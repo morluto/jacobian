@@ -1,36 +1,45 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from fractions import Fraction
 from math import sin
+from threading import Event
 from time import monotonic
 from typing import Any
 
 import pytest
+from flint import ctx
 from pydantic import ValidationError
 from tests.fixtures.accounting import assert_charged_work_parity
 from tests.math.analysis._analysis_support import analysis_validation_error
 
 from jacobian._execution import OperationExecutionTimeoutError, request_execution
+from jacobian._flint import flint_workprec
 from jacobian.canonical import canonicalize_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis._adaptive_range_enclosure import (
+    MAX_ADAPTIVE_RANGE_DYADIC_EXPONENT,
     MAX_ADAPTIVE_RANGE_RESULT_BYTES,
     AdaptiveRangeBudgetExhausted,
+    AdaptiveRangeDomainUnproven,
+    AdaptiveRangeDomainUnprovenLeaf,
     AdaptiveRangeEnclosureRequest,
     AdaptiveRangeEnclosureResult,
+    AdaptiveRangeLeaf,
     AdaptiveRangeTargetMet,
     _admit_adaptive_range,
     _compute_adaptive_range_enclosure,
     _enclosure_width,
     _estimated_result_bytes,
-    _interval_hull,
+    _problem_from_request,
     adaptive_range_enclosure,
 )
 from jacobian.math.analysis._box_enclosure import (
     IntervalExpressionBoxEnclosureRequest,
     _box_expression_enclosure,
 )
+from jacobian.math.analysis._models import DyadicClosedInterval
 
 
 def _q(numerator: int, denominator: int = 1) -> dict[str, str]:
@@ -102,6 +111,20 @@ def _quadratic() -> dict[str, Any]:
     }
 
 
+def _result_enclosure(
+    result: AdaptiveRangeEnclosureResult,
+) -> DyadicClosedInterval:
+    assert result.enclosure is not None
+    return result.enclosure
+
+
+def _enclosed_leaves(
+    result: AdaptiveRangeEnclosureResult,
+) -> tuple[AdaptiveRangeLeaf, ...]:
+    assert all(isinstance(leaf, AdaptiveRangeLeaf) for leaf in result.leaves)
+    return tuple(leaf for leaf in result.leaves if isinstance(leaf, AdaptiveRangeLeaf))
+
+
 def test_quadratic_target_met_reconstructs_the_complete_four_leaf_cover() -> None:
     result = _run(
         _quadratic(),
@@ -131,10 +154,21 @@ def test_quadratic_target_met_reconstructs_the_complete_four_leaf_cover() -> Non
         (Fraction(1, 2), Fraction(3, 4)),
         (Fraction(3, 4), Fraction(1)),
     )
-    assert result.enclosure == _interval_hull(result.leaves)
-    assert result.enclosure.lower.as_fraction() <= 0
-    assert result.enclosure.upper.as_fraction() >= Fraction(1, 4)
-    assert _enclosure_width(result.enclosure) <= Fraction(7, 16)
+    leaves = _enclosed_leaves(result)
+    enclosure = _result_enclosure(result)
+    expected_lower = min(
+        (leaf.enclosure.lower for leaf in leaves),
+        key=lambda endpoint: endpoint.as_fraction(),
+    )
+    expected_upper = max(
+        (leaf.enclosure.upper for leaf in leaves),
+        key=lambda endpoint: endpoint.as_fraction(),
+    )
+    assert enclosure.lower == expected_lower
+    assert enclosure.upper == expected_upper
+    assert enclosure.lower.as_fraction() <= 0
+    assert enclosure.upper.as_fraction() >= Fraction(1, 4)
+    assert _enclosure_width(enclosure) <= Fraction(7, 16)
     assert result.evaluations_used == 7
 
 
@@ -148,7 +182,7 @@ def test_each_returned_leaf_box_composes_with_the_existing_box_operation() -> No
         max_evaluations=7,
     )
 
-    for leaf in result.leaves:
+    for leaf in _enclosed_leaves(result):
         replay = _box_expression_enclosure(
             IntervalExpressionBoxEnclosureRequest(
                 expression=result.expression,
@@ -172,8 +206,9 @@ def test_sine_enclosure_contains_both_interior_extrema_on_zero_to_seven() -> Non
     )
 
     assert isinstance(result.disposition, AdaptiveRangeTargetMet)
-    assert result.enclosure.lower.as_fraction() <= -1
-    assert result.enclosure.upper.as_fraction() >= 1
+    enclosure = _result_enclosure(result)
+    assert enclosure.lower.as_fraction() <= -1
+    assert enclosure.upper.as_fraction() >= 1
 
 
 def test_two_variable_coupling_contains_a_secondary_grid_oracle() -> None:
@@ -199,8 +234,9 @@ def test_two_variable_coupling_contains_a_secondary_grid_oracle() -> None:
         max_evaluations=7,
     )
 
-    lower = float(result.enclosure.lower.as_fraction())
-    upper = float(result.enclosure.upper.as_fraction())
+    enclosure = _result_enclosure(result)
+    lower = float(enclosure.lower.as_fraction())
+    upper = float(enclosure.upper.as_fraction())
     for x_index in range(17):
         for y_index in range(17):
             x = x_index / 32
@@ -218,8 +254,9 @@ def test_dependency_expression_never_loses_zero() -> None:
         max_evaluations=15,
     )
 
-    assert result.enclosure.lower.as_fraction() <= 0
-    assert result.enclosure.upper.as_fraction() >= 0
+    enclosure = _result_enclosure(result)
+    assert enclosure.lower.as_fraction() <= 0
+    assert enclosure.upper.as_fraction() >= 0
 
 
 def test_leaf_and_coordinate_ties_follow_path_then_source_axis_order() -> None:
@@ -298,10 +335,11 @@ def test_reduced_matrix_norm_fixture_needs_refinement_for_one_third_bound() -> N
     )
 
     assert one_box.status == "ENCLOSED"
+    assert one_box.upper is not None
     assert one_box.upper.as_fraction() >= Fraction(1, 9)
     assert isinstance(result.disposition, AdaptiveRangeTargetMet)
     assert len(result.leaves) == 4
-    assert result.enclosure.upper.as_fraction() < Fraction(1, 9)
+    assert _result_enclosure(result).upper.as_fraction() < Fraction(1, 9)
 
 
 @pytest.mark.parametrize(
@@ -327,8 +365,9 @@ def test_budget_exhaustion_reasons_are_deterministic(
 
     assert isinstance(result.disposition, AdaptiveRangeBudgetExhausted)
     assert result.disposition.reason == reason
-    assert result.enclosure.lower.as_fraction() <= 0
-    assert result.enclosure.upper.as_fraction() >= 1
+    enclosure = _result_enclosure(result)
+    assert enclosure.lower.as_fraction() <= 0
+    assert enclosure.upper.as_fraction() >= 1
 
 
 def test_zero_dimensional_precision_schedule_has_a_typed_exhaustion() -> None:
@@ -394,55 +433,6 @@ def test_no_split_depth_cause_precedes_irrelevant_budget_caps(
 
 
 @pytest.mark.parametrize(
-    ("coordinates", "request_overrides", "forged_reason"),
-    [
-        (
-            (),
-            {
-                "expression": {"op": "exp", "children": [_const(1)]},
-                "precision_bits": 32,
-                "maximum_precision_bits": 100,
-                "max_leaves": 1,
-                "max_depth": 4,
-                "max_evaluations": 5,
-            },
-            "MAX_LEAVES",
-        ),
-        (
-            (("x", Fraction(0), Fraction(1)),),
-            {
-                "expression": _var("x"),
-                "max_leaves": 4,
-                "max_depth": 0,
-                "max_evaluations": 1,
-            },
-            "MAX_EVALUATIONS",
-        ),
-    ],
-)
-def test_round_trip_rejects_an_irrelevant_no_split_budget_reason(
-    coordinates: tuple[tuple[str, Fraction, Fraction], ...],
-    request_overrides: dict[str, Any],
-    forged_reason: str,
-) -> None:
-    expression = request_overrides.pop("expression")
-    result = _run(
-        expression,
-        coordinates,
-        target_width=Fraction(1, 10**60),
-        **request_overrides,
-    )
-    payload = result.model_dump(mode="json")
-    payload["disposition"] = {
-        "status": "BUDGET_EXHAUSTED",
-        "reason": forged_reason,
-    }
-
-    with pytest.raises(ValidationError):
-        AdaptiveRangeEnclosureResult.model_validate(payload)
-
-
-@pytest.mark.parametrize(
     "expression",
     [
         {"op": "log", "children": [_var("x")]},
@@ -462,6 +452,128 @@ def test_source_domain_failure_is_request_rejection(
     with pytest.raises(OperationDomainValidationError) as caught:
         _compute_adaptive_range_enclosure(request)
     assert caught.value.errors()[0]["type"] == "analysis.adaptive_range.domain_unproven"
+
+
+def test_arb_domain_uncertainty_is_a_typed_leaf_nonconclusion() -> None:
+    expression = {
+        "op": "log",
+        "children": [
+            {
+                "op": "add",
+                "children": [_var("x"), _const(1, 10**127)],
+            }
+        ],
+    }
+
+    result = _run(
+        expression,
+        (("x", Fraction(0), Fraction(1)),),
+        target_width=Fraction(100),
+        precision_bits=32,
+        maximum_precision_bits=32,
+        max_leaves=1,
+        max_depth=8,
+        max_evaluations=1,
+    )
+
+    assert isinstance(result.disposition, AdaptiveRangeDomainUnproven)
+    assert result.disposition.reason == "MAX_LEAVES"
+    assert result.enclosure is None
+    assert len(result.leaves) == 1
+    leaf = result.leaves[0]
+    assert isinstance(leaf, AdaptiveRangeDomainUnprovenLeaf)
+    assert leaf.path == ()
+    assert leaf.domain_failure.operation == "log"
+    assert leaf.domain_failure.reason == "LOG_ARGUMENT_NOT_STRICTLY_POSITIVE"
+
+
+def test_arb_domain_uncertainty_can_resolve_under_midpoint_refinement() -> None:
+    expression = {
+        "op": "log",
+        "children": [
+            {
+                "op": "add",
+                "children": [_var("x"), _const(1, 2**40)],
+            }
+        ],
+    }
+
+    result = _run(
+        expression,
+        (("x", Fraction(0), Fraction(1)),),
+        target_width=Fraction(100),
+        precision_bits=32,
+        maximum_precision_bits=32,
+        max_leaves=16,
+        max_depth=15,
+        max_evaluations=31,
+    )
+
+    assert isinstance(result.disposition, AdaptiveRangeTargetMet)
+    assert result.enclosure is not None
+    assert all(isinstance(leaf, AdaptiveRangeLeaf) for leaf in result.leaves)
+    assert any(len(leaf.path) > 0 for leaf in result.leaves)
+
+
+def test_arb_domain_uncertainty_resolves_before_partition_at_higher_precision() -> None:
+    expression = {
+        "op": "log",
+        "children": [
+            {
+                "op": "add",
+                "children": [_var("x"), _const(1, 2**40)],
+            }
+        ],
+    }
+
+    result = _run(
+        expression,
+        (("x", Fraction(0), Fraction(1)),),
+        target_width=Fraction(100),
+        precision_bits=32,
+        maximum_precision_bits=128,
+        max_leaves=1,
+        max_depth=8,
+        max_evaluations=3,
+    )
+
+    assert isinstance(result.disposition, AdaptiveRangeTargetMet)
+    assert result.evaluations_used == 2
+    assert result.maximum_precision_bits_used == 64
+    assert tuple(leaf.path for leaf in result.leaves) == ((),)
+    assert all(isinstance(leaf, AdaptiveRangeLeaf) for leaf in result.leaves)
+
+
+def test_unresolved_leaf_depth_precedes_unrelated_refinement_budgets() -> None:
+    expression = {
+        "op": "log",
+        "children": [
+            {
+                "op": "add",
+                "children": [_var("x"), _const(1, 2**40)],
+            }
+        ],
+    }
+
+    result = _run(
+        expression,
+        (("x", Fraction(0), Fraction(1)),),
+        target_width=Fraction(100),
+        precision_bits=32,
+        maximum_precision_bits=32,
+        max_leaves=16,
+        max_depth=4,
+        max_evaluations=31,
+    )
+
+    assert isinstance(result.disposition, AdaptiveRangeDomainUnproven)
+    assert result.disposition.reason == "MAX_DEPTH"
+    assert len(result.leaves) == 5
+    assert any(
+        isinstance(leaf, AdaptiveRangeDomainUnprovenLeaf)
+        and len(leaf.path) == result.max_depth
+        for leaf in result.leaves
+    )
 
 
 def test_raw_target_and_cross_precision_bounds_reject_before_execution() -> None:
@@ -509,7 +621,10 @@ def test_result_sensitive_output_bound_rejects_only_the_large_envelope() -> None
         max_depth=32,
         max_evaluations=1,
     )
-    assert _estimated_result_bytes(large) > MAX_ADAPTIVE_RANGE_RESULT_BYTES
+    assert (
+        _estimated_result_bytes(_problem_from_request(large))
+        > MAX_ADAPTIVE_RANGE_RESULT_BYTES
+    )
     with pytest.raises(OperationDomainValidationError) as caught:
         _compute_adaptive_range_enclosure(large)
     assert caught.value.errors()[0]["type"] == "analysis.adaptive_range.result_bytes"
@@ -522,7 +637,10 @@ def test_result_sensitive_output_bound_rejects_only_the_large_envelope() -> None
         max_depth=32,
         max_evaluations=1,
     )
-    assert _estimated_result_bytes(small) < MAX_ADAPTIVE_RANGE_RESULT_BYTES
+    assert (
+        _estimated_result_bytes(_problem_from_request(small))
+        < MAX_ADAPTIVE_RANGE_RESULT_BYTES
+    )
     assert isinstance(
         _compute_adaptive_range_enclosure(small).disposition,
         AdaptiveRangeTargetMet,
@@ -626,6 +744,56 @@ def test_native_and_request_paths_return_the_same_exact_result() -> None:
     assert native == dispatched
 
 
+def test_concurrent_adaptive_operations_isolate_32_and_512_bit_precision() -> None:
+    expression = {"op": "exp", "children": [_const(1)]}
+    low_request = _request(
+        expression,
+        (),
+        target_width=Fraction(1),
+        precision_bits=32,
+        maximum_precision_bits=32,
+        max_leaves=1,
+        max_depth=0,
+        max_evaluations=1,
+    )
+    high_request = low_request.model_copy(
+        update={"precision_bits": 512, "maximum_precision_bits": 512}
+    )
+    expected_low = _compute_adaptive_range_enclosure(low_request)
+    expected_high = _compute_adaptive_range_enclosure(high_request)
+    original_precision = ctx.prec
+    holder_entered = Event()
+    high_attempting = Event()
+    high_finished = Event()
+
+    def low_worker() -> AdaptiveRangeEnclosureResult:
+        with flint_workprec(32):
+            holder_entered.set()
+            assert high_attempting.wait(timeout=1)
+            assert not high_finished.wait(timeout=0.25)
+            assert ctx.prec == 32
+            return _compute_adaptive_range_enclosure(low_request)
+
+    def high_worker() -> AdaptiveRangeEnclosureResult:
+        assert holder_entered.wait(timeout=1)
+        high_attempting.set()
+        try:
+            return _compute_adaptive_range_enclosure(high_request)
+        finally:
+            high_finished.set()
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        low_future = workers.submit(low_worker)
+        high_future = workers.submit(high_worker)
+        low = low_future.result(timeout=2)
+        high = high_future.result(timeout=2)
+
+    assert low == expected_low
+    assert high == expected_high
+    assert _result_enclosure(low) != _result_enclosure(high)
+    assert ctx.prec == original_precision
+
+
 def test_admission_charge_covers_every_real_leaf_evaluation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -639,7 +807,9 @@ def test_admission_charge_covers_every_real_leaf_evaluation(
         max_depth=2,
         max_evaluations=7,
     )
-    admission = _admit_adaptive_range(request, started_at=monotonic())
+    admission = _admit_adaptive_range(
+        _problem_from_request(request), started_at=monotonic()
+    )
     original = adaptive._evaluate_leaf
     calls = 0
 
@@ -658,8 +828,8 @@ def test_admission_charge_covers_every_real_leaf_evaluation(
     assert calls == result.evaluations_used == 7
 
 
-@pytest.mark.parametrize("mutation", ["path", "box", "hull", "disposition"])
-def test_round_trip_rejects_forged_partition_or_target_claim(mutation: str) -> None:
+@pytest.mark.parametrize("mutation", ["path", "box"])
+def test_round_trip_rejects_forged_partition_structure(mutation: str) -> None:
     result = _run(
         _quadratic(),
         (("x", Fraction(0), Fraction(1)),),
@@ -677,17 +847,157 @@ def test_round_trip_rejects_forged_partition_or_target_claim(mutation: str) -> N
     payload = deepcopy(result.model_dump(mode="json"))
     if mutation == "path":
         payload["leaves"][0]["path"] = [0, 1]
-    elif mutation == "box":
-        payload["leaves"][0]["box"]["intervals"][0]["upper"] = _q(1, 3)
-    elif mutation == "hull":
-        payload["enclosure"]["lower"] = {"mantissa": "0", "exponent": 0}
     else:
-        payload["disposition"] = {
-            "status": "BUDGET_EXHAUSTED",
-            "reason": "MAX_LEAVES",
-        }
+        payload["leaves"][0]["box"]["intervals"][0]["upper"] = _q(1, 3)
 
     with pytest.raises(ValidationError):
+        AdaptiveRangeEnclosureResult.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("evaluations_used", 8, "requested evaluation budget"),
+        ("maximum_precision_bits_used", 256, "requested precision range"),
+    ],
+)
+def test_result_structural_counters_remain_within_the_request(
+    field: str, value: int, message: str
+) -> None:
+    result = _run(
+        _quadratic(),
+        (("x", Fraction(0), Fraction(1)),),
+        target_width=Fraction(7, 16),
+        max_leaves=4,
+        max_depth=2,
+        max_evaluations=7,
+    )
+    payload = result.model_dump(mode="json")
+    payload[field] = value
+
+    with pytest.raises(ValidationError, match=message):
+        AdaptiveRangeEnclosureResult.model_validate(payload)
+
+
+def test_result_preflights_authored_leaf_endpoints_before_fraction_work() -> None:
+    result = _run(
+        _quadratic(),
+        (("x", Fraction(0), Fraction(1)),),
+        target_width=Fraction(7, 16),
+        max_leaves=4,
+        max_depth=2,
+        max_evaluations=7,
+    )
+    payload = result.model_dump(mode="json")
+    payload["leaves"][0]["box"]["intervals"][0]["upper"] = {
+        "num": "9" * 129,
+        "den": "1",
+    }
+
+    with pytest.raises(ValidationError, match="128-digit bound"):
+        AdaptiveRangeEnclosureResult.model_validate(payload)
+
+
+def test_result_structurally_bounds_authored_dyadic_exponents() -> None:
+    result = _run(
+        _quadratic(),
+        (("x", Fraction(0), Fraction(1)),),
+        target_width=Fraction(7, 16),
+        max_leaves=4,
+        max_depth=2,
+        max_evaluations=7,
+    )
+    payload = result.model_dump(mode="json")
+    payload["leaves"][0]["enclosure"]["lower"]["exponent"] = (
+        MAX_ADAPTIVE_RANGE_DYADIC_EXPONENT + 1
+    )
+
+    with pytest.raises(ValidationError, match="source-and-precision bound"):
+        AdaptiveRangeEnclosureResult.model_validate(payload)
+
+
+def test_result_deserialization_does_not_replay_computed_math(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.analysis._adaptive_range_enclosure as adaptive
+
+    result = _run(
+        _quadratic(),
+        (("x", Fraction(0), Fraction(1)),),
+        target_width=Fraction(7, 16),
+        max_leaves=4,
+        max_depth=2,
+        max_evaluations=7,
+    )
+
+    def replayed(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("computed mathematics was replayed during deserialization")
+
+    for name in (
+        "_enclosure_width",
+        "_evaluated_hull",
+        "_precision_schedule",
+    ):
+        monkeypatch.setattr(adaptive, name, replayed)
+
+    parsed = AdaptiveRangeEnclosureResult.model_validate(result.model_dump(mode="json"))
+    assert parsed == result
+
+
+def test_domain_unproven_result_cannot_carry_a_global_enclosure() -> None:
+    expression = {
+        "op": "log",
+        "children": [
+            {
+                "op": "add",
+                "children": [_var("x"), _const(1, 10**127)],
+            }
+        ],
+    }
+    result = _run(
+        expression,
+        (("x", Fraction(0), Fraction(1)),),
+        target_width=Fraction(100),
+        precision_bits=32,
+        maximum_precision_bits=32,
+        max_leaves=1,
+        max_depth=8,
+        max_evaluations=1,
+    )
+    payload = result.model_dump(mode="json")
+    payload["enclosure"] = {
+        "lower": {"mantissa": "0", "exponent": 0},
+        "upper": {"mantissa": "1", "exponent": 0},
+    }
+
+    with pytest.raises(ValidationError, match="cannot carry a global enclosure"):
+        AdaptiveRangeEnclosureResult.model_validate(payload)
+
+
+def test_domain_failure_evidence_is_bound_to_the_source_expression_node() -> None:
+    expression = {
+        "op": "log",
+        "children": [
+            {
+                "op": "add",
+                "children": [_var("x"), _const(1, 10**127)],
+            }
+        ],
+    }
+    result = _run(
+        expression,
+        (("x", Fraction(0), Fraction(1)),),
+        target_width=Fraction(100),
+        precision_bits=32,
+        maximum_precision_bits=32,
+        max_leaves=1,
+        max_depth=8,
+        max_evaluations=1,
+    )
+    payload = result.model_dump(mode="json")
+    payload["leaves"][0]["domain_failure"]["node_path"] = [0]
+
+    with pytest.raises(ValidationError, match="does not match the source expression"):
         AdaptiveRangeEnclosureResult.model_validate(payload)
 
 
@@ -703,7 +1013,7 @@ def test_result_reservation_dominates_actual_canonical_output() -> None:
     result = _compute_adaptive_range_enclosure(request)
 
     assert len(canonicalize_json(result.model_dump(mode="json"))) <= (
-        _estimated_result_bytes(request)
+        _estimated_result_bytes(_problem_from_request(request))
     )
 
 
@@ -711,9 +1021,23 @@ def test_disposition_schema_is_a_status_discriminated_union() -> None:
     schema = AdaptiveRangeEnclosureResult.model_json_schema()
     reference = schema["properties"]["disposition"]["$ref"]
     disposition = schema["$defs"][reference.removeprefix("#/$defs/")]
+    leaf_reference = schema["properties"]["leaves"]["items"]["$ref"]
+    leaf = schema["$defs"][leaf_reference.removeprefix("#/$defs/")]
 
     assert disposition["discriminator"]["propertyName"] == "status"
     assert set(disposition["discriminator"]["mapping"]) == {
         "BUDGET_EXHAUSTED",
+        "DOMAIN_UNPROVEN",
         "TARGET_MET",
+    }
+    assert leaf["discriminator"]["propertyName"] == "status"
+    assert set(leaf["discriminator"]["mapping"]) == {
+        "DOMAIN_UNPROVEN",
+        "ENCLOSED",
+    }
+    assert {
+        variant.get("type") for variant in schema["properties"]["enclosure"]["anyOf"]
+    } == {
+        "null",
+        None,
     }

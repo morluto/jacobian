@@ -16,6 +16,7 @@ from jacobian._execution import (
     bind_request_deadline,
     current_request_execution,
 )
+from jacobian._flint import flint_workprec
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import CanonicalLimits, canonicalize_json
 from jacobian.catalog._examples import example
@@ -35,6 +36,7 @@ from jacobian.math.analysis._models import (
     IntervalExpressionDomainFailure,
     IntervalExpressionNode,
     RationalIntervalBox,
+    _bound_raw_box,
     _bound_raw_rational,
     _bounded_expression_nodes,
     _IntervalExpressionBoxRequest,
@@ -76,8 +78,20 @@ class AdaptiveRangeBudgetExhausted(StrictModel):
     reason: AdaptiveRangeBudgetReason
 
 
+class AdaptiveRangeDomainUnproven(StrictModel):
+    """No global range is claimed because one final Arb leaf is uncertain."""
+
+    status: Literal["DOMAIN_UNPROVEN"] = "DOMAIN_UNPROVEN"
+    reason: AdaptiveRangeBudgetReason = Field(
+        description=(
+            "The deterministic finite refinement resource that prevented every "
+            "uncertain leaf from obtaining an Arb enclosure."
+        )
+    )
+
+
 type AdaptiveRangeDisposition = Annotated[
-    AdaptiveRangeTargetMet | AdaptiveRangeBudgetExhausted,
+    AdaptiveRangeTargetMet | AdaptiveRangeBudgetExhausted | AdaptiveRangeDomainUnproven,
     Field(discriminator="status"),
 ]
 
@@ -148,8 +162,39 @@ class AdaptiveRangeEnclosureRequest(_IntervalExpressionBoxRequest):
         return self
 
 
-class AdaptiveRangeLeaf(StrictModel):
-    """One canonically addressed leaf and its sound expression enclosure."""
+@dataclass(frozen=True, slots=True)
+class _AdaptiveRangeProblem:
+    """Canonical domain input shared by native and wire execution paths."""
+
+    expression: IntervalExpressionNode
+    box: RationalIntervalBox
+    target_width: CanonicalRational
+    precision_bits: int
+    maximum_precision_bits: int
+    max_leaves: int
+    max_depth: int
+    max_evaluations: int
+    wall_seconds: int
+
+
+def _problem_from_request(
+    request: AdaptiveRangeEnclosureRequest,
+) -> _AdaptiveRangeProblem:
+    return _AdaptiveRangeProblem(
+        expression=request.expression,
+        box=request.box,
+        target_width=request.target_width,
+        precision_bits=request.precision_bits,
+        maximum_precision_bits=request.maximum_precision_bits,
+        max_leaves=request.max_leaves,
+        max_depth=request.max_depth,
+        max_evaluations=request.max_evaluations,
+        wall_seconds=request.wall_seconds,
+    )
+
+
+class _AdaptiveRangeLeafPath(StrictModel):
+    """One canonically addressed leaf in the exact midpoint partition."""
 
     path: tuple[StrictInt, ...] = Field(
         max_length=MAX_ADAPTIVE_RANGE_DEPTH,
@@ -160,7 +205,6 @@ class AdaptiveRangeLeaf(StrictModel):
         ),
     )
     box: RationalIntervalBox
-    enclosure: DyadicClosedInterval
 
     @field_validator("path", mode="before")
     @classmethod
@@ -178,6 +222,26 @@ class AdaptiveRangeLeaf(StrictModel):
         return self
 
 
+class AdaptiveRangeLeaf(_AdaptiveRangeLeafPath):
+    """One leaf with a sound expression enclosure."""
+
+    status: Literal["ENCLOSED"] = "ENCLOSED"
+    enclosure: DyadicClosedInterval
+
+
+class AdaptiveRangeDomainUnprovenLeaf(_AdaptiveRangeLeafPath):
+    """One leaf whose fixed-precision Arb evaluation remained uncertain."""
+
+    status: Literal["DOMAIN_UNPROVEN"] = "DOMAIN_UNPROVEN"
+    domain_failure: IntervalExpressionDomainFailure
+
+
+type AdaptiveRangeFinalLeaf = Annotated[
+    AdaptiveRangeLeaf | AdaptiveRangeDomainUnprovenLeaf,
+    Field(discriminator="status"),
+]
+
+
 def _precision_schedule(initial: int, maximum: int) -> tuple[int, ...]:
     schedule = [initial]
     while schedule[-1] < maximum:
@@ -186,24 +250,35 @@ def _precision_schedule(initial: int, maximum: int) -> tuple[int, ...]:
 
 
 def _dyadic_fraction(value: ExactDyadic) -> Fraction:
+    _require_adaptive_dyadic_endpoint(value)
+    return value.as_fraction()
+
+
+def _require_adaptive_dyadic_endpoint(value: ExactDyadic) -> None:
     if abs(value.exponent) > MAX_ADAPTIVE_RANGE_DYADIC_EXPONENT:
         raise _validation_error(
             "adaptive dyadic exponent exceeds the admitted source-and-precision bound"
         )
-    return value.as_fraction()
+
+
+def _require_adaptive_dyadic_interval(enclosure: DyadicClosedInterval) -> None:
+    _require_adaptive_dyadic_endpoint(enclosure.lower)
+    _require_adaptive_dyadic_endpoint(enclosure.upper)
 
 
 def _enclosure_width(enclosure: DyadicClosedInterval) -> Fraction:
     return _dyadic_fraction(enclosure.upper) - _dyadic_fraction(enclosure.lower)
 
 
-def _interval_hull(leaves: tuple[AdaptiveRangeLeaf, ...]) -> DyadicClosedInterval:
+def _enclosure_hull(
+    enclosures: tuple[DyadicClosedInterval, ...],
+) -> DyadicClosedInterval:
     lower = min(
-        (leaf.enclosure.lower for leaf in leaves),
+        (enclosure.lower for enclosure in enclosures),
         key=_dyadic_fraction,
     )
     upper = max(
-        (leaf.enclosure.upper for leaf in leaves),
+        (enclosure.upper for enclosure in enclosures),
         key=_dyadic_fraction,
     )
     return DyadicClosedInterval(lower=lower, upper=upper)
@@ -264,6 +339,31 @@ def _paths_are_complete(paths: tuple[tuple[int, ...], ...]) -> bool:
     return sum(1 << (depth - len(path)) for path in paths) == 1 << depth
 
 
+def _bind_domain_failure_to_expression(
+    expression: IntervalExpressionNode,
+    failure: IntervalExpressionDomainFailure,
+) -> None:
+    node = expression
+    for child_index in failure.node_path:
+        if child_index >= len(node.children):
+            raise _validation_error(
+                "domain-failure node path does not exist in the source expression"
+            )
+        node = node.children[child_index]
+    if node.op != failure.operation:
+        raise _validation_error(
+            "domain-failure operation does not match the source expression node"
+        )
+    if failure.operation == "pow" and (node.exponent is None or node.exponent >= 0):
+        raise _validation_error(
+            "negative-power domain failure requires a negative source exponent"
+        )
+    if failure.reason == "SQRT_ARGUMENT_NOT_STRICTLY_POSITIVE_FOR_SECOND_JET":
+        raise _validation_error(
+            "second-jet differentiability evidence is not a range-domain failure"
+        )
+
+
 def _bind_leaf_partition(result: AdaptiveRangeEnclosureResult) -> None:
     if len(result.leaves) > result.max_leaves:
         raise _validation_error("adaptive result exceeds the requested leaf budget")
@@ -283,91 +383,24 @@ def _bind_leaf_partition(result: AdaptiveRangeEnclosureResult) -> None:
             raise _validation_error(
                 "adaptive leaf box does not match its source-bound midpoint path"
             )
-        _enclosure_width(leaf.enclosure)
-
-
-def _bind_evaluation_schedule(
-    result: AdaptiveRangeEnclosureResult, schedule: tuple[int, ...]
-) -> int:
-    root_evaluations = result.evaluations_used - 2 * (len(result.leaves) - 1)
-    if not 1 <= root_evaluations <= len(schedule):
-        raise _validation_error(
-            "adaptive evaluation count does not reconstruct its finite schedule"
-        )
-    if result.maximum_precision_bits_used != schedule[root_evaluations - 1]:
-        raise _validation_error(
-            "adaptive used precision does not match its doubling schedule"
-        )
-    if len(result.leaves) > 1 and root_evaluations != len(schedule):
-        raise _validation_error(
-            "adaptive bisection may begin only after the precision schedule"
-        )
-    if result.evaluations_used > result.max_evaluations:
-        raise _validation_error(
-            "adaptive result exceeds the requested evaluation budget"
-        )
-    return root_evaluations
-
-
-def _bind_budget_reason(
-    result: AdaptiveRangeEnclosureResult,
-    schedule: tuple[int, ...],
-    root_evaluations: int,
-) -> None:
-    if not isinstance(result.disposition, AdaptiveRangeBudgetExhausted):
-        return
-    reason = result.disposition.reason
-    if reason != "MAX_EVALUATIONS" and root_evaluations != len(schedule):
-        raise _validation_error(
-            "only MAX_EVALUATIONS may stop an incomplete precision schedule"
-        )
-    if reason == "MAX_EVALUATIONS":
-        remaining = result.max_evaluations - result.evaluations_used
-        required = 1 if root_evaluations < len(schedule) else 2
-        if remaining >= required:
-            raise _validation_error(
-                "MAX_EVALUATIONS must lack the next complete evaluation action"
-            )
-        if root_evaluations < len(schedule):
-            return
-
-    splittable = any(
-        len(leaf.path) < result.max_depth and _widest_coordinate(leaf.box) is not None
-        for leaf in result.leaves
-    )
-    if reason in ("MAX_LEAVES", "MAX_EVALUATIONS"):
-        if not splittable:
-            raise _validation_error(
-                f"{reason} cannot stop when no retained leaf is splittable"
-            )
-        if reason == "MAX_LEAVES" and len(result.leaves) != result.max_leaves:
-            raise _validation_error(
-                "MAX_LEAVES requires the requested leaf budget to be full"
-            )
-        return
-    if splittable:
-        raise _validation_error(f"{reason} cannot stop while a leaf remains splittable")
-    has_positive_coordinate = any(
-        _widest_coordinate(leaf.box) is not None for leaf in result.leaves
-    )
-    if (reason == "MAX_DEPTH") != has_positive_coordinate:
-        raise _validation_error(
-            "MAX_DEPTH and MAX_PRECISION must identify the deterministic no-split cause"
-        )
-    if reason == "MAX_PRECISION" and (
-        result.maximum_precision_bits_used != result.maximum_precision_bits
-    ):
-        raise _validation_error(
-            "MAX_PRECISION requires completing the precision schedule"
-        )
+        if isinstance(leaf, AdaptiveRangeDomainUnprovenLeaf):
+            _bind_domain_failure_to_expression(result.expression, leaf.domain_failure)
+        else:
+            _require_adaptive_dyadic_interval(leaf.enclosure)
 
 
 class AdaptiveRangeEnclosureResult(AdaptiveRangeEnclosureRequest):
-    """A complete source-bound range enclosure and exact finite leaf cover."""
+    """A complete source-bound range enclosure or typed finite nonconclusion."""
 
-    enclosure: DyadicClosedInterval
+    enclosure: DyadicClosedInterval | None = Field(
+        default=None,
+        description=(
+            "The hull of every retained leaf enclosure; absent exactly when the "
+            "disposition is DOMAIN_UNPROVEN."
+        ),
+    )
     disposition: AdaptiveRangeDisposition
-    leaves: tuple[AdaptiveRangeLeaf, ...] = Field(
+    leaves: tuple[AdaptiveRangeFinalLeaf, ...] = Field(
         min_length=1,
         max_length=MAX_ADAPTIVE_RANGE_LEAVES,
         description=(
@@ -383,53 +416,86 @@ class AdaptiveRangeEnclosureResult(AdaptiveRangeEnclosureRequest):
     def preserve_bounded_leaves(cls, value: object) -> object:
         if isinstance(value, (list, tuple)) and len(value) > MAX_ADAPTIVE_RANGE_LEAVES:
             raise _validation_error("adaptive result exceeds its leaf bound")
+        if isinstance(value, (list, tuple)):
+            for leaf in value:
+                if not isinstance(leaf, Mapping):
+                    continue
+                path = leaf.get("path")
+                if (
+                    isinstance(path, (list, tuple))
+                    and len(path) > MAX_ADAPTIVE_RANGE_DEPTH
+                ):
+                    raise _validation_error(
+                        "adaptive leaf path exceeds the bisection-depth bound"
+                    )
+                _bound_raw_box(leaf.get("box"))
         return tuple(value) if isinstance(value, list) else value
 
     @model_validator(mode="after")
-    def bind_partition_and_hull_to_source(self) -> Self:
+    def bind_partition_and_disposition_state(self) -> Self:
         _bind_leaf_partition(self)
-        hull = _interval_hull(self.leaves)
-        if self.enclosure != hull:
+        if self.enclosure is not None:
+            _require_adaptive_dyadic_interval(self.enclosure)
+        if self.evaluations_used > self.max_evaluations:
             raise _validation_error(
-                "adaptive global enclosure must equal the hull of every leaf enclosure"
+                "adaptive result exceeds the requested evaluation budget"
             )
-        target = self.target_width.as_fraction()
-        if target <= 0:
-            raise _validation_error("adaptive target width must be positive")
-        target_met = _enclosure_width(hull) <= target
-        if target_met != isinstance(self.disposition, AdaptiveRangeTargetMet):
+        if not (
+            self.precision_bits
+            <= self.maximum_precision_bits_used
+            <= self.maximum_precision_bits
+        ):
             raise _validation_error(
-                "adaptive disposition must agree with the requested target width"
+                "adaptive used precision must lie in the requested precision range"
             )
-
-        schedule = _precision_schedule(self.precision_bits, self.maximum_precision_bits)
-        root_evaluations = _bind_evaluation_schedule(self, schedule)
-        _bind_budget_reason(self, schedule, root_evaluations)
+        unproven = tuple(
+            leaf
+            for leaf in self.leaves
+            if isinstance(leaf, AdaptiveRangeDomainUnprovenLeaf)
+        )
+        if isinstance(self.disposition, AdaptiveRangeDomainUnproven):
+            if not unproven:
+                raise _validation_error(
+                    "DOMAIN_UNPROVEN requires at least one uncertain final leaf"
+                )
+            if self.enclosure is not None:
+                raise _validation_error(
+                    "DOMAIN_UNPROVEN cannot carry a global enclosure"
+                )
+            return self
+        if unproven:
+            raise _validation_error(
+                "an uncertain adaptive leaf requires DOMAIN_UNPROVEN disposition"
+            )
+        if self.enclosure is None:
+            raise _validation_error(
+                "a concluded adaptive disposition requires a global enclosure"
+            )
         return self
 
     @classmethod
     def _from_kernel(
         cls,
-        request: AdaptiveRangeEnclosureRequest,
+        problem: _AdaptiveRangeProblem,
         *,
-        enclosure: DyadicClosedInterval,
+        enclosure: DyadicClosedInterval | None,
         disposition: AdaptiveRangeDisposition,
-        leaves: tuple[AdaptiveRangeLeaf, ...],
+        leaves: tuple[AdaptiveRangeFinalLeaf, ...],
         evaluations_used: int,
         maximum_precision_bits_used: int,
     ) -> AdaptiveRangeEnclosureResult:
         """Construct a result after the kernel established every range claim."""
 
         return cls.model_construct(
-            expression=request.expression,
-            box=request.box,
-            precision_bits=request.precision_bits,
-            target_width=request.target_width,
-            maximum_precision_bits=request.maximum_precision_bits,
-            max_leaves=request.max_leaves,
-            max_depth=request.max_depth,
-            max_evaluations=request.max_evaluations,
-            wall_seconds=request.wall_seconds,
+            expression=problem.expression,
+            box=problem.box,
+            precision_bits=problem.precision_bits,
+            target_width=problem.target_width,
+            maximum_precision_bits=problem.maximum_precision_bits,
+            max_leaves=problem.max_leaves,
+            max_depth=problem.max_depth,
+            max_evaluations=problem.max_evaluations,
+            wall_seconds=problem.wall_seconds,
             enclosure=enclosure,
             disposition=disposition,
             leaves=leaves,
@@ -444,6 +510,18 @@ class _AdaptiveRangeAdmission:
     planned_evaluations: int
     target_width: Fraction
     deadline: float
+
+
+@dataclass(frozen=True, slots=True)
+class _EvaluatedAdaptiveRangeLeaf:
+    path: tuple[int, ...]
+    box: RationalIntervalBox
+    enclosure: DyadicClosedInterval | None = None
+    domain_failure: IntervalExpressionDomainFailure | None = None
+
+    def __post_init__(self) -> None:
+        if (self.enclosure is None) == (self.domain_failure is None):
+            raise AssertionError("one adaptive leaf must carry exactly one outcome")
 
 
 def _midpoint_component_digits(box: RationalIntervalBox, depth: int) -> int:
@@ -461,19 +539,33 @@ def _midpoint_component_digits(box: RationalIntervalBox, depth: int) -> int:
     return 2 * source_digits + depth + 2
 
 
-def _estimated_result_bytes(request: AdaptiveRangeEnclosureRequest) -> int:
-    source_bytes = len(canonicalize_json(request.model_dump(mode="json")))
-    endpoint_digits = _midpoint_component_digits(request.box, request.max_depth)
+def _estimated_result_bytes(problem: _AdaptiveRangeProblem) -> int:
+    source_bytes = len(
+        canonicalize_json(
+            {
+                "expression": problem.expression.model_dump(mode="json"),
+                "box": problem.box.model_dump(mode="json"),
+                "target_width": problem.target_width.model_dump(mode="json"),
+                "precision_bits": problem.precision_bits,
+                "maximum_precision_bits": problem.maximum_precision_bits,
+                "max_leaves": problem.max_leaves,
+                "max_depth": problem.max_depth,
+                "max_evaluations": problem.max_evaluations,
+                "wall_seconds": problem.wall_seconds,
+            }
+        )
+    )
+    endpoint_digits = _midpoint_component_digits(problem.box, problem.max_depth)
     axis_bytes = sum(
-        len(variable.encode("utf-8")) + 3 for variable in request.box.variables
+        len(variable.encode("utf-8")) + 3 for variable in problem.box.variables
     )
     box_bytes = (
-        128 + axis_bytes + len(request.box.variables) * (4 * endpoint_digits + 128)
+        128 + axis_bytes + len(problem.box.variables) * (4 * endpoint_digits + 128)
     )
     dyadic_interval_bytes = 2 * (MAX_DYADIC_MANTISSA_DIGITS + 64) + 64
-    path_bytes = 2 * request.max_depth + 32
+    path_bytes = 2 * problem.max_depth + 32
     leaf_bytes = box_bytes + dyadic_interval_bytes + path_bytes + 128
-    return source_bytes + request.max_leaves * leaf_bytes + 4_096
+    return source_bytes + problem.max_leaves * leaf_bytes + 4_096
 
 
 def _require_deadline(deadline: float, stage: str) -> None:
@@ -483,19 +575,97 @@ def _require_deadline(deadline: float, stage: str) -> None:
         )
 
 
+def _require_parameter_envelope(problem: _AdaptiveRangeProblem) -> None:
+    bounds = (
+        ("precision_bits", problem.precision_bits, 32, 4_096),
+        (
+            "maximum_precision_bits",
+            problem.maximum_precision_bits,
+            32,
+            4_096,
+        ),
+        ("max_leaves", problem.max_leaves, 1, MAX_ADAPTIVE_RANGE_LEAVES),
+        ("max_depth", problem.max_depth, 0, MAX_ADAPTIVE_RANGE_DEPTH),
+        (
+            "max_evaluations",
+            problem.max_evaluations,
+            1,
+            MAX_ADAPTIVE_RANGE_EVALUATIONS,
+        ),
+        (
+            "wall_seconds",
+            problem.wall_seconds,
+            1,
+            MAX_ADAPTIVE_RANGE_WALL_SECONDS,
+        ),
+    )
+    for field, value, minimum, maximum in bounds:
+        if type(value) is not int or not minimum <= value <= maximum:
+            raise OperationDomainValidationError(
+                location=(field,),
+                code="analysis.adaptive_range.parameter_bound",
+                message=(f"{field} must be an integer between {minimum} and {maximum}"),
+            )
+    if problem.maximum_precision_bits < problem.precision_bits:
+        raise OperationDomainValidationError(
+            location=("maximum_precision_bits", "precision_bits"),
+            code="analysis.adaptive_range.precision_schedule",
+            message="maximum_precision_bits must be at least precision_bits",
+        )
+
+
+def _require_complete_source_axis(
+    problem: _AdaptiveRangeProblem,
+    nodes: tuple[IntervalExpressionNode, ...],
+) -> None:
+    used_variables: set[str] = set()
+    for node in nodes:
+        if node.op != "var":
+            continue
+        if node.variable is None:
+            raise OperationDomainValidationError(
+                location=("expression",),
+                code="analysis.adaptive_range.named_variable",
+                message="adaptive range variable nodes must be named",
+            )
+        used_variables.add(node.variable)
+    box_variables = set(problem.box.variables)
+    missing = used_variables - box_variables
+    if missing:
+        raise OperationDomainValidationError(
+            location=("box", "variables"),
+            code="analysis.adaptive_range.missing_variable",
+            message=(
+                "expression variables are missing from the box: "
+                + ", ".join(sorted(missing))
+            ),
+        )
+    unused = box_variables - used_variables
+    if unused:
+        raise OperationDomainValidationError(
+            location=("box", "variables"),
+            code="analysis.adaptive_range.unused_variable",
+            message=(
+                "box variables are unused by the expression: "
+                + ", ".join(sorted(unused))
+            ),
+        )
+
+
 def _admit_adaptive_range(
-    request: AdaptiveRangeEnclosureRequest, *, started_at: float
+    problem: _AdaptiveRangeProblem, *, started_at: float
 ) -> _AdaptiveRangeAdmission:
-    deadline = started_at + request.wall_seconds
+    _require_parameter_envelope(problem)
+    deadline = started_at + problem.wall_seconds
     bind_request_deadline(deadline)
     _require_deadline(deadline, "before semantic preflight")
 
     try:
-        target_width = request.target_width.as_fraction()
+        target_width = problem.target_width.as_fraction()
         if target_width <= 0:
             raise ValueError("adaptive target width must be positive")
         if (
-            canonical_rational_component_digits(request.target_width)
+            canonical_rational_component_digits(problem.target_width)
             > MAX_RATIONAL_DIGITS
         ):
             raise ValueError(
@@ -508,13 +678,14 @@ def _admit_adaptive_range(
             message=str(exc),
         ) from exc
 
-    nodes = _bounded_expression_nodes(request.expression)
+    nodes = _bounded_expression_nodes(problem.expression)
+    _require_complete_source_axis(problem, nodes)
     schedule = _precision_schedule(
-        request.precision_bits, request.maximum_precision_bits
+        problem.precision_bits, problem.maximum_precision_bits
     )
     planned_evaluations = min(
-        request.max_evaluations,
-        len(schedule) + 2 * (request.max_leaves - 1),
+        problem.max_evaluations,
+        len(schedule) + 2 * (problem.max_leaves - 1),
     )
     node_evaluations = len(nodes) * planned_evaluations
     if node_evaluations > MAX_ADAPTIVE_RANGE_NODE_EVALUATIONS:
@@ -526,7 +697,7 @@ def _admit_adaptive_range(
                 f"evaluations exceeds the {MAX_ADAPTIVE_RANGE_NODE_EVALUATIONS}-unit bound"
             ),
         )
-    precision_work = node_evaluations * request.maximum_precision_bits
+    precision_work = node_evaluations * problem.maximum_precision_bits
     if precision_work > MAX_ADAPTIVE_RANGE_PRECISION_WORK:
         raise OperationDomainValidationError(
             location=("maximum_precision_bits", "max_evaluations"),
@@ -536,7 +707,7 @@ def _admit_adaptive_range(
                 f"exceeds the {MAX_ADAPTIVE_RANGE_PRECISION_WORK}-unit bound"
             ),
         )
-    estimated_result_bytes = _estimated_result_bytes(request)
+    estimated_result_bytes = _estimated_result_bytes(problem)
     if estimated_result_bytes > MAX_ADAPTIVE_RANGE_RESULT_BYTES:
         raise OperationDomainValidationError(
             location=("max_leaves", "max_depth", "box"),
@@ -549,7 +720,7 @@ def _admit_adaptive_range(
 
     try:
         preflight = _preflight_box_expression(
-            request.expression, _rational_box_bounds(request.box)
+            problem.expression, _rational_box_bounds(problem.box)
         )
     except ValueError as exc:
         raise OperationDomainValidationError(
@@ -577,46 +748,51 @@ def _admit_adaptive_range(
 
 def _evaluate_leaf(
     expression: IntervalExpressionNode,
+    path: tuple[int, ...],
     box: RationalIntervalBox,
     precision_bits: int,
     *,
     deadline: float,
-) -> DyadicClosedInterval:
+) -> _EvaluatedAdaptiveRangeLeaf:
     _require_deadline(deadline, "before an Arb leaf evaluation")
+    domain_failure: IntervalExpressionDomainFailure | None = None
     try:
-        from flint import ctx
-
-        with ctx.workprec(precision_bits):
+        with flint_workprec(precision_bits, deadline=deadline):
             variables = {
                 variable: arb_source_interval(interval)
                 for variable, interval in zip(box.variables, box.intervals, strict=True)
             }
             result = _evaluate_box_expression(expression, variables)
             if isinstance(result, IntervalExpressionDomainFailure):
-                raise RuntimeError(
-                    "pinned Arb disagreed with the admitted real source domain"
-                )
-            if isinstance(result, _BoxEvaluationFailure) or not result.is_finite():
+                domain_failure = result
+                endpoints = None
+            elif isinstance(result, _BoxEvaluationFailure) or not result.is_finite():
                 raise RuntimeError(
                     "pinned Arb returned no finite adaptive leaf enclosure"
                 )
-            lower_mantissa, lower_exponent = result.lower().man_exp()
-            upper_mantissa, upper_exponent = result.upper().man_exp()
-            endpoints = dyadic_endpoints(
-                lower_mantissa,
-                lower_exponent,
-                upper_mantissa,
-                upper_exponent,
-            )
-    except OperationExecutionTimeoutError:
-        raise
-    except RuntimeError:
-        raise
+            else:
+                lower_mantissa, lower_exponent = result.lower().man_exp()
+                upper_mantissa, upper_exponent = result.upper().man_exp()
+                endpoints = dyadic_endpoints(
+                    lower_mantissa,
+                    lower_exponent,
+                    upper_mantissa,
+                    upper_exponent,
+                )
     except (OverflowError, ValueError, ZeroDivisionError) as exc:
         raise RuntimeError(
             "pinned Arb rejected an admitted adaptive leaf evaluation"
         ) from exc
     _require_deadline(deadline, "after an Arb leaf evaluation")
+    if domain_failure is not None:
+        # The exact source-box preflight proved the real domain once. Arb's
+        # fixed-precision interval extension can still be unable to prove a
+        # domain-sensitive node, so retain that bounded leaf for refinement.
+        return _EvaluatedAdaptiveRangeLeaf(
+            path=path,
+            box=box,
+            domain_failure=domain_failure,
+        )
     if endpoints is None or any(
         abs(endpoint.exponent) > MAX_ADAPTIVE_RANGE_DYADIC_EXPONENT
         for endpoint in endpoints
@@ -624,40 +800,85 @@ def _evaluate_leaf(
         raise RuntimeError(
             "pinned Arb produced an adaptive endpoint outside the admitted dyadic envelope"
         )
-    return DyadicClosedInterval(lower=endpoints[0], upper=endpoints[1])
+    return _EvaluatedAdaptiveRangeLeaf(
+        path=path,
+        box=box,
+        enclosure=DyadicClosedInterval(lower=endpoints[0], upper=endpoints[1]),
+    )
+
+
+def _public_leaves(
+    leaves: tuple[_EvaluatedAdaptiveRangeLeaf, ...],
+) -> tuple[AdaptiveRangeFinalLeaf, ...]:
+    ordered = tuple(sorted(leaves, key=lambda leaf: leaf.path))
+    public: list[AdaptiveRangeFinalLeaf] = []
+    for leaf in ordered:
+        if leaf.domain_failure is not None:
+            public.append(
+                AdaptiveRangeDomainUnprovenLeaf(
+                    path=leaf.path,
+                    box=leaf.box,
+                    domain_failure=leaf.domain_failure,
+                )
+            )
+            continue
+        assert leaf.enclosure is not None
+        public.append(
+            AdaptiveRangeLeaf(
+                path=leaf.path,
+                box=leaf.box,
+                enclosure=leaf.enclosure,
+            )
+        )
+    return tuple(public)
+
+
+def _evaluated_hull(
+    leaves: tuple[_EvaluatedAdaptiveRangeLeaf, ...],
+) -> DyadicClosedInterval:
+    enclosed = tuple(leaf.enclosure for leaf in leaves if leaf.enclosure is not None)
+    if len(enclosed) != len(leaves):
+        raise AssertionError("a global adaptive hull requires every leaf enclosure")
+    return _enclosure_hull(enclosed)
 
 
 def _result(
-    request: AdaptiveRangeEnclosureRequest,
-    leaves: tuple[AdaptiveRangeLeaf, ...],
+    problem: _AdaptiveRangeProblem,
+    leaves: tuple[_EvaluatedAdaptiveRangeLeaf, ...],
     *,
     target_width: Fraction,
     evaluations_used: int,
     maximum_precision_bits_used: int,
     reason: AdaptiveRangeBudgetReason | None,
 ) -> AdaptiveRangeEnclosureResult:
-    leaves = tuple(sorted(leaves, key=lambda leaf: leaf.path))
-    hull = _interval_hull(leaves)
-    target_met = _enclosure_width(hull) <= target_width
+    public_leaves = _public_leaves(leaves)
+    has_unproven = any(leaf.domain_failure is not None for leaf in leaves)
     disposition: AdaptiveRangeDisposition
-    if target_met:
-        disposition = AdaptiveRangeTargetMet()
-    else:
+    enclosure: DyadicClosedInterval | None
+    if has_unproven:
         assert reason is not None
-        disposition = AdaptiveRangeBudgetExhausted(reason=reason)
+        enclosure = None
+        disposition = AdaptiveRangeDomainUnproven(reason=reason)
+    else:
+        enclosure = _evaluated_hull(leaves)
+        if _enclosure_width(enclosure) <= target_width:
+            disposition = AdaptiveRangeTargetMet()
+        else:
+            assert reason is not None
+            disposition = AdaptiveRangeBudgetExhausted(reason=reason)
     return AdaptiveRangeEnclosureResult._from_kernel(
-        request,
-        enclosure=hull,
+        problem,
+        enclosure=enclosure,
         disposition=disposition,
-        leaves=leaves,
+        leaves=public_leaves,
         evaluations_used=evaluations_used,
         maximum_precision_bits_used=maximum_precision_bits_used,
     )
 
 
 def _finish_result(
-    request: AdaptiveRangeEnclosureRequest,
-    leaves: tuple[AdaptiveRangeLeaf, ...],
+    problem: _AdaptiveRangeProblem,
+    leaves: tuple[_EvaluatedAdaptiveRangeLeaf, ...],
     *,
     admission: _AdaptiveRangeAdmission,
     evaluations_used: int,
@@ -665,7 +886,7 @@ def _finish_result(
     reason: AdaptiveRangeBudgetReason | None,
 ) -> AdaptiveRangeEnclosureResult:
     result = _result(
-        request,
+        problem,
         leaves,
         target_width=admission.target_width,
         evaluations_used=evaluations_used,
@@ -676,36 +897,44 @@ def _finish_result(
     return result
 
 
-def _compute_adaptive_range_enclosure(
-    request: AdaptiveRangeEnclosureRequest, *, native_started_at: float | None = None
+def _evaluated_target_met(
+    leaves: tuple[_EvaluatedAdaptiveRangeLeaf, ...], target_width: Fraction
+) -> bool:
+    if any(leaf.enclosure is None for leaf in leaves):
+        return False
+    return _enclosure_width(_evaluated_hull(leaves)) <= target_width
+
+
+def _leaf_selection_key(
+    leaf: _EvaluatedAdaptiveRangeLeaf,
+) -> tuple[int, Fraction, tuple[int, ...]]:
+    if leaf.domain_failure is not None:
+        return (0, Fraction(), leaf.path)
+    assert leaf.enclosure is not None
+    return (1, -_enclosure_width(leaf.enclosure), leaf.path)
+
+
+def _run_adaptive_range_enclosure(
+    problem: _AdaptiveRangeProblem, *, started_at: float
 ) -> AdaptiveRangeEnclosureResult:
-    execution = current_request_execution()
-    started_at = (
-        execution.started_at
-        if execution is not None
-        else native_started_at
-        if native_started_at is not None
-        else monotonic()
-    )
-    admission = _admit_adaptive_range(request, started_at=started_at)
+    admission = _admit_adaptive_range(problem, started_at=started_at)
     schedule = admission.precision_schedule
     evaluations = 0
 
-    root_path: tuple[int, ...] = ()
-    best = _evaluate_leaf(
-        request.expression,
-        request.box,
+    root = _evaluate_leaf(
+        problem.expression,
+        (),
+        problem.box,
         schedule[0],
         deadline=admission.deadline,
     )
     evaluations += 1
     precision_used = schedule[0]
-    leaves: tuple[AdaptiveRangeLeaf, ...] = (
-        AdaptiveRangeLeaf(path=root_path, box=request.box, enclosure=best),
-    )
-    if _enclosure_width(best) <= admission.target_width:
+    best = root if root.enclosure is not None else None
+    leaves: tuple[_EvaluatedAdaptiveRangeLeaf, ...] = (root,)
+    if _evaluated_target_met(leaves, admission.target_width):
         return _finish_result(
-            request,
+            problem,
             leaves,
             admission=admission,
             evaluations_used=evaluations,
@@ -714,9 +943,9 @@ def _compute_adaptive_range_enclosure(
         )
 
     for precision in schedule[1:]:
-        if evaluations >= request.max_evaluations:
+        if evaluations >= problem.max_evaluations:
             return _finish_result(
-                request,
+                problem,
                 leaves,
                 admission=admission,
                 evaluations_used=evaluations,
@@ -724,21 +953,27 @@ def _compute_adaptive_range_enclosure(
                 reason="MAX_EVALUATIONS",
             )
         candidate = _evaluate_leaf(
-            request.expression,
-            request.box,
+            problem.expression,
+            (),
+            problem.box,
             precision,
             deadline=admission.deadline,
         )
         evaluations += 1
         precision_used = precision
-        if _enclosure_width(candidate) < _enclosure_width(best):
-            best = candidate
-            leaves = (
-                AdaptiveRangeLeaf(path=root_path, box=request.box, enclosure=best),
+        if candidate.enclosure is not None and (
+            best is None
+            or (
+                best.enclosure is not None
+                and _enclosure_width(candidate.enclosure)
+                < _enclosure_width(best.enclosure)
             )
-        if _enclosure_width(best) <= admission.target_width:
+        ):
+            best = candidate
+        leaves = (best if best is not None else candidate,)
+        if _evaluated_target_met(leaves, admission.target_width):
             return _finish_result(
-                request,
+                problem,
                 leaves,
                 admission=admission,
                 evaluations_used=evaluations,
@@ -746,12 +981,28 @@ def _compute_adaptive_range_enclosure(
                 reason=None,
             )
 
+    reason: AdaptiveRangeBudgetReason
     while True:
         _require_deadline(admission.deadline, "before partition refinement")
+        blocked_unproven = tuple(
+            leaf
+            for leaf in leaves
+            if leaf.domain_failure is not None
+            and (
+                len(leaf.path) >= problem.max_depth
+                or _widest_coordinate(leaf.box) is None
+            )
+        )
+        if blocked_unproven:
+            has_positive_coordinate = any(
+                _widest_coordinate(leaf.box) is not None for leaf in blocked_unproven
+            )
+            reason = "MAX_DEPTH" if has_positive_coordinate else "MAX_PRECISION"
+            break
         candidates = tuple(
             leaf
             for leaf in leaves
-            if len(leaf.path) < request.max_depth
+            if len(leaf.path) < problem.max_depth
             and _widest_coordinate(leaf.box) is not None
         )
         if not candidates:
@@ -760,58 +1011,60 @@ def _compute_adaptive_range_enclosure(
             )
             reason = "MAX_DEPTH" if any_positive_coordinate else "MAX_PRECISION"
             break
-        if len(leaves) >= request.max_leaves:
+        if len(leaves) >= problem.max_leaves:
             reason = "MAX_LEAVES"
             break
-        if request.max_evaluations - evaluations < 2:
+        if problem.max_evaluations - evaluations < 2:
             reason = "MAX_EVALUATIONS"
             break
         selected = min(
             candidates,
-            key=lambda leaf: (-_enclosure_width(leaf.enclosure), leaf.path),
+            key=_leaf_selection_key,
         )
         coordinate = _widest_coordinate(selected.box)
         assert coordinate is not None
         child_boxes = _split_box(selected.box, coordinate)
-        child_enclosures = tuple(
+        children = tuple(
             _evaluate_leaf(
-                request.expression,
+                problem.expression,
+                (*selected.path, bit),
                 child_box,
-                request.maximum_precision_bits,
+                problem.maximum_precision_bits,
                 deadline=admission.deadline,
             )
-            for child_box in child_boxes
+            for bit, child_box in enumerate(child_boxes)
         )
         evaluations += 2
-        children = tuple(
-            AdaptiveRangeLeaf(
-                path=(*selected.path, bit),
-                box=child_box,
-                enclosure=enclosure,
-            )
-            for bit, (child_box, enclosure) in enumerate(
-                zip(child_boxes, child_enclosures, strict=True)
-            )
-        )
         leaves = tuple(leaf for leaf in leaves if leaf.path != selected.path) + children
         leaves = tuple(sorted(leaves, key=lambda leaf: leaf.path))
-        if _enclosure_width(_interval_hull(leaves)) <= admission.target_width:
+        if _evaluated_target_met(leaves, admission.target_width):
             return _finish_result(
-                request,
+                problem,
                 leaves,
                 admission=admission,
                 evaluations_used=evaluations,
-                maximum_precision_bits_used=request.maximum_precision_bits,
+                maximum_precision_bits_used=problem.maximum_precision_bits,
                 reason=None,
             )
 
     return _finish_result(
-        request,
+        problem,
         leaves,
         admission=admission,
         evaluations_used=evaluations,
         maximum_precision_bits_used=precision_used,
         reason=reason,
+    )
+
+
+def _compute_adaptive_range_enclosure(
+    request: AdaptiveRangeEnclosureRequest,
+) -> AdaptiveRangeEnclosureResult:
+    execution = current_request_execution()
+    started_at = execution.started_at if execution is not None else monotonic()
+    return _run_adaptive_range_enclosure(
+        _problem_from_request(request),
+        started_at=started_at,
     )
 
 
@@ -827,10 +1080,10 @@ def adaptive_range_enclosure(
     max_evaluations: int = 128,
     wall_seconds: int = 30,
 ) -> AdaptiveRangeEnclosureResult:
-    """Return a sound complete range hull over a deterministic finite cover."""
+    """Return a sound complete range hull or a typed finite nonconclusion."""
 
     started_at = monotonic()
-    request = AdaptiveRangeEnclosureRequest(
+    problem = _AdaptiveRangeProblem(
         expression=expression,
         box=box,
         precision_bits=precision_bits,
@@ -841,7 +1094,7 @@ def adaptive_range_enclosure(
         max_evaluations=max_evaluations,
         wall_seconds=wall_seconds,
     )
-    return _compute_adaptive_range_enclosure(request, native_started_at=started_at)
+    return _run_adaptive_range_enclosure(problem, started_at=started_at)
 
 
 ADAPTIVE_RANGE_ENCLOSURE_OPERATIONS = (
@@ -852,11 +1105,15 @@ ADAPTIVE_RANGE_ENCLOSURE_OPERATIONS = (
             "Return a sound dyadic hull over every leaf of a deterministic complete "
             "rational-box partition. Precision doubles to the requested maximum; "
             "the narrowest source-box enclosure is retained (earliest precision on "
-            "ties), then the widest currently splittable certified-range leaf is "
-            "bisected on its widest source coordinate, with canonical path and axis "
-            "ties. TARGET_MET means the hull width is at most target_width. "
+            "ties). Domain-uncertain leaves are then refined first in canonical path "
+            "order; otherwise the widest splittable certified-range leaf is bisected "
+            "on its widest source coordinate, with canonical path and axis ties. "
+            "TARGET_MET means the hull width is at most target_width. "
             "BUDGET_EXHAUSTED retains the same global soundness after the declared "
-            "finite schedule stops. The envelope admits at most "
+            "finite schedule stops. DOMAIN_UNPROVEN carries the complete final cover "
+            "but no global enclosure when fixed-precision Arb leaves a local real-"
+            "domain obligation uncertain after bounded refinement. The envelope "
+            "admits at most "
             f"{MAX_ADAPTIVE_RANGE_LEAVES:,} leaves, depth "
             f"{MAX_ADAPTIVE_RANGE_DEPTH}, {MAX_ADAPTIVE_RANGE_EVALUATIONS:,} "
             "evaluations and 4,096 precision bits, "
@@ -937,6 +1194,8 @@ __all__ = [
     "MAX_ADAPTIVE_RANGE_RESULT_BYTES",
     "MAX_ADAPTIVE_RANGE_WALL_SECONDS",
     "AdaptiveRangeBudgetExhausted",
+    "AdaptiveRangeDomainUnproven",
+    "AdaptiveRangeDomainUnprovenLeaf",
     "AdaptiveRangeEnclosureRequest",
     "AdaptiveRangeEnclosureResult",
     "AdaptiveRangeLeaf",

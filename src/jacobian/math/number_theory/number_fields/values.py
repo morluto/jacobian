@@ -170,7 +170,12 @@ class SimpleNumberFieldElement(StrictModel):
 
 
 class RealNumberFieldEmbedding(StrictModel):
-    """A field homomorphism selected by one exact real root of its presentation."""
+    """A simple-field presentation with one structurally selected real root.
+
+    Embedding producers establish that the indexed root exists. Deserialization
+    preserves that canonical identity without replaying a backend; mathematical
+    consumers recognize the root before using this value as a field homomorphism.
+    """
 
     kind: Literal["REAL"]
     presentation: SimpleNumberFieldPresentation
@@ -495,6 +500,7 @@ __all__ = [
     "NumberFieldEmbeddingProfile",
     "NumberFieldEmbeddingRecord",
     "NumberFieldSignature",
+    "RealNumberFieldEmbedding",
     "RealNumberFieldEmbeddingRecord",
     "SimpleNumberFieldElement",
     "SimpleNumberFieldPresentation",

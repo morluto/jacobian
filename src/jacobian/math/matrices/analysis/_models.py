@@ -10,7 +10,12 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.math.matrices.values import RationalMatrix, rational_matrix_from_fractions
+from jacobian.math.matrices.values import (
+    EmbeddedRealSimpleNumberFieldMatrix,
+    ExactRealMatrix,
+    RationalMatrix,
+    rational_matrix_from_fractions,
+)
 
 # The canonical dense rational matrix carries determinant inputs through
 # order 64, but the symmetric definiteness request's work and result
@@ -148,13 +153,30 @@ class MatrixEntry(StrictModel):
 
 
 class SymmetricMatrixRequest(StrictModel):
-    """A symmetric rational matrix for definiteness analysis."""
+    """A sparse rational or canonical embedded algebraic symmetric matrix."""
 
-    dimension: int = Field(ge=1, le=MAX_SYMMETRIC_MATRIX_DIMENSION)
-    entries: tuple[MatrixEntry, ...] = Field(min_length=1)
+    dimension: int | None = Field(
+        default=None,
+        ge=1,
+        le=MAX_SYMMETRIC_MATRIX_DIMENSION,
+    )
+    entries: tuple[MatrixEntry, ...] = Field(default=())
+    matrix: EmbeddedRealSimpleNumberFieldMatrix | None = None
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
+        if self.matrix is not None:
+            if self.dimension is not None or self.entries:
+                raise _validation_error(
+                    "invariant_mismatch",
+                    "an embedded algebraic inertia request uses matrix alone",
+                )
+            return self
+        if self.dimension is None or not self.entries:
+            raise _validation_error(
+                "shape_mismatch",
+                "a rational inertia request needs dimension and sparse entries",
+            )
         seen: set[tuple[int, int]] = set()
         for e in self.entries:
             if e.row >= self.dimension or e.col >= self.dimension:
@@ -170,8 +192,12 @@ class SymmetricMatrixRequest(StrictModel):
         return self
 
 
-def _canonical_source_matrix(request: SymmetricMatrixRequest) -> RationalMatrix:
-    """Normalize sparse symmetric input without entering the operation module."""
+def _canonical_source_matrix(request: SymmetricMatrixRequest) -> ExactRealMatrix:
+    """Normalize a wire source without entering the operation module."""
+
+    if request.matrix is not None:
+        return request.matrix
+    assert request.dimension is not None
 
     matrix = [[Fraction(0)] * request.dimension for _ in range(request.dimension)]
     for entry in request.entries:
@@ -185,12 +211,10 @@ def _canonical_source_matrix(request: SymmetricMatrixRequest) -> RationalMatrix:
 class InertiaResult(StrictModel):
     """Sylvester inertia (n_pos, n_neg, n_zero) of a symmetric matrix.
 
-    Retains the source matrix in the domain's canonical dense
-    ``RationalMatrix`` form, so every payload describing the same symmetric
-    matrix yields identical outputs and digests regardless of entry order,
-    triangular coordinates, or explicit zeros. Structural validation enforces
-    the count and definiteness-label invariants. Exact congruence replay for
-    independently supplied outcomes is provided by the owner verifier:
+    Retains the source matrix in its canonical exact-real domain. Structural
+    validation enforces the count and definiteness-label invariants. Exact
+    congruence replay for independently supplied outcomes is provided by the
+    owner verifier:
 
     - ``n_positive + n_negative + n_zero`` equals the dimension;
     - positive_definite iff all eigenvalues are positive, negative_definite
@@ -199,7 +223,7 @@ class InertiaResult(StrictModel):
       opposite sign; indefinite requires both nonzero sign classes.
     """
 
-    matrix: RationalMatrix
+    matrix: ExactRealMatrix
     n_positive: int = Field(ge=0)
     n_negative: int = Field(ge=0)
     n_zero: int = Field(ge=0)
@@ -244,7 +268,7 @@ class InertiaResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        matrix: RationalMatrix,
+        matrix: ExactRealMatrix,
         n_positive: int,
         n_negative: int,
         n_zero: int,

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from fractions import Fraction
 from math import factorial, lcm
+from typing import Any
 
 from pydantic_core import PydanticCustomError
 
@@ -19,6 +21,13 @@ from jacobian.canonical import (
     encode_strict_json,
 )
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.matrices._number_field import (
+    EmbeddedNumberFieldRecognitionError,
+    RecognizedRealSimpleNumberField,
+    domain_matrix_from_embedded,
+    field_element_sign,
+    recognize_real_simple_number_field,
+)
 from jacobian.math.matrices.analysis._models import (
     _RATIONAL_SPECTRUM_CLAIM_BYTES,
     _RATIONAL_SPECTRUM_MATRIX_ENTRY_BYTES,
@@ -40,7 +49,17 @@ from jacobian.math.matrices.analysis._models import (
     RationalSpectrumNullityLedgerEntry,
     _validation_error,
 )
-from jacobian.math.matrices.values import RationalMatrix, require_matrix_scalar_digits
+from jacobian.math.matrices.values import (
+    EmbeddedRealSimpleNumberFieldMatrix,
+    ExactRealMatrix,
+    RationalMatrix,
+    require_matrix_scalar_digits,
+)
+from jacobian.math.number_theory.number_fields.values import (
+    MAX_NUMBER_FIELD_EMBEDDING_DEGREE,
+)
+
+MAX_ALGEBRAIC_INERTIA_DIGIT_WORK = 500_000_000
 
 
 def _admit_rational_spectrum_claim(
@@ -128,7 +147,7 @@ def _admit_rational_spectrum_claim(
         )
 
 
-def _admit_inertia(matrix: RationalMatrix) -> None:
+def _admit_inertia(matrix: ExactRealMatrix) -> None:
     try:
         order = len(matrix.entries)
         if order != len(matrix.entries[0]):
@@ -148,6 +167,34 @@ def _admit_inertia(matrix: RationalMatrix) -> None:
             raise _validation_error(
                 "shape_mismatch", "inertia requires a symmetric matrix"
             )
+        if isinstance(matrix, EmbeddedRealSimpleNumberFieldMatrix):
+            degree = matrix.embedding.presentation.degree
+            if degree > MAX_NUMBER_FIELD_EMBEDDING_DEGREE:
+                raise _validation_error(
+                    "budget_exceeded",
+                    "exact algebraic inertia supports field degree at most "
+                    f"{MAX_NUMBER_FIELD_EMBEDDING_DEGREE}",
+                )
+            scalar_digits = max(
+                len(component.lstrip("-"))
+                for row in matrix.entries
+                for value in row
+                for coordinate in value.coefficients_ascending
+                for component in (coordinate.num, coordinate.den)
+            )
+            field_digits = max(
+                len(coefficient.lstrip("-"))
+                for coefficient in matrix.embedding.presentation.coefficients_descending
+            )
+            digit_work = (
+                order**3 * degree**2 * (2 * scalar_digits + degree * field_digits + 8)
+            )
+            if digit_work > MAX_ALGEBRAIC_INERTIA_DIGIT_WORK:
+                raise _validation_error(
+                    "budget_exceeded",
+                    "exact algebraic congruence elimination exceeds the "
+                    f"{MAX_ALGEBRAIC_INERTIA_DIGIT_WORK:,}-unit digit-work bound",
+                )
         output_limit = CanonicalLimits().max_output_bytes
         try:
             retained_bytes = len(encode_strict_json(matrix.model_dump(mode="json")))
@@ -373,22 +420,120 @@ def _symmetric_inertia(matrix: list[list[Fraction]]) -> tuple[int, int, int]:
     return n_pos, n_neg, n_zero
 
 
-def compute_inertia(matrix: RationalMatrix) -> InertiaResult:
-    """Compute the Sylvester inertia of a symmetric rational matrix."""
-    try:
-        _admit_inertia(matrix)
-    except PydanticCustomError as exc:
-        raise OperationDomainValidationError(
-            location=("matrix",), code=exc.type, message=exc.message()
-        ) from exc
-    source = [[entry.as_fraction() for entry in row] for row in matrix.entries]
-    n_pos, n_neg, n_zero = _symmetric_inertia(source)
+def _symmetric_algebraic_inertia(
+    matrix: list[list[Any]],
+    *,
+    sign: Callable[[Any], int],
+) -> tuple[int, int, int]:
+    """Reduce a symmetric number-field matrix by exact congruences."""
+
+    a = [row[:] for row in matrix]
+    n = len(a)
+    n_pos = n_neg = n_zero = 0
+    index = 0
+    while index < n:
+        pivot = next((row for row in range(index, n) if bool(a[row][row])), None)
+        if pivot is not None:
+            _swap_symmetric(a, index, pivot)
+            diagonal = a[index][index]
+            diagonal_sign = sign(diagonal)
+            if diagonal_sign > 0:
+                n_pos += 1
+            else:
+                n_neg += 1
+            for row in range(index + 1, n):
+                if not a[row][index]:
+                    continue
+                factor = a[row][index] / diagonal
+                for column in range(index, n):
+                    a[row][column] -= factor * a[index][column]
+                for column in range(index, n):
+                    a[column][row] = a[row][column]
+            index += 1
+            continue
+
+        pair = next(
+            (
+                (row, column)
+                for row in range(index, n)
+                for column in range(row + 1, n)
+                if bool(a[row][column])
+            ),
+            None,
+        )
+        if pair is None:
+            n_zero += n - index
+            break
+        first, second = pair
+        _swap_symmetric(a, index, first)
+        if second == index:
+            second = first
+        _swap_symmetric(a, index + 1, second)
+        # Every remaining diagonal is zero, so the selected block is
+        # [[0,b],[b,0]] with negative determinant and inertia (1,1).
+        b = a[index][index + 1]
+        n_pos += 1
+        n_neg += 1
+        if index + 2 < n:
+            inverse_off_diagonal = b**-1
+            for row in range(index + 2, n):
+                left = a[row][index]
+                right = a[row][index + 1]
+                coefficient0 = right * inverse_off_diagonal
+                coefficient1 = left * inverse_off_diagonal
+                for column in range(index, n):
+                    a[row][column] -= (
+                        coefficient0 * a[index][column]
+                        + coefficient1 * a[index + 1][column]
+                    )
+                for column in range(index, n):
+                    a[column][row] = a[row][column]
+        index += 2
+    return n_pos, n_neg, n_zero
+
+
+def _compute_inertia(
+    matrix: ExactRealMatrix,
+    *,
+    recognized_field: RecognizedRealSimpleNumberField | None = None,
+) -> InertiaResult:
+    """Compute Sylvester inertia over QQ or one exact real simple field."""
+
+    _admit_inertia(matrix)
+    if isinstance(matrix, EmbeddedRealSimpleNumberFieldMatrix):
+        try:
+            if recognized_field is None:
+                recognized = recognize_real_simple_number_field(matrix.embedding)
+            else:
+                recognized = recognized_field
+            source = domain_matrix_from_embedded(matrix, recognized).rep.to_ddm()
+        except EmbeddedNumberFieldRecognitionError as exc:
+            raise OperationDomainValidationError(
+                location=("matrix", "embedding"),
+                code=f"matrix.{exc.reason}",
+                message=str(exc),
+            ) from exc
+        n_pos, n_neg, n_zero = _symmetric_algebraic_inertia(
+            [list(row) for row in source],
+            sign=lambda value: field_element_sign(value, recognized),
+        )
+    else:
+        rational_source = [
+            [entry.as_fraction() for entry in row] for row in matrix.entries
+        ]
+        n_pos, n_neg, n_zero = _symmetric_inertia(rational_source)
     return InertiaResult._from_kernel(
         matrix=matrix,
         n_positive=n_pos,
         n_negative=n_neg,
         n_zero=n_zero,
     )
+
+
+def compute_inertia(matrix: ExactRealMatrix) -> InertiaResult:
+    """Compute Sylvester inertia over QQ or one exact real simple field."""
+
+    return _compute_inertia(matrix)
 
 
 def check_farkas_certificate(

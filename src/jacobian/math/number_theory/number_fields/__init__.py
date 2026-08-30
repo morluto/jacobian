@@ -7,12 +7,14 @@ from jacobian.math.number_theory.number_fields.operations import (
 )
 from jacobian.math.number_theory.number_fields.values import (
     NumberFieldEmbeddingProfile,
+    RealNumberFieldEmbedding,
     SimpleNumberFieldElement,
     SimpleNumberFieldPresentation,
 )
 
 __all__ = [
     "NumberFieldEmbeddingProfile",
+    "RealNumberFieldEmbedding",
     "SimpleNumberFieldElement",
     "SimpleNumberFieldPresentation",
     "discriminant",

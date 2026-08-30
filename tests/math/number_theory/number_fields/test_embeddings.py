@@ -374,9 +374,9 @@ def test_structural_complex_root_parsing_does_not_replay_sympy() -> None:
     )
 
 
-def test_unrecognized_embedding_carriers_are_not_native_api() -> None:
+def test_only_real_embedding_carrier_is_public_native_api() -> None:
     assert "ComplexNumberFieldEmbedding" not in number_fields.__all__
-    assert "RealNumberFieldEmbedding" not in number_fields.__all__
+    assert "RealNumberFieldEmbedding" in number_fields.__all__
     assert "EmbeddedSimpleNumberFieldElement" not in number_fields.__all__
 
 

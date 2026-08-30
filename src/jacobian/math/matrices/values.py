@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from itertools import pairwise
-from typing import Any, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 from pydantic.json_schema import JsonSchemaValue
@@ -18,6 +18,10 @@ from jacobian._exact import (
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.quadratic import RealQuadraticValue
+from jacobian.math.number_theory.number_fields.values import (
+    RealNumberFieldEmbedding,
+    SimpleNumberFieldElement,
+)
 
 MAX_MATRIX_DIMENSION = 32
 MAX_EXACT_LINEAR_MATRIX_AXIS = 64
@@ -143,6 +147,78 @@ class RationalMatrix(StrictModel):
             label="matrix",
         )
         return self
+
+
+class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
+    """One matrix over a simple number field at a selected real embedding.
+
+    Every entry retains the canonical abstract field element.  The common
+    embedding selects how those elements act as real scalars; consumers must
+    recognize the field and indexed root before doing mathematical work.
+    """
+
+    domain: Literal["EMBEDDED_REAL_SIMPLE_NUMBER_FIELD"] = (
+        "EMBEDDED_REAL_SIMPLE_NUMBER_FIELD"
+    )
+    embedding: RealNumberFieldEmbedding
+    entries: tuple[tuple[SimpleNumberFieldElement, ...], ...] = Field(
+        min_length=1,
+        max_length=MAX_RATIONAL_MATRIX_ORDER,
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_matrix_envelope(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        entries = data.get("entries")
+        if isinstance(entries, (list, tuple)):
+            if len(entries) > MAX_RATIONAL_MATRIX_ORDER:
+                raise _validation_error(
+                    "budget_exceeded",
+                    "embedded number-field matrices have at most "
+                    f"{MAX_RATIONAL_MATRIX_ORDER} rows",
+                )
+            for row in entries:
+                if isinstance(row, (list, tuple)) and len(row) > (
+                    MAX_RATIONAL_MATRIX_ORDER
+                ):
+                    raise _validation_error(
+                        "budget_exceeded",
+                        "embedded number-field matrices have at most "
+                        f"{MAX_RATIONAL_MATRIX_ORDER} columns",
+                    )
+        return canonicalize_json_containers(data)
+
+    @model_validator(mode="after")
+    def require_common_embedding_and_rectangular_shape(self) -> Self:
+        column_count = len(self.entries[0])
+        if column_count == 0 or column_count > MAX_RATIONAL_MATRIX_ORDER:
+            raise _validation_error(
+                "budget_exceeded",
+                "embedded number-field matrix rows must contain between 1 and "
+                f"{MAX_RATIONAL_MATRIX_ORDER} entries",
+            )
+        if any(len(row) != column_count for row in self.entries):
+            raise _validation_error(
+                "shape_mismatch",
+                "embedded number-field matrix rows must have equal length",
+            )
+        presentation = self.embedding.presentation
+        if any(
+            entry.presentation != presentation for row in self.entries for entry in row
+        ):
+            raise _validation_error(
+                "embedding_presentation",
+                "every matrix entry must use the selected embedding's presentation",
+            )
+        return self
+
+
+ExactRealMatrix = Annotated[
+    RationalMatrix | EmbeddedRealSimpleNumberFieldMatrix,
+    Field(discriminator="domain"),
+]
 
 
 def rational_matrix_from_fractions(
@@ -472,6 +548,8 @@ __all__ = [
     "MAX_RATIONAL_MATRIX_ORDER",
     "MAX_SPARSE_RATIONAL_MATRIX_AXIS",
     "MAX_SPARSE_RATIONAL_MATRIX_NONZEROS",
+    "EmbeddedRealSimpleNumberFieldMatrix",
+    "ExactRealMatrix",
     "IntegerMatrix",
     "RationalMatrix",
     "RationalVectorSpaceBasis",

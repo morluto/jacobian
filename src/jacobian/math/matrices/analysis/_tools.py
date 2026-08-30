@@ -139,10 +139,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     ),
     _op(
         "matrix.inertia.compute",
-        "Compute Sylvester inertia of a symmetric rational matrix",
-        "Given a symmetric rational matrix, compute its Sylvester inertia "
-        "(n_positive, n_negative, n_zero) and definiteness classification "
-        "using exact rational LDL decomposition.",
+        "Compute Sylvester inertia of an exact real symmetric matrix",
+        "Given a sparse rational or common-embedding real simple-number-field "
+        "symmetric matrix, compute its exact Sylvester inertia "
+        "(n_positive, n_negative, n_zero) and definiteness classification by "
+        "congruence reduction in the retained scalar domain.",
         SymmetricMatrixRequest,
         InertiaResult,
         compute_inertia,
@@ -161,6 +162,40 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         {"row": 1, "col": 1, "value": {"num": "1", "den": "1"}},
                         {"row": 2, "col": 2, "value": {"num": "1", "den": "1"}},
                     ],
+                },
+            ),
+            example(
+                "positive_quadratic_embedding",
+                "The positive embedding of sqrt(2) has inertia (1, 0, 0).",
+                {
+                    "matrix": {
+                        "domain": "EMBEDDED_REAL_SIMPLE_NUMBER_FIELD",
+                        "embedding": {
+                            "kind": "REAL",
+                            "presentation": {
+                                "domain": "QQ",
+                                "coefficients_descending": ["1", "0", "-2"],
+                            },
+                            "root": {
+                                "polynomial": ["1", "0", "-2"],
+                                "real_root_index": 1,
+                            },
+                        },
+                        "entries": [
+                            [
+                                {
+                                    "presentation": {
+                                        "domain": "QQ",
+                                        "coefficients_descending": ["1", "0", "-2"],
+                                    },
+                                    "coefficients_ascending": [
+                                        {"num": "0", "den": "1"},
+                                        {"num": "1", "den": "1"},
+                                    ],
+                                }
+                            ]
+                        ],
+                    }
                 },
             ),
         ),

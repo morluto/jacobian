@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.r_full_enumeration._models import (
+    MAX_R_FULL_SIEVE_BOUND,
     RFullEnumerationResult,
 )
 
@@ -16,7 +18,22 @@ def enumerate_r_full(bound: int, minimum_exponent: int) -> RFullEnumerationResul
     at least r. The enumeration generates all products of prime powers
     p^e with e >= r.
     """
-    if bound < 1 or minimum_exponent < 2:
+    if bound < 0 or bound > MAX_R_FULL_SIEVE_BOUND:
+        raise OperationDomainValidationError(
+            location=("bound",),
+            code="number_theory.r_full_sieve_bound",
+            message=(
+                "r-full enumeration supports bounds from 0 through "
+                f"{MAX_R_FULL_SIEVE_BOUND}"
+            ),
+        )
+    if minimum_exponent < 2:
+        raise OperationDomainValidationError(
+            location=("minimum_exponent",),
+            code="number_theory.r_full_minimum_exponent",
+            message="r-full enumeration requires minimum_exponent at least 2",
+        )
+    if bound < 1:
         return RFullEnumerationResult(
             bound=bound,
             minimum_exponent=minimum_exponent,
@@ -34,31 +51,6 @@ def enumerate_r_full(bound: int, minimum_exponent: int) -> RFullEnumerationResul
     primes = [p for p in range(2, bound + 1) if sieve[p]]
 
     values: set[int] = set()
-
-    def _generate(idx: int, current: int) -> None:
-        if current > bound:
-            return
-        if current >= 1:
-            values.add(current)
-        for i in range(idx, len(primes)):
-            p = primes[i]
-            power = p**minimum_exponent
-            if current == 0:
-                pass
-            if current > bound // power and current > 0:
-                break
-            # Start from p^r, then multiply by p for higher exponents
-            n = current
-            if n == 0:
-                n = 1
-            pe = p**minimum_exponent
-            if n * pe > bound:
-                continue
-            # Use p^r, p^(r+1), ...
-            e = minimum_exponent
-            while n * (p**e) <= bound:
-                _generate(i + 1, n * (p**e))
-                e += 1
 
     # Generate all r-full numbers
     # An r-full number is a product of prime powers p^e with e >= r

@@ -34,6 +34,7 @@ __all__ = [
     "orthogonal_complement",
     "orthogonal_sum",
     "saturate_lattice",
+    "saturated_lattice_basis",
     "smith_invariant_factors",
     "sublattice_index",
 ]
@@ -146,17 +147,19 @@ def dual_basis(entries: list[list[int]]) -> list[list[Fraction]]:
     return result
 
 
-def saturate_lattice(
-    entries: list[list[int]],
-) -> tuple[list[list[int]], list[list[int]], int]:
-    """Return ``(saturated_basis, inclusion, index)`` for the lattice.
+def saturated_lattice_basis(entries: list[list[int]]) -> list[list[int]]:
+    """Return a transpose-column-HNF basis of ``span_Q(entries) cap ZZ^n``.
 
-    ``saturated_basis`` spans ``sat(L) = span_Q(L) cap ZZ^n`` in HNF canonical
-    form.  ``inclusion`` is the integer matrix ``C`` with ``B = C @ sat``.
-    ``index`` is the finite index ``[sat(L) : L]``.
+    The input rows must be linearly independent.  SymPy's exact Smith
+    decomposition supplies a unimodular change of ambient coordinates; the
+    corresponding primitive rows are normalized by applying its column-Hermite
+    implementation to their transpose. This is the historical convention used
+    by ``saturate_lattice``; callers that require FLINT's row-Hermite convention
+    must normalize the returned rows once more. This helper deliberately does
+    not compute an inclusion matrix or enumerate maximal minors, so callers
+    that only need the primitive closure do not pay the combinatorial index
+    cost.
     """
-    from math import gcd
-
     from sympy import ZZ, Matrix
     from sympy.matrices.normalforms import hermite_normal_form
     from sympy.polys.matrices import DomainMatrix
@@ -174,6 +177,25 @@ def saturate_lattice(
     _, _, right = smith_normal_decomp(domain_basis)
     primitive_rows = right.to_Matrix().inv()[:rows, :]
     sat = hermite_normal_form(primitive_rows.T).T
+    return _sympy_to_int_list(sat)
+
+
+def saturate_lattice(
+    entries: list[list[int]],
+) -> tuple[list[list[int]], list[list[int]], int]:
+    """Return ``(saturated_basis, inclusion, index)`` for the lattice.
+
+    ``saturated_basis`` spans ``sat(L) = span_Q(L) cap ZZ^n`` in HNF canonical
+    form.  ``inclusion`` is the integer matrix ``C`` with ``B = C @ sat``.
+    ``index`` is the finite index ``[sat(L) : L]``.
+    """
+    from math import gcd
+
+    from sympy import Matrix
+
+    basis = Matrix(entries)
+    rows = basis.rows
+    sat = Matrix(saturated_lattice_basis(entries))
 
     # Inclusion L -> sat(L): each basis row of L is an integer combination
     # of the sat basis rows.  Solve basis = C @ sat_basis for the r x r

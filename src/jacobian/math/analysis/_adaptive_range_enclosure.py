@@ -614,6 +614,17 @@ class AdaptiveRangeEnclosureResult(AdaptiveRangeEnclosureRequest):
             raise _validation_error(
                 "a concluded adaptive disposition requires a global enclosure"
             )
+        enclosure_width = _enclosure_width(self.enclosure)
+        target_width = self.target_width.as_fraction()
+        if isinstance(self.disposition, AdaptiveRangeTargetMet):
+            if enclosure_width > target_width:
+                raise _validation_error(
+                    "TARGET_MET requires enclosure width at most target_width"
+                )
+        elif enclosure_width <= target_width:
+            raise _validation_error(
+                "BUDGET_EXHAUSTED requires enclosure width above target_width"
+            )
         return self
 
     @classmethod

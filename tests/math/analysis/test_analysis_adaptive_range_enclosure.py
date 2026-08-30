@@ -1285,3 +1285,16 @@ def test_result_schema_and_parser_reject_contradictory_outcome_shapes() -> None:
         assert list(validator.iter_errors(forged))
         with pytest.raises(ValidationError):
             AdaptiveRangeEnclosureResult.model_validate(forged)
+
+    target_contradiction = deepcopy(concluded_payload)
+    target_contradiction["target_width"] = {"num": "1", "den": "1000000"}
+    with pytest.raises(ValidationError, match="TARGET_MET"):
+        AdaptiveRangeEnclosureResult.model_validate(target_contradiction)
+
+    budget_contradiction = deepcopy(concluded_payload)
+    budget_contradiction["disposition"] = {
+        "status": "BUDGET_EXHAUSTED",
+        "reason": "MAX_LEAVES",
+    }
+    with pytest.raises(ValidationError, match="BUDGET_EXHAUSTED"):
+        AdaptiveRangeEnclosureResult.model_validate(budget_contradiction)

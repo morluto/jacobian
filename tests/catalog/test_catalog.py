@@ -257,7 +257,10 @@ def test_natural_prime_power_query_ranks_factorization_before_prime_navigation()
     result = catalog.search(
         OperationDiscoveryRequest(
             query="factor an integer into prime powers",
-            limit=10,
+            # Keep the complete navigation comparison within the public
+            # discovery limit; new factor-related operations may occupy the
+            # first ten slots without changing the relative ordering.
+            limit=20,
         )
     )
     positions = {

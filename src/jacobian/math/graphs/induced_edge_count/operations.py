@@ -84,7 +84,7 @@ def _admit_induced_edge_count_profile(
         witness_bytes = _array_size(
             tuple(sorted(label_sizes, reverse=True)[:cardinality])
         )
-        max_rows = min(edge_count + 1, subset_count)
+        max_rows = min(comb(cardinality, 2) + 1, edge_count + 1, subset_count)
         row_bytes = strict_json_object_size(
             (
                 ("edge_count", _int_size(edge_count)),
@@ -134,7 +134,9 @@ def compute_induced_edge_count_profile(
     the number of k-subsets having that count, and one canonical witness.
     """
     _admit_induced_edge_count_profile(graph, cardinality)
-    vertices = list(graph.vertices)
+    # Establish canonical witness order once; sorting each subset would repeat
+    # label comparisons for every combination.
+    vertices = sorted(graph.vertices)
     edges = list(graph.edges)
 
     # Keep one witness and a multiplicity per attained edge count rather than
@@ -148,7 +150,7 @@ def compute_induced_edge_count_profile(
         for a, b in edges:
             if a in subset_set and b in subset_set:
                 edge_count += 1
-        witness = tuple(sorted(subset))
+        witness = tuple(subset)
         previous = count_to_stats.get(edge_count)
         if previous is None:
             count_to_stats[edge_count] = (1, witness)

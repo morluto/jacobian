@@ -5,6 +5,9 @@ from __future__ import annotations
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.number_theory._r_full_enumerate_kernels import (
+    enumerate_r_full as enumerate_r_full_kernel,
+)
 from jacobian.math.number_theory._r_full_enumerate_models import (
     MAX_R_FULL_CUTOFF,
     MAX_R_FULL_EXPONENT,
@@ -38,9 +41,10 @@ def _enumerate_r_full_admitted(
             code="r_full_enumerate_family_exceeds_transport_budget",
             message="r-full family exceeds the serialized-byte budget",
         )
-    return RFullEnumerateResult._from_kernel(
-        minimum_exponent, canonical_cutoff, list(plan.family)
+    family = enumerate_r_full_kernel(
+        cutoff, minimum_exponent, planned_family=plan.family
     )
+    return RFullEnumerateResult._from_kernel(minimum_exponent, canonical_cutoff, family)
 
 
 def enumerate_r_full_numbers(
@@ -60,7 +64,10 @@ def enumerate_r_full(minimum_exponent: int, cutoff: int) -> RFullEnumerateResult
         raise OperationDomainValidationError(
             location=("minimum_exponent",),
             code="r_full_enumerate.exponent_bound",
-            message="minimum_exponent must be an integer from 2 through 64",
+            message=(
+                f"minimum_exponent must be an integer from {MIN_R_FULL_EXPONENT} "
+                f"through {MAX_R_FULL_EXPONENT}"
+            ),
         )
     if type(cutoff) is not int or not (0 < cutoff <= MAX_R_FULL_CUTOFF):
         raise OperationDomainValidationError(

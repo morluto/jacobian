@@ -10,14 +10,15 @@ This avoids scanning every integer in the interval.
 
 from __future__ import annotations
 
-from bisect import bisect_right
-from heapq import merge
-
-from sympy import integer_nthroot
-from sympy.ntheory.generate import primerange
+from jacobian.math.number_theory._r_full_enumerate_models import plan_r_full_family
 
 
-def enumerate_r_full(cutoff: int, r: int) -> list[int]:
+def enumerate_r_full(
+    cutoff: int,
+    r: int,
+    *,
+    planned_family: tuple[int, ...] | None = None,
+) -> list[int]:
     """Return every r-full integer in [1, cutoff] exactly once, sorted.
 
     Algorithm:
@@ -29,39 +30,12 @@ def enumerate_r_full(cutoff: int, r: int) -> list[int]:
        k >= r, as long as the product is <= cutoff.
     5. Iterate until fixpoint.
     """
+    if planned_family is not None:
+        return list(planned_family)
     if cutoff < 1:
         return []
 
-    # Collect primes p with p^r <= cutoff. Bounding the prime search by the
-    # exact integer root avoids scanning the entire interval up to ``cutoff``.
-    prime_bound, _ = integer_nthroot(cutoff, r)
-    primes: list[int] = []
-    for p in primerange(2, int(prime_bound) + 1):
-        primes.append(int(p))
-
-    family_set: set[int] = {1}
-    sorted_family = [1]
-
-    # For each prime, multiply into existing family members
-    for prime in primes:
-        # Generate prime^r, prime^(r+1), ... all <= cutoff
-        powers: list[int] = []
-        current = prime**r
-        while current <= cutoff:
-            powers.append(current)
-            current *= prime
-        if not powers:
-            continue
-
-        # Multiply every existing family member by each power
-        new_values: set[int] = set()
-        for pw in powers:
-            max_member = cutoff // pw
-            for member in sorted_family[: bisect_right(sorted_family, max_member)]:
-                new_values.add(member * pw)
-        fresh_values = sorted(value for value in new_values if value not in family_set)
-        if fresh_values:
-            family_set.update(fresh_values)
-            sorted_family = list(merge(sorted_family, fresh_values))
-
-    return sorted_family
+    plan = plan_r_full_family(r, cutoff)
+    if plan.exceeded:
+        return []
+    return list(plan.family)

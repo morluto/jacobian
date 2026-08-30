@@ -51,6 +51,14 @@ def _common_denominator_digits(fractions: tuple[Fraction, ...]) -> int:
     return len(format_canonical_integer(common_denominator))
 
 
+def _single_sum_digit_bounds(fractions: tuple[Fraction, ...]) -> tuple[int, int]:
+    total = sum(fractions, Fraction(0))
+    return (
+        len(format_canonical_integer(total.numerator)),
+        len(format_canonical_integer(total.denominator)),
+    )
+
+
 def _support_bound(
     fractions: tuple[Fraction, ...], arity: int, candidate_count: int
 ) -> tuple[int, int, int]:
@@ -127,7 +135,7 @@ def _capped_combination(n: int, k: int, cap: int) -> int:
     return result
 
 
-def _admit(
+def _admit(  # noqa: C901
     values: tuple[CanonicalRational, ...],
     arity: int,
 ) -> _AdmissionPlan:
@@ -196,7 +204,11 @@ def _admit(
     )
     shared_denominator = len({value.den for value in values}) == 1 if values else True
     common_denominator_digits = _common_denominator_digits(fractions)
-    if candidate_count:
+    if candidate_count == 1:
+        sum_numerator_digits, sum_denominator_digits = _single_sum_digit_bounds(
+            fractions
+        )
+    elif candidate_count:
         # The sole empty sum is exactly 0/1, independent of source widths.
         if arity == 0:
             sum_numerator_digits = sum_denominator_digits = 1

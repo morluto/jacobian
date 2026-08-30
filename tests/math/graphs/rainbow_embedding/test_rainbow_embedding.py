@@ -93,9 +93,7 @@ def test_degree_impossible_pattern_returns_empty_profile() -> None:
     host = ColoredUndirectedGraph(
         graph=SimpleUndirectedGraph(
             vertices=tuple(f"v{index:02d}" for index in range(13)),
-            edges=tuple(
-                (f"v{index:02d}", f"v{index + 1:02d}") for index in range(12)
-            ),
+            edges=tuple((f"v{index:02d}", f"v{index + 1:02d}") for index in range(12)),
         ),
         edge_colors=tuple("red" for _ in range(12)),
     )

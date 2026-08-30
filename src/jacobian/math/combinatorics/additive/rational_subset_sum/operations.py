@@ -105,7 +105,10 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
             lattice_step = gcd(lattice_step, abs(value))
         support_span = (positive_span - negative_span) // max(lattice_step, 1)
         support_upper_bound = min(support_upper_bound, support_span + 1)
-        if common_denominator_overflow or numerator_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+        if (
+            common_denominator_overflow
+            or numerator_digits > MAX_CANONICAL_RATIONAL_DIGITS
+        ):
             if len(nonzero) > 2:
                 _reject(
                     "rational_growth_bound",

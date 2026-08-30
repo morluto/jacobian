@@ -174,3 +174,14 @@ def test_result_budget_charges_cycle_blocks_independently() -> None:
     )
     result = compute_cycle_length_profile(_graph(vertices, edges))
     assert {row.cycle_length for row in result.rows} == set(range(3, 11))
+
+
+def test_simple_cycle_reserves_only_its_feasible_length() -> None:
+    """A chordless cycle has one possible witness length, not every prefix."""
+    vertices = sorted(f"v{index:02d}-" + "x" * 100_000 for index in range(20))
+    edges = [
+        tuple(sorted((vertices[index], vertices[(index + 1) % 20])))
+        for index in range(20)
+    ]
+    result = compute_cycle_length_profile(_graph(vertices, sorted(edges)))
+    assert [row.cycle_length for row in result.rows] == [20]

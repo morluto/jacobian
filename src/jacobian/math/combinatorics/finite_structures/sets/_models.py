@@ -9,7 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits, parse_canonical_integer
+from jacobian.canonical import parse_canonical_integer
 
 MAX_FINITE_SET_OPERAND_ELEMENTS = 50_000
 MAX_FINITE_INTEGER_SET_ELEMENTS = 2 * MAX_FINITE_SET_OPERAND_ELEMENTS

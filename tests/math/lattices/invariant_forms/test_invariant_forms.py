@@ -12,7 +12,6 @@ from sympy import Matrix
 from tests.fixtures.accounting import assert_charged_work_parity
 
 from jacobian.canonical import CanonicalLimits, encode_strict_json
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lattices._lattice_ops import saturate_lattice
 from jacobian.math.lattices.invariant_forms import (
@@ -477,9 +476,7 @@ def test_source_height_is_coupled_to_constraint_expansion_work(
 
 
 def test_catalog_publishes_typed_operation_and_valid_example() -> None:
-    operation = Catalog.open().operation(
-        "lattice.invariant_bilinear_form_lattice.compute"
-    )
+    operation = INVARIANT_BILINEAR_FORM_LATTICE_OPERATION
 
     assert operation is not None
     schema = operation.request_type.model_json_schema()

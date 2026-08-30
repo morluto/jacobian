@@ -7,7 +7,7 @@ from typing import Any, Literal, Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math._labels import OpaqueLabel
 from jacobian.math.matrices.values import (
@@ -93,6 +93,7 @@ def _canonicalize_generator_order(data: dict[str, object]) -> dict[str, object]:
 def _require_raw_action_envelope(data: object) -> object:
     """Bound structural action containers before nested rational parsing."""
 
+    data = canonicalize_json_containers(data)
     if not isinstance(data, dict):
         return data
     axis = data.get("coordinate_axis")
@@ -121,6 +122,7 @@ def _raw_action_parts(action: object) -> tuple[object, object]:
 def _require_raw_request_envelope(data: object) -> object:
     """Reject an over-work request before copying or nested scalar parsing."""
 
+    data = canonicalize_json_containers(data)
     if not isinstance(data, dict):
         return data
     axis, generators = _raw_action_parts(data.get("action"))
@@ -174,7 +176,7 @@ class RationalMatrixAction(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_raw_envelope(cls, data: Any) -> Any:
-        return _require_raw_action_envelope(data)
+        return _require_raw_action_envelope(canonicalize_json_containers(data))
 
     @model_validator(mode="after")
     def require_common_axis(self) -> Self:
@@ -291,7 +293,7 @@ class InvariantBilinearFormLatticeRequest(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_raw_operation_envelope(cls, data: Any) -> Any:
-        return _require_raw_request_envelope(data)
+        return _require_raw_request_envelope(canonicalize_json_containers(data))
 
 
 class InvariantBilinearFormLattice(StrictModel):

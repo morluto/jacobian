@@ -18,6 +18,7 @@ from jacobian.math.geometry.differential import (
     RationalLieDerivativeRequest,
     lie_derivative,
 )
+from jacobian.math.geometry.differential import _bounds as lie_bounds
 from jacobian.math.geometry.differential import _sympy as lie_backend
 from jacobian.math.geometry.differential._bounds import (
     MAX_LIE_DERIVATIVE_WORK_UNITS,
@@ -566,9 +567,9 @@ def test_zero_tensor_at_the_maximum_dense_shape_is_computed_completely() -> None
     assert all(not value.numerator.terms for value in result.lie_derivative.components)
 
 
-def test_maximum_dense_shape_charges_every_backend_formula_step(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def _maximum_dense_formula_inputs() -> tuple[
+    RationalCoordinateTensor, RationalCoordinateTensor
+]:
     variables = ("x", "y")
     one = _function(variables, (1, (0, 0)))
     vector = _tensor(
@@ -584,6 +585,33 @@ def test_maximum_dense_shape_charges_every_backend_formula_step(
         ("COVARIANT",) * MAX_RATIONAL_TENSOR_RANK,
         (one,) * MAX_RATIONAL_TENSOR_COMPONENTS,
     )
+    return vector, tensor
+
+
+def test_maximum_dense_shape_work_ledger_sums_actual_charge_amounts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    vector, tensor = _maximum_dense_formula_inputs()
+    charged_units: list[int] = []
+    original_charge = lie_bounds._Ledger.charge
+
+    def record_charge(ledger: Any, amount: int) -> None:
+        charged_units.append(amount)
+        original_charge(ledger, amount)
+
+    monkeypatch.setattr(lie_bounds._Ledger, "charge", record_charge)
+
+    plan = build_lie_derivative_plan(vector, tensor)
+
+    assert charged_units
+    assert sum(charged_units) == plan.work_units
+    assert plan.work_units <= MAX_LIE_DERIVATIVE_WORK_UNITS
+
+
+def test_maximum_dense_shape_executes_every_backend_formula_step(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    vector, tensor = _maximum_dense_formula_inputs()
     plan = build_lie_derivative_plan(vector, tensor)
     executed = {"derivative": 0, "product": 0, "sum": 0, "output_component": 0}
 
@@ -612,8 +640,7 @@ def test_maximum_dense_shape_charges_every_backend_formula_step(
     result = lie_backend.compute_lie_derivative_components(vector, tensor, plan)
     executed["output_component"] = len(result)
     formula_terms = sum(len(component.terms) for component in plan.components)
-    dimension = len(variables)
-    assert 0 < plan.work_units <= MAX_LIE_DERIVATIVE_WORK_UNITS
+    dimension = len(vector.coordinate_axis)
     assert_charged_work_parity(
         charged={
             "derivative": dimension * (dimension + len(tensor.components)),

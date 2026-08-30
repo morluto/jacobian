@@ -65,7 +65,8 @@ class MatrixRankResult(StrictModel):
                 "pivot columns must be declared column labels",
             )
         column_positions = {
-            label: position for position, label in enumerate(self.matrix.column_axis.labels)
+            label: position
+            for position, label in enumerate(self.matrix.column_axis.labels)
         }
         if any(
             column_positions[later] <= column_positions[earlier]

@@ -35,7 +35,7 @@ def _construct(request: ConstructChainComplexRequest) -> ChainComplexValue:
         return construct_chain_complex(
             request.basis_sizes,
             request.differential_matrices,
-            coefficient_field=request.coefficient_field,
+            coefficient_ring=request.coefficient_ring,
             prime=request.prime,
         )
     except ValidationError as exc:
@@ -80,13 +80,21 @@ def _tensor_product(request: TensorProductRequest) -> TensorProductResult:
 
 
 _CIRCLE_COMPLEX = {
-    "coefficient_field": "QQ",
+    "coefficient_ring": "QQ",
     "degree_min": 0,
     "degree_max": 1,
     "basis_sizes": [3, 3],
     "differential_matrices": [
         [["-1", "1", "0"], ["0", "-1", "1"], ["0", "0", "0"]],
     ],
+}
+
+_MULTIPLICATION_BY_SIX_COMPLEX = {
+    "coefficient_ring": "ZZ",
+    "degree_min": 0,
+    "degree_max": 1,
+    "basis_sizes": [1, 1],
+    "differential_matrices": [[["6"]]],
 }
 
 
@@ -96,7 +104,7 @@ TOOLS: MathTools = (
         title="Construct a finite based chain complex",
         description=(
             "Construct a bounded homological chain complex from differential "
-            "matrices over QQ or a prime field."
+            "matrices over ZZ, QQ, or a prime field."
         ),
         request_type=ConstructChainComplexRequest,
         result_type=ChainComplexValue,
@@ -111,7 +119,7 @@ TOOLS: MathTools = (
                 "x basis_sizes[i+1], and adjacent matrices must compose to "
                 "zero (d^2 = 0).",
                 {
-                    "coefficient_field": "QQ",
+                    "coefficient_ring": "QQ",
                     "basis_sizes": [3, 3],
                     "differential_matrices": [
                         [["-1", "1", "0"], ["0", "-1", "1"], ["0", "0", "0"]],
@@ -163,18 +171,33 @@ TOOLS: MathTools = (
         operation_id="chain_complex.homology.compute",
         title="Compute homology of a chain complex",
         description=(
-            "Compute the homology groups (Betti numbers) of a bounded chain "
-            "complex over QQ or a prime field using exact linear algebra."
+            "Compute exact homology of a bounded finite based chain complex. "
+            "Over QQ or GF(p), return vector-space ranks. Over ZZ, return "
+            "finitely generated abelian groups with invariant factors, "
+            "source-basis free and torsion cycles, torsion bounding chains, "
+            "and both Smith transformation certificates in every degree."
         ),
         request_type=ComputeHomologyRequest,
         result_type=HomologyResult,
         run=_homology,
-        tags=("chain-complex", "homology", "exact"),
+        tags=(
+            "chain-complex",
+            "homology",
+            "integer-homology",
+            "torsion",
+            "smith-normal-form",
+            "exact",
+        ),
         examples=(
             example(
                 "circle_homology",
                 "Compute homology of the circle (Betti numbers 1, 1).",
                 {"complex": _CIRCLE_COMPLEX},
+            ),
+            example(
+                "multiplication_by_six_homology",
+                "Compute H_0 = Z/6 and its torsion cycle and bounding chain.",
+                {"complex": _MULTIPLICATION_BY_SIX_COMPLEX},
             ),
         ),
     ),

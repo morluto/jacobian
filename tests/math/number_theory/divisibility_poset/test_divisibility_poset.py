@@ -84,15 +84,16 @@ def test_transitive_closure() -> None:
     assert ("2", "12") in pairs
 
 
-def test_native_admission_rejects_zero_and_empty_inputs() -> None:
+def test_native_admission_rejects_zero_and_accepts_empty_inputs() -> None:
     with pytest.raises(ValueError, match="positive integers"):
         divisibility_poset(_set("0", "2"))
-    with pytest.raises(ValueError, match="between 1"):
-        divisibility_poset(_set())
+    result = divisibility_poset(_set())
+    assert result.elements == ()
+    assert result.strict_order_pairs == ()
 
 
 def test_native_admission_matches_finite_poset_envelope() -> None:
-    with pytest.raises(ValueError, match="between 1 and 64"):
+    with pytest.raises(ValueError, match="between 0 and 64"):
         divisibility_poset(_set(*(str(value) for value in range(1, 66))))
     with pytest.raises(ValueError, match="no longer than 32"):
         divisibility_poset(_set("1" * 33))

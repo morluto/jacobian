@@ -34,12 +34,12 @@ def _admit_values(values: FiniteIntegerSet) -> tuple[str, ...]:
             message="values must be a canonical finite set of positive integers",
         )
     elements = values.elements
-    if not 1 <= len(elements) <= min(MAX_DIVISIBILITY_SET_SIZE, MAX_POSET_ELEMENTS):
+    if not 0 <= len(elements) <= min(MAX_DIVISIBILITY_SET_SIZE, MAX_POSET_ELEMENTS):
         raise OperationDomainValidationError(
             location=("values",),
             code="divisibility_poset.values_size",
             message=(
-                "values must contain between 1 and "
+                "values must contain between 0 and "
                 f"{min(MAX_DIVISIBILITY_SET_SIZE, MAX_POSET_ELEMENTS)} distinct integers"
             ),
         )

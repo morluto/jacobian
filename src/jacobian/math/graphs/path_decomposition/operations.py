@@ -28,6 +28,7 @@ MAX_RESULT_BYTES = CanonicalLimits().max_output_bytes
 @dataclass(frozen=True, slots=True)
 class _PathSearchPlan:
     candidates: tuple[frozenset[tuple[str, str]], ...]
+    candidate_incidences: int
     candidate_checks_bound: int
 
 
@@ -53,9 +54,12 @@ def _admit_graph(graph: SimpleUndirectedGraph) -> _PathSearchPlan:
         adjacency[left].add(right)
         adjacency[right].add(left)
 
+    candidate_sets, candidate_incidences = _find_all_simple_paths(
+        adjacency, candidate_limit=MAX_SEARCH_STATES
+    )
     candidates = tuple(
         sorted(
-            _find_all_simple_paths(adjacency, candidate_limit=MAX_SEARCH_STATES),
+            candidate_sets,
             key=lambda path: (-len(path), tuple(sorted(path))),
         )
     )
@@ -86,6 +90,7 @@ def _admit_graph(graph: SimpleUndirectedGraph) -> _PathSearchPlan:
         )
     return _PathSearchPlan(
         candidates=candidates,
+        candidate_incidences=candidate_incidences,
         candidate_checks_bound=candidate_checks_bound,
     )
 
@@ -107,6 +112,7 @@ def compute_minimum_path_decomposition(
     best = _minimum_cover(
         edge_set,
         plan.candidates,
+        candidate_incidences=plan.candidate_incidences,
         candidate_checks_bound=plan.candidate_checks_bound,
     )
 
@@ -129,7 +135,7 @@ def _find_all_simple_paths(
     adjacency: dict[str, set[str]],
     *,
     candidate_limit: int,
-) -> set[frozenset[tuple[str, str]]]:
+) -> tuple[set[frozenset[tuple[str, str]]], int]:
     """Find all simple paths as sets of edges."""
     paths: set[frozenset[tuple[str, str]]] = set()
     enumeration_steps = [0]
@@ -145,7 +151,7 @@ def _find_all_simple_paths(
             enumeration_steps=enumeration_steps,
             candidate_incidences=candidate_incidences,
         )
-    return paths
+    return paths, candidate_incidences[0]
 
 
 def _dfs_paths(
@@ -201,13 +207,24 @@ def _minimum_cover(
     edge_set: frozenset[tuple[str, str]],
     candidates: tuple[frozenset[tuple[str, str]], ...],
     *,
+    candidate_incidences: int,
     candidate_checks_bound: int,
 ) -> list[frozenset[tuple[str, str]]] | None:
     """Find the minimum partition while solving each residual edge set once."""
 
-    by_edge: dict[tuple[str, str], tuple[frozenset[tuple[str, str]], ...]] = {
-        edge: tuple(path for path in candidates if edge in path) for edge in edge_set
+    by_edge_lists: dict[tuple[str, str], list[frozenset[tuple[str, str]]]] = {
+        edge: [] for edge in edge_set
     }
+    for path in candidates:
+        for edge in path:
+            candidate_incidences += 1
+            if candidate_incidences > MAX_CANDIDATE_EDGE_INCIDENCES:
+                _reject(
+                    "candidate_materialization_bound",
+                    "simple-path candidate indexing exceeds its bounded incidence envelope",
+                )
+            by_edge_lists[edge].append(path)
+    by_edge = {edge: tuple(paths) for edge, paths in by_edge_lists.items()}
     candidate_checks = 0
 
     @cache

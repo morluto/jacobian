@@ -61,8 +61,18 @@ def test_large_palette_uses_the_direct_singleton_class_construction() -> None:
     assert result.coloring == tuple(range(64))
 
 
-def test_exponential_search_is_rejected_before_backtracking() -> None:
+def test_edgeless_graph_uses_direct_balanced_class_construction() -> None:
     graph = _graph([str(index) for index in range(20)], [])
+    result = decide_equitable_k_coloring(graph, 2)
+
+    assert result.colorable
+    assert result.coloring is not None
+    assert result.coloring.count(0) == 10
+    assert result.coloring.count(1) == 10
+
+
+def test_exponential_search_is_rejected_before_backtracking() -> None:
+    graph = _graph([str(index) for index in range(20)], [["0", "1"]])
 
     with pytest.raises(OperationDomainValidationError, match="search bound"):
         decide_equitable_k_coloring(graph, 2)

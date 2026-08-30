@@ -20,7 +20,11 @@ class EquitableColoringRequest(StrictModel):
     @model_validator(mode="after")
     def require_bounded_search(self) -> Self:
         n = len(self.graph.vertices)
-        if 0 < self.k < n and self.k**n > MAX_EQUITABLE_COLORING_SEARCH_NODES:
+        if (
+            self.graph.edges
+            and 0 < self.k < n
+            and self.k**n > MAX_EQUITABLE_COLORING_SEARCH_NODES
+        ):
             raise PydanticCustomError(
                 "graph.equitable_coloring_search_exceeded",
                 "equitable coloring exceeds the 1000000-node search bound",

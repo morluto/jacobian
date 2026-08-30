@@ -28,21 +28,16 @@ def decide_equitable_k_coloring(
             code="graph.equitable_coloring_positive_palette",
             message="equitable coloring requires a positive palette size",
         )
+    direct_result = _direct_result(graph, k)
+    if direct_result is not None:
+        return direct_result
     n = len(graph.vertices)
-    if k < n and k**n > MAX_EQUITABLE_COLORING_SEARCH_NODES:
+    if k**n > MAX_EQUITABLE_COLORING_SEARCH_NODES:
         raise OperationDomainValidationError(
             location=("graph", "k"),
             code="graph.equitable_coloring_search_exceeded",
             message="equitable coloring exceeds the 1000000-node search bound",
         )
-    if k >= n:
-        return EquitableColoringResult(
-            graph=graph,
-            k=k,
-            colorable=True,
-            coloring=tuple(range(n)),
-        )
-
     nx_graph: nx.Graph[str] = nx.Graph()
     for v in graph.vertices:
         nx_graph.add_node(v)
@@ -96,3 +91,22 @@ def decide_equitable_k_coloring(
             coloring=tuple(result_colors),
         )
     return EquitableColoringResult(graph=graph, k=k, colorable=False)
+
+
+def _direct_result(
+    graph: SimpleUndirectedGraph,
+    k: int,
+) -> EquitableColoringResult | None:
+    n = len(graph.vertices)
+    if k >= n:
+        coloring = tuple(range(n))
+    elif not graph.edges:
+        coloring = tuple(index % k for index in range(n))
+    else:
+        return None
+    return EquitableColoringResult(
+        graph=graph,
+        k=k,
+        colorable=True,
+        coloring=coloring,
+    )

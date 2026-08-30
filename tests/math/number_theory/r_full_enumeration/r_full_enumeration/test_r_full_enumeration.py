@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.r_full_enumeration._models import (
     MAX_R_FULL_SIEVE_BOUND,
+    RFullEnumerationRequest,
 )
 from jacobian.math.number_theory.r_full_enumeration.operations import (
     enumerate_r_full,
@@ -71,6 +73,24 @@ def test_invalid_minimum_exponent_is_rejected() -> None:
         enumerate_r_full(10, 1)
 
 
+def test_negative_bound_is_rejected() -> None:
+    with pytest.raises(OperationDomainValidationError, match="nonnegative"):
+        enumerate_r_full(-1, 2)
+
+
 def test_huge_exponent_is_bounded_without_constructing_the_power() -> None:
     result = enumerate_r_full(2, 1_000_000_000)
     assert result.values == (1,)
+
+
+def test_large_bound_uses_trivial_family_presolve() -> None:
+    request = RFullEnumerationRequest(bound=10**12, minimum_exponent=100)
+
+    result = enumerate_r_full(request.bound, request.minimum_exponent)
+
+    assert result.values == (1,)
+
+
+def test_large_nontrivial_bound_remains_sieve_bounded() -> None:
+    with pytest.raises(ValidationError, match="large bounds"):
+        RFullEnumerationRequest(bound=MAX_R_FULL_SIEVE_BOUND + 1, minimum_exponent=2)

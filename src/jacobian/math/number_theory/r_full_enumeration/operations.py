@@ -6,6 +6,7 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.r_full_enumeration._models import (
     MAX_R_FULL_SIEVE_BOUND,
     RFullEnumerationResult,
+    _is_trivial_family,
 )
 
 __all__ = ["enumerate_r_full"]
@@ -18,20 +19,17 @@ def enumerate_r_full(bound: int, minimum_exponent: int) -> RFullEnumerationResul
     at least r. The enumeration generates all products of prime powers
     p^e with e >= r.
     """
-    if bound < 0 or bound > MAX_R_FULL_SIEVE_BOUND:
-        raise OperationDomainValidationError(
-            location=("bound",),
-            code="number_theory.r_full_sieve_bound",
-            message=(
-                "r-full enumeration supports bounds from 0 through "
-                f"{MAX_R_FULL_SIEVE_BOUND}"
-            ),
-        )
     if minimum_exponent < 2:
         raise OperationDomainValidationError(
             location=("minimum_exponent",),
             code="number_theory.r_full_minimum_exponent",
             message="r-full enumeration requires minimum_exponent at least 2",
+        )
+    if bound < 0:
+        raise OperationDomainValidationError(
+            location=("bound",),
+            code="number_theory.r_full_nonnegative_bound",
+            message="r-full enumeration requires a nonnegative bound",
         )
     if bound < 1:
         return RFullEnumerationResult(
@@ -39,6 +37,22 @@ def enumerate_r_full(bound: int, minimum_exponent: int) -> RFullEnumerationResul
             minimum_exponent=minimum_exponent,
             values=(),
             count=0,
+        )
+    if _is_trivial_family(bound, minimum_exponent):
+        return RFullEnumerationResult(
+            bound=bound,
+            minimum_exponent=minimum_exponent,
+            values=(1,),
+            count=1,
+        )
+    if bound > MAX_R_FULL_SIEVE_BOUND:
+        raise OperationDomainValidationError(
+            location=("bound",),
+            code="number_theory.r_full_sieve_bound",
+            message=(
+                "r-full enumeration supports bounds from 0 through "
+                f"{MAX_R_FULL_SIEVE_BOUND} unless the family is just (1,)"
+            ),
         )
 
     # Sieve primes up to bound

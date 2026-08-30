@@ -34,7 +34,7 @@ class DivisibilityEdgeProfileRequest(StrictModel):
             "(a divides b, a != b) with the quotient b/a and its least "
             "prime factor."
         ),
-        examples=["2", "4", "6", "12"],
+        examples=[["2", "4", "6", "12"]],
     )
 
     @model_validator(mode="after")

@@ -48,6 +48,18 @@ def _bind_execution_deadline() -> None:
     bind_request_deadline(deadline)
 
 
+def _require_execution_active(phase: str) -> None:
+    execution = current_request_execution()
+    if (
+        execution is not None
+        and execution.deadline is not None
+        and monotonic() >= execution.deadline
+    ):
+        raise OperationExecutionTimeoutError(
+            f"divisibility edge profile request deadline expired {phase}"
+        )
+
+
 @contextmanager
 def _owner_execution() -> Iterator[None]:
     """Provide one request context for native calls made outside dispatch."""
@@ -108,7 +120,9 @@ def _build_divisibility_edge_profile(
         )
         for d in data
     )
-    return DivisibilityEdgeProfileResult(values=values, edges=edges)
+    result = DivisibilityEdgeProfileResult(values=values, edges=edges)
+    _require_execution_active("after result construction")
+    return result
 
 
 def divisibility_edge_profile(

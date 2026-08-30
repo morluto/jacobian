@@ -5,6 +5,10 @@ from itertools import combinations
 import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.graphs.cycle_length_profile import (
+    CycleLengthProfileResult,
+    CycleLengthRow,
+)
 from jacobian.math.graphs.cycle_length_profile.operations import (
     compute_cycle_length_profile,
 )
@@ -16,6 +20,14 @@ def _graph(vertices, edges):
         vertices=tuple(vertices),
         edges=tuple((a, b) for a, b in edges),
     )
+
+
+def test_result_types_are_publicly_exported() -> None:
+    """Native callers can import the canonical producer result types."""
+    result = compute_cycle_length_profile(_graph(["a", "b", "c"], []))
+    assert isinstance(result, CycleLengthProfileResult)
+    assert result.rows == ()
+    assert CycleLengthRow.model_fields["cycle_length"].annotation is not None
 
 
 def test_c4() -> None:

@@ -29,7 +29,10 @@ def _enumerate_r_full_admitted(
             code="r_full_enumerate_family_exceeds_result_budget",
             message="r-full family exceeds the result-size budget",
         )
-    if estimate_r_full_result_bytes(minimum_exponent, cutoff, plan.family) > MAX_R_FULL_RESULT_BYTES:
+    if (
+        estimate_r_full_result_bytes(minimum_exponent, cutoff, plan.family)
+        > MAX_R_FULL_RESULT_BYTES
+    ):
         raise OperationDomainValidationError(
             location=("cutoff",),
             code="r_full_enumerate_family_exceeds_transport_budget",

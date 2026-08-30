@@ -55,8 +55,7 @@ def compute_rank(request: MatrixRankRequest) -> MatrixRankResult:
             default=0,
         )
         if (
-            matrix_bytes
-            + rank_bound * (max_row_label_bytes + max_column_label_bytes)
+            matrix_bytes + rank_bound * (max_row_label_bytes + max_column_label_bytes)
             > CanonicalLimits().max_output_bytes
         ):
             raise OperationDomainValidationError(

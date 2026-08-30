@@ -2,6 +2,8 @@
 
 from typing import Literal
 
+from pydantic import Field
+
 from jacobian._models import StrictModel
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -9,7 +11,7 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 class BooleanLatticeIntersectionRequest(StrictModel):
     """Request to construct a Boolean-lattice intersection graph."""
 
-    n: int
+    n: int = Field(ge=0, le=8)
     intersection_cardinality: int
     relation: Literal[
         "INTERSECTION_EQ_THRESHOLD",

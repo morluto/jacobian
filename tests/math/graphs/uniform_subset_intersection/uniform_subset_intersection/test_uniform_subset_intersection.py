@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.uniform_subset_intersection.operations import (
     construct_uniform_subset_intersection_graph,
 )
@@ -49,3 +52,17 @@ def test_result_preserves_params() -> None:
     assert result.n == 4
     assert result.k == 2
     assert result.threshold == 1
+
+
+def test_negative_uniform_cardinality_is_rejected() -> None:
+    with pytest.raises(OperationDomainValidationError, match="0 <= k <= n"):
+        construct_uniform_subset_intersection_graph(
+            3, -1, 0, "INTERSECTION_EQ_THRESHOLD"
+        )
+
+
+def test_uniform_family_must_fit_the_graph_carrier() -> None:
+    with pytest.raises(OperationDomainValidationError, match="256-vertex"):
+        construct_uniform_subset_intersection_graph(
+            257, 1, 2, "INTERSECTION_EQ_THRESHOLD"
+        )

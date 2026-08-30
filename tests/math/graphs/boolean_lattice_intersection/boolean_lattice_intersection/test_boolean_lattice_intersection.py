@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.boolean_lattice_intersection.operations import (
     construct_boolean_lattice_intersection_graph,
 )
@@ -32,3 +35,10 @@ def test_result_preserves_params() -> None:
     )
     assert result.n == 3
     assert result.intersection_cardinality == 2
+
+
+def test_boolean_lattice_must_fit_the_graph_carrier() -> None:
+    with pytest.raises(OperationDomainValidationError, match="0 through 8"):
+        construct_boolean_lattice_intersection_graph(
+            9, 10, "INTERSECTION_EQ_THRESHOLD"
+        )

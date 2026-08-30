@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from itertools import combinations
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.boolean_lattice_intersection._models import (
     BooleanLatticeIntersectionResult,
 )
@@ -22,6 +23,12 @@ def construct_boolean_lattice_intersection_graph(
     An edge joins two distinct subsets when their intersection satisfies
     the declared relation with the given cardinality.
     """
+    if not 0 <= n <= 8:
+        raise OperationDomainValidationError(
+            location=("n",),
+            code="boolean_lattice.graph_carrier_exceeded",
+            message="Boolean-lattice graphs support dimensions from 0 through 8",
+        )
     subsets = []
     for size in range(n + 1):
         for combo in combinations(range(n), size):

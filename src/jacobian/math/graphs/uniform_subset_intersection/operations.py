@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from itertools import combinations
+from math import comb
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.uniform_subset_intersection._models import (
     UniformSubsetIntersectionResult,
 )
@@ -23,6 +25,18 @@ def construct_uniform_subset_intersection_graph(
     An edge joins two k-subsets when their intersection satisfies the
     declared relation with the threshold.
     """
+    if n < 0 or k < 0 or k > n:
+        raise OperationDomainValidationError(
+            location=("n", "k"),
+            code="uniform_subset.k_out_of_range",
+            message="uniform-subset graphs require 0 <= k <= n",
+        )
+    if comb(n, k) > 256:
+        raise OperationDomainValidationError(
+            location=("n", "k"),
+            code="uniform_subset.vertex_count_exceeded",
+            message="uniform-subset family exceeds the 256-vertex graph carrier",
+        )
     subsets = list(combinations(range(n), k))
     # Use sorted tuple string as vertex label
     labels = [f"L{len(s)}_" + "_".join(str(x) for x in s) for s in subsets]

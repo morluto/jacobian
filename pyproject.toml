@@ -229,6 +229,7 @@ ignore_imports = [
     "jacobian.math.graphs.optimization._maximum_cut_process -> jacobian.process",
     "jacobian.math.graphs.chip_firing._snf_process -> jacobian.process",
     "jacobian.math.geometry.affine_tori._flint_process -> jacobian.process",
+    "jacobian.math.topology.chain_complexes._smith_process -> jacobian.process",
     "jacobian.math.combinatorics.finite_structures.hypergraphs._independence_z3 -> jacobian.process",
     "jacobian.math.combinatorics.discrepancy._optimum_process -> jacobian.process",
     "jacobian.math.combinatorics._counting_process -> jacobian.process",

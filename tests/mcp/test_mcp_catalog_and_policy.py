@@ -136,8 +136,12 @@ def test_mcp_compact_operation_index_is_searchable_and_paginated() -> None:
                 {
                     "request": {
                         "op": "search",
-                        "query": "exact",
-                        "cursor": "integer.compute.unknown",
+                        # Keep the cursor invalid for this filtered result.  The
+                        # catalog contains many descriptions mentioning
+                        # "operation", so that word is not a stable no-match
+                        # fixture as the operation library grows.
+                        "query": "zqx",
+                        "cursor": first["next_cursor"],
                         "limit": 20,
                     }
                 },

@@ -120,37 +120,40 @@ def _admit_edge_pattern_profile(
         encoded: dict[str, int] = {}
         source_size = len(canonicalize_json(hypergraph.model_dump(mode="json")))
         colors_size = len(canonicalize_json(normalized_colors))
-        entry_sizes: list[int] = []
-        monochromatic_sizes: list[int] = []
-        rainbow_sizes: list[int] = []
+        entries_bytes = monochromatic_bytes = rainbow_bytes = 2
+        entries_count = monochromatic_count = rainbow_count = 0
         result_bytes = strict_json_object_size(
             (
                 ("hypergraph", source_size),
                 ("vertex_colors", colors_size),
-                ("entries", _strict_json_array_size(())),
-                ("monochromatic_edge_ids", _strict_json_array_size(())),
-                ("rainbow_edge_ids", _strict_json_array_size(())),
+                ("entries", entries_bytes),
+                ("monochromatic_edge_ids", monochromatic_bytes),
+                ("rainbow_edge_ids", rainbow_bytes),
             )
         )
-        for edge_id, members in hypergraph.edges:
+        for entries_count, (edge_id, members) in enumerate(hypergraph.edges):
             colors = tuple(normalized_colors[member] for member in members)
-            entry_sizes.append(_entry_size(edge_id, members, colors, encoded))
+            entries_bytes += _entry_size(edge_id, members, colors, encoded) + (
+                1 if entries_count else 0
+            )
             edge_id_size = _encoded_size(edge_id, encoded)
             blocks = len(set(colors))
             if blocks == 1:
-                monochromatic_sizes.append(edge_id_size)
+                monochromatic_bytes += edge_id_size + (1 if monochromatic_count else 0)
+                monochromatic_count += 1
             if blocks == len(members):
-                rainbow_sizes.append(edge_id_size)
+                rainbow_bytes += edge_id_size + (1 if rainbow_count else 0)
+                rainbow_count += 1
             result_bytes = strict_json_object_size(
                 (
                     ("hypergraph", source_size),
                     ("vertex_colors", colors_size),
-                    ("entries", _strict_json_array_size(tuple(entry_sizes))),
+                    ("entries", entries_bytes),
                     (
                         "monochromatic_edge_ids",
-                        _strict_json_array_size(tuple(monochromatic_sizes)),
+                        monochromatic_bytes,
                     ),
-                    ("rainbow_edge_ids", _strict_json_array_size(tuple(rainbow_sizes))),
+                    ("rainbow_edge_ids", rainbow_bytes),
                 )
             )
             if result_bytes > MAX_EDGE_PATTERN_PROFILE_RESULT_BYTES:

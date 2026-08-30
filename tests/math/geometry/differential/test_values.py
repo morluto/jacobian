@@ -87,6 +87,48 @@ def test_tensor_shape_preflight_closes_at_the_component_boundary() -> None:
     )
 
 
+def test_tensor_component_count_is_rejected_before_sequence_traversal() -> None:
+    class UntraversableComponents(list[dict[str, Any]]):
+        def __iter__(self) -> Any:
+            raise AssertionError("over-budget components must not be traversed")
+
+    components = UntraversableComponents([{}] * (MAX_RATIONAL_TENSOR_COMPONENTS + 1))
+
+    with pytest.raises(ValidationError) as error:
+        RationalCoordinateTensor.model_validate(
+            {
+                "coordinate_axis": ["x"],
+                "variance": [],
+                "components": components,
+                "retained_nonzero_denominators": [],
+            }
+        )
+
+    assert error.value.errors()[0]["type"] == (
+        "differential_geometry.tensor_component_budget"
+    )
+
+
+def test_tensor_excessive_python_nesting_is_a_typed_validation_error() -> None:
+    nested: Any = {}
+    for _ in range(1_500):
+        nested = [nested]
+
+    with pytest.raises(ValidationError) as error:
+        RationalCoordinateTensor.model_validate(
+            {
+                "coordinate_axis": ["x"],
+                "variance": [],
+                "components": [nested],
+                "retained_nonzero_denominators": [],
+            }
+        )
+
+    assert error.value.errors()[0]["type"] == (
+        "differential_geometry.tensor_input_depth"
+    )
+
+
 def test_tensor_rejects_a_missing_or_noncanonical_locus_guard() -> None:
     variables = ("x",)
     value = _function(

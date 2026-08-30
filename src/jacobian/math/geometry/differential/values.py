@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Self
+from typing import Any, Literal, Self, TypeGuard
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.canonical import CanonicalLimits
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_VARIABLES,
     PolynomialVariable,
@@ -24,10 +25,33 @@ MAX_RATIONAL_TENSOR_LOCUS_GUARDS = 768
 MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS = 256
 MAX_RATIONAL_TENSOR_EXPONENT = 64
 MAX_RATIONAL_TENSOR_COEFFICIENT_DIGITS = 128
+_MAX_RATIONAL_TENSOR_INPUT_DEPTH = CanonicalLimits().max_depth
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"differential_geometry.{reason}", message)
+
+
+def _is_json_sequence(value: Any) -> TypeGuard[list[Any] | tuple[Any, ...]]:
+    return isinstance(value, (list, tuple))
+
+
+def _require_bounded_tensor_input_depth(value: Any) -> None:
+    """Check nested Python input iteratively before immutable conversion."""
+
+    pending: list[tuple[Any, int]] = [(value, 0)]
+    while pending:
+        item, depth = pending.pop()
+        if depth > _MAX_RATIONAL_TENSOR_INPUT_DEPTH:
+            raise _validation_error(
+                "tensor_input_depth",
+                "rational coordinate tensor input exceeds the "
+                f"{_MAX_RATIONAL_TENSOR_INPUT_DEPTH}-level nesting budget",
+            )
+        if isinstance(item, dict):
+            pending.extend((nested, depth + 1) for nested in item.values())
+        elif _is_json_sequence(item):
+            pending.extend((nested, depth + 1) for nested in item)
 
 
 def _polynomial_key(
@@ -114,15 +138,15 @@ class RationalCoordinateTensor(StrictModel):
     def preflight_tensor_shape(cls, value: Any) -> Any:
         """Reject impossible dense shapes before nested field values parse."""
 
-        canonical = canonicalize_json_containers(value)
-        if not isinstance(canonical, dict):
-            return canonical
-        axis = canonical.get("coordinate_axis")
-        variance = canonical.get("variance")
-        components = canonical.get("components")
-        guards = canonical.get("retained_nonzero_denominators", ())
+        if not isinstance(value, dict):
+            _require_bounded_tensor_input_depth(value)
+            return canonicalize_json_containers(value)
+        axis = value.get("coordinate_axis")
+        variance = value.get("variance")
+        components = value.get("components")
+        guards = value.get("retained_nonzero_denominators", ())
         if (
-            isinstance(components, tuple)
+            _is_json_sequence(components)
             and len(components) > MAX_RATIONAL_TENSOR_COMPONENTS
         ):
             raise _validation_error(
@@ -130,13 +154,13 @@ class RationalCoordinateTensor(StrictModel):
                 "rational coordinate tensor exceeds the "
                 f"{MAX_RATIONAL_TENSOR_COMPONENTS}-component representation budget",
             )
-        if isinstance(guards, tuple) and len(guards) > MAX_RATIONAL_TENSOR_LOCUS_GUARDS:
+        if _is_json_sequence(guards) and len(guards) > MAX_RATIONAL_TENSOR_LOCUS_GUARDS:
             raise _validation_error(
                 "tensor_locus_guard_budget",
                 "rational coordinate tensor exceeds the "
                 f"{MAX_RATIONAL_TENSOR_LOCUS_GUARDS}-guard representation budget",
             )
-        if isinstance(axis, tuple) and isinstance(variance, tuple):
+        if _is_json_sequence(axis) and _is_json_sequence(variance):
             dimension = len(axis)
             rank = len(variance)
             if rank <= MAX_RATIONAL_TENSOR_RANK and dimension:
@@ -147,13 +171,14 @@ class RationalCoordinateTensor(StrictModel):
                         "dense tensor shape requires more than "
                         f"{MAX_RATIONAL_TENSOR_COMPONENTS} components",
                     )
-                if isinstance(components, tuple) and len(components) != expected:
+                if _is_json_sequence(components) and len(components) != expected:
                     raise _validation_error(
                         "tensor_component_shape",
                         f"rank-{rank} tensor on a {dimension}-coordinate axis "
                         f"requires exactly {expected} components",
                     )
-        return canonical
+        _require_bounded_tensor_input_depth(value)
+        return canonicalize_json_containers(value)
 
     @model_validator(mode="after")
     def require_one_ordered_chart_and_locus(self) -> Self:

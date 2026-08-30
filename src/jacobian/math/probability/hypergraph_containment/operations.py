@@ -238,14 +238,10 @@ def compute_hypergraph_vertex_containment(
             for k in range(n + 1)
         )
         p = retention_probability.as_fraction()
-        success_count = sum(
-            1 << (n - edge_size) for edge_size in edge_sizes
-        ) - (
+        success_count = sum(1 << (n - edge_size) for edge_size in edge_sizes) - (
             (1 << (n - union_size)) if len(edge_sizes) == 2 else 0
         )
-        probability = sum(
-            (p**edge_size for edge_size in edge_sizes), Fraction(0)
-        ) - (
+        probability = sum((p**edge_size for edge_size in edge_sizes), Fraction(0)) - (
             p**union_size if len(edge_sizes) == 2 else 0
         )
         return HypergraphVertexContainmentResult(

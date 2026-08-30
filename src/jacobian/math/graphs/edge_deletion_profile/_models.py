@@ -48,10 +48,7 @@ def _edge_deletion_admission_error(
         size * math.comb(edge_count, size) for size in range(maximum_order + 1)
     )
     max_edge_bytes = (
-        max(
-            (len(encode_strict_json([left, right])) + 8)
-            for left, right in graph.edges
-        )
+        max((len(encode_strict_json([left, right])) + 8) for left, right in graph.edges)
         if graph.edges
         else 0
     )

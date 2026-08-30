@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from functools import cache
 from typing import NoReturn
 
 from jacobian.canonical import (
@@ -22,6 +24,12 @@ MAX_SEARCH_STATES = 1_000_000
 MAX_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 
+@dataclass(frozen=True, slots=True)
+class _PathSearchPlan:
+    candidates: tuple[frozenset[tuple[str, str]], ...]
+    candidate_checks_bound: int
+
+
 def _array_size(item_sizes: list[int]) -> int:
     return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
 
@@ -32,7 +40,7 @@ def _reject(code: str, message: str) -> NoReturn:
     )
 
 
-def _admit_graph(graph: SimpleUndirectedGraph) -> None:
+def _admit_graph(graph: SimpleUndirectedGraph) -> _PathSearchPlan:
     if not isinstance(graph, SimpleUndirectedGraph):
         _reject("invalid_graph", "graph must be a simple undirected graph")
     vertex_count = len(graph.vertices)
@@ -44,22 +52,18 @@ def _admit_graph(graph: SimpleUndirectedGraph) -> None:
         adjacency[left].add(right)
         adjacency[right].add(left)
 
-    if edge_count:
-        # Count paths in the actual graph, stopping once the work budget is
-        # already impossible. This preserves sparse graphs that the complete
-        # graph envelope rejected.
-        candidate_bound = max(
-            _count_simple_paths(adjacency, MAX_SEARCH_STATES * 2) // 2,
-            1,
+    candidates = tuple(
+        sorted(
+            _find_all_simple_paths(adjacency),
+            key=lambda path: (-len(path), tuple(sorted(path))),
         )
-        search_bound = 1
-        for _ in range(edge_count):
-            search_bound *= max(candidate_bound, 1)
-            if search_bound > MAX_SEARCH_STATES:
-                _reject(
-                    "search_work_bound",
-                    "the exact path-partition search exceeds its bounded work envelope",
-                )
+    )
+    candidate_checks_bound = (1 << edge_count) * max(len(candidates), 1)
+    if candidate_checks_bound > MAX_SEARCH_STATES:
+        _reject(
+            "search_work_bound",
+            "the exact memoized residual-edge search exceeds its bounded work envelope",
+        )
 
     try:
         source_bytes = len(encode_strict_json(graph.model_dump(mode="json")))
@@ -82,31 +86,10 @@ def _admit_graph(graph: SimpleUndirectedGraph) -> None:
             "result_size_bound",
             f"the path decomposition result exceeds the {MAX_RESULT_BYTES}-byte output bound",
         )
-
-
-def _count_simple_paths(
-    adjacency: dict[str, set[str]],
-    limit: int,
-) -> int:
-    count = 0
-
-    def visit(current: str, visited: frozenset[str]) -> None:
-        nonlocal count
-        for neighbor in adjacency[current]:
-            if neighbor in visited:
-                continue
-            count += 1
-            if count > limit:
-                return
-            visit(neighbor, visited | {neighbor})
-            if count > limit:
-                return
-
-    for start in adjacency:
-        visit(start, frozenset({start}))
-        if count > limit:
-            return limit + 1
-    return count
+    return _PathSearchPlan(
+        candidates=candidates,
+        candidate_checks_bound=candidate_checks_bound,
+    )
 
 
 def compute_minimum_path_decomposition(
@@ -117,24 +100,20 @@ def compute_minimum_path_decomposition(
     The path number p(G) is the minimum number of edge-disjoint simple
     paths whose union is E(G). Uses exhaustive search over edge partitions.
     """
-    _admit_graph(graph)
+    plan = _admit_graph(graph)
     edges = list(graph.edges)
     if not edges:
         return PathDecompositionResult(graph=graph, path_count=0, paths=())
 
-    adjacency: dict[str, set[str]] = {v: set() for v in graph.vertices}
-    for a, b in edges:
-        adjacency[a].add(b)
-        adjacency[b].add(a)
-
-    all_paths = _find_all_simple_paths(adjacency)
-    all_paths = [p for p in all_paths if p]
-
     edge_set = frozenset(edges)
-    best = _minimum_cover(edge_set, all_paths)
+    best = _minimum_cover(
+        edge_set,
+        plan.candidates,
+        candidate_checks_bound=plan.candidate_checks_bound,
+    )
 
     if best is None:
-        return PathDecompositionResult(graph=graph, path_count=len(edges), paths=())
+        raise AssertionError("single-edge paths must realize every admitted graph")
 
     path_vertices = []
     for path_edges in best:
@@ -150,13 +129,12 @@ def compute_minimum_path_decomposition(
 
 def _find_all_simple_paths(
     adjacency: dict[str, set[str]],
-) -> list[frozenset[tuple[str, str]]]:
+) -> set[frozenset[tuple[str, str]]]:
     """Find all simple paths as sets of edges."""
     paths: set[frozenset[tuple[str, str]]] = set()
     for start in adjacency:
         _dfs_paths(start, frozenset(), frozenset({start}), adjacency, paths)
-    paths.add(frozenset())
-    return list(paths)
+    return paths
 
 
 def _dfs_paths(
@@ -185,19 +163,41 @@ def _dfs_paths(
 
 def _minimum_cover(
     edge_set: frozenset[tuple[str, str]],
-    candidates: list[frozenset[tuple[str, str]]],
+    candidates: tuple[frozenset[tuple[str, str]], ...],
+    *,
+    candidate_checks_bound: int,
 ) -> list[frozenset[tuple[str, str]]] | None:
-    """Find the minimum number of paths that partition all edges."""
-    if not edge_set:
-        return []
-    best: list[frozenset[tuple[str, str]]] | None = None
-    for path in candidates:
-        if path <= edge_set:
-            remaining = edge_set - path
-            result = _minimum_cover(remaining, candidates)
-            if result is not None and (best is None or len(result) + 1 < len(best)):
-                best = [path, *result]
-    return best
+    """Find the minimum partition while solving each residual edge set once."""
+
+    by_edge: dict[tuple[str, str], tuple[frozenset[tuple[str, str]], ...]] = {
+        edge: tuple(path for path in candidates if edge in path) for edge in edge_set
+    }
+    candidate_checks = 0
+
+    @cache
+    def solve(
+        remaining: frozenset[tuple[str, str]],
+    ) -> tuple[frozenset[tuple[str, str]], ...] | None:
+        nonlocal candidate_checks
+        if not remaining:
+            return ()
+        pivot = min(remaining)
+        best: tuple[frozenset[tuple[str, str]], ...] | None = None
+        for path in by_edge[pivot]:
+            candidate_checks += 1
+            if candidate_checks > candidate_checks_bound:
+                raise AssertionError(
+                    "path-decomposition admission undercounted search work"
+                )
+            if not path <= remaining:
+                continue
+            suffix = solve(remaining - path)
+            if suffix is not None and (best is None or len(suffix) + 1 < len(best)):
+                best = (path, *suffix)
+        return best
+
+    result = solve(edge_set)
+    return list(result) if result is not None else None
 
 
 def _path_to_vertices(path_edges: frozenset[tuple[str, str]]) -> list[str]:

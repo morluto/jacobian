@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-import pytest
+from itertools import pairwise
 
-from jacobian.catalog.models import OperationDomainValidationError
+import pytest
+from pydantic import ValidationError
+
+from jacobian.math.graphs.path_decomposition._models import PathDecompositionResult
 from jacobian.math.graphs.path_decomposition.operations import (
     compute_minimum_path_decomposition,
 )
@@ -64,15 +67,21 @@ def test_result_preserves_source() -> None:
     assert result.graph == g
 
 
-def test_k5_search_is_rejected_before_exhaustive_cover() -> None:
-    """The admitted graph shape must fit the exact cover work envelope."""
+def test_k5_search_uses_memoized_residual_states() -> None:
     vertices = ["a", "b", "c", "d", "e"]
     g = _graph(
         vertices,
         [(vertices[i], vertices[j]) for i in range(5) for j in range(i + 1, 5)],
     )
-    with pytest.raises(OperationDomainValidationError, match="work envelope"):
-        compute_minimum_path_decomposition(g)
+    result = compute_minimum_path_decomposition(g)
+    assert result.path_count > 0
+
+
+def test_seven_vertex_path_is_inside_the_residual_state_bound() -> None:
+    vertices = [f"v{i}" for i in range(7)]
+    graph = _graph(vertices, list(pairwise(vertices)))
+    result = compute_minimum_path_decomposition(graph)
+    assert result.path_count == 1
 
 
 def test_sparse_graph_uses_actual_path_candidates() -> None:
@@ -81,3 +90,24 @@ def test_sparse_graph_uses_actual_path_candidates() -> None:
     g = _graph(vertices, [(vertices[0], vertices[1])])
     result = compute_minimum_path_decomposition(g)
     assert result.path_count == 1
+
+
+@pytest.mark.parametrize(
+    "payload_update",
+    [
+        {"path_count": -1, "paths": []},
+        {"path_count": 2, "paths": [["a", "b"]]},
+        {"path_count": 1, "paths": [["a", "c"]]},
+        {"path_count": 1, "paths": [["a", "b", "a"]]},
+    ],
+)
+def test_result_requires_an_exact_source_edge_partition(payload_update: dict) -> None:
+    graph = _graph(["a", "b"], [("a", "b")])
+    payload = {
+        "graph": graph.model_dump(mode="json"),
+        "path_count": 1,
+        "paths": [["a", "b"]],
+        **payload_update,
+    }
+    with pytest.raises(ValidationError):
+        PathDecompositionResult.model_validate(payload)

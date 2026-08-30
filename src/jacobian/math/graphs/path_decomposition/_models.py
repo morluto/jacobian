@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from itertools import pairwise
 from typing import Self
 
 from pydantic import Field, model_validator
@@ -38,8 +39,44 @@ class PathDecompositionResult(StrictModel):
     """The minimum path decomposition of a graph."""
 
     graph: SimpleUndirectedGraph
-    path_count: int
+    path_count: int = Field(ge=0)
     paths: tuple[tuple[str, ...], ...]
+
+    @model_validator(mode="after")
+    def require_source_edge_partition(self) -> Self:
+        if self.path_count != len(self.paths):
+            raise PydanticCustomError(
+                "path_decomposition.path_count",
+                "path_count must equal the number of returned paths",
+            )
+        source_edges = set(self.graph.edges)
+        used_edges: set[tuple[str, str]] = set()
+        source_vertices = set(self.graph.vertices)
+        for path in self.paths:
+            if len(path) < 2 or len(path) != len(set(path)):
+                raise PydanticCustomError(
+                    "path_decomposition.simple_path",
+                    "each returned path must contain distinct vertices and at least one edge",
+                )
+            if any(vertex not in source_vertices for vertex in path):
+                raise PydanticCustomError(
+                    "path_decomposition.unknown_vertex",
+                    "returned paths must use vertices from the source graph",
+                )
+            for left, right in pairwise(path):
+                edge = (left, right) if left < right else (right, left)
+                if edge not in source_edges or edge in used_edges:
+                    raise PydanticCustomError(
+                        "path_decomposition.edge_partition",
+                        "returned paths must partition the source edges exactly once",
+                    )
+                used_edges.add(edge)
+        if used_edges != source_edges:
+            raise PydanticCustomError(
+                "path_decomposition.edge_partition",
+                "returned paths must partition the source edges exactly once",
+            )
+        return self
 
 
 __all__ = [

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from itertools import permutations
 from math import perm
 
@@ -28,6 +29,12 @@ __all__ = ["compute_rainbow_embedding_profile"]
 MAX_RAINBOW_EMBEDDING_WORK = 50_000_000
 
 
+@dataclass(frozen=True, slots=True)
+class _RainbowAdmissionPlan:
+    candidate_count: int
+    rainbow_possible: bool
+
+
 def _json_array_size(item_sizes: list[int]) -> int:
     return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
 
@@ -39,7 +46,7 @@ def _repeated_array_size(item_size: int, count: int) -> int:
 def _admit_rainbow_embedding_profile(
     pattern: SimpleUndirectedGraph,
     host: ColoredUndirectedGraph,
-) -> int:
+) -> _RainbowAdmissionPlan:
     pattern_order = len(pattern.vertices)
     host_order = len(host.graph.vertices)
     if pattern_order > MAX_PATTERN_VERTICES:
@@ -81,6 +88,7 @@ def _admit_rainbow_embedding_profile(
             code="graph.rainbow_embedding.work_exceeds_bound",
             message="rainbow embedding enumeration exceeds its exact work bound",
         )
+    rainbow_possible = len(set(host.edge_colors)) >= len(pattern.edges)
 
     try:
         pattern_bytes = len(encode_strict_json(pattern.model_dump(mode="json")))
@@ -123,7 +131,8 @@ def _admit_rainbow_embedding_profile(
             ("edge_color_labels", colors_bytes),
         )
     )
-    embeddings_bytes = _repeated_array_size(witness_bytes, candidate_count)
+    witness_count = candidate_count if rainbow_possible else 0
+    embeddings_bytes = _repeated_array_size(witness_bytes, witness_count)
     result_bytes = strict_json_object_size(
         (
             ("pattern", pattern_bytes),
@@ -139,7 +148,7 @@ def _admit_rainbow_embedding_profile(
             code="graph.rainbow_embedding.result_exceeds_output_bound",
             message="rainbow embedding profile exceeds the canonical output bound",
         )
-    return candidate_count
+    return _RainbowAdmissionPlan(candidate_count, rainbow_possible)
 
 
 def _degree_obstruction(
@@ -169,7 +178,7 @@ def compute_rainbow_embedding_profile(
     pattern edge maps to a host edge. The embedding is rainbow if all
     mapped edges have pairwise distinct colours.
     """
-    _admit_rainbow_embedding_profile(pattern, host)
+    plan = _admit_rainbow_embedding_profile(pattern, host)
     pattern_vertices = list(pattern.vertices)
     host_vertices = list(host.graph.vertices)
     host_edges = set(host.graph.edges)
@@ -189,7 +198,7 @@ def compute_rainbow_embedding_profile(
             rainbow_count=1,
         )
 
-    if len(pattern_vertices) > len(host_vertices):
+    if plan.candidate_count == 0:
         return RainbowEmbeddingResult(
             pattern=pattern,
             host=host,
@@ -197,23 +206,6 @@ def compute_rainbow_embedding_profile(
             total_embeddings=0,
             rainbow_count=0,
         )
-    if len(pattern.edges) > len(host.graph.edges):
-        return RainbowEmbeddingResult(
-            pattern=pattern,
-            host=host,
-            embeddings=(),
-            total_embeddings=0,
-            rainbow_count=0,
-        )
-    if _degree_obstruction(pattern, host):
-        return RainbowEmbeddingResult(
-            pattern=pattern,
-            host=host,
-            embeddings=(),
-            total_embeddings=0,
-            rainbow_count=0,
-        )
-
     total = 0
     rainbow = 0
 
@@ -231,7 +223,7 @@ def compute_rainbow_embedding_profile(
         if not valid:
             continue
         total += 1
-        if len(colors) == len(set(colors)):
+        if plan.rainbow_possible and len(colors) == len(set(colors)):
             rainbow += 1
             embeddings.append(
                 EmbeddingWitness(

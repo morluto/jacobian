@@ -580,9 +580,6 @@ class SimpleNumberFieldRealEmbeddingOrder(StrictModel):
     difference: SimpleNumberFieldRealEmbeddingBinding
     order: SimpleNumberFieldRealOrder
     difference_enclosure: NumberFieldRealValueEnclosure
-    comparison_basis: Literal["MINIMAL_POLYNOMIAL_REAL_ROOT_ISOLATION"] = (
-        "MINIMAL_POLYNOMIAL_REAL_ROOT_ISOLATION"
-    )
 
     @model_validator(mode="before")
     @classmethod
@@ -694,7 +691,6 @@ class SimpleNumberFieldRealEmbeddingOrder(StrictModel):
             difference=difference,
             order=order,
             difference_enclosure=difference_enclosure,
-            comparison_basis="MINIMAL_POLYNOMIAL_REAL_ROOT_ISOLATION",
         )
 
 

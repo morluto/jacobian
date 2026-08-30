@@ -15,6 +15,7 @@ from jacobian._execution import OperationExecutionTimeoutError, request_executio
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.number_fields import (
+    BinaryPowerSumGap,
     BinaryPowerSumGapProfile,
     SimpleNumberFieldElement,
     SimpleNumberFieldPresentation,
@@ -419,6 +420,8 @@ def test_result_round_trip_preserves_source_partition_and_gap_reconstruction(
     admission = admit_binary_power_sum_gap_profile(result.base, 3)
     assert len(encoded) <= admission.predicted_result_bytes
     assert len(encoded) <= MAX_BINARY_POWER_SUM_RESULT_BYTES
+    assert "evidence_basis" not in result.gaps[0].model_dump()
+    assert "evidence_basis" not in BinaryPowerSumGap.model_json_schema()["properties"]
 
 
 def test_result_validation_rejects_duplicate_sources_and_wrong_gap_difference(
@@ -439,6 +442,44 @@ def test_result_validation_rejects_duplicate_sources_and_wrong_gap_difference(
     )
     with pytest.raises(ValidationError, match="reconstruct"):
         BinaryPowerSumGapProfile.model_validate(wrong_gap)
+
+
+@pytest.mark.parametrize("index_field", ["least_gap_index", "largest_gap_index"])
+def test_result_validation_rejects_out_of_range_summary_indices_as_typed_errors(
+    index_field: str,
+) -> None:
+    field = _field("1", "0")
+    (record,) = _real_records(field)
+    result = binary_power_sum_gap_profile(
+        _binding(_element(field, Fraction(3, 2)), record), 2
+    )
+    invalid = result.model_dump(mode="json")
+    invalid[index_field] = 100
+
+    with pytest.raises(ValidationError) as caught:
+        BinaryPowerSumGapProfile.model_validate(invalid)
+
+    assert caught.value.errors()[0]["type"] == "binary_power_sum.gap_summary_index"
+
+
+def test_result_validation_requires_first_exactly_matching_gap_summary() -> None:
+    field = _field("1", "0")
+    (record,) = _real_records(field)
+    result = binary_power_sum_gap_profile(
+        _binding(_element(field, Fraction(3, 2)), record), 2
+    )
+    assert result.largest_gap_index == 0
+    assert result.gaps[0].difference == result.gaps[2].difference
+
+    noncanonical = result.model_dump(mode="json")
+    noncanonical["largest_gap_index"] = 2
+    with pytest.raises(ValidationError) as caught:
+        BinaryPowerSumGapProfile.model_validate(noncanonical)
+
+    assert (
+        caught.value.errors()[0]["type"]
+        == "binary_power_sum.gap_summary_first_match"
+    )
 
 
 def test_catalog_operation_runs_example_and_projects_domain_errors() -> None:

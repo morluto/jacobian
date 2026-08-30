@@ -66,7 +66,9 @@ record from that complete profile. Only then does it construct SymPy's exact
 the quotient field, derives the selected image's primitive minimal polynomial,
 identifies its exact real root, and returns `LT`, `EQ`, or `GT` with a closed
 rational enclosure of `left - right`. A zero reduced quotient-field difference
-establishes `EQ` independently of the selected real embedding.
+establishes `EQ` independently of the selected real embedding. The enclosure is
+the canonical evidence value for rational singleton and algebraic differences;
+the public result does not label the private comparison path used to obtain it.
 
 The same serialized `SimpleNumberFieldPresentation` is the `field` input to
 `number_field.discriminant.compute`; no caller-selected polynomial variable or

@@ -223,6 +223,11 @@ def test_result_round_trips_without_replaying_recognition(
         )
         == result
     )
+    assert "comparison_basis" not in result.model_dump()
+    assert (
+        "comparison_basis"
+        not in SimpleNumberFieldRealEmbeddingOrder.model_json_schema()["properties"]
+    )
 
 
 def test_catalog_operation_runs_its_declared_example() -> None:

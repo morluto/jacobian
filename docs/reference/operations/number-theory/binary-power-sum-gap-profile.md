@@ -57,7 +57,9 @@ real-root isolation of that difference. Floating approximations are never used.
 Each adjacent gap stores the exact reduced difference and a closed rational
 enclosure lying strictly above zero. `least_gap` and `largest_gap` retain exact
 field elements and identify their first matching gap indices. Equal gap values
-therefore have a deterministic summary representative.
+therefore have a deterministic summary representative. The enclosure is the
+canonical evidence value for rational singleton and algebraic gaps alike; the
+result does not expose the private comparison kernel that produced it.
 
 For `m=0`, the only bucket is zero with representation `()`. There are no gaps,
 and the least/largest gap values and indices are absent. For every other result:

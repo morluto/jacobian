@@ -57,10 +57,6 @@ BINARY_POWER_SUM_WALL_SECONDS = 600.0
 
 BinaryDigit = Annotated[int, Field(ge=0, le=1, strict=True)]
 BinaryPowerSumBitVector = tuple[BinaryDigit, ...]
-PowerSumOrderEvidenceBasis = Literal[
-    "POWER_BASIS_INTERVAL_EVALUATION",
-    "MINIMAL_POLYNOMIAL_REAL_ROOT_ISOLATION",
-]
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -153,7 +149,6 @@ class BinaryPowerSumGap(StrictModel):
     )
     difference: SimpleNumberFieldElement
     positive_enclosure: NumberFieldRealValueEnclosure
-    evidence_basis: Literal["MINIMAL_POLYNOMIAL_REAL_ROOT_ISOLATION"]
 
     @model_validator(mode="after")
     def require_adjacent_positive_shape(self) -> Self:
@@ -384,6 +379,14 @@ class BinaryPowerSumGapProfile(StrictModel):
                     "a nonempty gap family requires least and largest gap summaries",
                 )
             if (
+                self.least_gap_index >= len(self.gaps)
+                or self.largest_gap_index >= len(self.gaps)
+            ):
+                raise _validation_error(
+                    "gap_summary_index",
+                    "least and largest gap indices must reference the gap family",
+                )
+            if (
                 self.least_gap
                 != self.gaps[self.least_gap_index].difference
                 or self.largest_gap
@@ -393,6 +396,20 @@ class BinaryPowerSumGapProfile(StrictModel):
                     "gap_summary_source",
                     "least and largest gap values must reference their indexed gap entries",
                 )
+            for label, gap_value, gap_index in (
+                ("least", self.least_gap, self.least_gap_index),
+                ("largest", self.largest_gap, self.largest_gap_index),
+            ):
+                first_matching_index = next(
+                    index
+                    for index, gap in enumerate(self.gaps)
+                    if gap.difference == gap_value
+                )
+                if gap_index != first_matching_index:
+                    raise _validation_error(
+                        "gap_summary_first_match",
+                        f"{label} gap index must be the first exactly matching gap",
+                    )
 
     @classmethod
     def _from_kernel(
@@ -761,7 +778,6 @@ class _SelectedRealEmbeddingEvaluator:
             tuple[
                 SimpleNumberFieldRealOrder,
                 NumberFieldRealValueEnclosure,
-                PowerSumOrderEvidenceBasis,
             ],
         ] = {}
         self._certified_cache: dict[
@@ -769,7 +785,6 @@ class _SelectedRealEmbeddingEvaluator:
             tuple[
                 SimpleNumberFieldRealOrder,
                 NumberFieldRealValueEnclosure,
-                Literal["MINIMAL_POLYNOMIAL_REAL_ROOT_ISOLATION"],
             ],
         ] = {}
 
@@ -815,14 +830,12 @@ class _SelectedRealEmbeddingEvaluator:
         result: tuple[
             SimpleNumberFieldRealOrder,
             NumberFieldRealValueEnclosure,
-            PowerSumOrderEvidenceBasis,
         ],
     ) -> tuple[
         SimpleNumberFieldRealOrder,
         NumberFieldRealValueEnclosure,
-        PowerSumOrderEvidenceBasis,
     ]:
-        order, enclosure, basis = result
+        order, enclosure = result
         inverse_order: SimpleNumberFieldRealOrder = (
             "LT" if order == "GT" else "GT" if order == "LT" else "EQ"
         )
@@ -832,7 +845,6 @@ class _SelectedRealEmbeddingEvaluator:
                 -enclosure.upper.as_fraction(),
                 -enclosure.lower.as_fraction(),
             ),
-            basis,
         )
 
     def sign(
@@ -843,7 +855,6 @@ class _SelectedRealEmbeddingEvaluator:
     ) -> tuple[
         SimpleNumberFieldRealOrder,
         NumberFieldRealValueEnclosure,
-        PowerSumOrderEvidenceBasis,
     ]:
         _require_execution_active(self.deadline, "during selected-embedding order")
         coordinates = self._coordinate_key(public_value)
@@ -856,7 +867,7 @@ class _SelectedRealEmbeddingEvaluator:
             self._cache[coordinates] = result
             return result
         if all(coordinate == 0 for coordinate in coordinates):
-            result = ("EQ", _enclosure(Fraction(0), Fraction(0)), "POWER_BASIS_INTERVAL_EVALUATION")
+            result = ("EQ", _enclosure(Fraction(0), Fraction(0)))
             self._cache[coordinates] = result
             return result
 
@@ -881,7 +892,6 @@ class _SelectedRealEmbeddingEvaluator:
             result = (
                 order,
                 _enclosure(lower, upper),
-                "POWER_BASIS_INTERVAL_EVALUATION",
             )
         else:
             order, isolating_interval = isolate_backend_real_value(
@@ -895,7 +905,6 @@ class _SelectedRealEmbeddingEvaluator:
                     isolating_interval.lower.as_fraction(),
                     isolating_interval.upper.as_fraction(),
                 ),
-                "MINIMAL_POLYNOMIAL_REAL_ROOT_ISOLATION",
             )
         self._cache[coordinates] = result
         return result
@@ -907,7 +916,7 @@ class _SelectedRealEmbeddingEvaluator:
     ) -> int:
         difference_backend = left_backend - right_backend
         difference_public = self.context.from_backend(difference_backend)
-        order, _enclosure_value, _basis = self.sign(
+        order, _enclosure_value = self.sign(
             difference_backend,
             difference_public,
             self.comparison_admission,
@@ -923,7 +932,6 @@ class _SelectedRealEmbeddingEvaluator:
     ) -> tuple[
         SimpleNumberFieldRealOrder,
         NumberFieldRealValueEnclosure,
-        Literal["MINIMAL_POLYNOMIAL_REAL_ROOT_ISOLATION"],
     ]:
         """Return bounded public evidence from the admitted image polynomial."""
 
@@ -945,14 +953,12 @@ class _SelectedRealEmbeddingEvaluator:
         result: tuple[
             SimpleNumberFieldRealOrder,
             NumberFieldRealValueEnclosure,
-            Literal["MINIMAL_POLYNOMIAL_REAL_ROOT_ISOLATION"],
         ] = (
             order,
             _enclosure(
                 isolating_interval.lower.as_fraction(),
                 isolating_interval.upper.as_fraction(),
             ),
-            "MINIMAL_POLYNOMIAL_REAL_ROOT_ISOLATION",
         )
         self._certified_cache[coordinates] = result
         return result
@@ -1019,12 +1025,12 @@ def binary_power_sum_gap_profile(
     backend_base = context.to_backend(base.element)
     one = _constant_element(context, 1)
     two = _constant_element(context, 2)
-    lower_order, _lower_enclosure, _lower_basis = evaluator.sign(
+    lower_order, _lower_enclosure = evaluator.sign(
         backend_base - context.to_backend(one),
         context.from_backend(backend_base - context.to_backend(one)),
         admission.base_lower_admission,
     )
-    upper_order, _upper_enclosure, _upper_basis = evaluator.sign(
+    upper_order, _upper_enclosure = evaluator.sign(
         backend_base - context.to_backend(two),
         context.from_backend(backend_base - context.to_backend(two)),
         admission.base_upper_admission,
@@ -1088,7 +1094,7 @@ def binary_power_sum_gap_profile(
     ):
         backend_difference = upper_bucket.backend_value - lower_bucket.backend_value
         public_difference = context.from_backend(backend_difference)
-        order, positive_enclosure, evidence_basis = evaluator.certify(
+        order, positive_enclosure = evaluator.certify(
             backend_difference,
             public_difference,
         )
@@ -1100,7 +1106,6 @@ def binary_power_sum_gap_profile(
                 upper_value_index=index + 1,
                 difference=public_difference,
                 positive_enclosure=positive_enclosure,
-                evidence_basis=evidence_basis,
             )
         )
         backend_gaps.append(backend_difference)

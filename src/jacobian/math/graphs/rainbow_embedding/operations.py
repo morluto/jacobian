@@ -67,11 +67,13 @@ def _admit_rainbow_embedding_profile(
             message="edge_colors must be empty or align with every host edge",
         )
 
-    candidate_count = (
-        perm(host_order, pattern_order)
-        if pattern_order <= host_order and len(pattern.edges) <= len(host.graph.edges)
-        else 0
-    )
+    candidate_count = 0
+    if (
+        pattern_order <= host_order
+        and len(pattern.edges) <= len(host.graph.edges)
+        and not _degree_obstruction(pattern, host)
+    ):
+        candidate_count = perm(host_order, pattern_order)
     edge_work = max(1, len(pattern.edges) + len(host.graph.edges))
     if candidate_count * edge_work > MAX_RAINBOW_EMBEDDING_WORK:
         raise OperationDomainValidationError(
@@ -140,6 +142,23 @@ def _admit_rainbow_embedding_profile(
     return candidate_count
 
 
+def _degree_obstruction(
+    pattern: SimpleUndirectedGraph, host: ColoredUndirectedGraph
+) -> bool:
+    """Return whether a pattern degree cannot occur in the host graph."""
+
+    host_degrees = dict.fromkeys(host.graph.vertices, 0)
+    for left, right in host.graph.edges:
+        host_degrees[left] += 1
+        host_degrees[right] += 1
+    maximum_host_degree = max(host_degrees.values(), default=0)
+    pattern_degrees = dict.fromkeys(pattern.vertices, 0)
+    for left, right in pattern.edges:
+        pattern_degrees[left] += 1
+        pattern_degrees[right] += 1
+    return any(degree > maximum_host_degree for degree in pattern_degrees.values())
+
+
 def compute_rainbow_embedding_profile(
     pattern: SimpleUndirectedGraph,
     host: ColoredUndirectedGraph,
@@ -179,6 +198,14 @@ def compute_rainbow_embedding_profile(
             rainbow_count=0,
         )
     if len(pattern.edges) > len(host.graph.edges):
+        return RainbowEmbeddingResult(
+            pattern=pattern,
+            host=host,
+            embeddings=(),
+            total_embeddings=0,
+            rainbow_count=0,
+        )
+    if _degree_obstruction(pattern, host):
         return RainbowEmbeddingResult(
             pattern=pattern,
             host=host,

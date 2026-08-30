@@ -80,6 +80,45 @@ def test_rejects_unbounded_embedding_family() -> None:
         compute_rainbow_embedding_profile(pattern, host)
 
 
+def test_degree_impossible_pattern_returns_empty_profile() -> None:
+    pattern = SimpleUndirectedGraph(
+        vertices=("a", "b", "c", "center", "d"),
+        edges=(
+            ("a", "center"),
+            ("b", "center"),
+            ("c", "center"),
+            ("center", "d"),
+        ),
+    )
+    host = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(
+            vertices=tuple(f"v{index:02d}" for index in range(13)),
+            edges=tuple(
+                (f"v{index:02d}", f"v{index + 1:02d}") for index in range(12)
+            ),
+        ),
+        edge_colors=tuple("red" for _ in range(12)),
+    )
+
+    result = compute_rainbow_embedding_profile(pattern, host)
+
+    assert result.total_embeddings == 0
+    assert result.embeddings == ()
+
+
+def test_budget_admission_allows_cheap_seventeen_vertex_host() -> None:
+    pattern = SimpleUndirectedGraph(vertices=("v",), edges=())
+    host = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(
+            vertices=tuple(f"v{index}" for index in range(17)), edges=()
+        )
+    )
+
+    result = compute_rainbow_embedding_profile(pattern, host)
+
+    assert result.total_embeddings == 17
+
+
 def test_pattern_larger_than_host() -> None:
     """Pattern larger than host: 0 embeddings."""
     large = SimpleUndirectedGraph(

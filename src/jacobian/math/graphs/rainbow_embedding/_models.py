@@ -6,10 +6,14 @@ from pydantic import WithJsonSchema
 from pydantic.json_schema import JsonSchemaValue
 
 from jacobian._models import StrictModel
-from jacobian.math.graphs.values import ColoredUndirectedGraph, SimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+    ColoredUndirectedGraph,
+    SimpleUndirectedGraph,
+)
 
-MAX_HOST_VERTICES = 16
-MAX_PATTERN_VERTICES = 8
+MAX_HOST_VERTICES = MAX_INDEXED_SIMPLE_GRAPH_VERTICES
+MAX_PATTERN_VERTICES = MAX_INDEXED_SIMPLE_GRAPH_VERTICES
 
 
 def _bounded_graph_schema(
@@ -37,7 +41,8 @@ RainbowPatternGraph = Annotated[
             SimpleUndirectedGraph,
             maximum=MAX_PATTERN_VERTICES,
             description=(
-                f"A pattern graph with at most {MAX_PATTERN_VERTICES} vertices."
+                "A pattern graph within the canonical simple-graph vertex bound; "
+                "admission uses the exact work and output envelopes."
             ),
         )
     ),
@@ -49,8 +54,9 @@ RainbowHostGraph = Annotated[
             ColoredUndirectedGraph,
             maximum=MAX_HOST_VERTICES,
             description=(
-                "A coloured host graph with at most "
-                f"{MAX_HOST_VERTICES} vertices and a total edge coloring."
+                "A coloured host graph within the canonical simple-graph vertex "
+                "bound and with a total edge coloring; admission uses the exact "
+                "work and output envelopes."
             ),
         )
     ),

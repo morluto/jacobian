@@ -45,25 +45,7 @@ class DivisibilityPosetRequest(StrictModel):
         return self
 
 
-class DivisibilityPosetResult(StrictModel):
-    """The canonical proper-divisibility poset."""
-
-    values: tuple[str, ...] = Field(min_length=1)
-    strict_order_pairs: tuple[tuple[str, str], ...] = Field(default=())
-
-    @model_validator(mode="after")
-    def require_canonical_pairs(self) -> Self:
-        for a, b in self.strict_order_pairs:
-            if a == b:
-                raise PydanticCustomError(
-                    "divisibility_poset.no_reflexive",
-                    "strict order pairs must not be reflexive",
-                )
-        return self
-
-
 __all__ = [
     "MAX_DIVISIBILITY_SET_SIZE",
     "DivisibilityPosetRequest",
-    "DivisibilityPosetResult",
 ]

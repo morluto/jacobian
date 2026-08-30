@@ -19,11 +19,11 @@ from jacobian.math.number_theory._divisibility_poset_models import (
 from jacobian.math.number_theory._support import number_theory_operation
 
 
-def compute_divisibility_poset(request: DivisibilityPosetRequest) -> FinitePoset:
-    """Return the canonical proper-divisibility poset of a finite set of integers."""
-    data = construct_divisibility_poset(request.values)
+def divisibility_poset(values: tuple[str, ...]) -> FinitePoset:
+    """Return the canonical proper-divisibility poset of positive integers."""
+    data = construct_divisibility_poset(values)
     return materialize_finite_poset(
-        tuple(sorted(request.values)),
+        tuple(sorted(values)),
         tuple(
             PresentationPair(lower=lower, upper=upper)
             for lower, upper in data.strict_order_pairs
@@ -31,6 +31,11 @@ def compute_divisibility_poset(request: DivisibilityPosetRequest) -> FinitePoset
         RelationInterpretation.COMPARABLE_PAIRS,
         ReflexivePairPolicy.FORBIDDEN,
     )
+
+
+def compute_divisibility_poset(request: DivisibilityPosetRequest) -> FinitePoset:
+    """Adapt the wire request to the native divisibility-poset operation."""
+    return divisibility_poset(request.values)
 
 
 DIVISIBILITY_POSET_OPERATION = number_theory_operation(
@@ -57,4 +62,8 @@ DIVISIBILITY_POSET_OPERATION = number_theory_operation(
 )
 
 
-__all__ = ["DIVISIBILITY_POSET_OPERATION", "compute_divisibility_poset"]
+__all__ = [
+    "DIVISIBILITY_POSET_OPERATION",
+    "compute_divisibility_poset",
+    "divisibility_poset",
+]

@@ -12,6 +12,7 @@ from jacobian.canonical import (
     CanonicalLimits,
     format_canonical_integer,
     parse_canonical_integer,
+    strict_json_object_size,
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive import _multiset_sum
@@ -88,6 +89,29 @@ def _representation_function(
 
 def _sorted_sums(counts: Mapping[int, int]) -> list[int]:
     return sorted(counts.keys())
+
+
+def _require_sumset_preflight(
+    left: FiniteIntegerSet, right: FiniteIntegerSet
+) -> None:
+    """Reject an output envelope that cannot fit before building pair sums."""
+    pair_count = len(left.elements) * len(right.elements)
+    max_digits = max(
+        (len(element.lstrip("-")) for element in (*left.elements, *right.elements)),
+        default=1,
+    ) + 1
+    value_size = max_digits + 3  # quotes, optional sign, and conservative comma
+    elements_size = 2 + max(pair_count - 1, 0) + pair_count * value_size
+    support_size = strict_json_object_size((("elements", elements_size),))
+    result_size = strict_json_object_size(
+        (("cardinality", len(str(max(1, pair_count)))), ("support", support_size))
+    )
+    if result_size > CanonicalLimits().max_output_bytes:
+        raise OperationDomainValidationError(
+            location=("left", "right"),
+            code="additive_combinatorics.sumset_result_transport_exceeded",
+            message="sumset result exceeds the canonical output envelope",
+        )
 
 
 def _admit_direct_sum(
@@ -206,6 +230,7 @@ def sumset_cardinality(
 ) -> SumsetCardinalityResult:
     """Compute ``|A + B|`` (the support cardinality of ``r_{A+B}``)."""
     _require_bounded_cartesian_product(left, right)
+    _require_sumset_preflight(left, right)
     counts = _representation_function(_parse_set(left), _parse_set(right))
     support_values = _sorted_sums(counts)
     try:

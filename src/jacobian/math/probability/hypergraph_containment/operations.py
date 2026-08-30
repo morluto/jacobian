@@ -14,6 +14,7 @@ from jacobian.canonical import (
     CanonicalizationError,
     CanonicalLimits,
     encode_strict_json,
+    format_canonical_integer,
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
@@ -74,6 +75,13 @@ def _admit_hypergraph_vertex_containment(
                 for _, members in hypergraph.edges
             )
         )
+        antichain_work = len(unique_masks) * len(unique_masks)
+        if antichain_work > MAX_CONTAINMENT_WORK:
+            raise OperationDomainValidationError(
+                location=("hypergraph", "edges"),
+                code="hypergraph_containment.work_bound_exceeded",
+                message="the antichain reduction work envelope is exceeded",
+            )
         minimal_masks: list[int] = []
         for mask in sorted(unique_masks, key=int.bit_count):
             if not any(existing & mask == existing for existing in minimal_masks):
@@ -127,10 +135,11 @@ def _admit_hypergraph_vertex_containment(
             "hypergraph": hypergraph.model_dump(mode="json"),
             "retention_probability": retention_probability.model_dump(mode="json"),
             "containing_subset_counts": [
-                10 ** len(str(comb(n, k))) - 1 for k in range(n + 1)
+                format_canonical_integer(10 ** len(str(comb(n, k))) - 1)
+                for k in range(n + 1)
             ],
-            "total_state_count": state_count,
-            "success_count": state_count,
+            "total_state_count": format_canonical_integer(state_count),
+            "success_count": format_canonical_integer(state_count),
             "probability": {
                 "num": "9" * max(1, probability_digits),
                 "den": "9" * max(1, probability_digits),
@@ -170,9 +179,9 @@ def compute_hypergraph_vertex_containment(
         return HypergraphVertexContainmentResult(
             hypergraph=hypergraph,
             retention_probability=retention_probability,
-            containing_subset_counts=tuple(0 for _ in range(n + 1)),
-            total_state_count=1 << n,
-            success_count=0,
+            containing_subset_counts=tuple("0" for _ in range(n + 1)),
+            total_state_count=format_canonical_integer(1 << n),
+            success_count="0",
             probability=CanonicalRational.from_fraction(Fraction(0)),
         )
     if any(not members for _, members in hypergraph.edges):
@@ -180,9 +189,9 @@ def compute_hypergraph_vertex_containment(
         return HypergraphVertexContainmentResult(
             hypergraph=hypergraph,
             retention_probability=retention_probability,
-            containing_subset_counts=all_counts,
-            total_state_count=1 << n,
-            success_count=1 << n,
+            containing_subset_counts=tuple(format_canonical_integer(value) for value in all_counts),
+            total_state_count=format_canonical_integer(1 << n),
+            success_count=format_canonical_integer(1 << n),
             probability=CanonicalRational.from_fraction(Fraction(1)),
         )
 
@@ -209,8 +218,8 @@ def compute_hypergraph_vertex_containment(
     return HypergraphVertexContainmentResult(
         hypergraph=hypergraph,
         retention_probability=retention_probability,
-        containing_subset_counts=tuple(counts),
-        total_state_count=total,
-        success_count=success,
+        containing_subset_counts=tuple(format_canonical_integer(value) for value in counts),
+        total_state_count=format_canonical_integer(total),
+        success_count=format_canonical_integer(success),
         probability=CanonicalRational.from_fraction(prob),
     )

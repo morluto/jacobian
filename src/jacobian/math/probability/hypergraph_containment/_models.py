@@ -2,7 +2,7 @@
 
 from pydantic import Field
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalInteger, CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
@@ -31,9 +31,9 @@ class HypergraphVertexContainmentResult(StrictModel):
 
     hypergraph: FiniteHypergraph
     retention_probability: CanonicalRational
-    containing_subset_counts: tuple[int, ...]
-    total_state_count: int
-    success_count: int
+    containing_subset_counts: tuple[CanonicalInteger, ...]
+    total_state_count: CanonicalInteger
+    success_count: CanonicalInteger
     probability: CanonicalRational
 
 

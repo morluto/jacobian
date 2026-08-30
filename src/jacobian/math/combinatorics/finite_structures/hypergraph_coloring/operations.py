@@ -78,7 +78,9 @@ def decide_nonmonochromatic_coloring(
     work_budget = palette_size**n * len(edges)
     if execution is not None:
         if execution.deadline is None:
-            bind_request_deadline(execution.started_at + max(60.0, work_budget / 100_000))
+            bind_request_deadline(
+                execution.started_at + max(60.0, work_budget / 100_000)
+            )
         deadline = execution.deadline
     else:
         deadline = time.monotonic() + max(60.0, work_budget / 100_000)
@@ -112,7 +114,11 @@ def _is_valid_coloring(
 ) -> bool:
     vertex_to_color = {vertices[i]: coloring[i] for i in range(len(coloring))}
     for edge_index, (_, members) in enumerate(edges):
-        if edge_index % 256 == 0 and deadline is not None and time.monotonic() >= deadline:
+        if (
+            edge_index % 256 == 0
+            and deadline is not None
+            and time.monotonic() >= deadline
+        ):
             raise OperationExecutionTimeoutError(
                 "hypergraph coloring edge checks exceeded its request deadline"
             )

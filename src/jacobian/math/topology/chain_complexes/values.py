@@ -56,7 +56,11 @@ MAX_INTEGRAL_HOMOLOGY_OUTPUT_DIGITS = MAX_CERTIFIED_SNF_OUTPUT_DIGITS
 MAX_INTEGRAL_HOMOLOGY_OUTPUT_BITS = 3 * MAX_INTEGRAL_HOMOLOGY_OUTPUT_DIGITS
 MAX_INTEGRAL_HOMOLOGY_OUTPUT_SCALARS = 65_536
 MAX_INTEGRAL_HOMOLOGY_WORK_UNITS = 5_000_000
-INTEGRAL_HOMOLOGY_WALL_SECONDS = 120.0
+# The exact work envelope can legitimately take minutes. This 30-minute
+# killable owner ceiling is a safety backstop for the bounded SymPy child, not
+# a mathematical admission rule; ordinary unit/diagonal requests finish in the
+# in-process presolve without launching it.
+INTEGRAL_HOMOLOGY_WALL_SECONDS = 30.0 * 60.0
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -279,7 +283,7 @@ def _require_rational_entry_grammar(
 class HomologyGroupValue(StrictModel):
     """One homology vector space over QQ or GF(p)."""
 
-    kind: Literal["FIELD_VECTOR_SPACE"] = "FIELD_VECTOR_SPACE"
+    kind: Literal["FIELD_VECTOR_SPACE"]
     degree: int
     cycle_rank: int = Field(ge=0)
     boundary_rank: int = Field(ge=0)
@@ -337,9 +341,7 @@ class IntegralTorsionGenerator(StrictModel):
 class IntegralHomologyGroupValue(StrictModel):
     """One finitely generated integral homology group with representatives."""
 
-    kind: Literal["FINITELY_GENERATED_ABELIAN_GROUP"] = (
-        "FINITELY_GENERATED_ABELIAN_GROUP"
-    )
+    kind: Literal["FINITELY_GENERATED_ABELIAN_GROUP"]
     degree: StrictInt = Field(ge=-MAX_CHAIN_DEGREE, le=MAX_CHAIN_DEGREE)
     chain_rank: StrictInt = Field(ge=0, le=MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK)
     incoming_chain_rank: StrictInt = Field(ge=0, le=MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK)

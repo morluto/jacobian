@@ -2,9 +2,10 @@
 
 The two Smith reductions have deliberately separate roles.  The outgoing
 reduction supplies a saturated integral cycle basis; the incoming reduction
-computes the quotient of that cycle lattice by the boundary lattice.  SymPy
-owns both exact Smith decompositions.  This module owns admission, source-basis
-reconstruction, and the public height/result contract.
+computes the quotient of that cycle lattice by the boundary lattice.  A bounded
+unit presolve owns structurally trivial reductions, and a killable SymPy child
+owns the remaining exact decompositions.  This module owns admission,
+source-basis reconstruction, and the public height/result contract.
 """
 
 from __future__ import annotations
@@ -14,9 +15,11 @@ from itertools import pairwise
 from time import monotonic
 
 from jacobian._execution import (
+    OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     bind_request_deadline,
     current_request_execution,
+    request_cancelled,
 )
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
@@ -24,11 +27,10 @@ from jacobian.math.matrices.certified_snf.operations import (
     Matrix,
     SmithReduction,
     certificate_from_reduction,
-    inverse_unimodular,
+    identity_matrix,
     matrix_columns,
     matrix_multiply,
     matrix_vector_multiply,
-    smith_reduce,
 )
 from jacobian.math.matrices.certified_snf.values import CertifiedIntegerMatrix
 from jacobian.math.topology.chain_complexes.values import (
@@ -78,7 +80,9 @@ class IntegralHomologyDegreePlan:
     outgoing: Matrix
     incoming: Matrix
     outgoing_height: SmithHeightBound
+    outgoing_presolve: SmithReductionData | None
     incoming_heights_by_cycle_rank: tuple[SmithHeightBound, ...]
+    incoming_presolves_by_cycle_rank: tuple[SmithReductionData | None, ...]
     coordinate_bits_by_cycle_rank: tuple[int, ...]
     output_bits_by_cycle_rank: tuple[int, ...]
 
@@ -94,6 +98,17 @@ class IntegralHomologyExecutionPlan:
     output_scalar_count: int
     total_work: int
     deadline: float
+
+
+@dataclass(frozen=True, slots=True)
+class SmithReductionData:
+    """One exact Smith reduction with both inverse transformations."""
+
+    reduction: SmithReduction
+    left_inverse: Matrix
+    right_inverse: Matrix
+    work_units: int
+    intermediate_bits: int
 
 
 def _domain_error(code: str, message: str) -> OperationDomainValidationError:
@@ -379,6 +394,397 @@ def _smith_height_bound(
     return _smith_height_bound_from_shape(rows, columns, input_bits)
 
 
+class _PresolveHeightExceededError(Exception):
+    """The unit presolve cannot stay inside the admitted integer envelope."""
+
+
+def _checked_linear_update(value: int, factor: int, source: int) -> int:
+    """Return ``value + factor * source`` without creating an over-height value."""
+
+    predicted_bits = max(
+        abs(value).bit_length(),
+        abs(factor).bit_length() + abs(source).bit_length() + 1,
+    )
+    if predicted_bits > MAX_INTEGRAL_HOMOLOGY_OUTPUT_BITS:
+        raise _PresolveHeightExceededError
+    result = value + factor * source
+    if abs(result).bit_length() > MAX_INTEGRAL_HOMOLOGY_OUTPUT_BITS:
+        raise _PresolveHeightExceededError
+    return result
+
+
+def _swap_rows(matrix: Matrix, left: int, right: int) -> int:
+    if left == right:
+        return 0
+    matrix[left], matrix[right] = matrix[right], matrix[left]
+    return len(matrix[left])
+
+
+def _swap_columns(matrix: Matrix, left: int, right: int) -> int:
+    if left == right:
+        return 0
+    for row in matrix:
+        row[left], row[right] = row[right], row[left]
+    return len(matrix)
+
+
+def _scale_row(matrix: Matrix, row: int, factor: int) -> int:
+    matrix[row] = [factor * value for value in matrix[row]]
+    return len(matrix[row])
+
+
+def _scale_column(matrix: Matrix, column: int, factor: int) -> int:
+    for row in matrix:
+        row[column] *= factor
+    return len(matrix)
+
+
+def _add_row_multiple(matrix: Matrix, *, target: int, source: int, factor: int) -> int:
+    matrix[target] = [
+        _checked_linear_update(value, factor, source_value)
+        for value, source_value in zip(matrix[target], matrix[source], strict=True)
+    ]
+    return 2 * len(matrix[target])
+
+
+def _add_column_multiple(
+    matrix: Matrix, *, target: int, source: int, factor: int
+) -> int:
+    for row in matrix:
+        row[target] = _checked_linear_update(row[target], factor, row[source])
+    return 2 * len(matrix)
+
+
+def _identity_reduction(
+    source: Matrix,
+    *,
+    rows: int,
+    columns: int,
+    diagonal: Matrix,
+    rank: int,
+    factors: tuple[int, ...],
+) -> SmithReductionData:
+    left = identity_matrix(rows)
+    right = identity_matrix(columns)
+    reduction = SmithReduction(
+        source=[row[:] for row in source],
+        diagonal=diagonal,
+        left=left,
+        right=right,
+        rank=rank,
+        invariant_factors=factors,
+        left_determinant=1,
+        right_determinant=1,
+    )
+    return SmithReductionData(
+        reduction=reduction,
+        left_inverse=[row[:] for row in left],
+        right_inverse=[row[:] for row in right],
+        # Cover source/diagonal scans and copies plus construction, comparison,
+        # and retention of both square transformations and their inverses.
+        # In particular, a 0 x n or n x 0 reduction still constructs two n x n
+        # identity matrices and must not be priced as one unit.
+        work_units=8 * (rows * columns + rows * rows + columns * columns + 1),
+        intermediate_bits=max(1, _matrix_bits(source)),
+    )
+
+
+def _unit_presolve_structural_work(rows: int, columns: int) -> int:
+    """Charge scans and retained structures independent of pivot outcomes."""
+
+    pivot_scans = sum(
+        (rows - pivot) * (columns - pivot) for pivot in range(min(rows, columns))
+    )
+    return 8 * (rows * columns + rows * rows + columns * columns + 1) + pivot_scans
+
+
+def _unit_presolve_attempt_work_bound(rows: int, columns: int) -> int:
+    """Bound an unsuccessful unit-pivot attempt before general Smith work."""
+
+    work = _unit_presolve_structural_work(rows, columns)
+    for pivot in range(min(rows, columns)):
+        remaining_rows = rows - pivot - 1
+        remaining_columns = columns - pivot - 1
+        # At most one row swap, one column swap, and one sign normalization.
+        work += 5 * rows + 4 * columns
+        # Every clearing update touches the working matrix, its accumulated
+        # transformation, and the inverse transformation.
+        work += remaining_rows * (2 * columns + 4 * rows)
+        work += remaining_columns * (2 * rows + 4 * columns)
+    return work
+
+
+def _position_unit_pivot(
+    working: Matrix,
+    left: Matrix,
+    right: Matrix,
+    left_inverse: Matrix,
+    right_inverse: Matrix,
+    *,
+    pivot: int,
+    selected_row: int,
+    selected_column: int,
+) -> tuple[int, int, int]:
+    """Move one selected unit to the positive diagonal position."""
+
+    work = 0
+    left_determinant = 1
+    right_determinant = 1
+    if selected_row != pivot:
+        work += _swap_rows(working, pivot, selected_row)
+        work += _swap_rows(left, pivot, selected_row)
+        work += _swap_columns(left_inverse, pivot, selected_row)
+        left_determinant = -1
+    if selected_column != pivot:
+        work += _swap_columns(working, pivot, selected_column)
+        work += _swap_columns(right, pivot, selected_column)
+        work += _swap_rows(right_inverse, pivot, selected_column)
+        right_determinant = -1
+    if working[pivot][pivot] == -1:
+        work += _scale_row(working, pivot, -1)
+        work += _scale_row(left, pivot, -1)
+        work += _scale_column(left_inverse, pivot, -1)
+        left_determinant *= -1
+    return work, left_determinant, right_determinant
+
+
+def _clear_unit_pivot(
+    working: Matrix,
+    left: Matrix,
+    right: Matrix,
+    left_inverse: Matrix,
+    right_inverse: Matrix,
+    *,
+    pivot: int,
+) -> int:
+    """Clear the row and column of one positive unit pivot."""
+
+    work = 0
+    for row in range(pivot + 1, len(working)):
+        coefficient = working[row][pivot]
+        if coefficient == 0:
+            continue
+        work += _add_row_multiple(
+            working, target=row, source=pivot, factor=-coefficient
+        )
+        work += _add_row_multiple(left, target=row, source=pivot, factor=-coefficient)
+        work += _add_column_multiple(
+            left_inverse, target=pivot, source=row, factor=coefficient
+        )
+    column_count = len(right)
+    for column in range(pivot + 1, column_count):
+        coefficient = working[pivot][column]
+        if coefficient == 0:
+            continue
+        work += _add_column_multiple(
+            working, target=column, source=pivot, factor=-coefficient
+        )
+        work += _add_column_multiple(
+            right, target=column, source=pivot, factor=-coefficient
+        )
+        work += _add_row_multiple(
+            right_inverse, target=pivot, source=column, factor=coefficient
+        )
+    return work
+
+
+def _presolve_unit_smith(
+    source: Matrix,
+    *,
+    rows: int,
+    columns: int,
+) -> SmithReductionData | None:
+    """Exactly reduce matrices cleared by a sequence of visible unit pivots.
+
+    A selected ``+/-1`` pivot can be cleared using integral elementary row
+    and column operations.  The presolve tracks both transformations and their
+    inverses, checks every scalar update against the owner height envelope, and
+    succeeds only when the remaining block is zero.  A nonzero residual with no
+    visible unit pivot is left to the maintained general Smith backend, even if
+    a later Bezout combination could expose one.
+    """
+
+    if rows == 0 or columns == 0 or not any(value for row in source for value in row):
+        return _identity_reduction(
+            source,
+            rows=rows,
+            columns=columns,
+            diagonal=[[0 for _ in range(columns)] for _ in range(rows)],
+            rank=0,
+            factors=(),
+        )
+    if _is_positive_smith_diagonal(source, rows=rows, columns=columns):
+        factors = tuple(
+            source[index][index]
+            for index in range(min(rows, columns))
+            if source[index][index] != 0
+        )
+        return _identity_reduction(
+            source,
+            rows=rows,
+            columns=columns,
+            diagonal=[row[:] for row in source],
+            rank=len(factors),
+            factors=factors,
+        )
+
+    working = [row[:] for row in source]
+    left = identity_matrix(rows)
+    right = identity_matrix(columns)
+    left_inverse = identity_matrix(rows)
+    right_inverse = identity_matrix(columns)
+    left_determinant = 1
+    right_determinant = 1
+    work = _unit_presolve_structural_work(rows, columns)
+    rank = 0
+    try:
+        for pivot in range(min(rows, columns)):
+            selected = next(
+                (
+                    (row, column)
+                    for row in range(pivot, rows)
+                    for column in range(pivot, columns)
+                    if abs(working[row][column]) == 1
+                ),
+                None,
+            )
+            if selected is None:
+                if any(
+                    working[row][column] != 0
+                    for row in range(pivot, rows)
+                    for column in range(pivot, columns)
+                ):
+                    return None
+                break
+            selected_row, selected_column = selected
+            positioned_work, left_sign, right_sign = _position_unit_pivot(
+                working,
+                left,
+                right,
+                left_inverse,
+                right_inverse,
+                pivot=pivot,
+                selected_row=selected_row,
+                selected_column=selected_column,
+            )
+            work += positioned_work
+            left_determinant *= left_sign
+            right_determinant *= right_sign
+            work += _clear_unit_pivot(
+                working,
+                left,
+                right,
+                left_inverse,
+                right_inverse,
+                pivot=pivot,
+            )
+            rank += 1
+    except _PresolveHeightExceededError:
+        return None
+
+    expected = [
+        [int(row == column and row < rank) for column in range(columns)]
+        for row in range(rows)
+    ]
+    if working != expected:
+        return None
+    source_bits = _matrix_bits(source)
+    left_bits = _matrix_bits(left)
+    right_bits = _matrix_bits(right)
+    left_inverse_bits = _matrix_bits(left_inverse)
+    right_inverse_bits = _matrix_bits(right_inverse)
+    left_source_bits = _matrix_product_bits(rows, left_bits, source_bits)
+    reconstruction_bits = _matrix_product_bits(columns, left_source_bits, right_bits)
+    left_inverse_check_bits = _matrix_product_bits(rows, left_inverse_bits, left_bits)
+    right_inverse_check_bits = _matrix_product_bits(
+        columns, right_bits, right_inverse_bits
+    )
+    maximum_bits = max(
+        source_bits,
+        _matrix_bits(working),
+        left_bits,
+        right_bits,
+        left_inverse_bits,
+        right_inverse_bits,
+        reconstruction_bits,
+        left_inverse_check_bits,
+        right_inverse_check_bits,
+    )
+    if maximum_bits > MAX_INTEGRAL_HOMOLOGY_OUTPUT_BITS:
+        return None
+    # These are bounded defining checks for the presolve itself.  The stored
+    # reduction is reused by the kernel; ordinary result construction does not
+    # replay them.
+    reconstructed = matrix_multiply(
+        matrix_multiply(left, source),
+        right,
+        right_columns_if_empty=columns,
+    )
+    if reconstructed != working:
+        raise ArithmeticError("unit Smith presolve lost its source relation")
+    if matrix_multiply(left_inverse, left) != identity_matrix(rows):
+        raise ArithmeticError("unit Smith presolve left inverse is invalid")
+    if matrix_multiply(right, right_inverse) != identity_matrix(columns):
+        raise ArithmeticError("unit Smith presolve right inverse is invalid")
+    work += rows * rows * max(1, rows) + columns * columns * max(1, columns)
+    work += rows * rows * max(1, columns) + rows * columns * max(1, columns)
+    return SmithReductionData(
+        reduction=SmithReduction(
+            source=[row[:] for row in source],
+            diagonal=working,
+            left=left,
+            right=right,
+            rank=rank,
+            invariant_factors=(1,) * rank,
+            left_determinant=left_determinant,
+            right_determinant=right_determinant,
+        ),
+        left_inverse=left_inverse,
+        right_inverse=right_inverse,
+        work_units=work,
+        intermediate_bits=maximum_bits,
+    )
+
+
+def _smith_admission(
+    matrix: Matrix,
+    *,
+    rows: int,
+    columns: int,
+) -> tuple[SmithHeightBound, SmithReductionData | None]:
+    presolved = _presolve_unit_smith(matrix, rows=rows, columns=columns)
+    if presolved is None:
+        bound = _smith_height_bound(matrix, rows=rows, columns=columns)
+        return (
+            SmithHeightBound(
+                left_bits=bound.left_bits,
+                right_bits=bound.right_bits,
+                diagonal_bits=bound.diagonal_bits,
+                intermediate_bits=bound.intermediate_bits,
+                work_units=(
+                    bound.work_units + _unit_presolve_attempt_work_bound(rows, columns)
+                ),
+                transformations_are_identity=bound.transformations_are_identity,
+            ),
+            None,
+        )
+    reduction = presolved.reduction
+    return (
+        SmithHeightBound(
+            left_bits=_matrix_bits(reduction.left),
+            right_bits=_matrix_bits(reduction.right),
+            diagonal_bits=_matrix_bits(reduction.diagonal),
+            intermediate_bits=presolved.intermediate_bits,
+            work_units=presolved.work_units,
+            transformations_are_identity=(
+                reduction.left == identity_matrix(rows)
+                and reduction.right == identity_matrix(columns)
+            ),
+        ),
+        presolved,
+    )
+
+
 def _known_rank_before_smith(
     matrix: Matrix,
     *,
@@ -505,6 +911,10 @@ def _require_square_zero(
                 "the conservative d^2 intermediate-height bound exceeds the "
                 f"{MAX_INTEGRAL_HOMOLOGY_OUTPUT_BITS}-bit execution envelope",
             )
+        left_cells = source.basis_sizes[index] * middle
+        right_cells = middle * columns
+        product_cells = source.basis_sizes[index] * columns
+        work += left_cells + right_cells + product_cells
         work += source.basis_sizes[index] * middle * columns
         product = matrix_multiply(left, right, right_columns_if_empty=columns)
         if any(value for row in product for value in row):
@@ -580,12 +990,21 @@ def _reconstruction_work(
 def _deadline() -> float:
     execution = current_request_execution()
     started = execution.started_at if execution is not None else monotonic()
-    deadline = started + INTEGRAL_HOMOLOGY_WALL_SECONDS
+    owner_deadline = started + INTEGRAL_HOMOLOGY_WALL_SECONDS
+    deadline = (
+        min(owner_deadline, execution.deadline)
+        if execution is not None and execution.deadline is not None
+        else owner_deadline
+    )
     bind_request_deadline(deadline)
     return deadline
 
 
 def _require_deadline(deadline: float, stage: str) -> None:
+    if request_cancelled():
+        raise OperationExecutionCancelledError(
+            f"integral homology request cancelled {stage}"
+        )
     if monotonic() >= deadline:
         raise OperationExecutionTimeoutError(
             f"integral homology deadline expired {stage}"
@@ -633,7 +1052,7 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
             if index < len(differentials)
             else [[] for _ in range(chain_rank)]
         )
-        outgoing_height = _smith_height_bound(
+        outgoing_height, outgoing_presolve = _smith_admission(
             outgoing,
             rows=outgoing_rows,
             columns=chain_rank,
@@ -646,12 +1065,17 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
 
         coordinate_bounds: list[int] = []
         incoming_bounds: list[SmithHeightBound] = []
+        incoming_presolves: list[SmithReductionData | None] = []
         result_bounds: list[int] = []
-        known_outgoing_rank = _known_rank_before_smith(
-            outgoing,
-            rows=outgoing_rows,
-            columns=chain_rank,
-            bound=outgoing_height,
+        known_outgoing_rank = (
+            outgoing_presolve.reduction.rank
+            if outgoing_presolve is not None
+            else _known_rank_before_smith(
+                outgoing,
+                rows=outgoing_rows,
+                columns=chain_rank,
+                bound=outgoing_height,
+            )
         )
         known_cycle_rank = (
             None if known_outgoing_rank is None else chain_rank - known_outgoing_rank
@@ -662,16 +1086,39 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
             if known_cycle_rank is not None
             else tuple(range(chain_rank + 1))
         )
-        bounds_by_cycle_rank: dict[int, tuple[int, SmithHeightBound, int]] = {}
+        exact_incoming_coordinates: Matrix | None = None
+        if outgoing_presolve is not None and known_outgoing_rank is not None:
+            all_coordinates = matrix_multiply(
+                outgoing_presolve.right_inverse,
+                incoming,
+                right_columns_if_empty=incoming_chain_rank,
+            )
+            if any(
+                value for row in all_coordinates[:known_outgoing_rank] for value in row
+            ):
+                raise ArithmeticError(
+                    "unit Smith presolve produced invalid cycle coordinates"
+                )
+            exact_incoming_coordinates = all_coordinates[known_outgoing_rank:]
+        bounds_by_cycle_rank: dict[
+            int, tuple[int, SmithHeightBound, SmithReductionData | None, int]
+        ] = {}
         for cycle_rank in cycle_ranks:
-            if (
+            if exact_incoming_coordinates is not None:
+                coordinate_bits = _matrix_bits(exact_incoming_coordinates)
+                incoming_height, incoming_presolve = _smith_admission(
+                    exact_incoming_coordinates,
+                    rows=cycle_rank,
+                    columns=incoming_chain_rank,
+                )
+            elif (
                 known_cycle_rank == cycle_rank
                 and outgoing_height.transformations_are_identity
             ):
                 outgoing_rank = chain_rank - cycle_rank
                 known_incoming_coordinates = incoming[outgoing_rank:]
                 coordinate_bits = incoming_bits
-                incoming_height = _smith_height_bound(
+                incoming_height, incoming_presolve = _smith_admission(
                     known_incoming_coordinates,
                     rows=cycle_rank,
                     columns=incoming_chain_rank,
@@ -686,6 +1133,7 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
                     incoming_chain_rank,
                     coordinate_bits,
                 )
+                incoming_presolve = None
             else:
                 right_inverse_bits = _inverse_unimodular_bits(
                     chain_rank, outgoing_height.right_bits
@@ -700,6 +1148,7 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
                     incoming_chain_rank,
                     coordinate_bits,
                 )
+                incoming_presolve = None
             _require_height(
                 incoming_height,
                 label=(
@@ -743,6 +1192,7 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
             bounds_by_cycle_rank[cycle_rank] = (
                 coordinate_bits,
                 incoming_height,
+                incoming_presolve,
                 result_bits,
             )
         # Pre-Smith exact-rank cases prove the unique cycle rank. The repeated
@@ -752,11 +1202,15 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
             known_bounds = bounds_by_cycle_rank[known_cycle_rank]
             bounds_by_cycle_rank = dict.fromkeys(range(chain_rank + 1), known_bounds)
         for cycle_rank in range(chain_rank + 1):
-            coordinate_bits, incoming_height, result_bits = bounds_by_cycle_rank[
-                cycle_rank
-            ]
+            (
+                coordinate_bits,
+                incoming_height,
+                incoming_presolve,
+                result_bits,
+            ) = bounds_by_cycle_rank[cycle_rank]
             coordinate_bounds.append(coordinate_bits)
             incoming_bounds.append(incoming_height)
+            incoming_presolves.append(incoming_presolve)
             result_bounds.append(result_bits)
         smith_work += max(bound.work_units for bound in incoming_bounds)
         reconstruction_work += max(
@@ -781,7 +1235,9 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
                 outgoing=outgoing,
                 incoming=incoming,
                 outgoing_height=outgoing_height,
+                outgoing_presolve=outgoing_presolve,
                 incoming_heights_by_cycle_rank=tuple(incoming_bounds),
+                incoming_presolves_by_cycle_rank=tuple(incoming_presolves),
                 coordinate_bits_by_cycle_rank=tuple(coordinate_bounds),
                 output_bits_by_cycle_rank=tuple(result_bounds),
             )
@@ -865,6 +1321,43 @@ def _integer_sequence_bits(values: list[int]) -> int:
     return max((abs(value).bit_length() for value in values), default=1)
 
 
+def _execute_smith_reduction(
+    source: Matrix,
+    *,
+    rows: int,
+    columns: int,
+    presolved: SmithReductionData | None,
+    height: SmithHeightBound,
+    deadline: float,
+) -> SmithReductionData:
+    """Return one admitted reduction, reusing exact presolve when available."""
+
+    if presolved is not None:
+        return presolved
+    from jacobian.math.topology.chain_complexes._smith_process import (
+        smith_reduce_in_worker,
+    )
+
+    completed = smith_reduce_in_worker(
+        source,
+        rows=rows,
+        columns=columns,
+        deadline=deadline,
+        left_bits=height.left_bits,
+        right_bits=height.right_bits,
+        diagonal_bits=height.diagonal_bits,
+        left_inverse_bits=_inverse_unimodular_bits(rows, height.left_bits),
+        right_inverse_bits=_inverse_unimodular_bits(columns, height.right_bits),
+    )
+    return SmithReductionData(
+        reduction=completed.reduction,
+        left_inverse=completed.left_inverse,
+        right_inverse=completed.right_inverse,
+        work_units=0,
+        intermediate_bits=_actual_reduction_bits(completed.reduction),
+    )
+
+
 def compute_integral_homology(
     plan: IntegralHomologyExecutionPlan,
 ) -> tuple[IntegralHomologyGroupValue, ...]:
@@ -876,15 +1369,19 @@ def compute_integral_homology(
             plan.deadline,
             f"before degree {degree_plan.degree} outgoing Smith reduction",
         )
-        outgoing_reduction = smith_reduce(
+        outgoing_execution = _execute_smith_reduction(
             degree_plan.outgoing,
-            row_count=(
+            rows=(
                 plan.source.basis_sizes[degree_plan.degree - plan.source.degree_min - 1]
                 if degree_plan.degree > plan.source.degree_min
                 else 0
             ),
-            column_count=degree_plan.chain_rank,
+            columns=degree_plan.chain_rank,
+            presolved=degree_plan.outgoing_presolve,
+            height=degree_plan.outgoing_height,
+            deadline=plan.deadline,
         )
+        outgoing_reduction = outgoing_execution.reduction
         _require_reduction_bound(
             outgoing_reduction,
             degree_plan.outgoing_height,
@@ -893,7 +1390,7 @@ def compute_integral_homology(
         outgoing_rank = outgoing_reduction.rank
         cycle_rank = degree_plan.chain_rank - outgoing_rank
         cycle_basis = matrix_columns(outgoing_reduction.right, start=outgoing_rank)
-        right_inverse = inverse_unimodular(outgoing_reduction.right)
+        right_inverse = outgoing_execution.right_inverse
         all_cycle_coordinates = matrix_multiply(
             right_inverse,
             degree_plan.incoming,
@@ -912,11 +1409,15 @@ def compute_integral_homology(
             plan.deadline,
             f"before degree {degree_plan.degree} incoming Smith reduction",
         )
-        incoming_reduction = smith_reduce(
+        incoming_execution = _execute_smith_reduction(
             incoming_coordinates,
-            row_count=cycle_rank,
-            column_count=degree_plan.incoming_chain_rank,
+            rows=cycle_rank,
+            columns=degree_plan.incoming_chain_rank,
+            presolved=degree_plan.incoming_presolves_by_cycle_rank[cycle_rank],
+            height=degree_plan.incoming_heights_by_cycle_rank[cycle_rank],
+            deadline=plan.deadline,
         )
+        incoming_reduction = incoming_execution.reduction
         incoming_height = degree_plan.incoming_heights_by_cycle_rank[cycle_rank]
         _require_reduction_bound(
             incoming_reduction,
@@ -924,7 +1425,7 @@ def compute_integral_homology(
             label=f"degree {degree_plan.degree} incoming Smith reduction",
         )
         incoming_rank = incoming_reduction.rank
-        incoming_left_inverse = inverse_unimodular(incoming_reduction.left)
+        incoming_left_inverse = incoming_execution.left_inverse
 
         free_generators: list[IntegralFreeGenerator] = []
         generator_values: list[int] = []
@@ -978,6 +1479,7 @@ def compute_integral_homology(
 
         groups.append(
             IntegralHomologyGroupValue(
+                kind="FINITELY_GENERATED_ABELIAN_GROUP",
                 degree=degree_plan.degree,
                 chain_rank=degree_plan.chain_rank,
                 incoming_chain_rank=degree_plan.incoming_chain_rank,

@@ -523,6 +523,7 @@ def _compute_homology_groups(
 
         groups.append(
             HomologyGroupValue(
+                kind="FIELD_VECTOR_SPACE",
                 degree=actual_degree,
                 cycle_rank=cycle_rank,
                 boundary_rank=incoming_rank,

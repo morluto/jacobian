@@ -1,10 +1,13 @@
 """Tests for chain complex operations (#1824)."""
 
 from fractions import Fraction
+from itertools import combinations
 from typing import Any, NoReturn, cast
+from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
+from tests.fixtures.accounting import assert_charged_work_parity
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.topology.chain_complexes._models import (
@@ -90,6 +93,140 @@ def _point_complex() -> ChainComplexValue:
         basis_sizes=(1,),
         differential_matrices=(),
     )
+
+
+class _IntegralWorkObserver:
+    """Count executed scalar primitives without reading admission estimates."""
+
+    def __init__(self, kernel: Any) -> None:
+        self.kernel = kernel
+        self.executed = {
+            "parse": 0,
+            "square_zero": 0,
+            "smith": 0,
+            "reconstruction": 0,
+            "output": 0,
+        }
+        self.phase = "smith"
+        self._parse_integer = kernel.parse_canonical_integer
+        self._square_zero = kernel._require_square_zero
+        self._matrix_bits = kernel._matrix_bits
+        self._multiply = kernel.matrix_multiply
+        self._vector_multiply = kernel.matrix_vector_multiply
+        self._smith_admission = kernel._smith_admission
+        self._swap_rows = kernel._swap_rows
+        self._swap_columns = kernel._swap_columns
+        self._scale_row = kernel._scale_row
+        self._scale_column = kernel._scale_column
+        self._add_row = kernel._add_row_multiple
+        self._add_column = kernel._add_column_multiple
+
+    @staticmethod
+    def _scalar_cells(matrix: list[list[int]]) -> int:
+        return sum(len(row) for row in matrix)
+
+    def parse_integer(self, value: str) -> int:
+        self.executed["parse"] += len(value) + 1
+        return cast(int, self._parse_integer(value))
+
+    def square_zero(
+        self, source: ChainComplexValue, differentials: tuple[list[list[int]], ...]
+    ) -> int:
+        self.phase = "square_zero"
+        try:
+            return cast(int, self._square_zero(source, differentials))
+        finally:
+            self.phase = "smith"
+
+    def matrix_bits(self, matrix: list[list[int]]) -> int:
+        if self.phase in self.executed:
+            self.executed[self.phase] += self._scalar_cells(matrix)
+        return cast(int, self._matrix_bits(matrix))
+
+    def multiply(
+        self, left: list[list[int]], right: list[list[int]], **kwargs: Any
+    ) -> list[list[int]]:
+        inner = len(left[0]) if left else len(right)
+        columns = (
+            len(right[0]) if right else int(kwargs.get("right_columns_if_empty", 0))
+        )
+        if self.phase in self.executed:
+            self.executed[self.phase] += len(left) * inner * columns
+            self.executed[self.phase] += len(left) * columns
+        return cast(list[list[int]], self._multiply(left, right, **kwargs))
+
+    def vector_multiply(self, matrix: list[list[int]], vector: list[int]) -> list[int]:
+        if self.phase in self.executed:
+            self.executed[self.phase] += len(matrix) * len(vector) + len(matrix)
+        return cast(list[int], self._vector_multiply(matrix, vector))
+
+    def smith_admission(self, *args: Any, **kwargs: Any) -> Any:
+        bound, presolved = self._smith_admission(*args, **kwargs)
+        if presolved is not None:
+            reduction = presolved.reduction
+            self.executed["smith"] += sum(
+                self._scalar_cells(matrix)
+                for matrix in (
+                    reduction.source,
+                    reduction.diagonal,
+                    reduction.left,
+                    reduction.right,
+                    presolved.left_inverse,
+                    presolved.right_inverse,
+                )
+            )
+        return bound, presolved
+
+    def swap_rows(self, matrix: list[list[int]], left: int, right: int) -> int:
+        if left != right:
+            self.executed["smith"] += len(matrix[left])
+        return cast(int, self._swap_rows(matrix, left, right))
+
+    def swap_columns(self, matrix: list[list[int]], left: int, right: int) -> int:
+        if left != right:
+            self.executed["smith"] += len(matrix)
+        return cast(int, self._swap_columns(matrix, left, right))
+
+    def scale_row(self, matrix: list[list[int]], row: int, factor: int) -> int:
+        self.executed["smith"] += len(matrix[row])
+        return cast(int, self._scale_row(matrix, row, factor))
+
+    def scale_column(self, matrix: list[list[int]], column: int, factor: int) -> int:
+        self.executed["smith"] += len(matrix)
+        return cast(int, self._scale_column(matrix, column, factor))
+
+    def add_row(
+        self, matrix: list[list[int]], *, target: int, source: int, factor: int
+    ) -> int:
+        self.executed["smith"] += 2 * len(matrix[target])
+        return cast(
+            int,
+            self._add_row(matrix, target=target, source=source, factor=factor),
+        )
+
+    def add_column(
+        self, matrix: list[list[int]], *, target: int, source: int, factor: int
+    ) -> int:
+        self.executed["smith"] += 2 * len(matrix)
+        return cast(
+            int,
+            self._add_column(matrix, target=target, source=source, factor=factor),
+        )
+
+    @classmethod
+    def count_output_scalars(cls, value: Any) -> int:
+        if isinstance(value, bool):
+            return 0
+        if isinstance(value, int):
+            return 1
+        if isinstance(value, str):
+            digits = value[1:] if value.startswith("-") else value
+            return int(bool(digits) and digits.isdigit())
+        if isinstance(value, dict):
+            return sum(cls.count_output_scalars(item) for item in value.values())
+        if isinstance(value, (list, tuple)):
+            return sum(cls.count_output_scalars(item) for item in value)
+        return 0
 
 
 class TestConstructChainComplex:
@@ -240,6 +377,32 @@ class TestIntegralHomology:
             for row in matrix
         )
 
+    @classmethod
+    def _simplex_complex(cls, vertex_count: int) -> ChainComplexValue:
+        """Canonical oriented chain complex of one full simplex."""
+
+        bases = tuple(
+            tuple(combinations(range(vertex_count), size))
+            for size in range(1, vertex_count + 1)
+        )
+        differentials: list[tuple[tuple[str, ...], ...]] = []
+        for dimension in range(1, vertex_count):
+            target_index = {
+                face: index for index, face in enumerate(bases[dimension - 1])
+            }
+            rows = [[0] * len(bases[dimension]) for _ in bases[dimension - 1]]
+            for column, simplex in enumerate(bases[dimension]):
+                for removed in range(len(simplex)):
+                    face = simplex[:removed] + simplex[removed + 1 :]
+                    rows[target_index[face]][column] = 1 if removed % 2 == 0 else -1
+            differentials.append(
+                tuple(tuple(str(value) for value in row) for row in rows)
+            )
+        return cls._complex(
+            tuple(len(basis) for basis in bases),
+            tuple(differentials),
+        )
+
     def test_zz_contract_rejects_fractional_entries(self) -> None:
         with pytest.raises(ValidationError, match="must be an integer"):
             self._complex((1, 1), ((("1/2",),),))
@@ -261,6 +424,30 @@ class TestIntegralHomology:
             complex_value.differential_matrices[0],
             torsion.bounding_chain.coefficients,
         ) == tuple(order * int(value) for value in torsion.cycle.coefficients)
+
+    @pytest.mark.parametrize("rank", (17, 32))
+    def test_zero_endpoint_certificates_round_trip_through_maximum_dimension(
+        self, rank: int
+    ) -> None:
+        result = homology_groups(self._complex((rank,), ()))
+        payload = result.model_dump(mode="json")
+        serialized = HomologyResult.model_validate(payload)
+        group = _integral_groups(serialized)[0]
+
+        assert (
+            group.outgoing_smith_certificate.source.row_count,
+            group.outgoing_smith_certificate.source.column_count,
+        ) == (0, rank)
+        assert (
+            group.incoming_smith_certificate.source.row_count,
+            group.incoming_smith_certificate.source.column_count,
+        ) == (rank, 0)
+        identity = tuple(
+            tuple("1" if row == column else "0" for column in range(rank))
+            for row in range(rank)
+        )
+        assert group.outgoing_smith_certificate.right_transformation.entries == identity
+        assert group.incoming_smith_certificate.left_transformation.entries == identity
 
     def test_non_simplicial_non_ternary_basis_changes_preserve_mixed_group(
         self,
@@ -302,6 +489,43 @@ class TestIntegralHomology:
         ) == tuple(
             int(torsion.order) * int(value) for value in torsion.cycle.coefficients
         )
+
+    def test_signed_permutation_differential_is_admitted_exactly(self) -> None:
+        """A unit-equivalent differential has zero homology in both degrees.
+
+        This is the smallest generic regression for the structural Smith
+        presolve: shape-only transformation-height recurrences used to reject
+        this useful exact case even though unit elimination stays tiny.
+        """
+
+        signed_permutation = (
+            ("0", "0", "-1", "0"),
+            ("1", "0", "0", "0"),
+            ("0", "0", "0", "1"),
+            ("0", "-1", "0", "0"),
+        )
+        result = homology_groups(self._complex((4, 4), (signed_permutation,)))
+
+        assert tuple(
+            (group.free_rank, group.torsion_invariant_factors)
+            for group in _integral_groups(result)
+        ) == ((0, ()), (0, ()))
+
+    def test_signed_permutation_presolve_reaches_the_chain_rank_boundary(self) -> None:
+        rank = 32
+        signed_reverse = tuple(
+            tuple(
+                ("-1" if row % 2 else "1") if column == rank - row - 1 else "0"
+                for column in range(rank)
+            )
+            for row in range(rank)
+        )
+
+        groups = _integral_groups(
+            homology_groups(self._complex((rank, rank), (signed_reverse,)))
+        )
+
+        assert tuple(group.free_rank for group in groups) == (0, 0)
 
     def test_zz_tensor_producer_composes_back_into_integral_homology(self) -> None:
         multiplication = self._complex((1, 1), ((("6",),),))
@@ -374,6 +598,23 @@ class TestIntegralHomology:
         with pytest.raises(ValidationError, match="homogeneous"):
             HomologyResult.model_validate(payload)
 
+    def test_group_discriminators_are_required_in_schema_and_validation(self) -> None:
+        schema = HomologyResult.model_json_schema()
+        for definition in (
+            "HomologyGroupValue",
+            "IntegralHomologyGroupValue",
+        ):
+            assert "kind" in schema["$defs"][definition]["required"]
+
+        for complex_value in (
+            _circle_complex(),
+            self._complex((1, 1), ((("2",),),)),
+        ):
+            payload = homology_groups(complex_value).model_dump(mode="json")
+            del payload["homology_groups"][0]["kind"]
+            with pytest.raises(ValidationError, match="kind"):
+                HomologyResult.model_validate(payload)
+
     def test_integral_certificates_remain_bound_to_retained_differentials(
         self,
     ) -> None:
@@ -415,6 +656,138 @@ class TestIntegralHomology:
             + plan.smith_work
             + plan.reconstruction_work
             + plan.output_scalar_count
+        )
+
+    def test_expired_dispatch_deadline_stops_before_integral_admission(self) -> None:
+        from time import monotonic
+
+        from jacobian._execution import (
+            OperationExecutionTimeoutError,
+            request_execution,
+        )
+        from jacobian.math.topology.chain_complexes.values import (
+            INTEGRAL_HOMOLOGY_WALL_SECONDS,
+        )
+
+        with (
+            request_execution(monotonic() - INTEGRAL_HOMOLOGY_WALL_SECONDS - 1),
+            pytest.raises(OperationExecutionTimeoutError, match="source admission"),
+        ):
+            homology_groups(self._complex((1, 1), ((("6",),),)))
+
+    def test_integral_admission_observes_caller_cancellation(self) -> None:
+        from threading import Event
+
+        from jacobian._execution import OperationExecutionCancelledError
+        from jacobian.process import bounded_process_cancellation
+
+        cancellation = Event()
+        cancellation.set()
+        with (
+            bounded_process_cancellation(cancellation),
+            pytest.raises(OperationExecutionCancelledError, match="cancelled"),
+        ):
+            homology_groups(self._complex((2, 2), ((("2", "2"), ("2", "2")),)))
+
+    def test_real_tetrahedron_kernel_stays_within_every_charged_work_class(
+        self,
+    ) -> None:
+        from jacobian.math.topology.chain_complexes import _integral_homology as kernel
+
+        complex_value = self._simplex_complex(4)
+        observer = _IntegralWorkObserver(kernel)
+
+        with (
+            patch.object(kernel, "parse_canonical_integer", observer.parse_integer),
+            patch.object(kernel, "_require_square_zero", observer.square_zero),
+            patch.object(kernel, "_matrix_bits", observer.matrix_bits),
+            patch.object(kernel, "_smith_admission", observer.smith_admission),
+            patch.object(kernel, "matrix_multiply", observer.multiply),
+            patch.object(kernel, "matrix_vector_multiply", observer.vector_multiply),
+            patch.object(kernel, "_swap_rows", observer.swap_rows),
+            patch.object(kernel, "_swap_columns", observer.swap_columns),
+            patch.object(kernel, "_scale_row", observer.scale_row),
+            patch.object(kernel, "_scale_column", observer.scale_column),
+            patch.object(kernel, "_add_row_multiple", observer.add_row),
+            patch.object(kernel, "_add_column_multiple", observer.add_column),
+        ):
+            plan = kernel.admit_integral_homology(complex_value)
+            observer.phase = "reconstruction"
+            groups = kernel.compute_integral_homology(plan)
+        result = HomologyResult._from_kernel(
+            homology_groups=groups,
+            source_complex=complex_value,
+        )
+        observer.executed["output"] = observer.count_output_scalars(
+            result.model_dump(mode="json")
+        )
+
+        assert tuple(group.free_rank for group in groups) == (1, 0, 0, 0)
+        assert_charged_work_parity(
+            charged={
+                "parse": plan.parse_work,
+                "square_zero": plan.square_zero_work,
+                "smith": plan.smith_work,
+                "reconstruction": plan.reconstruction_work,
+                "output": plan.output_scalar_count,
+            },
+            executed=observer.executed,
+        )
+
+    @pytest.mark.parametrize(("rows", "columns"), ((0, 32), (32, 0)))
+    def test_zero_endpoint_smith_charge_covers_retained_transformations(
+        self, rows: int, columns: int
+    ) -> None:
+        from jacobian.math.topology.chain_complexes import _integral_homology as kernel
+
+        source: list[list[int]] = [[] for _ in range(rows)]
+        height, presolved = kernel._smith_admission(
+            source,
+            rows=rows,
+            columns=columns,
+        )
+
+        assert presolved is not None
+        reduction = presolved.reduction
+        retained_scalars = sum(
+            sum(len(row) for row in matrix)
+            for matrix in (
+                reduction.source,
+                reduction.diagonal,
+                reduction.left,
+                reduction.right,
+                presolved.left_inverse,
+                presolved.right_inverse,
+            )
+        )
+        assert retained_scalars == 2 * 32 * 32
+        assert_charged_work_parity(
+            charged={"smith": height.work_units},
+            executed={"smith": retained_scalars},
+        )
+
+    def test_general_smith_charge_covers_actual_worker_jobs(self) -> None:
+        from jacobian.math.topology.chain_complexes import _integral_homology as kernel
+        from jacobian.math.topology.chain_complexes import _smith_process
+
+        complex_value = self._complex(
+            (2, 2),
+            ((("2", "2"), ("2", "2")),),
+        )
+        plan = kernel.admit_integral_homology(complex_value)
+
+        with patch.object(
+            _smith_process,
+            "smith_reduce_in_worker",
+            wraps=_smith_process.smith_reduce_in_worker,
+        ) as smith_worker:
+            groups = kernel.compute_integral_homology(plan)
+
+        assert smith_worker.call_count > 0
+        assert tuple(group.free_rank for group in groups) == (1, 1)
+        assert_charged_work_parity(
+            charged={"smith": plan.smith_work},
+            executed={"smith": smith_worker.call_count},
         )
 
 
@@ -868,7 +1241,11 @@ class TestHomologySourceBinding:
 
         payload_groups = (
             HomologyGroupValue(
-                degree=0, cycle_rank=5, boundary_rank=0, betti_number=100
+                kind="FIELD_VECTOR_SPACE",
+                degree=0,
+                cycle_rank=5,
+                boundary_rank=0,
+                betti_number=100,
             ),
         )
         with pytest.raises(ValueError, match="betti_number"):
@@ -918,7 +1295,11 @@ class TestHomologyParentMatch:
             HomologyResult(
                 homology_groups=(
                     HomologyGroupValue(
-                        degree=0, cycle_rank=1, boundary_rank=0, betti_number=1
+                        kind="FIELD_VECTOR_SPACE",
+                        degree=0,
+                        cycle_rank=1,
+                        boundary_rank=0,
+                        betti_number=1,
                     ),
                 ),
                 coefficient_ring=CoefficientRing.PRIME_FIELD,

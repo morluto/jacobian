@@ -1,3 +1,5 @@
 """Projective-geometry operation ownership."""
 
-__all__: list[str] = []
+from jacobian.math.geometry.projective.values import AlgebraicProjectivePlanePoint
+
+__all__ = ["AlgebraicProjectivePlanePoint"]

@@ -278,6 +278,32 @@ def test_duplicate_generator_labels_are_rejected_after_order_normalization() -> 
     )
 
 
+@pytest.mark.parametrize("extra_location", ("action", "generator"))
+def test_deep_unknown_data_is_rejected_without_recursive_preprocessing(
+    extra_location: str,
+) -> None:
+    nested: object = None
+    for _ in range(1_500):
+        nested = {"next": nested}
+    generator: dict[str, object] = {
+        "label": "identity",
+        "matrix": {"entries": [[_rational(1)]]},
+    }
+    action: dict[str, object] = {
+        "coordinate_axis": ["e1"],
+        "generators": [generator],
+    }
+    if extra_location == "action":
+        action["unknown"] = nested
+    else:
+        generator["unknown"] = nested
+
+    with pytest.raises(ValidationError) as exc_info:
+        RationalMatrixAction.model_validate(action)
+
+    assert exc_info.value.errors(include_input=False)[0]["type"] == "extra_forbidden"
+
+
 def test_unimodular_coordinate_change_transports_the_invariant_lattice() -> None:
     action = _action([("A", [[-1, 0], [0, 1]])])
     conjugated_action = _action([("A", [[-1, -2], [0, 1]])])

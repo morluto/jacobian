@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Self, cast
+from typing import Any, Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian._models import StrictModel
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math._labels import OpaqueLabel
 from jacobian.math.matrices.values import (
@@ -66,9 +66,9 @@ def constraint_coefficient_count(
 
 
 def _canonicalize_generator_order(data: dict[str, object]) -> dict[str, object]:
-    normalized = cast(dict[str, object], canonicalize_json_containers(data))
+    normalized = dict(data)
     normalized_generators = normalized.get("generators")
-    if not isinstance(normalized_generators, tuple):
+    if not isinstance(normalized_generators, (list, tuple)):
         return normalized
     labelled_generators: list[tuple[str, object]] = []
     for generator in normalized_generators:
@@ -100,7 +100,7 @@ def _require_raw_action_envelope(data: object) -> object:
         )
     generators = data.get("generators")
     if not isinstance(generators, (list, tuple)):
-        return canonicalize_json_containers(data)
+        return data
     if len(generators) > MAX_ACTION_GENERATORS:
         raise _validation_error(
             "budget_exceeded",

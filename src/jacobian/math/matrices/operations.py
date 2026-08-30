@@ -602,12 +602,6 @@ def _admit_sparse_rank(matrix: SparseRationalMatrix) -> _SparseRankPlan:
         label="matrix input",
     )
     components = _sparse_rank_components(matrix.entries)
-    rank_bound = sum(
-        min(len(component.rows), len(component.columns)) for component in components
-    )
-    active_columns = tuple(
-        sorted(column for component in components for column in component.columns)
-    )
     # Independent support components become diagonal blocks after row and
     # column permutations. Exact row operations cannot create a nonzero
     # between blocks, so intermediate cells, arithmetic work, and minor-height
@@ -668,11 +662,6 @@ def _admit_sparse_rank(matrix: SparseRationalMatrix) -> _SparseRankPlan:
                 "budget_exceeded",
                 "sparse rank elimination exceeds the exact intermediate-height bound",
             )
-    _require_sparse_rank_transport_envelope(
-        matrix,
-        rank_bound=rank_bound,
-        active_columns=active_columns,
-    )
     return _SparseRankPlan(
         components=components,
         row_count=matrix.row_count,
@@ -1200,9 +1189,26 @@ def determinant_result(matrix: RationalMatrix) -> MatrixDeterminantResult:
 
 def rank_result(
     matrix: RationalMatrix | SparseRationalMatrix,
+    *,
+    enforce_transport_limit: bool = False,
 ) -> MatrixRankResult:
     if isinstance(matrix, SparseRationalMatrix):
         plan = _admit(_admit_sparse_rank, matrix)
+        if enforce_transport_limit:
+            _require_sparse_rank_transport_envelope(
+                matrix,
+                rank_bound=sum(
+                    min(len(component.rows), len(component.columns))
+                    for component in plan.components
+                ),
+                active_columns=tuple(
+                    sorted(
+                        column
+                        for component in plan.components
+                        for column in component.columns
+                    )
+                ),
+            )
         pivot_columns = _sympy_sparse_rank_pivots(plan)
     else:
         _admit(_admit_exact_linear_matrix, matrix.entries)

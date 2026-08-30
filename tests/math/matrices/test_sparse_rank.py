@@ -317,7 +317,7 @@ def test_sparse_rank_rejects_a_source_bound_result_above_the_output_limit() -> N
     )
 
     with pytest.raises(OperationDomainValidationError, match="canonical output limit"):
-        rank_result(matrix)
+        rank_result(matrix, enforce_transport_limit=True)
 
 
 def test_sparse_rank_result_rejects_rank_above_a_source_axis() -> None:

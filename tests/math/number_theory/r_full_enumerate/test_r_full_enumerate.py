@@ -93,6 +93,12 @@ def test_native_api_uses_integer_arguments() -> None:
     assert result.family == ("1", "8", "16")
 
 
+def test_high_exponent_admits_cutoff_above_old_ceiling() -> None:
+    """A sparse high-exponent family is admitted from its actual prime bound."""
+    result = enumerate_r_full(64, 2**64)
+    assert result.family == ("1", "18446744073709551616")
+
+
 def test_result_rejects_oversized_family_member_before_parsing() -> None:
     """Result validation bounds member representations before bigint parsing."""
     with pytest.raises(ValueError, match="canonical width"):
@@ -106,7 +112,7 @@ def test_result_rejects_oversized_family_member_before_parsing() -> None:
 
 def test_result_rejects_oversized_cutoff_before_parsing() -> None:
     """Result validation bounds cutoff representations before bigint parsing."""
-    with pytest.raises(ValueError, match="at most 19 characters"):
+    with pytest.raises(ValueError, match="at most 257 characters"):
         RFullEnumerateResult(
             minimum_exponent=2,
             cutoff="1" * 1_000_000,

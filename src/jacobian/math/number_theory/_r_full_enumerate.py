@@ -16,6 +16,7 @@ from jacobian.math.number_theory._r_full_enumerate_models import (
     MIN_R_FULL_EXPONENT,
     RFullEnumerateRequest,
     RFullEnumerateResult,
+    estimate_r_full_family_size,
 )
 from jacobian.math.number_theory._support import number_theory_operation
 
@@ -24,7 +25,7 @@ def _enumerate_r_full_admitted(
     minimum_exponent: int, cutoff: int
 ) -> RFullEnumerateResult:
     canonical_cutoff = format_canonical_integer(cutoff)
-    estimate = 10 * (cutoff ** (1 / minimum_exponent))
+    estimate = estimate_r_full_family_size(minimum_exponent, cutoff)
     if estimate > MAX_R_FULL_FAMILY_SIZE:
         raise OperationDomainValidationError(
             location=("cutoff",),

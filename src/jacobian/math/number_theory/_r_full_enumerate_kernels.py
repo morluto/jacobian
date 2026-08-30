@@ -10,6 +10,7 @@ This avoids scanning every integer in the interval.
 
 from __future__ import annotations
 
+from sympy import integer_nthroot
 from sympy.ntheory.generate import primerange
 
 
@@ -28,11 +29,11 @@ def enumerate_r_full(cutoff: int, r: int) -> list[int]:
     if cutoff < 1:
         return []
 
-    # Collect primes p with p^r <= cutoff
+    # Collect primes p with p^r <= cutoff. Bounding the prime search by the
+    # exact integer root avoids scanning the entire interval up to ``cutoff``.
+    prime_bound, _ = integer_nthroot(cutoff, r)
     primes: list[int] = []
-    for p in primerange(2, cutoff + 1):
-        if p**r > cutoff:
-            break
+    for p in primerange(2, int(prime_bound) + 1):
         primes.append(int(p))
 
     family: set[int] = {1}

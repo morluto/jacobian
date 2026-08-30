@@ -6,17 +6,24 @@ from typing import Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
+from sympy import integer_nthroot
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 
-MAX_R_FULL_CUTOFF_DIGITS = 18
+MAX_R_FULL_CUTOFF_DIGITS = 256
 MAX_R_FULL_CUTOFF = 10**MAX_R_FULL_CUTOFF_DIGITS
 MIN_R_FULL_EXPONENT = 2
 MAX_R_FULL_EXPONENT = 64
 MAX_R_FULL_FAMILY_SIZE = 200_000
 MAX_R_FULL_RESULT_BYTES = 3_000_000
+
+
+def estimate_r_full_family_size(minimum_exponent: int, cutoff: int) -> int:
+    """Return a conservative estimate from the prime-power bound."""
+    prime_bound, _ = integer_nthroot(cutoff, minimum_exponent)
+    return max(1, 10 * int(prime_bound))
 
 
 class RFullEnumerateRequest(StrictModel):
@@ -45,6 +52,17 @@ class RFullEnumerateRequest(StrictModel):
                 "r_full_enumerate.cutoff_bound",
                 "cutoff must be a positive canonical integer within the admitted bound",
             )
+        estimate = estimate_r_full_family_size(self.minimum_exponent, cutoff)
+        if estimate > MAX_R_FULL_FAMILY_SIZE:
+            raise PydanticCustomError(
+                "r_full_enumerate.family_budget",
+                "r-full family exceeds the result-size budget",
+            )
+        if estimate * (len(self.cutoff) + 3) > MAX_R_FULL_RESULT_BYTES:
+            raise PydanticCustomError(
+                "r_full_enumerate.transport_budget",
+                "r-full family exceeds the serialized-byte budget",
+            )
         return self
 
 
@@ -70,6 +88,17 @@ class RFullEnumerateResult(StrictModel):
             raise PydanticCustomError(
                 "r_full_enumerate.cutoff_bound",
                 "cutoff must be a positive canonical integer within the admitted bound",
+            )
+        estimate = estimate_r_full_family_size(self.minimum_exponent, cutoff)
+        if estimate > MAX_R_FULL_FAMILY_SIZE:
+            raise PydanticCustomError(
+                "r_full_enumerate.family_budget",
+                "r-full family exceeds the result-size budget",
+            )
+        if estimate * (len(self.cutoff) + 3) > MAX_R_FULL_RESULT_BYTES:
+            raise PydanticCustomError(
+                "r_full_enumerate.transport_budget",
+                "r-full family exceeds the serialized-byte budget",
             )
         if any(len(value) > MAX_R_FULL_CUTOFF_DIGITS + 1 for value in self.family):
             raise PydanticCustomError(
@@ -127,4 +156,5 @@ __all__ = [
     "MIN_R_FULL_EXPONENT",
     "RFullEnumerateRequest",
     "RFullEnumerateResult",
+    "estimate_r_full_family_size",
 ]

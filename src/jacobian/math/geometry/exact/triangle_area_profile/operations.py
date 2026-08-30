@@ -5,7 +5,8 @@ from __future__ import annotations
 from fractions import Fraction
 from itertools import combinations
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.exact._models import PointConfiguration
 from jacobian.math.geometry.exact.triangle_area_profile._models import (
@@ -35,6 +36,7 @@ def compute_triangle_area_profile(
 
     entries: list[TriangleAreaEntry] = []
     area_to_triples: dict[Fraction, list[tuple[int, int, int]]] = {}
+    admitted_areas: list[tuple[tuple[int, int, int], Fraction]] = []
 
     for i, j, k in combinations(range(n), 3):
         coords_i = [c.as_fraction() for c in points[i].coordinates]
@@ -52,6 +54,23 @@ def compute_triangle_area_profile(
         area = abs(cross) / 2
 
         triple = (i, j, k)
+        numerator = format_canonical_integer(area.numerator)
+        denominator = format_canonical_integer(area.denominator)
+        if (
+            len(numerator.lstrip("-")) > MAX_CANONICAL_RATIONAL_DIGITS
+            or len(denominator) > MAX_CANONICAL_RATIONAL_DIGITS
+        ):
+            raise OperationDomainValidationError(
+                location=("configuration",),
+                code="geometry.triangle_area_result_bound",
+                message=(
+                    "a derived triangle area exceeds the canonical rational "
+                    f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit bound"
+                ),
+            )
+        admitted_areas.append((triple, area))
+
+    for triple, area in admitted_areas:
         entries.append(
             TriangleAreaEntry(
                 indices=triple,

@@ -762,6 +762,18 @@ def test_precision_work_boundary_is_derived_from_actual_subproblems() -> None:
         _admit_definite_integral(rejected, started_at=monotonic())
 
 
+def test_widened_box_endpoints_retain_definite_integral_admission() -> None:
+    lower = Fraction(10**128)
+    request = _request(
+        _var(),
+        lower=lower,
+        upper=lower + 1,
+        max_leaves=MAX_DEFINITE_INTEGRAL_LEAVES,
+    )
+
+    _admit_definite_integral(request, started_at=monotonic())
+
+
 def test_leaf_and_wall_field_bounds_reject_one_beyond() -> None:
     payload = _request(_var()).model_dump(mode="json")
     payload["max_leaves"] = MAX_DEFINITE_INTEGRAL_LEAVES + 1

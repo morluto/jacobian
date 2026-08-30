@@ -51,8 +51,13 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
     if nonzero:
         denominator_digits = sum(len(value.den) for value in nonzero)
         numerator_digits = max(
-            len(value.num) + denominator_digits - len(value.den) for value in nonzero
-        ) + len(str(len(nonzero)))
+            len(value.num.lstrip("-"))
+            + denominator_digits
+            - len(value.den)
+            for value in nonzero
+        )
+        if len(nonzero) > 1:
+            numerator_digits += len(str(len(nonzero)))
         growth_digits = max(denominator_digits, numerator_digits)
     else:
         growth_digits = 1

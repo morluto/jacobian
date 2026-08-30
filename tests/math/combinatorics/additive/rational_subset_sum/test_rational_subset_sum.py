@@ -100,6 +100,14 @@ def test_single_max_height_value_is_admitted() -> None:
     assert len(result.rows) == 2
 
 
+def test_single_max_height_negative_numerator_is_admitted() -> None:
+    value = _cr(-(10**32768 - 1))
+
+    result = compute_rational_subset_sum_profile((value,))
+
+    assert len(result.rows) == 2
+
+
 def test_uncancellable_rational_growth_is_rejected_before_enumeration() -> None:
     values = (
         _cr(1, 10**20000 + 1),

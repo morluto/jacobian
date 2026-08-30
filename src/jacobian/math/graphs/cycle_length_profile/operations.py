@@ -37,14 +37,6 @@ def _maximum_path_work(graph: SimpleUndirectedGraph) -> int:
     if len(graph.edges) == vertex_count * (vertex_count - 1) // 2:
         # In a complete graph the first DFS branch witnesses every length.
         return vertex_count**3
-    complete_edges = vertex_count * (vertex_count - 1) // 2
-    if (
-        len(graph.edges) >= complete_edges - vertex_count
-        and len(_cycle_core_vertices(graph)) == vertex_count
-    ):
-        # A graph missing only a handful of edges still yields a first witness
-        # for each requested length after a bounded prefix search.
-        return vertex_count**3
     vertex_to_index = {vertex: index for index, vertex in enumerate(graph.vertices)}
     adjacency = [[False] * vertex_count for _ in range(vertex_count)]
     for left, right in graph.edges:

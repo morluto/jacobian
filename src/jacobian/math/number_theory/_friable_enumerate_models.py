@@ -49,7 +49,7 @@ def _generate_from_exponent_vectors(x: int, primes: tuple[int, ...]) -> tuple[in
     """
 
     if not primes:
-        return 1
+        return (1,)
     values: list[int] = []
     nodes = 0
     stack = [(0, 1)]

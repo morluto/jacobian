@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from fractions import Fraction
 from math import comb
 
@@ -29,10 +30,16 @@ __all__ = ["compute_hypergraph_vertex_containment"]
 MAX_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 
+@dataclass(frozen=True, slots=True)
+class _ContainmentAdmissionPlan:
+    edge_masks: tuple[int, ...]
+    active_vertices: tuple[int, ...]
+
+
 def _admit_hypergraph_vertex_containment(
     hypergraph: FiniteHypergraph,
     retention_probability: CanonicalRational,
-) -> tuple[int, ...]:
+) -> _ContainmentAdmissionPlan:
     if not isinstance(hypergraph, FiniteHypergraph):
         raise OperationDomainValidationError(
             location=("hypergraph",),
@@ -58,22 +65,37 @@ def _admit_hypergraph_vertex_containment(
     n = len(hypergraph.vertices)
     state_count = 1 << n
     if not trivial_event:
-        if state_count > MAX_SUBSET_STATES:
-            raise OperationDomainValidationError(
-                location=("hypergraph", "vertices"),
-                code="hypergraph_containment.state_bound_exceeded",
-                message="the complete subset-state envelope is exceeded",
-            )
-        vertex_index = {
-            vertex: index for index, vertex in enumerate(hypergraph.vertices)
-        }
-        edge_masks = tuple(
+        vertex_index = {vertex: index for index, vertex in enumerate(hypergraph.vertices)}
+        unique_masks = tuple(
             dict.fromkeys(
                 sum(1 << vertex_index[member] for member in members)
                 for _, members in hypergraph.edges
             )
         )
-        if len(edge_masks) * state_count > MAX_CONTAINMENT_WORK:
+        minimal_masks: list[int] = []
+        for mask in sorted(unique_masks, key=int.bit_count):
+            if not any(existing & mask == existing for existing in minimal_masks):
+                minimal_masks.append(mask)
+        support_mask = 0
+        for mask in minimal_masks:
+            support_mask |= mask
+        active_vertices = tuple(
+            index for index in range(n) if support_mask & (1 << index)
+        )
+        active_position = {index: position for position, index in enumerate(active_vertices)}
+        edge_masks = tuple(
+            sum(1 << active_position[index] for index in range(n) if mask & (1 << index))
+            for mask in minimal_masks
+        )
+        active_state_count = 1 << len(active_vertices)
+        if active_state_count > MAX_SUBSET_STATES:
+            raise OperationDomainValidationError(
+                location=("hypergraph", "vertices"),
+                code="hypergraph_containment.state_bound_exceeded",
+                message="the active subset-state envelope is exceeded",
+            )
+        lift_work = active_state_count * (n - len(active_vertices) + 1)
+        if len(edge_masks) * active_state_count + lift_work > MAX_CONTAINMENT_WORK:
             raise OperationDomainValidationError(
                 location=("hypergraph", "edges"),
                 code="hypergraph_containment.work_bound_exceeded",
@@ -81,6 +103,7 @@ def _admit_hypergraph_vertex_containment(
             )
     else:
         edge_masks = ()
+        active_vertices = ()
     support_size = len(
         {member for _, members in hypergraph.edges for member in members}
     )
@@ -122,7 +145,7 @@ def _admit_hypergraph_vertex_containment(
             code="hypergraph_containment.result_size_bound",
             message="the complete containment profile exceeds the canonical output bound",
         )
-    return edge_masks
+    return _ContainmentAdmissionPlan(edge_masks, active_vertices)
 
 
 def compute_hypergraph_vertex_containment(
@@ -135,7 +158,8 @@ def compute_hypergraph_vertex_containment(
     Count by k and compute the exact probability under independent vertex
     retention.
     """
-    edge_masks = _admit_hypergraph_vertex_containment(hypergraph, retention_probability)
+    plan = _admit_hypergraph_vertex_containment(hypergraph, retention_probability)
+    edge_masks = plan.edge_masks
     n = len(hypergraph.vertices)
 
     if not hypergraph.edges:
@@ -158,12 +182,15 @@ def compute_hypergraph_vertex_containment(
             probability=CanonicalRational.from_fraction(Fraction(1)),
         )
 
+    active_n = len(plan.active_vertices)
+    isolated_n = n - active_n
     counts: list[int] = [0] * (n + 1)
-    for mask in range(1 << n):
+    for mask in range(1 << active_n):
         k = mask.bit_count()
         contains_edge = any(edge_mask & ~mask == 0 for edge_mask in edge_masks)
         if contains_edge:
-            counts[k] += 1
+            for isolated_k in range(isolated_n + 1):
+                counts[k + isolated_k] += comb(isolated_n, isolated_k)
 
     total = 1 << n
     success = sum(counts)

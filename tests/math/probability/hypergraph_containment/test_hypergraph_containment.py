@@ -136,3 +136,33 @@ def test_probability_growth_uses_event_support() -> None:
     result = compute_hypergraph_vertex_containment(hg, p)
 
     assert result.probability == p
+
+
+def test_enumerates_active_support_and_lifts_isolates() -> None:
+    hg = _hg([f"v{i}" for i in range(23)], [("e0", ("v0",))])
+
+    result = compute_hypergraph_vertex_containment(
+        hg, CanonicalRational.from_fraction(Fraction(1, 2))
+    )
+
+    assert result.success_count == 1 << 22
+    assert result.containing_subset_counts[1] == 1
+    assert result.containing_subset_counts[23] == 1
+
+
+def test_dominated_edges_are_removed_before_work_admission() -> None:
+    vertices = [f"v{i}" for i in range(13)]
+    edges = []
+    for subset in range(1 << 12):
+        members = tuple(
+            ["v0"]
+            + [vertices[index + 1] for index in range(12) if subset & (1 << index)]
+        )
+        edges.append((f"e{subset}", members))
+    hg = _hg(vertices, edges)
+
+    result = compute_hypergraph_vertex_containment(
+        hg, CanonicalRational.from_fraction(Fraction(1))
+    )
+
+    assert result.success_count == 1 << 12

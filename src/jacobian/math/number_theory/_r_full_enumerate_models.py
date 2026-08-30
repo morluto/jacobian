@@ -32,8 +32,9 @@ class RFullEnumerateRequest(StrictModel):
         examples=[2],
     )
     cutoff: CanonicalInteger = Field(
+        max_length=MAX_R_FULL_CUTOFF_DIGITS + 1,
         description="Positive upper bound (inclusive).",
-        examples=[100],
+        examples=["100"],
     )
 
     @model_validator(mode="after")

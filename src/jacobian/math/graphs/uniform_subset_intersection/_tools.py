@@ -56,7 +56,8 @@ TOOLS: MathTools = (
         "Construct a uniform-subset intersection graph",
         (
             "Construct a labelled simple graph whose vertices are all k-subsets "
-            "of [n], with an edge between two subsets when their intersection size "
+            "of the zero-based ground set {0,...,n-1}, with an edge between two "
+            "subsets when their intersection size "
             "satisfies the declared less-than-threshold or equality relation. "
             "Includes Kneser graphs and Johnson-scheme threshold graphs "
             "as special cases."
@@ -70,7 +71,7 @@ TOOLS: MathTools = (
         examples=(
             example(
                 "kneser_kg42",
-                "Kneser graph KG(4,2): 2-subsets of [4] with intersection < 1.",
+                "Kneser graph KG(4,2): 2-subsets of {0,1,2,3} with intersection < 1.",
                 {
                     "ground_set_size": 4,
                     "subset_cardinality": 2,

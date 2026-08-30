@@ -42,23 +42,29 @@ def compute_rank(request: MatrixRankRequest) -> MatrixRankResult:
     """Return the exact rank of a labelled matrix over its presented finite field."""
     matrix = request.matrix
     try:
-        matrix_bytes = len(
-            encode_strict_json({"matrix": matrix.model_dump(mode="json")})
-        )
         rank_bound = min(len(matrix.row_axis.labels), len(matrix.column_axis.labels))
-        max_row_label_bytes = max(
-            (len(encode_strict_json(label)) for label in matrix.row_axis.labels),
-            default=0,
+        # Reserve the complete result envelope, including object keys, array
+        # framing, rank digits, and the widest possible pivot labels, before
+        # invoking the cubic elimination kernel.
+        widest_rows = sorted(
+            matrix.row_axis.labels,
+            key=lambda label: len(encode_strict_json(label)),
+            reverse=True,
+        )[:rank_bound]
+        widest_columns = sorted(
+            matrix.column_axis.labels,
+            key=lambda label: len(encode_strict_json(label)),
+            reverse=True,
+        )[:rank_bound]
+        result_reservation = encode_strict_json(
+            {
+                "matrix": matrix.model_dump(mode="json"),
+                "rank": rank_bound,
+                "pivot_rows": widest_rows,
+                "pivot_columns": widest_columns,
+            }
         )
-        max_column_label_bytes = max(
-            (len(encode_strict_json(label)) for label in matrix.column_axis.labels),
-            default=0,
-        )
-        if (
-            matrix_bytes
-            + rank_bound * (max_row_label_bytes + max_column_label_bytes)
-            > CanonicalLimits().max_output_bytes
-        ):
+        if len(result_reservation) > CanonicalLimits().max_output_bytes:
             raise OperationDomainValidationError(
                 location=("matrix",),
                 code="finite_field.matrix_rank.result_bound",

@@ -102,7 +102,7 @@ def _coloring_work_bound(graph: SimpleUndirectedGraph, deletion_order: int) -> i
             continue
         complete_edge_count = n * (n - 1) // 2
         complete = edge_count == complete_edge_count
-        if complete and deletion_order <= 1:
+        if complete and deletion_order <= 2:
             total += n
             continue
         if edge_count == complete_edge_count - 1 and deletion_order == 0:
@@ -306,6 +306,17 @@ def _chromatic_number(vertices: list[str], edges: list[tuple[str, str]]) -> int:
             component_numbers.append(n)
         elif len(component_edges) == complete_edge_count - 1:
             component_numbers.append(n - 1)
+        elif len(component_edges) == complete_edge_count - 2:
+            component_edge_set = set(component_edges)
+            missing_endpoints = [
+                endpoint
+                for left, right in combinations(component_vertices, 2)
+                if (left, right) not in component_edge_set
+                for endpoint in (left, right)
+            ]
+            component_numbers.append(
+                n - 2 if len(set(missing_endpoints)) == 4 else n - 1
+            )
         elif _is_bipartite_edges(component_vertices, component_edges):
             component_numbers.append(2)
         else:

@@ -20,10 +20,16 @@ import threading
 import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
-from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
-from typing import BinaryIO, Protocol, cast
+from typing import BinaryIO, cast
+
+from jacobian._execution import (
+    RequestCancellationSignal,
+    current_request_cancellation,
+    request_cancellation,
+    request_cancelled,
+)
 
 __all__ = [
     "BoundedProcessResult",
@@ -36,16 +42,6 @@ __all__ = [
 ]
 
 
-class _CancellationSignal(Protocol):
-    """Minimal cooperative signal accepted by the process monitor."""
-
-    def is_set(self) -> bool: ...
-
-
-_CANCELLATION_EVENT: ContextVar[_CancellationSignal | None] = ContextVar(
-    "jacobian_bounded_process_cancellation_event",
-    default=None,
-)
 _PIPE_DRAIN_GRACE_SECONDS = 0.5
 _DEFAULT_LOCALE = "C.UTF-8"
 
@@ -63,22 +59,18 @@ class BoundedProcessResult:
 
 @contextmanager
 def bounded_process_cancellation(
-    event: _CancellationSignal,
+    event: RequestCancellationSignal,
 ) -> Iterator[None]:
     """Bind cooperative subprocess cancellation to the current worker context."""
 
-    token = _CANCELLATION_EVENT.set(event)
-    try:
+    with request_cancellation(event):
         yield
-    finally:
-        _CANCELLATION_EVENT.reset(token)
 
 
 def bounded_process_cancelled() -> bool:
     """Report whether the current operation worker has lost its client."""
 
-    event = _CANCELLATION_EVENT.get()
-    return event is not None and event.is_set()
+    return request_cancelled()
 
 
 @dataclass(frozen=True, slots=True)
@@ -270,7 +262,7 @@ def _monitor_bounded_process(
     process: subprocess.Popen[bytes],
     *,
     deadline: float,
-    cancellation_event: _CancellationSignal | None,
+    cancellation_event: RequestCancellationSignal | None,
     platform_tools: ProcessPlatformTools | None,
 ) -> tuple[bool, bool]:
     """Poll the child until exit, timeout, or cancellation.
@@ -332,7 +324,7 @@ def run_bounded_process(
     resource_limits: ProcessResourceLimits | None = None,
     cwd: str | None = None,
     platform_tools: ProcessPlatformTools | None = None,
-    cancellation_event: _CancellationSignal | None = None,
+    cancellation_event: RequestCancellationSignal | None = None,
 ) -> BoundedProcessResult:
     """Run a child with bounded output, time, lifetime, and supported resources.
 
@@ -369,7 +361,7 @@ def run_bounded_process(
     stdout_exceeded = threading.Event()
     stderr_exceeded = threading.Event()
     if cancellation_event is None:
-        cancellation_event = _CANCELLATION_EVENT.get()
+        cancellation_event = current_request_cancellation()
 
     prlimit_executable = (
         platform_tools.prlimit_executable if platform_tools is not None else None

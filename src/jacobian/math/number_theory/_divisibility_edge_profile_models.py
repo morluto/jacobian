@@ -17,6 +17,8 @@ MAX_DIVISIBILITY_EDGE_SET_SIZE = 500
 MAX_DIVISIBILITY_EDGE_VALUE_DIGITS = 256
 MAX_DIVISIBILITY_EDGE_QUOTIENT_DIGITS = 20
 MAX_DIVISIBILITY_EDGE_WORK = 1_000_000
+MAX_DIVISIBILITY_EDGE_PAIR_SCAN_WORK = 2_000_000
+_FACTORIZATION_STARTUP_WORK = 10_000
 MAX_DIVISIBILITY_EDGE_RESULT_BYTES = 10 * 1024 * 1024
 
 
@@ -82,10 +84,10 @@ def _validate_divisibility_edge_resources(
     parsed = tuple(parse_canonical_integer(value) for value in values)
     max_digits = max(len(value) for value in values)
     pair_count = len(parsed) * (len(parsed) - 1) // 2
-    if pair_count * max_digits * max_digits > MAX_DIVISIBILITY_EDGE_WORK:
+    if pair_count * max_digits * max_digits > MAX_DIVISIBILITY_EDGE_PAIR_SCAN_WORK:
         raise PydanticCustomError(
-            "divisibility_edge.factorization_work",
-            "divisibility factorization exceeds the admitted work budget",
+            "divisibility_edge.pair_scan_work",
+            "divisibility pair scan exceeds the admitted work budget",
         )
     if len(values) * (max_digits + 32) > MAX_DIVISIBILITY_EDGE_RESULT_BYTES:
         raise PydanticCustomError(
@@ -93,6 +95,7 @@ def _validate_divisibility_edge_resources(
             "divisibility edge profile exceeds the serialized-byte budget",
         )
     edge_plan: list[tuple[int, int, int]] = []
+    distinct_quotients: set[int] = set()
     for left_index, left in enumerate(parsed):
         for right_index, right in enumerate(parsed):
             if left_index == right_index or right % left:
@@ -106,6 +109,16 @@ def _validate_divisibility_edge_resources(
                     "derived divisibility quotients exceed the factorization worker limit",
                 )
             edge_plan.append((left_index, right_index, quotient))
+            distinct_quotients.add(quotient)
+    factorization_work = sum(
+        _FACTORIZATION_STARTUP_WORK + len(str(quotient)) ** 2
+        for quotient in distinct_quotients
+    )
+    if factorization_work > MAX_DIVISIBILITY_EDGE_WORK:
+        raise PydanticCustomError(
+            "divisibility_edge.factorization_work",
+            "divisibility factorization exceeds the admitted work budget",
+        )
     if len(edge_plan) * (2 * max_digits + 96) > MAX_DIVISIBILITY_EDGE_RESULT_BYTES:
         raise PydanticCustomError(
             "divisibility_edge.result_bytes",

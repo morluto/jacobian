@@ -398,9 +398,7 @@ class RationalFlatSymmetryGenerator(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_raw_generator_envelope(cls, data: Any) -> Any:
-        return canonicalize_json_containers(
-            _require_raw_generator_envelope(data)
-        )
+        return canonicalize_json_containers(_require_raw_generator_envelope(data))
 
 
 class ClauseConstrainedRationalFlatProblem(StrictModel):

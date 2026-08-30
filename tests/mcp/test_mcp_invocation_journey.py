@@ -77,14 +77,18 @@ def test_mcp_runs_independent_sync_operations_concurrently() -> None:
             results = await asyncio.gather(
                 *(
                     client.call_tool(
-                        "test.concurrent.kernel",
-                        {"value": value},
+                        "math.run",
+                        {
+                            "operation_id": "test.concurrent.kernel",
+                            "payload": {"value": value},
+                        },
                     )
                     for value in range(2)
                 )
             )
         assert any(
-            result.structured_content["simultaneous_calls"] == 2 for result in results
+            result.structured_content["output"]["simultaneous_calls"] == 2
+            for result in results
         )
 
     asyncio.run(scenario())

@@ -20,7 +20,7 @@ from typing import Any, cast
 ROOT = Path(__file__).resolve().parents[2]
 TIMING_SUITES = ("benchmark", "math")
 MAX_BYTES = 5 * 1024 * 1024
-MAX_ENTRIES = 10_000
+MAX_ENTRIES = 20_000
 MAX_CANDIDATES = 5
 HTTP_TIMEOUT_SECONDS = 10
 MAX_TIMING_HISTORY_AGE = timedelta(days=30)

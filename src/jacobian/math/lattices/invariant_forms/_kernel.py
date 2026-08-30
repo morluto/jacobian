@@ -12,7 +12,6 @@ from jacobian.canonical import (
     encode_strict_json,
     format_canonical_integer,
 )
-from jacobian.math.lattices._lattice_ops import hermite_basis, saturated_lattice_basis
 from jacobian.math.lattices.invariant_forms._models import (
     MAX_CONSTRAINT_CELLS,
     MAX_CONSTRAINT_DIGIT_WORK,
@@ -215,33 +214,35 @@ def _retained_action_bytes(action: RationalMatrixAction) -> int:
     return source_bytes
 
 
+def _minor_digit_bound(*, rank: int, component_digits: int) -> int:
+    """Bound decimal digits in a rank minor by Hadamard's inequality."""
+
+    if rank == 0:
+        return 1
+    return max(1, ceil(rank * (component_digits + 0.5 * log10(rank))))
+
+
 def _kernel_entry_digit_bound(
     *, coefficient_count: int, constraint_count: int, constraint_digits: int
 ) -> int:
-    """Bound canonical integer-kernel HNF coefficients before backend work.
+    """Bound canonical integer-kernel row-HNF coefficients before backend work.
 
-    For constraint rank ``r`` in ``ZZ^m``, Cramer's rule gives an integer
-    rational-kernel basis whose entries are rank minors. Hadamard bounds each
-    such minor by ``(sqrt(m) H)^r``. The saturated row-HNF entries are bounded
-    by the maximal minors of that kernel basis, hence by another Hadamard
-    factor in kernel dimension ``m-r``. Admission maximizes this deliberately
-    loose bound over every possible non-full constraint rank; full rank has no
-    basis entries to serialize.
+    For constraint rank ``r`` in ``ZZ^m``, the primitive Pluecker coordinates
+    of the saturated kernel are the complementary rank-``r`` minors of an
+    independent constraint-row basis, divided by their common determinantal
+    divisor. Hadamard bounds each minor by ``r^(r/2) H^r``. Every entry of the
+    full-row-rank row HNF is bounded by its largest maximal minor. Since the
+    actual rank is not known before backend work, admission uses the largest
+    possible non-full rank; full rank has no basis entries to serialize.
     """
 
     if coefficient_count <= 1 or constraint_count == 0:
         return 1
     rank_ceiling = min(constraint_count, coefficient_count - 1)
-    logarithmic_bound = max(
-        (coefficient_count - rank)
-        * (
-            rank * (constraint_digits + 0.5 * log10(coefficient_count))
-            + 0.5 * log10(coefficient_count - rank)
-        )
-        + 2
-        for rank in range(1, rank_ceiling + 1)
+    return _minor_digit_bound(
+        rank=rank_ceiling,
+        component_digits=constraint_digits,
     )
-    return max(1, ceil(logarithmic_bound))
 
 
 def _require_result_envelope(
@@ -251,7 +252,7 @@ def _require_result_envelope(
     constraints: tuple[IntegerConstraint, ...],
     source_bytes: int,
 ) -> None:
-    """Prove a conservative exact-output envelope before nullspace work."""
+    """Prove a conservative exact-output envelope before graph-HNF work."""
 
     if constraints:
         constraint_digits = max(
@@ -259,16 +260,18 @@ def _require_result_envelope(
             for constraint in constraints
             for value in constraint
         )
-        maximum_basis_count = max(coefficient_count - 1, 0)
+        possible_nonfull_ranks = range(
+            1, min(len(constraints), coefficient_count - 1) + 1
+        )
     else:
         constraint_digits = 1
-        maximum_basis_count = coefficient_count
-    entry_digits = _kernel_entry_digit_bound(
+        possible_nonfull_ranks = range(1)
+    maximum_entry_digits = _kernel_entry_digit_bound(
         coefficient_count=coefficient_count,
         constraint_count=len(constraints),
         constraint_digits=constraint_digits,
     )
-    if maximum_basis_count and entry_digits > MAX_MATRIX_SCALAR_DIGITS:
+    if possible_nonfull_ranks and maximum_entry_digits > MAX_MATRIX_SCALAR_DIGITS:
         raise _validation_error(
             "budget_exceeded",
             "the exact invariant-form basis can exceed the canonical integer "
@@ -276,12 +279,27 @@ def _require_result_envelope(
         )
     axis_bytes = len(encode_strict_json(list(action.coordinate_axis)))
     dimension = len(action.coordinate_axis)
-    predicted_result_bytes = (
-        source_bytes
-        + 4_096
-        + maximum_basis_count
-        * (axis_bytes + 1_024 + dimension * dimension * (entry_digits + 5))
+    maximum_basis_bytes = max(
+        (
+            (coefficient_count - rank)
+            * (
+                axis_bytes
+                + 1_024
+                + dimension
+                * dimension
+                * (
+                    _minor_digit_bound(
+                        rank=rank,
+                        component_digits=constraint_digits,
+                    )
+                    + 5
+                )
+            )
+            for rank in possible_nonfull_ranks
+        ),
+        default=0,
     )
+    predicted_result_bytes = source_bytes + 4_096 + maximum_basis_bytes
     if predicted_result_bytes > MAX_INVARIANT_FORM_RESULT_BYTES:
         raise _validation_error(
             "budget_exceeded",
@@ -290,58 +308,36 @@ def _require_result_envelope(
         )
 
 
-def _require_nullspace_work_envelope(plan: _ConstraintPlan) -> None:
-    """Admit FLINT's dense integer nullspace from the realized system."""
+def _require_integer_kernel_work_envelope(plan: _ConstraintPlan) -> None:
+    """Admit canonical graph-lattice HNF from the realized constraint plan."""
 
     if not plan.constraints or not plan.positions:
         return
-    rows = len(plan.constraints)
-    columns = len(plan.positions)
-    rank_bound = min(rows, columns)
-    scalar_digits = max(
-        _integer_digit_count(value)
-        for constraint in plan.constraints
-        for value in constraint
-    )
-    digit_work = rows * columns * rank_bound * scalar_digits
-    if digit_work > MAX_INTEGER_KERNEL_DIGIT_WORK:
-        raise _validation_error(
-            "budget_exceeded",
-            "the realized congruence matrix exceeds the exact nullspace "
-            f"digit-work bound of {MAX_INTEGER_KERNEL_DIGIT_WORK:,} units",
-        )
-
-
-def _require_normal_form_work_envelope(
-    plan: _ConstraintPlan, raw_basis: list[list[int]]
-) -> None:
-    """Admit saturation and both Hermite normalizations before they run."""
-
-    if not raw_basis:
-        return
+    constraint_count = len(plan.constraints)
     coefficient_count = len(plan.positions)
     constraint_digits = max(
         _integer_digit_count(value)
         for constraint in plan.constraints
         for value in constraint
     )
-    predicted_digits = _kernel_entry_digit_bound(
-        coefficient_count=coefficient_count,
-        constraint_count=len(plan.constraints),
-        constraint_digits=constraint_digits,
+    graph_entry_digits = _minor_digit_bound(
+        rank=min(constraint_count, coefficient_count),
+        component_digits=constraint_digits,
     )
-    raw_digits = max(_integer_digit_count(value) for row in raw_basis for value in row)
-    scalar_digits = max(predicted_digits, raw_digits)
-    # Saturation performs rank/SNF work on a basis_rank x coefficient_count
-    # matrix, inverts the ambient Smith transform, then applies SymPy column
-    # HNF and FLINT row HNF. Four dense cubic passes conservatively cover those
-    # mandatory phases under the repository's scalar-digit work convention.
-    digit_work = 4 * coefficient_count**3 * scalar_digits
+    # The first FLINT HNF is taken on the full-row-rank graph matrix
+    # [C^T | I_m], of shape m x (q+m); its canonical output contains the
+    # primitive kernel in row HNF directly, without requesting a backend
+    # transformation matrix.
+    digit_work = (
+        coefficient_count**2
+        * (constraint_count + coefficient_count)
+        * max(constraint_digits, graph_entry_digits)
+    )
     if digit_work > MAX_INTEGER_KERNEL_DIGIT_WORK:
         raise _validation_error(
             "budget_exceeded",
-            "integer-kernel saturation and Hermite normalization exceed the "
-            f"{MAX_INTEGER_KERNEL_DIGIT_WORK:,}-unit digit-work bound",
+            "the realized congruence matrix exceeds the exact primitive-kernel "
+            f"digit-work bound of {MAX_INTEGER_KERNEL_DIGIT_WORK:,} units",
         )
 
 
@@ -410,11 +406,21 @@ def _build_constraint_plan(
         source_bytes=source_bytes,
     )
     plan = _ConstraintPlan(positions=positions, constraints=ordered_constraints)
-    _require_nullspace_work_envelope(plan)
+    _require_integer_kernel_work_envelope(plan)
     return plan
 
 
 def _integer_kernel_basis(plan: _ConstraintPlan) -> tuple[list[list[int]], int]:
+    """Extract the primitive kernel from a canonical graph-lattice HNF.
+
+    Rows of ``[C^T | I_m]`` form the graph of ``x -> x C^T`` inside
+    ``ZZ^q + ZZ^m``. Its row HNF spans the same graph. Because the constraint
+    columns come first, the rows whose first ``q`` entries vanish are exactly
+    ``(0, x)`` for a row-HNF basis of ``ker_ZZ(C)``. The identity block makes
+    the graph full-row-rank, so no arbitrary rational-nullspace scaling or
+    separate saturation transform is materialized.
+    """
+
     coefficient_count = len(plan.positions)
     if coefficient_count == 0:
         return [], 0
@@ -429,20 +435,34 @@ def _integer_kernel_basis(plan: _ConstraintPlan) -> tuple[list[list[int]], int]:
 
     from flint import fmpz_mat
 
-    constraint_matrix = fmpz_mat([list(row) for row in plan.constraints])
-    raw_kernel, nullity = constraint_matrix.nullspace()
-    integer_nullity = int(nullity)
-    constraint_rank = coefficient_count - integer_nullity
-    if integer_nullity == 0:
-        return [], constraint_rank
-    raw_basis = [
-        [int(raw_kernel[row, column]) for row in range(coefficient_count)]
-        for column in range(integer_nullity)
+    constraint_count = len(plan.constraints)
+    graph = fmpz_mat(
+        [
+            [
+                *(
+                    plan.constraints[constraint][coordinate]
+                    for constraint in range(constraint_count)
+                ),
+                *(int(coordinate == column) for column in range(coefficient_count)),
+            ]
+            for coordinate in range(coefficient_count)
+        ]
+    )
+    graph_hnf = graph.hnf()
+    primitive_kernel = [
+        [
+            int(graph_hnf[row, constraint_count + column])
+            for column in range(coefficient_count)
+        ]
+        for row in range(coefficient_count)
+        if all(
+            graph_hnf[row, constraint] == 0 for constraint in range(constraint_count)
+        )
     ]
-    _require_normal_form_work_envelope(plan, raw_basis)
-    saturated_basis = saturated_lattice_basis(raw_basis)
-    row_hnf, _ = hermite_basis(saturated_basis)
-    return row_hnf, constraint_rank
+    constraint_rank = coefficient_count - len(primitive_kernel)
+    if not primitive_kernel:
+        return [], constraint_rank
+    return primitive_kernel, constraint_rank
 
 
 def _form_entries(

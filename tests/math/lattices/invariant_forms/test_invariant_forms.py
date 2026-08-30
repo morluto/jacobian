@@ -14,7 +14,7 @@ from tests.fixtures.accounting import assert_charged_work_parity
 from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.lattices._lattice_ops import saturated_lattice_basis
+from jacobian.math.lattices._lattice_ops import saturate_lattice
 from jacobian.math.lattices.invariant_forms import (
     RationalMatrixAction,
     compute_invariant_bilinear_form_lattice,
@@ -233,10 +233,28 @@ def test_rational_action_regression_saturates_the_full_integer_kernel() -> None:
     # Saturation followed by the repository's row-HNF convention gives the
     # complete integer kernel, including the primitive difference vector.
     assert _flatten_forms(result) == [[4, 0, 3, 0], [0, 1, -1, 0]]
-    assert saturated_lattice_basis(_flatten_forms(result)) == [
+    saturated, _, index = saturate_lattice(_flatten_forms(result))
+    assert saturated == [
         [4, 3, 0, 0],
         [4, 2, 1, 0],
     ]
+    assert index == 1
+    _assert_every_basis_form_is_invariant(result)
+
+
+def test_eight_axis_reflection_retains_its_small_primitive_kernel() -> None:
+    dimension = 8
+    reflection = [
+        [(-1 if row == 0 else 1) if row == column else 0 for column in range(dimension)]
+        for row in range(dimension)
+    ]
+    action = _action([("reflection", reflection)])
+
+    result = compute_invariant_bilinear_form_lattice(action, "BILINEAR")
+
+    assert result.coefficient_dimension == 64
+    assert result.constraint_rank == 14
+    assert result.rank == 50
     _assert_every_basis_form_is_invariant(result)
 
 
@@ -273,10 +291,10 @@ def test_unimodular_coordinate_change_transports_the_invariant_lattice() -> None
         for form in result.basis_forms
     ]
     transported_rows = [[int(value) for value in matrix] for matrix in transported]
+    transported_saturation, _, _ = saturate_lattice(transported_rows)
+    conjugated_saturation, _, _ = saturate_lattice(_flatten_forms(conjugated_result))
 
-    assert saturated_lattice_basis(transported_rows) == saturated_lattice_basis(
-        _flatten_forms(conjugated_result)
-    )
+    assert transported_saturation == conjugated_saturation
     _assert_every_basis_form_is_invariant(conjugated_result)
 
 

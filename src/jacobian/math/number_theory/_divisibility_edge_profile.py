@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from time import monotonic
+
 from pydantic_core import PydanticCustomError
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
+    bind_request_deadline,
+    current_request_execution,
 )
 from jacobian.canonical import CanonicalizationError, format_canonical_integer
 from jacobian.catalog._examples import example
@@ -26,12 +30,27 @@ from jacobian.math.number_theory._divisibility_edge_profile_models import (
 from jacobian.math.number_theory._support import number_theory_operation
 from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
+_DIVISIBILITY_EDGE_PROFILE_WALL_SECONDS = 600.0
+
+
+def _bind_execution_deadline() -> None:
+    execution = current_request_execution()
+    started_at = execution.started_at if execution is not None else monotonic()
+    owner_deadline = started_at + _DIVISIBILITY_EDGE_PROFILE_WALL_SECONDS
+    deadline = (
+        min(owner_deadline, execution.deadline)
+        if execution is not None and execution.deadline is not None
+        else owner_deadline
+    )
+    bind_request_deadline(deadline)
+
 
 def compute_divisibility_edge_profile(
     request: DivisibilityEdgeProfileRequest,
 ) -> DivisibilityEdgeProfileResult:
     """Return the complete directed divisibility edge table with quotient and LPF."""
     try:
+        _bind_execution_deadline()
         _validate_divisibility_edge_resources(request.values)
         return _build_divisibility_edge_profile(request.values)
     except PydanticCustomError as exc:
@@ -86,6 +105,7 @@ def divisibility_edge_profile(
 ) -> DivisibilityEdgeProfileResult:
     """Return a divisibility edge profile from native canonical values."""
     try:
+        _bind_execution_deadline()
         canonical_values = tuple(_canonical_native_value(value) for value in values)
         _validate_divisibility_edge_shape(canonical_values)
         _validate_divisibility_edge_resources(canonical_values)

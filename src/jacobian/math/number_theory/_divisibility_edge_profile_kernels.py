@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from time import monotonic
 
+from jacobian._execution import (
+    OperationExecutionTimeoutError,
+    current_request_execution,
+)
 from jacobian.math.number_theory._factorization_kernels import (
     BoundedFactorizationFailure,
     _bounded_direct_factorization,
@@ -33,7 +38,17 @@ def _least_prime_factor(n: int) -> int:
     if n <= 1:
         raise ValueError(f"least_prime_factor requires n > 1, got {n}")
     failures: list[BoundedFactorizationFailure] = []
-    factors = _bounded_direct_factorization(n, failure=failures)
+    execution = current_request_execution()
+    timeout_seconds = 60.0
+    if execution is not None and execution.deadline is not None:
+        timeout_seconds = execution.deadline - monotonic()
+        if timeout_seconds <= 0:
+            raise OperationExecutionTimeoutError(
+                "divisibility edge factorization request deadline expired"
+            )
+    factors = _bounded_direct_factorization(
+        n, timeout_seconds=timeout_seconds, failure=failures
+    )
     if factors is None:
         raise FactorizationIncompleteError(failures[0] if failures else None)
     return min(int(factor.prime) for factor in factors)
@@ -52,6 +67,7 @@ def construct_divisibility_edge_profile(
     int_values = [int(v) for v in values]
     n = len(int_values)
     edges: list[DivisibilityEdgeData] = []
+    lpf_cache: dict[int, int] = {}
 
     for i in range(n):
         for j in range(n):
@@ -61,7 +77,10 @@ def construct_divisibility_edge_profile(
                 quotient = int_values[j] // int_values[i]
                 if quotient <= 1:
                     continue
-                lpf = _least_prime_factor(quotient)
+                lpf = lpf_cache.get(quotient)
+                if lpf is None:
+                    lpf = _least_prime_factor(quotient)
+                    lpf_cache[quotient] = lpf
                 edges.append(
                     DivisibilityEdgeData(
                         source=values[i],

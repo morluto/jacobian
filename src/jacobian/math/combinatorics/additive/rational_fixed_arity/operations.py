@@ -72,9 +72,9 @@ def _single_sum_digit_bounds(
         common_denominator = 1
         projection_work = 0
         for denominator in numerators_by_denominator:
-            common_denominator = common_denominator // gcd(
-                common_denominator, denominator
-            ) * denominator
+            common_denominator = (
+                common_denominator // gcd(common_denominator, denominator) * denominator
+            )
             denominator_digits = len(format_canonical_integer(common_denominator))
             projection_work += denominator_digits
             if denominator_digits > MAX_CANONICAL_RATIONAL_DIGITS:
@@ -91,7 +91,9 @@ def _single_sum_digit_bounds(
                 )
         common_numerator = 0
         for denominator, numerator in numerators_by_denominator.items():
-            projection_work += len(format_canonical_integer(abs(numerator))) + denominator_digits
+            projection_work += (
+                len(format_canonical_integer(abs(numerator))) + denominator_digits
+            )
             if projection_work > MAX_ENUMERATION_WORK:
                 _reject(
                     ("values",),

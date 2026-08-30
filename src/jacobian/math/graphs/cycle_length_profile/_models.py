@@ -49,7 +49,9 @@ class CycleLengthRow(StrictModel):
             for index in range(len(self.witness))
         )
         if self.witness != min(rotations):
-            raise ValueError("cycle witnesses must use canonical rotation and orientation")
+            raise ValueError(
+                "cycle witnesses must use canonical rotation and orientation"
+            )
         return self
 
 

@@ -8,10 +8,9 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
-from jacobian.math.polynomials.values import PolynomialVariable
-
-MAX_NUMBER_FIELD_COEFFICIENT_DIGITS = 256
+from jacobian.math.number_theory.number_fields.values import (
+    SimpleNumberFieldPresentation,
+)
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -21,37 +20,7 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 class NumberFieldRequest(StrictModel):
     """A number field Q(alpha) defined by a minimal polynomial."""
 
-    coefficients_descending: tuple[str, ...] = Field(min_length=2, max_length=32)
-    variable: PolynomialVariable
-
-    @model_validator(mode="after")
-    def require_bounded_monic_integer_polynomial(self) -> Self:
-        # Bound digit conversion before SymPy sees an arbitrary decimal
-        # spelling.  Degree and coefficient height jointly bound the parser
-        # input and every polynomial construction that follows.
-        if any(
-            len(coefficient.lstrip("-")) > MAX_NUMBER_FIELD_COEFFICIENT_DIGITS
-            for coefficient in self.coefficients_descending
-        ):
-            raise _validation_error(
-                "coefficient_digits",
-                "number-field coefficients may contain at most "
-                f"{MAX_NUMBER_FIELD_COEFFICIENT_DIGITS} decimal digits",
-            )
-        try:
-            coefficients = tuple(
-                parse_canonical_integer(value) for value in self.coefficients_descending
-            )
-        except ValueError as exc:
-            raise _validation_error(
-                "coefficient_syntax",
-                "number-field coefficients must be canonical integers",
-            ) from exc
-        if coefficients[0] != 1:
-            raise _validation_error(
-                "not_monic", "number-field polynomial must be monic"
-            )
-        return self
+    field: SimpleNumberFieldPresentation
 
 
 class NumberFieldDiscriminantResult(StrictModel):
@@ -74,3 +43,16 @@ class NumberFieldDiscriminantResult(StrictModel):
                 "an unknown number-field computation requires detail and no value",
             )
         return self
+
+
+class NumberFieldEmbeddingsRequest(StrictModel):
+    """Request every Archimedean embedding of one bounded presented field."""
+
+    field: SimpleNumberFieldPresentation
+
+
+__all__ = [
+    "NumberFieldDiscriminantResult",
+    "NumberFieldEmbeddingsRequest",
+    "NumberFieldRequest",
+]

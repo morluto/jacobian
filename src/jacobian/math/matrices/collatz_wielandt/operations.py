@@ -5,6 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.collatz_wielandt._models import (
     CollatzWielandtResult,
 )
@@ -18,14 +19,30 @@ def compute_collatz_wielandt_profile(
 ) -> CollatzWielandtResult:
     """Return the componentwise quotient profile (Ax)_i / x_i."""
     n = len(vector)
+    if n == 0 or len(matrix) != n or any(len(row) != n for row in matrix):
+        raise OperationDomainValidationError(
+            location=("matrix", "vector"),
+            code="collatz_wielandt.square_matrix",
+            message="matrix must be nonempty, square, and aligned with the vector",
+        )
+    if any(value.as_fraction() < 0 for row in matrix for value in row):
+        raise OperationDomainValidationError(
+            location=("matrix",),
+            code="collatz_wielandt.nonnegative_matrix",
+            message="Collatz-Wielandt requires a nonnegative matrix",
+        )
+    if any(value.as_fraction() <= 0 for value in vector):
+        raise OperationDomainValidationError(
+            location=("vector",),
+            code="collatz_wielandt.positive_vector",
+            message="Collatz-Wielandt requires a strictly positive vector",
+        )
     mat = [[matrix[i][j].as_fraction() for j in range(n)] for i in range(n)]
     vec = [v.as_fraction() for v in vector]
 
     quotients: list[Fraction] = []
     for i in range(n):
         ax_i = sum(mat[i][j] * vec[j] for j in range(n))
-        if vec[i] == 0:
-            raise ValueError("vector entries must be strictly positive")
         quotients.append(ax_i / vec[i])
 
     max_q = max(quotients)

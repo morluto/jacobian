@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+import pytest
+
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.collatz_wielandt.operations import (
     compute_collatz_wielandt_profile,
 )
@@ -44,3 +47,13 @@ def test_result_preserves_source() -> None:
     result = compute_collatz_wielandt_profile(matrix, vector)
     assert result.matrix == matrix
     assert result.vector == vector
+
+
+def test_negative_matrix_entry_is_rejected_before_quotients() -> None:
+    with pytest.raises(OperationDomainValidationError, match="nonnegative matrix"):
+        compute_collatz_wielandt_profile(((_cr(-1),),), (_cr(1),))
+
+
+def test_nonpositive_vector_is_rejected_through_the_domain_boundary() -> None:
+    with pytest.raises(OperationDomainValidationError, match="positive vector"):
+        compute_collatz_wielandt_profile(((_cr(1),),), (_cr(0),))

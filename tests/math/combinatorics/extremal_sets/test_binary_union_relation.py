@@ -192,6 +192,15 @@ def test_code_supports_are_bound_to_the_retained_code() -> None:
         construct_binary_union_relation(forged)
 
 
+def test_serialized_code_support_axis_is_bound_to_source_coordinates() -> None:
+    code = ExplicitBinaryCode(length=2, codewords=((0, 0), (1, 0)))
+    payload = to_set_system(code).model_dump(mode="json")
+    payload["coordinate_axis"] = [1, 0]
+
+    with pytest.raises(ValidationError, match="zero-based coordinate axis"):
+        type(to_set_system(code)).model_validate(payload)
+
+
 def test_total_membership_work_is_bounded_before_pair_scanning() -> None:
     common_size = MAX_BINARY_UNION_MEMBERSHIP_WORK // (255 * 256) + 1
     common = tuple(range(common_size))

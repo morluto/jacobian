@@ -355,6 +355,11 @@ class ToSetSystemResult(StrictModel):
                 "nonlinear_code.coordinate_axis_length",
                 "coordinate_axis must have one coordinate per source position",
             )
+        if self.coordinate_axis != tuple(range(self.length)):
+            raise _validation_error(
+                "nonlinear_code.coordinate_axis_mismatch",
+                "coordinate_axis must equal the source's zero-based coordinate axis",
+            )
         if len(self.supports) != self.cardinality:
             raise _validation_error(
                 "nonlinear_code.support_count_mismatch",

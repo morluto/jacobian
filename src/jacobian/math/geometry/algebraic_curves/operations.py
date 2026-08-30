@@ -17,6 +17,7 @@ from jacobian.math.geometry.algebraic_curves._models import (
     _validation_error,
     _validation_error_from,
 )
+from jacobian.math.geometry.algebraic_curves._singularity import singularity_profile
 from jacobian.math.polynomials._conversions import (
     rational_polynomial_from_sympy,
     rational_polynomial_to_sympy,
@@ -164,4 +165,5 @@ __all__ = [
     "affine_curve_check",
     "projective_closure",
     "rational_conic_parametrization",
+    "singularity_profile",
 ]

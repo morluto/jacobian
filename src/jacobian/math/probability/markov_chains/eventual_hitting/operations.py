@@ -41,7 +41,7 @@ def _reject(location: tuple[str | int, ...], code: str, message: str) -> NoRetur
     )
 
 
-def _admit_eventual_hitting(
+def _admit_eventual_hitting(  # noqa: C901
     matrix: TransitionMatrix,
     target_states: tuple[int, ...],
     *,
@@ -113,32 +113,25 @@ def _admit_eventual_hitting(
             "transition probabilities exceed the exact rational source bound",
         )
     transient_count = len(transient)
-    transient_matrix_digits = max(
-        (
-            max(_decimal_digits(value.numerator), _decimal_digits(value.denominator))
-            for state in transient
+    # Charge common-denominator growth row by row; combining the largest row
+    # width with the largest row term count can reject profiles where those
+    # maxima occur in different rows.
+    row_growth = 0
+    for state in transient:
+        row_values = [
+            value
             for destination, value in enumerate(matrix[state])
-            if destination in can_reach_target
-        ),
-        default=1,
-    )
-    max_row_terms = max(
-        (
-            sum(
-                value != 0
-                for destination, value in enumerate(matrix[state])
-                if destination in can_reach_target
-            )
-            for state in transient
-        ),
-        default=1,
-    )
-    # Gaussian elimination and the right-hand-side row sums can combine every
-    # nonzero transition denominator in a row.  Charge that common-denominator
-    # growth before solving rather than only one component width per state.
-    row_growth = max_row_terms * transient_matrix_digits + _decimal_digits(
-        max_row_terms
-    )
+            if destination in can_reach_target and value != 0
+        ]
+        row_terms = len(row_values)
+        row_digits = max(
+            (
+                max(_decimal_digits(value.numerator), _decimal_digits(value.denominator))
+                for value in row_values
+            ),
+            default=1,
+        )
+        row_growth += row_terms * row_digits + _decimal_digits(max(row_terms, 1))
     result_height = (
         transient_count * row_growth + _decimal_digits(factorial(transient_count)) + 1
     )

@@ -204,7 +204,7 @@ def compute_hypergraph_vertex_containment(
     isolated_n = n - active_n
     if len(plan.edge_masks) == 1:
         edge_size = active_n
-        counts = tuple(
+        single_edge_counts = tuple(
             format_canonical_integer(comb(isolated_n, k - edge_size))
             if k >= edge_size
             else "0"
@@ -214,7 +214,7 @@ def compute_hypergraph_vertex_containment(
         return HypergraphVertexContainmentResult(
             hypergraph=hypergraph,
             retention_probability=retention_probability,
-            containing_subset_counts=counts,
+            containing_subset_counts=single_edge_counts,
             total_state_count=format_canonical_integer(1 << n),
             success_count=format_canonical_integer(1 << isolated_n),
             probability=CanonicalRational.from_fraction(p**edge_size),

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import cast
 
 from sympy.ntheory.factor_ import factorint
 
@@ -21,7 +22,7 @@ def _least_prime_factor(n: int) -> int:
     """Return the least prime factor of n > 1."""
     if n <= 1:
         raise ValueError(f"least_prime_factor requires n > 1, got {n}")
-    factors = factorint(n)
+    factors = cast(dict[int, int], factorint(n))
     return min(factors.keys())
 
 

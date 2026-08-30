@@ -9,9 +9,12 @@ from typing import NoReturn
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalRational,
-    canonical_rational_component_digits,
 )
-from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.canonical import (
+    CanonicalLimits,
+    encode_strict_json,
+    strict_json_object_size,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.rational_subset_sum._models import (
     MAX_SEQUENCE_LENGTH,
@@ -44,11 +47,15 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
     if not n:
         return
 
-    max_digits = max(canonical_rational_component_digits(value) for value in values)
-    # Adding n fractions can multiply denominators and numerators by every
-    # other input denominator.  This is a conservative bound for every
-    # intermediate subset sum, including the complete sum.
-    growth_digits = n * max_digits + len(str(n)) + 1
+    nonzero = [value for value in values if value.as_fraction()]
+    if nonzero:
+        denominator_digits = sum(len(value.den) for value in nonzero)
+        numerator_digits = max(
+            len(value.num) + denominator_digits - len(value.den) for value in nonzero
+        ) + len(str(len(nonzero)))
+        growth_digits = max(denominator_digits, numerator_digits)
+    else:
+        growth_digits = 1
     if growth_digits > MAX_CANONICAL_RATIONAL_DIGITS:
         _reject(
             "rational_growth_bound",
@@ -63,12 +70,17 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
     # bounds the number of distinct sums while retaining the actual
     # exponential work bound below.
     multiplicities: dict[Fraction, int] = {}
-    for value in (item.as_fraction() for item in values):
+    for value in (item.as_fraction() for item in nonzero):
         multiplicities[value] = multiplicities.get(value, 0) + 1
     support_upper_bound = 1
     for multiplicity in multiplicities.values():
         support_upper_bound *= multiplicity + 1
-    row_bytes = 2 * growth_digits + 96
+    rational_bytes = strict_json_object_size(
+        (("num", growth_digits), ("den", growth_digits))
+    )
+    row_bytes = strict_json_object_size(
+        (("sum_value", rational_bytes), ("multiplicity", len(str(1 << n))))
+    )
     predicted_rows = support_upper_bound
     predicted_bytes = source_bytes + 128 + predicted_rows * (row_bytes + 1)
     if predicted_bytes > MAX_RESULT_BYTES:

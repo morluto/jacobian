@@ -90,3 +90,21 @@ def test_repeated_zero_values_use_their_small_support_bound() -> None:
     result = compute_rational_subset_sum_profile(values)
     assert len(result.rows) == 1
     assert result.rows[0].multiplicity == 2**20
+
+
+def test_single_max_height_value_is_admitted() -> None:
+    value = _cr(1, 10**32767 + 1)
+
+    result = compute_rational_subset_sum_profile((value,))
+
+    assert len(result.rows) == 2
+
+
+def test_uncancellable_rational_growth_is_rejected_before_enumeration() -> None:
+    values = (
+        _cr(1, 10**20000 + 1),
+        _cr(1, 10**20000 + 3),
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="rational"):
+        compute_rational_subset_sum_profile(values)

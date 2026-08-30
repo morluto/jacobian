@@ -6,9 +6,11 @@ from fractions import Fraction
 from itertools import combinations
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.rational_subset_sum._models import (
     RationalSubsetSumEntry,
     RationalSubsetSumResult,
+    require_rational_subset_sum_envelope,
 )
 
 __all__ = ["compute_rational_subset_sum_profile"]
@@ -22,6 +24,14 @@ def compute_rational_subset_sum_profile(
     For each subset I of {0,...,n-1}, the sum is sum(values[i] for i in I).
     The multiplicity of a sum s is the number of subsets achieving that sum.
     """
+    try:
+        require_rational_subset_sum_envelope(values)
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("values",),
+            code="rational_subset_sum.envelope_exceeded",
+            message=str(exc),
+        ) from exc
     n = len(values)
     fracs = [v.as_fraction() for v in values]
 

@@ -131,8 +131,8 @@ def test_family_length_matches_count(x: int, y: int) -> None:
 
 
 def test_matches_independent_factorization_oracle() -> None:
-    for x in range(0, 51):
-        for y in range(0, 13):
+    for x in range(51):
+        for y in range(13):
             assert enumerate_friable(x, y) == tuple(_direct_enumerate(x, y))
 
 
@@ -155,9 +155,10 @@ def test_generated_regime_admits_large_sources_when_work_is_small() -> None:
 
 
 def test_materialized_regime_reaches_its_boundary() -> None:
-    """At the materialized boundary with y >= x, every integer is friable."""
-    family = enumerate_friable(MAX_FRIABLE_ENUMERATE_MATERIALIZED_X, MAX_FRIABLE_ENUMERATE_MATERIALIZED_X)
-    assert len(family) == MAX_FRIABLE_ENUMERATE_MATERIALIZED_X
+    """The direct family remains inside the exact result-size envelope."""
+    cutoff = MAX_FRIABLE_ENUMERATE_FAMILY_SIZE
+    family = enumerate_friable(cutoff, cutoff)
+    assert len(family) == cutoff
 
 
 def test_operation_request_rejects_negative_sources() -> None:

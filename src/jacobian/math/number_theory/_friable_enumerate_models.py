@@ -21,6 +21,7 @@ MAX_FRIABLE_ENUMERATE_FAMILY_SIZE = 200_000
 _MAX_FRIABLE_ENUMERATE_SOURCE_DIGITS = 256
 _MAX_FRIABLE_ENUMERATE_SOURCE_ABS = 10**_MAX_FRIABLE_ENUMERATE_SOURCE_DIGITS
 _MAX_FRIABLE_ENUMERATED_BYTES = 3_000_000
+_MAX_FRIABLE_ENUMERATE_COUNT_NODES = 2_000_000
 
 
 def _primes_through(limit: int) -> tuple[int, ...]:
@@ -49,11 +50,23 @@ def _count_from_exponent_vectors(x: int, primes: tuple[int, ...]) -> int:
     if not primes:
         return 1
     total = 0
+    nodes = 0
     stack = [(0, x)]
     while stack:
+        nodes += 1
+        if nodes > _MAX_FRIABLE_ENUMERATE_COUNT_NODES:
+            raise _validation_error(
+                "friable_enumerate_exceeds_the_search_node_budget",
+                "friable-enumerate presolve exceeds the search-node budget",
+            )
         prime_index, remaining = stack.pop()
         if prime_index == len(primes):
             total += 1
+            if total > MAX_FRIABLE_ENUMERATE_FAMILY_SIZE:
+                raise _validation_error(
+                    "friable_enumerate_family_exceeds_the_result_size_budget",
+                    "friable-enumerate family exceeds the result-size budget",
+                )
             continue
         prime = primes[prime_index]
         while True:
@@ -103,7 +116,7 @@ class FriableEnumerateResult(StrictModel):
 
     @model_validator(mode="after")
     def require_nonempty_or_singleton(self) -> Self:
-        if not self.family:
+        if not self.family and self.x != "0":
             raise _validation_error(
                 "friable_enumerate_family_must_be_nonempty_when_x_is_positive",
                 "friable-enumerate family must be nonempty when x is positive",
@@ -151,6 +164,16 @@ def plan_friable_enumerate(x: int, y: int) -> tuple[str, tuple[int, ...]]:
     if y <= 1:
         return "DIRECT", ()
     if y >= x:
+        if x > MAX_FRIABLE_ENUMERATE_FAMILY_SIZE:
+            raise _validation_error(
+                "friable_enumerate_family_exceeds_the_result_size_budget",
+                "friable-enumerate family exceeds the result-size budget",
+            )
+        if _estimate_serialized_bytes(x, x) > _MAX_FRIABLE_ENUMERATED_BYTES:
+            raise _validation_error(
+                "friable_enumerate_family_exceeds_the_serialized_byte_budget",
+                "friable-enumerate family exceeds the serialized-byte budget",
+            )
         return "DIRECT", ()
 
     # Materialized regime: small enough to scan 1..x directly.

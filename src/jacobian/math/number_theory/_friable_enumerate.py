@@ -6,7 +6,7 @@ from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._friable_enumerate_kernels import (
-    enumerate_friable as enumerate_friable,
+    enumerate_friable as _enumerate_friable_kernel,
 )
 from jacobian.math.number_theory._friable_enumerate_models import (
     FriableEnumerateRequest,
@@ -17,7 +17,7 @@ from jacobian.math.number_theory._support import number_theory_operation
 
 def compute_friable_enumerate(request: FriableEnumerateRequest) -> FriableEnumerateResult:
     try:
-        family = enumerate_friable(
+        family = _enumerate_friable_kernel(
             parse_canonical_integer(request.x),
             parse_canonical_integer(request.y),
         )
@@ -28,6 +28,13 @@ def compute_friable_enumerate(request: FriableEnumerateRequest) -> FriableEnumer
             message=exc.message(),
         ) from exc
     return FriableEnumerateResult._from_kernel(request, family=family)
+
+
+def enumerate_friable(x: int, y: int) -> FriableEnumerateResult:
+    """Enumerate friable integers from native integer inputs."""
+
+    request = FriableEnumerateRequest(x=str(x), y=str(y))
+    return compute_friable_enumerate(request)
 
 
 FRIABLE_ENUMERATE_OPERATION = number_theory_operation(
@@ -60,4 +67,4 @@ FRIABLE_ENUMERATE_OPERATION = number_theory_operation(
     ),
 )
 
-__all__ = ["FRIABLE_ENUMERATE_OPERATION"]
+__all__ = ["FRIABLE_ENUMERATE_OPERATION", "enumerate_friable"]

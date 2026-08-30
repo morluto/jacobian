@@ -204,6 +204,14 @@ def _cycle_block_feasible_lengths(
         }
         if edge_count == len(block) and all(degree == 2 for degree in degrees.values()):
             lengths: Iterable[int] = (len(block),)
+        elif nx.is_bipartite(topology.subgraph(block)):
+            coloring = nx.bipartite.color(topology.subgraph(block))
+            part_sizes = (
+                sum(not color for color in coloring.values()),
+                sum(color for color in coloring.values()),
+            )
+            maximum_length = min(edge_count, 2 * min(part_sizes))
+            lengths = range(4, maximum_length + 1, 2)
         else:
             lengths = range(3, min(len(block), edge_count) + 1)
         label_sizes = sorted(

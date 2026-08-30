@@ -197,3 +197,14 @@ def test_simple_cycle_reserves_only_its_feasible_length() -> None:
     ]
     result = compute_cycle_length_profile(_graph(vertices, sorted(edges)))
     assert [row.cycle_length for row in result.rows] == [20]
+
+
+def test_bipartite_block_reserves_only_part_size_feasible_lengths() -> None:
+    left = [f"l{index}" for index in range(2)]
+    right = [f"r{index}" for index in range(8)]
+    vertices = [*left, *right]
+    edges = [(a, b) for a in left for b in right]
+
+    result = compute_cycle_length_profile(_graph(vertices, edges))
+
+    assert [row.cycle_length for row in result.rows] == [4]

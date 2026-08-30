@@ -47,6 +47,26 @@ def _fraction_height(value: Fraction) -> RationalHeight:
     )
 
 
+def _exact_decimal_digits(value: int) -> int:
+    """Return decimal digits without relying on Python's integer string cap."""
+    magnitude = abs(value)
+    if magnitude == 0:
+        return 1
+    digits = _decimal_digits_from_bits(magnitude.bit_length())
+    while magnitude < 10 ** (digits - 1):
+        digits -= 1
+    while magnitude >= 10**digits:
+        digits += 1
+    return digits
+
+
+def _exact_fraction_height(value: Fraction) -> RationalHeight:
+    return RationalHeight(
+        _exact_decimal_digits(value.numerator),
+        _exact_decimal_digits(value.denominator),
+    )
+
+
 def _string_size(digits: int) -> int:
     # Reserve one byte for a possible leading minus sign in addition to the
     # JSON string quotes.  Heights intentionally track magnitude only.
@@ -68,6 +88,18 @@ def _coefficient_height(
     generators: tuple[tuple[Fraction, Fraction], ...], depth: int
 ) -> RationalHeight:
     """Bound coefficients while preserving zero-slope reset points."""
+    if depth == 1:
+        return _max_height(
+            tuple(
+                height
+                for slope, intercept in generators
+                for height in (
+                    _exact_fraction_height(slope),
+                    _exact_fraction_height(intercept),
+                )
+            ),
+            RationalHeight(1, 1),
+        )
     nonzero = [(slope, intercept) for slope, intercept in generators if slope]
     zero = [intercept for slope, intercept in generators if not slope]
     identity_only_nonzero = bool(nonzero) and all(
@@ -207,14 +239,12 @@ def _admit_word_collision_profile(
             ),
         )
 
-    slope_heights = tuple(_fraction_height(slope) for slope, _ in canonical_generators)
-    intercept_heights = tuple(
-        _fraction_height(intercept) for _, intercept in canonical_generators
+    exact_heights = tuple(
+        _exact_fraction_height(value)
+        for generator in canonical_generators
+        for value in generator
     )
-    if any(
-        height.exceeds(MAX_CANONICAL_RATIONAL_DIGITS)
-        for height in (*slope_heights, *intercept_heights)
-    ):
+    if any(height.exceeds(MAX_CANONICAL_RATIONAL_DIGITS) for height in exact_heights):
         raise OperationDomainValidationError(
             location=("generators",),
             code="affine_map.generator_height_exceeded",

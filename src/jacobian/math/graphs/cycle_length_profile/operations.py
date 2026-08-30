@@ -31,6 +31,7 @@ MAX_RESULT_BYTES = CanonicalLimits().max_output_bytes
 @dataclass(frozen=True, slots=True)
 class _AdmissionPlan:
     graph: SimpleUndirectedGraph
+    search_vertices: tuple[str, ...] | None = None
 
 
 def _maximum_path_work(graph: SimpleUndirectedGraph) -> int:
@@ -113,6 +114,28 @@ def _is_wheel_graph(graph: SimpleUndirectedGraph) -> bool:
             seen.add(neighbor)
             stack.append(neighbor)
     return len(seen) == len(rim)
+
+
+def _wheel_search_order(graph: SimpleUndirectedGraph) -> tuple[str, ...] | None:
+    """Return a hub-then-cyclic-rim order for the wheel DFS shortcut."""
+    if not _is_wheel_graph(graph):
+        return None
+    adjacency: dict[str, set[str]] = {vertex: set() for vertex in graph.vertices}
+    for left, right in graph.edges:
+        adjacency[left].add(right)
+        adjacency[right].add(left)
+    hub = next(vertex for vertex, neighbors in adjacency.items() if len(neighbors) == len(graph.vertices) - 1)
+    rim = [vertex for vertex in graph.vertices if vertex != hub]
+    rim_adjacency = {vertex: adjacency[vertex] - {hub} for vertex in rim}
+    order = [rim[0]]
+    previous: str | None = None
+    current = rim[0]
+    while len(order) < len(rim):
+        candidates = [neighbor for neighbor in rim_adjacency[current] if neighbor != previous]
+        next_vertex = candidates[0] if candidates[0] not in order else candidates[1]
+        order.append(next_vertex)
+        previous, current = current, next_vertex
+    return (hub, *order)
 
 
 def _cycle_core_vertices(graph: SimpleUndirectedGraph) -> set[str]:
@@ -243,7 +266,7 @@ def _admit(graph: SimpleUndirectedGraph) -> _AdmissionPlan:
             "cycle_profile.result_bound",
             "the complete cycle profile exceeds the canonical output bound",
         )
-    return _AdmissionPlan(graph=graph)
+    return _AdmissionPlan(graph=graph, search_vertices=_wheel_search_order(graph))
 
 
 def compute_cycle_length_profile(
@@ -255,7 +278,7 @@ def compute_cycle_length_profile(
     k-cycle. Return one canonical witness cycle for each present length.
     """
     plan = _admit(graph)
-    vertices = list(plan.graph.vertices)
+    vertices = list(plan.search_vertices or plan.graph.vertices)
 
     n = len(vertices)
     vertex_to_idx = {v: i for i, v in enumerate(vertices)}

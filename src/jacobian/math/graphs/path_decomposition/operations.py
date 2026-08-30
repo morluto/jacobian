@@ -52,39 +52,29 @@ def _admit_graph(graph: SimpleUndirectedGraph) -> _PathSearchPlan:
         adjacency[left].add(right)
         adjacency[right].add(left)
 
-    if edge_count >= MAX_SEARCH_STATES.bit_length():
-        _reject(
-            "search_work_bound",
-            "the exact memoized residual-edge search exceeds its bounded work envelope",
-        )
-    residual_state_bound = 1 << edge_count
-    candidate_limit = MAX_SEARCH_STATES // residual_state_bound
     candidates = tuple(
         sorted(
-            _find_all_simple_paths(adjacency, candidate_limit=candidate_limit),
+            _find_all_simple_paths(adjacency, candidate_limit=MAX_SEARCH_STATES),
             key=lambda path: (-len(path), tuple(sorted(path))),
         )
     )
-    candidate_checks_bound = residual_state_bound * max(len(candidates), 1)
-    if candidate_checks_bound > MAX_SEARCH_STATES:
-        _reject(
-            "search_work_bound",
-            "the exact memoized residual-edge search exceeds its bounded work envelope",
-        )
+    candidate_checks_bound = MAX_SEARCH_STATES
 
     try:
         source_bytes = len(encode_strict_json(graph.model_dump(mode="json")))
+        active_vertices = {vertex for edge in graph.edges for vertex in edge}
         max_label_bytes = max(
-            (len(encode_strict_json(vertex)) for vertex in graph.vertices), default=2
+            (len(encode_strict_json(vertex)) for vertex in active_vertices), default=2
         )
     except ValueError as exc:
         _reject("source_representation", str(exc))
-    path_bytes = _array_size([max_label_bytes] * vertex_count)
-    paths_bytes = _array_size([path_bytes] * edge_count) if edge_count else 2
+    paths_bytes = (
+        1 + 4 * edge_count + 2 * edge_count * max_label_bytes if edge_count else 2
+    )
     result_bytes = strict_json_object_size(
         (
             ("graph", source_bytes),
-            ("path_count", 3),
+            ("path_count", len(str(edge_count))),
             ("paths", paths_bytes),
         )
     )
@@ -220,8 +210,9 @@ def _minimum_cover(
         for path in by_edge[pivot]:
             candidate_checks += 1
             if candidate_checks > candidate_checks_bound:
-                raise AssertionError(
-                    "path-decomposition admission undercounted search work"
+                _reject(
+                    "search_work_bound",
+                    "the exact memoized residual-edge search exceeds its bounded work envelope",
                 )
             if not path <= remaining:
                 continue

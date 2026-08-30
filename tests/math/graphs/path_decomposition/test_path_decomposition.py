@@ -101,7 +101,7 @@ def test_isolated_vertices_do_not_trigger_a_coarse_carrier_rejection() -> None:
     assert result.path_count == 1
 
 
-def test_dense_graph_is_rejected_before_path_enumeration() -> None:
+def test_dense_graph_is_rejected_by_path_enumeration_ledger() -> None:
     vertices = [f"v{i:02d}" for i in range(12)]
     edges = [
         (vertices[left], vertices[right])
@@ -109,7 +109,7 @@ def test_dense_graph_is_rejected_before_path_enumeration() -> None:
         for right in range(left + 1, 12)
     ]
 
-    with pytest.raises(OperationDomainValidationError, match="residual-edge search"):
+    with pytest.raises(OperationDomainValidationError, match="bounded work envelope"):
         compute_minimum_path_decomposition(_graph(vertices, edges))
 
 
@@ -122,6 +122,25 @@ def test_path_orientation_is_canonical() -> None:
     result = compute_minimum_path_decomposition(graph)
 
     assert result.paths == (("a", "b", "c", "d"),)
+
+
+def test_path_search_uses_reachable_residual_states() -> None:
+    vertices = [f"v{i:02d}" for i in range(16)]
+
+    result = compute_minimum_path_decomposition(
+        _graph(vertices, list(pairwise(vertices)))
+    )
+
+    assert result.path_count == 1
+
+
+def test_result_bound_charges_only_active_path_vertices() -> None:
+    vertices = [f"{index:03d}-" + "x" * 2996 for index in range(256)]
+    edges = [(vertices[2 * index], vertices[2 * index + 1]) for index in range(15)]
+
+    result = compute_minimum_path_decomposition(_graph(vertices, edges))
+
+    assert result.path_count == 15
 
 
 @pytest.mark.parametrize(

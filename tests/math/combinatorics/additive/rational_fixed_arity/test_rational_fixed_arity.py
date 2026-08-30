@@ -112,7 +112,9 @@ def test_native_admission_rejects_negative_arity() -> None:
         compute_rational_fixed_arity_sum_profile((_cr(1),), -1)
 
 
-def test_large_source_and_empty_out_of_range_arity_use_result_sensitive_admission() -> None:
+def test_large_source_and_empty_out_of_range_arity_use_result_sensitive_admission() -> (
+    None
+):
     repeated = tuple(_cr(0) for _ in range(1_001))
     result = compute_rational_fixed_arity_sum_profile(repeated, 1)
     assert result.rows[0].multiplicity == 1_001

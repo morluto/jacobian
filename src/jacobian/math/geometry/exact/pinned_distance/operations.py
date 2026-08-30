@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from fractions import Fraction
+from math import gcd
 from typing import NoReturn
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import (
     CanonicalizationError,
     CanonicalLimits,
     encode_strict_json,
+    format_canonical_integer,
     strict_json_object_size,
 )
 from jacobian.catalog.models import OperationDomainValidationError
@@ -196,5 +198,36 @@ def _squared_distance(
     total = Fraction(0)
     for a, b in zip(coords_a, coords_b, strict=True):
         diff = a.as_fraction() - b.as_fraction()
-        total += diff * diff
+        term = diff * diff
+        _require_bounded_fraction(term)
+        new_denominator_factor = term.denominator // gcd(
+            total.denominator, term.denominator
+        )
+        if (
+            _integer_digits(total.denominator)
+            + _integer_digits(new_denominator_factor)
+            - 1
+            > MAX_CANONICAL_RATIONAL_DIGITS
+        ):
+            _reject(
+                "distance_intermediate_height_bound",
+                "squared-distance summation exceeds the canonical intermediate digit bound",
+            )
+        total += term
+        _require_bounded_fraction(total)
     return total
+
+
+def _integer_digits(value: int) -> int:
+    return len(format_canonical_integer(value).lstrip("-"))
+
+
+def _require_bounded_fraction(value: Fraction) -> None:
+    if (
+        _integer_digits(value.numerator) > MAX_CANONICAL_RATIONAL_DIGITS
+        or _integer_digits(value.denominator) > MAX_CANONICAL_RATIONAL_DIGITS
+    ):
+        _reject(
+            "distance_intermediate_height_bound",
+            "squared-distance arithmetic exceeds the canonical intermediate digit bound",
+        )

@@ -168,6 +168,23 @@ def test_overheight_denominator_is_rejected_at_the_first_pair() -> None:
         compute_pinned_distance_support_profile(config)
 
 
+def test_coprime_coordinate_denominators_are_bounded_before_summing() -> None:
+    first = CanonicalRational.from_fraction(Fraction(1, 2**30_000))
+    second = CanonicalRational.from_fraction(Fraction(1, 3**18_800))
+    config = PointConfiguration(
+        points=(
+            _pt("origin", (0, 0)),
+            LabelledRationalPoint(
+                label="coprime",
+                coordinates=(first, second),
+            ),
+        )
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="summation"):
+        compute_pinned_distance_support_profile(config)
+
+
 def test_shared_denominators_are_admitted_from_exact_distances() -> None:
     denominator = 10**1000 + 1
     coordinate = CanonicalRational.from_fraction(Fraction(1, denominator))

@@ -138,16 +138,19 @@ def _admit(graph: SimpleUndirectedGraph) -> _AdmissionPlan:
     if graph.edges:
         # The transport path NFC-normalizes strings and RFC-8785 escapes control
         # characters, so raw UTF-8 lengths undercount the actual result.
-        label_bytes = sum(
-            len(rfc8785.dumps(unicodedata.normalize("NFC", label)))
-            for label in graph.vertices
+        label_sizes = sorted(
+            (
+                len(rfc8785.dumps(unicodedata.normalize("NFC", label)))
+                for label in graph.vertices
+            ),
+            reverse=True,
         )
         # A simple cycle of length k consumes k distinct edges.  Charging only
         # lengths that can occur avoids rejecting sparse graphs whose exact
         # profile is empty (for example, a one-edge graph).
         max_cycle_length = min(_cycle_core_size(graph), len(graph.edges))
         for length in range(3, max_cycle_length + 1):
-            result_bytes += 32 + length * (label_bytes + 2)
+            result_bytes += 32 + sum(label_sizes[:length]) + 2 * length
     if result_bytes > MAX_RESULT_BYTES:
         _reject(
             "cycle_profile.result_bound",

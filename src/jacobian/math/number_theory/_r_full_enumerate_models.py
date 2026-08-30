@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
+import math
 from typing import Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
 
 MAX_R_FULL_CUTOFF_DIGITS = 18
 MAX_R_FULL_CUTOFF = 10 ** MAX_R_FULL_CUTOFF_DIGITS
 MIN_R_FULL_EXPONENT = 2
-MAX_R_FULL_EXPONENT = 10
+MAX_R_FULL_EXPONENT = 64
+MAX_R_FULL_FAMILY_SIZE = 200_000
+MAX_R_FULL_RESULT_BYTES = 3_000_000
 
 
 class RFullEnumerateRequest(StrictModel):
@@ -35,6 +39,21 @@ class RFullEnumerateRequest(StrictModel):
         examples=[100],
     )
 
+    @model_validator(mode="after")
+    def require_bounded_family(self) -> Self:
+        estimate = 3 * math.ceil(self.cutoff ** (1 / self.minimum_exponent))
+        if estimate > MAX_R_FULL_FAMILY_SIZE:
+            raise PydanticCustomError(
+                "r_full_enumerate_family_exceeds_result_budget",
+                "r-full family exceeds the result-size budget",
+            )
+        if estimate * (len(str(self.cutoff)) + 3) > MAX_R_FULL_RESULT_BYTES:
+            raise PydanticCustomError(
+                "r_full_enumerate_family_exceeds_transport_budget",
+                "r-full family exceeds the serialized-byte budget",
+            )
+        return self
+
 
 class RFullEnumerateResult(StrictModel):
     """The complete ordered family of r-full integers up to the cutoff."""
@@ -42,7 +61,7 @@ class RFullEnumerateResult(StrictModel):
     minimum_exponent: int = Field(ge=MIN_R_FULL_EXPONENT, le=MAX_R_FULL_EXPONENT)
     cutoff: int = Field(gt=0)
     count: int = Field(ge=0)
-    family: tuple[str, ...] = Field(default=())
+    family: tuple[CanonicalInteger, ...] = Field(default=())
 
     @model_validator(mode="after")
     def require_canonical_family(self) -> Self:
@@ -75,7 +94,7 @@ class RFullEnumerateResult(StrictModel):
         minimum_exponent: int,
         cutoff: int,
         raw_family: list[int],
-    ) -> "RFullEnumerateResult":
+    ) -> RFullEnumerateResult:
         family = tuple(format_canonical_integer(v) for v in sorted(raw_family))
         return cls.model_construct(
             minimum_exponent=minimum_exponent,

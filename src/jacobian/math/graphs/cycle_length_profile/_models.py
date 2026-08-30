@@ -20,6 +20,7 @@ class CycleLengthProfileRequest(StrictModel):
 
     graph: SimpleUndirectedGraph
 
+
 class CycleLengthRow(StrictModel):
     """One cycle length with a canonical witness cycle."""
 

@@ -146,7 +146,7 @@ class TestSumsetCardinality:
         )
         result = _run_sumset(req)
         assert result.cardinality == 5
-        assert result.support == ("0", "1", "2", "3", "4")
+        assert result.support.elements == ("0", "1", "2", "3", "4")
 
     def test_disjoint(self) -> None:
         req = SumsetCardinalityRequest(
@@ -162,7 +162,7 @@ class TestSumsetCardinality:
             right=FiniteIntegerSet(elements=("5", "0", "-5")),
         )
         result = _run_sumset(req)
-        assert result.support == (
+        assert result.support.elements == (
             "-7",
             "-5",
             "-2",

@@ -713,19 +713,19 @@ class SumsetCardinalityRequest(StrictModel):
 
 
 class SumsetCardinalityResult(StrictModel):
-    """Cardinality of the sumset and its sorted support."""
+    """Cardinality of the sumset and its canonical support set."""
 
     cardinality: int = Field(ge=0)
-    support: tuple[CanonicalInteger, ...] = Field(default=())
+    support: FiniteIntegerSet
 
     @model_validator(mode="after")
     def require_canonical_support(self) -> Self:
-        sums = list(self.support)
-        if tuple(sums) != _sorted_canonical_integers(sums):
+        elements = list(self.support.elements)
+        if tuple(elements) != _sorted_canonical_integers(elements):
             raise _validation_error(
                 "require_canonical_support", "sumset support must be sorted and unique"
             )
-        if self.cardinality != len(self.support):
+        if self.cardinality != len(self.support.elements):
             raise _validation_error(
                 "require_canonical_support", "cardinality must equal the support length"
             )
@@ -733,7 +733,10 @@ class SumsetCardinalityResult(StrictModel):
 
     @classmethod
     def _from_kernel(cls, support: tuple[CanonicalInteger, ...]) -> Self:
-        return cls.model_construct(cardinality=len(support), support=support)
+        return cls.model_construct(
+            cardinality=len(support),
+            support=FiniteIntegerSet(elements=support),
+        )
 
 
 # ---------------------------------------------------------------------------

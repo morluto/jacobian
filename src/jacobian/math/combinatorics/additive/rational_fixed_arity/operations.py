@@ -180,7 +180,7 @@ def compute_rational_fixed_arity_sum_profile(
         )
         for s, count in sorted(sum_to_count.items())
     ]
-    return RationalFixedAritySumResult(
+    return RationalFixedAritySumResult._from_kernel(
         values=values,
         arity=arity,
         rows=tuple(rows),

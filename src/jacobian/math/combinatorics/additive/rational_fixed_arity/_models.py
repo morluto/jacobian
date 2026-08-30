@@ -36,6 +36,16 @@ class RationalFixedAritySumResult(StrictModel):
     arity: StrictInt = Field(ge=0, le=MAX_ARITY)
     rows: tuple[SumProfileRow, ...] = Field(max_length=MAX_RESULT_ROWS)
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        values: tuple[CanonicalRational, ...],
+        arity: int,
+        rows: tuple[SumProfileRow, ...],
+    ) -> Self:
+        """Construct a result after the owner has established its profile."""
+        return cls.model_construct(values=values, arity=arity, rows=rows)
+
     @model_validator(mode="after")
     def require_profile_invariants(self) -> Self:
         sums = tuple(row.sum_value.as_fraction() for row in self.rows)

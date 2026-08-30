@@ -273,10 +273,15 @@ def _admit_word_collision_profile(
     word_bytes = _array_size((len(encode_strict_json(0)),) * depth)
     word_bytes += depth * max(index_digits - 1, 0)
     total_words_bytes = 2 * word_count + word_count * word_bytes
-    row_fixed_bytes = strict_json_object_size(
+    map_fixed_bytes = strict_json_object_size(
         (
             ("slope", _rational_size(coefficient_height)),
             ("intercept", _rational_size(coefficient_height)),
+        )
+    )
+    row_fixed_bytes = strict_json_object_size(
+        (
+            ("map", map_fixed_bytes),
             ("multiplicity", len(encode_strict_json(word_count))),
             ("words", 0),
         )

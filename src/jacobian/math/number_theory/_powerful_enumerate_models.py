@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import math
 from typing import Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
 
@@ -15,6 +17,8 @@ from jacobian.canonical import format_canonical_integer
 # We cap the cutoff so the complete family fits the transport budget.
 MAX_POWERFUL_ENUM_CUTOFF_DIGITS = 18
 MAX_POWERFUL_ENUM_CUTOFF = 10 ** MAX_POWERFUL_ENUM_CUTOFF_DIGITS
+MAX_POWERFUL_ENUM_FAMILY_SIZE = 200_000
+MAX_POWERFUL_ENUM_RESULT_BYTES = 3_000_000
 
 
 class PowerfulEnumerateRequest(StrictModel):
@@ -30,13 +34,28 @@ class PowerfulEnumerateRequest(StrictModel):
         examples=[100],
     )
 
+    @model_validator(mode="after")
+    def require_bounded_family(self) -> Self:
+        estimate = 3 * math.isqrt(self.cutoff) + 1
+        if estimate > MAX_POWERFUL_ENUM_FAMILY_SIZE:
+            raise PydanticCustomError(
+                "powerful_enumerate_family_exceeds_result_budget",
+                "powerful family exceeds the result-size budget",
+            )
+        if estimate * (len(str(self.cutoff)) + 3) > MAX_POWERFUL_ENUM_RESULT_BYTES:
+            raise PydanticCustomError(
+                "powerful_enumerate_family_exceeds_transport_budget",
+                "powerful family exceeds the serialized-byte budget",
+            )
+        return self
+
 
 class PowerfulEnumerateResult(StrictModel):
     """The complete ordered family of powerful integers up to the cutoff."""
 
     cutoff: int = Field(gt=0)
     count: int = Field(ge=0)
-    family: tuple[str, ...] = Field(default=())
+    family: tuple[CanonicalInteger, ...] = Field(default=())
 
     @model_validator(mode="after")
     def require_canonical_family(self) -> Self:
@@ -64,7 +83,7 @@ class PowerfulEnumerateResult(StrictModel):
         return self
 
     @classmethod
-    def _from_kernel(cls, cutoff: int, raw_family: list[int]) -> "PowerfulEnumerateResult":
+    def _from_kernel(cls, cutoff: int, raw_family: list[int]) -> PowerfulEnumerateResult:
         family = tuple(format_canonical_integer(v) for v in sorted(raw_family))
         return cls.model_construct(
             cutoff=cutoff,

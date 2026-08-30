@@ -116,7 +116,7 @@ def test_one_power_equation_has_d_zero_dimensional_components() -> None:
     _assert_defining_invariants(result)
 
 
-def test_mixed_invariant_factors_and_free_coordinate_stay_compact() -> None:
+def test_mixed_invariant_factors_and_free_coordinate_have_a_torus_factor() -> None:
     result = homogeneous_monomial_solution_subgroup(_system([[2, 0, 0], [0, 6, 0]]))
 
     assert result.torsion_character_group.invariant_factors == ("2", "6")

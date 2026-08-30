@@ -198,11 +198,14 @@ class TorsionCharacterGroup(StrictModel):
 
 
 class AlgebraicTorusSolutionSubgroup(StrictModel):
-    """The complete compact subgroup solving one homogeneous monomial system.
+    """The complete solution subgroup of one homogeneous monomial system.
 
     For ``D = U A V``, Smith parameters ``z`` map to source coordinates by
     ``x_i = product_j z_j ** V[i,j]``. Nontrivial Smith coordinates index the
     connected components and the final columns are free torus parameters.
+
+    The subgroup is compact only when ``free_rank == 0``; otherwise it has a
+    non-compact ``C*`` factor indexed by the free torus parameters.
     """
 
     source: HomogeneousMonomialSystem

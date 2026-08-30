@@ -100,12 +100,11 @@ def test_native_api_exports_the_reused_framework_values() -> None:
         "LabelledRationalPoint",
         "PlanarRigidityProfile",
         "PointConfiguration",
-        "SimpleUndirectedGraph",
         "planar_rigidity_profile",
     ]
     assert framework.LabelledRationalPoint is LabelledRationalPoint
     assert framework.PointConfiguration is PointConfiguration
-    assert framework.SimpleUndirectedGraph is SimpleUndirectedGraph
+    assert not hasattr(framework, "SimpleUndirectedGraph")
     assert framework.PlanarRigidityProfile is PlanarRigidityProfile
     assert framework.planar_rigidity_profile is planar_rigidity_profile
 

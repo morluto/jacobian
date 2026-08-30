@@ -344,6 +344,7 @@ def test_exact_public_api_symbols() -> None:
         "FiniteMapTable",
         "FinitePolynomial",
         "FinitePolynomialMap",
+        "MatrixRankResult",
         "OrbitDistribution",
         "PaleyTournamentResult",
         "PermutationResult",

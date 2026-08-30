@@ -160,7 +160,11 @@ def test_result_budget_charges_cycle_blocks_independently() -> None:
     edges = [tuple(sorted((rim[index], rim[(index + 1) % 9]))) for index in range(9)]
     edges.extend(tuple(sorted((wheel[0], wheel[index]))) for index in range(1, 10))
     edges.extend(
-        [(triangle[0], triangle[1]), (triangle[0], triangle[2]), (triangle[1], triangle[2])]
+        [
+            (triangle[0], triangle[1]),
+            (triangle[0], triangle[2]),
+            (triangle[1], triangle[2]),
+        ]
     )
     result = compute_cycle_length_profile(_graph(vertices, edges))
     assert {row.cycle_length for row in result.rows} == set(range(3, 11))

@@ -117,12 +117,20 @@ def _admit_eventual_hitting(
         (
             max(_decimal_digits(value.numerator), _decimal_digits(value.denominator))
             for state in transient
-            for value in matrix[state]
+            for destination, value in enumerate(matrix[state])
+            if destination in can_reach_target
         ),
         default=1,
     )
     max_row_terms = max(
-        (sum(value != 0 for value in matrix[state]) for state in transient),
+        (
+            sum(
+                value != 0
+                for destination, value in enumerate(matrix[state])
+                if destination in can_reach_target
+            )
+            for state in transient
+        ),
         default=1,
     )
     # Gaussian elimination and the right-hand-side row sums can combine every

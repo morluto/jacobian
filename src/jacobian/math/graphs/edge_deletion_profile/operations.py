@@ -67,6 +67,10 @@ def _coloring_work_bound(graph: SimpleUndirectedGraph, deletion_order: int) -> i
                 stack.append(neighbor)
         components.append(component)
     total = 0
+    # Each profile row currently rebuilds component vertex/edge lists in the
+    # chromatic kernel.  Charge those filters explicitly instead of treating
+    # only the subsequent coloring search as work.
+    total += len(components) * (len(graph.vertices) + len(graph.edges))
     for component in components:
         n = len(component)
         edge_count = sum(

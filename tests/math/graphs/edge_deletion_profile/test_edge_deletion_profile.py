@@ -106,6 +106,17 @@ def test_admits_sparse_non_bipartite_component_with_isolates() -> None:
     assert result.rows[0].chromatic_number == 3
 
 
+def test_rejects_many_component_filters_before_row_enumeration() -> None:
+    vertices = tuple(f"v{i}" for i in range(256))
+    graph = SimpleUndirectedGraph(
+        vertices=vertices,
+        edges=tuple((f"v{2 * i}", f"v{2 * i + 1}") for i in range(128)),
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="work bound"):
+        compute_edge_deletion_profile(graph, 2)
+
+
 def test_admits_disconnected_triangle_and_path() -> None:
     graph = _graph(
         [f"v{index:03d}" for index in range(256)],

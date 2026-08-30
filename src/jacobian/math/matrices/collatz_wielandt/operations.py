@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.collatz_wielandt._models import (
     CollatzWielandtResult,
@@ -44,6 +45,21 @@ def compute_collatz_wielandt_profile(
     for i in range(n):
         ax_i = sum(mat[i][j] * vec[j] for j in range(n))
         quotients.append(ax_i / vec[i])
+
+    if any(
+        len(format_canonical_integer(component).lstrip("-"))
+        > MAX_CANONICAL_RATIONAL_DIGITS
+        for quotient in quotients
+        for component in (quotient.numerator, quotient.denominator)
+    ):
+        raise OperationDomainValidationError(
+            location=("matrix", "vector"),
+            code="collatz_wielandt.quotient_bound",
+            message=(
+                "a derived Collatz-Wielandt quotient exceeds the canonical "
+                f"rational {MAX_CANONICAL_RATIONAL_DIGITS}-digit bound"
+            ),
+        )
 
     max_q = max(quotients)
 

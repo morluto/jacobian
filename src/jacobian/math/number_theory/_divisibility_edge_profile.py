@@ -8,6 +8,7 @@ from jacobian.canonical import CanonicalizationError, format_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._divisibility_edge_profile_kernels import (
+    FactorizationIncompleteError,
     construct_divisibility_edge_profile,
 )
 from jacobian.math.number_theory._divisibility_edge_profile_models import (
@@ -15,7 +16,8 @@ from jacobian.math.number_theory._divisibility_edge_profile_models import (
     DivisibilityEdge,
     DivisibilityEdgeProfileRequest,
     DivisibilityEdgeProfileResult,
-    _validate_divisibility_edge_values,
+    _validate_divisibility_edge_resources,
+    _validate_divisibility_edge_shape,
 )
 from jacobian.math.number_theory._support import number_theory_operation
 from jacobian.math.number_theory.arithmetic.values import IntegerValue
@@ -25,13 +27,32 @@ def compute_divisibility_edge_profile(
     request: DivisibilityEdgeProfileRequest,
 ) -> DivisibilityEdgeProfileResult:
     """Return the complete directed divisibility edge table with quotient and LPF."""
-    return _build_divisibility_edge_profile(request.values)
+    try:
+        _validate_divisibility_edge_resources(request.values)
+        return _build_divisibility_edge_profile(request.values)
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=("values",), code=exc.type, message=exc.message()
+        ) from exc
+    except FactorizationIncompleteError as exc:
+        raise OperationDomainValidationError(
+            location=("values",),
+            code="divisibility_edge.factorization_incomplete",
+            message="bounded factorization did not establish every quotient",
+        ) from exc
 
 
 def _build_divisibility_edge_profile(
     values: tuple[str, ...],
 ) -> DivisibilityEdgeProfileResult:
-    data = construct_divisibility_edge_profile(values)
+    try:
+        data = construct_divisibility_edge_profile(values)
+    except FactorizationIncompleteError as exc:
+        raise OperationDomainValidationError(
+            location=("values",),
+            code="divisibility_edge.factorization_incomplete",
+            message="bounded factorization did not establish every quotient",
+        ) from exc
     edges = tuple(
         DivisibilityEdge(
             source=d.source,
@@ -50,7 +71,8 @@ def divisibility_edge_profile(
     """Return a divisibility edge profile from native canonical values."""
     try:
         canonical_values = tuple(_canonical_native_value(value) for value in values)
-        _validate_divisibility_edge_values(canonical_values)
+        _validate_divisibility_edge_shape(canonical_values)
+        _validate_divisibility_edge_resources(canonical_values)
     except (CanonicalizationError, PydanticCustomError, TypeError, ValueError) as exc:
         if isinstance(exc, PydanticCustomError):
             code = exc.type

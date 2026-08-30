@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import cast
 
-from sympy.ntheory.factor_ import factorint
+from jacobian.math.number_theory._factorization_kernels import (
+    _bounded_direct_factorization,
+)
+
+
+class FactorizationIncompleteError(RuntimeError):
+    """The killable factorization worker did not establish a complete result."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,8 +27,10 @@ def _least_prime_factor(n: int) -> int:
     """Return the least prime factor of n > 1."""
     if n <= 1:
         raise ValueError(f"least_prime_factor requires n > 1, got {n}")
-    factors = cast(dict[int, int], factorint(n))
-    return min(factors.keys())
+    factors = _bounded_direct_factorization(n)
+    if factors is None:
+        raise FactorizationIncompleteError
+    return min(int(factor.prime) for factor in factors)
 
 
 def construct_divisibility_edge_profile(

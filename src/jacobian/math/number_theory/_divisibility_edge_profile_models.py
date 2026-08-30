@@ -27,6 +27,7 @@ class DivisibilityEdgeProfileRequest(StrictModel):
         max_length=MAX_DIVISIBILITY_EDGE_SET_SIZE,
         description=(
             "Ordered source set of positive canonical decimal integers. "
+            "Each value has at most 20 digits. "
             "The result profiles every proper-divisibility edge a -> b "
             "(a divides b, a != b) with the quotient b/a and its least "
             "prime factor."
@@ -36,7 +37,7 @@ class DivisibilityEdgeProfileRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_admitted_values(self) -> Self:
-        _validate_divisibility_edge_values(self.values)
+        _validate_divisibility_edge_shape(self.values)
         return self
 
 
@@ -149,5 +150,6 @@ __all__ = [
     "DivisibilityEdge",
     "DivisibilityEdgeProfileRequest",
     "DivisibilityEdgeProfileResult",
+    "_validate_divisibility_edge_resources",
     "_validate_divisibility_edge_values",
 ]

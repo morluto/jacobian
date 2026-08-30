@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._divisibility_edge_profile import (
     compute_divisibility_edge_profile,
     divisibility_edge_profile,
@@ -106,6 +107,15 @@ def test_native_rejects_oversized_integer_before_formatting() -> None:
     """Huge Python integers are bounded before decimal conversion."""
     with pytest.raises(ValueError, match="digit bound"):
         divisibility_edge_profile((1 << 10_000_000,))
+
+
+def test_resource_admission_belongs_to_operation_execution() -> None:
+    """Wire parsing accepts shape-valid input; execution owns work rejection."""
+    request = DivisibilityEdgeProfileRequest(
+        values=tuple(str(value) for value in range(1, 501))
+    )
+    with pytest.raises(OperationDomainValidationError, match="factorization"):
+        compute_divisibility_edge_profile(request)
 
 
 @pytest.mark.parametrize(

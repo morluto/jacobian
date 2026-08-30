@@ -10,6 +10,7 @@ from jacobian.math.number_theory._friable_kernel import count_friable
 from jacobian.math.number_theory.friable.family._models import (
     MAX_FRIABLE_FAMILY_GENERATED_CUTOFF,
     MAX_FRIABLE_FAMILY_MATERIALIZED_X,
+    MAX_FRIABLE_FAMILY_ROWS,
     FriableFamilyRequest,
 )
 from jacobian.math.number_theory.friable.family.operations import (
@@ -147,6 +148,13 @@ def test_materialized_regime_bound() -> None:
     """The materialized regime admits x up to its cap."""
     fam = enumerate_friable_family(MAX_FRIABLE_FAMILY_MATERIALIZED_X, 999_999)
     assert fam == list(range(1, MAX_FRIABLE_FAMILY_MATERIALIZED_X + 1))
+
+
+def test_direct_full_interval_still_enforces_the_row_budget() -> None:
+    beyond = MAX_FRIABLE_FAMILY_ROWS + 1
+
+    with pytest.raises(ValueError, match="row budget"):
+        enumerate_friable_family(beyond, beyond)
 
 
 def test_rejects_unbounded_generated_prime_cutoff() -> None:

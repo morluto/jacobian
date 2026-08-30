@@ -12,6 +12,7 @@ from jacobian.canonical import (
     CanonicalizationError,
     CanonicalLimits,
     encode_strict_json,
+    format_canonical_integer,
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.rational_fixed_arity._models import (
@@ -61,8 +62,21 @@ def _support_bound(
         count_vectors = next_counts
     count_vector_bound = count_vectors[arity]
     denominators = {value.denominator for value in fractions}
-    if len(denominators) == 1:
-        numerators = tuple(value.numerator for value in fractions)
+    common_denominator = 1
+    for denominator in denominators:
+        common_denominator = (
+            common_denominator // gcd(common_denominator, denominator) * denominator
+        )
+        if (
+            len(format_canonical_integer(common_denominator))
+            > MAX_CANONICAL_RATIONAL_DIGITS
+        ):
+            break
+    else:
+        numerators = tuple(
+            value.numerator * (common_denominator // value.denominator)
+            for value in fractions
+        )
         differences = (abs(value - numerators[0]) for value in numerators[1:])
         lattice_step = 0
         for difference in differences:
@@ -132,6 +146,15 @@ def _admit(
             ("values",),
             "rational_fixed_arity.work_bound",
             "fixed-arity enumeration exceeds the admitted work bound",
+        )
+    source_size_estimate = 64 + sum(
+        len(value.num) + len(value.den) + 24 for value in values
+    )
+    if source_size_estimate > MAX_RESULT_BYTES:
+        _reject(
+            ("values",),
+            "rational_fixed_arity.result_bound",
+            "the rational source exceeds the canonical output bound",
         )
     fractions = tuple(value.as_fraction() for value in values)
 

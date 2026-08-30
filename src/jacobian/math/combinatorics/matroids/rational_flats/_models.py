@@ -7,8 +7,8 @@ from typing import Annotated, Any, Literal, Self
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import CanonicalizationError, CanonicalLimits
+from jacobian._models import StrictModel
+from jacobian.canonical import CanonicalLimits
 from jacobian.math._labels import OpaqueLabel
 from jacobian.math.matrices.values import (
     RationalVectorSpaceBasis,
@@ -66,6 +66,56 @@ def _require_raw_mapping_keys(
         raise _validation_error(reason, f"{label} contains unknown fields")
 
 
+def _require_raw_sparse_entry(entry: object, *, label: str) -> None:
+    if not isinstance(entry, dict):
+        raise _validation_error(
+            f"{label}_entry_shape",
+            f"every {label} matrix entry must be an object",
+        )
+    _require_raw_mapping_keys(
+        entry,
+        allowed=frozenset({"row", "column", "value"}),
+        reason=f"{label}_entry_shape",
+        label=f"{label} matrix entry",
+    )
+    if any(
+        coordinate is not None
+        and (not isinstance(coordinate, int) or isinstance(coordinate, bool))
+        for coordinate in (entry.get("row"), entry.get("column"))
+    ):
+        raise _validation_error(
+            f"{label}_entry_shape",
+            f"{label} matrix coordinates must be integers",
+        )
+    value = entry.get("value")
+    if not isinstance(value, dict):
+        raise _validation_error(
+            f"{label}_value_shape",
+            f"every {label} matrix value must be a rational object",
+        )
+    _require_raw_mapping_keys(
+        value,
+        allowed=frozenset({"num", "den"}),
+        reason=f"{label}_value_shape",
+        label=f"{label} rational value",
+    )
+    components = (value.get("num"), value.get("den"))
+    if any(
+        component is not None and not isinstance(component, (str, int))
+        for component in components
+    ):
+        raise _validation_error(
+            f"{label}_value_shape",
+            f"{label} rational components must be decimal scalars",
+        )
+    if any(_raw_component_exceeds_input_digits(component) for component in components):
+        raise _validation_error(
+            "input_component_bound",
+            f"{label} rational components may contain at most "
+            f"{MAX_RATIONAL_FLAT_INPUT_COMPONENT_DIGITS} decimal digits",
+        )
+
+
 def _require_raw_sparse_input_envelope(
     data: object,
     *,
@@ -84,6 +134,23 @@ def _require_raw_sparse_input_envelope(
     )
     row_count = data.get("row_count")
     column_count = data.get("column_count")
+    for field_name, value in (
+        ("row_count", row_count),
+        ("column_count", column_count),
+    ):
+        if value is not None and (
+            not isinstance(value, int) or isinstance(value, bool)
+        ):
+            raise _validation_error(
+                f"{label}_matrix_shape",
+                f"{label} matrix {field_name} must be an integer",
+            )
+    domain = data.get("domain")
+    if domain is not None and not isinstance(domain, str):
+        raise _validation_error(
+            f"{label}_matrix_shape",
+            f"{label} matrix domain must be a string",
+        )
     if (
         isinstance(row_count, int)
         and not isinstance(row_count, bool)
@@ -104,8 +171,13 @@ def _require_raw_sparse_input_envelope(
             f"{MAX_RATIONAL_FLAT_AMBIENT_DIMENSION} columns",
         )
     entries = data.get("entries")
-    if not isinstance(entries, (list, tuple)):
+    if entries is None:
         return
+    if not isinstance(entries, (list, tuple)):
+        raise _validation_error(
+            f"{label}_matrix_shape",
+            f"{label} matrix entries must be an array",
+        )
     if len(entries) > MAX_RATIONAL_FLAT_MATRIX_NONZEROS:
         raise _validation_error(
             f"{label}_nonzero_bound",
@@ -113,32 +185,7 @@ def _require_raw_sparse_input_envelope(
             f"{MAX_RATIONAL_FLAT_MATRIX_NONZEROS} nonzero entries",
         )
     for entry in entries:
-        if not isinstance(entry, dict):
-            continue
-        _require_raw_mapping_keys(
-            entry,
-            allowed=frozenset({"row", "column", "value"}),
-            reason=f"{label}_entry_shape",
-            label=f"{label} matrix entry",
-        )
-        value = entry.get("value")
-        if not isinstance(value, dict):
-            continue
-        _require_raw_mapping_keys(
-            value,
-            allowed=frozenset({"num", "den"}),
-            reason=f"{label}_value_shape",
-            label=f"{label} rational value",
-        )
-        if any(
-            _raw_component_exceeds_input_digits(value.get(component))
-            for component in ("num", "den")
-        ):
-            raise _validation_error(
-                "input_component_bound",
-                f"{label} rational components may contain at most "
-                f"{MAX_RATIONAL_FLAT_INPUT_COMPONENT_DIGITS} decimal digits",
-            )
+        _require_raw_sparse_entry(entry, label=label)
 
 
 def _require_raw_generator_envelope(data: object) -> object:
@@ -150,6 +197,7 @@ def _require_raw_generator_envelope(data: object) -> object:
         reason="symmetry_generator_shape",
         label="rational-flat symmetry generator",
     )
+    projected = dict(data)
     for field_name, maximum, reason in (
         (
             "coordinate_permutation",
@@ -168,7 +216,17 @@ def _require_raw_generator_envelope(data: object) -> object:
                 reason,
                 f"{field_name} admits at most {maximum} entries",
             )
-    return data
+        if isinstance(permutation, (list, tuple)):
+            if any(
+                not isinstance(item, int) or isinstance(item, bool)
+                for item in permutation
+            ):
+                raise _validation_error(
+                    "symmetry_generator_shape",
+                    f"every {field_name} entry must be an integer",
+                )
+            projected[field_name] = tuple(permutation)
+    return projected
 
 
 class RationalVectorConfiguration(StrictModel):
@@ -215,6 +273,17 @@ class RationalVectorConfiguration(StrictModel):
             )
             axis = data.get("coordinate_axis")
             labels = data.get("vector_labels")
+            for field_name, value in (
+                ("coordinate_axis", axis),
+                ("vector_labels", labels),
+            ):
+                if isinstance(value, (list, tuple)) and any(
+                    not isinstance(item, str) for item in value
+                ):
+                    raise _validation_error(
+                        "configuration_shape",
+                        f"every {field_name} entry must be a string",
+                    )
             if isinstance(axis, (list, tuple)) and len(axis) > (
                 MAX_RATIONAL_FLAT_AMBIENT_DIMENSION
             ):
@@ -236,6 +305,12 @@ class RationalVectorConfiguration(StrictModel):
                 label="candidate",
                 maximum_rows=MAX_RATIONAL_FLAT_CANDIDATES,
             )
+            projected = dict(data)
+            if isinstance(axis, (list, tuple)):
+                projected["coordinate_axis"] = tuple(axis)
+            if isinstance(labels, (list, tuple)):
+                projected["vector_labels"] = tuple(labels)
+            return projected
         return data
 
     @model_validator(mode="after")
@@ -406,11 +481,23 @@ class ClauseConstrainedRationalFlatProblem(StrictModel):
                         "clause_count_bound",
                         f"at most {MAX_RATIONAL_FLAT_CLAUSES} clauses are admitted",
                     )
-                memberships = sum(
-                    len(clause)
-                    for clause in clauses
-                    if isinstance(clause, (list, tuple))
-                )
+                canonical_clauses: list[tuple[int, ...]] = []
+                memberships = 0
+                for clause in clauses:
+                    if not isinstance(clause, (list, tuple)):
+                        raise _validation_error(
+                            "clause_shape", "every clause must be an array"
+                        )
+                    memberships += len(clause)
+                    if any(
+                        not isinstance(index, int) or isinstance(index, bool)
+                        for index in clause
+                    ):
+                        raise _validation_error(
+                            "raw_container_structure",
+                            "raw rational-flat clause entries must be integers",
+                        )
+                    canonical_clauses.append(tuple(clause))
                 if memberships > MAX_RATIONAL_FLAT_CLAUSE_MEMBERSHIPS:
                     raise _validation_error(
                         "clause_membership_bound",
@@ -426,8 +513,10 @@ class ClauseConstrainedRationalFlatProblem(StrictModel):
                         f"{MAX_RATIONAL_FLAT_SYMMETRY_GENERATORS} symmetry generators "
                         "are admitted",
                     )
-                for generator in generators:
+                canonical_generators = tuple(
                     _require_raw_generator_envelope(generator)
+                    for generator in generators
+                )
             rank_interval = data.get("rank_interval")
             if isinstance(rank_interval, dict):
                 _require_raw_mapping_keys(
@@ -436,16 +525,12 @@ class ClauseConstrainedRationalFlatProblem(StrictModel):
                     reason="rank_interval_shape",
                     label="rational-flat rank interval",
                 )
-            if clauses is not None:
-                try:
-                    canonical_clauses = canonicalize_json_containers(clauses)
-                except CanonicalizationError as exc:
-                    raise _validation_error(
-                        "raw_container_structure",
-                        "raw rational-flat containers must be acyclic and stay within "
-                        "the canonical JSON depth limit",
-                    ) from exc
-                data = {**data, "clauses": canonical_clauses}
+            projected = dict(data)
+            if isinstance(clauses, (list, tuple)):
+                projected["clauses"] = tuple(canonical_clauses)
+            if isinstance(generators, (list, tuple)):
+                projected["symmetry_generators"] = canonical_generators
+            return projected
         return data
 
     @model_validator(mode="after")

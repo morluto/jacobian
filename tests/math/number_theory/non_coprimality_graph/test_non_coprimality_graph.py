@@ -1,7 +1,10 @@
 """Tests for the non-coprimality conflict-graph operation."""
 
+from collections.abc import Sequence
+
 import pytest
 
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.number_theory.non_coprimality_graph._models import (
     NonCoprimalityGraphRequest,
     NonCoprimalityGraphResult,
@@ -12,7 +15,7 @@ from jacobian.math.number_theory.non_coprimality_graph.operations import (
 )
 
 
-def _graph(vertices):
+def _graph(vertices: Sequence[str]) -> SimpleUndirectedGraph:
     """Run the operation on a list of integer-string vertices."""
     request = NonCoprimalityGraphRequest.model_validate(
         {"elements": {"elements": vertices}}
@@ -168,8 +171,6 @@ def test_examples_are_schema_valid() -> None:
 
 
 def test_graph_is_simple_undirected_graph() -> None:
-    from jacobian.math.graphs.values import SimpleUndirectedGraph
-
     graph = _graph(["2", "3", "6"])
     assert isinstance(graph, SimpleUndirectedGraph)
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from fractions import Fraction
 
 import pytest
@@ -19,11 +20,11 @@ from jacobian.math.geometry.exact.pinned_distance_profile.operations import (
 )
 
 
-def _cr(num, den=1):
+def _cr(num: int, den: int = 1) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(num, den))
 
 
-def _config(points):
+def _config(points: Sequence[tuple[str, Sequence[int]]]) -> PointConfiguration:
     return PointConfiguration(
         points=tuple(
             LabelledRationalPoint(

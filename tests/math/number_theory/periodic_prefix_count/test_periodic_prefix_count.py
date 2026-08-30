@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 
 import pytest
 
@@ -19,7 +20,9 @@ from jacobian.math.number_theory.periodic_prefix_count.operations import (
 )
 
 
-def _source(subsets, complement=False):
+def _source(
+    subsets: Sequence[tuple[str, Sequence[str]]], complement: bool = False
+) -> PeriodicCongruenceUnionSource:
     return PeriodicCongruenceUnionSource(
         subsets=tuple(
             PeriodicCongruenceSubset(modulus=m, residues=tuple(r)) for m, r in subsets
@@ -28,7 +31,9 @@ def _source(subsets, complement=False):
     )
 
 
-def _normalize_source(subsets, complement=False):
+def _normalize_source(
+    subsets: Sequence[tuple[str, Sequence[str]]], complement: bool = False
+) -> PeriodicCongruenceUnionSource:
     """Build a canonical source by normalizing raw (possibly negative) residues."""
     request = PeriodicCongruenceUnionRequest(
         subsets=tuple(
@@ -40,7 +45,7 @@ def _normalize_source(subsets, complement=False):
     return normalize_periodic_source(request)
 
 
-def test_fixture_mod2_or_mod3():
+def test_fixture_mod2_or_mod3() -> None:
     """On [1,6], the union of 0 mod 2 and 1 mod 3 is {1,2,4,6}, count 4."""
     source = _source([("2", ["0"]), ("3", ["1"])])
     result = compute_periodic_union_prefix_count(source, 6)
@@ -48,28 +53,28 @@ def test_fixture_mod2_or_mod3():
     assert result.occupied_count == 4
 
 
-def test_empty_union():
+def test_empty_union() -> None:
     """Empty union has count 0."""
     source = PeriodicCongruenceUnionSource(subsets=(), complement=False)
     result = compute_periodic_union_prefix_count(source, 10)
     assert result.count == "0"
 
 
-def test_mod1_all_integers():
+def test_mod1_all_integers() -> None:
     """0 mod 1: all positive integers."""
     source = _source([("1", ["0"])])
     result = compute_periodic_union_prefix_count(source, 10)
     assert result.count == "10"
 
 
-def test_cutoff_zero():
+def test_cutoff_zero() -> None:
     """Cutoff 0: count 0."""
     source = _source([("2", ["0"])])
     result = compute_periodic_union_prefix_count(source, 0)
     assert result.count == "0"
 
 
-def test_periodicity():
+def test_periodicity() -> None:
     """Extending the cutoff by one period increases the count by occupied_count."""
     source = _source([("2", ["0"])])
     result_small = compute_periodic_union_prefix_count(source, 10)
@@ -77,7 +82,7 @@ def test_periodicity():
     assert int(result_large.count) - int(result_small.count) == 1
 
 
-def test_result_preserves_source():
+def test_result_preserves_source() -> None:
     """Result retains the source and cutoff."""
     source = _source([("2", ["0"])])
     result = compute_periodic_union_prefix_count(source, 10)
@@ -88,28 +93,28 @@ def test_result_preserves_source():
 # --- Additional evidence from the issue's evidence plan ---
 
 
-def test_complement_of_full_set():
+def test_complement_of_full_set() -> None:
     """Complement of {0 mod 2} (i.e., odd numbers) on [1,10] has count 5."""
     source = _source([("2", ["0"])], complement=True)
     result = compute_periodic_union_prefix_count(source, 10)
     assert result.count == "5"
 
 
-def test_one_nonzero_residue():
+def test_one_nonzero_residue() -> None:
     """1 mod 3 on [1,10]: {1,4,7,10}, count 4."""
     source = _source([("3", ["1"])])
     result = compute_periodic_union_prefix_count(source, 10)
     assert result.count == "4"
 
 
-def test_exact_period_endpoint():
+def test_exact_period_endpoint() -> None:
     """Cutoff equal to one full period gives exactly occupied_count."""
     source = _source([("2", ["0"]), ("3", ["1"])])
     result = compute_periodic_union_prefix_count(source, 6)
     assert int(result.count) == result.occupied_count
 
 
-def test_multiple_periods_and_remainder():
+def test_multiple_periods_and_remainder() -> None:
     """Test X = qL + r across several periods; compare against direct enumeration."""
     source = _source([("2", ["0"]), ("3", ["1"])])
     period = 6
@@ -120,7 +125,7 @@ def test_multiple_periods_and_remainder():
         assert result.count == str(expected)
 
 
-def test_overlapping_and_nested_moduli():
+def test_overlapping_and_nested_moduli() -> None:
     """Overlapping moduli: {0 mod 2} union {0 mod 3} on [1, 20]."""
     source = _source([("2", ["0"]), ("3", ["0"])])
     result = compute_periodic_union_prefix_count(source, 20)
@@ -128,7 +133,7 @@ def test_overlapping_and_nested_moduli():
     assert result.count == str(expected)
 
 
-def test_complement_overlapping():
+def test_complement_overlapping() -> None:
     """Complement of {0 mod 2} union {0 mod 3} on [1, 20]."""
     source = _source([("2", ["0"]), ("3", ["0"])], complement=True)
     result = compute_periodic_union_prefix_count(source, 20)
@@ -136,7 +141,7 @@ def test_complement_overlapping():
     assert result.count == str(expected)
 
 
-def test_negative_residues_normalized():
+def test_negative_residues_normalized() -> None:
     """Negative input residues normalized by the shared source."""
     source = _normalize_source([("2", ["0"]), ("3", ["-2"])])
     result = compute_periodic_union_prefix_count(source, 10)
@@ -144,7 +149,7 @@ def test_negative_residues_normalized():
     assert result.count == str(expected)
 
 
-def test_exhaustive_small_periods():
+def test_exhaustive_small_periods() -> None:
     """Exhaustive direct enumeration on small periods/cutoffs."""
     test_cases = [
         [("2", ["0"], False)],
@@ -177,7 +182,7 @@ def test_exhaustive_small_periods():
             )
 
 
-def test_large_cutoff_small_period():
+def test_large_cutoff_small_period() -> None:
     """A huge X remains admissible when L and the result are small; no scan through [1,X]."""
     source = _source([("2", ["0"])])
     cutoff = 10**18
@@ -185,7 +190,7 @@ def test_large_cutoff_small_period():
     assert result.count == str(cutoff // 2)
 
 
-def test_divisor_family_488_fixture():
+def test_divisor_family_488_fixture() -> None:
     """Test the multiples encoding of a divisor family as a #488-shaped fixture."""
     source = _source([("2", ["0"]), ("3", ["0"]), ("5", ["0"])])
     for cutoff in [0, 1, 10, 30, 100]:
@@ -196,7 +201,7 @@ def test_divisor_family_488_fixture():
         assert result.count == str(expected)
 
 
-def test_result_common_period():
+def test_result_common_period() -> None:
     """Result retains the common period."""
     source = _source([("4", ["0"]), ("6", ["1"])])
     result = compute_periodic_union_prefix_count(source, 100)

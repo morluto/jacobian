@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import pytest
 from pydantic import ValidationError
 
@@ -15,7 +17,9 @@ from jacobian.math.graphs.coloring.hypergraph_coloring.operations import (
 )
 
 
-def _hypergraph(vertices, edges):
+def _hypergraph(
+    vertices: Sequence[str], edges: Sequence[tuple[str, Sequence[str]]]
+) -> FiniteHypergraph:
     return FiniteHypergraph(
         vertices=tuple(vertices),
         edges=tuple((eid, tuple(m)) for eid, m in edges),

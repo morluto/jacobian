@@ -12,7 +12,7 @@ MAX_GOWERS_CUBE_VERTEX_CHECKS = 2_000_000
 
 
 def gowers_cube_work(modulus: int, order: int) -> int:
-    return modulus ** (order + 1) * (1 << order) * order
+    return int(modulus ** (order + 1) * (1 << order) * order)
 
 
 class GowersCubeRequest(StrictModel):

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from jacobian.math.number_theory._periodic_models import (
     PeriodicCongruenceSubset,
     PeriodicCongruenceUnionSource,
@@ -9,7 +11,9 @@ from jacobian.math.number_theory.periodic_interval_count.operations import (
 )
 
 
-def _source(modulus, residues, complement=False):
+def _source(
+    modulus: int, residues: Sequence[int], complement: bool = False
+) -> PeriodicCongruenceUnionSource:
     return PeriodicCongruenceUnionSource(
         subsets=(
             PeriodicCongruenceSubset(

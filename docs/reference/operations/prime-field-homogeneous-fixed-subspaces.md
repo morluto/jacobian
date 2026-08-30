@@ -34,7 +34,7 @@ bounds, not restrictions on the mathematical definition.
 
 The defining source regression uses the two displayed matrices for the
 five-dimensional `D8` action on `Q` in equation (4) of Muhammad Fazeel Anwar,
-*A Counterexample to Wehlau's Conjecture on Noether Numbers*,
+*Counterexamples to Conjectures of Wehlau on Noether Numbers*,
 [arXiv:2607.18585v2](https://arxiv.org/abs/2607.18585). It reproduces the fixed
 dimensions `(1, 2, 4, 7, 15, 23, 37, 53)` in degrees zero through seven. The
 larger invariant-generation and indecomposable-quotient calculations remain

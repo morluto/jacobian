@@ -12,6 +12,8 @@ from jacobian.math.finite_fields import (
     PrimeFieldLinearAction,
     homogeneous_fixed_subspace,
 )
+from jacobian.math.finite_fields._models import HomogeneousFixedSubspaceRequest
+from jacobian.math.finite_fields._tools import TOOLS
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
 
@@ -24,36 +26,40 @@ def _swap_action() -> PrimeFieldLinearAction:
     )
 
 
+def _anwar_q_action_data() -> dict[str, object]:
+    return {
+        "variable_axis": {"name": "Q", "labels": [f"x{i}" for i in range(5)]},
+        "generator_matrices": [
+            {
+                "prime": 2,
+                "entries": [
+                    [1, 1, 0, 0, 0],
+                    [0, 1, 1, 0, 0],
+                    [0, 0, 1, 0, 0],
+                    [0, 0, 0, 1, 1],
+                    [0, 0, 0, 0, 1],
+                ],
+                "columns": 5,
+            },
+            {
+                "prime": 2,
+                "entries": [
+                    [1, 1, 1, 0, 1],
+                    [0, 1, 0, 0, 0],
+                    [0, 0, 1, 0, 0],
+                    [0, 0, 0, 1, 1],
+                    [0, 0, 0, 0, 1],
+                ],
+                "columns": 5,
+            },
+        ],
+    }
+
+
 def _anwar_q_action() -> PrimeFieldLinearAction:
     """The D8 action on Q in arXiv:2607.18585v2, equation (4)."""
 
-    return PrimeFieldLinearAction(
-        variable_axis=Axis(name="Q", labels=tuple(f"x{i}" for i in range(5))),
-        generator_matrices=(
-            PrimeFieldMatrix(
-                prime=2,
-                entries=(
-                    (1, 1, 0, 0, 0),
-                    (0, 1, 1, 0, 0),
-                    (0, 0, 1, 0, 0),
-                    (0, 0, 0, 1, 1),
-                    (0, 0, 0, 0, 1),
-                ),
-                columns=5,
-            ),
-            PrimeFieldMatrix(
-                prime=2,
-                entries=(
-                    (1, 1, 1, 0, 1),
-                    (0, 1, 0, 0, 0),
-                    (0, 0, 1, 0, 0),
-                    (0, 0, 0, 1, 1),
-                    (0, 0, 0, 0, 1),
-                ),
-                columns=5,
-            ),
-        ),
-    )
+    return PrimeFieldLinearAction.model_validate(_anwar_q_action_data())
 
 
 def _apply_matrix(
@@ -135,6 +141,23 @@ def test_source_d8_action_reproduces_every_reported_fixed_dimension() -> None:
     ) == (1, 2, 4, 7, 15, 23, 37, 53)
 
 
+def test_source_d8_degree_seven_crosses_the_declared_operation_boundary() -> None:
+    request = HomogeneousFixedSubspaceRequest.model_validate(
+        {"action": _anwar_q_action_data(), "degree": 7}
+    )
+    operation = next(
+        operation
+        for operation in TOOLS
+        if operation.operation_id
+        == "finite_field.prime_linear_action.homogeneous_fixed_subspace.compute"
+    )
+
+    result = operation.run(request)
+
+    assert isinstance(result, HomogeneousFixedSubspace)
+    assert result.fixed_dimension == 53
+
+
 def test_every_returned_row_is_fixed_by_every_induced_generator() -> None:
     from jacobian.math.finite_fields.operations import _induced_action_matrix
 
@@ -181,6 +204,32 @@ def test_oversized_homogeneous_basis_is_rejected_before_expansion() -> None:
 
     with pytest.raises(OperationDomainValidationError, match="monomial basis"):
         homogeneous_fixed_subspace(action, 5)
+
+
+def test_stacked_equation_axis_is_rejected_before_polynomial_expansion() -> None:
+    generators = tuple(
+        PrimeFieldMatrix(
+            prime=5,
+            entries=(
+                (1, index % 5, (index // 5) % 5),
+                (0, 1, (index // 25) % 5),
+                (0, 0, 1),
+            ),
+            columns=3,
+        )
+        for index in range(16)
+    )
+    action = PrimeFieldLinearAction(
+        variable_axis=Axis(name="polynomial_variables", labels=("x", "y", "z")),
+        generator_matrices=generators,
+    )
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        homogeneous_fixed_subspace(action, 14)
+
+    assert error.value.errors()[0]["type"] == (
+        "finite_field.fixed_subspace_equation_axis_bound"
+    )
 
 
 @pytest.mark.parametrize("degree", [-1, 65, True])

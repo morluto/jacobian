@@ -45,6 +45,7 @@ from jacobian.math.graphs.directed._models import (
 )
 from jacobian.math.matrices.finite_fields._bounds import (
     MAX_PRIME_FIELD_ELIMINATION_WORK,
+    MAX_PRIME_FIELD_MATRIX_AXIS,
     MAX_PRIME_FIELD_MATRIX_CELLS,
 )
 from jacobian.math.matrices.finite_fields.linear_algebra import (
@@ -75,6 +76,7 @@ def _homogeneous_fixed_subspace_envelope(
     variable_count = len(action.variable_axis.labels)
     generator_count = len(action.generator_matrices)
     monomial_count = comb(variable_count + degree - 1, degree)
+    equation_rows = generator_count * monomial_count
     equation_entries = generator_count * monomial_count**2
     output_entries = monomial_count**2
     expansion_work = (
@@ -89,6 +91,12 @@ def _homogeneous_fixed_subspace_envelope(
             location=("degree",),
             code="finite_field.fixed_subspace_monomial_bound",
             message="homogeneous monomial basis exceeds the operation bound",
+        )
+    if equation_rows > MAX_PRIME_FIELD_MATRIX_AXIS:
+        raise OperationDomainValidationError(
+            location=("action", "generator_matrices"),
+            code="finite_field.fixed_subspace_equation_axis_bound",
+            message="stacked fixed-subspace equations exceed the matrix axis bound",
         )
     if (
         equation_entries > MAX_PRIME_FIELD_MATRIX_CELLS

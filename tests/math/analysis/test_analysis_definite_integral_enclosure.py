@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from tests.fixtures.accounting import assert_charged_work_parity
 
 from jacobian._execution import (
+    OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     request_execution,
 )
@@ -51,6 +52,7 @@ from jacobian.math.analysis._models import (
     _bounded_expression_nodes,
 )
 from jacobian.math.analysis.intervals import ClosedRationalInterval
+from jacobian.process import bounded_process_cancellation
 
 
 def _q(value: Fraction | int, denominator: int = 1) -> dict[str, str]:
@@ -714,6 +716,18 @@ def test_dispatch_start_time_is_part_of_the_owner_deadline() -> None:
     with (
         request_execution(monotonic() - 2),
         pytest.raises(OperationExecutionTimeoutError, match="semantic preflight"),
+    ):
+        _compute_definite_integral_enclosure(request)
+
+
+def test_owner_checkpoints_observe_request_cancellation() -> None:
+    cancellation = Event()
+    cancellation.set()
+    request = _request(_var())
+
+    with (
+        bounded_process_cancellation(cancellation),
+        pytest.raises(OperationExecutionCancelledError, match="cancelled"),
     ):
         _compute_definite_integral_enclosure(request)
 

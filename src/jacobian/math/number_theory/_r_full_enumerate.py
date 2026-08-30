@@ -77,9 +77,7 @@ def enumerate_r_full(minimum_exponent: int, cutoff: int) -> RFullEnumerateResult
             code="r_full_enumerate.cutoff_bound",
             message="cutoff must be a positive integer within the admitted bound",
         )
-    return _enumerate_r_full_admitted(
-        minimum_exponent, cutoff, enforce_transport=False
-    )
+    return _enumerate_r_full_admitted(minimum_exponent, cutoff, enforce_transport=False)
 
 
 R_FULL_ENUMERATE_OPERATION = number_theory_operation(

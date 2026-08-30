@@ -177,7 +177,10 @@ def _admit_union_relation(source: IndexedFiniteSetFamily) -> _UnionRelationPlan:
         for i in range(len(member_sizes))
         for j in range(i + 1, len(member_sizes))
     )
-    membership_work += generated_union_work
+    # Source sizing and the final canonical serialization each inspect every
+    # retained coordinate; charge both traversals before any pair work begins.
+    source_delivery_work = 2 * sum(member_sizes)
+    membership_work += generated_union_work + source_delivery_work
     if membership_work > MAX_BINARY_UNION_MEMBERSHIP_WORK:
         raise OperationDomainValidationError(
             location=("source",),

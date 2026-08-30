@@ -126,7 +126,7 @@ def test_native_operation_rejects_an_oversized_raw_selection_before_hashing() ->
 
 def test_catalog_request_rejects_an_oversized_raw_selection() -> None:
     g = _graph(["a"], ())
-    with pytest.raises(ValueError, match="Tuple should have at most"):
+    with pytest.raises(ValueError, match="raw tuple-length bound"):
         NeighborhoodRequest(
             graph=g,
             selected_vertices=("a",) * (MAX_INDEXED_SIMPLE_GRAPH_VERTICES + 1),

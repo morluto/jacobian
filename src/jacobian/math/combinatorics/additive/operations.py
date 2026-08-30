@@ -196,8 +196,8 @@ def sumset_cardinality(
 ) -> SumsetCardinalityResult:
     """Compute ``|A + B|`` (the support cardinality of ``r_{A+B}``)."""
     _require_bounded_cartesian_product(left, right)
-    _require_sumset_result_transport_bound(left, right)
-    counts = _representation_function(_parse_set(left), _parse_set(right))
+    left_values, right_values = _require_sumset_result_transport_bound(left, right)
+    counts = _representation_function(left_values, right_values)
     support = tuple(format_canonical_integer(value) for value in _sorted_sums(counts))
     return SumsetCardinalityResult._from_kernel(support)
 

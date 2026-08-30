@@ -181,10 +181,18 @@ class TestSumsetCardinality:
         # the result carrier are materialized.
         width = 10_000
         left = FiniteIntegerSet(
-            elements=tuple("1" + str(index).zfill(width - 1) for index in range(256))
+            elements=tuple(
+                prefix + str(index).zfill(width - 1)
+                for prefix in ("1", "9")
+                for index in range(128)
+            )
         )
         right = FiniteIntegerSet(
-            elements=tuple("2" + str(index).zfill(width - 1) for index in range(256))
+            elements=tuple(
+                prefix + str(index).zfill(width - 1)
+                for prefix in ("2", "8")
+                for index in range(128)
+            )
         )
 
         with pytest.raises(OperationDomainValidationError) as exc_info:

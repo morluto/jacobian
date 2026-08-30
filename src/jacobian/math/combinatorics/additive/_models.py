@@ -294,7 +294,7 @@ def _require_bounded_cartesian_product(
 def _require_sumset_result_transport_bound(
     left: FiniteIntegerSet,
     right: FiniteIntegerSet,
-) -> None:
+) -> tuple[frozenset[int], frozenset[int]]:
     """Admit the canonical support envelope before sumset enumeration.
 
     A sumset has at most one support value per Cartesian pair.  Charging the
@@ -305,13 +305,23 @@ def _require_sumset_result_transport_bound(
 
     pair_count = len(left.elements) * len(right.elements)
     if pair_count == 0:
-        return
-    left_width = max(len(value.lstrip("-")) for value in left.elements)
-    right_width = max(len(value.lstrip("-")) for value in right.elements)
-    # Adding two integers can carry one additional decimal digit; reserve a
-    # sign and the carrier's per-element JSON overhead as well.
-    max_sum_width = left_width + right_width + 1
-    predicted = 64 + pair_count * (max_sum_width + 3)
+        return frozenset(), frozenset()
+    left_values = frozenset(parse_canonical_integer(value) for value in left.elements)
+    right_values = frozenset(parse_canonical_integer(value) for value in right.elements)
+    # Every sum lies in the interval between the two endpoint sums.  This is a
+    # collision-sensitive support bound, while the endpoint combinations give
+    # the exact widest magnitude that any represented sum can have.
+    interval_bound = (
+        max(left_values) - min(left_values) + max(right_values) - min(right_values) + 1
+    )
+    support_bound = min(pair_count, interval_bound)
+    max_sum_abs = max(
+        abs(left_endpoint + right_endpoint)
+        for left_endpoint in (min(left_values), max(left_values))
+        for right_endpoint in (min(right_values), max(right_values))
+    )
+    max_sum_width = len(format_canonical_integer(max_sum_abs))
+    predicted = 64 + support_bound * (max_sum_width + 3)
     if predicted > _MAX_FINITE_SET_WIRE_BYTES:
         raise OperationDomainValidationError(
             location=("left", "right"),
@@ -323,6 +333,7 @@ def _require_sumset_result_transport_bound(
                 "cardinality or integer width"
             ),
         )
+    return left_values, right_values
 
 
 def _decimal_digit_sum_through(value: int) -> int:

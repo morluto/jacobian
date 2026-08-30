@@ -117,7 +117,11 @@ def _is_valid_coloring(
 ) -> bool:
     vertex_to_color = {vertices[i]: coloring[i] for i in range(len(coloring))}
     for edge_index, (_, members) in enumerate(edges):
-        if edge_index % 256 == 0 and deadline is not None and time.monotonic() >= deadline:
+        if (
+            edge_index % 256 == 0
+            and deadline is not None
+            and time.monotonic() >= deadline
+        ):
             raise OperationExecutionTimeoutError(
                 "hypergraph coloring edge checks exceeded its request deadline"
             )

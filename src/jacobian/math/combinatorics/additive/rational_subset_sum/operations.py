@@ -51,9 +51,7 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
     if nonzero:
         denominator_digits = sum(len(value.den) for value in nonzero)
         numerator_digits = max(
-            len(value.num.lstrip("-"))
-            + denominator_digits
-            - len(value.den)
+            len(value.num.lstrip("-")) + denominator_digits - len(value.den)
             for value in nonzero
         )
         if len(nonzero) > 1:

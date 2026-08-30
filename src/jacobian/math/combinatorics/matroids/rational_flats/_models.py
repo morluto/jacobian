@@ -8,7 +8,7 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import CanonicalLimits, CanonicalizationError
+from jacobian.canonical import CanonicalizationError, CanonicalLimits
 from jacobian.math._labels import OpaqueLabel
 from jacobian.math.matrices.values import (
     RationalVectorSpaceBasis,
@@ -307,11 +307,11 @@ class RationalVectorConfiguration(StrictModel):
             )
             try:
                 return canonicalize_json_containers(data)
-            except CanonicalizationError:
+            except CanonicalizationError as exc:
                 raise _validation_error(
                     "raw_container_structure",
                     "raw rational-flat containers must be acyclic",
-                )
+                ) from exc
         return data
 
     @model_validator(mode="after")
@@ -484,7 +484,6 @@ class ClauseConstrainedRationalFlatProblem(StrictModel):
                         "clause_count_bound",
                         f"at most {MAX_RATIONAL_FLAT_CLAUSES} clauses are admitted",
                     )
-                canonical_clauses: list[tuple[int, ...]] = []
                 memberships = 0
                 for clause in clauses:
                     if not isinstance(clause, (list, tuple)):
@@ -500,7 +499,6 @@ class ClauseConstrainedRationalFlatProblem(StrictModel):
                             "raw_container_structure",
                             "raw rational-flat clause entries must be integers",
                         )
-                    canonical_clauses.append(tuple(clause))
                 if memberships > MAX_RATIONAL_FLAT_CLAUSE_MEMBERSHIPS:
                     raise _validation_error(
                         "clause_membership_bound",
@@ -516,10 +514,8 @@ class ClauseConstrainedRationalFlatProblem(StrictModel):
                         f"{MAX_RATIONAL_FLAT_SYMMETRY_GENERATORS} symmetry generators "
                         "are admitted",
                     )
-                canonical_generators = tuple(
+                for generator in generators:
                     _require_raw_generator_envelope(generator)
-                    for generator in generators
-                )
             rank_interval = data.get("rank_interval")
             if isinstance(rank_interval, dict):
                 _require_raw_mapping_keys(
@@ -530,11 +526,11 @@ class ClauseConstrainedRationalFlatProblem(StrictModel):
                 )
             try:
                 return canonicalize_json_containers(data)
-            except CanonicalizationError:
+            except CanonicalizationError as exc:
                 raise _validation_error(
                     "raw_container_structure",
                     "raw rational-flat containers must be acyclic",
-                )
+                ) from exc
         return data
 
     @model_validator(mode="after")

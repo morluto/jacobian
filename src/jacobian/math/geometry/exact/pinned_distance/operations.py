@@ -109,10 +109,21 @@ def _admit_configuration(configuration: PointConfiguration) -> tuple[_EntryPlan,
     distances_by_source: list[dict[Fraction, list[str]]] = [
         {} for _point in configuration.points
     ]
+    canonical_distances: dict[Fraction, CanonicalRational] = {}
     for index, source in enumerate(configuration.points):
         for target_index in range(index + 1, len(configuration.points)):
             target = configuration.points[target_index]
             squared = _squared_distance(source.coordinates, target.coordinates)
+            if squared not in canonical_distances:
+                try:
+                    canonical_distances[squared] = CanonicalRational.from_fraction(
+                        squared
+                    )
+                except ValueError:
+                    _reject(
+                        "distance_height_bound",
+                        "squared-distance values exceed the canonical rational digit bound",
+                    )
             distances_by_source[index].setdefault(squared, []).append(target.label)
             distances_by_source[target_index].setdefault(squared, []).append(
                 source.label
@@ -124,16 +135,9 @@ def _admit_configuration(configuration: PointConfiguration) -> tuple[_EntryPlan,
     ):
         classes: list[_DistanceClassPlan] = []
         for squared, labels in sorted(distances.items()):
-            try:
-                canonical = CanonicalRational.from_fraction(squared)
-            except ValueError:
-                _reject(
-                    "distance_height_bound",
-                    "squared-distance values exceed the canonical rational digit bound",
-                )
             classes.append(
                 _DistanceClassPlan(
-                    squared_distance=canonical,
+                    squared_distance=canonical_distances[squared],
                     target_labels=tuple(sorted(labels)),
                 )
             )

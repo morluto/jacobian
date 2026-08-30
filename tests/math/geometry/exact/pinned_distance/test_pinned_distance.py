@@ -154,6 +154,20 @@ def test_native_admission_rejects_distance_height_before_squaring() -> None:
         compute_pinned_distance_support_profile(config)
 
 
+def test_overheight_denominator_is_rejected_at_the_first_pair() -> None:
+    denominator = 10**16384 + 1
+    tiny = CanonicalRational.from_fraction(Fraction(1, denominator))
+    config = PointConfiguration(
+        points=(
+            _pt("origin", (0,)),
+            LabelledRationalPoint(label="tiny", coordinates=(tiny,)),
+        )
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="squared-distance"):
+        compute_pinned_distance_support_profile(config)
+
+
 def test_shared_denominators_are_admitted_from_exact_distances() -> None:
     denominator = 10**1000 + 1
     coordinate = CanonicalRational.from_fraction(Fraction(1, denominator))

@@ -6,7 +6,7 @@ from fractions import Fraction
 from itertools import combinations
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import CanonicalLimits, format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.exact._models import PointConfiguration
 from jacobian.math.geometry.exact.triangle_area_profile._models import (
@@ -15,6 +15,48 @@ from jacobian.math.geometry.exact.triangle_area_profile._models import (
 )
 
 __all__ = ["compute_triangle_area_profile"]
+
+
+def _admit_triangle_area_result(configuration: PointConfiguration) -> None:
+    """Reject configurations whose complete profile cannot fit the wire limit."""
+    points = configuration.points
+    triangle_count = len(points) * (len(points) - 1) * (len(points) - 2) // 6
+    coordinate_digits = max(
+        (
+            max(len(coord.num.lstrip("-")), len(coord.den))
+            for point in points
+            for coord in point.coordinates
+        ),
+        default=0,
+    )
+    # Differences, products, subtraction, and the factor 1/2 can each add a
+    # carry digit to a coordinate component.  This is intentionally a safe
+    # bound used before any triple enumeration; exact checks remain below.
+    derived_digits = 2 * coordinate_digits + 2
+    if derived_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+        raise OperationDomainValidationError(
+            location=("configuration",),
+            code="geometry.triangle_area_result_bound",
+            message=(
+                "a derived triangle area exceeds the canonical rational "
+                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit bound"
+            ),
+        )
+    source_bytes = sum(
+        len(point.label)
+        + sum(len(coord.num) + len(coord.den) + 16 for coord in point.coordinates)
+        + 32
+        for point in points
+    )
+    entry_bytes = 96 + 2 * derived_digits
+    class_bytes = 128 + 2 * derived_digits
+    estimated_bytes = source_bytes + 256 + triangle_count * (entry_bytes + class_bytes)
+    if estimated_bytes > CanonicalLimits().max_output_bytes:
+        raise OperationDomainValidationError(
+            location=("configuration",),
+            code="geometry.triangle_area_result_bytes",
+            message="triangle area profile exceeds the canonical output-byte limit",
+        )
 
 
 def compute_triangle_area_profile(
@@ -31,6 +73,7 @@ def compute_triangle_area_profile(
             code="geometry.triangle_area_planar_configuration",
             message="triangle area profiles require exactly two coordinates per point",
         )
+    _admit_triangle_area_result(configuration)
     points = configuration.points
     n = len(points)
 

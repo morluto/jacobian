@@ -47,7 +47,7 @@ def compute_periodic_union_prefix_count(
 
     return PeriodicUnionPrefixCountResult(
         source=source,
-        cutoff=str(cutoff),
+        cutoff=format_canonical_integer(cutoff),
         common_period=format_canonical_integer(plan.common_period),
         occupied_count=format_canonical_integer(occupied_count),
         count=format_canonical_integer(count),

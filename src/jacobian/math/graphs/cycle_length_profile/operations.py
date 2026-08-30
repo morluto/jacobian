@@ -6,6 +6,7 @@ import unicodedata
 from dataclasses import dataclass
 
 import rfc8785
+
 from jacobian.canonical import CanonicalizationError, CanonicalLimits
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.cycle_length_profile._models import (
@@ -65,6 +66,26 @@ def _maximum_path_work(graph: SimpleUndirectedGraph) -> int:
     return work
 
 
+def _cycle_core_size(graph: SimpleUndirectedGraph) -> int:
+    """Return the number of vertices in the graph's 2-core."""
+    adjacency = {vertex: set() for vertex in graph.vertices}
+    for left, right in graph.edges:
+        adjacency[left].add(right)
+        adjacency[right].add(left)
+    pending = [vertex for vertex, neighbors in adjacency.items() if len(neighbors) < 2]
+    removed = set(pending)
+    while pending:
+        vertex = pending.pop()
+        for neighbor in adjacency[vertex]:
+            if neighbor in removed:
+                continue
+            adjacency[neighbor].discard(vertex)
+            if len(adjacency[neighbor]) < 2:
+                removed.add(neighbor)
+                pending.append(neighbor)
+    return len(adjacency) - len(removed)
+
+
 def _reject(code: str, message: str) -> None:
     raise OperationDomainValidationError(
         location=("graph",), code=code, message=message
@@ -107,7 +128,7 @@ def _admit(graph: SimpleUndirectedGraph) -> _AdmissionPlan:
         # A simple cycle of length k consumes k distinct edges.  Charging only
         # lengths that can occur avoids rejecting sparse graphs whose exact
         # profile is empty (for example, a one-edge graph).
-        max_cycle_length = min(vertex_count, len(graph.edges))
+        max_cycle_length = min(_cycle_core_size(graph), len(graph.edges))
         for length in range(3, max_cycle_length + 1):
             result_bytes += 32 + length * (label_bytes + 2)
     if result_bytes > MAX_RESULT_BYTES:

@@ -22,7 +22,10 @@ from pydantic_core import PydanticCustomError
 from jacobian._digest import Sha256Digest
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import canonicalize_json
-from jacobian.math.topology.chain_complexes.values import ChainComplexValue
+from jacobian.math.topology.chain_complexes.values import (
+    ChainComplexValue,
+    CoefficientRing,
+)
 
 MAX_TOPOLOGY_VERTICES = 64
 MAX_TOPOLOGY_FACETS = 128
@@ -480,8 +483,11 @@ def require_linear_algebra_bounds(complex_: FiniteSimplicialComplex) -> None:
         )
 
 
-def _require_canonical_conversion_bounds(complex_: FiniteSimplicialComplex) -> None:
-    """Unreduced GF(p) chains must fit the canonical value's bounds.
+def _require_canonical_conversion_bounds(
+    complex_: FiniteSimplicialComplex,
+    convention: HomologyConvention,
+) -> None:
+    """Every simplicial chain producer must fit the canonical value's bounds.
 
     ``ChainComplexValue`` caps the aggregate cells across every
     differential, so admission must check the same sum rather than each
@@ -492,19 +498,22 @@ def _require_canonical_conversion_bounds(complex_: FiniteSimplicialComplex) -> N
         MAX_MATRIX_CELLS,
     )
 
-    sizes = complex_.f_vector
+    sizes = (
+        (1, *complex_.f_vector)
+        if convention is HomologyConvention.REDUCED
+        else complex_.f_vector
+    )
     if any(size > MAX_BASIS_SIZE for size in sizes):
         raise _validation_error(
             "topology.require_canonical_conversion_bounds_1",
-            "unreduced prime-field chain complexes require at most "
+            "simplicial chain complexes require at most "
             f"{MAX_BASIS_SIZE} faces per chain group",
         )
-    padded = (0, *sizes)
-    total_cells = sum(rows * columns for rows, columns in pairwise(padded))
+    total_cells = sum(rows * columns for rows, columns in pairwise(sizes))
     if total_cells > MAX_MATRIX_CELLS:
         raise _validation_error(
             "topology.require_canonical_conversion_bounds_2",
-            "unreduced prime-field chain complexes require "
+            "simplicial chain complexes require "
             f"{total_cells} aggregate boundary cells within the canonical "
             f"{MAX_MATRIX_CELLS}-cell bound",
         )
@@ -621,7 +630,7 @@ class ChainComplexResult(StrictModel):
         default=(),
         max_length=MAX_TOPOLOGY_DIMENSION,
     )
-    canonical_value: ChainComplexValue | None = None
+    canonical_value: ChainComplexValue
 
     @model_validator(mode="after")
     def require_coherent_chain_contract(self) -> Self:
@@ -656,14 +665,47 @@ class ChainComplexResult(StrictModel):
                 "topology.require_coherent_chain_contract_4",
                 "boundary-square ledger must cover every adjacent pair",
             )
-        if self.canonical_value is not None and not (
-            self.coefficient_ring is ChainCoefficientRing.PRIME_FIELD
-            and self.convention is HomologyConvention.UNREDUCED
+        canonical_ring = (
+            CoefficientRing.INTEGER
+            if self.coefficient_ring is ChainCoefficientRing.INTEGER
+            else CoefficientRing.PRIME_FIELD
+        )
+        expected_basis_sizes = tuple(len(item.simplices) for item in self.simplex_bases)
+        expected_basis_sizes = (
+            (1, *expected_basis_sizes)
+            if self.convention is HomologyConvention.REDUCED
+            else expected_basis_sizes
+        )
+        expected_degree_min = -1 if self.convention is HomologyConvention.REDUCED else 0
+        canonical_boundaries = (
+            (self.augmentation, *self.boundary_matrices[1:])
+            if self.augmentation is not None
+            else self.boundary_matrices[1:]
+        )
+        expected_differentials: list[tuple[tuple[str, ...], ...]] = []
+        for matrix in canonical_boundaries:
+            if matrix is None:
+                raise _validation_error(
+                    "topology.require_coherent_chain_contract_5",
+                    "canonical differential source is unexpectedly absent",
+                )
+            dense = [[0] * matrix.columns for _ in range(matrix.rows)]
+            for entry in matrix.entries:
+                dense[entry.row][entry.column] = entry.value
+            expected_differentials.append(
+                tuple(tuple(str(value) for value in row) for row in dense)
+            )
+        if (
+            self.canonical_value.coefficient_ring is not canonical_ring
+            or self.canonical_value.prime != self.prime
+            or self.canonical_value.degree_min != expected_degree_min
+            or self.canonical_value.basis_sizes != expected_basis_sizes
+            or self.canonical_value.differential_matrices
+            != tuple(expected_differentials)
         ):
             raise _validation_error(
                 "topology.require_coherent_chain_contract_5",
-                "canonical chain-complex value is only defined for unreduced "
-                "prime-field chains",
+                "canonical chain-complex value does not match the simplicial coefficient, convention, or basis context",
             )
         return self
 

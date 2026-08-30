@@ -1,4 +1,4 @@
-"""Finite based chain complexes over exact fields."""
+"""Finite based chain complexes over exact coefficient rings."""
 
 from jacobian.math.topology.chain_complexes.operations import (
     chain_map_commutes,

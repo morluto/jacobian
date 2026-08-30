@@ -1,20 +1,10 @@
-"""Exact finite simplicial-complex and prime-field homology operations."""
+"""Exact finite simplicial-complex and homology operations."""
 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from itertools import pairwise
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.matrices.certified_snf.operations import (
-    certificate_from_reduction,
-    inverse_unimodular,
-    matrix_columns,
-    matrix_multiply,
-    matrix_vector_multiply,
-    smith_reduce,
-)
-from jacobian.math.matrices.certified_snf.values import CertifiedIntegerMatrix
 from jacobian.math.matrices.finite_fields import linear_algebra as prime_field
 from jacobian.math.topology._barycentric import (
     barycentric_subdivision as _barycentric_kernel,
@@ -24,15 +14,8 @@ from jacobian.math.topology._chain_conversion import (
 )
 from jacobian.math.topology._homology import (
     MAX_INLINE_HOMOLOGY_CHAIN_GROUP,
-    MAX_INTEGRAL_HOMOLOGY_CHAIN_GROUP,
-    MAX_INTEGRAL_HOMOLOGY_MATRIX_CELLS,
-    MAX_INTEGRAL_HOMOLOGY_TOTAL_CHAIN_RANK,
     HomologyGroupResult,
-    IntegralFreeGenerator,
-    IntegralHomologyGroupResult,
     IntegralSimplicialHomologyResult,
-    IntegralTorsionGenerator,
-    IntegralVector,
     ModularVector,
     SimplicialHomologyResult,
 )
@@ -63,6 +46,7 @@ from jacobian.math.topology._pseudomanifold import (
 )
 from jacobian.math.topology._request_admission import run_topology_admission
 from jacobian.math.topology._shelling import evaluate_shelling
+from jacobian.math.topology.chain_complexes.operations import homology_groups
 
 
 def _admit_chain(
@@ -77,11 +61,7 @@ def _admit_chain(
     elif prime is None or not is_bounded_prime(prime):
         raise ValueError("prime-field chain complexes require a bounded prime")
     require_linear_algebra_bounds(complex_)
-    if (
-        coefficient_ring is ChainCoefficientRing.PRIME_FIELD
-        and convention is HomologyConvention.UNREDUCED
-    ):
-        _require_canonical_conversion_bounds(complex_)
+    _require_canonical_conversion_bounds(complex_, convention)
 
 
 def _admit_homology(
@@ -103,25 +83,9 @@ def _admit_integral_homology(
     complex_: FiniteSimplicialComplex,
     convention: HomologyConvention,
 ) -> None:
-    if any(size > MAX_INTEGRAL_HOMOLOGY_CHAIN_GROUP for size in complex_.f_vector):
-        raise ValueError(
-            "integral homology requires at most "
-            f"{MAX_INTEGRAL_HOMOLOGY_CHAIN_GROUP} simplices in each chain group"
-        )
-    if sum(complex_.f_vector) > MAX_INTEGRAL_HOMOLOGY_TOTAL_CHAIN_RANK:
-        raise ValueError(
-            "integral homology requires total chain rank at most "
-            f"{MAX_INTEGRAL_HOMOLOGY_TOTAL_CHAIN_RANK}"
-        )
-    padded = (0, *complex_.f_vector)
-    if any(
-        rows * columns > MAX_INTEGRAL_HOMOLOGY_MATRIX_CELLS
-        for rows, columns in pairwise(padded)
-    ):
-        raise ValueError(
-            "integral homology boundary exceeds the "
-            f"{MAX_INTEGRAL_HOMOLOGY_MATRIX_CELLS}-cell bound"
-        )
+    # Simplicial admission owns materialization of the canonical chain value.
+    # The chain-complex owner then admits d^2, both Smith reductions,
+    # transformation/generator height, exact output, and the shared deadline.
     _admit_chain(complex_, ChainCoefficientRing.INTEGER, None, convention)
 
 
@@ -298,6 +262,7 @@ def chain_complex(
             prime,
             bases,
             boundaries,
+            augmentation,
         ),
     )
 
@@ -409,23 +374,6 @@ def homology(
     )
 
 
-def _integer_matrix(
-    entries: list[list[int]],
-    *,
-    rows: int,
-    columns: int,
-) -> CertifiedIntegerMatrix:
-    return CertifiedIntegerMatrix(
-        row_count=rows,
-        column_count=columns,
-        entries=tuple(tuple(str(value) for value in row) for row in entries),
-    )
-
-
-def _integral_vector(values: list[int]) -> IntegralVector:
-    return IntegralVector(coefficients=tuple(str(value) for value in values))
-
-
 def integral_homology(
     complex_: FiniteSimplicialComplex,
     convention: HomologyConvention,
@@ -441,128 +389,11 @@ def integral_homology(
         convention,
         admitted=True,
     )
-    boundaries = tuple(
-        _dense(matrix, modulus=None) for matrix in chain.boundary_matrices
-    )
-    groups: list[IntegralHomologyGroupResult] = []
-    for dimension, basis in enumerate(chain.simplex_bases):
-        chain_dimension = len(basis.simplices)
-        if dimension == 0 and chain.augmentation is not None:
-            outgoing = _dense(chain.augmentation, modulus=None)
-            outgoing_rows = 1
-        else:
-            outgoing = boundaries[dimension]
-            outgoing_rows = chain.boundary_matrices[dimension].rows
-        outgoing_reduction = smith_reduce(
-            outgoing,
-            row_count=outgoing_rows,
-            column_count=chain_dimension,
-        )
-        outgoing_rank = outgoing_reduction.rank
-        cycle_rank = chain_dimension - outgoing_rank
-        cycle_basis = matrix_columns(
-            outgoing_reduction.right,
-            start=outgoing_rank,
-        )
-        right_inverse = inverse_unimodular(outgoing_reduction.right)
-
-        if dimension < complex_.dimension:
-            incoming = boundaries[dimension + 1]
-            incoming_chain_dimension = len(chain.simplex_bases[dimension + 1].simplices)
-        else:
-            incoming_chain_dimension = 0
-            incoming = [[] for _ in range(chain_dimension)]
-        all_cycle_coordinates = matrix_multiply(
-            right_inverse,
-            incoming,
-            right_columns_if_empty=incoming_chain_dimension,
-        )
-        if any(
-            value != 0 for row in all_cycle_coordinates[:outgoing_rank] for value in row
-        ):
-            raise ArithmeticError("incoming boundary is not in the outgoing kernel")
-        incoming_coordinates = all_cycle_coordinates[outgoing_rank:]
-        incoming_reduction = smith_reduce(
-            incoming_coordinates,
-            row_count=cycle_rank,
-            column_count=incoming_chain_dimension,
-        )
-        incoming_rank = incoming_reduction.rank
-        incoming_left_inverse = inverse_unimodular(incoming_reduction.left)
-
-        free_generators: list[IntegralFreeGenerator] = []
-        for index in range(incoming_rank, cycle_rank):
-            coordinate = [
-                incoming_left_inverse[row][index] for row in range(cycle_rank)
-            ]
-            free_generators.append(
-                IntegralFreeGenerator(
-                    cycle=_integral_vector(
-                        matrix_vector_multiply(cycle_basis, coordinate)
-                    ),
-                    cycle_coordinates=_integral_vector(coordinate),
-                )
-            )
-
-        torsion_generators: list[IntegralTorsionGenerator] = []
-        for index, factor in enumerate(incoming_reduction.invariant_factors):
-            if factor == 1:
-                continue
-            coordinate = [
-                incoming_left_inverse[row][index] for row in range(cycle_rank)
-            ]
-            cycle = matrix_vector_multiply(cycle_basis, coordinate)
-            bounding_chain = [
-                incoming_reduction.right[row][index]
-                for row in range(incoming_chain_dimension)
-            ]
-            if matrix_vector_multiply(incoming, bounding_chain) != [
-                factor * value for value in cycle
-            ]:
-                raise ArithmeticError("torsion bounding-chain relation is invalid")
-            torsion_generators.append(
-                IntegralTorsionGenerator(
-                    order=str(factor),
-                    cycle=_integral_vector(cycle),
-                    cycle_coordinates=_integral_vector(coordinate),
-                    bounding_chain=_integral_vector(bounding_chain),
-                )
-            )
-
-        groups.append(
-            IntegralHomologyGroupResult(
-                dimension=dimension,
-                chain_dimension=chain_dimension,
-                incoming_chain_dimension=incoming_chain_dimension,
-                outgoing_boundary_rank=outgoing_rank,
-                cycle_rank=cycle_rank,
-                incoming_boundary_rank=incoming_rank,
-                betti_number=cycle_rank - incoming_rank,
-                torsion_coefficients=tuple(
-                    str(factor)
-                    for factor in incoming_reduction.invariant_factors
-                    if factor > 1
-                ),
-                free_generators=tuple(free_generators),
-                torsion_generators=tuple(torsion_generators),
-                outgoing_smith_certificate=certificate_from_reduction(
-                    outgoing_reduction
-                ),
-                boundary_in_cycle_coordinates=_integer_matrix(
-                    incoming_coordinates,
-                    rows=cycle_rank,
-                    columns=incoming_chain_dimension,
-                ),
-                incoming_smith_certificate=certificate_from_reduction(
-                    incoming_reduction
-                ),
-            )
-        )
+    homology = homology_groups(chain.canonical_value)
     return IntegralSimplicialHomologyResult.model_construct(
         complex_digest=complex_.complex_digest,
         convention=convention,
-        dimension_range=(0, complex_.dimension),
-        groups=tuple(groups),
+        homology=homology,
     )
 
 

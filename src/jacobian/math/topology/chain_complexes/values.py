@@ -3,12 +3,20 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Self
+from typing import Annotated, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
+from jacobian.math.matrices.certified_snf.values import (
+    MAX_CERTIFIED_SNF_DIMENSION,
+    MAX_CERTIFIED_SNF_INPUT_DIGITS,
+    MAX_CERTIFIED_SNF_OUTPUT_DIGITS,
+    CertifiedIntegerMatrix,
+    SmithNormalFormCertificate,
+)
 
 MAX_CHAIN_DEGREE = 32
 MAX_BASIS_SIZE = 64
@@ -34,20 +42,39 @@ MAX_MATRIX_ENTRY_CHARS = 65536
 # spelling bounded before the derived matrices are materialized.
 MAX_TENSOR_COEFFICIENT_DIGITS = 512
 
+# Integral homology emits full Smith transformations. Its admitted group size
+# therefore cannot exceed the canonical certified-matrix dimension. The input
+# digit limit matches the maintained Smith primitive; the separate aggregate
+# bounds cover all degrees of one finite complex.
+MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK = MAX_CERTIFIED_SNF_DIMENSION
+MAX_INTEGRAL_HOMOLOGY_INPUT_DIGITS = MAX_CERTIFIED_SNF_INPUT_DIGITS
+MAX_INTEGRAL_HOMOLOGY_TOTAL_CHAIN_RANK = 100
+MAX_INTEGRAL_HOMOLOGY_MATRIX_CELLS = 2500
+MAX_INTEGRAL_HOMOLOGY_OUTPUT_DIGITS = MAX_CERTIFIED_SNF_OUTPUT_DIGITS
+# The bit-height and scalar-count limits jointly bound the complete exact
+# certificate/representative payload without truncating any returned integer.
+MAX_INTEGRAL_HOMOLOGY_OUTPUT_BITS = 3 * MAX_INTEGRAL_HOMOLOGY_OUTPUT_DIGITS
+MAX_INTEGRAL_HOMOLOGY_OUTPUT_SCALARS = 65_536
+MAX_INTEGRAL_HOMOLOGY_WORK_UNITS = 5_000_000
+INTEGRAL_HOMOLOGY_WALL_SECONDS = 120.0
+
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"chain_complex.{reason}", message)
 
 
-class CoefficientField(StrEnum):
+class CoefficientRing(StrEnum):
+    """Exact coefficient rings supported by finite based chain complexes."""
+
+    INTEGER = "ZZ"
     RATIONAL = "QQ"
     PRIME_FIELD = "GF_p"
 
 
 class ChainComplexValue(StrictModel):
-    """A finite based chain complex over an exact field."""
+    """A finite based chain complex over an exact coefficient ring."""
 
-    coefficient_field: CoefficientField
+    coefficient_ring: CoefficientRing
     prime: int | None = Field(default=None, ge=2)
     degree_min: int = Field(ge=-MAX_CHAIN_DEGREE, le=MAX_CHAIN_DEGREE)
     degree_max: int = Field(ge=-MAX_CHAIN_DEGREE, le=MAX_CHAIN_DEGREE)
@@ -56,7 +83,7 @@ class ChainComplexValue(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_chain_complex(self) -> Self:
-        _require_prime_coupling(self.coefficient_field, self.prime)
+        _require_prime_coupling(self.coefficient_ring, self.prime)
         # Degree consistency
         if self.degree_max < self.degree_min:
             raise _validation_error(
@@ -108,7 +135,7 @@ class ChainComplexValue(StrictModel):
                     )
                 for entry in row:
                     _require_rational_entry_grammar(
-                        self.coefficient_field,
+                        self.coefficient_ring,
                         entry,
                         prime=self.prime,
                     )
@@ -130,10 +157,10 @@ class ChainComplexValue(StrictModel):
 
 
 def _require_prime_coupling(
-    coefficient_field: CoefficientField, prime: int | None
+    coefficient_ring: CoefficientRing, prime: int | None
 ) -> None:
-    """GF_p carries a bounded prime modulus; QQ carries none."""
-    if coefficient_field == CoefficientField.PRIME_FIELD:
+    """GF(p) carries a bounded prime modulus; QQ and ZZ carry none."""
+    if coefficient_ring == CoefficientRing.PRIME_FIELD:
         if prime is None:
             raise _validation_error("prime_required", "GF_p requires a prime modulus")
         if not 2 <= prime <= 1000003:
@@ -155,7 +182,8 @@ def _require_prime_coupling(
             divisor += 2
     elif prime is not None:
         raise _validation_error(
-            "prime_forbidden", "QQ coefficient field must not have a prime modulus"
+            "prime_forbidden",
+            "QQ and ZZ coefficient rings must not have a prime modulus",
         )
 
 
@@ -198,7 +226,7 @@ def _require_canonical_fraction_entry(entry: str) -> None:
 
 
 def _require_rational_entry_grammar(
-    coefficient_field: CoefficientField,
+    coefficient_ring: CoefficientRing,
     entry: object,
     *,
     prime: int | None = None,
@@ -226,10 +254,10 @@ def _require_rational_entry_grammar(
         )
 
     if "/" in entry:
-        if coefficient_field == CoefficientField.PRIME_FIELD:
+        if coefficient_ring != CoefficientRing.RATIONAL:
             raise _validation_error(
-                "prime_field_entry_not_integer",
-                f"prime-field entry '{entry}' must be an integer residue",
+                "coefficient_entry_not_integer",
+                f"{coefficient_ring.value} entry '{entry}' must be an integer",
             )
         _require_canonical_fraction_entry(entry)
         return
@@ -238,7 +266,7 @@ def _require_rational_entry_grammar(
         raise _validation_error(
             "entry_digit_bound_exceeded", "differential entry exceeds digit bound"
         )
-    if coefficient_field == CoefficientField.PRIME_FIELD and (
+    if coefficient_ring == CoefficientRing.PRIME_FIELD and (
         value < 0 or (prime is not None and value >= prime)
     ):
         raise _validation_error(
@@ -249,19 +277,181 @@ def _require_rational_entry_grammar(
 
 
 class HomologyGroupValue(StrictModel):
-    """One homology group of a chain complex."""
+    """One homology vector space over QQ or GF(p)."""
 
+    kind: Literal["FIELD_VECTOR_SPACE"] = "FIELD_VECTOR_SPACE"
     degree: int
     cycle_rank: int = Field(ge=0)
     boundary_rank: int = Field(ge=0)
     betti_number: int = Field(ge=0)
 
 
+class IntegralVector(StrictModel):
+    """Coordinates of one integral chain in its retained source basis."""
+
+    coefficients: tuple[CanonicalInteger, ...] = Field(
+        max_length=MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK
+    )
+
+    @model_validator(mode="after")
+    def require_output_digit_budget(self) -> Self:
+        if any(
+            len(value.lstrip("-")) > MAX_INTEGRAL_HOMOLOGY_OUTPUT_DIGITS
+            for value in self.coefficients
+        ):
+            raise _validation_error(
+                "integral_homology_output_digit_budget_exceeded",
+                "integral homology vector exceeds the certified output digit bound",
+            )
+        return self
+
+
+class IntegralFreeGenerator(StrictModel):
+    """One free homology generator in source and cycle-basis coordinates."""
+
+    cycle: IntegralVector
+    cycle_coordinates: IntegralVector
+
+
+class IntegralTorsionGenerator(StrictModel):
+    """One torsion cycle together with a chain bounding its exact multiple."""
+
+    order: CanonicalInteger
+    cycle: IntegralVector
+    cycle_coordinates: IntegralVector
+    bounding_chain: IntegralVector
+
+    @model_validator(mode="after")
+    def require_nontrivial_bounded_order(self) -> Self:
+        if (
+            int(self.order) <= 1
+            or len(self.order.lstrip("-")) > MAX_INTEGRAL_HOMOLOGY_OUTPUT_DIGITS
+        ):
+            raise _validation_error(
+                "integral_homology_torsion_order_invalid",
+                "torsion generator order must be a bounded integer greater than one",
+            )
+        return self
+
+
+class IntegralHomologyGroupValue(StrictModel):
+    """One finitely generated integral homology group with representatives."""
+
+    kind: Literal["FINITELY_GENERATED_ABELIAN_GROUP"] = (
+        "FINITELY_GENERATED_ABELIAN_GROUP"
+    )
+    degree: StrictInt = Field(ge=-MAX_CHAIN_DEGREE, le=MAX_CHAIN_DEGREE)
+    chain_rank: StrictInt = Field(ge=0, le=MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK)
+    incoming_chain_rank: StrictInt = Field(ge=0, le=MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK)
+    outgoing_boundary_rank: StrictInt = Field(ge=0, le=MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK)
+    cycle_rank: StrictInt = Field(ge=0, le=MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK)
+    incoming_boundary_rank: StrictInt = Field(ge=0, le=MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK)
+    free_rank: StrictInt = Field(ge=0, le=MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK)
+    torsion_invariant_factors: tuple[CanonicalInteger, ...] = Field(
+        max_length=MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK
+    )
+    free_generators: tuple[IntegralFreeGenerator, ...] = Field(
+        max_length=MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK
+    )
+    torsion_generators: tuple[IntegralTorsionGenerator, ...] = Field(
+        max_length=MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK
+    )
+    outgoing_smith_certificate: SmithNormalFormCertificate
+    boundary_in_cycle_coordinates: CertifiedIntegerMatrix
+    incoming_smith_certificate: SmithNormalFormCertificate
+    generator_basis: Literal[
+        "SOURCE_CHAIN_BASIS_VIA_CERTIFIED_SMITH_TRANSFORMATIONS"
+    ] = "SOURCE_CHAIN_BASIS_VIA_CERTIFIED_SMITH_TRANSFORMATIONS"
+
+    @model_validator(mode="after")
+    def require_complete_integral_group_ledger(self) -> Self:
+        outgoing = self.outgoing_smith_certificate
+        incoming = self.incoming_smith_certificate
+        if (
+            outgoing.source.column_count != self.chain_rank
+            or outgoing.rank != self.outgoing_boundary_rank
+            or self.cycle_rank != self.chain_rank - self.outgoing_boundary_rank
+            or (
+                self.boundary_in_cycle_coordinates.row_count,
+                self.boundary_in_cycle_coordinates.column_count,
+            )
+            != (self.cycle_rank, self.incoming_chain_rank)
+            or incoming.source != self.boundary_in_cycle_coordinates
+            or incoming.rank != self.incoming_boundary_rank
+            or self.free_rank != self.cycle_rank - self.incoming_boundary_rank
+            or len(self.free_generators) != self.free_rank
+        ):
+            raise _validation_error(
+                "integral_homology_ledger_invalid",
+                "integral homology ranks and Smith certificate shapes are inconsistent",
+            )
+        torsion = tuple(
+            factor for factor in incoming.invariant_factors if int(factor) > 1
+        )
+        if (
+            self.torsion_invariant_factors != torsion
+            or tuple(item.order for item in self.torsion_generators) != torsion
+        ):
+            raise _validation_error(
+                "integral_homology_torsion_ledger_invalid",
+                "torsion generators must match the nontrivial Smith factors",
+            )
+        if any(
+            len(item.cycle.coefficients) != self.chain_rank
+            or len(item.cycle_coordinates.coefficients) != self.cycle_rank
+            for item in self.free_generators
+        ) or any(
+            len(item.cycle.coefficients) != self.chain_rank
+            or len(item.cycle_coordinates.coefficients) != self.cycle_rank
+            or len(item.bounding_chain.coefficients) != self.incoming_chain_rank
+            for item in self.torsion_generators
+        ):
+            raise _validation_error(
+                "integral_homology_generator_shape_invalid",
+                "integral homology generators must use the retained chain bases",
+            )
+        return self
+
+
+HomologyGroup = Annotated[
+    HomologyGroupValue | IntegralHomologyGroupValue,
+    Field(discriminator="kind"),
+]
+
+
+def _require_integral_group_source_binding(
+    source: ChainComplexValue,
+    groups: tuple[HomologyGroup, ...],
+) -> None:
+    """Bind every integral certificate axis and source matrix structurally."""
+
+    for index, group in enumerate(groups):
+        if not isinstance(group, IntegralHomologyGroupValue):
+            continue
+        outgoing_rows = source.basis_sizes[index - 1] if index > 0 else 0
+        incoming_rank = (
+            source.basis_sizes[index + 1] if index + 1 < len(source.basis_sizes) else 0
+        )
+        outgoing_entries = source.differential_matrices[index - 1] if index > 0 else ()
+        certified_source = group.outgoing_smith_certificate.source
+        if (
+            group.chain_rank != source.basis_sizes[index]
+            or group.incoming_chain_rank != incoming_rank
+            or certified_source.row_count != outgoing_rows
+            or certified_source.column_count != group.chain_rank
+            or certified_source.entries != outgoing_entries
+        ):
+            raise _validation_error(
+                "integral_homology_source_mismatch",
+                "integral homology group axes and outgoing Smith source must match the retained chain complex",
+            )
+
+
 class HomologyResult(StrictModel):
     """Homology of a retained source chain complex."""
 
-    homology_groups: tuple[HomologyGroupValue, ...]
-    coefficient_field: CoefficientField
+    homology_groups: tuple[HomologyGroup, ...]
+    coefficient_ring: CoefficientRing
     prime: int | None = Field(default=None, ge=2)
     degree_min: int = Field(ge=-MAX_CHAIN_DEGREE, le=MAX_CHAIN_DEGREE, default=0)
     degree_max: int = Field(ge=-MAX_CHAIN_DEGREE, le=MAX_CHAIN_DEGREE, default=0)
@@ -269,7 +459,7 @@ class HomologyResult(StrictModel):
 
     @model_validator(mode="after")
     def require_prime_coupling(self) -> Self:
-        if self.coefficient_field == CoefficientField.PRIME_FIELD:
+        if self.coefficient_ring == CoefficientRing.PRIME_FIELD:
             if self.prime is None:
                 raise _validation_error(
                     "homology_prime_required", "GF_p homology requires a prime"
@@ -277,7 +467,8 @@ class HomologyResult(StrictModel):
         else:
             if self.prime is not None:
                 raise _validation_error(
-                    "homology_prime_forbidden", "QQ homology must not have a prime"
+                    "homology_prime_forbidden",
+                    "QQ and ZZ homology must not have a prime",
                 )
         return self
 
@@ -299,12 +490,12 @@ class HomologyResult(StrictModel):
                 "degree interval must match the retained complex",
             )
         if (
-            self.coefficient_field != self.complex.coefficient_field
+            self.coefficient_ring != self.complex.coefficient_ring
             or self.prime != self.complex.prime
         ):
             raise _validation_error(
                 "homology_context_mismatch",
-                "coefficient field and prime must match the retained complex",
+                "coefficient ring and prime must match the retained complex",
             )
         expected_degrees = list(
             range(self.complex.degree_min, self.complex.degree_max + 1)
@@ -316,7 +507,7 @@ class HomologyResult(StrictModel):
                 "complex exactly once",
             )
         for group in self.homology_groups:
-            if (
+            if isinstance(group, HomologyGroupValue) and (
                 group.betti_number != group.cycle_rank - group.boundary_rank
                 or group.betti_number < 0
                 or group.cycle_rank < 0
@@ -327,18 +518,32 @@ class HomologyResult(StrictModel):
                     f"homology group at degree {group.degree} violates "
                     "betti_number = cycle_rank - boundary_rank",
                 )
+        integral = self.coefficient_ring is CoefficientRing.INTEGER
+        if any(
+            isinstance(group, IntegralHomologyGroupValue) != integral
+            for group in self.homology_groups
+        ):
+            raise _validation_error(
+                "homology_group_branch_mismatch",
+                "homology group branches must be homogeneous and match the retained coefficient ring",
+            )
+        if integral:
+            _require_integral_group_source_binding(
+                self.complex,
+                self.homology_groups,
+            )
         return self
 
     @classmethod
     def _from_kernel(
         cls,
         *,
-        homology_groups: tuple[HomologyGroupValue, ...],
+        homology_groups: tuple[HomologyGroupValue | IntegralHomologyGroupValue, ...],
         source_complex: ChainComplexValue,
     ) -> Self:
         return cls.model_construct(
             homology_groups=homology_groups,
-            coefficient_field=source_complex.coefficient_field,
+            coefficient_ring=source_complex.coefficient_ring,
             prime=source_complex.prime,
             degree_min=source_complex.degree_min,
             degree_max=source_complex.degree_max,
@@ -349,7 +554,7 @@ class HomologyResult(StrictModel):
 class MappingConeResult(StrictModel):
     """The mapping cone of a retained chain map.
 
-    The derived complex retains its coefficient field, prime, and degree
+    The derived complex retains its coefficient ring, prime, and degree
     interval as a first-class chain-complex value so it composes into
     homology, tensor, map, and cone operations unchanged.
     """
@@ -387,7 +592,7 @@ class MappingConeResult(StrictModel):
             )
         expected_degree_max = self.source.degree_min + len(self.value.basis_sizes) - 1
         if (
-            self.value.coefficient_field != self.source.coefficient_field
+            self.value.coefficient_ring != self.source.coefficient_ring
             or self.value.prime != self.source.prime
             or self.value.degree_min != self.source.degree_min
             or self.value.degree_max != expected_degree_max
@@ -424,14 +629,14 @@ class MappingConeResult(StrictModel):
 class TensorProductResult(StrictModel):
     """The tensor product of two retained chain complexes.
 
-    The derived complex retains its coefficient field, prime, and degree
+    The derived complex retains its coefficient ring, prime, and degree
         interval so it composes into downstream consumers as a first-class
         chain-complex value. Both factors are retained as source context.
     """
 
     tensor_basis_sizes: tuple[int, ...]
     tensor_differential_matrices: tuple[tuple[tuple[str, ...], ...], ...]
-    coefficient_field: CoefficientField
+    coefficient_ring: CoefficientRing
     prime: int | None = Field(default=None, ge=2)
     degree_min: int
     degree_max: int
@@ -442,16 +647,16 @@ class TensorProductResult(StrictModel):
     @model_validator(mode="after")
     def require_structural_context(self) -> Self:
         if self.left.prime != self.right.prime or (
-            self.left.coefficient_field != self.right.coefficient_field
+            self.left.coefficient_ring != self.right.coefficient_ring
         ):
             raise _validation_error(
                 "tensor_context_mismatch",
-                "tensor product requires same coefficient field and prime",
+                "tensor product requires same coefficient ring and prime",
             )
-        if self.coefficient_field != self.value.coefficient_field:
+        if self.coefficient_ring != self.value.coefficient_ring:
             raise _validation_error(
                 "tensor_result_field_mismatch",
-                "coefficient field must match the retained value",
+                "coefficient ring must match the retained value",
             )
         if self.prime != self.value.prime:
             raise _validation_error(
@@ -467,7 +672,7 @@ class TensorProductResult(StrictModel):
                 "the retained factors",
             )
         if (
-            self.value.coefficient_field != self.left.coefficient_field
+            self.value.coefficient_ring != self.left.coefficient_ring
             or self.value.prime != self.left.prime
             or self.value.degree_min != derived_min
             or self.value.degree_max != derived_max
@@ -488,10 +693,7 @@ class TensorProductResult(StrictModel):
                 "tensor projections must equal the retained canonical "
                 "tensor-product complex",
             )
-        if (
-            self.coefficient_field is CoefficientField.PRIME_FIELD
-            and self.prime is None
-        ):
+        if self.coefficient_ring is CoefficientRing.PRIME_FIELD and self.prime is None:
             raise _validation_error(
                 "tensor_prime_required", "GF_p tensor products must carry their prime"
             )
@@ -510,7 +712,7 @@ class TensorProductResult(StrictModel):
         return cls.model_construct(
             tensor_basis_sizes=tensor_basis_sizes,
             tensor_differential_matrices=tensor_differential_matrices,
-            coefficient_field=left.coefficient_field,
+            coefficient_ring=left.coefficient_ring,
             prime=left.prime,
             degree_min=value.degree_min,
             degree_max=value.degree_max,
@@ -521,17 +723,31 @@ class TensorProductResult(StrictModel):
 
 
 __all__ = [
+    "INTEGRAL_HOMOLOGY_WALL_SECONDS",
     "MAX_BASIS_SIZE",
     "MAX_CHAIN_DEGREE",
+    "MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK",
+    "MAX_INTEGRAL_HOMOLOGY_INPUT_DIGITS",
+    "MAX_INTEGRAL_HOMOLOGY_MATRIX_CELLS",
+    "MAX_INTEGRAL_HOMOLOGY_OUTPUT_BITS",
+    "MAX_INTEGRAL_HOMOLOGY_OUTPUT_DIGITS",
+    "MAX_INTEGRAL_HOMOLOGY_OUTPUT_SCALARS",
+    "MAX_INTEGRAL_HOMOLOGY_TOTAL_CHAIN_RANK",
+    "MAX_INTEGRAL_HOMOLOGY_WORK_UNITS",
     "MAX_MATRIX_CELLS",
     "MAX_OPERATION_MATRIX_CELLS",
     "MAX_TENSOR_COEFFICIENT_DIGITS",
     "MAX_TENSOR_GROUP_DIMENSION",
     "MAX_TENSOR_TOTAL_CELLS",
     "ChainComplexValue",
-    "CoefficientField",
+    "CoefficientRing",
+    "HomologyGroup",
     "HomologyGroupValue",
     "HomologyResult",
+    "IntegralFreeGenerator",
+    "IntegralHomologyGroupValue",
+    "IntegralTorsionGenerator",
+    "IntegralVector",
     "MappingConeResult",
     "TensorProductResult",
     "VerificationResult",

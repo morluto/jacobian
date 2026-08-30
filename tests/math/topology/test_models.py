@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Literal, overload
+from typing import Any, Literal, cast, overload
 
 import pytest
 from pydantic import ValidationError
@@ -21,6 +21,11 @@ from jacobian.math.topology._models import (
     SimplicialComplexRequest,
 )
 from jacobian.math.topology._tools import TOOLS
+from jacobian.math.topology.chain_complexes.values import (
+    CoefficientRing,
+    HomologyResult,
+    IntegralHomologyGroupValue,
+)
 
 
 @overload
@@ -49,6 +54,16 @@ def _operation(
 
 def _operation(operation_id: str) -> MathTool[Any, Any]:
     return next(tool for tool in TOOLS if tool.operation_id == operation_id)
+
+
+def _integral_groups(
+    result: HomologyResult,
+) -> tuple[IntegralHomologyGroupValue, ...]:
+    assert all(
+        isinstance(group, IntegralHomologyGroupValue)
+        for group in result.homology_groups
+    )
+    return cast(tuple[IntegralHomologyGroupValue, ...], result.homology_groups)
 
 
 def _canonical_complex(
@@ -140,8 +155,11 @@ def test_integral_homology_runs_through_the_public_operation() -> None:
     result = operation.run(IntegralSimplicialHomologyRequest(complex=complex_))
 
     assert result.complex_digest == complex_.complex_digest
-    assert result.coefficient_ring == "ZZ"
-    assert tuple(group.betti_number for group in result.groups) == (1, 1)
+    assert result.homology.coefficient_ring is CoefficientRing.INTEGER
+    assert tuple(group.free_rank for group in _integral_groups(result.homology)) == (
+        1,
+        1,
+    )
 
 
 def test_chain_bounds_are_checked_after_materialization_but_before_computation() -> (
@@ -202,8 +220,9 @@ def test_integral_homology_certificate_boundary_runs_the_public_operation() -> N
 
     result = operation.run(IntegralSimplicialHomologyRequest(complex=complex_))
 
-    assert result.groups[0].betti_number == 32
-    assert len(result.groups[0].free_generators) == 32
+    group = _integral_groups(result.homology)[0]
+    assert group.free_rank == 32
+    assert len(group.free_generators) == 32
 
 
 def test_stale_complex_digest_reports_field_level_loc() -> None:

@@ -12,7 +12,7 @@ from jacobian.math.topology.chain_complexes.values import (
     MAX_MATRIX_CELLS,
     MAX_OPERATION_MATRIX_CELLS,
     ChainComplexValue,
-    CoefficientField,
+    CoefficientRing,
 )
 
 
@@ -48,7 +48,7 @@ class ConstructChainComplexRequest(StrictModel):
     constructed value satisfies d^2 = 0.
     """
 
-    coefficient_field: CoefficientField = CoefficientField.RATIONAL
+    coefficient_ring: CoefficientRing = CoefficientRing.RATIONAL
     prime: int | None = Field(default=None, ge=2)
     basis_sizes: tuple[int, ...] = Field(
         min_length=1,
@@ -66,8 +66,8 @@ class ConstructChainComplexRequest(StrictModel):
             "adjacent matrices must compose to zero (d^2 = 0). Each entry "
             "is one canonical coefficient string: an integer with no "
             "leading zeros and no negative zero ('0', '5', '-3'), or for "
-            "QQ a fully reduced fraction with denominator >= 2 ('-1/2'); "
-            "for GF(p) only integer residues in [0, p) are accepted. "
+            "QQ a fully reduced fraction with denominator >= 2 ('-1/2'). "
+            "ZZ accepts integers and GF(p) accepts only residues in [0, p). "
             "Parsing is plain integer/fraction string parsing and never "
             "evaluates input."
         )
@@ -90,7 +90,7 @@ class VerifyDifferentialRequest(StrictModel):
 
 
 def _require_component_entry_grammar(
-    coefficient_field: CoefficientField,
+    coefficient_ring: CoefficientRing,
     matrix: tuple[tuple[str, ...], ...],
     *,
     prime: int | None = None,
@@ -105,7 +105,7 @@ def _require_component_entry_grammar(
             # Shape alone does not make an entry parseable: the exact
             # kernels parse entries with Fraction/int and would turn an
             # accepted request into a host exception.
-            _require_rational_entry_grammar(coefficient_field, entry, prime=prime)
+            _require_rational_entry_grammar(coefficient_ring, entry, prime=prime)
     return (
         sum(len(row) for row in matrix),
         sum(len(entry) for row in matrix for entry in row),
@@ -126,11 +126,11 @@ def _require_chain_map_components(
     columns. Degree intervals must coincide so tuple indices are actual
     chain degrees.
     """
-    if source.coefficient_field != target.coefficient_field:
+    if source.coefficient_ring != target.coefficient_ring:
         raise _validation_error(
-            "chain_map_field_mismatch",
-            f"{label} requires equal coefficient fields "
-            f"({source.coefficient_field} vs {target.coefficient_field})",
+            "chain_map_ring_mismatch",
+            f"{label} requires equal coefficient rings "
+            f"({source.coefficient_ring} vs {target.coefficient_ring})",
         )
     if source.prime != target.prime:
         raise _validation_error(
@@ -172,7 +172,7 @@ def _require_chain_map_components(
                 f"{rows}x{cols} (target rows x source columns)",
             )
         cells, chars = _require_component_entry_grammar(
-            source.coefficient_field, matrix, prime=source.prime
+            source.coefficient_ring, matrix, prime=source.prime
         )
         total_map_cells += cells
         total_entry_chars += chars
@@ -223,7 +223,7 @@ class VerifyChainMapRequest(StrictModel):
 
 
 class ComputeHomologyRequest(StrictModel):
-    """Compute homology of a chain complex."""
+    """Compute field or certified integral homology of a chain complex."""
 
     complex: ChainComplexValue
 

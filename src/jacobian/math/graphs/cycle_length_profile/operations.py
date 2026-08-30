@@ -39,9 +39,7 @@ def _maximum_path_work(graph: SimpleUndirectedGraph) -> int:
         # In a complete graph the first DFS branch witnesses every length.
         return vertex_count**3
     vertex_to_index = {vertex: index for index, vertex in enumerate(graph.vertices)}
-    adjacency: list[list[bool]] = [
-        [False] * vertex_count for _ in range(vertex_count)
-    ]
+    adjacency: list[list[bool]] = [[False] * vertex_count for _ in range(vertex_count)]
     for left, right in graph.edges:
         left_index = vertex_to_index[left]
         right_index = vertex_to_index[right]
@@ -79,9 +77,7 @@ def _maximum_path_work(graph: SimpleUndirectedGraph) -> int:
 
 def _cycle_core_vertices(graph: SimpleUndirectedGraph) -> set[str]:
     """Return vertices in the graph's cycle-bearing 2-core."""
-    adjacency: dict[str, set[str]] = {
-        vertex: set() for vertex in graph.vertices
-    }
+    adjacency: dict[str, set[str]] = {vertex: set() for vertex in graph.vertices}
     for left, right in graph.edges:
         adjacency[left].add(right)
         adjacency[right].add(left)

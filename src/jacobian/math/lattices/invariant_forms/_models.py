@@ -93,7 +93,6 @@ def _canonicalize_generator_order(data: dict[str, object]) -> dict[str, object]:
 def _require_raw_action_envelope(data: object) -> object:
     """Bound structural action containers before nested rational parsing."""
 
-    data = canonicalize_json_containers(data)
     if not isinstance(data, dict):
         return data
     axis = data.get("coordinate_axis")
@@ -122,7 +121,6 @@ def _raw_action_parts(action: object) -> tuple[object, object]:
 def _require_raw_request_envelope(data: object) -> object:
     """Reject an over-work request before copying or nested scalar parsing."""
 
-    data = canonicalize_json_containers(data)
     if not isinstance(data, dict):
         return data
     axis, generators = _raw_action_parts(data.get("action"))
@@ -176,7 +174,14 @@ class RationalMatrixAction(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_raw_envelope(cls, data: Any) -> Any:
-        return _require_raw_action_envelope(canonicalize_json_containers(data))
+        if isinstance(data, dict) and isinstance(
+            data.get("coordinate_axis"), (list, tuple)
+        ):
+            data = dict(data)
+            data["coordinate_axis"] = canonicalize_json_containers(
+                data["coordinate_axis"]
+            )
+        return _require_raw_action_envelope(data)
 
     @model_validator(mode="after")
     def require_common_axis(self) -> Self:
@@ -293,7 +298,18 @@ class InvariantBilinearFormLatticeRequest(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_raw_operation_envelope(cls, data: Any) -> Any:
-        return _require_raw_request_envelope(canonicalize_json_containers(data))
+        if isinstance(data, dict):
+            action = data.get("action")
+            if isinstance(action, dict) and isinstance(
+                action.get("coordinate_axis"), (list, tuple)
+            ):
+                data = dict(data)
+                action = dict(action)
+                action["coordinate_axis"] = canonicalize_json_containers(
+                    action["coordinate_axis"]
+                )
+                data["action"] = action
+        return _require_raw_request_envelope(data)
 
 
 class InvariantBilinearFormLattice(StrictModel):

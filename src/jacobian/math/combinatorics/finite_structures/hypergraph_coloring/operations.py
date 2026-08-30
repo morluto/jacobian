@@ -78,13 +78,9 @@ def decide_nonmonochromatic_coloring(
     work_budget = palette_size**n * len(edges)
     if execution is not None:
         if execution.deadline is None:
-            bind_request_deadline(
-                execution.started_at + max(60.0, work_budget / 100_000)
-            )
+            bind_request_deadline(execution.started_at + max(60.0, work_budget / 100_000))
         deadline = execution.deadline
     else:
-        # Native callers have no dispatch context; give the same admitted
-        # search envelope an operation-owned deadline.
         deadline = time.monotonic() + max(60.0, work_budget / 100_000)
     for index, coloring in enumerate(product(range(palette_size), repeat=n)):
         if index % 1024 == 0 and deadline is not None and time.monotonic() >= deadline:

@@ -57,14 +57,6 @@ def _admit_graph(graph: SimpleUndirectedGraph) -> _PathSearchPlan:
     candidate_sets, candidate_incidences = _find_all_simple_paths(
         adjacency, candidate_limit=MAX_SEARCH_STATES
     )
-    candidates = tuple(
-        sorted(
-            candidate_sets,
-            key=lambda path: (-len(path), tuple(sorted(path))),
-        )
-    )
-    candidate_checks_bound = MAX_SEARCH_STATES
-
     try:
         source_bytes = len(encode_strict_json(graph.model_dump(mode="json")))
         active_vertices = {vertex for edge in graph.edges for vertex in edge}
@@ -88,6 +80,17 @@ def _admit_graph(graph: SimpleUndirectedGraph) -> _PathSearchPlan:
             "result_size_bound",
             f"the path decomposition result exceeds the {MAX_RESULT_BYTES}-byte output bound",
         )
+
+    candidate_sets, candidate_incidences = _find_all_simple_paths(
+        adjacency, candidate_limit=MAX_SEARCH_STATES
+    )
+    candidates = tuple(
+        sorted(
+            candidate_sets,
+            key=lambda path: (-len(path), tuple(sorted(path))),
+        )
+    )
+    candidate_checks_bound = MAX_SEARCH_STATES
     return _PathSearchPlan(
         candidates=candidates,
         candidate_incidences=candidate_incidences,

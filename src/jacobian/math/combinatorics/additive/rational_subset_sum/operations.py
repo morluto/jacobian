@@ -105,7 +105,7 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
             lattice_step = gcd(lattice_step, abs(value))
         support_span = (positive_span - negative_span) // max(lattice_step, 1)
         support_upper_bound = min(support_upper_bound, support_span + 1)
-        if common_denominator_overflow:
+        if common_denominator_overflow or numerator_digits > MAX_CANONICAL_RATIONAL_DIGITS:
             if len(nonzero) > 2:
                 _reject(
                     "rational_growth_bound",
@@ -137,7 +137,8 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
     # Values are canonical JSON strings: include both quotes and a possible
     # minus sign in the numerator component before sizing the object.
     rational_bytes = strict_json_object_size(
-        (("num", growth_digits + 2), ("den", growth_digits + 2))
+        # Numerators may be negative; reserve quotes plus an optional sign.
+        (("num", growth_digits + 3), ("den", growth_digits + 2))
     )
     row_bytes = strict_json_object_size(
         (("sum_value", rational_bytes), ("multiplicity", len(str(1 << n))))

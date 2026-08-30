@@ -52,7 +52,7 @@ class RFullEnumerateResult(StrictModel):
     """The complete ordered family of r-full integers up to the cutoff."""
 
     minimum_exponent: int = Field(ge=MIN_R_FULL_EXPONENT, le=MAX_R_FULL_EXPONENT)
-    cutoff: CanonicalInteger
+    cutoff: CanonicalInteger = Field(max_length=MAX_R_FULL_CUTOFF_DIGITS + 1)
     count: int = Field(ge=0)
     family: tuple[CanonicalInteger, ...] = Field(
         default=(), max_length=MAX_R_FULL_FAMILY_SIZE

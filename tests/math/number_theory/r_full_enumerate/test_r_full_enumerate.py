@@ -102,3 +102,14 @@ def test_result_rejects_oversized_family_member_before_parsing() -> None:
             count=1,
             family=("9" * 1_000_000,),
         )
+
+
+def test_result_rejects_oversized_cutoff_before_parsing() -> None:
+    """Result validation bounds cutoff representations before bigint parsing."""
+    with pytest.raises(ValueError, match="at most 19 characters"):
+        RFullEnumerateResult(
+            minimum_exponent=2,
+            cutoff="1" * 1_000_000,
+            count=1,
+            family=("1",),
+        )

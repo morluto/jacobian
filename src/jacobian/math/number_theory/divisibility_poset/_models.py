@@ -9,6 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
+from jacobian.canonical import parse_canonical_integer
 from jacobian.math.combinatorics.finite_structures.sets._models import (
     FiniteIntegerSet,
 )
@@ -21,6 +22,19 @@ from jacobian.math.combinatorics.posets.core._models import (
 MAX_DIVISIBILITY_POSET_ELEMENTS = MAX_POSET_ELEMENTS  # 64
 
 
+def _divisibility_poset_admission_error(
+    source_set: FiniteIntegerSet,
+) -> tuple[str, str] | None:
+    if len(source_set.elements) > MAX_DIVISIBILITY_POSET_ELEMENTS:
+        return (
+            "carrier_too_large",
+            f"source set must have at most {MAX_DIVISIBILITY_POSET_ELEMENTS} elements",
+        )
+    if any(parse_canonical_integer(value) <= 0 for value in source_set.elements):
+        return ("non_positive", "all source set elements must be positive integers")
+    return None
+
+
 class DivisibilityPosetRequest(StrictModel):
     """A bounded finite set of distinct positive integers for poset construction."""
 
@@ -28,20 +42,12 @@ class DivisibilityPosetRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_positive_and_bounded(self) -> Self:
-        from jacobian.canonical import parse_canonical_integer
-
-        if len(self.source_set.elements) > MAX_DIVISIBILITY_POSET_ELEMENTS:
+        failure = _divisibility_poset_admission_error(self.source_set)
+        if failure is not None:
+            code, message = failure
             raise PydanticCustomError(
-                "number_theory.divisibility_poset.carrier_too_large",
-                f"source set must have at most "
-                f"{MAX_DIVISIBILITY_POSET_ELEMENTS} elements",
+                f"number_theory.divisibility_poset.{code}", message
             )
-        for value in self.source_set.elements:
-            if parse_canonical_integer(value) <= 0:
-                raise PydanticCustomError(
-                    "number_theory.divisibility_poset.non_positive",
-                    "all source set elements must be positive integers",
-                )
         return self
 
 
@@ -67,4 +73,5 @@ __all__ = [
     "DivisibilityPosetRequest",
     "ElementSource",
     "IntegerDivisibilityPosetResult",
+    "_divisibility_poset_admission_error",
 ]

@@ -76,9 +76,7 @@ def _admission_error(lower: int, upper: int, k: int) -> tuple[str, str, str] | N
     max_difference = (n - 1) // (k - 1)
     max_start = upper - (k - 1)
     edge_label_bytes = (
-        3
-        + max(len(str(lower)), len(str(max_start)))
-        + len(str(max_difference))
+        3 + max(len(str(lower)), len(str(max_start))) + len(str(max_difference))
         if max_difference > 0
         else 0
     )

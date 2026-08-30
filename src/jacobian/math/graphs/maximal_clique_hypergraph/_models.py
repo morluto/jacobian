@@ -22,10 +22,10 @@ def _moon_moser_bound(vertex_count: int) -> int:
         return 1
     quotient, remainder = divmod(vertex_count, 3)
     if remainder == 0:
-        return 3**quotient
+        return int(3**quotient)
     if remainder == 1:
-        return 4 * 3 ** (quotient - 1)
-    return 2 * 3**quotient
+        return int(4 * 3 ** (quotient - 1))
+    return int(2 * 3**quotient)
 
 
 def _maximal_clique_admission_error(

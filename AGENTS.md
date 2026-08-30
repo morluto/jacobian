@@ -29,14 +29,12 @@ operations, but admit it separately only when it establishes a distinct stable
 postcondition. Alternative algorithms for the same postcondition remain private
 kernel choices.
 
-It exposes the admitted catalog directly through MCP, plus fixed discovery and
-migration tools:
+It exposes two MCP tools:
 
 | Agent verb | MCP tool | Meaning |
 | --- | --- | --- |
-| Execute | the operation ID | Call one operation through its typed owner-local schema. |
-| Search | `math.find` | Search mathematical vocabulary or inspect an exact contract. |
-| Transitional execute | `math.run` | Generic dispatch retained while direct discovery is evaluated. |
+| Search | `math.find` | Find or inspect an operation. |
+| Execute | `math.run` | Run one operation and return its mathematical value. |
 
 Jacobian supplies bounded typed operations and immutable discovery. Use
 “operation” or “math tool,” not “product” or “provider,” for built-ins. It is
@@ -45,13 +43,12 @@ preserve an explicit transport/security boundary only when the task actually
 changes one.
 
 The authoritative operation path and ownership vocabulary are defined in the
-[architecture](docs/explanation/architecture.md). In summary, the MCP tool list
-is derived from immutable declarations. A direct call parses one strict request
-against its named operation, executes one owner-local bounded domain operation,
-and returns that operation's canonical mathematical result through the delivery
-boundary. `math.find` is a separate semantic discovery surface. Any execution
-plan is request-scoped internal data, not caller-visible workflow state or a new
-MCP verb.
+[architecture](docs/explanation/architecture.md). In summary, `math.find`
+selects an immutable declaration and `math.run` parses one strict request,
+executes one owner-local bounded domain operation, and returns a canonical
+mathematical result through the delivery boundary. Any execution plan is
+request-scoped internal data, not caller-visible workflow state or a new MCP
+verb.
 
 The domain function may use a maintained library as a private computational
 engine; prefer an established backend over hand-rolling a kernel whenever it
@@ -95,15 +92,29 @@ semantics and types.
 Catalog admission means publication in the immutable catalog. Request
 admission means per-call mathematical and resource bounds. Result construction
 means conversion to Jacobian's canonical typed result; defining-invariant
-evidence belongs primarily in tests. Replay verification is optional and only
-applies when independently supplied result data is accepted. Transport
-projection is the final MCP/JSON delivery step.
+evidence belongs in tests. Never replay computed mathematical work during
+request validation, result construction, deserialization, transport projection,
+or worker-output decoding. An explicit bounded verifier is permitted only when
+a public operation or consumer intentionally accepts an independently supplied
+theorem-bearing claim. Transport projection is the final MCP/JSON delivery
+step.
 
 - Raw preflight may enforce cheap representation limits before canonicalization.
   After canonicalization, semantic admission is computed once per invocation
   and reused by the kernel and trusted result construction; do not repeat
   non-trivial admission in request validators, operation wrappers, or result
   validators.
+
+- Pydantic validators and result wrappers may enforce cheap canonical shape,
+  bounds, discriminated-state consistency, and source references. They must not
+  factor, isolate roots, enumerate candidates, invoke a solver or backend,
+  recompute a defining relation, or call a nested public validator that does so.
+  The admitted kernel computes once and constructs through an owner-local
+  trusted factory such as `_from_kernel`; tests establish defining invariants.
+- A child worker returns only a bounded derived projection. The parent retains
+  the admitted source, structurally decodes and binds that projection, and uses
+  trusted result construction. Never echo a full public result from a worker or
+  pass worker output to the public result model's `model_validate` path.
 
 - Public contracts use canonical mathematical values, not backend expressions
   or ambient contexts.
@@ -118,7 +129,9 @@ projection is the final MCP/JSON delivery step.
 - Intentional changes of ring, field, parent, or axis require explicit typed
   maps; implicit coercion is forbidden.
 - Exact results retain all information needed for reconstruction and downstream
-  composition.
+  composition. Before admitting an operation, apply the
+  [codomain-closure](docs/reference/domain-operation-library.md#codomain-closure)
+  rule to its complete advertised result domain.
 
 A `MathTool` is a bounded mathematical instrument, not a lesson, proof recipe,
 or workflow. Add an operation only when it exposes a stable bounded computation

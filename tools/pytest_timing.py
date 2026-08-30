@@ -68,7 +68,13 @@ def pytest_testnodedown(node: Any, error: BaseException | None) -> None:
     del error
     config = node.config
     state = config.stash[_TIMING_STATE]
-    timing = node.workeroutput.get("jacobian_timing")
+    workeroutput = getattr(node, "workeroutput", None)
+    if not isinstance(workeroutput, dict):
+        # xdist does not attach worker output when a worker terminates before
+        # its session-finish hook. Preserve xdist's original worker failure
+        # instead of replacing it with a timing-plugin AttributeError.
+        return
+    timing = workeroutput.get("jacobian_timing")
     if not isinstance(timing, dict):
         return
     worker_id = timing.get("id")

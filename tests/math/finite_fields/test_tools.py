@@ -22,6 +22,7 @@ from jacobian.math.finite_fields import (
 from jacobian.math.finite_fields._models import (
     DirectionRankLedgerRequest,
     FiniteMapTableRequest,
+    PaleyTournamentRequest,
     ProjectiveLineRequest,
 )
 from jacobian.math.finite_fields._tools import TOOLS
@@ -40,8 +41,9 @@ def test_bundle_declares_atomic_inline_typed_operations() -> None:
         "finite_field.polynomial_map.fibers.compute",
         "finite_field.polynomial_map.collision.analyze",
         "finite_field.polynomial_map.permutation.analyze",
+        "finite_field.paley_tournament.construct",
     )
-    projective, restrict_operation, rank_operation, _, _, table, _, _, _ = bundle
+    projective, restrict_operation, rank_operation, _, _, table, _, _, _, paley = bundle
     for operation in bundle:
         assert isinstance(operation, MathTool)
         assert not hasattr(operation, "provider_binding")
@@ -50,6 +52,7 @@ def test_bundle_declares_atomic_inline_typed_operations() -> None:
     assert restrict_operation.result_type is FiniteLinearMap
     assert rank_operation.result_type is RankResult
     assert table.result_type is FiniteMapTable
+    assert paley.request_type is PaleyTournamentRequest
 
 
 def test_projective_enumeration_refuses_large_output_before_allocation() -> None:

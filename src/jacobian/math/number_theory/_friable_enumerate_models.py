@@ -8,6 +8,7 @@ from typing import Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.canonical import CanonicalLimits
 from jacobian.math.number_theory._models import BoundedInteger, _validation_error
 
 # The enumeration shares the generated-exponent-vector regime with
@@ -20,7 +21,7 @@ MAX_FRIABLE_ENUMERATE_GENERATED_CUTOFF = 10_000
 MAX_FRIABLE_ENUMERATE_FAMILY_SIZE = 200_000
 _MAX_FRIABLE_ENUMERATE_SOURCE_DIGITS = 256
 _MAX_FRIABLE_ENUMERATE_SOURCE_ABS = 10**_MAX_FRIABLE_ENUMERATE_SOURCE_DIGITS
-_MAX_FRIABLE_ENUMERATED_BYTES = 3_000_000
+_MAX_FRIABLE_ENUMERATED_BYTES = CanonicalLimits().max_output_bytes
 _MAX_FRIABLE_ENUMERATE_COUNT_NODES = 2_000_000
 
 

@@ -2,7 +2,7 @@
 
 from pydantic_core import PydanticCustomError
 
-from jacobian.canonical import parse_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._friable_enumerate_kernels import (
@@ -13,6 +13,7 @@ from jacobian.math.number_theory._friable_enumerate_models import (
     FriableEnumerateResult,
 )
 from jacobian.math.number_theory._support import number_theory_operation
+from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
 
 def compute_friable_enumerate(
@@ -32,10 +33,16 @@ def compute_friable_enumerate(
     return FriableEnumerateResult._from_kernel(request, family=family)
 
 
-def enumerate_friable(x: int, y: int) -> FriableEnumerateResult:
+def enumerate_friable(
+    x: int | IntegerValue, y: int | IntegerValue
+) -> FriableEnumerateResult:
     """Enumerate friable integers from native integer inputs."""
 
-    request = FriableEnumerateRequest(x=str(x), y=str(y))
+    x_value = parse_canonical_integer(x.value) if isinstance(x, IntegerValue) else x
+    y_value = parse_canonical_integer(y.value) if isinstance(y, IntegerValue) else y
+    request = FriableEnumerateRequest(
+        x=format_canonical_integer(x_value), y=format_canonical_integer(y_value)
+    )
     return compute_friable_enumerate(request)
 
 

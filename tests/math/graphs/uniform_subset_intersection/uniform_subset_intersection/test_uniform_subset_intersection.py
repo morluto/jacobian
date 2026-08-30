@@ -78,6 +78,16 @@ def test_single_huge_subset_is_rejected_before_materialization() -> None:
         )
 
 
+def test_huge_central_binomial_is_rejected_without_materializing_it() -> None:
+    with pytest.raises(OperationDomainValidationError, match="256-vertex"):
+        construct_uniform_subset_intersection_graph(
+            1_000_000_000_000,
+            500_000_000_000,
+            0,
+            "INTERSECTION_EQ_THRESHOLD",
+        )
+
+
 def test_multidigit_labels_have_canonical_edge_endpoints() -> None:
     result = construct_uniform_subset_intersection_graph(
         11, 1, 1, "INTERSECTION_LT_THRESHOLD"

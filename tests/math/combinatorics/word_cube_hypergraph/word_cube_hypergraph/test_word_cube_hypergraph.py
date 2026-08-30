@@ -44,3 +44,8 @@ def test_multidigit_symbols_have_injective_word_labels() -> None:
 def test_word_cube_expansion_is_admitted_before_construction() -> None:
     with pytest.raises(OperationDomainValidationError, match="256-vertex"):
         compute_word_cube_hypergraph(17, 2)
+
+
+def test_huge_dimension_is_rejected_before_exponentiation() -> None:
+    with pytest.raises(OperationDomainValidationError, match="label envelope"):
+        compute_word_cube_hypergraph(1, 1_000_000_000_000)

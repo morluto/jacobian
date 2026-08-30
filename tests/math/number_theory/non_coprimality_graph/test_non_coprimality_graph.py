@@ -4,6 +4,7 @@ from collections.abc import Sequence
 
 import pytest
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.number_theory.non_coprimality_graph._models import (
     NonCoprimalityGraphRequest,
@@ -217,3 +218,11 @@ def test_disconnected_components() -> None:
     graph = _graph(["2", "4", "3", "9"])
     edges = {tuple(e) for e in graph.edges}
     assert edges == {("2", "4"), ("3", "9")}
+
+
+def test_complete_graph_output_is_admitted_before_gcd_work() -> None:
+    base = 2 * 10**999
+    vertices = tuple(str(base + 2 * index) for index in range(120))
+
+    with pytest.raises(OperationDomainValidationError, match="canonical output"):
+        non_coprimality_graph(vertices)

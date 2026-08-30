@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.math.number_theory._divisibility_poset import compute_divisibility_poset
+import pytest
+
+from jacobian.math.number_theory._divisibility_poset import (
+    compute_divisibility_poset,
+    divisibility_poset,
+)
 from jacobian.math.number_theory._divisibility_poset_models import (
     DivisibilityPosetRequest,
 )
@@ -68,3 +73,10 @@ def test_transitive_closure() -> None:
     assert ("2", "6") in pairs
     assert ("6", "12") in pairs
     assert ("2", "12") in pairs
+
+
+def test_native_admission_rejects_zero_and_empty_inputs() -> None:
+    with pytest.raises(ValueError, match="positive integers"):
+        divisibility_poset(("0", "2"))
+    with pytest.raises(ValueError, match="between 1"):
+        divisibility_poset(())

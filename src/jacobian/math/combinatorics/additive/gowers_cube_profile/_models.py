@@ -5,6 +5,7 @@ from typing import Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 
 MAX_GOWERS_CUBE_ORDER = 12
@@ -46,7 +47,7 @@ class GowersCubeResult(StrictModel):
     subset: tuple[int, ...]
     order: int
     cube_count: int
-    normalized_count: int
+    normalized_count: CanonicalRational
 
 
 __all__ = [

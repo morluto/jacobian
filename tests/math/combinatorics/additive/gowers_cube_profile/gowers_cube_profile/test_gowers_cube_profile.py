@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from fractions import Fraction
+
 import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
@@ -13,6 +15,7 @@ def test_full_set() -> None:
     result = compute_gowers_cube_profile(5, (0, 1, 2, 3, 4), 1)
     # Order 1: cubes are (x, x+e) with both in A. Full set -> all 5*5 = 25
     assert result.cube_count == 25
+    assert result.normalized_count.as_fraction() == Fraction(1)
 
 
 def test_empty_set() -> None:
@@ -24,6 +27,7 @@ def test_single_element() -> None:
     result = compute_gowers_cube_profile(7, (3,), 1)
     # Only cube with both vertices at 3: base=3, e=0 -> (3,3)
     assert result.cube_count == 1
+    assert result.normalized_count.as_fraction() == Fraction(1, 49)
 
 
 def test_result_preserves_source() -> None:

@@ -30,6 +30,7 @@ from jacobian.math.matrices.cyclic_linear import (
 )
 from jacobian.math.matrices.cyclic_linear._tools import TOOLS
 from jacobian.math.matrices.cyclic_linear.operations import (
+    _CYCLIC_PROFILE_WALL_SECONDS,
     CyclicRankKernelAdmissionError,
 )
 from jacobian.process import bounded_process_cancellation
@@ -133,6 +134,22 @@ def _public_polynomial(value: object) -> Any:
     return Poly(expression, x, domain="QQ")
 
 
+def _public_cyclotomic_element_polynomial(
+    value: RationalCyclotomicElement,
+) -> Any:
+    from sympy import Poly, Rational, Symbol
+
+    x = Symbol("x")
+    return Poly(
+        sum(
+            Rational(*coefficient.as_integer_ratio()) * x**power
+            for power, coefficient in enumerate(value.coefficients_ascending)
+        ),
+        x,
+        domain="QQ",
+    )
+
+
 def test_composite_period_distinguishes_galois_components() -> None:
     # Phi_3(x) = x^2 + x + 1 vanishes only on the order-three component of C_6.
     result = cyclic_rational_rank_kernel_profile(
@@ -203,6 +220,82 @@ def test_block_rank_drop_returns_source_bound_minor_and_kernel() -> None:
     assert (result.global_rank, result.global_nullity) == (5, 1)
 
 
+def test_component_matrix_minor_and_kernel_satisfy_direct_quotient_identities() -> None:
+    from sympy import Matrix, Poly, Rational, Symbol, cyclotomic_poly
+
+    source = _symbol(
+        period=5,
+        source_dimension=3,
+        target_dimension=2,
+        entries=(
+            (0, 0, 1, 1),
+            (0, 1, 0, 1),
+            (1, 1, 0, 1),
+            (1, 1, 1, 1),
+            (1, 2, 0, 1),
+        ),
+    )
+    result = cyclic_rational_rank_kernel_profile(source)
+    component = next(item for item in result.components if item.order == 5)
+    x = Symbol("x")
+    modulus = Poly(cyclotomic_poly(5, x), x, domain="QQ")
+
+    for target in range(source.target_block_dimension):
+        for source_coordinate in range(source.source_block_dimension):
+            expected = Poly(
+                sum(
+                    Rational(*entry.coefficient.as_integer_ratio()) * x**entry.shift
+                    for entry in source.entries
+                    if entry.target_coordinate == target
+                    and entry.source_coordinate == source_coordinate
+                ),
+                x,
+                domain="QQ",
+            ).rem(modulus)
+            actual = _public_cyclotomic_element_polynomial(
+                component.component_matrix.entries[target][source_coordinate]
+            ).rem(modulus)
+            assert actual == expected
+
+    assert component.nullity == 1
+    assert len(component.kernel_basis.vectors) == 1
+    kernel_vector = component.kernel_basis.vectors[0]
+    assert any(
+        not _public_cyclotomic_element_polynomial(value).is_zero
+        for value in kernel_vector
+    )
+    for matrix_row in component.component_matrix.entries:
+        image = sum(
+            (
+                _public_cyclotomic_element_polynomial(matrix_value)
+                * _public_cyclotomic_element_polynomial(vector_value)
+                for matrix_value, vector_value in zip(
+                    matrix_row, kernel_vector, strict=True
+                )
+            ),
+            Poly(0, x, domain="QQ"),
+        )
+        assert image.rem(modulus).is_zero
+
+    assert component.nonzero_minor is not None
+    minor = component.nonzero_minor
+    selected = Matrix(
+        [
+            [
+                _public_cyclotomic_element_polynomial(
+                    component.component_matrix.entries[row][column]
+                ).as_expr()
+                for column in minor.column_indices
+            ]
+            for row in minor.row_indices
+        ]
+    )
+    determinant = Poly(selected.det(), x, domain="QQ").rem(modulus)
+    assert determinant == _public_cyclotomic_element_polynomial(minor.determinant).rem(
+        modulus
+    )
+
+
 @pytest.mark.parametrize("kind", ["zero", "identity"])
 def test_zero_and_identity_operators_have_complete_exact_profiles(kind: str) -> None:
     entries: tuple[tuple[int, int, int, Fraction | int], ...]
@@ -270,6 +363,23 @@ def test_period_59_phi_59_flips_rank_and_reconstructs_nontrivial_kernel() -> Non
     from jacobian.math.matrices._flint import rational_rref
 
     assert rational_rref(global_vectors)[1] == 58
+
+    mutated = cyclic_rational_rank_kernel_profile(
+        _symbol(
+            period=59,
+            entries=tuple((0, 0, shift, 2 if shift == 0 else 1) for shift in range(59)),
+        )
+    )
+    primitive = next(
+        component for component in mutated.components if component.order == 59
+    )
+    assert (primitive.rank, primitive.nullity) == (1, 0)
+    assert primitive.nonzero_minor is not None
+    assert (
+        _coefficients(primitive.nonzero_minor.determinant)
+        == (Fraction(1),) + (Fraction(0),) * 57
+    )
+    assert (mutated.global_rank, mutated.global_nullity) == (59, 0)
 
     assert (
         RationalCyclotomicField.model_validate(
@@ -509,10 +619,34 @@ def test_distinct_denominator_growth_rejects_before_large_lcm_power() -> None:
         cyclic_rational_rank_kernel_profile(source)
 
 
-def test_scalar_height_is_charged_to_cyclotomic_work() -> None:
+def test_period_59_scalar_height_is_charged_only_to_affected_work() -> None:
     source = _symbol(
         period=59,
-        entries=((0, 0, 0, 10**40),),
+        entries=((0, 0, 0, 10**63),),
+    )
+
+    result = cyclic_rational_rank_kernel_profile(source)
+
+    assert (result.global_rank, result.global_nullity) == (59, 0)
+    assert all(component.rank == 1 for component in result.components)
+    assert all(component.nonzero_minor is not None for component in result.components)
+
+
+def test_dense_hadamard_axis_exceeds_the_field_work_envelope() -> None:
+    source = _symbol(
+        period=1,
+        source_dimension=64,
+        target_dimension=64,
+        entries=tuple(
+            (
+                row,
+                column,
+                0,
+                -1 if (row & column).bit_count() % 2 else 1,
+            )
+            for row in range(64)
+            for column in range(64)
+        ),
     )
 
     with pytest.raises(CyclicRankKernelAdmissionError, match="scalar-bit work"):
@@ -536,4 +670,13 @@ def test_owner_checkpoint_observes_existing_request_deadline() -> None:
         pytest.raises(OperationExecutionTimeoutError, match="deadline expired"),
     ):
         bind_request_deadline(started - 1)
+        cyclic_rational_rank_kernel_profile(_symbol(period=3, entries=((0, 0, 0, 1),)))
+
+
+def test_owner_binds_deadline_from_original_request_start() -> None:
+    started = time.monotonic() - _CYCLIC_PROFILE_WALL_SECONDS - 1
+    with (
+        request_execution(started),
+        pytest.raises(OperationExecutionTimeoutError, match="deadline expired"),
+    ):
         cyclic_rational_rank_kernel_profile(_symbol(period=3, entries=((0, 0, 0, 1),)))

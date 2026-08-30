@@ -12,8 +12,10 @@ from jacobian._exact import CanonicalRational
 from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
+    bind_request_deadline,
     current_request_execution,
     request_cancelled,
+    request_execution,
 )
 from jacobian.canonical import CanonicalLimits
 from jacobian.math.matrices.cyclic_linear._models import (
@@ -39,6 +41,7 @@ type FieldCoordinates = tuple[Fraction, ...]
 type ComponentCoordinates = tuple[tuple[FieldCoordinates, ...], ...]
 
 _MAX_CYCLOTOMIC_SCALAR_MAGNITUDE = 10**MAX_CYCLIC_FIELD_ELEMENT_DIGITS - 1
+_CYCLIC_PROFILE_WALL_SECONDS = 3_600.0
 
 
 class CyclicRankKernelAdmissionError(ValueError):
@@ -80,6 +83,19 @@ def _require_execution_active(phase: str) -> None:
         and time.monotonic() >= execution.deadline
     ):
         raise OperationExecutionTimeoutError(f"request deadline expired {phase}")
+
+
+def _bind_cyclic_profile_deadline() -> None:
+    execution = current_request_execution()
+    if execution is None:  # pragma: no cover - native entry establishes the context
+        raise RuntimeError("cyclic-profile execution context is missing")
+    owner_deadline = execution.started_at + _CYCLIC_PROFILE_WALL_SECONDS
+    deadline = (
+        min(execution.deadline, owner_deadline)
+        if execution.deadline is not None
+        else owner_deadline
+    )
+    bind_request_deadline(deadline)
 
 
 def _divisors(value: int) -> tuple[int, ...]:
@@ -465,6 +481,9 @@ def _admit_cyclic_symbol(
             symbol, polynomial, degree, variable
         )
         maximum_rank = _structural_rank_bound(matrix_coordinates)
+        minimum_rank = int(
+            any(any(value) for row in matrix_coordinates for value in row)
+        )
         (
             common_denominator,
             scaled_height,
@@ -516,14 +535,25 @@ def _admit_cyclic_symbol(
         )
         maximum_component_bytes = 0
         maximum_global_component_bytes = 0
-        maximum_scalar_bits = max(
-            source_scalar_bits,
-            matrix_scalar_bits,
+        cyclotomic_structure_scalar_bits = max(
             multiplication_norm.bit_length(),
             idempotent_scalar_bits,
+            *(abs(int(value)).bit_length() for value in polynomial.all_coeffs()),
+        )
+        source_specialization_scalar_bits = max(
+            source_scalar_bits,
+            matrix_scalar_bits,
+            cyclotomic_structure_scalar_bits,
+        )
+        elimination_scalar_bits = max(
+            matrix_scalar_bits,
+            multiplication_norm.bit_length(),
             determinant_bound.bit_length(),
             determinant_denominator_bound.bit_length(),
-            *(abs(int(value)).bit_length() for value in polynomial.all_coeffs()),
+        )
+        reconstruction_scalar_bits = max(
+            elimination_scalar_bits,
+            idempotent_scalar_bits,
         )
         for possible_rank in range(maximum_rank + 1):
             possible_determinant_bound = _determinant_magnitude_bound(
@@ -564,8 +594,8 @@ def _admit_cyclic_symbol(
                     _decimal_digits(max(reconstruction_numerator_bound, 1)),
                     _decimal_digits(idempotent_denominator),
                 )
-                maximum_scalar_bits = max(
-                    maximum_scalar_bits,
+                reconstruction_scalar_bits = max(
+                    reconstruction_scalar_bits,
                     reconstruction_numerator_bound.bit_length(),
                     idempotent_denominator.bit_length(),
                 )
@@ -584,27 +614,34 @@ def _admit_cyclic_symbol(
             )
         predicted_result_bytes += maximum_component_bytes
         predicted_global_basis_bytes += maximum_global_component_bytes
-        component_arithmetic_units = (
-            degree * max(len(symbol.entries), 1)
-            + degree**3
-            + symbol.period * degree**2
-            + symbol.source_block_dimension**2 * degree**2 * symbol.period
-            + degree**2
-            * (
-                symbol.target_block_dimension
-                * symbol.source_block_dimension
-                * max(maximum_rank, 1)
-                + maximum_rank**3
-            )
-            + degree
-            * symbol.source_block_dimension**2
+        # Price source-height arithmetic separately from the small fixed
+        # cyclotomic structure constants used to construct this component.
+        source_specialization_units = degree * max(len(symbol.entries), 1)
+        cyclotomic_structure_units = degree**3 + symbol.period * degree**2
+        elimination_units = degree**2 * (
+            symbol.target_block_dimension
+            * symbol.source_block_dimension
+            * max(maximum_rank, 1)
+            + maximum_rank**3
+        )
+        maximum_nullity = symbol.source_block_dimension - minimum_rank
+        reconstruction_units = (
+            degree
+            * maximum_nullity
+            * symbol.source_block_dimension
             * (degree**2 + degree * symbol.period)
         )
-        field_work = _charge_field_work(
-            field_work,
-            component_arithmetic_units,
-            max(maximum_scalar_bits, 1),
-        )
+        for units, scalar_bits in (
+            (source_specialization_units, source_specialization_scalar_bits),
+            (cyclotomic_structure_units, cyclotomic_structure_scalar_bits),
+            (elimination_units, elimination_scalar_bits),
+            (reconstruction_units, reconstruction_scalar_bits),
+        ):
+            field_work = _charge_field_work(
+                field_work,
+                units,
+                max(scalar_bits, 1),
+            )
 
         components.append(
             _ComponentAdmission(
@@ -884,6 +921,16 @@ def cyclic_rational_rank_kernel_profile(
     the component bases back to rational cyclic coordinates.
     """
 
+    if current_request_execution() is None:
+        with request_execution(time.monotonic()):
+            return _cyclic_rational_rank_kernel_profile_in_request(symbol)
+    return _cyclic_rational_rank_kernel_profile_in_request(symbol)
+
+
+def _cyclic_rational_rank_kernel_profile_in_request(
+    symbol: CyclicRationalBlockSymbol,
+) -> CyclicRationalRankKernelProfile:
+    _bind_cyclic_profile_deadline()
     admission = _admit_cyclic_symbol(symbol)
     _require_execution_active("after cyclic-profile admission")
     components = tuple(_compute_component(item) for item in admission)

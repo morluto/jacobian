@@ -14,8 +14,8 @@ from jacobian.math.geometry.affine_tori._bounds import (
 from jacobian.math.geometry.affine_tori._flint import (
     EmptyFixedLocusKernel,
     NonemptyFixedLocusKernel,
-    compute_fixed_locus_kernel,
 )
+from jacobian.math.geometry.affine_tori._flint_process import compute_fixed_locus_kernel
 from jacobian.math.geometry.affine_tori._models import (
     AffineTorusFixedLocusResult,
     EmptyAffineTorusFixedLocus,

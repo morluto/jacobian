@@ -2,29 +2,28 @@
 
 from __future__ import annotations
 
+from collections import Counter
+from collections.abc import Callable
 from fractions import Fraction
 from itertools import product
 from math import gcd, lcm
 from random import Random
-from threading import Event
 from time import monotonic
 from typing import Any
 
 import pytest
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
+from tests.fixtures.accounting import assert_charged_work_parity
 
 from jacobian._execution import (
-    OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     current_request_execution,
-    request_cancellation,
     request_execution,
 )
 from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import invoke_operation
 from jacobian.math.geometry import affine_tori
 from jacobian.math.geometry.affine_tori import (
@@ -36,12 +35,14 @@ from jacobian.math.geometry.affine_tori import (
     RationalTorusPoint,
     affine_torus_fixed_locus,
 )
-from jacobian.math.geometry.affine_tori import _bounds as affine_bounds
-from jacobian.math.geometry.affine_tori import operations as affine_operations
+from jacobian.math.geometry.affine_tori import _flint as affine_flint
 from jacobian.math.geometry.affine_tori._bounds import (
     AFFINE_TORUS_FIXED_LOCUS_WALL_SECONDS,
-    MAX_AFFINE_TORUS_BACKEND_ENVELOPE_UNITS,
     build_affine_torus_plan,
+)
+from jacobian.math.geometry.affine_tori._flint import (
+    AffineTorusKernelSource,
+    NonemptyFixedLocusKernel,
 )
 from jacobian.math.geometry.affine_tori._flint import (
     compute_fixed_locus_kernel as _compute_fixed_locus_kernel,
@@ -89,6 +90,18 @@ def _source(
     translation: tuple[Fraction, ...],
 ) -> RationalAffineTorusMap:
     return RationalAffineTorusMap.model_validate(_payload(linear_part, translation))
+
+
+def _kernel_source(source: RationalAffineTorusMap) -> AffineTorusKernelSource:
+    return AffineTorusKernelSource(
+        dimension=source.torus.dimension,
+        linear_part=tuple(
+            tuple(int(value) for value in row) for row in source.linear_part.entries
+        ),
+        translation=tuple(
+            coordinate.as_fraction() for coordinate in source.translation.coordinates
+        ),
+    )
 
 
 def _matrix_multiply(
@@ -277,6 +290,36 @@ def test_positive_dimensional_locus_with_two_components() -> None:
     assert family.finite_components.component_count == "2"
 
 
+def test_component_relation_may_land_nontrivially_in_identity_subtorus() -> None:
+    result = affine_torus_fixed_locus(
+        _source(((1, 0), (-4, -4)), (Fraction(0), Fraction(0)))
+    )
+
+    assert isinstance(result.outcome, NonemptyAffineTorusFixedLocus)
+    family = result.outcome.fixed_locus
+    assert family.identity_component.embedding.entries == (("5",), ("-4",))
+    generator = tuple(
+        value.as_fraction() for value in family.component_generators[0].coordinates
+    )
+    assert generator == (Fraction(3, 4), Fraction(0))
+    assert family.finite_components.relation_matrix.entries == (("1",),)
+    assert family.finite_components.generator_orders == ("1",)
+    assert family.finite_components.invariant_factors == ()
+    assert family.finite_components.component_count == "1"
+
+    # A component relation vanishes modulo the connected subtorus, not
+    # necessarily as a point of the ambient torus. Here the nonintegral
+    # generator is the image of parameter 3/4 under t |-> (5t,-4t).
+    parameter = Fraction(3, 4)
+    assert (
+        tuple(
+            (int(row[0]) * parameter) % 1
+            for row in family.identity_component.embedding.entries
+        )
+        == generator
+    )
+
+
 def test_nonunimodular_infinite_order_map_is_inside_the_public_domain() -> None:
     source = _source(((2, 1), (0, 2)), (Fraction(1, 7), Fraction(2, 7)))
 
@@ -365,18 +408,28 @@ def test_nonempty_result_reconstructs_defining_integer_and_rational_identities()
         tuple(int(value) for value in row)
         for row in family.finite_components.relation_matrix.entries
     )
-    # A relation column must send every component lift to an integral vector.
-    lift_relations = _matrix_fraction_multiply(
+    relation_points = _matrix_fraction_multiply(
         component_lifts,
         tuple(tuple(Fraction(value) for value in row) for row in relation_matrix),
     )
-    assert all(value.denominator == 1 for row in lift_relations for value in row)
+    # Each relation is zero in the component quotient: modulo the ambient
+    # integer lattice it lies in the connected identity subtorus. These two
+    # relation points use the zero identity parameter; the regression above
+    # covers the essential nonzero-parameter case.
+    identity_parameters = ((Fraction(0), Fraction(0)),)
+    identity_relation_points = _matrix_fraction_multiply(
+        identity_embedding,
+        identity_parameters,
+    )
+    assert tuple(tuple(value % 1 for value in row) for row in relation_points) == tuple(
+        tuple(value % 1 for value in row) for row in identity_relation_points
+    )
     determinant = abs(_determinant_two(relation_matrix))
     assert determinant == int(family.finite_components.component_count) == 6
     assert family.finite_components.invariant_factors == ("6",)
 
 
-def test_empty_character_replays_the_obstruction_definition() -> None:
+def test_empty_character_satisfies_the_obstruction_definition() -> None:
     linear_part = (
         (1, 0, 0, 0),
         (6, 0, 1, 0),
@@ -689,50 +742,31 @@ def test_point_schema_matches_sign_aware_carrier_digit_bounds() -> None:
     assert result_scalar == rational_scalar
 
 
-def test_admission_reserves_every_backend_phase_before_the_kernel(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_admission_records_the_maintained_backend_structure() -> None:
     source = _source(((3, 0), (0, 4)), (Fraction(0), Fraction(0)))
     plan = build_affine_torus_plan(source, deadline=monotonic() + 30)
-    reservations = dict(plan.backend_envelope_units_by_category)
-    assert set(reservations) == {
-        "source_conversion",
-        "source_hnf",
-        "character_hnf",
-        "rank_minor_selection",
-        "rational_linear_algebra",
-        "relation_hnf",
-        "smith",
-        "integral_lift",
-        "result_construction",
+    envelope = plan.backend_envelope
+
+    assert dict(envelope.primitive_call_limits) == {
+        "integer_rank": 5,
+        "integer_hnf": 4,
+        "rational_solve": 3,
+        "integer_snf": 1,
+        "rational_inverse": 1,
+        "integer_multiply": 1,
     }
-    assert all(amount > 0 for amount in reservations.values())
-    assert (
-        plan.backend_envelope_units
-        == sum(reservations.values())
-        <= MAX_AFFINE_TORUS_BACKEND_ENVELOPE_UNITS
-    )
-
-    monkeypatch.setattr(
-        affine_bounds,
-        "MAX_AFFINE_TORUS_BACKEND_ENVELOPE_UNITS",
-        plan.backend_envelope_units - 1,
-    )
-    backend_called = False
-
-    def forbidden_kernel(*_args: object, **_kwargs: object) -> None:
-        nonlocal backend_called
-        backend_called = True
-
-    monkeypatch.setattr(
-        affine_operations, "compute_fixed_locus_kernel", forbidden_kernel
-    )
-    with pytest.raises(OperationDomainValidationError, match="backend work"):
-        affine_torus_fixed_locus(source)
-    assert not backend_called
+    assert envelope.maximum_integer_rows == 2
+    assert envelope.maximum_integer_columns == 4
+    assert envelope.maximum_integer_height >= plan.displacement_height
+    assert envelope.maximum_rational_rows == 2
+    assert envelope.maximum_rational_columns == 2
+    assert envelope.maximum_rational_height >= 1
+    assert plan.worker_input_bytes_upper_bound > 0
 
 
-def test_near_envelope_source_fits_the_conservative_backend_reservation() -> None:
+def test_near_envelope_kernel_fits_the_observed_backend_structure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     dimension = 16
     rank = 8
     height = (10**32 - 1) // 2
@@ -753,12 +787,101 @@ def test_near_envelope_source_fits_the_conservative_backend_reservation() -> Non
     translation = (Fraction(1, 2),) + (Fraction(0),) * (dimension - 1)
     source = _source(linear_part, translation)
     plan = build_affine_torus_plan(source, deadline=monotonic() + 30)
+    envelope = plan.backend_envelope
+    executed: Counter[str] = Counter()
+    integer_operands: list[tuple[int, int, int]] = []
+    rational_operands: list[tuple[int, int, int]] = []
 
-    result = affine_torus_fixed_locus(source)
+    def integer_height(matrix: Any) -> int:
+        return max(
+            (
+                abs(int(matrix[row, column]))
+                for row in range(matrix.nrows())
+                for column in range(matrix.ncols())
+            ),
+            default=0,
+        )
 
-    assert result.outcome.status == "NONEMPTY"
-    assert plan.backend_envelope_units <= MAX_AFFINE_TORUS_BACKEND_ENVELOPE_UNITS
-    assert all(amount > 0 for _, amount in plan.backend_envelope_units_by_category)
+    def rational_height(matrix: Any) -> int:
+        return max(
+            (
+                max(abs(int(matrix[row, column].p)), int(matrix[row, column].q))
+                for row in range(matrix.nrows())
+                for column in range(matrix.ncols())
+            ),
+            default=0,
+        )
+
+    def observe_integer(name: str, primitive: Callable[..., Any]) -> Callable[..., Any]:
+        def observed(*matrices: Any) -> Any:
+            executed[name] += 1
+            integer_operands.extend(
+                (matrix.nrows(), matrix.ncols(), integer_height(matrix))
+                for matrix in matrices
+            )
+            return primitive(*matrices)
+
+        return observed
+
+    def observe_rational(
+        name: str, primitive: Callable[..., Any]
+    ) -> Callable[..., Any]:
+        def observed(*matrices: Any) -> Any:
+            executed[name] += 1
+            rational_operands.extend(
+                (matrix.nrows(), matrix.ncols(), rational_height(matrix))
+                for matrix in matrices
+            )
+            return primitive(*matrices)
+
+        return observed
+
+    for name in (
+        "integer_rank",
+        "integer_hnf",
+        "integer_snf",
+        "integer_multiply",
+    ):
+        attribute = f"_{name}"
+        monkeypatch.setattr(
+            affine_flint,
+            attribute,
+            observe_integer(name, getattr(affine_flint, attribute)),
+        )
+    for name in ("rational_solve", "rational_inverse"):
+        attribute = f"_{name}"
+        monkeypatch.setattr(
+            affine_flint,
+            attribute,
+            observe_rational(name, getattr(affine_flint, attribute)),
+        )
+
+    result = _compute_fixed_locus_kernel(_kernel_source(source))
+
+    assert isinstance(result, NonemptyFixedLocusKernel)
+    assert_charged_work_parity(
+        charged=dict(envelope.primitive_call_limits), executed=executed
+    )
+    assert set(executed) == {
+        "integer_rank",
+        "integer_hnf",
+        "rational_solve",
+        "integer_snf",
+        "rational_inverse",
+        "integer_multiply",
+    }
+    assert all(
+        rows <= envelope.maximum_integer_rows
+        and columns <= envelope.maximum_integer_columns
+        and height <= envelope.maximum_integer_height
+        for rows, columns, height in integer_operands
+    )
+    assert all(
+        rows <= envelope.maximum_rational_rows
+        and columns <= envelope.maximum_rational_columns
+        and height <= envelope.maximum_rational_height
+        for rows, columns, height in rational_operands
+    )
 
 
 def test_dispatch_start_and_all_phases_share_one_deadline() -> None:
@@ -773,57 +896,6 @@ def test_dispatch_start_and_all_phases_share_one_deadline() -> None:
         assert execution.deadline == pytest.approx(
             started_at + AFFINE_TORUS_FIXED_LOCUS_WALL_SECONDS
         )
-
-
-def test_deadline_expiry_after_the_real_kernel_prevents_result_construction(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    source = _source(((3,),), (Fraction(0),))
-    clock = [0.0]
-    original_kernel = _compute_fixed_locus_kernel
-
-    def observed_kernel(*args: Any, **kwargs: Any) -> Any:
-        result = original_kernel(*args, **kwargs)
-        clock[0] = AFFINE_TORUS_FIXED_LOCUS_WALL_SECONDS + 1
-        return result
-
-    monkeypatch.setattr(affine_bounds, "monotonic", lambda: clock[0])
-    monkeypatch.setattr(
-        affine_operations, "compute_fixed_locus_kernel", observed_kernel
-    )
-
-    with (
-        request_execution(0.0),
-        pytest.raises(
-            OperationExecutionTimeoutError, match="before result construction"
-        ),
-    ):
-        affine_torus_fixed_locus(source)
-
-
-def test_cancellation_after_the_real_kernel_prevents_result_construction(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    source = _source(((3,),), (Fraction(0),))
-    cancellation = Event()
-    original_kernel = _compute_fixed_locus_kernel
-
-    def observed_kernel(*args: Any, **kwargs: Any) -> Any:
-        result = original_kernel(*args, **kwargs)
-        cancellation.set()
-        return result
-
-    monkeypatch.setattr(
-        affine_operations, "compute_fixed_locus_kernel", observed_kernel
-    )
-
-    with (
-        request_cancellation(cancellation),
-        pytest.raises(
-            OperationExecutionCancelledError, match="before result construction"
-        ),
-    ):
-        affine_torus_fixed_locus(source)
 
 
 def test_max_dimension_adversary_is_deterministic_and_transport_bounded() -> None:

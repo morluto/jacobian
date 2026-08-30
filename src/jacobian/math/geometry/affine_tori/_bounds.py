@@ -1,4 +1,4 @@
-"""One admission plan, deadline, and work ledger for affine-torus fixed loci."""
+"""One admission plan and deadline for affine-torus fixed loci."""
 
 from __future__ import annotations
 
@@ -31,38 +31,14 @@ from jacobian.math.geometry.affine_tori.values import (
 # generous platform margin while retaining one finite owner deadline.
 AFFINE_TORUS_FIXED_LOCUS_WALL_SECONDS = 120.0
 
-# This release uses a conservative finite backend envelope: at most 16 axes,
-# 32 source digits, a fixed number of dense FLINT calls, and the source-derived
-# operand heights below. Envelope units combine dense cells, elimination
-# dimension, and 32-digit height chunks. They are an admission proxy for that
-# finite representation, not observed FLINT scalar-operation counts. Evaluating
-# these formulas at n=16, |A-I|<=10^32, and denominator lcm <10^512 gives at
-# most 1,656,332,960 units across the possible ranks; two billion retains margin.
-MAX_AFFINE_TORUS_BACKEND_ENVELOPE_UNITS = 2_000_000_000
-
 type AffineTorusBackendEnvelopeCategory = Literal[
-    "source_conversion",
-    "source_hnf",
-    "character_hnf",
-    "rank_minor_selection",
-    "rational_linear_algebra",
-    "relation_hnf",
-    "smith",
-    "integral_lift",
-    "result_construction",
+    "integer_rank",
+    "integer_hnf",
+    "rational_solve",
+    "integer_snf",
+    "rational_inverse",
+    "integer_multiply",
 ]
-
-_BACKEND_ENVELOPE_CATEGORIES: tuple[AffineTorusBackendEnvelopeCategory, ...] = (
-    "source_conversion",
-    "source_hnf",
-    "character_hnf",
-    "rank_minor_selection",
-    "rational_linear_algebra",
-    "relation_hnf",
-    "smith",
-    "integral_lift",
-    "result_construction",
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,22 +59,35 @@ class AffineTorusRankBounds:
 
 
 @dataclass(frozen=True, slots=True)
+class AffineTorusBackendEnvelope:
+    """Structural bounds for the maintained FLINT primitive schedule.
+
+    Counts are direct backend invocations, not a proxy for FLINT's private
+    scalar instruction count. Operand dimensions and exact heights are bounded
+    independently by the admitted source and every possible rank of ``A-I``.
+    """
+
+    primitive_call_limits: tuple[tuple[AffineTorusBackendEnvelopeCategory, int], ...]
+    maximum_integer_rows: int
+    maximum_integer_columns: int
+    maximum_integer_height: int
+    maximum_rational_rows: int
+    maximum_rational_columns: int
+    maximum_rational_height: int
+
+
+@dataclass(frozen=True, slots=True)
 class AffineTorusFixedLocusPlan:
-    """The conservative envelope reused by every mandatory kernel phase."""
+    """Source-derived structural admission and delivery bounds."""
 
     dimension: int
     deadline: float
     displacement_height: int
     translation_common_denominator: int
     rank_bounds: tuple[AffineTorusRankBounds, ...]
+    worker_input_bytes_upper_bound: int
     result_bytes_upper_bound: int
-    backend_envelope_units_by_category: tuple[
-        tuple[AffineTorusBackendEnvelopeCategory, int], ...
-    ]
-
-    @property
-    def backend_envelope_units(self) -> int:
-        return sum(amount for _, amount in self.backend_envelope_units_by_category)
+    backend_envelope: AffineTorusBackendEnvelope
 
     def bounds_for_rank(self, rank: int) -> AffineTorusRankBounds:
         """Return the precomputed envelope for the kernel's exact source rank."""
@@ -106,44 +95,6 @@ class AffineTorusFixedLocusPlan:
         if not 0 <= rank < len(self.rank_bounds):
             raise AssertionError("affine-torus rank is outside its admitted plan")
         return self.rank_bounds[rank]
-
-
-class _BackendEnvelope:
-    """Admission-only reservation for the fixed family of dense backend calls."""
-
-    def __init__(self, *, deadline: float) -> None:
-        self.deadline = deadline
-        self.total = 0
-        self.by_category: dict[AffineTorusBackendEnvelopeCategory, int] = dict.fromkeys(
-            _BACKEND_ENVELOPE_CATEGORIES, 0
-        )
-
-    def reserve(
-        self, category: AffineTorusBackendEnvelopeCategory, amount: int
-    ) -> None:
-        if amount < 0:
-            raise AssertionError(
-                "affine-torus backend reservations must be nonnegative"
-            )
-        require_affine_torus_deadline(
-            self.deadline, f"while reserving {category} backend work"
-        )
-        self.total += amount
-        self.by_category[category] += amount
-        if self.total > MAX_AFFINE_TORUS_BACKEND_ENVELOPE_UNITS:
-            _reject(
-                "backend_envelope",
-                "affine-torus fixed-locus backend work exceeds the conservative "
-                f"{MAX_AFFINE_TORUS_BACKEND_ENVELOPE_UNITS}-unit envelope",
-            )
-
-    def freeze(
-        self,
-    ) -> tuple[tuple[AffineTorusBackendEnvelopeCategory, int], ...]:
-        return tuple(
-            (category, self.by_category[category])
-            for category in _BACKEND_ENVELOPE_CATEGORIES
-        )
 
 
 def _reject(reason: str, message: str) -> NoReturn:
@@ -185,10 +136,6 @@ def require_affine_torus_deadline(deadline: float, stage: str) -> None:
 
 def _decimal_digits(value: int) -> int:
     return len(format_canonical_integer(abs(value)))
-
-
-def _digit_chunks(value: int) -> int:
-    return (_decimal_digits(value) + 31) // 32
 
 
 def _rank_minor_height(rank: int, source_height: int) -> int:
@@ -508,77 +455,58 @@ def _result_bytes_for_rank(
     return max(branch_bytes)
 
 
-def _dense_backend_envelope_units(rows: int, columns: int, height: int) -> int:
-    """Reserve dense cells, elimination dimension, and operand-height chunks."""
-
-    if rows == 0 or columns == 0:
-        return 0
-    return rows * columns * min(rows, columns) * _digit_chunks(height) ** 2
-
-
-def _work_for_rank(
+def _backend_envelope(
     *,
     dimension: int,
     displacement_height: int,
-    common_denominator: int,
-    bounds: AffineTorusRankBounds,
-) -> dict[AffineTorusBackendEnvelopeCategory, int]:
-    """Reserve every backend primitive used by one rank-specific kernel path.
+    rank_bounds: tuple[AffineTorusRankBounds, ...],
+) -> AffineTorusBackendEnvelope:
+    """Bound the exact maintained primitive schedule and its operand shapes."""
 
-    The categories cover two source augmented HNFs, one character augmented
-    HNF, source/minor rank calls, three rational solves and one inverse, one
-    relation HNF, one Smith form, and the integral lift. The formulas use the
-    largest source-derived operand height entering each fixed-size call; they do
-    not claim to observe FLINT's private instruction count.
-    """
-
-    rank = bounds.rank
-    nullity = bounds.nullity
-    source_chunks = _digit_chunks(max(1, displacement_height))
-    minor_chunks = _digit_chunks(bounds.source_minor_height)
-    rational_chunks = _digit_chunks(bounds.rational_intermediate_height)
-    denominator_chunks = _digit_chunks(common_denominator)
-
-    return {
-        "source_conversion": (
-            (dimension * dimension + 2 * dimension) * source_chunks
-            + dimension * dimension * denominator_chunks**2
+    positive_dimension = int(dimension > 0)
+    integer_height = max(
+        1,
+        displacement_height,
+        *(
+            height
+            for bounds in rank_bounds
+            for height in (
+                bounds.source_minor_height,
+                bounds.source_hnf_transform_height,
+                bounds.character_hnf_transform_height,
+                bounds.image_saturation_height,
+                bounds.leading_solution_height,
+                bounds.integral_lift_height,
+                bounds.image_coordinate_height,
+            )
         ),
-        "source_hnf": 2
-        * _dense_backend_envelope_units(
-            dimension,
-            2 * dimension,
-            bounds.source_hnf_transform_height,
+    )
+    rational_height = max(
+        1,
+        *(bounds.rational_intermediate_height for bounds in rank_bounds),
+    )
+    return AffineTorusBackendEnvelope(
+        primitive_call_limits=(
+            ("integer_rank", 1 + 2 * dimension),
+            ("integer_hnf", 3 + positive_dimension),
+            ("rational_solve", 3 * positive_dimension),
+            ("integer_snf", 1),
+            ("rational_inverse", positive_dimension),
+            ("integer_multiply", positive_dimension),
         ),
-        "character_hnf": _dense_backend_envelope_units(
-            dimension,
-            dimension + nullity,
-            bounds.character_hnf_transform_height,
-        ),
-        "rank_minor_selection": ((2 * dimension + 7) * dimension**3 * source_chunks),
-        "rational_linear_algebra": 4 * dimension**3 * rational_chunks**2,
-        "relation_hnf": _dense_backend_envelope_units(
-            rank, rank, bounds.image_coordinate_height
-        ),
-        "smith": _dense_backend_envelope_units(rank, rank, bounds.source_minor_height),
-        "integral_lift": (
-            dimension
-            * nullity
-            * _digit_chunks(bounds.character_hnf_transform_height)
-            * _digit_chunks(bounds.leading_solution_height)
-        ),
-        "result_construction": (3 * dimension * dimension + 4 * dimension + 32)
-        * max(
-            minor_chunks,
-            _digit_chunks(bounds.base_point_component_height),
-        ),
-    }
+        maximum_integer_rows=dimension,
+        maximum_integer_columns=2 * dimension,
+        maximum_integer_height=integer_height,
+        maximum_rational_rows=dimension,
+        maximum_rational_columns=dimension,
+        maximum_rational_height=rational_height,
+    )
 
 
 def build_affine_torus_plan(
     source: RationalAffineTorusMap, *, deadline: float
 ) -> AffineTorusFixedLocusPlan:
-    """Precharge every possible phase before the first FLINT backend call."""
+    """Build structural and exact-result envelopes before the first FLINT call."""
 
     require_affine_torus_deadline(deadline, "before work accounting")
     dimension = source.torus.dimension
@@ -636,21 +564,6 @@ def build_affine_torus_plan(
             f"{transport_limit}-byte canonical transport limit",
         )
 
-    rank_work = tuple(
-        _work_for_rank(
-            dimension=dimension,
-            displacement_height=displacement_height,
-            common_denominator=common_denominator,
-            bounds=bounds,
-        )
-        for bounds in rank_bounds
-    )
-    envelope = _BackendEnvelope(deadline=deadline)
-    for category in _BACKEND_ENVELOPE_CATEGORIES:
-        envelope.reserve(
-            category,
-            max((work[category] for work in rank_work), default=0),
-        )
     require_affine_torus_deadline(deadline, "after semantic admission")
     return AffineTorusFixedLocusPlan(
         dimension=dimension,
@@ -658,14 +571,19 @@ def build_affine_torus_plan(
         displacement_height=displacement_height,
         translation_common_denominator=common_denominator,
         rank_bounds=rank_bounds,
+        worker_input_bytes_upper_bound=source_wire_bytes,
         result_bytes_upper_bound=result_bytes,
-        backend_envelope_units_by_category=envelope.freeze(),
+        backend_envelope=_backend_envelope(
+            dimension=dimension,
+            displacement_height=displacement_height,
+            rank_bounds=rank_bounds,
+        ),
     )
 
 
 __all__ = [
     "AFFINE_TORUS_FIXED_LOCUS_WALL_SECONDS",
-    "MAX_AFFINE_TORUS_BACKEND_ENVELOPE_UNITS",
+    "AffineTorusBackendEnvelope",
     "AffineTorusFixedLocusPlan",
     "AffineTorusRankBounds",
     "begin_affine_torus_deadline",

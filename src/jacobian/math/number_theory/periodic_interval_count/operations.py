@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import (
+    CanonicalLimits,
+    canonicalize_json,
+    format_canonical_integer,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._periodic_kernel import (
     rank_periodic_union,
@@ -18,6 +22,28 @@ from jacobian.math.number_theory.periodic_interval_count._models import (
 __all__ = ["compute_periodic_interval_count"]
 
 
+def _integer_decimal_digit_bound(value: int) -> int:
+    if value == 0:
+        return 1
+    return (abs(value).bit_length() * 30_103) // 100_000 + 1
+
+
+def _admit_interval_result(
+    source: PeriodicCongruenceUnionSource, lower: int, upper: int
+) -> None:
+    lower_digits = _integer_decimal_digit_bound(lower)
+    upper_digits = _integer_decimal_digit_bound(upper)
+    count_digits = max(lower_digits, upper_digits) + 1
+    source_bytes = len(canonicalize_json(source.model_dump(mode="json")))
+    predicted_bytes = source_bytes + lower_digits + upper_digits + count_digits + 512
+    if predicted_bytes > CanonicalLimits().max_output_bytes:
+        raise OperationDomainValidationError(
+            location=("lower", "upper"),
+            code="number_theory.periodic.result_bound",
+            message="periodic interval endpoints and count exceed the output budget",
+        )
+
+
 def compute_periodic_interval_count(
     source: PeriodicCongruenceUnionSource,
     lower: int,
@@ -27,6 +53,7 @@ def compute_periodic_interval_count(
 
     Uses the exact one-period profile and quotient/remainder arithmetic.
     """
+    _admit_interval_result(source, lower, upper)
     if lower > upper:
         return PeriodicIntervalCountResult(
             source=source,

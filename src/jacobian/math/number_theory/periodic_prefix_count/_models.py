@@ -7,7 +7,7 @@ from pydantic import Field, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits
+from jacobian.canonical import CanonicalLimits, parse_canonical_integer
 from jacobian.math.number_theory._periodic_models import (
     PeriodicCongruenceUnionSource,
     PeriodicNonnegativeInteger,
@@ -52,12 +52,12 @@ class PeriodicUnionPrefixCountResult(StrictModel):
 
     @model_validator(mode="after")
     def require_count_invariants(self) -> Self:
-        cutoff = int(self.cutoff)
-        period = int(self.common_period)
-        occupied = int(self.occupied_count)
-        count = int(self.count)
+        cutoff = parse_canonical_integer(self.cutoff)
+        period = parse_canonical_integer(self.common_period)
+        occupied = parse_canonical_integer(self.occupied_count)
+        count = parse_canonical_integer(self.count)
         source_period = lcm(
-            *(int(subset.modulus) for subset in self.source.subsets)
+            *(parse_canonical_integer(subset.modulus) for subset in self.source.subsets)
         )
         if period != source_period:
             raise PydanticCustomError(

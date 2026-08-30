@@ -5,18 +5,15 @@ from __future__ import annotations
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.number_theory._r_full_enumerate_kernels import (
-    enumerate_r_full as _enumerate_r_full_kernel,
-)
 from jacobian.math.number_theory._r_full_enumerate_models import (
     MAX_R_FULL_CUTOFF,
     MAX_R_FULL_EXPONENT,
-    MAX_R_FULL_FAMILY_SIZE,
     MAX_R_FULL_RESULT_BYTES,
     MIN_R_FULL_EXPONENT,
     RFullEnumerateRequest,
     RFullEnumerateResult,
-    estimate_r_full_family_size,
+    estimate_r_full_result_bytes,
+    plan_r_full_family,
 )
 from jacobian.math.number_theory._support import number_theory_operation
 
@@ -25,22 +22,21 @@ def _enumerate_r_full_admitted(
     minimum_exponent: int, cutoff: int
 ) -> RFullEnumerateResult:
     canonical_cutoff = format_canonical_integer(cutoff)
-    estimate = estimate_r_full_family_size(minimum_exponent, cutoff)
-    if estimate > MAX_R_FULL_FAMILY_SIZE:
+    plan = plan_r_full_family(minimum_exponent, cutoff)
+    if plan.exceeded:
         raise OperationDomainValidationError(
             location=("cutoff",),
             code="r_full_enumerate_family_exceeds_result_budget",
             message="r-full family exceeds the result-size budget",
         )
-    if estimate * (len(canonical_cutoff) + 3) > MAX_R_FULL_RESULT_BYTES:
+    if estimate_r_full_result_bytes(minimum_exponent, cutoff, plan.family) > MAX_R_FULL_RESULT_BYTES:
         raise OperationDomainValidationError(
             location=("cutoff",),
             code="r_full_enumerate_family_exceeds_transport_budget",
             message="r-full family exceeds the serialized-byte budget",
         )
-    raw_family = _enumerate_r_full_kernel(cutoff, minimum_exponent)
     return RFullEnumerateResult._from_kernel(
-        minimum_exponent, canonical_cutoff, raw_family
+        minimum_exponent, canonical_cutoff, list(plan.family)
     )
 
 

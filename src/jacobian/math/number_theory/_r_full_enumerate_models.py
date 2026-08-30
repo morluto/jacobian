@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from bisect import bisect_right
 from heapq import merge
-from typing import Self
+from typing import NamedTuple, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -13,18 +13,31 @@ from sympy.ntheory.generate import primerange
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import (
+    CanonicalizationError,
+    CanonicalLimits,
+    encode_strict_json,
+    format_canonical_integer,
+    parse_canonical_integer,
+)
 
 MAX_R_FULL_CUTOFF_DIGITS = 256
 MAX_R_FULL_CUTOFF = 10**MAX_R_FULL_CUTOFF_DIGITS
 MIN_R_FULL_EXPONENT = 2
-MAX_R_FULL_EXPONENT = 64
+MAX_R_FULL_EXPONENT = 256
 MAX_R_FULL_FAMILY_SIZE = 200_000
 MAX_R_FULL_RESULT_BYTES = 3_000_000
 _MAX_PRIME_SEARCH_BOUND = 3_000_000
 
 
-def estimate_r_full_family_size(minimum_exponent: int, cutoff: int) -> int:
+class RFullFamilyPlan(NamedTuple):
+    """Request-scoped family plan shared by admission and result construction."""
+
+    family: tuple[int, ...]
+    exceeded: bool
+
+
+def plan_r_full_family(minimum_exponent: int, cutoff: int) -> RFullFamilyPlan:
     """Return a conservative, exponent-sensitive family-size estimate.
 
     The admission pass counts the multiplicative family itself, stopping as
@@ -37,7 +50,7 @@ def estimate_r_full_family_size(minimum_exponent: int, cutoff: int) -> int:
     """
     prime_bound, _ = integer_nthroot(cutoff, minimum_exponent)
     if prime_bound > _MAX_PRIME_SEARCH_BOUND:
-        return MAX_R_FULL_FAMILY_SIZE + 1
+        return RFullFamilyPlan((), True)
 
     family_set: set[int] = {1}
     sorted_family = [1]
@@ -57,8 +70,35 @@ def estimate_r_full_family_size(minimum_exponent: int, cutoff: int) -> int:
             family_set.update(fresh_values)
             sorted_family = list(merge(sorted_family, fresh_values))
             if len(sorted_family) > MAX_R_FULL_FAMILY_SIZE:
-                return len(sorted_family)
-    return len(sorted_family)
+                return RFullFamilyPlan((), True)
+    return RFullFamilyPlan(tuple(sorted_family), False)
+
+
+def estimate_r_full_family_size(minimum_exponent: int, cutoff: int) -> int:
+    """Return the admitted family size, or one past the family limit."""
+    plan = plan_r_full_family(minimum_exponent, cutoff)
+    return MAX_R_FULL_FAMILY_SIZE + 1 if plan.exceeded else len(plan.family)
+
+
+def estimate_r_full_result_bytes(
+    minimum_exponent: int, cutoff: int, family: tuple[int, ...]
+) -> int:
+    """Measure the canonical result payload for an admitted family."""
+    payload = {
+        "minimum_exponent": minimum_exponent,
+        "cutoff": format_canonical_integer(cutoff),
+        "count": len(family),
+        "family": [format_canonical_integer(value) for value in family],
+    }
+    try:
+        return len(
+            encode_strict_json(
+                payload,
+                limits=CanonicalLimits(max_output_bytes=MAX_R_FULL_RESULT_BYTES),
+            )
+        )
+    except CanonicalizationError:
+        return MAX_R_FULL_RESULT_BYTES + 1
 
 
 class RFullEnumerateRequest(StrictModel):
@@ -169,5 +209,8 @@ __all__ = [
     "MIN_R_FULL_EXPONENT",
     "RFullEnumerateRequest",
     "RFullEnumerateResult",
+    "RFullFamilyPlan",
     "estimate_r_full_family_size",
+    "estimate_r_full_result_bytes",
+    "plan_r_full_family",
 ]

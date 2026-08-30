@@ -78,8 +78,11 @@ def _enumerate_recursive(
     values.add(current)
     for i in range(prime_idx, len(primes)):
         p = primes[i]
+        remaining_bound = bound // current
+        if r > remaining_bound.bit_length() - 1:
+            break
         pe = p**r
-        if current > bound // pe:
+        if pe > remaining_bound:
             break
         # Add this prime with exponent >= r
         multiplier = pe

@@ -7,7 +7,11 @@ from math import factorial
 from typing import NoReturn
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import CanonicalLimits, strict_json_object_size
+from jacobian.canonical import (
+    CanonicalLimits,
+    encode_strict_json,
+    strict_json_object_size,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.probability.markov_chains.eventual_hitting._models import (
     EventualHittingProfileResult,
@@ -25,6 +29,10 @@ __all__ = ["compute_eventual_hitting_profile"]
 
 def _json_array_size(item_size: int, count: int) -> int:
     return 2 + max(count - 1, 0) + item_size * count
+
+
+def _json_array_sizes(item_sizes: list[int]) -> int:
+    return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
 
 
 def _reject(location: tuple[str | int, ...], code: str, message: str) -> NoReturn:
@@ -98,6 +106,12 @@ def _admit_eventual_hitting(
         ),
         default=1,
     )
+    if matrix_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+        _reject(
+            ("matrix",),
+            "source_height_exceeds_bound",
+            "transition probabilities exceed the exact rational source bound",
+        )
     transient_count = len(transient)
     result_height = (
         transient_count * matrix_digits
@@ -111,13 +125,20 @@ def _admit_eventual_hitting(
             "eventual hitting probabilities exceed the exact rational result bound",
         )
 
-    rational_source_bytes = strict_json_object_size(
-        (
-            ("num", matrix_digits + 2),
-            ("den", matrix_digits + 2),
+    matrix_row_bytes = [
+        _json_array_sizes(
+            [
+                len(
+                    encode_strict_json(
+                        CanonicalRational.from_fraction(value).model_dump(mode="json")
+                    )
+                )
+                for value in row
+            ]
         )
-    )
-    matrix_bytes = _json_array_size(_json_array_size(rational_source_bytes, n), n)
+        for row in matrix
+    ]
+    matrix_bytes = _json_array_sizes(matrix_row_bytes)
     index_bytes = max(1, len(str(max(n - 1, 0))))
     target_bytes = _json_array_size(index_bytes, len(target_states))
     probability_bytes = _json_array_size(

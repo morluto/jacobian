@@ -67,13 +67,15 @@ def test_known_families_and_boundary_conventions() -> None:
     assert enumerate_friable(10, 3) == (1, 2, 3, 4, 6, 8, 9)
     assert enumerate_friable(100, 100) == tuple(range(1, 101))
     assert enumerate_friable(100, 2) == tuple(
-        2**k for k in range(7)  # 1,2,4,8,16,32,64
+        2**k
+        for k in range(7)  # 1,2,4,8,16,32,64
     )
 
 
 # --------------------------------------------------------------------------- #
 # Tests from the implementation packet
 # --------------------------------------------------------------------------- #
+
 
 def test_factor_each_emitted_value_and_require_smooth() -> None:
     """Factor each emitted value and require every prime factor at most y."""
@@ -113,7 +115,9 @@ def test_absent_values_and_increasing_ordering() -> None:
     family = enumerate_friable(20, 5)
     absent = {7, 11, 13, 14, 17, 19}
     for value in absent:
-        assert value not in family, f"{value} should be absent from the 5-smooth family at most 20"
+        assert value not in family, (
+            f"{value} should be absent from the 5-smooth family at most 20"
+        )
 
     assert list(family) == sorted(family)
     assert len(family) == len(set(family))
@@ -122,6 +126,7 @@ def test_absent_values_and_increasing_ordering() -> None:
 # --------------------------------------------------------------------------- #
 # Cross-checks against the existing count operation
 # --------------------------------------------------------------------------- #
+
 
 @pytest.mark.parametrize("x", [0, 1, 5, 10, 20, 50, 100, 200, 500])
 @pytest.mark.parametrize("y", [0, 1, 2, 3, 5, 7, 11, 50])

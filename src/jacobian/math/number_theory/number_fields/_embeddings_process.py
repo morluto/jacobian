@@ -19,6 +19,9 @@ from jacobian.math.number_theory.number_fields._embedding_protocol import (
     NumberFieldEmbeddingWorkerRequest,
     NumberFieldEmbeddingWorkerResponse,
 )
+from jacobian.math.number_theory.number_fields.values import (
+    SimpleNumberFieldPresentation,
+)
 
 _EMBEDDINGS_WORKER = Path(__file__).resolve().with_name("_embeddings_worker.py")
 EMBEDDINGS_WORKER_WALL_SECONDS = 120.0
@@ -28,8 +31,10 @@ _EMBEDDINGS_WORKER_STDERR_BYTES = 64 * 1024
 
 
 def run_embeddings_worker(
-    request: NumberFieldEmbeddingWorkerRequest,
+    field: SimpleNumberFieldPresentation,
     *,
+    root_isolation_bits: int,
+    evidence_grid_bits: int,
     deadline: float,
     stdout_limit: int,
 ) -> NumberFieldEmbeddingWorkerResponse:
@@ -41,6 +46,11 @@ def run_embeddings_worker(
         worker_environment,
     )
 
+    request = NumberFieldEmbeddingWorkerRequest(
+        field=field,
+        root_isolation_bits=root_isolation_bits,
+        evidence_grid_bits=evidence_grid_bits,
+    )
     timeout_seconds = deadline - time.monotonic()
     if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
         raise OperationExecutionTimeoutError(

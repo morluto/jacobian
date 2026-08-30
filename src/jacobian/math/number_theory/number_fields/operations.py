@@ -30,7 +30,6 @@ from jacobian.math.number_theory.number_fields._embedding_limits import (
 from jacobian.math.number_theory.number_fields._embedding_protocol import (
     NumberFieldEmbeddingWorkerInvalid,
     NumberFieldEmbeddingWorkerRejected,
-    NumberFieldEmbeddingWorkerRequest,
 )
 from jacobian.math.number_theory.number_fields._embeddings_process import (
     EMBEDDINGS_WORKER_WALL_SECONDS,
@@ -238,11 +237,9 @@ def embeddings(
     admission = _admit_number_field_embeddings(field)
     _require_embedding_execution_active(deadline, "after embedding admission")
     worker_response = run_embeddings_worker(
-        NumberFieldEmbeddingWorkerRequest(
-            field=field,
-            root_isolation_bits=admission.root_isolation_bits,
-            evidence_grid_bits=admission.evidence_grid_bits,
-        ),
+        field,
+        root_isolation_bits=admission.root_isolation_bits,
+        evidence_grid_bits=admission.evidence_grid_bits,
         deadline=deadline,
         stdout_limit=admission.predicted_worker_output_bytes,
     )

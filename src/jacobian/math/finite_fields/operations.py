@@ -10,12 +10,14 @@ from jacobian.canonical import (
     encode_strict_json,
 )
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.finite_fields._matrix_rank_kernels import compute_matrix_rank
 from jacobian.math.finite_fields._models import (
     _MAX_DIRECTION_RANK_WORK,
     _MAX_PROJECTIVE_POINTS,
 )
 from jacobian.math.finite_fields.values import (
     Axis,
+    AxisBoundMatrix,
     CollisionResult,
     DirectionRankLedger,
     FiberPartition,
@@ -34,8 +36,6 @@ from jacobian.math.finite_fields.values import (
     RankResult,
     _direction_rank_work,
 )
-from jacobian.math.finite_fields._matrix_rank_kernels import compute_matrix_rank
-from jacobian.math.finite_fields.values import AxisBoundMatrix
 from jacobian.math.graphs.directed._models import (
     MAX_DIRECTED_GRAPH_PARSE_EDGES,
     DirectedGraph,

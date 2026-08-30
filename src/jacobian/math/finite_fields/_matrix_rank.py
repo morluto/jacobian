@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool
-from jacobian.math.finite_fields.operations import matrix_rank
 from jacobian.math.finite_fields._matrix_rank_models import (
     MatrixRankRequest,
     MatrixRankResult,
 )
+from jacobian.math.finite_fields.operations import matrix_rank
 
 _FIELD: dict[str, object] = {
     "characteristic": 2,
@@ -60,4 +60,4 @@ MATRIX_RANK_OPERATION = MathTool(
 )
 
 
-__all__ = ["compute_rank", "MATRIX_RANK_OPERATION"]
+__all__ = ["MATRIX_RANK_OPERATION", "compute_rank"]

@@ -26,8 +26,10 @@ from jacobian.math.finite_fields import (
     restrict_scalars,
 )
 from jacobian.math.finite_fields._matrix_rank import MATRIX_RANK_OPERATION
-from jacobian.math.finite_fields._matrix_rank_models import MatrixRankRequest
-from jacobian.math.finite_fields._matrix_rank_models import MatrixRankResult
+from jacobian.math.finite_fields._matrix_rank_models import (
+    MatrixRankRequest,
+    MatrixRankResult,
+)
 from jacobian.math.finite_fields._models import (
     CollisionRequest,
     DirectionRankLedgerRequest,

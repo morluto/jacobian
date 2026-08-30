@@ -64,8 +64,6 @@ def compute_matrix_rank(matrix: AxisBoundMatrix) -> MatrixRankData:
     presentation = matrix.presentation
     z = symbols("z")
     modulus = _build_modulus(presentation)
-    degree = presentation.degree
-
     rows = len(matrix.row_axis.labels)
     cols = len(matrix.column_axis.labels)
 

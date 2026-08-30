@@ -79,6 +79,8 @@ def test_exact_public_api_symbols() -> None:
         "gcdex",
         "groebner_basis",
         "hermite_reduction",
+        "ideal_containment",
+        "ideal_equality",
         "integer_polynomial_compose",
         "integer_polynomial_content",
         "integer_polynomial_evaluate",

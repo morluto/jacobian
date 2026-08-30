@@ -232,8 +232,8 @@ def test_stacked_equation_axis_is_rejected_before_polynomial_expansion() -> None
     )
 
 
-@pytest.mark.parametrize("degree", [-1, 65, True])
-def test_native_api_rejects_degree_outside_the_typed_request_domain(
+@pytest.mark.parametrize("degree", [-1, True])
+def test_native_api_rejects_nonnegative_integer_degree_domain_violations(
     degree: object,
 ) -> None:
     with pytest.raises(OperationDomainValidationError) as error:
@@ -242,6 +242,28 @@ def test_native_api_rejects_degree_outside_the_typed_request_domain(
     assert error.value.errors()[0]["type"] == (
         "finite_field.fixed_subspace_degree_bound"
     )
+
+
+def test_one_variable_degree_is_bounded_by_derived_work_not_fixed_cap() -> None:
+    action = PrimeFieldLinearAction(
+        variable_axis=Axis(name="polynomial_variables", labels=("x",)),
+        generator_matrices=(PrimeFieldMatrix(prime=3, entries=((1,),), columns=1),),
+    )
+
+    result = homogeneous_fixed_subspace(action, 65)
+
+    assert result.monomial_basis == ((65,),)
+    assert result.basis_matrix.entries == ((1,),)
+
+
+def test_huge_one_variable_degree_is_rejected_by_derived_work_bound() -> None:
+    action = PrimeFieldLinearAction(
+        variable_axis=Axis(name="polynomial_variables", labels=("x",)),
+        generator_matrices=(PrimeFieldMatrix(prime=3, entries=((1,),), columns=1),),
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="work bound"):
+        homogeneous_fixed_subspace(action, 1_100_000_000)
 
 
 def test_raw_action_rejects_oversized_prime_and_matrix_before_nested_work() -> None:
@@ -255,6 +277,24 @@ def test_raw_action_rejects_oversized_prime_and_matrix_before_nested_work() -> N
                 "generator_matrices": [
                     {"prime": 10**200, "entries": [[1]], "columns": 1}
                 ],
+            }
+        )
+
+
+def test_raw_action_malformed_matrix_row_is_a_validation_error() -> None:
+    with pytest.raises(ValidationError):
+        HomogeneousFixedSubspaceRequest.model_validate(
+            {
+                "action": {
+                    "variable_axis": {
+                        "name": "polynomial_variables",
+                        "labels": ["x"],
+                    },
+                    "generator_matrices": [
+                        {"prime": 3, "entries": [1], "columns": 1}
+                    ],
+                },
+                "degree": 1,
             }
         )
 

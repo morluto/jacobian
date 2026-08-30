@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from math import comb
 from typing import Any, Literal, Self
 
 import rfc8785
@@ -22,8 +21,21 @@ _MAX_AXIS_LABELS = 256
 _MAX_DERIVATION_WORK = 1_000_000
 _MAX_ACTION_VARIABLES = 8
 _MAX_ACTION_GENERATORS = 16
-_MAX_HOMOGENEOUS_DEGREE = 64
+# A one-variable, one-generator degree reaches this bound exactly through the
+# derived expansion-work envelope; multi-variable actions are admitted only
+# when their sharper monomial and matrix budgets fit first.
 _MAX_HOMOGENEOUS_MONOMIALS = 512
+
+
+def _homogeneous_monomial_count(variable_count: int, degree: int) -> int:
+    """Count homogeneous monomials, stopping once the result is out of budget."""
+
+    count = 1
+    for position in range(1, variable_count):
+        count = count * (degree + position) // position
+        if count > _MAX_HOMOGENEOUS_MONOMIALS:
+            return count
+    return count
 
 
 def _validation_error(code: str, message: str) -> PydanticCustomError:
@@ -402,7 +414,7 @@ class HomogeneousFixedSubspace(StrictModel):
     """One homogeneous simultaneous fixed space in canonical coefficient form."""
 
     action: PrimeFieldLinearAction
-    degree: StrictInt = Field(ge=0, le=_MAX_HOMOGENEOUS_DEGREE)
+    degree: StrictInt = Field(ge=0)
     monomial_basis: tuple[tuple[StrictInt, ...], ...] = Field(
         min_length=1, max_length=_MAX_HOMOGENEOUS_MONOMIALS
     )
@@ -420,12 +432,12 @@ class HomogeneousFixedSubspace(StrictModel):
         labels = _raw_field(axis, "labels")
         if type(degree) is not int or not isinstance(labels, (list, tuple)):
             return data
-        if not 0 <= degree <= _MAX_HOMOGENEOUS_DEGREE:
+        if degree < 0:
             return data
         variable_count = len(labels)
         if not 1 <= variable_count <= _MAX_ACTION_VARIABLES:
             return data
-        monomial_count = comb(variable_count + degree - 1, degree)
+        monomial_count = _homogeneous_monomial_count(variable_count, degree)
         if monomial_count > _MAX_HOMOGENEOUS_MONOMIALS:
             raise _validation_error(
                 "finite_field.fixed_subspace_monomial_bound",
@@ -476,7 +488,7 @@ class HomogeneousFixedSubspace(StrictModel):
     @model_validator(mode="after")
     def require_canonical_shape(self) -> Self:
         variable_count = len(self.action.variable_axis.labels)
-        monomial_count = comb(variable_count + self.degree - 1, self.degree)
+        monomial_count = _homogeneous_monomial_count(variable_count, self.degree)
         if len(self.monomial_basis) != monomial_count:
             raise _validation_error(
                 "finite_field.fixed_subspace_monomial_shape",

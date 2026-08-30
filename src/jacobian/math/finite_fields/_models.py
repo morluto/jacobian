@@ -6,7 +6,6 @@ from pydantic import Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.finite_fields.values import (
-    _MAX_HOMOGENEOUS_DEGREE,
     Axis,
     DirectionRankLedger,
     FiniteDimensionalSubspace,
@@ -26,7 +25,7 @@ class HomogeneousFixedSubspaceRequest(StrictModel):
     """Compute one homogeneous fixed space for explicit action generators."""
 
     action: PrimeFieldLinearAction
-    degree: StrictInt = Field(ge=0, le=_MAX_HOMOGENEOUS_DEGREE)
+    degree: StrictInt = Field(ge=0)
 
     @model_validator(mode="before")
     @classmethod
@@ -50,7 +49,14 @@ class HomogeneousFixedSubspaceRequest(StrictModel):
                     **matrix,
                     "entries": tuple(tuple(row) for row in matrix["entries"]),
                 }
-                if isinstance(matrix, dict) and isinstance(matrix.get("entries"), list)
+                if (
+                    isinstance(matrix, dict)
+                    and isinstance(matrix.get("entries"), list)
+                    and all(
+                        isinstance(row, (list, tuple))
+                        for row in matrix["entries"]
+                    )
+                )
                 else matrix
                 for matrix in matrices
             )

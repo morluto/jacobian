@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from math import comb
 from typing import Literal
 
 from jacobian.canonical import (
@@ -16,7 +15,6 @@ from jacobian.math.finite_fields._models import (
     _MAX_PROJECTIVE_POINTS,
 )
 from jacobian.math.finite_fields.values import (
-    _MAX_HOMOGENEOUS_DEGREE,
     _MAX_HOMOGENEOUS_MONOMIALS,
     Axis,
     CollisionResult,
@@ -38,6 +36,7 @@ from jacobian.math.finite_fields.values import (
     ProjectivePoint,
     RankResult,
     _direction_rank_work,
+    _homogeneous_monomial_count,
 )
 from jacobian.math.graphs.directed._models import (
     MAX_DIRECTED_GRAPH_PARSE_EDGES,
@@ -65,17 +64,15 @@ _PALEY_ORIENTATION: Literal["ARC_X_TO_Y_IFF_Y_MINUS_X_IS_NONZERO_SQUARE"] = (
 def _homogeneous_fixed_subspace_envelope(
     action: PrimeFieldLinearAction, degree: int
 ) -> int:
-    if type(degree) is not int or not 0 <= degree <= _MAX_HOMOGENEOUS_DEGREE:
+    if type(degree) is not int or degree < 0:
         raise OperationDomainValidationError(
             location=("degree",),
             code="finite_field.fixed_subspace_degree_bound",
-            message=(
-                f"degree must be an integer from 0 through {_MAX_HOMOGENEOUS_DEGREE}"
-            ),
+            message="degree must be a nonnegative integer",
         )
     variable_count = len(action.variable_axis.labels)
     generator_count = len(action.generator_matrices)
-    monomial_count = comb(variable_count + degree - 1, degree)
+    monomial_count = _homogeneous_monomial_count(variable_count, degree)
     equation_rows = generator_count * monomial_count
     equation_entries = generator_count * monomial_count**2
     output_entries = monomial_count**2

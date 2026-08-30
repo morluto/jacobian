@@ -171,7 +171,15 @@ def test_sqrt_two_profile_matches_an_independent_exact_quadratic_oracle(
         )
         assert _pair(gap.difference) == expected
         assert _sqrt_two_sign(expected) == 1
-        assert gap.positive_enclosure.lower.as_fraction() > 0
+        enclosure_lower = gap.positive_enclosure.lower.as_fraction()
+        enclosure_upper = gap.positive_enclosure.upper.as_fraction()
+        assert enclosure_lower > 0
+        assert _sqrt_two_sign(
+            (expected[0] - enclosure_lower, expected[1])
+        ) >= 0
+        assert _sqrt_two_sign(
+            (enclosure_upper - expected[0], -expected[1])
+        ) >= 0
 
     oracle_gaps = tuple(_pair(gap.difference) for gap in result.gaps)
     expected_least = min(oracle_gaps, key=cmp_to_key(_sqrt_two_compare))

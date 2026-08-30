@@ -81,7 +81,13 @@ def _admit_maximum_weight_antichain(
         )
     # A singleton antichain returns the input weight unchanged; do not charge
     # an extra addition digit at that exact canonical boundary.
-    max_sum_digits = max_digits if width <= 1 else width * max_digits + len(str(width))
+    denominators = {weight.den for weight in weights}
+    if len(denominators) == 1:
+        # Adding values with a common denominator does not multiply that
+        # denominator at every summand; only the numerator can gain carry digits.
+        max_sum_digits = max_digits + (len(str(width)) if width > 1 else 0)
+    else:
+        max_sum_digits = max_digits if width <= 1 else width * max_digits + len(str(width))
     if max_sum_digits > 32_768:
         raise OperationDomainValidationError(
             location=("weights",),

@@ -49,18 +49,18 @@ def _admit_edge_deletion_profile(
             message="deletion_order must not exceed the number of edges",
         )
 
-    row_count = sum(comb(edge_count, order) for order in range(deletion_order + 1))
+    row_count = 0
     coloring_work = 1
     if graph.edges and vertex_count:
-        coloring_work = vertex_count * sum(
-            colors**vertex_count for colors in range(1, vertex_count + 1)
-        )
-    if row_count * coloring_work > MAX_EDGE_DELETION_PROFILE_WORK:
-        raise OperationDomainValidationError(
-            location=("graph",),
-            code="graph.edge_deletion.work_exceeds_bound",
-            message="edge-deletion profile search exceeds its exact work bound",
-        )
+        coloring_work = edge_count * vertex_count * vertex_count
+    for order in range(deletion_order + 1):
+        row_count += comb(edge_count, order)
+        if row_count > MAX_EDGE_DELETION_PROFILE_WORK // max(coloring_work, 1):
+            raise OperationDomainValidationError(
+                location=("graph",),
+                code="graph.edge_deletion.work_exceeds_bound",
+                message="edge-deletion profile search exceeds its exact work bound",
+            )
 
     graph_bytes = len(encode_strict_json(graph.model_dump(mode="json")))
     index_bytes = max(1, len(str(max(edge_count - 1, 0))))

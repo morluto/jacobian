@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from time import monotonic
 
 from pydantic_core import PydanticCustomError
@@ -11,6 +13,7 @@ from jacobian._execution import (
     OperationExecutionTimeoutError,
     bind_request_deadline,
     current_request_execution,
+    request_execution,
 )
 from jacobian.canonical import CanonicalizationError, format_canonical_integer
 from jacobian.catalog._examples import example
@@ -45,24 +48,35 @@ def _bind_execution_deadline() -> None:
     bind_request_deadline(deadline)
 
 
+@contextmanager
+def _owner_execution() -> Iterator[None]:
+    """Provide one request context for native calls made outside dispatch."""
+    if current_request_execution() is None:
+        with request_execution(monotonic()):
+            yield
+    else:
+        yield
+
+
 def compute_divisibility_edge_profile(
     request: DivisibilityEdgeProfileRequest,
 ) -> DivisibilityEdgeProfileResult:
     """Return the complete directed divisibility edge table with quotient and LPF."""
-    try:
-        _bind_execution_deadline()
-        _validate_divisibility_edge_resources(request.values)
-        return _build_divisibility_edge_profile(request.values)
-    except PydanticCustomError as exc:
-        raise OperationDomainValidationError(
-            location=("values",), code=exc.type, message=exc.message()
-        ) from exc
-    except FactorizationIncompleteError as exc:
-        failure = exc.failure
-        failure_kind = failure.kind if failure is not None else "UNKNOWN"
-        raise RuntimeError(
-            "divisibility edge factorization worker failed: " + failure_kind
-        ) from exc
+    with _owner_execution():
+        try:
+            _bind_execution_deadline()
+            _validate_divisibility_edge_resources(request.values)
+            return _build_divisibility_edge_profile(request.values)
+        except PydanticCustomError as exc:
+            raise OperationDomainValidationError(
+                location=("values",), code=exc.type, message=exc.message()
+            ) from exc
+        except FactorizationIncompleteError as exc:
+            failure = exc.failure
+            failure_kind = failure.kind if failure is not None else "UNKNOWN"
+            raise RuntimeError(
+                "divisibility edge factorization worker failed: " + failure_kind
+            ) from exc
 
 
 def _build_divisibility_edge_profile(
@@ -83,11 +97,7 @@ def _build_divisibility_edge_profile(
             raise OperationExecutionTimeoutError(
                 "divisibility edge factorization exceeded its deadline"
             ) from exc
-        raise OperationDomainValidationError(
-            location=("values",),
-            code="divisibility_edge.factorization_incomplete",
-            message="bounded factorization did not establish every quotient",
-        ) from exc
+        raise
     edges = tuple(
         DivisibilityEdge(
             source=d.source,
@@ -104,22 +114,32 @@ def divisibility_edge_profile(
     values: tuple[str | int | IntegerValue, ...],
 ) -> DivisibilityEdgeProfileResult:
     """Return a divisibility edge profile from native canonical values."""
-    try:
-        _bind_execution_deadline()
-        canonical_values = tuple(_canonical_native_value(value) for value in values)
-        _validate_divisibility_edge_shape(canonical_values)
-        _validate_divisibility_edge_resources(canonical_values)
-    except (CanonicalizationError, PydanticCustomError, TypeError, ValueError) as exc:
-        if isinstance(exc, PydanticCustomError):
-            code = exc.type
-            message = exc.message()
-        else:
-            code = "divisibility_edge.invalid_native_value"
-            message = "values must be canonical integers or IntegerValue instances"
-        raise OperationDomainValidationError(
-            location=("values",), code=code, message=message
-        ) from exc
-    return _build_divisibility_edge_profile(canonical_values)
+    with _owner_execution():
+        try:
+            _bind_execution_deadline()
+            canonical_values = tuple(
+                _canonical_native_value(value) for value in values
+            )
+            _validate_divisibility_edge_shape(canonical_values)
+            _validate_divisibility_edge_resources(canonical_values)
+        except (CanonicalizationError, PydanticCustomError, TypeError, ValueError) as exc:
+            if isinstance(exc, PydanticCustomError):
+                code = exc.type
+                message = exc.message()
+            else:
+                code = "divisibility_edge.invalid_native_value"
+                message = "values must be canonical integers or IntegerValue instances"
+            raise OperationDomainValidationError(
+                location=("values",), code=code, message=message
+            ) from exc
+        try:
+            return _build_divisibility_edge_profile(canonical_values)
+        except FactorizationIncompleteError as exc:
+            failure = exc.failure
+            failure_kind = failure.kind if failure is not None else "UNKNOWN"
+            raise RuntimeError(
+                "divisibility edge factorization worker failed: " + failure_kind
+            ) from exc
 
 
 def _canonical_native_value(value: str | int | IntegerValue) -> str:

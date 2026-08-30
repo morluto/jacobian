@@ -98,9 +98,17 @@ def test_native_rejects_oversized_value_before_parsing() -> None:
 
 
 def test_native_rejects_values_beyond_worker_factorization_envelope() -> None:
-    """The edge profile shares the direct factorization worker's 20-digit bound."""
-    with pytest.raises(ValueError, match="digit bound"):
-        divisibility_edge_profile(("1" * 21,))
+    """Derived quotients, rather than source widths, use the worker bound."""
+    with pytest.raises(ValueError, match="quotient"):
+        divisibility_edge_profile(("1", "1" + "0" * 20))
+
+
+def test_native_allows_wide_sources_with_small_quotient() -> None:
+    """Source width is independent from the worker's derived quotient width."""
+    left = 10**100
+    result = divisibility_edge_profile((left, 2 * left))
+    assert len(result.edges) == 1
+    assert result.edges[0].quotient == "2"
 
 
 def test_native_rejects_oversized_integer_before_formatting() -> None:

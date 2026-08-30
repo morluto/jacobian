@@ -12,9 +12,10 @@ from jacobian._models import StrictModel
 from jacobian.canonical import parse_canonical_integer
 
 MAX_DIVISIBILITY_EDGE_SET_SIZE = 500
-# LPF extraction uses the isolated direct-factorization worker, whose exact
-# admitted input envelope is twenty decimal digits.
-MAX_DIVISIBILITY_EDGE_VALUE_DIGITS = 20
+# LPF extraction uses the isolated direct-factorization worker for derived
+# quotients; source values may use the canonical integer envelope.
+MAX_DIVISIBILITY_EDGE_VALUE_DIGITS = 256
+MAX_DIVISIBILITY_EDGE_QUOTIENT_DIGITS = 20
 MAX_DIVISIBILITY_EDGE_WORK = 1_000_000
 MAX_DIVISIBILITY_EDGE_RESULT_BYTES = 10 * 1024 * 1024
 
@@ -27,7 +28,8 @@ class DivisibilityEdgeProfileRequest(StrictModel):
         max_length=MAX_DIVISIBILITY_EDGE_SET_SIZE,
         description=(
             "Ordered source set of positive canonical decimal integers. "
-            "Each value has at most 20 digits. "
+            f"Each value has at most {MAX_DIVISIBILITY_EDGE_VALUE_DIGITS} digits; "
+            f"each derived quotient has at most {MAX_DIVISIBILITY_EDGE_QUOTIENT_DIGITS} digits. "
             "The result profiles every proper-divisibility edge a -> b "
             "(a divides b, a != b) with the quotient b/a and its least "
             "prime factor."
@@ -88,6 +90,15 @@ def _validate_divisibility_edge_resources(values: tuple[str, ...]) -> None:
             "divisibility_edge.result_bytes",
             "divisibility edge profile exceeds the serialized-byte budget",
         )
+    for left in parsed:
+        for right in parsed:
+            if left != right and right % left == 0:
+                quotient = right // left
+                if quotient > 1 and len(str(quotient)) > MAX_DIVISIBILITY_EDGE_QUOTIENT_DIGITS:
+                    raise PydanticCustomError(
+                        "divisibility_edge.quotient_digits",
+                        "derived divisibility quotients exceed the factorization worker limit",
+                    )
 
 
 class DivisibilityEdge(StrictModel):
@@ -146,7 +157,9 @@ class DivisibilityEdgeProfileResult(StrictModel):
 
 
 __all__ = [
+    "MAX_DIVISIBILITY_EDGE_QUOTIENT_DIGITS",
     "MAX_DIVISIBILITY_EDGE_SET_SIZE",
+    "MAX_DIVISIBILITY_EDGE_VALUE_DIGITS",
     "DivisibilityEdge",
     "DivisibilityEdgeProfileRequest",
     "DivisibilityEdgeProfileResult",

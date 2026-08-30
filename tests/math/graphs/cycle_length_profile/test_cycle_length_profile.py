@@ -160,9 +160,7 @@ def test_near_complete_graph_uses_exhaustive_work_bound() -> None:
 def test_wheel_uses_first_witness_bound() -> None:
     """A pancyclic wheel is admitted through its first-witness envelope."""
     vertices = [f"v{index:02d}" for index in range(17)]
-    edges = [
-        tuple(sorted((vertices[0], vertices[index]))) for index in range(1, 17)
-    ]
+    edges = [tuple(sorted((vertices[0], vertices[index]))) for index in range(1, 17)]
     edges.extend(
         tuple(sorted((vertices[index], vertices[1 + (index % 16)])))
         for index in range(1, 17)

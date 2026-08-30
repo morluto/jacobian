@@ -18,14 +18,12 @@ def _admit_result_size(
     matrix: tuple[tuple[CanonicalRational, ...], ...],
     vector: tuple[CanonicalRational, ...],
 ) -> None:
-    source_bytes = 128 + sum(
-        len(value.num) + len(value.den) + 16
-        for row in matrix
-        for value in row
-    ) + sum(len(value.num) + len(value.den) + 16 for value in vector)
-    quotient_bytes = (len(vector) + 1) * (
-        2 * MAX_CANONICAL_RATIONAL_DIGITS + 64
+    source_bytes = (
+        128
+        + sum(len(value.num) + len(value.den) + 16 for row in matrix for value in row)
+        + sum(len(value.num) + len(value.den) + 16 for value in vector)
     )
+    quotient_bytes = (len(vector) + 1) * (2 * MAX_CANONICAL_RATIONAL_DIGITS + 64)
     if source_bytes + quotient_bytes > CanonicalLimits().max_output_bytes:
         raise OperationDomainValidationError(
             location=("matrix", "vector"),

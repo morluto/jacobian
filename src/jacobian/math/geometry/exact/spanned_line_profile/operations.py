@@ -31,9 +31,7 @@ def _admit_line_key_growth(configuration: PointConfiguration) -> None:
     )
     derived_digits = dimension * (2 * maximum_coordinate_digits + 2)
     pair_count = len(points) * (len(points) - 1) // 2
-    estimated_key_bytes = pair_count * max(1, dimension) * (
-        2 * derived_digits + 64
-    )
+    estimated_key_bytes = pair_count * max(1, dimension) * (2 * derived_digits + 64)
     if (
         derived_digits > MAX_CANONICAL_RATIONAL_DIGITS
         or estimated_key_bytes > CanonicalLimits().max_output_bytes

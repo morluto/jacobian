@@ -109,10 +109,20 @@ def _admit_edge_pattern_profile(
             code="edge_pattern.color_map_key_collision",
             message="vertex_colors keys collide after Unicode normalization",
         )
+    normalized_colors = {
+        unicodedata.normalize("NFC", key): unicodedata.normalize("NFC", value)
+        for key, value in vertex_colors.items()
+    }
+    if set(normalized_colors) != set(hypergraph.vertices):
+        raise OperationDomainValidationError(
+            location=("vertex_colors",),
+            code="edge_pattern.color_map_must_cover_all_vertices",
+            message="vertex_colors must cover exactly all declared vertices after normalization",
+        )
     try:
         encoded: dict[str, int] = {}
         source_size = len(encode_strict_json(hypergraph.model_dump(mode="json")))
-        colors_size = len(encode_strict_json(vertex_colors))
+        colors_size = len(encode_strict_json(normalized_colors))
         entry_sizes: list[int] = []
         monochromatic_sizes: list[int] = []
         rainbow_sizes: list[int] = []
@@ -127,7 +137,7 @@ def _admit_edge_pattern_profile(
         )
         for edge_id, members in hypergraph.edges:
             colors = tuple(
-                unicodedata.normalize("NFC", vertex_colors[member]) for member in members
+                normalized_colors[member] for member in members
             )
             entry_sizes.append(_entry_size(edge_id, members, colors, encoded))
             edge_id_size = _encoded_size(edge_id, encoded)
@@ -178,6 +188,10 @@ def compute_edge_pattern_profile(
     the number of colour blocks, and classify as monochromatic or rainbow.
     """
     _admit_edge_pattern_profile(hypergraph, vertex_colors)
+    vertex_colors = {
+        unicodedata.normalize("NFC", key): unicodedata.normalize("NFC", value)
+        for key, value in vertex_colors.items()
+    }
     entries: list[EdgePatternEntry] = []
     monochromatic: list[str] = []
     rainbow: list[str] = []

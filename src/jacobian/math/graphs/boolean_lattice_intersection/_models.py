@@ -41,10 +41,10 @@ def _validate_intersection_request(
             "boolean_lattice.invalid_relation",
             "relation must be INTERSECTION_EQ, INTERSECTION_LT, or INTERSECTION_GT",
         )
-    if not 0 <= threshold <= ground_set_size:
+    if threshold < 0:
         raise PydanticCustomError(
             "boolean_lattice.threshold_exceeds_n",
-            "threshold must be between 0 and ground_set_size",
+            "threshold must be nonnegative",
         )
     vertex_count = 1 << ground_set_size
     edge_count = vertex_count * (vertex_count - 1) // 2

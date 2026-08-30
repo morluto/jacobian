@@ -68,14 +68,14 @@ def test_vertex_labels_are_subsets() -> None:
     assert set(result.graph.vertices) == {"{}", "{0}", "{1}", "{0,1}"}
 
 
-def test_rejects_threshold_exceeds_n() -> None:
+def test_threshold_above_ground_set_is_defined() -> None:
     request = BooleanLatticeIntersectionRequest(
-        ground_set_size=2, threshold=3, relation="INTERSECTION_EQ"
+        ground_set_size=2, threshold=3, relation="INTERSECTION_LT"
     )
-    with pytest.raises(OperationDomainValidationError):
-        construct_boolean_lattice_intersection_graph(
-            request.ground_set_size, request.threshold, request.relation
-        )
+    result = construct_boolean_lattice_intersection_graph(
+        request.ground_set_size, request.threshold, request.relation
+    )
+    assert len(result.graph.edges) == 6
 
 
 def test_result_preserves_metadata() -> None:

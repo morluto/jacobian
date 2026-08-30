@@ -41,6 +41,14 @@ def test_k3_order1() -> None:
             assert row.chromatic_number == 2
 
 
+def test_k8_order1_uses_complete_graph_shortcuts() -> None:
+    vertices = [f"v{index}" for index in range(8)]
+    edges = list(combinations(vertices, 2))
+    result = compute_edge_deletion_profile(_graph(vertices, edges), 1)
+    assert len(result.rows) == 1 + len(edges)
+    assert {row.chromatic_number for row in result.rows} == {7, 8}
+
+
 def test_k3_order3() -> None:
     """K3 with deletion order 3: deleting all edges yields chromatic number 1."""
     g = _graph(["a", "b", "c"], [("a", "b"), ("a", "c"), ("b", "c")])

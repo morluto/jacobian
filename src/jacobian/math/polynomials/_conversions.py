@@ -146,7 +146,7 @@ def rational_function_from_sympy(
             if isinstance(expression, int)
             else rational_from_sympy(expression)
         )
-        return RationalFunction(
+        return RationalFunction._from_kernel(
             variables=(),
             numerator=SparseRationalPolynomial(
                 terms=()
@@ -178,7 +178,7 @@ def rational_function_from_sympy(
         else numerator
     )
     denominator = denominator.monic()
-    return RationalFunction(
+    return RationalFunction._from_kernel(
         variables=variables,
         numerator=sparse_rational_polynomial_from_sympy(
             numerator, variables, maximum_terms=maximum_terms

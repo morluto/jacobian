@@ -601,6 +601,33 @@ def test_consistent_results_round_trip_without_replaying_at_deserialization() ->
         replayed = GenericDegreeResult.model_validate(result.model_dump(mode="json"))
 
         assert replayed == result
+        assert replayed.evidence is not None
+        require_certificate_reconstructs_from_source(replayed.source, replayed.evidence)
+
+
+@pytest.mark.parametrize(
+    "replay",
+    (require_certificate_reconstructs_from_source, validate_generic_fiber_certificate),
+)
+def test_nonreduced_certificate_coefficient_parses_then_replay_rejects_it(
+    replay: Any,
+) -> None:
+    payload = _identity_certificate().model_dump(mode="json")
+    coefficient = payload["basis"][0]["terms"][0]["coefficient"]
+    common = {
+        "terms": [
+            {
+                "coefficient": {"num": "1", "den": "1"},
+                "exponents": [1, 0],
+            }
+        ]
+    }
+    coefficient["numerator"] = common
+    coefficient["denominator"] = common
+    certificate = GenericFiberCertificate.model_validate(payload)
+
+    with pytest.raises(ValueError, match="must be coprime"):
+        replay(_identity_source(), certificate)
 
 
 def test_serialized_evidence_cannot_be_presented_against_a_different_source() -> None:

@@ -407,6 +407,64 @@ def test_rejects_axis_mismatch_and_nonvector_signature_at_domain_admission() -> 
     assert signature.value.errors()[0]["type"].endswith("vector_signature")
 
 
+def test_nonvector_signature_precedes_nested_coprimality_recognition() -> None:
+    nonreduced = {
+        "variables": ["x"],
+        "numerator": _sparse((1, (2,)), (-1, (0,))),
+        "denominator": _sparse((1, (1,)), (-1, (0,))),
+    }
+    scalar = _function(("x",), (1, (1,))).model_dump(mode="json")
+    request = RationalLieDerivativeRequest.model_validate(
+        {
+            "vector_field": {
+                "coordinate_axis": ["x"],
+                "variance": ["COVARIANT"],
+                "components": [nonreduced],
+                "retained_nonzero_denominators": [nonreduced["denominator"]],
+            },
+            "tensor": {
+                "coordinate_axis": ["x"],
+                "variance": [],
+                "components": [scalar],
+                "retained_nonzero_denominators": [],
+            },
+        }
+    )
+
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="rank one and CONTRAVARIANT",
+    ) as error:
+        lie_derivative(request.vector_field, request.tensor)
+
+    assert error.value.errors()[0]["type"].endswith("vector_signature")
+
+
+def test_admitted_signature_rejects_a_nonreduced_component_as_noncanonical() -> None:
+    nonreduced = {
+        "variables": ["x"],
+        "numerator": _sparse((1, (2,)), (-1, (0,))),
+        "denominator": _sparse((1, (1,)), (-1, (0,))),
+    }
+    vector = RationalCoordinateTensor.model_validate(
+        {
+            "coordinate_axis": ["x"],
+            "variance": ["CONTRAVARIANT"],
+            "components": [nonreduced],
+            "retained_nonzero_denominators": [nonreduced["denominator"]],
+        }
+    )
+    scalar = _tensor(("x",), (), (_function(("x",), (1, (1,))),))
+
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="coprime",
+    ) as error:
+        lie_derivative(vector, scalar)
+
+    assert error.value.errors()[0]["type"].endswith("component_not_canonical")
+
+
 def test_zero_tensor_at_the_maximum_dense_shape_is_computed_completely() -> None:
     variables = ("x", "y")
     zero = _zero(variables)

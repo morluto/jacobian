@@ -16,6 +16,10 @@ from jacobian.math._singular import (
     run_bounded_singular,
     singular_version_preamble,
 )
+from jacobian.math.polynomials._conversions import (
+    rational_function_from_sympy,
+    sparse_rational_polynomial_to_sympy,
+)
 from jacobian.math.polynomials.maps._generic_degree import (
     GenericFiberReplayLimitError,
     enumerate_standard_monomials,
@@ -303,16 +307,24 @@ def _parse_generic_fiber_coefficient(
     if not numerator or not denominator:
         raise ValueError("Singular returned a zero generic-fiber coefficient")
     denominator_leading = denominator[max(denominator)]
-    value = RationalFunction(
-        variables=target_parameters,
-        numerator=_sparse_parameter_polynomial(
-            numerator,
-            scale=denominator_leading,
-        ),
-        denominator=_sparse_parameter_polynomial(
-            denominator,
-            scale=denominator_leading,
-        ),
+    numerator_value = _sparse_parameter_polynomial(
+        numerator,
+        scale=denominator_leading,
+    )
+    denominator_value = _sparse_parameter_polynomial(
+        denominator,
+        scale=denominator_leading,
+    )
+    numerator_polynomial = sparse_rational_polynomial_to_sympy(
+        numerator_value, target_parameters
+    )
+    denominator_polynomial = sparse_rational_polynomial_to_sympy(
+        denominator_value, target_parameters
+    )
+    value = rational_function_from_sympy(
+        numerator_polynomial.as_expr() / denominator_polynomial.as_expr(),
+        target_parameters,
+        maximum_terms=MAX_GENERIC_FIBER_PARAMETER_TERMS,
     )
     return value, len(numerator) + len(denominator)
 

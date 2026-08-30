@@ -25,6 +25,7 @@ from jacobian.math.geometry.differential.values import (
 from jacobian.math.polynomials.values import (
     RationalFunction,
     SparseRationalPolynomial,
+    require_canonical_rational_function,
 )
 
 MAX_LIE_DERIVATIVE_WORK_UNITS = 25_000_000
@@ -711,6 +712,22 @@ def build_lie_derivative_plan(
             "vector field must have rank one and CONTRAVARIANT variance",
             location=("vector_field", "variance"),
         )
+    for owner, source in (("vector_field", vector_field), ("tensor", tensor)):
+        for component, value in enumerate(source.components):
+            try:
+                require_canonical_rational_function(
+                    value,
+                    maximum_terms=MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS,
+                    maximum_exponent=MAX_RATIONAL_TENSOR_EXPONENT,
+                    maximum_coefficient_digits=MAX_RATIONAL_TENSOR_COEFFICIENT_DIGITS,
+                    label=f"{owner} component",
+                )
+            except ValueError as exc:
+                _reject(
+                    "component_not_canonical",
+                    f"{owner} components must have coprime canonical rational-function parts: {exc}",
+                    location=(owner, "components", component),
+                )
     dimension = len(tensor.coordinate_axis)
     ledger = _Ledger()
     vector_bounds = tuple(_fraction_bound(value) for value in vector_field.components)

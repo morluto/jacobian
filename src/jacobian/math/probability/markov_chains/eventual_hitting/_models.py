@@ -16,9 +16,7 @@ class EventualHittingProfileRequest(StrictModel):
 
     matrix: tuple[
         Annotated[tuple[CanonicalRational, ...], Field(max_length=MAX_STATES)], ...
-    ] = Field(
-        min_length=1, max_length=MAX_STATES
-    )
+    ] = Field(min_length=1, max_length=MAX_STATES)
     target_states: tuple[StrictInt, ...] = Field(
         min_length=1,
         max_length=MAX_STATES,

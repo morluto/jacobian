@@ -128,7 +128,9 @@ def _admit_eventual_hitting(
     # Gaussian elimination and the right-hand-side row sums can combine every
     # nonzero transition denominator in a row.  Charge that common-denominator
     # growth before solving rather than only one component width per state.
-    row_growth = max_row_terms * transient_matrix_digits + _decimal_digits(max_row_terms)
+    row_growth = max_row_terms * transient_matrix_digits + _decimal_digits(
+        max_row_terms
+    )
     result_height = (
         transient_count * row_growth + _decimal_digits(factorial(transient_count)) + 1
     )

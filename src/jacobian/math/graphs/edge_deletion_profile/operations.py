@@ -177,6 +177,8 @@ def _chromatic_number(vertices: list[str], edges: list[tuple[str, str]]) -> int:
         return 1
     if len(edges) == n * (n - 1) // 2:
         return n
+    if _is_bipartite_edges(vertices, edges):
+        return 2
 
     adjacency: dict[str, set[str]] = {v: set() for v in vertices}
     for a, b in edges:
@@ -187,6 +189,30 @@ def _chromatic_number(vertices: list[str], edges: list[tuple[str, str]]) -> int:
         if _try_k_color(vertices, adjacency, k):
             return k
     return n
+
+
+def _is_bipartite_edges(
+    vertices: list[str], edges: list[tuple[str, str]]
+) -> bool:
+    adjacency: dict[str, set[str]] = {vertex: set() for vertex in vertices}
+    for left, right in edges:
+        adjacency[left].add(right)
+        adjacency[right].add(left)
+    colors: dict[str, bool] = {}
+    for start in vertices:
+        if start in colors:
+            continue
+        colors[start] = False
+        stack = [start]
+        while stack:
+            vertex = stack.pop()
+            for neighbor in adjacency[vertex]:
+                if neighbor not in colors:
+                    colors[neighbor] = not colors[vertex]
+                    stack.append(neighbor)
+                elif colors[neighbor] == colors[vertex]:
+                    return False
+    return True
 
 
 def _try_k_color(vertices: list[str], adjacency: dict[str, set[str]], k: int) -> bool:

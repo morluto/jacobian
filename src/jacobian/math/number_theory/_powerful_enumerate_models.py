@@ -16,7 +16,7 @@ from jacobian.canonical import format_canonical_integer
 # The total number of powerful integers up to X is at most 3*sqrt(X).
 # We cap the cutoff so the complete family fits the transport budget.
 MAX_POWERFUL_ENUM_CUTOFF_DIGITS = 18
-MAX_POWERFUL_ENUM_CUTOFF = 10 ** MAX_POWERFUL_ENUM_CUTOFF_DIGITS
+MAX_POWERFUL_ENUM_CUTOFF = 10**MAX_POWERFUL_ENUM_CUTOFF_DIGITS
 MAX_POWERFUL_ENUM_FAMILY_SIZE = 200_000
 MAX_POWERFUL_ENUM_RESULT_BYTES = 3_000_000
 
@@ -83,7 +83,9 @@ class PowerfulEnumerateResult(StrictModel):
         return self
 
     @classmethod
-    def _from_kernel(cls, cutoff: int, raw_family: list[int]) -> PowerfulEnumerateResult:
+    def _from_kernel(
+        cls, cutoff: int, raw_family: list[int]
+    ) -> PowerfulEnumerateResult:
         family = tuple(format_canonical_integer(v) for v in sorted(raw_family))
         return cls.model_construct(
             cutoff=cutoff,

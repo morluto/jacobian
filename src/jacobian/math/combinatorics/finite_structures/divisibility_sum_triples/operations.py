@@ -50,7 +50,21 @@ def _admit_divisibility_sum_triples(
             code="divisibility_sum.interval_too_large",
             message=f"interval size must not exceed {MAX_INTERVAL_SIZE}",
         )
-    candidate_count = comb(interval_size, 3) if interval_size >= 3 else 0
+    vertices = tuple(str(value) for value in range(lower_bound, upper_bound + 1))
+    if any(len(vertex) > MAX_LABEL_LENGTH for vertex in vertices):
+        raise OperationDomainValidationError(
+            location=(),
+            code="divisibility_sum.vertex_label_too_long",
+            message=f"interval vertices must be at most {MAX_LABEL_LENGTH} characters",
+        )
+
+    # If 2U < 3L for a positive interval, every triple satisfies
+    # 2a < b+c < 3a, so no divisor test can succeed.  Admit this closed form
+    # before the generic interval/work ceilings.
+    sparse_no_edges = lower_bound > 0 and 2 * upper_bound < 3 * lower_bound
+    candidate_count = (
+        0 if sparse_no_edges else comb(interval_size, 3) if interval_size >= 3 else 0
+    )
     if candidate_count > MAX_TRIPLE_ENUMERATION:
         raise OperationDomainValidationError(
             location=(),
@@ -61,27 +75,22 @@ def _admit_divisibility_sum_triples(
             ),
         )
 
-    vertices = tuple(str(value) for value in range(lower_bound, upper_bound + 1))
-    if any(len(vertex) > MAX_LABEL_LENGTH for vertex in vertices):
-        raise OperationDomainValidationError(
-            location=(),
-            code="divisibility_sum.vertex_label_too_long",
-            message=f"interval vertices must be at most {MAX_LABEL_LENGTH} characters",
-        )
-
     edges: list[tuple[str, tuple[str, ...]]] = []
-    for edge_index, triple in enumerate(
-        combinations(range(lower_bound, upper_bound + 1), 3)
-    ):
-        a, b, c = triple
-        if a != 0 and (b + c) % a == 0:
-            edges.append((f"edge_{edge_index}", tuple(str(value) for value in triple)))
-    if len(edges) > 12_000 or 3 * len(edges) > 36_000:
-        raise OperationDomainValidationError(
-            location=(),
-            code="divisibility_sum.output_too_large",
-            message="the exact triple family exceeds the hypergraph envelope",
-        )
+    if not sparse_no_edges:
+        for edge_index, triple in enumerate(
+            combinations(range(lower_bound, upper_bound + 1), 3)
+        ):
+            a, b, c = triple
+            if a != 0 and (b + c) % a == 0:
+                edges.append(
+                    (f"edge_{edge_index}", tuple(str(value) for value in triple))
+                )
+                if len(edges) > 12_000 or 3 * len(edges) > 36_000:
+                    raise OperationDomainValidationError(
+                        location=(),
+                        code="divisibility_sum.output_too_large",
+                        message="the exact triple family exceeds the hypergraph envelope",
+                    )
 
     try:
         payload = {

@@ -91,15 +91,16 @@ def _sorted_sums(counts: Mapping[int, int]) -> list[int]:
     return sorted(counts.keys())
 
 
-def _require_sumset_preflight(
-    left: FiniteIntegerSet, right: FiniteIntegerSet
-) -> None:
+def _require_sumset_preflight(left: FiniteIntegerSet, right: FiniteIntegerSet) -> None:
     """Reject an output envelope that cannot fit before building pair sums."""
     pair_count = len(left.elements) * len(right.elements)
-    max_digits = max(
-        (len(element.lstrip("-")) for element in (*left.elements, *right.elements)),
-        default=1,
-    ) + 1
+    max_digits = (
+        max(
+            (len(element.lstrip("-")) for element in (*left.elements, *right.elements)),
+            default=1,
+        )
+        + 1
+    )
     value_size = max_digits + 3  # quotes, optional sign, and conservative comma
     elements_size = 2 + max(pair_count - 1, 0) + pair_count * value_size
     support_size = strict_json_object_size((("elements", elements_size),))

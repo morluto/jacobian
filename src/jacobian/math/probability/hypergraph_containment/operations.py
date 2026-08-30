@@ -99,7 +99,7 @@ def _admit_hypergraph_vertex_containment(
             n - len(active_vertices) + 1
         )
         ie_work = ie_terms * (n + len(edge_masks) + 2) if ie_terms is not None else None
-        use_inclusion_exclusion = ie_terms is not None and ie_work < direct_work
+        use_inclusion_exclusion = ie_work is not None and ie_work < direct_work
         if active_state_count > MAX_SUBSET_STATES and not use_inclusion_exclusion:
             raise OperationDomainValidationError(
                 location=("hypergraph", "vertices"),

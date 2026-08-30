@@ -174,7 +174,9 @@ def _admit(
         elif shared_denominator:
             # With one common denominator, only numerators add; the reduced
             # result cannot retain a denominator wider than that source.
-            sum_numerator_digits = maximum_numerator_digits + len(str(arity))
+            sum_numerator_digits = maximum_numerator_digits + (
+                len(str(arity)) if arity > 1 else 0
+            )
             sum_denominator_digits = max(1, maximum_denominator_digits)
         else:
             sum_numerator_digits = (

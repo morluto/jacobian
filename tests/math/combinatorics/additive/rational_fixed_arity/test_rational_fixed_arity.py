@@ -52,6 +52,12 @@ def test_arity_1() -> None:
     assert sum_map[Fraction(2, 3)] == 1
 
 
+def test_singleton_at_maximum_rational_digit_width_is_admitted() -> None:
+    value = CanonicalRational(num="1" * 32_768, den="1")
+    result = compute_rational_fixed_arity_sum_profile((value,), 1)
+    assert result.rows[0].sum_value == value
+
+
 def test_replay() -> None:
     """Replay: independently compute all sums."""
     values = (_cr(1, 2), _cr(1, 3), _cr(1, 4), _cr(1, 5))

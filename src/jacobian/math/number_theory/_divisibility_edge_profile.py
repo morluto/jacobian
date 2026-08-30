@@ -117,12 +117,15 @@ def divisibility_edge_profile(
     with _owner_execution():
         try:
             _bind_execution_deadline()
-            canonical_values = tuple(
-                _canonical_native_value(value) for value in values
-            )
+            canonical_values = tuple(_canonical_native_value(value) for value in values)
             _validate_divisibility_edge_shape(canonical_values)
             _validate_divisibility_edge_resources(canonical_values)
-        except (CanonicalizationError, PydanticCustomError, TypeError, ValueError) as exc:
+        except (
+            CanonicalizationError,
+            PydanticCustomError,
+            TypeError,
+            ValueError,
+        ) as exc:
             if isinstance(exc, PydanticCustomError):
                 code = exc.type
                 message = exc.message()

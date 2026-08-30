@@ -94,7 +94,10 @@ def _validate_divisibility_edge_resources(values: tuple[str, ...]) -> None:
         for right in parsed:
             if left != right and right % left == 0:
                 quotient = right // left
-                if quotient > 1 and len(str(quotient)) > MAX_DIVISIBILITY_EDGE_QUOTIENT_DIGITS:
+                if (
+                    quotient > 1
+                    and len(str(quotient)) > MAX_DIVISIBILITY_EDGE_QUOTIENT_DIGITS
+                ):
                     raise PydanticCustomError(
                         "divisibility_edge.quotient_digits",
                         "derived divisibility quotients exceed the factorization worker limit",

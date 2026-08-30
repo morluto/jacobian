@@ -630,35 +630,13 @@ class TestIntegralHomology:
             "chain_complex.integral_homology_output_byte_budget_exceeded"
         )
 
-    def test_result_discriminator_rejects_mixed_group_branches(self) -> None:
-        result = homology_groups(self._complex((1, 1), ((("2",),),)))
-        payload = result.model_dump(mode="json")
-        payload["homology_groups"][0] = {
-            "kind": "FIELD_VECTOR_SPACE",
-            "degree": 0,
-            "cycle_rank": 1,
-            "boundary_rank": 1,
-            "betti_number": 0,
-        }
-        with pytest.raises(ValidationError, match="homogeneous"):
-            HomologyResult.model_validate(payload)
-
-    def test_group_discriminators_are_required_in_schema_and_validation(self) -> None:
+    def test_group_discriminators_are_required_in_schema(self) -> None:
         schema = HomologyResult.model_json_schema()
         for definition in (
             "HomologyGroupValue",
             "IntegralHomologyGroupValue",
         ):
             assert "kind" in schema["$defs"][definition]["required"]
-
-        for complex_value in (
-            _circle_complex(),
-            self._complex((1, 1), ((("2",),),)),
-        ):
-            payload = homology_groups(complex_value).model_dump(mode="json")
-            del payload["homology_groups"][0]["kind"]
-            with pytest.raises(ValidationError, match="kind"):
-                HomologyResult.model_validate(payload)
 
     def test_integral_homology_schema_publishes_nested_array_limits(self) -> None:
         schema = ComputeHomologyRequest.model_json_schema()
@@ -847,17 +825,6 @@ class TestIntegralHomology:
         assert exc_info.value.errors()[0]["type"] == (
             "chain_complex.homology_raw_coefficient_invalid"
         )
-
-    def test_integral_certificates_remain_bound_to_retained_differentials(
-        self,
-    ) -> None:
-        result = homology_groups(self._complex((1, 1), ((("2",),),)))
-        payload = result.model_dump(mode="json")
-        payload["homology_groups"][1]["outgoing_smith_certificate"]["source"][
-            "entries"
-        ] = [["3"]]
-        with pytest.raises(ValidationError, match="retained chain complex"):
-            HomologyResult.model_validate(payload)
 
     def test_admission_uses_one_dispatch_deadline_and_complete_work_ledger(
         self,

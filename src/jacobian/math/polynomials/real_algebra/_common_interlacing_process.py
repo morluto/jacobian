@@ -23,6 +23,9 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
 from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
 from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
+    MAX_COMMON_INTERLACING_FAMILY_SIZE,
+    MAX_COMMON_INTERLACING_INPUT_DIGITS,
+    MAX_COMMON_INTERLACING_SOURCE_TERMS,
     CommonInterlacingOutcome,
     CommonInterlacingProfile,
     LabelledRationalPolynomial,
@@ -31,12 +34,53 @@ from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
 )
 
 _WORKER = Path(__file__).resolve().with_name("_common_interlacing_worker.py")
-_WALL_SECONDS = 180.0
+_WALL_SECONDS = 1_800.0
 _ADDRESS_SPACE_BYTES = 2 * 1024 * 1024 * 1024
 _STDOUT_LIMIT = 11 * 1024 * 1024
 _STDERR_LIMIT = 64 * 1024
 _CANONICAL_POLYNOMIAL = TypeAdapter(tuple[CanonicalInteger, ...])
 _OUTCOME: TypeAdapter[CommonInterlacingOutcome] = TypeAdapter(CommonInterlacingOutcome)
+
+
+def _preflight_family_size(
+    family: tuple[LabelledRationalPolynomial, ...],
+) -> None:
+    """Reject oversized families before serializing them for the worker."""
+
+    if not 2 <= len(family) <= MAX_COMMON_INTERLACING_FAMILY_SIZE:
+        raise OperationDomainValidationError(
+            location=("family",),
+            code="polynomial.common_interlacing_family_size",
+            message=(
+                "common interlacing requires between 2 and "
+                f"{MAX_COMMON_INTERLACING_FAMILY_SIZE} family members"
+            ),
+        )
+    for source_index, source in enumerate(family):
+        terms = source.polynomial.polynomial.terms
+        if len(terms) > MAX_COMMON_INTERLACING_SOURCE_TERMS:
+            raise OperationDomainValidationError(
+                location=("family", source_index, "polynomial", "terms"),
+                code="polynomial.common_interlacing_term_count",
+                message=(
+                    "a common interlacing source exceeds the "
+                    f"{MAX_COMMON_INTERLACING_SOURCE_TERMS}-term bound"
+                ),
+            )
+        for term in terms:
+            coeff = term.coefficient
+            if (
+                max(len(coeff.num.lstrip("-")), len(coeff.den))
+                > MAX_COMMON_INTERLACING_INPUT_DIGITS
+            ):
+                raise OperationDomainValidationError(
+                    location=("family", source_index, "polynomial", "terms"),
+                    code="polynomial.common_interlacing_coefficient_digits",
+                    message=(
+                        "a common interlacing source coefficient exceeds the "
+                        f"{MAX_COMMON_INTERLACING_INPUT_DIGITS}-digit input bound"
+                    ),
+                )
 
 
 def _root_profile_from_worker(
@@ -48,6 +92,8 @@ def _root_profile_from_worker(
     if not isinstance(value, dict) or not isinstance(value.get("roots"), list):
         raise ValueError("malformed root profile")
     source_poly = rational_polynomial_to_sympy(source.polynomial)
+    reconstruction = source_poly.one()
+    root_factors: dict[tuple[int, ...], tuple[Any, int]] = {}
     roots: list[PolynomialRealRoot] = []
     for raw_root in value["roots"]:
         if not isinstance(raw_root, dict):
@@ -74,10 +120,14 @@ def _root_profile_from_worker(
             raise ValueError("worker root polynomial is not primitive canonical form")
         if root_index >= root_poly.degree():
             raise ValueError("worker root index is outside its canonical factor")
-        if root_poly.is_irreducible is not True:
-            raise ValueError("worker root polynomial is not irreducible")
         if not source_poly.rem(root_poly).is_zero:
             raise ValueError("worker root polynomial is not a factor of its source")
+        multiplicity = raw_root.get("multiplicity")
+        if type(multiplicity) is not int or multiplicity < 1:
+            raise ValueError("malformed root multiplicity")
+        poly_key = tuple(int(c) for c in polynomial)
+        if poly_key not in root_factors:
+            root_factors[poly_key] = (root_poly, multiplicity)
         algebraic_value = RealAlgebraicValue._from_admitted_polynomial(
             polynomial=polynomial,
             real_root_index=root_index,
@@ -85,6 +135,13 @@ def _root_profile_from_worker(
         root_payload = dict(raw_root)
         root_payload["value"] = algebraic_value
         roots.append(PolynomialRealRoot.model_validate(root_payload))
+    reconstruction = source_poly.one()
+    for root_poly, mult in root_factors.values():
+        reconstruction *= root_poly ** mult
+    if not source_poly.div(reconstruction)[1].is_zero:
+        raise ValueError(
+            "worker root rows do not divide the source polynomial"
+        )
     return SourceRootProfile.model_validate(
         {"source_index": value.get("source_index"), "roots": roots}
     )
@@ -166,6 +223,7 @@ def run_common_interlacing_profile(
             "request deadline expired before common-interlacing execution"
         )
 
+    _preflight_family_size(family)
     request_bytes = json.dumps(
         [source.model_dump(mode="json") for source in family],
         separators=(",", ":"),

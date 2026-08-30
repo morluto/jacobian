@@ -569,7 +569,7 @@ def test_expired_request_deadline_stops_before_backend_launch() -> None:
     )
 
     with (
-        request_execution(time.monotonic() - 181.0),
+        request_execution(time.monotonic() - 1801.0),
         pytest.raises(OperationExecutionTimeoutError),
     ):
         common_interlacing_profile(family)

@@ -20,20 +20,20 @@ def test_fixture_24612() -> None:
     """For (2,4,6,12), the complete proper-divisibility rows are correct."""
     edges = _edges(["2", "4", "6", "12"])
     # 2 -> 4: quotient 2, LPF 2
-    assert edges[("2", "4")].quotient == 2
-    assert edges[("2", "4")].least_prime_factor == 2
+    assert edges[("2", "4")].quotient == "2"
+    assert edges[("2", "4")].least_prime_factor == "2"
     # 2 -> 6: quotient 3, LPF 3
-    assert edges[("2", "6")].quotient == 3
-    assert edges[("2", "6")].least_prime_factor == 3
+    assert edges[("2", "6")].quotient == "3"
+    assert edges[("2", "6")].least_prime_factor == "3"
     # 2 -> 12: quotient 6, LPF 2
-    assert edges[("2", "12")].quotient == 6
-    assert edges[("2", "12")].least_prime_factor == 2
+    assert edges[("2", "12")].quotient == "6"
+    assert edges[("2", "12")].least_prime_factor == "2"
     # 4 -> 12: quotient 3, LPF 3
-    assert edges[("4", "12")].quotient == 3
-    assert edges[("4", "12")].least_prime_factor == 3
+    assert edges[("4", "12")].quotient == "3"
+    assert edges[("4", "12")].least_prime_factor == "3"
     # 6 -> 12: quotient 2, LPF 2
-    assert edges[("6", "12")].quotient == 2
-    assert edges[("6", "12")].least_prime_factor == 2
+    assert edges[("6", "12")].quotient == "2"
+    assert edges[("6", "12")].least_prime_factor == "2"
 
 
 def test_non_edge_absent() -> None:
@@ -55,18 +55,18 @@ def test_lpf_is_prime() -> None:
     from sympy import isprime
     edges = _edges(["1", "2", "3", "6", "12", "24"])
     for edge in edges.values():
-        assert isprime(edge.least_prime_factor)
+        assert isprime(int(edge.least_prime_factor))
 
 
 def test_lpf_divides_quotient() -> None:
     """The LPF divides the quotient."""
     edges = _edges(["1", "2", "4", "6", "12", "24"])
     for edge in edges.values():
-        assert edge.quotient % edge.least_prime_factor == 0
+        assert int(edge.quotient) % int(edge.least_prime_factor) == 0
 
 
 def test_quotient_reconstructs() -> None:
     """Every quotient reconstructs b = a * quotient."""
     edges = _edges(["2", "4", "6", "12"])
     for (a, b), edge in edges.items():
-        assert int(a) * edge.quotient == int(b)
+        assert int(a) * int(edge.quotient) == int(b)

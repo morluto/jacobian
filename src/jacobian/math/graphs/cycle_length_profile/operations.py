@@ -111,9 +111,7 @@ def _is_wheel_graph(graph: SimpleUndirectedGraph) -> bool:
     rim = [vertex for vertex in graph.vertices if vertex != hubs[0]]
     if not all(len(adjacency[vertex]) == 3 for vertex in rim):
         return False
-    rim_adjacency = {
-        vertex: adjacency[vertex] - {hubs[0]} for vertex in rim
-    }
+    rim_adjacency = {vertex: adjacency[vertex] - {hubs[0]} for vertex in rim}
     if not all(len(neighbors) == 2 for neighbors in rim_adjacency.values()):
         return False
     seen = {rim[0]}
@@ -134,7 +132,11 @@ def _wheel_search_order(graph: SimpleUndirectedGraph) -> tuple[str, ...] | None:
     for left, right in graph.edges:
         adjacency[left].add(right)
         adjacency[right].add(left)
-    hub = next(vertex for vertex, neighbors in adjacency.items() if len(neighbors) == len(graph.vertices) - 1)
+    hub = next(
+        vertex
+        for vertex, neighbors in adjacency.items()
+        if len(neighbors) == len(graph.vertices) - 1
+    )
     rim = sorted(vertex for vertex in graph.vertices if vertex != hub)
     rim_adjacency = {vertex: adjacency[vertex] - {hub} for vertex in rim}
     order = [rim[0]]

@@ -9,6 +9,7 @@ arithmetic over the field presentation's irreducible modulus.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from sympy import Poly, invert, symbols
 
@@ -37,7 +38,7 @@ def _build_modulus(presentation: FiniteFieldPresentation) -> Poly:
     )
 
 
-def _to_poly(element: FiniteFieldElement, z, modulus: Poly) -> Poly:
+def _to_poly(element: FiniteFieldElement, z: Any, modulus: Poly) -> Poly:
     return Poly(
         sum(c * z**i for i, c in enumerate(element.coordinates)),
         z,
@@ -50,7 +51,7 @@ def _to_coordinates(poly: Poly, degree: int) -> tuple[int, ...]:
 
 
 def _is_zero_poly(poly: Poly) -> bool:
-    return poly.is_zero
+    return bool(poly.is_zero)
 
 
 def compute_matrix_rank(matrix: AxisBoundMatrix) -> MatrixRankData:

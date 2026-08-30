@@ -150,6 +150,62 @@ def test_direct_calls_return_owner_results_without_dispatch_envelopes() -> None:
     asyncio.run(scenario())
 
 
+def test_direct_adaptive_call_preserves_typed_arb_domain_uncertainty() -> None:
+    operation_id = "interval.expression.adaptive_range_enclosure.compute"
+    operation = _operations(operation_id)[0]
+    payload = {
+        "expression": {
+            "op": "log",
+            "children": [
+                {
+                    "op": "add",
+                    "children": [
+                        {"op": "var", "variable": "x"},
+                        {
+                            "op": "const",
+                            "value": {"num": "1", "den": "1" + "0" * 127},
+                        },
+                    ],
+                }
+            ],
+        },
+        "box": {
+            "variables": ["x"],
+            "intervals": [
+                {
+                    "lower": {"num": "0", "den": "1"},
+                    "upper": {"num": "1", "den": "1"},
+                }
+            ],
+        },
+        "precision_bits": 32,
+        "maximum_precision_bits": 32,
+        "target_width": {"num": "100", "den": "1"},
+        "max_leaves": 1,
+        "max_depth": 8,
+        "max_evaluations": 1,
+        "wall_seconds": 30,
+    }
+    request = operation.request_type.model_validate(payload)
+    expected = operation.run(request).model_dump(mode="json")
+
+    async def scenario() -> None:
+        from mcp import Client
+
+        async with Client(_server(operation_id), raise_exceptions=True) as client:
+            result = await client.call_tool(operation_id, payload)
+
+        assert result.structured_content == expected
+        assert result.structured_content["disposition"] == {
+            "status": "DOMAIN_UNPROVEN",
+            "reason": "MAX_LEAVES",
+        }
+        assert result.structured_content["enclosure"] is None
+        assert result.structured_content["leaves"][0]["status"] == "DOMAIN_UNPROVEN"
+
+    asyncio.run(scenario())
+
+
 def test_direct_parsing_and_execution_share_one_request_envelope() -> None:
     observed_envelopes: list[bool] = []
 

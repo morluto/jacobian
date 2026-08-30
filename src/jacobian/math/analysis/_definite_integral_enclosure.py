@@ -41,7 +41,7 @@ from jacobian.math.analysis._models import (
     MAX_BOX_INTERMEDIATE_BITS,
     MAX_DYADIC_MANTISSA_DIGITS,
     MAX_EXPRESSION_NODES,
-    MAX_RATIONAL_DIGITS,
+    MAX_RATIONAL_BOX_ENDPOINT_DIGITS,
     DyadicClosedInterval,
     ExactDyadic,
     IntervalExpressionDomainFailure,
@@ -75,14 +75,14 @@ MAX_DEFINITE_INTEGRAL_WALL_SECONDS = 120
 MAX_DEFINITE_INTEGRAL_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 # A retained rational preflight bound has at most 8,192 component bits. A source
-# endpoint has at most 128 decimal digits (< 4 * 128 bits), a midpoint path adds
+# endpoint has at most the shared rational-box digit bound, a midpoint path adds
 # at most 1,023 denominator bits, and a normalized 4,096-bit endpoint may shift
 # by its precision. The final sum adds at most ceil(log2(1,024)) magnitude bits.
 # This owner-local ceiling is therefore strictly below the ambient ExactDyadic
 # wire exponent and bounds every Fraction shift performed by result validation.
 MAX_DEFINITE_INTEGRAL_DYADIC_EXPONENT = (
     MAX_BOX_INTERMEDIATE_BITS
-    + 4 * MAX_RATIONAL_DIGITS
+    + 4 * MAX_RATIONAL_BOX_ENDPOINT_DIGITS
     + MAX_DEFINITE_INTEGRAL_DEPTH
     + 4_096
     + (MAX_DEFINITE_INTEGRAL_LEAVES - 1).bit_length()
@@ -721,7 +721,10 @@ def _admit_definite_integral(
             ),
         )
     midpoint_digits = _midpoint_component_digits(request.box, request.max_leaves - 1)
-    if midpoint_digits > 2 * MAX_RATIONAL_DIGITS + MAX_DEFINITE_INTEGRAL_DEPTH + 2:
+    if (
+        midpoint_digits
+        > 2 * MAX_RATIONAL_BOX_ENDPOINT_DIGITS + MAX_DEFINITE_INTEGRAL_DEPTH + 2
+    ):
         raise AssertionError("definite-integral midpoint accounting is inconsistent")
     estimated_result_bytes = _estimated_result_bytes(request)
     if estimated_result_bytes > MAX_DEFINITE_INTEGRAL_RESULT_BYTES:

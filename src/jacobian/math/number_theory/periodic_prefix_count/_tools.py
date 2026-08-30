@@ -7,6 +7,7 @@ from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.number_theory.periodic_prefix_count._models import (
+    MAX_PREFIX_CUTOFF_DIGITS,
     PeriodicUnionPrefixCountRequest,
     PeriodicUnionPrefixCountResult,
 )
@@ -54,8 +55,9 @@ TOOLS: MathTools = (
         "Compute the exact prefix count of a periodic congruence union",
         (
             "Given a finite periodic congruence union (optionally complemented) "
-            "and a nonnegative integer cutoff, return the exact number of integers "
-            "in [1, cutoff] that belong to the declared periodic set."
+            "and a nonnegative integer cutoff of at most "
+            f"{MAX_PREFIX_CUTOFF_DIGITS} digits, return the exact number of "
+            "integers in [1, cutoff] that belong to the declared periodic set."
         ),
         PeriodicUnionPrefixCountRequest,
         PeriodicUnionPrefixCountResult,
@@ -65,7 +67,7 @@ TOOLS: MathTools = (
         examples=(
             example(
                 "mod2_or_mod3",
-                ("On [1,6], the union of 0 mod 2 and 1 mod 3 has count 4."),
+                "On [1,6], the union of 0 mod 2 and 1 mod 3 has count 4.",
                 {
                     "source": {
                         "subsets": [

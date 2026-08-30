@@ -76,6 +76,24 @@ def test_empty_hypergraph() -> None:
     assert len(result.rainbow_edge_ids) == 0
 
 
+def test_empty_edge_is_monochromatic() -> None:
+    hg = _hg(["a"], [("empty", ())])
+    result = compute_edge_pattern_profile(hg, {"a": "red"})
+
+    assert result.entries[0].num_color_blocks == 0
+    assert result.monochromatic_edge_ids == ("empty",)
+    assert result.rainbow_edge_ids == ("empty",)
+
+
+def test_numeric_color_keys_use_strict_delivery_sizing() -> None:
+    hg = _hg(["num", "den"], [("e0", ("num", "den"))])
+    result = compute_edge_pattern_profile(
+        hg, {"num": "red", "den": "blue"}
+    )
+
+    assert result.vertex_colors == {"num": "red", "den": "blue"}
+
+
 def test_result_preserves_source() -> None:
     hg = _hg(["a", "b"], [("e0", ("a", "b"))])
     colors = {"a": "red", "b": "blue"}

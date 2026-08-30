@@ -141,7 +141,7 @@ def _admit_edge_pattern_profile(
     try:
         encoded: dict[str, int] = {}
         source_size = len(canonicalize_json(hypergraph.model_dump(mode="json")))
-        colors_size = len(canonicalize_json(normalized_colors))
+        colors_size = len(encode_strict_json(normalized_colors))
         entries_bytes = monochromatic_bytes = rainbow_bytes = 2
         entries_count = monochromatic_count = rainbow_count = 0
         result_bytes = strict_json_object_size(
@@ -160,7 +160,7 @@ def _admit_edge_pattern_profile(
             )
             edge_id_size = _encoded_size(edge_id, encoded)
             blocks = len(set(colors))
-            if blocks == 1:
+            if blocks <= 1:
                 monochromatic_bytes += edge_id_size + (1 if monochromatic_count else 0)
                 monochromatic_count += 1
             if blocks == len(members):
@@ -239,7 +239,7 @@ def compute_edge_pattern_profile(
                 color_labels=tuple(color_labels),
             )
         )
-        if num_blocks == 1:
+        if num_blocks <= 1:
             monochromatic.append(edge_id)
         if num_blocks == len(members):
             rainbow.append(edge_id)

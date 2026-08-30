@@ -88,7 +88,7 @@ All Singular calls and exact point construction share one request-scoped
 deadline. Singular and the one-shot SymPy point worker are killable and have
 fixed diagnostic, address-space, file-size, and exact-output limits. Singular
 is the private exact ideal engine; the isolated SymPy transaction supplies
-factorization, Gröbner shape conversion, and residue-field replay. Public
+factorization, Gröbner shape conversion, and residue-field construction. Public
 identities use only Jacobian's canonical polynomials, ideals, number fields,
 field elements, and embeddings.
 

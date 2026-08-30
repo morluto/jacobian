@@ -34,34 +34,38 @@ class DivisibilityEdgeProfileRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_admitted_values(self) -> Self:
-        parsed = tuple(parse_canonical_integer(value) for value in self.values)
-        if any(value <= 0 for value in parsed):
-            raise PydanticCustomError(
-                "divisibility_edge.positive_values",
-                "values must be positive canonical integers",
-            )
-        if len(set(self.values)) != len(self.values):
-            raise PydanticCustomError(
-                "divisibility_edge.values_unique", "values must be distinct"
-            )
-        max_digits = max(len(value) for value in self.values)
-        if max_digits > MAX_DIVISIBILITY_EDGE_VALUE_DIGITS:
-            raise PydanticCustomError(
-                "divisibility_edge.value_digits",
-                "values exceed the admitted integer digit bound",
-            )
-        pair_count = len(parsed) * (len(parsed) - 1) // 2
-        if pair_count * max_digits * max_digits > MAX_DIVISIBILITY_EDGE_WORK:
-            raise PydanticCustomError(
-                "divisibility_edge.factorization_work",
-                "divisibility factorization exceeds the admitted work budget",
-            )
-        if pair_count * (2 * max_digits + 96) > MAX_DIVISIBILITY_EDGE_RESULT_BYTES:
-            raise PydanticCustomError(
-                "divisibility_edge.result_bytes",
-                "divisibility edge profile exceeds the serialized-byte budget",
-            )
+        _validate_divisibility_edge_values(self.values)
         return self
+
+
+def _validate_divisibility_edge_values(values: tuple[str, ...]) -> None:
+    parsed = tuple(parse_canonical_integer(value) for value in values)
+    if any(value <= 0 for value in parsed):
+        raise PydanticCustomError(
+            "divisibility_edge.positive_values",
+            "values must be positive canonical integers",
+        )
+    if len(set(values)) != len(values):
+        raise PydanticCustomError(
+            "divisibility_edge.values_unique", "values must be distinct"
+        )
+    max_digits = max(len(value) for value in values)
+    if max_digits > MAX_DIVISIBILITY_EDGE_VALUE_DIGITS:
+        raise PydanticCustomError(
+            "divisibility_edge.value_digits",
+            "values exceed the admitted integer digit bound",
+        )
+    pair_count = len(parsed) * (len(parsed) - 1) // 2
+    if pair_count * max_digits * max_digits > MAX_DIVISIBILITY_EDGE_WORK:
+        raise PydanticCustomError(
+            "divisibility_edge.factorization_work",
+            "divisibility factorization exceeds the admitted work budget",
+        )
+    if pair_count * (2 * max_digits + 96) > MAX_DIVISIBILITY_EDGE_RESULT_BYTES:
+        raise PydanticCustomError(
+            "divisibility_edge.result_bytes",
+            "divisibility edge profile exceeds the serialized-byte budget",
+        )
 
 
 class DivisibilityEdge(StrictModel):
@@ -90,7 +94,7 @@ class DivisibilityEdge(StrictModel):
 class DivisibilityEdgeProfileResult(StrictModel):
     """The complete directed divisibility edge table."""
 
-    values: tuple[str, ...] = Field(min_length=1)
+    values: tuple[CanonicalInteger, ...] = Field(min_length=1)
     edges: tuple[DivisibilityEdge, ...] = Field(default=())
 
     @model_validator(mode="after")
@@ -109,4 +113,5 @@ __all__ = [
     "DivisibilityEdge",
     "DivisibilityEdgeProfileRequest",
     "DivisibilityEdgeProfileResult",
+    "_validate_divisibility_edge_values",
 ]

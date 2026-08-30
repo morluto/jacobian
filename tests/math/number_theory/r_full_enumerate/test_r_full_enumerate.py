@@ -18,6 +18,7 @@ from jacobian.math.number_theory._r_full_enumerate_models import (
     RFullEnumerateRequest,
     RFullEnumerateResult,
     estimate_r_full_result_bytes,
+    plan_r_full_family,
 )
 
 
@@ -117,6 +118,12 @@ def test_result_uses_canonical_output_limit() -> None:
 def test_result_estimator_reserves_dispatch_envelope_space() -> None:
     family = tuple(10**99 + index for index in range(102_000))
     assert estimate_r_full_result_bytes(64, 10**109, family) > MAX_R_FULL_RESULT_BYTES
+
+
+def test_planner_admits_only_bounded_cumulative_merge_work() -> None:
+    plan = plan_r_full_family(2, 10**9)
+    assert plan.exceeded
+    assert plan.reason == "planning"
 
 
 def test_high_exponent_family_is_rejected_before_materialization() -> None:

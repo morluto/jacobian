@@ -27,6 +27,12 @@ def _enumerate_r_full_admitted(
     canonical_cutoff = format_canonical_integer(cutoff)
     plan = plan_r_full_family(minimum_exponent, cutoff)
     if plan.exceeded:
+        if plan.reason == "planning":
+            raise OperationDomainValidationError(
+                location=("cutoff",),
+                code="r_full_enumerate_planning_work_exceeds_budget",
+                message="r-full planning work exceeds the admitted budget",
+            )
         raise OperationDomainValidationError(
             location=("cutoff",),
             code="r_full_enumerate_family_exceeds_result_budget",

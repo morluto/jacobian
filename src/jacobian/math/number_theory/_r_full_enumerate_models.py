@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from bisect import bisect_right
 from heapq import merge
-from typing import NamedTuple, Self
+from typing import Literal, NamedTuple, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -27,6 +27,7 @@ MAX_R_FULL_FAMILY_SIZE = 200_000
 # Leave room for the typed OperationResult envelope added by dispatch before
 # the canonical payload reaches the transport boundary.
 MAX_R_FULL_RESULT_BYTES = CanonicalLimits().max_output_bytes - 1_024
+MAX_R_FULL_MERGE_WORK = 20_000_000
 _MAX_PRIME_SEARCH_BOUND = 3_000_000
 
 
@@ -35,6 +36,7 @@ class RFullFamilyPlan(NamedTuple):
 
     family: tuple[int, ...]
     exceeded: bool
+    reason: Literal["none", "family", "planning"] = "none"
 
 
 def plan_r_full_family(minimum_exponent: int, cutoff: int) -> RFullFamilyPlan:
@@ -60,6 +62,7 @@ def plan_r_full_family(minimum_exponent: int, cutoff: int) -> RFullFamilyPlan:
 
     family_set: set[int] = {1}
     sorted_family = [1]
+    merge_work = 0
     for prime in primerange(2, int(prime_bound) + 1):
         powers: list[int] = []
         current = int(prime) ** minimum_exponent
@@ -74,15 +77,18 @@ def plan_r_full_family(minimum_exponent: int, cutoff: int) -> RFullFamilyPlan:
                 if value in family_set or value in new_values:
                     continue
                 if len(family_set) + len(new_values) >= MAX_R_FULL_FAMILY_SIZE:
-                    return RFullFamilyPlan((), True)
+                    return RFullFamilyPlan((), True, "family")
                 new_values.add(value)
         fresh_values = sorted(value for value in new_values if value not in family_set)
         if fresh_values:
+            merge_work += len(sorted_family) + len(fresh_values)
+            if merge_work > MAX_R_FULL_MERGE_WORK:
+                return RFullFamilyPlan((), True, "planning")
             family_set.update(fresh_values)
             sorted_family = list(merge(sorted_family, fresh_values))
             if len(sorted_family) > MAX_R_FULL_FAMILY_SIZE:
-                return RFullFamilyPlan((), True)
-    return RFullFamilyPlan(tuple(sorted_family), False)
+                return RFullFamilyPlan((), True, "family")
+    return RFullFamilyPlan(tuple(sorted_family), False, "none")
 
 
 def estimate_r_full_family_size(minimum_exponent: int, cutoff: int) -> int:

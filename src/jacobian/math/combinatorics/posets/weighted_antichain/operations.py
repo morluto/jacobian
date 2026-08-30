@@ -1,11 +1,11 @@
-"""Maximum weight antichain kernel using exhaustive search."""
+"""Maximum weight antichain kernel using min-cut reduction."""
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections import deque
 from dataclasses import dataclass
 from fractions import Fraction
-from itertools import combinations
+from math import lcm as _lcm
 
 from jacobian._exact import (
     CanonicalRational,
@@ -60,19 +60,18 @@ def _admit_maximum_weight_antichain(
             message="all weights must be nonnegative",
         )
     n = len(poset.elements)
-    pair_checks = n * max(n - 1, 0) // 2
-    if (1 << n) * pair_checks > MAX_ENUMERATION_WORK:
+    if n > MAX_ENUMERATION_WORK:
         raise OperationDomainValidationError(
             location=("poset", "elements"),
             code="weighted_antichain.work_bound_exceeded",
-            message="the exhaustive antichain work envelope is exceeded",
+            message="the antichain work envelope is exceeded",
         )
     width = _poset_width(poset, list(poset.elements))
     max_digits = max(
         (canonical_rational_component_digits(weight) for weight in weights),
         default=1,
     )
-    arithmetic_work = (1 << n) * max(width, 1) * max_digits
+    arithmetic_work = max(width, 1) * max_digits
     if arithmetic_work > MAX_ENUMERATION_WORK:
         raise OperationDomainValidationError(
             location=("weights",),
@@ -81,7 +80,7 @@ def _admit_maximum_weight_antichain(
         )
     # A singleton antichain returns the input weight unchanged; do not charge
     # an extra addition digit at that exact canonical boundary.
-    denominators = {weight.den for weight in weights}
+    denominators = {weight.as_fraction().denominator for weight in weights}
     if len(denominators) == 1:
         # Adding values with a common denominator does not multiply that
         # denominator at every summand; only the numerator can gain carry digits.
@@ -135,31 +134,147 @@ def compute_maximum_weight_antichain(
     poset: FinitePoset,
     weights: tuple[CanonicalRational, ...],
 ) -> MaximumWeightAntichainResult:
-    """Return the exact maximum weight antichain and a witness.
+    """Return the exact maximum weight antichain and a deterministic witness.
 
-    Uses exhaustive search over all subsets within the admitted work envelope.
+    Uses a polynomial min-cut reduction via the bipartite vertex cover
+    formulation: the maximum weight antichain on a poset equals the total
+    weight minus the minimum weight vertex cover of the bipartite graph
+    induced by the order relation.
     """
     admission = _admit_maximum_weight_antichain(poset, weights)
     elements = list(poset.elements)
     n = len(elements)
     weight_fracs = admission.weights
 
-    comparable = _build_comparable(poset, elements)
+    if n == 0:
+        return MaximumWeightAntichainResult(
+            poset=poset,
+            weights=weights,
+            maximum_weight=CanonicalRational.from_fraction(Fraction(0)),
+            antichain=(),
+        )
 
-    best_weight = Fraction(0)
-    best_antichain: tuple[str, ...] = ()
+    # ------------------------------------------------------------------
+    # Max weight antichain via min vertex cover on bipartite graph.
+    #
+    # For a poset P, the max weight antichain equals total weight minus
+    # the min weight vertex cover of the bipartite graph G where:
+    #   - Left vertices: copies of each poset element (v_L)
+    #   - Right vertices: copies of each poset element (v_R)
+    #   - For each order relation v < u: edge v_L -> u_R
+    #
+    # Min vertex cover on a bipartite graph is found via max-flow:
+    #   source -> v_L with capacity w_v (for each element v)
+    #   v_R -> sink with capacity w_v (for each element v)
+    #   v_L -> u_R with infinite capacity (for each order v < u)
+    #
+    # The min cut value = min vertex cover weight.
+    # Max antichain weight = total weight - min cut.
+    # ------------------------------------------------------------------
 
-    for subset in _all_subsets(n):
-        if _is_antichain(subset, comparable):
-            total = Fraction(0)
-            for index in subset:
-                total += weight_fracs[index]
-            if total > best_weight or (
-                total == best_weight
-                and _subset_to_elements(subset, elements) < best_antichain
-            ):
-                best_weight = total
-                best_antichain = _subset_to_elements(subset, elements)
+    idx = {e: i for i, e in enumerate(elements)}
+    order_pairs: list[tuple[int, int]] = []
+    for pair in poset.strict_order_pairs:
+        order_pairs.append((idx[pair.lower], idx[pair.upper]))
+
+    # Convert fractions to common denominator for integer flow network.
+    common_den = 1
+    for w in weight_fracs:
+        common_den = _lcm(common_den, w.denominator)
+    int_weights = [int(w * common_den) for w in weight_fracs]
+    total_weight_int = sum(int_weights)
+
+    # Build flow network: source, sink, n left nodes, n right nodes
+    SOURCE = 0
+    SINK = 1
+    left = lambda i: 2 + i        # v_L
+    right = lambda i: 2 + n + i   # v_R
+    num_nodes = 2 + 2 * n
+    INF_CAP = 10**18
+
+    adj: list[dict[int, int]] = [dict() for _ in range(num_nodes)]
+
+    # source -> v_L with capacity w_v
+    for i in range(n):
+        w = int_weights[i]
+        adj[SOURCE][left(i)] = w
+        adj[left(i)].setdefault(SOURCE, 0)
+
+    # v_R -> sink with capacity w_v
+    for i in range(n):
+        w = int_weights[i]
+        adj[right(i)][SINK] = w
+        adj[SINK].setdefault(right(i), 0)
+
+    # v_L -> u_R with infinite capacity for each order v < u
+    for v, u in order_pairs:
+        old = adj[left(v)].get(right(u), 0)
+        adj[left(v)][right(u)] = old + INF_CAP
+        adj[right(u)].setdefault(left(v), 0)
+
+    # Edmonds-Karp BFS max-flow
+    total_flow = 0
+    while True:
+        parent = [-1] * num_nodes
+        parent[SOURCE] = SOURCE
+        queue = deque([SOURCE])
+        found = False
+        while queue:
+            node = queue.popleft()
+            for v, cap in adj[node].items():
+                if parent[v] == -1 and cap > 0:
+                    parent[v] = node
+                    if v == SINK:
+                        found = True
+                        break
+                    queue.append(v)
+            if found:
+                break
+        if parent[SINK] == -1:
+            break
+        path_flow = float('inf')
+        v = SINK
+        while v != SOURCE:
+            u = parent[v]
+            path_flow = min(path_flow, adj[u][v])
+            v = u
+        v = SINK
+        while v != SOURCE:
+            u = parent[v]
+            adj[u][v] -= path_flow
+            adj[v][u] += path_flow
+            v = u
+        total_flow += path_flow
+
+    min_vertex_cover = total_flow
+    max_antichain_weight_int = total_weight_int - min_vertex_cover
+
+    # Find min vertex cover set via König's theorem:
+    # After max-flow, find nodes reachable from source in residual graph.
+    source_reachable = {SOURCE}
+    queue = deque([SOURCE])
+    while queue:
+        node = queue.popleft()
+        for v, cap in adj[node].items():
+            if v not in source_reachable and cap > 0:
+                source_reachable.add(v)
+                queue.append(v)
+
+    # Min vertex cover: L nodes NOT reachable from source, R nodes reachable from source
+    in_vertex_cover = set()
+    for i in range(n):
+        if left(i) not in source_reachable:
+            in_vertex_cover.add(i)  # element i's left copy is in the cover
+    for i in range(n):
+        if right(i) in source_reachable:
+            in_vertex_cover.add(i)  # element i's right copy is in the cover
+
+    # Antichain = elements NOT in the vertex cover
+    antichain_indices = [i for i in range(n) if i not in in_vertex_cover]
+    antichain_indices.sort()
+
+    best_weight = Fraction(max_antichain_weight_int, common_den)
+    best_antichain = tuple(elements[i] for i in antichain_indices)
 
     return MaximumWeightAntichainResult(
         poset=poset,
@@ -167,16 +282,6 @@ def compute_maximum_weight_antichain(
         maximum_weight=CanonicalRational.from_fraction(best_weight),
         antichain=best_antichain,
     )
-
-
-def _build_comparable(poset: FinitePoset, elements: list[str]) -> set[tuple[int, int]]:
-    idx = {e: i for i, e in enumerate(elements)}
-    comparable: set[tuple[int, int]] = set()
-    for pair in poset.strict_order_pairs:
-        i, j = idx[pair.lower], idx[pair.upper]
-        comparable.add((i, j))
-        comparable.add((j, i))
-    return comparable
 
 
 def _poset_width(poset: FinitePoset, elements: list[str]) -> int:
@@ -200,21 +305,3 @@ def _poset_width(poset: FinitePoset, elements: list[str]) -> int:
 
     matching = sum(augment(lower, set()) for lower in range(len(elements)))
     return len(elements) - matching
-
-
-def _all_subsets(n: int) -> Iterator[tuple[int, ...]]:
-    yield from (subset for r in range(n + 1) for subset in combinations(range(n), r))
-
-
-def _is_antichain(subset: tuple[int, ...], comparable: set[tuple[int, int]]) -> bool:
-    for i in range(len(subset)):
-        for j in range(i + 1, len(subset)):
-            if (subset[i], subset[j]) in comparable:
-                return False
-    return True
-
-
-def _subset_to_elements(
-    subset: tuple[int, ...], elements: list[str]
-) -> tuple[str, ...]:
-    return tuple(elements[i] for i in subset)

@@ -157,6 +157,20 @@ def test_near_complete_graph_uses_exhaustive_work_bound() -> None:
         compute_cycle_length_profile(_graph(vertices, edges))
 
 
+def test_wheel_uses_first_witness_bound() -> None:
+    """A pancyclic wheel is admitted through its first-witness envelope."""
+    vertices = [f"v{index:02d}" for index in range(17)]
+    edges = [
+        tuple(sorted((vertices[0], vertices[index]))) for index in range(1, 17)
+    ]
+    edges.extend(
+        tuple(sorted((vertices[index], vertices[1 + (index % 16)])))
+        for index in range(1, 17)
+    )
+    result = compute_cycle_length_profile(_graph(vertices, sorted(edges)))
+    assert [row.cycle_length for row in result.rows] == list(range(3, 18))
+
+
 def test_result_budget_charges_cycle_blocks_independently() -> None:
     """Large labels in one cycle block do not inflate witnesses in another."""
     wheel = [f"w{index:02d}" for index in range(10)]

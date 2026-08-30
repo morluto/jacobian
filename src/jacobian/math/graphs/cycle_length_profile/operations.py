@@ -39,6 +39,12 @@ def _maximum_path_work(graph: SimpleUndirectedGraph) -> int:
     if len(graph.edges) == vertex_count * (vertex_count - 1) // 2:
         # In a complete graph the first DFS branch witnesses every length.
         return vertex_count**3
+    if _is_wheel_graph(graph):
+        # A wheel is pancyclic: the hub plus a contiguous rim segment gives
+        # every length from three through n.  The kernel's first-witness DFS
+        # reaches each such segment after at most O(n^2) neighbor checks, so
+        # charge one cubic envelope instead of all simple paths.
+        return vertex_count**3
     vertex_to_index = {vertex: index for index, vertex in enumerate(graph.vertices)}
     adjacency: list[list[bool]] = [[False] * vertex_count for _ in range(vertex_count)]
     for left, right in graph.edges:
@@ -73,6 +79,22 @@ def _maximum_path_work(graph: SimpleUndirectedGraph) -> int:
         if work > MAX_SEARCH_WORK:
             return work
     return work
+
+
+def _is_wheel_graph(graph: SimpleUndirectedGraph) -> bool:
+    """Recognize a wheel topology before applying the first-witness bound."""
+    vertex_count = len(graph.vertices)
+    if vertex_count < 4 or len(graph.edges) != 2 * (vertex_count - 1):
+        return False
+    adjacency: dict[str, set[str]] = {vertex: set() for vertex in graph.vertices}
+    for left, right in graph.edges:
+        adjacency[left].add(right)
+        adjacency[right].add(left)
+    hubs = [vertex for vertex, neighbors in adjacency.items() if len(neighbors) == vertex_count - 1]
+    if len(hubs) != 1:
+        return False
+    rim = [vertex for vertex in graph.vertices if vertex != hubs[0]]
+    return all(len(adjacency[vertex]) == 3 for vertex in rim)
 
 
 def _cycle_core_vertices(graph: SimpleUndirectedGraph) -> set[str]:

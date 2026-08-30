@@ -152,3 +152,59 @@ def test_native_admission_rejects_distance_height_before_squaring() -> None:
     )
     with pytest.raises(OperationDomainValidationError, match="squared-distance"):
         compute_pinned_distance_support_profile(config)
+
+
+def test_shared_denominators_are_admitted_from_exact_distances() -> None:
+    denominator = 10**1000 + 1
+    coordinate = CanonicalRational.from_fraction(Fraction(1, denominator))
+    config = PointConfiguration(
+        points=(
+            _pt("origin", (0,) * 20),
+            LabelledRationalPoint(label="diagonal", coordinates=(coordinate,) * 20),
+        )
+    )
+
+    result = compute_pinned_distance_support_profile(config)
+
+    assert result.entries[0].distance_classes[0].squared_distance.as_fraction() == (
+        Fraction(20, denominator**2)
+    )
+
+
+def test_long_target_labels_are_counted_once_per_entry() -> None:
+    labels = [chr(0x10000 + index) * 64 for index in range(64)]
+    config = PointConfiguration(
+        points=tuple(_pt(label, (index,)) for index, label in enumerate(labels))
+    )
+
+    result = compute_pinned_distance_support_profile(config)
+
+    assert len(result.entries) == 64
+
+
+def test_oversized_source_is_rejected_at_operation_boundary() -> None:
+    huge = CanonicalRational.from_fraction(Fraction(10**32767))
+    config = PointConfiguration(
+        points=tuple(
+            LabelledRationalPoint(
+                label=f"p{index}",
+                coordinates=(huge,) * 20,
+            )
+            for index in range(17)
+        )
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="JSON exceeds"):
+        compute_pinned_distance_support_profile(config)
+
+
+def test_aggregate_profile_size_is_rejected_before_result_construction() -> None:
+    scale = 10**15999
+    config = PointConfiguration(
+        points=tuple(_pt(f"p{index}", (index * scale,)) for index in range(24))
+    )
+
+    with pytest.raises(
+        OperationDomainValidationError, match="complete distance profile"
+    ):
+        compute_pinned_distance_support_profile(config)

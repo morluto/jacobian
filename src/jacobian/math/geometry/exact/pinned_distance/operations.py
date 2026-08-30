@@ -6,8 +6,9 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import NoReturn
 
-from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian._exact import CanonicalRational
 from jacobian.canonical import (
+    CanonicalizationError,
     CanonicalLimits,
     encode_strict_json,
     strict_json_object_size,
@@ -49,67 +50,50 @@ def _reject(code: str, message: str) -> NoReturn:
     )
 
 
-def _squared_distance_digit_bound(
-    left: tuple[CanonicalRational, ...],
-    right: tuple[CanonicalRational, ...],
-) -> tuple[int, int]:
-    """Return conservative numerator and denominator widths for a square sum."""
-    max_difference_numerator = 0
-    max_difference_denominator = 0
-    for first, second in zip(left, right, strict=True):
-        max_difference_numerator = max(
-            max_difference_numerator,
-            max(
-                len(first.num.lstrip("-")) + len(second.den),
-                len(second.num.lstrip("-")) + len(first.den),
-            )
-            + 1,
-        )
-        max_difference_denominator = max(
-            max_difference_denominator,
-            len(first.den) + len(second.den),
-        )
-    squared_denominator = 2 * max_difference_denominator
-    return (
-        2 * max_difference_numerator
-        + (len(left) - 1) * squared_denominator
-        + len(str(len(left)))
-        + 1,
-        len(left) * squared_denominator,
-    )
-
-
-def _maximum_result_bytes(
+def _result_bytes(
     configuration: PointConfiguration,
     source_bytes: int,
-    distance_numerator_digits: int,
-    distance_denominator_digits: int,
+    plans: tuple[_EntryPlan, ...],
 ) -> int:
-    points = configuration.points
-    max_label_bytes = max(len(encode_strict_json(point.label)) for point in points)
-    rational_bytes = strict_json_object_size(
-        (
-            ("num", distance_numerator_digits),
-            ("den", distance_denominator_digits),
+    label_sizes = {
+        point.label: len(encode_strict_json(point.label))
+        for point in configuration.points
+    }
+    entry_sizes: list[int] = []
+    for entry in plans:
+        class_sizes = [
+            strict_json_object_size(
+                (
+                    (
+                        "squared_distance",
+                        len(
+                            encode_strict_json(
+                                item.squared_distance.model_dump(mode="json")
+                            )
+                        ),
+                    ),
+                    (
+                        "target_labels",
+                        _array_size(
+                            [label_sizes[label] for label in item.target_labels]
+                        ),
+                    ),
+                )
+            )
+            for item in entry.distance_classes
+        ]
+        entry_sizes.append(
+            strict_json_object_size(
+                (
+                    ("source_label", label_sizes[entry.source_label]),
+                    ("distance_classes", _array_size(class_sizes)),
+                )
+            )
         )
-    )
-    target_labels_bytes = _array_size([max_label_bytes] * max(len(points) - 1, 0))
-    class_bytes = strict_json_object_size(
-        (
-            ("squared_distance", rational_bytes),
-            ("target_labels", target_labels_bytes),
-        )
-    )
-    entry_bytes = strict_json_object_size(
-        (
-            ("source_label", max_label_bytes),
-            ("distance_classes", _array_size([class_bytes] * (len(points) - 1))),
-        )
-    )
     return strict_json_object_size(
         (
             ("configuration", source_bytes),
-            ("entries", _array_size([entry_bytes] * len(points))),
+            ("entries", _array_size(entry_sizes)),
         )
     )
 
@@ -117,52 +101,36 @@ def _maximum_result_bytes(
 def _admit_configuration(configuration: PointConfiguration) -> tuple[_EntryPlan, ...]:
     if not isinstance(configuration, PointConfiguration):
         _reject("invalid_configuration", "configuration must be a point configuration")
-    source_bytes = len(encode_strict_json(configuration.model_dump(mode="json")))
-    maximum_numerator_digits = 0
-    maximum_denominator_digits = 0
-    for index, left in enumerate(configuration.points):
-        for right in configuration.points[index + 1 :]:
-            numerator_digits, denominator_digits = _squared_distance_digit_bound(
-                left.coordinates, right.coordinates
+    try:
+        source_bytes = len(encode_strict_json(configuration.model_dump(mode="json")))
+    except CanonicalizationError as exc:
+        _reject("source_representation", str(exc))
+
+    distances_by_source: list[dict[Fraction, list[str]]] = [
+        {} for _point in configuration.points
+    ]
+    for index, source in enumerate(configuration.points):
+        for target_index in range(index + 1, len(configuration.points)):
+            target = configuration.points[target_index]
+            squared = _squared_distance(source.coordinates, target.coordinates)
+            distances_by_source[index].setdefault(squared, []).append(target.label)
+            distances_by_source[target_index].setdefault(squared, []).append(
+                source.label
             )
-            maximum_numerator_digits = max(maximum_numerator_digits, numerator_digits)
-            maximum_denominator_digits = max(
-                maximum_denominator_digits, denominator_digits
-            )
-    if (
-        maximum_numerator_digits > MAX_CANONICAL_RATIONAL_DIGITS
-        or maximum_denominator_digits > MAX_CANONICAL_RATIONAL_DIGITS
-    ):
-        _reject(
-            "distance_height_bound",
-            "squared-distance intermediates exceed the canonical rational digit bound",
-        )
-    result_bytes = _maximum_result_bytes(
-        configuration,
-        source_bytes,
-        maximum_numerator_digits,
-        maximum_denominator_digits,
-    )
-    if result_bytes > MAX_RESULT_BYTES:
-        _reject(
-            "result_size_bound",
-            f"the complete distance profile exceeds the {MAX_RESULT_BYTES}-byte output bound",
-        )
 
     plans: list[_EntryPlan] = []
-    for index, source in enumerate(configuration.points):
-        distances: dict[Fraction, list[str]] = {}
-        for target_index, target in enumerate(configuration.points):
-            if index == target_index:
-                continue
-            squared = _squared_distance(source.coordinates, target.coordinates)
-            distances.setdefault(squared, []).append(target.label)
+    for source, distances in zip(
+        configuration.points, distances_by_source, strict=True
+    ):
         classes: list[_DistanceClassPlan] = []
         for squared, labels in sorted(distances.items()):
             try:
                 canonical = CanonicalRational.from_fraction(squared)
-            except ValueError as exc:
-                _reject("distance_height_bound", str(exc))
+            except ValueError:
+                _reject(
+                    "distance_height_bound",
+                    "squared-distance values exceed the canonical rational digit bound",
+                )
             classes.append(
                 _DistanceClassPlan(
                     squared_distance=canonical,
@@ -173,7 +141,18 @@ def _admit_configuration(configuration: PointConfiguration) -> tuple[_EntryPlan,
             _EntryPlan(source_label=source.label, distance_classes=tuple(classes))
         )
 
-    return tuple(plans)
+    completed_plans = tuple(plans)
+    try:
+        result_bytes = _result_bytes(configuration, source_bytes, completed_plans)
+    except CanonicalizationError as exc:
+        _reject("result_representation", str(exc))
+    if result_bytes > MAX_RESULT_BYTES:
+        _reject(
+            "result_size_bound",
+            f"the complete distance profile exceeds the {MAX_RESULT_BYTES}-byte output bound",
+        )
+
+    return completed_plans
 
 
 def compute_pinned_distance_support_profile(

@@ -71,9 +71,7 @@ class RFullEnumerateResult(StrictModel):
                 "r_full_enumerate.cutoff_bound",
                 "cutoff must be a positive canonical integer within the admitted bound",
             )
-        if any(
-            len(value) > MAX_R_FULL_CUTOFF_DIGITS + 1 for value in self.family
-        ):
+        if any(len(value) > MAX_R_FULL_CUTOFF_DIGITS + 1 for value in self.family):
             raise PydanticCustomError(
                 "r_full_enumerate.family_member_width",
                 "family members exceed the admitted canonical width",

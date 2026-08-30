@@ -26,7 +26,12 @@ from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import invoke_operation
+from jacobian.math.geometry import affine_tori
 from jacobian.math.geometry.affine_tori import (
+    AffineTorusFixedLocusOutcome,
+    AffineTorusFixedLocusResult,
+    EmptyAffineTorusFixedLocus,
+    NonemptyAffineTorusFixedLocus,
     RationalAffineTorusMap,
     RationalTorusPoint,
     affine_torus_fixed_locus,
@@ -41,11 +46,7 @@ from jacobian.math.geometry.affine_tori._bounds import (
 from jacobian.math.geometry.affine_tori._flint import (
     compute_fixed_locus_kernel as _compute_fixed_locus_kernel,
 )
-from jacobian.math.geometry.affine_tori._models import (
-    AffineTorusFixedLocusRequest,
-    AffineTorusFixedLocusResult,
-    NonemptyAffineTorusFixedLocus,
-)
+from jacobian.math.geometry.affine_tori._models import AffineTorusFixedLocusRequest
 from jacobian.math.geometry.affine_tori.values import MAX_AFFINE_TORUS_POINT_DIGITS
 
 
@@ -69,6 +70,18 @@ def _payload(
             ],
         },
     }
+
+
+def test_fixed_locus_result_contracts_are_public_owner_symbols() -> None:
+    expected = {
+        "AffineTorusFixedLocusOutcome": AffineTorusFixedLocusOutcome,
+        "AffineTorusFixedLocusResult": AffineTorusFixedLocusResult,
+        "EmptyAffineTorusFixedLocus": EmptyAffineTorusFixedLocus,
+        "NonemptyAffineTorusFixedLocus": NonemptyAffineTorusFixedLocus,
+    }
+
+    assert set(expected) <= set(affine_tori.__all__)
+    assert all(getattr(affine_tori, name) is value for name, value in expected.items())
 
 
 def _source(

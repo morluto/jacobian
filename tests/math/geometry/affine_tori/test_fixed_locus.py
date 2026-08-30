@@ -10,25 +10,29 @@ from time import monotonic
 from typing import Any
 
 import pytest
+from jsonschema import Draft202012Validator
 from pydantic import ValidationError
+from tests.fixtures.accounting import assert_charged_work_parity
 
 from jacobian._execution import (
     OperationExecutionTimeoutError,
     current_request_execution,
     request_execution,
 )
-from jacobian.canonical import canonicalize_json
+from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.builtins import BUILTIN_TOOLS
+from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.dispatch import invoke_operation
 from jacobian.math.geometry.affine_tori import (
     RationalAffineTorusMap,
     affine_torus_fixed_locus,
 )
 from jacobian.math.geometry.affine_tori import _bounds as affine_bounds
+from jacobian.math.geometry.affine_tori import _flint as affine_flint
 from jacobian.math.geometry.affine_tori import operations as affine_operations
 from jacobian.math.geometry.affine_tori._bounds import (
     AFFINE_TORUS_FIXED_LOCUS_WALL_SECONDS,
-    MAX_AFFINE_TORUS_RESULT_BYTES,
     MAX_AFFINE_TORUS_WORK_UNITS,
     build_affine_torus_plan,
 )
@@ -166,6 +170,33 @@ def test_identity_map_has_the_whole_torus_and_zero_dimensional_presentation() ->
     assert family.finite_components.component_count == "1"
 
 
+def test_zero_dimensional_torus_has_its_single_exact_fixed_point() -> None:
+    source = _source((), ())
+
+    result = affine_torus_fixed_locus(source)
+
+    assert result.source == source
+    assert isinstance(result.outcome, NonemptyAffineTorusFixedLocus)
+    family = result.outcome.fixed_locus
+    assert family.ambient_torus.dimension == 0
+    assert family.base_point.coordinates == ()
+    assert family.identity_component.parameter_dimension == 0
+    assert family.identity_component.embedding.row_count == 0
+    assert family.identity_component.embedding.column_count == 0
+    assert family.identity_component.embedding.entries == ()
+    assert family.component_generators == ()
+    assert family.finite_components.generator_count == 0
+    assert family.finite_components.relation_matrix.entries == ()
+    assert family.finite_components.component_count == "1"
+    assert (
+        AffineTorusFixedLocusResult.model_validate_json(
+            encode_strict_json(result.model_dump(mode="json")),
+            strict=True,
+        )
+        == result
+    )
+
+
 def test_translated_identity_returns_the_first_primitive_obstruction() -> None:
     source = _source(((1, 0), (0, 1)), (Fraction(1, 3), Fraction(1, 2)))
 
@@ -194,6 +225,19 @@ def test_zero_linear_map_returns_its_unique_fixed_point() -> None:
     assert family.finite_components.generator_orders == ("1", "1")
     assert family.finite_components.invariant_factors == ()
     assert family.finite_components.component_count == "1"
+
+
+def test_base_point_height_accounts_for_minor_times_translation_denominator() -> None:
+    source = _source(((17,),), (Fraction(1, 2),))
+    plan = build_affine_torus_plan(source, deadline=monotonic() + 30)
+
+    result = affine_torus_fixed_locus(source)
+
+    assert isinstance(result.outcome, NonemptyAffineTorusFixedLocus)
+    family = result.outcome.fixed_locus
+    assert family.base_point.coordinates[0].as_fraction() == Fraction(31, 32)
+    assert family.finite_components.component_count == "16"
+    assert plan.bounds_for_rank(1).rational_intermediate_height >= 32
 
 
 def test_positive_dimensional_locus_with_two_components() -> None:
@@ -419,6 +463,30 @@ def test_integral_basis_change_covariance_for_a_finite_fixed_locus() -> None:
     assert _finite_result_points(conjugated_result) == transformed_points
 
 
+def test_integral_shear_carries_a_positive_dimensional_fixed_locus() -> None:
+    source_result = affine_torus_fixed_locus(
+        _source(((3, 0), (0, 1)), (Fraction(1, 3), Fraction(0)))
+    )
+    sheared_result = affine_torus_fixed_locus(
+        _source(((3, -2), (0, 1)), (Fraction(1, 3), Fraction(0)))
+    )
+
+    assert isinstance(source_result.outcome, NonemptyAffineTorusFixedLocus)
+    assert isinstance(sheared_result.outcome, NonemptyAffineTorusFixedLocus)
+    source_family = source_result.outcome.fixed_locus
+    sheared_family = sheared_result.outcome.fixed_locus
+    assert source_family.identity_component.embedding.entries == (("0",), ("1",))
+    assert sheared_family.identity_component.embedding.entries == (("1",), ("1",))
+    assert (
+        sheared_family.finite_components.component_count
+        == source_family.finite_components.component_count
+        == "2"
+    )
+    assert tuple(
+        value.as_fraction() for value in sheared_family.base_point.coordinates
+    ) == tuple(value.as_fraction() for value in source_family.base_point.coordinates)
+
+
 def test_zero_dimensional_matrices_and_discriminated_result_round_trip() -> None:
     for source in (
         _source(((1, 0), (0, 1)), (Fraction(0), Fraction(0))),
@@ -429,6 +497,25 @@ def test_zero_dimensional_matrices_and_discriminated_result_round_trip() -> None
             result.model_dump(mode="json")
         )
         assert restored == result
+
+
+def test_empty_outcome_round_trips_through_public_dispatch() -> None:
+    source = _source(((1,),), (Fraction(1, 3),))
+    payload = {"affine_map": source.model_dump(mode="json")}
+    plan = build_affine_torus_plan(source, deadline=monotonic() + 30)
+
+    dispatched = invoke_operation(
+        "affine_torus.fixed_locus.compute",
+        payload,
+        Catalog.open(),
+    )
+    restored = AffineTorusFixedLocusResult.model_validate(dispatched.output)
+
+    assert restored.outcome.status == "EMPTY"
+    assert restored.outcome.obstruction.coefficients == ("1",)
+    assert restored.outcome.obstruction_pairing.as_fraction() == Fraction(1, 3)
+    assert restored.model_dump(mode="json") == dispatched.output
+    assert len(encode_strict_json(dispatched.output)) <= plan.result_bytes_upper_bound
 
 
 def test_contradictory_discriminator_and_component_metadata_fail_closed() -> None:
@@ -494,6 +581,51 @@ def test_raw_shape_and_digit_preflight_precedes_nested_parsing(mutation: str) ->
     }
 
 
+def test_request_schema_matches_sign_aware_affine_scalar_digit_bounds() -> None:
+    schema = AffineTorusFixedLocusRequest.model_json_schema()
+    Draft202012Validator.check_schema(schema)
+    validator = Draft202012Validator(schema)
+    source_schema = schema["$defs"]["RationalAffineTorusMap"]
+    linear_scalar = source_schema["properties"]["linear_part"]["properties"]["entries"][
+        "items"
+    ]["items"]
+    rational_scalar = source_schema["properties"]["translation"]["properties"][
+        "coordinates"
+    ]["items"]["properties"]
+
+    assert linear_scalar["pattern"] == r"^(?:0|-?[1-9][0-9]{0,31})$"
+    assert linear_scalar["maxLength"] == 33
+    assert rational_scalar["num"]["pattern"] == linear_scalar["pattern"]
+    assert rational_scalar["num"]["maxLength"] == 33
+    assert rational_scalar["den"]["pattern"] == r"^[1-9][0-9]{0,31}$"
+    assert rational_scalar["den"]["maxLength"] == 32
+
+    valid_payload = {
+        "affine_map": _payload(
+            ((-(10**32 - 1),),),
+            (Fraction(10**32 - 2, 10**32 - 1),),
+        )
+    }
+    assert not list(validator.iter_errors(valid_payload))
+    AffineTorusFixedLocusRequest.model_validate(valid_payload)
+
+    for field, invalid in (
+        ("linear", "-" + "1" * 33),
+        ("numerator", "1" * 33),
+        ("denominator", "1" * 33),
+        ("denominator", "-1"),
+    ):
+        invalid_payload = {"affine_map": _payload(((1,),), (Fraction(1, 2),))}
+        if field == "linear":
+            invalid_payload["affine_map"]["linear_part"]["entries"] = [[invalid]]
+        else:
+            component = invalid_payload["affine_map"]["translation"]["coordinates"][0]
+            component["num" if field == "numerator" else "den"] = invalid
+        assert list(validator.iter_errors(invalid_payload)), (field, invalid)
+        with pytest.raises(ValidationError):
+            AffineTorusFixedLocusRequest.model_validate(invalid_payload)
+
+
 def test_admission_precharges_every_phase_before_the_kernel(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -502,12 +634,15 @@ def test_admission_precharges_every_phase_before_the_kernel(
     charges = dict(plan.work_units_by_category)
     assert set(charges) == {
         "source_conversion",
-        "hnf",
+        "source_hnf",
+        "character_hnf",
         "rank_minor_selection",
-        "rational_solves",
-        "snf",
-        "normalization",
-        "serialization",
+        "rational_linear_algebra",
+        "relation_hnf",
+        "smith",
+        "integral_lift",
+        "reconstruction",
+        "result_construction",
     }
     assert all(amount > 0 for amount in charges.values())
     assert plan.work_units == sum(charges.values()) <= MAX_AFFINE_TORUS_WORK_UNITS
@@ -529,6 +664,84 @@ def test_admission_precharges_every_phase_before_the_kernel(
     assert not backend_called
 
 
+def test_near_envelope_real_hnf_work_fits_the_precharged_height_units(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dimension = 16
+    rank = 8
+    height = (10**32 - 1) // 2
+    displacement = [[0] * dimension for _ in range(dimension)]
+    for index in range(rank):
+        displacement[index][index] = height - index
+    # This shear makes (-2, 0, ..., 1, 0, ...) a primitive invariant
+    # character. Its pairing with b is -1, so the nonempty path performs a
+    # nonzero integral character lift as well as all three augmented HNFs.
+    displacement[rank][0] = 2 * height
+    linear_part = tuple(
+        tuple(
+            displacement[row][column] + int(row == column)
+            for column in range(dimension)
+        )
+        for row in range(dimension)
+    )
+    translation = (Fraction(1, 2),) + (Fraction(0),) * (dimension - 1)
+    source = _source(linear_part, translation)
+    plan = build_affine_torus_plan(source, deadline=monotonic() + 30)
+    charged: dict[str, int] = dict(plan.work_units_by_category)
+    executed = {"source_hnf": 0, "character_hnf": 0, "integral_lift": 0}
+    original_hnf = affine_flint._augmented_hnf_transform
+    original_lift = affine_flint._solve_integral_character_system
+    hnf_calls = 0
+    lift_calls = 0
+
+    def measured_hnf(matrix: Any) -> Any:
+        nonlocal hnf_calls
+        hnf, transform = original_hnf(matrix)
+        category = "source_hnf" if hnf_calls < 2 else "character_hnf"
+        actual_height = max(
+            affine_flint._integer_matrix_height(hnf),
+            affine_flint._integer_matrix_height(transform),
+            1,
+        )
+        executed[category] += affine_bounds._dense_exact_work(
+            matrix.nrows(),
+            matrix.ncols() + matrix.nrows(),
+            actual_height,
+        )
+        hnf_calls += 1
+        return hnf, transform
+
+    def measured_lift(kernel: Any, right_hand_side: Any, *args: Any) -> Any:
+        nonlocal lift_calls
+        result = original_lift(kernel, right_hand_side, *args)
+        right_height = max((abs(value) for value in right_hand_side), default=0)
+        executed["integral_lift"] += (
+            kernel.transpose_transform.nrows()
+            * len(right_hand_side)
+            * affine_bounds._digit_chunks(
+                max(affine_flint._integer_matrix_height(kernel.transpose_transform), 1)
+            )
+            * affine_bounds._digit_chunks(max(right_height, 1))
+        )
+        assert right_height > 0
+        lift_calls += 1
+        return result
+
+    monkeypatch.setattr(affine_flint, "_augmented_hnf_transform", measured_hnf)
+    monkeypatch.setattr(
+        affine_flint,
+        "_solve_integral_character_system",
+        measured_lift,
+    )
+
+    result = affine_torus_fixed_locus(source)
+
+    assert result.outcome.status == "NONEMPTY"
+    assert hnf_calls == 3
+    assert lift_calls == 1
+    assert_charged_work_parity(charged=charged, executed=executed)
+
+
 def test_dispatch_start_and_all_phases_share_one_deadline() -> None:
     source = _source(((3,),), (Fraction(0),))
     started_at = monotonic() - AFFINE_TORUS_FIXED_LOCUS_WALL_SECONDS - 1
@@ -543,18 +756,12 @@ def test_dispatch_start_and_all_phases_share_one_deadline() -> None:
         )
 
 
-def test_max_dimension_adversary_is_deterministic_and_below_one_mibibyte() -> None:
+def test_max_dimension_adversary_is_deterministic_and_transport_bounded() -> None:
     dimension = 16
-    height = 10**31 - 19
-    displacement = tuple(
-        tuple(
-            height - row - column if column >= row else 0 for column in range(dimension)
-        )
-        for row in range(dimension)
-    )
+    height = 10**32 - 1
     linear_part = tuple(
         tuple(
-            displacement[row][column] + int(row == column)
+            -height if column == row else height - row - column if column > row else 0
             for column in range(dimension)
         )
         for row in range(dimension)
@@ -564,11 +771,14 @@ def test_max_dimension_adversary_is_deterministic_and_below_one_mibibyte() -> No
 
     first = affine_torus_fixed_locus(source)
     second = affine_torus_fixed_locus(source)
-    encoded = canonicalize_json(first.model_dump(mode="json"))
+    encoded = encode_strict_json(first.model_dump(mode="json"))
 
     assert first == second
     assert len(encoded) <= plan.result_bytes_upper_bound
-    assert len(encoded) < MAX_AFFINE_TORUS_RESULT_BYTES
+    assert plan.result_bytes_upper_bound <= CanonicalLimits().max_output_bytes
+    assert (
+        AffineTorusFixedLocusResult.model_validate_json(encoded, strict=True) == first
+    )
 
 
 def test_public_tool_validates_and_executes_its_example() -> None:

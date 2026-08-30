@@ -22,6 +22,8 @@ from jacobian.math.matrices.certified_snf.values import CertifiedIntegerMatrix
 MAX_AFFINE_TORUS_DIMENSION = 16
 MAX_AFFINE_TORUS_INPUT_DIGITS = 32
 MAX_AFFINE_TORUS_POINT_DIGITS = 1_050
+_AFFINE_SIGNED_INTEGER_PATTERN = r"^(?:0|-?[1-9][0-9]{0,31})$"
+_AFFINE_POSITIVE_INTEGER_PATTERN = r"^[1-9][0-9]{0,31}$"
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -168,7 +170,7 @@ def _preflight_rational_coordinates(
 class StandardRealTorus(StrictModel):
     """The standard real torus ``T^n = R^n / Z^n`` with its ordered axis."""
 
-    dimension: StrictInt = Field(ge=1, le=MAX_AFFINE_TORUS_DIMENSION)
+    dimension: StrictInt = Field(ge=0, le=MAX_AFFINE_TORUS_DIMENSION)
 
 
 class RationalTorusPoint(StrictModel):
@@ -229,17 +231,73 @@ def _affine_linear_part_schema() -> JsonSchemaValue:
     schema = CertifiedIntegerMatrix.model_json_schema()
     for field_name in ("row_count", "column_count"):
         schema["properties"][field_name].update(
-            minimum=1,
+            minimum=0,
             maximum=MAX_AFFINE_TORUS_DIMENSION,
         )
     entries = schema["properties"]["entries"]
     entries["maxItems"] = MAX_AFFINE_TORUS_DIMENSION
     entries["items"]["maxItems"] = MAX_AFFINE_TORUS_DIMENSION
-    entries["items"]["items"]["maxLength"] = MAX_AFFINE_TORUS_INPUT_DIGITS + 1
+    entries["items"]["items"].update(
+        maxLength=MAX_AFFINE_TORUS_INPUT_DIGITS + 1,
+        pattern=_AFFINE_SIGNED_INTEGER_PATTERN,
+    )
     entries["description"] = (
         "Exactly n rows of n canonical integers, each with at most 32 decimal digits."
     )
     return schema
+
+
+def _affine_translation_schema() -> JsonSchemaValue:
+    """Expose the source-only 32-digit rational grammar without forking its type."""
+
+    return {
+        "type": "object",
+        "title": "RationalTorusPoint",
+        "description": (
+            "A point of the same torus in [0,1)^n. Rational components are "
+            "reduced, denominators are positive, and each component has at most "
+            "32 decimal digits."
+        ),
+        "additionalProperties": False,
+        "properties": {
+            "torus": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "dimension": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": MAX_AFFINE_TORUS_DIMENSION,
+                    }
+                },
+                "required": ["dimension"],
+            },
+            "coordinates": {
+                "type": "array",
+                "maxItems": MAX_AFFINE_TORUS_DIMENSION,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "num": {
+                            "type": "string",
+                            "maxLength": MAX_AFFINE_TORUS_INPUT_DIGITS + 1,
+                            "pattern": _AFFINE_SIGNED_INTEGER_PATTERN,
+                            "description": "Canonical reduced numerator.",
+                        },
+                        "den": {
+                            "type": "string",
+                            "maxLength": MAX_AFFINE_TORUS_INPUT_DIGITS,
+                            "pattern": _AFFINE_POSITIVE_INTEGER_PATTERN,
+                            "description": "Positive canonical reduced denominator.",
+                        },
+                    },
+                    "required": ["num", "den"],
+                },
+            },
+        },
+        "required": ["torus", "coordinates"],
+    }
 
 
 class RationalAffineTorusMap(StrictModel):
@@ -250,7 +308,10 @@ class RationalAffineTorusMap(StrictModel):
         CertifiedIntegerMatrix,
         WithJsonSchema(_affine_linear_part_schema()),
     ]
-    translation: RationalTorusPoint = Field(
+    translation: Annotated[
+        RationalTorusPoint,
+        WithJsonSchema(_affine_translation_schema()),
+    ] = Field(
         description=(
             "A point of the same torus in [0,1)^n; numerator and denominator "
             "components have at most 32 decimal digits for affine-map sources."

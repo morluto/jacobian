@@ -8,11 +8,10 @@ from math import lcm, prod
 
 from flint import fmpq, fmpq_mat, fmpz_mat
 
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import parse_canonical_integer
 from jacobian.math.geometry.affine_tori._bounds import (
-    MAX_AFFINE_TORUS_BASE_POINT_DIGITS,
-    MAX_AFFINE_TORUS_MINOR_DIGITS,
     AffineTorusFixedLocusPlan,
+    AffineTorusRankBounds,
     require_affine_torus_deadline,
 )
 from jacobian.math.geometry.affine_tori.values import RationalAffineTorusMap
@@ -82,24 +81,59 @@ def _backend_checkpoint(plan: AffineTorusFixedLocusPlan, stage: str) -> None:
     require_affine_torus_deadline(plan.deadline, stage)
 
 
+def _augmented_hnf_transform(source: fmpz_mat) -> tuple[fmpz_mat, fmpz_mat]:
+    """Return ``H, U`` from the canonical HNF of ``[source | I]``.
+
+    FLINT's transform is mathematically non-unique. Extracting it as the right
+    block of one canonical augmented HNF makes both its identity and its height
+    follow from the admitted source minors: ``[H | U] = HNF([source | I])``.
+    """
+
+    rows = source.nrows()
+    columns = source.ncols()
+    augmented = fmpz_mat(
+        rows,
+        columns + rows,
+        [
+            (source[row, column] if column < columns else int(column - columns == row))
+            for row in range(rows)
+            for column in range(columns + rows)
+        ],
+    )
+    augmented_hnf = augmented.hnf()
+    hnf = _submatrix(
+        augmented_hnf,
+        tuple(range(rows)),
+        tuple(range(columns)),
+    )
+    transform = _submatrix(
+        augmented_hnf,
+        tuple(range(rows)),
+        tuple(range(columns, columns + rows)),
+    )
+    if transform * source != hnf or abs(int(transform.det())) != 1:
+        raise ArithmeticError("augmented HNF did not recover a unimodular transform")
+    return hnf, transform
+
+
 def _saturated_integer_kernel(
     source: fmpz_mat,
     plan: AffineTorusFixedLocusPlan,
     *,
     label: str,
+    rank: int,
 ) -> _SaturatedKernel:
     """Return the canonical saturated column basis of ``ker_Z(source)``.
 
-    If ``H = T source^t`` is row HNF, the final ``q-rank(source)`` rows of
-    ``T`` are a saturated row basis of the left kernel of ``source^t``.
-    Transposing yields the desired integer kernel; a final row HNF of its
-    transpose canonicalizes the column lattice without changing it.
+    In the canonical row HNF ``[H | T] = HNF([source^t | I])``, the final
+    ``q-rank(source)`` rows have zero left block. Their right block is already
+    the canonical saturated row basis of the left kernel of ``source^t``;
+    transposing yields the desired integer kernel.
     """
 
-    _backend_checkpoint(plan, f"before {label} HNF with transformation")
-    transpose_hnf, transform = source.transpose().hnf(True)
-    _backend_checkpoint(plan, f"after {label} HNF with transformation")
-    rank = source.rank()
+    _backend_checkpoint(plan, f"before {label} augmented HNF")
+    transpose_hnf, transform = _augmented_hnf_transform(source.transpose())
+    _backend_checkpoint(plan, f"after {label} augmented HNF")
     nullity = source.ncols() - rank
     raw_rows = fmpz_mat(
         nullity,
@@ -110,10 +144,10 @@ def _saturated_integer_kernel(
             for column in range(source.ncols())
         ],
     )
-    _backend_checkpoint(plan, f"before {label} canonical HNF")
-    canonical_rows = raw_rows.hnf()
-    _backend_checkpoint(plan, f"after {label} canonical HNF")
-    basis = canonical_rows.transpose()
+    # The zero-left-block rows are already the row-HNF basis of the saturated
+    # kernel: deleting the preceding pivot rows and leading zero columns from
+    # HNF([source^t | I]) preserves the row-HNF conditions.
+    basis = raw_rows.transpose()
     if source * basis != _zero_integer_matrix(source.nrows(), nullity):
         raise ArithmeticError(f"{label} HNF basis does not lie in the integer kernel")
     if basis.rank() != nullity:
@@ -164,6 +198,7 @@ def _solve_integral_character_system(
     kernel: _SaturatedKernel,
     right_hand_side: tuple[int, ...],
     plan: AffineTorusFixedLocusPlan,
+    bounds: AffineTorusRankBounds,
 ) -> tuple[int, ...]:
     """Solve ``W z = h`` using the already-computed HNF of ``W^t``."""
 
@@ -173,36 +208,36 @@ def _solve_integral_character_system(
         raise AssertionError("character right-hand side has the wrong dimension")
     if equation_count == 0:
         return (0,) * ambient_dimension
-    leading = fmpq_mat(
-        equation_count,
-        equation_count,
-        [
-            kernel.transpose_hnf[column, row]
-            for row in range(equation_count)
-            for column in range(equation_count)
-        ],
-    )
-    rhs = fmpq_mat(
-        equation_count,
-        1,
-        [fmpq(value) for value in right_hand_side],
-    )
-    _backend_checkpoint(plan, "before the integral character solve")
-    leading_solution = leading.solve(rhs)
-    _backend_checkpoint(plan, "after the integral character solve")
-    if any(leading_solution[index, 0].q != 1 for index in range(equation_count)):
+    if any(
+        int(kernel.transpose_hnf[row, column]) != int(row == column)
+        for row in range(equation_count)
+        for column in range(equation_count)
+    ):
         raise ArithmeticError(
-            "saturated character lattice did not give an integer lift"
+            "saturated character lattice did not have identity HNF leading block"
         )
+    leading_solution_height = max(map(abs, right_hand_side), default=0)
+    _require_height(
+        leading_solution_height,
+        bounds.leading_solution_height,
+        label="integral-character leading solution",
+    )
     transformed = fmpz_mat(
         ambient_dimension,
         1,
         [
-            int(leading_solution[index, 0]) if index < equation_count else 0
+            right_hand_side[index] if index < equation_count else 0
             for index in range(ambient_dimension)
         ],
     )
+    _backend_checkpoint(plan, "before the integral character lift")
     solution = kernel.transpose_transform.transpose() * transformed
+    _backend_checkpoint(plan, "after the integral character lift")
+    _require_height(
+        _integer_matrix_height(solution),
+        bounds.integral_lift_height,
+        label="integral-character lift",
+    )
     return tuple(int(solution[index, 0]) for index in range(ambient_dimension))
 
 
@@ -221,36 +256,40 @@ def _mod_one(value: Fraction) -> Fraction:
     return value % 1
 
 
-def _digits(value: int) -> int:
-    return len(format_canonical_integer(abs(value)))
+def _integer_matrix_height(matrix: fmpz_mat) -> int:
+    return max(
+        (
+            abs(int(matrix[row, column]))
+            for row in range(matrix.nrows())
+            for column in range(matrix.ncols())
+        ),
+        default=0,
+    )
 
 
-def _require_predicted_heights(
-    *,
-    integer_matrices: tuple[fmpz_mat, ...],
-    generators: tuple[tuple[Fraction, ...], ...],
-    base_point: tuple[Fraction, ...],
-) -> None:
-    if any(
-        _digits(int(matrix[row, column])) > MAX_AFFINE_TORUS_MINOR_DIGITS
-        for matrix in integer_matrices
-        for row in range(matrix.nrows())
-        for column in range(matrix.ncols())
-    ):
-        raise ArithmeticError("affine-torus minor-height proof was violated")
-    if any(
-        max(_digits(value.numerator), _digits(value.denominator))
-        > MAX_AFFINE_TORUS_MINOR_DIGITS
-        for generator in generators
-        for value in generator
-    ):
-        raise ArithmeticError("affine-torus generator-height proof was violated")
-    if any(
-        max(_digits(value.numerator), _digits(value.denominator))
-        > MAX_AFFINE_TORUS_BASE_POINT_DIGITS
-        for value in base_point
-    ):
-        raise ArithmeticError("affine-torus base-point height proof was violated")
+def _rational_matrix_height(matrix: fmpq_mat) -> int:
+    return max(
+        (
+            max(abs(int(matrix[row, column].p)), int(matrix[row, column].q))
+            for row in range(matrix.nrows())
+            for column in range(matrix.ncols())
+        ),
+        default=0,
+    )
+
+
+def _fraction_height(values: tuple[Fraction, ...]) -> int:
+    return max(
+        (max(abs(value.numerator), value.denominator) for value in values),
+        default=0,
+    )
+
+
+def _require_height(actual: int, bound: int, *, label: str) -> None:
+    """Fail closed if a derived theorem/adapter invariant is ever violated."""
+
+    if actual > bound:
+        raise ArithmeticError(f"{label} exceeded its source-derived height proof")
 
 
 def compute_fixed_locus_kernel(
@@ -279,16 +318,55 @@ def compute_fixed_locus_kernel(
     translation = tuple(
         coordinate.as_fraction() for coordinate in source.translation.coordinates
     )
+    _backend_checkpoint(plan, "before the source rank")
+    rank = displacement.rank()
+    _backend_checkpoint(plan, "after the source rank")
+    bounds = plan.bounds_for_rank(rank)
 
     identity_kernel = _saturated_integer_kernel(
-        displacement, plan, label="fixed identity-component"
+        displacement,
+        plan,
+        label="fixed identity-component",
+        rank=rank,
     )
     character_columns = _saturated_integer_kernel(
-        displacement.transpose(), plan, label="invariant-character"
+        displacement.transpose(),
+        plan,
+        label="invariant-character",
+        rank=rank,
     )
+    for label, kernel in (
+        ("fixed identity-component", identity_kernel),
+        ("invariant-character", character_columns),
+    ):
+        _require_height(
+            _integer_matrix_height(kernel.transpose_transform),
+            bounds.source_hnf_transform_height,
+            label=f"{label} augmented-HNF transform",
+        )
+        _require_height(
+            _integer_matrix_height(kernel.basis),
+            bounds.source_minor_height,
+            label=f"{label} saturated-kernel basis",
+        )
     characters = character_columns.basis.transpose()
-    image_kernel = _saturated_integer_kernel(characters, plan, label="saturated-image")
+    image_kernel = _saturated_integer_kernel(
+        characters,
+        plan,
+        label="saturated-image",
+        rank=characters.nrows(),
+    )
     image_saturation = image_kernel.basis
+    _require_height(
+        _integer_matrix_height(image_kernel.transpose_transform),
+        bounds.character_hnf_transform_height,
+        label="saturated-image augmented-HNF transform",
+    )
+    _require_height(
+        _integer_matrix_height(image_saturation),
+        bounds.image_saturation_height,
+        label="saturated-image basis",
+    )
 
     pairings = tuple(
         sum(
@@ -306,14 +384,18 @@ def compute_fixed_locus_kernel(
             character = tuple(
                 int(characters[row, column]) for column in range(dimension)
             )
+            _require_height(
+                _fraction_height((residue,)),
+                bounds.base_point_component_height,
+                label="empty-locus obstruction pairing",
+            )
             _backend_checkpoint(plan, "after empty-locus result normalization")
             return EmptyFixedLocusKernel(character=character, pairing=residue)
 
-    rank = displacement.rank()
     rows, columns = _first_rank_minor(displacement, rank, plan)
     character_target = tuple(int(pairing) for pairing in pairings)
     integer_lift = _solve_integral_character_system(
-        image_kernel, character_target, plan
+        image_kernel, character_target, plan, bounds
     )
     image_rhs = tuple(
         Fraction(integer_lift[index]) - translation[index] for index in range(dimension)
@@ -330,6 +412,11 @@ def compute_fixed_locus_kernel(
         _backend_checkpoint(plan, "before the component-lift rational solve")
         selected_lifts = fmpq_mat(minor).solve(fmpq_mat(saturation_rows))
         _backend_checkpoint(plan, "after the component-lift rational solve")
+        _require_height(
+            _rational_matrix_height(selected_lifts),
+            bounds.rational_intermediate_height,
+            label="component-lift rational solve",
+        )
         component_lifts = _zero_rational_matrix(dimension, rank)
         for row_index, ambient_row in enumerate(columns):
             for column in range(rank):
@@ -344,8 +431,18 @@ def compute_fixed_locus_kernel(
             fmpq_mat(displacement_rows)
         )
         _backend_checkpoint(plan, "after the image-coordinate rational solve")
+        _require_height(
+            _rational_matrix_height(coordinates_rational),
+            bounds.rational_intermediate_height,
+            label="image-coordinate rational solve",
+        )
         image_coordinates = _require_integral(
             coordinates_rational, label="image-coordinate matrix"
+        )
+        _require_height(
+            _integer_matrix_height(image_coordinates),
+            bounds.image_coordinate_height,
+            label="image-coordinate matrix",
         )
         if image_saturation * image_coordinates != displacement:
             raise ArithmeticError("image coordinates do not reconstruct A-I")
@@ -362,6 +459,11 @@ def compute_fixed_locus_kernel(
                 for column in range(rank)
             ],
         )
+        _require_height(
+            _integer_matrix_height(relation_matrix),
+            bounds.source_minor_height,
+            label="component relation HNF",
+        )
 
         rhs_minor = fmpq_mat(
             rank,
@@ -376,6 +478,11 @@ def compute_fixed_locus_kernel(
         _backend_checkpoint(plan, "before the base-point rational solve")
         selected_base = fmpq_mat(minor).solve(rhs_minor)
         _backend_checkpoint(plan, "after the base-point rational solve")
+        _require_height(
+            _rational_matrix_height(selected_base),
+            bounds.rational_intermediate_height,
+            label="base-point rational solve",
+        )
         base_solution = _zero_rational_matrix(dimension, 1)
         for row_index, ambient_row in enumerate(columns):
             base_solution[ambient_row, 0] = selected_base[row_index, 0]
@@ -400,6 +507,11 @@ def compute_fixed_locus_kernel(
     _backend_checkpoint(plan, "before component Smith invariant factors")
     diagonal = relation_matrix.snf()
     _backend_checkpoint(plan, "after component Smith invariant factors")
+    _require_height(
+        _integer_matrix_height(diagonal),
+        bounds.source_minor_height,
+        label="component Smith factors",
+    )
     diagonal_factors = tuple(abs(int(diagonal[index, index])) for index in range(rank))
     if any(value <= 0 for value in diagonal_factors):
         raise ArithmeticError("relation lattice is not full rank")
@@ -414,6 +526,11 @@ def compute_fixed_locus_kernel(
         _backend_checkpoint(plan, "before component-generator order solve")
         inverse_relations = fmpq_mat(relation_matrix).inv()
         _backend_checkpoint(plan, "after component-generator order solve")
+        _require_height(
+            _rational_matrix_height(inverse_relations),
+            bounds.rational_intermediate_height,
+            label="component-generator order solve",
+        )
         generator_orders = tuple(
             lcm(*(int(inverse_relations[row, column].q) for row in range(rank)))
             for column in range(rank)
@@ -431,15 +548,17 @@ def compute_fixed_locus_kernel(
         )
         for column in range(rank)
     )
-    _require_predicted_heights(
-        integer_matrices=(
-            identity_kernel.basis,
-            image_saturation,
-            image_coordinates,
-            relation_matrix,
+    _require_height(
+        _fraction_height(
+            tuple(value for generator in generators for value in generator)
         ),
-        generators=generators,
-        base_point=base_point,
+        bounds.source_minor_height,
+        label="component generators",
+    )
+    _require_height(
+        _fraction_height(base_point),
+        bounds.base_point_component_height,
+        label="base point",
     )
     _backend_checkpoint(plan, "after exact result normalization")
     return NonemptyFixedLocusKernel(

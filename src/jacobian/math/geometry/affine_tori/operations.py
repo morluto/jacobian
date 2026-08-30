@@ -5,9 +5,8 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import canonicalize_json, format_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.geometry.affine_tori._bounds import (
-    MAX_AFFINE_TORUS_RESULT_BYTES,
     begin_affine_torus_deadline,
     build_affine_torus_plan,
     require_affine_torus_deadline,
@@ -60,7 +59,9 @@ def _nonempty_result(
     source: RationalAffineTorusMap, kernel: NonemptyFixedLocusKernel
 ) -> AffineTorusFixedLocusResult:
     dimension = source.torus.dimension
-    identity_dimension = len(kernel.identity_embedding[0])
+    identity_dimension = (
+        len(kernel.identity_embedding[0]) if kernel.identity_embedding else 0
+    )
     generator_count = len(kernel.component_generators)
     family = RationalTorusCosetFamily(
         ambient_torus=source.torus,
@@ -136,15 +137,9 @@ def affine_torus_fixed_locus(
         if isinstance(kernel, EmptyFixedLocusKernel)
         else _nonempty_result(source, kernel)
     )
-    require_affine_torus_deadline(deadline, "before canonical result serialization")
-    encoded = canonicalize_json(result.model_dump(mode="json"))
-    if len(encoded) > plan.result_bytes_upper_bound:
-        raise ArithmeticError(
-            "affine-torus exact result exceeds its admitted serialization proof"
-        )
-    if len(encoded) > MAX_AFFINE_TORUS_RESULT_BYTES:
-        raise ArithmeticError("affine-torus exact result exceeds its owner boundary")
-    require_affine_torus_deadline(deadline, "after canonical result serialization")
+    # Dispatch owns the one canonical serialization. The source-derived plan
+    # has already proved this result shape fits that concrete transport limit.
+    require_affine_torus_deadline(deadline, "before result handoff")
     return result
 
 

@@ -54,9 +54,6 @@ def _admit_graph(graph: SimpleUndirectedGraph) -> _PathSearchPlan:
         adjacency[left].add(right)
         adjacency[right].add(left)
 
-    candidate_sets, candidate_incidences = _find_all_simple_paths(
-        adjacency, candidate_limit=MAX_SEARCH_STATES
-    )
     try:
         source_bytes = len(encode_strict_json(graph.model_dump(mode="json")))
         active_vertices = {vertex for edge in graph.edges for vertex in edge}

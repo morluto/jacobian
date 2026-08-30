@@ -103,7 +103,9 @@ def _admit_source(source: PeriodicCongruenceUnionSource, cutoff: int) -> _Execut
     if not isinstance(source, PeriodicCongruenceUnionSource):
         _reject("invalid_source", "source must be a canonical periodic union")
     if isinstance(cutoff, bool) or not isinstance(cutoff, int):
-        _reject("invalid_cutoff", "cutoff must be a strict integer", location=("cutoff",))
+        _reject(
+            "invalid_cutoff", "cutoff must be a strict integer", location=("cutoff",)
+        )
     if cutoff < 0:
         _reject("negative_cutoff", "cutoff must be nonnegative", location=("cutoff",))
     if cutoff > 10**MAX_PREFIX_CUTOFF_DIGITS - 1:

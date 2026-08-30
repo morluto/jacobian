@@ -111,10 +111,16 @@ def _admit_edge_pattern_profile(
                 rainbow_sizes.append(edge_id_size)
         result_bytes = strict_json_object_size(
             (
-                ("hypergraph", len(encode_strict_json(hypergraph.model_dump(mode="json")))),
+                (
+                    "hypergraph",
+                    len(encode_strict_json(hypergraph.model_dump(mode="json"))),
+                ),
                 ("vertex_colors", len(encode_strict_json(vertex_colors))),
                 ("entries", _strict_json_array_size(tuple(entry_sizes))),
-                ("monochromatic_edge_ids", _strict_json_array_size(tuple(monochromatic_sizes))),
+                (
+                    "monochromatic_edge_ids",
+                    _strict_json_array_size(tuple(monochromatic_sizes)),
+                ),
                 ("rainbow_edge_ids", _strict_json_array_size(tuple(rainbow_sizes))),
             )
         )

@@ -118,7 +118,12 @@ def test_high_exponent_family_is_rejected_before_materialization() -> None:
         OperationDomainValidationError,
         match="serialized-byte budget",
     ):
-        enumerate_r_full(64, int("1" + "0" * 128))
+        enumerate_r_full_numbers(
+            RFullEnumerateRequest(
+                minimum_exponent=64,
+                cutoff="1" + "0" * 128,
+            )
+        )
 
 
 def test_result_rejects_oversized_family_member_before_parsing() -> None:

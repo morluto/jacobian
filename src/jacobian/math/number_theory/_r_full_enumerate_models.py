@@ -8,8 +8,6 @@ from typing import NamedTuple, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
-from sympy import integer_nthroot
-from sympy.ntheory.generate import primerange
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -48,6 +46,12 @@ def plan_r_full_family(minimum_exponent: int, cutoff: int) -> RFullFamilyPlan:
     huge interval; the first 200,001 prime powers already exceed the result
     budget at that boundary.
     """
+    # Keep the aggregate native namespace free of packaged backends.  The
+    # planner is the first execution path that needs SymPy, so import it only
+    # after request admission has selected this operation.
+    from sympy import integer_nthroot
+    from sympy.ntheory.generate import primerange
+
     prime_bound, _ = integer_nthroot(cutoff, minimum_exponent)
     if prime_bound > _MAX_PRIME_SEARCH_BOUND:
         return RFullFamilyPlan((), True)

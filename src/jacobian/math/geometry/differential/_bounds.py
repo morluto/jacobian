@@ -179,6 +179,37 @@ def _dense_term_bound(degrees: tuple[int, ...], *, cap: int | None = None) -> in
     return result
 
 
+def _polynomial_admission_work_units(
+    polynomial: SparseRationalPolynomial, variable_count: int
+) -> int:
+    """Price the scalar passes used to derive one exact polynomial bound.
+
+    Each nonzero coefficient is converted, participates in denominator/content
+    reduction, is scaled and made primitive, and is inspected for height. Each
+    exponent is inspected once for the maximum and once for the minimum. The
+    final unit prices construction of the separated rational content. Zero is
+    represented by one exact ``Fraction`` construction.
+    """
+
+    terms = len(polynomial.terms)
+    if terms == 0:
+        return 1
+    return terms * (6 + 2 * variable_count) + 1
+
+
+def _polynomial_backend_conversion_work_units(bound: PolynomialBound) -> int:
+    """Price sparse coefficient conversion and dense SymPy ``Poly`` creation."""
+
+    dense_coefficients = 1 if bound.is_zero else _dense_term_bound(bound.degrees)
+    coefficient_digits = (
+        bound.coefficient_digits
+        + len(str(abs(bound.rational_content.numerator)))
+        + len(str(bound.rational_content.denominator))
+    )
+    coefficient_chunks = max(1, (coefficient_digits + 31) // 32)
+    return bound.terms * coefficient_chunks + dense_coefficients
+
+
 def _polynomial_bound(polynomial: SparseRationalPolynomial) -> PolynomialBound:
     if not polynomial.terms:
         return PolynomialBound(
@@ -247,17 +278,28 @@ def _zero_fraction(variable_count: int) -> FractionBound:
     )
 
 
-def _fraction_bound(value: RationalFunction) -> FractionBound:
+def _fraction_bound(value: RationalFunction, ledger: _Ledger) -> FractionBound:
     variable_count = len(value.variables)
+    ledger.charge(
+        "source_conversion",
+        _polynomial_admission_work_units(value.numerator, variable_count)
+        + _polynomial_admission_work_units(value.denominator, variable_count),
+    )
     numerator = (
         _zero_polynomial(variable_count)
         if not value.numerator.terms
         else _polynomial_bound(value.numerator)
     )
-    return FractionBound(
+    result = FractionBound(
         numerator=numerator,
         denominator=_polynomial_bound(value.denominator),
     )
+    ledger.charge(
+        "source_conversion",
+        _polynomial_backend_conversion_work_units(result.numerator)
+        + _polynomial_backend_conversion_work_units(result.denominator),
+    )
+    return result
 
 
 def _check_raw_polynomial(bound: PolynomialBound) -> None:
@@ -286,9 +328,7 @@ def _differentiate_polynomial(
     active_terms: int,
     maximum_axis_exponent: int,
     minimum_exponents: tuple[int, ...],
-    ledger: _Ledger,
 ) -> PolynomialBound:
-    ledger.charge("differentiation", source.terms)
     if source.is_zero or active_terms == 0:
         return _zero_polynomial(len(source.degrees))
     degrees = list(source.degrees)
@@ -407,6 +447,10 @@ def _differentiate_fraction(
     axis: int,
     ledger: _Ledger,
 ) -> FractionBound:
+    ledger.charge(
+        "differentiation",
+        source_bound.numerator.terms + source_bound.denominator.terms,
+    )
     numerator_active = tuple(
         term for term in source_value.numerator.terms if term.exponents[axis] > 0
     )
@@ -414,10 +458,6 @@ def _differentiate_fraction(
         term for term in source_value.denominator.terms if term.exponents[axis] > 0
     )
     if not numerator_active and not denominator_active:
-        ledger.charge(
-            "differentiation",
-            len(source_value.numerator.terms) + len(source_value.denominator.terms),
-        )
         return _zero_fraction(len(source_bound.numerator.degrees))
     numerator_derivative = _differentiate_polynomial(
         source_bound.numerator,
@@ -435,7 +475,6 @@ def _differentiate_fraction(
         )
         if numerator_active
         else (0,) * len(source_value.variables),
-        ledger=ledger,
     )
     denominator_derivative = _differentiate_polynomial(
         source_bound.denominator,
@@ -453,7 +492,6 @@ def _differentiate_fraction(
         )
         if denominator_active
         else (0,) * len(source_value.variables),
-        ledger=ledger,
     )
     first = _multiply_polynomials(
         numerator_derivative, source_bound.denominator, ledger
@@ -836,15 +874,10 @@ def build_lie_derivative_plan(
         )
     dimension = len(tensor.coordinate_axis)
     ledger = _Ledger(deadline=deadline)
-    vector_bounds = tuple(_fraction_bound(value) for value in vector_field.components)
-    tensor_bounds = tuple(_fraction_bound(value) for value in tensor.components)
-    ledger.charge(
-        "source_conversion",
-        sum(
-            bound.numerator.terms + bound.denominator.terms
-            for bound in (*vector_bounds, *tensor_bounds)
-        ),
+    vector_bounds = tuple(
+        _fraction_bound(value, ledger) for value in vector_field.components
     )
+    tensor_bounds = tuple(_fraction_bound(value, ledger) for value in tensor.components)
     vector_derivatives = {
         (component, axis): _differentiate_fraction(
             vector_field.components[component],

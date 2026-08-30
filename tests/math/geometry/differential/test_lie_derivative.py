@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from itertools import product
+from math import gcd, lcm, prod
 from time import monotonic
 from typing import Any
 
@@ -49,6 +51,7 @@ from jacobian.math.geometry.differential.values import (
 from jacobian.math.polynomials._conversions import (
     rational_function_from_sympy,
     rational_function_to_sympy,
+    sparse_rational_polynomial_to_sympy,
 )
 from jacobian.math.polynomials.values import RationalFunction, SparseRationalPolynomial
 
@@ -654,6 +657,175 @@ def _categorized_accounting_inputs() -> tuple[
     return vector, covector
 
 
+def _dense_source_coefficients(
+    polynomial: SparseRationalPolynomial, variable_count: int
+) -> int:
+    if not polynomial.terms:
+        return 1
+    return prod(
+        max(term.exponents[axis] for term in polynomial.terms) + 1
+        for axis in range(variable_count)
+    )
+
+
+def _observed_recognition_units(value: RationalFunction) -> int:
+    variable_count = len(value.variables)
+    numerator_dense = _dense_source_coefficients(value.numerator, variable_count)
+    denominator_dense = _dense_source_coefficients(value.denominator, variable_count)
+    degree_steps = (
+        sum(
+            max(
+                max(term.exponents[axis] for term in value.numerator.terms),
+                max(term.exponents[axis] for term in value.denominator.terms),
+            )
+            for axis in range(variable_count)
+        )
+        + 1
+    )
+    coefficient_digits = max(
+        len(str(abs(term.coefficient.as_integer_ratio()[0])))
+        + len(str(term.coefficient.as_integer_ratio()[1]))
+        for polynomial in (value.numerator, value.denominator)
+        for term in polynomial.terms
+    )
+    coefficient_chunks = max(1, (coefficient_digits + 31) // 32)
+    return (numerator_dense + denominator_dense) * degree_steps * coefficient_chunks
+
+
+def _observed_normalization_units(expression: Any, variables: tuple[str, ...]) -> int:
+    symbols = tuple(sympy.Symbol(variable) for variable in variables)
+    numerator_expression, denominator_expression = sympy.fraction(expression)
+    numerator = sympy.Poly(numerator_expression, *symbols, domain=sympy.QQ)
+    denominator = sympy.Poly(denominator_expression, *symbols, domain=sympy.QQ)
+    if numerator.is_zero:
+        return 1
+
+    def dense_coefficients(polynomial: Any) -> int:
+        return prod(int(degree) + 1 for degree in polynomial.degree_list())
+
+    coefficient_digits = max(
+        len(str(abs(int(coefficient.p)))) + len(str(int(coefficient.q)))
+        for polynomial in (numerator, denominator)
+        for coefficient in polynomial.coeffs()
+    )
+    dense_total = dense_coefficients(numerator) + dense_coefficients(denominator)
+    return dense_total * (dense_total - 1) * coefficient_digits
+
+
+class _SourceConversionObserver:
+    def __init__(self, executed: dict[str, int], calls: dict[str, int]) -> None:
+        self.executed = executed
+        self.calls = calls
+        self.observing_bound = False
+        self.original_fraction_bound = lie_bounds._fraction_bound
+        self.original_polynomial_bound = lie_bounds._polynomial_bound
+        self.original_fraction = Fraction
+        self.original_gcd = gcd
+        self.original_lcm = lcm
+        self.original_sparse_conversion = sparse_rational_polynomial_to_sympy
+
+    def bound(self, value: RationalFunction, ledger: Any) -> Any:
+        self.calls["source_conversion"] += 1
+        self.observing_bound = True
+        try:
+            return self.original_fraction_bound(value, ledger)
+        finally:
+            self.observing_bound = False
+
+    def polynomial_bound(self, polynomial: SparseRationalPolynomial) -> Any:
+        result = self.original_polynomial_bound(polynomial)
+        if self.observing_bound:
+            terms = len(polynomial.terms)
+            variables = len(polynomial.terms[0].exponents)
+            # Integral scaling, primitive division, coefficient-height
+            # inspection, and maximum/minimum exponent scans.
+            self.executed["source_conversion"] += terms * (3 + 2 * variables)
+        return result
+
+    def fraction(self, *args: Any, **kwargs: Any) -> Any:
+        if self.observing_bound:
+            self.executed["source_conversion"] += 1
+        return self.original_fraction(*args, **kwargs)
+
+    def gcd(self, *integers: int) -> int:
+        if self.observing_bound:
+            self.executed["source_conversion"] += len(integers)
+        return self.original_gcd(*integers)
+
+    def lcm(self, *integers: int) -> int:
+        if self.observing_bound:
+            self.executed["source_conversion"] += len(integers)
+        return self.original_lcm(*integers)
+
+    def convert(
+        self, polynomial: SparseRationalPolynomial, variables: tuple[str, ...]
+    ) -> Any:
+        self.calls["source_conversion"] += 1
+        result = self.original_sparse_conversion(polynomial, variables)
+        coefficient_chunks = sum(
+            max(
+                1,
+                (len(str(abs(int(coefficient.p)))) + len(str(int(coefficient.q))) + 31)
+                // 32,
+            )
+            for coefficient in result.coeffs()
+        )
+        dense_coefficients = (
+            1
+            if result.is_zero
+            else prod(int(degree) + 1 for degree in result.degree_list())
+        )
+        self.executed["source_conversion"] += coefficient_chunks + dense_coefficients
+        return result
+
+
+class _PolynomialArithmeticObserver:
+    def __init__(self, executed: dict[str, int], calls: dict[str, int]) -> None:
+        self.executed = executed
+        self.calls = calls
+        self.active = 0
+        self.polynomial_type = type(sympy.Poly(sympy.Symbol("x"), sympy.Symbol("x")))
+        self.original_multiply = self.polynomial_type.__mul__
+        self.original_add = self.polynomial_type.__add__
+        self.original_subtract = self.polynomial_type.__sub__
+
+    def run(self, function: Any, *args: Any) -> Any:
+        self.active += 1
+        try:
+            return function(*args)
+        finally:
+            self.active -= 1
+
+    def multiply(self, left: Any, right: Any) -> Any:
+        if (
+            self.active
+            and isinstance(right, self.polynomial_type)
+            and not left.is_zero
+            and not right.is_zero
+        ):
+            self.calls["multiplication"] += 1
+            self.executed["multiplication"] += len(left.terms()) * len(right.terms())
+        return self.original_multiply(left, right)
+
+    def add(self, left: Any, right: Any) -> Any:
+        self._observe_addition(left, right)
+        return self.original_add(left, right)
+
+    def subtract(self, left: Any, right: Any) -> Any:
+        self._observe_addition(left, right)
+        return self.original_subtract(left, right)
+
+    def _observe_addition(self, left: Any, right: Any) -> None:
+        if (
+            self.active
+            and isinstance(right, self.polynomial_type)
+            and not left.is_zero
+            and not right.is_zero
+        ):
+            self.calls["addition"] += 1
+            self.executed["addition"] += len(left.terms()) + len(right.terms())
+
+
 def test_work_categories_cover_observed_backend_primitives_and_detect_mutations(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -667,10 +839,12 @@ def test_work_categories_cover_observed_backend_primitives_and_detect_mutations(
         "addition": 0,
         "normalization": 0,
     }
+    top_level_calls = dict.fromkeys(executed, 0)
+    source_observer = _SourceConversionObserver(executed, top_level_calls)
+    arithmetic_observer = _PolynomialArithmeticObserver(executed, top_level_calls)
 
     original_plan = build_lie_derivative_plan
     original_recognition = recognize_canonical_rational_functions
-    original_raw_fraction = lie_backend._raw_fraction
     original_differentiate = lie_backend._differentiate
     original_multiply = lie_backend._multiply
     original_add = lie_backend._add
@@ -683,41 +857,68 @@ def test_work_categories_cover_observed_backend_primitives_and_detect_mutations(
 
     def recognizing(*args: Any, **kwargs: Any) -> Any:
         result = original_recognition(*args, **kwargs)
-        executed["recognition"] += result.recognized_candidates
+        candidates = args[0]
+        top_level_calls["recognition"] += result.recognized_candidates
+        executed["recognition"] += sum(
+            _observed_recognition_units(candidate.value)
+            for candidate in candidates[: result.recognized_candidates]
+        )
         return result
 
-    def converting(value: RationalFunction) -> Any:
-        executed["source_conversion"] += len(value.numerator.terms) + len(
-            value.denominator.terms
+    def differentiating(source: Any, axis: int) -> Any:
+        top_level_calls["differentiation"] += 1
+        executed["differentiation"] += len(source.numerator.terms()) + len(
+            source.denominator.terms()
         )
-        return original_raw_fraction(value)
-
-    def differentiating(*args: Any, **kwargs: Any) -> Any:
-        executed["differentiation"] += 1
-        return original_differentiate(*args, **kwargs)
+        return arithmetic_observer.run(original_differentiate, source, axis)
 
     def multiplying(left: Any, right: Any) -> Any:
-        if not left.is_zero and not right.is_zero:
-            executed["multiplication"] += 1
-        return original_multiply(left, right)
+        return arithmetic_observer.run(original_multiply, left, right)
 
     def adding(left: Any, right: Any) -> Any:
-        if not left.is_zero and not right.is_zero:
-            executed["addition"] += 1
-        return original_add(left, right)
+        return arithmetic_observer.run(original_add, left, right)
 
-    def normalizing(*args: Any, **kwargs: Any) -> Any:
-        executed["normalization"] += 1
-        return original_normalize(*args, **kwargs)
+    def normalizing(expression: Any, variables: tuple[str, ...], **kwargs: Any) -> Any:
+        top_level_calls["normalization"] += 1
+        executed["normalization"] += _observed_normalization_units(
+            expression, variables
+        )
+        return original_normalize(expression, variables, **kwargs)
 
     monkeypatch.setattr(lie_operations, "build_lie_derivative_plan", planning)
     monkeypatch.setattr(
         lie_bounds, "recognize_canonical_rational_functions", recognizing
     )
-    monkeypatch.setattr(lie_backend, "_raw_fraction", converting)
+    monkeypatch.setattr(lie_bounds, "_fraction_bound", source_observer.bound)
+    monkeypatch.setattr(
+        lie_bounds, "_polynomial_bound", source_observer.polynomial_bound
+    )
+    monkeypatch.setattr(lie_bounds, "Fraction", source_observer.fraction)
+    monkeypatch.setattr(lie_bounds, "gcd", source_observer.gcd)
+    monkeypatch.setattr(lie_bounds, "lcm", source_observer.lcm)
+    monkeypatch.setattr(
+        lie_backend,
+        "sparse_rational_polynomial_to_sympy",
+        source_observer.convert,
+    )
     monkeypatch.setattr(lie_backend, "_differentiate", differentiating)
     monkeypatch.setattr(lie_backend, "_multiply", multiplying)
     monkeypatch.setattr(lie_backend, "_add", adding)
+    monkeypatch.setattr(
+        arithmetic_observer.polynomial_type,
+        "__mul__",
+        lambda left, right: arithmetic_observer.multiply(left, right),
+    )
+    monkeypatch.setattr(
+        arithmetic_observer.polynomial_type,
+        "__add__",
+        lambda left, right: arithmetic_observer.add(left, right),
+    )
+    monkeypatch.setattr(
+        arithmetic_observer.polynomial_type,
+        "__sub__",
+        lambda left, right: arithmetic_observer.subtract(left, right),
+    )
     monkeypatch.setattr(lie_backend, "rational_function_from_sympy", normalizing)
 
     result = lie_derivative(vector, tensor)
@@ -726,19 +927,41 @@ def test_work_categories_cover_observed_backend_primitives_and_detect_mutations(
     plan = captured_plan[0]
     charged = dict(plan.work_units_by_category)
     assert all(amount > 0 for amount in executed.values())
+    assert all(executed[category] > top_level_calls[category] for category in executed)
     assert sum(charged.values()) == plan.work_units
     assert_charged_work_parity(charged=charged, executed=executed)
 
-    zeroed = dict(charged)
-    zeroed["multiplication"] = 0
-    with pytest.raises(AssertionError, match="exceeds its admission charge"):
-        assert_charged_work_parity(charged=zeroed, executed=executed)
+    for category, calls in top_level_calls.items():
+        collapsed = dict(charged)
+        collapsed[category] = calls
+        with pytest.raises(AssertionError, match="exceeds its admission charge"):
+            assert_charged_work_parity(charged=collapsed, executed=executed)
     omitted = dict(charged)
     del omitted["addition"]
     with pytest.raises(AssertionError, match="has no admission charge"):
         assert_charged_work_parity(charged=omitted, executed=executed)
 
     assert len(result.lie_derivative.components) == 2
+
+
+def test_source_conversion_is_precharged_before_content_arithmetic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    variables = ("x",)
+    one = _function(variables, (1, (0,)))
+    vector = _tensor(variables, ("CONTRAVARIANT",), (one,))
+    scalar = _tensor(variables, (), (one,))
+
+    def forbidden_content_arithmetic(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("unadmitted source reached coefficient arithmetic")
+
+    monkeypatch.setattr(lie_bounds, "MAX_LIE_DERIVATIVE_WORK_UNITS", 1)
+    monkeypatch.setattr(lie_bounds, "_polynomial_bound", forbidden_content_arithmetic)
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        build_lie_derivative_plan(vector, scalar)
+
+    assert error.value.errors()[0]["type"].endswith("work_budget")
 
 
 def test_intermediate_support_is_rejected_before_coprimality_recognition(

@@ -12,7 +12,7 @@ from jacobian.math.geometry.differential.values import (
     MAX_RATIONAL_TENSOR_RANK,
     RationalCoordinateTensor,
 )
-from jacobian.math.polynomials.values import RationalFunction
+from jacobian.math.polynomials.values import MAX_POLYNOMIAL_VARIABLES, RationalFunction
 
 
 def _sparse(*terms: tuple[int, tuple[int, ...]]) -> dict[str, Any]:
@@ -107,6 +107,42 @@ def test_tensor_component_count_is_rejected_before_sequence_traversal() -> None:
     assert error.value.errors()[0]["type"] == (
         "differential_geometry.tensor_component_budget"
     )
+
+
+@pytest.mark.parametrize(
+    ("field", "length", "error_type"),
+    (
+        (
+            "coordinate_axis",
+            MAX_POLYNOMIAL_VARIABLES + 1,
+            "differential_geometry.tensor_coordinate_axis_budget",
+        ),
+        (
+            "variance",
+            MAX_RATIONAL_TENSOR_RANK + 1,
+            "differential_geometry.tensor_rank_budget",
+        ),
+    ),
+)
+def test_tensor_axis_and_rank_caps_precede_sequence_traversal(
+    field: str, length: int, error_type: str
+) -> None:
+    class UntraversableStrings(list[str]):
+        def __iter__(self) -> Any:
+            raise RuntimeError("over-budget shape metadata must not be traversed")
+
+    payload: dict[str, Any] = {
+        "coordinate_axis": ["x"],
+        "variance": [],
+        "components": [{}],
+        "retained_nonzero_denominators": [],
+    }
+    payload[field] = UntraversableStrings(["x"] * length)
+
+    with pytest.raises(ValidationError) as error:
+        RationalCoordinateTensor.model_validate(payload)
+
+    assert error.value.errors()[0]["type"] == error_type
 
 
 def test_tensor_excessive_python_nesting_is_a_typed_validation_error() -> None:

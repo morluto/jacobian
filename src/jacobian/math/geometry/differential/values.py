@@ -160,6 +160,18 @@ class RationalCoordinateTensor(StrictModel):
                 "rational coordinate tensor exceeds the "
                 f"{MAX_RATIONAL_TENSOR_LOCUS_GUARDS}-guard representation budget",
             )
+        if _is_json_sequence(axis) and len(axis) > MAX_POLYNOMIAL_VARIABLES:
+            raise _validation_error(
+                "tensor_coordinate_axis_budget",
+                "rational coordinate tensor exceeds the "
+                f"{MAX_POLYNOMIAL_VARIABLES}-coordinate representation budget",
+            )
+        if _is_json_sequence(variance) and len(variance) > MAX_RATIONAL_TENSOR_RANK:
+            raise _validation_error(
+                "tensor_rank_budget",
+                "rational coordinate tensor exceeds the "
+                f"rank-{MAX_RATIONAL_TENSOR_RANK} representation budget",
+            )
         if _is_json_sequence(axis) and _is_json_sequence(variance):
             dimension = len(axis)
             rank = len(variance)

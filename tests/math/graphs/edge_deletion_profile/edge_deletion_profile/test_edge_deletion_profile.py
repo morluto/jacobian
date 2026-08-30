@@ -47,6 +47,12 @@ def test_edgeless_graph() -> None:
     assert len(result.entries) == 1
 
 
+def test_null_graph_has_chromatic_number_zero() -> None:
+    result = compute_edge_deletion_profile(_graph([], []), 0)
+    assert result.source_chromatic_number == 0
+    assert result.entries[0].chromatic_number == 0
+
+
 def test_path_d0() -> None:
     graph = _graph(["a", "b", "c"], [["a", "b"], ["b", "c"]])
     result = compute_edge_deletion_profile(graph, 0)

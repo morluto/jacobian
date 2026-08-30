@@ -5,9 +5,9 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from functools import lru_cache
 from math import gcd
-from typing import Any, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictInt, ValidateAs, WithJsonSchema, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger, CanonicalRational
@@ -205,8 +205,8 @@ class RationalComplexIsolatingRectangle(StrictModel):
         )
 
 
-class ComplexAlgebraicValue(StrictModel):
-    """One nonreal algebraic number in canonical indexed-root form.
+class _ComplexAlgebraicValueShape(StrictModel):
+    """Canonical structural representation of an indexed nonreal root.
 
     ``polynomial`` is primitive irreducible in ``ZZ[x]`` with positive leading
     coefficient.  ``root_index`` uses the mathematical global order: all real
@@ -216,9 +216,9 @@ class ComplexAlgebraicValue(StrictModel):
     polynomial and index, rather than any one of infinitely many valid
     isolating rectangles, are the value's identity.
 
-    Ordinary parsing establishes this canonical bounded representation. The
-    producer or a mathematical consumer recognizes irreducibility and the
-    selected nonreal root; deserialization does not repeat that work.
+    This structural view checks the bounded canonical representation. A public
+    value constructor or mathematical consumer must additionally recognize
+    irreducibility and that the index selects a nonreal root.
     """
 
     polynomial: tuple[CanonicalInteger, ...] = Field(
@@ -286,6 +286,31 @@ class ComplexAlgebraicValue(StrictModel):
             )
         return self
 
+
+class ComplexAlgebraicValue(_ComplexAlgebraicValueShape):
+    """One recognized nonreal algebraic number in canonical indexed-root form."""
+
+    @model_validator(mode="after")
+    def require_canonical_nonreal_root(self) -> Self:
+        import sympy
+
+        variable = sympy.Symbol("x")
+        polynomial = sympy.Poly.from_list(
+            _integer_coefficients(self.polynomial), gens=variable, domain=sympy.ZZ
+        )
+        if polynomial.is_irreducible is not True:
+            raise _validation_error(
+                "not_irreducible",
+                "complex algebraic minimal polynomial must be irreducible over QQ",
+            )
+        real_root_count = int(polynomial.count_roots(-sympy.oo, sympy.oo))
+        if self.root_index < real_root_count:
+            raise _validation_error(
+                "root_index",
+                "root_index must select a nonreal root of the minimal polynomial",
+            )
+        return self
+
     @classmethod
     def _from_admitted_polynomial(
         cls,
@@ -298,10 +323,29 @@ class ComplexAlgebraicValue(StrictModel):
         return cls.model_construct(polynomial=polynomial, root_index=root_index)
 
 
+def _unrecognized_complex_value_from_shape(
+    shape: _ComplexAlgebraicValueShape,
+) -> ComplexAlgebraicValue:
+    if isinstance(shape, ComplexAlgebraicValue):
+        return shape
+    return ComplexAlgebraicValue.model_construct(
+        polynomial=shape.polynomial,
+        root_index=shape.root_index,
+    )
+
+
+_UnrecognizedComplexAlgebraicValue = Annotated[
+    ComplexAlgebraicValue,
+    ValidateAs(_ComplexAlgebraicValueShape, _unrecognized_complex_value_from_shape),
+    WithJsonSchema(ComplexAlgebraicValue.model_json_schema()),
+]
+
+
 __all__ = [
     "MAX_COMPLEX_ISOLATOR_COMPONENT_DIGITS",
     "ComplexAlgebraicValue",
     "RationalComplexIsolatingRectangle",
+    "_UnrecognizedComplexAlgebraicValue",
     "algebraic_real_part_separation_denominator_bound",
     "algebraic_root_magnitude_numerator_bound",
     "algebraic_root_separation_denominator_bound",

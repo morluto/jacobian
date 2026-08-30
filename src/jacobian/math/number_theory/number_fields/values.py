@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from math import gcd
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictInt, ValidateAs, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger, CanonicalRational
@@ -15,6 +15,7 @@ from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.complex import (
     ComplexAlgebraicValue,
     RationalComplexIsolatingRectangle,
+    _UnrecognizedComplexAlgebraicValue,
 )
 from jacobian.math.number_theory.algebraic_numbers.real import (
     RationalIsolatingInterval,
@@ -185,12 +186,12 @@ class RealNumberFieldEmbedding(StrictModel):
         return self
 
 
-class ComplexNumberFieldEmbedding(StrictModel):
-    """A field homomorphism selected by one exact nonreal indexed root."""
+class _ComplexNumberFieldEmbeddingShape(StrictModel):
+    """Structural view of a complex embedding recognized by its result owner."""
 
     kind: Literal["COMPLEX"]
     presentation: SimpleNumberFieldPresentation
-    root: ComplexAlgebraicValue
+    root: _UnrecognizedComplexAlgebraicValue
 
     @model_validator(mode="after")
     def bind_root_to_presentation(self) -> Self:
@@ -200,6 +201,33 @@ class ComplexNumberFieldEmbedding(StrictModel):
                 "embedding root must use the presentation's defining polynomial",
             )
         return self
+
+
+class ComplexNumberFieldEmbedding(_ComplexNumberFieldEmbeddingShape):
+    """A field homomorphism selected by one recognized exact nonreal root."""
+
+    root: ComplexAlgebraicValue
+
+
+def _unrecognized_complex_embedding_from_shape(
+    shape: _ComplexNumberFieldEmbeddingShape,
+) -> ComplexNumberFieldEmbedding:
+    if isinstance(shape, ComplexNumberFieldEmbedding):
+        return shape
+    return ComplexNumberFieldEmbedding.model_construct(
+        kind=shape.kind,
+        presentation=shape.presentation,
+        root=shape.root,
+    )
+
+
+_UnrecognizedComplexNumberFieldEmbedding = Annotated[
+    ComplexNumberFieldEmbedding,
+    ValidateAs(
+        _ComplexNumberFieldEmbeddingShape,
+        _unrecognized_complex_embedding_from_shape,
+    ),
+]
 
 
 NumberFieldEmbedding = Annotated[
@@ -273,7 +301,7 @@ class ComplexNumberFieldEmbeddingRecord(StrictModel):
     """A nonreal embedding together with exact rational isolation evidence."""
 
     kind: Literal["COMPLEX"]
-    embedding: ComplexNumberFieldEmbedding
+    embedding: _UnrecognizedComplexNumberFieldEmbedding
     isolating_rectangle: RationalComplexIsolatingRectangle
     half_plane: Literal["NEGATIVE_IMAGINARY", "POSITIVE_IMAGINARY"]
 

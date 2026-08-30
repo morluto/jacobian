@@ -24,6 +24,7 @@ from jacobian._execution import (
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.algebraic_numbers.complex import (
+    ComplexAlgebraicValue,
     RationalComplexIsolatingRectangle,
 )
 from jacobian.math.number_theory.algebraic_numbers.real import (
@@ -655,6 +656,20 @@ def test_embedding_discriminator_is_required_at_runtime() -> None:
 
     with pytest.raises(ValidationError, match="Field required"):
         ComplexNumberFieldEmbedding.model_validate(embedding)
+
+
+@pytest.mark.parametrize(
+    ("polynomial", "root_index", "message"),
+    [
+        (("1", "0", "-1"), 0, "irreducible"),
+        (("1", "0", "-2"), 0, "nonreal root"),
+    ],
+)
+def test_complex_algebraic_value_recognizes_its_selected_root(
+    polynomial: tuple[str, ...], root_index: int, message: str
+) -> None:
+    with pytest.raises(ValidationError, match=message):
+        ComplexAlgebraicValue(polynomial=polynomial, root_index=root_index)
 
 
 def test_catalog_operation_projects_owner_local_admission_rejection() -> None:

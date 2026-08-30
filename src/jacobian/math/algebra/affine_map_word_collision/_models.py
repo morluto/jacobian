@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
+from typing import Self
+
 from pydantic import Field, StrictInt
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, format_canonical_rational
 from jacobian._models import StrictModel
 
 MAX_WORDS = 10_000
@@ -17,6 +20,21 @@ class AffineMapSpec(StrictModel):
 
     slope: CanonicalRational
     intercept: CanonicalRational
+
+    @classmethod
+    def _from_kernel(cls, slope: Fraction, intercept: Fraction) -> Self:
+        def rational(value: Fraction) -> CanonicalRational:
+            numerator, separator, denominator = format_canonical_rational(value).partition(
+                "/"
+            )
+            return CanonicalRational.model_construct(
+                num=numerator, den=denominator if separator else "1"
+            )
+
+        return cls.model_construct(
+            slope=rational(slope),
+            intercept=rational(intercept),
+        )
 
 
 class WordCollisionProfileRequest(StrictModel):
@@ -31,10 +49,33 @@ class WordCollisionProfileRequest(StrictModel):
 class CollisionRow(StrictModel):
     """One collision class: a distinct composed map and its source words."""
 
-    slope: CanonicalRational
-    intercept: CanonicalRational
+    map: AffineMapSpec
     multiplicity: StrictInt = Field(ge=1)
     words: tuple[tuple[StrictInt, ...], ...]
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        slope: Fraction,
+        intercept: Fraction,
+        multiplicity: int,
+        words: tuple[tuple[int, ...], ...],
+    ) -> Self:
+        return cls.model_construct(
+            map=AffineMapSpec._from_kernel(slope, intercept),
+            multiplicity=multiplicity,
+            words=words,
+        )
+
+    @property
+    def slope(self) -> CanonicalRational:
+        """Compatibility accessor for the composed map's slope."""
+        return self.map.slope
+
+    @property
+    def intercept(self) -> CanonicalRational:
+        """Compatibility accessor for the composed map's intercept."""
+        return self.map.intercept
 
 
 class WordCollisionProfileResult(StrictModel):
@@ -43,6 +84,15 @@ class WordCollisionProfileResult(StrictModel):
     generators: tuple[AffineMapSpec, ...]
     depth: StrictInt = Field(ge=1, le=MAX_DEPTH)
     rows: tuple[CollisionRow, ...]
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        generators: tuple[AffineMapSpec, ...],
+        depth: int,
+        rows: tuple[CollisionRow, ...],
+    ) -> Self:
+        return cls.model_construct(generators=generators, depth=depth, rows=rows)
 
 
 __all__ = [

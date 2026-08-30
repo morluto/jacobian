@@ -122,8 +122,21 @@ def test_word_order_matches_documented_composition() -> None:
 
 def test_native_admission_rejects_excessive_word_enumeration() -> None:
     generators = tuple((Fraction(1), Fraction(index)) for index in range(20))
-    with pytest.raises(OperationDomainValidationError, match="10,000-word limit"):
-        compute_word_collision_profile(generators, 4)
+    with pytest.raises(OperationDomainValidationError, match="composition work limit"):
+        compute_word_collision_profile(generators, 5)
+
+
+def test_duplicate_maps_can_exceed_legacy_word_count() -> None:
+    result = compute_word_collision_profile(((Fraction(1), Fraction(0)),) * 2, 14)
+    assert result.rows[0].multiplicity == 2**14
+
+
+def test_mixed_constant_family_preserves_reset_bound() -> None:
+    huge = Fraction(10**32767)
+    result = compute_word_collision_profile(
+        ((Fraction(0), huge), (Fraction(1), Fraction(0))), 1
+    )
+    assert len(result.rows) == 2
 
 
 def test_native_admission_rejects_rational_growth_before_enumeration() -> None:

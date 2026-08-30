@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from itertools import product
 
-from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
 from jacobian.canonical import (
     CanonicalLimits,
     encode_strict_json,
@@ -18,12 +18,13 @@ from jacobian.math._rational_height import RationalHeight, sum_heights
 from jacobian.math.algebra.affine_map_word_collision._models import (
     MAX_DEPTH,
     MAX_GENERATORS,
-    MAX_WORDS,
     CollisionRow,
     WordCollisionProfileResult,
 )
 
 __all__ = ["compute_word_collision_profile"]
+
+MAX_COMPOSITION_WORK = 5_000_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +54,73 @@ def _string_size(digits: int) -> int:
     return digits + 3
 
 
+def _max_height(values: Sequence[RationalHeight], default: RationalHeight) -> RationalHeight:
+    if not values:
+        return default
+    return RationalHeight(
+        max(value.numerator_digits for value in values),
+        max(value.denominator_digits for value in values),
+    )
+
+
+def _coefficient_height(
+    generators: tuple[tuple[Fraction, Fraction], ...], depth: int
+) -> RationalHeight:
+    """Bound coefficients while preserving zero-slope reset points."""
+    nonzero = [(slope, intercept) for slope, intercept in generators if slope]
+    zero = [intercept for slope, intercept in generators if not slope]
+    nonzero_slope = RationalHeight(1, 1)
+    nonzero_intercept = RationalHeight(1, 1)
+    constant_intercept: RationalHeight | None = None
+    max_nonzero_slope = _max_height(
+        tuple(_fraction_height(slope) for slope, _ in nonzero), RationalHeight(1, 1)
+    )
+    max_nonzero_intercept = _max_height(
+        tuple(_fraction_height(intercept) for _, intercept in nonzero),
+        RationalHeight(1, 1),
+    )
+    max_zero_intercept = _max_height(
+        tuple(_fraction_height(intercept) for intercept in zero), RationalHeight(1, 1)
+    )
+    for _ in range(depth):
+        next_nonzero_slope: RationalHeight | None = None
+        next_nonzero_intercept: RationalHeight | None = None
+        if nonzero:
+            next_nonzero_slope = nonzero_slope.product(max_nonzero_slope)
+            next_nonzero_intercept = sum_heights(
+                (
+                    max_nonzero_slope.product(nonzero_intercept),
+                    max_nonzero_intercept,
+                )
+            )
+        next_constant = max_zero_intercept if zero else None
+        if constant_intercept is not None and nonzero:
+            grown_constant = sum_heights(
+                (
+                    max_nonzero_slope.product(constant_intercept),
+                    max_nonzero_intercept,
+                )
+            )
+            next_constant = (
+                grown_constant
+                if next_constant is None
+                else _max_height((next_constant, grown_constant), next_constant)
+            )
+        if next_nonzero_slope is not None:
+            assert next_nonzero_intercept is not None
+            nonzero_slope = next_nonzero_slope
+            nonzero_intercept = next_nonzero_intercept
+        constant_intercept = next_constant
+    return _max_height(
+        tuple(
+            height
+            for height in (nonzero_slope, nonzero_intercept, constant_intercept)
+            if height is not None
+        ),
+        RationalHeight(1, 1),
+    )
+
+
 def _rational_size(height: RationalHeight) -> int:
     return strict_json_object_size(
         (
@@ -69,6 +137,8 @@ def _array_size(value_sizes: tuple[int, ...]) -> int:
 def _admit_word_collision_profile(
     generators: Sequence[tuple[Fraction, Fraction]],
     depth: int,
+    *,
+    enforce_transport: bool = False,
 ) -> WordCollisionAdmission:
     """Admit native and catalog calls before product or exact composition."""
 
@@ -108,11 +178,15 @@ def _admit_word_collision_profile(
         normalized.append((slope, intercept))
     canonical_generators = tuple(normalized)
     word_count = len(canonical_generators) ** depth
-    if word_count > MAX_WORDS:
+    composition_work = word_count * depth
+    if composition_work > MAX_COMPOSITION_WORK:
         raise OperationDomainValidationError(
             location=("depth",),
-            code="affine_map.word_count_exceeds_bound",
-            message=(f"the complete word profile exceeds the {MAX_WORDS:,}-word limit"),
+            code="affine_map.composition_work_exceeds_bound",
+            message=(
+                f"the complete word profile exceeds the {MAX_COMPOSITION_WORK:,}-step "
+                "composition work limit"
+            ),
         )
 
     slope_heights = tuple(_fraction_height(slope) for slope, _ in canonical_generators)
@@ -128,32 +202,7 @@ def _admit_word_collision_profile(
             code="affine_map.generator_height_exceeded",
             message="generator coefficients exceed the canonical rational digit limit",
         )
-    max_slope = RationalHeight(
-        max(height.numerator_digits for height in slope_heights),
-        max(height.denominator_digits for height in slope_heights),
-    )
-    max_intercept = RationalHeight(
-        max(height.numerator_digits for height in intercept_heights),
-        max(height.denominator_digits for height in intercept_heights),
-    )
-    all_constant = all(slope == 0 for slope, _ in canonical_generators)
-    if all_constant:
-        # A zero slope erases the prior coefficient and leaves only the final
-        # intercept; the generic product bound would invent repeated growth.
-        coefficient_height = RationalHeight(1, 1)
-        intercept_height = max_intercept
-    else:
-        coefficient_height = RationalHeight(1, 1)
-        intercept_height = RationalHeight(1, 1)
-        for _ in range(depth):
-            coefficient_height = coefficient_height.product(max_slope)
-            intercept_height = sum_heights(
-                (max_slope.product(intercept_height), max_intercept)
-            )
-    coefficient_height = RationalHeight(
-        max(coefficient_height.numerator_digits, intercept_height.numerator_digits),
-        max(coefficient_height.denominator_digits, intercept_height.denominator_digits),
-    )
+    coefficient_height = _coefficient_height(canonical_generators, depth)
     if coefficient_height.exceeds(MAX_CANONICAL_RATIONAL_DIGITS):
         raise OperationDomainValidationError(
             location=("depth",),
@@ -186,7 +235,9 @@ def _admit_word_collision_profile(
     distinct_generator_count = len(set(canonical_generators))
     possible_rows = min(
         word_count,
-        distinct_generator_count if all_constant else distinct_generator_count**depth,
+        distinct_generator_count
+        if all(slope == 0 for slope, _ in canonical_generators)
+        else distinct_generator_count**depth,
     )
     rows_bytes = _array_size((row_fixed_bytes,) * possible_rows) + total_words_bytes
     result_bytes = strict_json_object_size(
@@ -196,7 +247,7 @@ def _admit_word_collision_profile(
             ("rows", rows_bytes),
         )
     )
-    if result_bytes > CanonicalLimits().max_output_bytes:
+    if enforce_transport and result_bytes > CanonicalLimits().max_output_bytes:
         raise OperationDomainValidationError(
             location=("generators",),
             code="affine_map.result_bytes_exceeded",
@@ -213,6 +264,8 @@ def _admit_word_collision_profile(
 def compute_word_collision_profile(
     generators: Sequence[tuple[Fraction, Fraction]],
     depth: int,
+    *,
+    enforce_transport: bool = False,
 ) -> WordCollisionProfileResult:
     """Compute the complete word collision profile of an affine-map family.
 
@@ -220,16 +273,15 @@ def compute_word_collision_profile(
     affine maps and group words by their exact composed map.
     Convention: word (i_1,...,i_d) represents f_{i_d} o ... o f_{i_1}.
     """
-    admission = _admit_word_collision_profile(generators, depth)
+    admission = _admit_word_collision_profile(
+        generators, depth, enforce_transport=enforce_transport
+    )
     generators = admission.generators
 
     from jacobian.math.algebra.affine_map_word_collision._models import AffineMapSpec
 
     gen_specs = [
-        AffineMapSpec(
-            slope=CanonicalRational.from_fraction(slope),
-            intercept=CanonicalRational.from_fraction(intercept),
-        )
+        AffineMapSpec._from_kernel(slope, intercept)
         for slope, intercept in generators
     ]
 
@@ -248,15 +300,12 @@ def compute_word_collision_profile(
         key=lambda kv: (kv[0][0], kv[0][1]),
     ):
         rows.append(
-            CollisionRow(
-                slope=CanonicalRational.from_fraction(slope),
-                intercept=CanonicalRational.from_fraction(intercept),
-                multiplicity=len(words),
-                words=tuple(sorted(words)),
+            CollisionRow._from_kernel(
+                slope, intercept, len(words), tuple(sorted(words))
             )
         )
 
-    return WordCollisionProfileResult(
+    return WordCollisionProfileResult._from_kernel(
         generators=tuple(gen_specs),
         depth=depth,
         rows=tuple(rows),

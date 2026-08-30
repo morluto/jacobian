@@ -7,8 +7,8 @@ from typing import Annotated, Any, Literal, Self
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits
+from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.canonical import CanonicalLimits, CanonicalizationError
 from jacobian.math._labels import OpaqueLabel
 from jacobian.math.matrices.values import (
     RationalVectorSpaceBasis,
@@ -305,12 +305,13 @@ class RationalVectorConfiguration(StrictModel):
                 label="candidate",
                 maximum_rows=MAX_RATIONAL_FLAT_CANDIDATES,
             )
-            projected = dict(data)
-            if isinstance(axis, (list, tuple)):
-                projected["coordinate_axis"] = tuple(axis)
-            if isinstance(labels, (list, tuple)):
-                projected["vector_labels"] = tuple(labels)
-            return projected
+            try:
+                return canonicalize_json_containers(data)
+            except CanonicalizationError:
+                raise _validation_error(
+                    "raw_container_structure",
+                    "raw rational-flat containers must be acyclic",
+                )
         return data
 
     @model_validator(mode="after")
@@ -397,7 +398,9 @@ class RationalFlatSymmetryGenerator(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_raw_generator_envelope(cls, data: Any) -> Any:
-        return _require_raw_generator_envelope(data)
+        return canonicalize_json_containers(
+            _require_raw_generator_envelope(data)
+        )
 
 
 class ClauseConstrainedRationalFlatProblem(StrictModel):
@@ -525,12 +528,13 @@ class ClauseConstrainedRationalFlatProblem(StrictModel):
                     reason="rank_interval_shape",
                     label="rational-flat rank interval",
                 )
-            projected = dict(data)
-            if isinstance(clauses, (list, tuple)):
-                projected["clauses"] = tuple(canonical_clauses)
-            if isinstance(generators, (list, tuple)):
-                projected["symmetry_generators"] = canonical_generators
-            return projected
+            try:
+                return canonicalize_json_containers(data)
+            except CanonicalizationError:
+                raise _validation_error(
+                    "raw_container_structure",
+                    "raw rational-flat containers must be acyclic",
+                )
         return data
 
     @model_validator(mode="after")

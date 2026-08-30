@@ -13,6 +13,7 @@ from jacobian._execution import (
     OperationExecutionTimeoutError,
     bind_request_deadline,
     current_request_execution,
+    request_cancelled,
     request_execution,
 )
 from jacobian.canonical import CanonicalizationError, format_canonical_integer
@@ -49,6 +50,10 @@ def _bind_execution_deadline() -> None:
 
 
 def _require_execution_active(phase: str) -> None:
+    if request_cancelled():
+        raise OperationExecutionCancelledError(
+            f"divisibility edge profile request cancelled {phase}"
+        )
     execution = current_request_execution()
     if (
         execution is not None
@@ -77,6 +82,7 @@ def compute_divisibility_edge_profile(
     with _owner_execution():
         try:
             _bind_execution_deadline()
+            _require_execution_active("before admission")
             edge_plan = _validate_divisibility_edge_resources(request.values)
             return _build_divisibility_edge_profile(request.values, edge_plan)
         except PydanticCustomError as exc:
@@ -132,6 +138,7 @@ def divisibility_edge_profile(
     with _owner_execution():
         try:
             _bind_execution_deadline()
+            _require_execution_active("before admission")
             canonical_values = tuple(_canonical_native_value(value) for value in values)
             _validate_divisibility_edge_shape(canonical_values)
             edge_plan = _validate_divisibility_edge_resources(canonical_values)

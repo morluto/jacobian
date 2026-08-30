@@ -49,3 +49,10 @@ def test_word_cube_expansion_is_admitted_before_construction() -> None:
 def test_huge_dimension_is_rejected_before_exponentiation() -> None:
     with pytest.raises(OperationDomainValidationError, match="label envelope"):
         compute_word_cube_hypergraph(1, 1_000_000_000_000)
+
+
+def test_unary_cube_deduplicates_wildcard_patterns() -> None:
+    result = compute_word_cube_hypergraph(1, 14)
+
+    assert len(result.hypergraph.vertices) == 1
+    assert len(result.hypergraph.edges) == 1

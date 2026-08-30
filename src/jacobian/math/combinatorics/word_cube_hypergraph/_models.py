@@ -20,8 +20,13 @@ def require_word_cube_envelope(alphabet_size: int, dimension: int) -> None:
     vertices = _bounded_power(alphabet_size, dimension, 256)
     if vertices > 256:
         raise ValueError("word cube exceeds the 256-vertex hypergraph carrier")
-    augmented_words = _bounded_power(alphabet_size + 1, dimension, 12_000 + vertices)
-    patterns = augmented_words - vertices
+    if alphabet_size == 1:
+        patterns = 1
+    else:
+        augmented_words = _bounded_power(
+            alphabet_size + 1, dimension, 12_000 + vertices
+        )
+        patterns = augmented_words - vertices
     if patterns > 12_000 or patterns * alphabet_size > 36_000:
         raise ValueError("word cube exceeds the hyperedge or incidence envelope")
 

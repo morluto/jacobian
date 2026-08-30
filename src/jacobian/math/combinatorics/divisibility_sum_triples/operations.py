@@ -35,6 +35,19 @@ def construct_divisibility_sum_triples(
             code="divisibility_sum_triples.interval_size",
             message="divisibility-sum triples admit at most 42 interval values",
         )
+    interval_size = upper - lower + 1
+    if (
+        len(str(upper)) > 64
+        or len(
+            f"triple_{interval_size * (interval_size - 1) * (interval_size - 2) // 6}"
+        )
+        > 64
+    ):
+        raise OperationDomainValidationError(
+            location=("lower", "upper"),
+            code="divisibility_sum_triples.label_size",
+            message="divisibility-sum vertex and edge labels exceed the 64-byte carrier",
+        )
     vertices = tuple(str(i) for i in range(lower, upper + 1))
     edges: list[tuple[str, tuple[str, ...]]] = []
 

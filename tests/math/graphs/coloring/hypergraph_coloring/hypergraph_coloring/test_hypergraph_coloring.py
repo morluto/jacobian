@@ -93,3 +93,11 @@ def test_singleton_edge_is_uncolorable_with_any_palette() -> None:
     result = decide_hypergraph_coloring(hypergraph, 2)
     assert not result.colorable
     assert result.coloring is None
+
+
+def test_empty_edge_is_uncolorable_with_any_palette() -> None:
+    hypergraph = _hypergraph(["a", "b"], [("e0", [])])
+
+    result = decide_hypergraph_coloring(hypergraph, 2)
+
+    assert not result.colorable

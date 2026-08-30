@@ -54,3 +54,10 @@ def test_interval_containing_zero_is_rejected_before_divisibility() -> None:
 def test_interval_expansion_is_bounded_before_triple_enumeration() -> None:
     with pytest.raises(OperationDomainValidationError, match="at most 42"):
         construct_divisibility_sum_triples(1, 43)
+
+
+def test_endpoint_derived_labels_fit_the_hypergraph_carrier() -> None:
+    lower = 10**64
+
+    with pytest.raises(OperationDomainValidationError, match="64-byte carrier"):
+        construct_divisibility_sum_triples(lower, lower + 2)

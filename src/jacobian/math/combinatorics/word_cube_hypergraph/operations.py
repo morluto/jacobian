@@ -39,6 +39,18 @@ def compute_word_cube_hypergraph(
     q = alphabet_size
     d = dimension
 
+    if q == 1:
+        word_label = "w:" + ",".join("0" for _ in range(d))
+        hypergraph = FiniteHypergraph(
+            vertices=(word_label,),
+            edges=(("line_0", (word_label,)),),
+        )
+        return WordCubeResult(
+            alphabet_size=q,
+            dimension=d,
+            hypergraph=hypergraph,
+        )
+
     # All words of length d over [q]
     all_words = list(product(range(q), repeat=d))
     word_to_str = {w: "w:" + ",".join(str(x) for x in w) for w in all_words}

@@ -1,6 +1,5 @@
 """Typed contracts for the uniform-subset intersection graph operation."""
 
-from math import comb
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
@@ -16,7 +15,7 @@ MAX_UNIFORM_SUBSET_ITEMS = 100_000
 def _uniform_subset_admission_error(n: int, k: int) -> tuple[str, str] | None:
     if n < 0 or k < 0 or k > n:
         return ("k_out_of_range", "k must satisfy 0 <= k <= n")
-    vertex_count = comb(n, k)
+    vertex_count = _bounded_binomial(n, k, 256)
     if vertex_count > 256:
         return (
             "vertex_count_exceeded",
@@ -35,6 +34,16 @@ def _uniform_subset_admission_error(n: int, k: int) -> tuple[str, str] | None:
             "uniform-subset labels exceed the canonical output budget",
         )
     return None
+
+
+def _bounded_binomial(n: int, k: int, limit: int) -> int:
+    """Return ``binomial(n, k)`` or ``limit + 1`` without oversized integers."""
+    count = 1
+    for index in range(1, min(k, n - k) + 1):
+        count = count * (n - index + 1) // index
+        if count > limit:
+            return limit + 1
+    return count
 
 
 class UniformSubsetIntersectionRequest(StrictModel):

@@ -5,13 +5,34 @@ from __future__ import annotations
 from itertools import combinations
 from math import gcd as exact_gcd
 
-from jacobian.canonical import parse_canonical_integer
+from jacobian.canonical import (
+    CanonicalLimits,
+    encode_strict_json,
+    parse_canonical_integer,
+    strict_json_object_size,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.number_theory.non_coprimality_graph._models import (
     MAX_NON_COPRIMALITY_GRAPH_VERTICES,
     NonCoprimalityGraphResult,
 )
+
+MAX_GCD_DIGIT_WORK = 10_000_000
+
+
+def _array_size(item_sizes: list[int]) -> int:
+    return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
+
+
+def _base_result_bytes(label_sizes: list[int]) -> int:
+    graph_size = strict_json_object_size(
+        (
+            ("vertices", _array_size(label_sizes)),
+            ("edges", _array_size([])),
+        )
+    )
+    return strict_json_object_size((("graph", graph_size),))
 
 
 def non_coprimality_graph(
@@ -58,9 +79,37 @@ def non_coprimality_graph(
     sorted_labels = tuple(vertices[i] for i in order)
     sorted_values = [values[i] for i in order]
 
+    gcd_digit_work = sum(
+        min(len(sorted_labels[i]), len(sorted_labels[j]))
+        for i, j in combinations(range(n), 2)
+    )
+    if gcd_digit_work > MAX_GCD_DIGIT_WORK:
+        raise OperationDomainValidationError(
+            location=("elements",),
+            code="number_theory.non_coprimality_graph.work_bound_exceeded",
+            message="the pairwise GCD work exceeds the operation bound",
+        )
+    label_sizes = [len(encode_strict_json(label)) for label in sorted_labels]
+    result_bytes = _base_result_bytes(label_sizes)
+    if result_bytes > CanonicalLimits().max_output_bytes:
+        raise OperationDomainValidationError(
+            location=("elements",),
+            code="number_theory.non_coprimality_graph.result_size_bound",
+            message="the complete graph exceeds the canonical output bound",
+        )
+
     edges: list[tuple[str, str]] = []
     for i, j in combinations(range(n), 2):
         if exact_gcd(sorted_values[i], sorted_values[j]) > 1:
+            result_bytes += _array_size([label_sizes[i], label_sizes[j]])
+            if edges:
+                result_bytes += 1
+            if result_bytes > CanonicalLimits().max_output_bytes:
+                raise OperationDomainValidationError(
+                    location=("elements",),
+                    code="number_theory.non_coprimality_graph.result_size_bound",
+                    message="the complete graph exceeds the canonical output bound",
+                )
             left, right = sorted_labels[i], sorted_labels[j]
             if left > right:
                 left, right = right, left

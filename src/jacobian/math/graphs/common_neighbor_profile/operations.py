@@ -71,7 +71,7 @@ def _admit_graph(
                             [len(encode_strict_json(vertex)) for vertex in common]
                         ),
                     ),
-                    ("codegree", 3),
+                    ("codegree", len(encode_strict_json(len(common)))),
                 )
             )
             for left, right, common in rows

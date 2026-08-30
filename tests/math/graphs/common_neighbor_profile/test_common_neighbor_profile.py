@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.common_neighbor_profile.operations import (
     compute_common_neighbor_profile,
@@ -108,3 +109,17 @@ def test_result_bound_uses_actual_common_neighbor_labels() -> None:
     edges = [(left, right) for i, left in enumerate(short) for right in short[i + 1 :]]
     result = compute_common_neighbor_profile(_graph(vertices, edges))
     assert len(result.rows) == len(vertices) * (len(vertices) - 1) // 2
+
+
+def test_result_bound_uses_actual_codegree_digit_width() -> None:
+    left = ["a" * 60 + suffix for suffix in ("0", "1")]
+    right = ["b" * 60 + f"{index:04x}" for index in range(254)]
+    graph = _graph(
+        [*left, *right],
+        [(left_vertex, right_vertex) for left_vertex in left for right_vertex in right],
+    )
+
+    result = compute_common_neighbor_profile(graph)
+    assert len(encode_strict_json(result.model_dump(mode="json"))) <= (
+        CanonicalLimits().max_output_bytes
+    )

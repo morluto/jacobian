@@ -5,7 +5,8 @@ from __future__ import annotations
 from fractions import Fraction
 from itertools import combinations
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.rational_subset_sum._models import (
     RationalSubsetSumEntry,
@@ -43,6 +44,21 @@ def compute_rational_subset_sum_profile(
             for subset in combinations(range(n), size):
                 s = sum((fracs[i] for i in subset), Fraction(0))
                 sums[s] = sums.get(s, 0) + 1
+
+    if any(
+        len(format_canonical_integer(component).lstrip("-"))
+        > MAX_CANONICAL_RATIONAL_DIGITS
+        for subset_sum in sums
+        for component in (subset_sum.numerator, subset_sum.denominator)
+    ):
+        raise OperationDomainValidationError(
+            location=("values",),
+            code="rational_subset_sum.derived_rational_bound",
+            message=(
+                "a derived subset sum exceeds the canonical rational "
+                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit bound"
+            ),
+        )
 
     entries = tuple(
         RationalSubsetSumEntry(

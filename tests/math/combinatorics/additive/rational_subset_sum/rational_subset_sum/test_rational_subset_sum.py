@@ -57,3 +57,11 @@ def test_subset_enumeration_work_is_bounded() -> None:
 
     with pytest.raises(OperationDomainValidationError, match="subset work bound"):
         compute_rational_subset_sum_profile(values)
+
+
+def test_derived_subset_sum_must_fit_the_rational_carrier() -> None:
+    denominator = 10**32_767
+    values = (_cr(1, denominator), _cr(1, denominator - 1))
+
+    with pytest.raises(OperationDomainValidationError, match="derived subset sum"):
+        compute_rational_subset_sum_profile(values)

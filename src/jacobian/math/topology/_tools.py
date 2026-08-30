@@ -238,10 +238,11 @@ TOPOLOGY_OPERATIONS: MathTools = (
         operation_id="topology.simplicial_homology.integral.compute",
         title="Compute transformation-certified integral simplicial homology",
         description=(
-            "Compute the free rank, torsion invariant factors, and simplex-basis "
-            "cycle generators of every integral homology group, with explicit "
-            "Smith transformations and bounding chains. Each chain group is "
-            "bounded by the certified Smith-certificate dimension."
+            "Compute the chain-owned certified ZZ homology of a finite "
+            "simplicial complex: free ranks, torsion invariant factors, "
+            "simplex-basis cycles, Smith transformations, and torsion "
+            "bounding chains. Reduced homology is the ordinary homology of "
+            "the augmented complex with a rank-one group in degree -1."
         ),
         request_type=IntegralSimplicialHomologyRequest,
         result_type=IntegralSimplicialHomologyResult,

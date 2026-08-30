@@ -292,7 +292,7 @@ class ComplexAlgebraicValue(_ComplexAlgebraicValueShape):
 
     Parsing checks only its bounded canonical shape. Mathematical consumers
     must recognize irreducibility and the selected nonreal root within their
-    own admitted execution path; model validation never replays that work.
+    own admitted execution path; model validation does not recompute that work.
     """
 
     @classmethod

@@ -220,6 +220,7 @@ def test_number_theory_native_api_is_explicit() -> None:
         "chinese_remainder",
         "contiguous_sum_profile",
         "count_friable",
+        "divisibility_poset",
         "enumerate_r_full",
         "euler_totient",
         "factorial_valuation",

@@ -6,6 +6,8 @@ from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.posets.core._models import (
+    MAX_ELEMENT_LABEL_LENGTH,
+    MAX_POSET_ELEMENTS,
     FinitePoset,
     IncomparablePair,
     OrderedPair,
@@ -30,13 +32,26 @@ def _admit_values(values: tuple[str, ...]) -> None:
             code="divisibility_poset.values_type",
             message="values must be a tuple of canonical positive integers",
         )
-    if not 1 <= len(values) <= MAX_DIVISIBILITY_SET_SIZE:
+    if not 1 <= len(values) <= min(MAX_DIVISIBILITY_SET_SIZE, MAX_POSET_ELEMENTS):
         raise OperationDomainValidationError(
             location=("values",),
             code="divisibility_poset.values_size",
             message=(
                 "values must contain between 1 and "
-                f"{MAX_DIVISIBILITY_SET_SIZE} distinct integers"
+                "between 1 and "
+                f"{min(MAX_DIVISIBILITY_SET_SIZE, MAX_POSET_ELEMENTS)} distinct integers"
+            ),
+        )
+    if any(
+        type(value) is not str or len(value) > MAX_ELEMENT_LABEL_LENGTH
+        for value in values
+    ):
+        raise OperationDomainValidationError(
+            location=("values",),
+            code="divisibility_poset.values_label_length",
+            message=(
+                "values must use positive canonical integers no longer than "
+                f"{MAX_ELEMENT_LABEL_LENGTH} characters"
             ),
         )
     try:

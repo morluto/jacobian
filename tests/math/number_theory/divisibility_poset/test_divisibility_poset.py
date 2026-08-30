@@ -80,3 +80,10 @@ def test_native_admission_rejects_zero_and_empty_inputs() -> None:
         divisibility_poset(("0", "2"))
     with pytest.raises(ValueError, match="between 1"):
         divisibility_poset(())
+
+
+def test_native_admission_matches_finite_poset_envelope() -> None:
+    with pytest.raises(ValueError, match="between 1 and 64"):
+        divisibility_poset(tuple(str(value) for value in range(1, 66)))
+    with pytest.raises(ValueError, match="no longer than 32"):
+        divisibility_poset(("1" * 33,))

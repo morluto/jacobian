@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Mapping
 
+from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
 from jacobian.canonical import (
@@ -204,9 +205,16 @@ def sumset_cardinality(
         raise OperationDomainValidationError(
             location=("left", "right"), code=exc.type, message=exc.message()
         ) from None
-    support = FiniteIntegerSet.model_construct(
-        elements=tuple(format_canonical_integer(value) for value in support_values)
-    )
+    try:
+        support = FiniteIntegerSet(
+            elements=tuple(format_canonical_integer(value) for value in support_values)
+        )
+    except ValidationError as exc:
+        raise OperationDomainValidationError(
+            location=("left", "right"),
+            code="additive_combinatorics.sumset_support_not_composable",
+            message="the produced support exceeds the canonical finite-set envelope",
+        ) from exc
     return SumsetCardinalityResult._from_kernel(support)
 
 

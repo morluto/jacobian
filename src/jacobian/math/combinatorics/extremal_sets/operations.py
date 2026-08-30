@@ -89,9 +89,19 @@ def _canonical_source(
                     "within the declared axis"
                 ),
             )
+        expected_supports = tuple(
+            tuple(index for index, bit in enumerate(word) if bit == 1)
+            for word in source.source.codewords
+        )
+        if source.supports != expected_supports:
+            raise OperationDomainValidationError(
+                location=("source", "supports"),
+                code="set_system.binary_union_relation.support_source_mismatch",
+                message="code supports must equal the retained codeword supports",
+            )
         return IndexedFiniteSetFamily(
             ground_set_size=source.length,
-            members=source.supports,
+            members=expected_supports,
         )
     return source
 

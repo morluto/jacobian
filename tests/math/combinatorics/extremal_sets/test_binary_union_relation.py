@@ -180,6 +180,19 @@ def test_noncanonical_code_support_is_a_domain_rejection() -> None:
         construct_binary_union_relation(malformed)
 
 
+def test_code_supports_are_bound_to_the_retained_code() -> None:
+    code = ExplicitBinaryCode(
+        length=2,
+        codewords=((0, 0), (0, 1), (1, 0), (1, 1)),
+    )
+    payload = to_set_system(code).model_dump(mode="json")
+    payload["supports"] = [[], [0], [0, 1], [1]]
+    forged = type(to_set_system(code)).model_validate(payload)
+
+    with pytest.raises(OperationDomainValidationError, match="retained codeword"):
+        construct_binary_union_relation(forged)
+
+
 def test_total_membership_work_is_bounded_before_pair_scanning() -> None:
     common_size = MAX_BINARY_UNION_MEMBERSHIP_WORK // (255 * 256) + 1
     common = tuple(range(common_size))

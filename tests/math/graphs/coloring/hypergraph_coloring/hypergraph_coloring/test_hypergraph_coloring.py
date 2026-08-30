@@ -63,7 +63,11 @@ def test_dense_graph_coloring_search_is_rejected_before_backtracking() -> None:
     edges = [
         (f"e{edge_index:03d}", [left, right])
         for edge_index, (left, right) in enumerate(
-            (pair for i, left in enumerate(vertices) for pair in [(left, right) for right in vertices[i + 1 :]])
+            (
+                pair
+                for i, left in enumerate(vertices)
+                for pair in [(left, right) for right in vertices[i + 1 :]]
+            )
         )
     ]
     hypergraph = _hypergraph(vertices, edges)

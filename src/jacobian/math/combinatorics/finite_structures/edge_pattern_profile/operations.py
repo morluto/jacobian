@@ -19,6 +19,7 @@ from jacobian.math.combinatorics.finite_structures.edge_pattern_profile._models 
     EdgePatternProfileResult,
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
+    MAX_LABEL_LENGTH,
     FiniteHypergraph,
 )
 
@@ -109,6 +110,24 @@ def _admit_edge_pattern_profile(
             code="edge_pattern.invalid_color_map",
             message="vertex_colors must be a string-to-string mapping",
         )
+    if any(len(value) > MAX_LABEL_LENGTH for value in vertex_colors.values()):
+        raise OperationDomainValidationError(
+            location=("vertex_colors",),
+            code="edge_pattern.color_label_too_long",
+            message=(
+                "each vertex color label must contain at most "
+                f"{MAX_LABEL_LENGTH} characters"
+            ),
+        )
+    try:
+        for value in vertex_colors.values():
+            value.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise OperationDomainValidationError(
+            location=("vertex_colors",),
+            code="edge_pattern.invalid_color_encoding",
+            message="vertex color labels must be valid UTF-8",
+        ) from exc
     normalized_keys = [unicodedata.normalize("NFC", key) for key in vertex_colors]
     if len(set(normalized_keys)) != len(normalized_keys):
         raise OperationDomainValidationError(

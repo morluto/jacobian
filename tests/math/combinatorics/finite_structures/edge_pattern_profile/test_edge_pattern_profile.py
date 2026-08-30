@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.edge_pattern_profile._models import (
     EdgePatternProfileRequest,
 )
@@ -89,3 +90,15 @@ def test_rejects_incomplete_colors() -> None:
         EdgePatternProfileRequest(
             hypergraph=hg, vertex_colors={"a": "red", "b": "blue"}
         )
+
+
+def test_native_rejects_oversized_color_before_normalization() -> None:
+    hg = _hg(["a"], [])
+    with pytest.raises(OperationDomainValidationError, match="at most 64"):
+        compute_edge_pattern_profile(hg, {"a": "x" * 65})
+
+
+def test_native_rejects_unencodable_color() -> None:
+    hg = _hg(["a"], [])
+    with pytest.raises(OperationDomainValidationError, match="valid UTF-8"):
+        compute_edge_pattern_profile(hg, {"a": "\ud800"})

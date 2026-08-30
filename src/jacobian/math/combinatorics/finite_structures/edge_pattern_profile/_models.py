@@ -9,6 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
+    MAX_LABEL_LENGTH,
     FiniteHypergraph,
 )
 
@@ -20,7 +21,8 @@ class EdgePatternProfileRequest(StrictModel):
     vertex_colors: dict[str, str] = Field(
         description=(
             "A total map on the hypergraph vertex labels. The complete result "
-            "is admitted against the canonical output-size envelope."
+            "is admitted against the canonical output-size envelope; each color "
+            f"label has at most {MAX_LABEL_LENGTH} characters."
         )
     )
 

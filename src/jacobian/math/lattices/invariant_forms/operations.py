@@ -21,6 +21,12 @@ def compute_invariant_bilinear_form_lattice(
 ) -> InvariantBilinearFormLattice:
     """Compute all integral forms ``Q`` with ``A^T Q A = Q`` exactly."""
 
+    if kind not in ("BILINEAR", "SYMMETRIC", "ALTERNATING"):
+        raise OperationDomainValidationError(
+            location=("kind",),
+            code="lattice.invariant_form.invalid_kind",
+            message="kind must be BILINEAR, SYMMETRIC, or ALTERNATING",
+        )
     try:
         return invariant_bilinear_form_lattice_kernel(action, kind)
     except PydanticCustomError as exc:

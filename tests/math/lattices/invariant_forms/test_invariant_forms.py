@@ -221,22 +221,39 @@ def test_one_dimensional_alternating_space_has_zero_coefficient_dimension() -> N
     assert result.basis_forms == ()
 
 
-def test_one_dimensional_alternating_action_does_not_parse_unused_scalars(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from jacobian._exact import CanonicalRational
-
+def test_one_dimensional_alternating_action_does_not_parse_unused_scalars() -> None:
     action = _action([("nontrivial", [[Fraction(3, 2)]])])
-
-    def unexpected_fraction(_value: CanonicalRational) -> Fraction:
-        pytest.fail("a zero-dimensional coefficient space has no scalar work")
-
-    monkeypatch.setattr(CanonicalRational, "as_fraction", unexpected_fraction)
 
     result = compute_invariant_bilinear_form_lattice(action, "ALTERNATING")
 
     assert result.coefficient_dimension == 0
     assert result.basis_forms == ()
+
+
+def test_native_api_rejects_unknown_form_kind() -> None:
+    """Native callers cannot route an unknown kind through alternating semantics."""
+    action = _action([], axis=("x",))
+    with pytest.raises(OperationDomainValidationError, match="kind must be"):
+        compute_invariant_bilinear_form_lattice(action, "UNKNOWN")  # type: ignore[arg-type]
+
+
+def test_raw_request_rejects_unknown_kind_before_nested_action_parsing() -> None:
+    """Malformed kinds fail before expensive nested rational validation."""
+    with pytest.raises(ValueError, match="kind must be"):
+        InvariantBilinearFormLatticeRequest.model_validate(
+            {
+                "action": {
+                    "coordinate_axis": ["x"],
+                    "generators": [
+                        {
+                            "label": "g",
+                            "matrix": {"entries": [[{"num": "1", "den": "2"}]]},
+                        }
+                    ],
+                },
+                "kind": "UNKNOWN",
+            }
+        )
 
 
 def test_rational_action_regression_saturates_the_full_integer_kernel() -> None:

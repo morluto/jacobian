@@ -125,6 +125,11 @@ def _require_raw_request_envelope(data: object) -> object:
         return data
     axis, generators = _raw_action_parts(data.get("action"))
     kind = data.get("kind")
+    if kind not in ("BILINEAR", "SYMMETRIC", "ALTERNATING"):
+        raise _validation_error(
+            "invalid_kind",
+            "kind must be BILINEAR, SYMMETRIC, or ALTERNATING",
+        )
     if (
         isinstance(axis, (list, tuple))
         and isinstance(generators, (list, tuple))

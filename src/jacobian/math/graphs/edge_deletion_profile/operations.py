@@ -103,7 +103,7 @@ def _admit_edge_deletion_profile(
 
     try:
         graph_bytes = len(encode_strict_json(graph.model_dump(mode="json")))
-    except CanonicalizationError as exc:
+    except (CanonicalizationError, UnicodeEncodeError) as exc:
         raise OperationDomainValidationError(
             location=("graph",),
             code="graph.edge_deletion.result_exceeds_output_bound",

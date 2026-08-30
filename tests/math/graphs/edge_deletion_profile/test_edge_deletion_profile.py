@@ -87,6 +87,12 @@ def test_native_negative_order_is_typed() -> None:
         compute_edge_deletion_profile(graph, -1)
 
 
+def test_native_non_utf8_label_is_typed() -> None:
+    graph = _graph(["\ud800"], [])
+    with pytest.raises(OperationDomainValidationError):
+        compute_edge_deletion_profile(graph, 0)
+
+
 def test_result_preserves_source() -> None:
     g = _graph(["a", "b", "c"], [("a", "b"), ("b", "c")])
     result = compute_edge_deletion_profile(g, 1)

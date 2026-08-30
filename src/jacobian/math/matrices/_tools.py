@@ -306,7 +306,7 @@ TOOLS = (
     matrix_operation(
         "matrix.rank.compute",
         "Compute exact rational matrix rank",
-        "Compute the rank and RREF pivot columns of one rectangular matrix over QQ through 64 rows and columns, subject to scalar-work and result-height bounds.",
+        "Compute the rank and RREF pivot columns of one dense or coordinate-sparse rectangular matrix over QQ. Dense matrices are admitted through 64 axes; sparse matrices retain declared axes through 8192 and are admitted by active support, scalar work, intermediate height, and exact output size.",
         MatrixRankRequest,
         MatrixRankResult,
         compute_rank,
@@ -339,6 +339,23 @@ TOOLS = (
                                 {"num": "0", "den": "1"},
                             ],
                         ]
+                    }
+                },
+            ),
+            example(
+                "rank_sparse_last_column",
+                "Compute rank while retaining a sparse matrix's declared column axis.",
+                {
+                    "matrix": {
+                        "row_count": 1,
+                        "column_count": 128,
+                        "entries": [
+                            {
+                                "row": 0,
+                                "column": 127,
+                                "value": {"num": "1", "den": "1"},
+                            }
+                        ],
                     }
                 },
             ),

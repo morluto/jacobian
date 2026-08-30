@@ -130,6 +130,43 @@ def test_dispatch_returns_typed_results_at_the_boundary_order() -> None:
     assert len(result.output["coefficients_descending"]) == MAX_MATRIX_DIMENSION + 1
 
 
+def test_dispatch_retains_a_sparse_rank_source_and_its_declared_axis() -> None:
+    result = invoke_operation(
+        "matrix.rank.compute",
+        {
+            "matrix": {
+                "row_count": 1,
+                "column_count": 128,
+                "entries": [
+                    {
+                        "row": 0,
+                        "column": 127,
+                        "value": {"num": "1", "den": "1"},
+                    }
+                ],
+            }
+        },
+        Catalog.open(),
+    )
+
+    assert result.output == {
+        "matrix": {
+            "domain": "QQ",
+            "row_count": 1,
+            "column_count": 128,
+            "entries": [
+                {
+                    "row": 0,
+                    "column": 127,
+                    "value": {"num": "1", "den": "1"},
+                }
+            ],
+        },
+        "rank": 1,
+        "pivot_columns": [127],
+    }
+
+
 def test_native_and_dispatch_determinants_share_the_canonical_boundary() -> None:
     import sympy
 

@@ -109,9 +109,7 @@ def test_sparse_rational_matrix_strict_json_retains_zero_axes(
         "entries": [],
     }
 
-    matrix = SparseRationalMatrix.model_validate_json(
-        json.dumps(payload), strict=True
-    )
+    matrix = SparseRationalMatrix.model_validate_json(json.dumps(payload), strict=True)
 
     assert matrix.model_dump(mode="json") == payload
     assert (

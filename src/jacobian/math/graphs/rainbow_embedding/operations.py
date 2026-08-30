@@ -32,6 +32,10 @@ def _json_array_size(item_sizes: list[int]) -> int:
     return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
 
 
+def _repeated_array_size(item_size: int, count: int) -> int:
+    return 2 + max(count - 1, 0) + item_size * count
+
+
 def _admit_rainbow_embedding_profile(
     pattern: SimpleUndirectedGraph,
     host: ColoredUndirectedGraph,
@@ -117,7 +121,7 @@ def _admit_rainbow_embedding_profile(
             ("edge_color_labels", colors_bytes),
         )
     )
-    embeddings_bytes = _json_array_size([witness_bytes] * candidate_count)
+    embeddings_bytes = _repeated_array_size(witness_bytes, candidate_count)
     result_bytes = strict_json_object_size(
         (
             ("pattern", pattern_bytes),

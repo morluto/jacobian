@@ -105,12 +105,15 @@ def _admit_monochromatic_clique_hypergraph(  # noqa: C901
     edge_to_color = dict(zip(graph.edges, colored_graph.edge_colors, strict=True))
     cliques_list: list[tuple[str, ...]] = []
     for subset in combinations(vertices, clique_order):
-        if len(
-            {
-                edge_to_color.get((left, right), edge_to_color.get((right, left)))
-                for left, right in combinations(subset, 2)
-            }
-        ) != 1:
+        if (
+            len(
+                {
+                    edge_to_color.get((left, right), edge_to_color.get((right, left)))
+                    for left, right in combinations(subset, 2)
+                }
+            )
+            != 1
+        ):
             continue
         cliques_list.append(tuple(sorted(subset)))
         if len(cliques_list) > MAX_EDGES:

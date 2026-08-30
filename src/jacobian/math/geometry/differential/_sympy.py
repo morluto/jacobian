@@ -9,6 +9,9 @@ from jacobian.math.geometry.differential._bounds import (
     FactorReference,
     LieDerivativePlan,
 )
+from jacobian.math.geometry.differential._execution import (
+    require_lie_derivative_deadline,
+)
 from jacobian.math.geometry.differential.values import (
     MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS,
     RationalCoordinateTensor,
@@ -81,6 +84,7 @@ def _factor(
     vector_values: tuple[_RawFraction, ...],
     tensor_values: tuple[_RawFraction, ...],
     vector_derivatives: dict[tuple[int, int], _RawFraction],
+    deadline: float,
 ) -> _RawFraction:
     if reference.owner == "VECTOR":
         if reference.derivative_axis is None:
@@ -91,46 +95,79 @@ def _factor(
     # Every tensor-component derivative occurs in exactly one directional
     # term.  Compute it at that use site instead of retaining the full
     # component-by-coordinate derivative table.
-    return _differentiate(tensor_values[reference.component], reference.derivative_axis)
+    require_lie_derivative_deadline(deadline, "before tensor differentiation")
+    result = _differentiate(
+        tensor_values[reference.component], reference.derivative_axis
+    )
+    require_lie_derivative_deadline(deadline, "after tensor differentiation")
+    return result
 
 
 def compute_lie_derivative_components(
     vector_field: RationalCoordinateTensor,
     tensor: RationalCoordinateTensor,
     plan: LieDerivativePlan,
+    *,
+    deadline: float,
 ) -> tuple[RationalFunction, ...]:
     """Execute one already-admitted complete coordinate formula."""
 
-    vector_values = tuple(_raw_fraction(value) for value in vector_field.components)
-    tensor_values = tuple(_raw_fraction(value) for value in tensor.components)
+    vector_values: list[_RawFraction] = []
+    tensor_values: list[_RawFraction] = []
+    for owner, source, destination in (
+        ("vector", vector_field.components, vector_values),
+        ("tensor", tensor.components, tensor_values),
+    ):
+        for source_value in source:
+            require_lie_derivative_deadline(
+                deadline, f"before {owner} source conversion"
+            )
+            destination.append(_raw_fraction(source_value))
+            require_lie_derivative_deadline(
+                deadline, f"after {owner} source conversion"
+            )
+    canonical_vector_values = tuple(vector_values)
+    canonical_tensor_values = tuple(tensor_values)
     dimension = len(tensor.coordinate_axis)
-    vector_derivatives = {
-        (component, axis): _differentiate(vector_values[component], axis)
-        for component in range(dimension)
-        for axis in range(dimension)
-    }
+    vector_derivatives: dict[tuple[int, int], _RawFraction] = {}
+    for component in range(dimension):
+        for axis in range(dimension):
+            require_lie_derivative_deadline(deadline, "before vector differentiation")
+            vector_derivatives[(component, axis)] = _differentiate(
+                canonical_vector_values[component], axis
+            )
+            require_lie_derivative_deadline(deadline, "after vector differentiation")
     results: list[RationalFunction] = []
     for component_plan in plan.components:
-        accumulator = _zero_fraction(vector_values[0].denominator)
+        accumulator = _zero_fraction(canonical_vector_values[0].denominator)
         for term in component_plan.terms:
-            value = _multiply(
+            require_lie_derivative_deadline(deadline, "before formula multiplication")
+            product_value = _multiply(
                 _factor(
                     term.left,
-                    vector_values=vector_values,
-                    tensor_values=tensor_values,
+                    vector_values=canonical_vector_values,
+                    tensor_values=canonical_tensor_values,
                     vector_derivatives=vector_derivatives,
+                    deadline=deadline,
                 ),
                 _factor(
                     term.right,
-                    vector_values=vector_values,
-                    tensor_values=tensor_values,
+                    vector_values=canonical_vector_values,
+                    tensor_values=canonical_tensor_values,
                     vector_derivatives=vector_derivatives,
+                    deadline=deadline,
                 ),
             )
-            if term.sign < 0 and not value.is_zero:
-                value = _RawFraction(-value.numerator, value.denominator)
-            accumulator = _add(accumulator, value)
+            require_lie_derivative_deadline(deadline, "after formula multiplication")
+            if term.sign < 0 and not product_value.is_zero:
+                product_value = _RawFraction(
+                    -product_value.numerator, product_value.denominator
+                )
+            require_lie_derivative_deadline(deadline, "before formula addition")
+            accumulator = _add(accumulator, product_value)
+            require_lie_derivative_deadline(deadline, "after formula addition")
         expression = accumulator.numerator.as_expr() / accumulator.denominator.as_expr()
+        require_lie_derivative_deadline(deadline, "before component normalization")
         results.append(
             rational_function_from_sympy(
                 expression,
@@ -138,6 +175,7 @@ def compute_lie_derivative_components(
                 maximum_terms=MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS,
             )
         )
+        require_lie_derivative_deadline(deadline, "after component normalization")
     return tuple(results)
 
 

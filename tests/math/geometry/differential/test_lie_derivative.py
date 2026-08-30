@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from itertools import product
+from time import monotonic
 from typing import Any
 
 import pytest
@@ -10,6 +11,11 @@ import sympy
 from pydantic import ValidationError
 from tests.fixtures.accounting import assert_charged_work_parity
 
+from jacobian._execution import (
+    OperationExecutionTimeoutError,
+    current_request_execution,
+    request_execution,
+)
 from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.differential import (
@@ -20,16 +26,31 @@ from jacobian.math.geometry.differential import (
 )
 from jacobian.math.geometry.differential import _bounds as lie_bounds
 from jacobian.math.geometry.differential import _sympy as lie_backend
+from jacobian.math.geometry.differential import operations as lie_operations
 from jacobian.math.geometry.differential._bounds import (
     MAX_LIE_DERIVATIVE_WORK_UNITS,
     build_lie_derivative_plan,
 )
+from jacobian.math.geometry.differential._execution import (
+    LIE_DERIVATIVE_WALL_SECONDS,
+    require_lie_derivative_deadline,
+)
+from jacobian.math.geometry.differential._recognition_process import (
+    recognize_canonical_rational_functions,
+)
 from jacobian.math.geometry.differential.values import (
     MAX_RATIONAL_TENSOR_COMPONENTS,
+    MAX_RATIONAL_TENSOR_EXPONENT,
+    MAX_RATIONAL_TENSOR_LOCUS_GUARDS,
+    MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS,
     MAX_RATIONAL_TENSOR_RANK,
+    canonical_locus_guards,
 )
-from jacobian.math.polynomials._conversions import rational_function_to_sympy
-from jacobian.math.polynomials.values import RationalFunction
+from jacobian.math.polynomials._conversions import (
+    rational_function_from_sympy,
+    rational_function_to_sympy,
+)
+from jacobian.math.polynomials.values import RationalFunction, SparseRationalPolynomial
 
 type Coefficient = int | tuple[int, int]
 type PolynomialTerm = tuple[Coefficient, tuple[int, ...]]
@@ -588,72 +609,141 @@ def _maximum_dense_formula_inputs() -> tuple[
     return vector, tensor
 
 
-def test_maximum_dense_shape_work_ledger_sums_actual_charge_amounts(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_maximum_dense_shape_skips_trivial_coprimality_gcds() -> None:
     vector, tensor = _maximum_dense_formula_inputs()
-    charged_units: list[int] = []
-    original_charge = lie_bounds._Ledger.charge
-
-    def record_charge(ledger: Any, amount: int) -> None:
-        charged_units.append(amount)
-        original_charge(ledger, amount)
-
-    monkeypatch.setattr(lie_bounds._Ledger, "charge", record_charge)
-
     plan = build_lie_derivative_plan(vector, tensor)
 
-    assert charged_units
-    assert sum(charged_units) == plan.work_units
+    assert not plan.recognition_candidates
+    assert dict(plan.work_units_by_category)["recognition"] == 0
+    assert sum(dict(plan.work_units_by_category).values()) == plan.work_units
     assert plan.work_units <= MAX_LIE_DERIVATIVE_WORK_UNITS
 
 
-def test_maximum_dense_shape_executes_every_backend_formula_step(
+def _categorized_accounting_inputs() -> tuple[
+    RationalCoordinateTensor, RationalCoordinateTensor
+]:
+    variables = ("x", "y")
+    vector = _tensor(
+        variables,
+        ("CONTRAVARIANT",),
+        (
+            _function(
+                variables,
+                (1, (1, 0)),
+                denominator=((1, (0, 1)), (1, (0, 0))),
+            ),
+            _function(
+                variables,
+                (1, (0, 1)),
+                denominator=((1, (1, 0)), (1, (0, 0))),
+            ),
+        ),
+        guards=(
+            _guard((1, (0, 1)), (1, (0, 0))),
+            _guard((1, (1, 0)), (1, (0, 0))),
+        ),
+    )
+    covector = _tensor(
+        variables,
+        ("COVARIANT",),
+        (
+            _function(variables, (1, (1, 0)), (1, (0, 1))),
+            _function(variables, (1, (1, 0)), (-1, (0, 1))),
+        ),
+    )
+    return vector, covector
+
+
+def test_work_categories_cover_observed_backend_primitives_and_detect_mutations(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    vector, tensor = _maximum_dense_formula_inputs()
-    plan = build_lie_derivative_plan(vector, tensor)
-    executed = {"derivative": 0, "product": 0, "sum": 0, "output_component": 0}
+    vector, tensor = _categorized_accounting_inputs()
+    captured_plan: list[Any] = []
+    executed = {
+        "recognition": 0,
+        "source_conversion": 0,
+        "differentiation": 0,
+        "multiplication": 0,
+        "addition": 0,
+        "normalization": 0,
+    }
 
-    def count_calls(name: str, function: Any) -> Any:
-        def counted(*args: Any, **kwargs: Any) -> Any:
-            executed[name] += 1
-            return function(*args, **kwargs)
+    original_plan = build_lie_derivative_plan
+    original_recognition = recognize_canonical_rational_functions
+    original_raw_fraction = lie_backend._raw_fraction
+    original_differentiate = lie_backend._differentiate
+    original_multiply = lie_backend._multiply
+    original_add = lie_backend._add
+    original_normalize = rational_function_from_sympy
 
-        return counted
+    def planning(*args: Any, **kwargs: Any) -> Any:
+        plan = original_plan(*args, **kwargs)
+        captured_plan.append(plan)
+        return plan
 
+    def recognizing(*args: Any, **kwargs: Any) -> Any:
+        result = original_recognition(*args, **kwargs)
+        executed["recognition"] += result.recognized_candidates
+        return result
+
+    def converting(value: RationalFunction) -> Any:
+        executed["source_conversion"] += len(value.numerator.terms) + len(
+            value.denominator.terms
+        )
+        return original_raw_fraction(value)
+
+    def differentiating(*args: Any, **kwargs: Any) -> Any:
+        executed["differentiation"] += 1
+        return original_differentiate(*args, **kwargs)
+
+    def multiplying(left: Any, right: Any) -> Any:
+        if not left.is_zero and not right.is_zero:
+            executed["multiplication"] += 1
+        return original_multiply(left, right)
+
+    def adding(left: Any, right: Any) -> Any:
+        if not left.is_zero and not right.is_zero:
+            executed["addition"] += 1
+        return original_add(left, right)
+
+    def normalizing(*args: Any, **kwargs: Any) -> Any:
+        executed["normalization"] += 1
+        return original_normalize(*args, **kwargs)
+
+    monkeypatch.setattr(lie_operations, "build_lie_derivative_plan", planning)
     monkeypatch.setattr(
-        lie_backend,
-        "_differentiate",
-        count_calls("derivative", lie_backend._differentiate),
+        lie_bounds, "recognize_canonical_rational_functions", recognizing
     )
-    monkeypatch.setattr(
-        lie_backend,
-        "_multiply",
-        count_calls("product", lie_backend._multiply),
-    )
-    monkeypatch.setattr(
-        lie_backend,
-        "_add",
-        count_calls("sum", lie_backend._add),
-    )
-    result = lie_backend.compute_lie_derivative_components(vector, tensor, plan)
-    executed["output_component"] = len(result)
-    formula_terms = sum(len(component.terms) for component in plan.components)
-    dimension = len(vector.coordinate_axis)
-    assert_charged_work_parity(
-        charged={
-            "derivative": dimension * (dimension + len(tensor.components)),
-            "product": formula_terms,
-            "sum": formula_terms,
-            "output_component": len(plan.components),
-        },
-        executed=executed,
-    )
-    assert all(rational_function_to_sympy(component) == 8 for component in result)
+    monkeypatch.setattr(lie_backend, "_raw_fraction", converting)
+    monkeypatch.setattr(lie_backend, "_differentiate", differentiating)
+    monkeypatch.setattr(lie_backend, "_multiply", multiplying)
+    monkeypatch.setattr(lie_backend, "_add", adding)
+    monkeypatch.setattr(lie_backend, "rational_function_from_sympy", normalizing)
+
+    result = lie_derivative(vector, tensor)
+
+    assert len(captured_plan) == 1
+    plan = captured_plan[0]
+    charged = dict(plan.work_units_by_category)
+    assert all(amount > 0 for amount in executed.values())
+    assert sum(charged.values()) == plan.work_units
+    assert_charged_work_parity(charged=charged, executed=executed)
+
+    zeroed = dict(charged)
+    zeroed["multiplication"] = 0
+    with pytest.raises(AssertionError, match="exceeds its admission charge"):
+        assert_charged_work_parity(charged=zeroed, executed=executed)
+    omitted = dict(charged)
+    del omitted["addition"]
+    with pytest.raises(AssertionError, match="has no admission charge"):
+        assert_charged_work_parity(charged=omitted, executed=executed)
+
+    assert len(result.lie_derivative.components) == 2
 
 
-def test_intermediate_support_is_rejected_before_polynomial_expansion() -> None:
+def test_intermediate_support_is_rejected_before_coprimality_recognition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     variables = ("x", "y")
     sparse_grid = tuple(
         (1, exponents)
@@ -670,12 +760,164 @@ def test_intermediate_support_is_rejected_before_polynomial_expansion() -> None:
     )
     scalar = _tensor(variables, (), (value,))
 
+    def forbidden_recognition(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("doomed intermediate request reached recognition")
+
+    monkeypatch.setattr(
+        lie_bounds,
+        "recognize_canonical_rational_functions",
+        forbidden_recognition,
+    )
+
     with pytest.raises(
         OperationDomainValidationError,
         match="4096-term intermediate budget",
     ) as error:
         lie_derivative(vector, scalar)
     assert error.value.errors()[0]["type"].endswith("intermediate_support")
+
+
+def test_work_budget_rejection_precedes_coprimality_recognition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    variables = ("x", "y")
+    vector = _tensor(
+        variables,
+        ("CONTRAVARIANT",),
+        (
+            _function(variables, (1, (1, 0))),
+            _function(variables, (1, (0, 1))),
+        ),
+    )
+    value = _function(variables, (1, (8, 8)))
+    tensor = _tensor(
+        variables,
+        ("COVARIANT",) * MAX_RATIONAL_TENSOR_RANK,
+        (value,) * MAX_RATIONAL_TENSOR_COMPONENTS,
+    )
+
+    def forbidden_recognition(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("doomed work request reached recognition")
+
+    monkeypatch.setattr(
+        lie_bounds,
+        "recognize_canonical_rational_functions",
+        forbidden_recognition,
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="work budget") as error:
+        lie_derivative(vector, tensor)
+
+    assert error.value.errors()[0]["type"].endswith("work_budget")
+
+
+def _result_byte_rejection_inputs() -> tuple[
+    RationalCoordinateTensor, RationalCoordinateTensor
+]:
+    variables = ("x", "y")
+    one = _function(variables, (1, (0, 0)))
+    vector = _tensor(variables, ("CONTRAVARIANT",), (one, one))
+    nonconstant_exponents = tuple(
+        exponent
+        for exponent in sorted(
+            product(range(MAX_RATIONAL_TENSOR_EXPONENT + 1), repeat=2),
+            reverse=True,
+        )
+        if exponent != (0, 0)
+    )[: MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS // 2 - 1]
+    guards = tuple(
+        SparseRationalPolynomial.model_validate(
+            _sparse(
+                *((1, exponent) for exponent in nonconstant_exponents),
+                (index + 1, (0, 0)),
+            )
+        )
+        for index in range(MAX_RATIONAL_TENSOR_LOCUS_GUARDS)
+    )
+    ordered_guards = canonical_locus_guards(guards, variable_count=2)
+    scalar = RationalCoordinateTensor(
+        coordinate_axis=variables,
+        variance=(),
+        components=(one,),
+        retained_nonzero_denominators=ordered_guards,
+    )
+    return vector, scalar
+
+
+def test_result_byte_rejection_precedes_coprimality_recognition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    vector, scalar = _result_byte_rejection_inputs()
+
+    def forbidden_recognition(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("doomed output request reached recognition")
+
+    monkeypatch.setattr(
+        lie_bounds,
+        "recognize_canonical_rational_functions",
+        forbidden_recognition,
+    )
+
+    with pytest.raises(
+        OperationDomainValidationError, match="canonical output budget"
+    ) as error:
+        lie_derivative(vector, scalar)
+
+    assert error.value.errors()[0]["type"].endswith("result_bytes")
+
+
+def test_dispatch_start_owns_one_deadline_through_result_construction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    vector, tensor = _categorized_accounting_inputs()
+    started = monotonic()
+    observed: list[tuple[str, float, float | None]] = []
+    original_check = require_lie_derivative_deadline
+
+    def checking(deadline: float, stage: str) -> None:
+        execution = current_request_execution()
+        observed.append(
+            (stage, deadline, execution.deadline if execution is not None else None)
+        )
+        original_check(deadline, stage)
+
+    monkeypatch.setattr(
+        lie_operations,
+        "require_lie_derivative_deadline",
+        checking,
+    )
+
+    with request_execution(started):
+        result = lie_derivative(vector, tensor)
+        bound = current_request_execution()
+        assert bound is not None
+        assert bound.deadline == started + LIE_DERIVATIVE_WALL_SECONDS
+
+    assert result.lie_derivative.components
+    assert observed
+    assert {deadline for _, deadline, _ in observed} == {
+        started + LIE_DERIVATIVE_WALL_SECONDS
+    }
+    assert {bound_deadline for _, _, bound_deadline in observed} == {
+        started + LIE_DERIVATIVE_WALL_SECONDS
+    }
+    assert observed[-1][0] == "after result-size serialization"
+
+
+def test_expired_dispatch_deadline_stops_before_semantic_preflight() -> None:
+    variables = ("x",)
+    vector = _tensor(
+        variables,
+        ("CONTRAVARIANT",),
+        (_function(variables, (1, (1,))),),
+    )
+    scalar = _tensor(variables, (), (_function(variables, (1, (1,))),))
+
+    with (
+        request_execution(monotonic() - LIE_DERIVATIVE_WALL_SECONDS),
+        pytest.raises(OperationExecutionTimeoutError, match="semantic preflight"),
+    ):
+        lie_derivative(vector, scalar)
 
 
 def test_result_exponent_admission_has_an_accepted_and_rejected_edge() -> None:

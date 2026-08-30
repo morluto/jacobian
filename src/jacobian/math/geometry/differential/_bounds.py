@@ -16,6 +16,15 @@ from jacobian.canonical import (
     strict_json_object_size,
 )
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.geometry.differential._execution import (
+    begin_lie_derivative_deadline,
+    require_lie_derivative_deadline,
+)
+from jacobian.math.geometry.differential._recognition_process import (
+    RationalFunctionRecognitionCandidate,
+    canonical_recognition_candidates,
+    recognize_canonical_rational_functions,
+)
 from jacobian.math.geometry.differential.values import (
     MAX_RATIONAL_TENSOR_COEFFICIENT_DIGITS,
     MAX_RATIONAL_TENSOR_EXPONENT,
@@ -27,13 +36,29 @@ from jacobian.math.geometry.differential.values import (
 from jacobian.math.polynomials.values import (
     RationalFunction,
     SparseRationalPolynomial,
-    require_canonical_rational_function,
 )
 
 MAX_LIE_DERIVATIVE_WORK_UNITS = 25_000_000
 MAX_LIE_DERIVATIVE_RESULT_BYTES = CanonicalLimits().max_output_bytes
 MAX_LIE_DERIVATIVE_RAW_POLYNOMIAL_TERMS = 4_096
 MAX_LIE_DERIVATIVE_RAW_COEFFICIENT_DIGITS = 4_096
+
+type LieWorkCategory = Literal[
+    "recognition",
+    "source_conversion",
+    "differentiation",
+    "multiplication",
+    "addition",
+    "normalization",
+]
+_LIE_WORK_CATEGORIES: tuple[LieWorkCategory, ...] = (
+    "recognition",
+    "source_conversion",
+    "differentiation",
+    "multiplication",
+    "addition",
+    "normalization",
+)
 
 
 @dataclass(frozen=True)
@@ -92,23 +117,44 @@ class LieComponentPlan:
 @dataclass(frozen=True)
 class LieDerivativePlan:
     components: tuple[LieComponentPlan, ...]
+    recognition_candidates: tuple[RationalFunctionRecognitionCandidate, ...]
     inherited_locus_guards: tuple[SparseRationalPolynomial, ...]
     result_bytes_upper_bound: int
-    work_units: int
+    work_units_by_category: tuple[tuple[LieWorkCategory, int], ...]
+
+    @property
+    def work_units(self) -> int:
+        return sum(amount for _, amount in self.work_units_by_category)
 
 
 class _Ledger:
-    def __init__(self) -> None:
+    def __init__(self, *, deadline: float) -> None:
+        self.deadline = deadline
         self.work_units = 0
+        self._by_category: dict[LieWorkCategory, int] = dict.fromkeys(
+            _LIE_WORK_CATEGORIES, 0
+        )
 
-    def charge(self, amount: int) -> None:
+    def charge(self, category: LieWorkCategory, amount: int) -> None:
+        if amount < 0:
+            raise AssertionError("Lie-derivative work charges must be nonnegative")
+        require_lie_derivative_deadline(
+            self.deadline, f"while charging {category} work"
+        )
         self.work_units += amount
+        self._by_category[category] += amount
         if self.work_units > MAX_LIE_DERIVATIVE_WORK_UNITS:
             _reject(
                 "work_budget",
                 "Lie-derivative exact arithmetic exceeds the "
                 f"{MAX_LIE_DERIVATIVE_WORK_UNITS}-unit work budget",
             )
+
+    @property
+    def by_category(self) -> tuple[tuple[LieWorkCategory, int], ...]:
+        return tuple(
+            (category, self._by_category[category]) for category in _LIE_WORK_CATEGORIES
+        )
 
 
 def _reject(
@@ -242,7 +288,7 @@ def _differentiate_polynomial(
     minimum_exponents: tuple[int, ...],
     ledger: _Ledger,
 ) -> PolynomialBound:
-    ledger.charge(source.terms)
+    ledger.charge("differentiation", source.terms)
     if source.is_zero or active_terms == 0:
         return _zero_polynomial(len(source.degrees))
     degrees = list(source.degrees)
@@ -268,7 +314,7 @@ def _multiply_polynomials(
     if left.is_zero or right.is_zero:
         return _zero_polynomial(len(left.degrees))
     pair_count = left.terms * right.terms
-    ledger.charge(pair_count)
+    ledger.charge("multiplication", pair_count)
     degrees = tuple(
         left_degree + right_degree
         for left_degree, right_degree in zip(left.degrees, right.degrees, strict=True)
@@ -306,7 +352,7 @@ def _add_polynomials(
         return right
     if right.is_zero:
         return left
-    ledger.charge(left.terms + right.terms)
+    ledger.charge("addition", left.terms + right.terms)
     degrees = tuple(
         max(left_degree, right_degree)
         for left_degree, right_degree in zip(left.degrees, right.degrees, strict=True)
@@ -369,7 +415,8 @@ def _differentiate_fraction(
     )
     if not numerator_active and not denominator_active:
         ledger.charge(
-            len(source_value.numerator.terms) + len(source_value.denominator.terms)
+            "differentiation",
+            len(source_value.numerator.terms) + len(source_value.denominator.terms),
         )
         return _zero_fraction(len(source_bound.numerator.degrees))
     numerator_derivative = _differentiate_polynomial(
@@ -538,6 +585,7 @@ def _canonical_coefficient_digits(bound: FractionBound) -> int:
 
 def _validate_canonical_result_bound(bound: FractionBound, ledger: _Ledger) -> int:
     if bound.is_zero:
+        ledger.charge("normalization", 1)
         return 1
     for label, polynomial in (
         ("numerator", bound.numerator),
@@ -570,9 +618,10 @@ def _validate_canonical_result_bound(bound: FractionBound, ledger: _Ledger) -> i
     denominator_dense = _dense_term_bound(bound.denominator.degrees)
     normalization_degree = numerator_dense + denominator_dense - 2
     ledger.charge(
+        "normalization",
         (numerator_dense + denominator_dense)
         * (normalization_degree + 1)
-        * coefficient_digits
+        * coefficient_digits,
     )
     return coefficient_digits
 
@@ -726,11 +775,52 @@ def _result_bytes_upper_bound(
     )
 
 
+def _recognition_work_units(bound: FractionBound) -> int:
+    """Charge the dense exact coefficient work exposed to SymPy's GCD.
+
+    SymPy 1.14 represents a multivariate ``Poly`` as a recursively dense DMP.
+    The product of per-axis degree ranges therefore bounds the coefficients
+    materialized by conversion.  Total degree steps and 32-digit coefficient
+    chunks conservatively price the subsequent exact GCD reductions.  A
+    killable worker still owns wall time and memory because SymPy exposes no
+    cooperative cancellation hook inside ``Poly.gcd``.
+    """
+
+    numerator_dense = _dense_term_bound(bound.numerator.degrees)
+    denominator_dense = _dense_term_bound(bound.denominator.degrees)
+    degree_steps = (
+        sum(
+            max(numerator, denominator)
+            for numerator, denominator in zip(
+                bound.numerator.degrees,
+                bound.denominator.degrees,
+                strict=True,
+            )
+        )
+        + 1
+    )
+    coefficient_digits = max(
+        bound.numerator.coefficient_digits
+        + len(str(abs(bound.numerator.rational_content.numerator)))
+        + len(str(bound.numerator.rational_content.denominator)),
+        bound.denominator.coefficient_digits
+        + len(str(abs(bound.denominator.rational_content.numerator)))
+        + len(str(bound.denominator.rational_content.denominator)),
+    )
+    coefficient_chunks = max(1, (coefficient_digits + 31) // 32)
+    return (numerator_dense + denominator_dense) * degree_steps * coefficient_chunks
+
+
 def build_lie_derivative_plan(
     vector_field: RationalCoordinateTensor,
     tensor: RationalCoordinateTensor,
+    *,
+    deadline: float | None = None,
 ) -> LieDerivativePlan:
     """Admit one complete Lie derivative and return its reusable plan."""
+
+    if deadline is None:
+        deadline = begin_lie_derivative_deadline()
 
     if vector_field.coordinate_axis != tensor.coordinate_axis:
         _reject(
@@ -744,26 +834,17 @@ def build_lie_derivative_plan(
             "vector field must have rank one and CONTRAVARIANT variance",
             location=("vector_field", "variance"),
         )
-    for owner, source in (("vector_field", vector_field), ("tensor", tensor)):
-        for component, value in enumerate(source.components):
-            try:
-                require_canonical_rational_function(
-                    value,
-                    maximum_terms=MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS,
-                    maximum_exponent=MAX_RATIONAL_TENSOR_EXPONENT,
-                    maximum_coefficient_digits=MAX_RATIONAL_TENSOR_COEFFICIENT_DIGITS,
-                    label=f"{owner} component",
-                )
-            except ValueError as exc:
-                _reject(
-                    "component_not_canonical",
-                    f"{owner} components must have coprime canonical rational-function parts: {exc}",
-                    location=(owner, "components", component),
-                )
     dimension = len(tensor.coordinate_axis)
-    ledger = _Ledger()
+    ledger = _Ledger(deadline=deadline)
     vector_bounds = tuple(_fraction_bound(value) for value in vector_field.components)
     tensor_bounds = tuple(_fraction_bound(value) for value in tensor.components)
+    ledger.charge(
+        "source_conversion",
+        sum(
+            bound.numerator.terms + bound.denominator.terms
+            for bound in (*vector_bounds, *tensor_bounds)
+        ),
+    )
     vector_derivatives = {
         (component, axis): _differentiate_fraction(
             vector_field.components[component],
@@ -853,12 +934,35 @@ def build_lie_derivative_plan(
             f"Lie-derivative result estimate of {result_bytes} bytes exceeds the "
             f"{MAX_LIE_DERIVATIVE_RESULT_BYTES}-byte canonical output budget",
         )
-    return LieDerivativePlan(
+    recognition_candidates = canonical_recognition_candidates(vector_field, tensor)
+    for candidate in recognition_candidates:
+        source_bounds = (
+            vector_bounds if candidate.owner == "vector_field" else tensor_bounds
+        )
+        ledger.charge(
+            "recognition",
+            _recognition_work_units(source_bounds[candidate.component]),
+        )
+    plan = LieDerivativePlan(
         components=plans,
+        recognition_candidates=recognition_candidates,
         inherited_locus_guards=inherited_guards,
         result_bytes_upper_bound=result_bytes,
-        work_units=ledger.work_units,
+        work_units_by_category=ledger.by_category,
     )
+    recognition = recognize_canonical_rational_functions(
+        plan.recognition_candidates,
+        deadline=deadline,
+    )
+    if recognition.non_coprime is not None:
+        failure = recognition.non_coprime
+        _reject(
+            "component_not_canonical",
+            f"{failure.owner} components must have coprime canonical rational-function parts",
+            location=(failure.owner, "components", failure.component),
+        )
+    require_lie_derivative_deadline(deadline, "after coprimality recognition")
+    return plan
 
 
 __all__ = [

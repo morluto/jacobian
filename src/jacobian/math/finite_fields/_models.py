@@ -52,10 +52,7 @@ class HomogeneousFixedSubspaceRequest(StrictModel):
                 if (
                     isinstance(matrix, dict)
                     and isinstance(matrix.get("entries"), list)
-                    and all(
-                        isinstance(row, (list, tuple))
-                        for row in matrix["entries"]
-                    )
+                    and all(isinstance(row, (list, tuple)) for row in matrix["entries"])
                 )
                 else matrix
                 for matrix in matrices

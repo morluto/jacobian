@@ -290,9 +290,7 @@ def test_raw_action_malformed_matrix_row_is_a_validation_error() -> None:
                         "name": "polynomial_variables",
                         "labels": ["x"],
                     },
-                    "generator_matrices": [
-                        {"prime": 3, "entries": [1], "columns": 1}
-                    ],
+                    "generator_matrices": [{"prime": 3, "entries": [1], "columns": 1}],
                 },
                 "degree": 1,
             }

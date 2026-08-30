@@ -66,3 +66,13 @@ def test_uniform_family_must_fit_the_graph_carrier() -> None:
         construct_uniform_subset_intersection_graph(
             257, 1, 2, "INTERSECTION_EQ_THRESHOLD"
         )
+
+
+def test_single_huge_subset_is_rejected_before_materialization() -> None:
+    with pytest.raises(OperationDomainValidationError, match="materialization work"):
+        construct_uniform_subset_intersection_graph(
+            10_000_000,
+            10_000_000,
+            0,
+            "INTERSECTION_EQ_THRESHOLD",
+        )

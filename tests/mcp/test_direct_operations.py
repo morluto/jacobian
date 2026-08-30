@@ -1,4 +1,4 @@
-"""Direct catalog-derived MCP operation registration and invocation."""
+"""Experimental direct catalog projection used by frozen evaluations."""
 
 from __future__ import annotations
 
@@ -18,7 +18,11 @@ from jacobian._execution import (
 from jacobian._models import StrictModel
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import MathTool
-from jacobian.mcp.direct_tools import _operation_input_schema, _operation_tool_name
+from jacobian.mcp.direct_tools import (
+    _operation_input_schema,
+    _operation_tool_name,
+    direct_operation_tools,
+)
 from jacobian.mcp.runtime import AppState
 from jacobian.mcp.server import _build_server, create_server
 
@@ -35,30 +39,38 @@ def _operations(*operation_ids: str) -> tuple[MathTool[Any, Any], ...]:
     return tuple(operations)
 
 
-def _server(*operation_ids: str) -> Any:
+def _direct_server(catalog: Catalog) -> Any:
     return _build_server(
-        state=AppState(operation_catalog=Catalog(_operations(*operation_ids)))
+        state=AppState(operation_catalog=catalog),
+        evaluation_tools=direct_operation_tools(catalog),
     )
 
 
-def test_every_catalog_operation_is_one_direct_identity_named_tool() -> None:
+def _server(*operation_ids: str) -> Any:
+    return _direct_server(Catalog(_operations(*operation_ids)))
+
+
+def test_production_server_does_not_eagerly_expose_catalog_operations() -> None:
     async def scenario() -> None:
         from mcp import Client
 
-        catalog_ids = {
-            descriptor.operation_id
-            for descriptor in Catalog.open().snapshot().operations
-        }
         async with Client(create_server(), raise_exceptions=True) as client:
             listed_ids = {tool.name for tool in (await client.list_tools()).tools}
 
-        assert listed_ids == catalog_ids | _FIXED_TOOLS
-        assert all(
-            _operation_tool_name(operation_id) == operation_id
-            for operation_id in catalog_ids
-        )
+        assert listed_ids == _FIXED_TOOLS
 
     asyncio.run(scenario())
+
+
+def test_experimental_direct_projection_preserves_identity_names() -> None:
+    catalog_ids = {
+        descriptor.operation_id for descriptor in Catalog.open().snapshot().operations
+    }
+
+    assert all(
+        _operation_tool_name(operation_id) == operation_id
+        for operation_id in catalog_ids
+    )
 
 
 def test_direct_schemas_are_owner_contracts_with_only_mcp_root_projection() -> None:
@@ -232,7 +244,7 @@ def test_direct_parsing_and_execution_share_one_request_envelope() -> None:
         result_type=Result,
         run=run,
     )
-    server = _build_server(state=AppState(operation_catalog=Catalog((operation,))))
+    server = _direct_server(Catalog((operation,)))
 
     async def scenario() -> None:
         from mcp import Client
@@ -331,7 +343,7 @@ def test_direct_calls_do_not_expose_unexpected_owner_failures() -> None:
         result_type=Result,
         run=crash,
     )
-    server = _build_server(state=AppState(operation_catalog=Catalog((operation,))))
+    server = _direct_server(Catalog((operation,)))
 
     async def scenario() -> None:
         from mcp import Client
@@ -368,7 +380,7 @@ def test_direct_calls_preserve_owner_cancellation_diagnosis() -> None:
         result_type=Result,
         run=cancel,
     )
-    server = _build_server(state=AppState(operation_catalog=Catalog((operation,))))
+    server = _direct_server(Catalog((operation,)))
 
     async def scenario() -> None:
         from mcp import Client

@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from typing import Any
 
 from mcp.server import MCPServer
+from mcp.server.mcpserver.tools import Tool
 
 from jacobian import __version__
 from jacobian.catalog.catalog import Catalog
-from jacobian.mcp.direct_tools import direct_operation_tools
 from jacobian.mcp.guidance import SERVER_DESCRIPTION, SERVER_INSTRUCTIONS
 from jacobian.mcp.protocol import register_core_projection
 from jacobian.mcp.runtime import AppState
@@ -34,8 +34,14 @@ def _build_server(
     state: AppState,
     token_verifier: Any | None = None,
     auth: Any | None = None,
+    evaluation_tools: Sequence[Tool] = (),
 ) -> MCPServer[AppState]:
-    """Register Jacobian's fixed MCP projection over one immutable state."""
+    """Register Jacobian's fixed MCP projection over one immutable state.
+
+    ``evaluation_tools`` exists only for frozen surface experiments. Production
+    constructors leave it empty so the catalog is discovered through the fixed
+    MCP tools instead of being eagerly expanded into hundreds of definitions.
+    """
 
     @asynccontextmanager
     async def lifespan(_server: MCPServer[AppState]) -> AsyncIterator[AppState]:
@@ -50,7 +56,7 @@ def _build_server(
         lifespan=lifespan,
         token_verifier=token_verifier,
         auth=auth,
-        tools=direct_operation_tools(state.operation_catalog),
+        tools=list(evaluation_tools),
     )
     register_core_projection(server, state)
     return server

@@ -120,7 +120,7 @@ def test_mcp_compact_operation_index_is_searchable_and_paginated() -> None:
                     "request": {
                         "op": "search",
                         "query": "exact",
-                        "cursor": first["next_cursor"],
+                        "cursor": "integer.compute.unknown",
                         "limit": 20,
                     }
                 },

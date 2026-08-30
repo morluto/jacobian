@@ -260,7 +260,7 @@ def _estimate_growth(
 def _require_enclosure_preflight(
     polynomial: RationalPolynomial,
     box: RationalBox,
-) -> None:
+) -> _GrowthEstimate:
     if polynomial.domain != box.domain or polynomial.variables != box.variables:
         raise _validation_error(
             "polynomial box must use the polynomial's complete ordered axis and QQ parent"
@@ -299,6 +299,7 @@ def _require_enclosure_preflight(
             "polynomial-box enclosure result would exceed the "
             f"{MAX_BOX_ENCLOSURE_RESULT_BYTES}-byte canonical output bound"
         )
+    return growth
 
 
 class PolynomialBoxEnclosureRequest(StrictModel):

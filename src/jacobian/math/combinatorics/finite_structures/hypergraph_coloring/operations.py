@@ -56,6 +56,17 @@ def decide_nonmonochromatic_coloring(
             witness=witness,
         )
 
+    if admission.has_injective_witness:
+        witness = ColoringWitness(
+            assignments=tuple((vertex, index) for index, vertex in enumerate(vertices))
+        )
+        return NonmonochromaticColoringResult(
+            hypergraph=hypergraph,
+            palette_size=palette_size,
+            outcome="COLORABLE",
+            witness=witness,
+        )
+
     n = len(vertices)
     for coloring in product(range(palette_size), repeat=n):
         if _is_valid_coloring(coloring, edges, vertices):

@@ -131,5 +131,6 @@ def test_large_carrier_with_cheap_search_is_admitted() -> None:
 
 def test_rejects_search_work_before_enumeration() -> None:
     h = _hg([str(i) for i in range(16)], [("e0", ("0", "1"))])
-    with pytest.raises(OperationDomainValidationError, match="edge checks"):
-        decide_nonmonochromatic_coloring(h, 16)
+    result = decide_nonmonochromatic_coloring(h, 16)
+    assert result.outcome == "COLORABLE"
+    assert result.witness is not None

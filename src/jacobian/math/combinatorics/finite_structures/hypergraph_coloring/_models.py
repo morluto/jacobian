@@ -33,6 +33,7 @@ class _ColoringAdmission:
     """Request-scoped facts established while admitting a coloring request."""
 
     has_forced_failure: bool
+    has_injective_witness: bool
 
 
 def _validate_coloring_envelope(
@@ -61,7 +62,12 @@ def _validate_coloring_envelope(
             f"at most {MAX_EDGE_COUNT} edges are supported",
         )
     has_forced_failure = any(len(members) <= 1 for _, members in hypergraph.edges)
-    work = 0 if has_forced_failure else palette_size**vertex_count * edge_count
+    has_injective_witness = not has_forced_failure and palette_size >= vertex_count
+    work = (
+        0
+        if has_forced_failure or has_injective_witness
+        else palette_size**vertex_count * edge_count
+    )
     if work > MAX_COLORING_WORK:
         raise PydanticCustomError(
             "hypergraph_coloring.work_too_large",
@@ -74,8 +80,13 @@ def _validate_coloring_envelope(
         "hypergraph": hypergraph.model_dump(mode="json"),
         "palette_size": palette_size,
         "outcome": "COLORABLE",
-        "witness": {"assignments": [[vertex, 0] for vertex in hypergraph.vertices]},
     }
+    if not has_forced_failure:
+        payload["witness"] = {
+            "assignments": [
+                [vertex, index] for index, vertex in enumerate(hypergraph.vertices)
+            ]
+        }
     try:
         result_bytes = len(encode_strict_json(payload))
     except CanonicalizationError as exc:
@@ -88,7 +99,10 @@ def _validate_coloring_envelope(
             "hypergraph_coloring.result_too_large",
             "the retained coloring result exceeds the canonical output limit",
         )
-    return _ColoringAdmission(has_forced_failure=has_forced_failure)
+    return _ColoringAdmission(
+        has_forced_failure=has_forced_failure,
+        has_injective_witness=has_injective_witness,
+    )
 
 
 class NonmonochromaticColoringRequest(StrictModel):

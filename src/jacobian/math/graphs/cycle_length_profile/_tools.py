@@ -52,7 +52,9 @@ TOOLS: MathTools = (
         (
             "Given a bounded finite simple graph, return the complete set of "
             "simple-cycle lengths together with one canonical witness cycle "
-            "for each occurring length."
+            "for each occurring length. Admission requires the first-witness "
+            "search to fit 10,000,000 work units and the complete canonical "
+            "result to fit the 10 MiB output envelope."
         ),
         CycleLengthProfileRequest,
         CycleLengthProfileResult,

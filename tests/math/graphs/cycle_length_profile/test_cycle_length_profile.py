@@ -137,3 +137,18 @@ def test_near_complete_graph_uses_exhaustive_work_bound() -> None:
     edges.remove(("v00", "v02"))
     with pytest.raises(OperationDomainValidationError, match="work bound"):
         compute_cycle_length_profile(_graph(vertices, edges))
+
+
+def test_result_budget_charges_cycle_blocks_independently() -> None:
+    """Large labels in one cycle block do not inflate witnesses in another."""
+    wheel = [f"w{index:02d}" for index in range(10)]
+    triangle = ["t0" + "x" * 500_000, "t1" + "x" * 500_000, "t2" + "x" * 500_000]
+    vertices = [*wheel, *triangle]
+    rim = wheel[1:]
+    edges = [tuple(sorted((rim[index], rim[(index + 1) % 9]))) for index in range(9)]
+    edges.extend(tuple(sorted((wheel[0], wheel[index]))) for index in range(1, 10))
+    edges.extend(
+        [(triangle[0], triangle[1]), (triangle[0], triangle[2]), (triangle[1], triangle[2])]
+    )
+    result = compute_cycle_length_profile(_graph(vertices, edges))
+    assert {row.cycle_length for row in result.rows} == set(range(3, 11))

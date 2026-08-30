@@ -123,6 +123,24 @@ def _maximum_cycle_block_size(graph: SimpleUndirectedGraph) -> int:
     )
 
 
+def _cycle_block_label_sizes(graph: SimpleUndirectedGraph) -> list[list[int]]:
+    """Return descending encoded-label sizes for each cycle-bearing block."""
+    topology = nx.Graph()
+    topology.add_nodes_from(graph.vertices)
+    topology.add_edges_from(graph.edges)
+    return [
+        sorted(
+            (
+                len(rfc8785.dumps(unicodedata.normalize("NFC", label)))
+                for label in block
+            ),
+            reverse=True,
+        )
+        for block in nx.biconnected_components(topology)
+        if len(block) >= 3
+    ]
+
+
 def _reject(code: str, message: str) -> None:
     raise OperationDomainValidationError(
         location=("graph",), code=code, message=message
@@ -158,19 +176,21 @@ def _admit(graph: SimpleUndirectedGraph) -> _AdmissionPlan:
     if graph.edges:
         # The transport path NFC-normalizes strings and RFC-8785 escapes control
         # characters, so raw UTF-8 lengths undercount the actual result.
-        label_sizes = sorted(
-            (
-                len(rfc8785.dumps(unicodedata.normalize("NFC", label)))
-                for label in _cycle_core_vertices(graph)
-            ),
-            reverse=True,
-        )
+        block_label_sizes = _cycle_block_label_sizes(graph)
         # A simple cycle of length k consumes k distinct edges.  Charging only
         # lengths that can occur avoids rejecting sparse graphs whose exact
         # profile is empty (for example, a one-edge graph).
         max_cycle_length = min(_maximum_cycle_block_size(graph), len(graph.edges))
         for length in range(3, max_cycle_length + 1):
-            result_bytes += 32 + sum(label_sizes[:length]) + 2 * length
+            witness_label_bytes = max(
+                (
+                    sum(label_sizes[:length])
+                    for label_sizes in block_label_sizes
+                    if len(label_sizes) >= length
+                ),
+                default=0,
+            )
+            result_bytes += 32 + witness_label_bytes + 2 * length
     if result_bytes > MAX_RESULT_BYTES:
         _reject(
             "cycle_profile.result_bound",

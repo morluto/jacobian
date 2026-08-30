@@ -5,6 +5,7 @@ from __future__ import annotations
 from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.combinatorics.finite_structures.sets._models import FiniteIntegerSet
 from jacobian.math.combinatorics.posets.core._models import (
     MAX_ELEMENT_LABEL_LENGTH,
     MAX_POSET_ELEMENTS,
@@ -25,26 +26,26 @@ from jacobian.math.number_theory._divisibility_poset_models import (
 from jacobian.math.number_theory._support import number_theory_operation
 
 
-def _admit_values(values: tuple[str, ...]) -> None:
-    if type(values) is not tuple:
+def _admit_values(values: FiniteIntegerSet) -> tuple[str, ...]:
+    if not isinstance(values, FiniteIntegerSet):
         raise OperationDomainValidationError(
             location=("values",),
             code="divisibility_poset.values_type",
-            message="values must be a tuple of canonical positive integers",
+            message="values must be a canonical finite set of positive integers",
         )
-    if not 1 <= len(values) <= min(MAX_DIVISIBILITY_SET_SIZE, MAX_POSET_ELEMENTS):
+    elements = values.elements
+    if not 1 <= len(elements) <= min(MAX_DIVISIBILITY_SET_SIZE, MAX_POSET_ELEMENTS):
         raise OperationDomainValidationError(
             location=("values",),
             code="divisibility_poset.values_size",
             message=(
                 "values must contain between 1 and "
-                "between 1 and "
                 f"{min(MAX_DIVISIBILITY_SET_SIZE, MAX_POSET_ELEMENTS)} distinct integers"
             ),
         )
     if any(
         type(value) is not str or len(value) > MAX_ELEMENT_LABEL_LENGTH
-        for value in values
+        for value in elements
     ):
         raise OperationDomainValidationError(
             location=("values",),
@@ -55,7 +56,7 @@ def _admit_values(values: tuple[str, ...]) -> None:
             ),
         )
     try:
-        parsed = tuple(parse_canonical_integer(value) for value in values)
+        parsed = tuple(parse_canonical_integer(value) for value in elements)
     except (TypeError, ValueError) as exc:
         raise OperationDomainValidationError(
             location=("values",),
@@ -68,19 +69,14 @@ def _admit_values(values: tuple[str, ...]) -> None:
             code="divisibility_poset.values_domain",
             message="values must be canonical positive integers",
         )
-    if len(set(values)) != len(values):
-        raise OperationDomainValidationError(
-            location=("values",),
-            code="divisibility_poset.values_unique",
-            message="values must be distinct",
-        )
+    return elements
 
 
-def divisibility_poset(values: tuple[str, ...]) -> FinitePoset:
+def divisibility_poset(values: FiniteIntegerSet) -> FinitePoset:
     """Return the canonical proper-divisibility poset of positive integers."""
-    _admit_values(values)
-    data = construct_divisibility_poset(values)
-    elements = tuple(sorted(values))
+    admitted_values = _admit_values(values)
+    data = construct_divisibility_poset(admitted_values)
+    elements = tuple(sorted(admitted_values))
     strict = set(data.strict_order_pairs)
     covers = _transitive_reduction(elements, strict)
     strict_pairs = tuple(
@@ -152,7 +148,7 @@ DIVISIBILITY_POSET_OPERATION = number_theory_operation(
             "divisibility_236",
             "For {2,3,6}, the proper-divisibility poset has 2<6 and 3<6; "
             "values must be positive canonical decimal integers.",
-            {"values": ["2", "3", "6"]},
+            {"values": {"elements": ["2", "3", "6"]}},
         ),
     ),
 )

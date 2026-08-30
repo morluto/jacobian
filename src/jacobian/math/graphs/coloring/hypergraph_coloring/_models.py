@@ -16,6 +16,8 @@ MAX_HYPERGRAPH_COLORING_SEARCH_STATES = 2_000_000
 def _hypergraph_coloring_admission_error(
     hypergraph: FiniteHypergraph, palette_size: int
 ) -> tuple[str, str] | None:
+    if palette_size < 1:
+        return ("invalid_palette", "palette_size must be positive")
     vertex_count = len(hypergraph.vertices)
     if not hypergraph.edges or palette_size <= 1 or palette_size >= vertex_count:
         return None

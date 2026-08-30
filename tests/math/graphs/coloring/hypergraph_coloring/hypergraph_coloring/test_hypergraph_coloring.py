@@ -101,3 +101,10 @@ def test_empty_edge_is_uncolorable_with_any_palette() -> None:
     result = decide_hypergraph_coloring(hypergraph, 2)
 
     assert not result.colorable
+
+
+def test_nonpositive_palette_is_rejected() -> None:
+    hypergraph = _hypergraph(["a"], [])
+
+    with pytest.raises(OperationDomainValidationError, match="positive"):
+        decide_hypergraph_coloring(hypergraph, 0)

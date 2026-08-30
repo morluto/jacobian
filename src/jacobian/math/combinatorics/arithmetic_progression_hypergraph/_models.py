@@ -72,6 +72,17 @@ def _admission_error(lower: int, upper: int, k: int) -> tuple[str, str, str] | N
             f"incidence count {incidences} exceeds the "
             f"{MAX_TOTAL_INCIDENCES}-incidence bound",
         )
+    vertex_label_bytes = max(len(str(lower)), len(str(upper)))
+    edge_label_bytes = max(
+        (len(f"({lower},{d})") for d in range(1, n)),
+        default=0,
+    )
+    if max(vertex_label_bytes, edge_label_bytes) > 64:
+        return (
+            "upper",
+            "label_size_exceeds_bound",
+            "generated vertex or edge labels exceed the 64-byte carrier",
+        )
     return None
 
 

@@ -315,12 +315,12 @@ def _require_sumset_result_transport_bound(
         max(left_values) - min(left_values) + max(right_values) - min(right_values) + 1
     )
     support_bound = min(pair_count, interval_bound)
-    max_sum_abs = max(
-        abs(left_endpoint + right_endpoint)
+    endpoint_sums = tuple(
+        left_endpoint + right_endpoint
         for left_endpoint in (min(left_values), max(left_values))
         for right_endpoint in (min(right_values), max(right_values))
     )
-    max_sum_width = len(format_canonical_integer(max_sum_abs))
+    max_sum_width = max(len(format_canonical_integer(value)) for value in endpoint_sums)
     predicted = 64 + support_bound * (max_sum_width + 3)
     if predicted > _MAX_FINITE_SET_WIRE_BYTES:
         raise OperationDomainValidationError(

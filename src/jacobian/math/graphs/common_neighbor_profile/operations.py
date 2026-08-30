@@ -52,30 +52,37 @@ def _admit_graph(
         adjacency[left].add(right)
         adjacency[right].add(left)
 
-    rows: list[tuple[str, str, tuple[str, ...]]] = []
-    for index, left in enumerate(vertices):
-        for right in vertices[index + 1 :]:
-            common = tuple(sorted(adjacency[left] & adjacency[right]))
-            rows.append((left, right, common))
-
     try:
+        encoded_vertex_sizes = {
+            vertex: len(encode_strict_json(vertex)) for vertex in vertices
+        }
         source_bytes = len(encode_strict_json(graph.model_dump(mode="json")))
-        row_sizes = [
-            strict_json_object_size(
-                (
-                    ("vertex_u", len(encode_strict_json(left))),
-                    ("vertex_v", len(encode_strict_json(right))),
-                    (
-                        "common_neighbors",
-                        _array_size(
-                            [len(encode_strict_json(vertex)) for vertex in common]
-                        ),
-                    ),
-                    ("codegree", len(encode_strict_json(len(common)))),
+        row_sizes: list[int] = []
+        for index, left in enumerate(vertices):
+            for right in vertices[index + 1 :]:
+                common_count = 0
+                common_bytes = 0
+                smaller, larger = sorted((adjacency[left], adjacency[right]), key=len)
+                for vertex in smaller:
+                    if vertex in larger:
+                        common_count += 1
+                        common_bytes += encoded_vertex_sizes[vertex]
+                row_sizes.append(
+                    strict_json_object_size(
+                        (
+                            ("vertex_u", encoded_vertex_sizes[left]),
+                            ("vertex_v", encoded_vertex_sizes[right]),
+                            (
+                                "common_neighbors",
+                                2 + max(common_count - 1, 0) + common_bytes,
+                            ),
+                            (
+                                "codegree",
+                                len(encode_strict_json(common_count)),
+                            ),
+                        )
+                    )
                 )
-            )
-            for left, right, common in rows
-        ]
         upper_bound = strict_json_object_size(
             (
                 ("graph", source_bytes),
@@ -90,7 +97,16 @@ def _admit_graph(
             f"the complete profile exceeds the {MAX_RESULT_BYTES}-byte output bound",
         )
 
-    return adjacency, _ProfilePlan(rows=tuple(rows))
+    rows = tuple(
+        (
+            left,
+            right,
+            tuple(sorted(adjacency[left] & adjacency[right])),
+        )
+        for index, left in enumerate(vertices)
+        for right in vertices[index + 1 :]
+    )
+    return adjacency, _ProfilePlan(rows=rows)
 
 
 def compute_common_neighbor_profile(

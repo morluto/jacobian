@@ -185,6 +185,31 @@ def test_coprime_coordinate_denominators_are_bounded_before_summing() -> None:
         compute_pinned_distance_support_profile(config)
 
 
+def test_squared_coordinate_terms_can_cancel_to_a_small_distance() -> None:
+    magnitude = 10**10_000
+    denominator = magnitude**2 + 1
+    config = PointConfiguration(
+        points=(
+            _pt("origin", (0, 0)),
+            LabelledRationalPoint(
+                label="cancelled",
+                coordinates=(
+                    CanonicalRational.from_fraction(
+                        Fraction(magnitude**2 - 1, denominator)
+                    ),
+                    CanonicalRational.from_fraction(
+                        Fraction(2 * magnitude, denominator)
+                    ),
+                ),
+            ),
+        )
+    )
+
+    result = compute_pinned_distance_support_profile(config)
+
+    assert result.entries[0].distance_classes[0].squared_distance.as_fraction() == 1
+
+
 def test_shared_denominators_are_admitted_from_exact_distances() -> None:
     denominator = 10**1000 + 1
     coordinate = CanonicalRational.from_fraction(Fraction(1, denominator))

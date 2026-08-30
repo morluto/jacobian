@@ -26,6 +26,7 @@ from jacobian.math.geometry.exact.pinned_distance._models import (
 __all__ = ["compute_pinned_distance_support_profile"]
 
 MAX_RESULT_BYTES = CanonicalLimits().max_output_bytes
+MAX_DISTANCE_INTERMEDIATE_DIGITS = 2 * MAX_CANONICAL_RATIONAL_DIGITS
 
 
 def _array_size(item_sizes: list[int]) -> int:
@@ -224,8 +225,8 @@ def _integer_digits(value: int) -> int:
 
 def _require_bounded_fraction(value: Fraction) -> None:
     if (
-        _integer_digits(value.numerator) > MAX_CANONICAL_RATIONAL_DIGITS
-        or _integer_digits(value.denominator) > MAX_CANONICAL_RATIONAL_DIGITS
+        _integer_digits(value.numerator) > MAX_DISTANCE_INTERMEDIATE_DIGITS
+        or _integer_digits(value.denominator) > MAX_DISTANCE_INTERMEDIATE_DIGITS
     ):
         _reject(
             "distance_intermediate_height_bound",

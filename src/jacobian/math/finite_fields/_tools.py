@@ -24,6 +24,7 @@ from jacobian.math.finite_fields import (
     projective_line,
     restrict_scalars,
 )
+from jacobian.math.finite_fields._matrix_rank import MATRIX_RANK_OPERATION
 from jacobian.math.finite_fields._models import (
     CollisionRequest,
     DirectionRankLedgerRequest,
@@ -340,8 +341,9 @@ def _build_tools() -> MathTools:
             ),
         ),
     )
+    matrix_rank_operation = MATRIX_RANK_OPERATION
     return (
-        projective_line_operation,
+        matrix_rank_operation,
         restrict_operation,
         rank_operation,
         ledger_operation,

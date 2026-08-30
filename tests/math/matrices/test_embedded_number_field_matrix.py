@@ -2,6 +2,7 @@
 
 from fractions import Fraction
 from threading import Event
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -108,6 +109,60 @@ def test_raw_embedded_matrix_rejects_deep_malformed_entries_without_recursing() 
     assert exc_info.value.errors(include_input=False)[0]["type"] == (
         "matrix.shape_mismatch"
     )
+
+
+@pytest.mark.parametrize(
+    ("malformed_part", "expected_type"),
+    (
+        ("row_axis", "matrix.shape_mismatch"),
+        ("coefficient_num", "string_type"),
+        ("coefficient_axis", "tuple_type"),
+        ("entry_presentation", "tuple_type"),
+        ("embedding_presentation", "tuple_type"),
+        ("embedding_root", "tuple_type"),
+    ),
+)
+def test_raw_embedded_matrix_validation_is_total_at_every_nested_axis(
+    malformed_part: str,
+    expected_type: str,
+) -> None:
+    presentation = SimpleNumberFieldPresentation(
+        coefficients_descending=("1", "0", "-2")
+    )
+    embedding = embeddings(presentation).records[1].embedding
+    assert isinstance(embedding, RealNumberFieldEmbedding)
+    nested: object = "0"
+    for _ in range(1_500):
+        nested = {"next": nested}
+    element: dict[str, Any] = {
+        "presentation": presentation.model_dump(mode="json"),
+        "coefficients_ascending": [
+            {"num": "0", "den": "1"},
+            {"num": "1", "den": "1"},
+        ],
+    }
+    payload: dict[str, Any] = {
+        "domain": "EMBEDDED_REAL_SIMPLE_NUMBER_FIELD",
+        "embedding": embedding.model_dump(mode="json"),
+        "entries": [[element]],
+    }
+    if malformed_part == "row_axis":
+        payload["entries"] = [1]
+    elif malformed_part == "coefficient_num":
+        element["coefficients_ascending"][0]["num"] = nested
+    elif malformed_part == "coefficient_axis":
+        element["coefficients_ascending"] = nested
+    elif malformed_part == "entry_presentation":
+        element["presentation"]["coefficients_descending"] = nested
+    elif malformed_part == "embedding_presentation":
+        payload["embedding"]["presentation"]["coefficients_descending"] = nested
+    else:
+        payload["embedding"]["root"]["polynomial"] = nested
+
+    with pytest.raises(ValidationError) as exc_info:
+        EmbeddedRealSimpleNumberFieldMatrix.model_validate(payload)
+
+    assert exc_info.value.errors(include_input=False)[0]["type"] == expected_type
 
 
 def test_exact_inertia_distinguishes_the_two_real_quartic_embeddings() -> None:

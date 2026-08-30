@@ -6,11 +6,18 @@ from fractions import Fraction
 import pytest
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
-from tests.math.geometry.complex_tori._support import rational
+from tests.math.geometry.complex_tori._support import (
+    nonmonic_quadratic_torus,
+    rational,
+)
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    current_request_execution,
     request_cancellation,
+    request_execution,
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.complex_tori import (
@@ -18,6 +25,7 @@ from jacobian.math.geometry.complex_tori import (
     compute_neron_severi_lattice,
     compute_riemann_form_profile,
 )
+from jacobian.math.geometry.complex_tori import operations as complex_torus_operations
 from jacobian.math.geometry.complex_tori._models import (
     NeronSeveriLatticeRequest,
     RiemannFormProfileRequest,
@@ -157,6 +165,60 @@ def test_profile_observes_cancellation_after_complex_structure_products() -> Non
     assert cancellation.checks == 4
 
 
+def test_neron_severi_owner_deadline_reaches_invariant_form_phases(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checks = 0
+
+    def monotonic() -> float:
+        nonlocal checks
+        checks += 1
+        # started_at=10 fixes the owner deadline at 610. The first expired
+        # observation occurs inside the nested invariant-form kernel.
+        return 700.0 if checks >= 7 else 500.0
+
+    monkeypatch.setattr(complex_torus_operations, "monotonic", monotonic)
+    with (
+        request_execution(started_at=10.0),
+        pytest.raises(
+            OperationExecutionTimeoutError,
+            match="during exact invariant-form constraint expansion",
+        ),
+    ):
+        compute_neron_severi_lattice(_elliptic_torus())
+
+
+def test_riemann_profile_preserves_a_stricter_deadline_through_inertia(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    torus = _elliptic_torus()
+    form = IntegralBilinearForm(
+        coordinate_axis=torus.coordinate_axis,
+        kind="ALTERNATING",
+        matrix=IntegerMatrix(entries=(("0", "1"), ("-1", "0"))),
+    )
+    checks = 0
+
+    def monotonic() -> float:
+        nonlocal checks
+        checks += 1
+        # The owner deadline would be 610, but the inherited 550 deadline must
+        # remain authoritative when the nested inertia phase observes 560.
+        return 560.0 if checks >= 8 else 500.0
+
+    monkeypatch.setattr(complex_torus_operations, "monotonic", monotonic)
+    with request_execution(started_at=10.0):
+        bind_request_deadline(550.0)
+        with pytest.raises(
+            OperationExecutionTimeoutError,
+            match="during exact rational congruence elimination",
+        ):
+            compute_riemann_form_profile(torus, form)
+        execution = current_request_execution()
+        assert execution is not None
+        assert execution.deadline == 550.0
+
+
 def test_raw_torus_validation_does_not_recurse_through_a_malformed_matrix() -> None:
     nested: object = None
     for _ in range(1_500):
@@ -172,6 +234,30 @@ def test_raw_torus_validation_does_not_recurse_through_a_malformed_matrix() -> N
                 },
             }
         )
+
+
+@pytest.mark.parametrize("malformed_part", ("row_axis", "coefficient_num"))
+def test_raw_neron_severi_request_rejects_allowed_key_depth_traps(
+    malformed_part: str,
+) -> None:
+    payload = {
+        "torus": nonmonic_quadratic_torus().model_dump(mode="json"),
+    }
+    matrix = payload["torus"]["complex_structure"]
+    if malformed_part == "row_axis":
+        matrix["entries"] = [42]
+        expected_type = "matrix.shape_mismatch"
+    else:
+        nested: object = "0"
+        for _ in range(1_500):
+            nested = {"next": nested}
+        matrix["entries"][0][0]["coefficients_ascending"][0]["num"] = nested
+        expected_type = "string_type"
+
+    with pytest.raises(ValidationError) as exc_info:
+        NeronSeveriLatticeRequest.model_validate(payload)
+
+    assert exc_info.value.errors(include_input=False)[0]["type"] == expected_type
 
 
 def test_neron_severi_admits_nested_work_before_testing_j_squared() -> None:

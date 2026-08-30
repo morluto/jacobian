@@ -178,33 +178,6 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
                 "embedded number-field matrix contains unknown fields",
             )
         entries = data.get("entries")
-        if isinstance(entries, (list, tuple)):
-            if len(entries) > MAX_RATIONAL_MATRIX_ORDER:
-                raise _validation_error(
-                    "budget_exceeded",
-                    "embedded number-field matrices have at most "
-                    f"{MAX_RATIONAL_MATRIX_ORDER} rows",
-                )
-            for row in entries:
-                if isinstance(row, (list, tuple)) and len(row) > (
-                    MAX_RATIONAL_MATRIX_ORDER
-                ):
-                    raise _validation_error(
-                        "budget_exceeded",
-                        "embedded number-field matrices have at most "
-                        f"{MAX_RATIONAL_MATRIX_ORDER} columns",
-                    )
-                for scalar in row:
-                    if isinstance(scalar, (list, tuple)) or (
-                        isinstance(scalar, dict)
-                        and set(scalar).difference(
-                            {"presentation", "coefficients_ascending"}
-                        )
-                    ):
-                        raise _validation_error(
-                            "shape_mismatch",
-                            "embedded number-field matrix entries must be field elements",
-                        )
         normalized = dict(data)
         embedding = normalized.get("embedding")
         if isinstance(embedding, dict):
@@ -215,10 +188,36 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
                 normalized_root["polynomial"] = tuple(root["polynomial"])
                 normalized_embedding["root"] = normalized_root
             normalized["embedding"] = normalized_embedding
-        if isinstance(entries, list):
-            normalized["entries"] = tuple(
-                tuple(row) if isinstance(row, list) else row for row in entries
-            )
+        if isinstance(entries, (list, tuple)):
+            if len(entries) > MAX_RATIONAL_MATRIX_ORDER:
+                raise _validation_error(
+                    "budget_exceeded",
+                    "embedded number-field matrices have at most "
+                    f"{MAX_RATIONAL_MATRIX_ORDER} rows",
+                )
+            for row in entries:
+                if not isinstance(row, (list, tuple)):
+                    raise _validation_error(
+                        "shape_mismatch",
+                        "embedded number-field matrix rows must be arrays",
+                    )
+                if len(row) > MAX_RATIONAL_MATRIX_ORDER:
+                    raise _validation_error(
+                        "budget_exceeded",
+                        "embedded number-field matrices have at most "
+                        f"{MAX_RATIONAL_MATRIX_ORDER} columns",
+                    )
+                for scalar in row:
+                    if isinstance(scalar, SimpleNumberFieldElement):
+                        continue
+                    if not isinstance(scalar, dict) or set(scalar).difference(
+                        {"presentation", "coefficients_ascending"}
+                    ):
+                        raise _validation_error(
+                            "shape_mismatch",
+                            "embedded number-field matrix entries must be field elements",
+                        )
+            normalized["entries"] = tuple(tuple(row) for row in entries)
         return normalized
 
     @model_validator(mode="after")

@@ -98,7 +98,10 @@ class SimpleNumberFieldPresentation(StrictModel):
                     "simple number-field coefficients may contain at most "
                     f"{MAX_SIMPLE_NUMBER_FIELD_COEFFICIENT_DIGITS} digits",
                 )
-        return canonicalize_json_containers(data)
+        normalized = dict(data)
+        if isinstance(coefficients, list):
+            normalized["coefficients_descending"] = tuple(coefficients)
+        return normalized
 
     @model_validator(mode="after")
     def require_canonical_polynomial(self) -> Self:
@@ -146,7 +149,11 @@ class SimpleNumberFieldElement(StrictModel):
             max_digits=MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS,
             label="simple number-field element",
         )
-        return canonicalize_json_containers(data)
+        normalized = dict(data)
+        coefficients = data.get("coefficients_ascending")
+        if isinstance(coefficients, list):
+            normalized["coefficients_ascending"] = tuple(coefficients)
+        return normalized
 
     @model_validator(mode="after")
     def require_reduced_power_basis_coordinates(self) -> Self:

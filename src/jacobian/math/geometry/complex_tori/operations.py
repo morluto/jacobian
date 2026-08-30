@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
+from functools import partial
+from time import monotonic
 from typing import Any
 
 from pydantic_core import PydanticCustomError
@@ -12,6 +15,9 @@ from sympy.polys.matrices import DomainMatrix
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    current_request_execution,
     request_cancelled,
 )
 from jacobian.canonical import CanonicalLimits, encode_strict_json
@@ -68,6 +74,11 @@ from jacobian.math.number_theory.number_fields.values import (
 )
 
 MAX_COMPLEX_TORUS_SCALAR_WORK = 500_000_000
+# The exact work ledgers remain the mathematical admission evidence. This
+# generous wall limit is only a cooperative request-occupancy backstop around
+# bounded in-process phases; it does not claim that SymPy or FLINT is preemptible.
+_COMPLEX_TORUS_WALL_SECONDS = 600.0
+type _ExecutionCheckpoint = Callable[[str], None]
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,9 +108,26 @@ class _RiemannFormExecutionPlan:
     associated_inertia: _InertiaExecutionPlan
 
 
-def _require_execution_active(phase: str) -> None:
+def _execution_deadline() -> float:
+    """Bind one owner deadline measured from the original request start."""
+
+    execution = current_request_execution()
+    started_at = execution.started_at if execution is not None else monotonic()
+    owner_deadline = started_at + _COMPLEX_TORUS_WALL_SECONDS
+    deadline = (
+        min(owner_deadline, execution.deadline)
+        if execution is not None and execution.deadline is not None
+        else owner_deadline
+    )
+    bind_request_deadline(deadline)
+    return deadline
+
+
+def _require_execution_active(deadline: float, phase: str) -> None:
     if request_cancelled():
         raise OperationExecutionCancelledError(f"request cancelled {phase}")
+    if monotonic() >= deadline:
+        raise OperationExecutionTimeoutError(f"complex-torus deadline expired {phase}")
 
 
 def _scalar_height_ledger(
@@ -354,10 +382,12 @@ def _rational_domain_matrix(matrix: RationalMatrix) -> DomainMatrix:
 
 def _require_complex_structure(
     torus: LatticeComplexStructure,
+    *,
+    execution_checkpoint: _ExecutionCheckpoint,
 ) -> RecognizedRealSimpleNumberField | None:
     """Recognize the scalar domain and establish ``J^2 = -I`` exactly."""
 
-    _require_execution_active("before exact complex-structure recognition")
+    execution_checkpoint("before exact complex-structure recognition")
     matrix = torus.complex_structure
     try:
         if isinstance(matrix, EmbeddedRealSimpleNumberFieldMatrix):
@@ -378,7 +408,7 @@ def _require_complex_structure(
             "not_complex_structure",
             "the exact complex-structure matrix must satisfy J^2 = -I",
         )
-    _require_execution_active("after exact complex-structure recognition")
+    execution_checkpoint("after exact complex-structure recognition")
     return recognized
 
 
@@ -387,20 +417,24 @@ def compute_neron_severi_lattice(
 ) -> InvariantBilinearFormLattice:
     """Compute every integral alternating Hodge ``(1,1)`` form exactly."""
 
+    execution_checkpoint = partial(_require_execution_active, _execution_deadline())
     try:
-        _require_execution_active("before Neron-Severi semantic admission")
+        execution_checkpoint("before Neron-Severi semantic admission")
         action, plan = _admit_neron_severi_execution(torus)
-        _require_execution_active("after Neron-Severi semantic admission")
-        recognized = _require_complex_structure(torus)
-        _require_execution_active("before the integral Hodge-lattice kernel")
+        execution_checkpoint("after Neron-Severi semantic admission")
+        recognized = _require_complex_structure(
+            torus,
+            execution_checkpoint=execution_checkpoint,
+        )
+        execution_checkpoint("before the integral Hodge-lattice kernel")
         result = invariant_bilinear_form_lattice_kernel(
             action,
             "ALTERNATING",
             admission=plan.invariant_forms,
             recognized_field=recognized,
-            execution_checkpoint=_require_execution_active,
+            execution_checkpoint=execution_checkpoint,
         )
-        _require_execution_active("after the integral Hodge-lattice kernel")
+        execution_checkpoint("after the integral Hodge-lattice kernel")
         return result
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(
@@ -463,8 +497,9 @@ def compute_riemann_form_profile(
 ) -> RiemannFormProfile:
     """Classify one integral alternating form under the standard Riemann sign."""
 
+    execution_checkpoint = partial(_require_execution_active, _execution_deadline())
     try:
-        _require_execution_active("before Riemann-form semantic admission")
+        execution_checkpoint("before Riemann-form semantic admission")
         if form.coordinate_axis != torus.coordinate_axis:
             raise _validation_error(
                 "form_axis",
@@ -475,8 +510,11 @@ def compute_riemann_form_profile(
                 "form_kind", "a Riemann-form profile requires an alternating form"
             )
         plan = _admit_riemann_form_execution(torus, form)
-        _require_execution_active("after Riemann-form semantic admission")
-        recognized = _require_complex_structure(torus)
+        execution_checkpoint("after Riemann-form semantic admission")
+        recognized = _require_complex_structure(
+            torus,
+            execution_checkpoint=execution_checkpoint,
+        )
         matrix = torus.complex_structure
         if isinstance(matrix, EmbeddedRealSimpleNumberFieldMatrix):
             if recognized is None:
@@ -487,14 +525,14 @@ def compute_riemann_form_profile(
             complex_structure = _rational_domain_matrix(matrix)
             form_matrix = _integer_form_domain_matrix(form, QQ)
 
-        _require_execution_active("before the Hodge compatibility products")
+        execution_checkpoint("before the Hodge compatibility products")
         transformed = (
             complex_structure.transpose()
             .matmul(form_matrix)
             .matmul(complex_structure)
             .to_dense()
         )
-        _require_execution_active("after the Hodge compatibility products")
+        execution_checkpoint("after the Hodge compatibility products")
         hodge_type_11 = transformed == form_matrix.to_dense()
         inertia: InertiaResult | None = None
         if hodge_type_11:
@@ -506,17 +544,17 @@ def compute_riemann_form_profile(
                 if recognized is not None
                 else _rational_matrix_from_domain(associated)
             )
-            _require_execution_active("before exact associated-form inertia")
+            execution_checkpoint("before exact associated-form inertia")
             inertia = _compute_inertia(
                 associated_matrix,
                 admission=plan.associated_inertia,
                 recognized_field=recognized,
-                execution_checkpoint=_require_execution_active,
+                execution_checkpoint=execution_checkpoint,
             )
-            _require_execution_active("after exact associated-form inertia")
-        _require_execution_active("before the alternating Smith kernel")
+            execution_checkpoint("after exact associated-form inertia")
+        execution_checkpoint("before the alternating Smith kernel")
         smith = _smith_normal_form_kernel(form.matrix)
-        _require_execution_active("after the alternating Smith kernel")
+        execution_checkpoint("after the alternating Smith kernel")
         factors = smith.invariant_factors
         if len(factors) % 2 or any(
             factors[index] != factors[index + 1] for index in range(0, len(factors), 2)
@@ -533,7 +571,7 @@ def compute_riemann_form_profile(
                 is_degenerate=degenerate,
                 outcome=RiemannFormNotHodge(status="NOT_HODGE"),
             )
-            _require_execution_active("after Riemann-form result construction")
+            execution_checkpoint("after Riemann-form result construction")
             return result
 
         if inertia is None:
@@ -566,7 +604,7 @@ def compute_riemann_form_profile(
             is_degenerate=degenerate,
             outcome=outcome,
         )
-        _require_execution_active("after Riemann-form result construction")
+        execution_checkpoint("after Riemann-form result construction")
         return result
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(

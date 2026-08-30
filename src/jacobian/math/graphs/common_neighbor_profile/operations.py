@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from jacobian.canonical import CanonicalLimits
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.common_neighbor_profile._models import (
     CommonNeighborProfileResult,
     PairEntry,
+    _common_neighbor_result_bytes_upper,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -22,6 +25,12 @@ def compute_common_neighbor_profile(
     complete cardinality histogram, and whether the graph is C4-free
     (every pair has codegree at most 1).
     """
+    if _common_neighbor_result_bytes_upper(graph) > CanonicalLimits().max_output_bytes:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="common_neighbor.output_bound",
+            message="common-neighbor profile exceeds the canonical output budget",
+        )
     vertices = graph.vertices
     n = len(vertices)
 

@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.graphs.common_neighbor_profile._models import (
+    CommonNeighborProfileRequest,
+)
 from jacobian.math.graphs.common_neighbor_profile.operations import (
     compute_common_neighbor_profile,
 )
@@ -57,3 +64,18 @@ def test_result_preserves_source() -> None:
     graph = _graph(["a", "b"], [["a", "b"]])
     result = compute_common_neighbor_profile(graph)
     assert result.graph == graph
+
+
+def test_dense_profile_is_rejected_from_exact_incidence_bound() -> None:
+    vertices = [f"v{i:03d}" for i in range(256)]
+    edges = [
+        [left, right]
+        for index, left in enumerate(vertices)
+        for right in vertices[index + 1 :]
+    ]
+    graph = _graph(vertices, edges)
+
+    with pytest.raises(OperationDomainValidationError, match="output budget"):
+        compute_common_neighbor_profile(graph)
+    with pytest.raises(ValidationError, match="output budget"):
+        CommonNeighborProfileRequest(graph=graph)

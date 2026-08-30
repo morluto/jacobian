@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from fractions import Fraction
 from itertools import combinations
-from math import comb
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import (
@@ -23,6 +22,7 @@ __all__ = ["compute_rational_fixed_arity_sum_profile"]
 
 MAX_ENUMERATION_WORK = 20_000_000
 MAX_RESULT_BYTES = CanonicalLimits().max_output_bytes
+MAX_SAFE_JSON_INTEGER = (1 << 53) - 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +61,16 @@ def _support_bound(
     return count_vectors[arity]
 
 
+def _capped_combination(n: int, k: int, cap: int) -> int:
+    k = min(k, n - k)
+    result = 1
+    for index in range(1, k + 1):
+        result = result * (n - k + index) // index
+        if result > cap:
+            return cap + 1
+    return result
+
+
 def _admit(
     values: tuple[CanonicalRational, ...],
     arity: int,
@@ -86,20 +96,30 @@ def _admit(
             "rational_fixed_arity.arity_domain",
             "arity must be nonnegative",
         )
+    if arity > MAX_SAFE_JSON_INTEGER:
+        _reject(
+            ("arity",),
+            "rational_fixed_arity.arity_json_range",
+            "arity must fit the canonical JSON integer range",
+        )
     source_size = len(values)
-    candidate_count = comb(source_size, arity) if arity <= source_size else 0
-    fractions = tuple(value.as_fraction() for value in values)
+    candidate_count = (
+        _capped_combination(source_size, arity, MAX_ENUMERATION_WORK)
+        if arity <= source_size
+        else 0
+    )
     arithmetic_digits = max(
         (max(len(value.num.lstrip("-")), len(value.den)) for value in values),
         default=1,
     )
     work = candidate_count * max(arity, 1) * arithmetic_digits
-    if work > MAX_ENUMERATION_WORK:
+    if candidate_count > MAX_ENUMERATION_WORK or work > MAX_ENUMERATION_WORK:
         _reject(
             ("values",),
             "rational_fixed_arity.work_bound",
             "fixed-arity enumeration exceeds the admitted work bound",
         )
+    fractions = tuple(value.as_fraction() for value in values)
 
     maximum_numerator_digits = max(
         (len(value.num.lstrip("-")) for value in values),

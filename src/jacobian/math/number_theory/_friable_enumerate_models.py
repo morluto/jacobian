@@ -41,8 +41,8 @@ def _primes_through(limit: int) -> tuple[int, ...]:
     return tuple(index for index, is_prime in enumerate(sieve) if is_prime)
 
 
-def _count_from_exponent_vectors(x: int, primes: tuple[int, ...]) -> int:
-    """Count the y-friable integers at most x without materializing them.
+def _generate_from_exponent_vectors(x: int, primes: tuple[int, ...]) -> tuple[int, ...]:
+    """Generate the y-friable integers at most x once for admission and output.
 
     Uses an explicit stack to avoid Python recursion-depth limits when the
     prime list is long (e.g. y = 10_000 admits ~1229 primes).
@@ -50,9 +50,9 @@ def _count_from_exponent_vectors(x: int, primes: tuple[int, ...]) -> int:
 
     if not primes:
         return 1
-    total = 0
+    values: list[int] = []
     nodes = 0
-    stack = [(0, x)]
+    stack = [(0, 1)]
     while stack:
         nodes += 1
         if nodes > _MAX_FRIABLE_ENUMERATE_COUNT_NODES:
@@ -60,10 +60,10 @@ def _count_from_exponent_vectors(x: int, primes: tuple[int, ...]) -> int:
                 "friable_enumerate_exceeds_the_search_node_budget",
                 "friable-enumerate presolve exceeds the search-node budget",
             )
-        prime_index, remaining = stack.pop()
+        prime_index, product = stack.pop()
         if prime_index == len(primes):
-            total += 1
-            if total > MAX_FRIABLE_ENUMERATE_FAMILY_SIZE:
+            values.append(product)
+            if len(values) > MAX_FRIABLE_ENUMERATE_FAMILY_SIZE:
                 raise _validation_error(
                     "friable_enumerate_family_exceeds_the_result_size_budget",
                     "friable-enumerate family exceeds the result-size budget",
@@ -71,11 +71,11 @@ def _count_from_exponent_vectors(x: int, primes: tuple[int, ...]) -> int:
             continue
         prime = primes[prime_index]
         while True:
-            stack.append((prime_index + 1, remaining))
-            if remaining < prime:
+            stack.append((prime_index + 1, product))
+            if product > x // prime:
                 break
-            remaining //= prime
-    return total
+            product *= prime
+    return tuple(sorted(values))
 
 
 def _estimate_serialized_bytes(x: int, family_size: int) -> int:
@@ -140,11 +140,13 @@ class FriableEnumerateResult(StrictModel):
         )
 
 
-def plan_friable_enumerate(x: int, y: int) -> tuple[str, tuple[int, ...]]:
+def plan_friable_enumerate(
+    x: int, y: int
+) -> tuple[str, tuple[int, ...], tuple[int, ...]]:
     """Validate and select one exact friable-enumerate execution regime.
 
-    Returns the regime name and, for the generated regime, the tuple of primes
-    at most ``y``.  Raises a validation error when the request cannot fit.
+    Returns the regime name, generated prime tuple, and (for the generated
+    regime) the materialized family so execution can reuse the admission pass.
     """
 
     if x < 0 or y < 0:
@@ -161,9 +163,9 @@ def plan_friable_enumerate(x: int, y: int) -> tuple[str, tuple[int, ...]]:
     # Direct regime: x is 0 (empty family is handled by the kernel), or y is so
     # large that every integer 1..x is friable, or y <= 1 (only 1 is friable).
     if x == 0:
-        return "DIRECT", ()
+        return "DIRECT", (), ()
     if y <= 1:
-        return "DIRECT", ()
+        return "DIRECT", (), ()
     if y >= x:
         if x > MAX_FRIABLE_ENUMERATE_FAMILY_SIZE:
             raise _validation_error(
@@ -175,7 +177,7 @@ def plan_friable_enumerate(x: int, y: int) -> tuple[str, tuple[int, ...]]:
                 "friable_enumerate_family_exceeds_the_serialized_byte_budget",
                 "friable-enumerate family exceeds the serialized-byte budget",
             )
-        return "DIRECT", ()
+        return "DIRECT", (), ()
 
     # Materialized regime: small enough to scan 1..x directly.
     # Use x as the family-size upper bound (y >= x is handled above as DIRECT,
@@ -187,7 +189,7 @@ def plan_friable_enumerate(x: int, y: int) -> tuple[str, tuple[int, ...]]:
             and _estimate_serialized_bytes(x, max_family_size)
             <= _MAX_FRIABLE_ENUMERATED_BYTES
         ):
-            return "MATERIALIZED", ()
+            return "MATERIALIZED", (), ()
 
     # Generated regime: enumerate exponent vectors without materializing 1..x.
     if y > MAX_FRIABLE_ENUMERATE_GENERATED_CUTOFF:
@@ -197,7 +199,8 @@ def plan_friable_enumerate(x: int, y: int) -> tuple[str, tuple[int, ...]]:
         )
 
     primes = _primes_through(y)
-    family_size = _count_from_exponent_vectors(x, primes)
+    family = _generate_from_exponent_vectors(x, primes)
+    family_size = len(family)
     if family_size > MAX_FRIABLE_ENUMERATE_FAMILY_SIZE:
         raise _validation_error(
             "friable_enumerate_family_exceeds_the_result_size_budget",
@@ -208,7 +211,7 @@ def plan_friable_enumerate(x: int, y: int) -> tuple[str, tuple[int, ...]]:
             "friable_enumerate_family_exceeds_the_serialized_byte_budget",
             "friable-enumerate family exceeds the serialized-byte budget",
         )
-    return "GENERATED", primes
+    return "GENERATED", primes, family
 
 
 __all__ = [

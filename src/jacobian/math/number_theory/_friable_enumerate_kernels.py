@@ -77,7 +77,7 @@ def enumerate_friable(x: int | IntegerValue, y: int | IntegerValue) -> tuple[int
     if type(x) is not int or type(y) is not int:
         raise TypeError("friable-enumerate inputs must be integers")
 
-    regime, primes = plan_friable_enumerate(x, y)
+    regime, _primes, admitted_family = plan_friable_enumerate(x, y)
 
     if regime == "DIRECT":
         if x == 0:
@@ -89,7 +89,7 @@ def enumerate_friable(x: int | IntegerValue, y: int | IntegerValue) -> tuple[int
 
     if regime == "MATERIALIZED":
         return _enumerate_materialized(x, y)
-    return _enumerate_generated(x, primes)
+    return admitted_family
 
 
 def _as_python_integer(value: int | IntegerValue) -> int:

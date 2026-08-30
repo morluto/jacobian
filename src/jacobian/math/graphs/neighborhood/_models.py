@@ -36,6 +36,8 @@ class NeighborhoodRequest(StrictModel):
                     "selected vertices exceed the raw tuple-length bound",
                 )
         return canonicalize_json_containers(value)
+
+
 class NeighborhoodResult(StrictModel):
     """The exact open neighbourhood of a selected vertex set."""
 

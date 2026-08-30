@@ -6,6 +6,7 @@ from itertools import combinations
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.uniform_subset_intersection._models import (
+    UniformSubsetIntersectionRelation,
     UniformSubsetIntersectionResult,
     _uniform_subset_admission_error,
 )
@@ -18,13 +19,23 @@ def construct_uniform_subset_intersection_graph(
     n: int,
     k: int,
     threshold: int,
-    relation: str,
+    relation: UniformSubsetIntersectionRelation,
 ) -> UniformSubsetIntersectionResult:
     """Construct a graph whose vertices are k-subsets of [n].
 
     An edge joins two k-subsets when their intersection satisfies the
     declared relation with the threshold.
     """
+    if relation not in {
+        "INTERSECTION_LT_THRESHOLD",
+        "INTERSECTION_EQ_THRESHOLD",
+        "INTERSECTION_GT_THRESHOLD",
+    }:
+        raise OperationDomainValidationError(
+            location=("relation",),
+            code="uniform_subset.invalid_relation",
+            message="relation must be one of the declared intersection relations",
+        )
     failure = _uniform_subset_admission_error(n, k)
     if failure is not None:
         code, message = failure

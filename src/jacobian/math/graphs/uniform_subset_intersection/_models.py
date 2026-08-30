@@ -10,6 +10,11 @@ from jacobian.canonical import CanonicalLimits
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_UNIFORM_SUBSET_ITEMS = 100_000
+UniformSubsetIntersectionRelation = Literal[
+    "INTERSECTION_LT_THRESHOLD",
+    "INTERSECTION_EQ_THRESHOLD",
+    "INTERSECTION_GT_THRESHOLD",
+]
 
 
 def _uniform_subset_admission_error(n: int, k: int) -> tuple[str, str] | None:
@@ -52,11 +57,7 @@ class UniformSubsetIntersectionRequest(StrictModel):
     n: int = Field(ge=0)
     k: int = Field(ge=0)
     threshold: int
-    relation: Literal[
-        "INTERSECTION_LT_THRESHOLD",
-        "INTERSECTION_EQ_THRESHOLD",
-        "INTERSECTION_GT_THRESHOLD",
-    ]
+    relation: UniformSubsetIntersectionRelation
 
     @model_validator(mode="after")
     def require_bounded_uniform_family(self) -> Self:
@@ -79,6 +80,7 @@ class UniformSubsetIntersectionResult(StrictModel):
 
 __all__ = [
     "MAX_UNIFORM_SUBSET_ITEMS",
+    "UniformSubsetIntersectionRelation",
     "UniformSubsetIntersectionRequest",
     "UniformSubsetIntersectionResult",
     "_uniform_subset_admission_error",

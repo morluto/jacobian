@@ -38,9 +38,10 @@ def _maximum_path_work(graph: SimpleUndirectedGraph) -> int:
         # In a complete graph the first DFS branch witnesses every length.
         return vertex_count**3
     complete_edges = vertex_count * (vertex_count - 1) // 2
-    if len(graph.edges) >= complete_edges - vertex_count and len(
-        _cycle_core_vertices(graph)
-    ) == vertex_count:
+    if (
+        len(graph.edges) >= complete_edges - vertex_count
+        and len(_cycle_core_vertices(graph)) == vertex_count
+    ):
         # A graph missing only a handful of edges still yields a first witness
         # for each requested length after a bounded prefix search.
         return vertex_count**3
@@ -121,7 +122,11 @@ def _maximum_cycle_block_size(graph: SimpleUndirectedGraph) -> int:
     topology.add_nodes_from(graph.vertices)
     topology.add_edges_from(graph.edges)
     return max(
-        (len(block) for block in nx.biconnected_components(topology) if len(block) >= 3),
+        (
+            len(block)
+            for block in nx.biconnected_components(topology)
+            if len(block) >= 3
+        ),
         default=0,
     )
 

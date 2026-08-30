@@ -77,13 +77,16 @@ def decide_nonmonochromatic_coloring(
     execution = current_request_execution()
     if execution is not None and execution.deadline is None:
         bind_request_deadline(
-            execution.started_at
-            + max(60.0, (palette_size**n * len(edges)) / 100_000)
+            execution.started_at + max(60.0, (palette_size**n * len(edges)) / 100_000)
         )
     for index, coloring in enumerate(product(range(palette_size), repeat=n)):
         if index % 1024 == 0:
             execution = current_request_execution()
-            if execution is not None and execution.deadline is not None and time.monotonic() >= execution.deadline:
+            if (
+                execution is not None
+                and execution.deadline is not None
+                and time.monotonic() >= execution.deadline
+            ):
                 raise OperationExecutionTimeoutError(
                     "hypergraph coloring search exceeded its request deadline"
                 )

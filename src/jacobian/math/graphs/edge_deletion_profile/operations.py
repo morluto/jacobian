@@ -88,10 +88,16 @@ def _coloring_work_bound(graph: SimpleUndirectedGraph, deletion_order: int) -> i
                 stack.append(neighbor)
         components.append(component)
     total = 0
-    # Each profile row currently rebuilds component vertex/edge lists in the
-    # chromatic kernel.  Charge those filters explicitly instead of treating
-    # only the subsequent coloring search as work.
-    total += len(components) * (len(graph.vertices) + len(graph.edges))
+    # The chromatic kernel initialises its active-vertex set once per
+    # profile row, then filters edges into per-component lists only for
+    # active components (those containing edges).  Isolates never trigger
+    # per-component filtering, so charge the one-time scan separately
+    # and multiply only by the active component count.
+    total += len(graph.vertices) + len(graph.edges)
+    active_components = [c for c in components if any(
+        left in c and right in c for left, right in graph.edges
+    )]
+    total += len(active_components) * (len(graph.vertices) + len(graph.edges))
     for component in components:
         n = len(component)
         edge_count = sum(

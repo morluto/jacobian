@@ -103,19 +103,6 @@ def test_public_values_and_functions_have_one_canonical_module() -> None:
     duplicates = sorted(
         locations for locations in function_locations.values() if len(locations) > 1
     )
-    # Compatibility debt: remove the geometry-framework compatibility re-export
-    # once downstream callers have migrated to the graph value owner.
-    compatibility_aliases = {
-        (
-            "jacobian.math.geometry.framework.SimpleUndirectedGraph",
-            "jacobian.math.graphs.SimpleUndirectedGraph",
-        )
-    }
-    duplicates = [
-        locations
-        for locations in duplicates
-        if tuple(sorted(locations)) not in compatibility_aliases
-    ]
     assert not duplicates, "duplicate public callables: " + repr(duplicates)
 
 

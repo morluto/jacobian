@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from jacobian.math.number_theory._divisibility_poset import compute_divisibility_poset
-from jacobian.math.number_theory._divisibility_poset_models import DivisibilityPosetRequest
+from jacobian.math.number_theory._divisibility_poset_models import (
+    DivisibilityPosetRequest,
+)
 
 
 def test_basic_fixture() -> None:

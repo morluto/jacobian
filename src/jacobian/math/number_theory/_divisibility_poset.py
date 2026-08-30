@@ -13,7 +13,9 @@ from jacobian.math.number_theory._divisibility_poset_models import (
 from jacobian.math.number_theory._support import number_theory_operation
 
 
-def compute_divisibility_poset(request: DivisibilityPosetRequest) -> DivisibilityPosetResult:
+def compute_divisibility_poset(
+    request: DivisibilityPosetRequest,
+) -> DivisibilityPosetResult:
     """Return the canonical proper-divisibility poset of a finite set of integers."""
     data = construct_divisibility_poset(request.values)
     return DivisibilityPosetResult(
@@ -46,4 +48,4 @@ DIVISIBILITY_POSET_OPERATION = number_theory_operation(
 )
 
 
-__all__ = ["compute_divisibility_poset", "DIVISIBILITY_POSET_OPERATION"]
+__all__ = ["DIVISIBILITY_POSET_OPERATION", "compute_divisibility_poset"]

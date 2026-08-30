@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import networkx as nx
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
 from jacobian.math.graphs.monochromatic_path_hypergraph._models import (
     MonochromaticPathHypergraphResult,
     MonochromaticPathResult,
+    _monochromatic_path_admission_error,
 )
 from jacobian.math.graphs.values import ColoredUndirectedGraph
 
@@ -24,6 +26,12 @@ def construct_monochromatic_path_hypergraphs(
 
     A singleton vertex is included in every colour's hypergraph.
     """
+    failure = _monochromatic_path_admission_error(colored_graph)
+    if failure is not None:
+        code, message = failure
+        raise OperationDomainValidationError(
+            location=("graph",), code=f"monochromatic_path.{code}", message=message
+        )
     graph = colored_graph.graph
     edge_colors = colored_graph.edge_colors
     vertices = graph.vertices

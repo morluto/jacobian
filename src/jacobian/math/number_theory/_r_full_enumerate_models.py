@@ -12,7 +12,7 @@ from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
 
 MAX_R_FULL_CUTOFF_DIGITS = 18
-MAX_R_FULL_CUTOFF = 10 ** MAX_R_FULL_CUTOFF_DIGITS
+MAX_R_FULL_CUTOFF = 10**MAX_R_FULL_CUTOFF_DIGITS
 MIN_R_FULL_EXPONENT = 2
 MAX_R_FULL_EXPONENT = 64
 MAX_R_FULL_FAMILY_SIZE = 200_000

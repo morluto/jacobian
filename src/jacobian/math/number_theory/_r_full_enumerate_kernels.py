@@ -31,7 +31,7 @@ def enumerate_r_full(cutoff: int, r: int) -> list[int]:
     # Collect primes p with p^r <= cutoff
     primes: list[int] = []
     for p in primerange(2, cutoff + 1):
-        if p ** r > cutoff:
+        if p**r > cutoff:
             break
         primes.append(int(p))
 
@@ -41,7 +41,7 @@ def enumerate_r_full(cutoff: int, r: int) -> list[int]:
     for prime in primes:
         # Generate prime^r, prime^(r+1), ... all <= cutoff
         powers: list[int] = []
-        current = prime ** r
+        current = prime**r
         while current <= cutoff:
             powers.append(current)
             current *= prime

@@ -35,8 +35,7 @@ def test_cross_check_brute_force() -> None:
     for r in [2, 3, 4, 5]:
         result = enumerate_r_full(300, r)
         brute = [
-            n for n in range(1, 301)
-            if all(e >= r for _, e in factorint(n).items())
+            n for n in range(1, 301) if all(e >= r for _, e in factorint(n).items())
         ]
         assert result == brute
 

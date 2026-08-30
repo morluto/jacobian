@@ -51,8 +51,7 @@ def test_completeness_via_factorization() -> None:
     cutoff = 200
     result = enumerate_powerful(cutoff)
     expected = [
-        n for n in range(1, cutoff + 1)
-        if all(e >= 2 for e in factorint(n).values())
+        n for n in range(1, cutoff + 1) if all(e >= 2 for e in factorint(n).values())
     ]
     assert result == expected
 
@@ -76,13 +75,13 @@ def test_square_cube_representation() -> None:
             continue
         found = False
         for b in range(1, n + 1):
-            b3 = b ** 3
+            b3 = b**3
             if b3 > n:
                 break
             if n % b3 != 0:
                 continue
             a2 = n // b3
-            a = int(a2 ** 0.5 + 0.5)
+            a = int(a2**0.5 + 0.5)
             if a * a == a2:
                 # Verify b is squarefree
                 b_factors = factorint(b)

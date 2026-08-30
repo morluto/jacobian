@@ -9,8 +9,6 @@ and deduplicate/sort under a complete interval envelope.
 
 from __future__ import annotations
 
-from sympy.ntheory.generate import primerange
-
 
 def _is_squarefree(n: int) -> bool:
     """Return True if n is squarefree (1 is squarefree)."""

@@ -60,13 +60,21 @@ def _admit_maximum_weight_antichain(
             code="weighted_antichain.work_bound_exceeded",
             message="the exhaustive antichain work envelope is exceeded",
         )
+    width = _poset_width(poset, list(poset.elements))
     max_digits = max(
         (canonical_rational_component_digits(weight) for weight in weights),
         default=1,
     )
+    arithmetic_work = (1 << n) * max(width, 1) * max_digits
+    if arithmetic_work > MAX_ENUMERATION_WORK:
+        raise OperationDomainValidationError(
+            location=("weights",),
+            code="weighted_antichain.arithmetic_work_bound_exceeded",
+            message="rational antichain summation exceeds the admitted work envelope",
+        )
     # A singleton antichain returns the input weight unchanged; do not charge
     # an extra addition digit at that exact canonical boundary.
-    max_sum_digits = max_digits if n <= 1 else n * max_digits + len(str(n))
+    max_sum_digits = max_digits if width <= 1 else width * max_digits + len(str(width))
     if max_sum_digits > 32_768:
         raise OperationDomainValidationError(
             location=("weights",),
@@ -153,6 +161,29 @@ def _build_comparable(poset: FinitePoset, elements: list[str]) -> set[tuple[int,
         comparable.add((i, j))
         comparable.add((j, i))
     return comparable
+
+
+def _poset_width(poset: FinitePoset, elements: list[str]) -> int:
+    """Return the maximum antichain size via the bipartite matching theorem."""
+    index = {element: position for position, element in enumerate(elements)}
+    adjacent: list[list[int]] = [[] for _ in elements]
+    for pair in poset.strict_order_pairs:
+        adjacent[index[pair.lower]].append(index[pair.upper])
+
+    matched_upper = [-1] * len(elements)
+
+    def augment(lower: int, seen: set[int]) -> bool:
+        for upper in adjacent[lower]:
+            if upper in seen:
+                continue
+            seen.add(upper)
+            if matched_upper[upper] == -1 or augment(matched_upper[upper], seen):
+                matched_upper[upper] = lower
+                return True
+        return False
+
+    matching = sum(augment(lower, set()) for lower in range(len(elements)))
+    return len(elements) - matching
 
 
 def _all_subsets(n: int) -> Iterator[tuple[int, ...]]:

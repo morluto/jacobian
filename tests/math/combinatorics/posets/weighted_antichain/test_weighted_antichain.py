@@ -86,3 +86,24 @@ def test_result_preserves_source() -> None:
     result = compute_maximum_weight_antichain(poset, weights)
     assert result.poset == poset
     assert result.weights == weights
+
+
+def test_rational_arithmetic_work_is_admitted_separately() -> None:
+    import pytest
+
+    poset = _antichain_poset([str(index) for index in range(20)])
+    digits = 1_600
+    weights = tuple(
+        CanonicalRational(num="1", den="1" + "0" * digits) for _ in range(20)
+    )
+    with pytest.raises(ValueError, match="summation exceeds"):
+        compute_maximum_weight_antichain(poset, weights)
+
+
+def test_chain_growth_uses_width_not_carrier_size() -> None:
+    digits = 16_384
+    weights = tuple(
+        CanonicalRational(num="1", den="1" + "0" * digits) for _ in range(2)
+    )
+    result = compute_maximum_weight_antichain(_chain_poset(["a", "b"]), weights)
+    assert result.antichain in (("a",), ("b",))

@@ -23,7 +23,6 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.differential import (
     RationalCoordinateTensor,
     RationalLieDerivativeProfile,
-    RationalLieDerivativeRequest,
     lie_derivative,
 )
 from jacobian.math.geometry.differential import _bounds as lie_bounds
@@ -37,6 +36,7 @@ from jacobian.math.geometry.differential._execution import (
     LIE_DERIVATIVE_WALL_SECONDS,
     require_lie_derivative_deadline,
 )
+from jacobian.math.geometry.differential._models import RationalLieDerivativeRequest
 from jacobian.math.geometry.differential._recognition_process import (
     recognize_canonical_rational_functions,
 )

@@ -61,7 +61,10 @@ def _admit_non_coprimality_graph(
                 code="non_coprimality.must_be_positive",
                 message="all integers must be positive",
             )
-        if value.bit_length() > 850:
+        # Avoid decimal conversion of huge native integers.  The generous
+        # bit-length threshold cannot exclude any value within the exact
+        # decimal label bound; the precise check below remains authoritative.
+        if value.bit_length() > (MAX_INTEGER_DIGITS + 1) * 4:
             raise OperationDomainValidationError(
                 location=("integers", index),
                 code="non_coprimality.digits",

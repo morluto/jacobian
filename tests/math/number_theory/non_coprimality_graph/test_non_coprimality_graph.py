@@ -51,9 +51,8 @@ def test_replay_gcd() -> None:
 
 
 def test_rejects_non_positive() -> None:
-    request = NonCoprimalityGraphRequest(integers=("0", "2"))
     with pytest.raises(OperationDomainValidationError):
-        construct_non_coprimality_graph(tuple(map(int, request.integers)))
+        construct_non_coprimality_graph((0, 2))
 
 
 def test_rejects_duplicates() -> None:

@@ -8,9 +8,12 @@ from jacobian._models import StrictModel
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
-from jacobian.math.graphs.values import ColoredUndirectedGraph
+from jacobian.math.graphs.values import (
+    MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+    ColoredUndirectedGraph,
+)
 
-MAX_VERTICES = 20
+MAX_VERTICES = MAX_INDEXED_SIMPLE_GRAPH_VERTICES
 MAX_CLIQUE_ORDER = 8
 
 

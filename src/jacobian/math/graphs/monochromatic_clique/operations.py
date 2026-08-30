@@ -34,6 +34,7 @@ class MonochromaticCliqueAdmission:
     clique_count: int
     incidence_count: int
     result_bytes: int
+    cliques: tuple[tuple[str, ...], ...]
 
 
 def _array_size(value_sizes: tuple[int, ...]) -> int:
@@ -93,7 +94,29 @@ def _admit_monochromatic_clique_hypergraph(
                     code="monochromatic_clique.graph_not_complete",
                     message="the underlying graph must be complete",
                 )
-    clique_count = comb(vertex_count, clique_order)
+    candidate_count = comb(vertex_count, clique_order)
+    work = candidate_count * (clique_order * (clique_order - 1) // 2)
+    if work > 2_000_000:
+        raise OperationDomainValidationError(
+            location=("clique_order",),
+            code="monochromatic_clique.work_bound_exceeded",
+            message="monochromatic clique enumeration exceeds the work bound",
+        )
+    edge_to_color = dict(
+        zip(graph.edges, colored_graph.edge_colors, strict=True)
+    )
+    cliques = tuple(
+        tuple(sorted(subset))
+        for subset in combinations(vertices, clique_order)
+        if len(
+            {
+                edge_to_color.get((left, right), edge_to_color.get((right, left)))
+                for left, right in combinations(subset, 2)
+            }
+        )
+        == 1
+    )
+    clique_count = len(cliques)
     incidence_count = clique_count * clique_order
     if clique_count > MAX_EDGES:
         raise OperationDomainValidationError(
@@ -146,7 +169,9 @@ def _admit_monochromatic_clique_hypergraph(
             code="monochromatic_clique.result_bytes_exceeded",
             message="monochromatic clique hypergraph exceeds the canonical output-byte limit",
         )
-    return MonochromaticCliqueAdmission(clique_count, incidence_count, result_bytes)
+    return MonochromaticCliqueAdmission(
+        clique_count, incidence_count, result_bytes, cliques
+    )
 
 
 __all__ = ["construct_monochromatic_clique_hypergraph"]
@@ -163,42 +188,15 @@ def construct_monochromatic_clique_hypergraph(
     and becomes a hyperedge.
     """
     admission = _admit_monochromatic_clique_hypergraph(colored_graph, clique_order)
-    graph = colored_graph.graph
-    vertices = list(graph.vertices)
-    edges = list(graph.edges)
-    edge_colors = colored_graph.edge_colors
+    hyper_edges = tuple(
+        (f"clique_{index}", clique) for index, clique in enumerate(admission.cliques)
+    )
 
-    edge_to_color: dict[tuple[str, str], str] = {}
-    for i, (a, b) in enumerate(edges):
-        edge_to_color[(a, b)] = edge_colors[i]
-
-    hyper_edges: list[tuple[str, tuple[str, ...]]] = []
-    edge_index = 0
-
-    for subset in combinations(vertices, clique_order):
-        colors = set()
-        is_mono = True
-        for i in range(clique_order):
-            for j in range(i + 1, clique_order):
-                a, b = subset[i], subset[j]
-                if (a, b) in edge_to_color:
-                    colors.add(edge_to_color[(a, b)])
-                elif (b, a) in edge_to_color:
-                    colors.add(edge_to_color[(b, a)])
-                else:
-                    is_mono = False
-                    break
-            if not is_mono:
-                break
-        if is_mono and len(colors) == 1:
-            hyper_edges.append((f"clique_{edge_index}", tuple(sorted(subset))))
-            edge_index += 1
-
-    if len(hyper_edges) > admission.clique_count:
+    if len(hyper_edges) != admission.clique_count:
         raise AssertionError("kernel produced more clique edges than admitted")
     hypergraph = FiniteHypergraph(
-        vertices=tuple(vertices),
-        edges=tuple(hyper_edges),
+        vertices=colored_graph.graph.vertices,
+        edges=hyper_edges,
     )
     return MonochromaticCliqueHypergraphResult(
         colored_graph=colored_graph,

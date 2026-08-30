@@ -18,6 +18,7 @@ def test_subject_operation_groups_preserve_wire_contracts() -> None:
             "analysis.real_function.point_enclosure.compute",
             "analysis.real_function.point_enclosure.check",
             "interval.compute.enclosure",
+            "interval.expression.adaptive_range_enclosure.compute",
             "interval.expression.box_enclosure.compute",
             "interval.expression.definite_integral_enclosure.compute",
             "interval.expression.second_jet_enclosure.compute",

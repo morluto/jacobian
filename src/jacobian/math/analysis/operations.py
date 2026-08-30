@@ -9,6 +9,7 @@ from typing import Any
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._flint import flint_workprec
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.analysis._adaptive_range_enclosure import adaptive_range_enclosure
 from jacobian.math.analysis._arb import arb_source_interval, dyadic_endpoints
 from jacobian.math.analysis._expression_enclosure import (
     IntervalExpressionEnclosureResult,
@@ -553,4 +554,8 @@ def second_jet_enclosure(
     )
 
 
-__all__ = ["expression_enclosure", "second_jet_enclosure"]
+__all__ = [
+    "adaptive_range_enclosure",
+    "expression_enclosure",
+    "second_jet_enclosure",
+]

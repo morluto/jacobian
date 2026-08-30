@@ -33,6 +33,9 @@ class _AdmissionPlan:
 def _maximum_path_work(graph: SimpleUndirectedGraph) -> int:
     """Count simple-path prefixes with an early work cutoff."""
     vertex_count = len(graph.vertices)
+    if len(graph.edges) == vertex_count * (vertex_count - 1) // 2:
+        # In a complete graph the first DFS branch witnesses every length.
+        return vertex_count**3
     vertex_to_index = {vertex: index for index, vertex in enumerate(graph.vertices)}
     adjacency = [[False] * vertex_count for _ in range(vertex_count)]
     for left, right in graph.edges:
@@ -67,7 +70,7 @@ def _maximum_path_work(graph: SimpleUndirectedGraph) -> int:
 
 
 def _cycle_core_size(graph: SimpleUndirectedGraph) -> int:
-    """Return the number of vertices in the graph's 2-core."""
+    """Return the largest connected component of the graph's 2-core."""
     adjacency = {vertex: set() for vertex in graph.vertices}
     for left, right in graph.edges:
         adjacency[left].add(right)
@@ -83,7 +86,21 @@ def _cycle_core_size(graph: SimpleUndirectedGraph) -> int:
             if len(adjacency[neighbor]) < 2:
                 removed.add(neighbor)
                 pending.append(neighbor)
-    return len(adjacency) - len(removed)
+    remaining = set(adjacency) - removed
+    largest = 0
+    while remaining:
+        start = remaining.pop()
+        component = {start}
+        stack = [start]
+        while stack:
+            vertex = stack.pop()
+            for neighbor in adjacency[vertex]:
+                if neighbor in remaining:
+                    remaining.remove(neighbor)
+                    component.add(neighbor)
+                    stack.append(neighbor)
+        largest = max(largest, len(component))
+    return largest
 
 
 def _reject(code: str, message: str) -> None:

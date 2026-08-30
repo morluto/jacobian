@@ -8,7 +8,11 @@ from itertools import combinations
 from math import comb
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import encode_strict_json
+from jacobian.canonical import (
+    CanonicalizationError,
+    CanonicalLimits,
+    encode_strict_json,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.rational_fixed_arity._models import (
     MAX_ARITY,
@@ -21,7 +25,7 @@ from jacobian.math.combinatorics.additive.rational_fixed_arity._models import (
 __all__ = ["compute_rational_fixed_arity_sum_profile"]
 
 MAX_ENUMERATION_WORK = 20_000_000
-MAX_RESULT_BYTES = 8 * 1024 * 1024
+MAX_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,7 +38,7 @@ def _reject(location: tuple[str | int, ...], code: str, message: str) -> None:
     raise OperationDomainValidationError(location=location, code=code, message=message)
 
 
-def _admit(
+def _admit(  # noqa: C901
     values: tuple[CanonicalRational, ...],
     arity: int,
 ) -> _AdmissionPlan:
@@ -100,22 +104,47 @@ def _admit(
             "rational_fixed_arity.rational_growth",
             "fixed-arity sums may exceed the canonical rational digit bound",
         )
-    if candidate_count > MAX_RESULT_ROWS:
+    # Equal source values can collapse many index tuples to the same sum.  The
+    # number of attainable value-count vectors is a safe support bound and is
+    # much tighter for repeated inputs than the raw combination count.
+    multiplicities: dict[Fraction, int] = {}
+    for value in values:
+        fraction = value.as_fraction()
+        multiplicities[fraction] = multiplicities.get(fraction, 0) + 1
+    count_vectors = [0] * (arity + 1)
+    count_vectors[0] = 1
+    for multiplicity in multiplicities.values():
+        next_counts = [0] * (arity + 1)
+        for used, count in enumerate(count_vectors):
+            if not count:
+                continue
+            for take in range(min(multiplicity, arity - used) + 1):
+                next_counts[used + take] += count
+        count_vectors = next_counts
+    support_bound = count_vectors[arity] if arity <= source_size else 0
+    if support_bound > MAX_RESULT_ROWS:
         _reject(
             ("values",),
             "rational_fixed_arity.support_bound",
             "the exact sum profile may contain too many distinct rows",
         )
 
-    source_bytes = len(
-        encode_strict_json(
-            {"values": [value.model_dump(mode="json") for value in values]}
+    try:
+        source_bytes = len(
+            encode_strict_json(
+                {"values": [value.model_dump(mode="json") for value in values]}
+            )
         )
-    )
+    except CanonicalizationError:
+        _reject(
+            ("values",),
+            "rational_fixed_arity.result_bound",
+            "the complete sum profile exceeds the canonical output bound",
+        )
     row_bytes = (
         sum_numerator_digits + sum_denominator_digits + len(str(candidate_count)) + 64
     )
-    result_bytes = 256 + source_bytes + candidate_count * row_bytes
+    result_bytes = 256 + source_bytes + support_bound * row_bytes
     if result_bytes > MAX_RESULT_BYTES:
         _reject(
             ("values",),

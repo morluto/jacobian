@@ -254,7 +254,15 @@ def compute_edge_deletion_profile(
             _require_execution_active("during profile enumeration")
             deleted = set(edge_indices)
             remaining_edges = [edges[i] for i in range(len(edges)) if i not in deleted]
-            chromatic = _chromatic_number(vertices, remaining_edges)
+            chromatic = _chromatic_number(
+                vertices,
+                remaining_edges,
+                missing_edges=(
+                    tuple(edges[i] for i in edge_indices)
+                    if len(edges) == len(vertices) * (len(vertices) - 1) // 2
+                    else None
+                ),
+            )
             rows.append(
                 DeletionRow(
                     deleted_edge_indices=tuple(edge_indices),
@@ -269,7 +277,12 @@ def compute_edge_deletion_profile(
     )
 
 
-def _chromatic_number(vertices: list[str], edges: list[tuple[str, str]]) -> int:
+def _chromatic_number(
+    vertices: list[str],
+    edges: list[tuple[str, str]],
+    *,
+    missing_edges: tuple[tuple[str, str], ...] | None = None,
+) -> int:
     """Compute the exact chromatic number by brute-force search."""
     _require_execution_active("during chromatic search")
     if not edges:
@@ -307,11 +320,22 @@ def _chromatic_number(vertices: list[str], edges: list[tuple[str, str]]) -> int:
         elif len(component_edges) == complete_edge_count - 1:
             component_numbers.append(n - 1)
         elif len(component_edges) == complete_edge_count - 2:
-            component_edge_set = set(component_edges)
+            if missing_edges is None:
+                component_edge_set = set(component_edges)
+                component_missing_edges = (
+                    edge
+                    for edge in combinations(component_vertices, 2)
+                    if tuple(sorted(edge)) not in component_edge_set
+                )
+            else:
+                component_missing_edges = (
+                    edge
+                    for edge in missing_edges
+                    if edge[0] in component and edge[1] in component
+                )
             missing_endpoints = [
                 endpoint
-                for left, right in combinations(component_vertices, 2)
-                if tuple(sorted((left, right))) not in component_edge_set
+                for left, right in component_missing_edges
                 for endpoint in (left, right)
             ]
             component_numbers.append(

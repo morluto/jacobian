@@ -109,25 +109,9 @@ def _cycle_core_vertices(graph: SimpleUndirectedGraph) -> set[str]:
     return core_vertices
 
 
-def _cycle_block_label_sizes(graph: SimpleUndirectedGraph) -> list[list[int]]:
-    """Return descending encoded-label sizes for each cycle-bearing block."""
-    topology: nx.Graph[str] = nx.Graph()
-    topology.add_nodes_from(graph.vertices)
-    topology.add_edges_from(graph.edges)
-    return [
-        sorted(
-            (
-                len(rfc8785.dumps(unicodedata.normalize("NFC", cast(str, label))))
-                for label in block
-            ),
-            reverse=True,
-        )
-        for block in nx.biconnected_components(topology)
-        if len(block) >= 3
-    ]
-
-
-def _cycle_block_feasible_lengths(graph: SimpleUndirectedGraph) -> dict[int, int]:
+def _cycle_block_feasible_lengths(
+    graph: SimpleUndirectedGraph,
+) -> list[tuple[frozenset[int], list[int]]]:
     """Return conservative cycle lengths and their supporting block sizes.
 
     A block that is itself a simple cycle contributes only its full length;
@@ -137,7 +121,7 @@ def _cycle_block_feasible_lengths(graph: SimpleUndirectedGraph) -> dict[int, int
     topology: nx.Graph[str] = nx.Graph()
     topology.add_nodes_from(graph.vertices)
     topology.add_edges_from(graph.edges)
-    feasible: dict[int, int] = {}
+    feasible: list[tuple[frozenset[int], list[int]]] = []
     for raw_block in nx.biconnected_components(topology):
         block = cast(set[str], raw_block)
         if len(block) < 3:
@@ -157,8 +141,14 @@ def _cycle_block_feasible_lengths(graph: SimpleUndirectedGraph) -> dict[int, int
             lengths: Iterable[int] = (len(block),)
         else:
             lengths = range(3, min(len(block), edge_count) + 1)
-        for length in lengths:
-            feasible[length] = max(feasible.get(length, 0), len(block))
+        label_sizes = sorted(
+            (
+                len(rfc8785.dumps(unicodedata.normalize("NFC", label)))
+                for label in block
+            ),
+            reverse=True,
+        )
+        feasible.append((frozenset(lengths), label_sizes))
     return feasible
 
 
@@ -197,17 +187,16 @@ def _admit(graph: SimpleUndirectedGraph) -> _AdmissionPlan:
     if graph.edges:
         # The transport path NFC-normalizes strings and RFC-8785 escapes control
         # characters, so raw UTF-8 lengths undercount the actual result.
-        block_label_sizes = _cycle_block_label_sizes(graph)
-        feasible_lengths = _cycle_block_feasible_lengths(graph)
-        for length in sorted(feasible_lengths):
-            witness_label_bytes = max(
-                (
-                    sum(label_sizes[:length])
-                    for label_sizes in block_label_sizes
-                    if len(label_sizes) >= length
-                ),
-                default=0,
-            )
+        block_feasible_lengths = _cycle_block_feasible_lengths(graph)
+        witness_label_bytes_by_length: dict[int, int] = {}
+        for lengths, label_sizes in block_feasible_lengths:
+            for length in lengths:
+                witness_label_bytes_by_length[length] = max(
+                    witness_label_bytes_by_length.get(length, 0),
+                    sum(label_sizes[:length]),
+                )
+        for length in sorted(witness_label_bytes_by_length):
+            witness_label_bytes = witness_label_bytes_by_length[length]
             result_bytes += 32 + witness_label_bytes + 2 * length
     if result_bytes > MAX_RESULT_BYTES:
         _reject(

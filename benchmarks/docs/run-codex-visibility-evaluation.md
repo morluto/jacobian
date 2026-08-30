@@ -30,14 +30,17 @@ make direct-mcp-catalog-eval \
   DIRECT_MCP_EVAL_OUTPUT=tmp/direct-mcp-catalog-evaluation.json
 ```
 
-They exercise the production in-memory MCP server and record catalog/schema
-coverage, serialized definition bytes, `tools/list` latency, `math.find`
-ranking, direct and `math.run` execution parity, and exact typed composition.
+They construct an explicit in-memory experimental surface and record
+catalog/schema coverage, serialized definition bytes, `tools/list` latency,
+`math.find` ranking, direct and `math.run` execution parity, and exact typed
+composition. Production exposes only `math.find` and `math.run`.
 They intentionally report model selection, deferred client search, and exact
 per-task loaded-definition bytes as unmeasured.
 
-For agent trials, start the anonymous loopback server, then select an arm and
-an output directory:
+For production-surface agent trials, start the anonymous loopback server and
+use the `legacy` arm. Direct arms require a separately instrumented evaluation
+endpoint and are retained only for reproducing the frozen experiment. Then
+select an arm and an output directory:
 
 ```sh
 uv run python -m jacobian.mcp.remote_cli \
@@ -48,7 +51,7 @@ make codex-visibility \
   VISIBILITY_CASES=benchmarks/config/direct-mcp-agent-adoption-v1.json \
   VISIBILITY_MCP_URL=http://127.0.0.1:8765/mcp \
   VISIBILITY_MODEL=<model> \
-  VISIBILITY_SURFACE_ARM=direct \
+  VISIBILITY_SURFACE_ARM=legacy \
   VISIBILITY_CASES_SELECTED="straightforward-determinant alternate-term-sandpile-group complete-subset-sum-profile structured-polynomial-gcd canonical-cnf-composition" \
   VISIBILITY_REPETITIONS=2 \
   VISIBILITY_OUTPUT=tmp/direct-mcp-agent-direct-r2

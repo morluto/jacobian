@@ -1,4 +1,4 @@
-"""Deterministic catalog-scale controls for the direct MCP migration.
+"""Deterministic catalog-scale controls for the historical direct MCP experiment.
 
 This evaluator proves only locally observable availability, schema, discovery,
 execution, and composition facts.  Agent selection and deferred-loading claims
@@ -25,7 +25,9 @@ from tools.command_runner import git_head_sha
 
 from jacobian._models import StrictModel
 from jacobian.catalog.catalog import Catalog
-from jacobian.mcp.server import create_server
+from jacobian.mcp.direct_tools import direct_operation_tools
+from jacobian.mcp.runtime import AppState
+from jacobian.mcp.server import _build_server
 from mcp import Client
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -446,7 +448,7 @@ async def run_evaluation(
     *,
     list_repetitions: int,
 ) -> dict[str, Any]:
-    """Run all locally observable controls against the production MCP server."""
+    """Run locally observable controls against an experimental direct surface."""
 
     catalog = Catalog.open()
     catalog_snapshot = catalog.snapshot()
@@ -454,7 +456,10 @@ async def run_evaluation(
         descriptor.operation_id for descriptor in catalog_snapshot.operations
     )
     construction_started = time.perf_counter()
-    server = create_server()
+    server = _build_server(
+        state=AppState(operation_catalog=catalog),
+        evaluation_tools=direct_operation_tools(catalog),
+    )
     construction_elapsed = time.perf_counter() - construction_started
     client_started = time.perf_counter()
     async with Client(server, raise_exceptions=True) as client:
@@ -585,7 +590,7 @@ async def run_evaluation(
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run deterministic catalog-scale direct MCP migration controls."
+        description="Run deterministic catalog-scale direct MCP experiment controls."
     )
     parser.add_argument("--suite", type=Path, default=_DEFAULT_SUITE)
     parser.add_argument("--output", type=Path, required=True)

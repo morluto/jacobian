@@ -38,10 +38,15 @@ def _reject(location: tuple[str | int, ...], code: str, message: str) -> None:
 def _support_bound(
     fractions: tuple[Fraction, ...], arity: int, candidate_count: int
 ) -> int:
+    if candidate_count <= 1:
+        return candidate_count
     multiplicities: dict[Fraction, int] = {}
     for fraction in fractions:
         multiplicities[fraction] = multiplicities.get(fraction, 0) + 1
-    if len(multiplicities) * (arity + 1) > MAX_ENUMERATION_WORK:
+    transition_bound = (
+        len(multiplicities) * (arity + 1) * (max(multiplicities.values()) + 1)
+    )
+    if transition_bound > MAX_ENUMERATION_WORK:
         return candidate_count
     count_vectors = [0] * (arity + 1)
     count_vectors[0] = 1
@@ -84,8 +89,6 @@ def _admit(
     source_size = len(values)
     candidate_count = comb(source_size, arity) if arity <= source_size else 0
     fractions = tuple(value.as_fraction() for value in values)
-    if arity > source_size:
-        return _AdmissionPlan(fractions=fractions, candidate_count=0)
     arithmetic_digits = max(
         (max(len(value.num.lstrip("-")), len(value.den)) for value in values),
         default=1,

@@ -12,6 +12,7 @@ from jacobian.canonical import parse_canonical_integer
 from jacobian.math._labels import OpaqueLabel
 from jacobian.math.matrices.values import (
     MAX_RATIONAL_MATRIX_ORDER,
+    EmbeddedRealSimpleNumberFieldMatrix,
     IntegerMatrix,
     RationalMatrix,
 )
@@ -136,8 +137,33 @@ def _require_raw_request_envelope(data: object) -> object:
         and kind in ("BILINEAR", "SYMMETRIC", "ALTERNATING")
     ):
         dimension = len(axis)
-        constraint_cells = constraint_coefficient_count(
-            dimension, len(generators), kind
+        field_degree = 1
+        if generators:
+            first_generator = generators[0]
+            first_matrix = (
+                first_generator.get("matrix")
+                if isinstance(first_generator, dict)
+                else getattr(first_generator, "matrix", None)
+            )
+            if isinstance(first_matrix, dict) and first_matrix.get("domain") == (
+                "EMBEDDED_REAL_SIMPLE_NUMBER_FIELD"
+            ):
+                embedding = first_matrix.get("embedding")
+                presentation = (
+                    embedding.get("presentation")
+                    if isinstance(embedding, dict)
+                    else None
+                )
+                coefficients = (
+                    presentation.get("coefficients_descending")
+                    if isinstance(presentation, dict)
+                    else None
+                )
+                if isinstance(coefficients, (list, tuple)) and len(coefficients) >= 2:
+                    field_degree = len(coefficients) - 1
+        constraint_cells = (
+            constraint_coefficient_count(dimension, len(generators), kind)
+            * field_degree
         )
         if constraint_cells > MAX_CONSTRAINT_CELLS:
             raise _validation_error(
@@ -210,6 +236,65 @@ class RationalMatrixAction(StrictModel):
         return self
 
 
+class EmbeddedRealNumberFieldActionGenerator(StrictModel):
+    """One labelled real-linear map over a selected simple-field embedding."""
+
+    label: OpaqueLabel
+    matrix: EmbeddedRealSimpleNumberFieldMatrix
+
+
+class EmbeddedRealNumberFieldMatrixAction(StrictModel):
+    """A homogeneous family of matrices over one embedded simple number field."""
+
+    coordinate_axis: tuple[OpaqueLabel, ...] = Field(
+        min_length=1, max_length=MAX_ACTION_DIMENSION
+    )
+    generators: tuple[EmbeddedRealNumberFieldActionGenerator, ...] = Field(
+        min_length=1,
+        max_length=MAX_ACTION_GENERATORS,
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_envelope(cls, data: Any) -> Any:
+        return _require_raw_action_envelope(data)
+
+    @model_validator(mode="after")
+    def require_common_axis_and_embedding(self) -> Self:
+        if len(set(self.coordinate_axis)) != len(self.coordinate_axis):
+            raise _validation_error(
+                "duplicate_coordinate_label",
+                "coordinate_axis labels must be pairwise distinct",
+            )
+        if len({generator.label for generator in self.generators}) != len(
+            self.generators
+        ):
+            raise _validation_error(
+                "duplicate_generator_label",
+                "generator labels must be pairwise distinct",
+            )
+        dimension = len(self.coordinate_axis)
+        embedding = self.generators[0].matrix.embedding
+        for generator in self.generators:
+            entries = generator.matrix.entries
+            if len(entries) != dimension or any(
+                len(row) != dimension for row in entries
+            ):
+                raise _validation_error(
+                    "generator_shape",
+                    "every generator matrix must be square on coordinate_axis",
+                )
+            if generator.matrix.embedding != embedding:
+                raise _validation_error(
+                    "generator_embedding",
+                    "every algebraic generator must use one common real embedding",
+                )
+        return self
+
+
+MatrixAction = RationalMatrixAction | EmbeddedRealNumberFieldMatrixAction
+
+
 class IntegralBilinearForm(StrictModel):
     """One integral form matrix on an explicitly ordered coordinate axis."""
 
@@ -218,6 +303,19 @@ class IntegralBilinearForm(StrictModel):
     )
     kind: FormKind
     matrix: IntegerMatrix
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_form_envelope(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        axis = data.get("coordinate_axis")
+        if isinstance(axis, (list, tuple)) and len(axis) > MAX_ACTION_DIMENSION:
+            raise _validation_error(
+                "budget_exceeded",
+                f"form coordinate_axis has at most {MAX_ACTION_DIMENSION} labels",
+            )
+        return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_form_shape(self) -> Self:
@@ -277,15 +375,17 @@ class IntegralBilinearForm(StrictModel):
 
 
 class InvariantBilinearFormLatticeRequest(StrictModel):
-    """One rational matrix action and one integral form symmetry class."""
+    """One exact real matrix action and one integral form symmetry class."""
 
-    action: RationalMatrixAction = Field(
+    action: MatrixAction = Field(
         description=(
-            "Canonical rational endomorphisms on one labelled lattice axis. "
+            "Canonical rational or common-embedding algebraic matrices on one "
+            "labelled lattice axis. "
             "Admission requires generator_count * axis_dimension^2 * "
-            f"coefficient_dimension <= {MAX_CONSTRAINT_CELLS:,}, couples that "
-            "count to source and intermediate digit heights, and separately "
-            "bounds exact elimination, normalization, and output size."
+            "coefficient_dimension * field_degree <= "
+            f"{MAX_CONSTRAINT_CELLS:,}, couples that count to source and "
+            "intermediate digit heights, and separately bounds exact elimination, "
+            "normalization, and output size."
         )
     )
     kind: FormKind = Field(
@@ -313,7 +413,7 @@ class InvariantBilinearFormLatticeRequest(StrictModel):
 
 
 class InvariantBilinearFormLattice(StrictModel):
-    """The complete lattice of integral forms fixed by a rational action.
+    """The complete lattice of integral forms fixed by an exact real action.
 
     Coefficients are read in the declared canonical order. ``basis_forms`` is
     the row-Hermite basis of the saturated integer kernel of all equations
@@ -322,7 +422,7 @@ class InvariantBilinearFormLattice(StrictModel):
     lattice.
     """
 
-    action: RationalMatrixAction
+    action: MatrixAction
     kind: FormKind
     coefficient_domain: Literal["ZZ"] = "ZZ"
     coefficient_order: FormCoefficientOrder
@@ -376,7 +476,7 @@ class InvariantBilinearFormLattice(StrictModel):
     def _from_kernel(
         cls,
         *,
-        action: RationalMatrixAction,
+        action: MatrixAction,
         kind: FormKind,
         coefficient_dimension: int,
         constraint_rank: int,
@@ -405,11 +505,14 @@ __all__ = [
     "MAX_ACTION_GENERATORS",
     "MAX_CONSTRAINT_CELLS",
     "MAX_FORM_COEFFICIENT_DIMENSION",
+    "EmbeddedRealNumberFieldActionGenerator",
+    "EmbeddedRealNumberFieldMatrixAction",
     "FormCoefficientOrder",
     "FormKind",
     "IntegralBilinearForm",
     "InvariantBilinearFormLattice",
     "InvariantBilinearFormLatticeRequest",
+    "MatrixAction",
     "RationalActionGenerator",
     "RationalMatrixAction",
 ]

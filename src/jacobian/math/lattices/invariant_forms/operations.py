@@ -11,12 +11,12 @@ from jacobian.math.lattices.invariant_forms._kernel import (
 from jacobian.math.lattices.invariant_forms._models import (
     FormKind,
     InvariantBilinearFormLattice,
-    RationalMatrixAction,
+    MatrixAction,
 )
 
 
 def compute_invariant_bilinear_form_lattice(
-    action: RationalMatrixAction,
+    action: MatrixAction,
     kind: FormKind,
 ) -> InvariantBilinearFormLattice:
     """Compute all integral forms ``Q`` with ``A^T Q A = Q`` exactly."""

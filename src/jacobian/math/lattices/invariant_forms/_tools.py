@@ -23,12 +23,12 @@ INVARIANT_BILINEAR_FORM_LATTICE_OPERATION = MathTool(
     operation_id="lattice.invariant_bilinear_form_lattice.compute",
     title="Compute the lattice of invariant integral bilinear forms",
     description=(
-        "For a bounded labelled rational matrix action whose generators are square "
-        "on coordinate_axis, compute and return the complete saturated row-Hermite "
-        "basis of integral matrices Q satisfying A^T Q A = Q for every generator "
-        "in a bilinear, symmetric, or alternating form class. "
-        "The exact result retains the action, coefficient order, constraint rank, "
-        "and the rank-zero lattice."
+        "For a bounded labelled action by rational or common-embedding real "
+        "simple-number-field matrices and a bilinear, symmetric, or alternating "
+        "form class, return the complete saturated row-Hermite basis of integral "
+        "matrices Q satisfying A^T Q A = Q for every generator. The exact result "
+        "retains the action, coefficient order, constraint rank, and the rank-zero "
+        "lattice."
     ),
     request_type=InvariantBilinearFormLatticeRequest,
     result_type=InvariantBilinearFormLattice,

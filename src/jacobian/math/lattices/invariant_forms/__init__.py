@@ -1,6 +1,8 @@
 """Invariant integral bilinear-form lattices."""
 
 from jacobian.math.lattices.invariant_forms._models import (
+    EmbeddedRealNumberFieldActionGenerator,
+    EmbeddedRealNumberFieldMatrixAction,
     FormKind,
     IntegralBilinearForm,
     InvariantBilinearFormLattice,
@@ -12,6 +14,8 @@ from jacobian.math.lattices.invariant_forms.operations import (
 )
 
 __all__ = [
+    "EmbeddedRealNumberFieldActionGenerator",
+    "EmbeddedRealNumberFieldMatrixAction",
     "FormKind",
     "IntegralBilinearForm",
     "InvariantBilinearFormLattice",

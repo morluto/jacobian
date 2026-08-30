@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from fractions import Fraction
 from math import ceil, gcd, lcm, log10
+from typing import Any
 
 from jacobian.canonical import (
     CanonicalizationError,
@@ -16,14 +17,25 @@ from jacobian.math.lattices.invariant_forms._models import (
     MAX_CONSTRAINT_CELLS,
     MAX_CONSTRAINT_DIGIT_WORK,
     MAX_INTEGER_KERNEL_DIGIT_WORK,
+    EmbeddedRealNumberFieldMatrixAction,
     FormKind,
     IntegralBilinearForm,
     InvariantBilinearFormLattice,
-    RationalMatrixAction,
+    MatrixAction,
     _validation_error,
     constraint_coefficient_count,
 )
+from jacobian.math.matrices._number_field import (
+    EmbeddedNumberFieldRecognitionError,
+    RecognizedRealSimpleNumberField,
+    field_element_coordinates,
+    field_element_from_value,
+    recognize_real_simple_number_field,
+)
 from jacobian.math.matrices.values import MAX_MATRIX_SCALAR_DIGITS
+from jacobian.math.number_theory.number_fields.values import (
+    MAX_NUMBER_FIELD_EMBEDDING_DEGREE,
+)
 
 MAX_CONSTRAINT_COMPONENT_DIGITS = 65_536
 MAX_STORED_CONSTRAINT_DIGITS = 2_000_000
@@ -62,13 +74,13 @@ def _coefficient_positions(
 
 
 def _constraint_coefficient(
-    matrix: tuple[tuple[Fraction, ...], ...],
+    matrix: tuple[tuple[Any, ...], ...],
     *,
     equation_row: int,
     equation_column: int,
     position: CoefficientPosition,
     kind: FormKind,
-) -> Fraction:
+) -> Any:
     """Return one coefficient of ``A^T Q A - Q`` exactly."""
 
     row, column = position
@@ -131,7 +143,7 @@ def _normalize_constraint(
 
 
 def _require_constraint_expansion_envelope(
-    action: RationalMatrixAction,
+    action: MatrixAction,
     *,
     kind: FormKind,
     coefficient_count: int,
@@ -141,12 +153,35 @@ def _require_constraint_expansion_envelope(
 
     if not action.generators or coefficient_count == 0:
         return
-    values = tuple(
-        value
-        for generator in action.generators
-        for row in generator.matrix.entries
-        for value in row
-    )
+    if isinstance(action, EmbeddedRealNumberFieldMatrixAction):
+        values = tuple(
+            coordinate
+            for generator in action.generators
+            for row in generator.matrix.entries
+            for value in row
+            for coordinate in value.coefficients_ascending
+        )
+        field_coefficients = action.generators[
+            0
+        ].matrix.embedding.presentation.coefficients_descending
+        field_digits = max(
+            len(coefficient.lstrip("-")) for coefficient in field_coefficients
+        )
+        leading_coefficient = abs(int(field_coefficients[0]))
+        leading_denominator_digits = (
+            0 if leading_coefficient == 1 else len(str(leading_coefficient))
+        )
+        degree = action.generators[0].matrix.embedding.presentation.degree
+    else:
+        values = tuple(
+            value
+            for generator in action.generators
+            for row in generator.matrix.entries
+            for value in row
+        )
+        field_digits = 1
+        leading_denominator_digits = 0
+        degree = 1
     numerator_digits = max(len(value.num.lstrip("-")) for value in values)
     all_denominators_are_one = all(value.den == "1" for value in values)
     denominator_growth_digits = (
@@ -160,16 +195,47 @@ def _require_constraint_expansion_envelope(
     # One product has two source numerators and denominators. Combining two
     # products can multiply their denominators; subtracting the source basis
     # coefficient adds at most one further decimal digit to the numerator.
-    coefficient_denominator_digits = 2 * transformed_terms * denominator_growth_digits
-    coefficient_numerator_digits = (
-        max(
-            2 * numerator_digits
-            + 2 * (transformed_terms - 1) * denominator_growth_digits
-            + int(transformed_terms == 2),
-            coefficient_denominator_digits,
+    if isinstance(action, EmbeddedRealNumberFieldMatrixAction):
+        # Put each degree-d source element over one common denominator, multiply
+        # two such polynomials, then reduce at most d-1 times by the primitive
+        # defining polynomial. A nonmonic leading coefficient contributes the
+        # only new reduction denominator. Combining the at-most-two transformed
+        # products may multiply their independently bounded denominators.
+        product_denominator_digits = (
+            2 * degree * denominator_growth_digits
+            + max(degree - 1, 0) * leading_denominator_digits
         )
-        + 1
-    )
+        product_numerator_digits = (
+            2 * numerator_digits
+            + 2 * max(degree - 1, 0) * denominator_growth_digits
+            + max(degree - 1, 0) * field_digits
+            + ceil(log10(max(degree, 1)))
+            + degree * ceil(log10(degree + 1))
+            + 2
+        )
+        coefficient_denominator_digits = transformed_terms * product_denominator_digits
+        coefficient_numerator_digits = (
+            max(
+                product_numerator_digits
+                + max(transformed_terms - 1, 0) * product_denominator_digits
+                + int(transformed_terms == 2),
+                coefficient_denominator_digits,
+            )
+            + 1
+        )
+    else:
+        coefficient_denominator_digits = (
+            2 * transformed_terms * denominator_growth_digits
+        )
+        coefficient_numerator_digits = (
+            max(
+                2 * numerator_digits
+                + 2 * (transformed_terms - 1) * denominator_growth_digits
+                + int(transformed_terms == 2),
+                coefficient_denominator_digits,
+            )
+            + 1
+        )
     cleared_component_digits = (
         coefficient_numerator_digits
         + max(coefficient_count - 1, 0) * coefficient_denominator_digits
@@ -183,7 +249,7 @@ def _require_constraint_expansion_envelope(
             f"{MAX_CONSTRAINT_COMPONENT_DIGITS} decimal digits",
         )
     matrix_cells = len(action.generators) * len(action.coordinate_axis) ** 2
-    digit_work = matrix_cells * source_component_digits + coefficient_cells * (
+    digit_work = matrix_cells * degree * source_component_digits + coefficient_cells * (
         coefficient_numerator_digits
         + coefficient_denominator_digits
         + 2 * cleared_component_digits
@@ -196,7 +262,7 @@ def _require_constraint_expansion_envelope(
         )
 
 
-def _retained_action_bytes(action: RationalMatrixAction) -> int:
+def _retained_action_bytes(action: MatrixAction) -> int:
     """Measure the exact retained source before expanding any constraints."""
 
     try:
@@ -204,12 +270,12 @@ def _retained_action_bytes(action: RationalMatrixAction) -> int:
     except CanonicalizationError:
         raise _validation_error(
             "budget_exceeded",
-            "the retained rational matrix action exceeds the canonical output limit",
+            "the retained exact matrix action exceeds the canonical output limit",
         ) from None
     if source_bytes + 4_096 > MAX_INVARIANT_FORM_RESULT_BYTES:
         raise _validation_error(
             "budget_exceeded",
-            "the retained rational matrix action leaves no room for the canonical result",
+            "the retained exact matrix action leaves no room for the canonical result",
         )
     return source_bytes
 
@@ -246,7 +312,7 @@ def _kernel_entry_digit_bound(
 
 
 def _require_result_envelope(
-    action: RationalMatrixAction,
+    action: MatrixAction,
     *,
     coefficient_count: int,
     constraints: tuple[IntegerConstraint, ...],
@@ -341,10 +407,32 @@ def _require_integer_kernel_work_envelope(plan: _ConstraintPlan) -> None:
         )
 
 
+def _recognize_action_field(
+    action: EmbeddedRealNumberFieldMatrixAction,
+) -> RecognizedRealSimpleNumberField:
+    try:
+        return recognize_real_simple_number_field(action.generators[0].matrix.embedding)
+    except EmbeddedNumberFieldRecognitionError as exc:
+        raise _validation_error(exc.reason, str(exc)) from exc
+
+
 def _build_constraint_plan(
-    action: RationalMatrixAction, kind: FormKind
+    action: MatrixAction,
+    kind: FormKind,
+    *,
+    recognized_field: RecognizedRealSimpleNumberField | None = None,
 ) -> _ConstraintPlan:
     dimension = len(action.coordinate_axis)
+    if (
+        isinstance(action, EmbeddedRealNumberFieldMatrixAction)
+        and action.generators[0].matrix.embedding.presentation.degree
+        > MAX_NUMBER_FIELD_EMBEDDING_DEGREE
+    ):
+        raise _validation_error(
+            "budget_exceeded",
+            "embedded invariant-form actions support field degree at most "
+            f"{MAX_NUMBER_FIELD_EMBEDDING_DEGREE}",
+        )
     positions = _coefficient_positions(dimension, kind)
     source_bytes = _retained_action_bytes(action)
     if not positions:
@@ -355,7 +443,15 @@ def _build_constraint_plan(
             source_bytes=source_bytes,
         )
         return _ConstraintPlan(positions=(), constraints=())
-    cell_count = constraint_coefficient_count(dimension, len(action.generators), kind)
+    field_degree = (
+        action.generators[0].matrix.embedding.presentation.degree
+        if isinstance(action, EmbeddedRealNumberFieldMatrixAction)
+        else 1
+    )
+    cell_count = (
+        constraint_coefficient_count(dimension, len(action.generators), kind)
+        * field_degree
+    )
     if cell_count > MAX_CONSTRAINT_CELLS:
         raise _validation_error(
             "budget_exceeded",
@@ -370,14 +466,32 @@ def _build_constraint_plan(
     )
     constraints: set[IntegerConstraint] = set()
     stored_digits = 0
-    for generator in action.generators:
-        matrix = tuple(
-            tuple(value.as_fraction() for value in row)
-            for row in generator.matrix.entries
+    recognized: RecognizedRealSimpleNumberField | None
+    generator_matrices: tuple[tuple[tuple[Any, ...], ...], ...]
+    if isinstance(action, EmbeddedRealNumberFieldMatrixAction):
+        recognized = recognized_field or _recognize_action_field(action)
+        if recognized.embedding != action.generators[0].matrix.embedding:
+            raise RuntimeError("recognized field does not match the action embedding")
+        generator_matrices = tuple(
+            tuple(
+                tuple(field_element_from_value(value, recognized) for value in row)
+                for row in generator.matrix.entries
+            )
+            for generator in action.generators
         )
+    else:
+        recognized = None
+        generator_matrices = tuple(
+            tuple(
+                tuple(value.as_fraction() for value in row)
+                for row in generator.matrix.entries
+            )
+            for generator in action.generators
+        )
+    for matrix in generator_matrices:
         for equation_row in range(dimension):
             for equation_column in range(dimension):
-                rational_row = tuple(
+                exact_row = tuple(
                     _constraint_coefficient(
                         matrix,
                         equation_row=equation_row,
@@ -387,17 +501,29 @@ def _build_constraint_plan(
                     )
                     for position in positions
                 )
-                constraint, row_digits = _normalize_constraint(rational_row)
-                if constraint is None or constraint in constraints:
-                    continue
-                stored_digits += row_digits
-                if stored_digits > MAX_STORED_CONSTRAINT_DIGITS:
-                    raise _validation_error(
-                        "budget_exceeded",
-                        "the normalized congruence system exceeds the exact "
-                        f"{MAX_STORED_CONSTRAINT_DIGITS}-digit intermediate bound",
+                rational_rows: tuple[tuple[Fraction, ...], ...] = (
+                    tuple(
+                        tuple(
+                            field_element_coordinates(value, recognized)[coordinate]
+                            for value in exact_row
+                        )
+                        for coordinate in range(recognized.degree)
                     )
-                constraints.add(constraint)
+                    if recognized is not None
+                    else (exact_row,)
+                )
+                for rational_row in rational_rows:
+                    constraint, row_digits = _normalize_constraint(rational_row)
+                    if constraint is None or constraint in constraints:
+                        continue
+                    stored_digits += row_digits
+                    if stored_digits > MAX_STORED_CONSTRAINT_DIGITS:
+                        raise _validation_error(
+                            "budget_exceeded",
+                            "the normalized congruence system exceeds the exact "
+                            f"{MAX_STORED_CONSTRAINT_DIGITS}-digit intermediate bound",
+                        )
+                    constraints.add(constraint)
     ordered_constraints = tuple(sorted(constraints))
     _require_result_envelope(
         action,
@@ -485,11 +611,18 @@ def _form_entries(
 
 
 def invariant_bilinear_form_lattice_kernel(
-    action: RationalMatrixAction, kind: FormKind
+    action: MatrixAction,
+    kind: FormKind,
+    *,
+    recognized_field: RecognizedRealSimpleNumberField | None = None,
 ) -> InvariantBilinearFormLattice:
     """Return the saturated integer lattice of forms fixed by every generator."""
 
-    plan = _build_constraint_plan(action, kind)
+    plan = _build_constraint_plan(
+        action,
+        kind,
+        recognized_field=recognized_field,
+    )
     basis, constraint_rank = _integer_kernel_basis(plan)
     dimension = len(action.coordinate_axis)
     basis_forms = tuple(

@@ -11,10 +11,13 @@ from pydantic import ValidationError
 from sympy import Matrix
 from tests.fixtures.accounting import assert_charged_work_parity
 
+from jacobian._exact import CanonicalRational
 from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lattices._lattice_ops import saturate_lattice
 from jacobian.math.lattices.invariant_forms import (
+    EmbeddedRealNumberFieldActionGenerator,
+    EmbeddedRealNumberFieldMatrixAction,
     RationalMatrixAction,
     compute_invariant_bilinear_form_lattice,
 )
@@ -28,6 +31,13 @@ from jacobian.math.lattices.invariant_forms._models import (
 from jacobian.math.lattices.invariant_forms._tools import (
     INVARIANT_BILINEAR_FORM_LATTICE_OPERATION,
 )
+from jacobian.math.matrices.values import EmbeddedRealSimpleNumberFieldMatrix
+from jacobian.math.number_theory.number_fields import (
+    RealNumberFieldEmbedding,
+    SimpleNumberFieldElement,
+    SimpleNumberFieldPresentation,
+    embeddings,
+)
 
 
 def _rational(value: int | Fraction) -> dict[str, str]:
@@ -36,6 +46,38 @@ def _rational(value: int | Fraction) -> dict[str, str]:
         "num": str(fraction.numerator),
         "den": str(fraction.denominator),
     }
+
+
+def _field_element(
+    presentation: SimpleNumberFieldPresentation,
+    *coordinates: int | Fraction,
+) -> SimpleNumberFieldElement:
+    return SimpleNumberFieldElement.model_validate(
+        {
+            "presentation": presentation,
+            "coefficients_ascending": [_rational(value) for value in coordinates],
+        }
+    )
+
+
+def _quartic_action(
+    entries: Sequence[Sequence[Sequence[int | Fraction]]],
+) -> EmbeddedRealNumberFieldMatrixAction:
+    presentation = SimpleNumberFieldPresentation(
+        coefficients_descending=("1", "0", "0", "0", "-2")
+    )
+    embedding = embeddings(presentation).records[1].embedding
+    matrix = EmbeddedRealSimpleNumberFieldMatrix(
+        embedding=embedding,
+        entries=tuple(
+            tuple(_field_element(presentation, *value) for value in row)
+            for row in entries
+        ),
+    )
+    return EmbeddedRealNumberFieldMatrixAction(
+        coordinate_axis=("e1", "e2", "e3", "e4"),
+        generators=(EmbeddedRealNumberFieldActionGenerator(label="J", matrix=matrix),),
+    )
 
 
 def _action(
@@ -195,6 +237,52 @@ def test_rank_zero_lattice_retains_its_ambient_coefficient_dimension() -> None:
     assert result.constraint_rank == 1
     assert result.rank == 0
     assert result.basis_forms == ()
+
+
+def test_quartic_complex_structure_has_rank_zero_alternating_lattice() -> None:
+    zero = (0, 0, 0, 0)
+    action = _quartic_action(
+        (
+            (zero, zero, (-1, 0, 0, 0), (0, -1, 0, 0)),
+            (zero, zero, (0, 0, 0, -1), (0, 0, -1, 0)),
+            ((-1, 0, -1, 0), (0, 1, 0, Fraction(1, 2)), zero, zero),
+            ((0, 1, 0, 1), (-1, 0, Fraction(-1, 2), 0), zero, zero),
+        )
+    )
+
+    result = compute_invariant_bilinear_form_lattice(action, "ALTERNATING")
+
+    assert result.coefficient_dimension == 6
+    assert result.constraint_rank == 6
+    assert result.rank == 0
+    assert result.basis_forms == ()
+
+
+def test_nonmonic_number_field_reduction_preserves_an_invariant_area_form() -> None:
+    presentation = SimpleNumberFieldPresentation(
+        coefficients_descending=("2", "0", "-1")
+    )
+    embedding = embeddings(presentation).records[1].embedding
+    zero = _field_element(presentation, 0, 0)
+    alpha = _field_element(presentation, 0, 1)
+    twice_alpha = _field_element(presentation, 0, 2)
+    action = EmbeddedRealNumberFieldMatrixAction(
+        coordinate_axis=("e1", "e2"),
+        generators=(
+            EmbeddedRealNumberFieldActionGenerator(
+                label="determinant_one",
+                matrix=EmbeddedRealSimpleNumberFieldMatrix(
+                    embedding=embedding,
+                    entries=((alpha, zero), (zero, twice_alpha)),
+                ),
+            ),
+        ),
+    )
+
+    result = compute_invariant_bilinear_form_lattice(action, "ALTERNATING")
+
+    assert result.rank == 1
+    assert result.basis_forms[0].matrix.entries == (("0", "1"), ("-1", "0"))
 
 
 def test_symmetric_constraint_path_keeps_exactly_the_diagonal_forms() -> None:
@@ -469,6 +557,46 @@ def test_source_height_is_coupled_to_constraint_expansion_work(
 
     with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_invariant_bilinear_form_lattice(action, "BILINEAR")
+
+    assert exc_info.value.errors()[0]["type"] == (
+        "lattice.invariant_form.budget_exceeded"
+    )
+
+
+def test_algebraic_degree_is_charged_before_embedding_recognition() -> None:
+    presentation = SimpleNumberFieldPresentation(
+        coefficients_descending=("1", "0", "0", "0", "0", "0", "0", "0", "1")
+    )
+    # x^8 + 1 has no real root, so reaching recognition would report an invalid
+    # embedding. The degree-expanded structural ledger must reject first.
+    embedding = RealNumberFieldEmbedding.model_validate(
+        {
+            "kind": "REAL",
+            "presentation": presentation.model_dump(mode="json"),
+            "root": {
+                "polynomial": presentation.coefficients_descending,
+                "real_root_index": 0,
+            },
+        }
+    )
+    zero = SimpleNumberFieldElement(
+        presentation=presentation,
+        coefficients_ascending=tuple(
+            CanonicalRational.from_fraction(Fraction(0)) for _ in range(8)
+        ),
+    )
+    dimension = 12
+    matrix = EmbeddedRealSimpleNumberFieldMatrix(
+        embedding=embedding,
+        entries=tuple(tuple(zero for _ in range(dimension)) for _ in range(dimension)),
+    )
+    action = EmbeddedRealNumberFieldMatrixAction(
+        coordinate_axis=tuple(f"e{index}" for index in range(dimension)),
+        generators=(EmbeddedRealNumberFieldActionGenerator(label="A", matrix=matrix),),
+    )
+
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        compute_invariant_bilinear_form_lattice(action, "ALTERNATING")
 
     assert exc_info.value.errors()[0]["type"] == (
         "lattice.invariant_form.budget_exceeded"

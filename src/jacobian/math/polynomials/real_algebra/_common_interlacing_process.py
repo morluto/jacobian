@@ -47,6 +47,7 @@ def _root_profile_from_worker(
 
     if not isinstance(value, dict) or not isinstance(value.get("roots"), list):
         raise ValueError("malformed root profile")
+    source_poly = rational_polynomial_to_sympy(source.polynomial)
     roots: list[PolynomialRealRoot] = []
     for raw_root in value["roots"]:
         if not isinstance(raw_root, dict):
@@ -58,18 +59,29 @@ def _root_profile_from_worker(
         root_index = raw_value.get("real_root_index")
         if type(root_index) is not int or root_index < 0:
             raise ValueError("malformed algebraic root index")
-        algebraic_value = RealAlgebraicValue._from_admitted_polynomial(
-            polynomial=polynomial,
-            real_root_index=root_index,
-        )
-        source_poly = rational_polynomial_to_sympy(source.polynomial)
         root_poly = source_poly.from_list(
             [int(coefficient) for coefficient in polynomial],
             gens=source_poly.gens,
             domain="QQ",
         )
+        if root_poly.degree() < 1:
+            raise ValueError("worker root polynomial is constant")
+        coefficients = [int(coefficient) for coefficient in polynomial]
+        content = 0
+        for coefficient in coefficients:
+            content = math.gcd(content, abs(coefficient))
+        if coefficients[0] <= 0 or content != 1:
+            raise ValueError("worker root polynomial is not primitive canonical form")
+        if root_index >= root_poly.degree():
+            raise ValueError("worker root index is outside its canonical factor")
+        if root_poly.is_irreducible is not True:
+            raise ValueError("worker root polynomial is not irreducible")
         if not source_poly.rem(root_poly).is_zero:
             raise ValueError("worker root polynomial is not a factor of its source")
+        algebraic_value = RealAlgebraicValue._from_admitted_polynomial(
+            polynomial=polynomial,
+            real_root_index=root_index,
+        )
         root_payload = dict(raw_root)
         root_payload["value"] = algebraic_value
         roots.append(PolynomialRealRoot.model_validate(root_payload))

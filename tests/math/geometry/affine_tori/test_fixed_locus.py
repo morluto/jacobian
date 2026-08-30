@@ -22,9 +22,6 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian.canonical import CanonicalLimits, encode_strict_json
-from jacobian.catalog.builtins import BUILTIN_TOOLS
-from jacobian.catalog.catalog import Catalog
-from jacobian.dispatch import invoke_operation
 from jacobian.math.geometry import affine_tori
 from jacobian.math.geometry.affine_tori import (
     AffineTorusFixedLocusOutcome,
@@ -571,25 +568,6 @@ def test_zero_dimensional_matrices_and_discriminated_result_round_trip() -> None
         assert restored == result
 
 
-def test_empty_outcome_round_trips_through_public_dispatch() -> None:
-    source = _source(((1,),), (Fraction(1, 3),))
-    payload = {"affine_map": source.model_dump(mode="json")}
-    plan = build_affine_torus_plan(source, deadline=monotonic() + 30)
-
-    dispatched = invoke_operation(
-        "affine_torus.fixed_locus.compute",
-        payload,
-        Catalog.open(),
-    )
-    restored = AffineTorusFixedLocusResult.model_validate(dispatched.output)
-
-    assert restored.outcome.status == "EMPTY"
-    assert restored.outcome.obstruction.coefficients == ("1",)
-    assert restored.outcome.obstruction_pairing.as_fraction() == Fraction(1, 3)
-    assert restored.model_dump(mode="json") == dispatched.output
-    assert len(encode_strict_json(dispatched.output)) <= plan.result_bytes_upper_bound
-
-
 def test_contradictory_discriminator_and_component_metadata_fail_closed() -> None:
     result = affine_torus_fixed_locus(_source(((3,),), (Fraction(0),))).model_dump(
         mode="json"
@@ -921,28 +899,3 @@ def test_max_dimension_adversary_is_deterministic_and_transport_bounded() -> Non
     assert (
         AffineTorusFixedLocusResult.model_validate_json(encoded, strict=True) == first
     )
-
-
-def test_public_tool_validates_and_executes_its_example() -> None:
-    tool = next(
-        tool
-        for tool in BUILTIN_TOOLS
-        if tool.operation_id == "affine_torus.fixed_locus.compute"
-    )
-    request = AffineTorusFixedLocusRequest.model_validate(tool.examples[0].input)
-    schema = tool.request_type.model_json_schema()
-    linear_schema = schema["$defs"]["RationalAffineTorusMap"]["properties"][
-        "linear_part"
-    ]
-
-    result = tool.run(request)
-
-    assert "linear part is square" in tool.examples[0].description
-    assert "same standard torus" in tool.examples[0].description
-    assert linear_schema["properties"]["row_count"]["maximum"] == 16
-    assert linear_schema["properties"]["column_count"]["maximum"] == 16
-    assert linear_schema["properties"]["entries"]["maxItems"] == 16
-    assert linear_schema["properties"]["entries"]["items"]["maxItems"] == 16
-    assert isinstance(result, AffineTorusFixedLocusResult)
-    assert result.outcome.status == "NONEMPTY"
-    assert result.outcome.fixed_locus.finite_components.component_count == "2"

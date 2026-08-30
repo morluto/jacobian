@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+import pytest
+
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.number_theory.r_full_enumeration._models import (
+    MAX_R_FULL_SIEVE_BOUND,
+)
 from jacobian.math.number_theory.r_full_enumeration.operations import (
     enumerate_r_full,
 )
@@ -53,3 +59,13 @@ def test_count() -> None:
 def test_empty() -> None:
     result = enumerate_r_full(0, 2)
     assert result.count == 0
+
+
+def test_sieve_allocation_is_bounded_before_construction() -> None:
+    with pytest.raises(OperationDomainValidationError, match="0 through"):
+        enumerate_r_full(MAX_R_FULL_SIEVE_BOUND + 1, 2)
+
+
+def test_invalid_minimum_exponent_is_rejected() -> None:
+    with pytest.raises(OperationDomainValidationError, match="at least 2"):
+        enumerate_r_full(10, 1)

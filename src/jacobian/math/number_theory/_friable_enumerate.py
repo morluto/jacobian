@@ -15,7 +15,9 @@ from jacobian.math.number_theory._friable_enumerate_models import (
 from jacobian.math.number_theory._support import number_theory_operation
 
 
-def compute_friable_enumerate(request: FriableEnumerateRequest) -> FriableEnumerateResult:
+def compute_friable_enumerate(
+    request: FriableEnumerateRequest,
+) -> FriableEnumerateResult:
     try:
         family = _enumerate_friable_kernel(
             parse_canonical_integer(request.x),

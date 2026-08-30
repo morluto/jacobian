@@ -33,9 +33,7 @@ def _enumerate_materialized(x: int, y: int) -> tuple[int, ...]:
             )
         # If this prime exceeds y, all its multiples are non-friable
         if candidate > y:
-            is_friable[candidate : x + 1 : candidate] = b"\x00" * (
-                x // candidate
-            )
+            is_friable[candidate : x + 1 : candidate] = b"\x00" * (x // candidate)
 
     return tuple(i for i in range(1, x + 1) if is_friable[i])
 

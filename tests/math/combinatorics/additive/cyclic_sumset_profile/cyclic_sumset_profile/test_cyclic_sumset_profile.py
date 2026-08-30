@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.combinatorics.additive.cyclic_sumset_profile._models import (
+    CyclicSumsetRequest,
+)
 from jacobian.math.combinatorics.additive.cyclic_sumset_profile.operations import (
     compute_cyclic_sumset_profile,
 )
@@ -50,3 +54,19 @@ def test_nonpositive_modulus_is_rejected_before_arithmetic() -> None:
 def test_noncanonical_residue_is_rejected() -> None:
     with pytest.raises(OperationDomainValidationError, match="canonical residues"):
         compute_cyclic_sumset_profile(5, (5,), (0,))
+
+
+@pytest.mark.parametrize(
+    ("left", "right"),
+    [((0, 0), (1,)), ((0,), (1, 1))],
+)
+def test_duplicate_subset_elements_are_rejected(
+    left: tuple[int, ...], right: tuple[int, ...]
+) -> None:
+    with pytest.raises(OperationDomainValidationError, match="distinct residues"):
+        compute_cyclic_sumset_profile(5, left, right)
+
+
+def test_request_rejects_duplicate_subset_elements() -> None:
+    with pytest.raises(ValidationError, match="distinct residues"):
+        CyclicSumsetRequest(modulus=2, left=(0, 0), right=(0,))

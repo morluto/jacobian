@@ -36,6 +36,12 @@ def compute_cyclic_sumset_profile(
             code="cyclic_sumset.canonical_residue",
             message="cyclic sumset operands must be canonical residues modulo modulus",
         )
+    if len(set(left)) != len(left) or len(set(right)) != len(right):
+        raise OperationDomainValidationError(
+            location=("left", "right"),
+            code="cyclic_sumset.duplicate_operand",
+            message="cyclic sumset operands must contain distinct residues",
+        )
     counts: dict[int, int] = {}
     for a in left:
         for b in right:

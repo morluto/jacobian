@@ -29,6 +29,13 @@ class CyclicSumsetRequest(StrictModel):
                 "cyclic_sumset.canonical_residue",
                 "cyclic sumset operands must be canonical residues modulo modulus",
             )
+        if len(set(self.left)) != len(self.left) or len(set(self.right)) != len(
+            self.right
+        ):
+            raise PydanticCustomError(
+                "cyclic_sumset.duplicate_operand",
+                "cyclic sumset operands must contain distinct residues",
+            )
         return self
 
 

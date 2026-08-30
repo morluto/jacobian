@@ -14,7 +14,7 @@ from jacobian.math.graphs.values import (
 )
 
 MAX_VERTICES = MAX_INDEXED_SIMPLE_GRAPH_VERTICES
-MAX_CLIQUE_ORDER = 8
+MAX_CLIQUE_ORDER = MAX_VERTICES
 
 
 class MonochromaticCliqueHypergraphRequest(StrictModel):

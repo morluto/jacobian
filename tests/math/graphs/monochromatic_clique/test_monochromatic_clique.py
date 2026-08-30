@@ -69,6 +69,27 @@ def test_t2() -> None:
     assert len(result.hypergraph.edges) == 6  # C(4,2) = 6
 
 
+def test_all_red_k9_is_admitted_when_only_one_clique_is_materialized() -> None:
+    vertices = tuple(str(index) for index in range(9))
+    graph = SimpleUndirectedGraph(
+        vertices=vertices,
+        edges=tuple(combinations(vertices, 2)),
+    )
+    result = construct_monochromatic_clique_hypergraph(
+        ColoredUndirectedGraph(graph=graph, edge_colors=("red",) * len(graph.edges)),
+        9,
+    )
+    assert len(result.hypergraph.edges) == 1
+
+
+def test_edgeless_graph_accepts_empty_edge_coloring() -> None:
+    graph = SimpleUndirectedGraph(vertices=("0",), edges=())
+    result = construct_monochromatic_clique_hypergraph(
+        ColoredUndirectedGraph(graph=graph), 2
+    )
+    assert result.hypergraph.edges == ()
+
+
 def test_replay_monochromatic() -> None:
     """Every hyperedge induces a monochromatic clique."""
     result = construct_monochromatic_clique_hypergraph(_k4_mixed(), 3)

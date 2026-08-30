@@ -73,7 +73,7 @@ def _admit_monochromatic_clique_hypergraph(
             code="monochromatic_clique.too_many_vertices",
             message=f"at most {MAX_VERTICES} vertices are supported",
         )
-    if not colored_graph.edge_colors:
+    if graph.edges and not colored_graph.edge_colors:
         raise OperationDomainValidationError(
             location=("colored_graph", "edge_colors"),
             code="monochromatic_clique.no_edge_colors",

@@ -20,6 +20,7 @@ from jacobian.math.polynomials.ideals._models import (
     MAX_INPUT_EXPONENT,
     MAX_INPUT_TERMS,
     EliminationIdealResult,
+    GradedBettiNumber,
     GroebnerBasisResult,
     IdealComputationBudget,
     IdealContainmentLedger,
@@ -32,10 +33,17 @@ from jacobian.math.polynomials.ideals._models import (
     IdealRadicalMembershipResult,
     IdealRadicalResult,
     IdealSaturationResult,
+    LcmLatticeHomologyEntry,
+    MonomialIdealBettiResult,
+    MultigradedBettiNumber,
+    _admit_monomial_ideal,
     _require_computed_minimal_prime_family,
     _require_ideal_budget,
     _require_provable_family_fit,
     _validation_error,
+)
+from jacobian.math.polynomials.ideals._monomial_betti import (
+    compute_monomial_betti_kernel,
 )
 from jacobian.math.polynomials.ideals._singular import (
     run_bounded_stdin_python_kernel,
@@ -62,6 +70,48 @@ def _run_admission(admission: Any) -> None:
         raise OperationDomainValidationError(
             location=(), code="polynomial.ideal_admission", message=str(exc)
         ) from exc
+
+
+def monomial_ideal_graded_betti_table(
+    ideal: RationalPolynomialIdeal,
+) -> MonomialIdealBettiResult:
+    """Compute the complete minimal graded Betti profile of a monomial ideal."""
+
+    _run_admission(lambda: _admit_monomial_ideal(ideal))
+    computed = compute_monomial_betti_kernel(ideal)
+    lattice_homology = tuple(
+        LcmLatticeHomologyEntry.model_construct(
+            multidegree=entry.multidegree,
+            face_counts=entry.face_counts,
+            boundary_ranks=entry.boundary_ranks,
+            reduced_homology_dimensions=entry.reduced_homology_dimensions,
+        )
+        for entry in computed.lattice_homology
+    )
+    multigraded = tuple(
+        MultigradedBettiNumber.model_construct(
+            homological_degree=homological_degree,
+            multidegree=multidegree,
+            value=value,
+        )
+        for homological_degree, multidegree, value in computed.multigraded_betti
+    )
+    graded = tuple(
+        GradedBettiNumber.model_construct(
+            homological_degree=homological_degree,
+            internal_degree=internal_degree,
+            value=value,
+        )
+        for homological_degree, internal_degree, value in computed.graded_betti
+    )
+    return MonomialIdealBettiResult._from_kernel(
+        ideal,
+        lcm_lattice_homology=lattice_homology,
+        multigraded_betti_numbers=multigraded,
+        graded_betti_numbers=graded,
+        regularity=computed.regularity,
+        has_linear_resolution=computed.has_linear_resolution,
+    )
 
 
 def _admit_source(ideal: RationalPolynomialIdeal, *, label: str) -> None:
@@ -868,6 +918,7 @@ __all__ = [
     "ideal_radical",
     "ideal_radical_membership",
     "ideal_saturation",
+    "monomial_ideal_graded_betti_table",
 ]
 
 

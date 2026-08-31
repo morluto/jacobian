@@ -1,24 +1,18 @@
-"""Exact Gaussian elimination kernel for finite-field matrix rank.
+"""Exact finite-field matrix rank kernel backed by a maintained library.
 
-Supports both prime and extension fields by working in the power-basis
-coordinate representation used by FiniteFieldElement. Extension-field
-elements are tuples of degree d; arithmetic is polynomial modular
-arithmetic over the field presentation's irreducible modulus.
+Rank and pivot tracking use python-flint's maintained ``fq_default`` element
+arithmetic instead of constructing SymPy polynomials.  For prime fields the
+backend degenerates to modular integer arithmetic.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from sympy import Poly
-
-from jacobian.math.finite_fields.values import (
-    AxisBoundMatrix,
-    FiniteFieldElement,
-    FiniteFieldPresentation,
-)
+from jacobian.math.finite_fields._flint import context as _backend_context
+from jacobian.math.finite_fields._flint import to_backend as _to_backend
+from jacobian.math.finite_fields.values import AxisBoundMatrix
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,74 +24,42 @@ class MatrixRankData:
     pivot_columns: tuple[str, ...]
 
 
-def _build_modulus(presentation: FiniteFieldPresentation) -> Poly:
-    from sympy import Poly, symbols
-
-    z = symbols("z")
-    return Poly(
-        sum(c * z**i for i, c in enumerate(presentation.modulus_coefficients)),
-        z,
-        modulus=presentation.characteristic,
-    )
-
-
-def _to_poly(element: FiniteFieldElement, z: Any, modulus: Poly) -> Poly:
-    from sympy import Poly
-
-    return Poly(
-        sum(c * z**i for i, c in enumerate(element.coordinates)),
-        z,
-        modulus=element.presentation.characteristic,
-    )
-
-
-def _to_coordinates(poly: Poly, degree: int) -> tuple[int, ...]:
-    return tuple(int(poly.nth(i)) % poly.domain.characteristic() for i in range(degree))
-
-
-def _is_zero_poly(poly: Poly) -> bool:
-    return bool(poly.is_zero)
-
-
 def compute_matrix_rank(matrix: AxisBoundMatrix) -> MatrixRankData:
-    """Compute exact rank via Gaussian elimination over the presented field.
+    """Compute exact rank and pivot labels over the presented finite field.
 
-    Works in the power-basis coordinate representation. For prime fields
-    (degree 1), this reduces to ordinary modular Gaussian elimination.
-    For extension fields, each entry is a polynomial modulo the irreducible
-    modulus.
+    Delegates all finite-field arithmetic to python-flint's maintained
+    ``fq_default`` backend rather than constructing SymPy polynomials.
     """
-    from sympy import invert, symbols
 
     presentation = matrix.presentation
-    z = symbols("z")
-    modulus = _build_modulus(presentation)
     rows = len(matrix.row_axis.labels)
     cols = len(matrix.column_axis.labels)
 
-    # Convert entries to polynomial form.
-    # poly_matrix[r][c] is a Poly in z mod modulus.
-    poly_matrix: list[list[Poly]] = []
+    if rows == 0 or cols == 0:
+        return MatrixRankData(rank=0, pivot_rows=(), pivot_columns=())
+
+    active_context = _backend_context(presentation)
+    zero = active_context.zero()
+
+    # Convert entries to maintained backend elements once.
+    entries: list[list[Any]] = []
     for r in range(rows):
         row = []
         for c in range(cols):
-            entry = matrix.entries[r][c]
-            row.append(_to_poly(entry, z, modulus))
-        poly_matrix.append(row)
+            row.append(_to_backend(matrix.entries[r][c], active_context=active_context))
+        entries.append(row)
 
-    # Gaussian elimination with partial pivoting (first nonzero in column).
-    rank = 0
+    # Gaussian elimination using the maintained backend's arithmetic.
     pivot_row_indices: list[int] = []
     pivot_col_indices: list[int] = []
+    rank = 0
     col = 0
-    work_matrix = [list(row) for row in poly_matrix]  # mutable copy
-    row_orig_indices = list(range(rows))
+    row_perm = list(range(rows))
 
     while rank < rows and col < cols:
-        # Find pivot in column col at or below row rank.
         pivot_row = None
         for r in range(rank, rows):
-            if not _is_zero_poly(work_matrix[r][col]):
+            if entries[r][col] != zero:
                 pivot_row = r
                 break
 
@@ -105,38 +67,32 @@ def compute_matrix_rank(matrix: AxisBoundMatrix) -> MatrixRankData:
             col += 1
             continue
 
-        # Swap rows.
         if pivot_row != rank:
-            work_matrix[rank], work_matrix[pivot_row] = (
-                work_matrix[pivot_row],
-                work_matrix[rank],
+            entries[rank], entries[pivot_row] = (
+                entries[pivot_row],
+                entries[rank],
             )
-            row_orig_indices[rank], row_orig_indices[pivot_row] = (
-                row_orig_indices[pivot_row],
-                row_orig_indices[rank],
+            row_perm[rank], row_perm[pivot_row] = (
+                row_perm[pivot_row],
+                row_perm[rank],
             )
 
-        # Eliminate below.
-        pivot_val = work_matrix[rank][col]
-        inv_pivot = invert(pivot_val, modulus)
+        pivot_val = entries[rank][col]
         for r in range(rank + 1, rows):
-            if not _is_zero_poly(work_matrix[r][col]):
-                # Compute factor = work_matrix[r][col] / pivot_val
-                # = work_matrix[r][col] * inverse(pivot_val) mod modulus
-                factor = (work_matrix[r][col] * inv_pivot).rem(modulus)
+            if entries[r][col] != zero:
+                factor = entries[r][col] / pivot_val
                 for c2 in range(col, cols):
-                    work_matrix[r][c2] = (
-                        work_matrix[r][c2] - factor * work_matrix[rank][c2]
-                    ).rem(modulus)
+                    entries[r][c2] = entries[r][c2] - factor * entries[rank][c2]
 
-        pivot_row_indices.append(row_orig_indices[rank])
+        pivot_row_indices.append(row_perm[rank])
         pivot_col_indices.append(col)
         rank += 1
         col += 1
 
-    # Map internal indices back to axis labels.
     pivot_rows = tuple(matrix.row_axis.labels[i] for i in pivot_row_indices)
-    pivot_columns = tuple(matrix.column_axis.labels[i] for i in pivot_col_indices)
+    pivot_columns = tuple(
+        matrix.column_axis.labels[i] for i in pivot_col_indices
+    )
 
     return MatrixRankData(
         rank=rank,

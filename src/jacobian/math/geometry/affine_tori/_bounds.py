@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from fractions import Fraction
 from math import lcm
 from time import monotonic
 from typing import Literal, NoReturn
@@ -56,6 +57,7 @@ class AffineTorusRankBounds:
     image_coordinate_height: int
     rational_intermediate_height: int
     base_point_component_height: int
+    obstruction_pairing_height: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -173,9 +175,9 @@ def _exact_integer_rank(matrix: tuple[tuple[int, ...], ...]) -> int:
     dimension = len(matrix)
     if dimension == 0:
         return 0
-    pivot_rows = [list(row) for row in matrix]
+    pivot_rows = [[Fraction(value) for value in row] for row in matrix]
     rank = 0
-    previous_pivot = 1
+    previous_pivot: int | Fraction = 1
     for column in range(dimension):
         pivot_row = -1
         for row in range(rank, dimension):
@@ -198,7 +200,7 @@ def _exact_integer_rank(matrix: tuple[tuple[int, ...], ...]) -> int:
                     pivot_rows[row][inner] * pivot - pivot_rows[rank][inner] * factor
                 )
                 if rank > 0:
-                    pivot_rows[row][inner] //= previous_pivot
+                    pivot_rows[row][inner] /= previous_pivot
         previous_pivot = pivot
         rank += 1
         if rank == dimension:
@@ -268,16 +270,16 @@ def _rank_bounds(
             base_solve_height,
         )
 
-    # After reduction modulo one, generator denominators divide a rank minor;
-    # the base-point denominator additionally divides the translation lcm.
-    # A rank-zero displacement has no such base point: the kernel's rank-zero
-    # base solution is the zero point, and a translated identity resolves as an
-    # empty locus.  Charging the translation lcm to that branch would fabricate
-    # a denominator the result never carries, so leave it out for rank zero.
+    # After reduction modulo one, generator denominators divide a rank minor.
+    # A rank-zero obstruction has no base point, but its pairing can retain a
+    # denominator from the translated source and needs its own result bound.
     base_point_component_height = (
-        1
-        if rank == 0 or translation_is_zero
-        else max(1, minor_height * common_denominator)
+        1 if rank == 0 else max(1, minor_height * common_denominator)
+    )
+    obstruction_pairing_height = (
+        max(1, common_denominator)
+        if rank == 0 and not translation_is_zero
+        else base_point_component_height
     )
     return AffineTorusRankBounds(
         rank=rank,
@@ -291,6 +293,7 @@ def _rank_bounds(
         image_coordinate_height=image_coordinate_height,
         rational_intermediate_height=rational_intermediate_height,
         base_point_component_height=base_point_component_height,
+        obstruction_pairing_height=obstruction_pairing_height,
     )
 
 
@@ -495,7 +498,7 @@ def _result_bytes_for_rank(
                 ("obstruction", obstruction_bytes),
                 (
                     "obstruction_pairing",
-                    _rational_wire_bytes(bounds.base_point_component_height),
+                    _rational_wire_bytes(bounds.obstruction_pairing_height),
                 ),
             )
         )
@@ -611,9 +614,15 @@ def build_affine_torus_plan(
         ),
     )
     if any(
-        _decimal_digits(bounds.base_point_component_height)
+        _decimal_digits(
+            max(
+                bounds.base_point_component_height,
+                bounds.obstruction_pairing_height,
+            )
+        )
         > MAX_AFFINE_TORUS_POINT_DIGITS
         for bounds in rank_bounds
+        if bounds.rank > 0
     ):
         _reject(
             "point_height",

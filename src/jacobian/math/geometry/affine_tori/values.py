@@ -508,6 +508,24 @@ class ConnectedSubtorusParameterization(StrictModel):
                     "subtorus_primitive",
                     "subtorus embedding column must generate a primitive sublattice",
                 )
+        else:
+            from flint import fmpz_mat
+
+            matrix = fmpz_mat([list(row) for row in embedding])
+            if int(matrix.rank()) != self.parameter_dimension:
+                raise _validation_error(
+                    "subtorus_rank",
+                    "subtorus embedding must have full column rank",
+                )
+            smith = matrix.snf()
+            if any(
+                abs(int(smith[index, index])) != 1
+                for index in range(self.parameter_dimension)
+            ):
+                raise _validation_error(
+                    "subtorus_primitive",
+                    "subtorus embedding columns must generate a primitive sublattice",
+                )
         return self
 
 
@@ -543,14 +561,20 @@ class FiniteTorusComponentPresentation(StrictModel):
                 "presentation_invariants",
                 "invariant factor count must not exceed generator count",
             )
-        if rank > 0 and any(
-            not any(parse_canonical_integer(value) for value in row)
-            for row in self.relation_matrix.entries
-        ):
-            raise _validation_error(
-                "presentation_rank",
-                "finite component relation matrix must have no zero row",
+        if rank > 0:
+            from flint import fmpz_mat
+
+            relation_matrix = fmpz_mat(
+                [
+                    [parse_canonical_integer(value) for value in row]
+                    for row in self.relation_matrix.entries
+                ]
             )
+            if int(relation_matrix.rank()) != rank:
+                raise _validation_error(
+                    "presentation_rank",
+                    "finite component relation matrix must have full rank",
+                )
         orders = tuple(
             parse_canonical_integer(value) for value in self.generator_orders
         )

@@ -8,17 +8,43 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.polynomials.ideals import (
-    MonomialIdeal,
+    MonomialIdealBettiRequest,
     MonomialIdealBettiResult,
     monomial_ideal_graded_betti_table,
 )
+from jacobian.math.polynomials.values import RationalPolynomialIdeal
+
+
+def _monomial_ideal(
+    variables: tuple[str, ...], *generators: tuple[int, ...]
+) -> MonomialIdealBettiRequest:
+    return MonomialIdealBettiRequest(
+        ideal=RationalPolynomialIdeal(
+            variables=variables,
+            generators=tuple(
+                {
+                    "domain": "QQ",
+                    "variables": list(variables),
+                    "polynomial": {
+                        "terms": [
+                            {
+                                "coefficient": {"num": "1", "den": "1"},
+                                "exponents": list(generator),
+                            }
+                        ]
+                    },
+                }
+                for generator in generators
+            ),
+        )
+    )
 
 
 def _result(
     variables: tuple[str, ...], *generators: tuple[int, ...]
 ) -> MonomialIdealBettiResult:
     return monomial_ideal_graded_betti_table(
-        MonomialIdeal(variables=variables, generators=generators)
+        _monomial_ideal(variables, *generators).ideal
     )
 
 
@@ -135,7 +161,10 @@ def test_multigraded_table_has_the_taylor_resolution_euler_characteristic() -> N
         (0, 0, 1, 1),
     )
     taylor_coefficients: dict[tuple[int, ...], int] = {}
-    generators = result.ideal.generators
+    generators = [
+        tuple(term.exponents for term in gen.polynomial.terms)[0]
+        for gen in result.ideal.generators
+    ]
     for size in range(1, len(generators) + 1):
         for subset in combinations(generators, size):
             multidegree = tuple(map(max, zip(*subset, strict=True)))
@@ -164,6 +193,10 @@ def test_exact_result_round_trips_and_its_ideal_composes_unchanged() -> None:
     assert decoded == produced
     assert consumed == produced
 
+    # The ideal is a RationalPolynomialIdeal that composes with other operations.
+    from jacobian.math.polynomials.values import RationalPolynomialIdeal
+    assert isinstance(decoded.ideal, RationalPolynomialIdeal)
+
 
 @pytest.mark.parametrize(
     ("generators", "message"),
@@ -177,17 +210,33 @@ def test_monomial_ideal_rejects_noncanonical_presentations(
     generators: tuple[tuple[int, int], ...], message: str
 ) -> None:
     with pytest.raises(ValidationError, match=message):
-        MonomialIdeal(variables=("x", "y"), generators=generators)
+        _monomial_ideal(("x", "y"), *generators)
 
 
 def test_generator_and_exponent_boundaries_reject_before_kernel_work() -> None:
-    with pytest.raises(ValidationError, match="at most 8 items"):
-        MonomialIdeal(
-            variables=tuple(f"x{index}" for index in range(8)),
-            generators=tuple(
+    with pytest.raises(ValidationError, match="8-generator operation budget"):
+        _monomial_ideal(
+            tuple(f"x{index}" for index in range(8)),
+            *tuple(
                 tuple(index + 1 if slot == 0 else 0 for slot in range(8))
                 for index in range(9)
             ),
         )
-    with pytest.raises(ValidationError, match="less than or equal to 64"):
-        MonomialIdeal(variables=("x",), generators=((65,),))
+    with pytest.raises(ValidationError, match="single monomial term"):
+        MonomialIdealBettiRequest(
+            ideal=RationalPolynomialIdeal(
+                variables=("x",),
+                generators=(
+                    {
+                        "domain": "QQ",
+                        "variables": ["x"],
+                        "polynomial": {
+                            "terms": [
+                                {"coefficient": {"num": "1", "den": "1"}, "exponents": [2]},
+                                {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]},
+                            ]
+                        },
+                    },
+                ),
+            )
+        )

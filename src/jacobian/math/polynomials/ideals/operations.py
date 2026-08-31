@@ -29,7 +29,6 @@ from jacobian.math.polynomials.ideals._models import (
     IdealRadicalResult,
     IdealSaturationResult,
     LcmLatticeHomologyEntry,
-    MonomialIdeal,
     MonomialIdealBettiResult,
     MultigradedBettiNumber,
     _require_computed_minimal_prime_family,
@@ -68,7 +67,7 @@ def _run_admission(admission: Any) -> None:
 
 
 def monomial_ideal_graded_betti_table(
-    ideal: MonomialIdeal,
+    ideal: RationalPolynomialIdeal,
 ) -> MonomialIdealBettiResult:
     """Compute the complete minimal graded Betti profile of a monomial ideal."""
 

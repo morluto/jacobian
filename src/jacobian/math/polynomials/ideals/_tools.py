@@ -168,10 +168,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "two_quadrics",
                 "Compute the Betti table of <x^2,y^2> in QQ[x,y].",
                 {
-                    "ideal": {
-                        "variables": ["x", "y"],
-                        "generators": [[2, 0], [0, 2]],
-                    }
+                    "ideal": _ideal(
+                        ("x", "y"),
+                        ((1, 1, (2, 0)),),
+                        ((1, 1, (0, 2)),),
+                    ),
                 },
             ),
         ),

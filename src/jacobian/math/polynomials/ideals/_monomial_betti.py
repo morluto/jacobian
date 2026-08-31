@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 from flint import fmpz_mat
 
-from jacobian.math.polynomials.ideals._models import MonomialIdeal
+from jacobian.math.polynomials.values import RationalPolynomialIdeal
 
 ExponentVector = tuple[int, ...]
 MultigradedBettiData = tuple[int, ExponentVector, int]
@@ -109,10 +109,13 @@ def _crosscut_homology(
     return tuple(map(len, by_size)), ranks, tuple(dimensions)
 
 
-def compute_monomial_betti_kernel(ideal: MonomialIdeal) -> MonomialBettiKernelResult:
+def compute_monomial_betti_kernel(ideal: RationalPolynomialIdeal) -> MonomialBettiKernelResult:
     """Compute one complete source-bound Betti profile without replay."""
 
-    generators = ideal.generators
+    generators = tuple(
+        generator.polynomial.terms[0].exponents
+        for generator in ideal.generators
+    )
     subset_lcms = _subset_lcms(generators)
     lattice = tuple(sorted(set(subset_lcms[1:])))
     lattice_homology: list[LcmLatticeHomologyData] = []

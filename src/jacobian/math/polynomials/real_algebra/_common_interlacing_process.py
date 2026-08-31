@@ -171,9 +171,7 @@ def _verify_declared_factors(
             raise ValueError("worker factor degree exceeds source degree")
         factor_dense = tuple(int(c) for c in factor_coeffs)
         if factor_dense[0] <= 0:
-            raise ValueError(
-                "worker factor has non-positive leading coefficient"
-            )
+            raise ValueError("worker factor has non-positive leading coefficient")
         content: int = 0
         for coefficient in factor_dense:
             content = gcd(content, abs(coefficient))

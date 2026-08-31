@@ -29,6 +29,13 @@ def _integers(value: FiniteIntegerSet) -> set[int]:
             code="finite_set.integer_digit_bound",
             message="finite-set elements exceed the canonical integer digit bound",
         )
+    total_digits = sum(len(element.lstrip("-")) for element in value.elements)
+    if total_digits > CanonicalLimits().max_input_bytes:
+        raise OperationDomainValidationError(
+            location=("value",),
+            code="finite_set.aggregate_digit_bound",
+            message="finite-set aggregate digits exceed the admitted parsing budget",
+        )
     return {parse_canonical_integer(element) for element in value.elements}
 
 
@@ -66,6 +73,21 @@ def exact_cover(
             message=(
                 "exact-cover input exceeds the "
                 f"{MAX_FINITE_SET_COVERAGE_VALUES}-value bound"
+            ),
+        )
+    # Bound the result envelope: the worst case echoes every scope element
+    # as missing, every value as a duplicate, and every value as outside,
+    # plus the boolean holds field.
+    scope_digits = sum(len(element.lstrip("-")) for element in scope.elements)
+    value_digits = sum(len(element.lstrip("-")) for element in values)
+    worst_case_digits = scope_digits + 2 * value_digits
+    if worst_case_digits > CanonicalLimits().max_output_bytes:
+        raise OperationDomainValidationError(
+            location=("scope", "values"),
+            code="finite_set.coverage_result_exceeded",
+            message=(
+                "exact-cover result may exceed the canonical output-byte limit; "
+                "partition the scope or values into smaller batches"
             ),
         )
     scope_values = _integers(scope)

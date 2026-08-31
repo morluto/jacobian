@@ -92,20 +92,36 @@ def _sorted_sums(counts: Mapping[int, int]) -> list[int]:
 
 
 def _require_sumset_preflight(left: FiniteIntegerSet, right: FiniteIntegerSet) -> None:
-    """Reject an output envelope that cannot fit before building pair sums."""
+    """Reject an output envelope that cannot fit before building pair sums.
+
+    The support bound is collision-sensitive: the sumset A+B lies in the
+    interval [min(A)+min(B), max(A)+max(B)], which bounds its cardinality by
+    max(A)-min(A)+max(B)-min(B)+1, independent of the Cartesian pair count.
+    """
     pair_count = len(left.elements) * len(right.elements)
-    max_digits = (
-        max(
-            (len(element.lstrip("-")) for element in (*left.elements, *right.elements)),
-            default=1,
-        )
-        + 1
+    if pair_count == 0:
+        return
+    left_values = frozenset(
+        parse_canonical_integer(element) for element in left.elements
     )
+    right_values = frozenset(
+        parse_canonical_integer(element) for element in right.elements
+    )
+    interval_bound = (
+        max(left_values) - min(left_values) + max(right_values) - min(right_values) + 1
+    )
+    support_bound = min(pair_count, interval_bound)
+    max_sum_abs = max(
+        abs(left_endpoint + right_endpoint)
+        for left_endpoint in (min(left_values), max(left_values))
+        for right_endpoint in (min(right_values), max(right_values))
+    )
+    max_digits = len(format_canonical_integer(max_sum_abs))
     value_size = max_digits + 3  # quotes, optional sign, and conservative comma
-    elements_size = 2 + max(pair_count - 1, 0) + pair_count * value_size
+    elements_size = 2 + max(support_bound - 1, 0) + support_bound * value_size
     support_size = strict_json_object_size((("elements", elements_size),))
     result_size = strict_json_object_size(
-        (("cardinality", len(str(max(1, pair_count)))), ("support", support_size))
+        (("cardinality", len(str(max(1, support_bound)))), ("support", support_size))
     )
     if result_size > CanonicalLimits().max_output_bytes:
         raise OperationDomainValidationError(
@@ -141,7 +157,12 @@ def representation_profile(
     right: FiniteIntegerSet,
 ) -> RepresentationProfileResult:
     """Compute ``r_{A+B}(x)`` for every sum ``x``."""
-    _require_bounded_cartesian_product(left, right)
+    try:
+        _require_bounded_cartesian_product(left, right)
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=("left", "right"), code=exc.type, message=exc.message()
+        ) from None
     counts = _representation_function(_parse_set(left), _parse_set(right))
     entries = tuple(
         RepresentationProfileEntry(

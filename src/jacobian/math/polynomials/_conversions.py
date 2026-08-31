@@ -133,8 +133,14 @@ def rational_function_from_sympy(
     variables: tuple[str, ...],
     *,
     maximum_terms: int = 256,
+    deadline_check: Any = None,
 ) -> RationalFunction:
-    """Canonicalize an exact rational-function expression into wire data."""
+    """Canonicalize an exact rational-function expression into wire data.
+
+    If ``deadline_check`` is provided, it is called before and after the
+    potentially expensive ``cancel`` step so callers can enforce a request
+    deadline around normalization.
+    """
 
     from sympy import QQ, Poly, cancel, fraction
 
@@ -146,7 +152,7 @@ def rational_function_from_sympy(
             if isinstance(expression, int)
             else rational_from_sympy(expression)
         )
-        return RationalFunction(
+        return RationalFunction._from_kernel(
             variables=(),
             numerator=SparseRationalPolynomial(
                 terms=()
@@ -168,7 +174,11 @@ def rational_function_from_sympy(
             ),
         )
     symbols = symbols_for_variables(variables)
+    if deadline_check is not None:
+        deadline_check()
     numerator_expression, denominator_expression = fraction(cancel(expression))
+    if deadline_check is not None:
+        deadline_check()
     numerator = Poly(numerator_expression, *symbols, domain=QQ)
     denominator = Poly(denominator_expression, *symbols, domain=QQ)
     leading = denominator.LC()
@@ -178,7 +188,7 @@ def rational_function_from_sympy(
         else numerator
     )
     denominator = denominator.monic()
-    return RationalFunction(
+    return RationalFunction._from_kernel(
         variables=variables,
         numerator=sparse_rational_polynomial_from_sympy(
             numerator, variables, maximum_terms=maximum_terms

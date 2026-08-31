@@ -339,6 +339,22 @@ def _materialize_certificate(
             "generic-fiber transformation rows must match source generators"
         )
 
+    from jacobian.math.polynomials.values import (
+        require_canonical_rational_function,
+    )
+
+    coefficient_index = 0
+    for polynomial in (
+        *certificate.basis,
+        *(value for row in certificate.basis_from_source for value in row),
+    ):
+        for term in polynomial.terms:
+            require_canonical_rational_function(
+                term.coefficient,
+                label=f"generic-fiber coefficient {coefficient_index}",
+            )
+            coefficient_index += 1
+
     from sympy import Dummy
 
     parameter_symbols = tuple(

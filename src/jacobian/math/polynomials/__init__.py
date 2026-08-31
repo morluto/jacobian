@@ -35,6 +35,17 @@ from jacobian.math.polynomials.operations import (
     square_free_decomposition,
 )
 
+
+def __getattr__(name: str) -> object:
+    if name not in {"ideal_containment", "ideal_equality"}:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    from jacobian.math.polynomials.ideals import operations
+
+    value = getattr(operations, name)
+    globals()[name] = value
+    return value
+
+
 __all__ = [
     "derivative",
     "discriminant",
@@ -44,6 +55,8 @@ __all__ = [
     "gcdex",
     "groebner_basis",
     "hermite_reduction",
+    "ideal_containment",
+    "ideal_equality",
     "integer_polynomial_compose",
     "integer_polynomial_content",
     "integer_polynomial_evaluate",

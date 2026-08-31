@@ -13,7 +13,6 @@ from jacobian.math.matrices.analysis._models import (
     RationalSpectrumClaimRequest,
     RationalSpectrumClaimResult,
     SymmetricMatrixRequest,
-    _canonical_source_matrix,
 )
 from jacobian.math.matrices.analysis.operations import (
     check_farkas_certificate as _check_farkas_certificate_native,
@@ -37,9 +36,9 @@ def check_rational_spectrum_claim(
 
 
 def compute_inertia(request: SymmetricMatrixRequest) -> InertiaResult:
-    """Normalize a sparse wire matrix for the canonical inertia operation."""
+    """Compute inertia of the request's canonical exact-real matrix."""
 
-    return _compute_inertia_native(_canonical_source_matrix(request))
+    return _compute_inertia_native(request.matrix)
 
 
 def check_farkas_certificate(
@@ -105,6 +104,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "the matrix must be symmetric and claimed eigenvalues distinct.",
                 {
                     "matrix": {
+                        "domain": "QQ",
                         "entries": [
                             [
                                 {"num": "2", "den": "1"},
@@ -121,7 +121,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                                 {"num": "0", "den": "1"},
                                 {"num": "-1", "den": "1"},
                             ],
-                        ]
+                        ],
                     },
                     "claimed_profile": [
                         {
@@ -139,10 +139,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     ),
     _op(
         "matrix.inertia.compute",
-        "Compute Sylvester inertia of a symmetric rational matrix",
-        "Given a symmetric rational matrix, compute its Sylvester inertia "
-        "(n_positive, n_negative, n_zero) and definiteness classification "
-        "using exact rational LDL decomposition.",
+        "Compute Sylvester inertia of an exact real symmetric matrix",
+        "Given a canonical rational or common-embedding real simple-number-field "
+        "symmetric matrix, compute its exact Sylvester inertia "
+        "(n_positive, n_negative, n_zero) and definiteness classification by "
+        "congruence reduction in the retained scalar domain.",
         SymmetricMatrixRequest,
         InertiaResult,
         compute_inertia,
@@ -155,12 +156,60 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "identity_inertia",
                 "3x3 identity matrix has inertia (3, 0, 0).",
                 {
-                    "dimension": 3,
-                    "entries": [
-                        {"row": 0, "col": 0, "value": {"num": "1", "den": "1"}},
-                        {"row": 1, "col": 1, "value": {"num": "1", "den": "1"}},
-                        {"row": 2, "col": 2, "value": {"num": "1", "den": "1"}},
-                    ],
+                    "matrix": {
+                        "domain": "QQ",
+                        "entries": [
+                            [
+                                {"num": "1", "den": "1"},
+                                {"num": "0", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            [
+                                {"num": "0", "den": "1"},
+                                {"num": "1", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            [
+                                {"num": "0", "den": "1"},
+                                {"num": "0", "den": "1"},
+                                {"num": "1", "den": "1"},
+                            ],
+                        ],
+                    }
+                },
+            ),
+            example(
+                "positive_quadratic_embedding",
+                "The positive embedding of sqrt(2) has inertia (1, 0, 0).",
+                {
+                    "matrix": {
+                        "domain": "EMBEDDED_REAL_SIMPLE_NUMBER_FIELD",
+                        "embedding": {
+                            "kind": "REAL",
+                            "presentation": {
+                                "domain": "QQ",
+                                "coefficients_descending": ["1", "0", "-2"],
+                            },
+                            "root": {
+                                "polynomial": ["1", "0", "-2"],
+                                "real_root_index": 1,
+                            },
+                        },
+                        "entries": [
+                            [
+                                {
+                                    "presentation": {
+                                        "domain": "QQ",
+                                        "coefficients_descending": ["1", "0", "-2"],
+                                    },
+                                    "coefficients_ascending": [
+                                        {"num": "0", "den": "1"},
+                                        {"num": "1", "den": "1"},
+                                    ],
+                                }
+                            ]
+                        ],
+                    }
                 },
             ),
         ),

@@ -38,6 +38,7 @@ from jacobian.math.dynamics.symbolic._tools import (
     compute_periodic_point_profile,
     construct_finite_type_shift,
 )
+from jacobian.math.polynomials.values import require_canonical_rational_function
 
 
 def _golden_mean() -> ForbiddenBlockShift:
@@ -76,7 +77,12 @@ def test_golden_mean_artin_mazur_zeta_is_bound_to_periodic_traces() -> None:
         == expected_denominator_terms
     )
     assert result.zeta_function.numerator.terms[0].coefficient.as_fraction() == -1
-    assert ArtinMazurZetaResult.model_validate(result.model_dump(mode="json")) == result
+    parsed = ArtinMazurZetaResult.model_validate(result.model_dump(mode="json"))
+    assert parsed == result
+    assert (
+        require_canonical_rational_function(parsed.zeta_function)
+        is parsed.zeta_function
+    )
 
 
 def test_zeta_distinguishes_full_shift_cycle_and_disjoint_components() -> None:

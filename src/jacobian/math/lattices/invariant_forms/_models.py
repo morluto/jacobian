@@ -395,6 +395,13 @@ class InvariantBilinearFormLatticeRequest(StrictModel):
             if isinstance(action, dict) and isinstance(
                 action.get("coordinate_axis"), (list, tuple)
             ):
+                axis_labels = action["coordinate_axis"]
+                for label in axis_labels:
+                    if not isinstance(label, str):
+                        raise _validation_error(
+                            "invalid_coordinate_label",
+                            "coordinate_axis labels must be strings",
+                        )
                 data = dict(data)
                 action = dict(action)
                 action["coordinate_axis"] = canonicalize_json_containers(

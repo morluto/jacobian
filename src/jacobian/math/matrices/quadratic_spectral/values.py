@@ -4,16 +4,14 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import BeforeValidator, Field, StrictInt, model_validator
+from pydantic import BeforeValidator, Field, StrictInt, WithJsonSchema, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.matrices.values import RealQuadraticMatrix
 from jacobian.math.number_theory.algebraic_numbers.real import (
     MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE,
-)
-from jacobian.math.number_theory.algebraic_numbers.root_isolation._models import (
-    _ComparisonRealAlgebraicValue,
+    RealAlgebraicValue,
 )
 
 SpectrumKind = Literal["SYMMETRIC_EIGENVALUES", "SINGULAR_VALUES"]
@@ -44,13 +42,26 @@ def _require_spectrum_value_degree(value: Any) -> Any:
     return value
 
 
+def _spectrum_value_schema() -> dict[str, Any]:
+    schema = RealAlgebraicValue.model_json_schema()
+    schema["properties"]["polynomial"]["maxItems"] = (
+        MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE + 1
+    )
+    return schema
+
+
+_SpectrumRealAlgebraicValue = Annotated[
+    RealAlgebraicValue,
+    BeforeValidator(canonicalize_json_containers),
+    BeforeValidator(_require_spectrum_value_degree),
+    WithJsonSchema(_spectrum_value_schema()),
+]
+
+
 class RealAlgebraicMultiplicity(StrictModel):
     """One exact real algebraic value and its spectral multiplicity."""
 
-    value: Annotated[
-        _ComparisonRealAlgebraicValue,
-        BeforeValidator(_require_spectrum_value_degree),
-    ]
+    value: _SpectrumRealAlgebraicValue
     multiplicity: StrictInt = Field(ge=1, le=2)
 
 

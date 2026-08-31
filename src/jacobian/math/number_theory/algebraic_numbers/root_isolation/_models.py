@@ -66,6 +66,11 @@ _ComparisonRealAlgebraicValue = Annotated[
     WithJsonSchema(_comparison_value_schema()),
 ]
 
+_RootIsolationRealAlgebraicValue = Annotated[
+    RealAlgebraicValue,
+    WithJsonSchema(_comparison_value_schema()),
+]
+
 
 class UnivariatePolynomialRequest(StrictModel):
     coefficients_descending: tuple[CanonicalRational, ...] = Field(
@@ -159,7 +164,7 @@ class RootIsolationEntry(StrictModel):
 
     isolating_interval: tuple[CanonicalRational, CanonicalRational]
     multiplicity: int = Field(ge=1, le=MAX_ROOT_ISOLATION_DEGREE)
-    algebraic_value: RealAlgebraicValue
+    algebraic_value: _RootIsolationRealAlgebraicValue
 
     @model_validator(mode="after")
     def require_ordered_interval(self) -> Self:

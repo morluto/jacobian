@@ -20,9 +20,11 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
 
-MAX_PALETTE_SIZE = 16
 MAX_VERTEX_COUNT = MAX_VERTICES
 MAX_EDGE_COUNT = MAX_EDGES
+# Palette sizes are emitted as JSON integers, so use the interoperable integer
+# range rather than tying a cheap injective presolve to the vertex count.
+MAX_PALETTE_SIZE = (1 << 53) - 1
 MAX_COLORING_WORK = 2_000_000
 
 ColoringResult = Literal["COLORABLE", "NOT_COLORABLE"]
@@ -34,6 +36,7 @@ class _ColoringAdmission:
 
     has_forced_failure: bool
     has_injective_witness: bool
+    work_budget: int
 
 
 def _validate_coloring_envelope(
@@ -79,7 +82,7 @@ def _validate_coloring_envelope(
     payload = {
         "hypergraph": hypergraph.model_dump(mode="json"),
         "palette_size": palette_size,
-        "outcome": "COLORABLE",
+        "outcome": "NOT_COLORABLE" if has_forced_failure else "COLORABLE",
     }
     if not has_forced_failure:
         payload["witness"] = {
@@ -87,6 +90,8 @@ def _validate_coloring_envelope(
                 [vertex, index] for index, vertex in enumerate(hypergraph.vertices)
             ]
         }
+    else:
+        payload["witness"] = None
     try:
         result_bytes = len(encode_strict_json(payload))
     except CanonicalizationError as exc:
@@ -102,6 +107,7 @@ def _validate_coloring_envelope(
     return _ColoringAdmission(
         has_forced_failure=has_forced_failure,
         has_injective_witness=has_injective_witness,
+        work_budget=work,
     )
 
 

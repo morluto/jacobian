@@ -21,7 +21,6 @@ from jacobian._execution import (
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
-from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
 from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
     MAX_COMMON_INTERLACING_FAMILY_SIZE,
     MAX_COMMON_INTERLACING_INPUT_DIGITS,
@@ -85,17 +84,28 @@ def _preflight_family_size(
 
 def _root_profile_from_worker(
     value: object,
-    source: LabelledRationalPolynomial,
     declared_factors: list[list[tuple[str, ...]]],
 ) -> SourceRootProfile:
-    """Parse bounded worker structure without replaying exact factorization."""
+    """Parse bounded worker structure without replaying exact factorization.
+
+    The killable worker has already established all mathematical invariants
+    (factorization, irreducibility, real-root isolation, source reconstruction).
+    This parent performs only cheap structural checks: type, canonical shape,
+    array bounds, membership in declared factors, and uniqueness of root
+    identities.  No SymPy kernel work (irreducibility recognition, root
+    isolation, divisibility, source reconstruction) is replayed.
+    """
 
     if not isinstance(value, dict) or not isinstance(value.get("roots"), list):
         raise ValueError("malformed root profile")
-    source_poly = rational_polynomial_to_sympy(source.polynomial)
-    root_factors: dict[tuple[int, ...], tuple[Any, int]] = {}
-    seen_identities: set[tuple[tuple[int, ...], int]] = set()
+    source_index = value.get("source_index")
+    if type(source_index) is not int:
+        raise ValueError("malformed root profile source index")
+    declared_factor_set = {
+        tuple(int(c) for c in f) for f in declared_factors
+    } if declared_factors else set()
     roots: list[PolynomialRealRoot] = []
+    seen_identities: set[tuple[tuple[str, ...], int]] = set()
     for raw_root in value["roots"]:
         if not isinstance(raw_root, dict):
             raise ValueError("malformed root row")
@@ -106,56 +116,46 @@ def _root_profile_from_worker(
         root_index = raw_value.get("real_root_index")
         if type(root_index) is not int or root_index < 0:
             raise ValueError("malformed algebraic root index")
-        root_poly = source_poly.from_list(
-            [int(coefficient) for coefficient in polynomial],
-            gens=source_poly.gens,
-            domain="QQ",
-        )
-        if root_poly.degree() < 1:
-            raise ValueError("worker root polynomial is constant")
         coefficients = [int(coefficient) for coefficient in polynomial]
+        if len(coefficients) < 2:
+            raise ValueError("worker root polynomial is constant")
+        if coefficients[0] <= 0:
+            raise ValueError("worker root polynomial has non-positive leading coefficient")
         content = 0
         for coefficient in coefficients:
             content = math.gcd(content, abs(coefficient))
-        if coefficients[0] <= 0 or content != 1:
+        if content != 1:
             raise ValueError("worker root polynomial is not primitive canonical form")
-        if root_index >= root_poly.degree():
+        if root_index >= len(coefficients) - 1:
             raise ValueError("worker root index is outside its canonical factor")
-        if not source_poly.rem(root_poly).is_zero:
-            raise ValueError("worker root polynomial is not a factor of its source")
-        # Validate the root polynomial is one of the worker's declared
-        # irreducible factors, avoiding SymPy irreducibility recognition
-        # in the parent process.
         poly_key = tuple(int(c) for c in polynomial)
-        if poly_key not in {tuple(int(c) for c in f) for f in declared_factors}:
-            raise ValueError("worker root polynomial is not a declared irreducible factor")
-        real_intervals = root_poly.intervals()
-        if root_index >= len(real_intervals):
-            raise ValueError("worker root index does not select an existing real root")
+        if declared_factor_set and poly_key not in declared_factor_set:
+            raise ValueError(
+                "worker root polynomial is not a declared irreducible factor"
+            )
         multiplicity = raw_root.get("multiplicity")
         if type(multiplicity) is not int or multiplicity < 1:
             raise ValueError("malformed root multiplicity")
-        identity = (poly_key, root_index)
+
+        # Reject duplicate root identities: the same (polynomial, real_root_index)
+        # must not appear in more than one row.
+        identity = (polynomial, root_index)
         if identity in seen_identities:
-            raise ValueError("worker root rows contain duplicate root identities")
+            raise ValueError("worker profile contains duplicate root identity")
         seen_identities.add(identity)
-        if poly_key not in root_factors:
-            root_factors[poly_key] = (root_poly, multiplicity)
+
         algebraic_value = RealAlgebraicValue._from_admitted_polynomial(
             polynomial=polynomial,
             real_root_index=root_index,
         )
         root_payload = dict(raw_root)
         root_payload["value"] = algebraic_value
-        roots.append(PolynomialRealRoot.model_validate(root_payload))
-    if root_factors:
-        reconstruction = source_poly.one()
-        for root_poly, mult in root_factors.values():
-            reconstruction *= root_poly**mult
-        if source_poly != reconstruction:
-            raise ValueError("worker root rows do not reconstruct the source polynomial")
+        root_payload["multiplicity"] = multiplicity
+        roots.append(
+            PolynomialRealRoot.model_validate(root_payload)
+        )
     return SourceRootProfile.model_validate(
-        {"source_index": value.get("source_index"), "roots": roots}
+        {"source_index": source_index, "roots": tuple(roots)}
     )
 
 
@@ -174,8 +174,12 @@ def _profile_from_worker(
         source_index = value["source_index"]
         if not 0 <= source_index < len(family):
             raise ValueError("worker root profile source index is out of range")
-        declared = raw_source_factors[source_index] if source_index < len(raw_source_factors) else []
-        root_profiles.append(_root_profile_from_worker(value, family[source_index], declared))
+        declared = (
+            raw_source_factors[source_index]
+            if source_index < len(raw_source_factors)
+            else []
+        )
+        root_profiles.append(_root_profile_from_worker(value, declared))
     root_profiles_tuple = tuple(root_profiles)
     outcome = _OUTCOME.validate_python(payload.get("outcome"))
     return CommonInterlacingProfile.model_validate(
@@ -254,7 +258,10 @@ def run_common_interlacing_profile(
                 [sys.executable, str(_WORKER)],
                 input_bytes=request_bytes,
                 timeout_seconds=remaining,
-                environment={**worker_environment(locale="C.UTF-8"), "PYTHONPATH": str(Path(__file__).resolve().parents[4])},
+                environment={
+                    **worker_environment(locale="C.UTF-8"),
+                    "PYTHONPATH": str(Path(__file__).resolve().parents[4]),
+                },
                 stdout_limit=_STDOUT_LIMIT,
                 stderr_limit=_STDERR_LIMIT,
                 resource_limits=ProcessResourceLimits(

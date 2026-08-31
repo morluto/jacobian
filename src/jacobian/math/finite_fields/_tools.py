@@ -176,6 +176,7 @@ def _paley_tournament(request: PaleyTournamentRequest) -> PaleyTournamentResult:
 
 def _compute_matrix_rank(request: MatrixRankRequest) -> MatrixRankResult:
     from jacobian.math.finite_fields._matrix_rank import compute_rank
+
     return compute_rank(request)
 
 
@@ -376,12 +377,40 @@ def _build_tools() -> MathTools:
                         "column_axis": {"name": "cols", "labels": ["c0", "c1"]},
                         "entries": [
                             [
-                                {"presentation": {"characteristic": 2, "modulus_coefficients": [0, 1], "generator": "a"}, "coordinates": [1]},
-                                {"presentation": {"characteristic": 2, "modulus_coefficients": [0, 1], "generator": "a"}, "coordinates": [1]},
+                                {
+                                    "presentation": {
+                                        "characteristic": 2,
+                                        "modulus_coefficients": [0, 1],
+                                        "generator": "a",
+                                    },
+                                    "coordinates": [1],
+                                },
+                                {
+                                    "presentation": {
+                                        "characteristic": 2,
+                                        "modulus_coefficients": [0, 1],
+                                        "generator": "a",
+                                    },
+                                    "coordinates": [1],
+                                },
                             ],
                             [
-                                {"presentation": {"characteristic": 2, "modulus_coefficients": [0, 1], "generator": "a"}, "coordinates": [1]},
-                                {"presentation": {"characteristic": 2, "modulus_coefficients": [0, 1], "generator": "a"}, "coordinates": [1]},
+                                {
+                                    "presentation": {
+                                        "characteristic": 2,
+                                        "modulus_coefficients": [0, 1],
+                                        "generator": "a",
+                                    },
+                                    "coordinates": [1],
+                                },
+                                {
+                                    "presentation": {
+                                        "characteristic": 2,
+                                        "modulus_coefficients": [0, 1],
+                                        "generator": "a",
+                                    },
+                                    "coordinates": [1],
+                                },
                             ],
                         ],
                     }

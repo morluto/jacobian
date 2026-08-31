@@ -92,26 +92,21 @@ def compute_matrix_rank(matrix: AxisBoundMatrix) -> MatrixRankData:
     # Canonicalize pivot rows to declared row-axis order so that
     # equivalent or impossible pivot-label sequences cannot become
     # distinct exact values.
-    row_label_to_index = {
-        matrix.row_axis.labels[i]: i for i in pivot_row_indices
-    }
+    row_label_to_index = {matrix.row_axis.labels[i]: i for i in pivot_row_indices}
     ordered_pivot_row_indices = sorted(
         pivot_row_indices, key=lambda i: row_label_to_index[matrix.row_axis.labels[i]]
     )
     # Reorder pivot_rows and pivot_columns together based on the
     # canonical row-axis order of pivot rows.
     pivot_row_labels = [matrix.row_axis.labels[i] for i in ordered_pivot_row_indices]
-    {
-        matrix.row_axis.labels[i]: pos
-        for pos, i in enumerate(ordered_pivot_row_indices)
-    }
+    {matrix.row_axis.labels[i]: pos for pos, i in enumerate(ordered_pivot_row_indices)}
     # The pivot columns are paired with pivot rows; reorder them too.
-    original_pivot_col_labels = [matrix.column_axis.labels[i] for i in pivot_col_indices]
+    original_pivot_col_labels = [
+        matrix.column_axis.labels[i] for i in pivot_col_indices
+    ]
     [
         original_pivot_col_labels[
-            list(pivot_row_indices).index(
-                matrix.row_axis.labels.index(label)
-            )
+            list(pivot_row_indices).index(matrix.row_axis.labels.index(label))
         ]
         for label in pivot_row_labels
     ] if False else original_pivot_col_labels  # keep original for now

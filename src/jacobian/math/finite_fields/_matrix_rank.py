@@ -44,9 +44,7 @@ def compute_rank(request: MatrixRankRequest) -> MatrixRankResult:
     # Reserve the complete result envelope before the backend call so
     # that we do not waste CPU on a result known to be undeliverable.
     # The worst case is full rank with all pivot labels present.
-    max_rank = min(
-        len(matrix.row_axis.labels), len(matrix.column_axis.labels)
-    )
+    max_rank = min(len(matrix.row_axis.labels), len(matrix.column_axis.labels))
     try:
         result_probe = encode_strict_json(
             {

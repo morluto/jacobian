@@ -392,8 +392,10 @@ def _chromatic_number(
                     )
                     if (edge[0], edge[1]) not in component_edge_set
                 ]
-                clique_cover = _min_clique_cover(
-                    component_vertices, component_missing_edges
+                clique_cover = (
+                    n - 1
+                    if len(component_missing_edges) == 1
+                    else _min_clique_cover(component_vertices, component_missing_edges)
                 )
                 component_numbers.append(clique_cover)
             elif _is_bipartite_edges(component_vertices, component_edges):
@@ -432,12 +434,6 @@ def _min_clique_cover(vertices: list[str], edges: list[tuple[str, str]]) -> int:
     # missing-edge graph has at most n edges on at most n vertices.
 
     n = len(vertices)
-    if len(edges) == 1:
-        # K_n with one deleted edge has exactly one two-vertex colour class;
-        # the remaining vertices are singletons, so its chromatic number is
-        # n - 1. Keep this common row out of the generic partition search.
-        return n - 1
-
     # Greedy clique partition: repeatedly take the largest clique
     # from the remaining vertices.  This gives an upper bound.
     def _greedy_clique_partition() -> int:

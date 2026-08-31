@@ -35,7 +35,7 @@ MAX_CONSTRAINT_COMPONENT_DIGITS = 65_536
 MAX_STORED_CONSTRAINT_DIGITS = 2_000_000
 MAX_INVARIANT_FORM_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
-_INVARIANT_FORM_WALL_SECONDS = 120.0
+_INVARIANT_FORM_WALL_SECONDS = 3600.0
 
 
 def _require_active_request(stage: str) -> None:
@@ -241,6 +241,25 @@ def _require_constraint_expansion_envelope(
 def _retained_action_bytes(action: RationalMatrixAction) -> int:
     """Measure the exact retained source before expanding any constraints."""
 
+    # Preflight the expanded source-byte budget before model_dump and
+    # encode_strict_json materialize the full canonical representation.
+    dimension = len(action.coordinate_axis)
+    generator_count = len(action.generators)
+    if generator_count > 0:
+        sample = action.generators[0].matrix
+        sample_row_bytes = max(
+            sum(len(str(value)) + 4 for value in row) for row in sample.entries
+        )
+        estimated_bytes = (
+            4_096
+            + dimension * 8
+            + generator_count * (8 + dimension * sample_row_bytes + 32)
+        )
+        if estimated_bytes + 4_096 > MAX_INVARIANT_FORM_RESULT_BYTES:
+            raise _validation_error(
+                "budget_exceeded",
+                "the retained rational matrix action leaves no room for the canonical result",
+            )
     try:
         source_bytes = len(encode_strict_json(action.model_dump(mode="json")))
     except CanonicalizationError:

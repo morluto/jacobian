@@ -22,6 +22,9 @@ from jacobian.math.number_theory.algebraic_numbers.complex import (
 from jacobian.math.number_theory.algebraic_numbers.real import (
     RealAlgebraicValue,
 )
+from jacobian.math.number_theory.number_fields._binary_power_sum import (
+    binary_power_sum_gap_profile,
+)
 from jacobian.math.number_theory.number_fields._embedding_limits import (
     MAX_NUMBER_FIELD_EMBEDDING_RESULT_BYTES,
     MAX_NUMBER_FIELD_REAL_PART_RESULTANT_STORAGE_BITS,
@@ -38,6 +41,9 @@ from jacobian.math.number_theory.number_fields._embeddings_process import (
 )
 from jacobian.math.number_theory.number_fields._integral_basis import (
     recognized_integral_basis,
+)
+from jacobian.math.number_theory.number_fields._real_embedding_order import (
+    compare_real_embedding_elements,
 )
 from jacobian.math.number_theory.number_fields.values import (
     MAX_NUMBER_FIELD_EMBEDDING_DEGREE,
@@ -367,6 +373,8 @@ def ring_of_integers(field: SimpleNumberFieldPresentation) -> list[str]:
 
 
 __all__ = [
+    "binary_power_sum_gap_profile",
+    "compare_real_embedding_elements",
     "discriminant",
     "embeddings",
     "ring_of_integers",

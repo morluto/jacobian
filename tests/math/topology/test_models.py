@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Literal, overload
+from fractions import Fraction
+from typing import Any, Literal, cast, overload
 
 import pytest
 from pydantic import ValidationError
@@ -21,6 +22,11 @@ from jacobian.math.topology._models import (
     SimplicialComplexRequest,
 )
 from jacobian.math.topology._tools import TOOLS
+from jacobian.math.topology.chain_complexes.values import (
+    CoefficientRing,
+    HomologyResult,
+    IntegralHomologyGroupValue,
+)
 
 
 @overload
@@ -51,6 +57,16 @@ def _operation(operation_id: str) -> MathTool[Any, Any]:
     return next(tool for tool in TOOLS if tool.operation_id == operation_id)
 
 
+def _integral_groups(
+    result: HomologyResult,
+) -> tuple[IntegralHomologyGroupValue, ...]:
+    assert all(
+        isinstance(group, IntegralHomologyGroupValue)
+        for group in result.homology_groups
+    )
+    return cast(tuple[IntegralHomologyGroupValue, ...], result.homology_groups)
+
+
 def _canonical_complex(
     vertices: tuple[str, ...], facets: tuple[tuple[str, ...], ...]
 ) -> FiniteSimplicialComplex:
@@ -58,6 +74,37 @@ def _canonical_complex(
     request = SimplicialComplexRequest(vertices=vertices, facets=facets)
     operation = _operation("topology.simplicial_complex.canonicalize")
     return operation.run(request).complex
+
+
+def _rational_rank(rows: tuple[tuple[str, ...], ...]) -> int:
+    """Small independent Gaussian rank oracle for topology fixtures."""
+
+    matrix = [[Fraction(int(value)) for value in row] for row in rows]
+    if not matrix:
+        return 0
+    pivot_row = 0
+    for column in range(len(matrix[0])):
+        pivot = next(
+            (row for row in range(pivot_row, len(matrix)) if matrix[row][column]),
+            None,
+        )
+        if pivot is None:
+            continue
+        matrix[pivot_row], matrix[pivot] = matrix[pivot], matrix[pivot_row]
+        pivot_value = matrix[pivot_row][column]
+        matrix[pivot_row] = [value / pivot_value for value in matrix[pivot_row]]
+        for row in range(len(matrix)):
+            if row == pivot_row or not matrix[row][column]:
+                continue
+            factor = matrix[row][column]
+            matrix[row] = [
+                value - factor * pivot_value
+                for value, pivot_value in zip(
+                    matrix[row], matrix[pivot_row], strict=True
+                )
+            ]
+        pivot_row += 1
+    return pivot_row
 
 
 def test_facet_request_rejects_duplicates_nonmaximal_faces_and_hidden_isolates() -> (
@@ -140,8 +187,40 @@ def test_integral_homology_runs_through_the_public_operation() -> None:
     result = operation.run(IntegralSimplicialHomologyRequest(complex=complex_))
 
     assert result.complex_digest == complex_.complex_digest
-    assert result.coefficient_ring == "ZZ"
-    assert tuple(group.betti_number for group in result.groups) == (1, 1)
+    assert result.homology.coefficient_ring is CoefficientRing.INTEGER
+    assert tuple(group.free_rank for group in _integral_groups(result.homology)) == (
+        1,
+        1,
+    )
+
+
+def test_integral_homology_admits_one_tetrahedron() -> None:
+    """The canonical simplex contraction has H_0 = ZZ and no higher homology."""
+
+    complex_ = _canonical_complex(
+        ("a", "b", "c", "d"),
+        (("a", "b", "c", "d"),),
+    )
+    operation = _operation("topology.simplicial_homology.integral.compute")
+
+    result = operation.run(IntegralSimplicialHomologyRequest(complex=complex_))
+
+    groups = _integral_groups(result.homology)
+    assert tuple(
+        (group.free_rank, group.torsion_invariant_factors) for group in groups
+    ) == ((1, ()), (0, ()), (0, ()), (0, ()))
+    chain = result.homology.complex
+    independent_betti = tuple(
+        chain.basis_sizes[index]
+        - (_rational_rank(chain.differential_matrices[index - 1]) if index > 0 else 0)
+        - (
+            _rational_rank(chain.differential_matrices[index])
+            if index < len(chain.differential_matrices)
+            else 0
+        )
+        for index in range(len(chain.basis_sizes))
+    )
+    assert tuple(group.free_rank for group in groups) == independent_betti
 
 
 def test_chain_bounds_are_checked_after_materialization_but_before_computation() -> (
@@ -202,8 +281,9 @@ def test_integral_homology_certificate_boundary_runs_the_public_operation() -> N
 
     result = operation.run(IntegralSimplicialHomologyRequest(complex=complex_))
 
-    assert result.groups[0].betti_number == 32
-    assert len(result.groups[0].free_generators) == 32
+    group = _integral_groups(result.homology)[0]
+    assert group.free_rank == 32
+    assert len(group.free_generators) == 32
 
 
 def test_stale_complex_digest_reports_field_level_loc() -> None:

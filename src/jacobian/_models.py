@@ -6,6 +6,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from jacobian.canonical import CanonicalizationError
+
 _MAX_CONTAINER_DEPTH = 256
 
 
@@ -23,22 +25,24 @@ def canonicalize_json_containers(value: Any) -> Any:
     stack.
     """
 
-    from jacobian.canonical import CanonicalizationError
-
-    def _canonicalize(inner: Any, depth: int) -> Any:
+    def _canonicalize(inner: Any, depth: int, seen: set[int]) -> Any:
         if depth > _MAX_CONTAINER_DEPTH:
             raise CanonicalizationError(
                 f"container nesting exceeds {_MAX_CONTAINER_DEPTH} levels"
             )
-        if isinstance(inner, list):
-            return tuple(_canonicalize(item, depth + 1) for item in inner)
-        if isinstance(inner, tuple):
-            return tuple(_canonicalize(item, depth + 1) for item in inner)
+        if isinstance(inner, (list, tuple)):
+            if id(inner) in seen:
+                raise CanonicalizationError("cyclic JSON containers are not allowed")
+            seen = seen | {id(inner)}
+            return tuple(_canonicalize(item, depth + 1, seen) for item in inner)
         if isinstance(inner, dict):
-            return {key: _canonicalize(item, depth + 1) for key, item in inner.items()}
+            if id(inner) in seen:
+                raise CanonicalizationError("cyclic JSON containers are not allowed")
+            seen = seen | {id(inner)}
+            return {key: _canonicalize(item, depth + 1, seen) for key, item in inner.items()}
         return inner
 
-    return _canonicalize(value, 0)
+    return _canonicalize(value, 0, set())
 
 
 class StrictModel(BaseModel):

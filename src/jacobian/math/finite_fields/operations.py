@@ -624,9 +624,7 @@ def _homogeneous_monomial_basis(
     slot_count = degree + variable_count - 1
     separator_count = variable_count - 1
     compositions: list[tuple[int, ...]] = []
-    for separators in reversed(
-        tuple(combinations(range(slot_count), separator_count))
-    ):
+    for separators in reversed(tuple(combinations(range(slot_count), separator_count))):
         previous = -1
         exponents: list[int] = []
         for separator in separators:
@@ -693,10 +691,7 @@ def _induced_action_matrix(
                     polynomial, coefficients, prime=action.prime
                 )
                 substitution_steps += 1
-                if (
-                    checkpoint is not None
-                    and substitution_steps % 1_024 == 0
-                ):
+                if checkpoint is not None and substitution_steps % 1_024 == 0:
                     checkpoint("during substitution")
         for target_exponents, coefficient in polynomial.items():
             matrix[monomial_index[target_exponents]][column] = coefficient

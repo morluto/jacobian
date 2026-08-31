@@ -210,7 +210,7 @@ def _admit_edge_pattern_profile(
                 str, tuple[str, ...], tuple[int, ...], int, tuple[str, ...], bool, bool
             ]
         ] = []
-        for edge_id, members in hypergraph.edges:
+        for entries_count, (edge_id, members) in enumerate(hypergraph.edges):
             colors = tuple(normalized_colors[member] for member in members)
             (
                 entry_size,
@@ -232,7 +232,6 @@ def _admit_edge_pattern_profile(
                 )
             )
             entries_bytes += entry_size + (1 if entries_count else 0)
-            entries_count += 1
             edge_id_size = _encoded_size(edge_id, encoded)
             if is_mono:
                 monochromatic_bytes += edge_id_size + (1 if monochromatic_count else 0)

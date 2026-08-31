@@ -601,14 +601,13 @@ def homogeneous_fixed_subspace(
     if execution is not None:
         deadline = min(
             execution.started_at + _FIXED_SUBSPACE_WALL_SECONDS,
-            execution.deadline
-            if execution.deadline is not None
-            else float("inf"),
+            execution.deadline if execution.deadline is not None else float("inf"),
         )
         bind_request_deadline(deadline)
 
     def checkpoint(stage: str) -> None:
         _fixed_subspace_checkpoint(deadline, stage)
+
     monomial_count = _homogeneous_fixed_subspace_envelope(
         action,
         degree,

@@ -483,6 +483,215 @@ class NumberFieldEmbeddingProfile(StrictModel):
         )
 
 
+class SimpleNumberFieldRealEmbeddingBinding(StrictModel):
+    """A structural binding of one field element to one real embedding record.
+
+    This value preserves the exact power-basis element, selected indexed root,
+    and the producer's rational root-isolation record.  Construction and
+    deserialization establish only that those values use one presentation.
+    A theorem-bearing consumer must recognize the presentation and match the
+    complete embedding record inside its own admitted execution path.
+    """
+
+    element: SimpleNumberFieldElement
+    embedding_record: RealNumberFieldEmbeddingRecord
+    interpretation: Literal["POWER_BASIS_AT_SELECTED_REAL_ROOT"] = (
+        "POWER_BASIS_AT_SELECTED_REAL_ROOT"
+    )
+
+    @model_validator(mode="after")
+    def bind_element_to_record_presentation(self) -> Self:
+        if self.element.presentation != self.embedding_record.embedding.presentation:
+            raise _validation_error(
+                "real_embedding_binding_field",
+                "field element and real embedding record must share one presentation",
+            )
+        return self
+
+
+class NumberFieldRealValueEnclosure(StrictModel):
+    """A closed rational enclosure of one selected real image.
+
+    The producing operation proves containment. Public parsing establishes the
+    canonical bounded interval shape but does not replay field arithmetic or
+    selected-root recognition.
+    """
+
+    lower: CanonicalRational
+    upper: CanonicalRational
+    interval_type: Literal["CLOSED", "SINGLETON"]
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_component_bound(cls, data: Any) -> Any:
+        if not isinstance(data, Mapping):
+            return data
+        _raw_rational_component_bound(
+            tuple(data.get(name) for name in ("lower", "upper")),
+            max_digits=MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS,
+            label="real embedded value enclosure",
+        )
+        return canonicalize_json_containers(data)
+
+    @model_validator(mode="after")
+    def require_closed_interval(self) -> Self:
+        if any(
+            len(endpoint.num.lstrip("-")) > MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
+            or len(endpoint.den) > MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
+            for endpoint in (self.lower, self.upper)
+        ):
+            raise _validation_error(
+                "real_value_enclosure_component_bound",
+                "real embedded value enclosure exceeds the "
+                f"{MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS:,}-digit rational "
+                "component bound",
+            )
+        lower = self.lower.as_fraction()
+        upper = self.upper.as_fraction()
+        if lower > upper:
+            raise _validation_error(
+                "real_value_enclosure_order",
+                "real embedded value enclosure lower endpoint exceeds upper",
+            )
+        expected = "SINGLETON" if lower == upper else "CLOSED"
+        if self.interval_type != expected:
+            raise _validation_error(
+                "real_value_enclosure_type",
+                "equal endpoints require SINGLETON; distinct endpoints require CLOSED",
+            )
+        return self
+
+
+SimpleNumberFieldRealOrder = Literal["LT", "EQ", "GT"]
+
+
+class SimpleNumberFieldRealEmbeddingOrder(StrictModel):
+    """Source-bound exact order under one recognized real embedding.
+
+    ``difference_enclosure`` is exact rational evidence produced for
+    ``left - right`` at the retained selected root. Public parsing checks the
+    source relation, parent binding, enclosure sign, and bounded shape; it does
+    not re-run root recognition or field arithmetic.
+    """
+
+    left: SimpleNumberFieldRealEmbeddingBinding
+    right: SimpleNumberFieldRealEmbeddingBinding
+    difference: SimpleNumberFieldRealEmbeddingBinding
+    order: SimpleNumberFieldRealOrder
+    difference_enclosure: NumberFieldRealValueEnclosure
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_difference_interval_bound(cls, data: Any) -> Any:
+        if not isinstance(data, Mapping):
+            return data
+        interval = data.get("difference_enclosure")
+        if isinstance(interval, Mapping):
+            for endpoint_name in ("lower", "upper"):
+                endpoint = interval.get(endpoint_name)
+                if not isinstance(endpoint, Mapping):
+                    continue
+                for part in ("num", "den"):
+                    raw = endpoint.get(part)
+                    if isinstance(raw, str) and len(raw.lstrip("-")) > (
+                        MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
+                    ):
+                        raise _validation_error(
+                            "real_order_isolator_component_bound",
+                            "real-embedding order evidence exceeds the "
+                            f"{MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS:,}-digit "
+                            "rational component bound",
+                        )
+        return canonicalize_json_containers(data)
+
+    @model_validator(mode="after")
+    def bind_order_to_source_shape(self) -> Self:
+        record = self.left.embedding_record
+        if (
+            self.right.embedding_record != record
+            or self.difference.embedding_record != record
+        ):
+            raise _validation_error(
+                "real_order_embedding_mismatch",
+                "left, right, and difference must use one exact embedding record",
+            )
+
+        expected_difference = tuple(
+            left.as_fraction() - right.as_fraction()
+            for left, right in zip(
+                self.left.element.coefficients_ascending,
+                self.right.element.coefficients_ascending,
+                strict=True,
+            )
+        )
+        actual_difference = tuple(
+            coefficient.as_fraction()
+            for coefficient in self.difference.element.coefficients_ascending
+        )
+        if actual_difference != expected_difference:
+            raise _validation_error(
+                "real_order_difference_mismatch",
+                "difference must be the exact reduced-coordinate value left minus right",
+            )
+
+        interval = self.difference_enclosure
+        endpoints = (interval.lower, interval.upper)
+        if any(
+            len(endpoint.num.lstrip("-")) > MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
+            or len(endpoint.den) > MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
+            for endpoint in endpoints
+        ):
+            raise _validation_error(
+                "real_order_isolator_component_bound",
+                "real-embedding order evidence exceeds the "
+                f"{MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS:,}-digit rational "
+                "component bound",
+            )
+        lower = interval.lower.as_fraction()
+        upper = interval.upper.as_fraction()
+        difference_is_zero = all(value == 0 for value in expected_difference)
+        if self.order == "EQ":
+            if not difference_is_zero or lower != 0 or upper != 0:
+                raise _validation_error(
+                    "real_order_zero_mismatch",
+                    "equal order requires the zero field difference and singleton zero evidence",
+                )
+        elif difference_is_zero:
+            raise _validation_error(
+                "real_order_zero_mismatch",
+                "a zero field difference requires equal order",
+            )
+        elif self.order == "LT" and upper >= 0:
+            raise _validation_error(
+                "real_order_interval_sign",
+                "less-than order requires strictly negative isolation evidence",
+            )
+        elif self.order == "GT" and lower <= 0:
+            raise _validation_error(
+                "real_order_interval_sign",
+                "greater-than order requires strictly positive isolation evidence",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        left: SimpleNumberFieldRealEmbeddingBinding,
+        right: SimpleNumberFieldRealEmbeddingBinding,
+        difference: SimpleNumberFieldRealEmbeddingBinding,
+        order: SimpleNumberFieldRealOrder,
+        difference_enclosure: NumberFieldRealValueEnclosure,
+    ) -> Self:
+        return cls.model_construct(
+            left=left,
+            right=right,
+            difference=difference,
+            order=order,
+            difference_enclosure=difference_enclosure,
+        )
+
+
 __all__ = [
     "MAX_NUMBER_FIELD_EMBEDDING_DEGREE",
     "MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS",
@@ -494,8 +703,12 @@ __all__ = [
     "NumberFieldEmbedding",
     "NumberFieldEmbeddingProfile",
     "NumberFieldEmbeddingRecord",
+    "NumberFieldRealValueEnclosure",
     "NumberFieldSignature",
     "RealNumberFieldEmbeddingRecord",
     "SimpleNumberFieldElement",
     "SimpleNumberFieldPresentation",
+    "SimpleNumberFieldRealEmbeddingBinding",
+    "SimpleNumberFieldRealEmbeddingOrder",
+    "SimpleNumberFieldRealOrder",
 ]

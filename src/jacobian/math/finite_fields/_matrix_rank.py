@@ -91,7 +91,9 @@ def compute_matrix_rank(
         # The worst case is full rank with all pivot labels present.
         max_rank = min(len(matrix.row_axis.labels), len(matrix.column_axis.labels))
         longest_row_label = max(
-            matrix.row_axis.labels, key=lambda label: len(label.encode("utf-8")), default=""
+            matrix.row_axis.labels,
+            key=lambda label: len(label.encode("utf-8")),
+            default="",
         )
         longest_column_label = max(
             matrix.column_axis.labels,

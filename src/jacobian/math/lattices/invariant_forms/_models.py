@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from typing import Any, Literal, Self
 
 from pydantic import Field, model_validator
@@ -281,6 +282,11 @@ class RationalMatrixAction(StrictModel):
                     raise _validation_error(
                         "invalid_coordinate_label",
                         "coordinate_axis labels must be strings",
+                    )
+                if unicodedata.normalize("NFC", label) != label:
+                    raise _validation_error(
+                        "noncanonical_coordinate_label",
+                        "coordinate_axis labels must use NFC Unicode normalization",
                     )
             data = dict(data)
             data["coordinate_axis"] = canonicalize_json_containers(axis)

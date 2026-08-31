@@ -132,11 +132,28 @@ def test_product_ci_uses_a_versioned_checked_in_test_plan() -> None:
     assert "python tools/ci_test_plan.py" in workflow
     assert '--base "$BASE_SHA"' in workflow
     assert '--head "$HEAD_SHA"' in workflow
-    assert "event=workflow_dispatch" in workflow
+    assert 'event="$EVENT_NAME"' in workflow
     assert "run_scale: ${{ steps.plan.outputs.run_scale }}" in workflow
     assert "python_lanes: ${{ steps.plan.outputs.python_lanes }}" in workflow
     assert "math_shards: ${{ steps.plan.outputs.math_shards }}" in workflow
     assert (ROOT / "tools" / "ci_test_plan.py").exists()
+
+
+def test_autofix_dispatch_binds_pr_plans_to_the_exact_commit_range() -> None:
+    ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    autofix = (ROOT / ".github/workflows/autofix.yml").read_text(encoding="utf-8")
+
+    assert "base_sha:" in ci
+    assert "head_sha:" in ci
+    assert "DISPATCH_BASE_SHA: ${{ inputs.base_sha }}" in ci
+    assert "DISPATCH_HEAD_SHA: ${{ inputs.head_sha }}" in ci
+    assert 'BASE_SHA="$DISPATCH_BASE_SHA"' in ci
+    assert 'HEAD_SHA="$DISPATCH_HEAD_SHA"' in ci
+    assert 'test "$HEAD_SHA" = "$(git rev-parse HEAD)"' in ci
+    assert 'git merge-base "$BASE_SHA" "$HEAD_SHA" >/dev/null' in ci
+    assert "PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}" in autofix
+    assert '-f base_sha="$PR_BASE_SHA"' in autofix
+    assert '-f head_sha="$(git rev-parse HEAD)"' in autofix
 
 
 def test_static_job_runs_docs_linkcheck() -> None:

@@ -59,11 +59,11 @@ def _compute_edge_admission(
     color_to_block: dict[str, int] = {}
     equality_partition: list[int] = []
     color_labels: list[str] = []
-    for c in colors:
-        if c not in color_to_block:
-            color_to_block[c] = len(color_to_block)
-            color_labels.append(c)
-        equality_partition.append(color_to_block[c])
+    for color in colors:
+        if color not in color_to_block:
+            color_to_block[color] = len(color_to_block)
+            color_labels.append(color)
+        equality_partition.append(color_to_block[color])
 
     num_blocks = len(color_to_block)
     is_mono = num_blocks <= 1
@@ -108,21 +108,20 @@ def _compute_edge_admission(
 
 
 def _admit_edge_pattern_profile(
-    hypergraph: FiniteHypergraph, vertex_colors: dict[str, str]
+    hypergraph: FiniteHypergraph, vertex_colors: tuple[VertexColorPair, ...]
 ) -> tuple[
-    dict[str, str],
+    tuple[VertexColorPair, ...],
     list[
         tuple[str, tuple[str, ...], tuple[int, ...], int, tuple[str, ...], bool, bool]
     ],
-    int,
 ]:
     """Admit the request and return the precomputed admission plan.
 
-    Returns ``(normalized_colors, edge_plans, result_bytes)`` where
-    ``edge_plans`` is a list of per-edge tuples containing
+    Returns ``(color_rows, edge_plans)`` where ``color_rows`` is the retained
+    colour carrier and ``edge_plans`` is a list of per-edge tuples containing
     ``(edge_id, members, equality_partition, num_blocks, color_labels,
-    is_monochromatic, is_rainbow)`` that the kernel reuses directly
-    without recomputing the equality partition.
+    is_monochromatic, is_rainbow)`` that the kernel reuses directly without
+    recomputing the equality partition.
     """
     if not isinstance(hypergraph, FiniteHypergraph):
         raise OperationDomainValidationError(
@@ -130,69 +129,74 @@ def _admit_edge_pattern_profile(
             code="edge_pattern.invalid_hypergraph",
             message="hypergraph must be a FiniteHypergraph value",
         )
-    if not isinstance(vertex_colors, dict) or set(vertex_colors) != set(
-        hypergraph.vertices
+    if not isinstance(vertex_colors, tuple) or any(
+        not isinstance(pair, VertexColorPair)
+        or not isinstance(pair.vertex, str)
+        or not isinstance(pair.color, str)
+        for pair in vertex_colors
     ):
+        raise OperationDomainValidationError(
+            location=("vertex_colors",),
+            code="edge_pattern.invalid_color_map",
+            message="vertex_colors must be a sequence of VertexColorPair rows",
+        )
+    vertices = set(hypergraph.vertices)
+    row_vertices = [pair.vertex for pair in vertex_colors]
+    if len(set(row_vertices)) != len(row_vertices):
+        raise OperationDomainValidationError(
+            location=("vertex_colors",),
+            code="edge_pattern.duplicate_vertex_color",
+            message="vertex_colors must not repeat a vertex",
+        )
+    if set(row_vertices) != vertices:
         raise OperationDomainValidationError(
             location=("vertex_colors",),
             code="edge_pattern.color_map_must_cover_all_vertices",
             message="vertex_colors must cover exactly all declared vertices",
         )
-    if any(
-        not isinstance(key, str) or not isinstance(value, str)
-        for key, value in vertex_colors.items()
-    ):
-        raise OperationDomainValidationError(
-            location=("vertex_colors",),
-            code="edge_pattern.invalid_color_map",
-            message="vertex_colors must be a string-to-string mapping",
-        )
-    # Thread 3: Use a cheap aggregate raw UTF-8 bound instead of a fixed
-    # per-label ceiling, followed by result-sensitive output admission.
+    # Cheap aggregate raw UTF-8 bound before normalization/allocation work:
+    # every color label is echoed verbatim into the result, so a raw total that
+    # already exceeds the output envelope is rejected up front.
     try:
-        for value in vertex_colors.values():
-            value.encode("utf-8")
+        total_color_bytes = sum(
+            len(pair.color.encode("utf-8")) for pair in vertex_colors
+        )
     except UnicodeEncodeError as exc:
         raise OperationDomainValidationError(
             location=("vertex_colors",),
             code="edge_pattern.invalid_color_encoding",
             message="vertex color labels must be valid UTF-8",
         ) from exc
-    total_color_bytes = sum(
-        len(value.encode("utf-8")) for value in vertex_colors.values()
-    )
     if total_color_bytes > MAX_EDGE_PATTERN_PROFILE_RESULT_BYTES:
         raise OperationDomainValidationError(
             location=("vertex_colors",),
             code="edge_pattern.result_too_large",
-            message="the complete edge-pattern profile exceeds the canonical output envelope",
+            message=(
+                "the complete edge-pattern profile exceeds the canonical "
+                "output envelope"
+            ),
         )
-    normalized_keys = [unicodedata.normalize("NFC", key) for key in vertex_colors]
-    if len(set(normalized_keys)) != len(normalized_keys):
-        raise OperationDomainValidationError(
-            location=("vertex_colors",),
-            code="edge_pattern.color_map_key_collision",
-            message="vertex_colors keys collide after Unicode normalization",
-        )
+    # Retain exact source-label identity: lookups are keyed by the exact vertex
+    # label, while only the color *values* are NFC-normalized for a canonical
+    # result. NFC-colliding vertex labels can therefore both be represented.
+    color_by_vertex = {pair.vertex: pair.color for pair in vertex_colors}
     normalized_colors = {
-        key: unicodedata.normalize("NFC", value) for key, value in vertex_colors.items()
+        vertex: unicodedata.normalize("NFC", color)
+        for vertex, color in color_by_vertex.items()
     }
 
-    # Thread 1: Compute equality partitions during admission and return
-    # them as part of the plan so the kernel reuses them without
-    # recomputing the same semantic work.
+    # Thread 1: Compute equality partitions during admission and return them as
+    # part of the plan so the kernel reuses them without recomputing the same
+    # semantic work. Color labels are measured after transport normalization.
     try:
         encoded: dict[str, int] = {}
-        # Thread 2: Use a list of vertex-color pairs for the result
-        # representation so the coloring cannot be confused with a
-        # rational-shaped object during canonicalization.
-        color_pairs = tuple(
-            VertexColorPair(vertex=v, color=c)
-            for v, c in sorted(normalized_colors.items())
+        color_rows = tuple(
+            VertexColorPair(vertex=v, color=normalized_colors[v])
+            for v in sorted(normalized_colors)
         )
         source_size = len(canonicalize_json(hypergraph.model_dump(mode="json")))
         colors_size = len(
-            encode_strict_json([p.model_dump(mode="json") for p in color_pairs])
+            encode_strict_json([p.model_dump(mode="json") for p in color_rows])
         )
         entries_bytes = monochromatic_bytes = rainbow_bytes = 2
         monochromatic_count = rainbow_count = 0
@@ -272,23 +276,21 @@ def _admit_edge_pattern_profile(
                 f"{MAX_EDGE_PATTERN_PROFILE_RESULT_BYTES}-byte result envelope"
             ),
         )
-    return normalized_colors, edge_plans, result_bytes
+    return color_rows, edge_plans
 
 
 def compute_edge_pattern_profile(
     hypergraph: FiniteHypergraph,
-    vertex_colors: dict[str, str],
+    vertex_colors: tuple[VertexColorPair, ...],
 ) -> EdgePatternProfileResult:
     """Return the complete edge-pattern profile of a vertex-coloured hypergraph.
 
     For each edge, compute the equality partition of its member colours,
     the number of colour blocks, and classify as monochromatic or rainbow.
     """
-    normalized_colors, edge_plans, _result_bytes = _admit_edge_pattern_profile(
-        hypergraph, vertex_colors
-    )
+    color_rows, edge_plans = _admit_edge_pattern_profile(hypergraph, vertex_colors)
 
-    # Thread 1: Reuse the precomputed equality partitions from admission
+    # Thread 1: reuse the precomputed equality partitions from admission
     # instead of recomputing them in the kernel.
     entries: list[EdgePatternEntry] = []
     monochromatic: list[str] = []
@@ -317,14 +319,11 @@ def compute_edge_pattern_profile(
         if is_rainbow:
             rainbow.append(edge_id)
 
-    # Thread 2: Use a list of vertex-color pairs to avoid rational ambiguity
-    color_pairs = tuple(
-        VertexColorPair(vertex=v, color=c) for v, c in sorted(normalized_colors.items())
-    )
-
+    # Thread 2: the coloring is a sequence of vertex-color pairs, so it cannot
+    # be confused with the repository's rational encoding during transport.
     return EdgePatternProfileResult(
         hypergraph=hypergraph,
-        vertex_colors=color_pairs,
+        vertex_colors=color_rows,
         entries=tuple(entries),
         monochromatic_edge_ids=tuple(monochromatic),
         rainbow_edge_ids=tuple(rainbow),

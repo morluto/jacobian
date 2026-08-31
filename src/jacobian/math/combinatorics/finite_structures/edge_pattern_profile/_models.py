@@ -13,23 +13,41 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 )
 
 
+class VertexColorPair(StrictModel):
+    """One (vertex label, color label) pair in a vertex colouring.
+
+    An aligned finite sequence of these pairs is the domain-owned carrier for
+    a total vertex colouring: it is deterministic, order-insensitive for
+    meaning, and cannot be mistaken for the repository's rational encoding.
+    """
+
+    vertex: str
+    color: str
+
+
 class EdgePatternProfileRequest(StrictModel):
     """Request for the vertex-colour edge-pattern profile of a hypergraph."""
 
     hypergraph: FiniteHypergraph
-    vertex_colors: dict[str, str] = Field(
+    vertex_colors: tuple[VertexColorPair, ...] = Field(
         description=(
-            "A total map on the hypergraph vertex labels. The complete result "
-            "is admitted against the canonical output-size envelope; color "
-            "labels must be valid UTF-8 and are bounded by the aggregate "
-            "output envelope."
+            "A total finite vertex colouring as aligned (vertex, color) pairs "
+            "covering every declared vertex exactly once. Color labels must be "
+            "valid UTF-8 and are admitted against the aggregate output-size "
+            "envelope."
         )
     )
 
     @model_validator(mode="after")
     def validate_colors(self) -> Self:
         vertices = set(self.hypergraph.vertices)
-        if set(self.vertex_colors.keys()) != vertices:
+        rows = self.vertex_colors
+        if len({pair.vertex for pair in rows}) != len(rows):
+            raise PydanticCustomError(
+                "edge_pattern.color_map_duplicate_vertex",
+                "vertex_colors must not repeat a vertex",
+            )
+        if {pair.vertex for pair in rows} != vertices:
             raise PydanticCustomError(
                 "edge_pattern.color_map_must_cover_all_vertices",
                 "vertex_colors must cover exactly all declared vertices",
@@ -45,13 +63,6 @@ class EdgePatternEntry(StrictModel):
     equality_partition: tuple[int, ...]
     num_color_blocks: int
     color_labels: tuple[str, ...]
-
-
-class VertexColorPair(StrictModel):
-    """One vertex-color pair in an edge-pattern profile coloring."""
-
-    vertex: str
-    color: str
 
 
 class EdgePatternProfileResult(StrictModel):

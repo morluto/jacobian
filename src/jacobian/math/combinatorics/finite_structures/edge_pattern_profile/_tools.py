@@ -69,7 +69,11 @@ TOOLS: MathTools = (
                             ["e1", ["a", "b"]],
                         ],
                     },
-                    "vertex_colors": {"a": "red", "b": "red", "c": "blue"},
+                    "vertex_colors": [
+                        {"vertex": "a", "color": "red"},
+                        {"vertex": "b", "color": "red"},
+                        {"vertex": "c", "color": "blue"},
+                    ],
                 },
             ),
         ),

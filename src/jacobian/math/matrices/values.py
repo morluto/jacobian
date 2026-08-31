@@ -582,6 +582,12 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
                     for coordinate in coordinates:
                         if not isinstance(coordinate, dict):
                             continue
+                        if set(coordinate).difference({"num", "den"}):
+                            raise _validation_error(
+                                "shape_mismatch",
+                                "embedded number-field matrix rational coordinates "
+                                "contain unknown fields",
+                            )
                         for component in ("num", "den"):
                             if not isinstance(coordinate.get(component), (str, int)):
                                 raise PydanticCustomError(

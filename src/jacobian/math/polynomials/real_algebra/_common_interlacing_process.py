@@ -11,6 +11,7 @@ from tempfile import TemporaryDirectory
 from typing import Any
 
 from pydantic import TypeAdapter, ValidationError
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._execution import (
@@ -30,6 +31,7 @@ from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
     LabelledRationalPolynomial,
     PolynomialRealRoot,
     SourceRootProfile,
+    _require_family_shape,
 )
 
 _WORKER = Path(__file__).resolve().with_name("_common_interlacing_worker.py")
@@ -227,6 +229,14 @@ def run_common_interlacing_profile(
     )
 
     _preflight_family_size(family)
+    try:
+        _require_family_shape(family)
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=("family",),
+            code=exc.type,
+            message=str(exc),
+        ) from exc
 
     execution = current_request_execution()
     started = execution.started_at if execution is not None else time.monotonic()

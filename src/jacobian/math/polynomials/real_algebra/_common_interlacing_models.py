@@ -476,6 +476,10 @@ class CommonInterlacingProfile(StrictModel):
                     obstruction.minimum_upper,
                 )
 
+        # Validate all references before indexing profiles to avoid
+        # raw IndexError escaping the public operation.
+        for reference in references:
+            self._require_reference(reference)
 
         # Verify gap endpoints reference the correct expanded root positions.
         if isinstance(self.outcome, CommonInterlacingExists):
@@ -517,8 +521,6 @@ class CommonInterlacingProfile(StrictModel):
                             "gap endpoint must reference the gap_index-th and "
                             "(gap_index+1)-th expanded root positions",
                         )
-        for reference in references:
-            self._require_reference(reference)
         return self
 
     @classmethod

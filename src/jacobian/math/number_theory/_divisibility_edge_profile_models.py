@@ -95,6 +95,9 @@ def _validate_divisibility_edge_resources(
     values: object,
 ) -> tuple[tuple[int, int, int], ...]:
     elements = _extract_elements(values)
+    # Canonicalize element order so the same mathematical set produces the
+    # same edge plan and retained result regardless of presentation.
+    elements = tuple(sorted(elements, key=int))
     parsed = tuple(parse_canonical_integer(value) for value in elements)
     digits = [len(v) for v in elements]
     pair_scan_work = sum(

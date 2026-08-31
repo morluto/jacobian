@@ -24,7 +24,24 @@ def main() -> int:
         family = tuple(
             LabelledRationalPolynomial.model_validate(source) for source in raw_family
         )
+        from jacobian.math.polynomials._conversions import (
+            rational_polynomial_to_sympy,
+        )
+
+        from jacobian.math.polynomials.real_algebra._common_interlacing import (
+            _admit_common_interlacing,
+        )
+
+        plan = _admit_common_interlacing(family)
         result = _common_interlacing_profile_in_process(family)
+        # Send the declared irreducible factors for each source so the parent
+        # can validate root rows structurally without re-running SymPy kernels.
+        source_factors = []
+        for source_index, source_plan in enumerate(plan.sources):
+            factors = []
+            for factor_plan in source_plan.factors:
+                factors.append(factor_plan.canonical_coefficients)
+            source_factors.append(factors)
     except OperationDomainValidationError as exc:
         sys.stdout.write(
             json.dumps({"ok": False, "kind": "domain", "errors": exc.errors()})
@@ -37,6 +54,7 @@ def main() -> int:
         json.dumps(
             {
                 "ok": True,
+                "source_factors": source_factors,
                 "root_profiles": [
                     profile.model_dump(mode="json") for profile in result.root_profiles
                 ],

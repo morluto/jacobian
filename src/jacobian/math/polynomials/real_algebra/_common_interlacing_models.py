@@ -15,6 +15,7 @@ from jacobian.math._labels import OpaqueLabel
 from jacobian.math.number_theory.algebraic_numbers.real import (
     RationalIsolatingInterval,
     RealAlgebraicValue,
+    _UnrecognizedRealAlgebraicValue,
 )
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
@@ -178,7 +179,7 @@ class CommonInterlacingRequest(StrictModel):
 class PolynomialRealRoot(StrictModel):
     """One distinct source root with exact multiplicity and algebraic identity."""
 
-    value: RealAlgebraicValue
+    value: _UnrecognizedRealAlgebraicValue
     multiplicity: StrictInt = Field(
         ge=1,
         le=MAX_COMMON_INTERLACING_SOURCE_DEGREE,
@@ -475,6 +476,47 @@ class CommonInterlacingProfile(StrictModel):
                     obstruction.minimum_upper,
                 )
 
+
+        # Verify gap endpoints reference the correct expanded root positions.
+        if isinstance(self.outcome, CommonInterlacingExists):
+            for gap in self.outcome.gaps:
+                for ref, pos in (
+                    (gap.lower, gap.gap_index),
+                    (gap.upper, gap.gap_index + 1),
+                ):
+                    profile = self.root_profiles[ref.source_index]
+                    expanded_start = 0
+                    for root_index, root in enumerate(profile.roots):
+                        if root_index == ref.distinct_root_index:
+                            break
+                        expanded_start += root.multiplicity
+                    root = profile.roots[ref.distinct_root_index]
+                    if not (expanded_start <= pos < expanded_start + root.multiplicity):
+                        raise _validation_error(
+                            "gap_endpoint_position",
+                            "gap endpoint must reference the gap_index-th and "
+                            "(gap_index+1)-th expanded root positions",
+                        )
+        elif isinstance(self.outcome, CommonInterlacingDoesNotExist):
+            obstruction = self.outcome.obstruction
+            if isinstance(obstruction, EmptyGapObstruction):
+                for ref, pos in (
+                    (obstruction.maximum_lower, obstruction.gap_index),
+                    (obstruction.minimum_upper, obstruction.gap_index + 1),
+                ):
+                    profile = self.root_profiles[ref.source_index]
+                    expanded_start = 0
+                    for root_index, root in enumerate(profile.roots):
+                        if root_index == ref.distinct_root_index:
+                            break
+                        expanded_start += root.multiplicity
+                    root = profile.roots[ref.distinct_root_index]
+                    if not (expanded_start <= pos < expanded_start + root.multiplicity):
+                        raise _validation_error(
+                            "gap_endpoint_position",
+                            "gap endpoint must reference the gap_index-th and "
+                            "(gap_index+1)-th expanded root positions",
+                        )
         for reference in references:
             self._require_reference(reference)
         return self

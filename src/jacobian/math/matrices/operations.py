@@ -591,6 +591,27 @@ def _require_sparse_rank_transport_envelope(
         ) from exc
 
 
+def _require_dense_rank_transport_envelope(matrix: RationalMatrix) -> None:
+    """Prove that a dense rank result retaining its source fits transport."""
+    row_count = len(matrix.entries)
+    column_count = len(matrix.entries[0])
+    rank_bound = min(row_count, column_count)
+    try:
+        encode_strict_json(
+            {
+                "matrix": matrix.model_dump(mode="json"),
+                "rank": rank_bound,
+                "pivot_columns": list(range(column_count - rank_bound, column_count)),
+            }
+        )
+    except CanonicalizationError as exc:
+        raise _validation_error(
+            "budget_exceeded",
+            "the dense rank result retains its source matrix and would exceed "
+            f"the {CanonicalLimits().max_output_bytes:,}-byte canonical output limit",
+        ) from exc
+
+
 def _admit_sparse_rank(matrix: SparseRationalMatrix) -> _SparseRankPlan:
     """Derive one bounded sparse QQ elimination plan from support components."""
 
@@ -1217,6 +1238,13 @@ def rank_result(
         pivot_columns = _sympy_sparse_rank_pivots(plan)
     else:
         _admit(_admit_exact_linear_matrix, matrix.entries)
+        if enforce_transport_limit:
+            try:
+                _require_dense_rank_transport_envelope(matrix)
+            except PydanticCustomError as exc:
+                raise OperationDomainValidationError(
+                    location=("matrix",), code=exc.type, message=exc.message()
+                ) from exc
         _, pivot_columns = _flint_rref(matrix)
     return MatrixRankResult._from_kernel(
         matrix=matrix,

@@ -21,12 +21,14 @@ from jacobian.math.matrices.cyclic_linear import (
     CyclicRationalBlockSymbol,
     CyclicRationalBlockSymbolEntry,
     CyclicRationalRankKernelProfile,
-    CyclicRationalRankKernelProfileRequest,
     RationalCyclotomicElement,
     RationalCyclotomicField,
     RationalCyclotomicMatrix,
     RationalCyclotomicVectorSpaceBasis,
     cyclic_rational_rank_kernel_profile,
+)
+from jacobian.math.matrices.cyclic_linear._models import (
+    CyclicRationalRankKernelProfileRequest,
 )
 from jacobian.math.matrices.cyclic_linear._tools import TOOLS
 from jacobian.math.matrices.cyclic_linear.operations import (

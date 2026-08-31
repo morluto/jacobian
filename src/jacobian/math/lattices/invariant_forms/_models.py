@@ -11,7 +11,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import parse_canonical_integer
-from jacobian.math._labels import OpaqueLabel
+from jacobian.math._labels import MAX_OPAQUE_LABEL_LENGTH, OpaqueLabel
 from jacobian.math.matrices.values import (
     MAX_RATIONAL_MATRIX_ORDER,
     IntegerMatrix,
@@ -100,6 +100,11 @@ def _canonicalize_generator_order(data: dict[str, object]) -> dict[str, object]:
         )
         if not isinstance(label, str):
             return normalized
+        if len(label) > MAX_OPAQUE_LABEL_LENGTH:
+            raise _validation_error(
+                "budget_exceeded",
+                f"generator labels have at most {MAX_OPAQUE_LABEL_LENGTH} characters",
+            )
         labelled_generators.append((label, generator))
     normalized["generators"] = tuple(
         generator

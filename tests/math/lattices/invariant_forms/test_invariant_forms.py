@@ -318,6 +318,25 @@ def test_duplicate_generator_labels_are_rejected_after_order_normalization() -> 
     )
 
 
+def test_overlong_generator_labels_are_rejected_before_normalization() -> None:
+    with pytest.raises(ValidationError) as exc_info:
+        RationalMatrixAction.model_validate(
+            {
+                "coordinate_axis": ["e1"],
+                "generators": [
+                    {
+                        "label": "x" * 65,
+                        "matrix": {"entries": [[_rational(1)]]},
+                    }
+                ],
+            }
+        )
+
+    assert exc_info.value.errors(include_input=False)[0]["type"] == (
+        "lattice.invariant_form.budget_exceeded"
+    )
+
+
 @pytest.mark.parametrize("extra_location", ("action", "generator"))
 def test_deep_unknown_data_is_rejected_without_recursive_preprocessing(
     extra_location: str,

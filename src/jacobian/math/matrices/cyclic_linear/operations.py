@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
-import multiprocessing
+import json
+import os
+import pickle
+import subprocess
+import sys
+import tempfile
 import time
+import multiprocessing
 from dataclasses import dataclass
 from fractions import Fraction
 from math import factorial, gcd
@@ -699,13 +705,14 @@ def _cyclotomic_kernel_child(
     degree: int,
     matrix_coordinates: ComponentCoordinates,
     common_denominator: int,
-    conn: multiprocessing.connection.Connection,
-) -> None:
-    """Run SymPy rref/det/rref_den in a child process.
+    conn: multiprocessing.connection.Connection | None = None,
+) -> tuple:
+    """Run SymPy rref/det/rref_den and return the result tuple.
 
     This function receives only picklable primitive data, reconstructs
     the SymPy objects, performs the heavy linear algebra, and returns
-    plain coordinate tuples through the pipe.
+    plain coordinate tuples. When ``conn`` is provided (multiprocessing
+    mode), the result is sent through the pipe instead of returned.
     """
     from sympy import QQ
     from sympy.polys.matrices import DomainMatrix
@@ -809,7 +816,94 @@ def _cyclotomic_kernel_child(
                 [_backend_coordinates(value, degree) for value in vector]
             )
 
-    conn.send((rank, source_dimension, nonzero_minor_data, kernel_coords))
+    result = (rank, source_dimension, nonzero_minor_data, kernel_coords)
+    if conn is not None:
+        conn.send(result)
+    return result
+
+
+def _run_kernel_subprocess(
+    order: int,
+    degree: int,
+    matrix_coordinates: ComponentCoordinates,
+    common_denominator: int,
+    deadline: float | None,
+) -> tuple:
+    """Run the cyclotomic kernel in a subprocess.
+
+    Uses ``subprocess.Popen`` with a ``python -c`` script instead of
+    ``multiprocessing.Process`` so callers do not need a ``__main__``
+    guard and the approach works cross-platform (no forkserver/spawn
+    start-method dependency). The subprocess communicates via a
+    temporary file: the parent writes pickled input, the child writes
+    pickled output, and the parent reads it back.
+    """
+
+    input_data = pickle.dumps(
+        (order, degree, matrix_coordinates, common_denominator)
+    )
+
+    runner_script = (
+        "import pickle, sys\n"
+        "from jacobian.math.matrices.cyclic_linear.operations import "
+        "_cyclotomic_kernel_child\n"
+        "input_path = sys.argv[1]\n"
+        "output_path = sys.argv[2]\n"
+        "with open(input_path, 'rb') as f:\n"
+        "    data = pickle.load(f)\n"
+        "order, degree, matrix_coordinates, common_denominator = data\n"
+        "result = _cyclotomic_kernel_child(\n"
+        "    order, degree, matrix_coordinates, common_denominator\n"
+        ")\n"
+        "with open(output_path, 'wb') as f:\n"
+        "    pickle.dump(result, f)\n"
+    )
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        input_path = os.path.join(tmpdir, "input.pkl")
+        output_path = os.path.join(tmpdir, "output.pkl")
+        with open(input_path, "wb") as f:
+            f.write(input_data)
+
+        proc = subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                runner_script,
+                input_path,
+                output_path,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        timeout = None
+        if deadline is not None:
+            timeout = max(0.1, deadline - time.monotonic())
+
+        try:
+            proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=5)
+            raise OperationExecutionTimeoutError(
+                "cyclotomic kernel subprocess exceeded the wall-time limit"
+            )
+
+        if proc.returncode != 0:
+            stderr = proc.stderr.read().decode("ascii", errors="replace")
+            raise RuntimeError(
+                f"cyclotomic kernel subprocess exited with code "
+                f"{proc.returncode}: {stderr[:500]}"
+            )
+
+        if not os.path.exists(output_path):
+            raise RuntimeError(
+                "cyclotomic kernel subprocess did not produce output"
+            )
+
+        with open(output_path, "rb") as f:
+            return pickle.load(f)
 
 
 def _compute_component(admission: _ComponentAdmission) -> _ComputedComponent:
@@ -818,66 +912,34 @@ def _compute_component(admission: _ComponentAdmission) -> _ComputedComponent:
     order = admission.order
     _require_execution_active(f"before order-{order} kernel")
 
-    # Run the SymPy kernel (rref, det, rref_den) in a child process so
-    # the parent can kill it on deadline or cancellation.  Only picklable
-    # primitive data crosses the process boundary.
-    parent_conn, child_conn = multiprocessing.Pipe(duplex=False)
-    ctx = multiprocessing.get_context("forkserver")
-    child = ctx.Process(
-        target=_cyclotomic_kernel_child,
-        args=(
-            order,
-            admission.degree,
-            admission.matrix_coordinates,
-            admission.common_denominator,
-            child_conn,
-        ),
-    )
-    child.start()
-    child_conn.close()
-
-    # Drain the result pipe before joining the child.  A large kernel
-    # basis can exceed the OS pipe buffer; if the parent only joins
-    # without recv(), conn.send() blocks in the child and deadlocks.
-    # Poll and recv in a loop so the parent drains the pipe while the
-    # child is still alive, then join once data has been received.
+    # Run the SymPy kernel (rref, det, rref_den) in a subprocess so
+    # the parent can kill it on deadline or cancellation.  Using
+    # subprocess.Popen avoids requiring a __main__ guard or a specific
+    # multiprocessing start method, working cross-platform.
     execution = current_request_execution()
-    received_result = None
-    while True:
-        if request_cancelled():
-            child.kill()
-            child.join(timeout=5)
-            raise OperationExecutionCancelledError(
-                f"request cancelled during order-{order} kernel"
-            )
-        if (
-            execution is not None
-            and execution.deadline is not None
-            and time.monotonic() >= execution.deadline
-        ):
-            child.kill()
-            child.join(timeout=5)
-            raise OperationExecutionTimeoutError(
-                f"request deadline expired during order-{order} kernel"
-            )
-        # poll returns True once the child has written (or closed) its end.
-        if parent_conn.poll(timeout=0.1):
-            received_result = parent_conn.recv()
-            break
-        if not child.is_alive():
-            child.join()
-            break
+    deadline = execution.deadline if execution is not None else None
 
-    if received_result is not None:
-        child.join(timeout=30)
-    else:
-        # Child exited before writing data; check for a pipe error.
-        received_result = parent_conn.recv()
+    if request_cancelled():
+        raise OperationExecutionCancelledError(
+            f"request cancelled before order-{order} kernel"
+        )
+
+    try:
+        rank, source_dimension, nonzero_minor_data, kernel_coords = (
+            _run_kernel_subprocess(
+                order,
+                admission.degree,
+                admission.matrix_coordinates,
+                admission.common_denominator,
+                deadline,
+            )
+        )
+    except OperationExecutionTimeoutError:
+        raise OperationExecutionTimeoutError(
+            f"request deadline expired during order-{order} kernel"
+        )
 
     _require_execution_active(f"after order-{order} kernel")
-    if child.exitcode != 0:
-        raise RuntimeError(f"cyclotomic kernel child exited with code {child.exitcode}")
-    rank, source_dimension, nonzero_minor_data, kernel_coords = received_result
 
     field = QQ.cyclotomic_field(order)
     generator = field.convert(field.ext)

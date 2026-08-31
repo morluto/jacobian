@@ -739,9 +739,9 @@ def _cyclotomic_kernel_child(
         for free in range(source_dimension):
             vector = [field.zero for _ in range(source_dimension)]
             vector[free] = field.one
-            kernel_coords.append([
-                _backend_coordinates(value, degree) for value in vector
-            ])
+            kernel_coords.append(
+                [_backend_coordinates(value, degree) for value in vector]
+            )
     else:
         column_basis = matrix.extract(range(len(backend_rows)), pivot_columns)
         _ignored, row_indices = column_basis.transpose().rref()
@@ -805,9 +805,9 @@ def _cyclotomic_kernel_child(
             vector[free] = solution_denominator
             for index, pivot in enumerate(pivot_columns):
                 vector[pivot] = -solution_rows[index][free_index]
-            kernel_coords.append([
-                _backend_coordinates(value, degree) for value in vector
-            ])
+            kernel_coords.append(
+                [_backend_coordinates(value, degree) for value in vector]
+            )
 
     conn.send((rank, source_dimension, nonzero_minor_data, kernel_coords))
 
@@ -864,9 +864,7 @@ def _compute_component(admission: _ComponentAdmission) -> _ComputedComponent:
     _require_execution_active(f"after order-{order} kernel")
 
     if child.exitcode != 0:
-        raise RuntimeError(
-            f"cyclotomic kernel child exited with code {child.exitcode}"
-        )
+        raise RuntimeError(f"cyclotomic kernel child exited with code {child.exitcode}")
 
     rank, source_dimension, nonzero_minor_data, kernel_coords = parent_conn.recv()
 

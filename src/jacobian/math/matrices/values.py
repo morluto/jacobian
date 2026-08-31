@@ -57,7 +57,7 @@ def require_matrix_scalar_digits(
                 )
 
 
-def _require_raw_matrix_envelope(
+def _require_raw_matrix_envelope(  # noqa: C901
     data: object, *, maximum_axis: int, label: str
 ) -> object:
     """Bound raw matrix depth, axes, and scalar strings before tuple copying."""

@@ -651,9 +651,7 @@ def _validate_canonical_result_bound(bound: FractionBound, ledger: _Ledger) -> i
         # When the denominator is the unit polynomial, there can be no
         # cancellation-induced support expansion, so the tracked sparse
         # term count is the accurate support bound.
-        denominator_is_unit = all(
-            degree == 0 for degree in bound.denominator.degrees
-        )
+        denominator_is_unit = all(degree == 0 for degree in bound.denominator.degrees)
         support_terms = polynomial.terms if denominator_is_unit else dense_terms
         if support_terms > MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS:
             _reject(

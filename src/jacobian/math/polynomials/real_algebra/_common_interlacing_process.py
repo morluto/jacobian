@@ -32,8 +32,11 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.algebraic_numbers.real import (
     MAX_REAL_ALGEBRAIC_DEGREE,
     RealAlgebraicValue,
+    compare_real_algebraic,
 )
 from jacobian.math.polynomials.real_algebra._common_interlacing import (
+    _common_interlacing_outcome,
+    _factor_digit_bound,
     _preflight_common_interlacing_sources,
 )
 from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
@@ -159,6 +162,11 @@ def _verify_declared_factors(  # noqa: C901
         raise ValueError("worker omitted source factor declarations")
     source_dense = _source_to_dense_int(source)
     source_degree = max(len(source_dense) - 1, 0)
+    source_height_digits = max(
+        len(format_canonical_integer(coefficient).lstrip("-"))
+        for coefficient in source_dense
+    )
+    factor_digit_bound = _factor_digit_bound(source_degree, source_height_digits)
     if len(declared_factors) > source_degree:
         raise ValueError("worker declared more factors than source degree")
     product: tuple[int, ...] = (1,)
@@ -176,6 +184,12 @@ def _verify_declared_factors(  # noqa: C901
             2 <= len(factor_coeffs) <= source_degree + 1
         ):
             raise ValueError("worker factor degree exceeds source degree")
+        if any(
+            not isinstance(coefficient, str)
+            or len(coefficient.lstrip("-")) > factor_digit_bound
+            for coefficient in factor_coeffs
+        ):
+            raise ValueError("worker factor coefficient exceeds its height bound")
         factor_dense: tuple[int, ...]
         try:
             factor_dense = tuple(
@@ -235,6 +249,18 @@ def _root_profile_from_worker(  # noqa: C901
     }
     if not declared_factor_set:
         raise ValueError("worker omitted source factor declarations")
+
+    import sympy
+
+    factor_real_root_counts: dict[tuple[int, ...], int] = {}
+    for entry in declared_factors:
+        factor_coefficients = tuple(
+            parse_canonical_integer(coefficient) for coefficient in entry[0]
+        )
+        polynomial = sympy.Poly.from_list(
+            list(factor_coefficients), gens=sympy.Symbol("x"), domain=sympy.ZZ
+        )
+        factor_real_root_counts[factor_coefficients] = len(polynomial.intervals())
 
     roots: list[PolynomialRealRoot] = []
     seen_identities: set[tuple[tuple[str, ...], int]] = set()
@@ -301,10 +327,15 @@ def _root_profile_from_worker(  # noqa: C901
         factor_row_counts[poly_key] = factor_row_counts.get(poly_key, 0) + 1
         factor_root_indices.setdefault(poly_key, set()).add(root_index)
 
-        algebraic_value = RealAlgebraicValue._from_admitted_polynomial(
-            polynomial=polynomial,
-            real_root_index=root_index,
-        )
+        try:
+            algebraic_value = RealAlgebraicValue.model_validate(
+                {
+                    "polynomial": polynomial,
+                    "real_root_index": root_index,
+                }
+            )
+        except ValidationError as exc:
+            raise ValueError("worker root is not an existing real root") from exc
         root_payload = dict(raw_root)
         root_payload["value"] = algebraic_value
         root_payload["multiplicity"] = multiplicity
@@ -318,15 +349,25 @@ def _root_profile_from_worker(  # noqa: C901
         expected = factor_root_counts[idx]
         if type(expected) is not int or not 0 <= expected <= len(fk) - 1:
             raise ValueError("worker factor root count is malformed")
+        if expected != factor_real_root_counts[fk]:
+            raise ValueError("worker factor root count disagrees with its factor")
         actual = factor_row_counts.get(fk, 0)
         if expected != actual:
             raise ValueError("worker omitted real roots of a source factor")
         if factor_root_indices.get(fk, set()) != set(range(expected)):
             raise ValueError("worker root indices do not match projected real roots")
 
-    return SourceRootProfile.model_validate(
+    profile = SourceRootProfile.model_validate(
         {"source_index": source_index, "roots": tuple(roots)}
     )
+    for left, right in zip(profile.roots, profile.roots[1:], strict=False):
+        if left.value.polynomial == right.value.polynomial:
+            ordered = left.value.real_root_index < right.value.real_root_index
+        else:
+            ordered = compare_real_algebraic(left.value, right.value).order == "LT"
+        if not ordered:
+            raise ValueError("worker roots are not in increasing order")
+    return profile
 
 
 def _profile_from_worker(
@@ -355,6 +396,7 @@ def _profile_from_worker(
         raise ValueError("worker factor root counts are missing or malformed")
     if len(raw_profiles) != len(family):
         raise ValueError("worker root profiles are missing or malformed")
+    degree = _require_family_shape(family)
 
     root_profiles: list[SourceRootProfile] = []
     for value in raw_profiles:
@@ -377,6 +419,9 @@ def _profile_from_worker(
         candidate.require_structural_profile()
     except (PydanticCustomError, ValidationError) as exc:
         raise ValueError("worker returned an inconsistent root profile") from exc
+    expected_outcome = _common_interlacing_outcome(root_profiles_tuple, degree)
+    if outcome != expected_outcome:
+        raise ValueError("worker outcome disagrees with the retained roots")
     return CommonInterlacingProfile._from_kernel(
         family=family,
         root_profiles=root_profiles_tuple,

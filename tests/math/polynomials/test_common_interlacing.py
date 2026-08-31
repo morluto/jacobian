@@ -409,6 +409,17 @@ def test_worker_factor_root_counts_reject_boolean_values() -> None:
         )
 
 
+def test_worker_factor_root_counts_are_bound_to_factor_roots() -> None:
+    factor = ["1", "0", "1"]
+
+    with pytest.raises(ValueError, match="disagrees with its factor"):
+        _root_profile_from_worker(
+            {"source_index": 0, "roots": []},
+            [(factor, 1)],
+            [2],
+        )
+
+
 def test_worker_factor_root_counts_require_a_list() -> None:
     with pytest.raises(ValueError, match="factor root counts are malformed"):
         _root_profile_from_worker(

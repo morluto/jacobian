@@ -22,7 +22,12 @@ from jacobian._execution import (
     bind_request_deadline,
     current_request_execution,
 )
-from jacobian.canonical import CanonicalizationError, loads_strict_json
+from jacobian.canonical import (
+    CanonicalizationError,
+    format_canonical_integer,
+    loads_strict_json,
+    parse_canonical_integer,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.algebraic_numbers.real import (
     MAX_REAL_ALGEBRAIC_DEGREE,
@@ -138,7 +143,7 @@ def _source_to_dense_int(
     return tuple(dense_int)
 
 
-def _verify_declared_factors(
+def _verify_declared_factors(  # noqa: C901
     source: LabelledRationalPolynomial,
     declared_factors: list[Any],
 ) -> None:
@@ -171,10 +176,21 @@ def _verify_declared_factors(
             2 <= len(factor_coeffs) <= source_degree + 1
         ):
             raise ValueError("worker factor degree exceeds source degree")
-        aggregate_degree += (len(factor_coeffs) - 1) * multiplicity
+        factor_dense: tuple[int, ...]
+        try:
+            factor_dense = tuple(
+                parse_canonical_integer(coefficient) for coefficient in factor_coeffs
+            )
+        except (TypeError, ValueError, CanonicalizationError) as exc:
+            raise ValueError("worker factor coefficient is not canonical") from exc
+        if any(
+            format_canonical_integer(value) != coefficient
+            for value, coefficient in zip(factor_dense, factor_coeffs, strict=True)
+        ):
+            raise ValueError("worker factor coefficient is not canonical")
+        aggregate_degree += (len(factor_dense) - 1) * multiplicity
         if aggregate_degree > source_degree:
             raise ValueError("worker factor degrees exceed source degree")
-        factor_dense = tuple(int(c) for c in factor_coeffs)
         if factor_dense[0] <= 0:
             raise ValueError("worker factor has non-positive leading coefficient")
         content: int = 0
@@ -212,7 +228,8 @@ def _root_profile_from_worker(  # noqa: C901
     if type(source_index) is not int:
         raise ValueError("malformed root profile source index")
     declared_factor_set = {
-        tuple(int(c) for c in entry[0]) for entry in declared_factors
+        tuple(parse_canonical_integer(c) for c in entry[0])
+        for entry in declared_factors
     }
     if not declared_factor_set:
         raise ValueError("worker omitted source factor declarations")
@@ -261,7 +278,7 @@ def _root_profile_from_worker(  # noqa: C901
         declared_multiplicity = next(
             int(entry[1])
             for entry in declared_factors
-            if tuple(int(c) for c in entry[0]) == poly_key
+            if tuple(parse_canonical_integer(c) for c in entry[0]) == poly_key
         )
         if multiplicity != declared_multiplicity:
             raise ValueError("worker root multiplicity disagrees with its factor")

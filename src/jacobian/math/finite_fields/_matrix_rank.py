@@ -89,19 +89,25 @@ def compute_matrix_rank(
         # Reserve the complete result envelope before the backend call so
         # that we do not waste CPU on a result known to be undeliverable.
         # The worst case is full rank with all pivot labels present.
-        nonzero_rows = [
-            index
-            for index, row in enumerate(matrix.entries)
-            if any(not entry.is_zero for entry in row)
-        ]
-        nonzero_columns = [
-            index
-            for index in range(len(matrix.column_axis.labels))
-            if any(
-                not matrix.entries[row][index].is_zero
-                for row in range(len(matrix.entries))
+        nonzero_rows: list[int] = []
+        seen_rows: list[tuple[object, ...]] = []
+        for index, row in enumerate(matrix.entries):
+            if any(not entry.is_zero for entry in row) and not any(
+                row == seen for seen in seen_rows
+            ):
+                nonzero_rows.append(index)
+                seen_rows.append(row)
+        nonzero_columns: list[int] = []
+        seen_columns: list[tuple[object, ...]] = []
+        for index in range(len(matrix.column_axis.labels)):
+            column = tuple(
+                matrix.entries[row][index] for row in range(len(matrix.entries))
             )
-        ]
+            if any(not entry.is_zero for entry in column) and not any(
+                column == seen for seen in seen_columns
+            ):
+                nonzero_columns.append(index)
+                seen_columns.append(column)
         max_rank = min(len(nonzero_rows), len(nonzero_columns))
         try:
             pivot_row_labels = list(

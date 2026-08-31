@@ -36,7 +36,9 @@ from jacobian.math.combinatorics.additive.values import (
     IndexedIntegerSequence,
     indexed_sequence_item_ceiling,
 )
-from jacobian.math.combinatorics.finite_structures.sets._models import FiniteIntegerSet
+from jacobian.math.combinatorics.finite_structures.sets._models import (
+    FiniteIntegerSet,
+)
 
 # This conservative materialized-axis cap bounds source parsing and binomial
 # preflight. Operation-specific work and result bounds impose the sharper
@@ -278,12 +280,40 @@ def _require_bounded_cartesian_product(
     left: FiniteIntegerSet,
     right: FiniteIntegerSet,
 ) -> None:
+    source_digits = sum(
+        len(element.lstrip("-")) for element in (*left.elements, *right.elements)
+    )
+    if source_digits > CanonicalLimits().max_input_bytes:
+        raise _validation_error(
+            "_require_bounded_cartesian_product",
+            "finite-set operands exceed the admitted aggregate integer parsing budget",
+        )
     pair_count = len(left.elements) * len(right.elements)
     if pair_count > _MAX_CARTESIAN_PAIR_COUNT:
         raise _validation_error(
             "_require_bounded_cartesian_product",
             f"Cartesian product has {pair_count} pairs, exceeding the "
             f"{_MAX_CARTESIAN_PAIR_COUNT}-pair bound",
+        )
+
+
+def _require_sumset_result_transport_bound(support: Iterable[int]) -> None:
+    """Reject sumsets whose complete result cannot fit canonical transport."""
+    values = tuple(format_canonical_integer(value) for value in support)
+    elements_size = (
+        2 + max(len(values) - 1, 0) + sum(len(value) + 2 for value in values)
+    )
+    support_size = strict_json_object_size((("elements", elements_size),))
+    result_size = strict_json_object_size(
+        (("cardinality", len(str(len(values)))), ("support", support_size))
+    )
+    limit = CanonicalLimits().max_output_bytes
+    if result_size > limit:
+        raise _validation_error(
+            "sumset_result_transport_exceeded",
+            "sumset result requires "
+            f"{result_size:,} canonical JSON bytes, exceeding the "
+            f"{limit:,}-byte output limit",
         )
 
 
@@ -713,27 +743,27 @@ class SumsetCardinalityRequest(StrictModel):
 
 
 class SumsetCardinalityResult(StrictModel):
-    """Cardinality of the sumset and its sorted support."""
+    """Cardinality of the sumset and its canonical finite-set support."""
 
     cardinality: int = Field(ge=0)
-    support: tuple[CanonicalInteger, ...] = Field(default=())
+    support: FiniteIntegerSet
 
     @model_validator(mode="after")
     def require_canonical_support(self) -> Self:
-        sums = list(self.support)
+        sums = list(self.support.elements)
         if tuple(sums) != _sorted_canonical_integers(sums):
             raise _validation_error(
                 "require_canonical_support", "sumset support must be sorted and unique"
             )
-        if self.cardinality != len(self.support):
+        if self.cardinality != len(self.support.elements):
             raise _validation_error(
                 "require_canonical_support", "cardinality must equal the support length"
             )
         return self
 
     @classmethod
-    def _from_kernel(cls, support: tuple[CanonicalInteger, ...]) -> Self:
-        return cls.model_construct(cardinality=len(support), support=support)
+    def _from_kernel(cls, support: FiniteIntegerSet) -> Self:
+        return cls.model_construct(cardinality=len(support.elements), support=support)
 
 
 # ---------------------------------------------------------------------------

@@ -19,8 +19,8 @@ if str(ROOT) not in sys.path:
 from tools.command_runner import (  # noqa: E402
     ToolCommandRequest,
     ToolCommandStatus,
-    output_sink,
     operator_environment,
+    output_sink,
     run_tool_command,
 )
 
@@ -90,7 +90,9 @@ def _run(target: str, command: list[str]) -> int:
         else:
             candidate = shutil.which(executable)
             if candidate is None:
-                print(f"validation command is unavailable: {executable}", file=sys.stderr)
+                print(
+                    f"validation command is unavailable: {executable}", file=sys.stderr
+                )
                 return 127
             resolved = candidate
         result = run_tool_command(

@@ -594,13 +594,29 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
                             raise PydanticCustomError(
                                 "tuple_type", "Input should be a valid tuple"
                             )
+                        if any(
+                            not isinstance(coefficient, (str, int))
+                            for coefficient in coefficients
+                        ):
+                            raise PydanticCustomError(
+                                "string_type", "Input should be a valid string"
+                            )
             normalized["entries"] = tuple(tuple(row) for row in entries)
         if isinstance(embedding, dict):
             presentation = embedding.get("presentation")
-            if isinstance(presentation, dict) and not isinstance(
-                presentation.get("coefficients_descending"), (list, tuple)
-            ):
-                raise PydanticCustomError("tuple_type", "Input should be a valid tuple")
+            if isinstance(presentation, dict):
+                coefficients = presentation.get("coefficients_descending")
+                if not isinstance(coefficients, (list, tuple)):
+                    raise PydanticCustomError(
+                        "tuple_type", "Input should be a valid tuple"
+                    )
+                if any(
+                    not isinstance(coefficient, (str, int))
+                    for coefficient in coefficients
+                ):
+                    raise PydanticCustomError(
+                        "string_type", "Input should be a valid string"
+                    )
             root = embedding.get("root")
             if isinstance(root, dict) and not isinstance(
                 root.get("polynomial"), (list, tuple)

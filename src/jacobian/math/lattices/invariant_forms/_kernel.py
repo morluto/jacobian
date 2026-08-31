@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
 from math import ceil, gcd, lcm, log10
-from typing import Any
+from typing import Any, cast
 from unicodedata import normalize
 
 from jacobian._execution import (
@@ -30,7 +30,6 @@ from jacobian.math.lattices.invariant_forms._models import (
     IntegralBilinearForm,
     InvariantBilinearFormLattice,
     MatrixAction,
-    RationalMatrixAction,
     _validation_error,
     constraint_coefficient_count,
 )
@@ -105,6 +104,7 @@ class _InvariantFormExecutionPlan:
     expansion_digit_work: int
     kernel_digit_work: int
     constraint_plan: _ConstraintPlan
+    recognized_field: RecognizedRealSimpleNumberField | None = None
 
 
 def _coefficient_positions(
@@ -353,8 +353,10 @@ def _retained_action_bytes(action: MatrixAction) -> int:
                 "the retained exact matrix action leaves no room for the canonical result",
             )
     try:
-        retained_payload = action.model_dump(mode="json")
-        retained_payload = _normalize_retained_strings(retained_payload)
+        retained_payload = cast(
+            dict[str, Any],
+            _normalize_retained_strings(action.model_dump(mode="json")),
+        )
         source_bytes = len(encode_strict_json(retained_payload))
     except CanonicalizationError:
         raise _validation_error(
@@ -717,7 +719,16 @@ def _admit_invariant_bilinear_form_lattice(
     # Build the constraint plan to derive work estimates.  The plan
     # construction itself enforces the expansion and kernel digit-work
     # bounds via the existing _require_*_envelope helpers.
-    plan = _build_constraint_plan(action, kind)
+    recognized_field = (
+        _recognize_action_field(action)
+        if isinstance(action, EmbeddedRealNumberFieldMatrixAction)
+        else None
+    )
+    plan = _build_constraint_plan(
+        action,
+        kind,
+        recognized_field=recognized_field,
+    )
     expansion_work = 0
     if plan.positions and plan.constraints:
         constraint_digits = max(
@@ -741,11 +752,12 @@ def _admit_invariant_bilinear_form_lattice(
         expansion_digit_work=expansion_work,
         kernel_digit_work=kernel_work,
         constraint_plan=plan,
+        recognized_field=recognized_field,
     )
 
 
 def invariant_bilinear_form_lattice_kernel(
-    action: RationalMatrixAction,
+    action: MatrixAction,
     kind: FormKind,
     *,
     admission: _InvariantFormExecutionPlan | None = None,

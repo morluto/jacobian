@@ -388,6 +388,7 @@ def _require_complex_structure(
     torus: LatticeComplexStructure,
     *,
     execution_checkpoint: _ExecutionCheckpoint,
+    recognized_field: RecognizedRealSimpleNumberField | None = None,
 ) -> RecognizedRealSimpleNumberField | None:
     """Recognize the scalar domain and establish ``J^2 = -I`` exactly."""
 
@@ -395,7 +396,9 @@ def _require_complex_structure(
     matrix = torus.complex_structure
     try:
         if isinstance(matrix, EmbeddedRealSimpleNumberFieldMatrix):
-            recognized = recognize_real_simple_number_field(matrix.embedding)
+            recognized = recognized_field or recognize_real_simple_number_field(
+                matrix.embedding
+            )
             domain_matrix = domain_matrix_from_embedded(matrix, recognized)
         else:
             recognized = None
@@ -426,16 +429,16 @@ def compute_neron_severi_lattice(
         execution_checkpoint("before Neron-Severi semantic admission")
         action, plan = _admit_neron_severi_execution(torus)
         execution_checkpoint("after Neron-Severi semantic admission")
-        recognized = _require_complex_structure(
+        _require_complex_structure(
             torus,
             execution_checkpoint=execution_checkpoint,
+            recognized_field=plan.invariant_forms.recognized_field,
         )
         execution_checkpoint("before the integral Hodge-lattice kernel")
         result = invariant_bilinear_form_lattice_kernel(
             action,
             "ALTERNATING",
             admission=plan.invariant_forms,
-            recognized_field=recognized,
             execution_checkpoint=execution_checkpoint,
         )
         execution_checkpoint("after the integral Hodge-lattice kernel")

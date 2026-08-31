@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from dataclasses import dataclass
@@ -510,7 +511,7 @@ def _build_constraint_plan(
     return plan
 
 
-def _integer_kernel_basis(
+def _integer_kernel_basis(  # noqa: C901
     plan: _ConstraintPlan, *, deadline: float | None = None
 ) -> tuple[list[list[int]], int]:
     """Extract the primitive kernel from a canonical graph-lattice HNF.
@@ -559,6 +560,7 @@ def _integer_kernel_basis(
         },
         separators=(",", ":"),
     ).encode("utf-8")
+    request_digest = hashlib.sha256(payload).hexdigest()
     with TemporaryDirectory(prefix="jacobian-invariant-form-hnf-") as directory:
         completed = run_bounded_process(
             [sys.executable, str(_HNF_WORKER)],
@@ -590,6 +592,8 @@ def _integer_kernel_basis(
         raise RuntimeError("bounded invariant-form HNF worker did not return a basis")
     try:
         response = loads_strict_json(completed.stdout)
+        if response.get("request_digest") != request_digest:
+            raise ValueError("worker result is not bound to the admitted constraints")
         primitive_kernel = []
         for row in response["primitive_kernel"]:
             decoded_row = []

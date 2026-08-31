@@ -150,6 +150,11 @@ def _canonicalize_coordinate_axis(data: dict[str, object]) -> dict[str, object]:
                     "invalid_coordinate_label",
                     "coordinate_axis labels must be strings",
                 )
+            if len(label) > MAX_OPAQUE_LABEL_LENGTH:
+                raise _validation_error(
+                    "budget_exceeded",
+                    f"coordinate labels have at most {MAX_OPAQUE_LABEL_LENGTH} characters",
+                )
             if unicodedata.normalize("NFC", label) != label:
                 raise _validation_error(
                     "noncanonical_coordinate_label",

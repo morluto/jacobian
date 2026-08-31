@@ -268,9 +268,7 @@ def test_term_and_total_term_boundaries_reject_before_backend_execution() -> Non
         1,
     )
     assert (
-        _profile(
-            _whole_plane_request((boundary_polynomial,))
-        ).outcome.status
+        _profile(_whole_plane_request((boundary_polynomial,))).outcome.status
         == "COMPUTED"
     )
 
@@ -339,10 +337,7 @@ def test_plane_dimension_polynomial_and_sign_row_bounds_reject_raw_excess() -> N
 def test_sample_count_degree_and_height_envelopes_are_preflighted() -> None:
     samples = tuple(_sample(index) for index in range(MAX_PLANE_COMPONENT_SAMPLES))
     assert (
-        _profile(
-            _whole_plane_request((), samples=samples)
-        ).outcome.status
-        == "COMPUTED"
+        _profile(_whole_plane_request((), samples=samples)).outcome.status == "COMPUTED"
     )
 
     raw = _whole_plane_request((), samples=samples).model_dump(mode="json")
@@ -352,9 +347,7 @@ def test_sample_count_degree_and_height_envelopes_are_preflighted() -> None:
 
     degree_boundary = _sample(0, degree=MAX_PLANE_COMPONENT_SAMPLE_DEGREE)
     assert (
-        _profile(
-            _whole_plane_request((), samples=(degree_boundary,))
-        ).outcome.status
+        _profile(_whole_plane_request((), samples=(degree_boundary,))).outcome.status
         == "COMPUTED"
     )
     raw_over_degree = _whole_plane_request((), samples=(degree_boundary,)).model_dump(
@@ -373,9 +366,7 @@ def test_sample_count_degree_and_height_envelopes_are_preflighted() -> None:
         leading_coefficient=10**MAX_PLANE_COMPONENT_SAMPLE_COEFFICIENT_DIGITS - 1,
     )
     assert (
-        _profile(
-            _whole_plane_request((), samples=(height_boundary,))
-        ).outcome.status
+        _profile(_whole_plane_request((), samples=(height_boundary,))).outcome.status
         == "COMPUTED"
     )
     raw_over_height = _whole_plane_request((), samples=(height_boundary,)).model_dump(

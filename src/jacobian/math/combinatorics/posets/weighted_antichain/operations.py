@@ -187,8 +187,8 @@ def compute_maximum_weight_antichain(
     # Build flow network: source, sink, n left nodes, n right nodes
     SOURCE = 0
     SINK = 1
-    left = lambda i: 2 + i        # v_L
-    right = lambda i: 2 + n + i   # v_R
+    left = lambda i: 2 + i  # v_L
+    right = lambda i: 2 + n + i  # v_R
     num_nodes = 2 + 2 * n
     INF_CAP = 10**18
 
@@ -232,7 +232,7 @@ def compute_maximum_weight_antichain(
                 break
         if parent[SINK] == -1:
             break
-        path_flow = float('inf')
+        path_flow = float("inf")
         v = SINK
         while v != SOURCE:
             u = parent[v]

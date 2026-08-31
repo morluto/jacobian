@@ -147,14 +147,15 @@ def test_polynomial_mixed_poset_25_elements() -> None:
         ReflexivePairPolicy,
         RelationInterpretation,
     )
-    from jacobian.math.combinatorics.posets.core.operations import materialize_finite_poset
+    from jacobian.math.combinatorics.posets.core.operations import (
+        materialize_finite_poset,
+    )
 
     # Use zero-padded names so lexical and numeric order agree.
     elements = [f"e{i:02d}" for i in range(25)]
     # Two chains: e00<e01<...<e12 and e13<e14<...<e24
     pairs = tuple(
-        PresentationPair(lower=elements[i], upper=elements[i + 1])
-        for i in range(12)
+        PresentationPair(lower=elements[i], upper=elements[i + 1]) for i in range(12)
     ) + tuple(
         PresentationPair(lower=elements[i], upper=elements[i + 1])
         for i in range(13, 24)

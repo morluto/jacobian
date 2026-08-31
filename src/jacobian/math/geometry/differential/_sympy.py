@@ -173,6 +173,9 @@ def compute_lie_derivative_components(
                 expression,
                 tensor.coordinate_axis,
                 maximum_terms=MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS,
+                deadline_check=lambda stage="component normalization": require_lie_derivative_deadline(
+                    deadline, stage
+                ),
             )
         )
         require_lie_derivative_deadline(deadline, "after component normalization")

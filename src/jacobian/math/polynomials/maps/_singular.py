@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass
 from fractions import Fraction
 from typing import Literal
@@ -24,6 +25,14 @@ from jacobian.math.polynomials.maps._generic_degree import (
     GenericFiberReplayLimitError,
     enumerate_standard_monomials,
 )
+_generic_fiber_deadline: float | None = None
+
+
+def _check_generic_fiber_deadline() -> None:
+    if _generic_fiber_deadline is not None and time.monotonic() > _generic_fiber_deadline:
+        raise TimeoutError("Singular coefficient reduction exceeded the wall-time limit")
+
+
 from jacobian.math.polynomials.maps._models import (
     MAX_GENERIC_FIBER_BASIS_POLYNOMIALS,
     MAX_GENERIC_FIBER_CERTIFICATE_SOURCE_EXPONENT,
@@ -325,6 +334,7 @@ def _parse_generic_fiber_coefficient(
         numerator_polynomial.as_expr() / denominator_polynomial.as_expr(),
         target_parameters,
         maximum_terms=MAX_GENERIC_FIBER_PARAMETER_TERMS,
+        deadline_check=_check_generic_fiber_deadline,
     )
     return value, len(numerator) + len(denominator)
 
@@ -584,6 +594,9 @@ def run_singular_generic_fiber(
 ) -> SingularGenericFiberResult:
     """Compute one exact generic-fiber certificate in a bounded process."""
 
+    global _generic_fiber_deadline
+    _generic_fiber_deadline = time.monotonic() + budget.wall_seconds
+    deadline = _generic_fiber_deadline
     completed = run_bounded_singular(
         _generic_fiber_script(polynomial_map),
         wall_seconds=budget.wall_seconds,
@@ -620,6 +633,11 @@ def run_singular_generic_fiber(
                 "Singular failed without producing an exact generic-fiber certificate."
             ),
         )
+    if time.monotonic() > deadline:
+        return SingularGenericFiberResult(
+            outcome="TIMEOUT",
+            detail="Singular coefficient reduction exceeded the declared wall-time limit.",
+        )
     try:
         certificate, dimension, vector_dimension, version = _parse_generic_fiber_output(
             completed.stdout,
@@ -637,6 +655,11 @@ def run_singular_generic_fiber(
                 "The exact Singular generic-fiber certificate exceeds the declared "
                 "result bound."
             ),
+        )
+    except TimeoutError:
+        return SingularGenericFiberResult(
+            outcome="TIMEOUT",
+            detail="Singular coefficient reduction exceeded the declared wall-time limit.",
         )
     except ValueError:
         return SingularGenericFiberResult(

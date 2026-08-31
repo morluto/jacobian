@@ -786,7 +786,21 @@ def _result_bytes_upper_bound(
         if not component.raw_result.is_zero
         and any(component.raw_result.denominator.degrees)
     )
-    guard_count_bound = len(inherited_guards) + len(result_guard_sizes)
+    # Deduplicate guards before counting: a result denominator that
+    # duplicates an inherited guard should not inflate the cap.
+    result_guard_polynomials = tuple(
+        component.raw_result.denominator
+        for component in components
+        if not component.raw_result.is_zero
+        and any(component.raw_result.denominator.degrees)
+    )
+    distinct_guards = len(inherited_guards) + len(result_guard_polynomials)
+    for i, result_guard in enumerate(result_guard_polynomials):
+        for inherited_guard in inherited_guards:
+            if result_guard == inherited_guard:
+                distinct_guards -= 1
+                break
+    guard_count_bound = distinct_guards
     if guard_count_bound > MAX_RATIONAL_TENSOR_LOCUS_GUARDS:
         _reject(
             "result_locus_guards",

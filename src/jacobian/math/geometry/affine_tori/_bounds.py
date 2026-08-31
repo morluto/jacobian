@@ -784,8 +784,7 @@ def build_affine_torus_plan(
         ),
     )
     if any(
-        _decimal_digits(bounds.source_minor_height)
-        > MAX_AFFINE_TORUS_POINT_DIGITS
+        _decimal_digits(bounds.source_minor_height) > MAX_AFFINE_TORUS_POINT_DIGITS
         for bounds in rank_bounds
         if not inconsistent
         if bounds.rank > 0

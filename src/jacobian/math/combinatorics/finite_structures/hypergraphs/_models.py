@@ -91,6 +91,7 @@ def _edge_intersection_graph_result_bytes(
         (("hypergraph", source_bytes), ("graph", graph_bytes))
     )
 
+
 # One pair entry's keys, punctuation, array brackets, commas, and bounded
 # integer occupy fewer than 128 bytes beyond its encoded labels.  The root
 # reserve covers the pair-array wrapper, histogram (at most 101 small integer

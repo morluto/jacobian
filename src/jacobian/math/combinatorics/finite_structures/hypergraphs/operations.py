@@ -4,6 +4,7 @@ import unicodedata
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
+    MAX_EDGE_INTERSECTION_RESULT_BYTES,
     MAX_HYPERGRAPH_INDEPENDENCE_INCIDENCES,
     MAX_HYPERGRAPH_INDEPENDENCE_VERTICES,
     MAX_INDUCED_PROFILE_RESULT_BYTES,
@@ -30,7 +31,6 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     VertexDegreesResult,
     _admit_edge_intersection_profile,
     _edge_intersection_graph_result_bytes,
-    MAX_EDGE_INTERSECTION_RESULT_BYTES,
     _induced_type_profile_admission_plan,
     _InducedTypeProfileAdmissionPlan,
     _maximum_edge_matching_result_bytes,
@@ -158,7 +158,10 @@ def _admit_edge_intersection_graph(hypergraph: FiniteHypergraph) -> None:
     # so no independent edge-count preflight is needed; the result-byte bound
     # below catches inputs whose serialized graph would exceed the canonical
     # output limit.
-    if _edge_intersection_graph_result_bytes(hypergraph) > MAX_EDGE_INTERSECTION_RESULT_BYTES:
+    if (
+        _edge_intersection_graph_result_bytes(hypergraph)
+        > MAX_EDGE_INTERSECTION_RESULT_BYTES
+    ):
         raise OperationDomainValidationError(
             location=("hypergraph",),
             code="hypergraph.edge_intersection_graph.result_bytes",
@@ -168,6 +171,7 @@ def _admit_edge_intersection_graph(hypergraph: FiniteHypergraph) -> None:
                 "limit; shorten labels or reduce the edge family"
             ),
         )
+
 
 def _admit_maximum_edge_matching(hypergraph: FiniteHypergraph) -> None:
     edge_ids = tuple(edge_id for edge_id, _ in hypergraph.edges)

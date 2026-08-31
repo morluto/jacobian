@@ -162,7 +162,7 @@ def test_multigraded_table_has_the_taylor_resolution_euler_characteristic() -> N
     )
     taylor_coefficients: dict[tuple[int, ...], int] = {}
     generators = [
-        tuple(term.exponents for term in gen.polynomial.terms)[0]
+        next(term.exponents for term in gen.polynomial.terms)
         for gen in result.ideal.generators
     ]
     for size in range(1, len(generators) + 1):
@@ -195,6 +195,7 @@ def test_exact_result_round_trips_and_its_ideal_composes_unchanged() -> None:
 
     # The ideal is a RationalPolynomialIdeal that composes with other operations.
     from jacobian.math.polynomials.values import RationalPolynomialIdeal
+
     assert isinstance(decoded.ideal, RationalPolynomialIdeal)
 
 
@@ -232,8 +233,14 @@ def test_generator_and_exponent_boundaries_reject_before_kernel_work() -> None:
                         "variables": ["x"],
                         "polynomial": {
                             "terms": [
-                                {"coefficient": {"num": "1", "den": "1"}, "exponents": [2]},
-                                {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]},
+                                {
+                                    "coefficient": {"num": "1", "den": "1"},
+                                    "exponents": [2],
+                                },
+                                {
+                                    "coefficient": {"num": "1", "den": "1"},
+                                    "exponents": [0],
+                                },
                             ]
                         },
                     },

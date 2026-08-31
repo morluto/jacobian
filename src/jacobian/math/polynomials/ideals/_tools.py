@@ -11,6 +11,10 @@ from jacobian.math.polynomials.ideals._models import (
     EliminationIdealResult,
     GroebnerBasisRequest,
     GroebnerBasisResult,
+    IdealContainmentRequest,
+    IdealContainmentResult,
+    IdealEqualityRequest,
+    IdealEqualityResult,
     IdealMinimalPrimesRequest,
     IdealMinimalPrimesResult,
     IdealNormalFormRequest,
@@ -29,6 +33,8 @@ from jacobian.math.polynomials.ideals._models import (
 from jacobian.math.polynomials.ideals.operations import (
     elimination_ideal,
     groebner_basis,
+    ideal_containment,
+    ideal_equality,
     ideal_minimal_primes,
     ideal_normal_form,
     ideal_quotient,
@@ -70,6 +76,24 @@ def _run_quotient(request: IdealQuotientRequest) -> IdealQuotientResult:
 def _run_saturation(request: IdealSaturationRequest) -> IdealSaturationResult:
     return ideal_saturation(
         request.ideal, request.denominator, resource_budget=request.resource_budget
+    )
+
+
+def _run_containment(request: IdealContainmentRequest) -> IdealContainmentResult:
+    return ideal_containment(
+        request.source,
+        request.target,
+        request.monomial_order,
+        resource_budget=request.resource_budget,
+    )
+
+
+def _run_equality(request: IdealEqualityRequest) -> IdealEqualityResult:
+    return ideal_equality(
+        request.left,
+        request.right,
+        request.monomial_order,
+        resource_budget=request.resource_budget,
     )
 
 
@@ -172,6 +196,67 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         ("x", "y"),
                         ((1, 1, (2, 0)),),
                         ((1, 1, (0, 2)),),
+                    ),
+                },
+            ),
+        ),
+    ),
+    _op(
+        "polynomial.ideal.containment.decide",
+        "Decide containment of rational polynomial ideals",
+        "Decide whether one bounded ideal is contained in another ideal in "
+        "the same ordered QQ polynomial ring. A positive result retains the "
+        "exact normal form of every source generator; a negative result ends "
+        "with the first nonzero normal-form obstruction.",
+        IdealContainmentRequest,
+        IdealContainmentResult,
+        _run_containment,
+        "commutative-algebra",
+        "ideal-containment",
+        "normal-form",
+        "exact",
+        examples=(
+            example(
+                "contained_redundant_generators",
+                "Decide <x^2,xy> subseteq <x> in Q[x,y].",
+                {
+                    "source": _ideal(
+                        ("x", "y"),
+                        ((1, 1, (2, 0)),),
+                        ((1, 1, (1, 1)),),
+                    ),
+                    "target": _ideal(("x", "y"), ((1, 1, (1, 0)),)),
+                },
+            ),
+        ),
+    ),
+    _op(
+        "polynomial.ideal.equality.decide",
+        "Decide equality of rational polynomial ideals",
+        "Decide equality of two bounded ideals in one ordered QQ polynomial "
+        "ring by mutual containment. Both source-ordered normal-form ledgers "
+        "are computed under one request deadline.",
+        IdealEqualityRequest,
+        IdealEqualityResult,
+        _run_equality,
+        "commutative-algebra",
+        "ideal-equality",
+        "mutual-containment",
+        "exact",
+        examples=(
+            example(
+                "equal_presentations",
+                "Compare <x,y> with the reordered, rescaled presentation <2y,3x>.",
+                {
+                    "left": _ideal(
+                        ("x", "y"),
+                        ((1, 1, (1, 0)),),
+                        ((1, 1, (0, 1)),),
+                    ),
+                    "right": _ideal(
+                        ("x", "y"),
+                        ((2, 1, (0, 1)),),
+                        ((3, 1, (1, 0)),),
                     ),
                 },
             ),

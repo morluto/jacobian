@@ -284,13 +284,12 @@ def _parametrization_height_bounds(
         *inverse_numerator,
         *inverse_denominator,
     )
-    # Canonical RationalFunction validation performs one more gcd on at most
-    # three result coefficients. The same degree-two determinant bound is
-    # 12*result_digits + 2 after clearing their denominators.
+    # Each rational-function bound already covers the exact cancellation in
+    # the canonical conversion. The value constructor performs only structural
+    # carrier checks after that normalization.
     intermediate_digits = max(
         *(_rational_digits(value) for value in raw_values),
         *(intermediate for _result, intermediate in rational_function_bounds),
-        12 * result_digits + 2,
     )
     return _ParametrizationHeightBounds(
         intermediate_digits=intermediate_digits,

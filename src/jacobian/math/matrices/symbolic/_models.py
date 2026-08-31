@@ -15,6 +15,7 @@ from jacobian.math.polynomials.values import (
     PolynomialVariable,
     RationalFunction,
     SparseRationalPolynomial,
+    require_canonical_rational_function,
 )
 
 MAX_SYMBOLIC_MATRIX_DIMENSION = 8
@@ -173,6 +174,21 @@ class SymbolicMatrix(StrictModel):
                 "symbolic matrix exceeds the 512-term operation budget",
             )
         return self
+
+
+def _require_canonical_symbolic_values(
+    values: tuple[RationalFunction, ...], *, label: str
+) -> None:
+    """Recognize rational-function values after matrix-owned admission."""
+
+    for index, value in enumerate(values):
+        require_canonical_rational_function(
+            value,
+            maximum_terms=MAX_SYMBOLIC_RESULT_TERMS,
+            maximum_exponent=MAX_SYMBOLIC_RESULT_EXPONENT,
+            maximum_coefficient_digits=MAX_SYMBOLIC_RESULT_COEFFICIENT_DIGITS,
+            label=f"{label} {index}",
+        )
 
 
 def _maximum_exponents(value: RationalFunction, *, numerator: bool) -> tuple[int, ...]:
@@ -748,6 +764,12 @@ def _require_symbolic_product_admission(
         raise _validation_error(
             "budget_exceeded",
             "symbolic matrix product exceeds the 512-term aggregate expansion budget",
+        )
+
+    for matrix_index, matrix in enumerate((left, right)):
+        _require_canonical_symbolic_values(
+            tuple(value for row in matrix.entries for value in row),
+            label=f"symbolic matrix {matrix_index} entry",
         )
 
     aggregate_expansion_terms = 0

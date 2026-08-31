@@ -237,6 +237,9 @@ ignore_imports = [
     "jacobian.math.number_theory.number_fields._embeddings_process -> jacobian.process",
     "jacobian.math.number_theory.number_fields._real_embedding_order_process -> jacobian.process",
     "jacobian.math.geometry.algebraic_curves._singularity_point_process -> jacobian.process",
+    "jacobian.math.geometry.complex_tori._smith_process -> jacobian.process",
+    "jacobian.math.lattices.invariant_forms._hnf_process -> jacobian.process",
+    "jacobian.math.matrices.analysis._inertia_process -> jacobian.process",
     "jacobian.math.number_theory._factorization_kernels -> jacobian.process",
     # Private exact-algebra adapters share one bounded Singular process owner.
     "jacobian.math._singular -> jacobian.process",
@@ -244,6 +247,8 @@ ignore_imports = [
     "jacobian.math.polynomials.ideals._singular -> jacobian.process",
     # Exact multivariate factorization runs in a bounded killable worker.
     "jacobian.math.polynomials.multivariate._factor_backend -> jacobian.process",
+    # Rational-function coprimality runs in one deadline-bound SymPy worker.
+    "jacobian.math.geometry.differential._recognition_process -> jacobian.process",
 ]
 
 [[tool.importlinter.contracts]]

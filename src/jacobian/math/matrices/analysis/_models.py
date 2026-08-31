@@ -2,21 +2,21 @@
 
 from __future__ import annotations
 
-from fractions import Fraction
 from typing import Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.math.matrices.values import RationalMatrix, rational_matrix_from_fractions
-
-# The canonical dense rational matrix carries determinant inputs through
-# order 64, but the symmetric definiteness request's work and result
-# budgets were established only through order 50. Pin the admitted
-# dimension to that established envelope.
-MAX_SYMMETRIC_MATRIX_DIMENSION = 50
+from jacobian.math.matrices.values import (
+    MAX_RATIONAL_MATRIX_ORDER,
+    ExactRealMatrix,
+    RationalMatrix,
+)
+from jacobian.math.number_theory.number_fields.values import (
+    MAX_NUMBER_FIELD_EMBEDDING_DEGREE,
+)
 
 # The inertia result echoes its source matrix in the domain's dense
 # canonical form, so a request whose normalized echo is near the canonical
@@ -36,6 +36,16 @@ MAX_RATIONAL_SPECTRUM_SHIFTED_DIGITS = 129
 MAX_RATIONAL_SPECTRUM_RANK_WORK = 1_048_576
 MAX_RATIONAL_SPECTRUM_MINOR_DIGITS = 132_256
 MAX_RATIONAL_SPECTRUM_RESULT_BYTES = 384 * 1024
+MAX_INERTIA_DIGIT_WORK = 500_000_000
+
+InertiaDefiniteness = Literal[
+    "positive_definite",
+    "positive_semidefinite",
+    "negative_definite",
+    "negative_semidefinite",
+    "zero",
+    "indefinite",
+]
 
 
 class RationalSpectrumMultiplicityClaim(StrictModel):
@@ -139,80 +149,55 @@ class RationalSpectrumClaimResult(StrictModel):
         )
 
 
-class MatrixEntry(StrictModel):
-    """One rational matrix entry at (row, col)."""
-
-    row: int = Field(ge=0)
-    col: int = Field(ge=0)
-    value: CanonicalRational
-
-
 class SymmetricMatrixRequest(StrictModel):
-    """A symmetric rational matrix for definiteness analysis."""
+    """One canonical exact-real matrix for exact inertia computation."""
 
-    dimension: int = Field(ge=1, le=MAX_SYMMETRIC_MATRIX_DIMENSION)
-    entries: tuple[MatrixEntry, ...] = Field(min_length=1)
+    model_config = ConfigDict(
+        json_schema_extra={
+            "x-jacobian-bounds": {
+                "max_matrix_order": MAX_RATIONAL_MATRIX_ORDER,
+                "max_algebraic_field_degree": MAX_NUMBER_FIELD_EMBEDDING_DEGREE,
+                "max_exact_digit_work": MAX_INERTIA_DIGIT_WORK,
+                "result_envelope_reserve_bytes": _RESULT_ENVELOPE_RESERVE_BYTES,
+                "diagonal_fast_path": True,
+            }
+        }
+    )
 
-    @model_validator(mode="after")
-    def require_valid(self) -> Self:
-        seen: set[tuple[int, int]] = set()
-        for e in self.entries:
-            if e.row >= self.dimension or e.col >= self.dimension:
-                raise _validation_error(
-                    "shape_mismatch", "entry indices must be < dimension"
-                )
-            key = (min(e.row, e.col), max(e.row, e.col))
-            if key in seen:
-                raise _validation_error(
-                    "invariant_mismatch", "symmetric matrix entries must not conflict"
-                )
-            seen.add(key)
-        return self
-
-
-def _canonical_source_matrix(request: SymmetricMatrixRequest) -> RationalMatrix:
-    """Normalize sparse symmetric input without entering the operation module."""
-
-    matrix = [[Fraction(0)] * request.dimension for _ in range(request.dimension)]
-    for entry in request.entries:
-        value = entry.value.as_fraction()
-        matrix[entry.row][entry.col] = value
-        if entry.row != entry.col:
-            matrix[entry.col][entry.row] = value
-    return rational_matrix_from_fractions(matrix)
+    matrix: ExactRealMatrix = Field(
+        description=(
+            "Canonical materialized matrix over QQ or one selected real simple-"
+            "number-field embedding. It must be square and symmetric. The carrier "
+            f"has order at most {MAX_RATIONAL_MATRIX_ORDER}; operation admission "
+            "derives exact arithmetic work and intermediate-height bounds from the "
+            "matrix order, scalar domain, source heights, and diagonal structure."
+        )
+    )
 
 
 class InertiaResult(StrictModel):
     """Sylvester inertia (n_pos, n_neg, n_zero) of a symmetric matrix.
 
-    Retains the source matrix in the domain's canonical dense
-    ``RationalMatrix`` form, so every payload describing the same symmetric
-    matrix yields identical outputs and digests regardless of entry order,
-    triangular coordinates, or explicit zeros. Structural validation enforces
-    the count and definiteness-label invariants. Exact congruence replay for
-    independently supplied outcomes is provided by the owner verifier:
+    Retains the source matrix in its canonical exact-real domain. Structural
+    validation enforces the count and definiteness-label invariants:
 
     - ``n_positive + n_negative + n_zero`` equals the dimension;
     - positive_definite iff all eigenvalues are positive, negative_definite
       iff all negative;
+    - zero iff every eigenvalue is zero;
     - semidefinite labels require one zero sign class and none of the
       opposite sign; indefinite requires both nonzero sign classes.
     """
 
-    matrix: RationalMatrix
-    n_positive: int = Field(ge=0)
-    n_negative: int = Field(ge=0)
-    n_zero: int = Field(ge=0)
-    definiteness: str
+    matrix: ExactRealMatrix
+    n_positive: int = Field(ge=0, le=MAX_RATIONAL_MATRIX_ORDER)
+    n_negative: int = Field(ge=0, le=MAX_RATIONAL_MATRIX_ORDER)
+    n_zero: int = Field(ge=0, le=MAX_RATIONAL_MATRIX_ORDER)
+    definiteness: InertiaDefiniteness
 
     @model_validator(mode="after")
     def require_source_bound(self) -> Self:
         dimension = len(self.matrix.entries)
-        if dimension > MAX_SYMMETRIC_MATRIX_DIMENSION:
-            raise _validation_error(
-                "budget_exceeded",
-                "retained source matrix exceeds the inertia order envelope",
-            )
         if any(len(row) != dimension for row in self.matrix.entries):
             raise _validation_error(
                 "shape_mismatch", "retained source matrix must be square"
@@ -244,7 +229,7 @@ class InertiaResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        matrix: RationalMatrix,
+        matrix: ExactRealMatrix,
         n_positive: int,
         n_negative: int,
         n_zero: int,
@@ -260,9 +245,13 @@ class InertiaResult(StrictModel):
         )
 
 
-def _inertia_definiteness_label(n_pos: int, n_neg: int, n_zero: int) -> str:
+def _inertia_definiteness_label(
+    n_pos: int, n_neg: int, n_zero: int
+) -> InertiaDefiniteness:
     """Return the public definiteness label implied by one inertia triple."""
 
+    if n_pos == 0 and n_neg == 0:
+        return "zero"
     if n_zero == 0:
         if n_neg == 0:
             return "positive_definite"
@@ -320,7 +309,6 @@ __all__ = [
     "FarkasCertificateRequest",
     "FarkasCertificateResult",
     "InertiaResult",
-    "MatrixEntry",
     "RationalSpectrumClaimRequest",
     "RationalSpectrumClaimResult",
     "RationalSpectrumMultiplicityClaim",

@@ -17,8 +17,11 @@ from jacobian.math.polynomials.ideals._models import (
     EliminationIdealResult,
     IdealComputationBudget,
     IdealQuotientRequest,
+    IdealQuotientResult,
     IdealRadicalMembershipRequest,
+    IdealRadicalMembershipResult,
     IdealRadicalRequest,
+    IdealRadicalResult,
 )
 from jacobian.math.polynomials.ideals._tools import TOOLS
 from jacobian.math.polynomials.ideals.operations import (
@@ -34,15 +37,17 @@ from jacobian.math.polynomials.values import (
 )
 
 
-def _run_radical(request: IdealRadicalRequest):
+def _run_radical(request: IdealRadicalRequest) -> IdealRadicalResult:
     return ideal_radical(request.ideal, resource_budget=request.resource_budget)
 
 
-def _run_radical_membership(request: IdealRadicalMembershipRequest):
+def _run_radical_membership(
+    request: IdealRadicalMembershipRequest,
+) -> IdealRadicalMembershipResult:
     return ideal_radical_membership(request.ideal, request.polynomial)
 
 
-def _run_quotient(request: IdealQuotientRequest):
+def _run_quotient(request: IdealQuotientRequest) -> IdealQuotientResult:
     return ideal_quotient(
         request.dividend, request.divisor, resource_budget=request.resource_budget
     )
@@ -138,6 +143,8 @@ def _monomial_radical_oracle(
 
 def test_catalog_contains_only_audited_operations() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
+        "polynomial.ideal.containment.decide",
+        "polynomial.ideal.equality.decide",
         "polynomial.ideal.radical.compute",
         "polynomial.ideal.radical_membership.decide",
         "polynomial.ideal.quotient.compute",
@@ -321,6 +328,25 @@ def test_singular_script_uses_internal_identifiers_not_caller_names() -> None:
     ).decode("ascii")
     assert "callerVariable" not in source
     assert "jv1" in source
+
+
+def test_singular_codec_normalizes_wide_nonzero_constant_units() -> None:
+    unit = RationalPolynomial(
+        variables=("x",),
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(
+                        num="1" + "0" * 5_000,
+                        den="1",
+                    ),
+                    exponents=(0,),
+                ),
+            )
+        ),
+    )
+
+    assert _singular._singular_polynomial(unit) == "(1/1)"
 
 
 def test_radical_membership_uses_canonical_polynomials() -> None:

@@ -16,6 +16,7 @@ from jacobian.math.number_theory._divisibility_profiles import (
     DIVISIBILITY_PROFILE_OPERATIONS,
 )
 from jacobian.math.number_theory._friable import FRIABLE_COUNT_OPERATION
+from jacobian.math.number_theory._friable_enumerate import FRIABLE_ENUMERATE_OPERATION
 from jacobian.math.number_theory._interval_profiles import (
     INTERVAL_PROFILE_OPERATIONS,
 )
@@ -23,10 +24,10 @@ from jacobian.math.number_theory._modular import MODULAR_OPERATIONS
 from jacobian.math.number_theory._modular_identity import MODULAR_IDENTITY_OPERATIONS
 from jacobian.math.number_theory._periodic import PERIODIC_CONGRUENCE_OPERATIONS
 from jacobian.math.number_theory._powerful import POWERFUL_NUMBER_OPERATION
-from jacobian.math.number_theory._powerful_enumerate import POWERFUL_ENUMERATE_OPERATION
 from jacobian.math.number_theory._preimage_ops import PREIMAGE_OPERATIONS
 from jacobian.math.number_theory._prime_shifts import PRIME_SHIFT_OPERATION
 from jacobian.math.number_theory._primes import PRIME_OPERATIONS
+from jacobian.math.number_theory._r_full_enumerate import R_FULL_ENUMERATE_OPERATION
 from jacobian.math.number_theory._ramanujan_sum import RAMANUJAN_SUM_OPERATION
 
 __all__ = ["TOOLS"]
@@ -35,15 +36,16 @@ TOOLS: MathTools = (
     *DIVISIBILITY_OPERATIONS,
     *PRIME_OPERATIONS,
     POWERFUL_NUMBER_OPERATION,
+    R_FULL_ENUMERATE_OPERATION,
     DIVISIBILITY_EDGE_PROFILE_OPERATION,
     DIVISIBILITY_POSET_OPERATION,
-    POWERFUL_ENUMERATE_OPERATION,
     *MODULAR_OPERATIONS,
     *PERIODIC_CONGRUENCE_OPERATIONS,
     *MODULAR_IDENTITY_OPERATIONS,
     *DERIVED_NUMBER_THEORY_OPERATIONS,
     RAMANUJAN_SUM_OPERATION,
     FRIABLE_COUNT_OPERATION,
+    FRIABLE_ENUMERATE_OPERATION,
     CONTIGUOUS_SUM_OPERATION,
     PRIME_SHIFT_OPERATION,
     *INTERVAL_PROFILE_OPERATIONS,

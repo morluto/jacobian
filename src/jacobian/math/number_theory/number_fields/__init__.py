@@ -15,6 +15,7 @@ from jacobian.math.number_theory.number_fields.operations import (
 from jacobian.math.number_theory.number_fields.values import (
     NumberFieldEmbeddingProfile,
     NumberFieldRealValueEnclosure,
+    RealNumberFieldEmbedding,
     SimpleNumberFieldElement,
     SimpleNumberFieldPresentation,
     SimpleNumberFieldRealEmbeddingBinding,
@@ -27,6 +28,7 @@ __all__ = [
     "BinaryPowerSumValueBucket",
     "NumberFieldEmbeddingProfile",
     "NumberFieldRealValueEnclosure",
+    "RealNumberFieldEmbedding",
     "SimpleNumberFieldElement",
     "SimpleNumberFieldPresentation",
     "SimpleNumberFieldRealEmbeddingBinding",

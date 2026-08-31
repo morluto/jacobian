@@ -14,6 +14,7 @@ from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValu
 from jacobian.math.polynomials.real_algebra._plane_component_models import (
     MAX_PLANE_COMPONENT_POINT_DEGREE,
     MAX_PLANE_COMPONENT_POINT_ISOLATOR_DIGITS,
+    MAX_PLANE_COMPONENT_POINT_TERMS,
     MAX_PLANE_COMPONENT_POLYNOMIALS,
     MAX_PLANE_COMPONENT_SIGN_CONDITIONS,
     MAX_PLANE_COMPONENTS,
@@ -186,6 +187,16 @@ def test_plane_point_rejects_coordinates_beyond_the_result_carrier_bound() -> No
             coordinates=(over_degree, point.coordinates[1]),
             isolating_box=point.isolating_box,
         )
+
+
+def test_plane_point_schema_advertises_the_degree_sixteen_coordinate_carrier() -> None:
+    coordinate_schema = IsolatedRealPlanePoint.model_json_schema()["properties"][
+        "coordinates"
+    ]["prefixItems"][0]
+
+    assert coordinate_schema["properties"]["polynomial"]["maxItems"] == (
+        MAX_PLANE_COMPONENT_POINT_TERMS
+    )
 
 
 def _large_structural_point(index: int) -> IsolatedRealPlanePoint:

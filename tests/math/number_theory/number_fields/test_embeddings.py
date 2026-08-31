@@ -57,6 +57,7 @@ from jacobian.math.number_theory.number_fields.operations import (
 )
 from jacobian.math.number_theory.number_fields.values import (
     ComplexNumberFieldEmbeddingRecord,
+    RealNumberFieldEmbedding,
     RealNumberFieldEmbeddingRecord,
 )
 from jacobian.process import bounded_process_cancellation
@@ -425,6 +426,20 @@ def test_degree_coefficient_isolation_work_and_result_bounds_are_preflighted() -
     with pytest.raises(NumberFieldEmbeddingAdmissionError) as caught:
         embeddings(large_eisenstein)
     assert caught.value.reason == "pair_ordering_precision_bound"
+
+
+def test_real_embedding_rejects_degree_above_its_runtime_carrier_bound() -> None:
+    degree_nine = _field("1", *("0",) * 8, "-2")
+
+    with pytest.raises(ValidationError, match="limited to degree 8"):
+        RealNumberFieldEmbedding(
+            kind="REAL",
+            presentation=degree_nine,
+            root={
+                "polynomial": degree_nine.coefficients_descending,
+                "real_root_index": 0,
+            },
+        )
 
 
 @pytest.mark.parametrize(

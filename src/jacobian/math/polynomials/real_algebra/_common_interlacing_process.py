@@ -87,6 +87,7 @@ def _preflight_family_size(
 def _root_profile_from_worker(
     value: object,
     declared_factors: list[list[tuple[str, ...]]],
+    factor_root_counts: list[int],
 ) -> SourceRootProfile:
     """Parse bounded worker structure without replaying exact factorization.
 
@@ -108,6 +109,7 @@ def _root_profile_from_worker(
     }
     roots: list[PolynomialRealRoot] = []
     seen_identities: set[tuple[tuple[str, ...], int]] = set()
+    factor_multiplicities: dict[tuple[int, ...], int] = {}
     for raw_root in value["roots"]:
         if not isinstance(raw_root, dict):
             raise ValueError("malformed root row")
@@ -138,6 +140,11 @@ def _root_profile_from_worker(
         multiplicity = raw_root.get("multiplicity")
         if type(multiplicity) is not int or multiplicity < 1:
             raise ValueError("malformed root multiplicity")
+        if poly_key in factor_multiplicities:
+            if factor_multiplicities[poly_key] != multiplicity:
+                raise ValueError("worker rows disagree on factor multiplicity")
+        else:
+            factor_multiplicities[poly_key] = multiplicity
 
         # Reject duplicate root identities: the same (polynomial, real_root_index)
         # must not appear in more than one row.
@@ -156,6 +163,28 @@ def _root_profile_from_worker(
         roots.append(
             PolynomialRealRoot.model_validate(root_payload)
         )
+    # Verify that every real root of each declared factor is reported
+    factor_row_counts: dict[tuple[int, ...], int] = {}
+    for raw_root in value["roots"]:
+        if not isinstance(raw_root, dict):
+            continue
+        rv = raw_root.get("value")
+        if not isinstance(rv, dict):
+            continue
+        pk = tuple(int(c) for c in _CANONICAL_POLYNOMIAL.validate_python(rv.get("polynomial")))
+        factor_row_counts[pk] = factor_row_counts.get(pk, 0) + 1
+    if factor_root_counts:
+        declared_set = {tuple(int(c) for c in f) for f in declared_factors}
+        for idx, (factor, count) in enumerate(zip(declared_factors, factor_root_counts)):
+            fk = tuple(int(c) for c in factor)
+            if fk in factor_row_counts:
+                if factor_row_counts[fk] != count:
+                    raise ValueError("worker omitted real roots of a source factor")
+            elif count > 0:
+                raise ValueError("worker omitted real roots of a source factor")
+
+    if roots and not declared_factor_set:
+        raise ValueError("worker omitted factor declarations despite reporting roots")
     return SourceRootProfile.model_validate(
         {"source_index": source_index, "roots": tuple(roots)}
     )
@@ -166,6 +195,7 @@ def _profile_from_worker(
     family: tuple[LabelledRationalPolynomial, ...],
 ) -> CommonInterlacingProfile:
     raw_source_factors = payload.get("source_factors", [])
+    raw_factor_root_counts = payload.get("source_factor_root_counts", [])
     raw_profiles = payload.get("root_profiles")
     if not isinstance(raw_profiles, list):
         raise ValueError("malformed root profiles")
@@ -181,7 +211,12 @@ def _profile_from_worker(
             if source_index < len(raw_source_factors)
             else []
         )
-        root_profiles.append(_root_profile_from_worker(value, declared))
+        root_counts = (
+            raw_factor_root_counts[source_index]
+            if source_index < len(raw_factor_root_counts)
+            else []
+        )
+        root_profiles.append(_root_profile_from_worker(value, declared, root_counts))
     root_profiles_tuple = tuple(root_profiles)
     outcome = _OUTCOME.validate_python(payload.get("outcome"))
     return CommonInterlacingProfile.model_validate(

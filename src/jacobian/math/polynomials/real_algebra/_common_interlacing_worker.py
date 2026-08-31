@@ -43,12 +43,15 @@ def main() -> int:
         # Send the declared irreducible factors for each source so the parent
         # can validate root rows structurally without re-running SymPy kernels.
         source_factors = []
+        source_factor_root_counts = []
         for source_plan in plan.sources:
-            factors = [
-                factor_plan.canonical_coefficients
-                for factor_plan in source_plan.factors
-            ]
+            factors = []
+            root_counts = []
+            for factor_plan in source_plan.factors:
+                factors.append(factor_plan.canonical_coefficients)
+                root_counts.append(len(factor_plan.polynomial.intervals()))
             source_factors.append(factors)
+            source_factor_root_counts.append(root_counts)
     except OperationDomainValidationError as exc:
         sys.stdout.write(
             json.dumps({"ok": False, "kind": "domain", "errors": exc.errors()})
@@ -62,6 +65,7 @@ def main() -> int:
             {
                 "ok": True,
                 "source_factors": source_factors,
+                "source_factor_root_counts": source_factor_root_counts,
                 "root_profiles": [
                     profile.model_dump(mode="json") for profile in result.root_profiles
                 ],

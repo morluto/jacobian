@@ -678,6 +678,10 @@ class RationalTorusCosetFamily(StrictModel):
         if rank:
             from flint import fmpz_mat
 
+            from jacobian.math.geometry.affine_tori._flint import (
+                _saturated_integer_kernel,
+            )
+
             embedding = self.identity_component.embedding
             embedding_matrix = fmpz_mat(
                 [
@@ -691,7 +695,10 @@ class RationalTorusCosetFamily(StrictModel):
                     "subtorus_rank",
                     "identity-component embedding must have full column rank",
                 )
-            annihilator = embedding_matrix.transpose().nullspace()[0]
+            annihilator = _saturated_integer_kernel(
+                embedding_matrix.transpose(),
+                rank=embedding_rank,
+            ).basis
             relation_matrix = self.finite_components.relation_matrix.entries
             for relation_column in range(rank):
                 relation_point = tuple(

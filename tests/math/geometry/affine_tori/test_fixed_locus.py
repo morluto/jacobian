@@ -619,6 +619,41 @@ def test_component_relations_are_bound_to_the_declared_generators() -> None:
         AffineTorusFixedLocusResult.model_validate(result)
 
 
+def test_component_relations_use_the_saturated_identity_annihilator() -> None:
+    result = affine_torus_fixed_locus(
+        _source(
+            ((2, 0, -2), (0, 3, -2), (0, 0, 1)),
+            (Fraction(0), Fraction(0), Fraction(0)),
+        )
+    ).model_dump(mode="json")
+    outcome = dict(result["outcome"])
+    family = dict(outcome["fixed_locus"])
+    generator = dict(family["component_generators"][1])
+    generator["coordinates"] = [
+        {"num": "0", "den": "1"},
+        {"num": "1", "den": "4"},
+        {"num": "0", "den": "1"},
+    ]
+    family["component_generators"] = [generator]
+    family["finite_components"] = {
+        "generator_count": 1,
+        "relation_matrix": {
+            "domain": "ZZ",
+            "row_count": 1,
+            "column_count": 1,
+            "entries": [["2"]],
+        },
+        "generator_orders": ["2"],
+        "invariant_factors": ["2"],
+        "component_count": "2",
+    }
+    outcome["fixed_locus"] = family
+    result["outcome"] = outcome
+
+    with pytest.raises(ValidationError, match="relation_generators"):
+        AffineTorusFixedLocusResult.model_validate(result)
+
+
 def test_contradictory_discriminator_and_component_metadata_fail_closed() -> None:
     result = affine_torus_fixed_locus(_source(((3,),), (Fraction(0),))).model_dump(
         mode="json"

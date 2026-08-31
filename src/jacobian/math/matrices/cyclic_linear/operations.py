@@ -1,15 +1,15 @@
+# ruff: noqa: B904, PTH118, PTH123, PTH110
 """Exact cyclotomic decomposition of bounded rational cyclic linear maps."""
 
 from __future__ import annotations
 
-import json
+import multiprocessing
 import os
 import pickle
 import subprocess
 import sys
 import tempfile
 import time
-import multiprocessing
 from dataclasses import dataclass
 from fractions import Fraction
 from math import factorial, gcd

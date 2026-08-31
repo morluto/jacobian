@@ -146,7 +146,7 @@ class TestSumsetCardinality:
         )
         result = _run_sumset(req)
         assert result.cardinality == 5
-        assert result.support == ("0", "1", "2", "3", "4")
+        assert result.support.elements == ("0", "1", "2", "3", "4")
 
     def test_disjoint(self) -> None:
         req = SumsetCardinalityRequest(
@@ -162,7 +162,7 @@ class TestSumsetCardinality:
             right=FiniteIntegerSet(elements=("5", "0", "-5")),
         )
         result = _run_sumset(req)
-        assert result.support == (
+        assert result.support.elements == (
             "-7",
             "-5",
             "-2",
@@ -172,6 +172,34 @@ class TestSumsetCardinality:
             "5",
             "7",
             "12",
+        )
+
+    def test_large_labels_are_rejected_before_support_materialization(self) -> None:
+        # Each operand remains within the shared finite-set input envelope, but
+        # the 256x256 pair envelope could not fit a canonical support carrying
+        # ten-thousand-digit sums.  Admission must reject before bigint sums or
+        # the result carrier are materialized.
+        width = 10_000
+        left = FiniteIntegerSet(
+            elements=tuple(
+                prefix + str(index).zfill(width - 1)
+                for prefix in ("1", "9")
+                for index in range(128)
+            )
+        )
+        right = FiniteIntegerSet(
+            elements=tuple(
+                prefix + str(index).zfill(width - 1)
+                for prefix in ("2", "8")
+                for index in range(128)
+            )
+        )
+
+        with pytest.raises(OperationDomainValidationError) as exc_info:
+            sumset_cardinality(left, right)
+
+        assert exc_info.value.errors()[0]["type"] == (
+            "additive_combinatorics.sumset_result_transport_exceeded"
         )
 
 

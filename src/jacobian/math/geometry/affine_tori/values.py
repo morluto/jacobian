@@ -478,6 +478,11 @@ class ConnectedSubtorusParameterization(StrictModel):
             raise _validation_error(
                 "subtorus_shape", "subtorus embedding must have shape n by k"
             )
+        if self.parameter_dimension > self.ambient_torus.dimension:
+            raise _validation_error(
+                "subtorus_dimension",
+                "subtorus parameter dimension must not exceed ambient torus dimension",
+            )
         return self
 
 
@@ -507,6 +512,11 @@ class FiniteTorusComponentPresentation(StrictModel):
         if len(self.generator_orders) != rank:
             raise _validation_error(
                 "presentation_orders", "one order is required for each generator"
+            )
+        if len(self.invariant_factors) > rank:
+            raise _validation_error(
+                "presentation_invariants",
+                "invariant factor count must not exceed generator count",
             )
         orders = tuple(
             parse_canonical_integer(value) for value in self.generator_orders

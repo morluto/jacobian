@@ -527,6 +527,18 @@ def build_affine_torus_plan(
             for coordinate in source.translation.coordinates
         )
     )
+    # Derive a source-sensitive rank upper bound from the non-zero rows of
+    # the displacement matrix A - I.  A zero row cannot contribute to the
+    # rank, so the actual rank cannot exceed the number of non-zero rows.
+    nonzero_row_count = sum(
+        any(
+            parse_canonical_integer(source.linear_part.entries[row][column])
+            - int(row == column)
+            != 0
+            for column in range(dimension)
+        )
+        for row in range(dimension)
+    )
     rank_bounds = tuple(
         _rank_bounds(
             dimension=dimension,
@@ -534,7 +546,7 @@ def build_affine_torus_plan(
             displacement_height=displacement_height,
             common_denominator=common_denominator,
         )
-        for rank in range(dimension + 1)
+        for rank in range(nonzero_row_count + 1)
     )
     if any(
         _decimal_digits(bounds.base_point_component_height)

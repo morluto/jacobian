@@ -135,6 +135,7 @@ TOOLS: MathTools = (
                 "must declare exactly one variable over QQ.",
                 {
                     "matrix": {
+                        "domain": "QQ",
                         "entries": [
                             [
                                 {"num": "0", "den": "1"},
@@ -182,6 +183,7 @@ TOOLS: MathTools = (
                 "Minimal polynomial of a 2x2 nilpotent Jordan block is t^2.",
                 {
                     "matrix": {
+                        "domain": "QQ",
                         "entries": [
                             [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
                             [{"num": "0", "den": "1"}, {"num": "0", "den": "1"}],
@@ -209,6 +211,7 @@ TOOLS: MathTools = (
                 "Rational canonical form of diag(2,3) has one invariant factor (t-2)(t-3).",
                 {
                     "matrix": {
+                        "domain": "QQ",
                         "entries": [
                             [{"num": "2", "den": "1"}, {"num": "0", "den": "1"}],
                             [{"num": "0", "den": "1"}, {"num": "3", "den": "1"}],
@@ -235,6 +238,7 @@ TOOLS: MathTools = (
                 "Primary decomposition of diag(2,3) gives (t-2) and (t-3).",
                 {
                     "matrix": {
+                        "domain": "QQ",
                         "entries": [
                             [{"num": "2", "den": "1"}, {"num": "0", "den": "1"}],
                             [{"num": "0", "den": "1"}, {"num": "3", "den": "1"}],

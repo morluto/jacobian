@@ -189,6 +189,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "Check the 2x2 identity matrix.",
                 {
                     "matrix": {
+                        "domain": "QQ",
                         "entries": [
                             [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
                             [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
@@ -215,6 +216,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "Decompose the 2x2 averaging matrix [[1/2,1/2],[1/2,1/2]] which is doubly stochastic.",
                 {
                     "matrix": {
+                        "domain": "QQ",
                         "entries": [
                             [{"num": "1", "den": "2"}, {"num": "1", "den": "2"}],
                             [{"num": "1", "den": "2"}, {"num": "1", "den": "2"}],

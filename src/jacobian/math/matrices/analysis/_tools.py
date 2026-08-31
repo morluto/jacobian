@@ -104,6 +104,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "the matrix must be symmetric and claimed eigenvalues distinct.",
                 {
                     "matrix": {
+                        "domain": "QQ",
                         "entries": [
                             [
                                 {"num": "2", "den": "1"},

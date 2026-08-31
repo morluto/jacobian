@@ -7,10 +7,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from math import lcm as _lcm
 
-from jacobian._exact import (
-    CanonicalRational,
-    canonical_rational_component_digits,
-)
+from jacobian._exact import CanonicalRational
 from jacobian.canonical import (
     CanonicalLimits,
     encode_strict_json,
@@ -29,6 +26,22 @@ __all__ = ["compute_maximum_weight_antichain"]
 @dataclass(frozen=True, slots=True)
 class _MaximumWeightAntichainAdmission:
     weights: tuple[Fraction, ...]
+    common_den: int
+    int_weights: tuple[int, ...]
+    total_int: int
+
+
+def _int_decimal_digits(value: int) -> int:
+    """Upper bound on the decimal digit count of a nonnegative integer.
+
+    Uses ``int.bit_length`` (linear in the magnitude) instead of ``str(value)``
+    so it stays below Python's integer-string conversion limit even for the
+    32,768-digit canonical components the kernel legitimately admits.
+    """
+    if value <= 0:
+        return 1
+    # digits <= floor(bit_length * log10(2)) + 1; round up for an upper bound.
+    return max(1, value.bit_length() * 30103 // 100000 + 1)
 
 
 def _admit_maximum_weight_antichain(
@@ -67,38 +80,69 @@ def _admit_maximum_weight_antichain(
             message="the antichain work envelope is exceeded",
         )
     width = _poset_width(poset, list(poset.elements))
-    max_digits = max(
-        (canonical_rational_component_digits(weight) for weight in weights),
-        default=1,
+    numerators = [frac.numerator for frac in weight_fracs]
+    denominators = [frac.denominator for frac in weight_fracs]
+    num_digits_max = max(
+        (_int_decimal_digits(num) for num in numerators), default=0
     )
-    arithmetic_work = max(width, 1) * max_digits
+
+    # The exact maximum antichain weight has denominator dividing the lcm of
+    # the input denominators; the polynomial min-cut clears to exactly that
+    # shared scale, so charge (and cap) that common-denominator expansion.
+    # Building the common denominator is itself the expensive step we bound, so
+    # halt as soon as its digit count would burst the canonical envelope.
+    rational_digit_cap = 32_768
+    common_den = 1
+    for denominator in denominators:
+        common_den = _lcm(common_den, denominator)
+        if _int_decimal_digits(common_den) > rational_digit_cap:
+            raise OperationDomainValidationError(
+                location=("weights",),
+                code="weighted_antichain.result_growth_exceeded",
+                message=(
+                    "maximum-weight rational growth exceeds the canonical "
+                    "digit envelope"
+                ),
+            )
+    common_den_digits = _int_decimal_digits(common_den)
+
+    # Scaled integer capacities need about (common-den digits + numerator
+    # digits) significant decimal digits during the min-cut.
+    scaled_digits = max(1, common_den_digits + num_digits_max)
+    num_nodes = 2 + 2 * n
+    num_edges = len(poset.strict_order_pairs) + 2 * n
+    arithmetic_work = max(1, num_nodes) * max(1, num_edges) * scaled_digits
     if arithmetic_work > MAX_ENUMERATION_WORK:
         raise OperationDomainValidationError(
             location=("weights",),
             code="weighted_antichain.arithmetic_work_bound_exceeded",
             message="rational antichain summation exceeds the admitted work envelope",
         )
-    # A singleton antichain returns the input weight unchanged; do not charge
-    # an extra addition digit at that exact canonical boundary.
-    denominators = {weight.as_fraction().denominator for weight in weights}
-    if len(denominators) == 1:
-        # Adding values with a common denominator does not multiply that
-        # denominator at every summand; only the numerator can gain carry digits.
-        max_sum_digits = max_digits + (len(str(width)) if width > 1 else 0)
-    else:
-        max_sum_digits = (
-            max_digits if width <= 1 else width * max_digits + len(str(width))
-        )
-    if max_sum_digits > 32_768:
+
+    # Denominator-clearing intermediates must fit the canonical envelope.
+    int_weights = tuple(int(frac * common_den) for frac in weight_fracs)
+    total_int = sum(int_weights)
+
+    # Result growth: numerator and denominator tracked per weight. The maximum
+    # antichain has at most `width` members, so its numerator gains at most
+    # len(str(width)) carry digits over a scaled integer.
+    result_den_digits = common_den_digits
+    result_num_digits = scaled_digits + (len(str(width)) if width > 1 else 0)
+    max_result_digits = max(result_den_digits, result_num_digits)
+    if max_result_digits > rational_digit_cap:
         raise OperationDomainValidationError(
             location=("weights",),
             code="weighted_antichain.result_growth_exceeded",
-            message="maximum-weight rational growth exceeds the canonical digit envelope",
+            message=(
+                "maximum-weight rational growth exceeds the canonical "
+                "digit envelope"
+            ),
         )
+
     rational_size = strict_json_object_size(
         (
-            ("num", len(encode_strict_json("9" * max_sum_digits))),
-            ("den", len(encode_strict_json("9" * max_sum_digits))),
+            ("num", len(encode_strict_json("9" * max_result_digits))),
+            ("den", len(encode_strict_json("9" * max_result_digits))),
         )
     )
     labels_size = (
@@ -127,7 +171,12 @@ def _admit_maximum_weight_antichain(
             code="weighted_antichain.result_too_large",
             message="maximum-weight antichain result exceeds the canonical output envelope",
         )
-    return _MaximumWeightAntichainAdmission(weights=weight_fracs)
+    return _MaximumWeightAntichainAdmission(
+        weights=weight_fracs,
+        common_den=common_den,
+        int_weights=int_weights,
+        total_int=total_int,
+    )
 
 
 def compute_maximum_weight_antichain(  # noqa: C901
@@ -144,7 +193,6 @@ def compute_maximum_weight_antichain(  # noqa: C901
     admission = _admit_maximum_weight_antichain(poset, weights)
     elements = list(poset.elements)
     n = len(elements)
-    weight_fracs = admission.weights
 
     if n == 0:
         return MaximumWeightAntichainResult(
@@ -154,37 +202,26 @@ def compute_maximum_weight_antichain(  # noqa: C901
             antichain=(),
         )
 
-    # ------------------------------------------------------------------
-    # Max weight antichain via min vertex cover on bipartite graph.
-    #
-    # For a poset P, the max weight antichain equals total weight minus
-    # the min weight vertex cover of the bipartite graph G where:
-    #   - Left vertices: copies of each poset element (v_L)
-    #   - Right vertices: copies of each poset element (v_R)
-    #   - For each order relation v < u: edge v_L -> u_R
-    #
-    # Min vertex cover on a bipartite graph is found via max-flow:
-    #   source -> v_L with capacity w_v (for each element v)
-    #   v_R -> sink with capacity w_v (for each element v)
-    #   v_L -> u_R with infinite capacity (for each order v < u)
-    #
-    # The min cut value = min vertex cover weight.
-    # Max antichain weight = total weight - min cut.
-    # ------------------------------------------------------------------
+    common_den = admission.common_den
+    int_weights = admission.int_weights
+    total_weight_int = admission.total_int
 
-    idx = {e: i for i, e in enumerate(elements)}
+    # Build flow network: source, sink, n left nodes, n right nodes
+    idx = {element: i for i, element in enumerate(elements)}
     order_pairs: list[tuple[int, int]] = []
     for pair in poset.strict_order_pairs:
         order_pairs.append((idx[pair.lower], idx[pair.upper]))
 
-    # Convert fractions to common denominator for integer flow network.
-    common_den = 1
-    for w in weight_fracs:
-        common_den = _lcm(common_den, w.denominator)
-    int_weights = [int(w * common_den) for w in weight_fracs]
-    total_weight_int = sum(int_weights)
-
-    # Build flow network: source, sink, n left nodes, n right nodes
+    # Min vertex cover on the bipartite comparison graph is found via max-flow:
+    #   source -> v_L with capacity w_v
+    #   v_R -> sink with capacity w_v
+    #   v_L -> u_R with an uncuttable capacity for each order v < u.
+    # The min cut value = min vertex cover weight, so
+    # max antichain weight = total weight - min cut.
+    #
+    # The relation edges are genuinely uncuttable: their capacity sits strictly
+    # above the sum of every finite vertex capacity, so any cut that removes a
+    # relation edge is strictly more expensive than cutting all vertices.
     source = 0
     sink = 1
 
@@ -195,7 +232,7 @@ def compute_maximum_weight_antichain(  # noqa: C901
         return 2 + n + i
 
     num_nodes = 2 + 2 * n
-    inf_cap = 10**18
+    inf_cap = total_weight_int + 1
 
     adj: list[dict[int, int]] = [{} for _ in range(num_nodes)]
 
@@ -237,7 +274,7 @@ def compute_maximum_weight_antichain(  # noqa: C901
                 break
         if parent[sink] == -1:
             break
-        path_flow = float("inf")
+        path_flow = total_weight_int + 1
         v = sink
         while v != source:
             u = parent[v]
@@ -254,8 +291,9 @@ def compute_maximum_weight_antichain(  # noqa: C901
     min_vertex_cover = total_flow
     max_antichain_weight_int = total_weight_int - min_vertex_cover
 
-    # Find min vertex cover set via König's theorem:
-    # After max-flow, find nodes reachable from source in residual graph.
+    # Find the min vertex cover set via König's theorem: reachable-from-source
+    # nodes in the residual graph. Left copies NOT reachable and right copies
+    # reachable form the min vertex cover.
     source_reachable = {source}
     queue = deque([source])
     while queue:
@@ -265,12 +303,10 @@ def compute_maximum_weight_antichain(  # noqa: C901
                 source_reachable.add(v)
                 queue.append(v)
 
-    # Min vertex cover: L nodes NOT reachable from source, R nodes reachable from source
     in_vertex_cover = set()
     for i in range(n):
         if left(i) not in source_reachable:
             in_vertex_cover.add(i)  # element i's left copy is in the cover
-    for i in range(n):
         if right(i) in source_reachable:
             in_vertex_cover.add(i)  # element i's right copy is in the cover
 

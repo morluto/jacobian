@@ -5,12 +5,14 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Mapping
 
+from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
 from jacobian.canonical import (
     CanonicalLimits,
     format_canonical_integer,
     parse_canonical_integer,
+    strict_json_object_size,
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive import _multiset_sum
@@ -66,6 +68,15 @@ def subset_sum_profile(source: IndexedIntegerSequence) -> SubsetSumProfile:
 
 
 def _parse_set(spec: FiniteIntegerSet) -> frozenset[int]:
+    if any(
+        len(element.lstrip("-")) > CanonicalLimits().max_integer_digits
+        for element in spec.elements
+    ):
+        raise OperationDomainValidationError(
+            location=("left", "right"),
+            code="additive_combinatorics.integer_digit_bound",
+            message="finite-set operands exceed the canonical integer digit bound",
+        )
     return frozenset(parse_canonical_integer(element) for element in spec.elements)
 
 
@@ -78,6 +89,46 @@ def _representation_function(
 
 def _sorted_sums(counts: Mapping[int, int]) -> list[int]:
     return sorted(counts.keys())
+
+
+def _require_sumset_preflight(left: FiniteIntegerSet, right: FiniteIntegerSet) -> None:
+    """Reject an output envelope that cannot fit before building pair sums.
+
+    The support bound is collision-sensitive: the sumset A+B lies in the
+    interval [min(A)+min(B), max(A)+max(B)], which bounds its cardinality by
+    max(A)-min(A)+max(B)-min(B)+1, independent of the Cartesian pair count.
+    """
+    pair_count = len(left.elements) * len(right.elements)
+    if pair_count == 0:
+        return
+    left_values = frozenset(
+        parse_canonical_integer(element) for element in left.elements
+    )
+    right_values = frozenset(
+        parse_canonical_integer(element) for element in right.elements
+    )
+    interval_bound = (
+        max(left_values) - min(left_values) + max(right_values) - min(right_values) + 1
+    )
+    support_bound = min(pair_count, interval_bound)
+    max_sum_abs = max(
+        abs(left_endpoint + right_endpoint)
+        for left_endpoint in (min(left_values), max(left_values))
+        for right_endpoint in (min(right_values), max(right_values))
+    )
+    max_digits = len(format_canonical_integer(max_sum_abs))
+    value_size = max_digits + 3  # quotes, optional sign, and conservative comma
+    elements_size = 2 + max(support_bound - 1, 0) + support_bound * value_size
+    support_size = strict_json_object_size((("elements", elements_size),))
+    result_size = strict_json_object_size(
+        (("cardinality", len(str(max(1, support_bound)))), ("support", support_size))
+    )
+    if result_size > CanonicalLimits().max_output_bytes:
+        raise OperationDomainValidationError(
+            location=("left", "right"),
+            code="additive_combinatorics.sumset_result_transport_exceeded",
+            message="sumset result exceeds the canonical output envelope",
+        )
 
 
 def _admit_direct_sum(
@@ -106,7 +157,12 @@ def representation_profile(
     right: FiniteIntegerSet,
 ) -> RepresentationProfileResult:
     """Compute ``r_{A+B}(x)`` for every sum ``x``."""
-    _require_bounded_cartesian_product(left, right)
+    try:
+        _require_bounded_cartesian_product(left, right)
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=("left", "right"), code=exc.type, message=exc.message()
+        ) from None
     counts = _representation_function(_parse_set(left), _parse_set(right))
     entries = tuple(
         RepresentationProfileEntry(
@@ -196,9 +252,25 @@ def sumset_cardinality(
 ) -> SumsetCardinalityResult:
     """Compute ``|A + B|`` (the support cardinality of ``r_{A+B}``)."""
     _require_bounded_cartesian_product(left, right)
-    left_values, right_values = _require_sumset_result_transport_bound(left, right)
-    counts = _representation_function(left_values, right_values)
-    support = tuple(format_canonical_integer(value) for value in _sorted_sums(counts))
+    _require_sumset_preflight(left, right)
+    counts = _representation_function(_parse_set(left), _parse_set(right))
+    support_values = _sorted_sums(counts)
+    try:
+        _require_sumset_result_transport_bound(support_values)
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=("left", "right"), code=exc.type, message=exc.message()
+        ) from None
+    try:
+        support = FiniteIntegerSet(
+            elements=tuple(format_canonical_integer(value) for value in support_values)
+        )
+    except ValidationError as exc:
+        raise OperationDomainValidationError(
+            location=("left", "right"),
+            code="additive_combinatorics.sumset_support_not_composable",
+            message="the produced support exceeds the canonical finite-set envelope",
+        ) from exc
     return SumsetCardinalityResult._from_kernel(support)
 
 

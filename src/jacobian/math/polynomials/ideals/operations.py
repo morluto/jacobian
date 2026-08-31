@@ -914,6 +914,8 @@ def ideal_containment(
     except _ResultLimitExceededError:
         outcome = "LIMIT_EXCEEDED"
         detail = "the exact containment ledger exceeds the declared result bound"
+    except OperationDomainValidationError:
+        raise
     except (KeyError, TypeError, ValueError, _SympyKernelError):
         outcome = "ERROR"
         detail = "the bounded kernel failed without producing an exact containment"
@@ -971,6 +973,8 @@ def ideal_equality(
     except _ResultLimitExceededError:
         outcome = "LIMIT_EXCEEDED"
         detail = "the exact equality ledgers exceed the declared result bound"
+    except OperationDomainValidationError:
+        raise
     except (KeyError, TypeError, ValueError, _SympyKernelError):
         outcome = "ERROR"
         detail = "the bounded kernel failed without producing an exact equality result"

@@ -9,15 +9,9 @@ from jacobian.math.matrices.analysis.operations import (
     check_rational_spectrum_claim,
     compute_inertia,
 )
-from jacobian.math.matrices.values import (
-    EmbeddedRealSimpleNumberFieldMatrix,
-    ExactRealMatrix,
-    RationalMatrix,
-)
+from jacobian.math.matrices.values import RationalMatrix
 
 __all__ = [
-    "EmbeddedRealSimpleNumberFieldMatrix",
-    "ExactRealMatrix",
     "InertiaResult",
     "RationalMatrix",
     "RationalSpectrumMultiplicityClaim",

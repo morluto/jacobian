@@ -16,6 +16,7 @@ from pydantic import ValidationError
 
 from jacobian._execution import OperationExecutionCancelledError
 from jacobian.math.polynomials.real_algebra._plane_component_models import (
+    IsolatedRealPlanePoint,
     PlaneComponentProfileRequest,
 )
 from jacobian.math.polynomials.real_algebra._qepcad_plane_protocol import (
@@ -70,6 +71,7 @@ class QepcadPlaneProcessOutcome:
     reason: QepcadPlaneProcessReason | None = None
     version: str | None = None
     projection: QepcadPlaneWorkerComplete | None = None
+    canonical_samples: tuple[IsolatedRealPlanePoint, ...] | None = None
 
 
 class QepcadPlaneSampleValidationError(ValueError):
@@ -224,7 +226,15 @@ def run_plane_sample_recognition(
             status="BACKEND_ERROR",
             reason="SAMPLE_RECOGNITION_INVALID_OUTPUT",
         )
-    return QepcadPlaneProcessOutcome(status="COMPUTED")
+    if len(response.canonical_samples) != len(request.samples):
+        return QepcadPlaneProcessOutcome(
+            status="BACKEND_ERROR",
+            reason="SAMPLE_RECOGNITION_INVALID_OUTPUT",
+        )
+    return QepcadPlaneProcessOutcome(
+        status="COMPUTED",
+        canonical_samples=response.canonical_samples,
+    )
 
 
 def run_qepcad_plane_components(

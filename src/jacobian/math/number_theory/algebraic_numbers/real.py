@@ -226,14 +226,6 @@ def _order_data(
     RationalIsolatingInterval,
     RationalIsolatingInterval,
 ]:
-    if any(
-        len(value.polynomial) - 1 > MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE
-        for value in (left, right)
-    ):
-        raise ValueError(
-            "exact algebraic comparison admits degree at most "
-            f"{MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE}"
-        )
     left_poly = _sympy_polynomial(left)
     right_poly = _sympy_polynomial(right)
     if left.polynomial == right.polynomial:
@@ -247,6 +239,15 @@ def _order_data(
             else "EQ"
         )
         return order, left_interval, right_interval
+
+    if any(
+        len(value.polynomial) - 1 > MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE
+        for value in (left, right)
+    ):
+        raise ValueError(
+            "exact algebraic comparison admits degree at most "
+            f"{MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE}"
+        )
 
     # Distinct canonical minimal polynomials are coprime.  Isolating the roots
     # of their square-free product gives one exact common ordered axis, avoiding

@@ -327,6 +327,18 @@ def compute_plane_component_profile(
         _require_active(deadline, "after exact sample recognition")
         if sample_outcome.status != "COMPUTED":
             return _noncompletion(request, sample_outcome)
+        if sample_outcome.canonical_samples is None:
+            return _noncompletion(
+                request,
+                QepcadPlaneProcessOutcome(
+                    status="BACKEND_ERROR",
+                    reason="SAMPLE_RECOGNITION_INVALID_OUTPUT",
+                ),
+            )
+        request = PlaneComponentProfileRequest(
+            semialgebraic_set=request.semialgebraic_set,
+            samples=sample_outcome.canonical_samples,
+        )
 
     if not semialgebraic_set.sign_conditions:
         result = _computed_result(

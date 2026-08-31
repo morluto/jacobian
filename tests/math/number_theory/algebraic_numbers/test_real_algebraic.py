@@ -57,6 +57,13 @@ def test_order_within_one_minimal_polynomial_uses_real_root_indices() -> None:
     assert compare_real_algebraic(positive_sqrt_two, positive_sqrt_two).order == "EQ"
 
 
+def test_order_within_one_degree_sixteen_polynomial_uses_root_indices() -> None:
+    negative_root = _value(("1",) + ("0",) * 15 + ("-2",), 0)
+    positive_root = _value(("1",) + ("0",) * 15 + ("-2",), 1)
+
+    assert compare_real_algebraic(negative_root, positive_root).order == "LT"
+
+
 @pytest.mark.parametrize(
     ("polynomial", "message"),
     [

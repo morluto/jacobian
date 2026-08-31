@@ -9,7 +9,9 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.matrices.values import RealQuadraticMatrix
-from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
+from jacobian.math.number_theory.algebraic_numbers.root_isolation._models import (
+    _ComparisonRealAlgebraicValue,
+)
 
 SpectrumKind = Literal["SYMMETRIC_EIGENVALUES", "SINGULAR_VALUES"]
 Definiteness = Literal[
@@ -25,7 +27,7 @@ Definiteness = Literal[
 class RealAlgebraicMultiplicity(StrictModel):
     """One exact real algebraic value and its spectral multiplicity."""
 
-    value: RealAlgebraicValue
+    value: _ComparisonRealAlgebraicValue
     multiplicity: StrictInt = Field(ge=1, le=2)
 
 

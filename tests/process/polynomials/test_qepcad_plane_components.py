@@ -155,7 +155,9 @@ def test_degenerate_sample_recognition_does_not_require_qepcad() -> None:
         wall_seconds=30.0,
     )
 
-    assert outcome == QepcadPlaneProcessOutcome(status="COMPUTED")
+    assert outcome.status == "COMPUTED"
+    assert outcome.canonical_samples is not None
+    assert len(outcome.canonical_samples) == 1
 
 
 def test_degenerate_sample_recognition_deadline_is_nonconclusive() -> None:

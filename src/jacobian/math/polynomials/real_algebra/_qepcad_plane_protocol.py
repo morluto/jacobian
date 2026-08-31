@@ -145,6 +145,9 @@ class PlaneSamplesValid(StrictModel):
     """Every supplied structural sample denotes its declared isolated point."""
 
     kind: Literal["samples_valid"] = "samples_valid"
+    canonical_samples: tuple[IsolatedRealPlanePoint, ...] = Field(
+        max_length=MAX_PLANE_COMPONENT_SAMPLES
+    )
 
 
 QepcadPlaneWorkerResponse = Annotated[

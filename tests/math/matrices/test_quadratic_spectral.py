@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.quadratic_spectral import (
+    RealAlgebraicMultiplicity,
     RealQuadraticInertia,
     inertia,
     singular_spectrum,
@@ -29,6 +30,7 @@ from jacobian.math.matrices.quadratic_spectral._tools import (
 from jacobian.math.matrices.values import RealQuadraticMatrix
 from jacobian.math.number_theory.algebraic_numbers.quadratic import RealQuadraticValue
 from jacobian.math.number_theory.algebraic_numbers.real import compare_real_algebraic
+from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
 
 
 def _q(
@@ -121,6 +123,16 @@ def test_singular_spectrum_can_return_degree_eight_values() -> None:
     assert tuple(
         (row.value.polynomial, row.value.real_root_index) for row in result.values
     ) == ((polynomial, 7), (polynomial, 5))
+
+
+def test_quadratic_spectrum_rejects_degree_sixteen_values() -> None:
+    value = RealAlgebraicValue(
+        polynomial=("1",) + ("0",) * 15 + ("-2",),
+        real_root_index=0,
+    )
+
+    with pytest.raises(ValidationError):
+        RealAlgebraicMultiplicity(value=value, multiplicity=1)
 
 
 def test_repeated_irrational_spectrum_keeps_multiplicity() -> None:

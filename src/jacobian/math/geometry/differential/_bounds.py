@@ -652,9 +652,8 @@ def _validate_canonical_result_bound(bound: FractionBound, ledger: _Ledger) -> i
         # cancellation-induced support expansion, so the tracked sparse
         # term count is the accurate support bound.
         is_denominator = label == "denominator"
-        denominator_is_unit = (
-            is_denominator
-            and all(degree == 0 for degree in bound.denominator.degrees)
+        denominator_is_unit = is_denominator and all(
+            degree == 0 for degree in bound.denominator.degrees
         )
         support_terms = polynomial.terms if denominator_is_unit else dense_terms
         if support_terms > MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS:
@@ -676,8 +675,8 @@ def _validate_canonical_result_bound(bound: FractionBound, ledger: _Ledger) -> i
         if denominator_is_unit
         else _dense_term_bound(bound.numerator.degrees)
     )
-    denominator_dense = 1 if denominator_is_unit else _dense_term_bound(
-        bound.denominator.degrees
+    denominator_dense = (
+        1 if denominator_is_unit else _dense_term_bound(bound.denominator.degrees)
     )
     normalization_degree = max(numerator_dense + denominator_dense - 2, 0)
     ledger.charge(
@@ -710,9 +709,7 @@ def _bounded_string_size(content_digits: int, *, possibly_negative: bool) -> int
     return content_digits + 2 + int(possibly_negative)
 
 
-def _polynomial_result_size(
-    bound: PolynomialBound, *, sparse: bool = False
-) -> int:
+def _polynomial_result_size(bound: PolynomialBound, *, sparse: bool = False) -> int:
     if bound.is_zero:
         return strict_json_object_size((("terms", 2),))
     term_count = bound.terms if sparse else _dense_term_bound(bound.degrees)

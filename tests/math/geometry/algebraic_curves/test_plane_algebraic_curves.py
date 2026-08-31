@@ -35,6 +35,7 @@ from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialTerm,
     SparseRationalPolynomial,
+    require_canonical_rational_function,
 )
 
 
@@ -508,7 +509,11 @@ def test_result_round_trips_through_the_canonical_wire_schema() -> None:
     )
     result = _parametrize(source, (_rational(1), _rational(0)))
     payload = result.model_dump(mode="json")
-    assert RationalConicParametrizationResult.model_validate(payload) == result
+    parsed = RationalConicParametrizationResult.model_validate(payload)
+
+    assert parsed == result
+    for value in (*parsed.coordinates, parsed.inverse_parameter):
+        assert require_canonical_rational_function(value) is value
 
 
 def test_parametrization_schema_guides_cross_field_contract() -> None:

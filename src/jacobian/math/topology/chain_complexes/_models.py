@@ -10,6 +10,7 @@ from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.canonical import CanonicalizationError
 from jacobian.math.topology.chain_complexes.values import (
     MAX_BASIS_SIZE,
     MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS,
@@ -442,7 +443,7 @@ class ComputeHomologyRequest(StrictModel):
     def preflight_raw_complex(cls, data: object) -> object:
         try:
             canonical = canonicalize_json_containers(data)
-        except RecursionError as exc:
+        except (RecursionError, CanonicalizationError) as exc:
             # Inspect the raw outer axes before reporting a nesting failure so
             # malformed coefficients retain the owner-specific diagnostic.
             _preflight_raw_homology_complex(data)

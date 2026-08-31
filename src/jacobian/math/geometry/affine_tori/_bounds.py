@@ -31,6 +31,7 @@ from jacobian.math.geometry.affine_tori.values import (
 # well under one second on an ordinary development host. Two minutes leaves a
 # generous platform margin while retaining one finite owner deadline.
 AFFINE_TORUS_FIXED_LOCUS_WALL_SECONDS = 120.0
+_AFFINE_TORUS_WORKER_STDIN_LIMIT = 64 * 1024
 
 type AffineTorusBackendEnvelopeCategory = Literal[
     "integer_rank",
@@ -608,19 +609,10 @@ def build_affine_torus_plan(
         for row in range(dimension)
     )
     attained_rank = _exact_integer_rank(displacement)
-    translation_fractions = tuple(
-        coordinate.as_integer_ratio() for coordinate in source.translation.coordinates
-    )
-    augmented_denominator = lcm(*(fraction[1] for fraction in translation_fractions))
-    augmented = tuple(
-        (
-            *row,
-            -translation_fractions[row_index][0]
-            * (augmented_denominator // translation_fractions[row_index][1]),
-        )
-        for row_index, row in enumerate(displacement)
-    )
-    inconsistent = _exact_integer_rank(augmented) > attained_rank
+    # Admission cannot use the worker's saturated character lattice without
+    # replaying its backend work.  Keep the nonempty branch in the envelope;
+    # the worker still determines the exact obstruction modulo Z^n.
+    inconsistent = False
     rank_bounds = (
         _rank_bounds(
             dimension=dimension,
@@ -649,6 +641,12 @@ def build_affine_torus_plan(
         )
 
     source_wire_bytes = _source_wire_bytes(source)
+    if source_wire_bytes > _AFFINE_TORUS_WORKER_STDIN_LIMIT:
+        _reject(
+            "worker_input",
+            "the private affine-torus worker request exceeds its "
+            f"{_AFFINE_TORUS_WORKER_STDIN_LIMIT}-byte stdin limit",
+        )
     result_bytes = max(
         _result_bytes_for_rank(
             dimension=dimension,

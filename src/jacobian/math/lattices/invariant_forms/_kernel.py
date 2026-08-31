@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 import json
-import sys
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from fractions import Fraction
 from math import ceil, gcd, lcm, log10
-from pathlib import Path
-from tempfile import TemporaryDirectory
 from time import monotonic
 from typing import Any, cast
 from unicodedata import normalize
@@ -28,6 +25,7 @@ from jacobian.canonical import (
     loads_strict_json,
     parse_canonical_integer,
 )
+from jacobian.math.lattices.invariant_forms._hnf_process import run_hnf_worker
 from jacobian.math.lattices.invariant_forms._models import (
     MAX_CONSTRAINT_CELLS,
     MAX_CONSTRAINT_DIGIT_WORK,
@@ -57,8 +55,6 @@ MAX_STORED_CONSTRAINT_DIGITS = 2_000_000
 MAX_INVARIANT_FORM_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 _INVARIANT_FORM_WALL_SECONDS = 3600.0
-_HNF_WORKER = Path(__file__).with_name("_hnf_worker.py")
-_HNF_STDERR_LIMIT = 64 * 1024
 
 
 def _require_active_request(stage: str, *, deadline: float | None = None) -> None:
@@ -717,17 +713,6 @@ def _integer_kernel_basis(
     if deadline is None:
         deadline = _bind_request_deadline()
     _require_active_request("before the graph-lattice HNF")
-    from jacobian.process import (
-        ProcessResourceLimits,
-        run_bounded_process,
-        worker_environment,
-    )
-
-    remaining = deadline - monotonic()
-    if remaining <= 0:
-        raise OperationExecutionTimeoutError(
-            "invariant-form lattice deadline expired before graph-lattice HNF"
-        )
     payload = json.dumps(
         {
             "coefficient_count": coefficient_count,
@@ -738,21 +723,7 @@ def _integer_kernel_basis(
         },
         separators=(",", ":"),
     ).encode("utf-8")
-    with TemporaryDirectory(prefix="jacobian-invariant-form-hnf-") as directory:
-        completed = run_bounded_process(
-            [sys.executable, str(_HNF_WORKER)],
-            input_bytes=payload,
-            timeout_seconds=remaining,
-            environment=worker_environment(locale="C.UTF-8"),
-            stdout_limit=MAX_INVARIANT_FORM_RESULT_BYTES,
-            stderr_limit=_HNF_STDERR_LIMIT,
-            resource_limits=ProcessResourceLimits(
-                cpu_seconds=max(1, ceil(_INVARIANT_FORM_WALL_SECONDS)),
-                address_space_bytes=1024 * 1024 * 1024,
-                file_size_bytes=1024 * 1024,
-            ),
-            cwd=directory,
-        )
+    completed = run_hnf_worker(payload, deadline=deadline)
     if completed.cancelled:
         raise OperationExecutionCancelledError(
             "invariant-form lattice cancelled during graph-lattice HNF"

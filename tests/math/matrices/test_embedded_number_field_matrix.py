@@ -118,6 +118,7 @@ def test_raw_embedded_matrix_rejects_deep_malformed_entries_without_recursing() 
         ("coefficient_num", "string_type"),
         ("coefficient_axis", "tuple_type"),
         ("entry_presentation", "tuple_type"),
+        ("entry_presentation_extra", "matrix.shape_mismatch"),
         ("embedding_presentation", "tuple_type"),
         ("embedding_root", "tuple_type"),
     ),
@@ -154,6 +155,8 @@ def test_raw_embedded_matrix_validation_is_total_at_every_nested_axis(
         element["coefficients_ascending"] = nested
     elif malformed_part == "entry_presentation":
         element["presentation"]["coefficients_descending"] = nested
+    elif malformed_part == "entry_presentation_extra":
+        element["presentation"]["unknown"] = nested
     elif malformed_part == "embedding_presentation":
         payload["embedding"]["presentation"]["coefficients_descending"] = nested
     else:

@@ -595,6 +595,14 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
                                 )
                     presentation = scalar.get("presentation")
                     if isinstance(presentation, dict):
+                        if set(presentation).difference(
+                            {"domain", "coefficients_descending"}
+                        ):
+                            raise _validation_error(
+                                "shape_mismatch",
+                                "embedded number-field entry presentations contain "
+                                "unknown fields",
+                            )
                         coefficients = presentation.get("coefficients_descending")
                         if not isinstance(coefficients, (list, tuple)):
                             raise PydanticCustomError(
@@ -611,6 +619,11 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
         if isinstance(embedding, dict):
             presentation = embedding.get("presentation")
             if isinstance(presentation, dict):
+                if set(presentation).difference({"domain", "coefficients_descending"}):
+                    raise _validation_error(
+                        "shape_mismatch",
+                        "embedded number-field presentations contain unknown fields",
+                    )
                 coefficients = presentation.get("coefficients_descending")
                 if not isinstance(coefficients, (list, tuple)):
                     raise PydanticCustomError(

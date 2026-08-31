@@ -80,7 +80,10 @@ def field_element_from_value(
     """Convert canonical ascending coordinates to SymPy's exact ANP value."""
 
     coefficients_descending = [
-        QQ(parse_canonical_integer(coefficient.num), parse_canonical_integer(coefficient.den))
+        QQ(
+            parse_canonical_integer(coefficient.num),
+            parse_canonical_integer(coefficient.den),
+        )
         for coefficient in reversed(value.coefficients_ascending)
     ]
     return recognized.field.new(coefficients_descending)

@@ -246,7 +246,9 @@ def compute_eventual_hitting_profile(
         for j in target_set:
             b_vector[row_idx] += matrix[i][j]
 
-    solution = _solve_linear_system(a_matrix, b_vector)
+    from jacobian.math.probability.markov_chains._flint import solve_linear_system
+
+    solution = solve_linear_system(a_matrix, b_vector)
     if solution is None:
         _reject(
             ("matrix",),
@@ -271,31 +273,3 @@ def compute_eventual_hitting_profile(
         almost_sure_states=almost_sure,
     )
 
-
-def _solve_linear_system(
-    a: list[list[Fraction]], b: list[Fraction]
-) -> list[Fraction] | None:
-    """Solve Ax = b using Gaussian elimination with exact fractions."""
-    n = len(a)
-    aug = [[*list(a[i]), b[i]] for i in range(n)]
-
-    for col in range(n):
-        pivot = None
-        for row in range(col, n):
-            if aug[row][col] != 0:
-                pivot = row
-                break
-        if pivot is None:
-            continue
-        aug[col], aug[pivot] = aug[pivot], aug[col]
-        for row in range(n):
-            if row != col and aug[row][col] != 0:
-                factor = aug[row][col] / aug[col][col]
-                for k in range(n + 1):
-                    aug[row][k] -= factor * aug[col][k]
-
-    solution = [Fraction(0)] * n
-    for i in range(n):
-        if aug[i][i] != 0:
-            solution[i] = aug[i][n] / aug[i][i]
-    return solution

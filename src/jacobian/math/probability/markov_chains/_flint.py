@@ -37,4 +37,36 @@ def solve_stationary_class(
     )
 
 
-__all__ = ["solve_stationary_class"]
+def solve_linear_system(
+    a: list[list[Fraction]], b: list[Fraction]
+) -> list[Fraction] | None:
+    """Solve *Ax = b* exactly via FLINT's ``fmpq_mat.solve``.
+
+    Returns the solution vector, or ``None`` when the system is singular.
+    """
+
+    from flint import fmpq, fmpq_mat
+
+    n = len(a)
+    if n == 0:
+        return []
+
+    coefficients = fmpq_mat(
+        [[fmpq(val.numerator, val.denominator) for val in row] for row in a]
+    )
+    rhs = fmpq_mat([[fmpq(val.numerator, val.denominator)] for val in b])
+    try:
+        solution = coefficients.solve(rhs)
+    except (ZeroDivisionError, ValueError, ArithmeticError):
+        return None
+
+    return [
+        Fraction(
+            int(solution[i, 0].numerator),
+            int(solution[i, 0].denominator),
+        )
+        for i in range(n)
+    ]
+
+
+__all__ = ["solve_stationary_class", "solve_linear_system"]

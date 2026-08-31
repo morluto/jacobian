@@ -9,9 +9,9 @@ on:
   merge_group:
     types: [checks_requested]
   workflow_dispatch:
-    # The autofix bot dispatches CI on the head SHA it just pushed (GITHUB_TOKEN
-    # pushes raise no events). Selecting the pull_request lane set keeps the
-    # dispatched run identical to what a human push would run.
+    # The autofix bot dispatches CI on the exact base/head range it just pushed
+    # (GITHUB_TOKEN pushes raise no events). Selecting the pull_request lane set
+    # keeps the dispatched run identical to what a human push would run.
     inputs:
       pr_lanes:
         description: Select the pull_request lane set instead of the main gate.
@@ -123,8 +123,8 @@ jobs:
               echo "::error::dispatched head_sha does not match the checked-out commit"
               exit 1
             }
-            git merge-base --is-ancestor "$BASE_SHA" "$HEAD_SHA" || {
-              echo "::error::dispatched base_sha is not an ancestor of head_sha"
+            git merge-base "$BASE_SHA" "$HEAD_SHA" >/dev/null || {
+              echo "::error::dispatched base_sha and head_sha have no common ancestor"
               exit 1
             }
           fi

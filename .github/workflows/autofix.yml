@@ -105,9 +105,10 @@ jobs:
           # GitHub suppresses workflow runs for pushes made with GITHUB_TOKEN,
           # so the new head would otherwise carry no fresh required checks and
           # stay unmergeable until a human pushes. Dispatch CI explicitly with
-          # the pull_request lane selection; its check runs
-          # attach to this exact head SHA. With AUTOFIX_TOKEN configured the
-          # push itself raises synchronize events, so no dispatch is needed.
+          # the pull_request lane selection and the immutable base/head range;
+          # its check runs attach to this exact head SHA. With AUTOFIX_TOKEN
+          # configured the push itself raises synchronize events, so no
+          # dispatch is needed.
           if [[ -z "${AUTOFIX_TOKEN}" ]]; then
             gh workflow run ci.yml \
               --ref "$PR_HEAD_REF" \

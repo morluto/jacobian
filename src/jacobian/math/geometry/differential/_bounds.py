@@ -622,10 +622,10 @@ def _canonical_coefficient_digits(bound: FractionBound) -> int:
     return max(
         len(str(abs(content_ratio.numerator)))
         + bound.numerator.coefficient_digits
-        + numerator_factor_digits,
+        + (0 if denominator_is_unit else numerator_factor_digits),
         len(str(content_ratio.denominator))
         + bound.denominator.coefficient_digits
-        + denominator_factor_digits,
+        + (0 if denominator_is_unit else denominator_factor_digits),
         denominator_factor_digits,
     )
 

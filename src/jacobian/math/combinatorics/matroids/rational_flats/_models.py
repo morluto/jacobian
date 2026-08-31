@@ -212,6 +212,11 @@ def _require_raw_configuration_envelope(data: object, *, label: str) -> None:
         ("coordinate_axis", coordinate_axis),
         ("vector_labels", data.get("vector_labels")),
     ):
+        if value is not None and not isinstance(value, (list, tuple)):
+            raise _validation_error(
+                "configuration_shape",
+                f"{label} {field_name} must be an array",
+            )
         if isinstance(value, (list, tuple)) and any(
             not isinstance(item, str) for item in value
         ):

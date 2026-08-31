@@ -621,6 +621,19 @@ def test_raw_candidate_configuration_is_bounded_before_nested_copying(
     assert caught.value.errors()[0]["type"] == error_type
 
 
+@pytest.mark.parametrize("field_name", ["coordinate_axis", "vector_labels"])
+def test_raw_configuration_axes_must_be_arrays_before_nested_copying(
+    field_name: str,
+) -> None:
+    raw = _minimal_raw_request()
+    raw["problem"]["candidates"][field_name] = {"nested": "container"}
+
+    with pytest.raises(ValidationError) as caught:
+        ClauseConstrainedRationalFlatRequest.model_validate(raw)
+
+    assert caught.value.errors()[0]["type"] == "rational_flat.configuration_shape"
+
+
 def test_raw_repeated_minus_prefix_is_bounded_before_canonicalization() -> None:
     raw = _minimal_raw_request()
     raw["problem"]["forbidden_vectors"]["entries"] = [

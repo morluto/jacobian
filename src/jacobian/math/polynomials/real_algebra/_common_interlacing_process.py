@@ -24,6 +24,9 @@ from jacobian._execution import (
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
+from jacobian.math.polynomials.real_algebra._common_interlacing import (
+    _preflight_common_interlacing_sources,
+)
 from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
     MAX_COMMON_INTERLACING_FAMILY_SIZE,
     MAX_COMMON_INTERLACING_INPUT_DIGITS,
@@ -146,6 +149,7 @@ def _verify_declared_factors(
     if not declared_factors:
         raise ValueError("worker omitted source factor declarations")
     source_dense = _source_to_dense_int(source)
+    source_degree = max(len(source_dense) - 1, 0)
     product: tuple[int, ...] = (1,)
     for entry in declared_factors:
         if not isinstance(entry, (list, tuple)) or len(entry) != 2:
@@ -153,6 +157,8 @@ def _verify_declared_factors(
         factor_coeffs, multiplicity = entry
         if type(multiplicity) is not int or multiplicity < 1:
             raise ValueError("malformed source factor multiplicity")
+        if multiplicity > source_degree:
+            raise ValueError("worker factor multiplicity exceeds source degree")
         factor_dense = tuple(int(c) for c in factor_coeffs)
         for _ in range(multiplicity):
             product = _multiply_integer_polynomials(product, factor_dense)
@@ -352,6 +358,7 @@ def run_common_interlacing_profile(
             code=exc.type,
             message=str(exc),
         ) from exc
+    _preflight_common_interlacing_sources(family)
 
     execution = current_request_execution()
     started = execution.started_at if execution is not None else time.monotonic()

@@ -33,6 +33,10 @@ from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
     NonRealRootObstruction,
     PolynomialRootReference,
 )
+from jacobian.math.polynomials.real_algebra._common_interlacing_process import (
+    _verify_declared_factors,
+    run_common_interlacing_profile,
+)
 from jacobian.math.polynomials.real_algebra._tools import (
     TOOLS,
     compute_common_interlacing_profile,
@@ -342,6 +346,27 @@ def test_returned_factor_rows_reconstruct_the_retained_source() -> None:
         assert coefficient.denominator == 1
         retained_source[retained_degree - term.exponents[0]] = coefficient.numerator
     assert reconstructed == tuple(retained_source)
+
+
+def test_worker_factor_multiplicity_is_capped_before_expansion() -> None:
+    source = _source("linear", (1, 1), (-1, 0))
+
+    with pytest.raises(ValueError, match="multiplicity exceeds source degree"):
+        _verify_declared_factors(source, [([1, 0], 10**100)])
+
+
+def test_aggregate_source_bounds_are_checked_before_worker_launch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    family = tuple(_source(f"source-{index}", (1, 32), (1, 0)) for index in range(8))
+
+    def unexpected_worker(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("aggregate source bounds were checked in the worker")
+
+    monkeypatch.setattr("jacobian.process.run_bounded_process", unexpected_worker)
+
+    with pytest.raises(OperationDomainValidationError, match="total-degree bound"):
+        run_common_interlacing_profile(family)
 
 
 def test_linear_sources_have_an_exists_profile_with_no_gaps() -> None:

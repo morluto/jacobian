@@ -357,6 +357,32 @@ def _require_aggregate_source_bounds(
         )
 
 
+def _preflight_common_interlacing_sources(
+    family: tuple[LabelledRationalPolynomial, ...],
+) -> tuple[_PrimitiveSourcePlan, ...]:
+    """Admit source degree, height, and aggregate work before backend launch."""
+
+    common_variables = family[0].polynomial.variables
+    primitive_sources = tuple(
+        _preflight_source(
+            source,
+            source_index=source_index,
+            common_variables=common_variables,
+        )
+        for source_index, source in enumerate(family)
+    )
+    common_degree = primitive_sources[0].degree
+    for source_index, source in enumerate(primitive_sources[1:], start=1):
+        if source.degree != common_degree:
+            _reject(
+                ("family", source_index, "polynomial"),
+                "common_degree",
+                "common interlacing sources must have the same positive degree",
+            )
+    _require_aggregate_source_bounds(primitive_sources)
+    return primitive_sources
+
+
 def _factor_source(
     primitive: _PrimitiveSourcePlan,
     *,
@@ -476,23 +502,8 @@ def _admit_common_interlacing(
             "variable_count",
             "common interlacing sources must be univariate",
         )
-    primitive_sources = tuple(
-        _preflight_source(
-            source,
-            source_index=source_index,
-            common_variables=common_variables,
-        )
-        for source_index, source in enumerate(family)
-    )
+    primitive_sources = _preflight_common_interlacing_sources(family)
     common_degree = primitive_sources[0].degree
-    for source_index, source in enumerate(primitive_sources[1:], start=1):
-        if source.degree != common_degree:
-            _reject(
-                ("family", source_index, "polynomial"),
-                "common_degree",
-                "common interlacing sources must have the same positive degree",
-            )
-    _require_aggregate_source_bounds(primitive_sources)
 
     # This is the operation's only factorization layer.  The exact factor plan
     # is retained for isolation, multiplicity expansion, root attribution, and
@@ -604,6 +615,38 @@ def _common_interlacing_outcome(
     profiles: tuple[SourceRootProfile, ...],
     common_degree: int,
 ) -> CommonInterlacingOutcome:
+    comparison_cache: dict[
+        tuple[tuple[tuple[str, ...], int], tuple[tuple[str, ...], int]], str
+    ] = {}
+
+    def root_order(
+        left: PolynomialRootReference,
+        right: PolynomialRootReference,
+    ) -> str:
+        left_root = profiles[left.source_index].roots[left.distinct_root_index]
+        right_root = profiles[right.source_index].roots[right.distinct_root_index]
+        left_key = (tuple(left_root.value.polynomial), left_root.value.real_root_index)
+        right_key = (
+            tuple(right_root.value.polynomial),
+            right_root.value.real_root_index,
+        )
+        if left_key == right_key:
+            return "EQ"
+        cached = comparison_cache.get((left_key, right_key))
+        if cached is not None:
+            return cached
+        if left_key[0] == right_key[0]:
+            order = "LT" if left_key[1] < right_key[1] else "GT"
+        else:
+            order = compare_real_algebraic(left_root.value, right_root.value).order
+        comparison_cache[(left_key, right_key)] = order
+        comparison_cache[(right_key, left_key)] = {
+            "LT": "GT",
+            "EQ": "EQ",
+            "GT": "LT",
+        }[order]
+        return order
+
     expanded = tuple(_expanded_root_references(profile) for profile in profiles)
     for source_index, roots in enumerate(expanded):
         if len(roots) != common_degree:
@@ -623,28 +666,13 @@ def _common_interlacing_outcome(
         minimum_upper = expanded[0][gap_index + 1]
         for source_roots in expanded[1:]:
             lower_candidate = source_roots[gap_index]
-            if (
-                compare_real_algebraic(
-                    _referenced_value(profiles, maximum_lower),
-                    _referenced_value(profiles, lower_candidate),
-                ).order
-                == "LT"
-            ):
+            if root_order(maximum_lower, lower_candidate) == "LT":
                 maximum_lower = lower_candidate
             upper_candidate = source_roots[gap_index + 1]
-            if (
-                compare_real_algebraic(
-                    _referenced_value(profiles, minimum_upper),
-                    _referenced_value(profiles, upper_candidate),
-                ).order
-                == "GT"
-            ):
+            if root_order(minimum_upper, upper_candidate) == "GT":
                 minimum_upper = upper_candidate
 
-        endpoint_order = compare_real_algebraic(
-            _referenced_value(profiles, maximum_lower),
-            _referenced_value(profiles, minimum_upper),
-        ).order
+        endpoint_order = root_order(maximum_lower, minimum_upper)
         if endpoint_order == "GT":
             return CommonInterlacingDoesNotExist(
                 obstruction=EmptyGapObstruction(

@@ -22,7 +22,6 @@ from jacobian.canonical import (
 MAX_R_FULL_CUTOFF_DIGITS = 32_768
 MAX_R_FULL_CUTOFF = 10**MAX_R_FULL_CUTOFF_DIGITS
 MIN_R_FULL_EXPONENT = 2
-MAX_R_FULL_EXPONENT = 850
 MAX_R_FULL_FAMILY_SIZE = 200_000
 # Leave room for the typed OperationResult envelope added by dispatch before
 # the canonical payload reaches the transport boundary.
@@ -31,12 +30,36 @@ MAX_R_FULL_MERGE_WORK = 20_000_000
 _MAX_PRIME_SEARCH_BOUND = 3_000_000
 
 
+def max_r_full_exponent(cutoff: int) -> int:
+    """Derive the maximum exponent from the cutoff and result budget.
+
+    For a given cutoff, the largest meaningful exponent is one where the
+    prime bound (cutoff^(1/r)) is at least 2, i.e. r <= log2(cutoff).
+    Beyond that, the only r-full integer is 1 and the family is trivially
+    [1, 2^r] when 2^r <= cutoff.  The family-size and merge-work budgets
+    handle rejection during planning.
+    """
+    if cutoff < 2:
+        return MIN_R_FULL_EXPONENT
+    return max(MIN_R_FULL_EXPONENT, cutoff.bit_length())
+
+
 class RFullFamilyPlan(NamedTuple):
     """Request-scoped family plan shared by admission and result construction."""
 
     family: tuple[int, ...]
     exceeded: bool
-    reason: Literal["none", "family", "planning"] = "none"
+    reason: Literal["none", "family", "planning", "bytes"] = "none"
+
+
+def _estimate_member_bytes(value: int) -> int:
+    """Estimate the canonical wire bytes for one family member.
+
+    Each member is serialized as a quoted decimal string plus separator
+    overhead inside the JSON array.
+    """
+    # len(str(value)) + 2 quotes + 1 comma separator
+    return len(str(value)) + 3
 
 
 def plan_r_full_family(minimum_exponent: int, cutoff: int) -> RFullFamilyPlan:
@@ -49,6 +72,11 @@ def plan_r_full_family(minimum_exponent: int, cutoff: int) -> RFullFamilyPlan:
     bounded prime-search range is rejected before asking SymPy to sieve a
     huge interval; the first 200,001 prime powers already exceed the result
     budget at that boundary.
+
+    Wire-byte accumulation: during planning we sum each family member's
+    estimated canonical wire width so we can stop as soon as the result
+    envelope is exhausted, avoiding a post-hoc serialization that would
+    materialize the entire family as strings.
     """
     # Keep the aggregate native namespace free of packaged backends.  The
     # planner is the first execution path that needs SymPy, so import it only
@@ -63,6 +91,11 @@ def plan_r_full_family(minimum_exponent: int, cutoff: int) -> RFullFamilyPlan:
     family_set: set[int] = {1}
     sorted_family = [1]
     merge_work = 0
+    # Accumulate wire bytes during planning so we stop as soon as the
+    # transport budget is crossed, without a post-hoc full serialization.
+    # Reserve overhead for the JSON envelope (keys, separators, etc.).
+    result_bytes = 200 + len(str(minimum_exponent)) + len(str(cutoff))
+    result_bytes += _estimate_member_bytes(1)
     for prime in primerange(2, int(prime_bound) + 1):
         powers: list[int] = []
         current = int(prime) ** minimum_exponent
@@ -79,6 +112,9 @@ def plan_r_full_family(minimum_exponent: int, cutoff: int) -> RFullFamilyPlan:
                 if len(family_set) + len(new_values) >= MAX_R_FULL_FAMILY_SIZE:
                     return RFullFamilyPlan((), True, "family")
                 new_values.add(value)
+                result_bytes += _estimate_member_bytes(value)
+                if result_bytes > MAX_R_FULL_RESULT_BYTES:
+                    return RFullFamilyPlan((), True, "bytes")
         fresh_values = sorted(value for value in new_values if value not in family_set)
         if fresh_values:
             merge_work += len(sorted_family) + len(fresh_values)
@@ -123,10 +159,10 @@ class RFullEnumerateRequest(StrictModel):
 
     minimum_exponent: int = Field(
         ge=MIN_R_FULL_EXPONENT,
-        le=MAX_R_FULL_EXPONENT,
         description=(
             "Minimum prime exponent r. An integer n is r-full when every "
-            "prime factor appears to exponent at least r."
+            "prime factor appears to exponent at least r. The exponent "
+            "ceiling is derived from the cutoff during admission."
         ),
         examples=[2],
     )
@@ -150,7 +186,7 @@ class RFullEnumerateRequest(StrictModel):
 class RFullEnumerateResult(StrictModel):
     """The complete ordered family of r-full integers up to the cutoff."""
 
-    minimum_exponent: int = Field(ge=MIN_R_FULL_EXPONENT, le=MAX_R_FULL_EXPONENT)
+    minimum_exponent: int = Field(ge=MIN_R_FULL_EXPONENT)
     cutoff: CanonicalInteger = Field(max_length=MAX_R_FULL_CUTOFF_DIGITS + 1)
     count: int = Field(ge=0)
     family: tuple[CanonicalInteger, ...] = Field(
@@ -222,12 +258,12 @@ class RFullEnumerateResult(StrictModel):
 __all__ = [
     "MAX_R_FULL_CUTOFF",
     "MAX_R_FULL_CUTOFF_DIGITS",
-    "MAX_R_FULL_EXPONENT",
     "MIN_R_FULL_EXPONENT",
     "RFullEnumerateRequest",
     "RFullEnumerateResult",
     "RFullFamilyPlan",
     "estimate_r_full_family_size",
     "estimate_r_full_result_bytes",
+    "max_r_full_exponent",
     "plan_r_full_family",
 ]

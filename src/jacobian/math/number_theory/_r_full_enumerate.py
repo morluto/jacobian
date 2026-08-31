@@ -10,12 +10,10 @@ from jacobian.math.number_theory._r_full_enumerate_kernels import (
 )
 from jacobian.math.number_theory._r_full_enumerate_models import (
     MAX_R_FULL_CUTOFF,
-    MAX_R_FULL_EXPONENT,
-    MAX_R_FULL_RESULT_BYTES,
     MIN_R_FULL_EXPONENT,
     RFullEnumerateRequest,
     RFullEnumerateResult,
-    estimate_r_full_result_bytes,
+    max_r_full_exponent,
     plan_r_full_family,
 )
 from jacobian.math.number_theory._support import number_theory_operation
@@ -33,19 +31,16 @@ def _enumerate_r_full_admitted(
                 code="r_full_enumerate_planning_work_exceeds_budget",
                 message="r-full planning work exceeds the admitted budget",
             )
+        if plan.reason == "bytes":
+            raise OperationDomainValidationError(
+                location=("cutoff",),
+                code="r_full_enumerate_family_exceeds_transport_budget",
+                message="r-full family exceeds the serialized-byte budget",
+            )
         raise OperationDomainValidationError(
             location=("cutoff",),
             code="r_full_enumerate_family_exceeds_result_budget",
             message="r-full family exceeds the result-size budget",
-        )
-    if enforce_transport and (
-        estimate_r_full_result_bytes(minimum_exponent, cutoff, plan.family)
-        > MAX_R_FULL_RESULT_BYTES
-    ):
-        raise OperationDomainValidationError(
-            location=("cutoff",),
-            code="r_full_enumerate_family_exceeds_transport_budget",
-            message="r-full family exceeds the serialized-byte budget",
         )
     family = enumerate_r_full_kernel(
         cutoff, minimum_exponent, planned_family=plan.family
@@ -64,17 +59,21 @@ def enumerate_r_full_numbers(
     )
 
 
-def enumerate_r_full(minimum_exponent: int, cutoff: int) -> RFullEnumerateResult:
-    """Enumerate r-full integers for native callers using integer arguments."""
+def enumerate_r_full(minimum_exponent: int, cutoff: int) -> tuple[int, ...]:
+    """Enumerate r-full integers for native callers using integer arguments.
+
+    Returns the complete ordered family as a tuple of Python integers, so
+    callers receive directly composable mathematical values rather than a
+    wire-format transport model.
+    """
     if type(minimum_exponent) is not int or not (
-        MIN_R_FULL_EXPONENT <= minimum_exponent <= MAX_R_FULL_EXPONENT
+        MIN_R_FULL_EXPONENT <= minimum_exponent
     ):
         raise OperationDomainValidationError(
             location=("minimum_exponent",),
             code="r_full_enumerate.exponent_bound",
             message=(
-                f"minimum_exponent must be an integer from {MIN_R_FULL_EXPONENT} "
-                f"through {MAX_R_FULL_EXPONENT}"
+                f"minimum_exponent must be an integer at least {MIN_R_FULL_EXPONENT}"
             ),
         )
     if type(cutoff) is not int or not (0 < cutoff <= MAX_R_FULL_CUTOFF):
@@ -83,7 +82,30 @@ def enumerate_r_full(minimum_exponent: int, cutoff: int) -> RFullEnumerateResult
             code="r_full_enumerate.cutoff_bound",
             message="cutoff must be a positive integer within the admitted bound",
         )
-    return _enumerate_r_full_admitted(minimum_exponent, cutoff, enforce_transport=False)
+    max_exp = max_r_full_exponent(cutoff)
+    if minimum_exponent > max_exp:
+        raise OperationDomainValidationError(
+            location=("minimum_exponent",),
+            code="r_full_enumerate.exponent_bound",
+            message=(
+                f"minimum_exponent {minimum_exponent} exceeds the maximum "
+                f"meaningful exponent {max_exp} for cutoff {cutoff}"
+            ),
+        )
+    plan = plan_r_full_family(minimum_exponent, cutoff)
+    if plan.exceeded:
+        if plan.reason == "planning":
+            raise OperationDomainValidationError(
+                location=("cutoff",),
+                code="r_full_enumerate_planning_work_exceeds_budget",
+                message="r-full planning work exceeds the admitted budget",
+            )
+        raise OperationDomainValidationError(
+            location=("cutoff",),
+            code="r_full_enumerate_family_exceeds_result_budget",
+            message="r-full family exceeds the result-size budget",
+        )
+    return plan.family
 
 
 R_FULL_ENUMERATE_OPERATION = number_theory_operation(

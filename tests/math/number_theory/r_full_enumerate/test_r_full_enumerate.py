@@ -94,25 +94,25 @@ def test_result_requires_one_for_positive_cutoff() -> None:
 def test_native_api_uses_integer_arguments() -> None:
     """Native callers can enumerate without constructing a wire request."""
     result = enumerate_r_full(3, 20)
-    assert result.family == ("1", "8", "16")
+    assert result == (1, 8, 16)
 
 
 def test_high_exponent_admits_cutoff_above_old_ceiling() -> None:
     """A sparse high-exponent family is admitted from its actual prime bound."""
     result = enumerate_r_full(64, 2**64)
-    assert result.family == ("1", "18446744073709551616")
+    assert result == (1, 18446744073709551616)
 
 
 def test_exponent_bound_follows_cutoff_width() -> None:
     """Sparse exponents beyond the old fixed cap remain valid requests."""
     result = enumerate_r_full(257, 2**257)
-    assert result.family == ("1", str(2**257))
+    assert result == (1, 2**257)
 
 
 def test_result_uses_canonical_output_limit() -> None:
     """A complete family between the old 3 MiB cap and 10 MiB is admitted."""
     result = enumerate_r_full(64, 10**109)
-    assert result.count == 31_377
+    assert len(result) == 31_377
 
 
 def test_result_estimator_reserves_dispatch_envelope_space() -> None:

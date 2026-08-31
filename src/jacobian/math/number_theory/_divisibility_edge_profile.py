@@ -17,16 +17,15 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian.canonical import CanonicalizationError, format_canonical_integer
-from jacobian.math.combinatorics.finite_structures.sets._models import FiniteIntegerSet
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.combinatorics.finite_structures.sets._models import FiniteIntegerSet
 from jacobian.math.number_theory._divisibility_edge_profile_kernels import (
     FactorizationIncompleteError,
     construct_divisibility_edge_profile,
 )
 from jacobian.math.number_theory._divisibility_edge_profile_models import (
     MAX_DIVISIBILITY_EDGE_SET_SIZE,
-    MAX_DIVISIBILITY_EDGE_VALUE_DIGITS,
     DivisibilityEdge,
     DivisibilityEdgeProfileRequest,
     DivisibilityEdgeProfileResult,
@@ -103,11 +102,7 @@ def _build_divisibility_edge_profile(
     edge_plan: tuple[tuple[int, int, int], ...],
 ) -> DivisibilityEdgeProfileResult:
     try:
-        elements = (
-            values.elements
-            if hasattr(values, "elements")
-            else values
-        )
+        elements = values.elements if hasattr(values, "elements") else values
         data = construct_divisibility_edge_profile(
             elements if isinstance(elements, tuple) else tuple(elements), edge_plan
         )

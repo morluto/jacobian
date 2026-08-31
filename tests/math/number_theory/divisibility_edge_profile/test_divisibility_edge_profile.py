@@ -6,11 +6,11 @@ import pytest
 from sympy import nextprime
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.combinatorics.finite_structures.sets._models import FiniteIntegerSet
 from jacobian.math.number_theory._divisibility_edge_profile import (
     compute_divisibility_edge_profile,
     divisibility_edge_profile,
 )
-from jacobian.math.combinatorics.finite_structures.sets._models import FiniteIntegerSet
 from jacobian.math.number_theory._divisibility_edge_profile_models import (
     DivisibilityEdgeProfileRequest,
     DivisibilityEdgeProfileResult,
@@ -110,7 +110,9 @@ def test_native_rejects_values_beyond_worker_factorization_envelope() -> None:
 def test_native_allows_wide_sources_with_small_quotient() -> None:
     """Source width is independent from the worker's derived quotient width."""
     left = 10**100
-    result = divisibility_edge_profile(FiniteIntegerSet(elements=(str(left), str(2 * left))))
+    result = divisibility_edge_profile(
+        FiniteIntegerSet(elements=(str(left), str(2 * left)))
+    )
     assert len(result.edges) == 1
     assert result.edges[0].quotient == "2"
 
@@ -124,9 +126,7 @@ def test_native_rejects_oversized_integer_before_formatting() -> None:
 def test_resource_admission_belongs_to_operation_execution() -> None:
     """Wire parsing accepts shape-valid input; execution owns work rejection."""
     request = DivisibilityEdgeProfileRequest(
-        values=FiniteIntegerSet(
-            elements=tuple(str(value) for value in range(1, 501))
-        )
+        values=FiniteIntegerSet(elements=tuple(str(value) for value in range(1, 501)))
     )
     with pytest.raises(OperationDomainValidationError, match="factorization"):
         compute_divisibility_edge_profile(request)
@@ -139,7 +139,9 @@ def test_resource_admission_belongs_to_operation_execution() -> None:
 def test_result_rejects_invalid_source_set(values: tuple[str, ...]) -> None:
     """Deserialized results retain positive, distinct source semantics."""
     with pytest.raises(ValueError):
-        DivisibilityEdgeProfileResult(values=FiniteIntegerSet(elements=values), edges=())
+        DivisibilityEdgeProfileResult(
+            values=FiniteIntegerSet(elements=values), edges=()
+        )
 
 
 def test_heterogeneous_pair_widths_admitted_per_pair() -> None:

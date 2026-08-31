@@ -44,8 +44,6 @@ class DivisibilityEdgeProfileRequest(StrictModel):
         return self
 
 
-
-
 def _extract_elements(values: object) -> tuple[str, ...]:
     """Extract the element tuple from a FiniteIntegerSet or raw tuple."""
     if isinstance(values, FiniteIntegerSet):

@@ -10,6 +10,7 @@ def test_hypergraph_public_api_is_explicit() -> None:
         "FiniteHypergraph",
         "clique_expansion",
         "dual",
+        "edge_intersection_graph",
         "edge_intersections",
         "incidence_graph",
         "independence_number",

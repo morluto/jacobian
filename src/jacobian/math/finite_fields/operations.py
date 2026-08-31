@@ -7,6 +7,7 @@ import math
 import sys
 import time
 from collections.abc import Callable
+from itertools import combinations
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Literal
@@ -618,16 +619,24 @@ def _homogeneous_monomial_basis(
 ) -> tuple[tuple[int, ...], ...]:
     """Return degree-d exponent vectors in descending lexicographic order."""
 
-    def compositions(remaining: int, positions: int) -> tuple[tuple[int, ...], ...]:
-        if positions == 1:
-            return ((remaining,),)
-        return tuple(
-            (first, *tail)
-            for first in range(remaining, -1, -1)
-            for tail in compositions(remaining - first, positions - 1)
-        )
-
-    return compositions(degree, variable_count)
+    # A weak composition is determined by the positions of its variable_count
+    # minus one separators among degree + variable_count - 1 slots. Reversing
+    # the lexicographically ordered separator choices gives the established
+    # descending exponent order without recursive calls or a deep Python stack.
+    slot_count = degree + variable_count - 1
+    separator_count = variable_count - 1
+    compositions: list[tuple[int, ...]] = []
+    for separators in reversed(
+        tuple(combinations(range(slot_count), separator_count))
+    ):
+        previous = -1
+        exponents: list[int] = []
+        for separator in separators:
+            exponents.append(separator - previous - 1)
+            previous = separator
+        exponents.append(slot_count - previous - 1)
+        compositions.append(tuple(exponents))
+    return tuple(compositions)
 
 
 def _multiply_by_linear_form(
@@ -671,6 +680,7 @@ def _induced_action_matrix(
     matrix = [[0] * len(monomial_basis) for _ in monomial_basis]
     variable_count = len(action.variable_axis.labels)
     zero_exponents = (0,) * variable_count
+    substitution_steps = 0
     for column, source_exponents in enumerate(monomial_basis):
         if checkpoint is not None:
             checkpoint("during substitution")
@@ -684,6 +694,12 @@ def _induced_action_matrix(
                 polynomial = _multiply_by_linear_form(
                     polynomial, coefficients, prime=action.prime
                 )
+                substitution_steps += 1
+                if (
+                    checkpoint is not None
+                    and substitution_steps % 1_024 == 0
+                ):
+                    checkpoint("during substitution")
         for target_exponents, coefficient in polynomial.items():
             matrix[monomial_index[target_exponents]][column] = coefficient
     return tuple(tuple(row) for row in matrix)

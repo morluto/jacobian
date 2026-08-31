@@ -91,14 +91,14 @@ def compute_matrix_rank(
         # The worst case is full rank with all pivot labels present.
         max_rank = min(len(matrix.row_axis.labels), len(matrix.column_axis.labels))
         try:
-            pivot_row_labels = tuple(
+            pivot_row_labels = list(
                 sorted(
                     matrix.row_axis.labels,
                     key=lambda label: (len(encode_strict_json(label)), label),
                     reverse=True,
                 )[:max_rank]
             )
-            pivot_column_labels = tuple(
+            pivot_column_labels = list(
                 sorted(
                     matrix.column_axis.labels,
                     key=lambda label: (len(encode_strict_json(label)), label),

@@ -434,6 +434,7 @@ def _min_clique_cover(vertices: list[str], edges: list[tuple[str, str]]) -> int:
     # missing-edge graph has at most n edges on at most n vertices.
 
     n = len(vertices)
+
     # Greedy clique partition: repeatedly take the largest clique
     # from the remaining vertices.  This gives an upper bound.
     def _greedy_clique_partition() -> int:

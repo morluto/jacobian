@@ -75,6 +75,12 @@ def test_lpf_divides_quotient() -> None:
         assert int(edge.quotient) % int(edge.least_prime_factor) == 0
 
 
+def test_lpf_is_the_minimal_factor() -> None:
+    """The projected LPF is not merely an arbitrary divisor of the quotient."""
+    edges = _edges(["1", "6"])
+    assert edges[("1", "6")].least_prime_factor == "2"
+
+
 def test_quotient_reconstructs() -> None:
     """Every quotient reconstructs b = a * quotient."""
     edges = _edges(["2", "4", "6", "12"])

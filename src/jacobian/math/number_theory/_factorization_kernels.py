@@ -374,109 +374,22 @@ def _bounded_least_prime_factor(  # noqa: C901
     timeout_seconds: float = _FACTORIZATION_WORKER_TIMEOUT_SECONDS,
     failure: list[BoundedFactorizationFailure] | None = None,
 ) -> int | None:
-    """Return the least prime factor of ``value`` via a killable worker.
+    """Return the least prime factor from one validated worker factorization.
 
-    Unlike :func:`_bounded_direct_factorization`, this decodes only the
-    minimum prime from the worker projection without replaying ``isprime``
-    or product reconstruction.  The worker factors are sorted by prime, so
-    the first pair carries the least prime factor.  ``None`` is an
-    operational non-conclusion, never a factor claim.
+    The direct-factorization decoder validates every returned prime, exponent,
+    ordering, and the complete product before this projection takes the first
+    factor.  Reusing that decoder prevents a well-shaped but non-minimal first
+    pair from becoming an LPF claim and keeps exponentiation inside its cheap
+    bounded validation path.
     """
-    from jacobian.process import (
-        ProcessResourceLimits,
-        run_bounded_process,
-        worker_environment,
+    factors = _bounded_direct_factorization(
+        value,
+        timeout_seconds=timeout_seconds,
+        failure=failure,
     )
-
-    started = monotonic()
-
-    def failed(
-        kind: BoundedFactorizationFailureKind,
-        timeout_layer: BoundedFactorizationTimeoutLayer,
-        returncode: int | None = None,
-    ) -> None:
-        if failure is not None:
-            failure.append(
-                BoundedFactorizationFailure(
-                    kind=kind,
-                    timeout_layer=timeout_layer,
-                    elapsed_seconds=max(0.0, monotonic() - started),
-                    timeout_seconds=timeout_seconds,
-                    returncode=returncode,
-                )
-            )
-
-    try:
-        with TemporaryDirectory(prefix="jacobian-direct-factor-") as worker_directory:
-            completed = run_bounded_process(
-                [sys.executable, str(_DIRECT_FACTORIZATION_WORKER)],
-                input_bytes=json.dumps(
-                    {"value": str(value)}, separators=(",", ":")
-                ).encode(),
-                timeout_seconds=timeout_seconds,
-                environment=worker_environment(locale="C.UTF-8"),
-                stdout_limit=64 * 1024,
-                stderr_limit=64 * 1024,
-                resource_limits=ProcessResourceLimits(
-                    cpu_seconds=math.ceil(timeout_seconds),
-                    address_space_bytes=_FACTORIZATION_WORKER_ADDRESS_SPACE_BYTES,
-                    file_size_bytes=_FACTORIZATION_WORKER_FILE_SIZE_BYTES,
-                ),
-                cwd=worker_directory,
-            )
-    except OSError:
-        failed("WORKER_START_FAILED", "WORKER_START")
+    if not factors:
         return None
-    if completed.cancelled:
-        failed("WORKER_CANCELLED", "REQUEST_CANCELLATION", completed.returncode)
-        return None
-    if completed.timed_out:
-        failed("WORKER_TIMEOUT", "WORKER_WALL", completed.returncode)
-        return None
-    if completed.stdout_exceeded:
-        failed("STDOUT_LIMIT_EXCEEDED", "OUTPUT_LIMIT", completed.returncode)
-        return None
-    if completed.stderr_exceeded:
-        failed("STDERR_LIMIT_EXCEEDED", "OUTPUT_LIMIT", completed.returncode)
-        return None
-    if completed.returncode != 0:
-        if completed.returncode is not None and completed.returncode < 0:
-            failed("WORKER_RESOURCE_LIMIT", "PROCESS_RESOURCE", completed.returncode)
-        else:
-            failed("WORKER_EXITED", "WORKER_EXIT", completed.returncode)
-        return None
-    try:
-        response = json.loads(completed.stdout.decode("utf-8"))
-        raw_factors = response["factors"]
-        if not isinstance(raw_factors, list) or not raw_factors:
-            raise ValueError("factors must be a non-empty list")
-        least_prime_pair = raw_factors[0]
-        if not isinstance(least_prime_pair, (list, tuple)) or len(least_prime_pair) < 2:
-            raise ValueError("factors must be (prime, power) pairs")
-        least_prime = int(least_prime_pair[0])
-        power = int(least_prime_pair[1])
-        # Structurally decode the LPF projection and bind it to the admitted
-        # quotient: the least prime factor must be ≥ 2 and must divide the
-        # value.  A malformed worker payload (e.g. a composite "prime" or a
-        # mismatched value) fails closed rather than corrupting the result.
-        if least_prime < 2:
-            raise ValueError("least prime factor must be at least 2")
-        if value % least_prime != 0:
-            raise ValueError("least prime factor does not divide the value")
-        # Verify the power is consistent: least_prime ** power must divide value
-        if value % (least_prime**power) != 0:
-            raise ValueError("least prime factor power is inconsistent")
-        return least_prime
-    except (
-        IndexError,
-        KeyError,
-        TypeError,
-        ValueError,
-        UnicodeDecodeError,
-        json.JSONDecodeError,
-    ):
-        failed("MALFORMED_OUTPUT", "RESULT_VALIDATION", completed.returncode)
-        return None
+    return int(factors[0].prime)
 
 
 def enumerate_divisors(request: FactorizationRequest) -> DivisorListResult:

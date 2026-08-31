@@ -483,6 +483,11 @@ def _raw_optional_string(value: object, *, label: str) -> None:
 
 def _raw_rational_limit(value: object, *, maximum_digits: int, label: str) -> None:
     if isinstance(value, CanonicalRational):
+        if max(len(value.num.lstrip("-")), len(value.den)) > maximum_digits:
+            raise _validation_error(
+                "coefficient_digits",
+                f"{label} admits at most {maximum_digits} decimal digits",
+            )
         return
     if not isinstance(value, Mapping):
         if value is not None:
@@ -513,7 +518,7 @@ def _raw_rational_limit(value: object, *, maximum_digits: int, label: str) -> No
             )
 
 
-def _raw_polynomial_limit(
+def _raw_polynomial_limit(  # noqa: C901
     value: object,
     *,
     maximum_terms: int,
@@ -521,7 +526,27 @@ def _raw_polynomial_limit(
     maximum_coefficient_digits: int,
     label: str,
 ) -> None:
+    terms: object
     if isinstance(value, RationalPolynomial):
+        terms = value.polynomial.terms
+        if len(terms) > maximum_terms:
+            raise _validation_error(
+                "term_count", f"{label} admits at most {maximum_terms} terms"
+            )
+        for term in terms:
+            _raw_rational_limit(
+                term.coefficient,
+                maximum_digits=maximum_coefficient_digits,
+                label=f"{label} coefficient",
+            )
+            if any(
+                exponent < 0 or exponent > maximum_exponent
+                for exponent in term.exponents
+            ):
+                raise _validation_error(
+                    "exponent_bound",
+                    f"{label} exceeds the degree-{maximum_exponent} operation bound",
+                )
         return
     if not isinstance(value, Mapping):
         raise _validation_error(
@@ -608,9 +633,17 @@ def _raw_polynomial_limit(
                 )
 
 
-def _raw_semialgebraic_envelope(value: object) -> None:  # noqa: C901
+def _raw_semialgebraic_envelope(  # noqa: C901
+    value: object, *, validate_model: bool = False
+) -> None:
     if isinstance(value, PlaneSemialgebraicSet):
-        return
+        if not validate_model:
+            return
+        value = {
+            "axis": value.axis,
+            "polynomials": value.polynomials,
+            "sign_conditions": value.sign_conditions,
+        }
     if not isinstance(value, Mapping):
         if value is not None:
             raise _validation_error(
@@ -901,7 +934,9 @@ class PlaneComponentProfileResult(StrictModel):
     @classmethod
     def require_raw_source_envelope(cls, data: Any) -> Any:
         if isinstance(data, Mapping):
-            _raw_semialgebraic_envelope(data.get("semialgebraic_set"))
+            _raw_semialgebraic_envelope(
+                data.get("semialgebraic_set"), validate_model=True
+            )
         return data
 
     @model_validator(mode="after")

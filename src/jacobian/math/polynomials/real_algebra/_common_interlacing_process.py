@@ -151,6 +151,7 @@ def _verify_declared_factors(
     source_dense = _source_to_dense_int(source)
     source_degree = max(len(source_dense) - 1, 0)
     product: tuple[int, ...] = (1,)
+    seen_factor_coefficients: set[tuple[int, ...]] = set()
     for entry in declared_factors:
         if not isinstance(entry, (list, tuple)) or len(entry) != 2:
             raise ValueError("malformed source factor declaration")
@@ -159,7 +160,14 @@ def _verify_declared_factors(
             raise ValueError("malformed source factor multiplicity")
         if multiplicity > source_degree:
             raise ValueError("worker factor multiplicity exceeds source degree")
+        if not isinstance(factor_coeffs, (list, tuple)) or not (
+            2 <= len(factor_coeffs) <= source_degree + 1
+        ):
+            raise ValueError("worker factor degree exceeds source degree")
         factor_dense = tuple(int(c) for c in factor_coeffs)
+        if factor_dense in seen_factor_coefficients:
+            raise ValueError("worker declared a duplicate source factor")
+        seen_factor_coefficients.add(factor_dense)
         for _ in range(multiplicity):
             product = _multiply_integer_polynomials(product, factor_dense)
     if product != source_dense:

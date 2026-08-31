@@ -822,7 +822,7 @@ def _compute_component(admission: _ComponentAdmission) -> _ComputedComponent:
     # the parent can kill it on deadline or cancellation.  Only picklable
     # primitive data crosses the process boundary.
     parent_conn, child_conn = multiprocessing.Pipe(duplex=False)
-    ctx = multiprocessing.get_context("fork")
+    ctx = multiprocessing.get_context("forkserver")
     child = ctx.Process(
         target=_cyclotomic_kernel_child,
         args=(
@@ -836,31 +836,37 @@ def _compute_component(admission: _ComponentAdmission) -> _ComputedComponent:
     child.start()
     child_conn.close()
 
-    # Poll the child, enforcing deadline and cancellation while it runs.
+    # Poll the pipe and child, enforcing deadline and cancellation while it runs.
+    # Use parent_conn.poll() rather than child.join() so the parent drains
+    # the result pipe while the child is alive.  A large kernel basis can
+    # exceed the OS pipe buffer; if the parent only joins without recv(),
+    # conn.send() blocks in the child and deadlocks until the deadline.
     execution = current_request_execution()
     while True:
-        if child.is_alive():
-            if request_cancelled():
-                child.kill()
-                child.join(timeout=5)
-                raise OperationExecutionCancelledError(
-                    f"request cancelled during order-{order} kernel"
-                )
-            if (
-                execution is not None
-                and execution.deadline is not None
-                and time.monotonic() >= execution.deadline
-            ):
-                child.kill()
-                child.join(timeout=5)
-                raise OperationExecutionTimeoutError(
-                    f"request deadline expired during order-{order} kernel"
-                )
-            child.join(timeout=0.1)
-        else:
+        if request_cancelled():
+            child.kill()
+            child.join(timeout=5)
+            raise OperationExecutionCancelledError(
+                f"request cancelled during order-{order} kernel"
+            )
+        if (
+            execution is not None
+            and execution.deadline is not None
+            and time.monotonic() >= execution.deadline
+        ):
+            child.kill()
+            child.join(timeout=5)
+            raise OperationExecutionTimeoutError(
+                f"request deadline expired during order-{order} kernel"
+            )
+        # poll returns True once the child has written (or closed) its end.
+        if parent_conn.poll(timeout=0.1):
+            break
+        if not child.is_alive():
             child.join()
             break
 
+    child.join(timeout=30)
     _require_execution_active(f"after order-{order} kernel")
 
     if child.exitcode != 0:

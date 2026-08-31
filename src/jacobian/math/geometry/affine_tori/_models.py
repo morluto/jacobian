@@ -70,10 +70,98 @@ class AffineTorusFixedLocusResult(StrictModel):
     def require_source_ambient(self) -> Self:
         torus = self.source.torus
         if isinstance(self.outcome, NonemptyAffineTorusFixedLocus):
-            if self.outcome.fixed_locus.ambient_torus != torus:
+            family = self.outcome.fixed_locus
+            if family.ambient_torus != torus:
                 raise _validation_error(
                     "source_mismatch", "fixed locus must belong to the source torus"
                 )
+            dimension = torus.dimension
+            from flint import fmpz_mat
+
+            displacement = fmpz_mat(
+                [
+                    [
+                        parse_canonical_integer(self.source.linear_part.entries[row][column])
+                        - int(row == column)
+                        for column in range(dimension)
+                    ]
+                    for row in range(dimension)
+                ]
+            )
+            displacement_rank = int(displacement.rank())
+            expected_parameter_dimension = dimension - displacement_rank
+            if (
+                family.identity_component.parameter_dimension
+                != expected_parameter_dimension
+            ):
+                raise _validation_error(
+                    "source_fixed_locus",
+                    "identity-component dimension must match the source kernel",
+                )
+            embedding = fmpz_mat(
+                [
+                    [parse_canonical_integer(value) for value in row]
+                    for row in family.identity_component.embedding.entries
+                ]
+            )
+            displaced_embedding = displacement * embedding
+            if any(
+                int(displaced_embedding[row, column]) != 0
+                for row in range(dimension)
+                for column in range(expected_parameter_dimension)
+            ):
+                raise _validation_error(
+                    "source_fixed_locus",
+                    "identity-component embedding must lie in the source kernel",
+                )
+            smith = displacement.snf()
+            expected_component_count = 1
+            for index in range(displacement_rank):
+                expected_component_count *= abs(int(smith[index, index]))
+            if parse_canonical_integer(
+                family.finite_components.component_count
+            ) != expected_component_count:
+                raise _validation_error(
+                    "source_fixed_locus",
+                    "component count must match the source fixed locus",
+                )
+
+            translation = tuple(
+                coordinate.as_fraction()
+                for coordinate in self.source.translation.coordinates
+            )
+            base_point = tuple(
+                coordinate.as_fraction()
+                for coordinate in family.base_point.coordinates
+            )
+            for row in range(dimension):
+                base_displacement = translation[row] + sum(
+                    int(displacement[row, column]) * base_point[column]
+                    for column in range(dimension)
+                )
+                if base_displacement.denominator != 1:
+                    raise _validation_error(
+                        "source_fixed_locus",
+                        "base point must satisfy the source fixed-point equation",
+                    )
+            for generator in family.component_generators:
+                coordinates = tuple(
+                    coordinate.as_fraction() for coordinate in generator.coordinates
+                )
+                if any(
+                    (
+                        sum(
+                            int(displacement[row, column]) * coordinates[column]
+                            for column in range(dimension)
+                        ).denominator
+                        != 1
+                    )
+                    for row in range(dimension)
+                ):
+                    raise _validation_error(
+                        "source_fixed_locus",
+                        "component generators must satisfy the source fixed-point equation",
+                    )
         else:
             if self.outcome.obstruction.torus != torus:
                 raise _validation_error(

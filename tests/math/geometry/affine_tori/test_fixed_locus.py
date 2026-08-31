@@ -468,6 +468,27 @@ def test_empty_result_deserialization_binds_obstruction_to_source() -> None:
         AffineTorusFixedLocusResult.model_validate(payload)
 
 
+def test_nonempty_result_deserialization_binds_identity_component_to_source() -> None:
+    source = _source(((1,),), (Fraction(0),))
+    result = affine_torus_fixed_locus(source).model_dump(mode="json")
+    outcome = dict(result["outcome"])
+    family = dict(outcome["fixed_locus"])
+    identity_component = dict(family["identity_component"])
+    identity_component["parameter_dimension"] = 0
+    identity_component["embedding"] = {
+        "domain": "ZZ",
+        "row_count": 1,
+        "column_count": 0,
+        "entries": [[]],
+    }
+    family["identity_component"] = identity_component
+    outcome["fixed_locus"] = family
+    result["outcome"] = outcome
+
+    with pytest.raises(ValidationError, match="identity-component dimension"):
+        AffineTorusFixedLocusResult.model_validate(result)
+
+
 def test_random_small_full_rank_maps_match_a_grid_congruence_oracle() -> None:
     random = Random(2443)
     checked = 0

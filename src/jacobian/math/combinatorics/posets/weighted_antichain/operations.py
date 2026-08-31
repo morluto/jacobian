@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from collections import deque
 from dataclasses import dataclass
 from fractions import Fraction
 from math import lcm as _lcm
+
+import networkx as nx
 
 from jacobian._exact import (
     CanonicalRational,
@@ -78,17 +79,18 @@ def _admit_maximum_weight_antichain(
             code="weighted_antichain.arithmetic_work_bound_exceeded",
             message="rational antichain summation exceeds the admitted work envelope",
         )
-    # A singleton antichain returns the input weight unchanged; do not charge
-    # an extra addition digit at that exact canonical boundary.
-    denominators = {weight.as_fraction().denominator for weight in weights}
-    if len(denominators) == 1:
-        # Adding values with a common denominator does not multiply that
-        # denominator at every summand; only the numerator can gain carry digits.
+    # Bound the common-denominator expansion: the LCM of all denominators
+    # can have up to width * max_digits digits (in the worst case), and each
+    # of n scaled weights then has similar size.  Charge this before execution.
+    denominators = [w.denominator for w in weight_fracs]
+    unique_denoms = len(set(denominators))
+    if unique_denoms <= 1:
         max_sum_digits = max_digits + (len(str(width)) if width > 1 else 0)
     else:
-        max_sum_digits = (
-            max_digits if width <= 1 else width * max_digits + len(str(width))
-        )
+        # The sum of up to width rationals with different denominators has
+        # at most width * max_digits digits in the numerator and the LCM of
+        # denominators (at most width * max_digits digits) in the denominator.
+        max_sum_digits = max(width, 1) * max_digits + len(str(max(width, 1)))
     if max_sum_digits > 32_768:
         raise OperationDomainValidationError(
             location=("weights",),
@@ -130,7 +132,7 @@ def _admit_maximum_weight_antichain(
     return _MaximumWeightAntichainAdmission(weights=weight_fracs)
 
 
-def compute_maximum_weight_antichain(  # noqa: C901
+def compute_maximum_weight_antichain(
     poset: FinitePoset,
     weights: tuple[CanonicalRational, ...],
 ) -> MaximumWeightAntichainResult:
@@ -154,28 +156,8 @@ def compute_maximum_weight_antichain(  # noqa: C901
             antichain=(),
         )
 
-    # ------------------------------------------------------------------
-    # Max weight antichain via min vertex cover on bipartite graph.
-    #
-    # For a poset P, the max weight antichain equals total weight minus
-    # the min weight vertex cover of the bipartite graph G where:
-    #   - Left vertices: copies of each poset element (v_L)
-    #   - Right vertices: copies of each poset element (v_R)
-    #   - For each order relation v < u: edge v_L -> u_R
-    #
-    # Min vertex cover on a bipartite graph is found via max-flow:
-    #   source -> v_L with capacity w_v (for each element v)
-    #   v_R -> sink with capacity w_v (for each element v)
-    #   v_L -> u_R with infinite capacity (for each order v < u)
-    #
-    # The min cut value = min vertex cover weight.
-    # Max antichain weight = total weight - min cut.
-    # ------------------------------------------------------------------
-
     idx = {e: i for i, e in enumerate(elements)}
-    order_pairs: list[tuple[int, int]] = []
-    for pair in poset.strict_order_pairs:
-        order_pairs.append((idx[pair.lower], idx[pair.upper]))
+    order_pairs = [(idx[pair.lower], idx[pair.upper]) for pair in poset.strict_order_pairs]
 
     # Convert fractions to common denominator for integer flow network.
     common_den = 1
@@ -184,97 +166,33 @@ def compute_maximum_weight_antichain(  # noqa: C901
     int_weights = [int(w * common_den) for w in weight_fracs]
     total_weight_int = sum(int_weights)
 
-    # Build flow network: source, sink, n left nodes, n right nodes
-    source = 0
-    sink = 1
+    # Build NetworkX flow network
+    source, sink = "source", "sink"
+    g = nx.DiGraph()
+    g.add_edge(source, sink, capacity=0)  # ensure nodes exist
 
-    def left(i: int) -> int:  # v_L
-        return 2 + i
-
-    def right(i: int) -> int:  # v_R
-        return 2 + n + i
-
-    num_nodes = 2 + 2 * n
-    inf_cap = 10**18
-
-    adj: list[dict[int, int]] = [{} for _ in range(num_nodes)]
-
-    # source -> v_L with capacity w_v
     for i in range(n):
         w = int_weights[i]
-        adj[source][left(i)] = w
-        adj[left(i)].setdefault(source, 0)
+        g.add_edge(source, f"L{i}", capacity=w)
+        g.add_edge(f"R{i}", sink, capacity=w)
 
-    # v_R -> sink with capacity w_v
-    for i in range(n):
-        w = int_weights[i]
-        adj[right(i)][sink] = w
-        adj[sink].setdefault(right(i), 0)
-
-    # v_L -> u_R with infinite capacity for each order v < u
+    # Use total_weight_int + 1 as infinite capacity (always > any cut)
+    inf_cap = total_weight_int + 1
     for v, u in order_pairs:
-        old = adj[left(v)].get(right(u), 0)
-        adj[left(v)][right(u)] = old + inf_cap
-        adj[right(u)].setdefault(left(v), 0)
+        g.add_edge(f"L{v}", f"R{u}", capacity=inf_cap)
 
-    # Edmonds-Karp BFS max-flow
-    total_flow = 0
-    while True:
-        parent = [-1] * num_nodes
-        parent[source] = source
-        queue = deque([source])
-        found = False
-        while queue:
-            node = queue.popleft()
-            for v, cap in adj[node].items():
-                if parent[v] == -1 and cap > 0:
-                    parent[v] = node
-                    if v == sink:
-                        found = True
-                        break
-                    queue.append(v)
-            if found:
-                break
-        if parent[sink] == -1:
-            break
-        path_flow = float("inf")
-        v = sink
-        while v != source:
-            u = parent[v]
-            path_flow = min(path_flow, adj[u][v])
-            v = u
-        v = sink
-        while v != source:
-            u = parent[v]
-            adj[u][v] -= path_flow
-            adj[v][u] += path_flow
-            v = u
-        total_flow += path_flow
+    min_cut_value, partition = nx.minimum_cut(g, source, sink)
+    max_antichain_weight_int = total_weight_int - min_cut_value
 
-    min_vertex_cover = total_flow
-    max_antichain_weight_int = total_weight_int - min_vertex_cover
-
-    # Find min vertex cover set via König's theorem:
-    # After max-flow, find nodes reachable from source in residual graph.
-    source_reachable = {source}
-    queue = deque([source])
-    while queue:
-        node = queue.popleft()
-        for v, cap in adj[node].items():
-            if v not in source_reachable and cap > 0:
-                source_reachable.add(v)
-                queue.append(v)
-
-    # Min vertex cover: L nodes NOT reachable from source, R nodes reachable from source
+    # partition[0] = source side, partition[1] = sink side
+    reachable = partition[0]
     in_vertex_cover = set()
     for i in range(n):
-        if left(i) not in source_reachable:
-            in_vertex_cover.add(i)  # element i's left copy is in the cover
-    for i in range(n):
-        if right(i) in source_reachable:
-            in_vertex_cover.add(i)  # element i's right copy is in the cover
+        if f"L{i}" not in reachable:
+            in_vertex_cover.add(i)
+        if f"R{i}" in reachable:
+            in_vertex_cover.add(i)
 
-    # Antichain = elements NOT in the vertex cover
     antichain_indices = [i for i in range(n) if i not in in_vertex_cover]
     antichain_indices.sort()
 

@@ -24,8 +24,9 @@ class MaximumWeightAntichainRequest(StrictModel):
     weights: tuple[CanonicalRational, ...] = Field(
         max_length=MAX_POSET_ELEMENTS,
         description=(
-            "One nonnegative exact rational per poset element. Exhaustive "
-            "admission uses the candidate-subset work envelope."
+            "One nonnegative exact rational per poset element. Admission "
+            "derives the work envelope from the poset width and rational "
+            "digit growth."
         ),
     )
 

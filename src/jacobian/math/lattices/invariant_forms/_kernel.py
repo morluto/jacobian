@@ -600,7 +600,9 @@ def _integer_kernel_basis(plan: _ConstraintPlan) -> tuple[list[list[int]], int]:
             for row in primitive_kernel
         )
     ):
-        raise RuntimeError("bounded invariant-form HNF worker returned invalid dimensions")
+        raise RuntimeError(
+            "bounded invariant-form HNF worker returned invalid dimensions"
+        )
     _require_active_request("after graph-lattice HNF")
     if not primitive_kernel:
         return [], constraint_rank

@@ -241,6 +241,7 @@ def run_qepcad_plane_components(
     request: PlaneComponentProfileRequest,
     *,
     wall_seconds: float,
+    canonical_samples: tuple[IsolatedRealPlanePoint, ...] | None = None,
 ) -> QepcadPlaneProcessOutcome:
     """Return one exact profile, or an explicit operational non-conclusion."""
 
@@ -265,6 +266,7 @@ def run_qepcad_plane_components(
             qepcad_root=qepcad_root,
             deadline_monotonic=deadline,
             request=request,
+            canonical_samples=canonical_samples,
         )
     except ValidationError:
         return QepcadPlaneProcessOutcome(

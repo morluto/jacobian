@@ -314,6 +314,7 @@ def compute_plane_component_profile(
     _require_active(deadline, "after semantic admission")
 
     semialgebraic_set = request.semialgebraic_set
+    validated_canonical_samples = None
     if request.samples:
         try:
             sample_outcome = run_plane_sample_recognition(
@@ -335,10 +336,7 @@ def compute_plane_component_profile(
                     reason="SAMPLE_RECOGNITION_INVALID_OUTPUT",
                 ),
             )
-        request = PlaneComponentProfileRequest(
-            semialgebraic_set=request.semialgebraic_set,
-            samples=sample_outcome.canonical_samples,
-        )
+        validated_canonical_samples = sample_outcome.canonical_samples
 
     if not semialgebraic_set.sign_conditions:
         result = _computed_result(
@@ -385,6 +383,7 @@ def compute_plane_component_profile(
             wall_seconds=_backend_wall_seconds(
                 deadline, "QEPCAD plane-component launch"
             ),
+            canonical_samples=validated_canonical_samples,
         )
     except QepcadPlaneSampleValidationError as exc:
         _raise_sample_domain_error(exc)

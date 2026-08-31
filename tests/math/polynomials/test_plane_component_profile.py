@@ -267,9 +267,7 @@ def test_closed_z_squared_minus_one_lemniscate_is_connected() -> None:
             (2, (0, 2)),
         )
     )
-    outcome = _computed(
-        _set((expanded,), ((PlaneSign.NEGATIVE,), (PlaneSign.ZERO,)))
-    )
+    outcome = _computed(_set((expanded,), ((PlaneSign.NEGATIVE,), (PlaneSign.ZERO,))))
 
     assert len(outcome.components) == 1
 

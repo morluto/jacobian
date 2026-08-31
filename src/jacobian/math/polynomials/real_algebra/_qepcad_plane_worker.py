@@ -470,15 +470,18 @@ def _computed_projection(
 
 
 def _compute(request: QepcadPlaneWorkerRequest) -> QepcadPlaneWorkerResponse:
-    try:
-        canonical_samples = tuple(
-            canonicalize_isolated_plane_point(sample)
-            for sample in request.request.samples
-        )
-    except QepcadSampleLimitError:
-        return QepcadPlaneWorkerInvalid(reason="SAMPLE_RECOGNITION_LIMIT")
-    except QepcadSampleError:
-        return QepcadPlaneWorkerInvalid(reason="SAMPLE_NOT_ISOLATED")
+    if request.canonical_samples is not None:
+        canonical_samples = request.canonical_samples
+    else:
+        try:
+            canonical_samples = tuple(
+                canonicalize_isolated_plane_point(sample)
+                for sample in request.request.samples
+            )
+        except QepcadSampleLimitError:
+            return QepcadPlaneWorkerInvalid(reason="SAMPLE_RECOGNITION_LIMIT")
+        except QepcadSampleError:
+            return QepcadPlaneWorkerInvalid(reason="SAMPLE_NOT_ISOLATED")
 
     try:
         transcript_remaining = _MAX_TRANSCRIPT_BYTES

@@ -23,7 +23,12 @@ from jacobian.math.matrices.certified_snf.values import CertifiedIntegerMatrix
 # build_affine_torus_plan is the actual gate, checking result bytes against
 # the transport limit and point-height against its carrier envelope.  These
 # caps only reject absurdly large raw input before the plan runs.
-MAX_AFFINE_TORUS_DIMENSION = 64
+#
+# The dimension envelope is capped by the reused integer-matrix carrier
+# (`CertifiedIntegerMatrix`, whose rows and columns are bounded at 32), so the
+# exposed affine-matrix schema and preflight stay aligned with the actual
+# parse rather than advertising a range the linear-part carrier cannot hold.
+MAX_AFFINE_TORUS_DIMENSION = 32
 MAX_AFFINE_TORUS_INPUT_DIGITS = 500
 MAX_AFFINE_TORUS_POINT_DIGITS = 1_050
 _AFFINE_SIGNED_INTEGER_PATTERN = (

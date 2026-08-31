@@ -8,6 +8,7 @@ from jacobian.math.finite_fields import (
     FiberPartition,
     FiniteLinearMap,
     FiniteMapTable,
+    HomogeneousFixedSubspace,
     OrbitDistribution,
     PaleyTournamentResult,
     PermutationResult,
@@ -18,6 +19,7 @@ from jacobian.math.finite_fields import (
     direction_rank_ledger,
     fiber_partition,
     finite_map_table,
+    homogeneous_fixed_subspace,
     linear_map_rank,
     orbit_distribution,
     paley_tournament,
@@ -33,6 +35,7 @@ from jacobian.math.finite_fields._models import (
     DirectionRankLedgerRequest,
     FiberPartitionRequest,
     FiniteMapTableRequest,
+    HomogeneousFixedSubspaceRequest,
     LinearMapRankRequest,
     OrbitDistributionRequest,
     PaleyTournamentRequest,
@@ -132,6 +135,16 @@ _TABLE: dict[str, object] = {
         [_element(1, 1), _element(1, 0)],
     ],
 }
+_FIXED_ACTION: dict[str, object] = {
+    "variable_axis": {"name": "variables", "labels": ["x", "y"]},
+    "generator_matrices": [
+        {
+            "prime": 2,
+            "entries": [[0, 1], [1, 0]],
+            "columns": 2,
+        }
+    ],
+}
 
 
 def _enumerate_projective_line(request: ProjectiveLineRequest) -> ProjectiveLine:
@@ -178,6 +191,12 @@ def _compute_matrix_rank(request: MatrixRankRequest) -> MatrixRankResult:
     from jacobian.math.finite_fields._matrix_rank import compute_matrix_rank
 
     return compute_matrix_rank(request.matrix, enforce_transport_limit=True)
+
+
+def _homogeneous_fixed_subspace(
+    request: HomogeneousFixedSubspaceRequest,
+) -> HomogeneousFixedSubspace:
+    return homogeneous_fixed_subspace(request.action, request.degree)
 
 
 def _build_tools() -> MathTools:
@@ -418,6 +437,26 @@ def _build_tools() -> MathTools:
             ),
         ),
     )
+    fixed_subspace_operation = MathTool(
+        operation_id="finite_field.prime_linear_action.homogeneous_fixed_subspace.compute",
+        title="Compute a homogeneous fixed subspace of a prime-field linear action",
+        description=(
+            "Given explicit invertible generator matrices on a variable axis and "
+            "a homogeneous degree, return the simultaneous fixed subspace in "
+            "canonical monomial coordinates."
+        ),
+        request_type=HomogeneousFixedSubspaceRequest,
+        result_type=HomogeneousFixedSubspace,
+        run=_homogeneous_fixed_subspace,
+        tags=("finite-field", "linear-action", "fixed-subspace", "exact"),
+        examples=(
+            example(
+                "quadratic_swap_fixed_subspace",
+                "Compute the quadratic fixed subspace for the coordinate-swap action over F_2.",
+                {"action": _FIXED_ACTION, "degree": 2},
+            ),
+        ),
+    )
     return (
         projective_line_operation,
         matrix_rank_operation,
@@ -430,6 +469,7 @@ def _build_tools() -> MathTools:
         collision_operation,
         permutation_operation,
         paley_tournament_operation,
+        fixed_subspace_operation,
     )
 
 

@@ -6,6 +6,8 @@ import json
 import math
 import sys
 import time
+from fractions import Fraction
+from math import gcd, lcm
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -84,10 +86,86 @@ def _preflight_family_size(
                 )
 
 
+def _multiply_integer_polynomials(
+    left: tuple[int, ...], right: tuple[int, ...]
+) -> tuple[int, ...]:
+    """Multiply two dense integer polynomials (leading coefficient first)."""
+
+    if not left or not right:
+        return ()
+    product = [0] * (len(left) + len(right) - 1)
+    for i, lc in enumerate(left):
+        for j, rc in enumerate(right):
+            product[i + j] += lc * rc
+    return tuple(product)
+
+
+def _source_to_dense_int(
+    source: LabelledRationalPolynomial,
+) -> tuple[int, ...]:
+    """Convert a univariate RationalPolynomial to a dense primitive ZZ[x].
+
+    Returns coefficients in descending degree order with positive leading
+    coefficient and content one.
+    """
+
+    terms = source.polynomial.polynomial.terms
+    degree = terms[0].exponents[0] if terms else 0
+    dense_rational: list[Fraction] = [Fraction(0)] * (degree + 1)
+    for term in terms:
+        dense_rational[degree - term.exponents[0]] = term.coefficient.as_fraction()
+    common_denominator = 1
+    for coeff in dense_rational:
+        common_denominator = lcm(common_denominator, coeff.denominator)
+    dense_int = [
+        int(coeff.numerator) * (common_denominator // int(coeff.denominator))
+        for coeff in dense_rational
+    ]
+    content = 0
+    for coeff in dense_int:
+        content = gcd(content, abs(coeff))
+    if content > 1:
+        dense_int = [c // content for c in dense_int]
+    if dense_int and dense_int[0] < 0:
+        dense_int = [-c for c in dense_int]
+    return tuple(dense_int)
+
+
+def _verify_declared_factors(
+    source: LabelledRationalPolynomial,
+    declared_factors: list,
+) -> None:
+    """Verify the worker's declared factors reconstruct the retained source.
+
+    Each declared factor is a [coefficients, multiplicity] pair.  Multiplies
+    each factor raised to its multiplicity and checks the product equals the
+    source polynomial.  Uses only integer polynomial arithmetic, not SymPy,
+    so no kernel work is replayed in the parent.
+    """
+
+    if not declared_factors:
+        raise ValueError("worker omitted source factor declarations")
+    source_dense = _source_to_dense_int(source)
+    product: tuple[int, ...] = (1,)
+    for entry in declared_factors:
+        if not isinstance(entry, (list, tuple)) or len(entry) != 2:
+            raise ValueError("malformed source factor declaration")
+        factor_coeffs, multiplicity = entry
+        if type(multiplicity) is not int or multiplicity < 1:
+            raise ValueError("malformed source factor multiplicity")
+        factor_dense = tuple(int(c) for c in factor_coeffs)
+        for _ in range(multiplicity):
+            product = _multiply_integer_polynomials(product, factor_dense)
+    if product != source_dense:
+        raise ValueError(
+            "declared factors do not reconstruct the source polynomial"
+        )
+
+
 def _root_profile_from_worker(
     value: object,
-    declared_factors: list[list[tuple[str, ...]]],
-    factor_root_counts: list[int],
+    declared_factors: list,
+    factor_root_counts: list,
 ) -> SourceRootProfile:
     """Parse bounded worker structure without replaying exact factorization.
 
@@ -105,11 +183,15 @@ def _root_profile_from_worker(
     if type(source_index) is not int:
         raise ValueError("malformed root profile source index")
     declared_factor_set = {
-        tuple(int(c) for c in f) for f in declared_factors
+        tuple(int(c) for c in entry[0]) for entry in declared_factors
     }
+    if not declared_factor_set:
+        raise ValueError("worker omitted source factor declarations")
+
     roots: list[PolynomialRealRoot] = []
     seen_identities: set[tuple[tuple[str, ...], int]] = set()
     factor_multiplicities: dict[tuple[int, ...], int] = {}
+    factor_row_counts: dict[tuple[int, ...], int] = {}
     for raw_root in value["roots"]:
         if not isinstance(raw_root, dict):
             raise ValueError("malformed root row")
@@ -153,6 +235,9 @@ def _root_profile_from_worker(
             raise ValueError("worker profile contains duplicate root identity")
         seen_identities.add(identity)
 
+        # Count rows per factor for the completeness check.
+        factor_row_counts[poly_key] = factor_row_counts.get(poly_key, 0) + 1
+
         algebraic_value = RealAlgebraicValue._from_admitted_polynomial(
             polynomial=polynomial,
             real_root_index=root_index,
@@ -163,28 +248,17 @@ def _root_profile_from_worker(
         roots.append(
             PolynomialRealRoot.model_validate(root_payload)
         )
-    # Verify that every real root of each declared factor is reported
-    factor_row_counts: dict[tuple[int, ...], int] = {}
-    for raw_root in value["roots"]:
-        if not isinstance(raw_root, dict):
-            continue
-        rv = raw_root.get("value")
-        if not isinstance(rv, dict):
-            continue
-        pk = tuple(int(c) for c in _CANONICAL_POLYNOMIAL.validate_python(rv.get("polynomial")))
-        factor_row_counts[pk] = factor_row_counts.get(pk, 0) + 1
-    if factor_root_counts:
-        declared_set = {tuple(int(c) for c in f) for f in declared_factors}
-        for idx, (factor, count) in enumerate(zip(declared_factors, factor_root_counts)):
-            fk = tuple(int(c) for c in factor)
-            if fk in factor_row_counts:
-                if factor_row_counts[fk] != count:
-                    raise ValueError("worker omitted real roots of a source factor")
-            elif count > 0:
-                raise ValueError("worker omitted real roots of a source factor")
 
-    if roots and not declared_factor_set:
-        raise ValueError("worker omitted factor declarations despite reporting roots")
+    # Require factor-root-count projection to be complete and fail closed.
+    if not factor_root_counts or len(factor_root_counts) != len(declared_factors):
+        raise ValueError("worker omitted or truncated factor root counts")
+    for idx, entry in enumerate(declared_factors):
+        fk = tuple(int(c) for c in entry[0])
+        expected = factor_root_counts[idx]
+        actual = factor_row_counts.get(fk, 0)
+        if expected != actual:
+            raise ValueError("worker omitted real roots of a source factor")
+
     return SourceRootProfile.model_validate(
         {"source_index": source_index, "roots": tuple(roots)}
     )
@@ -199,6 +273,18 @@ def _profile_from_worker(
     raw_profiles = payload.get("root_profiles")
     if not isinstance(raw_profiles, list):
         raise ValueError("malformed root profiles")
+
+    # Verify declared factors reconstruct each retained source.
+    if not isinstance(raw_source_factors, list) or len(raw_source_factors) != len(family):
+        raise ValueError("worker source factor declarations are missing or malformed")
+    for source_index, source in enumerate(family):
+        declared = raw_source_factors[source_index]
+        _verify_declared_factors(source, declared)
+
+    # Require factor-root-count projection aligned one-for-one with family.
+    if not isinstance(raw_factor_root_counts, list) or len(raw_factor_root_counts) != len(family):
+        raise ValueError("worker factor root counts are missing or malformed")
+
     root_profiles: list[SourceRootProfile] = []
     for value in raw_profiles:
         if not isinstance(value, dict) or type(value.get("source_index")) is not int:
@@ -206,16 +292,8 @@ def _profile_from_worker(
         source_index = value["source_index"]
         if not 0 <= source_index < len(family):
             raise ValueError("worker root profile source index is out of range")
-        declared = (
-            raw_source_factors[source_index]
-            if source_index < len(raw_source_factors)
-            else []
-        )
-        root_counts = (
-            raw_factor_root_counts[source_index]
-            if source_index < len(raw_factor_root_counts)
-            else []
-        )
+        declared = raw_source_factors[source_index]
+        root_counts = raw_factor_root_counts[source_index]
         root_profiles.append(_root_profile_from_worker(value, declared, root_counts))
     root_profiles_tuple = tuple(root_profiles)
     outcome = _OUTCOME.validate_python(payload.get("outcome"))

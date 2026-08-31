@@ -40,16 +40,31 @@ def main() -> int:
             root_profiles=root_profiles,
             outcome=outcome,
         )
-        # Send the declared irreducible factors for each source so the parent
-        # can validate root rows structurally without re-running SymPy kernels.
+        # Send the declared irreducible factors and their real-root counts.
+        # Root counts are derived from the already-computed root profiles
+        # (one row per real root of each factor) rather than calling
+        # intervals() again for each factor.
         source_factors = []
         source_factor_root_counts = []
-        for source_plan in plan.sources:
-            factors = []
-            root_counts = []
-            for factor_plan in source_plan.factors:
-                factors.append(factor_plan.canonical_coefficients)
-                root_counts.append(len(factor_plan.polynomial.intervals()))
+        for source_index, source_plan in enumerate(plan.sources):
+            factors = [
+                [
+                    list(factor_plan.canonical_coefficients),
+                    factor_plan.multiplicity,
+                ]
+                for factor_plan in source_plan.factors
+            ]
+            # Count distinct root rows per factor from the computed profile.
+            profile = root_profiles[source_index]
+            factor_key_to_index = {
+                tuple(int(c) for c in factor_plan.canonical_coefficients): idx
+                for idx, factor_plan in enumerate(source_plan.factors)
+            }
+            root_counts = [0] * len(factors)
+            for root in profile.roots:
+                poly_key = tuple(int(c) for c in root.value.polynomial)
+                if poly_key in factor_key_to_index:
+                    root_counts[factor_key_to_index[poly_key]] += 1
             source_factors.append(factors)
             source_factor_root_counts.append(root_counts)
     except OperationDomainValidationError as exc:
@@ -58,7 +73,9 @@ def main() -> int:
         )
         return 0
     except Exception:
-        sys.stderr.write(f"common-interlacing worker failed: {type(sys.exc_info()[1]).__name__}\n")
+        sys.stderr.write(
+            f"common-interlacing worker failed: {type(sys.exc_info()[1]).__name__}\n"
+        )
         return 1
     sys.stdout.write(
         json.dumps(

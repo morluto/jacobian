@@ -105,7 +105,7 @@ def _root_profile_from_worker(
         raise ValueError("malformed root profile source index")
     declared_factor_set = {
         tuple(int(c) for c in f) for f in declared_factors
-    } if declared_factors else set()
+    }
     roots: list[PolynomialRealRoot] = []
     seen_identities: set[tuple[tuple[str, ...], int]] = set()
     for raw_root in value["roots"]:
@@ -131,7 +131,7 @@ def _root_profile_from_worker(
         if root_index >= len(coefficients) - 1:
             raise ValueError("worker root index is outside its canonical factor")
         poly_key = tuple(int(c) for c in polynomial)
-        if declared_factor_set and poly_key not in declared_factor_set:
+        if poly_key not in declared_factor_set:
             raise ValueError(
                 "worker root polynomial is not a declared irreducible factor"
             )

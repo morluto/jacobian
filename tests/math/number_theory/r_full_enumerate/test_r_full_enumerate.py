@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 from sympy.ntheory.factor_ import factorint
 
-from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.canonical import format_canonical_integer
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._r_full_enumerate import (
     enumerate_r_full,
     enumerate_r_full_numbers,

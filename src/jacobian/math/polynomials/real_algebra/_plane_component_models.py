@@ -849,6 +849,13 @@ class PlaneComponentProfileResult(StrictModel):
     )
     outcome: PlaneComponentProfileOutcome
 
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_source_envelope(cls, data: Any) -> Any:
+        if isinstance(data, Mapping):
+            _raw_semialgebraic_envelope(data.get("semialgebraic_set"))
+        return data
+
     @model_validator(mode="after")
     def bind_computed_sample_count(self) -> Self:
         if any(sample.axis != self.semialgebraic_set.axis for sample in self.samples):

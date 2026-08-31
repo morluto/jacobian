@@ -121,7 +121,13 @@ def test_comparison_preflights_raw_degree_before_algebraic_recognition() -> None
         "polynomial": ["1", *("0" for _ in range(15)), "-2"],
         "real_root_index": 1,
     }
-    payload = {"left": degree_sixteen, "right": degree_sixteen}
+    payload = {
+        "left": degree_sixteen,
+        "right": {
+            "polynomial": ["1", *("0" for _ in range(15)), "-3"],
+            "real_root_index": 1,
+        },
+    }
     profiler = cProfile.Profile()
 
     with pytest.raises(ValidationError, match="degree at most 8"):

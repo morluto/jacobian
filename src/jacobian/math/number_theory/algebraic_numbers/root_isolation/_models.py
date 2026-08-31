@@ -14,6 +14,7 @@ from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.real import (
     MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE,
+    MAX_REAL_ALGEBRAIC_DEGREE,
     RealAlgebraicValue,
 )
 
@@ -41,12 +42,12 @@ def _require_raw_comparison_degree(value: Any) -> Any:
         else None
     )
     if isinstance(polynomial, (list, tuple)) and len(polynomial) > (
-        MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE + 1
+        MAX_REAL_ALGEBRAIC_DEGREE + 1
     ):
         raise _validation_error(
             "comparison_degree_bound",
             "exact algebraic comparison admits degree at most "
-            f"{MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE}",
+            f"{MAX_REAL_ALGEBRAIC_DEGREE}",
         )
     if isinstance(value, Mapping):
         return canonicalize_json_containers(value)
@@ -55,9 +56,7 @@ def _require_raw_comparison_degree(value: Any) -> Any:
 
 def _comparison_value_schema() -> dict[str, Any]:
     schema = RealAlgebraicValue.model_json_schema()
-    schema["properties"]["polynomial"]["maxItems"] = (
-        MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE + 1
-    )
+    schema["properties"]["polynomial"]["maxItems"] = MAX_REAL_ALGEBRAIC_DEGREE + 1
     return schema
 
 
@@ -226,6 +225,19 @@ class RootIsolationResult(StrictModel):
 class AlgebraicCompareRequest(StrictModel):
     left: _ComparisonRealAlgebraicValue
     right: _ComparisonRealAlgebraicValue
+
+    @model_validator(mode="after")
+    def require_pair_comparison_envelope(self) -> Self:
+        if self.left.polynomial != self.right.polynomial and (
+            len(self.left.polynomial) - 1 > MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE
+            or len(self.right.polynomial) - 1 > MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE
+        ):
+            raise _validation_error(
+                "comparison_degree_bound",
+                "distinct-polynomial comparison admits degree at most "
+                f"{MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE}",
+            )
+        return self
 
 
 __all__ = [

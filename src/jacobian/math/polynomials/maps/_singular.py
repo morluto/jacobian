@@ -571,6 +571,7 @@ def _parse_generic_fiber_output(
                 reader,
                 source_count=source_count,
                 target_parameters=target_parameters,
+                deadline_check=deadline_check,
             )
             row.append(polynomial)
             certificate_terms += len(polynomial.terms)

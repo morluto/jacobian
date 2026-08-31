@@ -74,6 +74,7 @@ def compute_invariant_bilinear_form_lattice(
             kind,
             admission=admission,
             execution_checkpoint=execution_checkpoint,
+            deadline=deadline,
         )
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(

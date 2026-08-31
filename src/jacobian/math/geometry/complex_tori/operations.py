@@ -428,7 +428,8 @@ def compute_neron_severi_lattice(
 ) -> InvariantBilinearFormLattice:
     """Compute every integral alternating Hodge ``(1,1)`` form exactly."""
 
-    execution_checkpoint = partial(_require_execution_active, _execution_deadline())
+    deadline = _execution_deadline()
+    execution_checkpoint = partial(_require_execution_active, deadline)
     try:
         execution_checkpoint("before Neron-Severi semantic admission")
         action, plan = _admit_neron_severi_execution(torus)
@@ -444,6 +445,7 @@ def compute_neron_severi_lattice(
             "ALTERNATING",
             admission=plan.invariant_forms,
             execution_checkpoint=execution_checkpoint,
+            deadline=deadline,
         )
         execution_checkpoint("after the integral Hodge-lattice kernel")
         return result

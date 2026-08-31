@@ -6,6 +6,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
+from functools import partial
 from math import ceil, factorial, lcm, log10
 from typing import Any, Literal
 
@@ -85,15 +86,18 @@ class _InertiaExecutionPlan:
 _INERTIA_WALL_SECONDS: float = 600.0
 
 
-def _require_inertia_execution_active(phase: str) -> None:
+def _require_inertia_execution_active(
+    phase: str,
+    *,
+    deadline: float | None = None,
+) -> None:
     if request_cancelled():
         raise OperationExecutionCancelledError(f"request cancelled {phase}")
     execution = current_request_execution()
-    if (
-        execution is not None
-        and execution.deadline is not None
-        and execution.deadline <= time.monotonic()
-    ):
+    effective_deadline = deadline
+    if effective_deadline is None and execution is not None:
+        effective_deadline = execution.deadline
+    if effective_deadline is not None and effective_deadline <= time.monotonic():
         raise OperationExecutionTimeoutError(f"request deadline expired {phase}")
 
 
@@ -882,10 +886,23 @@ def compute_inertia(matrix: ExactRealMatrix) -> InertiaResult:
     )
     bind_request_deadline(deadline)
     try:
-        _require_inertia_execution_active("before exact inertia admission")
+        _require_inertia_execution_active(
+            "before exact inertia admission",
+            deadline=deadline,
+        )
         admission = _admit_inertia(matrix)
-        _require_inertia_execution_active("after exact inertia admission")
-        return _compute_inertia(matrix, admission=admission)
+        _require_inertia_execution_active(
+            "after exact inertia admission",
+            deadline=deadline,
+        )
+        return _compute_inertia(
+            matrix,
+            admission=admission,
+            execution_checkpoint=partial(
+                _require_inertia_execution_active,
+                deadline=deadline,
+            ),
+        )
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(
             location=("matrix",), code=exc.type, message=exc.message()

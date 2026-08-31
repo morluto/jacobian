@@ -675,7 +675,11 @@ def _build_constraint_plan(
     )
 
 
-def _integer_kernel_basis(plan: _ConstraintPlan) -> tuple[list[list[int]], int]:
+def _integer_kernel_basis(
+    plan: _ConstraintPlan,
+    *,
+    deadline: float | None = None,
+) -> tuple[list[list[int]], int]:
     """Extract the primitive kernel from a canonical graph-lattice HNF.
 
     Rows of ``[C^T | I_m]`` form the graph of ``x -> x C^T`` inside
@@ -698,7 +702,8 @@ def _integer_kernel_basis(plan: _ConstraintPlan) -> tuple[list[list[int]], int]:
             0,
         )
 
-    deadline = _bind_request_deadline()
+    if deadline is None:
+        deadline = _bind_request_deadline()
     _require_active_request("before the graph-lattice HNF")
     from jacobian.process import (
         ProcessResourceLimits,
@@ -851,10 +856,12 @@ def invariant_bilinear_form_lattice_kernel(
     admission: _InvariantFormExecutionPlan | None = None,
     execution_checkpoint: Callable[[str], None] | None = None,
     recognized_field: Any = None,
+    deadline: float | None = None,
 ) -> InvariantBilinearFormLattice:
     """Return the saturated integer lattice of forms fixed by every generator."""
 
-    _bind_request_deadline()
+    if deadline is None:
+        deadline = _bind_request_deadline()
     checkpoint = execution_checkpoint or _require_active_request
     checkpoint("before constraint expansion")
     plan = (
@@ -866,7 +873,7 @@ def invariant_bilinear_form_lattice_kernel(
             recognized_field=recognized_field,
         )
     )
-    basis, constraint_rank = _integer_kernel_basis(plan)
+    basis, constraint_rank = _integer_kernel_basis(plan, deadline=deadline)
     dimension = len(action.coordinate_axis)
     basis_forms = tuple(
         IntegralBilinearForm._from_kernel(

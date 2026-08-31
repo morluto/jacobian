@@ -25,14 +25,13 @@ result retains the complete source action and degree, including when the fixed
 space is zero-dimensional, so it can be serialized and passed back to the same
 or later degree computations without reconstructing field or axis context.
 
-Admission is derived before polynomial expansion. Requests are limited to 8
-variables, 16 distinct generators, and 512 homogeneous monomials. Degree is
-bounded by the derived expansion, matrix-cell, and elimination-work envelope;
-one-variable actions can therefore admit degrees above 64 when their actual
-work remains within budget. The operation also applies the shared prime-field matrix-cell and
-elimination-work bounds to the induced matrices, stacked fixed equations, exact
-row reduction, and dense canonical result. These are execution and codomain
-bounds, not restrictions on the mathematical definition.
+Admission is derived before polynomial expansion. The variable and generator
+axes are bounded by the shared prime-field matrix axis, and the homogeneous
+monomial basis is bounded by that same axis. The accepted degree is then
+constrained by the induced-matrix cell bound, stacked-equation axis and cell
+bounds, Python substitution work, prime-field elimination work, and the exact
+canonical result-size envelope. These are execution and codomain bounds, not
+restrictions on the mathematical definition.
 
 The defining source regression uses the two displayed matrices for the
 five-dimensional `D8` action on `Q` in equation (4) of Muhammad Fazeel Anwar,

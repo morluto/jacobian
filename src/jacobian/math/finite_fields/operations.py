@@ -7,7 +7,6 @@ from typing import Literal
 from jacobian.canonical import (
     CanonicalizationError,
     CanonicalLimits,
-    canonicalize_json,
     encode_strict_json,
 )
 from jacobian.catalog.models import OperationDomainValidationError
@@ -109,10 +108,7 @@ def _homogeneous_fixed_subspace_output_bytes(
         "monomial_basis": [list(exponents) for exponents in monomial_basis],
     }
     try:
-        encoded = canonicalize_json(
-            payload,
-            limits=CanonicalLimits(max_output_bytes=(1 << 63) - 1),
-        )
+        encoded = encode_strict_json(payload)
     except CanonicalizationError as error:
         raise OperationDomainValidationError(
             location=("action",),

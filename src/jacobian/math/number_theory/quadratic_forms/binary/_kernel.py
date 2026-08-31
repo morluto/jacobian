@@ -1,5 +1,6 @@
 """Reusable exact kernels for integral binary quadratic forms."""
 
+from dataclasses import dataclass
 from math import isqrt
 
 from jacobian.math.number_theory.quadratic_forms.binary._models import (
@@ -7,6 +8,7 @@ from jacobian.math.number_theory.quadratic_forms.binary._models import (
     BinaryQuadraticFormRepresentation,
     PrimitivePositiveDefiniteBinaryQuadraticForm,
     _has_sum_of_two_squares_mod_four_obstruction,
+    _is_reduced_coefficients,
     _representation_y_bound,
     _require_representation_budget,
 )
@@ -29,15 +31,140 @@ def evaluate(a: int, b: int, c: int, x: int, y: int) -> int:
 
 def is_reduced(a: int, b: int, c: int) -> bool:
     """Check Gauss reduction: ``|b| <= a <= c``, with tie-breaking ``b >= 0``."""
-    if a <= 0 or c <= 0:
-        return False
-    if abs(b) > a:
-        return False
-    if a > c:
-        return False
-    if abs(b) == a and b < 0:
-        return False
-    return not (a == c and b < 0)
+    return a > 0 and c > 0 and _is_reduced_coefficients(a, b, c)
+
+
+def _extended_gcd(a: int, b: int) -> tuple[int, int, int]:
+    """Return nonnegative gcd and deterministic Bezout coefficients."""
+    old_r, r = abs(a), abs(b)
+    old_s, s = 1, 0
+    old_t, t = 0, 1
+    while r:
+        quotient = old_r // r
+        old_r, r = r, old_r - quotient * r
+        old_s, s = s, old_s - quotient * s
+        old_t, t = t, old_t - quotient * t
+    return old_r, old_s if a >= 0 else -old_s, old_t if b >= 0 else -old_t
+
+
+def _extended_gcd_three(a: int, b: int, c: int) -> tuple[int, int, int, int]:
+    gcd_ab, coefficient_a, coefficient_b = _extended_gcd(a, b)
+    common_divisor, coefficient_ab, coefficient_c = _extended_gcd(gcd_ab, c)
+    return (
+        common_divisor,
+        coefficient_ab * coefficient_a,
+        coefficient_ab * coefficient_b,
+        coefficient_c,
+    )
+
+
+def _exact_quotient(numerator: int, denominator: int, label: str) -> int:
+    quotient, remainder = divmod(numerator, denominator)
+    if remainder:
+        raise ArithmeticError(f"{label} is not integral")
+    return quotient
+
+
+@dataclass(frozen=True, slots=True)
+class DirectComposition:
+    """One direct Gauss composite and its bilinear substitution."""
+
+    a: int
+    b: int
+    c: int
+    x_coefficients: tuple[int, int, int, int]
+    y_coefficients: tuple[int, int, int, int]
+
+
+def compose(
+    first: PrimitivePositiveDefiniteBinaryQuadraticForm,
+    second: PrimitivePositiveDefiniteBinaryQuadraticForm,
+) -> DirectComposition:
+    """Return a direct Gauss composite using Buell's ternary-Bezout formula."""
+    if first.discriminant != second.discriminant:
+        raise ValueError("forms must have the same discriminant")
+
+    a1, b1 = first.a, first.b
+    a2, b2 = second.a, second.b
+    discriminant = first.discriminant
+    beta = _exact_quotient(b1 + b2, 2, "composition parity term")
+    common_divisor, t, u, v = _extended_gcd_three(a1, a2, beta)
+    if common_divisor <= 0:
+        raise ArithmeticError("composition common divisor must be positive")
+
+    composed_a = _exact_quotient(
+        a1 * a2,
+        common_divisor * common_divisor,
+        "composition leading coefficient",
+    )
+    discriminant_term = _exact_quotient(
+        b1 * b2 + discriminant,
+        2,
+        "composition discriminant term",
+    )
+    middle_numerator = a1 * b2 * t + a2 * b1 * u + v * discriminant_term
+    initial_b = _exact_quotient(
+        middle_numerator, common_divisor, "composition middle coefficient"
+    )
+
+    x_coefficients = (
+        common_divisor,
+        _exact_quotient(
+            (b2 - initial_b) * common_divisor,
+            2 * a2,
+            "first mixed composition coefficient",
+        ),
+        _exact_quotient(
+            (b1 - initial_b) * common_divisor,
+            2 * a1,
+            "second mixed composition coefficient",
+        ),
+        _exact_quotient(
+            (b1 * b2 + discriminant - initial_b * (b1 + b2)) * common_divisor,
+            4 * a1 * a2,
+            "trailing mixed composition coefficient",
+        ),
+    )
+    y_coefficients = (
+        0,
+        _exact_quotient(a1, common_divisor, "first Y coefficient"),
+        _exact_quotient(a2, common_divisor, "second Y coefficient"),
+        _exact_quotient(beta, common_divisor, "trailing Y coefficient"),
+    )
+
+    # Replace the incidental middle coefficient by its deterministic residue
+    # in [-A, A). This is the SL_2(Z) substitution x -> x+k*y. Adjust the
+    # direct-composition map by the inverse substitution so its identity stays
+    # attached to the normalized form.
+    composed_b = (initial_b + composed_a) % (2 * composed_a) - composed_a
+    shift = _exact_quotient(
+        composed_b - initial_b,
+        2 * composed_a,
+        "composition normalization shift",
+    )
+    normalized_x_coefficients = tuple(
+        x_value - shift * y_value
+        for x_value, y_value in zip(x_coefficients, y_coefficients, strict=True)
+    )
+    x_coefficients = (
+        normalized_x_coefficients[0],
+        normalized_x_coefficients[1],
+        normalized_x_coefficients[2],
+        normalized_x_coefficients[3],
+    )
+    c_numerator = composed_b * composed_b - discriminant
+    composed_c = _exact_quotient(
+        c_numerator,
+        4 * composed_a,
+        "composition trailing coefficient",
+    )
+    return DirectComposition(
+        a=composed_a,
+        b=composed_b,
+        c=composed_c,
+        x_coefficients=x_coefficients,
+        y_coefficients=y_coefficients,
+    )
 
 
 def _reduce_step(
@@ -142,4 +269,12 @@ def representations(
     return tuple(sorted(rows, key=lambda row: (row.x, row.y)))
 
 
-__all__ = ["evaluate", "gcd", "is_reduced", "reduce", "representations"]
+__all__ = [
+    "DirectComposition",
+    "compose",
+    "evaluate",
+    "gcd",
+    "is_reduced",
+    "reduce",
+    "representations",
+]

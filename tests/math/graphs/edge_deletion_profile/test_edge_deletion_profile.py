@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from itertools import combinations
+from itertools import combinations, pairwise
 
 import pytest
 
@@ -146,7 +146,7 @@ def test_near_complete_large_graph_is_rejected_before_greedy_approximation() -> 
     """A large near-complete graph cannot publish a greedy upper bound as exact."""
     vertices = [f"v{i:02}" for i in range(21)]
     missing = {
-        tuple(sorted(pair)) for pair in zip(vertices, vertices[1:4], strict=False)
+        tuple(sorted(pair)) for pair in pairwise(vertices[:4])
     }
     edges = [
         pair

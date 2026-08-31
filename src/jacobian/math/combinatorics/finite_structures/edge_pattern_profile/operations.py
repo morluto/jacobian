@@ -195,7 +195,7 @@ def _admit_edge_pattern_profile(
             encode_strict_json([p.model_dump(mode="json") for p in color_pairs])
         )
         entries_bytes = monochromatic_bytes = rainbow_bytes = 2
-        entries_count = monochromatic_count = rainbow_count = 0
+        monochromatic_count = rainbow_count = 0
         result_bytes = strict_json_object_size(
             (
                 ("hypergraph", source_size),

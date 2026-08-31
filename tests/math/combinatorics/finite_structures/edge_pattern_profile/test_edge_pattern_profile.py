@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import OperationDomainValidationError, OperationResult
 from jacobian.math.combinatorics.finite_structures.edge_pattern_profile._models import (
     EdgePatternProfileRequest,
 )
@@ -128,3 +128,51 @@ def test_native_rejects_unencodable_color() -> None:
     hg = _hg(["a"], [])
     with pytest.raises(OperationDomainValidationError, match="valid UTF-8"):
         compute_edge_pattern_profile(hg, {"a": "\ud800"})
+
+
+def test_numeric_color_keys_survive_canonical_transport() -> None:
+    # Thread 2: vertices named num/den with non-integer colors must not be
+    # reinterpreted as a rational object by OperationResult.require_canonical_output.
+    # The VertexColorPair carrier serializes as {vertex, color} rows, so the
+    # full transport envelope canonicalizes without an execution failure.
+    hg = _hg(["num", "den"], [("e0", ("num", "den"))])
+    result = compute_edge_pattern_profile(hg, {"num": "red", "den": "blue"})
+    output = result.model_dump(mode="json")
+    assert {(p["vertex"], p["color"]) for p in output["vertex_colors"]} == {
+        ("num", "red"),
+        ("den", "blue"),
+    }
+
+    envelope = OperationResult(
+        operation_id="hypergraph.vertex_coloring.edge_pattern_profile.compute",
+        runtime_ms=0,
+        output=output,
+    )
+    assert len(envelope.output["vertex_colors"]) == 2
+
+
+def test_single_label_over_the_aggregate_utf8_bound_is_rejected() -> None:
+    # Thread 3: the cheap aggregate raw UTF-8 bound rejects a single color
+    # label whose raw size already exceeds the output envelope, before any
+    # normalization or result construction.
+    hg = _hg(["a"], [])
+    with pytest.raises(OperationDomainValidationError, match="output envelope"):
+        compute_edge_pattern_profile(hg, {"a": "x" * (11 * 1024 * 1024)})
+
+
+def test_admitted_equality_partitions_are_reused_in_the_kernel() -> None:
+    # Thread 1: admission computes the equality partition, block count, and
+    # distinct-label sequence once and the kernel constructs the result from
+    # that plan without recomputing the defining mathematical work.
+    hg = _hg(
+        ["a", "b", "c"],
+        [("e0", ("a", "b", "c")), ("e1", ("a", "b")), ("e2", ("b", "c"))],
+    )
+    result = compute_edge_pattern_profile(hg, {"a": "red", "b": "red", "c": "blue"})
+    assert result.entries[0].equality_partition == (0, 0, 1)
+    assert result.entries[0].num_color_blocks == 2
+    assert result.entries[0].color_labels == ("red", "blue")
+    assert "e0" not in result.monochromatic_edge_ids
+    assert "e1" in result.monochromatic_edge_ids
+    assert "e1" not in result.rainbow_edge_ids
+    assert "e2" in result.rainbow_edge_ids

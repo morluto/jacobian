@@ -710,10 +710,14 @@ def _raw_semialgebraic_envelope(  # noqa: C901
                 terms = polynomial.polynomial.terms
             elif isinstance(polynomial, SparseRationalPolynomial):
                 terms = polynomial.terms
-            elif isinstance(polynomial, Mapping) and isinstance(
-                polynomial.get("polynomial"), Mapping
-            ):
-                terms = polynomial["polynomial"].get("terms")
+            elif isinstance(polynomial, Mapping):
+                nested = polynomial.get("polynomial")
+                if isinstance(nested, SparseRationalPolynomial):
+                    terms = nested.terms
+                elif isinstance(nested, Mapping):
+                    terms = nested.get("terms")
+                else:
+                    terms = None
             else:
                 terms = None
             if isinstance(terms, (list, tuple)):

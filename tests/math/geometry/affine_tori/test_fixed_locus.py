@@ -22,6 +22,7 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry import affine_tori
 from jacobian.math.geometry.affine_tori import (
     AffineTorusFixedLocusOutcome,
@@ -1005,6 +1006,41 @@ def test_admission_uses_the_exact_attainable_rank_not_the_nonzero_row_count() ->
     assert len(kernel.component_generators) == plan.rank_bounds[0].rank
     assert kernel.component_count == height
     assert plan.bounds_for_rank(1).source_minor_height >= height
+
+
+def test_zero_translation_uses_selected_generator_height_not_minor_bound() -> None:
+    height = 10**499
+    source = _source(
+        tuple(
+            tuple((height + 1) if row == column else 0 for column in range(3))
+            for row in range(3)
+        ),
+        (Fraction(0),) * 3,
+    )
+
+    plan = build_affine_torus_plan(source, deadline=monotonic() + 300)
+    bounds = plan.bounds_for_rank(3)
+
+    assert bounds.source_minor_height > height
+    assert bounds.component_generator_height == height
+
+
+def test_point_height_is_revalidated_after_the_selected_translated_solve() -> None:
+    determinant_scale = 10**399
+    translation_denominator = 10**499
+    source = _source(
+        (
+            (determinant_scale + 1, 1),
+            (1, determinant_scale + 1),
+        ),
+        (Fraction(1, translation_denominator), Fraction(0)),
+    )
+
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="exact fixed-locus point bound exceeds",
+    ):
+        build_affine_torus_plan(source, deadline=monotonic() + 300)
 
 
 def test_admission_uses_the_selected_translated_solve_height() -> None:

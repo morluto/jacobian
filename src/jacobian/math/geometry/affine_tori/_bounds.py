@@ -50,6 +50,7 @@ class AffineTorusRankBounds:
     rank: int
     nullity: int
     source_minor_height: int
+    component_generator_height: int
     source_hnf_transform_height: int
     character_hnf_transform_height: int
     image_saturation_height: int
@@ -252,10 +253,66 @@ def _first_rank_minor(
     return tuple(rows), tuple(columns)
 
 
+def _selected_rank_minor_inverse(
+    displacement: tuple[tuple[int, ...], ...], rank: int
+) -> tuple[tuple[int, ...], tuple[int, ...], tuple[tuple[Fraction, ...], ...]]:
+    """Return the worker's selected minor and its exact rational inverse."""
+
+    if rank == 0:
+        return (), (), ()
+    rows, columns = _first_rank_minor(displacement, rank)
+    augmented = [
+        [
+            Fraction(displacement[row][column])
+            for column in columns
+        ]
+        + [Fraction(int(row_index == column_index)) for column_index in range(rank)]
+        for row_index, row in enumerate(rows)
+    ]
+    for column in range(rank):
+        pivot = next(
+            (row for row in range(column, rank) if augmented[row][column]),
+            None,
+        )
+        if pivot is None:
+            raise AssertionError("selected rank minor is singular")
+        augmented[column], augmented[pivot] = augmented[pivot], augmented[column]
+        pivot_value = augmented[column][column]
+        augmented[column] = [value / pivot_value for value in augmented[column]]
+        for row in range(rank):
+            if row == column:
+                continue
+            factor = augmented[row][column]
+            if factor:
+                augmented[row] = [
+                    left - factor * right
+                    for left, right in zip(
+                        augmented[row], augmented[column], strict=True
+                    )
+                ]
+    return rows, columns, tuple(
+        tuple(row[rank + column] for column in range(rank)) for row in augmented
+    )
+
+
+def _selected_component_generator_height(
+    inverse: tuple[tuple[Fraction, ...], ...],
+) -> int:
+    """Bound selected component generators by the selected solve denominator."""
+
+    if not inverse:
+        return 1
+    return max(1, lcm(*(value.denominator for row in inverse for value in row)))
+
+
 def _selected_zero_lift_base_point_height(
     displacement: tuple[tuple[int, ...], ...],
     translation: tuple[Fraction, ...],
     rank: int,
+    *,
+    selected_inverse: tuple[tuple[Fraction, ...], ...] | None = None,
+    selected_rows: tuple[int, ...] | None = None,
+    selected_columns: tuple[int, ...] | None = None,
 ) -> int | None:
     """Bound the selected solve when the zero integer lift is exact.
 
@@ -271,35 +328,19 @@ def _selected_zero_lift_base_point_height(
 
     if rank == 0 or all(value == 0 for value in translation):
         return 1
-    rows, columns = _first_rank_minor(displacement, rank)
-    augmented = [
-        [Fraction(displacement[row][column]) for column in columns]
-        + [-translation[row]]
-        for row in rows
-    ]
-    for column in range(rank):
-        pivot = next(
-            (row for row in range(column, rank) if augmented[row][column]),
-            None,
+    if selected_inverse is None:
+        rows, columns, inverse = _selected_rank_minor_inverse(displacement, rank)
+    else:
+        if selected_rows is None or selected_columns is None:
+            raise AssertionError("selected minor coordinates are required")
+        rows, columns, inverse = selected_rows, selected_columns, selected_inverse
+    solution = [
+        sum(
+            inverse[column][row] * -translation[rows[column]]
+            for column in range(rank)
         )
-        if pivot is None:
-            raise AssertionError("selected rank minor is singular")
-        augmented[column], augmented[pivot] = augmented[pivot], augmented[column]
-        pivot_value = augmented[column][column]
-        for row in range(column + 1, rank):
-            factor = augmented[row][column] / pivot_value
-            if factor:
-                for inner in range(column, rank + 1):
-                    augmented[row][inner] -= factor * augmented[column][inner]
-    solution = [Fraction(0)] * rank
-    for row in range(rank - 1, -1, -1):
-        solution[row] = (
-            augmented[row][rank]
-            - sum(
-                augmented[row][column] * solution[column]
-                for column in range(row + 1, rank)
-            )
-        ) / augmented[row][row]
+        for row in range(rank)
+    ]
 
     # The selected equations must solve every retained equation for the zero
     # lift to be valid.  If they do not, the worker needs its character-lattice
@@ -327,6 +368,7 @@ def _rank_bounds(
     common_denominator: int,
     translation_is_zero: bool,
     selected_base_point_height: int | None = None,
+    component_generator_height: int | None = None,
 ) -> AffineTorusRankBounds:
     nullity = dimension - rank
     minor_height = _rank_minor_height(rank, displacement_height)
@@ -347,6 +389,11 @@ def _rank_bounds(
     # rational image, hence is bounded directly by M's rank minors even though
     # the transformation used to recover it has the coarser bound above.
     image_saturation_height = minor_height
+    component_generator_height = (
+        minor_height
+        if component_generator_height is None
+        else component_generator_height
+    )
 
     pairing_height = max(1, dimension * minor_height)
     # The character lattice is primitive. Its HNF leading block is therefore
@@ -403,6 +450,7 @@ def _rank_bounds(
         rank=rank,
         nullity=nullity,
         source_minor_height=minor_height,
+        component_generator_height=component_generator_height,
         source_hnf_transform_height=source_transform_height,
         character_hnf_transform_height=character_transform_height,
         image_saturation_height=image_saturation_height,
@@ -569,7 +617,7 @@ def _result_bytes_for_rank(
     )
     generator_bytes = _point_wire_bytes(
         dimension=dimension,
-        height=bounds.source_minor_height,
+        height=bounds.component_generator_height,
     )
     integer_bytes = _integer_string_wire_bytes(bounds.source_minor_height)
     identity_component_bytes = strict_json_object_size(
@@ -766,6 +814,12 @@ def build_affine_torus_plan(
     translation = tuple(
         coordinate.as_fraction() for coordinate in source.translation.coordinates
     )
+    selected_rows, selected_columns, selected_inverse = _selected_rank_minor_inverse(
+        displacement, attained_rank
+    )
+    component_generator_height = _selected_component_generator_height(
+        selected_inverse
+    )
     # Admission cannot use the worker's saturated character lattice without
     # replaying its backend work.  Keep the nonempty branch in the envelope;
     # the worker still determines the exact obstruction modulo Z^n.
@@ -781,10 +835,12 @@ def build_affine_torus_plan(
             common_denominator=common_denominator,
             translation_is_zero=translation_is_zero,
             selected_base_point_height=None,
+            component_generator_height=component_generator_height,
         ),
     )
     if any(
-        _decimal_digits(bounds.source_minor_height) > MAX_AFFINE_TORUS_POINT_DIGITS
+        _decimal_digits(bounds.component_generator_height)
+        > MAX_AFFINE_TORUS_POINT_DIGITS
         for bounds in rank_bounds
         if not inconsistent
         if bounds.rank > 0
@@ -799,6 +855,9 @@ def build_affine_torus_plan(
         displacement,
         translation,
         attained_rank,
+        selected_inverse=selected_inverse,
+        selected_rows=selected_rows,
+        selected_columns=selected_columns,
     )
     rank_bounds = (
         _rank_bounds(
@@ -808,8 +867,23 @@ def build_affine_torus_plan(
             common_denominator=common_denominator,
             translation_is_zero=translation_is_zero,
             selected_base_point_height=selected_base_point_height,
+            component_generator_height=component_generator_height,
         ),
     )
+    if any(
+        _decimal_digits(
+            max(bounds.base_point_component_height, bounds.component_generator_height)
+        )
+        > MAX_AFFINE_TORUS_POINT_DIGITS
+        for bounds in rank_bounds
+        if not inconsistent
+        if bounds.rank > 0
+    ):
+        _reject(
+            "point_height",
+            "the exact fixed-locus point bound exceeds the canonical torus-point "
+            f"carrier's {MAX_AFFINE_TORUS_POINT_DIGITS}-digit envelope",
+        )
 
     result_bytes = max(
         _result_bytes_for_rank(

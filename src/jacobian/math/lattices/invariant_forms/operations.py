@@ -25,7 +25,9 @@ from jacobian.math.lattices.invariant_forms._models import (
     MatrixAction,
 )
 
-_INVARIANT_FORM_WALL_SECONDS = 600.0
+# Admission derives the mathematical work envelope. This generous backstop
+# only bounds request occupancy when no stricter caller deadline exists.
+_INVARIANT_FORM_WALL_SECONDS = 3600.0
 
 
 def _execution_deadline() -> float:

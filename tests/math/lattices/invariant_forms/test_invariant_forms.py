@@ -37,6 +37,7 @@ from jacobian.math.lattices.invariant_forms._models import (
 from jacobian.math.lattices.invariant_forms._tools import (
     INVARIANT_BILINEAR_FORM_LATTICE_OPERATION,
 )
+from jacobian.math.matrices.values import IntegerMatrix
 
 
 def _rational(value: int | Fraction) -> dict[str, str]:
@@ -401,6 +402,18 @@ def test_deep_unknown_form_data_is_rejected_before_recursive_canonicalization() 
     assert exc_info.value.errors(include_input=False)[0]["type"] == (
         "lattice.invariant_form.shape_mismatch"
     )
+
+
+def test_form_materializes_axis_before_validating_a_typed_matrix() -> None:
+    form = IntegralBilinearForm.model_validate(
+        {
+            "coordinate_axis": iter(("x",)),
+            "kind": "BILINEAR",
+            "matrix": IntegerMatrix(entries=(("1",),)),
+        }
+    )
+
+    assert form.coordinate_axis == ("x",)
 
 
 def test_unimodular_coordinate_change_transports_the_invariant_lattice() -> None:

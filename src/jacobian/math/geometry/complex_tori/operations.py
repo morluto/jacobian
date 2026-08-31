@@ -564,6 +564,7 @@ def compute_riemann_form_profile(
             inertia = _compute_inertia(
                 associated_matrix,
                 admission=plan.associated_inertia,
+                deadline=deadline,
                 recognized_field=recognized,
                 execution_checkpoint=execution_checkpoint,
             )

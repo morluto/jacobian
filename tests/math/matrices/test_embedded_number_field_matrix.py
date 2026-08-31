@@ -136,6 +136,42 @@ def test_raw_embedded_matrix_bounds_iterable_axes_before_nested_validation() -> 
         EmbeddedRealSimpleNumberFieldMatrix.model_validate(payload)
 
 
+@pytest.mark.parametrize("location", ("entry", "embedding", "root"))
+def test_raw_embedded_matrix_bounds_field_polynomial_iterables(
+    location: str,
+) -> None:
+    presentation = SimpleNumberFieldPresentation(
+        coefficients_descending=("1", "0", "-2")
+    )
+    embedding = embeddings(presentation).records[1].embedding
+    assert isinstance(embedding, RealNumberFieldEmbedding)
+    element = {
+        "presentation": presentation.model_dump(mode="json"),
+        "coefficients_ascending": [{"num": "0", "den": "1"}],
+    }
+    payload: dict[str, Any] = {
+        "domain": "EMBEDDED_REAL_SIMPLE_NUMBER_FIELD",
+        "embedding": embedding.model_dump(mode="json"),
+        "entries": [[element]],
+    }
+    if location == "entry":
+        payload["entries"][0][0]["presentation"][
+            "coefficients_descending"
+        ] = repeat("0")
+    elif location == "embedding":
+        payload["embedding"]["presentation"]["coefficients_descending"] = repeat(
+            "0"
+        )
+    else:
+        payload["embedding"]["root"]["polynomial"] = repeat("0")
+
+    with pytest.raises(
+        ValidationError,
+        match="simple number-field polynomials have at most",
+    ):
+        EmbeddedRealSimpleNumberFieldMatrix.model_validate(payload)
+
+
 @pytest.mark.parametrize(
     ("malformed_part", "expected_type"),
     (

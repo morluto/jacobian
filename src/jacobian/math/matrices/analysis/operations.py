@@ -35,8 +35,10 @@ from jacobian.math.matrices._number_field import (
     EmbeddedNumberFieldRecognitionError,
     RecognizedRealSimpleNumberField,
     domain_matrix_from_embedded,
-    field_element_sign,
     recognize_real_simple_number_field,
+)
+from jacobian.math.matrices.analysis._inertia_process import (
+    field_element_sign_killable,
 )
 from jacobian.math.matrices.analysis._models import (
     _RATIONAL_SPECTRUM_CLAIM_BYTES,
@@ -83,7 +85,9 @@ class _InertiaExecutionPlan:
     digit_work: int
 
 
-_INERTIA_WALL_SECONDS: float = 600.0
+# Admission derives the mathematical work envelope. This generous backstop
+# only bounds request occupancy when no stricter caller deadline exists.
+_INERTIA_WALL_SECONDS: float = 3600.0
 
 
 def _require_inertia_execution_active(
@@ -797,6 +801,7 @@ def _compute_inertia(
     matrix: ExactRealMatrix,
     *,
     admission: _InertiaExecutionPlan,
+    deadline: float,
     recognized_field: RecognizedRealSimpleNumberField | None = None,
     execution_checkpoint: _ExecutionCheckpoint = _require_inertia_execution_active,
 ) -> InertiaResult:
@@ -825,13 +830,17 @@ def _compute_inertia(
             if admission.regime == "DIAGONAL":
                 n_pos, n_neg, n_zero = _diagonal_inertia(
                     [source_rows[index][index] for index in range(len(source_rows))],
-                    sign=lambda value: field_element_sign(value, recognized),
+                    sign=lambda value: field_element_sign_killable(
+                        value, recognized, deadline=deadline
+                    ),
                     checkpoint=execution_checkpoint,
                 )
             else:
                 n_pos, n_neg, n_zero = _symmetric_algebraic_inertia(
                     source_rows,
-                    sign=lambda value: field_element_sign(value, recognized),
+                    sign=lambda value: field_element_sign_killable(
+                        value, recognized, deadline=deadline
+                    ),
                     checkpoint=execution_checkpoint,
                 )
         except EmbeddedNumberFieldRecognitionError as exc:
@@ -894,6 +903,7 @@ def compute_inertia(matrix: ExactRealMatrix) -> InertiaResult:
         return _compute_inertia(
             matrix,
             admission=admission,
+            deadline=deadline,
             execution_checkpoint=partial(
                 _require_inertia_execution_active,
                 deadline=deadline,

@@ -584,6 +584,7 @@ class IntegralBilinearForm(StrictModel):
                         "form coordinate_axis labels must use NFC Unicode normalization",
                     )
         matrix = data.get("matrix")
+        normalized["coordinate_axis"] = canonicalize_json_containers(axis)
         if isinstance(matrix, dict):
             if set(matrix).difference({"domain", "entries"}):
                 raise PydanticCustomError(
@@ -604,7 +605,6 @@ class IntegralBilinearForm(StrictModel):
                             "matrix.shape_mismatch",
                             "form matrix entries must be integers or strings",
                         )
-            normalized["coordinate_axis"] = canonicalize_json_containers(axis)
         return normalized
 
     @model_validator(mode="after")

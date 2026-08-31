@@ -582,15 +582,6 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
             )
         entries = data.get("entries")
         normalized = dict(data)
-        embedding = normalized.get("embedding")
-        if isinstance(embedding, dict):
-            normalized_embedding = dict(embedding)
-            root = normalized_embedding.get("root")
-            if isinstance(root, dict) and isinstance(root.get("polynomial"), list):
-                normalized_root = dict(root)
-                normalized_root["polynomial"] = tuple(root["polynomial"])
-                normalized_embedding["root"] = normalized_root
-            normalized["embedding"] = normalized_embedding
 
         def materialize_bounded(value: object, *, maximum: int, message: str) -> object:
             if isinstance(value, (list, tuple, str, bytes, Mapping)):
@@ -608,6 +599,34 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
             else:
                 raise _validation_error("budget_exceeded", message)
             return tuple(values)
+
+        def bounded_field_coefficients(value: object) -> object:
+            return materialize_bounded(
+                value,
+                maximum=MAX_SIMPLE_NUMBER_FIELD_DEGREE + 1,
+                message=(
+                    "simple number-field polynomials have at most "
+                    f"{MAX_SIMPLE_NUMBER_FIELD_DEGREE + 1} coefficients"
+                ),
+            )
+
+        embedding = normalized.get("embedding")
+        if isinstance(embedding, dict):
+            normalized_embedding = dict(embedding)
+            root = normalized_embedding.get("root")
+            if isinstance(root, dict):
+                normalized_root = dict(root)
+                polynomial = bounded_field_coefficients(root.get("polynomial"))
+                if isinstance(polynomial, (list, tuple)):
+                    if len(polynomial) > MAX_SIMPLE_NUMBER_FIELD_DEGREE + 1:
+                        raise _validation_error(
+                            "budget_exceeded",
+                            "simple number-field polynomials have at most "
+                            f"{MAX_SIMPLE_NUMBER_FIELD_DEGREE + 1} coefficients",
+                        )
+                    normalized_root["polynomial"] = tuple(polynomial)
+                normalized_embedding["root"] = normalized_root
+            normalized["embedding"] = normalized_embedding
 
         entries = materialize_bounded(
             entries,
@@ -706,7 +725,9 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
                                 "embedded number-field entry presentations contain "
                                 "unknown fields",
                             )
-                        coefficients = presentation.get("coefficients_descending")
+                        coefficients = bounded_field_coefficients(
+                            presentation.get("coefficients_descending")
+                        )
                         if not isinstance(coefficients, (list, tuple)):
                             raise PydanticCustomError(
                                 "tuple_type", "Input should be a valid tuple"
@@ -731,7 +752,9 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
                         "shape_mismatch",
                         "embedded number-field presentations contain unknown fields",
                     )
-                coefficients = presentation.get("coefficients_descending")
+                coefficients = bounded_field_coefficients(
+                    presentation.get("coefficients_descending")
+                )
                 if not isinstance(coefficients, (list, tuple)):
                     raise PydanticCustomError(
                         "tuple_type", "Input should be a valid tuple"

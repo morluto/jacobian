@@ -1020,7 +1020,9 @@ class GroebnerBasisRequest(StrictModel):
     )
 
 
-GroebnerExecutionOutcome = Literal["COMPUTED", "ERROR", "LIMIT_EXCEEDED", "TIMEOUT"]
+GroebnerExecutionOutcome = Literal[
+    "COMPUTED", "ERROR", "LIMIT_EXCEEDED", "TIMEOUT", "CANCELLED"
+]
 
 
 class GroebnerBasisResult(StrictModel):
@@ -1111,7 +1113,9 @@ class IdealNormalFormRequest(StrictModel):
     monomial_order: NormalFormMonomialOrder = "grevlex"
 
 
-NormalFormExecutionOutcome = Literal["COMPUTED", "ERROR", "LIMIT_EXCEEDED", "TIMEOUT"]
+NormalFormExecutionOutcome = Literal[
+    "COMPUTED", "ERROR", "LIMIT_EXCEEDED", "TIMEOUT", "CANCELLED"
+]
 
 
 class IdealNormalFormResult(StrictModel):
@@ -1209,7 +1213,9 @@ class EliminationIdealRequest(StrictModel):
         return self
 
 
-EliminationExecutionOutcome = Literal["COMPUTED", "ERROR", "LIMIT_EXCEEDED", "TIMEOUT"]
+EliminationExecutionOutcome = Literal[
+    "COMPUTED", "ERROR", "LIMIT_EXCEEDED", "TIMEOUT", "CANCELLED"
+]
 
 
 class EliminationIdealResult(StrictModel):

@@ -991,6 +991,13 @@ def groebner_basis(
     # output limits.
     try:
         result_payload = _run_sympy_kernel(payload, resource_budget.wall_seconds)
+    except _SympyKernelCancelledError:
+        return GroebnerBasisResult(
+            ideal=ideal,
+            outcome="CANCELLED",
+            monomial_order=monomial_order,
+            detail="the groebner computation was cancelled before producing a result",
+        )
     except _SympyKernelTimeoutError:
         return GroebnerBasisResult(
             ideal=ideal,
@@ -1066,6 +1073,14 @@ def ideal_normal_form(
     # declared output limits.
     try:
         result_payload = _run_sympy_kernel(payload, 10)
+    except _SympyKernelCancelledError:
+        return IdealNormalFormResult(
+            ideal=ideal,
+            polynomial=polynomial,
+            monomial_order=monomial_order,
+            outcome="CANCELLED",
+            detail="the Gröbner reduction was cancelled before producing a result",
+        )
     except _SympyKernelTimeoutError:
         return IdealNormalFormResult(
             ideal=ideal,
@@ -1174,6 +1189,13 @@ def elimination_ideal(
     # output limits.
     try:
         result_payload = _run_sympy_kernel(payload, resource_budget.wall_seconds)
+    except _SympyKernelCancelledError:
+        return EliminationIdealResult(
+            ideal=ideal,
+            outcome="CANCELLED",
+            eliminated_variables=tuple(eliminated_variables),
+            detail="the lex Gröbner elimination was cancelled before producing a result",
+        )
     except _SympyKernelTimeoutError:
         return EliminationIdealResult(
             ideal=ideal,

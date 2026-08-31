@@ -73,37 +73,42 @@ _MATRIX: dict[str, object] = {
 }
 
 
-def compute_rank(request: MatrixRankRequest) -> MatrixRankResult:
+def compute_rank(
+    request: MatrixRankRequest,
+    *,
+    enforce_transport_limit: bool = False,
+) -> MatrixRankResult:
     """Return the exact rank of a labelled matrix over its presented finite field."""
     matrix = request.matrix
     deadline = _execution_deadline()
     execution_checkpoint = partial(_require_deadline, deadline)
     execution_checkpoint("before result admission")
-    # Reserve the complete result envelope before the backend call so
-    # that we do not waste CPU on a result known to be undeliverable.
-    # The worst case is full rank with all pivot labels present.
-    max_rank = min(len(matrix.row_axis.labels), len(matrix.column_axis.labels))
-    try:
-        result_probe = encode_strict_json(
-            {
-                "matrix": matrix.model_dump(mode="json"),
-                "rank": max_rank,
-                "pivot_rows": list(matrix.row_axis.labels[:max_rank]),
-                "pivot_columns": list(matrix.column_axis.labels[:max_rank]),
-            }
-        )
-    except CanonicalizationError as exc:
-        raise OperationDomainValidationError(
-            location=("matrix",),
-            code="finite_field.matrix_rank.result_bound",
-            message="matrix-rank result exceeds the canonical output bound",
-        ) from exc
-    if len(result_probe) > CanonicalLimits().max_output_bytes:
-        raise OperationDomainValidationError(
-            location=("matrix",),
-            code="finite_field.matrix_rank.result_bound",
-            message="matrix-rank result exceeds the canonical output bound",
-        )
+    if enforce_transport_limit:
+        # Reserve the complete result envelope before the backend call so
+        # that we do not waste CPU on a result known to be undeliverable.
+        # The worst case is full rank with all pivot labels present.
+        max_rank = min(len(matrix.row_axis.labels), len(matrix.column_axis.labels))
+        try:
+            result_probe = encode_strict_json(
+                {
+                    "matrix": matrix.model_dump(mode="json"),
+                    "rank": max_rank,
+                    "pivot_rows": list(matrix.row_axis.labels[:max_rank]),
+                    "pivot_columns": list(matrix.column_axis.labels[:max_rank]),
+                }
+            )
+        except CanonicalizationError as exc:
+            raise OperationDomainValidationError(
+                location=("matrix",),
+                code="finite_field.matrix_rank.result_bound",
+                message="matrix-rank result exceeds the canonical output bound",
+            ) from exc
+        if len(result_probe) > CanonicalLimits().max_output_bytes:
+            raise OperationDomainValidationError(
+                location=("matrix",),
+                code="finite_field.matrix_rank.result_bound",
+                message="matrix-rank result exceeds the canonical output bound",
+            )
     execution_checkpoint("after result admission")
     # Compute the exact deterministic pivots using the maintained backend.
     data = compute_matrix_rank(matrix, execution_checkpoint=execution_checkpoint)
@@ -117,6 +122,12 @@ def compute_rank(request: MatrixRankRequest) -> MatrixRankResult:
     return result
 
 
+def _run_matrix_rank(request: MatrixRankRequest) -> MatrixRankResult:
+    """Run matrix rank through the canonical delivery boundary."""
+
+    return compute_rank(request, enforce_transport_limit=True)
+
+
 MATRIX_RANK_OPERATION = MathTool(
     operation_id="finite_field.matrix.rank.compute",
     title="Compute exact rank of a labelled matrix over its presented field",
@@ -127,7 +138,7 @@ MATRIX_RANK_OPERATION = MathTool(
     ),
     request_type=MatrixRankRequest,
     result_type=MatrixRankResult,
-    run=compute_rank,
+    run=_run_matrix_rank,
     tags=("finite-field", "matrix", "rank", "exact"),
     examples=(
         example(

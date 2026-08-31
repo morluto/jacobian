@@ -36,6 +36,7 @@ from jacobian.math.number_theory.algebraic_numbers.real import (
 )
 from jacobian.math.polynomials.real_algebra._common_interlacing import (
     _factor_digit_bound,
+    _isolation_endpoint_digit_bound,
     _preflight_common_interlacing_sources,
 )
 from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
@@ -254,6 +255,17 @@ def _root_profile_from_worker(  # noqa: C901
     factor_multiplicities: dict[tuple[int, ...], int] = {}
     factor_row_counts: dict[tuple[int, ...], int] = {}
     factor_root_indices: dict[tuple[int, ...], set[int]] = {}
+    squarefree_product: tuple[int, ...] = (1,)
+    for entry in declared_factors:
+        factor = tuple(parse_canonical_integer(c) for c in entry[0])
+        squarefree_product = _multiply_integer_polynomials(squarefree_product, factor)
+    endpoint_digit_bound = _isolation_endpoint_digit_bound(
+        len(squarefree_product) - 1,
+        max(
+            len(format_canonical_integer(coefficient).lstrip("-"))
+            for coefficient in squarefree_product
+        ),
+    )
     for raw_root in value["roots"]:
         if not isinstance(raw_root, dict):
             raise ValueError("malformed root row")
@@ -287,6 +299,19 @@ def _root_profile_from_worker(  # noqa: C901
             raise ValueError(
                 "worker root polynomial is not a declared irreducible factor"
             )
+        raw_interval = raw_root.get("isolating_interval")
+        if not isinstance(raw_interval, dict):
+            raise ValueError("malformed isolating interval")
+        for endpoint_name in ("lower", "upper"):
+            endpoint = raw_interval.get(endpoint_name)
+            if not isinstance(endpoint, dict):
+                raise ValueError("malformed isolating interval endpoint")
+            numerator = endpoint.get("num")
+            denominator = endpoint.get("den")
+            if not isinstance(numerator, str) or not isinstance(denominator, str):
+                raise ValueError("malformed isolating interval endpoint")
+            if max(len(numerator.lstrip("-")), len(denominator)) > endpoint_digit_bound:
+                raise ValueError("isolating interval endpoint exceeds its source bound")
         multiplicity = raw_root.get("multiplicity")
         if type(multiplicity) is not int or multiplicity < 1:
             raise ValueError("malformed root multiplicity")

@@ -376,6 +376,34 @@ def test_worker_factor_declarations_require_canonical_coefficients() -> None:
         )
 
 
+def test_worker_root_intervals_are_bounded_before_model_validation() -> None:
+    factor = ["1", "0", "-1"]
+    oversized_endpoint = "9" * 26
+
+    with pytest.raises(ValueError, match="isolating interval endpoint exceeds"):
+        _root_profile_from_worker(
+            {
+                "source_index": 0,
+                "roots": [
+                    {
+                        "value": {
+                            "polynomial": factor,
+                            "real_root_index": 0,
+                        },
+                        "multiplicity": 1,
+                        "isolating_interval": {
+                            "lower": {"num": f"-{oversized_endpoint}", "den": "1"},
+                            "upper": {"num": "0", "den": "1"},
+                            "interval_type": "OPEN",
+                        },
+                    }
+                ],
+            },
+            [(factor, 1)],
+            [1],
+        )
+
+
 def test_worker_root_factors_obey_algebraic_value_degree_bound() -> None:
     factor = ["1", *(["0"] * 8), "-2"]
 

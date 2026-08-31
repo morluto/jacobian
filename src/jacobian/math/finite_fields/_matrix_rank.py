@@ -82,6 +82,46 @@ def compute_matrix_rank(
     deadline = _execution_deadline()
     execution_checkpoint = partial(_require_deadline, deadline)
     execution_checkpoint("before result admission")
+    if enforce_transport_limit:
+        # Reserve the complete result envelope before the backend call so
+        # that we do not waste CPU on a result known to be undeliverable.
+        # The worst case is full rank with all pivot labels present.
+        max_rank = min(len(matrix.row_axis.labels), len(matrix.column_axis.labels))
+        try:
+            pivot_row_labels = tuple(
+                sorted(
+                    matrix.row_axis.labels,
+                    key=lambda label: (len(encode_strict_json(label)), label),
+                    reverse=True,
+                )[:max_rank]
+            )
+            pivot_column_labels = tuple(
+                sorted(
+                    matrix.column_axis.labels,
+                    key=lambda label: (len(encode_strict_json(label)), label),
+                    reverse=True,
+                )[:max_rank]
+            )
+            result_probe = encode_strict_json(
+                {
+                    "matrix": matrix.model_dump(mode="json"),
+                    "rank": max_rank,
+                    "pivot_rows": list(pivot_row_labels),
+                    "pivot_columns": list(pivot_column_labels),
+                }
+            )
+        except CanonicalizationError as exc:
+            raise OperationDomainValidationError(
+                location=("matrix",),
+                code="finite_field.matrix_rank.result_bound",
+                message="matrix-rank result exceeds the canonical output bound",
+            ) from exc
+        if len(result_probe) + 1_024 > CanonicalLimits().max_output_bytes:
+            raise OperationDomainValidationError(
+                location=("matrix",),
+                code="finite_field.matrix_rank.result_bound",
+                message="matrix-rank result exceeds the canonical output bound",
+            )
     execution_checkpoint("after result admission")
     # Compute the exact deterministic pivots using the maintained backend.
     from jacobian.math.finite_fields._matrix_rank_kernels import (

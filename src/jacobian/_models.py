@@ -39,7 +39,9 @@ def canonicalize_json_containers(value: Any) -> Any:
             if id(inner) in seen:
                 raise CanonicalizationError("cyclic JSON containers are not allowed")
             seen = seen | {id(inner)}
-            return {key: _canonicalize(item, depth + 1, seen) for key, item in inner.items()}
+            return {
+                key: _canonicalize(item, depth + 1, seen) for key, item in inner.items()
+            }
         return inner
 
     return _canonicalize(value, 0, set())

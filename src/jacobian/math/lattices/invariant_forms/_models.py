@@ -469,7 +469,13 @@ class EmbeddedRealNumberFieldMatrixAction(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_raw_envelope(cls, data: Any) -> Any:
-        return _require_raw_action_envelope(data)
+        normalized = _require_raw_action_envelope(data)
+        if isinstance(normalized, dict):
+            axis = normalized.get("coordinate_axis")
+            if isinstance(axis, (list, tuple)):
+                normalized = dict(normalized)
+                normalized["coordinate_axis"] = canonicalize_json_containers(axis)
+        return normalized
 
     @model_validator(mode="after")
     def require_common_axis(self) -> Self:

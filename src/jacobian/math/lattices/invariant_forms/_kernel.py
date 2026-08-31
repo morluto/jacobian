@@ -603,15 +603,18 @@ def _build_constraint_plan(
         else None
     )
     generator_matrices: tuple[tuple[tuple[Any, ...], ...], ...]
-    if isinstance(action, EmbeddedRealNumberFieldMatrixAction) and action.generators:
-        assert recognized is not None
-        generator_matrices = tuple(
-            tuple(
-                tuple(field_element_from_value(value, recognized) for value in row)
-                for row in generator.matrix.entries
+    if isinstance(action, EmbeddedRealNumberFieldMatrixAction):
+        if action.generators:
+            assert recognized is not None
+            generator_matrices = tuple(
+                tuple(
+                    tuple(field_element_from_value(value, recognized) for value in row)
+                    for row in generator.matrix.entries
+                )
+                for generator in action.generators
             )
-            for generator in action.generators
-        )
+        else:
+            generator_matrices = ()
     else:
         generator_matrices = tuple(
             tuple(

@@ -720,7 +720,9 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
                             )
                     normalized_row.append(scalar)
                 normalized_entries.append(tuple(normalized_row))
-            normalized["entries"] = tuple(normalized_entries)
+            normalized["entries"] = canonicalize_json_containers(
+                tuple(normalized_entries)
+            )
         if isinstance(embedding, dict):
             presentation = embedding.get("presentation")
             if isinstance(presentation, dict):

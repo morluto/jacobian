@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from bisect import bisect_right
 from heapq import merge
 from typing import Literal, NamedTuple, Self
@@ -27,6 +28,7 @@ MAX_R_FULL_FAMILY_SIZE = 200_000
 # the canonical payload reaches the transport boundary.
 MAX_R_FULL_RESULT_BYTES = CanonicalLimits().max_output_bytes - 1_024
 MAX_R_FULL_MERGE_WORK = 20_000_000
+MAX_R_FULL_WORKING_MEMORY_BYTES = 256 * 1024 * 1024
 _MAX_PRIME_SEARCH_BOUND = 3_000_000
 
 
@@ -63,7 +65,7 @@ def _estimate_member_bytes(value: int) -> int:
     return len(format_canonical_integer(value)) + 3
 
 
-def plan_r_full_family(
+def plan_r_full_family(  # noqa: C901
     minimum_exponent: int,
     cutoff: int,
     *,
@@ -97,6 +99,7 @@ def plan_r_full_family(
     family_set: set[int] = {1}
     sorted_family = [1]
     merge_work = 0
+    working_memory_bytes = sys.getsizeof(family_set) + sys.getsizeof(sorted_family) + 1_024
     if enforce_transport:
         # Accumulate wire bytes during planning so we stop as soon as the
         # transport budget is crossed, without a post-hoc full serialization.
@@ -112,6 +115,9 @@ def plan_r_full_family(
         current = int(prime) ** minimum_exponent
         while current <= cutoff:
             powers.append(current)
+            working_memory_bytes += sys.getsizeof(current) + 32
+            if working_memory_bytes > MAX_R_FULL_WORKING_MEMORY_BYTES:
+                return RFullFamilyPlan((), True, "planning")
             current *= int(prime)
         new_values: set[int] = set()
         for power in powers:
@@ -122,6 +128,9 @@ def plan_r_full_family(
                     continue
                 if len(family_set) + len(new_values) >= MAX_R_FULL_FAMILY_SIZE:
                     return RFullFamilyPlan((), True, "family")
+                working_memory_bytes += sys.getsizeof(value) + 64
+                if working_memory_bytes > MAX_R_FULL_WORKING_MEMORY_BYTES:
+                    return RFullFamilyPlan((), True, "planning")
                 new_values.add(value)
                 if enforce_transport:
                     result_bytes += _estimate_member_bytes(value)

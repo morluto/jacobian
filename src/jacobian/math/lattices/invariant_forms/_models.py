@@ -423,6 +423,30 @@ class IntegralBilinearForm(StrictModel):
             )
         axis = data.get("coordinate_axis")
         normalized = dict(data)
+        if isinstance(axis, (str, bytes, Mapping)) or axis is None:
+            return normalized
+        if not isinstance(axis, (list, tuple)):
+            try:
+                axis_iterator = iter(cast(Iterable[object], axis))
+            except TypeError:
+                return normalized
+            axis_values: list[object] = []
+            for _index in range(MAX_ACTION_DIMENSION + 1):
+                try:
+                    axis_values.append(next(axis_iterator))
+                except StopIteration:
+                    break
+            else:
+                raise _validation_error(
+                    "budget_exceeded",
+                    f"coordinate_axis has at most {MAX_ACTION_DIMENSION} labels",
+                )
+            axis = tuple(axis_values)
+        if len(axis) > MAX_ACTION_DIMENSION:
+            raise _validation_error(
+                "budget_exceeded",
+                f"coordinate_axis has at most {MAX_ACTION_DIMENSION} labels",
+            )
         if isinstance(axis, (list, tuple)):
             for label in axis:
                 if not isinstance(label, str):

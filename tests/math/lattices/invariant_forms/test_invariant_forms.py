@@ -31,6 +31,7 @@ from jacobian.math.lattices.invariant_forms._models import (
     IntegralBilinearForm,
     InvariantBilinearFormLattice,
     InvariantBilinearFormLatticeRequest,
+    MAX_ACTION_DIMENSION,
     constraint_coefficient_count,
 )
 from jacobian.math.lattices.invariant_forms._tools import (
@@ -353,6 +354,19 @@ def test_coordinate_axis_iterables_are_bounded_before_tuple_materialization() ->
     with pytest.raises(ValidationError, match="coordinate_axis has at most"):
         RationalMatrixAction.model_validate(
             {"coordinate_axis": labels(), "generators": []}
+        )
+
+
+def test_integral_form_coordinate_axis_is_bounded_before_copying() -> None:
+    with pytest.raises(ValidationError, match="coordinate_axis has at most"):
+        IntegralBilinearForm.model_validate(
+            {
+                "coordinate_axis": [
+                    f"e{index}" for index in range(MAX_ACTION_DIMENSION + 1)
+                ],
+                "kind": "BILINEAR",
+                "matrix": {"entries": []},
+            }
         )
 
 

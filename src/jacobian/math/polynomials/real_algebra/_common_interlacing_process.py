@@ -150,6 +150,8 @@ def _verify_declared_factors(
         raise ValueError("worker omitted source factor declarations")
     source_dense = _source_to_dense_int(source)
     source_degree = max(len(source_dense) - 1, 0)
+    if len(declared_factors) > source_degree:
+        raise ValueError("worker declared more factors than source degree")
     product: tuple[int, ...] = (1,)
     seen_factor_coefficients: set[tuple[int, ...]] = set()
     for entry in declared_factors:
@@ -204,6 +206,7 @@ def _root_profile_from_worker(  # noqa: C901
     seen_identities: set[tuple[tuple[str, ...], int]] = set()
     factor_multiplicities: dict[tuple[int, ...], int] = {}
     factor_row_counts: dict[tuple[int, ...], int] = {}
+    factor_root_indices: dict[tuple[int, ...], set[int]] = {}
     for raw_root in value["roots"]:
         if not isinstance(raw_root, dict):
             raise ValueError("malformed root row")
@@ -236,6 +239,11 @@ def _root_profile_from_worker(  # noqa: C901
         multiplicity = raw_root.get("multiplicity")
         if type(multiplicity) is not int or multiplicity < 1:
             raise ValueError("malformed root multiplicity")
+        declared_multiplicity = next(
+            int(entry[1]) for entry in declared_factors if tuple(int(c) for c in entry[0]) == poly_key
+        )
+        if multiplicity != declared_multiplicity:
+            raise ValueError("worker root multiplicity disagrees with its factor")
         if poly_key in factor_multiplicities:
             if factor_multiplicities[poly_key] != multiplicity:
                 raise ValueError("worker rows disagree on factor multiplicity")
@@ -251,6 +259,7 @@ def _root_profile_from_worker(  # noqa: C901
 
         # Count rows per factor for the completeness check.
         factor_row_counts[poly_key] = factor_row_counts.get(poly_key, 0) + 1
+        factor_root_indices.setdefault(poly_key, set()).add(root_index)
 
         algebraic_value = RealAlgebraicValue._from_admitted_polynomial(
             polynomial=polynomial,
@@ -270,6 +279,8 @@ def _root_profile_from_worker(  # noqa: C901
         actual = factor_row_counts.get(fk, 0)
         if expected != actual:
             raise ValueError("worker omitted real roots of a source factor")
+        if factor_root_indices.get(fk, set()) != set(range(expected)):
+            raise ValueError("worker root indices do not match projected real roots")
 
     return SourceRootProfile.model_validate(
         {"source_index": source_index, "roots": tuple(roots)}
@@ -300,6 +311,8 @@ def _profile_from_worker(
         raw_factor_root_counts
     ) != len(family):
         raise ValueError("worker factor root counts are missing or malformed")
+    if len(raw_profiles) != len(family):
+        raise ValueError("worker root profiles are missing or malformed")
 
     root_profiles: list[SourceRootProfile] = []
     for value in raw_profiles:

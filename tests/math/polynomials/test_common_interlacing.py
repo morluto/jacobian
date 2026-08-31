@@ -355,6 +355,16 @@ def test_worker_factor_multiplicity_is_capped_before_expansion() -> None:
         _verify_declared_factors(source, [([1, 0], 10**100)])
 
 
+def test_worker_factor_declarations_require_positive_primitive_form() -> None:
+    source = _source("quadratic", (1, 2), (-1, 0))
+
+    with pytest.raises(ValueError, match="non-positive leading coefficient"):
+        _verify_declared_factors(
+            source,
+            [([-1, 1], 1), ([-1, -1], 1)],
+        )
+
+
 def test_aggregate_source_bounds_are_checked_before_worker_launch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

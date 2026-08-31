@@ -85,6 +85,18 @@ def test_cyclotomic_element_has_explicit_shared_number_field_conversion() -> Non
     assert converted.coefficients_ascending == element.coefficients_ascending
 
 
+def test_order_67_cyclotomic_element_converts_to_shared_number_field() -> None:
+    element = RationalCyclotomicElement(
+        field=RationalCyclotomicField(order=67),
+        coefficients_ascending=(_q(1),) + (_q(0),) * 65,
+    )
+
+    converted = element.to_simple_number_field_element()
+
+    assert converted.presentation.degree == 66
+    assert converted.coefficients_ascending == element.coefficients_ascending
+
+
 def test_scalar_x_minus_one_drops_only_the_trivial_component() -> None:
     result = cyclic_rational_rank_kernel_profile(
         _symbol(period=6, entries=((0, 0, 0, -1), (0, 0, 1, 1)))

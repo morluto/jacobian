@@ -836,12 +836,13 @@ def _compute_component(admission: _ComponentAdmission) -> _ComputedComponent:
     child.start()
     child_conn.close()
 
-    # Poll the pipe and child, enforcing deadline and cancellation while it runs.
-    # Use parent_conn.poll() rather than child.join() so the parent drains
-    # the result pipe while the child is alive.  A large kernel basis can
-    # exceed the OS pipe buffer; if the parent only joins without recv(),
-    # conn.send() blocks in the child and deadlocks until the deadline.
+    # Drain the result pipe before joining the child.  A large kernel
+    # basis can exceed the OS pipe buffer; if the parent only joins
+    # without recv(), conn.send() blocks in the child and deadlocks.
+    # Poll and recv in a loop so the parent drains the pipe while the
+    # child is still alive, then join once data has been received.
     execution = current_request_execution()
+    received_result = None
     while True:
         if request_cancelled():
             child.kill()
@@ -861,18 +862,22 @@ def _compute_component(admission: _ComponentAdmission) -> _ComputedComponent:
             )
         # poll returns True once the child has written (or closed) its end.
         if parent_conn.poll(timeout=0.1):
+            received_result = parent_conn.recv()
             break
         if not child.is_alive():
             child.join()
             break
 
-    child.join(timeout=30)
-    _require_execution_active(f"after order-{order} kernel")
+    if received_result is not None:
+        child.join(timeout=30)
+    else:
+        # Child exited before writing data; check for a pipe error.
+        received_result = parent_conn.recv()
 
+    _require_execution_active(f"after order-{order} kernel")
     if child.exitcode != 0:
         raise RuntimeError(f"cyclotomic kernel child exited with code {child.exitcode}")
-
-    rank, source_dimension, nonzero_minor_data, kernel_coords = parent_conn.recv()
+    rank, source_dimension, nonzero_minor_data, kernel_coords = received_result
 
     field = QQ.cyclotomic_field(order)
     generator = field.convert(field.ext)

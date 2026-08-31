@@ -166,6 +166,16 @@ class FriableEnumerateResult(StrictModel):
                 "friable_enumerate_small_cutoff_is_singleton",
                 "positive x with y at most one must have family {1}",
             )
+        if x > 0 and y > 1 and "1" not in self.family.elements:
+            raise _validation_error(
+                "friable_enumerate_family_must_contain_one",
+                "every positive friable family with y greater than one must contain 1",
+            )
+        if x > 0 and y >= x and len(values) != x:
+            raise _validation_error(
+                "friable_enumerate_all_values_required",
+                "when y is at least x the complete family must contain every value in [1, x]",
+            )
         if not self.family.elements and x != 0:
             raise _validation_error(
                 "friable_enumerate_family_must_be_nonempty_when_x_is_positive",

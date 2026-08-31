@@ -1,8 +1,6 @@
 """Native and dispatch parity for clause-constrained rational flats."""
 
-from tests.math.combinatorics.matroids.rational_flats._support import (
-    seven_coordinate_source_problem,
-)
+from tests.support.rational_flats import seven_coordinate_source_problem
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import invoke_operation

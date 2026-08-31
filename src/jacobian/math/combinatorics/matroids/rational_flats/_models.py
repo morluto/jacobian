@@ -45,6 +45,14 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 def _raw_component_exceeds_input_digits(value: object) -> bool:
     if isinstance(value, str):
+        # A valid negative decimal has one sign plus the bounded digit body.
+        # Check the total length before stripping signs so repeated leading
+        # minus characters cannot evade the cheap raw-input bound.
+        allowed_length = MAX_RATIONAL_FLAT_INPUT_COMPONENT_DIGITS + int(
+            value.startswith("-")
+        )
+        if len(value) > allowed_length:
+            return True
         return len(value.lstrip("-")) > MAX_RATIONAL_FLAT_INPUT_COMPONENT_DIGITS
     if isinstance(value, int) and not isinstance(value, bool):
         return bool(abs(value) >= 10**MAX_RATIONAL_FLAT_INPUT_COMPONENT_DIGITS)
@@ -186,6 +194,31 @@ def _require_raw_sparse_input_envelope(
         )
     for entry in entries:
         _require_raw_sparse_entry(entry, label=label)
+
+
+def _require_raw_configuration_envelope(data: object, *, label: str) -> None:
+    """Reject oversized configuration labels before canonicalizing containers."""
+
+    if not isinstance(data, dict):
+        return
+    coordinate_axis = data.get("coordinate_axis")
+    if isinstance(coordinate_axis, (list, tuple)) and len(
+        coordinate_axis
+    ) > MAX_RATIONAL_FLAT_AMBIENT_DIMENSION:
+        raise _validation_error(
+            f"{label}_axis_bound",
+            f"{label} coordinate axes have at most "
+            f"{MAX_RATIONAL_FLAT_AMBIENT_DIMENSION} entries",
+        )
+    vector_labels = data.get("vector_labels")
+    if isinstance(vector_labels, (list, tuple)) and len(vector_labels) > (
+        MAX_RATIONAL_FLAT_CANDIDATES
+    ):
+        raise _validation_error(
+            f"{label}_label_bound",
+            f"{label} vector labels have at most "
+            f"{MAX_RATIONAL_FLAT_CANDIDATES} entries",
+        )
 
 
 def _require_raw_generator_envelope(data: object) -> object:
@@ -465,6 +498,7 @@ class ClauseConstrainedRationalFlatProblem(StrictModel):
             )
             candidates = data.get("candidates")
             if isinstance(candidates, dict):
+                _require_raw_configuration_envelope(candidates, label="candidate")
                 _require_raw_sparse_input_envelope(
                     candidates.get("vectors"),
                     label="candidate",

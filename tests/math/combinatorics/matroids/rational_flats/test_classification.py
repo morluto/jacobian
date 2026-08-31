@@ -11,9 +11,7 @@ import pytest
 from pydantic import ValidationError
 from sympy import Matrix
 from tests.fixtures.accounting import assert_charged_work_parity
-from tests.math.combinatorics.matroids.rational_flats._support import (
-    seven_coordinate_source_problem,
-)
+from tests.support.rational_flats import seven_coordinate_source_problem
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import (
@@ -592,6 +590,51 @@ def test_raw_sparse_axes_and_nonzeros_are_rejected_before_nested_copying() -> No
     assert caught_support.value.errors()[0]["type"] == (
         "rational_flat.candidate_nonzero_bound"
     )
+
+
+@pytest.mark.parametrize(
+    ("field_name", "error_type", "oversized"),
+    [
+        (
+            "coordinate_axis",
+            "rational_flat.candidate_axis_bound",
+            ["x"] * 17,
+        ),
+        (
+            "vector_labels",
+            "rational_flat.candidate_label_bound",
+            ["v"] * 129,
+        ),
+    ],
+)
+def test_raw_candidate_configuration_is_bounded_before_nested_copying(
+    field_name: str,
+    error_type: str,
+    oversized: list[str],
+) -> None:
+    raw = _minimal_raw_request()
+    raw["problem"]["candidates"][field_name] = oversized
+
+    with pytest.raises(ValidationError) as caught:
+        ClauseConstrainedRationalFlatRequest.model_validate(raw)
+
+    assert caught.value.errors()[0]["type"] == error_type
+
+
+def test_raw_repeated_minus_prefix_is_bounded_before_canonicalization() -> None:
+    raw = _minimal_raw_request()
+    raw["problem"]["forbidden_vectors"]["entries"] = [
+        {
+            "row": 0,
+            "column": 0,
+            "value": {"num": "-" * 1_000_000 + "1", "den": "1"},
+        }
+    ]
+
+    with pytest.raises(ValidationError) as caught:
+        ClauseConstrainedRationalFlatRequest.model_validate(raw)
+
+    assert caught.value.errors()[0]["type"] == "rational_flat.input_component_bound"
 
 
 def test_raw_symmetry_payload_is_bounded_before_nested_copying() -> None:

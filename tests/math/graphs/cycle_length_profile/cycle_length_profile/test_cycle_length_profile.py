@@ -3,12 +3,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import pytest
-from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.graphs.cycle_length_profile._models import (
-    CycleLengthProfileRequest,
-)
 from jacobian.math.graphs.cycle_length_profile.operations import (
     compute_cycle_length_profile,
 )
@@ -48,7 +44,7 @@ def test_k4() -> None:
         [["a", "b"], ["a", "c"], ["a", "d"], ["b", "c"], ["b", "d"], ["c", "d"]],
     )
     result = compute_cycle_length_profile(graph)
-    assert set(tuple(r.cycle_length for r in result.rows)) == {3, 4}
+    assert {r.cycle_length for r in result.rows} == {3, 4}
 
 
 def test_result_preserves_source() -> None:

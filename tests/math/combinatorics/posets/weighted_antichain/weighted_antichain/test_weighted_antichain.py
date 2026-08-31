@@ -3,7 +3,6 @@ from __future__ import annotations
 from fractions import Fraction
 
 import pytest
-from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
@@ -15,9 +14,6 @@ from jacobian.math.combinatorics.posets.core._models import (
 )
 from jacobian.math.combinatorics.posets.core.operations import (
     materialize_finite_poset,
-)
-from jacobian.math.combinatorics.posets.weighted_antichain._models import (
-    MaximumWeightAntichainRequest,
 )
 from jacobian.math.combinatorics.posets.weighted_antichain.operations import (
     compute_maximum_weight_antichain,

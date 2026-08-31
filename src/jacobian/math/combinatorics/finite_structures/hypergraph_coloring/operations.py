@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import time
 from itertools import product
 
 from pydantic_core import PydanticCustomError
 
+from jacobian._execution import (
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    current_request_execution,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraph_coloring._models import (
     ColoringWitness,
@@ -34,6 +40,19 @@ def decide_nonmonochromatic_coloring(
         raise OperationDomainValidationError(
             location=(), code=error.type, message=str(error)
         ) from error
+
+    # Establish the operation-owned deadline before any presolve return so
+    # native and dispatched calls cover result construction on every path.
+    execution = current_request_execution()
+    work_budget = admission.work_budget
+    if execution is not None:
+        if execution.deadline is None:
+            deadline = execution.started_at + max(60.0, work_budget / 100_000)
+            bind_request_deadline(deadline)
+        else:
+            deadline = execution.deadline
+    else:
+        deadline = time.monotonic() + max(60.0, work_budget / 100_000)
 
     vertices = list(hypergraph.vertices)
     edges = list(hypergraph.edges)
@@ -68,8 +87,12 @@ def decide_nonmonochromatic_coloring(
         )
 
     n = len(vertices)
-    for coloring in product(range(palette_size), repeat=n):
-        if _is_valid_coloring(coloring, edges, vertices):
+    for index, coloring in enumerate(product(range(palette_size), repeat=n)):
+        if index % 1024 == 0 and deadline is not None and time.monotonic() >= deadline:
+            raise OperationExecutionTimeoutError(
+                "hypergraph coloring search exceeded its request deadline"
+            )
+        if _is_valid_coloring(coloring, edges, vertices, deadline):
             assignments = tuple((vertices[i], coloring[i]) for i in range(n))
             witness = ColoringWitness(assignments=assignments)
             return NonmonochromaticColoringResult(
@@ -90,9 +113,18 @@ def _is_valid_coloring(
     coloring: tuple[int, ...],
     edges: list[tuple[str, tuple[str, ...]]],
     vertices: list[str],
+    deadline: float | None = None,
 ) -> bool:
     vertex_to_color = {vertices[i]: coloring[i] for i in range(len(coloring))}
-    for _, members in edges:
+    for edge_index, (_, members) in enumerate(edges):
+        if (
+            edge_index % 256 == 0
+            and deadline is not None
+            and time.monotonic() >= deadline
+        ):
+            raise OperationExecutionTimeoutError(
+                "hypergraph coloring edge checks exceeded its request deadline"
+            )
         colors = {vertex_to_color[m] for m in members}
         if len(colors) < 2:
             return False

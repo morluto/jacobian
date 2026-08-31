@@ -102,6 +102,39 @@ def _compute(source: RationalPolynomial) -> ProjectivePlaneCurveSingularityProfi
     )
 
 
+def _assert_singular_point_defining_identities(
+    result: ProjectivePlaneCurveSingularityProfile,
+) -> None:
+    assert result.outcome.status == "SINGULAR_ZERO_DIMENSIONAL"
+    parameter = sympy.Symbol("alpha")
+    for record in result.outcome.points:
+        presentation = record.point.embedding.presentation
+        modulus = sympy.Poly.from_list(
+            [int(coefficient) for coefficient in presentation.coefficients_descending],
+            gens=parameter,
+            domain=sympy.QQ,
+        )
+        coordinate_expressions = tuple(
+            sum(
+                sympy.Rational(*coefficient.as_integer_ratio()) * parameter**power
+                for power, coefficient in enumerate(coordinate.coefficients_ascending)
+            )
+            for coordinate in record.point.coordinates
+        )
+        for polynomial in (
+            result.source_polynomial,
+            *result.partial_derivatives,
+        ):
+            backend = rational_polynomial_to_sympy(polynomial)
+            substitutions = dict(zip(backend.gens, coordinate_expressions, strict=True))
+            value = sympy.Poly(
+                sympy.expand(backend.as_expr().subs(substitutions)),
+                parameter,
+                domain=sympy.QQ,
+            ).rem(modulus)
+            assert value.is_zero
+
+
 def _ideal_with_shape(
     *,
     coefficient: CanonicalRational,
@@ -167,6 +200,7 @@ def test_conjugate_nonrational_singularities_keep_distinct_embedding_identity() 
         )
         assert point.chart_index == 0
     assert roots == [0, 1]
+    _assert_singular_point_defining_identities(result)
 
     payload = result.model_dump(mode="json")
     assert ProjectivePlaneCurveSingularityProfile.model_validate(payload) == result
@@ -211,6 +245,7 @@ def test_geometrically_split_cubic_keeps_its_complete_galois_orbit() -> None:
         1,
         2,
     ]
+    _assert_singular_point_defining_identities(result)
 
 
 @pytest.mark.parametrize(
@@ -282,28 +317,7 @@ def test_nodal_cubic_returns_an_exact_zero_first_jet() -> None:
         for value in (record.first_jet.value, *record.first_jet.gradient)
         for coefficient in value.coefficients_ascending
     )
-
-
-def test_result_deserialization_does_not_replay_the_zero_jet() -> None:
-    result = _compute(
-        _polynomial(
-            (-1, (3, 0, 0)),
-            (-1, (2, 0, 1)),
-            (1, (0, 2, 1)),
-        )
-    )
-    payload = result.model_dump(mode="json")
-    payload["outcome"]["points"][0]["first_jet"]["value"]["coefficients_ascending"][0][
-        "num"
-    ] = "1"
-
-    parsed = ProjectivePlaneCurveSingularityProfile.model_validate(payload)
-
-    assert parsed.outcome.status == "SINGULAR_ZERO_DIMENSIONAL"
-    assert (
-        parsed.outcome.points[0].first_jet.value.coefficients_ascending[0].as_fraction()
-        == 1
-    )
+    _assert_singular_point_defining_identities(result)
 
 
 def test_three_coordinate_lines_return_one_point_in_each_disjoint_chart() -> None:

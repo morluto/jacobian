@@ -283,11 +283,7 @@ def _retained_action_bytes(action: RationalMatrixAction) -> int:
     try:
         retained_payload = action.model_dump(mode="json")
         retained_payload = _normalize_retained_strings(retained_payload)
-        source_bytes = len(
-            encode_strict_json(
-                retained_payload
-            )
-        )
+        source_bytes = len(encode_strict_json(retained_payload))
     except CanonicalizationError:
         raise _validation_error(
             "budget_exceeded",

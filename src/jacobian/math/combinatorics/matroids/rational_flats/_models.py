@@ -527,6 +527,12 @@ class ClauseConstrainedRationalFlatProblem(StrictModel):
                 label="forbidden",
                 maximum_rows=MAX_RATIONAL_FLAT_FORBIDDEN_VECTORS,
             )
+            for field_name in ("clauses", "symmetry_generators"):
+                value = data.get(field_name)
+                if value is not None and not isinstance(value, (list, tuple)):
+                    raise _validation_error(
+                        "problem_shape", f"{field_name} must be an array"
+                    )
             clauses = data.get("clauses")
             if isinstance(clauses, (list, tuple)):
                 if len(clauses) > MAX_RATIONAL_FLAT_CLAUSES:
@@ -567,6 +573,12 @@ class ClauseConstrainedRationalFlatProblem(StrictModel):
                 for generator in generators:
                     _require_raw_generator_envelope(generator)
             rank_interval = data.get("rank_interval")
+            if rank_interval is not None and not isinstance(
+                rank_interval, (dict, RationalFlatRankInterval)
+            ):
+                raise _validation_error(
+                    "rank_interval_shape", "rank_interval must be an object"
+                )
             if isinstance(rank_interval, dict):
                 _require_raw_mapping_keys(
                     rank_interval,

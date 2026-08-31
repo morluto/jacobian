@@ -611,9 +611,7 @@ def build_affine_torus_plan(
     translation_fractions = tuple(
         coordinate.as_integer_ratio() for coordinate in source.translation.coordinates
     )
-    augmented_denominator = lcm(
-        *(fraction[1] for fraction in translation_fractions)
-    )
+    augmented_denominator = lcm(*(fraction[1] for fraction in translation_fractions))
     augmented = tuple(
         (
             *row,

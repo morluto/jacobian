@@ -19,7 +19,7 @@ from jacobian.canonical import (
     parse_canonical_integer,
 )
 
-MAX_R_FULL_CUTOFF_DIGITS = 256
+MAX_R_FULL_CUTOFF_DIGITS = 32_768
 MAX_R_FULL_CUTOFF = 10**MAX_R_FULL_CUTOFF_DIGITS
 MIN_R_FULL_EXPONENT = 2
 MAX_R_FULL_EXPONENT = 850

@@ -839,9 +839,7 @@ def _run_kernel_subprocess(
     pickled output, and the parent reads it back.
     """
 
-    input_data = pickle.dumps(
-        (order, degree, matrix_coordinates, common_denominator)
-    )
+    input_data = pickle.dumps((order, degree, matrix_coordinates, common_denominator))
 
     runner_script = (
         "import pickle, sys\n"
@@ -898,9 +896,7 @@ def _run_kernel_subprocess(
             )
 
         if not os.path.exists(output_path):
-            raise RuntimeError(
-                "cyclotomic kernel subprocess did not produce output"
-            )
+            raise RuntimeError("cyclotomic kernel subprocess did not produce output")
 
         with open(output_path, "rb") as f:
             return pickle.load(f)

@@ -359,7 +359,11 @@ def _bounded_direct_factorization(  # noqa: C901
             if base > quotient:
                 raise ValueError("factor base exceeds the remaining quotient")
             prime_power = _bounded_prime_power(base, factor.power, quotient)
-            if prime_power is None or not isprime(base):
+            if (
+                prime_power is None
+                or quotient % prime_power != 0
+                or not isprime(base)
+            ):
                 raise ValueError("factorization contains an invalid prime power")
             quotient //= prime_power
         if quotient != 1:

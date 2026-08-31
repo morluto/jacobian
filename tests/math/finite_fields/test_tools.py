@@ -163,14 +163,14 @@ def test_oversized_presentation_rejects_during_request_parsing() -> None:
     )
 
 
-def test_oversized_axis_rejects_during_request_parsing() -> None:
+def test_axis_beyond_shared_matrix_bound_rejects_during_request_parsing() -> None:
     with pytest.raises(ValidationError) as error:
         ProjectiveLineRequest(
             presentation=FiniteFieldPresentation(
                 characteristic=2,
                 modulus_coefficients=(1, 1, 1),
             ),
-            axis=Axis(name="large", labels=tuple(f"x{i}" for i in range(257))),
+            axis=Axis(name="large", labels=tuple(f"x{i}" for i in range(1025))),
         )
     assert (
         error.value.errors()[0]["type"]

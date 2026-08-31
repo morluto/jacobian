@@ -20,7 +20,7 @@ from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 _MAX_FIELD_ORDER = 65536
 _MIN_MODULUS_COEFFICIENTS = 2
 _MAX_MODULUS_COEFFICIENTS = 17
-_MAX_AXIS_LABELS = 256
+_MAX_AXIS_LABELS = MAX_PRIME_FIELD_MATRIX_AXIS
 _MAX_DERIVATION_WORK = 1_000_000
 _MAX_ACTION_GENERATORS = MAX_PRIME_FIELD_MATRIX_AXIS
 # The matrix carrier and the fixed-subspace operation both cap the ambient

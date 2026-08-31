@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from collections import deque
 from dataclasses import dataclass
 from fractions import Fraction
 from math import lcm as _lcm
+from typing import Any
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import (
@@ -179,7 +179,7 @@ def _admit_maximum_weight_antichain(
     )
 
 
-def compute_maximum_weight_antichain(  # noqa: C901
+def compute_maximum_weight_antichain(
     poset: FinitePoset,
     weights: tuple[CanonicalRational, ...],
 ) -> MaximumWeightAntichainResult:
@@ -190,6 +190,8 @@ def compute_maximum_weight_antichain(  # noqa: C901
     weight minus the minimum weight vertex cover of the bipartite graph
     induced by the order relation.
     """
+    import networkx as nx
+
     admission = _admit_maximum_weight_antichain(poset, weights)
     elements = list(poset.elements)
     n = len(elements)
@@ -212,7 +214,8 @@ def compute_maximum_weight_antichain(  # noqa: C901
     for pair in poset.strict_order_pairs:
         order_pairs.append((idx[pair.lower], idx[pair.upper]))
 
-    # Min vertex cover on the bipartite comparison graph is found via max-flow:
+    # Min vertex cover on the bipartite comparison graph is found via a
+    # minimum cut (König's theorem):
     #   source -> v_L with capacity w_v
     #   v_R -> sink with capacity w_v
     #   v_L -> u_R with an uncuttable capacity for each order v < u.
@@ -231,84 +234,30 @@ def compute_maximum_weight_antichain(  # noqa: C901
     def right(i: int) -> int:  # v_R
         return 2 + n + i
 
-    num_nodes = 2 + 2 * n
     inf_cap = total_weight_int + 1
 
-    adj: list[dict[int, int]] = [{} for _ in range(num_nodes)]
-
-    # source -> v_L with capacity w_v
+    graph: nx.DiGraph[Any, Any] = nx.DiGraph()
+    graph.add_nodes_from(range(2 + 2 * n))
     for i in range(n):
-        w = int_weights[i]
-        adj[source][left(i)] = w
-        adj[left(i)].setdefault(source, 0)
-
-    # v_R -> sink with capacity w_v
-    for i in range(n):
-        w = int_weights[i]
-        adj[right(i)][sink] = w
-        adj[sink].setdefault(right(i), 0)
-
-    # v_L -> u_R with infinite capacity for each order v < u
+        graph.add_edge(source, left(i), weight=int_weights[i])
+        graph.add_edge(right(i), sink, weight=int_weights[i])
     for v, u in order_pairs:
-        old = adj[left(v)].get(right(u), 0)
-        adj[left(v)][right(u)] = old + inf_cap
-        adj[right(u)].setdefault(left(v), 0)
+        graph.add_edge(left(v), right(u), weight=inf_cap)
 
-    # Edmonds-Karp BFS max-flow
-    total_flow = 0
-    while True:
-        parent = [-1] * num_nodes
-        parent[source] = source
-        queue = deque([source])
-        found = False
-        while queue:
-            node = queue.popleft()
-            for v, cap in adj[node].items():
-                if parent[v] == -1 and cap > 0:
-                    parent[v] = node
-                    if v == sink:
-                        found = True
-                        break
-                    queue.append(v)
-            if found:
-                break
-        if parent[sink] == -1:
-            break
-        path_flow = total_weight_int + 1
-        v = sink
-        while v != source:
-            u = parent[v]
-            path_flow = min(path_flow, adj[u][v])
-            v = u
-        v = sink
-        while v != source:
-            u = parent[v]
-            adj[u][v] -= path_flow
-            adj[v][u] += path_flow
-            v = u
-        total_flow += path_flow
-
-    min_vertex_cover = total_flow
+    cut_value, (source_side, _sink_side) = nx.minimum_cut(
+        graph, source, sink, capacity="weight"
+    )
+    min_vertex_cover = int(cut_value)
     max_antichain_weight_int = total_weight_int - min_vertex_cover
 
-    # Find the min vertex cover set via König's theorem: reachable-from-source
-    # nodes in the residual graph. Left copies NOT reachable and right copies
-    # reachable form the min vertex cover.
-    source_reachable = {source}
-    queue = deque([source])
-    while queue:
-        node = queue.popleft()
-        for v, cap in adj[node].items():
-            if v not in source_reachable and cap > 0:
-                source_reachable.add(v)
-                queue.append(v)
-
+    # Recover the min vertex cover from the residual reachable set S (König):
+    # left copies not in S plus right copies in S.
     in_vertex_cover = set()
     for i in range(n):
-        if left(i) not in source_reachable:
-            in_vertex_cover.add(i)  # element i's left copy is in the cover
-        if right(i) in source_reachable:
-            in_vertex_cover.add(i)  # element i's right copy is in the cover
+        if left(i) not in source_side:
+            in_vertex_cover.add(i)
+        if right(i) in source_side:
+            in_vertex_cover.add(i)
 
     # Antichain = elements NOT in the vertex cover
     antichain_indices = [i for i in range(n) if i not in in_vertex_cover]

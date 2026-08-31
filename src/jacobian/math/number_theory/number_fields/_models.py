@@ -10,6 +10,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._models import StrictModel
 from jacobian.math.number_theory.number_fields.values import (
     SimpleNumberFieldPresentation,
+    SimpleNumberFieldRealEmbeddingBinding,
 )
 
 
@@ -51,8 +52,16 @@ class NumberFieldEmbeddingsRequest(StrictModel):
     field: SimpleNumberFieldPresentation
 
 
+class NumberFieldRealEmbeddingOrderRequest(StrictModel):
+    """Compare two field elements at one selected real embedding record."""
+
+    left: SimpleNumberFieldRealEmbeddingBinding
+    right: SimpleNumberFieldRealEmbeddingBinding
+
+
 __all__ = [
     "NumberFieldDiscriminantResult",
     "NumberFieldEmbeddingsRequest",
+    "NumberFieldRealEmbeddingOrderRequest",
     "NumberFieldRequest",
 ]

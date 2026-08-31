@@ -575,6 +575,12 @@ class FiniteTorusComponentPresentation(StrictModel):
                     "presentation_rank",
                     "finite component relation matrix must have full rank",
                 )
+            smith = relation_matrix.snf()
+            computed_factors = tuple(
+                abs(int(smith[index, index])) for index in range(rank)
+            )
+        else:
+            computed_factors = ()
         orders = tuple(
             parse_canonical_integer(value) for value in self.generator_orders
         )
@@ -592,6 +598,11 @@ class FiniteTorusComponentPresentation(StrictModel):
             raise _validation_error(
                 "presentation_invariants",
                 "nontrivial invariant factors must be positive and divide successively",
+            )
+        if computed_factors != tuple([1] * (rank - len(factors)) + list(factors)):
+            raise _validation_error(
+                "presentation_invariants",
+                "invariant factors must be the Smith factors of the relation matrix",
             )
         product = 1
         for factor in factors:

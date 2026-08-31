@@ -63,10 +63,10 @@ def _nonempty_result(
         len(kernel.identity_embedding[0]) if kernel.identity_embedding else 0
     )
     generator_count = len(kernel.component_generators)
-    family = RationalTorusCosetFamily(
+    family = RationalTorusCosetFamily.model_construct(
         ambient_torus=source.torus,
         base_point=_point(source, kernel.base_point),
-        identity_component=ConnectedSubtorusParameterization(
+        identity_component=ConnectedSubtorusParameterization.model_construct(
             ambient_torus=source.torus,
             parameter_dimension=identity_dimension,
             embedding=_integer_matrix(
@@ -78,7 +78,7 @@ def _nonempty_result(
         component_generators=tuple(
             _point(source, coordinates) for coordinates in kernel.component_generators
         ),
-        finite_components=FiniteTorusComponentPresentation(
+        finite_components=FiniteTorusComponentPresentation.model_construct(
             generator_count=generator_count,
             relation_matrix=_integer_matrix(
                 kernel.relation_matrix,

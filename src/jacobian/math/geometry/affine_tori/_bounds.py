@@ -409,6 +409,7 @@ def _result_bytes_for_rank(
     dimension: int,
     source_wire_bytes: int,
     bounds: AffineTorusRankBounds,
+    include_nonempty: bool = True,
 ) -> int:
     """Bound both branches using the transport's exact compact-JSON grammar."""
 
@@ -469,19 +470,22 @@ def _result_bytes_for_rank(
             ("finite_components", finite_components_bytes),
         )
     )
-    nonempty_outcome_bytes = strict_json_object_size(
-        (
-            ("status", 10),  # canonical JSON string ``"NONEMPTY"``
-            ("fixed_locus", fixed_locus_bytes),
+    branch_bytes: list[int] = []
+    if include_nonempty:
+        nonempty_outcome_bytes = strict_json_object_size(
+            (
+                ("status", 10),  # canonical JSON string ``"NONEMPTY"``
+                ("fixed_locus", fixed_locus_bytes),
+            )
         )
-    )
-    nonempty_bytes = strict_json_object_size(
-        (
-            ("source", source_wire_bytes),
-            ("outcome", nonempty_outcome_bytes),
+        branch_bytes.append(
+            strict_json_object_size(
+                (
+                    ("source", source_wire_bytes),
+                    ("outcome", nonempty_outcome_bytes),
+                )
+            )
         )
-    )
-    branch_bytes = [nonempty_bytes]
     if nullity:
         obstruction_bytes = strict_json_object_size(
             (
@@ -604,6 +608,21 @@ def build_affine_torus_plan(
         for row in range(dimension)
     )
     attained_rank = _exact_integer_rank(displacement)
+    translation_fractions = tuple(
+        coordinate.as_integer_ratio() for coordinate in source.translation.coordinates
+    )
+    augmented_denominator = lcm(
+        *(fraction[1] for fraction in translation_fractions)
+    )
+    augmented = tuple(
+        (
+            *row,
+            -translation_fractions[row_index][0]
+            * (augmented_denominator // translation_fractions[row_index][1]),
+        )
+        for row_index, row in enumerate(displacement)
+    )
+    inconsistent = _exact_integer_rank(augmented) > attained_rank
     rank_bounds = (
         _rank_bounds(
             dimension=dimension,
@@ -622,6 +641,7 @@ def build_affine_torus_plan(
         )
         > MAX_AFFINE_TORUS_POINT_DIGITS
         for bounds in rank_bounds
+        if not inconsistent
         if bounds.rank > 0
     ):
         _reject(
@@ -636,6 +656,7 @@ def build_affine_torus_plan(
             dimension=dimension,
             source_wire_bytes=source_wire_bytes,
             bounds=bounds,
+            include_nonempty=not inconsistent,
         )
         for bounds in rank_bounds
     )

@@ -181,6 +181,48 @@ def _cycle_core_vertices(graph: SimpleUndirectedGraph) -> set[str]:
     return core_vertices
 
 
+def _theta_feasible_lengths(
+    adjacency: dict[str, set[str]],
+    degrees: dict[str, int],
+) -> tuple[int, ...] | None:
+    """Feasible cycle lengths of a theta-family block, or None.
+
+    A theta graph is two branch vertices joined by at least three internally
+    disjoint paths, with every other block vertex of degree two. Each simple
+    cycle is the union of two such paths, so its feasible cycle lengths are
+    exactly the pair-wise sums of the ear lengths. Recognizing this topology
+    lets admission reserve only the genuinely realizable lengths for a sparse
+    non-bipartite block instead of every length up to the block size.
+    """
+    branches = [vertex for vertex, degree in degrees.items() if degree >= 3]
+    if len(branches) != 2:
+        return None
+    if any(degree != 2 for vertex, degree in degrees.items() if vertex not in branches):
+        return None
+    tail, head = branches
+    ear_lengths: list[int] = []
+    for start in adjacency[tail]:
+        length = 1
+        previous, current = tail, start
+        while current != head:
+            onward = [
+                neighbor for neighbor in adjacency[current] if neighbor != previous
+            ]
+            if len(onward) != 1:
+                return None  # not a simple theta structure
+            previous, current = current, onward[0]
+            length += 1
+        ear_lengths.append(length)
+    if len(ear_lengths) < 3:
+        return None
+    lengths = {
+        ear_lengths[i] + ear_lengths[j]
+        for i in range(len(ear_lengths))
+        for j in range(i + 1, len(ear_lengths))
+    }
+    return tuple(sorted(lengths))
+
+
 def _cycle_block_feasible_lengths(
     graph: SimpleUndirectedGraph,
 ) -> list[tuple[frozenset[int], list[int]]]:
@@ -209,6 +251,12 @@ def _cycle_block_feasible_lengths(
             )
             for vertex in block
         }
+        block_adjacency: dict[str, set[str]] = {vertex: set() for vertex in block}
+        for left, right in graph.edges:
+            if left in block and right in block:
+                block_adjacency[left].add(right)
+                block_adjacency[right].add(left)
+
         if edge_count == len(block) and all(degree == 2 for degree in degrees.values()):
             lengths: Iterable[int] = (len(block),)
         elif nx.is_bipartite(topology.subgraph(block)):
@@ -220,9 +268,13 @@ def _cycle_block_feasible_lengths(
             maximum_length = min(edge_count, 2 * min(part_sizes))
             lengths = range(4, maximum_length + 1, 2)
         else:
-            block_subgraph = topology.subgraph(block)
-            shortest_cycle = int(nx.girth(block_subgraph))
-            lengths = range(shortest_cycle, min(len(block), edge_count) + 1)
+            theta_lengths = _theta_feasible_lengths(block_adjacency, degrees)
+            if theta_lengths is not None:
+                lengths = theta_lengths
+            else:
+                block_subgraph = topology.subgraph(block)
+                shortest_cycle = int(nx.girth(block_subgraph))
+                lengths = range(shortest_cycle, min(len(block), edge_count) + 1)
         label_sizes = sorted(
             (
                 len(rfc8785.dumps(unicodedata.normalize("NFC", label)))

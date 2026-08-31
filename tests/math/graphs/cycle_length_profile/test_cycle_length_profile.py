@@ -219,3 +219,66 @@ def test_perfect_matching_depth_two_scans_are_charged() -> None:
 
     with pytest.raises(OperationDomainValidationError, match="work bound"):
         compute_cycle_length_profile(graph)
+
+
+def test_theta_reserves_only_its_two_feasible_lengths() -> None:
+    """A theta non-bipartite block admits only its realizable 4- and 5-cycles.
+
+    Three internally disjoint paths of lengths 2, 2, and 3 between two branch
+    vertices form a six-vertex non-bipartite block whose only simple cycles have
+    lengths 4 and 5.  The output reservation must not charge the impossible
+    lengths 3 and 6, or a valid request near the canonical bound is misrejected.
+    """
+    vertices = ["t0", "t1", "t2", "t3", "t4", "t5"]
+    edges = [
+        ("t0", "t1"),
+        ("t1", "t5"),
+        ("t0", "t2"),
+        ("t2", "t5"),
+        ("t0", "t3"),
+        ("t3", "t4"),
+        ("t4", "t5"),
+    ]
+    result = compute_cycle_length_profile(_graph(vertices, edges))
+    assert [row.cycle_length for row in result.rows] == [4, 5]
+
+
+def test_theta_graph_large_labels_stay_within_result_envelope() -> None:
+    """A large-label theta graph is admitted when only feasible rows are budgeted.
+
+    Reserving the full 3..6 range for a theta whose only simple cycles have
+    lengths 4 and 5 misrejects a request whose exact output fits the 10 MiB
+    canonical envelope.
+    """
+    label = "x" * 300_000
+    vertices = [f"t{index}" + label for index in range(6)]
+    edges = [
+        (vertices[0], vertices[1]),
+        (vertices[1], vertices[5]),
+        (vertices[0], vertices[2]),
+        (vertices[2], vertices[5]),
+        (vertices[0], vertices[3]),
+        (vertices[3], vertices[4]),
+        (vertices[4], vertices[5]),
+    ]
+    result = compute_cycle_length_profile(_graph(vertices, edges))
+    assert {row.cycle_length for row in result.rows} == {4, 5}
+
+
+def test_wheel_order_is_carried_from_single_recognition() -> None:
+    """A wheel admitted once yields every cycle length for either rim order.
+
+    The hub-then-cyclic-rim order is derived once during admission and carried
+    into the kernel plan, so a wheel whose rim vertices follow a non-sequential
+    axis still exposes its full pancyclic profile.
+    """
+    rim = [f"rim-{index + 1:02d}" for index in range(15, 0, -1)]
+    hub = "hub"
+    vertices = [hub, *rim]
+    edges = [tuple(sorted((hub, rim_vertex))) for rim_vertex in rim]
+    edges.extend(
+        tuple(sorted((rim[index], rim[(index + 1) % len(rim)])))
+        for index in range(len(rim))
+    )
+    result = compute_cycle_length_profile(_graph(vertices, edges))
+    assert [row.cycle_length for row in result.rows] == list(range(3, 17))

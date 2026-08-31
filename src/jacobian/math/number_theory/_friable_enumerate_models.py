@@ -144,11 +144,7 @@ class FriableEnumerateResult(StrictModel):
                 "friable_enumerate_zero_source_must_be_empty",
                 "friable-enumerate family must be empty when x is zero",
             )
-        if (
-            self.x != "0"
-            and self.y in {"0", "1"}
-            and self.family.elements != ("1",)
-        ):
+        if self.x != "0" and self.y in {"0", "1"} and self.family.elements != ("1",):
             raise _validation_error(
                 "friable_enumerate_small_cutoff_is_singleton",
                 "positive x with y at most one must have family {1}",

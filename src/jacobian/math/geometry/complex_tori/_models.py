@@ -63,7 +63,11 @@ class LatticeComplexStructure(StrictModel):
         normalized = dict(data)
         if isinstance(axis, list):
             normalized["coordinate_axis"] = tuple(axis)
-        return canonicalize_json_containers(normalized)
+        # Canonicalize only the bounded outer containers; leave the nested
+        # complex_structure matrix for its owning model validator.
+        for key in ("coordinate_axis",):
+            normalized[key] = canonicalize_json_containers(normalized.get(key))
+        return normalized
 
     @model_validator(mode="after")
     def require_even_common_axis(self) -> Self:

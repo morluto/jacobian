@@ -321,7 +321,19 @@ class EmbeddedRealNumberFieldMatrixAction(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_raw_envelope(cls, data: Any) -> Any:
-        return canonicalize_json_containers(_require_raw_action_envelope(data))
+        # Canonicalize only the bounded outer containers; leave the nested
+        # generator matrix entries for their owning model validators.
+        result = _require_raw_action_envelope(data)
+        if not isinstance(result, dict):
+            return result
+        normalized = dict(result)
+        for key in ("coordinate_axis",):
+            if key in normalized:
+                normalized[key] = canonicalize_json_containers(normalized[key])
+        generators = normalized.get("generators")
+        if isinstance(generators, (list, tuple)):
+            normalized["generators"] = tuple(generators)
+        return normalized
 
     @model_validator(mode="after")
     def require_common_axis_and_embedding(self) -> Self:
@@ -382,7 +394,12 @@ class IntegralBilinearForm(StrictModel):
         normalized = dict(data)
         if isinstance(axis, list):
             normalized["coordinate_axis"] = tuple(axis)
-        return canonicalize_json_containers(normalized)
+        # Canonicalize only the bounded outer containers; leave the nested
+        # form matrix for its owning model validator.
+        for key in ("coordinate_axis",):
+            if key in normalized:
+                normalized[key] = canonicalize_json_containers(normalized[key])
+        return normalized
 
     @model_validator(mode="after")
     def require_form_shape(self) -> Self:

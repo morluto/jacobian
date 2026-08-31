@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
+import time
 from math import ceil, factorial, lcm, log10
 from typing import Any, Literal
 
@@ -18,6 +19,9 @@ from jacobian._exact import (
 )
 from jacobian._execution import (
     OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    current_request_execution,
     request_cancelled,
 )
 from jacobian.canonical import (
@@ -78,9 +82,19 @@ class _InertiaExecutionPlan:
     digit_work: int
 
 
+_INERTIA_WALL_SECONDS: float = 600.0
+
+
 def _require_inertia_execution_active(phase: str) -> None:
     if request_cancelled():
         raise OperationExecutionCancelledError(f"request cancelled {phase}")
+    execution = current_request_execution()
+    if (
+        execution is not None
+        and execution.deadline is not None
+        and execution.deadline <= time.monotonic()
+    ):
+        raise OperationExecutionTimeoutError(f"request deadline expired {phase}")
 
 
 def _admit_rational_spectrum_claim(
@@ -824,6 +838,15 @@ def _compute_inertia(
 def compute_inertia(matrix: ExactRealMatrix) -> InertiaResult:
     """Compute Sylvester inertia over QQ or one exact real simple field."""
 
+    execution = current_request_execution()
+    started = execution.started_at if execution is not None else time.monotonic()
+    owner_deadline = started + _INERTIA_WALL_SECONDS
+    deadline = (
+        min(execution.deadline, owner_deadline)
+        if execution is not None and execution.deadline is not None
+        else owner_deadline
+    )
+    bind_request_deadline(deadline)
     try:
         _require_inertia_execution_active("before exact inertia admission")
         admission = _admit_inertia(matrix)

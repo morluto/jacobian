@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from itertools import pairwise
-from typing import Any, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, field_validator, model_validator
 from pydantic.json_schema import JsonSchemaValue
@@ -18,6 +18,10 @@ from jacobian._exact import (
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.quadratic import RealQuadraticValue
+from jacobian.math.number_theory.number_fields.values import (
+    RealNumberFieldEmbedding,
+    SimpleNumberFieldElement,
+)
 
 MAX_MATRIX_DIMENSION = 32
 MAX_EXACT_LINEAR_MATRIX_AXIS = 64
@@ -95,6 +99,25 @@ def _require_raw_matrix_envelope(
                 else (scalar,)
             )
             for component in components:
+                if not isinstance(component, (str, int)):
+                    if hasattr(component, "num") and hasattr(component, "den"):
+                        component = (component.num, component.den)
+                        for sub in component:
+                            if (
+                                isinstance(sub, (str, int))
+                                and len(str(sub).lstrip("-"))
+                                > MAX_MATRIX_SCALAR_DIGITS
+                            ):
+                                raise _validation_error(
+                                    "budget_exceeded",
+                                    f"{label} scalars are limited to "
+                                    f"{MAX_MATRIX_SCALAR_DIGITS} decimal digits",
+                                )
+                        continue
+                    raise _validation_error(
+                        "shape_mismatch",
+                        f"{label} rational scalar components must be integers or strings",
+                    )
                 if (
                     isinstance(component, (str, int))
                     and len(str(component).lstrip("-")) > MAX_MATRIX_SCALAR_DIGITS
@@ -107,9 +130,18 @@ def _require_raw_matrix_envelope(
     return data
 
 
+def _require_domain_required(schema: dict[str, Any]) -> dict[str, Any]:
+    """Force the domain discriminator to be required in the JSON schema."""
+    required = set(schema.get("required", []))
+    required.add("domain")
+    schema["required"] = sorted(required)
+    return schema
+
+
 class RationalMatrix(StrictModel):
     """One nonempty rectangular matrix over canonical rationals."""
 
+    model_config = {"json_schema_extra": _require_domain_required}
     domain: Literal["QQ"] = "QQ"
     entries: tuple[tuple[CanonicalRational, ...], ...] = Field(
         min_length=1,
@@ -467,7 +499,56 @@ class SmithNormalForm(StrictModel):
         return values
 
 
+class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
+    """One nonempty rectangular matrix over a shared embedded simple number field."""
+
+    model_config = {"json_schema_extra": _require_domain_required}
+    domain: Literal["QQ_ALPHA"] = "QQ_ALPHA"
+    embedding: RealNumberFieldEmbedding
+    entries: tuple[tuple[SimpleNumberFieldElement, ...], ...] = Field(
+        min_length=1,
+        max_length=MAX_MATRIX_DIMENSION,
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_matrix_envelope(cls, data: Any) -> Any:
+        data = _require_raw_matrix_envelope(
+            data, maximum_axis=MAX_MATRIX_DIMENSION, label="matrix"
+        )
+        return canonicalize_json_containers(data)
+
+    @model_validator(mode="after")
+    def require_rectangular_shared_field(self) -> Self:
+        column_count = len(self.entries[0])
+        if column_count == 0 or column_count > MAX_MATRIX_DIMENSION:
+            raise _validation_error(
+                "shape_mismatch", "matrix rows must contain between 1 and 32 entries"
+            )
+        if any(len(row) != column_count for row in self.entries):
+            raise _validation_error(
+                "shape_mismatch", "matrix rows must all have the same length"
+            )
+        presentation = self.embedding.presentation
+        for row in self.entries:
+            for entry in row:
+                if entry.presentation != presentation:
+                    raise _validation_error(
+                        "shape_mismatch",
+                        "every matrix entry must belong to the embedding field",
+                    )
+        return self
+
+
+ExactRealMatrix = Annotated[
+    RationalMatrix | EmbeddedRealSimpleNumberFieldMatrix,
+    Field(discriminator="domain"),
+]
+
+
 __all__ = [
+    "EmbeddedRealSimpleNumberFieldMatrix",
+    "ExactRealMatrix",
     "MAX_EXACT_LINEAR_MATRIX_AXIS",
     "MAX_INTEGER_MATRIX_ORDER",
     "MAX_MATRIX_DIMENSION",

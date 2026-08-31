@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections.abc import Callable
 from fractions import Fraction
 from math import ceil, gcd, lcm, log10
+from typing import Any
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
@@ -25,6 +27,7 @@ from jacobian.math.lattices.invariant_forms._models import (
     FormKind,
     IntegralBilinearForm,
     InvariantBilinearFormLattice,
+    MatrixAction,
     RationalMatrixAction,
     _validation_error,
     constraint_coefficient_count,
@@ -81,6 +84,14 @@ class _ConstraintPlan:
 
     positions: tuple[CoefficientPosition, ...]
     constraints: tuple[IntegerConstraint, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _InvariantFormExecutionPlan:
+    """One admitted invariant-form envelope with digit-work estimates."""
+
+    expansion_digit_work: int
+    kernel_digit_work: int
 
 
 def _coefficient_positions(
@@ -436,7 +447,7 @@ def _build_constraint_plan(
     constraints: set[IntegerConstraint] = set()
     stored_digits = 0
     for generator in action.generators:
-        _require_active_request("during constraint expansion")
+        _require_active_request("during exact invariant-form constraint expansion")
         matrix = tuple(
             tuple(value.as_fraction() for value in row)
             for row in generator.matrix.entries
@@ -553,13 +564,69 @@ def _form_entries(
     )
 
 
+def _admit_invariant_bilinear_form_lattice(
+    action: MatrixAction,
+    kind: FormKind,
+) -> _InvariantFormExecutionPlan:
+    """Validate the action envelope and return work estimates.
+
+    Ensures the action is a structurally valid rational matrix action
+    before the kernel builds and solves the congruence system.
+    """
+
+    if not isinstance(action, RationalMatrixAction):
+        raise _validation_error(
+            "unsupported_action",
+            "only rational matrix actions are supported for invariant-form "
+            "lattice computation",
+        )
+    if kind not in ("BILINEAR", "SYMMETRIC", "ALTERNATING"):
+        raise _validation_error(
+            "invalid_kind",
+            "kind must be BILINEAR, SYMMETRIC, or ALTERNATING",
+        )
+    # Build the constraint plan to derive work estimates.  The plan
+    # construction itself enforces the expansion and kernel digit-work
+    # bounds via the existing _require_*_envelope helpers.
+    plan = _build_constraint_plan(action, kind)
+    expansion_work = 0
+    if plan.positions and plan.constraints:
+        constraint_digits = max(
+            _integer_digit_count(value)
+            for constraint in plan.constraints
+            for value in constraint
+        )
+        expansion_work = (
+            len(action.generators)
+            * len(action.coordinate_axis) ** 2
+            * constraint_digits
+        )
+        kernel_work = (
+            len(plan.positions) ** 2
+            * (len(plan.constraints) + len(plan.positions))
+            * constraint_digits
+        )
+    else:
+        kernel_work = 0
+    return _InvariantFormExecutionPlan(
+        expansion_digit_work=expansion_work,
+        kernel_digit_work=kernel_work,
+    )
+
+
 def invariant_bilinear_form_lattice_kernel(
-    action: RationalMatrixAction, kind: FormKind
+    action: RationalMatrixAction,
+    kind: FormKind,
+    *,
+    admission: None = None,
+    execution_checkpoint: Callable[[str], None] | None = None,
+    recognized_field: Any = None,
 ) -> InvariantBilinearFormLattice:
     """Return the saturated integer lattice of forms fixed by every generator."""
 
     _bind_request_deadline()
-    _require_active_request("before constraint expansion")
+    checkpoint = execution_checkpoint or _require_active_request
+    checkpoint("before constraint expansion")
     plan = _build_constraint_plan(action, kind)
     basis, constraint_rank = _integer_kernel_basis(plan)
     dimension = len(action.coordinate_axis)
@@ -585,4 +652,8 @@ def invariant_bilinear_form_lattice_kernel(
     )
 
 
-__all__ = ["invariant_bilinear_form_lattice_kernel"]
+__all__ = [
+    "_admit_invariant_bilinear_form_lattice",
+    "_InvariantFormExecutionPlan",
+    "invariant_bilinear_form_lattice_kernel",
+]

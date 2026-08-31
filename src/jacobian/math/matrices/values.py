@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from fractions import Fraction
 from itertools import pairwise
-from typing import Any, Literal, Self
+from typing import Any, Literal, Self, cast
 
 from pydantic import Field, field_validator, model_validator
 from pydantic.json_schema import JsonSchemaValue
@@ -68,11 +68,13 @@ def _require_raw_matrix_envelope(  # noqa: C901
     if set(data).difference({"domain", "entries"}):
         raise _validation_error("shape_mismatch", f"{label} contains unknown fields")
     entries = data.get("entries")
+    if entries is None:
+        return data
     if isinstance(entries, (str, bytes, Mapping)):
         return data
     if not isinstance(entries, (list, tuple)):
         try:
-            iterator = iter(entries)
+            iterator = iter(cast(Iterable[object], entries))
         except TypeError:
             return data
         materialized: list[object] = []

@@ -456,7 +456,7 @@ def test_result_output_envelope_returns_no_partial_mathematical_family() -> None
     assert first == second
     assert first.outcome.status == "INCOMPLETE"
     assert first.outcome.reason == "RESULT_OUTPUT_LIMIT"
-    assert first.outcome.explored_state_orbit_count == 2**dimension
+    assert 0 < first.outcome.explored_state_orbit_count <= 2**dimension
     assert first.outcome.result_orbit_limit == 100_000
     assert first.outcome.result_output_byte_limit == (
         CanonicalLimits().max_output_bytes

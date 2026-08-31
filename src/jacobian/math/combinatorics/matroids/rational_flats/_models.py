@@ -201,7 +201,24 @@ def _require_raw_configuration_envelope(data: object, *, label: str) -> None:
 
     if not isinstance(data, dict):
         return
+    _require_raw_mapping_keys(
+        data,
+        allowed=frozenset({"coordinate_axis", "vector_labels", "vectors"}),
+        reason="configuration_shape",
+        label=f"{label} configuration",
+    )
     coordinate_axis = data.get("coordinate_axis")
+    for field_name, value in (
+        ("coordinate_axis", coordinate_axis),
+        ("vector_labels", data.get("vector_labels")),
+    ):
+        if isinstance(value, (list, tuple)) and any(
+            not isinstance(item, str) for item in value
+        ):
+            raise _validation_error(
+                "configuration_shape",
+                f"every {label} {field_name} entry must be a string",
+            )
     if (
         isinstance(coordinate_axis, (list, tuple))
         and len(coordinate_axis) > MAX_RATIONAL_FLAT_AMBIENT_DIMENSION

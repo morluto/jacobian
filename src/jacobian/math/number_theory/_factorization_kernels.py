@@ -464,7 +464,7 @@ def _bounded_least_prime_factor(  # noqa: C901
         if value % least_prime != 0:
             raise ValueError("least prime factor does not divide the value")
         # Verify the power is consistent: least_prime ** power must divide value
-        if value % (least_prime ** power) != 0:
+        if value % (least_prime**power) != 0:
             raise ValueError("least prime factor power is inconsistent")
         return least_prime
     except (

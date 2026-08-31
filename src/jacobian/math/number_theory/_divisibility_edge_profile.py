@@ -83,7 +83,9 @@ def compute_divisibility_edge_profile(
         try:
             _bind_execution_deadline()
             _require_execution_active("before admission")
-            canonical_elements, edge_plan = _validate_divisibility_edge_resources(request.values)
+            canonical_elements, edge_plan = _validate_divisibility_edge_resources(
+                request.values
+            )
             if not canonical_elements:
                 return DivisibilityEdgeProfileResult(
                     values=FiniteIntegerSet(elements=()), edges=()
@@ -151,7 +153,9 @@ def divisibility_edge_profile(
                     f"values must contain at most {MAX_DIVISIBILITY_EDGE_SET_SIZE} integers",
                 )
             _validate_divisibility_edge_shape(values)
-            canonical_elements, edge_plan = _validate_divisibility_edge_resources(values)
+            canonical_elements, edge_plan = _validate_divisibility_edge_resources(
+                values
+            )
         except (
             CanonicalizationError,
             PydanticCustomError,

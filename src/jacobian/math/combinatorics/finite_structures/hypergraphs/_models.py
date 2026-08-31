@@ -67,7 +67,7 @@ def _edge_intersection_graph_result_bytes(
     the already-admitted exact set of intersecting pairs.  The byte count must
     follow that set rather than charging every input for a complete graph.
     """
-    source_bytes = len(encode_strict_json(hypergraph.model_dump(mode="json")))
+    source_bytes = _hypergraph_wire_bytes(hypergraph)
     edge_ids = tuple(edge_id for edge_id, _ in hypergraph.edges)
     # Each graph vertex is a strict-JSON string (the edge ID).
     vertex_bytes = _strict_json_array_size(
@@ -87,6 +87,28 @@ def _edge_intersection_graph_result_bytes(
     return strict_json_object_size(
         (("hypergraph", source_bytes), ("graph", graph_bytes))
     )
+
+
+def _hypergraph_wire_bytes(hypergraph: FiniteHypergraph) -> int:
+    """Return the exact source size without applying the final output cap."""
+
+    vertex_bytes = _strict_json_array_size(
+        tuple(_strict_label_wire_bytes(vertex) for vertex in hypergraph.vertices)
+    )
+    edge_bytes = _strict_json_array_size(
+        tuple(
+            _strict_json_array_size(
+                (
+                    _strict_label_wire_bytes(edge_id),
+                    _strict_json_array_size(
+                        tuple(_strict_label_wire_bytes(member) for member in members)
+                    ),
+                )
+            )
+            for edge_id, members in hypergraph.edges
+        )
+    )
+    return strict_json_object_size((("vertices", vertex_bytes), ("edges", edge_bytes)))
 
 
 # One pair entry's keys, punctuation, array brackets, commas, and bounded
@@ -518,7 +540,7 @@ def _edge_intersection_preflight_data(
     )
     maximum_pair_payload_bytes = largest_edge_id_bytes + possible_violation_members
 
-    source_bytes = len(encode_strict_json(hypergraph.model_dump(mode="json")))
+    source_bytes = _hypergraph_wire_bytes(hypergraph)
     estimated_result_bytes = (
         source_bytes
         + pair_count * _PAIR_ENTRY_OVERHEAD_BYTES

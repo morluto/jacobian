@@ -31,16 +31,18 @@ MAX_RESULT_BYTES = CanonicalLimits().max_output_bytes
 @dataclass(frozen=True, slots=True)
 class _AdmissionPlan:
     graph: SimpleUndirectedGraph
-    search_vertices: tuple[str, ...] | None = None
+    wheel_order: tuple[str, ...] | None = None
 
 
-def _maximum_path_work(graph: SimpleUndirectedGraph) -> int:
+def _maximum_path_work(
+    graph: SimpleUndirectedGraph, *, is_wheel: bool = False
+) -> int:
     """Count simple-path prefixes with an early work cutoff."""
     vertex_count = len(graph.vertices)
     if len(graph.edges) == vertex_count * (vertex_count - 1) // 2:
         # In a complete graph the first DFS branch witnesses every length.
         return vertex_count**3
-    if _is_wheel_graph(graph):
+    if is_wheel:
         # A wheel is pancyclic: the hub plus a contiguous rim segment gives
         # every length from three through n.  The kernel's first-witness DFS
         # reaches each such segment after at most O(n^2) neighbor checks, so
@@ -92,11 +94,15 @@ def _maximum_path_work(graph: SimpleUndirectedGraph) -> int:
     return work
 
 
-def _is_wheel_graph(graph: SimpleUndirectedGraph) -> bool:
-    """Recognize a wheel topology before applying the first-witness bound."""
+def _wheel_search_order(graph: SimpleUndirectedGraph) -> tuple[str, ...] | None:
+    """Return a hub-then-cyclic-rim order for the wheel DFS shortcut.
+
+    Recognizes the wheel topology and returns the cyclic rim order in one pass,
+    so callers that need both recognition and the order do not re-derive it.
+    """
     vertex_count = len(graph.vertices)
     if vertex_count < 4 or len(graph.edges) != 2 * (vertex_count - 1):
-        return False
+        return None
     adjacency: dict[str, set[str]] = {vertex: set() for vertex in graph.vertices}
     for left, right in graph.edges:
         adjacency[left].add(right)
@@ -107,13 +113,13 @@ def _is_wheel_graph(graph: SimpleUndirectedGraph) -> bool:
         if len(neighbors) == vertex_count - 1
     ]
     if len(hubs) != 1:
-        return False
+        return None
     rim = [vertex for vertex in graph.vertices if vertex != hubs[0]]
     if not all(len(adjacency[vertex]) == 3 for vertex in rim):
-        return False
+        return None
     rim_adjacency = {vertex: adjacency[vertex] - {hubs[0]} for vertex in rim}
     if not all(len(neighbors) == 2 for neighbors in rim_adjacency.values()):
-        return False
+        return None
     seen = {rim[0]}
     stack = [rim[0]]
     while stack:
@@ -121,17 +127,8 @@ def _is_wheel_graph(graph: SimpleUndirectedGraph) -> bool:
         for neighbor in rim_adjacency[vertex] - seen:
             seen.add(neighbor)
             stack.append(neighbor)
-    return len(seen) == len(rim)
-
-
-def _wheel_search_order(graph: SimpleUndirectedGraph) -> tuple[str, ...] | None:
-    """Return a hub-then-cyclic-rim order for the wheel DFS shortcut."""
-    if not _is_wheel_graph(graph):
+    if len(seen) != len(rim):
         return None
-    adjacency: dict[str, set[str]] = {vertex: set() for vertex in graph.vertices}
-    for left, right in graph.edges:
-        adjacency[left].add(right)
-        adjacency[right].add(left)
     hub = next(
         vertex
         for vertex, neighbors in adjacency.items()
@@ -225,7 +222,11 @@ def _cycle_block_feasible_lengths(
             maximum_length = min(edge_count, 2 * min(part_sizes))
             lengths = range(4, maximum_length + 1, 2)
         else:
-            lengths = range(3, min(len(block), edge_count) + 1)
+            block_subgraph = topology.subgraph(block)
+            shortest_cycle = int(nx.girth(block_subgraph))
+            lengths = range(
+                shortest_cycle, min(len(block), edge_count) + 1
+            )
         label_sizes = sorted(
             (
                 len(rfc8785.dumps(unicodedata.normalize("NFC", label)))
@@ -256,7 +257,8 @@ def _admit(graph: SimpleUndirectedGraph) -> _AdmissionPlan:
             "cycle_profile.vertex_bound",
             f"cycle profiles support at most {MAX_VERTICES} vertices",
         )
-    if _maximum_path_work(graph) > MAX_SEARCH_WORK:
+    wheel_order = _wheel_search_order(graph)
+    if _maximum_path_work(graph, is_wheel=wheel_order is not None) > MAX_SEARCH_WORK:
         _reject(
             "cycle_profile.work_bound",
             "complete cycle-profile search exceeds the admitted work bound",
@@ -288,7 +290,7 @@ def _admit(graph: SimpleUndirectedGraph) -> _AdmissionPlan:
             "cycle_profile.result_bound",
             "the complete cycle profile exceeds the canonical output bound",
         )
-    return _AdmissionPlan(graph=graph, search_vertices=_wheel_search_order(graph))
+    return _AdmissionPlan(graph=graph, wheel_order=wheel_order)
 
 
 def compute_cycle_length_profile(
@@ -300,7 +302,7 @@ def compute_cycle_length_profile(
     k-cycle. Return one canonical witness cycle for each present length.
     """
     plan = _admit(graph)
-    vertices = list(plan.search_vertices or plan.graph.vertices)
+    vertices = list(plan.wheel_order or plan.graph.vertices)
 
     n = len(vertices)
     vertex_to_idx = {v: i for i, v in enumerate(vertices)}

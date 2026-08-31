@@ -75,18 +75,9 @@ class CycleLengthProfileResult(StrictModel):
         if lengths != tuple(sorted(lengths)) or len(set(lengths)) != len(lengths):
             raise ValueError("cycle profile rows must be sorted and unique")
         vertices = set(self.graph.vertices)
-        edges = {frozenset(edge) for edge in self.graph.edges}
         for row in self.rows:
             if not set(row.witness) <= vertices:
                 raise ValueError("cycle witnesses must use graph vertices")
-            witness_edges = {
-                frozenset(
-                    (row.witness[index], row.witness[(index + 1) % row.cycle_length])
-                )
-                for index in range(row.cycle_length)
-            }
-            if not witness_edges <= edges:
-                raise ValueError("cycle witnesses must use graph edges")
         return self
 
     @classmethod

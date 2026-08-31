@@ -224,6 +224,8 @@ def _root_profile_from_worker(  # noqa: C901
 
     if not isinstance(value, dict) or not isinstance(value.get("roots"), list):
         raise ValueError("malformed root profile")
+    if not isinstance(factor_root_counts, list):
+        raise ValueError("worker factor root counts are malformed")
     source_index = value.get("source_index")
     if type(source_index) is not int:
         raise ValueError("malformed root profile source index")

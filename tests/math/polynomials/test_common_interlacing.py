@@ -409,6 +409,15 @@ def test_worker_factor_root_counts_reject_boolean_values() -> None:
         )
 
 
+def test_worker_factor_root_counts_require_a_list() -> None:
+    with pytest.raises(ValueError, match="factor root counts are malformed"):
+        _root_profile_from_worker(
+            {"source_index": 0, "roots": []},
+            [(["1", "0", "-1"], 1)],
+            {"0": 0},  # type: ignore[arg-type]
+        )
+
+
 def test_aggregate_source_bounds_are_checked_before_worker_launch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

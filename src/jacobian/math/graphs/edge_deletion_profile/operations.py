@@ -70,7 +70,12 @@ def _is_bipartite(graph: SimpleUndirectedGraph) -> bool:
     return True
 
 
-def _coloring_work_bound(graph: SimpleUndirectedGraph, deletion_order: int) -> int:
+def _coloring_work_bound(
+    graph: SimpleUndirectedGraph,
+    deletion_order: int,
+    *,
+    source_is_bipartite: bool,
+) -> int:
     adjacency: dict[str, set[str]] = {vertex: set() for vertex in graph.vertices}
     for left, right in graph.edges:
         adjacency[left].add(right)
@@ -140,6 +145,9 @@ def _coloring_work_bound(graph: SimpleUndirectedGraph, deletion_order: int) -> i
             if n > 20:
                 return MAX_EDGE_DELETION_PROFILE_WORK + 1
             total += sum(k**n for k in range(1, n + 1))
+            continue
+        if source_is_bipartite:
+            total += edge_count * n * 2
             continue
         component_graph = SimpleUndirectedGraph(
             vertices=tuple(component),
@@ -218,7 +226,7 @@ def _preflight_graph_wire_size(graph: SimpleUndirectedGraph) -> None:
 def _admit_edge_deletion_profile(
     graph: SimpleUndirectedGraph,
     deletion_order: int,
-) -> None:
+) -> bool:
     """Admit native inputs before row enumeration and chromatic searches."""
 
     if type(deletion_order) is not int or not 0 <= deletion_order <= MAX_DELETION_ORDER:
@@ -240,7 +248,12 @@ def _admit_edge_deletion_profile(
         )
 
     row_count = 0
-    coloring_work = _coloring_work_bound(graph, deletion_order)
+    source_is_bipartite = _is_bipartite(graph)
+    coloring_work = _coloring_work_bound(
+        graph,
+        deletion_order,
+        source_is_bipartite=source_is_bipartite,
+    )
     per_row_reconstruction_work = 2 * edge_count
     for order in range(deletion_order + 1):
         row_count += comb(edge_count, order)
@@ -286,6 +299,7 @@ def _admit_edge_deletion_profile(
             code="graph.edge_deletion.result_exceeds_output_bound",
             message="edge-deletion profile result exceeds the canonical output bound",
         )
+    return source_is_bipartite
 
 
 __all__ = ["compute_edge_deletion_profile"]
@@ -307,7 +321,7 @@ def compute_edge_deletion_profile(
     if execution.deadline is None:
         bind_request_deadline(execution.started_at + _OWNER_DEADLINE_SECONDS)
     _require_execution_active("before admission")
-    _admit_edge_deletion_profile(graph, deletion_order)
+    source_is_bipartite = _admit_edge_deletion_profile(graph, deletion_order)
     edges = list(graph.edges)
     vertices = list(graph.vertices)
 
@@ -321,6 +335,7 @@ def compute_edge_deletion_profile(
             chromatic = _chromatic_number(
                 vertices,
                 remaining_edges,
+                source_is_bipartite=source_is_bipartite,
             )
             rows.append(
                 DeletionRow(
@@ -339,9 +354,13 @@ def compute_edge_deletion_profile(
 def _chromatic_number(
     vertices: list[str],
     edges: list[tuple[str, str]],
+    *,
+    source_is_bipartite: bool = False,
 ) -> int:
     """Compute the exact chromatic number by brute-force search."""
     _require_execution_active("during chromatic search")
+    if source_is_bipartite:
+        return 0 if not vertices else 1 if not edges else 2
     if not edges:
         return 0 if not vertices else 1
     adjacency: dict[str, set[str]] = {v: set() for v in vertices}

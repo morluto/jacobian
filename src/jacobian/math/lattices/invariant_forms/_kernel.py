@@ -437,6 +437,13 @@ def _build_constraint_plan(
 ) -> _ConstraintPlan:
     dimension = len(action.coordinate_axis)
     positions = _coefficient_positions(dimension, kind)
+    cell_count = constraint_coefficient_count(dimension, len(action.generators), kind)
+    if cell_count > MAX_CONSTRAINT_CELLS:
+        raise _validation_error(
+            "budget_exceeded",
+            "the congruence expansion exceeds the structural bound of "
+            f"{MAX_CONSTRAINT_CELLS} coefficients",
+        )
     source_bytes = _retained_action_bytes(action)
     if not positions:
         _require_result_envelope(
@@ -446,13 +453,6 @@ def _build_constraint_plan(
             source_bytes=source_bytes,
         )
         return _ConstraintPlan(positions=(), constraints=())
-    cell_count = constraint_coefficient_count(dimension, len(action.generators), kind)
-    if cell_count > MAX_CONSTRAINT_CELLS:
-        raise _validation_error(
-            "budget_exceeded",
-            "the congruence expansion exceeds the structural bound of "
-            f"{MAX_CONSTRAINT_CELLS} coefficients",
-        )
     _require_constraint_expansion_envelope(
         action,
         kind=kind,

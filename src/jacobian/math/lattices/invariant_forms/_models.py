@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unicodedata
+from collections.abc import Mapping
 from typing import Any, Literal, Self
 
 from pydantic import Field, model_validator
@@ -72,10 +73,14 @@ def _canonicalize_generator_order(data: dict[str, object]) -> dict[str, object]:
     if isinstance(normalized_axis, list):
         normalized["coordinate_axis"] = tuple(normalized_axis)
     normalized_generators = normalized.get("generators")
-    if not isinstance(normalized_generators, (list, tuple)):
+    if isinstance(normalized_generators, (str, bytes, Mapping)):
+        return normalized
+    try:
+        generator_values = tuple(normalized_generators)
+    except TypeError:
         return normalized
     labelled_generators: list[tuple[str, object]] = []
-    for generator in normalized_generators:
+    for generator in generator_values:
         label = (
             generator.get("label")
             if isinstance(generator, dict)

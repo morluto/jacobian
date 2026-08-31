@@ -12,6 +12,7 @@ from jacobian._execution import (
     bind_request_deadline,
     current_request_execution,
     request_cancelled,
+    request_execution,
 )
 from jacobian.canonical import (
     CanonicalizationError,
@@ -124,14 +125,13 @@ def _coloring_work_bound(graph: SimpleUndirectedGraph, deletion_order: int) -> i
         # which the kernel computes via a bounded backtracking search.
         # The greedy upper bound gives an initial k, then exhaustive
         # search tries k-1, k-2, ..., each with k^n branching.  The
-        # total work is bounded by k^(n+2), charged here as n * k^3
-        # for small n (≤ 20) where the search is admitted. Larger
-        # near-complete components are rejected below because a greedy
-        # partition is only an upper bound, not an exact chromatic number.
+        # Charge the actual exhaustive search envelope. The kernel tries
+        # every cover size below the greedy upper bound and its assignment
+        # tree has at most k**n leaves for a k-cover.
         if max_missing <= n:
             if n > 20:
                 return MAX_EDGE_DELETION_PROFILE_WORK + 1
-            total += n * max_missing * max_missing * max_missing
+            total += sum(k**n for k in range(1, n + 1))
             continue
         component_graph = SimpleUndirectedGraph(
             vertices=tuple(component),
@@ -292,7 +292,10 @@ def compute_edge_deletion_profile(
     chromatic number of the graph after deleting those edges.
     """
     execution = current_request_execution()
-    if execution is not None and execution.deadline is None:
+    if execution is None:
+        with request_execution(time.monotonic()):
+            return compute_edge_deletion_profile(graph, deletion_order)
+    if execution.deadline is None:
         bind_request_deadline(execution.started_at + _OWNER_DEADLINE_SECONDS)
     _require_execution_active("before admission")
     _admit_edge_deletion_profile(graph, deletion_order)

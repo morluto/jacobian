@@ -144,6 +144,7 @@ def _require_raw_action_envelope(data: object) -> object:  # noqa: C901
     if isinstance(axis, (list, tuple)) and axis:
         dimension = len(axis)
         total_cells = 0
+        raw_digit_work = 0
         for generator in generators:
             if isinstance(generator, dict):
                 raw_matrix = generator.get("matrix")
@@ -156,7 +157,12 @@ def _require_raw_action_envelope(data: object) -> object:  # noqa: C901
                 for row in raw_entries:
                     if isinstance(row, (list, tuple)):
                         total_cells += len(row)
-            elif hasattr(generator, "matrix"):
+                        for cell in row:
+                            if isinstance(cell, dict):
+                                for comp in (cell.get("num"), cell.get("den")):
+                                    if isinstance(comp, str):
+                                        raw_digit_work += len(comp.lstrip("-"))
+            elif isinstance(generator, RationalActionGenerator):
                 # Already a canonical RationalActionGenerator instance.
                 total_cells += len(generator.matrix.entries) * (
                     len(generator.matrix.entries[0]) if generator.matrix.entries else 0
@@ -169,11 +175,18 @@ def _require_raw_action_envelope(data: object) -> object:  # noqa: C901
                     "generator matrix rows exceed the declared coordinate_axis"
                     " dimension before nested parsing",
                 )
+            if raw_digit_work > MAX_CONSTRAINT_DIGIT_WORK:
+                raise _validation_error(
+                    "budget_exceeded",
+                    "raw rational digit work exceeds the "
+                    f"{MAX_CONSTRAINT_DIGIT_WORK}-digit work bound",
+                )
     else:
         # When the axis is missing, empty, or not a sequence, still bound the
         # total raw cell count so Pydantic does not validate a billion cells
         # merely to report the axis error.
         total_cells = 0
+        raw_digit_work = 0
         for generator in generators:
             if not isinstance(generator, dict):
                 continue

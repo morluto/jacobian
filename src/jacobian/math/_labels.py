@@ -13,8 +13,8 @@ MAX_OPAQUE_LABEL_LENGTH = 64
 def _require_opaque_label(value: str) -> str:
     if value != value.strip():
         raise ValueError("label must not have leading or trailing whitespace")
-    if any(unicodedata.category(character) == "Cc" for character in value):
-        raise ValueError("label must not contain control characters")
+    if any(unicodedata.category(character) in ("Cc", "Cs") for character in value):
+        raise ValueError("label must not contain control or surrogate characters")
     return value
 
 

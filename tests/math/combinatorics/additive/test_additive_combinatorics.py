@@ -1,6 +1,7 @@
 """Tests for additive combinatorics operations."""
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.canonical import (
     CanonicalLimits,
@@ -10,10 +11,14 @@ from jacobian.canonical import (
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive._models import (
     AdditiveEnergyRequest,
+    AdditiveEnergyResult,
     DirectSumPredicateRequest,
+    DirectSumPredicateResult,
     FiniteIntegerSet,
     RepresentationProfileRequest,
+    RepresentationProfileResult,
     SumsetCardinalityRequest,
+    SumsetCardinalityResult,
     _direct_sum_predicate_result_upper_bound,
 )
 from jacobian.math.combinatorics.additive.operations import (
@@ -25,21 +30,26 @@ from jacobian.math.combinatorics.additive.operations import (
 from jacobian.math.combinatorics.finite_structures.sets._models import (
     FiniteIntegerSet as CanonicalFiniteIntegerSet,
 )
+from jacobian.math.combinatorics.finite_structures.sets.operations import (
+    set_intersection,
+)
 
 
-def _run_representation(request: RepresentationProfileRequest):
+def _run_representation(
+    request: RepresentationProfileRequest,
+) -> RepresentationProfileResult:
     return representation_profile(request.left, request.right)
 
 
-def _run_energy(request: AdditiveEnergyRequest):
+def _run_energy(request: AdditiveEnergyRequest) -> AdditiveEnergyResult:
     return additive_energy(request.left, request.right)
 
 
-def _run_sumset(request: SumsetCardinalityRequest):
+def _run_sumset(request: SumsetCardinalityRequest) -> SumsetCardinalityResult:
     return sumset_cardinality(request.left, request.right)
 
 
-def _run_direct_sum(request: DirectSumPredicateRequest):
+def _run_direct_sum(request: DirectSumPredicateRequest) -> DirectSumPredicateResult:
     return direct_sum_predicate(request.modulus, request.left, request.right)
 
 
@@ -146,7 +156,7 @@ class TestSumsetCardinality:
         )
         result = _run_sumset(req)
         assert result.cardinality == 5
-        assert result.support.elements == ("0", "1", "2", "3", "4")
+        assert result.support == FiniteIntegerSet(elements=("0", "1", "2", "3", "4"))
 
     def test_disjoint(self) -> None:
         req = SumsetCardinalityRequest(
@@ -162,45 +172,87 @@ class TestSumsetCardinality:
             right=FiniteIntegerSet(elements=("5", "0", "-5")),
         )
         result = _run_sumset(req)
-        assert result.support.elements == (
-            "-7",
-            "-5",
-            "-2",
-            "0",
-            "2",
-            "3",
-            "5",
-            "7",
-            "12",
+        assert result.support == FiniteIntegerSet(
+            elements=("-7", "-5", "-2", "0", "2", "3", "5", "7", "12")
         )
 
-    def test_large_labels_are_rejected_before_support_materialization(self) -> None:
-        # Each operand remains within the shared finite-set input envelope, but
-        # the 256x256 pair envelope could not fit a canonical support carrying
-        # ten-thousand-digit sums.  Admission must reject before bigint sums or
-        # the result carrier are materialized.
-        width = 10_000
-        left = FiniteIntegerSet(
-            elements=tuple(
-                prefix + str(index).zfill(width - 1)
-                for prefix in ("1", "9")
-                for index in range(128)
-            )
+    def test_support_composes_as_a_canonical_finite_set(self) -> None:
+        result = sumset_cardinality(
+            FiniteIntegerSet(elements=("0", "1", "2")),
+            FiniteIntegerSet(elements=("0", "2")),
         )
+
+        serialized_support = result.support.model_dump(mode="json")
+        support = CanonicalFiniteIntegerSet.model_validate(serialized_support)
+        intersection = set_intersection(
+            support, FiniteIntegerSet(elements=("1", "3", "8"))
+        )
+        profile = representation_profile(support, FiniteIntegerSet(elements=("0",)))
+
+        assert intersection == FiniteIntegerSet(elements=("1", "3"))
+        assert tuple(entry.sum for entry in profile.entries) == support.elements
+
+    @pytest.mark.parametrize(
+        ("left", "right", "expected"),
+        [
+            ((), ("1", "2"), ()),
+            (("-3", "-1"), ("-2", "1"), ("-5", "-3", "-2", "0")),
+            (("0", "1", "2"), ("0", "1", "2"), ("0", "1", "2", "3", "4")),
+        ],
+    )
+    def test_support_preserves_degenerate_and_duplicate_producing_sumsets(
+        self,
+        left: tuple[str, ...],
+        right: tuple[str, ...],
+        expected: tuple[str, ...],
+    ) -> None:
+        result = sumset_cardinality(
+            FiniteIntegerSet(elements=left), FiniteIntegerSet(elements=right)
+        )
+
+        assert result.support == FiniteIntegerSet(elements=expected)
+        assert result.cardinality == len(expected)
+
+    def test_maximum_admitted_cartesian_product_can_return_distinct_support(
+        self,
+    ) -> None:
+        left = FiniteIntegerSet(elements=tuple(str(value) for value in range(256)))
         right = FiniteIntegerSet(
-            elements=tuple(
-                prefix + str(index).zfill(width - 1)
-                for prefix in ("2", "8")
-                for index in range(128)
+            elements=tuple(str(256 * value) for value in range(256))
+        )
+
+        result = sumset_cardinality(left, right)
+
+        assert result.cardinality == 65_536
+        assert result.support.elements == tuple(str(value) for value in range(65_536))
+
+    def test_large_support_uses_the_final_result_transport_envelope(self) -> None:
+        """A produced support is not subject to the smaller operand envelope."""
+        left = FiniteIntegerSet(elements=("1" + "0" * 24_999,))
+        right = FiniteIntegerSet(elements=tuple(str(value) for value in range(256)))
+
+        result = sumset_cardinality(left, right)
+        encoded = encode_strict_json(result.model_dump(mode="json"))
+
+        assert result.cardinality == 256
+        assert len(encoded) <= CanonicalLimits().max_output_bytes
+        assert result.support.elements[0] == "1" + "0" * 24_999
+
+    def test_result_rejects_cardinality_that_disagrees_with_canonical_support(
+        self,
+    ) -> None:
+        with pytest.raises(ValidationError, match="cardinality must equal"):
+            SumsetCardinalityResult(
+                cardinality=1,
+                support=FiniteIntegerSet(elements=("0", "1")),
             )
-        )
 
-        with pytest.raises(OperationDomainValidationError) as exc_info:
-            sumset_cardinality(left, right)
-
-        assert exc_info.value.errors()[0]["type"] == (
-            "additive_combinatorics.sumset_result_transport_exceeded"
-        )
+    def test_result_rejects_noncanonical_support_order(self) -> None:
+        with pytest.raises(ValidationError, match="support must be sorted"):
+            SumsetCardinalityResult(
+                cardinality=2,
+                support=FiniteIntegerSet(elements=("1", "0")),
+            )
 
 
 class TestDirectSumPredicate:

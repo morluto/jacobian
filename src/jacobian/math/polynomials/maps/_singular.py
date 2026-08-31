@@ -344,12 +344,17 @@ def _parse_generic_fiber_coefficient(
     denominator_polynomial = sparse_rational_polynomial_to_sympy(
         denominator_value, target_parameters
     )
-    value = rational_function_from_sympy(
-        numerator_polynomial.as_expr() / denominator_polynomial.as_expr(),
-        target_parameters,
-        maximum_terms=MAX_GENERIC_FIBER_PARAMETER_TERMS,
-        deadline_check=deadline_check,
-    )
+    try:
+        value = rational_function_from_sympy(
+            numerator_polynomial.as_expr() / denominator_polynomial.as_expr(),
+            target_parameters,
+            maximum_terms=MAX_GENERIC_FIBER_PARAMETER_TERMS,
+            deadline_check=deadline_check,
+        )
+    except ValueError as exc:
+        raise _ResultLimitExceededError(
+            "normalized Singular coefficient exceeds the exact-result limit"
+        ) from exc
     return value, len(numerator) + len(denominator)
 
 

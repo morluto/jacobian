@@ -199,8 +199,7 @@ class RootIsolationResult(StrictModel):
         if len(roots) > MAX_ROOT_ISOLATION_DEGREE:
             raise _validation_error(
                 "root_count_bound",
-                "root isolation admits at most "
-                f"{MAX_ROOT_ISOLATION_DEGREE} roots",
+                f"root isolation admits at most {MAX_ROOT_ISOLATION_DEGREE} roots",
             )
         for root in roots:
             if not isinstance(root, Mapping):

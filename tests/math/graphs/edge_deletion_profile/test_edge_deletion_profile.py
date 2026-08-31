@@ -49,6 +49,16 @@ def test_k8_order1_uses_complete_graph_shortcuts() -> None:
     assert {row.chromatic_number for row in result.rows} == {7, 8}
 
 
+def test_k30_order1_uses_single_missing_edge_formula() -> None:
+    vertices = [f"v{index:02d}" for index in range(30)]
+    edges = list(combinations(vertices, 2))
+
+    result = compute_edge_deletion_profile(_graph(vertices, edges), 1)
+
+    assert len(result.rows) == 1 + len(edges)
+    assert {row.chromatic_number for row in result.rows} == {29, 30}
+
+
 def test_k8_order2_uses_complete_graph_shortcuts() -> None:
     vertices = [f"v{index}" for index in range(8)]
     edges = list(combinations(vertices, 2))

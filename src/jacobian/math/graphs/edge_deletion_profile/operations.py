@@ -187,9 +187,11 @@ def _preflight_graph_wire_size(graph: SimpleUndirectedGraph) -> None:
 
     limit = CanonicalLimits().max_output_bytes
     try:
-        label_sizes = {vertex: _json_escaped_size(vertex) for vertex in graph.vertices}
+        label_sizes: dict[str, int] = {}
         estimated = 32 * (len(graph.vertices) + 1)
-        for size in label_sizes.values():
+        for vertex in graph.vertices:
+            size = _json_escaped_size(vertex)
+            label_sizes[vertex] = size
             estimated += size
             if estimated > limit:
                 raise OperationDomainValidationError(
@@ -430,7 +432,11 @@ def _min_clique_cover(vertices: list[str], edges: list[tuple[str, str]]) -> int:
     # missing-edge graph has at most n edges on at most n vertices.
 
     n = len(vertices)
-    set(vertices)
+    if len(edges) == 1:
+        # K_n with one deleted edge has exactly one two-vertex colour class;
+        # the remaining vertices are singletons, so its chromatic number is
+        # n - 1. Keep this common row out of the generic partition search.
+        return n - 1
 
     # Greedy clique partition: repeatedly take the largest clique
     # from the remaining vertices.  This gives an upper bound.

@@ -706,6 +706,7 @@ def _raw_semialgebraic_envelope(  # noqa: C901
                 maximum_coefficient_digits=MAX_PLANE_COMPONENT_COEFFICIENT_DIGITS,
                 label="plane sign polynomial",
             )
+            terms: object
             if isinstance(polynomial, RationalPolynomial):
                 terms = polynomial.polynomial.terms
             elif isinstance(polynomial, SparseRationalPolynomial):
@@ -723,6 +724,7 @@ def _raw_semialgebraic_envelope(  # noqa: C901
             if isinstance(terms, (list, tuple)):
                 total_terms += len(terms)
                 for term in terms:
+                    exponents: object
                     if isinstance(term, RationalPolynomialTerm):
                         exponents = term.exponents
                     elif isinstance(term, Mapping):

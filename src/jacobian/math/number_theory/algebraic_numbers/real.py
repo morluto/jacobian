@@ -10,7 +10,7 @@ from pydantic import Field, StrictInt, ValidateAs, WithJsonSchema, model_validat
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger, CanonicalRational
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math._root_isolation import strict_root_count
 
@@ -312,7 +312,7 @@ class RealAlgebraicOrderValue(StrictModel):
                 "exact algebraic comparison admits degree at most "
                 f"{MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE} for distinct polynomials",
             )
-        return data
+        return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_admitted_distinct_polynomial_pair(self) -> Self:

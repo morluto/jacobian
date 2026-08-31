@@ -60,6 +60,12 @@ def _comparison_value_schema() -> dict[str, Any]:
     return schema
 
 
+def _root_isolation_value_schema() -> dict[str, Any]:
+    schema = RealAlgebraicValue.model_json_schema()
+    schema["properties"]["polynomial"]["maxItems"] = MAX_ROOT_ISOLATION_DEGREE + 1
+    return schema
+
+
 _ComparisonRealAlgebraicValue = Annotated[
     RealAlgebraicValue,
     BeforeValidator(_require_raw_comparison_degree),
@@ -68,7 +74,7 @@ _ComparisonRealAlgebraicValue = Annotated[
 
 _RootIsolationRealAlgebraicValue = Annotated[
     RealAlgebraicValue,
-    WithJsonSchema(_comparison_value_schema()),
+    WithJsonSchema(_root_isolation_value_schema()),
 ]
 
 
@@ -221,7 +227,7 @@ class RootIsolationResult(StrictModel):
                     "root-isolation algebraic values must have degree at most "
                     f"{MAX_ROOT_ISOLATION_DEGREE}",
                 )
-        return data
+        return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_structural_order(self) -> Self:

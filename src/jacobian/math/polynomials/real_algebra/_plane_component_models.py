@@ -15,6 +15,7 @@ from jacobian.canonical import (
     CanonicalLimits,
     encode_strict_json,
     parse_canonical_integer,
+    sha256_digest,
 )
 from jacobian.math.analysis.intervals import ClosedRationalInterval, RationalBox
 from jacobian.math.number_theory.algebraic_numbers.real import (
@@ -975,6 +976,20 @@ class PlaneComponentProfileResult(StrictModel):
                 "component_axis",
                 "every component representative must use the source axis",
             )
+        if (
+            isinstance(self.outcome, PlaneComponentProfileNoncompletion)
+            and self.outcome.status == "TIMEOUT"
+        ):
+            retained_request = {
+                "semialgebraic_set": self.semialgebraic_set.model_dump(mode="json"),
+                "samples": [sample.model_dump(mode="json") for sample in self.samples],
+            }
+            expected_digest = sha256_digest(encode_strict_json(retained_request))
+            if self.outcome.request_digest != expected_digest:
+                raise _validation_error(
+                    "timeout_request_digest",
+                    "timeout metadata must bind to the retained source and samples",
+                )
         return self
 
 

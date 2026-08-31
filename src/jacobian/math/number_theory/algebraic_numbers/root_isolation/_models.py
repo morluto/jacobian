@@ -186,6 +186,39 @@ class RootIsolationResult(StrictModel):
     )
     roots: tuple[RootIsolationEntry, ...] = Field(max_length=MAX_ROOT_ISOLATION_DEGREE)
 
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_root_degree_envelope(cls, data: Any) -> Any:
+        """Reject oversized worker roots before nested algebraic recognition."""
+
+        if not isinstance(data, Mapping):
+            return data
+        roots = data.get("roots")
+        if not isinstance(roots, (list, tuple)):
+            return data
+        if len(roots) > MAX_ROOT_ISOLATION_DEGREE:
+            raise _validation_error(
+                "root_count_bound",
+                "root isolation admits at most "
+                f"{MAX_ROOT_ISOLATION_DEGREE} roots",
+            )
+        for root in roots:
+            if not isinstance(root, Mapping):
+                continue
+            algebraic_value = root.get("algebraic_value")
+            if not isinstance(algebraic_value, Mapping):
+                continue
+            polynomial = algebraic_value.get("polynomial")
+            if isinstance(polynomial, (list, tuple)) and len(polynomial) > (
+                MAX_ROOT_ISOLATION_DEGREE + 1
+            ):
+                raise _validation_error(
+                    "algebraic_value_degree",
+                    "root-isolation algebraic values must have degree at most "
+                    f"{MAX_ROOT_ISOLATION_DEGREE}",
+                )
+        return data
+
     @model_validator(mode="after")
     def require_structural_order(self) -> Self:
         if parse_canonical_integer(self.source_coefficients_descending[0]) <= 0:

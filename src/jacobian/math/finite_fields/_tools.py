@@ -176,7 +176,8 @@ def _paley_tournament(request: PaleyTournamentRequest) -> PaleyTournamentResult:
 
 
 def _compute_matrix_rank(request: MatrixRankRequest) -> MatrixRankResult:
-    return matrix_rank(request.matrix)
+    from jacobian.math.finite_fields._matrix_rank import compute_rank
+    return compute_rank(request)
 
 
 def _build_tools() -> MathTools:

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from fractions import Fraction
 from itertools import pairwise
-from typing import Any, Literal, Self, cast
+from typing import Annotated, Any, ClassVar, Literal, Self, cast
 
 from pydantic import Field, field_validator, model_validator
 from pydantic.json_schema import JsonSchemaValue
@@ -19,6 +19,10 @@ from jacobian._exact import (
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.quadratic import RealQuadraticValue
+from jacobian.math.number_theory.number_fields.values import (
+    RealNumberFieldEmbedding,
+    SimpleNumberFieldElement,
+)
 
 MAX_MATRIX_DIMENSION = 32
 MAX_EXACT_LINEAR_MATRIX_AXIS = 64
@@ -146,6 +150,28 @@ def _require_raw_matrix_envelope(  # noqa: C901
                 else (scalar,)
             )
             for component in components:
+                if not isinstance(component, (str, int)):
+                    if hasattr(component, "num") and hasattr(component, "den"):
+                        component_value: Any = component
+                        component = (
+                            component_value.num,
+                            component_value.den,
+                        )
+                        for sub in component:
+                            if (
+                                isinstance(sub, (str, int))
+                                and len(str(sub).lstrip("-")) > MAX_MATRIX_SCALAR_DIGITS
+                            ):
+                                raise _validation_error(
+                                    "budget_exceeded",
+                                    f"{label} scalars are limited to "
+                                    f"{MAX_MATRIX_SCALAR_DIGITS} decimal digits",
+                                )
+                        continue
+                    raise _validation_error(
+                        "shape_mismatch",
+                        f"{label} rational scalar components must be integers or strings",
+                    )
                 if (
                     isinstance(component, (str, int))
                     and len(str(component).lstrip("-")) > MAX_MATRIX_SCALAR_DIGITS
@@ -161,9 +187,18 @@ def _require_raw_matrix_envelope(  # noqa: C901
     return data
 
 
+def _require_domain_required(schema: dict[str, Any]) -> dict[str, Any]:
+    """Force the domain discriminator to be required in the JSON schema."""
+    required = set(schema.get("required", []))
+    required.add("domain")
+    schema["required"] = sorted(required)
+    return schema
+
+
 class RationalMatrix(StrictModel):
     """One nonempty rectangular matrix over canonical rationals."""
 
+    model_config: ClassVar[Any] = {"json_schema_extra": _require_domain_required}
     domain: Literal["QQ"] = "QQ"
     entries: tuple[tuple[CanonicalRational, ...], ...] = Field(
         min_length=1,
@@ -521,6 +556,175 @@ class SmithNormalForm(StrictModel):
         return values
 
 
+class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
+    """One nonempty rectangular matrix over a shared embedded simple number field."""
+
+    model_config: ClassVar[Any] = {"json_schema_extra": _require_domain_required}
+    domain: Literal["EMBEDDED_REAL_SIMPLE_NUMBER_FIELD"] = (
+        "EMBEDDED_REAL_SIMPLE_NUMBER_FIELD"
+    )
+    embedding: RealNumberFieldEmbedding
+    entries: tuple[tuple[SimpleNumberFieldElement, ...], ...] = Field(
+        min_length=1,
+        max_length=MAX_MATRIX_DIMENSION,
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_matrix_envelope(cls, data: Any) -> Any:  # noqa: C901
+        if not isinstance(data, dict):
+            return data
+        if set(data).difference({"domain", "embedding", "entries"}):
+            raise _validation_error(
+                "shape_mismatch",
+                "embedded number-field matrix contains unknown fields",
+            )
+        entries = data.get("entries")
+        normalized = dict(data)
+        embedding = normalized.get("embedding")
+        if isinstance(embedding, dict):
+            normalized_embedding = dict(embedding)
+            root = normalized_embedding.get("root")
+            if isinstance(root, dict) and isinstance(root.get("polynomial"), list):
+                normalized_root = dict(root)
+                normalized_root["polynomial"] = tuple(root["polynomial"])
+                normalized_embedding["root"] = normalized_root
+            normalized["embedding"] = normalized_embedding
+        if isinstance(entries, (list, tuple)):
+            if len(entries) > MAX_MATRIX_DIMENSION:
+                raise _validation_error(
+                    "budget_exceeded",
+                    "embedded number-field matrices have at most "
+                    f"{MAX_MATRIX_DIMENSION} rows",
+                )
+            for row in entries:
+                if not isinstance(row, (list, tuple)):
+                    raise _validation_error(
+                        "shape_mismatch",
+                        "embedded number-field matrix rows must be arrays",
+                    )
+                if len(row) > MAX_MATRIX_DIMENSION:
+                    raise _validation_error(
+                        "budget_exceeded",
+                        "embedded number-field matrices have at most "
+                        f"{MAX_MATRIX_DIMENSION} columns",
+                    )
+                for scalar in row:
+                    if isinstance(scalar, SimpleNumberFieldElement):
+                        continue
+                    if not isinstance(scalar, dict) or set(scalar).difference(
+                        {"presentation", "coefficients_ascending"}
+                    ):
+                        raise _validation_error(
+                            "shape_mismatch",
+                            "embedded number-field matrix entries must be field elements",
+                        )
+                    coordinates = scalar.get("coefficients_ascending")
+                    if not isinstance(coordinates, (list, tuple)):
+                        raise PydanticCustomError(
+                            "tuple_type", "Input should be a valid tuple"
+                        )
+                    for coordinate in coordinates:
+                        if not isinstance(coordinate, dict):
+                            raise _validation_error(
+                                "shape_mismatch",
+                                "embedded number-field matrix rational coordinates "
+                                "must be mappings",
+                            )
+                        if set(coordinate).difference({"num", "den"}):
+                            raise _validation_error(
+                                "shape_mismatch",
+                                "embedded number-field matrix rational coordinates "
+                                "contain unknown fields",
+                            )
+                        for component in ("num", "den"):
+                            if not isinstance(coordinate.get(component), (str, int)):
+                                raise PydanticCustomError(
+                                    "string_type", "Input should be a valid string"
+                                )
+                    presentation = scalar.get("presentation")
+                    if not isinstance(presentation, dict):
+                        raise _validation_error(
+                            "shape_mismatch",
+                            "embedded number-field entry presentation must be a mapping",
+                        )
+                    if isinstance(presentation, dict):
+                        if set(presentation).difference(
+                            {"domain", "coefficients_descending"}
+                        ):
+                            raise _validation_error(
+                                "shape_mismatch",
+                                "embedded number-field entry presentations contain "
+                                "unknown fields",
+                            )
+                        coefficients = presentation.get("coefficients_descending")
+                        if not isinstance(coefficients, (list, tuple)):
+                            raise PydanticCustomError(
+                                "tuple_type", "Input should be a valid tuple"
+                            )
+                        if any(
+                            not isinstance(coefficient, (str, int))
+                            for coefficient in coefficients
+                        ):
+                            raise PydanticCustomError(
+                                "string_type", "Input should be a valid string"
+                            )
+            normalized["entries"] = tuple(tuple(row) for row in entries)
+        if isinstance(embedding, dict):
+            presentation = embedding.get("presentation")
+            if isinstance(presentation, dict):
+                if set(presentation).difference({"domain", "coefficients_descending"}):
+                    raise _validation_error(
+                        "shape_mismatch",
+                        "embedded number-field presentations contain unknown fields",
+                    )
+                coefficients = presentation.get("coefficients_descending")
+                if not isinstance(coefficients, (list, tuple)):
+                    raise PydanticCustomError(
+                        "tuple_type", "Input should be a valid tuple"
+                    )
+                if any(
+                    not isinstance(coefficient, (str, int))
+                    for coefficient in coefficients
+                ):
+                    raise PydanticCustomError(
+                        "string_type", "Input should be a valid string"
+                    )
+            root = embedding.get("root")
+            if isinstance(root, dict) and not isinstance(
+                root.get("polynomial"), (list, tuple)
+            ):
+                raise PydanticCustomError("tuple_type", "Input should be a valid tuple")
+        return normalized
+
+    @model_validator(mode="after")
+    def require_rectangular_shared_field(self) -> Self:
+        column_count = len(self.entries[0])
+        if column_count == 0 or column_count > MAX_MATRIX_DIMENSION:
+            raise _validation_error(
+                "shape_mismatch", "matrix rows must contain between 1 and 32 entries"
+            )
+        if any(len(row) != column_count for row in self.entries):
+            raise _validation_error(
+                "shape_mismatch", "matrix rows must all have the same length"
+            )
+        presentation = self.embedding.presentation
+        for row in self.entries:
+            for entry in row:
+                if entry.presentation != presentation:
+                    raise _validation_error(
+                        "embedding_presentation",
+                        "every matrix entry must belong to the embedding field",
+                    )
+        return self
+
+
+ExactRealMatrix = Annotated[
+    RationalMatrix | EmbeddedRealSimpleNumberFieldMatrix,
+    Field(discriminator="domain"),
+]
+
+
 __all__ = [
     "MAX_EXACT_LINEAR_MATRIX_AXIS",
     "MAX_INTEGER_MATRIX_ORDER",
@@ -529,6 +733,8 @@ __all__ = [
     "MAX_RATIONAL_MATRIX_ORDER",
     "MAX_SPARSE_RATIONAL_MATRIX_AXIS",
     "MAX_SPARSE_RATIONAL_MATRIX_NONZEROS",
+    "EmbeddedRealSimpleNumberFieldMatrix",
+    "ExactRealMatrix",
     "IntegerMatrix",
     "RationalMatrix",
     "RationalVectorSpaceBasis",

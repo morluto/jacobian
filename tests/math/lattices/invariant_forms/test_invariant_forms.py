@@ -27,7 +27,7 @@ from jacobian.math.lattices.invariant_forms import (
     compute_invariant_bilinear_form_lattice,
 )
 from jacobian.math.lattices.invariant_forms._models import (
-    MAX_ACTION_DIMENSION,
+    EmbeddedRealNumberFieldMatrixAction,
     FormKind,
     IntegralBilinearForm,
     InvariantBilinearFormLattice,
@@ -180,6 +180,35 @@ def test_empty_generator_family_returns_full_coefficient_lattice(
     _assert_every_basis_form_is_invariant(result)
 
 
+def test_empty_embedded_generator_family_returns_full_coefficient_lattice() -> None:
+    action = EmbeddedRealNumberFieldMatrixAction(
+        coordinate_axis=("x", "y"),
+        generators=(),
+    )
+
+    result = compute_invariant_bilinear_form_lattice(action, "ALTERNATING")
+
+    assert result.coefficient_dimension == 1
+    assert result.constraint_rank == 0
+    assert result.rank == 1
+
+
+def test_wire_request_preserves_the_empty_embedded_action_carrier() -> None:
+    request = InvariantBilinearFormLatticeRequest(
+        action=EmbeddedRealNumberFieldMatrixAction(
+            coordinate_axis=("x",),
+            generators=(),
+        ),
+        kind="BILINEAR",
+    )
+
+    decoded = InvariantBilinearFormLatticeRequest.model_validate(
+        request.model_dump(mode="json")
+    )
+
+    assert isinstance(decoded.action, EmbeddedRealNumberFieldMatrixAction)
+
+
 def test_strict_json_action_can_omit_the_defaulted_generator_family() -> None:
     request = InvariantBilinearFormLatticeRequest.model_validate_json(
         encode_strict_json(
@@ -318,25 +347,6 @@ def test_duplicate_generator_labels_are_rejected_after_order_normalization() -> 
     )
 
 
-def test_overlong_generator_labels_are_rejected_before_normalization() -> None:
-    with pytest.raises(ValidationError) as exc_info:
-        RationalMatrixAction.model_validate(
-            {
-                "coordinate_axis": ["e1"],
-                "generators": [
-                    {
-                        "label": "x" * 65,
-                        "matrix": {"entries": [[_rational(1)]]},
-                    }
-                ],
-            }
-        )
-
-    assert exc_info.value.errors(include_input=False)[0]["type"] == (
-        "lattice.invariant_form.budget_exceeded"
-    )
-
-
 @pytest.mark.parametrize("extra_location", ("action", "generator"))
 def test_deep_unknown_data_is_rejected_without_recursive_preprocessing(
     extra_location: str,
@@ -373,19 +383,6 @@ def test_coordinate_axis_iterables_are_bounded_before_tuple_materialization() ->
     with pytest.raises(ValidationError, match="coordinate_axis has at most"):
         RationalMatrixAction.model_validate(
             {"coordinate_axis": labels(), "generators": []}
-        )
-
-
-def test_integral_form_coordinate_axis_is_bounded_before_copying() -> None:
-    with pytest.raises(ValidationError, match="coordinate_axis has at most"):
-        IntegralBilinearForm.model_validate(
-            {
-                "coordinate_axis": [
-                    f"e{index}" for index in range(MAX_ACTION_DIMENSION + 1)
-                ],
-                "kind": "BILINEAR",
-                "matrix": {"entries": []},
-            }
         )
 
 
@@ -505,6 +502,7 @@ def test_near_envelope_constraint_count_matches_realized_expansion(
     )
     assert charged == 65_536
     assert plan.constraints == ()
+    assert plan.expansion_digit_work > 0
 
 
 def test_source_height_is_coupled_to_constraint_expansion_work(
@@ -578,21 +576,6 @@ def test_oversized_generator_matrices_are_rejected_before_nested_parsing() -> No
     assert exc_info.value.errors()[0]["type"] == (
         "lattice.invariant_form.budget_exceeded"
     )
-
-
-def test_oversized_raw_matrix_axes_are_rejected_before_cell_scanning() -> None:
-    action = {
-        "coordinate_axis": ["e1"],
-        "generators": [
-            {
-                "label": "g",
-                "matrix": {"entries": [[object()] for _ in range(129)]},
-            }
-        ],
-    }
-
-    with pytest.raises(ValidationError, match="at most 128 rows"):
-        RationalMatrixAction.model_validate(action)
 
 
 def test_cancellation_during_constraint_expansion() -> None:

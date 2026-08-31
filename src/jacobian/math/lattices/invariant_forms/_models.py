@@ -14,6 +14,7 @@ from jacobian.canonical import parse_canonical_integer
 from jacobian.math._labels import MAX_OPAQUE_LABEL_LENGTH, OpaqueLabel
 from jacobian.math.matrices.values import (
     MAX_RATIONAL_MATRIX_ORDER,
+    EmbeddedRealSimpleNumberFieldMatrix,
     IntegerMatrix,
     RationalMatrix,
 )
@@ -366,6 +367,7 @@ class RationalMatrixAction(StrictModel):
     congruence fixed-point condition for rational endomorphisms.
     """
 
+    action_type: Literal["RATIONAL"] = "RATIONAL"
     coordinate_axis: tuple[OpaqueLabel, ...] = Field(
         min_length=1, max_length=MAX_ACTION_DIMENSION
     )
@@ -437,6 +439,88 @@ class RationalMatrixAction(StrictModel):
         return self
 
 
+class EmbeddedRealNumberFieldActionGenerator(StrictModel):
+    """One labelled endomorphism over an embedded real number field."""
+
+    label: OpaqueLabel
+    matrix: EmbeddedRealSimpleNumberFieldMatrix
+
+    @model_validator(mode="after")
+    def require_canonical_label(self) -> Self:
+        if unicodedata.normalize("NFC", self.label) != self.label:
+            raise _validation_error(
+                "noncanonical_generator_label",
+                "generator labels must use NFC Unicode normalization",
+            )
+        return self
+
+
+class EmbeddedRealNumberFieldMatrixAction(StrictModel):
+    """A finite labelled action by matrices in one embedded real field."""
+
+    action_type: Literal["EMBEDDED_REAL_NUMBER_FIELD"] = (
+        "EMBEDDED_REAL_NUMBER_FIELD"
+    )
+    coordinate_axis: tuple[OpaqueLabel, ...] = Field(
+        min_length=1, max_length=MAX_ACTION_DIMENSION
+    )
+    generators: tuple[EmbeddedRealNumberFieldActionGenerator, ...] = Field(
+        default=(), max_length=MAX_ACTION_GENERATORS
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_envelope(cls, data: Any) -> Any:
+        return _require_raw_action_envelope(data)
+
+    @model_validator(mode="after")
+    def require_common_axis(self) -> Self:
+        if any(
+            unicodedata.normalize("NFC", label) != label
+            for label in self.coordinate_axis
+        ):
+            raise _validation_error(
+                "noncanonical_coordinate_label",
+                "coordinate_axis labels must use NFC Unicode normalization",
+            )
+        if len(set(self.coordinate_axis)) != len(self.coordinate_axis):
+            raise _validation_error(
+                "duplicate_coordinate_label",
+                "coordinate_axis labels must be pairwise distinct",
+            )
+        if len({generator.label for generator in self.generators}) != len(
+            self.generators
+        ):
+            raise _validation_error(
+                "duplicate_generator_label",
+                "generator labels must be pairwise distinct",
+            )
+        dimension = len(self.coordinate_axis)
+        for generator in self.generators:
+            entries = generator.matrix.entries
+            if len(entries) != dimension or any(
+                len(row) != dimension for row in entries
+            ):
+                raise _validation_error(
+                    "generator_shape",
+                    "every generator matrix must be square on coordinate_axis",
+                )
+        if self.generators:
+            embedding = self.generators[0].matrix.embedding
+            if any(
+                generator.matrix.embedding != embedding
+                for generator in self.generators[1:]
+            ):
+                raise _validation_error(
+                    "generator_embedding",
+                    "every embedded generator must use one common field embedding",
+                )
+        return self
+
+
+MatrixAction = RationalMatrixAction | EmbeddedRealNumberFieldMatrixAction
+
+
 class IntegralBilinearForm(StrictModel):
     """One integral form matrix on an explicitly ordered coordinate axis."""
 
@@ -448,7 +532,7 @@ class IntegralBilinearForm(StrictModel):
 
     @model_validator(mode="before")
     @classmethod
-    def require_canonical_axis_labels(cls, data: Any) -> Any:
+    def require_canonical_axis_labels(cls, data: Any) -> Any:  # noqa: C901
         if not isinstance(data, dict):
             return data
         unknown = set(data).difference({"coordinate_axis", "kind", "matrix"})
@@ -495,6 +579,27 @@ class IntegralBilinearForm(StrictModel):
                         "noncanonical_coordinate_label",
                         "form coordinate_axis labels must use NFC Unicode normalization",
                     )
+        matrix = data.get("matrix")
+        if isinstance(matrix, dict):
+            if set(matrix).difference({"domain", "entries"}):
+                raise PydanticCustomError(
+                    "matrix.shape_mismatch", "form matrix contains unknown fields"
+                )
+            entries = matrix.get("entries")
+            if isinstance(entries, (list, tuple)):
+                for row in entries:
+                    if not isinstance(row, (list, tuple)):
+                        raise PydanticCustomError(
+                            "matrix.shape_mismatch", "form matrix rows must be arrays"
+                        )
+                    if any(
+                        not isinstance(value, (str, int)) or isinstance(value, bool)
+                        for value in row
+                    ):
+                        raise PydanticCustomError(
+                            "matrix.shape_mismatch",
+                            "form matrix entries must be integers or strings",
+                        )
             normalized["coordinate_axis"] = canonicalize_json_containers(axis)
         return normalized
 
@@ -564,11 +669,12 @@ class IntegralBilinearForm(StrictModel):
 
 
 class InvariantBilinearFormLatticeRequest(StrictModel):
-    """One rational matrix action and one integral form symmetry class."""
+    """One rational or common-embedding matrix action and one form class."""
 
-    action: RationalMatrixAction = Field(
+    action: MatrixAction = Field(
         description=(
-            "Canonical rational endomorphisms on one labelled lattice axis. "
+            "Canonical rational or common-embedding real number-field endomorphisms "
+            "on one labelled lattice axis. "
             "Admission requires generator_count * axis_dimension^2 * "
             f"coefficient_dimension <= {MAX_CONSTRAINT_CELLS:,}, couples that "
             "count to source and intermediate digit heights, and separately "
@@ -626,7 +732,7 @@ class InvariantBilinearFormLattice(StrictModel):
     lattice.
     """
 
-    action: RationalMatrixAction
+    action: MatrixAction
     kind: FormKind
     coefficient_domain: Literal["ZZ"] = "ZZ"
     coefficient_order: FormCoefficientOrder
@@ -680,7 +786,7 @@ class InvariantBilinearFormLattice(StrictModel):
     def _from_kernel(
         cls,
         *,
-        action: RationalMatrixAction,
+        action: MatrixAction,
         kind: FormKind,
         coefficient_dimension: int,
         constraint_rank: int,
@@ -709,11 +815,14 @@ __all__ = [
     "MAX_ACTION_GENERATORS",
     "MAX_CONSTRAINT_CELLS",
     "MAX_FORM_COEFFICIENT_DIMENSION",
+    "EmbeddedRealNumberFieldActionGenerator",
+    "EmbeddedRealNumberFieldMatrixAction",
     "FormCoefficientOrder",
     "FormKind",
     "IntegralBilinearForm",
     "InvariantBilinearFormLattice",
     "InvariantBilinearFormLatticeRequest",
+    "MatrixAction",
     "RationalActionGenerator",
     "RationalMatrixAction",
 ]

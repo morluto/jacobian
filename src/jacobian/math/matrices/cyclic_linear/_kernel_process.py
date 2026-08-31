@@ -72,7 +72,9 @@ def run_cyclotomic_kernel(
     try:
         return pickle.loads(completed.stdout)  # type: ignore[no-any-return]
     except (EOFError, pickle.UnpicklingError, TypeError) as exc:
-        raise RuntimeError("bounded cyclotomic kernel returned malformed output") from exc
+        raise RuntimeError(
+            "bounded cyclotomic kernel returned malformed output"
+        ) from exc
 
 
 __all__ = ["run_cyclotomic_kernel"]

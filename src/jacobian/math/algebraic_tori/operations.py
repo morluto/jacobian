@@ -90,9 +90,10 @@ def _admit_monomial_system(system: HomogeneousMonomialSystem) -> None:
     """
 
     from jacobian.math.matrices.certified_snf.values import (
-        MAX_CERTIFIED_SNF_INPUT_DIMENSION,
         MAX_CERTIFIED_SNF_INPUT_DIGITS,
+        MAX_CERTIFIED_SNF_INPUT_DIMENSION,
     )
+
     matrix = system.exponent_matrix
     if (
         matrix.row_count > MAX_CERTIFIED_SNF_INPUT_DIMENSION

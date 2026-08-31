@@ -643,9 +643,8 @@ def _validate_canonical_result_bound(bound: FractionBound, ledger: _Ledger) -> i
         # cancellation-induced support expansion, so the tracked sparse
         # term count is the accurate support bound.
         is_denominator = label == "denominator"
-        denominator_is_unit = (
-            is_denominator
-            and all(degree == 0 for degree in bound.denominator.degrees)
+        denominator_is_unit = is_denominator and all(
+            degree == 0 for degree in bound.denominator.degrees
         )
         support_terms = polynomial.terms if denominator_is_unit else dense_terms
         if support_terms > MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS:
@@ -815,9 +814,7 @@ def _result_bytes_upper_bound(
         else ()
         for guard in inherited_guards
     )
-    result_degrees = tuple(
-        guard.degrees for guard in result_guard_polynomials
-    )
+    result_degrees = tuple(guard.degrees for guard in result_guard_polynomials)
     # Count distinct result guards, deduplicating both against
     # inherited guards and against each other.
     distinct_guards = len(inherited_guards)

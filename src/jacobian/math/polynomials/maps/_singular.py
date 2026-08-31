@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import typing
-
 import re
 import time
+import typing
 from dataclasses import dataclass
 from fractions import Fraction
 from typing import Literal
@@ -46,6 +45,7 @@ from jacobian.math.polynomials.values import (
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
+
 
 def _make_generic_fiber_deadline_check(
     deadline: float,
@@ -656,12 +656,10 @@ def run_singular_generic_fiber(
             detail="Singular coefficient reduction exceeded the declared wall-time limit.",
         )
     try:
-        certificate, dimension, vector_dimension, version = (
-            _parse_generic_fiber_output(
-                completed.stdout,
-                polynomial_map=polynomial_map,
-                deadline_check=deadline_check,
-            )
+        certificate, dimension, vector_dimension, version = _parse_generic_fiber_output(
+            completed.stdout,
+            polynomial_map=polynomial_map,
+            deadline_check=deadline_check,
         )
     except UnsupportedSingularVersionError:
         return SingularGenericFiberResult(

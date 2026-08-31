@@ -323,6 +323,7 @@ class PrimeFieldActionAxis(Axis):
     @model_validator(mode="before")
     @classmethod
     def coerce_shared_axis(cls, value: Any) -> Any:
+        value = canonicalize_json_containers(value)
         if isinstance(value, Axis):
             return value.model_dump()
         return value

@@ -239,6 +239,7 @@ ignore_imports = [
     "jacobian.math.geometry.complex_tori._smith_process -> jacobian.process",
     "jacobian.math.lattices.invariant_forms._hnf_process -> jacobian.process",
     "jacobian.math.matrices.analysis._inertia_process -> jacobian.process",
+    "jacobian.math.matrices.cyclic_linear._kernel_process -> jacobian.process",
     "jacobian.math.number_theory._factorization_kernels -> jacobian.process",
     # Private exact-algebra adapters share one bounded Singular process owner.
     "jacobian.math._singular -> jacobian.process",

@@ -33,9 +33,10 @@ class DivisibilityEdgeProfileRequest(StrictModel):
             f"each derived quotient has at most {MAX_DIVISIBILITY_EDGE_QUOTIENT_DIGITS} digits. "
             "The result profiles every proper-divisibility edge a -> b "
             "(a divides b, a != b) with the quotient b/a and its least "
-            "prime factor."
+            "prime factor. "
+            f"At most {MAX_DIVISIBILITY_EDGE_SET_SIZE} values are accepted."
         ),
-        examples=[["2", "4", "6", "12"]],
+        examples=[{"elements": ["2", "4", "6", "12"]}],
     )
 
     @model_validator(mode="after")

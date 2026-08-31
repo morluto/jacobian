@@ -171,10 +171,18 @@ def _unrecognized_real_value_from_shape(
     )
 
 
+def _number_field_embedding_root_schema() -> dict[str, object]:
+    schema = RealAlgebraicValue.model_json_schema()
+    polynomial = schema.get("properties", {}).get("polynomial")
+    if isinstance(polynomial, dict):
+        polynomial["maxItems"] = MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE + 1
+    return schema
+
+
 _UnrecognizedRealAlgebraicValue = Annotated[
     RealAlgebraicValue,
     ValidateAs(_RealAlgebraicValueShape, _unrecognized_real_value_from_shape),
-    WithJsonSchema(RealAlgebraicValue.model_json_schema()),
+    WithJsonSchema(_number_field_embedding_root_schema()),
 ]
 
 

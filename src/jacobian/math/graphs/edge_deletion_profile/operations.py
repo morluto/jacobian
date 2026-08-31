@@ -125,9 +125,12 @@ def _coloring_work_bound(graph: SimpleUndirectedGraph, deletion_order: int) -> i
         # The greedy upper bound gives an initial k, then exhaustive
         # search tries k-1, k-2, ..., each with k^n branching.  The
         # total work is bounded by k^(n+2), charged here as n * k^3
-        # for small n (≤ 20) where the search is admitted, and the
-        # greedy-only path is used for larger n.
+        # for small n (≤ 20) where the search is admitted. Larger
+        # near-complete components are rejected below because a greedy
+        # partition is only an upper bound, not an exact chromatic number.
         if max_missing <= n:
+            if n > 20:
+                return MAX_EDGE_DELETION_PROFILE_WORK + 1
             total += n * max_missing * max_missing * max_missing
             continue
         component_graph = SimpleUndirectedGraph(
@@ -463,12 +466,6 @@ def _min_clique_cover(  # noqa: C901
             return False
 
         return backtrack(0, [set() for _ in range(k)])
-
-    # Limit the exhaustive search to bounded domains where the
-    # work bound has already admitted the search.  For larger
-    # missing-edge graphs, return the greedy upper bound.
-    if n > 20:
-        return upper
 
     for k in range(1, upper):
         _require_execution_active("during clique cover search")

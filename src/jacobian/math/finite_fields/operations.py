@@ -10,12 +10,15 @@ from jacobian.canonical import (
     encode_strict_json,
 )
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.finite_fields._matrix_rank_kernels import compute_matrix_rank
+from jacobian.math.finite_fields._matrix_rank_models import MatrixRankResult
 from jacobian.math.finite_fields._models import (
     _MAX_DIRECTION_RANK_WORK,
     _MAX_PROJECTIVE_POINTS,
 )
 from jacobian.math.finite_fields.values import (
     Axis,
+    AxisBoundMatrix,
     CollisionResult,
     DirectionRankLedger,
     FiberPartition,
@@ -45,6 +48,17 @@ _MAX_PALEY_TOURNAMENT_WORK = 4_000_000
 _PALEY_ORIENTATION: Literal["ARC_X_TO_Y_IFF_Y_MINUS_X_IS_NONZERO_SQUARE"] = (
     "ARC_X_TO_Y_IFF_Y_MINUS_X_IS_NONZERO_SQUARE"
 )
+
+
+def matrix_rank(matrix: AxisBoundMatrix) -> MatrixRankResult:
+    """Return the exact rank certificate for an axis-bound finite-field matrix."""
+    data = compute_matrix_rank(matrix)
+    return MatrixRankResult(
+        matrix=matrix,
+        rank=data.rank,
+        pivot_rows=data.pivot_rows,
+        pivot_columns=data.pivot_columns,
+    )
 
 
 def finite_field(

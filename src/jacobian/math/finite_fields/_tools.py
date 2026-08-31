@@ -8,7 +8,6 @@ from jacobian.math.finite_fields import (
     FiberPartition,
     FiniteLinearMap,
     FiniteMapTable,
-    HomogeneousFixedSubspace,
     OrbitDistribution,
     PaleyTournamentResult,
     PermutationResult,
@@ -19,9 +18,7 @@ from jacobian.math.finite_fields import (
     direction_rank_ledger,
     fiber_partition,
     finite_map_table,
-    homogeneous_fixed_subspace,
     linear_map_rank,
-    matrix_rank,
     orbit_distribution,
     paley_tournament,
     projective_line,
@@ -36,7 +33,6 @@ from jacobian.math.finite_fields._models import (
     DirectionRankLedgerRequest,
     FiberPartitionRequest,
     FiniteMapTableRequest,
-    HomogeneousFixedSubspaceRequest,
     LinearMapRankRequest,
     OrbitDistributionRequest,
     PaleyTournamentRequest,
@@ -178,14 +174,10 @@ def _paley_tournament(request: PaleyTournamentRequest) -> PaleyTournamentResult:
     return paley_tournament(request.presentation)
 
 
-def _fixed_subspace(
-    request: HomogeneousFixedSubspaceRequest,
-) -> HomogeneousFixedSubspace:
-    return homogeneous_fixed_subspace(request.action, request.degree)
-
-
 def _compute_matrix_rank(request: MatrixRankRequest) -> MatrixRankResult:
-    return matrix_rank(request.matrix)
+    from jacobian.math.finite_fields._matrix_rank import compute_matrix_rank
+
+    return compute_matrix_rank(request.matrix, enforce_transport_limit=True)
 
 
 def _build_tools() -> MathTools:
@@ -202,74 +194,6 @@ def _build_tools() -> MathTools:
                 "projective_line_over_gf_four",
                 "Enumerate the projective line on a two-coordinate GF(4) axis.",
                 {"presentation": _FIELD, "axis": _ROWS},
-            ),
-        ),
-    )
-    matrix_rank_operation = MathTool(
-        operation_id="finite_field.matrix.rank.compute",
-        title="Compute exact rank of a labelled matrix over its presented field",
-        description=(
-            "Given one AxisBoundMatrix bound to a FiniteFieldPresentation, return its "
-            "exact rank over that field with deterministic row and column pivot labels. "
-            "Supports both prime and extension fields."
-        ),
-        request_type=MatrixRankRequest,
-        result_type=MatrixRankResult,
-        run=_compute_matrix_rank,
-        tags=("finite-field", "matrix", "rank", "exact"),
-        examples=(
-            example(
-                "rank_one_over_f2",
-                "Rank [[1,1],[1,1]] over F_2 is 1; the matrix must use one consistent field presentation.",
-                {
-                    "matrix": {
-                        "presentation": {
-                            "characteristic": 2,
-                            "modulus_coefficients": [0, 1],
-                            "generator": "a",
-                        },
-                        "row_axis": {"name": "rows", "labels": ["r0", "r1"]},
-                        "column_axis": {"name": "cols", "labels": ["c0", "c1"]},
-                        "entries": [
-                            [
-                                {
-                                    "presentation": {
-                                        "characteristic": 2,
-                                        "modulus_coefficients": [0, 1],
-                                        "generator": "a",
-                                    },
-                                    "coordinates": [1],
-                                },
-                                {
-                                    "presentation": {
-                                        "characteristic": 2,
-                                        "modulus_coefficients": [0, 1],
-                                        "generator": "a",
-                                    },
-                                    "coordinates": [1],
-                                },
-                            ],
-                            [
-                                {
-                                    "presentation": {
-                                        "characteristic": 2,
-                                        "modulus_coefficients": [0, 1],
-                                        "generator": "a",
-                                    },
-                                    "coordinates": [1],
-                                },
-                                {
-                                    "presentation": {
-                                        "characteristic": 2,
-                                        "modulus_coefficients": [0, 1],
-                                        "generator": "a",
-                                    },
-                                    "coordinates": [1],
-                                },
-                            ],
-                        ],
-                    }
-                },
             ),
         ),
     )
@@ -426,39 +350,70 @@ def _build_tools() -> MathTools:
             ),
         ),
     )
-    fixed_subspace_operation = MathTool(
-        operation_id="finite_field.prime_linear_action.homogeneous_fixed_subspace.compute",
-        request_type=HomogeneousFixedSubspaceRequest,
-        result_type=HomogeneousFixedSubspace,
-        run=_fixed_subspace,
-        title="Compute a homogeneous fixed subspace over a prime field",
+    matrix_rank_operation = MathTool(
+        operation_id="finite_field.matrix.rank.compute",
+        title="Compute exact rank of a labelled matrix over its presented field",
         description=(
-            "Induce explicit invertible GF(p) substitutions on one bounded "
-            "homogeneous monomial space and return the simultaneous fixed "
-            "subspace in a canonical reduced coefficient basis."
+            "Given one AxisBoundMatrix bound to a FiniteFieldPresentation, return its "
+            "exact rank over that field with deterministic row and column pivot labels. "
+            "Supports both prime and extension fields."
         ),
-        tags=("finite-field", "linear-action", "invariant-theory", "exact"),
+        request_type=MatrixRankRequest,
+        result_type=MatrixRankResult,
+        run=_compute_matrix_rank,
+        tags=("finite-field", "matrix", "rank", "exact"),
         examples=(
             example(
-                "quadratic_swap_invariants",
-                "Compute the quadratic polynomials fixed by swapping x and y over GF(3). "
-                "Each generator matrix must be square and invertible on the variable "
-                "axis, use one prime, and be distinct from the other generators.",
+                "rank_one_over_f2",
+                "Rank [[1,1],[1,1]] over F_2 is 1; the matrix must use one consistent field presentation.",
                 {
-                    "action": {
-                        "variable_axis": {
-                            "name": "polynomial_variables",
-                            "labels": ["x", "y"],
+                    "matrix": {
+                        "presentation": {
+                            "characteristic": 2,
+                            "modulus_coefficients": [0, 1],
+                            "generator": "a",
                         },
-                        "generator_matrices": [
-                            {
-                                "prime": 3,
-                                "entries": [[0, 1], [1, 0]],
-                                "columns": 2,
-                            }
+                        "row_axis": {"name": "rows", "labels": ["r0", "r1"]},
+                        "column_axis": {"name": "cols", "labels": ["c0", "c1"]},
+                        "entries": [
+                            [
+                                {
+                                    "presentation": {
+                                        "characteristic": 2,
+                                        "modulus_coefficients": [0, 1],
+                                        "generator": "a",
+                                    },
+                                    "coordinates": [1],
+                                },
+                                {
+                                    "presentation": {
+                                        "characteristic": 2,
+                                        "modulus_coefficients": [0, 1],
+                                        "generator": "a",
+                                    },
+                                    "coordinates": [1],
+                                },
+                            ],
+                            [
+                                {
+                                    "presentation": {
+                                        "characteristic": 2,
+                                        "modulus_coefficients": [0, 1],
+                                        "generator": "a",
+                                    },
+                                    "coordinates": [1],
+                                },
+                                {
+                                    "presentation": {
+                                        "characteristic": 2,
+                                        "modulus_coefficients": [0, 1],
+                                        "generator": "a",
+                                    },
+                                    "coordinates": [1],
+                                },
+                            ],
                         ],
-                    },
-                    "degree": 2,
+                    }
                 },
             ),
         ),
@@ -475,7 +430,6 @@ def _build_tools() -> MathTools:
         collision_operation,
         permutation_operation,
         paley_tournament_operation,
-        fixed_subspace_operation,
     )
 
 

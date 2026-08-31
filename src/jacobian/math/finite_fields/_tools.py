@@ -372,7 +372,9 @@ def _chromatic_number(
                 component_edge_set = set(component_edges)
                 component_missing_edges: list[tuple[str, str]] = [
                     (edge[0], edge[1])
-                    for edge in (sorted(combo) for combo in combinations(component_vertices, 2))
+                    for edge in (
+                        sorted(combo) for combo in combinations(component_vertices, 2)
+                    )
                     if (edge[0], edge[1]) not in component_edge_set
                 ]
                 clique_cover = _min_clique_cover(

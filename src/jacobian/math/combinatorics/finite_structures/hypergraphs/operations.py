@@ -39,6 +39,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     _validation_error,
 )
 from jacobian.math.graphs.values import (
+    MAX_GRAPH_LABEL_BYTES,
     MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
     SimpleUndirectedGraph,
 )
@@ -143,13 +144,14 @@ def _admit_edge_intersection_graph(hypergraph: FiniteHypergraph) -> None:
     # hypergraph; they must fit the graph label length to compose with
     # downstream graph operations.
     for edge_id, _ in hypergraph.edges:
-        if len(edge_id) > MAX_LABEL_LENGTH:
+        if len(edge_id) == 0 or len(edge_id.encode("utf-8")) > MAX_GRAPH_LABEL_BYTES:
             raise OperationDomainValidationError(
                 location=("hypergraph",),
                 code="hypergraph.edge_intersection_graph.label_length",
                 message=(
-                    "edge-intersection graph edge IDs must be at most "
-                    f"{MAX_LABEL_LENGTH} characters to fit the graph carrier"
+                    "edge-intersection graph edge IDs must be nonempty "
+                    f"and at most {MAX_GRAPH_LABEL_BYTES} UTF-8 bytes "
+                    "to fit the graph carrier"
                 ),
             )
     # Bound the complete retained-source result size before execution.

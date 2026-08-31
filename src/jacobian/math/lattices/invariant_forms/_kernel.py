@@ -243,17 +243,21 @@ def _retained_action_bytes(action: RationalMatrixAction) -> int:
 
     # Preflight the expanded source-byte budget before model_dump and
     # encode_strict_json materialize the full canonical representation.
+    # Accumulate a conservative size over every generator, not just the
+    # first, since later generators may carry much larger rationals.
     dimension = len(action.coordinate_axis)
     generator_count = len(action.generators)
     if generator_count > 0:
-        sample = action.generators[0].matrix
-        sample_row_bytes = max(
-            sum(len(str(value)) + 4 for value in row) for row in sample.entries
-        )
+        max_row_bytes = 0
+        for generator in action.generators:
+            for row in generator.matrix.entries:
+                row_bytes = sum(len(str(value)) + 4 for value in row)
+                if row_bytes > max_row_bytes:
+                    max_row_bytes = row_bytes
         estimated_bytes = (
             4_096
             + dimension * 8
-            + generator_count * (8 + dimension * sample_row_bytes + 32)
+            + generator_count * (8 + dimension * max_row_bytes + 32)
         )
         if estimated_bytes + 4_096 > MAX_INVARIANT_FORM_RESULT_BYTES:
             raise _validation_error(

@@ -851,6 +851,7 @@ def _search_satisfying_states(
     canonicalizer = _SubsetOrbitCanonicalizer(plan.candidate_permutations)
     visited: set[ClosedCandidateSet] = set()
     satisfying: dict[ClosedCandidateSet, _FlatState] = {}
+    satisfying_retention_bytes = 0
     satisfying_elements = 0
     initial = _canonical_closure(
         (),
@@ -905,9 +906,20 @@ def _search_satisfying_states(
             retained_work = _subset_container_work(len(closed))
             ledger.charge("search_frontier", retained_work)
             if closed not in satisfying:
+                _state_bytes = ambient_dimension * max(state.rank, 1) * 8
+                if (
+                    satisfying_retention_bytes + _state_bytes
+                    > CanonicalLimits().max_output_bytes
+                ):
+                    raise _SearchStoppedError(
+                        "RESULT_OUTPUT_LIMIT",
+                        visited_count=ledger.state_orbit_count,
+                        consumed_work=ledger.consumed,
+                    )
                 ledger.charge("search_frontier", retained_work)
                 satisfying[closed] = state
                 satisfying_elements += max(len(closed), 1)
+                satisfying_retention_bytes += _state_bytes
         if state.rank == problem.maximum_rank:
             continue
         child_keys: set[ClosedCandidateSet] = set()

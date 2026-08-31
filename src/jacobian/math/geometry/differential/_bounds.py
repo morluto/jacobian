@@ -647,10 +647,7 @@ def _validate_canonical_result_bound(bound: FractionBound, ledger: _Ledger) -> i
             is_denominator
             and all(degree == 0 for degree in bound.denominator.degrees)
         )
-        if denominator_is_unit:
-            support_terms = polynomial.terms
-        else:
-            support_terms = dense_terms
+        support_terms = polynomial.terms if denominator_is_unit else dense_terms
         if support_terms > MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS:
             _reject(
                 "result_support",

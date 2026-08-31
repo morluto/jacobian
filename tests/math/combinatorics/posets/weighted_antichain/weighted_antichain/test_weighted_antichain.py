@@ -106,7 +106,9 @@ def test_equal_maxima_choose_lexicographically_least_antichain() -> None:
 
 
 def test_weight_axis_must_match_the_poset() -> None:
-    with pytest.raises(OperationDomainValidationError, match="one entry per poset element"):
+    with pytest.raises(
+        OperationDomainValidationError, match="one entry per poset element"
+    ):
         compute_maximum_weight_antichain(_make_chain(2), (_cr(1),))
 
 
@@ -115,7 +117,9 @@ def test_exponential_search_envelope_is_enforced() -> None:
         _make_antichain(65)
 
     poset = _make_antichain(64)
-    with pytest.raises(OperationDomainValidationError, match="one entry per poset element"):
+    with pytest.raises(
+        OperationDomainValidationError, match="one entry per poset element"
+    ):
         compute_maximum_weight_antichain(poset, tuple(_cr(1) for _ in range(65)))
 
 
@@ -123,5 +127,7 @@ def test_derived_rational_growth_is_rejected_before_subset_search() -> None:
     poset = _make_antichain(2)
     weights = (_cr(1, 10**20_000 - 1), _cr(1, 10**20_000))
 
-    with pytest.raises(OperationDomainValidationError, match="exceeds the canonical digit envelope"):
+    with pytest.raises(
+        OperationDomainValidationError, match="exceeds the canonical digit envelope"
+    ):
         compute_maximum_weight_antichain(poset, weights)

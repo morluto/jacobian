@@ -58,9 +58,11 @@ def test_dense_bipartite_search_is_rejected_before_traversal() -> None:
     right = [f"r{i}" for i in range(20)]
     graph = _graph([*left, *right], [[u, v] for u in left for v in right])
 
-    with pytest.raises(OperationDomainValidationError, match="cycle-profile search exceeds the admitted work bound"):
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="cycle-profile search exceeds the admitted work bound",
+    ):
         compute_cycle_length_profile(graph)
-
 
 
 def test_large_single_cycle_remains_admitted() -> None:
@@ -79,5 +81,7 @@ def test_wide_cycle_labels_are_rejected_before_search() -> None:
         labels, [[labels[0], labels[1]], [labels[1], labels[2]], [labels[0], labels[2]]]
     )
 
-    with pytest.raises(OperationDomainValidationError, match="exceeds the canonical output bound"):
+    with pytest.raises(
+        OperationDomainValidationError, match="exceeds the canonical output bound"
+    ):
         compute_cycle_length_profile(graph)

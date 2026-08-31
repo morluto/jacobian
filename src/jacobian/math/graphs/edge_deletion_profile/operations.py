@@ -262,9 +262,7 @@ def compute_edge_deletion_profile(
             _require_execution_active("during profile enumeration")
             deleted = set(edge_indices)
             remaining_edges = [edges[i] for i in range(len(edges)) if i not in deleted]
-            deleted_edge_tuples = tuple(
-                tuple(sorted(edges[i])) for i in edge_indices
-            )
+            deleted_edge_tuples = tuple(tuple(sorted(edges[i])) for i in edge_indices)
             chromatic = _chromatic_number(
                 vertices,
                 remaining_edges,

@@ -899,3 +899,70 @@ def test_max_dimension_adversary_is_deterministic_and_transport_bounded() -> Non
     assert (
         AffineTorusFixedLocusResult.model_validate_json(encoded, strict=True) == first
     )
+
+
+def test_admission_uses_the_exact_attainable_rank_not_the_nonzero_row_count() -> None:
+    # A rank-one displacement with every row non-zero (H * ones) must not be
+    # rejected through a fictitious rank-three minor bound: the actual result
+    # has a ~500-digit component count and fits the canonical carriers.
+    height = 10**499
+    linear = tuple(
+        tuple(height + int(row == column) for column in range(3)) for row in range(3)
+    )
+    source = _source(linear, (Fraction(0), Fraction(0), Fraction(0)))
+
+    plan = build_affine_torus_plan(source, deadline=monotonic() + 300)
+    kernel = _compute_fixed_locus_kernel(_kernel_source(source))
+
+    assert tuple(bounds.rank for bounds in plan.rank_bounds) == (1,)
+    assert isinstance(kernel, NonemptyFixedLocusKernel)
+    assert len(kernel.component_generators) == plan.rank_bounds[0].rank
+    assert kernel.component_count == height
+    assert plan.bounds_for_rank(1).source_minor_height >= height
+
+
+def test_translated_identity_is_empty_without_charging_the_translation_lcm() -> None:
+    # Three pairwise-coprime 500-digit denominators make the global lcm far
+    # larger than the point carrier, but a translated identity is empty and
+    # produces no base point, so admission must not reject it via that lcm.
+    denominators = (10**499, 10**499 + 1, 10**499 + 2)
+    linear = tuple(tuple(int(row == column) for column in range(3)) for row in range(3))
+    translation = tuple(Fraction(1, denominator) for denominator in denominators)
+    source = _source(linear, translation)
+
+    plan = build_affine_torus_plan(source, deadline=monotonic() + 300)
+    result = affine_torus_fixed_locus(source)
+
+    assert tuple(bounds.rank for bounds in plan.rank_bounds) == (0,)
+    assert plan.bounds_for_rank(0).base_point_component_height == 1
+    assert result.outcome.status == "EMPTY"
+
+
+def test_dimension_envelope_agrees_with_the_matrix_carrier() -> None:
+    # The affine-matrix schema and preflight must not advertise a dimension the
+    # reused integer-matrix carrier cannot parse: a 33-axis linear part is
+    # unrepresentable and must be rejected, while a 17-axis identity is a small
+    # well-formed request that the derived admission accepts.
+    seventeen_identity = [
+        [int(row == column) for column in range(17)] for row in range(17)
+    ]
+    source = _source(seventeen_identity, (Fraction(0),) * 17)
+    plan = build_affine_torus_plan(source, deadline=monotonic() + 30)
+    assert plan.dimension == 17
+
+    oversized = {
+        "torus": {"dimension": 33},
+        "linear_part": {
+            "row_count": 33,
+            "column_count": 33,
+            "entries": [
+                [str(int(row == column)) for column in range(33)] for row in range(33)
+            ],
+        },
+        "translation": {
+            "torus": {"dimension": 33},
+            "coordinates": [{"num": "0", "den": "1"} for _ in range(33)],
+        },
+    }
+    with pytest.raises(ValidationError):
+        RationalAffineTorusMap.model_validate(oversized)

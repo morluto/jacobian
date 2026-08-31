@@ -92,9 +92,10 @@ class AffineTorusFixedLocusPlan:
     def bounds_for_rank(self, rank: int) -> AffineTorusRankBounds:
         """Return the precomputed envelope for the kernel's exact source rank."""
 
-        if not 0 <= rank < len(self.rank_bounds):
-            raise AssertionError("affine-torus rank is outside its admitted plan")
-        return self.rank_bounds[rank]
+        for bounds in self.rank_bounds:
+            if bounds.rank == rank:
+                return bounds
+        raise AssertionError("affine-torus rank is outside its admitted plan")
 
 
 def _reject(reason: str, message: str) -> NoReturn:
@@ -160,6 +161,51 @@ def _augmented_hnf_transform_height(rows: int, minor_height: int) -> int:
     return rows * minor_height * minor_height
 
 
+def _exact_integer_rank(matrix: tuple[tuple[int, ...], ...]) -> int:
+    """Return the exact rational rank of a square integer matrix.
+
+    Fraction-free (Bareiss-style) Gaussian elimination is exact over the
+    integers, so it agrees with the tightened FLINT kernel's ``rank`` without
+    requiring the isolated backend here.  The matrix is bounded by the admitted
+    dimension and entry digit envelope, keeping admission one bounded pass.
+    """
+
+    dimension = len(matrix)
+    if dimension == 0:
+        return 0
+    pivot_rows = [list(row) for row in matrix]
+    rank = 0
+    previous_pivot = 1
+    for column in range(dimension):
+        pivot_row = -1
+        for row in range(rank, dimension):
+            if pivot_rows[row][column] != 0:
+                pivot_row = row
+                break
+        if pivot_row == -1:
+            continue
+        pivot_rows[rank], pivot_rows[pivot_row] = (
+            pivot_rows[pivot_row],
+            pivot_rows[rank],
+        )
+        pivot = pivot_rows[rank][column]
+        for row in range(rank + 1, dimension):
+            factor = pivot_rows[row][column]
+            if factor == 0:
+                continue
+            for inner in range(column + 1, dimension):
+                pivot_rows[row][inner] = (
+                    pivot_rows[row][inner] * pivot - pivot_rows[rank][inner] * factor
+                )
+                if rank > 0:
+                    pivot_rows[row][inner] //= previous_pivot
+        previous_pivot = pivot
+        rank += 1
+        if rank == dimension:
+            break
+    return rank
+
+
 def _rank_bounds(
     *,
     dimension: int,
@@ -223,7 +269,13 @@ def _rank_bounds(
 
     # After reduction modulo one, generator denominators divide a rank minor;
     # the base-point denominator additionally divides the translation lcm.
-    base_point_component_height = max(1, minor_height * common_denominator)
+    # A rank-zero displacement has no such base point: the kernel's rank-zero
+    # base solution is the zero point, and a translated identity resolves as an
+    # empty locus.  Charging the translation lcm to that branch would fabricate
+    # a denominator the result never carries, so leave it out for rank zero.
+    base_point_component_height = (
+        1 if rank == 0 else max(1, minor_height * common_denominator)
+    )
     return AffineTorusRankBounds(
         rank=rank,
         nullity=nullity,
@@ -527,26 +579,28 @@ def build_affine_torus_plan(
             for coordinate in source.translation.coordinates
         )
     )
-    # Derive a source-sensitive rank upper bound from the non-zero rows of
-    # the displacement matrix A - I.  A zero row cannot contribute to the
-    # rank, so the actual rank cannot exceed the number of non-zero rows.
-    nonzero_row_count = sum(
-        any(
+    # Admit against the source's actually attainable rank.  The exact rank of
+    # the displacement A - I bounds every unreachable-rank branch that could
+    # otherwise fabricate a too-large point-height or transport rejection (for
+    # example dependent non-zero rows in a low-rank displacement).  Computing
+    # it once here lets the admission gates look only at the result the kernel
+    # will build at that rank rather than an over-large worst case.
+    displacement = tuple(
+        tuple(
             parse_canonical_integer(source.linear_part.entries[row][column])
             - int(row == column)
-            != 0
             for column in range(dimension)
         )
         for row in range(dimension)
     )
-    rank_bounds = tuple(
+    attained_rank = _exact_integer_rank(displacement)
+    rank_bounds = (
         _rank_bounds(
             dimension=dimension,
-            rank=rank,
+            rank=attained_rank,
             displacement_height=displacement_height,
             common_denominator=common_denominator,
-        )
-        for rank in range(nonzero_row_count + 1)
+        ),
     )
     if any(
         _decimal_digits(bounds.base_point_component_height)

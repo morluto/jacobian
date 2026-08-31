@@ -202,9 +202,10 @@ def _require_raw_configuration_envelope(data: object, *, label: str) -> None:
     if not isinstance(data, dict):
         return
     coordinate_axis = data.get("coordinate_axis")
-    if isinstance(coordinate_axis, (list, tuple)) and len(
-        coordinate_axis
-    ) > MAX_RATIONAL_FLAT_AMBIENT_DIMENSION:
+    if (
+        isinstance(coordinate_axis, (list, tuple))
+        and len(coordinate_axis) > MAX_RATIONAL_FLAT_AMBIENT_DIMENSION
+    ):
         raise _validation_error(
             f"{label}_axis_bound",
             f"{label} coordinate axes have at most "

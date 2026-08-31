@@ -73,6 +73,26 @@ BoundedFactorizationTimeoutLayer = Literal[
 ]
 
 
+def _bounded_prime_power(base: int, exponent: int, limit: int) -> int | None:
+    """Compute ``base**exponent`` only while it can fit below ``limit``."""
+
+    result = 1
+    factor = base
+    remaining_exponent = exponent
+    while remaining_exponent:
+        if remaining_exponent & 1:
+            if result > limit // factor:
+                return None
+            result *= factor
+        remaining_exponent //= 2
+        if remaining_exponent:
+            if factor > limit // factor:
+                factor = limit + 1
+            else:
+                factor *= factor
+    return result
+
+
 @dataclass(frozen=True, slots=True)
 class BoundedFactorizationFailure:
     """Bounded evidence for one unsuccessful isolated factorization attempt."""
@@ -241,7 +261,7 @@ def _admit_nonzero(request: FactorizationRequest) -> None:
         )
 
 
-def _bounded_direct_factorization(
+def _bounded_direct_factorization(  # noqa: C901
     value: int,
     *,
     timeout_seconds: float = _FACTORIZATION_WORKER_TIMEOUT_SECONDS,
@@ -333,9 +353,16 @@ def _bounded_direct_factorization(
             raise ValueError("noncanonical factors")
         from sympy import isprime
 
-        if not all(isprime(int(factor.prime)) for factor in factors) or math.prod(
-            int(factor.prime) ** factor.power for factor in factors
-        ) != abs(value):
+        quotient = abs(value)
+        for factor in factors:
+            base = int(factor.prime)
+            if base > quotient:
+                raise ValueError("factor base exceeds the remaining quotient")
+            prime_power = _bounded_prime_power(base, factor.power, quotient)
+            if prime_power is None or quotient % prime_power != 0 or not isprime(base):
+                raise ValueError("factorization contains an invalid prime power")
+            quotient //= prime_power
+        if quotient != 1:
             raise ValueError("factorization does not reconstruct the input")
         return factors
     except (
@@ -366,6 +393,30 @@ def _divisors_from_factors(
         divisors = [base * power for base in divisors for power in power_values]
     ordered = tuple(str(divisor) for divisor in sorted(divisors))
     return ordered[:-1] if proper else ordered
+
+
+def _bounded_least_prime_factor(
+    value: int,
+    *,
+    timeout_seconds: float = _FACTORIZATION_WORKER_TIMEOUT_SECONDS,
+    failure: list[BoundedFactorizationFailure] | None = None,
+) -> int | None:
+    """Return the least prime factor from one validated worker factorization.
+
+    The direct-factorization decoder validates every returned prime, exponent,
+    ordering, and the complete product before this projection takes the first
+    factor.  Reusing that decoder prevents a well-shaped but non-minimal first
+    pair from becoming an LPF claim and keeps exponentiation inside its cheap
+    bounded validation path.
+    """
+    factors = _bounded_direct_factorization(
+        value,
+        timeout_seconds=timeout_seconds,
+        failure=failure,
+    )
+    if not factors:
+        return None
+    return int(factors[0].prime)
 
 
 def enumerate_divisors(request: FactorizationRequest) -> DivisorListResult:

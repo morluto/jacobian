@@ -21,6 +21,7 @@ _MAX_FIELD_ORDER = 65536
 _MIN_MODULUS_COEFFICIENTS = 2
 _MAX_MODULUS_COEFFICIENTS = 17
 _MAX_VALUE_AXIS_LABELS = 256
+_MAX_ACTION_AXIS_LABELS = MAX_PRIME_FIELD_MATRIX_AXIS
 _MAX_DERIVATION_WORK = 1_000_000
 _MAX_ACTION_GENERATORS = MAX_PRIME_FIELD_MATRIX_AXIS
 # The matrix carrier and the fixed-subspace operation both cap the ambient
@@ -316,6 +317,38 @@ class Axis(StrictModel):
         )
 
 
+class PrimeFieldActionAxis(Axis):
+    """An ordered variable axis for prime-field linear actions."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def coerce_shared_axis(cls, value: Any) -> Any:
+        if isinstance(value, Axis):
+            return value.model_dump()
+        return value
+
+    @model_validator(mode="after")
+    def validate_axis(self) -> Self:
+        if not self.name:
+            raise _validation_error(
+                "finite_field.axis_name_nonempty", "axis name must be nonempty"
+            )
+        if not self.labels or any(not label for label in self.labels):
+            raise _validation_error(
+                "finite_field.axis_labels_nonempty", "axis labels must be nonempty"
+            )
+        if len(self.labels) > _MAX_ACTION_AXIS_LABELS:
+            raise _validation_error(
+                "finite_field.action_axis_exceeds_supported_label_bound",
+                "prime-field action axes exceed the supported label bound",
+            )
+        if len(set(self.labels)) != len(self.labels):
+            raise _validation_error(
+                "finite_field.axis_labels_unique", "axis labels must be unique"
+            )
+        return self
+
+
 def _raw_field(value: object, name: str) -> object:
     if isinstance(value, dict):
         return value.get(name)
@@ -330,7 +363,7 @@ class PrimeFieldLinearAction(StrictModel):
     structurally canonical source; it is not replayed while decoding results.
     """
 
-    variable_axis: Axis
+    variable_axis: PrimeFieldActionAxis
     generator_matrices: tuple[PrimeFieldMatrix, ...] = Field(
         min_length=1, max_length=_MAX_ACTION_GENERATORS
     )

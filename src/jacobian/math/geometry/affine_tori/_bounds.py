@@ -407,6 +407,35 @@ def _source_wire_bytes(source: RationalAffineTorusMap) -> int:
     )
 
 
+def _worker_input_wire_bytes(source: RationalAffineTorusMap) -> int:
+    """Return the exact compact-JSON size of the private worker request."""
+
+    dimension = source.torus.dimension
+    linear_rows = tuple(
+        _array_item_wire_bytes(tuple(len(entry) + 2 for entry in row))
+        for row in source.linear_part.entries
+    )
+    linear_part_bytes = _array_item_wire_bytes(linear_rows)
+    translation_entries = tuple(
+        strict_json_object_size(
+            (
+                ("num", len(coordinate.num) + 2),
+                ("den", len(coordinate.den) + 2),
+            )
+        )
+        for coordinate in source.translation.coordinates
+    )
+    translation_bytes = _array_item_wire_bytes(translation_entries)
+    return strict_json_object_size(
+        (
+            ("protocol_version", 1),
+            ("dimension", _nonnegative_integer_wire_bytes(dimension)),
+            ("linear_part", linear_part_bytes),
+            ("translation", translation_bytes),
+        )
+    )
+
+
 def _result_bytes_for_rank(
     *,
     dimension: int,
@@ -597,7 +626,8 @@ def build_affine_torus_plan(
         for coordinate in source.translation.coordinates
     )
     source_wire_bytes = _source_wire_bytes(source)
-    if source_wire_bytes > _AFFINE_TORUS_WORKER_STDIN_LIMIT:
+    worker_input_bytes = _worker_input_wire_bytes(source)
+    if worker_input_bytes > _AFFINE_TORUS_WORKER_STDIN_LIMIT:
         _reject(
             "worker_input",
             "the private affine-torus worker request exceeds its "
@@ -673,7 +703,7 @@ def build_affine_torus_plan(
         displacement_height=displacement_height,
         translation_common_denominator=common_denominator,
         rank_bounds=rank_bounds,
-        worker_input_bytes_upper_bound=source_wire_bytes,
+        worker_input_bytes_upper_bound=worker_input_bytes,
         result_bytes_upper_bound=result_bytes,
         backend_envelope=_backend_envelope(
             dimension=dimension,

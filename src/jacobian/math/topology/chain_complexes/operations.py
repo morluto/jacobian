@@ -5,6 +5,10 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian.canonical import format_canonical_integer
+from jacobian.math.topology.chain_complexes._integral_homology import (
+    admit_integral_homology,
+    compute_integral_homology,
+)
 from jacobian.math.topology.chain_complexes._models import (
     _require_chain_map_components,
     _require_complex_cell_budget,
@@ -17,9 +21,10 @@ from jacobian.math.topology.chain_complexes.values import (
     MAX_TENSOR_GROUP_DIMENSION,
     MAX_TENSOR_TOTAL_CELLS,
     ChainComplexValue,
-    CoefficientField,
+    CoefficientRing,
     HomologyGroupValue,
     HomologyResult,
+    IntegralHomologyGroupValue,
     MappingConeResult,
     TensorProductResult,
     VerificationResult,
@@ -48,10 +53,10 @@ class ChainComplexAdmissionError(ValueError):
 def _require_tensor_admission(
     left: ChainComplexValue, right: ChainComplexValue
 ) -> None:
-    if left.coefficient_field != right.coefficient_field or left.prime != right.prime:
+    if left.coefficient_ring != right.coefficient_ring or left.prime != right.prime:
         raise ChainComplexAdmissionError(
             "tensor_context_mismatch",
-            "tensor product requires same coefficient field and prime",
+            "tensor product requires same coefficient ring and prime",
         )
     group_count = len(left.basis_sizes) + len(right.basis_sizes) - 1
     group_sizes: list[int] = []
@@ -114,7 +119,7 @@ def _require_tensor_admission(
         for index in range(max(0, group_count - 1))
     )
     ChainComplexValue(
-        coefficient_field=left.coefficient_field,
+        coefficient_ring=left.coefficient_ring,
         prime=left.prime,
         degree_min=tensor_degree_min,
         degree_max=tensor_degree_min + group_count - 1,
@@ -158,7 +163,7 @@ def _require_cone_admission(
         for index in range(max(0, len(cone_basis_sizes) - 1))
     )
     ChainComplexValue(
-        coefficient_field=source.coefficient_field,
+        coefficient_ring=source.coefficient_ring,
         prime=source.prime,
         degree_min=source.degree_min,
         degree_max=source.degree_min + len(cone_basis_sizes) - 1,
@@ -518,6 +523,7 @@ def _compute_homology_groups(
 
         groups.append(
             HomologyGroupValue(
+                kind="FIELD_VECTOR_SPACE",
                 degree=actual_degree,
                 cycle_rank=cycle_rank,
                 boundary_rank=incoming_rank,
@@ -559,12 +565,12 @@ def _require_mapping_cone_parents(
     source: ChainComplexValue,
     target: ChainComplexValue,
 ) -> None:
-    """A cone is defined only over one coefficient field on one interval."""
+    """A cone is defined only over one coefficient ring on one interval."""
     if (
-        source.coefficient_field != target.coefficient_field
+        source.coefficient_ring != target.coefficient_ring
         or source.prime != target.prime
     ):
-        raise ValueError("mapping cone requires same coefficient field and prime")
+        raise ValueError("mapping cone requires same coefficient ring and prime")
     if (source.degree_min, source.degree_max) != (
         target.degree_min,
         target.degree_max,
@@ -915,8 +921,8 @@ def _compute_tensor_product(
 ) -> tuple[tuple[int, ...], tuple[tuple[tuple[str, ...], ...], ...]]:
     """Exact tensor-product construction shared by the operation and its
     result validator."""
-    if left.coefficient_field != right.coefficient_field or left.prime != right.prime:
-        raise ValueError("tensor product requires same coefficient field and prime")
+    if left.coefficient_ring != right.coefficient_ring or left.prime != right.prime:
+        raise ValueError("tensor product requires same coefficient ring and prime")
     prime = left.prime
 
     tensor_basis_sizes = _tensor_group_sizes(left, right)
@@ -961,7 +967,7 @@ def construct_chain_complex(
     basis_sizes: tuple[int, ...],
     differential_matrices: tuple[tuple[tuple[str, ...], ...], ...],
     *,
-    coefficient_field: CoefficientField = CoefficientField.RATIONAL,
+    coefficient_ring: CoefficientRing = CoefficientRing.RATIONAL,
     prime: int | None = None,
 ) -> ChainComplexValue:
     """Construct an admitted canonical chain-complex value.
@@ -970,7 +976,7 @@ def construct_chain_complex(
     :class:`ChainComplexValue`; adjacent differentials must compose to zero.
     """
     value = ChainComplexValue(
-        coefficient_field=coefficient_field,
+        coefficient_ring=coefficient_ring,
         prime=prime,
         degree_min=0,
         degree_max=len(basis_sizes) - 1,
@@ -999,9 +1005,13 @@ def homology_groups(complex_value: ChainComplexValue) -> HomologyResult:
         maximum=MAX_MATRIX_CELLS,
         label="homology input",
     )
-    groups = _compute_homology_groups(complex_value)
+    groups: tuple[HomologyGroupValue | IntegralHomologyGroupValue, ...]
+    if complex_value.coefficient_ring is CoefficientRing.INTEGER:
+        groups = compute_integral_homology(admit_integral_homology(complex_value))
+    else:
+        groups = tuple(_compute_homology_groups(complex_value))
     return HomologyResult._from_kernel(
-        homology_groups=tuple(groups),
+        homology_groups=groups,
         source_complex=complex_value,
     )
 
@@ -1060,7 +1070,7 @@ def mapping_cone(
     _require_cone_admission(source, target, map_matrices)
     cone_basis_sizes, cone_diffs = _compute_mapping_cone(source, target, map_matrices)
     value = ChainComplexValue(
-        coefficient_field=source.coefficient_field,
+        coefficient_ring=source.coefficient_ring,
         prime=source.prime,
         degree_min=source.degree_min,
         degree_max=source.degree_min + len(cone_basis_sizes) - 1,
@@ -1094,7 +1104,7 @@ def tensor_product_complex(
     degree_min = left.degree_min + right.degree_min
     degree_max = degree_min + group_count - 1
     value = ChainComplexValue(
-        coefficient_field=left.coefficient_field,
+        coefficient_ring=left.coefficient_ring,
         prime=left.prime,
         degree_min=degree_min,
         degree_max=degree_max,

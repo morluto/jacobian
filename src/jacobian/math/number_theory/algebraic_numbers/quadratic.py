@@ -18,7 +18,7 @@ _MAX_DIGITS = 256
 # For a,b with numerator and denominator at most 256 decimal digits,
 # a^2 - d*b^2 has a denominator of at most 1,024 digits and a numerator
 # of at most 1,032 digits after bringing the two terms to that denominator
-# (d <= 10^6).  The trace is smaller.  This covers producer and replay.
+# (d <= 10^6).  The trace is smaller.  This covers production and reconstruction.
 _MAX_EMBEDDING_PROFILE_RESULT_DIGITS = 1_032
 
 

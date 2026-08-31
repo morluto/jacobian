@@ -192,8 +192,8 @@ class RationalConicParametrizationResult(StrictModel):
         """Check only bounded wire-shape relations between result fields.
 
         The admitted line-pencil kernel establishes the parametrization
-        identities. Parsing a serialized result must not reconstruct and replay
-        that computation; independently supplied claims are outside this result
+        identities. Parsing a serialized result must not rerun that computation;
+        independently supplied claims are outside this result
         contract.
         """
         try:

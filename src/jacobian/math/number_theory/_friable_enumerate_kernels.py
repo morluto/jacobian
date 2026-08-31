@@ -88,7 +88,7 @@ def enumerate_friable(x: int | IntegerValue, y: int | IntegerValue) -> tuple[int
         return tuple(range(1, x + 1))
 
     if regime == "MATERIALIZED":
-        return _enumerate_materialized(x, y)
+        return admitted_family
     return admitted_family
 
 

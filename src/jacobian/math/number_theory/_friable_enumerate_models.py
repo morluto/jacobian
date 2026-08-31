@@ -25,7 +25,12 @@ MAX_FRIABLE_ENUMERATE_GENERATED_CUTOFF = 10_000
 MAX_FRIABLE_ENUMERATE_FAMILY_SIZE = MAX_FINITE_INTEGER_SET_ELEMENTS
 _MAX_FRIABLE_ENUMERATE_SOURCE_DIGITS = 256
 _MAX_FRIABLE_ENUMERATE_SOURCE_ABS = 10**_MAX_FRIABLE_ENUMERATE_SOURCE_DIGITS
-_MAX_FRIABLE_ENUMERATED_BYTES = CanonicalLimits().max_output_bytes
+# FiniteIntegerSet enforces a wire envelope of max_output_bytes // 2;
+# admission must use that carrier limit, not the full output bound.
+from jacobian.math.combinatorics.finite_structures.sets._models import (
+    _MAX_FINITE_SET_WIRE_BYTES,
+)
+_MAX_FRIABLE_ENUMERATED_BYTES = _MAX_FINITE_SET_WIRE_BYTES
 _MAX_FRIABLE_ENUMERATE_COUNT_NODES = 2_000_000
 
 
@@ -185,6 +190,37 @@ def _count_friable_bounded(x: int, y: int) -> int:
     return count
 
 
+def _materialize_friable_bounded(x: int, y: int) -> tuple[int, ...]:
+    """Return the y-friable integers in 1..x, or an oversized tuple.
+
+    Reuses the same sieve as _count_friable_bounded but returns the family
+    so the kernel can skip the duplicate sieve pass.
+    """
+
+    if x == 0:
+        return ()
+    if y <= 1:
+        return (1,) if x >= 1 else ()
+
+    is_friable = bytearray(b"\x01") * (x + 1)
+    is_friable[0] = 0
+    is_prime = bytearray(b"\x01") * (x + 1)
+    is_prime[0:2] = b"\x00\x00"
+
+    for candidate in range(2, x + 1):
+        if not is_prime[candidate]:
+            continue
+        if candidate * candidate <= x:
+            first = candidate * candidate
+            is_prime[first : x + 1 : candidate] = b"\x00" * (
+                (x - first) // candidate + 1
+            )
+        if candidate > y:
+            is_friable[candidate : x + 1 : candidate] = b"\x00" * (x // candidate)
+
+    return tuple(v for v in range(1, x + 1) if is_friable[v])
+
+
 def plan_friable_enumerate(
     x: int, y: int
 ) -> tuple[str, tuple[int, ...], tuple[int, ...]]:
@@ -228,7 +264,8 @@ def plan_friable_enumerate(
     # Count the actual friable family size instead of using the coarse x
     # upper bound, so requests whose result is safely bounded are admitted.
     if x <= MAX_FRIABLE_ENUMERATE_MATERIALIZED_X:
-        family_size = _count_friable_bounded(x, y)
+        family = _materialize_friable_bounded(x, y)
+        family_size = len(family)
         if family_size > MAX_FRIABLE_ENUMERATE_FAMILY_SIZE:
             raise _validation_error(
                 "friable_enumerate_family_exceeds_the_result_size_budget",
@@ -239,7 +276,7 @@ def plan_friable_enumerate(
                 "friable_enumerate_family_exceeds_the_serialized_byte_budget",
                 "friable-enumerate family exceeds the serialized-byte budget",
             )
-        return "MATERIALIZED", (), ()
+        return "MATERIALIZED", (), family
 
     # Generated regime: enumerate exponent vectors without materializing 1..x.
     if y > MAX_FRIABLE_ENUMERATE_GENERATED_CUTOFF:

@@ -766,15 +766,13 @@ def build_affine_torus_plan(
     translation = tuple(
         coordinate.as_fraction() for coordinate in source.translation.coordinates
     )
-    selected_base_point_height = _selected_zero_lift_base_point_height(
-        displacement,
-        translation,
-        attained_rank,
-    )
     # Admission cannot use the worker's saturated character lattice without
     # replaying its backend work.  Keep the nonempty branch in the envelope;
     # the worker still determines the exact obstruction modulo Z^n.
     inconsistent = False
+    # Reject conservative point-height failures before attempting the selected
+    # rational solve. That solve is only useful when the envelope admits the
+    # nonempty result.
     rank_bounds = (
         _rank_bounds(
             dimension=dimension,
@@ -782,17 +780,11 @@ def build_affine_torus_plan(
             displacement_height=displacement_height,
             common_denominator=common_denominator,
             translation_is_zero=translation_is_zero,
-            selected_base_point_height=selected_base_point_height,
+            selected_base_point_height=None,
         ),
     )
     if any(
-        _decimal_digits(
-            max(
-                bounds.base_point_component_height,
-                bounds.source_minor_height,
-                bounds.obstruction_pairing_height,
-            )
-        )
+        _decimal_digits(bounds.source_minor_height)
         > MAX_AFFINE_TORUS_POINT_DIGITS
         for bounds in rank_bounds
         if not inconsistent
@@ -803,6 +795,22 @@ def build_affine_torus_plan(
             "the exact fixed-locus point bound exceeds the canonical torus-point "
             f"carrier's {MAX_AFFINE_TORUS_POINT_DIGITS}-digit envelope",
         )
+
+    selected_base_point_height = _selected_zero_lift_base_point_height(
+        displacement,
+        translation,
+        attained_rank,
+    )
+    rank_bounds = (
+        _rank_bounds(
+            dimension=dimension,
+            rank=attained_rank,
+            displacement_height=displacement_height,
+            common_denominator=common_denominator,
+            translation_is_zero=translation_is_zero,
+            selected_base_point_height=selected_base_point_height,
+        ),
+    )
 
     result_bytes = max(
         _result_bytes_for_rank(

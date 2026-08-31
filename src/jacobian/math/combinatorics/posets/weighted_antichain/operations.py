@@ -130,7 +130,7 @@ def _admit_maximum_weight_antichain(
     return _MaximumWeightAntichainAdmission(weights=weight_fracs)
 
 
-def compute_maximum_weight_antichain(
+def compute_maximum_weight_antichain(  # noqa: C901
     poset: FinitePoset,
     weights: tuple[CanonicalRational, ...],
 ) -> MaximumWeightAntichainResult:
@@ -185,61 +185,66 @@ def compute_maximum_weight_antichain(
     total_weight_int = sum(int_weights)
 
     # Build flow network: source, sink, n left nodes, n right nodes
-    SOURCE = 0
-    SINK = 1
-    left = lambda i: 2 + i  # v_L
-    right = lambda i: 2 + n + i  # v_R
-    num_nodes = 2 + 2 * n
-    INF_CAP = 10**18
+    source = 0
+    sink = 1
 
-    adj: list[dict[int, int]] = [dict() for _ in range(num_nodes)]
+    def left(i: int) -> int:  # v_L
+        return 2 + i
+
+    def right(i: int) -> int:  # v_R
+        return 2 + n + i
+
+    num_nodes = 2 + 2 * n
+    inf_cap = 10**18
+
+    adj: list[dict[int, int]] = [{} for _ in range(num_nodes)]
 
     # source -> v_L with capacity w_v
     for i in range(n):
         w = int_weights[i]
-        adj[SOURCE][left(i)] = w
-        adj[left(i)].setdefault(SOURCE, 0)
+        adj[source][left(i)] = w
+        adj[left(i)].setdefault(source, 0)
 
     # v_R -> sink with capacity w_v
     for i in range(n):
         w = int_weights[i]
-        adj[right(i)][SINK] = w
-        adj[SINK].setdefault(right(i), 0)
+        adj[right(i)][sink] = w
+        adj[sink].setdefault(right(i), 0)
 
     # v_L -> u_R with infinite capacity for each order v < u
     for v, u in order_pairs:
         old = adj[left(v)].get(right(u), 0)
-        adj[left(v)][right(u)] = old + INF_CAP
+        adj[left(v)][right(u)] = old + inf_cap
         adj[right(u)].setdefault(left(v), 0)
 
     # Edmonds-Karp BFS max-flow
     total_flow = 0
     while True:
         parent = [-1] * num_nodes
-        parent[SOURCE] = SOURCE
-        queue = deque([SOURCE])
+        parent[source] = source
+        queue = deque([source])
         found = False
         while queue:
             node = queue.popleft()
             for v, cap in adj[node].items():
                 if parent[v] == -1 and cap > 0:
                     parent[v] = node
-                    if v == SINK:
+                    if v == sink:
                         found = True
                         break
                     queue.append(v)
             if found:
                 break
-        if parent[SINK] == -1:
+        if parent[sink] == -1:
             break
         path_flow = float("inf")
-        v = SINK
-        while v != SOURCE:
+        v = sink
+        while v != source:
             u = parent[v]
             path_flow = min(path_flow, adj[u][v])
             v = u
-        v = SINK
-        while v != SOURCE:
+        v = sink
+        while v != source:
             u = parent[v]
             adj[u][v] -= path_flow
             adj[v][u] += path_flow
@@ -251,8 +256,8 @@ def compute_maximum_weight_antichain(
 
     # Find min vertex cover set via König's theorem:
     # After max-flow, find nodes reachable from source in residual graph.
-    source_reachable = {SOURCE}
-    queue = deque([SOURCE])
+    source_reachable = {source}
+    queue = deque([source])
     while queue:
         node = queue.popleft()
         for v, cap in adj[node].items():

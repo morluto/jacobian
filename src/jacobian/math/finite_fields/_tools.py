@@ -442,8 +442,8 @@ def _build_tools() -> MathTools:
             example(
                 "quadratic_swap_invariants",
                 "Compute the quadratic polynomials fixed by swapping x and y over GF(3). "
-                "Each generator matrix must be square on the variable axis, use one "
-                "prime, and be distinct from the other generators.",
+                "Each generator matrix must be square and invertible on the variable "
+                "axis, use one prime, and be distinct from the other generators.",
                 {
                     "action": {
                         "variable_axis": {

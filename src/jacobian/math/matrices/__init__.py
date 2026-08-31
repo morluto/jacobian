@@ -15,10 +15,16 @@ from jacobian.math.matrices.operations import (
     solve_linear_system,
     trace,
 )
-from jacobian.math.matrices.values import SmithNormalForm
+from jacobian.math.matrices.values import (
+    SmithNormalForm,
+    SparseRationalMatrix,
+    SparseRationalMatrixEntry,
+)
 
 __all__ = [
     "SmithNormalForm",
+    "SparseRationalMatrix",
+    "SparseRationalMatrixEntry",
     "adjugate",
     "characteristic_polynomial",
     "determinant",

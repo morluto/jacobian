@@ -185,7 +185,7 @@ def test_rational_conic_parametrization_has_canonical_known_answer() -> None:
         ),
     ],
 )
-def test_parametrization_replays_substitution_and_inverse_identities(
+def test_parametrization_satisfies_substitution_and_inverse_identities(
     source: RationalPolynomial,
     point: tuple[CanonicalRational, CanonicalRational],
 ) -> None:

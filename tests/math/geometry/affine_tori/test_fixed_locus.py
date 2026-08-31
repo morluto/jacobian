@@ -454,6 +454,41 @@ def test_empty_character_satisfies_the_obstruction_definition() -> None:
     assert pairing % 1 == result.outcome.obstruction_pairing.as_fraction() != 0
 
 
+def test_empty_result_deserialization_binds_obstruction_to_source() -> None:
+    source = _source(
+        [[1]],
+        [Fraction(1, 3)],
+    )
+    result = affine_torus_fixed_locus(source)
+    assert isinstance(result.outcome, EmptyAffineTorusFixedLocus)
+    payload = result.model_dump(mode="json")
+    payload["outcome"]["obstruction_pairing"] = {"num": "1", "den": "2"}
+
+    with pytest.raises(ValidationError, match="obstruction pairing"):
+        AffineTorusFixedLocusResult.model_validate(payload)
+
+
+def test_nonempty_result_deserialization_binds_identity_component_to_source() -> None:
+    source = _source(((1,),), (Fraction(0),))
+    result = affine_torus_fixed_locus(source).model_dump(mode="json")
+    outcome = dict(result["outcome"])
+    family = dict(outcome["fixed_locus"])
+    identity_component = dict(family["identity_component"])
+    identity_component["parameter_dimension"] = 0
+    identity_component["embedding"] = {
+        "domain": "ZZ",
+        "row_count": 1,
+        "column_count": 0,
+        "entries": [[]],
+    }
+    family["identity_component"] = identity_component
+    outcome["fixed_locus"] = family
+    result["outcome"] = outcome
+
+    with pytest.raises(ValidationError, match="identity-component dimension"):
+        AffineTorusFixedLocusResult.model_validate(result)
+
+
 def test_random_small_full_rank_maps_match_a_grid_congruence_oracle() -> None:
     random = Random(2443)
     checked = 0
@@ -566,6 +601,57 @@ def test_zero_dimensional_matrices_and_discriminated_result_round_trip() -> None
             result.model_dump(mode="json")
         )
         assert restored == result
+
+
+def test_component_relations_are_bound_to_the_declared_generators() -> None:
+    result = affine_torus_fixed_locus(_source(((3,),), (Fraction(0),))).model_dump(
+        mode="json"
+    )
+    outcome = dict(result["outcome"])
+    family = dict(outcome["fixed_locus"])
+    generator = dict(family["component_generators"][0])
+    generator["coordinates"] = [{"num": "1", "den": "3"}]
+    family["component_generators"] = [generator]
+    outcome["fixed_locus"] = family
+    result["outcome"] = outcome
+
+    with pytest.raises(ValidationError, match="relation_generators"):
+        AffineTorusFixedLocusResult.model_validate(result)
+
+
+def test_component_relations_use_the_saturated_identity_annihilator() -> None:
+    result = affine_torus_fixed_locus(
+        _source(
+            ((2, 0, -2), (0, 3, -2), (0, 0, 1)),
+            (Fraction(0), Fraction(0), Fraction(0)),
+        )
+    ).model_dump(mode="json")
+    outcome = dict(result["outcome"])
+    family = dict(outcome["fixed_locus"])
+    generator = dict(family["component_generators"][1])
+    generator["coordinates"] = [
+        {"num": "0", "den": "1"},
+        {"num": "1", "den": "4"},
+        {"num": "0", "den": "1"},
+    ]
+    family["component_generators"] = [generator]
+    family["finite_components"] = {
+        "generator_count": 1,
+        "relation_matrix": {
+            "domain": "ZZ",
+            "row_count": 1,
+            "column_count": 1,
+            "entries": [["2"]],
+        },
+        "generator_orders": ["2"],
+        "invariant_factors": ["2"],
+        "component_count": "2",
+    }
+    outcome["fixed_locus"] = family
+    result["outcome"] = outcome
+
+    with pytest.raises(ValidationError, match="relation_generators"):
+        AffineTorusFixedLocusResult.model_validate(result)
 
 
 def test_contradictory_discriminator_and_component_metadata_fail_closed() -> None:
@@ -919,6 +1005,24 @@ def test_admission_uses_the_exact_attainable_rank_not_the_nonzero_row_count() ->
     assert len(kernel.component_generators) == plan.rank_bounds[0].rank
     assert kernel.component_count == height
     assert plan.bounds_for_rank(1).source_minor_height >= height
+
+
+def test_admission_uses_the_selected_translated_solve_height() -> None:
+    height = 10**499
+    linear = ((height + 1, 0, 0), (0, height + 1, 0), (0, 0, 1))
+    source = _source(
+        linear,
+        (Fraction(1, height), Fraction(0), Fraction(0)),
+    )
+
+    plan = build_affine_torus_plan(source, deadline=monotonic() + 300)
+    result = affine_torus_fixed_locus(source)
+
+    assert isinstance(result.outcome, NonemptyAffineTorusFixedLocus)
+    assert result.outcome.fixed_locus.base_point.coordinates[0].as_fraction() == (
+        Fraction(height * height - 1, height * height)
+    )
+    assert plan.bounds_for_rank(2).base_point_component_height == height * height
 
 
 def test_translated_identity_is_empty_without_charging_the_translation_lcm() -> None:

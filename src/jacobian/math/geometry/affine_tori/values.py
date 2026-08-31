@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from itertools import pairwise
 from math import gcd, lcm
 from typing import Annotated, Self
@@ -592,6 +593,25 @@ class FiniteTorusComponentPresentation(StrictModel):
             raise _validation_error(
                 "presentation_orders", "component generator orders must be positive"
             )
+        if rank > 0:
+            from flint import fmpq_mat
+
+            inverse = fmpq_mat(
+                [
+                    [parse_canonical_integer(value) for value in row]
+                    for row in self.relation_matrix.entries
+                ]
+            ).inv()
+            expected_orders = tuple(
+                lcm(*(int(inverse[row, column].q) for row in range(rank)))
+                for column in range(rank)
+            )
+            if orders != expected_orders:
+                raise _validation_error(
+                    "presentation_orders",
+                    "generator orders must match the corresponding standard "
+                    "generators of the declared relation matrix",
+                )
         if any(value <= 1 for value in factors) or any(
             right % left for left, right in pairwise(factors)
         ):
@@ -654,6 +674,65 @@ class RationalTorusCosetFamily(StrictModel):
                 "generator_count",
                 "component generators must match the finite presentation",
             )
+        rank = self.finite_components.generator_count
+        if rank:
+            from flint import fmpz_mat
+
+            from jacobian.math.geometry.affine_tori._flint import (
+                _saturated_integer_kernel,
+            )
+
+            embedding = self.identity_component.embedding
+            embedding_matrix = fmpz_mat(
+                [
+                    [parse_canonical_integer(value) for value in row]
+                    for row in embedding.entries
+                ]
+            )
+            embedding_rank = int(embedding_matrix.rank())
+            if embedding_rank != embedding.column_count:
+                raise _validation_error(
+                    "subtorus_rank",
+                    "identity-component embedding must have full column rank",
+                )
+            annihilator = _saturated_integer_kernel(
+                embedding_matrix.transpose(),
+                rank=embedding_rank,
+            ).basis
+            relation_matrix = self.finite_components.relation_matrix.entries
+            for relation_column in range(rank):
+                relation_point = tuple(
+                    sum(
+                        (
+                            parse_canonical_integer(
+                                relation_matrix[row][relation_column]
+                            )
+                            * self.component_generators[row]
+                            .coordinates[coordinate]
+                            .as_fraction()
+                            for row in range(rank)
+                        ),
+                        Fraction(0),
+                    )
+                    for coordinate in range(self.ambient_torus.dimension)
+                )
+                for annihilator_column in range(
+                    self.ambient_torus.dimension - embedding_rank
+                ):
+                    pairing = sum(
+                        (
+                            int(annihilator[coordinate, annihilator_column])
+                            * relation_point[coordinate]
+                            for coordinate in range(self.ambient_torus.dimension)
+                        ),
+                        Fraction(0),
+                    )
+                    if pairing.denominator != 1:
+                        raise _validation_error(
+                            "relation_generators",
+                            "component generators must satisfy every declared relation "
+                            "modulo the identity component",
+                        )
         return self
 
 

@@ -7,9 +7,24 @@ import sys
 
 from flint import fmpz_mat
 
+from jacobian.canonical import (
+    format_canonical_integer,
+    loads_strict_json,
+    parse_canonical_integer,
+)
+
+
+def _decode_integer(value: object) -> int:
+    if not isinstance(value, str):
+        raise ValueError("worker integer must be a canonical string")
+    parsed = parse_canonical_integer(value)
+    if format_canonical_integer(parsed) != value:
+        raise ValueError("worker integer is not canonical")
+    return parsed
+
 
 def main() -> None:
-    payload = json.load(sys.stdin)
+    payload = loads_strict_json(sys.stdin.buffer.read())
     coefficient_count = payload["coefficient_count"]
     constraints = payload["constraints"]
     constraint_count = len(constraints)
@@ -17,7 +32,7 @@ def main() -> None:
         [
             [
                 *(
-                    constraints[constraint][coordinate]
+                    _decode_integer(constraints[constraint][coordinate])
                     for constraint in range(constraint_count)
                 ),
                 *(int(coordinate == column) for column in range(coefficient_count)),
@@ -28,7 +43,7 @@ def main() -> None:
     graph_hnf = graph.hnf()
     primitive_kernel = [
         [
-            int(graph_hnf[row, constraint_count + column])
+            format_canonical_integer(int(graph_hnf[row, constraint_count + column]))
             for column in range(coefficient_count)
         ]
         for row in range(coefficient_count)

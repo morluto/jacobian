@@ -5,6 +5,9 @@ from jacobian.math.number_theory._additional_ops import ADDITIONAL_NT_OPERATIONS
 from jacobian.math.number_theory._contiguous_sum import CONTIGUOUS_SUM_OPERATION
 from jacobian.math.number_theory._derived import DERIVED_NUMBER_THEORY_OPERATIONS
 from jacobian.math.number_theory._divisibility import DIVISIBILITY_OPERATIONS
+from jacobian.math.number_theory._divisibility_edge_profile import (
+    DIVISIBILITY_EDGE_PROFILE_OPERATION,
+)
 from jacobian.math.number_theory._divisibility_graph import (
     DIVISIBILITY_GRAPH_OPERATION,
 )
@@ -33,6 +36,7 @@ TOOLS: MathTools = (
     *DIVISIBILITY_OPERATIONS,
     *PRIME_OPERATIONS,
     POWERFUL_NUMBER_OPERATION,
+    DIVISIBILITY_EDGE_PROFILE_OPERATION,
     DIVISIBILITY_POSET_OPERATION,
     POWERFUL_ENUMERATE_OPERATION,
     *MODULAR_OPERATIONS,

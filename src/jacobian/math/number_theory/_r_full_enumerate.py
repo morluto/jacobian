@@ -113,13 +113,12 @@ def enumerate_r_full(minimum_exponent: int, cutoff: int) -> tuple[int, ...]:
                 else "r-full planning work exceeds the admitted budget"
             ),
         )
-    result = _enumerate_r_full_admitted(
-        minimum_exponent,
+    family = enumerate_r_full_kernel(
         cutoff,
-        enforce_transport=False,
-        plan=plan,
+        minimum_exponent,
+        planned_family=plan.family,
     )
-    return tuple(parse_canonical_integer(value) for value in result.family)
+    return tuple(family)
 
 
 R_FULL_ENUMERATE_OPERATION = number_theory_operation(

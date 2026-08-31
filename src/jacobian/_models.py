@@ -35,10 +35,7 @@ def canonicalize_json_containers(value: Any) -> Any:
         if isinstance(inner, tuple):
             return tuple(_canonicalize(item, depth + 1) for item in inner)
         if isinstance(inner, dict):
-            return {
-                key: _canonicalize(item, depth + 1)
-                for key, item in inner.items()
-            }
+            return {key: _canonicalize(item, depth + 1) for key, item in inner.items()}
         return inner
 
     return _canonicalize(value, 0)

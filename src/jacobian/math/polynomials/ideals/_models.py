@@ -73,8 +73,8 @@ def _admit_monomial_ideal(ideal: RationalPolynomialIdeal) -> None:
                 "every monomial-ideal generator must have unit coefficient"
             )
     # Extract exponent vectors for canonical-form checks.
-    generators = tuple(
-        generator.polynomial.terms[0].exponents for generator in ideal.generators
+    generators: tuple[tuple[int, ...], ...] = tuple(
+        gen.polynomial.terms[0].exponents for gen in ideal.generators
     )
     if any(not any(generator) for generator in generators):
         raise _validation_error(
@@ -84,12 +84,12 @@ def _admit_monomial_ideal(ideal: RationalPolynomialIdeal) -> None:
         raise _validation_error(
             "monomial generators must use descending lexicographic order"
         )
-    for index, generator in enumerate(generators):
+    for index, gen in enumerate(generators):
         for other in generators[index + 1 :]:
             if all(
-                left <= right for left, right in zip(generator, other, strict=True)
+                left <= right for left, right in zip(gen, other, strict=True)
             ) or all(
-                right <= left for left, right in zip(generator, other, strict=True)
+                right <= left for left, right in zip(gen, other, strict=True)
             ):
                 raise _validation_error(
                     "monomial generators must be pairwise nondividing"

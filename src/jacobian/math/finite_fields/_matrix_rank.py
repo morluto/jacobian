@@ -26,9 +26,6 @@ from jacobian.math.finite_fields._flint import (
 from jacobian.math.finite_fields._flint import (
     to_backend as _to_backend,
 )
-from jacobian.math.finite_fields._matrix_rank_kernels import (
-    compute_matrix_rank as _compute_matrix_rank_kernel,
-)
 from jacobian.math.finite_fields._matrix_rank_models import (
     MatrixRankRequest,
     MatrixRankResult,
@@ -194,6 +191,10 @@ def compute_matrix_rank(
             )
     execution_checkpoint("after result admission")
     # Compute the exact deterministic pivots using the maintained backend.
+    from jacobian.math.finite_fields._matrix_rank_kernels import (
+        compute_matrix_rank as _compute_matrix_rank_kernel,
+    )
+
     data = _compute_matrix_rank_kernel(
         matrix,
         execution_checkpoint=execution_checkpoint,

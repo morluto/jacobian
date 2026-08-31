@@ -8,8 +8,8 @@ from typing import Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.canonical import CanonicalLimits, canonicalize_json
 from jacobian.math.combinatorics.finite_structures.sets._models import (
-    _MAX_FINITE_SET_WIRE_BYTES,
     MAX_FINITE_INTEGER_SET_ELEMENTS,
     FiniteIntegerSet,
 )
@@ -25,9 +25,9 @@ MAX_FRIABLE_ENUMERATE_GENERATED_CUTOFF = 10_000
 MAX_FRIABLE_ENUMERATE_FAMILY_SIZE = MAX_FINITE_INTEGER_SET_ELEMENTS
 _MAX_FRIABLE_ENUMERATE_SOURCE_DIGITS = 256
 _MAX_FRIABLE_ENUMERATE_SOURCE_ABS = 10**_MAX_FRIABLE_ENUMERATE_SOURCE_DIGITS
-# FiniteIntegerSet enforces a wire envelope of max_output_bytes // 2;
-# admission must use that carrier limit, not the full output bound.
-_MAX_FRIABLE_ENUMERATED_BYTES = _MAX_FINITE_SET_WIRE_BYTES
+# The final operation result is delivered under the canonical output boundary;
+# the finite-set carrier itself does not enforce the half-budget constant.
+_MAX_FRIABLE_ENUMERATED_BYTES = CanonicalLimits().max_output_bytes
 _MAX_FRIABLE_ENUMERATE_COUNT_NODES = 2_000_000
 
 
@@ -93,10 +93,20 @@ def _estimate_serialized_bytes(x: int, family_size: int) -> int:
     return family_size * (max_digits + 3)
 
 
-def _exact_serialized_bytes(family: tuple[int, ...]) -> int:
-    """Sum the actual canonical wire widths of a materialized family."""
+def _exact_serialized_bytes(x: int, y: int, family: tuple[int, ...]) -> int:
+    """Measure the complete final result in the canonical wire format."""
 
-    return sum(max(1, len(str(v)) + 3) for v in family)
+    payload = {
+        "family": {"elements": [str(value) for value in family]},
+        "x": str(x),
+        "y": str(y),
+    }
+    return len(
+        canonicalize_json(
+            payload,
+            limits=CanonicalLimits(max_output_bytes=(1 << 63) - 1),
+        )
+    )
 
 
 class FriableEnumerateRequest(StrictModel):
@@ -129,6 +139,20 @@ class FriableEnumerateResult(StrictModel):
 
     @model_validator(mode="after")
     def require_nonempty_or_singleton(self) -> Self:
+        if self.x == "0" and self.family.elements:
+            raise _validation_error(
+                "friable_enumerate_zero_source_must_be_empty",
+                "friable-enumerate family must be empty when x is zero",
+            )
+        if (
+            self.x != "0"
+            and self.y in {"0", "1"}
+            and self.family.elements != ("1",)
+        ):
+            raise _validation_error(
+                "friable_enumerate_small_cutoff_is_singleton",
+                "positive x with y at most one must have family {1}",
+            )
         if not self.family.elements and self.x != "0":
             raise _validation_error(
                 "friable_enumerate_family_must_be_nonempty_when_x_is_positive",
@@ -257,7 +281,7 @@ def plan_friable_enumerate(
                 "friable-enumerate family exceeds the result-size budget",
             )
         if (
-            _exact_serialized_bytes(tuple(range(1, x + 1)))
+            _exact_serialized_bytes(x, y, tuple(range(1, x + 1)))
             > _MAX_FRIABLE_ENUMERATED_BYTES
         ):
             raise _validation_error(
@@ -277,7 +301,7 @@ def plan_friable_enumerate(
                 "friable_enumerate_family_exceeds_the_result_size_budget",
                 "friable-enumerate family exceeds the result-size budget",
             )
-        if _exact_serialized_bytes(family) > _MAX_FRIABLE_ENUMERATED_BYTES:
+        if _exact_serialized_bytes(x, y, family) > _MAX_FRIABLE_ENUMERATED_BYTES:
             raise _validation_error(
                 "friable_enumerate_family_exceeds_the_serialized_byte_budget",
                 "friable-enumerate family exceeds the serialized-byte budget",
@@ -299,7 +323,7 @@ def plan_friable_enumerate(
             "friable_enumerate_family_exceeds_the_result_size_budget",
             "friable-enumerate family exceeds the result-size budget",
         )
-    if _exact_serialized_bytes(family) > _MAX_FRIABLE_ENUMERATED_BYTES:
+    if _exact_serialized_bytes(x, y, family) > _MAX_FRIABLE_ENUMERATED_BYTES:
         raise _validation_error(
             "friable_enumerate_family_exceeds_the_serialized_byte_budget",
             "friable-enumerate family exceeds the serialized-byte budget",

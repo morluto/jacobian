@@ -13,6 +13,7 @@ from jacobian.math.number_theory._friable_enumerate_models import (
     MAX_FRIABLE_ENUMERATE_GENERATED_CUTOFF,
     MAX_FRIABLE_ENUMERATE_MATERIALIZED_X,
     FriableEnumerateRequest,
+    FriableEnumerateResult,
 )
 from jacobian.math.number_theory._friable_kernel import count_friable
 
@@ -198,6 +199,18 @@ def test_operation_example_executes() -> None:
     assert result.family.elements == tuple(str(v) for v in FIVE_SMOOTH_THROUGH_20)
     assert result.x == "20"
     assert result.y == "5"
+
+
+def test_result_rejects_impossible_degenerate_families() -> None:
+    with pytest.raises(ValueError, match="must be empty when x is zero"):
+        FriableEnumerateResult.model_validate(
+            {"x": "0", "y": "5", "family": {"elements": ["1"]}}
+        )
+
+    with pytest.raises(ValueError, match=r"must have family \{1\}"):
+        FriableEnumerateResult.model_validate(
+            {"x": "5", "y": "0", "family": {"elements": ["2"]}}
+        )
 
 
 def test_operation_is_discoverable_with_one_executable_example() -> None:

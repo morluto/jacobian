@@ -19,23 +19,25 @@ def _monomial_ideal(
     variables: tuple[str, ...], *generators: tuple[int, ...]
 ) -> MonomialIdealBettiRequest:
     return MonomialIdealBettiRequest(
-        ideal=RationalPolynomialIdeal(
-            variables=variables,
-            generators=tuple(
-                {
-                    "domain": "QQ",
-                    "variables": list(variables),
-                    "polynomial": {
-                        "terms": [
-                            {
-                                "coefficient": {"num": "1", "den": "1"},
-                                "exponents": list(generator),
-                            }
-                        ]
-                    },
-                }
-                for generator in generators
-            ),
+        ideal=RationalPolynomialIdeal.model_validate(
+            {
+                "variables": variables,
+                "generators": [
+                    {
+                        "domain": "QQ",
+                        "variables": list(variables),
+                        "polynomial": {
+                            "terms": [
+                                {
+                                    "coefficient": {"num": "1", "den": "1"},
+                                    "exponents": list(generator),
+                                }
+                            ]
+                        },
+                    }
+                    for generator in generators
+                ],
+            }
         )
     )
 
@@ -225,25 +227,27 @@ def test_generator_and_exponent_boundaries_reject_before_kernel_work() -> None:
         )
     with pytest.raises(ValidationError, match="single monomial term"):
         MonomialIdealBettiRequest(
-            ideal=RationalPolynomialIdeal(
-                variables=("x",),
-                generators=(
-                    {
-                        "domain": "QQ",
-                        "variables": ["x"],
-                        "polynomial": {
-                            "terms": [
-                                {
-                                    "coefficient": {"num": "1", "den": "1"},
-                                    "exponents": [2],
-                                },
-                                {
-                                    "coefficient": {"num": "1", "den": "1"},
-                                    "exponents": [0],
-                                },
-                            ]
+            ideal=RationalPolynomialIdeal.model_validate(
+                {
+                    "variables": ("x",),
+                    "generators": [
+                        {
+                            "domain": "QQ",
+                            "variables": ["x"],
+                            "polynomial": {
+                                "terms": [
+                                    {
+                                        "coefficient": {"num": "1", "den": "1"},
+                                        "exponents": [2],
+                                    },
+                                    {
+                                        "coefficient": {"num": "1", "den": "1"},
+                                        "exponents": [0],
+                                    },
+                                ]
+                            },
                         },
-                    },
-                ),
+                    ],
+                }
             )
         )

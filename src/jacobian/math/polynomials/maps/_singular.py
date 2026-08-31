@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import typing
+
 import re
 import time
 from dataclasses import dataclass
@@ -45,17 +47,23 @@ from jacobian.math.polynomials.values import (
     SparseRationalPolynomial,
 )
 
-_generic_fiber_deadline: float | None = None
+def _make_generic_fiber_deadline_check(
+    deadline: float,
+) -> typing.Callable[[], None]:
+    """Return a request-local deadline check closure.
 
+    Each call gets its own deadline rather than sharing a module-level
+    global, so concurrent requests in worker threads do not clobber
+    each other's deadlines.
+    """
 
-def _check_generic_fiber_deadline() -> None:
-    if (
-        _generic_fiber_deadline is not None
-        and time.monotonic() > _generic_fiber_deadline
-    ):
-        raise TimeoutError(
-            "Singular coefficient reduction exceeded the wall-time limit"
-        )
+    def _check() -> None:
+        if time.monotonic() > deadline:
+            raise TimeoutError(
+                "Singular coefficient reduction exceeded the wall-time limit"
+            )
+
+    return _check
 
 
 _GENERIC_FIBER_PROTOCOL_HEADER = "JACOBIAN_SINGULAR_GENERIC_FIBER_V1"
@@ -309,6 +317,7 @@ def _parse_generic_fiber_coefficient(
     denominator_text: str,
     *,
     target_parameters: tuple[str, ...],
+    deadline_check: typing.Callable[[], None] | None = None,
 ) -> tuple[RationalFunction, int]:
     numerator = _parse_parameter_polynomial(
         numerator_text,
@@ -339,7 +348,7 @@ def _parse_generic_fiber_coefficient(
         numerator_polynomial.as_expr() / denominator_polynomial.as_expr(),
         target_parameters,
         maximum_terms=MAX_GENERIC_FIBER_PARAMETER_TERMS,
-        deadline_check=_check_generic_fiber_deadline,
+        deadline_check=deadline_check,
     )
     return value, len(numerator) + len(denominator)
 
@@ -373,6 +382,7 @@ def _parse_generic_fiber_polynomial(
     *,
     source_count: int,
     target_parameters: tuple[str, ...],
+    deadline_check: typing.Callable[[], None] | None = None,
 ) -> tuple[GenericFiberPolynomial, int]:
     reader.expect("POLYNOMIAL")
     terms: list[GenericFiberTerm] = []
@@ -389,6 +399,7 @@ def _parse_generic_fiber_polynomial(
             reader.pop(),
             reader.pop(),
             target_parameters=target_parameters,
+            deadline_check=deadline_check,
         )
         terms.append(
             GenericFiberTerm(
@@ -509,6 +520,7 @@ def _parse_generic_fiber_output(
     output: bytes,
     *,
     polynomial_map: RationalPolynomialMap,
+    deadline_check: typing.Callable[[], None] | None = None,
 ) -> tuple[GenericFiberCertificate, int, int | None, str]:
     try:
         text = output.decode("ascii")
@@ -541,6 +553,7 @@ def _parse_generic_fiber_output(
             reader,
             source_count=source_count,
             target_parameters=target_parameters,
+            deadline_check=deadline_check,
         )
         basis.append(polynomial)
         certificate_terms += len(polynomial.terms)
@@ -599,9 +612,8 @@ def run_singular_generic_fiber(
 ) -> SingularGenericFiberResult:
     """Compute one exact generic-fiber certificate in a bounded process."""
 
-    global _generic_fiber_deadline
-    _generic_fiber_deadline = time.monotonic() + budget.wall_seconds
-    deadline = _generic_fiber_deadline
+    deadline = time.monotonic() + budget.wall_seconds
+    deadline_check = _make_generic_fiber_deadline_check(deadline)
     completed = run_bounded_singular(
         _generic_fiber_script(polynomial_map),
         wall_seconds=budget.wall_seconds,
@@ -644,9 +656,12 @@ def run_singular_generic_fiber(
             detail="Singular coefficient reduction exceeded the declared wall-time limit.",
         )
     try:
-        certificate, dimension, vector_dimension, version = _parse_generic_fiber_output(
-            completed.stdout,
-            polynomial_map=polynomial_map,
+        certificate, dimension, vector_dimension, version = (
+            _parse_generic_fiber_output(
+                completed.stdout,
+                polynomial_map=polynomial_map,
+                deadline_check=deadline_check,
+            )
         )
     except UnsupportedSingularVersionError:
         return SingularGenericFiberResult(

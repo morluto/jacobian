@@ -639,7 +639,19 @@ def _validate_canonical_result_bound(bound: FractionBound, ledger: _Ledger) -> i
             polynomial.degrees,
             cap=MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS,
         )
-        if dense_terms > MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS:
+        # When the denominator is the unit polynomial, there can be no
+        # cancellation-induced support expansion, so the tracked sparse
+        # term count is the accurate support bound.
+        is_denominator = label == "denominator"
+        denominator_is_unit = (
+            is_denominator
+            and all(degree == 0 for degree in bound.denominator.degrees)
+        )
+        if denominator_is_unit:
+            support_terms = polynomial.terms
+        else:
+            support_terms = dense_terms
+        if support_terms > MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS:
             _reject(
                 "result_support",
                 f"Lie-derivative {label} can exceed the canonical "
@@ -794,12 +806,30 @@ def _result_bytes_upper_bound(
         if not component.raw_result.is_zero
         and any(component.raw_result.denominator.degrees)
     )
-    distinct_guards = len(inherited_guards) + len(result_guard_polynomials)
-    for _i, result_guard in enumerate(result_guard_polynomials):
-        for inherited_guard in inherited_guards:
-            if result_guard == inherited_guard:
-                distinct_guards -= 1
-                break
+    # Compare compatible canonical representations: the degrees
+    # tuple of each PolynomialBound against the degrees tuple
+    # computed from each SparseRationalPolynomial's terms.
+    inherited_degrees = tuple(
+        tuple(
+            max(term.exponents[axis] for term in guard.terms)
+            for axis in range(len(guard.terms[0].exponents))
+        )
+        if guard.terms
+        else ()
+        for guard in inherited_guards
+    )
+    result_degrees = tuple(
+        guard.degrees for guard in result_guard_polynomials
+    )
+    # Count distinct result guards, deduplicating both against
+    # inherited guards and against each other.
+    distinct_guards = len(inherited_guards)
+    seen_result: set[tuple[int, ...]] = set()
+    for degree in result_degrees:
+        if degree in inherited_degrees or degree in seen_result:
+            continue
+        seen_result.add(degree)
+        distinct_guards += 1
     guard_count_bound = distinct_guards
     if guard_count_bound > MAX_RATIONAL_TENSOR_LOCUS_GUARDS:
         _reject(

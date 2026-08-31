@@ -489,6 +489,12 @@ class ClauseConstrainedRationalFlatProblem(StrictModel):
                             "clause_shape", "every clause must be an array"
                         )
                     memberships += len(clause)
+                    if memberships > MAX_RATIONAL_FLAT_CLAUSE_MEMBERSHIPS:
+                        raise _validation_error(
+                            "clause_membership_bound",
+                            "clause memberships exceed the structural bound of "
+                            f"{MAX_RATIONAL_FLAT_CLAUSE_MEMBERSHIPS}",
+                        )
                     if any(
                         not isinstance(index, int) or isinstance(index, bool)
                         for index in clause
@@ -497,12 +503,6 @@ class ClauseConstrainedRationalFlatProblem(StrictModel):
                             "raw_container_structure",
                             "raw rational-flat clause entries must be integers",
                         )
-                if memberships > MAX_RATIONAL_FLAT_CLAUSE_MEMBERSHIPS:
-                    raise _validation_error(
-                        "clause_membership_bound",
-                        "clause memberships exceed the structural bound of "
-                        f"{MAX_RATIONAL_FLAT_CLAUSE_MEMBERSHIPS}",
-                    )
             generators = data.get("symmetry_generators")
             if isinstance(generators, (list, tuple)):
                 if len(generators) > MAX_RATIONAL_FLAT_SYMMETRY_GENERATORS:
@@ -522,6 +522,13 @@ class ClauseConstrainedRationalFlatProblem(StrictModel):
                     reason="rank_interval_shape",
                     label="rational-flat rank interval",
                 )
+                for key in ("minimum", "maximum"):
+                    value = rank_interval.get(key)
+                    if value is not None and not isinstance(value, int):
+                        raise _validation_error(
+                            "rank_interval_shape",
+                            "rational-flat rank interval endpoints must be integers",
+                        )
             try:
                 return canonicalize_json_containers(data)
             except CanonicalizationError as exc:

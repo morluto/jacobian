@@ -906,7 +906,12 @@ def _search_satisfying_states(
             retained_work = _subset_container_work(len(closed))
             ledger.charge("search_frontier", retained_work)
             if closed not in satisfying:
-                _state_bytes = ambient_dimension * max(state.rank, 1) * 8
+                # Each retained coordinate is a separately allocated Fraction
+                # (object header + numerator pointer + denominator pointer),
+                # plus tuple pointer overhead.  Use a conservative 16-byte
+                # per-rational bound instead of 8 bytes to account for the
+                # Fraction object and container overhead.
+                _state_bytes = ambient_dimension * max(state.rank, 1) * 16
                 if (
                     satisfying_retention_bytes + _state_bytes
                     > CanonicalLimits().max_output_bytes

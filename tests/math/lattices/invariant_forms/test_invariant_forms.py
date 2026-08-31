@@ -525,9 +525,12 @@ def test_cancellation_during_constraint_expansion() -> None:
             return True
 
     action = _action([("A", [[1, 1], [0, 1]])])
-    with request_execution(time.monotonic()), request_cancellation(_Cancelled()):
-        with pytest.raises(OperationExecutionCancelledError):
-            compute_invariant_bilinear_form_lattice(action, "BILINEAR")
+    with (
+        request_execution(time.monotonic()),
+        request_cancellation(_Cancelled()),
+        pytest.raises(OperationExecutionCancelledError),
+    ):
+        compute_invariant_bilinear_form_lattice(action, "BILINEAR")
 
 
 def test_deadline_expiration_before_constraint_expansion() -> None:

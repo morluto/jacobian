@@ -240,7 +240,9 @@ def _root_profile_from_worker(  # noqa: C901
         if type(multiplicity) is not int or multiplicity < 1:
             raise ValueError("malformed root multiplicity")
         declared_multiplicity = next(
-            int(entry[1]) for entry in declared_factors if tuple(int(c) for c in entry[0]) == poly_key
+            int(entry[1])
+            for entry in declared_factors
+            if tuple(int(c) for c in entry[0]) == poly_key
         )
         if multiplicity != declared_multiplicity:
             raise ValueError("worker root multiplicity disagrees with its factor")

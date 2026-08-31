@@ -488,6 +488,26 @@ class ConnectedSubtorusParameterization(StrictModel):
                 "subtorus_dimension",
                 "subtorus parameter dimension must not exceed ambient torus dimension",
             )
+        if self.parameter_dimension == 0:
+            return self
+        embedding = tuple(
+            tuple(parse_canonical_integer(value) for value in row)
+            for row in self.embedding.entries
+        )
+        if self.parameter_dimension == 1:
+            column = tuple(row[0] for row in embedding)
+            if not any(column):
+                raise _validation_error(
+                    "subtorus_rank", "subtorus embedding must have full column rank"
+                )
+            divisor = 0
+            for value in column:
+                divisor = gcd(divisor, abs(value))
+            if divisor != 1:
+                raise _validation_error(
+                    "subtorus_primitive",
+                    "subtorus embedding column must generate a primitive sublattice",
+                )
         return self
 
 
@@ -522,6 +542,14 @@ class FiniteTorusComponentPresentation(StrictModel):
             raise _validation_error(
                 "presentation_invariants",
                 "invariant factor count must not exceed generator count",
+            )
+        if rank > 0 and any(
+            not any(parse_canonical_integer(value) for value in row)
+            for row in self.relation_matrix.entries
+        ):
+            raise _validation_error(
+                "presentation_rank",
+                "finite component relation matrix must have no zero row",
             )
         orders = tuple(
             parse_canonical_integer(value) for value in self.generator_orders

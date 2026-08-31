@@ -36,6 +36,7 @@ class _ContainmentAdmissionPlan:
     edge_masks: tuple[int, ...]
     active_vertices: tuple[int, ...]
     use_inclusion_exclusion: bool
+    use_singleton_closed_form: bool
 
 
 def _admit_hypergraph_vertex_containment(
@@ -93,22 +94,35 @@ def _admit_hypergraph_vertex_containment(
             )
             for mask in minimal_masks
         )
+        use_singleton_closed_form = bool(edge_masks) and all(
+            edge_mask & (edge_mask - 1) == 0 for edge_mask in edge_masks
+        )
         active_state_count = 1 << len(active_vertices)
         ie_terms = _inclusion_exclusion_terms(len(edge_masks), n)
         direct_work = len(edge_masks) * active_state_count + active_state_count * (
             n - len(active_vertices) + 1
         )
         ie_work = ie_terms * (n + len(edge_masks) + 2) if ie_terms is not None else None
-        use_inclusion_exclusion = ie_work is not None and ie_work < direct_work
-        if active_state_count > MAX_SUBSET_STATES and not use_inclusion_exclusion:
+        use_inclusion_exclusion = (
+            ie_work is not None and ie_work < direct_work
+        ) and not use_singleton_closed_form
+        if (
+            active_state_count > MAX_SUBSET_STATES
+            and not use_inclusion_exclusion
+            and not use_singleton_closed_form
+        ):
             raise OperationDomainValidationError(
                 location=("hypergraph", "vertices"),
                 code="hypergraph_containment.state_bound_exceeded",
                 message="the active subset-state envelope is exceeded",
             )
         lift_work = active_state_count * (n - len(active_vertices) + 1)
-        if not use_inclusion_exclusion and (
-            len(edge_masks) * active_state_count + lift_work > MAX_CONTAINMENT_WORK
+        if (
+            not use_inclusion_exclusion
+            and not use_singleton_closed_form
+            and (
+                len(edge_masks) * active_state_count + lift_work > MAX_CONTAINMENT_WORK
+            )
         ):
             raise OperationDomainValidationError(
                 location=("hypergraph", "edges"),
@@ -118,6 +132,7 @@ def _admit_hypergraph_vertex_containment(
     else:
         edge_masks = ()
         active_vertices = ()
+        use_singleton_closed_form = False
     support_size = len(active_vertices)
     probability_digits = (
         1
@@ -159,7 +174,10 @@ def _admit_hypergraph_vertex_containment(
             message="the complete containment profile exceeds the canonical output bound",
         )
     return _ContainmentAdmissionPlan(
-        edge_masks, active_vertices, use_inclusion_exclusion
+        edge_masks,
+        active_vertices,
+        use_inclusion_exclusion,
+        use_singleton_closed_form,
     )
 
 
@@ -236,6 +254,27 @@ def compute_hypergraph_vertex_containment(
             total_state_count=format_canonical_integer(1 << n),
             success_count=format_canonical_integer(1 << n),
             probability=CanonicalRational.from_fraction(Fraction(1)),
+        )
+
+    if plan.use_singleton_closed_form:
+        # Every minimal edge is a singleton over one distinct vertex, so the
+        # event "a declared edge is contained" reduces to "at least one of the
+        # m singleton-edge vertices is retained".  This admits a closed form
+        # instead of enumerating the (possibly exponential) active states.
+        m = len(plan.edge_masks)
+        singleton_counts = tuple(comb(n, k) - comb(n - m, k) for k in range(n + 1))
+        success_count = (1 << n) - (1 << (n - m))
+        p = retention_probability.as_fraction()
+        probability = Fraction(1) - (1 - p) ** m
+        return HypergraphVertexContainmentResult(
+            hypergraph=hypergraph,
+            retention_probability=retention_probability,
+            containing_subset_counts=tuple(
+                format_canonical_integer(value) for value in singleton_counts
+            ),
+            total_state_count=format_canonical_integer(1 << n),
+            success_count=format_canonical_integer(success_count),
+            probability=CanonicalRational.from_fraction(probability),
         )
 
     active_n = len(plan.active_vertices)

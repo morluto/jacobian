@@ -224,3 +224,40 @@ def test_dominated_edges_are_removed_before_work_admission() -> None:
     )
 
     assert parse_canonical_integer(result.success_count) == 1 << 12
+
+
+def test_many_singleton_edges_use_closed_form_before_state_cap() -> None:
+    """23 singleton edges would exceed the 2^22 subset cap; use closed form."""
+    m = 23
+    n = m
+    vertices = [f"v{i}" for i in range(n)]
+    edges = [(f"e{i}", (vertices[i],)) for i in range(m)]
+    hg = _hg(vertices, edges)
+
+    result = compute_hypergraph_vertex_containment(
+        hg, CanonicalRational.from_fraction(Fraction(1, 2))
+    )
+
+    assert parse_canonical_integer(result.total_state_count) == 1 << n
+    assert parse_canonical_integer(result.success_count) == (1 << n) - (1 << (n - m))
+    for k in range(n + 1):
+        expected = comb(n, k) - comb(n - m, k)
+        assert parse_canonical_integer(result.containing_subset_counts[k]) == expected
+    assert result.probability.as_fraction() == Fraction(1) - (1 - Fraction(1, 2)) ** m
+
+
+def test_singleton_closed_form_keeps_isolated_vertices() -> None:
+    """Singleton edges over a subset of vertices hold the other vertices aside."""
+    m = 2
+    n = 25
+    vertices = [f"v{i}" for i in range(n)]
+    hg = _hg(vertices, [(f"e{i}", (vertices[i],)) for i in range(m)])
+
+    result = compute_hypergraph_vertex_containment(
+        hg, CanonicalRational.from_fraction(Fraction(1, 3))
+    )
+
+    for k in range(n + 1):
+        expected = comb(n, k) - comb(n - m, k)
+        assert parse_canonical_integer(result.containing_subset_counts[k]) == expected
+    assert result.probability.as_fraction() == Fraction(1) - (Fraction(2, 3) ** m)

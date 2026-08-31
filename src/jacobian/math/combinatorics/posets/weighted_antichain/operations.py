@@ -157,7 +157,9 @@ def compute_maximum_weight_antichain(
         )
 
     idx = {e: i for i, e in enumerate(elements)}
-    order_pairs = [(idx[pair.lower], idx[pair.upper]) for pair in poset.strict_order_pairs]
+    order_pairs = [
+        (idx[pair.lower], idx[pair.upper]) for pair in poset.strict_order_pairs
+    ]
 
     # Convert fractions to common denominator for integer flow network.
     common_den = 1

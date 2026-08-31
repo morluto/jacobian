@@ -26,9 +26,9 @@ from jacobian.math.number_theory.quadratic_forms.binary._models import (
     PrimitivePositiveDefiniteBinaryQuadraticForm,
     ProperBinaryQuadraticFormClass,
     ProperEquivalenceResult,
-    _require_evaluated_value_bound,
     _require_composition_budget,
-_require_reduced_class_search_budget,
+    _require_evaluated_value_bound,
+    _require_reduced_class_search_budget,
     _require_representation_coordinate,
 )
 
@@ -174,9 +174,7 @@ def compose_classes(
     second: ProperBinaryQuadraticFormClass,
 ) -> BinaryQuadraticFormClassCompositionResult:
     """Return the exact proper-class product with direct-composition evidence."""
-    _require_composition_budget(
-        first.representative, second.representative
-    )
+    _require_composition_budget(first.representative, second.representative)
     direct = _compose(first.representative, second.representative)
     composed_form = PrimitivePositiveDefiniteBinaryQuadraticForm(
         a=direct.a, b=direct.b, c=direct.c

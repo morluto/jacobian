@@ -571,9 +571,7 @@ class TestProperClassComposition:
         """Composition is O(1) + O(log|D|) reduction, not class enumeration."""
         principal = _proper_class(1, 0, 7_351)
         result = compute_class_compose(
-            BinaryQuadraticFormClassComposeRequest(
-                first=principal, second=principal
-            )
+            BinaryQuadraticFormClassComposeRequest(first=principal, second=principal)
         )
         assert result.product == principal
 
@@ -582,9 +580,7 @@ class TestProperClassComposition:
         second = _proper_class(1, 0, 7)
         with pytest.raises(ValueError, match="same discriminant"):
             compute_class_compose(
-                BinaryQuadraticFormClassComposeRequest(
-                    first=first, second=second
-                )
+                BinaryQuadraticFormClassComposeRequest(first=first, second=second)
             )
 
 

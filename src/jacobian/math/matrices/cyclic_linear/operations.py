@@ -871,30 +871,36 @@ def _run_kernel_subprocess(
                 input_path,
                 output_path,
             ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            # The child communicates through the bounded temporary output
+            # file. Redirecting both standard streams avoids pipe-buffer
+            # backpressure while it runs; diagnostics are not part of the
+            # mathematical result.
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
 
-        timeout = None
-        if deadline is not None:
-            timeout = max(0.1, deadline - time.monotonic())
-
-        try:
-            proc.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait(timeout=5)
-            raise OperationExecutionTimeoutError(
-                "cyclotomic kernel subprocess exceeded the wall-time limit"
-            )
+        while proc.poll() is None:
+            if request_cancelled():
+                proc.kill()
+                proc.wait(timeout=5)
+                raise OperationExecutionCancelledError(
+                    "cyclotomic kernel subprocess was cancelled"
+                )
+            if deadline is not None and time.monotonic() >= deadline:
+                proc.kill()
+                proc.wait(timeout=5)
+                raise OperationExecutionTimeoutError(
+                    "cyclotomic kernel subprocess exceeded the wall-time limit"
+                )
+            try:
+                proc.wait(timeout=0.1)
+            except subprocess.TimeoutExpired:
+                continue
 
         if proc.returncode != 0:
-            stderr = (proc.stderr.read() if proc.stderr else b"").decode(
-                "ascii", errors="replace"
-            )
             raise RuntimeError(
                 f"cyclotomic kernel subprocess exited with code "
-                f"{proc.returncode}: {stderr[:500]}"
+                f"{proc.returncode}"
             )
 
         if not os.path.exists(output_path):

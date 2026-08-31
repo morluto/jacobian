@@ -71,6 +71,18 @@ def _coefficients(element: object) -> tuple[Fraction, ...]:
     return tuple(value.as_fraction() for value in element.coefficients_ascending)  # type: ignore[attr-defined]
 
 
+def test_cyclotomic_element_has_explicit_shared_number_field_conversion() -> None:
+    element = RationalCyclotomicElement(
+        field=RationalCyclotomicField(order=3),
+        coefficients_ascending=(_q(0), _q(1)),
+    )
+
+    converted = element.to_simple_number_field_element()
+
+    assert converted.presentation.coefficients_descending == ("1", "1", "1")
+    assert converted.coefficients_ascending == element.coefficients_ascending
+
+
 def test_scalar_x_minus_one_drops_only_the_trivial_component() -> None:
     result = cyclic_rational_rank_kernel_profile(
         _symbol(period=6, entries=((0, 0, 0, -1), (0, 0, 1, 1)))

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from math import gcd
-from typing import Annotated, Any, Literal, Self
+from typing import TYPE_CHECKING, Annotated, Any, Literal, Self
 
 from pydantic import Field, WithJsonSchema, model_validator
 from pydantic_core import PydanticCustomError
@@ -15,6 +15,11 @@ from jacobian.math.matrices.values import (
     MAX_RATIONAL_MATRIX_ORDER,
     RationalVectorSpaceBasis,
 )
+
+if TYPE_CHECKING:
+    from jacobian.math.number_theory.number_fields.values import (
+        SimpleNumberFieldElement,
+    )
 from jacobian.math.polynomials.values import RationalPolynomial
 
 MAX_CYCLIC_GLOBAL_AXIS = MAX_RATIONAL_MATRIX_ORDER
@@ -268,7 +273,12 @@ def _require_raw_coordinate_bound(
 
 
 class RationalCyclotomicElement(StrictModel):
-    """One exact element in a canonical rational cyclotomic field."""
+    """One exact element in a canonical rational cyclotomic field.
+
+    ``to_simple_number_field_element`` provides an explicit conversion to
+    Jacobian's shared number-field element carrier. The cyclotomic wrapper
+    retains the period order needed by cyclic-map results.
+    """
 
     field: RationalCyclotomicField
     coefficients_ascending: tuple[CyclotomicCoordinate, ...] = Field(
@@ -309,6 +319,29 @@ class RationalCyclotomicElement(StrictModel):
                 f"{MAX_CYCLIC_FIELD_ELEMENT_DIGITS}-digit bound",
             )
         return self
+
+    def to_simple_number_field_element(self) -> SimpleNumberFieldElement:
+        """Convert to the shared ``SimpleNumberFieldElement`` carrier."""
+        from sympy import Poly, cyclotomic_poly, symbols
+
+        from jacobian.math.number_theory.number_fields.values import (
+            SimpleNumberFieldElement,
+            SimpleNumberFieldPresentation,
+        )
+
+        variable = symbols("x")
+        coefficients = tuple(
+            str(int(coefficient))
+            for coefficient in Poly(
+                cyclotomic_poly(self.field.order, variable), variable
+            ).all_coeffs()
+        )
+        return SimpleNumberFieldElement(
+            presentation=SimpleNumberFieldPresentation(
+                coefficients_descending=coefficients
+            ),
+            coefficients_ascending=self.coefficients_ascending,
+        )
 
 
 class RationalCyclotomicMatrix(StrictModel):

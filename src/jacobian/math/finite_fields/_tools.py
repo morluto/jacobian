@@ -19,7 +19,6 @@ from jacobian.math.finite_fields import (
     fiber_partition,
     finite_map_table,
     linear_map_rank,
-    matrix_rank,
     orbit_distribution,
     paley_tournament,
     projective_line,

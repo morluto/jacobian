@@ -101,13 +101,13 @@ def compute_matrix_rank(matrix: AxisBoundMatrix) -> MatrixRankData:
     # Reorder pivot_rows and pivot_columns together based on the
     # canonical row-axis order of pivot rows.
     pivot_row_labels = [matrix.row_axis.labels[i] for i in ordered_pivot_row_indices]
-    row_label_to_pivot_pos = {
+    {
         matrix.row_axis.labels[i]: pos
         for pos, i in enumerate(ordered_pivot_row_indices)
     }
     # The pivot columns are paired with pivot rows; reorder them too.
     original_pivot_col_labels = [matrix.column_axis.labels[i] for i in pivot_col_indices]
-    pivot_col_labels = [
+    [
         original_pivot_col_labels[
             list(pivot_row_indices).index(
                 matrix.row_axis.labels.index(label)
@@ -119,7 +119,7 @@ def compute_matrix_rank(matrix: AxisBoundMatrix) -> MatrixRankData:
     # Actually, the correct approach: sort pivot rows by row-axis order,
     # and reorder the corresponding pivot columns accordingly.
     # pivot_row_indices and pivot_col_indices are paired by elimination order.
-    pivot_pairs = list(zip(pivot_row_indices, pivot_col_indices))
+    pivot_pairs = list(zip(pivot_row_indices, pivot_col_indices, strict=False))
     pivot_pairs.sort(key=lambda pair: pair[0])  # sort by row index = row-axis order
     canonical_row_indices = [r for r, _ in pivot_pairs]
     canonical_col_indices = [c for _, c in pivot_pairs]

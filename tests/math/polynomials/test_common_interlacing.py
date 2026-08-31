@@ -34,6 +34,7 @@ from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
     PolynomialRootReference,
 )
 from jacobian.math.polynomials.real_algebra._common_interlacing_process import (
+    _root_profile_from_worker,
     _verify_declared_factors,
     run_common_interlacing_profile,
 )
@@ -362,6 +363,28 @@ def test_worker_factor_declarations_require_positive_primitive_form() -> None:
         _verify_declared_factors(
             source,
             [([-1, 1], 1), ([-1, -1], 1)],
+        )
+
+
+def test_worker_root_factors_obey_algebraic_value_degree_bound() -> None:
+    factor = ["1", *(["0"] * 8), "-2"]
+
+    with pytest.raises(ValueError, match="algebraic value degree bound"):
+        _root_profile_from_worker(
+            {
+                "source_index": 0,
+                "roots": [
+                    {
+                        "value": {
+                            "polynomial": factor,
+                            "real_root_index": 0,
+                        },
+                        "multiplicity": 1,
+                    }
+                ],
+            },
+            [(factor, 1)],
+            [1],
         )
 
 

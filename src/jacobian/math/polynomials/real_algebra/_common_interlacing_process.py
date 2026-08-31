@@ -23,7 +23,10 @@ from jacobian._execution import (
     current_request_execution,
 )
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
+from jacobian.math.number_theory.algebraic_numbers.real import (
+    MAX_REAL_ALGEBRAIC_DEGREE,
+    RealAlgebraicValue,
+)
 from jacobian.math.polynomials.real_algebra._common_interlacing import (
     _preflight_common_interlacing_sources,
 )
@@ -240,6 +243,10 @@ def _root_profile_from_worker(  # noqa: C901
             raise ValueError("worker root polynomial is not primitive canonical form")
         if root_index >= len(coefficients) - 1:
             raise ValueError("worker root index is outside its canonical factor")
+        if len(coefficients) - 1 > MAX_REAL_ALGEBRAIC_DEGREE:
+            raise ValueError(
+                "worker root factor exceeds the algebraic value degree bound"
+            )
         poly_key = tuple(int(c) for c in polynomial)
         if poly_key not in declared_factor_set:
             raise ValueError(

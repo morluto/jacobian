@@ -93,8 +93,11 @@ def _set(
     )
 
 
-def _computed(request: PlaneComponentProfileRequest) -> PlaneComponentProfileComputed:
-    result = compute_plane_component_profile(request)
+def _computed(
+    semialgebraic_set: PlaneSemialgebraicSet,
+    samples: tuple[IsolatedRealPlanePoint, ...] = (),
+) -> PlaneComponentProfileComputed:
+    result = compute_plane_component_profile(semialgebraic_set, samples)
     assert result.outcome.status == "COMPUTED", result.outcome
     assert isinstance(result.outcome, PlaneComponentProfileComputed)
     assert (
@@ -111,7 +114,7 @@ def _computed(request: PlaneComponentProfileRequest) -> PlaneComponentProfileCom
     for component in result.outcome.components:
         _assert_point_satisfies_source(
             component.representative,
-            request.semialgebraic_set,
+            semialgebraic_set,
         )
     return result.outcome
 
@@ -154,19 +157,15 @@ def test_annulus_complement_has_two_components_and_binds_samples() -> None:
             (PlaneSign.POSITIVE, PlaneSign.POSITIVE),
         ),
     )
-    baseline = _computed(
-        PlaneComponentProfileRequest(semialgebraic_set=semialgebraic_set)
-    )
+    baseline = _computed(semialgebraic_set)
     outcome = _computed(
-        PlaneComponentProfileRequest(
-            semialgebraic_set=semialgebraic_set,
-            samples=(
-                _rational_point(0, 0),
-                _rational_point(Fraction(1, 2), 0),
-                _rational_point(3, 0),
-                _rational_point(Fraction(3, 2), 0),
-            ),
-        )
+        semialgebraic_set,
+        (
+            _rational_point(0, 0),
+            _rational_point(Fraction(1, 2), 0),
+            _rational_point(3, 0),
+            _rational_point(Fraction(3, 2), 0),
+        ),
     )
 
     assert len(outcome.components) == 2
@@ -184,26 +183,20 @@ def test_disk_and_disjoint_disk_union_component_counts() -> None:
     left = _polynomial(((1, (2, 0)), (4, (1, 0)), (1, (0, 2)), (3, (0, 0))))
     right = _polynomial(((1, (2, 0)), (-4, (1, 0)), (1, (0, 2)), (3, (0, 0))))
 
-    disk = _computed(
-        PlaneComponentProfileRequest(
-            semialgebraic_set=_set((unit,), ((PlaneSign.NEGATIVE,),))
-        )
-    )
+    disk = _computed(_set((unit,), ((PlaneSign.NEGATIVE,),)))
     disjoint_union = _computed(
-        PlaneComponentProfileRequest(
-            semialgebraic_set=_set(
-                (left, right),
-                tuple(
-                    row
-                    for row in (
-                        (PlaneSign.NEGATIVE, PlaneSign.NEGATIVE),
-                        (PlaneSign.NEGATIVE, PlaneSign.ZERO),
-                        (PlaneSign.NEGATIVE, PlaneSign.POSITIVE),
-                        (PlaneSign.ZERO, PlaneSign.NEGATIVE),
-                        (PlaneSign.POSITIVE, PlaneSign.NEGATIVE),
-                    )
-                ),
-            )
+        _set(
+            (left, right),
+            tuple(
+                row
+                for row in (
+                    (PlaneSign.NEGATIVE, PlaneSign.NEGATIVE),
+                    (PlaneSign.NEGATIVE, PlaneSign.ZERO),
+                    (PlaneSign.NEGATIVE, PlaneSign.POSITIVE),
+                    (PlaneSign.ZERO, PlaneSign.NEGATIVE),
+                    (PlaneSign.POSITIVE, PlaneSign.NEGATIVE),
+                )
+            ),
         )
     )
 
@@ -216,18 +209,12 @@ def test_strict_and_closed_boundary_semantics() -> None:
     boundary = _rational_point(1, 0)
 
     strict = _computed(
-        PlaneComponentProfileRequest(
-            semialgebraic_set=_set((circle,), ((PlaneSign.NEGATIVE,),)),
-            samples=(boundary,),
-        )
+        _set((circle,), ((PlaneSign.NEGATIVE,),)),
+        (boundary,),
     )
     closed = _computed(
-        PlaneComponentProfileRequest(
-            semialgebraic_set=_set(
-                (circle,), ((PlaneSign.NEGATIVE,), (PlaneSign.ZERO,))
-            ),
-            samples=(boundary,),
-        )
+        _set((circle,), ((PlaneSign.NEGATIVE,), (PlaneSign.ZERO,))),
+        (boundary,),
     )
 
     assert strict.sample_dispositions[0].status == "OUTSIDE"
@@ -235,11 +222,7 @@ def test_strict_and_closed_boundary_semantics() -> None:
 
 
 def test_circle_zero_set_is_one_component_with_an_exact_representative() -> None:
-    outcome = _computed(
-        PlaneComponentProfileRequest(
-            semialgebraic_set=_set((_radial_level(3),), ((PlaneSign.ZERO,),))
-        )
-    )
+    outcome = _computed(_set((_radial_level(3),), ((PlaneSign.ZERO,),)))
 
     assert len(outcome.components) == 1
     representative = outcome.components[0].representative
@@ -253,23 +236,19 @@ def test_circle_zero_set_is_one_component_with_an_exact_representative() -> None
 def test_atom_order_does_not_change_the_canonical_profile() -> None:
     inner = _radial_level(1)
     outer = _radial_level(4)
-    forward = PlaneComponentProfileRequest(
-        semialgebraic_set=_set(
-            (inner, outer),
-            (
-                (PlaneSign.NEGATIVE, PlaneSign.NEGATIVE),
-                (PlaneSign.POSITIVE, PlaneSign.POSITIVE),
-            ),
-        )
+    forward = _set(
+        (inner, outer),
+        (
+            (PlaneSign.NEGATIVE, PlaneSign.NEGATIVE),
+            (PlaneSign.POSITIVE, PlaneSign.POSITIVE),
+        ),
     )
-    reversed_request = PlaneComponentProfileRequest(
-        semialgebraic_set=_set(
-            (outer, inner),
-            (
-                (PlaneSign.POSITIVE, PlaneSign.POSITIVE),
-                (PlaneSign.NEGATIVE, PlaneSign.NEGATIVE),
-            ),
-        )
+    reversed_request = _set(
+        (outer, inner),
+        (
+            (PlaneSign.POSITIVE, PlaneSign.POSITIVE),
+            (PlaneSign.NEGATIVE, PlaneSign.NEGATIVE),
+        ),
     )
 
     assert compute_plane_component_profile(forward) == compute_plane_component_profile(
@@ -289,11 +268,7 @@ def test_closed_z_squared_minus_one_lemniscate_is_connected() -> None:
         )
     )
     outcome = _computed(
-        PlaneComponentProfileRequest(
-            semialgebraic_set=_set(
-                (expanded,), ((PlaneSign.NEGATIVE,), (PlaneSign.ZERO,))
-            )
-        )
+        _set((expanded,), ((PlaneSign.NEGATIVE,), (PlaneSign.ZERO,)))
     )
 
     assert len(outcome.components) == 1
@@ -310,9 +285,7 @@ def test_quartic_intersection_retains_degree_sixteen_representatives() -> None:
         (y_fourth_minus_x, x_fourth_minus_two),
         ((PlaneSign.ZERO, PlaneSign.ZERO),),
     )
-    outcome = _computed(
-        PlaneComponentProfileRequest(semialgebraic_set=semialgebraic_set)
-    )
+    outcome = _computed(semialgebraic_set)
 
     assert len(outcome.components) == 2
     representatives = tuple(
@@ -352,7 +325,10 @@ def test_quartic_intersection_retains_degree_sixteen_representatives() -> None:
         strict=True,
     )
     assert len(consumer_request.samples[0].coordinates[1].polynomial) == 17
-    consumed = _computed(consumer_request)
+    consumed = _computed(
+        consumer_request.semialgebraic_set,
+        consumer_request.samples,
+    )
     assert consumed.components == outcome.components
     assert consumed.sample_dispositions[0].status == "INSIDE"
     assert consumed.sample_dispositions[0].component_id is not None
@@ -366,8 +342,8 @@ def test_quartic_intersection_retains_degree_sixteen_representatives() -> None:
 
 
 def test_empty_and_whole_plane_degeneracies() -> None:
-    empty = _computed(PlaneComponentProfileRequest(semialgebraic_set=_set((), ())))
-    whole = _computed(PlaneComponentProfileRequest(semialgebraic_set=_set((), ((),))))
+    empty = _computed(_set((), ()))
+    whole = _computed(_set((), ((),)))
 
     assert empty.components == ()
     assert len(whole.components) == 1
@@ -401,8 +377,6 @@ def test_supplied_sample_must_select_one_root_per_coordinate() -> None:
             OperationDomainValidationError, match="select one exact real root"
         ):
             compute_plane_component_profile(
-                PlaneComponentProfileRequest(
-                    semialgebraic_set=semialgebraic_set,
-                    samples=(sample,),
-                )
+                semialgebraic_set,
+                (sample,),
             )

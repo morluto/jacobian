@@ -291,10 +291,15 @@ def _raise_sample_domain_error(exc: QepcadPlaneSampleValidationError) -> NoRetur
 
 
 def compute_plane_component_profile(
-    request: PlaneComponentProfileRequest,
+    semialgebraic_set: PlaneSemialgebraicSet,
+    samples: tuple[IsolatedRealPlanePoint, ...] = (),
 ) -> PlaneComponentProfileResult:
     """Compute one exact bounded connected-component profile in ``R^2``."""
 
+    request = PlaneComponentProfileRequest(
+        semialgebraic_set=semialgebraic_set,
+        samples=samples,
+    )
     execution = current_request_execution()
     started = time.monotonic() if execution is None else execution.started_at
     owner_deadline = started + PLANE_COMPONENT_WALL_SECONDS
@@ -309,9 +314,7 @@ def compute_plane_component_profile(
     _require_active(deadline, "after semantic admission")
 
     semialgebraic_set = request.semialgebraic_set
-    if request.samples and (
-        not semialgebraic_set.sign_conditions or _whole_plane(semialgebraic_set)
-    ):
+    if request.samples:
         try:
             sample_outcome = run_plane_sample_recognition(
                 request,

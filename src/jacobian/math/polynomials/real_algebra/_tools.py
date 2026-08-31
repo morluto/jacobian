@@ -56,7 +56,10 @@ def compute_strict_sublevel_measure(
 def compute_plane_component_profile(
     request: PlaneComponentProfileRequest,
 ) -> PlaneComponentProfileResult:
-    return _compute_plane_component_profile_native(request)
+    return _compute_plane_component_profile_native(
+        request.semialgebraic_set,
+        request.samples,
+    )
 
 
 def ra_operation[RequestT: StrictModel, ResultT: StrictModel](

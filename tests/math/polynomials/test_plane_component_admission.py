@@ -40,6 +40,7 @@ from jacobian.math.polynomials.real_algebra._plane_component_models import (
     IsolatedRealPlanePoint,
     PlaneComponentProfileComputed,
     PlaneComponentProfileRequest,
+    PlaneComponentProfileResult,
     PlaneSemialgebraicComponent,
     PlaneSemialgebraicSet,
     PlaneSign,
@@ -147,6 +148,15 @@ def _whole_plane_request(
     )
 
 
+def _profile(
+    request: PlaneComponentProfileRequest,
+) -> PlaneComponentProfileResult:
+    return compute_plane_component_profile(
+        request.semialgebraic_set,
+        request.samples,
+    )
+
+
 _SAMPLE_PRIMES = (2, 3, 5, 7, 11, 13, 17, 19)
 
 
@@ -242,14 +252,14 @@ def test_degree_and_coefficient_height_boundaries_are_inclusive() -> None:
         )
     )
 
-    assert compute_plane_component_profile(boundary).outcome.status == "COMPUTED"
+    assert _profile(boundary).outcome.status == "COMPUTED"
 
     for polynomial in (
         _polynomial(((1, (MAX_PLANE_COMPONENT_TOTAL_DEGREE + 1, 0)),)),
         _polynomial(((10**MAX_PLANE_COMPONENT_COEFFICIENT_DIGITS, (1, 0)),)),
     ):
         with pytest.raises(OperationDomainValidationError):
-            compute_plane_component_profile(_whole_plane_request((polynomial,)))
+            _profile(_whole_plane_request((polynomial,)))
 
 
 def test_term_and_total_term_boundaries_reject_before_backend_execution() -> None:
@@ -258,7 +268,7 @@ def test_term_and_total_term_boundaries_reject_before_backend_execution() -> Non
         1,
     )
     assert (
-        compute_plane_component_profile(
+        _profile(
             _whole_plane_request((boundary_polynomial,))
         ).outcome.status
         == "COMPUTED"
@@ -283,7 +293,7 @@ def test_term_and_total_term_boundaries_reject_before_backend_execution() -> Non
             for leading_coefficient, term_count in enumerate(boundary_counts, start=1)
         )
     )
-    assert compute_plane_component_profile(boundary).outcome.status == "COMPUTED"
+    assert _profile(boundary).outcome.status == "COMPUTED"
 
     above = _whole_plane_request(
         tuple(
@@ -292,7 +302,7 @@ def test_term_and_total_term_boundaries_reject_before_backend_execution() -> Non
         )
     )
     with pytest.raises(OperationDomainValidationError, match="48 terms"):
-        compute_plane_component_profile(above)
+        _profile(above)
 
 
 def test_plane_dimension_polynomial_and_sign_row_bounds_reject_raw_excess() -> None:
@@ -329,7 +339,7 @@ def test_plane_dimension_polynomial_and_sign_row_bounds_reject_raw_excess() -> N
 def test_sample_count_degree_and_height_envelopes_are_preflighted() -> None:
     samples = tuple(_sample(index) for index in range(MAX_PLANE_COMPONENT_SAMPLES))
     assert (
-        compute_plane_component_profile(
+        _profile(
             _whole_plane_request((), samples=samples)
         ).outcome.status
         == "COMPUTED"
@@ -342,7 +352,7 @@ def test_sample_count_degree_and_height_envelopes_are_preflighted() -> None:
 
     degree_boundary = _sample(0, degree=MAX_PLANE_COMPONENT_SAMPLE_DEGREE)
     assert (
-        compute_plane_component_profile(
+        _profile(
             _whole_plane_request((), samples=(degree_boundary,))
         ).outcome.status
         == "COMPUTED"
@@ -363,7 +373,7 @@ def test_sample_count_degree_and_height_envelopes_are_preflighted() -> None:
         leading_coefficient=10**MAX_PLANE_COMPONENT_SAMPLE_COEFFICIENT_DIGITS - 1,
     )
     assert (
-        compute_plane_component_profile(
+        _profile(
             _whole_plane_request((), samples=(height_boundary,))
         ).outcome.status
         == "COMPUTED"
@@ -381,7 +391,7 @@ def test_sample_count_degree_and_height_envelopes_are_preflighted() -> None:
 def test_projection_cell_envelope_distinguishes_admitted_and_rejected_families() -> (
     None
 ):
-    degenerate = compute_plane_component_profile(
+    degenerate = _profile(
         _whole_plane_request(
             (),
             samples=tuple(_sample(index, degree=5) for index in range(8)),
@@ -394,7 +404,7 @@ def test_projection_cell_envelope_distinguishes_admitted_and_rejected_families()
         sign_conditions=(PlaneSignCondition(signs=(PlaneSign.POSITIVE,)),),
     )
     with pytest.raises(OperationDomainValidationError, match="CAD cell bound"):
-        compute_plane_component_profile(
+        _profile(
             PlaneComponentProfileRequest(
                 semialgebraic_set=nondegenerate,
                 samples=tuple(_sample(index, degree=5) for index in range(8)),
@@ -496,7 +506,7 @@ def test_owner_deadline_includes_time_before_plane_component_admission() -> None
         request_execution(monotonic() - PLANE_COMPONENT_WALL_SECONDS - 1),
         pytest.raises(OperationExecutionTimeoutError, match="semantic admission"),
     ):
-        compute_plane_component_profile(request)
+        _profile(request)
 
 
 def test_owner_checkpoint_observes_cancellation_before_direct_result() -> None:
@@ -507,4 +517,4 @@ def test_owner_checkpoint_observes_cancellation_before_direct_result() -> None:
         bounded_process_cancellation(cancellation),
         pytest.raises(OperationExecutionCancelledError, match="cancelled"),
     ):
-        compute_plane_component_profile(_whole_plane_request(()))
+        _profile(_whole_plane_request(()))

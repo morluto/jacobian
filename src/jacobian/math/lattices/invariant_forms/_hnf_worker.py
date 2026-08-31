@@ -32,7 +32,9 @@ def main() -> None:
             for column in range(coefficient_count)
         ]
         for row in range(coefficient_count)
-        if all(graph_hnf[row, constraint] == 0 for constraint in range(constraint_count))
+        if all(
+            graph_hnf[row, constraint] == 0 for constraint in range(constraint_count)
+        )
     ]
     json.dump(
         {

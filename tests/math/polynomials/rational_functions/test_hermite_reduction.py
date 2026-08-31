@@ -18,6 +18,10 @@ from jacobian.math.polynomials.rational_functions._tools import (
     TOOLS,
     compute_hermite_reduction,
 )
+from jacobian.math.polynomials.values import (
+    RationalFunction,
+    require_canonical_rational_function,
+)
 
 x = Symbol("x")
 
@@ -118,6 +122,45 @@ def test_request_rejects_multivariate_function() -> None:
     request = HermiteReductionRequest(function=function)
     with pytest.raises(OperationDomainValidationError):
         compute_hermite_reduction(request)
+
+
+def test_nonreduced_request_parses_then_owner_admission_rejects_it() -> None:
+    function = RationalFunction.model_validate(
+        {
+            "variables": ["x"],
+            "numerator": {
+                "terms": [
+                    {
+                        "coefficient": {"num": "1", "den": "1"},
+                        "exponents": [1],
+                    }
+                ]
+            },
+            "denominator": {
+                "terms": [
+                    {
+                        "coefficient": {"num": "1", "den": "1"},
+                        "exponents": [1],
+                    }
+                ]
+            },
+        }
+    )
+    request = HermiteReductionRequest(function=function)
+
+    with pytest.raises(OperationDomainValidationError, match="must be coprime"):
+        compute_hermite_reduction(request)
+
+
+def test_result_round_trip_remains_canonical_for_the_next_consumer() -> None:
+    result = compute_hermite_reduction(_request(1 / (x - 1) ** 2))
+    parsed = type(result).model_validate(result.model_dump(mode="json"))
+
+    assert (
+        require_canonical_rational_function(parsed.rational_part)
+        is parsed.rational_part
+    )
+    assert require_canonical_rational_function(parsed.remainder) is parsed.remainder
 
 
 def test_example_description_states_input_preconditions() -> None:

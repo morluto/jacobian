@@ -29,6 +29,7 @@ from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialTerm,
     SparseRationalPolynomial,
+    require_canonical_rational_function,
 )
 from jacobian.process import bounded_process_cancellation
 
@@ -396,6 +397,27 @@ def test_one_second_budget_still_replays_a_light_certificate(
 def test_parameter_protocol_is_non_evaluating_and_fail_closed(text: str) -> None:
     with pytest.raises(ValueError):
         _singular._parse_parameter_polynomial(text, parameter_count=1)
+
+
+def test_protocol_coefficient_with_common_factor_is_normalized_on_construction() -> (
+    None
+):
+    coefficient, raw_terms = _singular._parse_generic_fiber_coefficient(
+        "jtp1^2-1",
+        "jtp1-1",
+        target_parameters=("t1",),
+    )
+
+    assert raw_terms == 4
+    assert require_canonical_rational_function(coefficient) is coefficient
+    assert tuple(
+        (term.exponents, term.coefficient.num, term.coefficient.den)
+        for term in coefficient.numerator.terms
+    ) == (((1,), "1", "1"), ((0,), "1", "1"))
+    assert tuple(
+        (term.exponents, term.coefficient.num, term.coefficient.den)
+        for term in coefficient.denominator.terms
+    ) == (((0,), "1", "1"),)
 
 
 def test_backend_script_uses_only_fixed_internal_identifiers() -> None:

@@ -72,6 +72,7 @@ def _admission_error(lower: int, upper: int, k: int) -> tuple[str, str, str] | N
             f"incidence count {incidences} exceeds the "
             f"{MAX_TOTAL_INCIDENCES}-incidence bound",
         )
+
     def decimal_width(value: int) -> int:
         if value == 0:
             return 1

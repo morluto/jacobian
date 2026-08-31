@@ -34,6 +34,7 @@ def test_bundle_declares_atomic_inline_typed_operations() -> None:
 
     assert tuple(operation.operation_id for operation in bundle) == (
         "finite_field.projective_line.enumerate",
+        "finite_field.matrix.rank.compute",
         "finite_field.restrict_scalars.compute",
         "finite_field.linear_map.rank.compute",
         "finite_field.direction_rank_ledger.compute",
@@ -45,19 +46,7 @@ def test_bundle_declares_atomic_inline_typed_operations() -> None:
         "finite_field.paley_tournament.construct",
         "finite_field.prime_linear_action.homogeneous_fixed_subspace.compute",
     )
-    (
-        projective,
-        restrict_operation,
-        rank_operation,
-        _,
-        _,
-        table,
-        _,
-        _,
-        _,
-        paley,
-        fixed,
-    ) = bundle
+    projective, _, restrict_operation, rank_operation, _, _, table, _, _, _, paley, fixed = bundle
     for operation in bundle:
         assert isinstance(operation, MathTool)
         assert not hasattr(operation, "provider_binding")

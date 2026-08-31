@@ -1,5 +1,6 @@
 """Exact finite-field values and explicit restriction-of-scalars operations."""
 
+from jacobian.math.finite_fields._matrix_rank_models import MatrixRankResult
 from jacobian.math.finite_fields.operations import (
     analyze_collisions,
     analyze_permutation,
@@ -13,6 +14,7 @@ from jacobian.math.finite_fields.operations import (
     finite_polynomial_map,
     homogeneous_fixed_subspace,
     linear_map_rank,
+    matrix_rank,
     orbit_distribution,
     paley_tournament,
     projective_line,
@@ -56,6 +58,7 @@ __all__ = [
     "FinitePolynomial",
     "FinitePolynomialMap",
     "HomogeneousFixedSubspace",
+    "MatrixRankResult",
     "OrbitDistribution",
     "PaleyTournamentResult",
     "PermutationResult",
@@ -75,6 +78,7 @@ __all__ = [
     "finite_polynomial_map",
     "homogeneous_fixed_subspace",
     "linear_map_rank",
+    "matrix_rank",
     "orbit_distribution",
     "paley_tournament",
     "projective_line",

@@ -21,10 +21,15 @@ from jacobian.math.finite_fields import (
     finite_map_table,
     homogeneous_fixed_subspace,
     linear_map_rank,
+    matrix_rank,
     orbit_distribution,
     paley_tournament,
     projective_line,
     restrict_scalars,
+)
+from jacobian.math.finite_fields._matrix_rank_models import (
+    MatrixRankRequest,
+    MatrixRankResult,
 )
 from jacobian.math.finite_fields._models import (
     CollisionRequest,
@@ -179,6 +184,10 @@ def _fixed_subspace(
     return homogeneous_fixed_subspace(request.action, request.degree)
 
 
+def _compute_matrix_rank(request: MatrixRankRequest) -> MatrixRankResult:
+    return matrix_rank(request.matrix)
+
+
 def _build_tools() -> MathTools:
     projective_line_operation = MathTool(
         operation_id="finite_field.projective_line.enumerate",
@@ -193,6 +202,46 @@ def _build_tools() -> MathTools:
                 "projective_line_over_gf_four",
                 "Enumerate the projective line on a two-coordinate GF(4) axis.",
                 {"presentation": _FIELD, "axis": _ROWS},
+            ),
+        ),
+    )
+    matrix_rank_operation = MathTool(
+        operation_id="finite_field.matrix.rank.compute",
+        title="Compute exact rank of a labelled matrix over its presented field",
+        description=(
+            "Given one AxisBoundMatrix bound to a FiniteFieldPresentation, return its "
+            "exact rank over that field with deterministic row and column pivot labels. "
+            "Supports both prime and extension fields."
+        ),
+        request_type=MatrixRankRequest,
+        result_type=MatrixRankResult,
+        run=_compute_matrix_rank,
+        tags=("finite-field", "matrix", "rank", "exact"),
+        examples=(
+            example(
+                "rank_one_over_f2",
+                "Rank [[1,1],[1,1]] over F_2 is 1; the matrix must use one consistent field presentation.",
+                {
+                    "matrix": {
+                        "presentation": {
+                            "characteristic": 2,
+                            "modulus_coefficients": [0, 1],
+                            "generator": "a",
+                        },
+                        "row_axis": {"name": "rows", "labels": ["r0", "r1"]},
+                        "column_axis": {"name": "cols", "labels": ["c0", "c1"]},
+                        "entries": [
+                            [
+                                {"presentation": {"characteristic": 2, "modulus_coefficients": [0, 1], "generator": "a"}, "coordinates": [1]},
+                                {"presentation": {"characteristic": 2, "modulus_coefficients": [0, 1], "generator": "a"}, "coordinates": [1]},
+                            ],
+                            [
+                                {"presentation": {"characteristic": 2, "modulus_coefficients": [0, 1], "generator": "a"}, "coordinates": [1]},
+                                {"presentation": {"characteristic": 2, "modulus_coefficients": [0, 1], "generator": "a"}, "coordinates": [1]},
+                            ],
+                        ],
+                    }
+                },
             ),
         ),
     )
@@ -388,6 +437,7 @@ def _build_tools() -> MathTools:
     )
     return (
         projective_line_operation,
+        matrix_rank_operation,
         restrict_operation,
         rank_operation,
         ledger_operation,

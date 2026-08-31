@@ -170,6 +170,12 @@ class RootIsolationEntry(StrictModel):
                 "interval_bounds_invalid",
                 "isolating interval must have lower <= upper",
             )
+        if len(self.algebraic_value.polynomial) > MAX_ROOT_ISOLATION_DEGREE + 1:
+            raise _validation_error(
+                "algebraic_value_degree",
+                "root-isolation algebraic values must have degree at most "
+                f"{MAX_ROOT_ISOLATION_DEGREE}",
+            )
         return self
 
 

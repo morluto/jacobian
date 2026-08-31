@@ -327,6 +327,7 @@ def compute_plane_component_profile(
         _require_active(deadline, "after exact sample recognition")
         if sample_outcome.status != "COMPUTED":
             return _noncompletion(request, sample_outcome)
+        validated_canonical_samples = sample_outcome.canonical_samples
 
     if not semialgebraic_set.sign_conditions:
         result = _computed_result(
@@ -373,6 +374,7 @@ def compute_plane_component_profile(
             wall_seconds=_backend_wall_seconds(
                 deadline, "QEPCAD plane-component launch"
             ),
+            canonical_samples=locals().get("validated_canonical_samples"),
         )
     except QepcadPlaneSampleValidationError as exc:
         _raise_sample_domain_error(exc)

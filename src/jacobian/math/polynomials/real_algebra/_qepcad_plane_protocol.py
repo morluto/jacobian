@@ -35,6 +35,13 @@ class QepcadPlaneWorkerRequest(StrictModel):
     qepcad_root: str = Field(min_length=1, max_length=4_096)
     deadline_monotonic: float = Field(gt=0, allow_inf_nan=False)
     request: PlaneComponentProfileRequest
+    canonical_samples: tuple[IsolatedRealPlanePoint, ...] | None = Field(
+        default=None,
+        description=(
+            "Pre-canonicalized samples from the validation pass, or None "
+            "if the worker should canonicalize them itself."
+        ),
+    )
 
 
 class PlaneSampleWorkerRequest(StrictModel):

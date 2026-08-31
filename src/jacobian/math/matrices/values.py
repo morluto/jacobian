@@ -598,6 +598,11 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
                                     "string_type", "Input should be a valid string"
                                 )
                     presentation = scalar.get("presentation")
+                    if not isinstance(presentation, dict):
+                        raise _validation_error(
+                            "shape_mismatch",
+                            "embedded number-field entry presentation must be a mapping",
+                        )
                     if isinstance(presentation, dict):
                         if set(presentation).difference(
                             {"domain", "coefficients_descending"}

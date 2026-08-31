@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fractions import Fraction
 from math import ceil, gcd, lcm, log10
 from typing import Any, cast
@@ -96,6 +96,7 @@ class _ConstraintPlan:
     positions: tuple[CoefficientPosition, ...]
     constraints: tuple[IntegerConstraint, ...]
     expansion_digit_work: int = 0
+    kernel_digit_work: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -475,11 +476,11 @@ def _require_result_envelope(
         )
 
 
-def _require_integer_kernel_work_envelope(plan: _ConstraintPlan) -> None:
+def _require_integer_kernel_work_envelope(plan: _ConstraintPlan) -> int:
     """Admit canonical graph-lattice HNF from the realized constraint plan."""
 
     if not plan.constraints or not plan.positions:
-        return
+        return 0
     constraint_count = len(plan.constraints)
     coefficient_count = len(plan.positions)
     constraint_digits = max(
@@ -506,6 +507,7 @@ def _require_integer_kernel_work_envelope(plan: _ConstraintPlan) -> None:
             "the realized congruence matrix exceeds the exact primitive-kernel "
             f"digit-work bound of {MAX_INTEGER_KERNEL_DIGIT_WORK:,} units",
         )
+    return digit_work
 
 
 def _recognize_action_field(
@@ -552,7 +554,12 @@ def _build_constraint_plan(
             constraints=(),
             source_bytes=source_bytes,
         )
-        return _ConstraintPlan(positions=(), constraints=(), expansion_digit_work=0)
+        return _ConstraintPlan(
+            positions=(),
+            constraints=(),
+            expansion_digit_work=0,
+            kernel_digit_work=0,
+        )
     cell_count = (
         constraint_coefficient_count(dimension, len(action.generators), kind)
         * field_degree
@@ -644,8 +651,10 @@ def _build_constraint_plan(
         constraints=ordered_constraints,
         expansion_digit_work=expansion_digit_work,
     )
-    _require_integer_kernel_work_envelope(plan)
-    return plan
+    return replace(
+        plan,
+        kernel_digit_work=_require_integer_kernel_work_envelope(plan),
+    )
 
 
 def _integer_kernel_basis(plan: _ConstraintPlan) -> tuple[list[list[int]], int]:
@@ -754,23 +763,9 @@ def _admit_invariant_bilinear_form_lattice(
         kind,
         recognized_field=recognized_field,
     )
-    expansion_work = plan.expansion_digit_work
-    if plan.positions and plan.constraints:
-        constraint_digits = max(
-            _integer_digit_count(value)
-            for constraint in plan.constraints
-            for value in constraint
-        )
-        kernel_work = (
-            len(plan.positions) ** 2
-            * (len(plan.constraints) + len(plan.positions))
-            * constraint_digits
-        )
-    else:
-        kernel_work = 0
     return _InvariantFormExecutionPlan(
-        expansion_digit_work=expansion_work,
-        kernel_digit_work=kernel_work,
+        expansion_digit_work=plan.expansion_digit_work,
+        kernel_digit_work=plan.kernel_digit_work,
         constraint_plan=plan,
         recognized_field=recognized_field,
     )

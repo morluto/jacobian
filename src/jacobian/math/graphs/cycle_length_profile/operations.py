@@ -34,9 +34,7 @@ class _AdmissionPlan:
     wheel_order: tuple[str, ...] | None = None
 
 
-def _maximum_path_work(
-    graph: SimpleUndirectedGraph, *, is_wheel: bool = False
-) -> int:
+def _maximum_path_work(graph: SimpleUndirectedGraph, *, is_wheel: bool = False) -> int:
     """Count simple-path prefixes with an early work cutoff."""
     vertex_count = len(graph.vertices)
     if len(graph.edges) == vertex_count * (vertex_count - 1) // 2:
@@ -224,9 +222,7 @@ def _cycle_block_feasible_lengths(
         else:
             block_subgraph = topology.subgraph(block)
             shortest_cycle = int(nx.girth(block_subgraph))
-            lengths = range(
-                shortest_cycle, min(len(block), edge_count) + 1
-            )
+            lengths = range(shortest_cycle, min(len(block), edge_count) + 1)
         label_sizes = sorted(
             (
                 len(rfc8785.dumps(unicodedata.normalize("NFC", label)))

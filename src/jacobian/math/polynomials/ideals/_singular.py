@@ -86,6 +86,15 @@ def _singular_polynomial(polynomial: RationalPolynomial) -> str:
 
     if not polynomial.polynomial.terms:
         return "0"
+    if (
+        len(polynomial.polynomial.terms) == 1
+        and not any(polynomial.polynomial.terms[0].exponents)
+        and polynomial.polynomial.terms[0].coefficient.num != "0"
+    ):
+        # Every nonzero constant is the unit in QQ.  Canonical admission may
+        # retain a very wide unit coefficient because it is zero-work, but
+        # the backend must not materialize that irrelevant integer literal.
+        return "(1/1)"
     encoded_terms: list[str] = []
     for term in polynomial.polynomial.terms:
         numerator, denominator = term.coefficient.as_integer_ratio()

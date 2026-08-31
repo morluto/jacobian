@@ -330,6 +330,25 @@ def test_singular_script_uses_internal_identifiers_not_caller_names() -> None:
     assert "jv1" in source
 
 
+def test_singular_codec_normalizes_wide_nonzero_constant_units() -> None:
+    unit = RationalPolynomial(
+        variables=("x",),
+        polynomial=SparseRationalPolynomial(
+            terms=(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(
+                        num="1" + "0" * 5_000,
+                        den="1",
+                    ),
+                    exponents=(0,),
+                ),
+            )
+        ),
+    )
+
+    assert _singular._singular_polynomial(unit) == "(1/1)"
+
+
 def test_radical_membership_uses_canonical_polynomials() -> None:
     source = _ideal(("x", "y"), {(2, 0): 1}, {(1, 1): 1})
     assert _run_radical_membership(

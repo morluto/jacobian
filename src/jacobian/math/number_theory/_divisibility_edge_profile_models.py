@@ -10,6 +10,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import parse_canonical_integer
+from jacobian.math.combinatorics.finite_structures.sets._models import FiniteIntegerSet
 
 MAX_DIVISIBILITY_EDGE_SET_SIZE = 500
 # LPF extraction uses the isolated direct-factorization worker for derived
@@ -25,9 +26,7 @@ MAX_DIVISIBILITY_EDGE_RESULT_BYTES = 10 * 1024 * 1024
 class DivisibilityEdgeProfileRequest(StrictModel):
     """Profile quotient and least-prime-factor data on finite divisibility edges."""
 
-    values: tuple[CanonicalInteger, ...] = Field(
-        min_length=1,
-        max_length=MAX_DIVISIBILITY_EDGE_SET_SIZE,
+    values: FiniteIntegerSet = Field(
         description=(
             "Ordered source set of positive canonical decimal integers. "
             f"Each value has at most {MAX_DIVISIBILITY_EDGE_VALUE_DIGITS} digits; "
@@ -45,48 +44,64 @@ class DivisibilityEdgeProfileRequest(StrictModel):
         return self
 
 
+
+
+def _extract_elements(values: object) -> tuple[str, ...]:
+    """Extract the element tuple from a FiniteIntegerSet or raw tuple."""
+    if isinstance(values, FiniteIntegerSet):
+        return values.elements
+    if isinstance(values, tuple):
+        return values
+    if isinstance(values, list):
+        return tuple(values)
+    raise TypeError("values must be a FiniteIntegerSet or tuple of canonical integers")
+
+
 def _validate_divisibility_edge_values(values: tuple[str, ...]) -> None:
     _validate_divisibility_edge_shape(values)
     _validate_divisibility_edge_resources(values)
 
 
-def _validate_divisibility_edge_shape(values: tuple[str, ...]) -> None:
-    if not values:
+def _validate_divisibility_edge_shape(values: object) -> tuple[str, ...]:
+    elements = _extract_elements(values)
+    if not elements:
         raise PydanticCustomError(
             "divisibility_edge.values_nonempty",
             "values must contain at least one integer",
         )
-    if len(values) > MAX_DIVISIBILITY_EDGE_SET_SIZE:
+    if len(elements) > MAX_DIVISIBILITY_EDGE_SET_SIZE:
         raise PydanticCustomError(
             "divisibility_edge.values_size",
             f"values must contain at most {MAX_DIVISIBILITY_EDGE_SET_SIZE} integers",
         )
-    if any(len(value) > MAX_DIVISIBILITY_EDGE_VALUE_DIGITS for value in values):
+    if any(len(value) > MAX_DIVISIBILITY_EDGE_VALUE_DIGITS for value in elements):
         raise PydanticCustomError(
             "divisibility_edge.value_digits",
             "values exceed the admitted integer digit bound",
         )
-    parsed = tuple(parse_canonical_integer(value) for value in values)
+    parsed = tuple(parse_canonical_integer(value) for value in elements)
     if any(value <= 0 for value in parsed):
         raise PydanticCustomError(
             "divisibility_edge.positive_values",
             "values must be positive canonical integers",
         )
-    if len(set(values)) != len(values):
+    if len(set(elements)) != len(elements):
         raise PydanticCustomError(
             "divisibility_edge.values_unique", "values must be distinct"
         )
+    return elements
 
 
 def _validate_divisibility_edge_resources(
-    values: tuple[str, ...],
+    values: object,
 ) -> tuple[tuple[int, int, int], ...]:
-    parsed = tuple(parse_canonical_integer(value) for value in values)
-    digits = [len(v) for v in values]
+    elements = _extract_elements(values)
+    parsed = tuple(parse_canonical_integer(value) for value in elements)
+    digits = [len(v) for v in elements]
     pair_scan_work = sum(
         digits[i] * digits[j]
-        for i in range(len(values))
-        for j in range(i + 1, len(values))
+        for i in range(len(elements))
+        for j in range(i + 1, len(elements))
     )
     if pair_scan_work > MAX_DIVISIBILITY_EDGE_PAIR_SCAN_WORK:
         raise PydanticCustomError(
@@ -94,7 +109,7 @@ def _validate_divisibility_edge_resources(
             "divisibility pair scan exceeds the admitted work budget",
         )
     max_digits = max(digits)
-    if len(values) * (max_digits + 32) > MAX_DIVISIBILITY_EDGE_RESULT_BYTES:
+    if len(elements) * (max_digits + 32) > MAX_DIVISIBILITY_EDGE_RESULT_BYTES:
         raise PydanticCustomError(
             "divisibility_edge.result_bytes",
             "divisibility edge profile exceeds the serialized-byte budget",
@@ -158,13 +173,15 @@ class DivisibilityEdge(StrictModel):
 class DivisibilityEdgeProfileResult(StrictModel):
     """The complete directed divisibility edge table."""
 
-    values: tuple[CanonicalInteger, ...] = Field(min_length=1)
+    values: FiniteIntegerSet = Field(
+        description="The finite integer set that was profiled."
+    )
     edges: tuple[DivisibilityEdge, ...] = Field(default=())
 
     @model_validator(mode="after")
     def require_canonical_edges(self) -> Self:
         _validate_divisibility_edge_shape(self.values)
-        values = set(self.values)
+        values = set(self.values.elements)
         seen: set[tuple[str, str]] = set()
         for edge in self.edges:
             if edge.source == edge.target:

@@ -10,6 +10,7 @@ from jacobian.math.number_theory._divisibility_edge_profile import (
     compute_divisibility_edge_profile,
     divisibility_edge_profile,
 )
+from jacobian.math.combinatorics.finite_structures.sets._models import FiniteIntegerSet
 from jacobian.math.number_theory._divisibility_edge_profile_models import (
     DivisibilityEdgeProfileRequest,
     DivisibilityEdgeProfileResult,
@@ -17,7 +18,9 @@ from jacobian.math.number_theory._divisibility_edge_profile_models import (
 
 
 def _edges(values: list[str]) -> dict:
-    request = DivisibilityEdgeProfileRequest(values=tuple(values))
+    request = DivisibilityEdgeProfileRequest(
+        values=FiniteIntegerSet(elements=tuple(values))
+    )
     result = compute_divisibility_edge_profile(request)
     return {(e.source, e.target): e for e in result.edges}
 
@@ -82,46 +85,48 @@ def test_quotient_reconstructs() -> None:
 def test_native_rejects_empty_source_set() -> None:
     """Native and wire callers share the non-empty source-set admission."""
     with pytest.raises(ValueError, match="at least one"):
-        divisibility_edge_profile(())
+        divisibility_edge_profile(FiniteIntegerSet(elements=()))
 
 
 @pytest.mark.parametrize("values", [(True, "2"), ("02",)])
 def test_native_rejects_noncanonical_values(values: tuple[object, ...]) -> None:
     """Native inputs use the same strict canonical domain as wire requests."""
     with pytest.raises(ValueError):
-        divisibility_edge_profile(values)  # type: ignore[arg-type]
+        divisibility_edge_profile(FiniteIntegerSet(elements=tuple(values)))  # type: ignore[arg-type]
 
 
 def test_native_rejects_oversized_value_before_parsing() -> None:
     """The representation bound rejects huge strings during preflight."""
     with pytest.raises(ValueError, match="digit bound"):
-        divisibility_edge_profile(("1" * (256 + 1),))
+        divisibility_edge_profile(FiniteIntegerSet(elements=("1" * (256 + 1),)))
 
 
 def test_native_rejects_values_beyond_worker_factorization_envelope() -> None:
     """Derived quotients, rather than source widths, use the worker bound."""
     with pytest.raises(ValueError, match="quotient"):
-        divisibility_edge_profile(("1", "1" + "0" * 20))
+        divisibility_edge_profile(FiniteIntegerSet(elements=("1", "1" + "0" * 20)))
 
 
 def test_native_allows_wide_sources_with_small_quotient() -> None:
     """Source width is independent from the worker's derived quotient width."""
     left = 10**100
-    result = divisibility_edge_profile((left, 2 * left))
+    result = divisibility_edge_profile(FiniteIntegerSet(elements=(str(left), str(2 * left))))
     assert len(result.edges) == 1
     assert result.edges[0].quotient == "2"
 
 
 def test_native_rejects_oversized_integer_before_formatting() -> None:
-    """Huge Python integers are bounded before decimal conversion."""
+    """Huge integers are bounded by the digit limit before worker admission."""
     with pytest.raises(ValueError, match="digit bound"):
-        divisibility_edge_profile((1 << 10_000_000,))
+        divisibility_edge_profile(FiniteIntegerSet(elements=("1" * (256 + 1),)))
 
 
 def test_resource_admission_belongs_to_operation_execution() -> None:
     """Wire parsing accepts shape-valid input; execution owns work rejection."""
     request = DivisibilityEdgeProfileRequest(
-        values=tuple(str(value) for value in range(1, 501))
+        values=FiniteIntegerSet(
+            elements=tuple(str(value) for value in range(1, 501))
+        )
     )
     with pytest.raises(OperationDomainValidationError, match="factorization"):
         compute_divisibility_edge_profile(request)
@@ -134,7 +139,7 @@ def test_resource_admission_belongs_to_operation_execution() -> None:
 def test_result_rejects_invalid_source_set(values: tuple[str, ...]) -> None:
     """Deserialized results retain positive, distinct source semantics."""
     with pytest.raises(ValueError):
-        DivisibilityEdgeProfileResult(values=values, edges=())
+        DivisibilityEdgeProfileResult(values=FiniteIntegerSet(elements=values), edges=())
 
 
 def test_heterogeneous_pair_widths_admitted_per_pair() -> None:
@@ -150,6 +155,6 @@ def test_heterogeneous_pair_widths_admitted_per_pair() -> None:
     small_primes = [str(n) for n in range(101, 1000) if isprime(n)]
     large_prime = str(nextprime(10**200))
     values = (*small_primes, large_prime)
-    result = divisibility_edge_profile(values)
+    result = divisibility_edge_profile(FiniteIntegerSet(elements=values))
     # No divisibility edges among distinct primes
     assert len(result.edges) == 0

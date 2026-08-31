@@ -17,6 +17,7 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian.canonical import CanonicalizationError, format_canonical_integer
+from jacobian.math.combinatorics.finite_structures.sets._models import FiniteIntegerSet
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._divisibility_edge_profile_kernels import (
@@ -24,6 +25,7 @@ from jacobian.math.number_theory._divisibility_edge_profile_kernels import (
     construct_divisibility_edge_profile,
 )
 from jacobian.math.number_theory._divisibility_edge_profile_models import (
+    MAX_DIVISIBILITY_EDGE_SET_SIZE,
     MAX_DIVISIBILITY_EDGE_VALUE_DIGITS,
     DivisibilityEdge,
     DivisibilityEdgeProfileRequest,
@@ -32,7 +34,6 @@ from jacobian.math.number_theory._divisibility_edge_profile_models import (
     _validate_divisibility_edge_shape,
 )
 from jacobian.math.number_theory._support import number_theory_operation
-from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
 _DIVISIBILITY_EDGE_PROFILE_WALL_SECONDS = 600.0
 
@@ -98,11 +99,18 @@ def compute_divisibility_edge_profile(
 
 
 def _build_divisibility_edge_profile(
-    values: tuple[str, ...],
+    values: object,
     edge_plan: tuple[tuple[int, int, int], ...],
 ) -> DivisibilityEdgeProfileResult:
     try:
-        data = construct_divisibility_edge_profile(values, edge_plan)
+        elements = (
+            values.elements
+            if hasattr(values, "elements")
+            else values
+        )
+        data = construct_divisibility_edge_profile(
+            elements if isinstance(elements, tuple) else tuple(elements), edge_plan
+        )
     except FactorizationIncompleteError as exc:
         failure = exc.failure
         if failure is not None and failure.kind == "WORKER_CANCELLED":
@@ -132,16 +140,20 @@ def _build_divisibility_edge_profile(
 
 
 def divisibility_edge_profile(
-    values: tuple[str | int | IntegerValue, ...],
+    values: FiniteIntegerSet,
 ) -> DivisibilityEdgeProfileResult:
     """Return a divisibility edge profile from native canonical values."""
     with _owner_execution():
         try:
             _bind_execution_deadline()
             _require_execution_active("before admission")
-            canonical_values = tuple(_canonical_native_value(value) for value in values)
-            _validate_divisibility_edge_shape(canonical_values)
-            edge_plan = _validate_divisibility_edge_resources(canonical_values)
+            if len(values.elements) > MAX_DIVISIBILITY_EDGE_SET_SIZE:
+                raise PydanticCustomError(
+                    "divisibility_edge.values_size",
+                    f"values must contain at most {MAX_DIVISIBILITY_EDGE_SET_SIZE} integers",
+                )
+            _validate_divisibility_edge_shape(values)
+            edge_plan = _validate_divisibility_edge_resources(values)
         except (
             CanonicalizationError,
             PydanticCustomError,
@@ -158,28 +170,13 @@ def divisibility_edge_profile(
                 location=("values",), code=code, message=message
             ) from exc
         try:
-            return _build_divisibility_edge_profile(canonical_values, edge_plan)
+            return _build_divisibility_edge_profile(values, edge_plan)
         except FactorizationIncompleteError as exc:
             failure = exc.failure
             failure_kind = failure.kind if failure is not None else "UNKNOWN"
             raise RuntimeError(
                 "divisibility edge factorization worker failed: " + failure_kind
             ) from exc
-
-
-def _canonical_native_value(value: str | int | IntegerValue) -> str:
-    if isinstance(value, IntegerValue):
-        return value.value
-    if type(value) is str:
-        return value
-    if type(value) is int:
-        if abs(value) >= 10**MAX_DIVISIBILITY_EDGE_VALUE_DIGITS:
-            raise PydanticCustomError(
-                "divisibility_edge.value_digits",
-                "values exceed the admitted integer digit bound",
-            )
-        return format_canonical_integer(value)
-    raise TypeError("native divisibility values must be strings or integers")
 
 
 DIVISIBILITY_EDGE_PROFILE_OPERATION = number_theory_operation(
@@ -202,7 +199,7 @@ DIVISIBILITY_EDGE_PROFILE_OPERATION = number_theory_operation(
             "For (2,4,6,12), profile all proper-divisibility edges with "
             "quotient and least-prime-factor data; values must be positive "
             "canonical decimal integers.",
-            {"values": ["2", "4", "6", "12"]},
+            {"values": {"elements": ["2", "4", "6", "12"]}},
         ),
     ),
 )

@@ -2,8 +2,17 @@
 
 from __future__ import annotations
 
+import time
+from collections.abc import Callable
 from typing import Literal
 
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    current_request_execution,
+    request_cancelled,
+)
 from jacobian.canonical import (
     CanonicalizationError,
     CanonicalLimits,
@@ -76,6 +85,18 @@ def matrix_rank(matrix: AxisBoundMatrix) -> MatrixRankResult:
 # interchangeable: one billion FLINT matrix-rank cells finish in seconds, but
 # one billion Python loop iterations take minutes.
 _MAX_PYTHON_SUBSTITUTION_WORK = 10_000_000
+_FIXED_SUBSPACE_WALL_SECONDS = 600.0
+
+
+def _fixed_subspace_checkpoint(deadline: float | None, stage: str) -> None:
+    if request_cancelled():
+        raise OperationExecutionCancelledError(
+            f"finite-field fixed-subspace computation cancelled {stage}"
+        )
+    if deadline is not None and time.monotonic() >= deadline:
+        raise OperationExecutionTimeoutError(
+            f"finite-field fixed-subspace deadline expired {stage}"
+        )
 
 
 def _homogeneous_fixed_subspace_output_bytes(
@@ -112,8 +133,13 @@ def _homogeneous_fixed_subspace_output_bytes(
 
 
 def _homogeneous_fixed_subspace_envelope(
-    action: PrimeFieldLinearAction, degree: int
+    action: PrimeFieldLinearAction,
+    degree: int,
+    *,
+    enforce_transport_limit: bool,
+    checkpoint: Callable[[str], None],
 ) -> int:
+    checkpoint("before admission")
     if type(degree) is not int or degree < 0:
         raise OperationDomainValidationError(
             location=("degree",),
@@ -123,6 +149,7 @@ def _homogeneous_fixed_subspace_envelope(
     variable_count = len(action.variable_axis.labels)
     generator_count = len(action.generator_matrices)
     monomial_count = _homogeneous_monomial_count(variable_count, degree)
+    checkpoint("after shape admission")
     equation_rows = generator_count * monomial_count
     equation_entries = generator_count * monomial_count**2
     output_entries = monomial_count**2
@@ -165,15 +192,17 @@ def _homogeneous_fixed_subspace_envelope(
             code="finite_field.fixed_subspace_work_bound",
             message="homogeneous fixed-subspace computation exceeds its work bound",
         )
-    result_bytes = _homogeneous_fixed_subspace_output_bytes(
-        action, degree, monomial_count
-    )
-    if result_bytes > CanonicalLimits().max_output_bytes:
-        raise OperationDomainValidationError(
-            location=("action",),
-            code="finite_field.fixed_subspace_output_bound",
-            message="canonical fixed-subspace result exceeds the output-size envelope",
+    if enforce_transport_limit:
+        result_bytes = _homogeneous_fixed_subspace_output_bytes(
+            action, degree, monomial_count
         )
+        if result_bytes > CanonicalLimits().max_output_bytes:
+            raise OperationDomainValidationError(
+                location=("action",),
+                code="finite_field.fixed_subspace_output_bound",
+                message="canonical fixed-subspace result exceeds the output-size envelope",
+            )
+    checkpoint("after result admission")
     return monomial_count
 
 
@@ -530,6 +559,8 @@ def _induced_action_matrix(
     action: PrimeFieldLinearAction,
     monomial_basis: tuple[tuple[int, ...], ...],
     generator: PrimeFieldMatrix,
+    *,
+    checkpoint: Callable[[str], None] | None = None,
 ) -> tuple[tuple[int, ...], ...]:
     """Substitute one generator into every ordered homogeneous monomial."""
 
@@ -540,6 +571,8 @@ def _induced_action_matrix(
     variable_count = len(action.variable_axis.labels)
     zero_exponents = (0,) * variable_count
     for column, source_exponents in enumerate(monomial_basis):
+        if checkpoint is not None:
+            checkpoint("during substitution")
         polynomial: dict[tuple[int, ...], int] = {zero_exponents: 1}
         for source_variable, exponent in enumerate(source_exponents):
             coefficients = tuple(
@@ -556,12 +589,34 @@ def _induced_action_matrix(
 
 
 def homogeneous_fixed_subspace(
-    action: PrimeFieldLinearAction, degree: int
+    action: PrimeFieldLinearAction,
+    degree: int,
+    *,
+    enforce_transport_limit: bool = False,
 ) -> HomogeneousFixedSubspace:
     """Compute one exact homogeneous simultaneous fixed subspace over GF(p)."""
 
-    monomial_count = _homogeneous_fixed_subspace_envelope(action, degree)
+    execution = current_request_execution()
+    deadline = None
+    if execution is not None:
+        deadline = min(
+            execution.started_at + _FIXED_SUBSPACE_WALL_SECONDS,
+            execution.deadline
+            if execution.deadline is not None
+            else float("inf"),
+        )
+        bind_request_deadline(deadline)
+
+    def checkpoint(stage: str) -> None:
+        _fixed_subspace_checkpoint(deadline, stage)
+    monomial_count = _homogeneous_fixed_subspace_envelope(
+        action,
+        degree,
+        enforce_transport_limit=enforce_transport_limit,
+        checkpoint=checkpoint,
+    )
     variable_count = len(action.variable_axis.labels)
+    checkpoint("before generator validation")
     if any(rank(matrix) != variable_count for matrix in action.generator_matrices):
         raise OperationDomainValidationError(
             location=("action", "generator_matrices"),
@@ -572,8 +627,11 @@ def homogeneous_fixed_subspace(
     assert len(monomial_basis) == monomial_count
     equations: list[tuple[int, ...]] = []
     for generator in action.generator_matrices:
-        induced = _induced_action_matrix(action, monomial_basis, generator)
+        induced = _induced_action_matrix(
+            action, monomial_basis, generator, checkpoint=checkpoint
+        )
         for row_index, row in enumerate(induced):
+            checkpoint("during equation assembly")
             equation = list(row)
             equation[row_index] = (equation[row_index] - 1) % action.prime
             equations.append(tuple(equation))
@@ -582,7 +640,9 @@ def homogeneous_fixed_subspace(
         entries=tuple(equations),
         columns=len(monomial_basis),
     )
+    checkpoint("before nullspace")
     nullspace_rows = nullspace(equation_matrix)
+    checkpoint("after nullspace")
     if nullspace_rows:
         reduced, pivots = rref(
             PrimeFieldMatrix(
@@ -591,6 +651,7 @@ def homogeneous_fixed_subspace(
                 columns=len(monomial_basis),
             )
         )
+        checkpoint("after basis reduction")
         basis_rows = reduced[: len(pivots)]
     else:
         basis_rows = ()
@@ -599,12 +660,14 @@ def homogeneous_fixed_subspace(
         entries=basis_rows,
         columns=len(monomial_basis),
     )
-    return HomogeneousFixedSubspace._from_kernel(
+    result = HomogeneousFixedSubspace._from_kernel(
         action=action,
         degree=degree,
         monomial_basis=monomial_basis,
         basis_matrix=basis_matrix,
     )
+    checkpoint("after result construction")
+    return result
 
 
 def direction_rank_ledger(

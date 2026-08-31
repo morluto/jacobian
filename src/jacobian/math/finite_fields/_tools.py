@@ -196,7 +196,9 @@ def _compute_matrix_rank(request: MatrixRankRequest) -> MatrixRankResult:
 def _homogeneous_fixed_subspace(
     request: HomogeneousFixedSubspaceRequest,
 ) -> HomogeneousFixedSubspace:
-    return homogeneous_fixed_subspace(request.action, request.degree)
+    return homogeneous_fixed_subspace(
+        request.action, request.degree, enforce_transport_limit=True
+    )
 
 
 def _build_tools() -> MathTools:

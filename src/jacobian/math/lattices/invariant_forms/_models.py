@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import unicodedata
-from collections.abc import Mapping
-from typing import Any, Literal, Self
+from collections.abc import Iterable, Mapping
+from typing import Any, Literal, Self, cast
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -77,7 +77,7 @@ def _canonicalize_generator_order(data: dict[str, object]) -> dict[str, object]:
     if isinstance(normalized_generators, (str, bytes, Mapping)):
         return normalized
     try:
-        generator_iterator = iter(normalized_generators)
+        generator_iterator = iter(cast(Iterable[object], normalized_generators))
     except TypeError:
         return normalized
     generator_values: list[object] = []
@@ -91,6 +91,7 @@ def _canonicalize_generator_order(data: dict[str, object]) -> dict[str, object]:
             "budget_exceeded",
             f"an action has at most {MAX_ACTION_GENERATORS} generators",
         )
+    normalized["generators"] = tuple(generator_values)
     labelled_generators: list[tuple[str, object]] = []
     for generator in generator_values:
         label = (
@@ -117,7 +118,7 @@ def _canonicalize_coordinate_axis(data: dict[str, object]) -> dict[str, object]:
         return normalized
     if not isinstance(axis, (list, tuple)):
         try:
-            axis_iterator = iter(axis)
+            axis_iterator = iter(cast(Iterable[object], axis))
         except TypeError:
             return normalized
         axis_values: list[object] = []
@@ -192,7 +193,10 @@ def _require_raw_action_envelope(data: object) -> object:  # noqa: C901
         )
     generators = data.get("generators")
     if not isinstance(generators, (list, tuple)):
-        return _canonicalize_generator_order(data)
+        data = _canonicalize_generator_order(data)
+        generators = data.get("generators")
+        if not isinstance(generators, (list, tuple)):
+            return data
     if len(generators) > MAX_ACTION_GENERATORS:
         raise _validation_error(
             "budget_exceeded",

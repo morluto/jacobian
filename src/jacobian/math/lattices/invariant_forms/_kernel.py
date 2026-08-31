@@ -25,6 +25,8 @@ from jacobian.canonical import (
     CanonicalLimits,
     encode_strict_json,
     format_canonical_integer,
+    loads_strict_json,
+    parse_canonical_integer,
 )
 from jacobian.math.lattices.invariant_forms._models import (
     MAX_CONSTRAINT_CELLS,
@@ -620,6 +622,7 @@ def _build_constraint_plan(
         _require_active_request("during exact invariant-form constraint expansion")
         for equation_row in range(dimension):
             for equation_column in range(dimension):
+                _require_active_request("during exact invariant-form constraint expansion")
                 exact_row = tuple(
                     _constraint_coefficient(
                         matrix,
@@ -653,6 +656,7 @@ def _build_constraint_plan(
                             f"{MAX_STORED_CONSTRAINT_DIGITS}-digit intermediate bound",
                         )
                     constraints.add(constraint)
+    _require_active_request("after exact invariant-form constraint expansion")
     ordered_constraints = tuple(sorted(constraints))
     _require_result_envelope(
         action,
@@ -710,7 +714,10 @@ def _integer_kernel_basis(plan: _ConstraintPlan) -> tuple[list[list[int]], int]:
     payload = json.dumps(
         {
             "coefficient_count": coefficient_count,
-            "constraints": [list(row) for row in plan.constraints],
+            "constraints": [
+                [format_canonical_integer(value) for value in row]
+                for row in plan.constraints
+            ],
         },
         separators=(",", ":"),
     ).encode("utf-8")
@@ -744,10 +751,20 @@ def _integer_kernel_basis(plan: _ConstraintPlan) -> tuple[list[list[int]], int]:
     ):
         raise RuntimeError("bounded invariant-form HNF worker did not return a basis")
     try:
-        response = json.loads(completed.stdout)
-        primitive_kernel = response["primitive_kernel"]
+        response = loads_strict_json(completed.stdout)
+        primitive_kernel = []
+        for row in response["primitive_kernel"]:
+            decoded_row = []
+            for value in row:
+                if not isinstance(value, str):
+                    raise ValueError("worker integer must be a canonical string")
+                decoded = parse_canonical_integer(value)
+                if format_canonical_integer(decoded) != value:
+                    raise ValueError("worker integer is not canonical")
+                decoded_row.append(decoded)
+            primitive_kernel.append(decoded_row)
         constraint_rank = response["constraint_rank"]
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+    except (KeyError, TypeError, ValueError, CanonicalizationError) as exc:
         raise RuntimeError(
             "bounded invariant-form HNF worker returned malformed data"
         ) from exc

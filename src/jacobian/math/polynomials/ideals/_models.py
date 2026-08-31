@@ -88,9 +88,7 @@ def _admit_monomial_ideal(ideal: RationalPolynomialIdeal) -> None:
         for other in generators[index + 1 :]:
             if all(
                 left <= right for left, right in zip(gen, other, strict=True)
-            ) or all(
-                right <= left for left, right in zip(gen, other, strict=True)
-            ):
+            ) or all(right <= left for left, right in zip(gen, other, strict=True)):
                 raise _validation_error(
                     "monomial generators must be pairwise nondividing"
                 )

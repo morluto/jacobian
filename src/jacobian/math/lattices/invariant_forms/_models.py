@@ -450,6 +450,23 @@ class IntegralBilinearForm(StrictModel):
                         "noncanonical_coordinate_label",
                         "form coordinate_axis labels must use NFC Unicode normalization",
                     )
+        matrix = data.get("matrix")
+        if isinstance(matrix, dict):
+            entries = matrix.get("entries")
+            if isinstance(entries, (list, tuple)):
+                for row in entries:
+                    if not isinstance(row, (list, tuple)):
+                        raise PydanticCustomError(
+                            "matrix.shape_mismatch", "form matrix rows must be arrays"
+                        )
+                    if any(
+                        not isinstance(value, (str, int)) or isinstance(value, bool)
+                        for value in row
+                    ):
+                        raise PydanticCustomError(
+                            "matrix.shape_mismatch",
+                            "form matrix entries must be integers or strings",
+                        )
         return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
@@ -570,7 +587,7 @@ class InvariantBilinearFormLattice(StrictModel):
     lattice.
     """
 
-    action: RationalMatrixAction
+    action: MatrixAction
     kind: FormKind
     coefficient_domain: Literal["ZZ"] = "ZZ"
     coefficient_order: FormCoefficientOrder
@@ -624,7 +641,7 @@ class InvariantBilinearFormLattice(StrictModel):
     def _from_kernel(
         cls,
         *,
-        action: RationalMatrixAction,
+        action: MatrixAction,
         kind: FormKind,
         coefficient_dimension: int,
         constraint_rank: int,

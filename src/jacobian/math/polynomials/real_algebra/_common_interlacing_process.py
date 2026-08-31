@@ -117,13 +117,13 @@ def _source_to_dense_int(
     common_denominator = 1
     for coeff in dense_rational:
         common_denominator = lcm(common_denominator, coeff.denominator)
-    dense_int = [
-        int(coeff.numerator) * (common_denominator // int(coeff.denominator))
+    dense_int: list[int] = [
+        int(int(coeff.numerator) * (common_denominator // int(coeff.denominator)))
         for coeff in dense_rational
     ]
-    content = 0
-    for coeff in dense_int:
-        content = gcd(content, abs(coeff))
+    content: int = 0
+    for coeff in dense_int:  # type: ignore[assignment]
+        content = gcd(content, abs(int(coeff)))
     if content > 1:
         dense_int = [c // content for c in dense_int]
     if dense_int and dense_int[0] < 0:
@@ -133,7 +133,7 @@ def _source_to_dense_int(
 
 def _verify_declared_factors(
     source: LabelledRationalPolynomial,
-    declared_factors: list,
+    declared_factors: list[Any],
 ) -> None:
     """Verify the worker's declared factors reconstruct the retained source.
 
@@ -162,10 +162,10 @@ def _verify_declared_factors(
         )
 
 
-def _root_profile_from_worker(
+def _root_profile_from_worker(  # noqa: C901
     value: object,
-    declared_factors: list,
-    factor_root_counts: list,
+    declared_factors: list[Any],
+    factor_root_counts: list[Any],
 ) -> SourceRootProfile:
     """Parse bounded worker structure without replaying exact factorization.
 
@@ -207,7 +207,7 @@ def _root_profile_from_worker(
             raise ValueError("worker root polynomial is constant")
         if coefficients[0] <= 0:
             raise ValueError("worker root polynomial has non-positive leading coefficient")
-        content = 0
+        content: int = 0
         for coefficient in coefficients:
             content = math.gcd(content, abs(coefficient))
         if content != 1:

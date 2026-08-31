@@ -14,7 +14,6 @@ from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math._labels import OpaqueLabel
 from jacobian.math.number_theory.algebraic_numbers.real import (
     RationalIsolatingInterval,
-    RealAlgebraicValue,
     _UnrecognizedRealAlgebraicValue,
 )
 from jacobian.math.polynomials.values import (
@@ -393,7 +392,7 @@ class CommonInterlacingProfile(StrictModel):
             )
 
     @model_validator(mode="after")
-    def require_structural_profile(self) -> Self:
+    def require_structural_profile(self) -> Self:  # noqa: C901
         if len(self.family) != len(self.root_profiles):
             raise _validation_error(
                 "source_axis",

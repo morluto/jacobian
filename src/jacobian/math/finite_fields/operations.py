@@ -61,6 +61,16 @@ _PALEY_ORIENTATION: Literal["ARC_X_TO_Y_IFF_Y_MINUS_X_IS_NONZERO_SQUARE"] = (
 )
 
 
+# Separate calibrated bound for the Python-level substitution loop in
+# _induced_action_matrix. Each monomial substitution performs sum(exponents)
+# calls to _multiply_by_linear_form, each iterating over at most
+# monomial_count terms. The bound is monomial_count * degree * monomial_count
+# per generator. FLINT elimination work and Python substitution work are not
+# interchangeable: one billion FLINT matrix-rank cells finish in seconds, but
+# one billion Python loop iterations take minutes.
+_MAX_PYTHON_SUBSTITUTION_WORK = 10_000_000
+
+
 def _homogeneous_fixed_subspace_envelope(
     action: PrimeFieldLinearAction, degree: int
 ) -> int:
@@ -83,6 +93,10 @@ def _homogeneous_fixed_subspace_envelope(
     # returned nullspace rows into backend-independent canonical RREF form.
     elimination_work = (generator_count + 1) * monomial_count**3
     action_rank_work = generator_count * variable_count**3
+    # The Python substitution loop does sum(exponents) calls to
+    # _multiply_by_linear_form per monomial, each iterating over at most
+    # monomial_count terms. Bound it separately from FLINT work.
+    substitution_work = generator_count * max(1, degree) * monomial_count**2
     if monomial_count > _MAX_HOMOGENEOUS_MONOMIALS:
         raise OperationDomainValidationError(
             location=("degree",),
@@ -104,12 +118,31 @@ def _homogeneous_fixed_subspace_envelope(
             code="finite_field.fixed_subspace_matrix_bound",
             message="fixed-subspace equation or result matrix exceeds its cell bound",
         )
+    if substitution_work > _MAX_PYTHON_SUBSTITUTION_WORK:
+        raise OperationDomainValidationError(
+            location=("degree",),
+            code="finite_field.fixed_subspace_substitution_bound",
+            message="Python substitution loop exceeds the separately calibrated expansion bound",
+        )
     work = expansion_work + elimination_work + action_rank_work
     if work > MAX_PRIME_FIELD_ELIMINATION_WORK:
         raise OperationDomainValidationError(
             location=("action",),
             code="finite_field.fixed_subspace_work_bound",
             message="homogeneous fixed-subspace computation exceeds its work bound",
+        )
+    # Account for the canonical output bytes: the result repeats the complete
+    # action (generator matrices), adds the monomial basis and basis matrix.
+    result_cells = (
+        generator_count * variable_count**2  # action generator matrices
+        + monomial_count * variable_count  # monomial basis
+        + monomial_count * monomial_count  # basis matrix
+    )
+    if result_cells > MAX_PRIME_FIELD_MATRIX_CELLS:
+        raise OperationDomainValidationError(
+            location=("action",),
+            code="finite_field.fixed_subspace_output_bound",
+            message="canonical fixed-subspace result exceeds the output-size envelope",
         )
     return monomial_count
 

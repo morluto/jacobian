@@ -256,13 +256,13 @@ def test_one_variable_degree_is_bounded_by_derived_work_not_fixed_cap() -> None:
     assert result.basis_matrix.entries == ((1,),)
 
 
-def test_huge_one_variable_degree_is_rejected_by_derived_work_bound() -> None:
+def test_huge_one_variable_degree_is_rejected_by_substitution_bound() -> None:
     action = PrimeFieldLinearAction(
         variable_axis=Axis(name="polynomial_variables", labels=("x",)),
         generator_matrices=(PrimeFieldMatrix(prime=3, entries=((1,),), columns=1),),
     )
 
-    with pytest.raises(OperationDomainValidationError, match="work bound"):
+    with pytest.raises(OperationDomainValidationError, match="expansion bound"):
         homogeneous_fixed_subspace(action, 1_100_000_000)
 
 

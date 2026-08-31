@@ -11,7 +11,10 @@ from pydantic_core import PydanticCustomError
 from jacobian._models import StrictModel
 from jacobian.canonical import sha256_digest
 from jacobian.math.graphs.directed._models import DirectedGraph
-from jacobian.math.matrices.finite_fields._bounds import MAX_PRIME_FIELD_FLINT_PRIME
+from jacobian.math.matrices.finite_fields._bounds import (
+    MAX_PRIME_FIELD_FLINT_PRIME,
+    MAX_PRIME_FIELD_MATRIX_AXIS,
+)
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix, rank
 
 _MAX_FIELD_ORDER = 65536
@@ -19,12 +22,11 @@ _MIN_MODULUS_COEFFICIENTS = 2
 _MAX_MODULUS_COEFFICIENTS = 17
 _MAX_AXIS_LABELS = 256
 _MAX_DERIVATION_WORK = 1_000_000
-_MAX_ACTION_VARIABLES = 8
-_MAX_ACTION_GENERATORS = 16
-# A one-variable, one-generator degree reaches this bound exactly through the
-# derived expansion-work envelope; multi-variable actions are admitted only
-# when their sharper monomial and matrix budgets fit first.
-_MAX_HOMOGENEOUS_MONOMIALS = 512
+_MAX_ACTION_GENERATORS = MAX_PRIME_FIELD_MATRIX_AXIS
+# The matrix carrier and the fixed-subspace operation both cap the ambient
+# homogeneous basis at one matrix axis.  Work and output admission remain
+# result-sensitive in the operation owner.
+_MAX_HOMOGENEOUS_MONOMIALS = MAX_PRIME_FIELD_MATRIX_AXIS
 
 
 def _homogeneous_monomial_count(variable_count: int, degree: int) -> int:
@@ -346,7 +348,7 @@ class PrimeFieldLinearAction(StrictModel):
         ):
             return data
         variable_count = len(labels)
-        if not 1 <= variable_count <= _MAX_ACTION_VARIABLES:
+        if variable_count < 1:
             raise _validation_error(
                 "finite_field.linear_action_variable_bound",
                 "linear action exceeds the variable-count bound",
@@ -435,7 +437,7 @@ class HomogeneousFixedSubspace(StrictModel):
         if degree < 0:
             return data
         variable_count = len(labels)
-        if not 1 <= variable_count <= _MAX_ACTION_VARIABLES:
+        if variable_count < 1:
             return data
         monomial_count = _homogeneous_monomial_count(variable_count, degree)
         if monomial_count > _MAX_HOMOGENEOUS_MONOMIALS:

@@ -191,7 +191,7 @@ def test_singular_generator_is_rejected_by_operation_admission() -> None:
         homogeneous_fixed_subspace(action, 2)
 
 
-def test_oversized_homogeneous_basis_is_rejected_before_expansion() -> None:
+def test_oversized_homogeneous_basis_is_rejected_by_derived_axis_bound() -> None:
     identity = tuple(
         tuple(int(row == column) for column in range(8)) for row in range(8)
     )
@@ -202,8 +202,8 @@ def test_oversized_homogeneous_basis_is_rejected_before_expansion() -> None:
         generator_matrices=(PrimeFieldMatrix(prime=3, entries=identity, columns=8),),
     )
 
-    with pytest.raises(OperationDomainValidationError, match="monomial basis"):
-        homogeneous_fixed_subspace(action, 5)
+    with pytest.raises(OperationDomainValidationError, match="equations exceed"):
+        homogeneous_fixed_subspace(action, 6)
 
 
 def test_stacked_equation_axis_is_rejected_before_polynomial_expansion() -> None:
@@ -254,6 +254,41 @@ def test_one_variable_degree_is_bounded_by_derived_work_not_fixed_cap() -> None:
 
     assert result.monomial_basis == ((65,),)
     assert result.basis_matrix.entries == ((1,),)
+
+
+def test_nine_variable_degree_one_action_uses_derived_admission() -> None:
+    variable_count = 9
+    identity = tuple(
+        tuple(int(row == column) for column in range(variable_count))
+        for row in range(variable_count)
+    )
+    action = PrimeFieldLinearAction(
+        variable_axis=Axis(
+            name="polynomial_variables",
+            labels=tuple(f"x{index}" for index in range(variable_count)),
+        ),
+        generator_matrices=(
+            PrimeFieldMatrix(prime=3, entries=identity, columns=variable_count),
+        ),
+    )
+
+    result = homogeneous_fixed_subspace(action, 1)
+
+    assert result.fixed_dimension == variable_count
+
+
+def test_seventeen_one_variable_generators_use_derived_admission() -> None:
+    action = PrimeFieldLinearAction(
+        variable_axis=Axis(name="polynomial_variables", labels=("x",)),
+        generator_matrices=tuple(
+            PrimeFieldMatrix(prime=19, entries=((value,),), columns=1)
+            for value in range(1, 18)
+        ),
+    )
+
+    result = homogeneous_fixed_subspace(action, 1)
+
+    assert result.fixed_dimension == 0
 
 
 def test_huge_one_variable_degree_is_rejected_by_substitution_bound() -> None:

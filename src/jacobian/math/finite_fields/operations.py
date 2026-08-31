@@ -7,6 +7,7 @@ from typing import Literal
 from jacobian.canonical import (
     CanonicalizationError,
     CanonicalLimits,
+    canonicalize_json,
     encode_strict_json,
 )
 from jacobian.catalog.models import OperationDomainValidationError
@@ -15,7 +16,6 @@ from jacobian.math.finite_fields._models import (
     _MAX_PROJECTIVE_POINTS,
 )
 from jacobian.math.finite_fields.values import (
-    _MAX_HOMOGENEOUS_MONOMIALS,
     Axis,
     CollisionResult,
     DirectionRankLedger,
@@ -71,6 +71,42 @@ _PALEY_ORIENTATION: Literal["ARC_X_TO_Y_IFF_Y_MINUS_X_IS_NONZERO_SQUARE"] = (
 _MAX_PYTHON_SUBSTITUTION_WORK = 10_000_000
 
 
+def _homogeneous_fixed_subspace_output_bytes(
+    action: PrimeFieldLinearAction, degree: int, monomial_count: int
+) -> int:
+    """Measure a conservative complete canonical result before execution."""
+
+    monomial_basis = _homogeneous_monomial_basis(
+        len(action.variable_axis.labels), degree
+    )
+    largest_residue = action.prime - 1
+    payload = {
+        "action": action.model_dump(mode="json"),
+        "basis_matrix": {
+            "columns": monomial_count,
+            "entries": [
+                [largest_residue] * monomial_count for _ in range(monomial_count)
+            ],
+            "prime": action.prime,
+        },
+        "degree": degree,
+        "fixed_dimension": monomial_count,
+        "monomial_basis": [list(exponents) for exponents in monomial_basis],
+    }
+    try:
+        encoded = canonicalize_json(
+            payload,
+            limits=CanonicalLimits(max_output_bytes=(1 << 63) - 1),
+        )
+    except CanonicalizationError as error:
+        raise OperationDomainValidationError(
+            location=("action",),
+            code="finite_field.fixed_subspace_output_bound",
+            message="canonical fixed-subspace result is not transportable",
+        ) from error
+    return len(encoded)
+
+
 def _homogeneous_fixed_subspace_envelope(
     action: PrimeFieldLinearAction, degree: int
 ) -> int:
@@ -97,12 +133,6 @@ def _homogeneous_fixed_subspace_envelope(
     # _multiply_by_linear_form per monomial, each iterating over at most
     # monomial_count terms. Bound it separately from FLINT work.
     substitution_work = generator_count * max(1, degree) * monomial_count**2
-    if monomial_count > _MAX_HOMOGENEOUS_MONOMIALS:
-        raise OperationDomainValidationError(
-            location=("degree",),
-            code="finite_field.fixed_subspace_monomial_bound",
-            message="homogeneous monomial basis exceeds the operation bound",
-        )
     if equation_rows > MAX_PRIME_FIELD_MATRIX_AXIS:
         raise OperationDomainValidationError(
             location=("action", "generator_matrices"),
@@ -131,14 +161,10 @@ def _homogeneous_fixed_subspace_envelope(
             code="finite_field.fixed_subspace_work_bound",
             message="homogeneous fixed-subspace computation exceeds its work bound",
         )
-    # Account for the canonical output bytes: the result repeats the complete
-    # action (generator matrices), adds the monomial basis and basis matrix.
-    result_cells = (
-        generator_count * variable_count**2  # action generator matrices
-        + monomial_count * variable_count  # monomial basis
-        + monomial_count * monomial_count  # basis matrix
+    result_bytes = _homogeneous_fixed_subspace_output_bytes(
+        action, degree, monomial_count
     )
-    if result_cells > MAX_PRIME_FIELD_MATRIX_CELLS:
+    if result_bytes > CanonicalLimits().max_output_bytes:
         raise OperationDomainValidationError(
             location=("action",),
             code="finite_field.fixed_subspace_output_bound",

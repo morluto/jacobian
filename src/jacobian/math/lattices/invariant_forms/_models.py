@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from typing import Any, Literal, Self
 
 from pydantic import Field, model_validator
@@ -135,6 +136,17 @@ def _require_raw_action_envelope(data: object) -> object:  # noqa: C901
             "budget_exceeded",
             f"an action has at most {MAX_ACTION_GENERATORS} generators",
         )
+    for generator in generators:
+        label = (
+            generator.get("label")
+            if isinstance(generator, dict)
+            else getattr(generator, "label", None)
+        )
+        if isinstance(label, str) and unicodedata.normalize("NFC", label) != label:
+            raise _validation_error(
+                "noncanonical_generator_label",
+                "generator labels must use NFC Unicode normalization",
+            )
     # Inspect each raw generator matrix against the declared axis dimension
     # before Pydantic canonicalizes every rational cell.  A native caller
     # can reuse one raw matrix object across generators, so bound the total

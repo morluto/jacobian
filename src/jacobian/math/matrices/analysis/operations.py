@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
-import time
 from math import ceil, factorial, lcm, log10
 from typing import Any, Literal
 
@@ -688,12 +688,13 @@ def _symmetric_algebraic_inertia(
                 if not a[row][index]:
                     continue
                 factor = a[row][index] / diagonal
-                for column in range(index + 1, n):
+                for column in range(row, n):
                     a[row][column] -= factor * a[index][column]
-                for column in range(index + 1, n):
-                    a[column][row] = a[row][column]
                 a[row][index] = 0
                 a[index][row] = 0
+            for row in range(index + 1, n):
+                for column in range(row + 1, n):
+                    a[column][row] = a[row][column]
             index += 1
             continue
 

@@ -60,6 +60,13 @@ class LatticeComplexStructure(StrictModel):
                 "budget_exceeded",
                 f"a complex-torus lattice has at most {MAX_ACTION_DIMENSION} axes",
             )
+        if isinstance(axis, (list, tuple)):
+            for label in axis:
+                if not isinstance(label, str):
+                    raise _validation_error(
+                        "invalid_coordinate_label",
+                        "coordinate_axis labels must be strings",
+                    )
         normalized = dict(data)
         if isinstance(axis, list):
             normalized["coordinate_axis"] = tuple(axis)

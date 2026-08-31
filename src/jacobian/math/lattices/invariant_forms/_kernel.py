@@ -61,7 +61,7 @@ _HNF_WORKER = Path(__file__).with_name("_hnf_worker.py")
 _HNF_STDERR_LIMIT = 64 * 1024
 
 
-def _require_active_request(stage: str) -> None:
+def _require_active_request(stage: str, *, deadline: float | None = None) -> None:
     """Raise if the request deadline expired or was cancelled during *stage*."""
 
     if request_cancelled():
@@ -69,13 +69,13 @@ def _require_active_request(stage: str) -> None:
             f"invariant-form lattice cancelled {stage}"
         )
     execution = current_request_execution()
-    if execution is not None and execution.deadline is not None:
-        import time
-
-        if time.monotonic() >= execution.deadline:
-            raise OperationExecutionTimeoutError(
-                f"invariant-form lattice deadline expired {stage}"
-            )
+    active_deadline = deadline
+    if active_deadline is None and execution is not None:
+        active_deadline = execution.deadline
+    if active_deadline is not None and monotonic() >= active_deadline:
+        raise OperationExecutionTimeoutError(
+            f"invariant-form lattice deadline expired {stage}"
+        )
 
 
 def _bind_request_deadline() -> float:
@@ -538,7 +538,10 @@ def _build_constraint_plan(
     kind: FormKind,
     *,
     recognized_field: RecognizedRealSimpleNumberField | None = None,
+    deadline: float | None = None,
 ) -> _ConstraintPlan:
+    if deadline is not None:
+        _require_active_request("before constraint expansion", deadline=deadline)
     dimension = len(action.coordinate_axis)
     if isinstance(action, EmbeddedRealNumberFieldMatrixAction):
         field_degree = (
@@ -619,10 +622,15 @@ def _build_constraint_plan(
             for generator in action.generators
         )
     for matrix in generator_matrices:
-        _require_active_request("during exact invariant-form constraint expansion")
+        _require_active_request(
+            "during exact invariant-form constraint expansion", deadline=deadline
+        )
         for equation_row in range(dimension):
             for equation_column in range(dimension):
-                _require_active_request("during exact invariant-form constraint expansion")
+                _require_active_request(
+                    "during exact invariant-form constraint expansion",
+                    deadline=deadline,
+                )
                 exact_row = tuple(
                     _constraint_coefficient(
                         matrix,
@@ -656,7 +664,9 @@ def _build_constraint_plan(
                             f"{MAX_STORED_CONSTRAINT_DIGITS}-digit intermediate bound",
                         )
                     constraints.add(constraint)
-    _require_active_request("after exact invariant-form constraint expansion")
+    _require_active_request(
+        "after exact invariant-form constraint expansion", deadline=deadline
+    )
     ordered_constraints = tuple(sorted(constraints))
     _require_result_envelope(
         action,
@@ -815,6 +825,8 @@ def _form_entries(
 def _admit_invariant_bilinear_form_lattice(
     action: MatrixAction,
     kind: FormKind,
+    *,
+    deadline: float | None = None,
 ) -> _InvariantFormExecutionPlan:
     """Validate the action envelope and return work estimates.
 
@@ -840,6 +852,7 @@ def _admit_invariant_bilinear_form_lattice(
         action,
         kind,
         recognized_field=recognized_field,
+        deadline=deadline,
     )
     return _InvariantFormExecutionPlan(
         expansion_digit_work=plan.expansion_digit_work,
@@ -871,6 +884,7 @@ def invariant_bilinear_form_lattice_kernel(
             action,
             kind,
             recognized_field=recognized_field,
+            deadline=deadline,
         )
     )
     basis, constraint_rank = _integer_kernel_basis(plan, deadline=deadline)

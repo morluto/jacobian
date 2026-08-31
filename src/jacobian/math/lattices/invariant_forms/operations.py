@@ -67,6 +67,7 @@ def compute_invariant_bilinear_form_lattice(
         admission = _admit_invariant_bilinear_form_lattice(
             action,
             kind,
+            deadline=deadline,
         )
         execution_checkpoint("after invariant-form semantic admission")
         return invariant_bilinear_form_lattice_kernel(

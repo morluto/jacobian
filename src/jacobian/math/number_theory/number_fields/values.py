@@ -141,6 +141,14 @@ class SimpleNumberFieldElement(StrictModel):
     def require_raw_coordinate_bound(cls, data: Any) -> Any:
         if not isinstance(data, Mapping):
             return data
+        presentation = data.get("presentation")
+        if isinstance(presentation, Mapping) and not isinstance(
+            presentation.get("domain"), str
+        ):
+            raise _validation_error(
+                "raw_domain",
+                "simple number-field presentation domain must be a string",
+            )
         _raw_rational_component_bound(
             data.get("coefficients_ascending"),
             max_digits=MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS,
@@ -170,7 +178,12 @@ class SimpleNumberFieldElement(StrictModel):
 
 
 class RealNumberFieldEmbedding(StrictModel):
-    """A field homomorphism selected by one exact real root of its presentation."""
+    """A simple-field presentation with one structurally selected real root.
+
+    Embedding producers establish that the indexed root exists. Deserialization
+    preserves that canonical identity structurally; mathematical consumers
+    recognize the root before using this value as a field homomorphism.
+    """
 
     kind: Literal["REAL"]
     presentation: SimpleNumberFieldPresentation
@@ -705,6 +718,7 @@ __all__ = [
     "NumberFieldEmbeddingRecord",
     "NumberFieldRealValueEnclosure",
     "NumberFieldSignature",
+    "RealNumberFieldEmbedding",
     "RealNumberFieldEmbeddingRecord",
     "SimpleNumberFieldElement",
     "SimpleNumberFieldPresentation",

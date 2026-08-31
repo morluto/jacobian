@@ -17,6 +17,9 @@ PolynomialVariable = Annotated[
 MAX_POLYNOMIAL_VARIABLES = 8
 MAX_POLYNOMIAL_TERMS = 4_096
 MAX_POLYNOMIAL_EXPONENT = 32_768
+MAX_RATIONAL_FUNCTION_TERMS = 256
+MAX_RATIONAL_FUNCTION_EXPONENT = 64
+MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS = 128
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -137,12 +140,14 @@ class RationalPolynomialIdeal(StrictModel):
 
 
 class RationalFunction(StrictModel):
-    """One reduced element of ``QQ(t_1, ..., t_n)``.
+    """One structurally bounded presentation over ``QQ(t_1, ..., t_n)``.
 
-    The denominator is monic and the numerator and denominator are coprime.
-    This makes the sparse representation unique for the declared variable
-    order.  With no variables, the value is a canonical rational represented
-    by one constant numerator over the constant denominator one.
+    Deserialization checks sparse shape, bounds, a monic nonzero denominator,
+    and the unique zero/constant spellings without entering a symbolic
+    backend. Exact coprimality is established by the consuming owner through
+    :func:`require_canonical_rational_function`; trusted kernel producers use
+    :meth:`_from_kernel` after exact normalization. A recognized value is the
+    unique reduced numerator/denominator pair for its declared variable order.
     """
 
     domain: Literal["QQ"] = "QQ"
@@ -154,10 +159,27 @@ class RationalFunction(StrictModel):
     denominator: SparseRationalPolynomial
 
     @model_validator(mode="after")
-    def require_canonical_fraction(self) -> Self:
+    def require_structural_fraction(self) -> Self:
         _require_rational_function_shapes(self)
-        _require_rational_function_normal_form(self)
+        _require_rational_function_structural_normal_form(self)
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        variables: tuple[PolynomialVariable, ...],
+        numerator: SparseRationalPolynomial,
+        denominator: SparseRationalPolynomial,
+    ) -> Self:
+        """Construct after an owner-local exact normalization established form."""
+
+        return cls(
+            domain="QQ",
+            variables=variables,
+            numerator=numerator,
+            denominator=denominator,
+        )
 
 
 def _rational_function_one(variable_count: int) -> SparseRationalPolynomial:
@@ -189,14 +211,16 @@ def _require_rational_function_shapes(value: RationalFunction) -> None:
             )
         require_sparse_polynomial_budget(
             polynomial,
-            maximum_terms=256,
-            maximum_exponent=64,
-            maximum_coefficient_digits=128,
+            maximum_terms=MAX_RATIONAL_FUNCTION_TERMS,
+            maximum_exponent=MAX_RATIONAL_FUNCTION_EXPONENT,
+            maximum_coefficient_digits=MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS,
             label=f"rational-function {label}",
         )
 
 
-def _require_rational_function_normal_form(value: RationalFunction) -> None:
+def _require_rational_function_structural_normal_form(
+    value: RationalFunction,
+) -> None:
     if not value.denominator.terms:
         raise _validation_error(
             "zero_denominator", "rational-function denominator cannot be zero"
@@ -216,8 +240,47 @@ def _require_rational_function_normal_form(value: RationalFunction) -> None:
             )
         return
 
-    # Construct exact polynomials from already validated term data. No caller
-    # text is parsed or evaluated at this boundary.
+    if value.denominator.terms[0].coefficient.as_fraction() != 1:
+        raise _validation_error(
+            "denominator_not_monic", "rational-function denominator must be monic"
+        )
+
+
+def require_canonical_rational_function(
+    value: RationalFunction,
+    *,
+    maximum_terms: int = MAX_RATIONAL_FUNCTION_TERMS,
+    maximum_exponent: int = MAX_RATIONAL_FUNCTION_EXPONENT,
+    maximum_coefficient_digits: int = MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS,
+    label: str = "rational function",
+) -> RationalFunction:
+    """Recognize one exact reduced rational-function presentation.
+
+    Shape parsing is intentionally backend-free. A consuming owner calls this
+    function only after its cheaper structural admission and supplies the
+    operation envelope that bounds both polynomial parts before exact SymPy
+    GCD recognition. The returned value is unchanged and may then be consumed
+    as the canonical element of the declared rational-function field.
+    """
+
+    _require_rational_function_shapes(value)
+    _require_rational_function_structural_normal_form(value)
+    for part, polynomial in (
+        ("numerator", value.numerator),
+        ("denominator", value.denominator),
+    ):
+        require_sparse_polynomial_budget(
+            polynomial,
+            maximum_terms=maximum_terms,
+            maximum_exponent=maximum_exponent,
+            maximum_coefficient_digits=maximum_coefficient_digits,
+            label=f"{label} {part}",
+        )
+    if not value.numerator.terms or not value.variables:
+        return value
+
+    # Construct exact polynomials from already structurally validated term
+    # data. No caller text is parsed or evaluated at this semantic boundary.
     from jacobian.math.polynomials._conversions import (
         sparse_rational_polynomial_to_sympy,
     )
@@ -226,14 +289,11 @@ def _require_rational_function_normal_form(value: RationalFunction) -> None:
     denominator = sparse_rational_polynomial_to_sympy(
         value.denominator, value.variables
     )
-    if denominator.LC() != 1:
-        raise _validation_error(
-            "denominator_not_monic", "rational-function denominator must be monic"
-        )
     if not numerator.gcd(denominator).is_one:
         raise _validation_error(
             "not_coprime", "rational-function numerator and denominator must be coprime"
         )
+    return value
 
 
 def require_sparse_polynomial_budget(
@@ -355,6 +415,9 @@ __all__ = [
     "MAX_POLYNOMIAL_EXPONENT",
     "MAX_POLYNOMIAL_TERMS",
     "MAX_POLYNOMIAL_VARIABLES",
+    "MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS",
+    "MAX_RATIONAL_FUNCTION_EXPONENT",
+    "MAX_RATIONAL_FUNCTION_TERMS",
     "PolynomialVariable",
     "RationalFunction",
     "RationalPolynomial",
@@ -362,6 +425,7 @@ __all__ = [
     "RationalPolynomialTerm",
     "SparseRationalPolynomial",
     "rational_evaluation_component_digit_bounds",
+    "require_canonical_rational_function",
     "require_polynomial_budget",
     "require_sparse_polynomial_budget",
 ]

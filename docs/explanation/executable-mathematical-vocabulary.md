@@ -9,6 +9,66 @@ The caller owns problem representation, decomposition, sequencing, strategy,
 interpretation, and stopping. Jacobian owns the public mathematical contracts,
 typed values, execution bounds, and honest result semantics around each move.
 
+## A dependency graph of executable results
+
+Mathematics is built in layers: foundational theories support mathematical
+objects, and those objects support lemmas and larger results. Jacobian does not
+try to encode that entire hierarchy or turn every lemma into a separate tool.
+It exposes selected reusable results as typed operations that agents can
+combine:
+
+```text
+mathematical objects -> executable operations -> larger investigations
+                              ^       |
+                              |       v
+                        typed results
+```
+
+The operation vocabulary is therefore closer to a dependency graph than to a
+flat list or a simple tree. One operation can use several mathematical inputs,
+and its result can be reused by many later operations. “Atomic” describes the
+boundary of one operation: it establishes one clear, independently useful
+mathematical postcondition. It does not mean that the operation is mathematically
+indivisible or internally simple.
+
+## Why a partial vocabulary is useful
+
+An agent investigating a mathematical problem is navigating a large space of
+possible states: known values, assumptions, intermediate results, and open
+questions. A useful operation gives the agent a reliable way to transform one
+state into another—for example, by factoring a polynomial, computing a kernel,
+or deriving an invariant. The agent still chooses which transformation to try
+and how to combine the results; Jacobian supplies the well-defined moves.
+
+The vocabulary does not need to contain every mathematical operation before it
+can provide value. A partial collection is useful when its operations cover
+common, reusable transformations with precise contracts. This is similar to
+giving an agent a library of legal moves in a board game: the library does not
+play the game or search every possible line, but it makes meaningful moves
+explicit and dependable.
+
+Formalization gives mathematical objects, validity conditions, and relationships
+their precise meaning. Jacobian turns selected, well-defined transformations
+between those objects into executable operations. In this sense, formalization
+supplies the rules while operations are the legal moves: the agent chooses which
+moves to make and how to combine them, and Jacobian provides moves whose effects
+are typed, bounded, and mathematically checkable.
+
+Clear, named, typed operations give agents explicit ways to transform a
+mathematical state. This makes useful moves easier to identify and apply, while
+keeping implementation details out of the agent's context. Writing code can be
+part of mathematical work, but repeatedly reimplementing standard
+transformations often adds accidental overhead in choosing representations,
+finding library calls, handling edge cases, and debugging the surrounding code.
+
+Jacobian's hypothesis is that this vocabulary can shape an agent's effective
+reasoning space. Operations provide semantic landmarks: recognizable ways to
+transform a mathematical state and structured results to reason from. This may
+make useful transformations more salient, reduce low-level implementation
+paths, and leave more context for mathematical exploration. This is an
+interface-level effect, not a claim that Jacobian changes model weights or
+directly measures the model's latent geometry.
+
 ## Semantic atomicity
 
 **Atomic means one stable, reusable mathematical postcondition, not a small or

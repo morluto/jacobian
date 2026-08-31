@@ -88,7 +88,9 @@ def test_public_values_and_functions_have_one_canonical_module() -> None:
     modules = tuple(
         "jacobian.math."
         + path.parent.relative_to(math_root).as_posix().replace("/", ".")
-        for path in math_root.rglob("__init__.py")
+        for path in sorted(
+            math_root.rglob("__init__.py"), key=lambda item: item.as_posix()
+        )
         if path.parent != math_root
     )
     function_locations: dict[object, list[str]] = {}
@@ -98,7 +100,12 @@ def test_public_values_and_functions_have_one_canonical_module() -> None:
             value = getattr(module, name)
             if callable(value) and not isinstance(value, type(importlib)):
                 function_locations.setdefault(value, []).append(f"{module_name}.{name}")
-    assert all(len(locations) == 1 for locations in function_locations.values())
+    duplicates = [
+        tuple(sorted(locations))
+        for locations in function_locations.values()
+        if len(locations) > 1
+    ]
+    assert not duplicates, "duplicate public callables: " + repr(duplicates)
 
 
 def test_root_namespace_stays_minimal() -> None:

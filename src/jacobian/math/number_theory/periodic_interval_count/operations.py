@@ -77,7 +77,9 @@ def compute_periodic_interval_count(
     terms: dict[tuple[int, int], int] | None = None
     if plan.method == "PERIOD_LIFT":
         residues = tuple(
-            index for index, occupied in enumerate(_union_mask(source, plan.common_period)) if occupied
+            index
+            for index, occupied in enumerate(_union_mask(source, plan.common_period))
+            if occupied
         )
     elif plan.method == "SPARSE_LIFT":
         residues = tuple(sorted(_sparse_union(source, plan.common_period)))
@@ -85,9 +87,7 @@ def compute_periodic_interval_count(
         terms = _inclusion_exclusion_terms(source)
     count = rank_periodic_union(
         source, plan, upper, residues=residues, terms=terms
-    ) - rank_periodic_union(
-        source, plan, lower - 1, residues=residues, terms=terms
-    )
+    ) - rank_periodic_union(source, plan, lower - 1, residues=residues, terms=terms)
 
     return PeriodicIntervalCountResult(
         source=source,

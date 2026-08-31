@@ -143,6 +143,27 @@ def _admit_source(ideal: RationalPolynomialIdeal, *, label: str) -> None:
             raise _validation_error(
                 f"{label} exceeds the {MAX_INPUT_TERMS}-term aggregate input budget"
             )
+        for generator in ideal.generators:
+            if (
+                len(generator.polynomial.terms) == 1
+                and not any(generator.polynomial.terms[0].exponents)
+                and generator.polynomial.terms[0].coefficient.num != "0"
+            ):
+                continue
+            require_polynomial_budget(
+                generator,
+                maximum_terms=MAX_INPUT_TERMS,
+                maximum_exponent=MAX_INPUT_EXPONENT,
+                maximum_coefficient_digits=MAX_COEFFICIENT_DIGITS,
+                label=f"{label} generator",
+            )
+            if any(
+                sum(term.exponents) > MAX_INPUT_EXPONENT
+                for term in generator.polynomial.terms
+            ):
+                raise _validation_error(
+                    f"{label} generator exceeds total degree {MAX_INPUT_EXPONENT}"
+                )
         return
     _require_ideal_budget(ideal, label=label)
 

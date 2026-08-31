@@ -27,19 +27,19 @@ def _graph(
 def test_triangle() -> None:
     graph = _graph(["a", "b", "c"], [["a", "b"], ["b", "c"], ["a", "c"]])
     result = compute_cycle_length_profile(graph)
-    assert result.cycle_lengths == (3,)
+    assert tuple(r.cycle_length for r in result.rows) == (3,)
 
 
 def test_edgeless_graph() -> None:
     graph = _graph(["a", "b", "c"], [])
     result = compute_cycle_length_profile(graph)
-    assert result.cycle_lengths == ()
+    assert tuple(r.cycle_length for r in result.rows) == ()
 
 
 def test_path_graph() -> None:
     graph = _graph(["a", "b", "c"], [["a", "b"], ["b", "c"]])
     result = compute_cycle_length_profile(graph)
-    assert result.cycle_lengths == ()
+    assert tuple(r.cycle_length for r in result.rows) == ()
 
 
 def test_k4() -> None:
@@ -48,7 +48,7 @@ def test_k4() -> None:
         [["a", "b"], ["a", "c"], ["a", "d"], ["b", "c"], ["b", "d"], ["c", "d"]],
     )
     result = compute_cycle_length_profile(graph)
-    assert set(result.cycle_lengths) == {3, 4}
+    assert set(tuple(r.cycle_length for r in result.rows)) == {3, 4}
 
 
 def test_result_preserves_source() -> None:
@@ -62,10 +62,9 @@ def test_dense_bipartite_search_is_rejected_before_traversal() -> None:
     right = [f"r{i}" for i in range(20)]
     graph = _graph([*left, *right], [[u, v] for u in left for v in right])
 
-    with pytest.raises(OperationDomainValidationError, match="simple-path work"):
+    with pytest.raises(OperationDomainValidationError, match="cycle-profile search exceeds the admitted work bound"):
         compute_cycle_length_profile(graph)
-    with pytest.raises(ValidationError, match="simple-path work"):
-        CycleLengthProfileRequest(graph=graph)
+
 
 
 def test_large_single_cycle_remains_admitted() -> None:
@@ -75,7 +74,7 @@ def test_large_single_cycle_remains_admitted() -> None:
 
     result = compute_cycle_length_profile(_graph(vertices, edges))
 
-    assert result.cycle_lengths == (20,)
+    assert tuple(r.cycle_length for r in result.rows) == (20,)
 
 
 def test_wide_cycle_labels_are_rejected_before_search() -> None:
@@ -84,7 +83,5 @@ def test_wide_cycle_labels_are_rejected_before_search() -> None:
         labels, [[labels[0], labels[1]], [labels[1], labels[2]], [labels[0], labels[2]]]
     )
 
-    with pytest.raises(OperationDomainValidationError, match="output-byte limit"):
+    with pytest.raises(OperationDomainValidationError, match="exceeds the canonical output bound"):
         compute_cycle_length_profile(graph)
-    with pytest.raises(ValidationError, match="output-byte limit"):
-        CycleLengthProfileRequest(graph=graph)

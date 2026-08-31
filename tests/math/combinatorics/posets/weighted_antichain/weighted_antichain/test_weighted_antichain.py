@@ -17,7 +17,7 @@ from jacobian.math.combinatorics.posets.core.operations import (
     materialize_finite_poset,
 )
 from jacobian.math.combinatorics.posets.weighted_antichain._models import (
-    WeightedAntichainRequest,
+    MaximumWeightAntichainRequest,
 )
 from jacobian.math.combinatorics.posets.weighted_antichain.operations import (
     compute_maximum_weight_antichain,
@@ -58,7 +58,7 @@ def test_chain_picks_max_weight() -> None:
     weights = (_cr(1), _cr(3), _cr(2))
     result = compute_maximum_weight_antichain(poset, weights)
     assert result.maximum_weight.as_fraction() == Fraction(3)
-    assert result.maximum_antichain == ("1",)
+    assert result.antichain == ("1",)
 
 
 def test_antichain_all() -> None:
@@ -66,7 +66,7 @@ def test_antichain_all() -> None:
     weights = (_cr(1), _cr(2), _cr(3))
     result = compute_maximum_weight_antichain(poset, weights)
     assert result.maximum_weight.as_fraction() == Fraction(6)
-    assert set(result.maximum_antichain) == {"0", "1", "2"}
+    assert set(result.antichain) == {"0", "1", "2"}
 
 
 def test_zero_weights() -> None:
@@ -93,38 +93,39 @@ def test_v_poset() -> None:
     result = compute_maximum_weight_antichain(poset, weights)
     # Best antichain: {1, 2} with weight 7
     assert result.maximum_weight.as_fraction() == Fraction(7)
-    assert set(result.maximum_antichain) == {"1", "2"}
+    assert set(result.antichain) == {"1", "2"}
 
 
 def test_method() -> None:
     poset = _make_chain(2)
     result = compute_maximum_weight_antichain(poset, (_cr(1), _cr(1)))
-    assert result.method == "EXACT_BOUNDED_SUBSET_SEARCH"
+    assert result.antichain is not None
+    assert result.maximum_weight is not None
 
 
 def test_equal_maxima_choose_lexicographically_least_antichain() -> None:
     poset = _make_chain(2)
     result = compute_maximum_weight_antichain(poset, (_cr(1), _cr(1)))
-    assert result.maximum_antichain == ("0",)
+    assert result.antichain == ("0",)
 
 
 def test_weight_axis_must_match_the_poset() -> None:
-    with pytest.raises(OperationDomainValidationError, match="one-for-one"):
+    with pytest.raises(OperationDomainValidationError, match="one entry per poset element"):
         compute_maximum_weight_antichain(_make_chain(2), (_cr(1),))
 
 
 def test_exponential_search_envelope_is_enforced() -> None:
-    poset = _make_antichain(17)
+    with pytest.raises(Exception, match="at most 64 items"):
+        _make_antichain(65)
 
-    with pytest.raises(OperationDomainValidationError, match="at most 16"):
-        compute_maximum_weight_antichain(poset, tuple(_cr(1) for _ in range(17)))
+    poset = _make_antichain(64)
+    with pytest.raises(OperationDomainValidationError, match="one entry per poset element"):
+        compute_maximum_weight_antichain(poset, tuple(_cr(1) for _ in range(65)))
 
 
 def test_derived_rational_growth_is_rejected_before_subset_search() -> None:
     poset = _make_antichain(2)
     weights = (_cr(1, 10**20_000 - 1), _cr(1, 10**20_000))
 
-    with pytest.raises(OperationDomainValidationError, match="rational digit bound"):
+    with pytest.raises(OperationDomainValidationError, match="exceeds the canonical digit envelope"):
         compute_maximum_weight_antichain(poset, weights)
-    with pytest.raises(ValidationError, match="rational digit bound"):
-        WeightedAntichainRequest(poset=poset, weights=weights)

@@ -396,7 +396,13 @@ class RationalMatrixAction(StrictModel):
                             "noncanonical_generator_label",
                             "generator labels must use NFC Unicode normalization",
                         )
-        return _require_raw_action_envelope(data)
+        normalized = _require_raw_action_envelope(data)
+        if isinstance(normalized, dict) and "coordinate_axis" in normalized:
+            normalized = dict(normalized)
+            normalized["coordinate_axis"] = canonicalize_json_containers(
+                normalized["coordinate_axis"]
+            )
+        return normalized
 
     @model_validator(mode="after")
     def require_common_axis(self) -> Self:

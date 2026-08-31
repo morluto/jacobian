@@ -559,6 +559,68 @@ class IdealQuotientRequest(StrictModel):
         return self
 
 
+class IdealContainmentRequest(StrictModel):
+    """Decide ``source subseteq target`` in one exact ordered ``QQ`` ring."""
+
+    source: RationalPolynomialIdeal = Field(
+        description=(
+            "The source ideal in at most 8 variables with at most 32 "
+            "generators and 256 aggregate terms; generator total degree "
+            "is at most 20 and coefficient components are at most 128 "
+            "digits. Both operands must use the same ordered ring."
+        )
+    )
+    target: RationalPolynomialIdeal = Field(
+        description=(
+            "The target ideal with the same 8-variable, 32-generator, "
+            "256-term, degree-20, and 128-digit bounds as the source."
+        )
+    )
+    monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex"
+    resource_budget: IdealComputationBudget = Field(
+        default_factory=IdealComputationBudget
+    )
+
+    @model_validator(mode="after")
+    def require_matching_ring(self) -> Self:
+        if self.source.variables != self.target.variables:
+            raise _validation_error(
+                "ideal containment operands must use the same ordered ring"
+            )
+        return self
+
+
+class IdealEqualityRequest(StrictModel):
+    """Decide equality by mutual containment in one ordered ``QQ`` ring."""
+
+    left: RationalPolynomialIdeal = Field(
+        description=(
+            "The left ideal in at most 8 variables with at most 32 "
+            "generators and 256 aggregate terms; generator total degree "
+            "is at most 20 and coefficient components are at most 128 "
+            "digits. Both operands must use the same ordered ring."
+        )
+    )
+    right: RationalPolynomialIdeal = Field(
+        description=(
+            "The right ideal with the same 8-variable, 32-generator, "
+            "256-term, degree-20, and 128-digit bounds as the left."
+        )
+    )
+    monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex"
+    resource_budget: IdealComputationBudget = Field(
+        default_factory=IdealComputationBudget
+    )
+
+    @model_validator(mode="after")
+    def require_matching_ring(self) -> Self:
+        if self.left.variables != self.right.variables:
+            raise _validation_error(
+                "ideal equality operands must use the same ordered ring"
+            )
+        return self
+
+
 IdealExecutionOutcome = Literal[
     "COMPUTED",
     "UNAVAILABLE",
@@ -643,6 +705,160 @@ class IdealSaturationResult(StrictModel):
                 "failed saturation computation requires only a safe detail"
             )
         return self
+
+
+class IdealContainmentLedger(StrictModel):
+    """Source-ordered normal forms proving or obstructing one containment."""
+
+    contained: bool
+    normal_forms: tuple[RationalPolynomial, ...] = Field(
+        min_length=1, max_length=MAX_GENERATORS
+    )
+    first_obstruction_index: StrictInt | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def require_conclusion_shape(self) -> Self:
+        nonzero = tuple(
+            index
+            for index, normal_form in enumerate(self.normal_forms)
+            if normal_form.polynomial.terms
+        )
+        if self.contained:
+            if nonzero or self.first_obstruction_index is not None:
+                raise _validation_error(
+                    "a positive containment ledger requires only zero normal forms"
+                )
+        elif (
+            nonzero != (len(self.normal_forms) - 1,)
+            or self.first_obstruction_index != len(self.normal_forms) - 1
+        ):
+            raise _validation_error(
+                "a negative containment ledger must end at its first obstruction"
+            )
+        return self
+
+
+class IdealContainmentResult(StrictModel):
+    """An exact directed ideal relation bound to both source presentations."""
+
+    source: RationalPolynomialIdeal
+    target: RationalPolynomialIdeal
+    outcome: IdealExecutionOutcome
+    ledger: IdealContainmentLedger | None = None
+    monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex"
+    detail: str | None = None
+
+    @model_validator(mode="after")
+    def require_outcome_shape(self) -> Self:
+        if self.source.variables != self.target.variables:
+            raise _validation_error("retained ideals must use the same ordered ring")
+        if self.outcome == "COMPUTED":
+            if self.ledger is None or self.detail is not None:
+                raise _validation_error(
+                    "computed containment requires a ledger and no failure detail"
+                )
+            _require_ledger_binding(self.ledger, self.source)
+        elif self.ledger is not None or self.detail is None:
+            raise _validation_error(
+                "incomplete containment carries only a safe failure detail"
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        source: RationalPolynomialIdeal,
+        target: RationalPolynomialIdeal,
+        ledger: IdealContainmentLedger,
+        monomial_order: Literal["lex", "grlex", "grevlex"],
+    ) -> Self:
+        _require_ledger_binding(ledger, source)
+        return cls.model_construct(
+            source=source,
+            target=target,
+            outcome="COMPUTED",
+            ledger=ledger,
+            monomial_order=monomial_order,
+            detail=None,
+        )
+
+
+class IdealEqualityResult(StrictModel):
+    """Exact equality represented by both directed containment ledgers."""
+
+    left: RationalPolynomialIdeal
+    right: RationalPolynomialIdeal
+    outcome: IdealExecutionOutcome
+    equal: bool | None = None
+    left_in_right: IdealContainmentLedger | None = None
+    right_in_left: IdealContainmentLedger | None = None
+    monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex"
+    detail: str | None = None
+
+    @model_validator(mode="after")
+    def require_outcome_shape(self) -> Self:
+        if self.left.variables != self.right.variables:
+            raise _validation_error("retained ideals must use the same ordered ring")
+        if self.outcome == "COMPUTED":
+            if (
+                self.equal is None
+                or self.left_in_right is None
+                or self.right_in_left is None
+                or self.detail is not None
+            ):
+                raise _validation_error(
+                    "computed equality requires both directed ledgers"
+                )
+            expected = self.left_in_right.contained and self.right_in_left.contained
+            if self.equal != expected:
+                raise _validation_error("ideal equality must be mutual containment")
+            _require_ledger_binding(self.left_in_right, self.left)
+            _require_ledger_binding(self.right_in_left, self.right)
+        elif (
+            self.equal is not None
+            or self.left_in_right is not None
+            or self.right_in_left is not None
+            or self.detail is None
+        ):
+            raise _validation_error(
+                "incomplete equality carries only a safe failure detail"
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        left: RationalPolynomialIdeal,
+        right: RationalPolynomialIdeal,
+        left_in_right: IdealContainmentLedger,
+        right_in_left: IdealContainmentLedger,
+        monomial_order: Literal["lex", "grlex", "grevlex"],
+    ) -> Self:
+        _require_ledger_binding(left_in_right, left)
+        _require_ledger_binding(right_in_left, right)
+        return cls.model_construct(
+            left=left,
+            right=right,
+            outcome="COMPUTED",
+            equal=left_in_right.contained and right_in_left.contained,
+            left_in_right=left_in_right,
+            right_in_left=right_in_left,
+            monomial_order=monomial_order,
+            detail=None,
+        )
+
+
+def _require_ledger_binding(
+    ledger: IdealContainmentLedger, source: RationalPolynomialIdeal
+) -> None:
+    if len(ledger.normal_forms) > len(source.generators):
+        raise _validation_error("containment ledger exceeds its source ideal")
+    if ledger.contained and len(ledger.normal_forms) != len(source.generators):
+        raise _validation_error("positive containment must cover every generator")
+    if any(form.variables != source.variables for form in ledger.normal_forms):
+        raise _validation_error(
+            "containment normal forms must use the retained ordered ring"
+        )
 
 
 class IdealMinimalPrimesRequest(StrictModel):
@@ -767,6 +983,11 @@ __all__ = [
     "GroebnerBasisRequest",
     "GroebnerBasisResult",
     "IdealComputationBudget",
+    "IdealContainmentLedger",
+    "IdealContainmentRequest",
+    "IdealContainmentResult",
+    "IdealEqualityRequest",
+    "IdealEqualityResult",
     "IdealExecutionOutcome",
     "IdealMinimalPrimesRequest",
     "IdealMinimalPrimesResult",
@@ -799,7 +1020,9 @@ class GroebnerBasisRequest(StrictModel):
     )
 
 
-GroebnerExecutionOutcome = Literal["COMPUTED", "ERROR", "LIMIT_EXCEEDED", "TIMEOUT"]
+GroebnerExecutionOutcome = Literal[
+    "COMPUTED", "ERROR", "LIMIT_EXCEEDED", "TIMEOUT", "CANCELLED"
+]
 
 
 class GroebnerBasisResult(StrictModel):
@@ -890,7 +1113,9 @@ class IdealNormalFormRequest(StrictModel):
     monomial_order: NormalFormMonomialOrder = "grevlex"
 
 
-NormalFormExecutionOutcome = Literal["COMPUTED", "ERROR", "LIMIT_EXCEEDED", "TIMEOUT"]
+NormalFormExecutionOutcome = Literal[
+    "COMPUTED", "ERROR", "LIMIT_EXCEEDED", "TIMEOUT", "CANCELLED"
+]
 
 
 class IdealNormalFormResult(StrictModel):
@@ -988,7 +1213,9 @@ class EliminationIdealRequest(StrictModel):
         return self
 
 
-EliminationExecutionOutcome = Literal["COMPUTED", "ERROR", "LIMIT_EXCEEDED", "TIMEOUT"]
+EliminationExecutionOutcome = Literal[
+    "COMPUTED", "ERROR", "LIMIT_EXCEEDED", "TIMEOUT", "CANCELLED"
+]
 
 
 class EliminationIdealResult(StrictModel):

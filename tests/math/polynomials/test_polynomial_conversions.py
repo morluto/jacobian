@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import pytest
+import sympy
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials._conversions import (
+    rational_function_from_sympy,
+    rational_function_to_sympy,
     rational_polynomial_from_sympy,
     rational_polynomial_to_sympy,
 )
@@ -14,8 +17,10 @@ from jacobian.math.polynomials.operations import (
     polynomial_resultant,
 )
 from jacobian.math.polynomials.values import (
+    RationalFunction,
     RationalPolynomial,
     SparseRationalPolynomial,
+    require_canonical_rational_function,
 )
 
 
@@ -79,6 +84,36 @@ def _binomial(degree: int, constant: int) -> RationalPolynomial:
     )
 
 
+def _nonreduced_rational_function_payload() -> dict[str, object]:
+    return {
+        "variables": ["x"],
+        "numerator": {
+            "terms": [
+                {
+                    "coefficient": {"num": "1", "den": "1"},
+                    "exponents": [2],
+                },
+                {
+                    "coefficient": {"num": "-1", "den": "1"},
+                    "exponents": [0],
+                },
+            ]
+        },
+        "denominator": {
+            "terms": [
+                {
+                    "coefficient": {"num": "1", "den": "1"},
+                    "exponents": [1],
+                },
+                {
+                    "coefficient": {"num": "-1", "den": "1"},
+                    "exponents": [0],
+                },
+            ]
+        },
+    }
+
+
 def test_contract_sympy_contract_round_trip_preserves_ring_and_order() -> None:
     source = _polynomial()
 
@@ -88,6 +123,43 @@ def test_contract_sympy_contract_round_trip_preserves_ring_and_order() -> None:
         )
         == source
     )
+
+
+def test_rational_function_wire_parse_is_structural_before_owner_recognition() -> None:
+    parsed = RationalFunction.model_validate(_nonreduced_rational_function_payload())
+
+    assert parsed.variables == ("x",)
+    with pytest.raises(ValueError, match="must be coprime"):
+        require_canonical_rational_function(parsed)
+
+
+def test_normalized_rational_function_round_trip_is_recognized_by_a_consumer() -> None:
+    x = sympy.Symbol("x")
+    produced = rational_function_from_sympy((x**2 - 1) / (x - 1), ("x",))
+    consumed = RationalFunction.model_validate(produced.model_dump(mode="json"))
+
+    assert require_canonical_rational_function(consumed) == produced
+    assert rational_function_to_sympy(consumed) == x + 1
+
+
+@pytest.mark.parametrize(
+    ("expression", "variables"),
+    (
+        (sympy.Integer(0), ()),
+        (sympy.Rational(2, 3), ()),
+        (
+            sympy.Symbol("x") / (sympy.Symbol("y") + 1),
+            ("x", "y"),
+        ),
+    ),
+)
+def test_recognizer_accepts_canonical_zero_constant_and_multivariate_values(
+    expression: object,
+    variables: tuple[str, ...],
+) -> None:
+    value = rational_function_from_sympy(expression, variables)
+
+    assert require_canonical_rational_function(value) is value
 
 
 def test_gcd_result_composes_without_reshaping_or_json_round_trip() -> None:

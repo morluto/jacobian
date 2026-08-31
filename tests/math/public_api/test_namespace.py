@@ -100,9 +100,11 @@ def test_public_values_and_functions_have_one_canonical_module() -> None:
             value = getattr(module, name)
             if callable(value) and not isinstance(value, type(importlib)):
                 function_locations.setdefault(value, []).append(f"{module_name}.{name}")
-    duplicates = sorted(
-        locations for locations in function_locations.values() if len(locations) > 1
-    )
+    duplicates = [
+        tuple(sorted(locations))
+        for locations in function_locations.values()
+        if len(locations) > 1
+    ]
     assert not duplicates, "duplicate public callables: " + repr(duplicates)
 
 

@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any, Literal
 
 import sympy
 from pydantic_core import PydanticCustomError
 
+from jacobian._execution import (
+    bind_request_deadline,
+    current_request_execution,
+    request_cancelled,
+)
 from jacobian.canonical import CanonicalizationError, canonicalize_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials._conversions import (
@@ -16,12 +22,18 @@ from jacobian.math.polynomials._conversions import (
 )
 from jacobian.math.polynomials.ideals._models import (
     MAX_COEFFICIENT_DIGITS,
+    MAX_GENERATORS,
     MAX_INPUT_EXPONENT,
     MAX_INPUT_TERMS,
+    MAX_VARS,
     EliminationIdealResult,
     GradedBettiNumber,
     GroebnerBasisResult,
     IdealComputationBudget,
+    IdealContainmentLedger,
+    IdealContainmentResult,
+    IdealEqualityResult,
+    IdealExecutionOutcome,
     IdealMinimalPrimesResult,
     IdealNormalFormResult,
     IdealQuotientResult,
@@ -110,6 +122,52 @@ def monomial_ideal_graded_betti_table(
 
 
 def _admit_source(ideal: RationalPolynomialIdeal, *, label: str) -> None:
+    # A nonzero constant already establishes the unit ideal.  Its coefficient
+    # never enters a Groebner expansion, so the kernel coefficient cap must not
+    # reject this exact zero-work case.
+    if any(
+        len(generator.polynomial.terms) == 1
+        and not any(generator.polynomial.terms[0].exponents)
+        and generator.polynomial.terms[0].coefficient.num != "0"
+        for generator in ideal.generators
+    ):
+        if len(ideal.variables) > MAX_VARS:
+            raise _validation_error(
+                f"{label} exceeds the {MAX_VARS}-variable operation budget"
+            )
+        if len(ideal.generators) > MAX_GENERATORS:
+            raise _validation_error(
+                f"{label} exceeds the {MAX_GENERATORS}-generator operation budget"
+            )
+        if (
+            sum(len(generator.polynomial.terms) for generator in ideal.generators)
+            > MAX_INPUT_TERMS
+        ):
+            raise _validation_error(
+                f"{label} exceeds the {MAX_INPUT_TERMS}-term aggregate input budget"
+            )
+        for generator in ideal.generators:
+            if (
+                len(generator.polynomial.terms) == 1
+                and not any(generator.polynomial.terms[0].exponents)
+                and generator.polynomial.terms[0].coefficient.num != "0"
+            ):
+                continue
+            require_polynomial_budget(
+                generator,
+                maximum_terms=MAX_INPUT_TERMS,
+                maximum_exponent=MAX_INPUT_EXPONENT,
+                maximum_coefficient_digits=MAX_COEFFICIENT_DIGITS,
+                label=f"{label} generator",
+            )
+            if any(
+                sum(term.exponents) > MAX_INPUT_EXPONENT
+                for term in generator.polynomial.terms
+            ):
+                raise _validation_error(
+                    f"{label} generator exceeds total degree {MAX_INPUT_EXPONENT}"
+                )
+        return
     _require_ideal_budget(ideal, label=label)
 
 
@@ -146,6 +204,17 @@ def _admit_quotient(
 ) -> None:
     _admit_source(dividend, label="dividend ideal")
     _admit_source(divisor, label="divisor ideal")
+
+
+def _admit_relation(
+    left: RationalPolynomialIdeal, right: RationalPolynomialIdeal
+) -> None:
+    _admit_source(left, label="left ideal")
+    _admit_source(right, label="right ideal")
+    if left.variables != right.variables:
+        raise _validation_error(
+            "ideal relation operands must use the same ordered ring"
+        )
 
 
 def _admit_minimal_primes(ideal: RationalPolynomialIdeal) -> None:
@@ -195,8 +264,26 @@ class _SympyKernelTimeoutError(TimeoutError):
     """The bounded SymPy worker exceeded the declared wall-time budget."""
 
 
+class _SympyKernelCancelledError(RuntimeError):
+    """The bounded SymPy worker was cancelled before producing a result."""
+
+
 class _SympyKernelError(RuntimeError):
     """The bounded SymPy worker failed without producing an exact result."""
+
+
+def _decimal_digit_count(value: int) -> int:
+    """Return an exact decimal width without converting an integer to text."""
+
+    value = abs(value)
+    if value == 0:
+        return 1
+    estimate = (value.bit_length() * 30_103) // 100_000 + 1
+    if value < 10 ** (estimate - 1):
+        estimate -= 1
+    elif value >= 10**estimate:
+        estimate += 1
+    return estimate
 
 
 def _require_transportable_minimal_primes_result(
@@ -215,6 +302,18 @@ def _require_transportable_minimal_primes_result(
 _SYMPY_WORKER_SCRIPT = r"""
 import json
 import sys
+
+
+def _decimal_digit_count(value: int) -> int:
+    value = abs(value)
+    if value == 0:
+        return 1
+    estimate = (value.bit_length() * 30_103) // 100_000 + 1
+    if value < 10 ** (estimate - 1):
+        estimate -= 1
+    elif value >= 10**estimate:
+        estimate += 1
+    return estimate
 
 
 def main() -> None:
@@ -246,6 +345,22 @@ def main() -> None:
                     f"{MAX_POLYNOMIAL_EXPONENT}-exponent operation budget"
                 )
 
+        def require_admissible_coefficients(poly: object) -> None:
+            # Classify oversized normal-form coefficient widths as a
+            # result limit BEFORE canonical conversion, just as
+            # require_admissible_exponents does for exponents.
+            from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
+            for _, coeff in poly.terms():
+                digits = max(
+                    _decimal_digit_count(coeff.p), _decimal_digit_count(coeff.q)
+                )
+                if digits > MAX_CANONICAL_RATIONAL_DIGITS:
+                    raise ValueError(
+                        f"polynomial result exceeds the "
+                        f"{MAX_CANONICAL_RATIONAL_DIGITS}-coefficient-digit "
+                        f"operation budget"
+                    )
+
         mode = payload["mode"]
         variables = tuple(payload["variables"])
         symbols = symbols_for_variables(variables)
@@ -260,6 +375,7 @@ def main() -> None:
                 expr, *symbols_for_variables(terms_variable), domain=sympy.QQ
             )
             require_admissible_exponents(poly)
+            require_admissible_coefficients(poly)
             converted = rational_polynomial_from_sympy(
                 poly, terms_variable, maximum_terms=maximum_terms
             )
@@ -299,6 +415,8 @@ def main() -> None:
                 domain=sympy.QQ,
             )
             remainder_poly = sympy.Poly(remainder, *symbols, domain=sympy.QQ)
+            require_admissible_exponents(remainder_poly)
+            require_admissible_coefficients(remainder_poly)
             converted = rational_polynomial_from_sympy(
                 remainder_poly, variables
             )
@@ -308,6 +426,52 @@ def main() -> None:
                     "remainder": converted.model_dump(mode="json"),
                 }
             )
+        elif mode == "ideal_relation":
+            right_gens = [
+                RationalPolynomial.model_validate(item)
+                for item in payload["right_generators"]
+            ]
+            right_exprs = [
+                rational_polynomial_to_sympy(generator).as_expr()
+                for generator in right_gens
+            ]
+            order = payload.get("order", "grevlex")
+            maximum_terms = payload["maximum_terms"]
+            aggregate_terms = 0
+
+            def ledger(
+                source_exprs: list[object], target_exprs: list[object]
+            ) -> dict:
+                nonlocal aggregate_terms
+                basis = sympy.groebner(
+                    target_exprs, *symbols, order=order, domain=sympy.QQ
+                )
+                normal_forms = []
+                obstruction = None
+                for index, source_expr in enumerate(source_exprs):
+                    _, remainder = basis.reduce(source_expr)
+                    converted = dump(remainder, variables, maximum_terms)
+                    aggregate_terms += len(converted["polynomial"]["terms"])
+                    if aggregate_terms > maximum_terms:
+                        raise ValueError(
+                            "the containment ledger exceeds the "
+                            f"{maximum_terms}-term aggregate operation budget"
+                        )
+                    normal_forms.append(converted)
+                    if remainder != 0:
+                        obstruction = index
+                        break
+                return {
+                    "contained": obstruction is None,
+                    "normal_forms": normal_forms,
+                    "first_obstruction_index": obstruction,
+                }
+
+            left_in_right = ledger(exprs, right_exprs)
+            response = {"status": "ok", "left_in_right": left_in_right}
+            if payload["mutual"]:
+                response["right_in_left"] = ledger(right_exprs, exprs)
+            _emit(response)
         elif mode == "verify_ideal_equality":
             claimed = [
                 RationalPolynomial.model_validate(item)
@@ -478,6 +642,7 @@ def main() -> None:
                         expr, *remaining_symbols, domain=sympy.QQ
                     )
                     require_admissible_exponents(converted_poly)
+                    require_admissible_coefficients(converted_poly)
                     converted = rational_polynomial_from_sympy(
                         converted_poly,
                         tuple(remaining),
@@ -509,9 +674,12 @@ main()
 
 _STDOUT_LIMIT = 8 * 1024 * 1024
 _STDERR_LIMIT = 64 * 1024
+_RELATION_RESULT_RESERVE_SECONDS = 0.25
 
 
-def _run_sympy_kernel(payload: dict[str, Any], wall_seconds: float) -> dict[str, Any]:
+def _run_sympy_kernel(
+    payload: dict[str, Any], wall_seconds: float, *, deadline: float | None = None
+) -> dict[str, Any]:
     """Run one exact Groebner-kernel computation in a killable worker.
 
     The killable-process launch and executable discovery live in the
@@ -519,15 +687,27 @@ def _run_sympy_kernel(payload: dict[str, Any], wall_seconds: float) -> dict[str,
     bounded outcome onto the typed kernel exceptions.
     """
     try:
-        timed_out, stdout, limit_exceeded = run_bounded_stdin_python_kernel(
-            _SYMPY_WORKER_SCRIPT,
-            json.dumps(payload),
-            wall_seconds=wall_seconds,
-            stdout_limit=_STDOUT_LIMIT,
-            stderr_limit=_STDERR_LIMIT,
-        )
+        if deadline is None:
+            timed_out, stdout, limit_exceeded = run_bounded_stdin_python_kernel(
+                _SYMPY_WORKER_SCRIPT,
+                json.dumps(payload),
+                wall_seconds=wall_seconds,
+                stdout_limit=_STDOUT_LIMIT,
+                stderr_limit=_STDERR_LIMIT,
+            )
+        else:
+            timed_out, stdout, limit_exceeded = run_bounded_stdin_python_kernel(
+                _SYMPY_WORKER_SCRIPT,
+                json.dumps(payload),
+                wall_seconds=wall_seconds,
+                deadline=deadline,
+                stdout_limit=_STDOUT_LIMIT,
+                stderr_limit=_STDERR_LIMIT,
+            )
     except OSError as error:
         raise _SympyKernelError(str(error)) from None
+    if timed_out == "CANCELLED":
+        raise _SympyKernelCancelledError()
     if timed_out:
         raise _SympyKernelTimeoutError()
     if limit_exceeded:
@@ -702,9 +882,170 @@ def ideal_saturation(
     )
 
 
+def _raise_if_relation_deadline_exceeded(deadline: float) -> None:
+    if request_cancelled():
+        raise _SympyKernelCancelledError()
+    if time.monotonic() > deadline:
+        raise _SympyKernelTimeoutError()
+
+
+def _bind_relation_deadline(resource_budget: IdealComputationBudget) -> float:
+    """Reserve delivery time after the relation kernel's private deadline."""
+    execution = current_request_execution()
+    started_at = execution.started_at if execution is not None else time.monotonic()
+    request_deadline = started_at + resource_budget.wall_seconds
+    if execution is not None and execution.deadline is not None:
+        request_deadline = min(request_deadline, execution.deadline)
+    # The direct MCP adapter must still be able to build and serialize the
+    # typed TIMEOUT result after the worker allowance expires. Keep the full
+    # request deadline in the shared execution context and give the relation
+    # kernel a slightly earlier private cutoff.
+    bind_request_deadline(request_deadline)
+    return max(started_at, request_deadline - _RELATION_RESULT_RESERVE_SECONDS)
+
+
+def _run_relation_kernel_before_deadline(
+    payload: dict[str, Any], deadline: float
+) -> dict[str, Any]:
+    """Launch the worker only when a strictly positive budget remains."""
+    _raise_if_relation_deadline_exceeded(deadline)
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise _SympyKernelTimeoutError()
+    return _run_sympy_kernel(payload, remaining, deadline=deadline)
+
+
+def _relation_ledger(
+    payload: dict[str, Any], *, deadline: float
+) -> IdealContainmentLedger:
+    _raise_if_relation_deadline_exceeded(deadline)
+    ledger = IdealContainmentLedger.model_validate(payload)
+    _raise_if_relation_deadline_exceeded(deadline)
+    return ledger
+
+
+def ideal_containment(
+    source: RationalPolynomialIdeal,
+    target: RationalPolynomialIdeal,
+    monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex",
+    *,
+    resource_budget: IdealComputationBudget | None = None,
+) -> IdealContainmentResult:
+    """Decide ``source subseteq target`` with a source-ordered exact ledger."""
+
+    resource_budget = resource_budget or IdealComputationBudget()
+    deadline = _bind_relation_deadline(resource_budget)
+    outcome: IdealExecutionOutcome
+    try:
+        _raise_if_relation_deadline_exceeded(deadline)
+        _run_admission(lambda: _admit_relation(source, target))
+        _raise_if_relation_deadline_exceeded(deadline)
+        payload = {
+            "mode": "ideal_relation",
+            "variables": list(source.variables),
+            "generators": [item.model_dump(mode="json") for item in source.generators],
+            "right_generators": [
+                item.model_dump(mode="json") for item in target.generators
+            ],
+            "order": monomial_order,
+            "maximum_terms": resource_budget.maximum_output_terms,
+            "mutual": False,
+        }
+        result = _run_relation_kernel_before_deadline(payload, deadline)
+        ledger = _relation_ledger(result["left_in_right"], deadline=deadline)
+        _raise_if_relation_deadline_exceeded(deadline)
+        computed = IdealContainmentResult._from_kernel(
+            source, target, ledger, monomial_order
+        )
+        _raise_if_relation_deadline_exceeded(deadline)
+        return computed
+    except _SympyKernelCancelledError:
+        outcome = "CANCELLED"
+        detail = "ideal containment was cancelled before producing a result"
+    except _SympyKernelTimeoutError:
+        outcome = "TIMEOUT"
+        detail = "ideal containment exceeded the enforced wall-time budget"
+    except _ResultLimitExceededError:
+        outcome = "LIMIT_EXCEEDED"
+        detail = "the exact containment ledger exceeds the declared result bound"
+    except OperationDomainValidationError:
+        raise
+    except (KeyError, TypeError, ValueError, _SympyKernelError):
+        outcome = "ERROR"
+        detail = "the bounded kernel failed without producing an exact containment"
+    return IdealContainmentResult(
+        source=source,
+        target=target,
+        outcome=outcome,
+        monomial_order=monomial_order,
+        detail=detail,
+    )
+
+
+def ideal_equality(
+    left: RationalPolynomialIdeal,
+    right: RationalPolynomialIdeal,
+    monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex",
+    *,
+    resource_budget: IdealComputationBudget | None = None,
+) -> IdealEqualityResult:
+    """Decide equality by two ledgers computed under one request deadline."""
+
+    resource_budget = resource_budget or IdealComputationBudget()
+    deadline = _bind_relation_deadline(resource_budget)
+    outcome: IdealExecutionOutcome
+    try:
+        _raise_if_relation_deadline_exceeded(deadline)
+        _run_admission(lambda: _admit_relation(left, right))
+        _raise_if_relation_deadline_exceeded(deadline)
+        payload = {
+            "mode": "ideal_relation",
+            "variables": list(left.variables),
+            "generators": [item.model_dump(mode="json") for item in left.generators],
+            "right_generators": [
+                item.model_dump(mode="json") for item in right.generators
+            ],
+            "order": monomial_order,
+            "maximum_terms": resource_budget.maximum_output_terms,
+            "mutual": True,
+        }
+        result = _run_relation_kernel_before_deadline(payload, deadline)
+        left_in_right = _relation_ledger(result["left_in_right"], deadline=deadline)
+        right_in_left = _relation_ledger(result["right_in_left"], deadline=deadline)
+        _raise_if_relation_deadline_exceeded(deadline)
+        computed = IdealEqualityResult._from_kernel(
+            left, right, left_in_right, right_in_left, monomial_order
+        )
+        _raise_if_relation_deadline_exceeded(deadline)
+        return computed
+    except _SympyKernelCancelledError:
+        outcome = "CANCELLED"
+        detail = "ideal equality was cancelled before producing a result"
+    except _SympyKernelTimeoutError:
+        outcome = "TIMEOUT"
+        detail = "ideal equality exceeded the enforced wall-time budget"
+    except _ResultLimitExceededError:
+        outcome = "LIMIT_EXCEEDED"
+        detail = "the exact equality ledgers exceed the declared result bound"
+    except OperationDomainValidationError:
+        raise
+    except (KeyError, TypeError, ValueError, _SympyKernelError):
+        outcome = "ERROR"
+        detail = "the bounded kernel failed without producing an exact equality result"
+    return IdealEqualityResult(
+        left=left,
+        right=right,
+        outcome=outcome,
+        monomial_order=monomial_order,
+        detail=detail,
+    )
+
+
 __all__ = [
     "elimination_ideal",
     "groebner_basis",
+    "ideal_containment",
+    "ideal_equality",
     "ideal_minimal_primes",
     "ideal_normal_form",
     "ideal_quotient",
@@ -743,6 +1084,13 @@ def groebner_basis(
     # output limits.
     try:
         result_payload = _run_sympy_kernel(payload, resource_budget.wall_seconds)
+    except _SympyKernelCancelledError:
+        return GroebnerBasisResult(
+            ideal=ideal,
+            outcome="CANCELLED",
+            monomial_order=monomial_order,
+            detail="the groebner computation was cancelled before producing a result",
+        )
     except _SympyKernelTimeoutError:
         return GroebnerBasisResult(
             ideal=ideal,
@@ -818,6 +1166,14 @@ def ideal_normal_form(
     # declared output limits.
     try:
         result_payload = _run_sympy_kernel(payload, 10)
+    except _SympyKernelCancelledError:
+        return IdealNormalFormResult(
+            ideal=ideal,
+            polynomial=polynomial,
+            monomial_order=monomial_order,
+            outcome="CANCELLED",
+            detail="the Gröbner reduction was cancelled before producing a result",
+        )
     except _SympyKernelTimeoutError:
         return IdealNormalFormResult(
             ideal=ideal,
@@ -926,6 +1282,13 @@ def elimination_ideal(
     # output limits.
     try:
         result_payload = _run_sympy_kernel(payload, resource_budget.wall_seconds)
+    except _SympyKernelCancelledError:
+        return EliminationIdealResult(
+            ideal=ideal,
+            outcome="CANCELLED",
+            eliminated_variables=tuple(eliminated_variables),
+            detail="the lex Gröbner elimination was cancelled before producing a result",
+        )
     except _SympyKernelTimeoutError:
         return EliminationIdealResult(
             ideal=ideal,

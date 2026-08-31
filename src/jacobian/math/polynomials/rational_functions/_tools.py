@@ -27,7 +27,7 @@ def compute_hermite_reduction(
         raise OperationDomainValidationError(
             location=(), code="polynomial.rational_function_admission", message=str(exc)
         ) from exc
-    rational_part, remainder = native.hermite_reduction(request.function)
+    rational_part, remainder = native._hermite_reduction_admitted(request.function)
     return HermiteReductionResult._from_kernel(
         function=request.function,
         rational_part=rational_part,

@@ -17,7 +17,10 @@ from jacobian.math.matrices.symbolic.operations import (
     SystemClassification,
     symbolic_linear_system_solve,
 )
-from jacobian.math.polynomials.values import RationalFunction
+from jacobian.math.polynomials.values import (
+    RationalFunction,
+    require_canonical_rational_function,
+)
 
 Payload = dict[str, object]
 
@@ -222,6 +225,36 @@ class TestSymbolicLinearSystem:
         assert result.classification == "UNIQUE"
         assert result.solution is not None
 
+    def test_nonreduced_rhs_parses_then_solver_rejects_it(self) -> None:
+        variables = ("t",)
+        one = _rf(variables, (1, (0,)))
+        matrix = _matrix(variables, ((one,),))
+        nonreduced = RationalFunction.model_validate(
+            {
+                "variables": ["t"],
+                "numerator": {
+                    "terms": [
+                        {
+                            "coefficient": {"num": "1", "den": "1"},
+                            "exponents": [1],
+                        }
+                    ]
+                },
+                "denominator": {
+                    "terms": [
+                        {
+                            "coefficient": {"num": "1", "den": "1"},
+                            "exponents": [1],
+                        }
+                    ]
+                },
+            }
+        )
+        request = SymbolicLinearSystemRequest(matrix=matrix, rhs=(nonreduced,))
+
+        with pytest.raises(OperationDomainValidationError, match="must be coprime"):
+            _run_linear_system(request)
+
 
 class TestSolutionGrowthAdmission:
     """Derived-solution growth is bounded at request admission."""
@@ -346,6 +379,11 @@ class TestAdmissionWorkBounding:
         )
         revalidated = SymbolicLinearSystemResult.model_validate(result.model_dump())
         assert revalidated.solution == result.solution
+        assert revalidated.solution is not None
+        assert all(
+            require_canonical_rational_function(value) is value
+            for value in revalidated.solution
+        )
 
     def test_diagonal_system_with_unit_rhs_keeps_exact_sparse_bounds(self) -> None:
         """An 8x8 diagonal system with unit right-hand side stays admitted.

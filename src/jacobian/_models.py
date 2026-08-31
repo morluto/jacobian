@@ -8,6 +8,8 @@ from pydantic import BaseModel, ConfigDict
 
 from jacobian.canonical import CanonicalizationError
 
+_MAX_CONTAINER_DEPTH = 256
+
 
 def canonicalize_json_containers(value: Any) -> Any:
     """Materialize JSON arrays as immutable canonical containers.
@@ -18,25 +20,31 @@ def canonicalize_json_containers(value: Any) -> Any:
     must return this projection rather than raw JSON arrays.  Mappings are
     copied recursively: callers retain ownership of their transport payload.
 
-    Self-referential containers are rejected as a canonicalization error
-    rather than recursing until the Python stack limit.
+    A bounded depth guard converts deeply nested or cyclic raw data into a
+    ``CanonicalizationError`` before recursion can exhaust the interpreter
+    stack.
     """
 
-    return _canonicalize(value, set())
+    def _canonicalize(inner: Any, depth: int, seen: set[int]) -> Any:
+        if depth > _MAX_CONTAINER_DEPTH:
+            raise CanonicalizationError(
+                f"container nesting exceeds {_MAX_CONTAINER_DEPTH} levels"
+            )
+        if isinstance(inner, (list, tuple)):
+            if id(inner) in seen:
+                raise CanonicalizationError("cyclic JSON containers are not allowed")
+            seen = seen | {id(inner)}
+            return tuple(_canonicalize(item, depth + 1, seen) for item in inner)
+        if isinstance(inner, dict):
+            if id(inner) in seen:
+                raise CanonicalizationError("cyclic JSON containers are not allowed")
+            seen = seen | {id(inner)}
+            return {
+                key: _canonicalize(item, depth + 1, seen) for key, item in inner.items()
+            }
+        return inner
 
-
-def _canonicalize(value: Any, seen: set[int]) -> Any:
-    if isinstance(value, (list, tuple)):
-        if id(value) in seen:
-            raise CanonicalizationError("cyclic JSON containers are not allowed")
-        seen = seen | {id(value)}
-        return tuple(_canonicalize(item, seen) for item in value)
-    if isinstance(value, dict):
-        if id(value) in seen:
-            raise CanonicalizationError("cyclic JSON containers are not allowed")
-        seen = seen | {id(value)}
-        return {key: _canonicalize(item, seen) for key, item in value.items()}
-    return value
+    return _canonicalize(value, 0, set())
 
 
 class StrictModel(BaseModel):

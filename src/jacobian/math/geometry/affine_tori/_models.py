@@ -9,6 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.canonical import parse_canonical_integer
 from jacobian.math.geometry.affine_tori.values import (
     IntegralTorusCharacter,
     RationalAffineTorusMap,
@@ -73,10 +74,40 @@ class AffineTorusFixedLocusResult(StrictModel):
                 raise _validation_error(
                     "source_mismatch", "fixed locus must belong to the source torus"
                 )
-        elif self.outcome.obstruction.torus != torus:
-            raise _validation_error(
-                "source_mismatch", "obstruction must be a character of the source torus"
+        else:
+            if self.outcome.obstruction.torus != torus:
+                raise _validation_error(
+                    "source_mismatch",
+                    "obstruction must be a character of the source torus",
+                )
+            character = tuple(
+                parse_canonical_integer(value)
+                for value in self.outcome.obstruction.coefficients
             )
+            linear = self.source.linear_part.entries
+            for column in range(torus.dimension):
+                if sum(
+                    character[row]
+                    * (
+                        parse_canonical_integer(linear[row][column])
+                        - int(row == column)
+                    )
+                    for row in range(torus.dimension)
+                ) != 0:
+                    raise _validation_error(
+                        "obstruction_invariant",
+                        "empty-locus obstruction must annihilate the linear displacement",
+                    )
+            expected_pairing = sum(
+                character[index]
+                * self.source.translation.coordinates[index].as_fraction()
+                for index in range(torus.dimension)
+            ) % 1
+            if expected_pairing != self.outcome.obstruction_pairing.as_fraction():
+                raise _validation_error(
+                    "obstruction_pairing_source",
+                    "empty-locus obstruction pairing must match the source translation",
+                )
         return self
 
 

@@ -789,6 +789,7 @@ def build_affine_torus_plan(
         _decimal_digits(
             max(
                 bounds.base_point_component_height,
+                bounds.source_minor_height,
                 bounds.obstruction_pairing_height,
             )
         )

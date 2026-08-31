@@ -454,6 +454,20 @@ def test_empty_character_satisfies_the_obstruction_definition() -> None:
     assert pairing % 1 == result.outcome.obstruction_pairing.as_fraction() != 0
 
 
+def test_empty_result_deserialization_binds_obstruction_to_source() -> None:
+    source = _source(
+        [[1]],
+        [Fraction(1, 3)],
+    )
+    result = affine_torus_fixed_locus(source)
+    assert isinstance(result.outcome, EmptyAffineTorusFixedLocus)
+    payload = result.model_dump(mode="json")
+    payload["outcome"]["obstruction_pairing"] = {"num": "1", "den": "2"}
+
+    with pytest.raises(ValidationError, match="obstruction pairing"):
+        AffineTorusFixedLocusResult.model_validate(payload)
+
+
 def test_random_small_full_rank_maps_match_a_grid_congruence_oracle() -> None:
     random = Random(2443)
     checked = 0

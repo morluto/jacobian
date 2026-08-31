@@ -13,19 +13,22 @@ from jacobian.math.number_theory._r_full_enumerate_models import (
     MIN_R_FULL_EXPONENT,
     RFullEnumerateRequest,
     RFullEnumerateResult,
+    RFullFamilyPlan,
     plan_r_full_family,
 )
 from jacobian.math.number_theory._support import number_theory_operation
 
 
 def _enumerate_r_full_admitted(
-    minimum_exponent: int, cutoff: int, *, enforce_transport: bool
+    minimum_exponent: int,
+    cutoff: int,
+    *,
+    enforce_transport: bool,
+    plan: RFullFamilyPlan | None = None,
 ) -> RFullEnumerateResult:
     canonical_cutoff = format_canonical_integer(cutoff)
-    plan = plan_r_full_family(
-        minimum_exponent,
-        cutoff,
-        enforce_transport=enforce_transport,
+    plan = plan or plan_r_full_family(
+        minimum_exponent, cutoff, enforce_transport=enforce_transport
     )
     if plan.exceeded:
         if plan.reason == "planning":
@@ -111,7 +114,10 @@ def enumerate_r_full(minimum_exponent: int, cutoff: int) -> tuple[int, ...]:
             ),
         )
     result = _enumerate_r_full_admitted(
-        minimum_exponent, cutoff, enforce_transport=False
+        minimum_exponent,
+        cutoff,
+        enforce_transport=False,
+        plan=plan,
     )
     return tuple(parse_canonical_integer(value) for value in result.family)
 

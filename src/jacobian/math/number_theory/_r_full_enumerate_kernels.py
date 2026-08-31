@@ -10,6 +10,7 @@ This avoids scanning every integer in the interval.
 
 from __future__ import annotations
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._r_full_enumerate_models import plan_r_full_family
 
 
@@ -37,5 +38,9 @@ def enumerate_r_full(
 
     plan = plan_r_full_family(r, cutoff)
     if plan.exceeded:
-        return []
+        raise OperationDomainValidationError(
+            location=("cutoff",),
+            code="r_full_enumerate.admission_exceeded",
+            message="r-full kernel call requires an admitted family plan",
+        )
     return list(plan.family)

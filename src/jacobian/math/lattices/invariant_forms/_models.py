@@ -90,6 +90,32 @@ def _canonicalize_generator_order(data: dict[str, object]) -> dict[str, object]:
     return normalized
 
 
+def _reject_nested_rational_components(entries: object) -> None:
+    """Reject non-string ``num``/``den`` values before recursive parsing.
+
+    A deeply nested dict or list inside a recognized rational component
+    would pass the ``num``/``den`` key check but cause a ``RecursionError``
+    during ``canonicalize_json_containers``.  Reject it here instead.
+    """
+
+    if not isinstance(entries, (list, tuple)):
+        return
+    for row in entries:
+        if not isinstance(row, (list, tuple)):
+            continue
+        for cell in row:
+            if not isinstance(cell, dict):
+                continue
+            for key in ("num", "den"):
+                value = cell.get(key)
+                if value is not None and not isinstance(value, str):
+                    raise _validation_error(
+                        "rational_component",
+                        f"rational {key} must be a string, not "
+                        f"{type(value).__name__}",
+                    )
+
+
 def _require_raw_action_envelope(data: object) -> object:  # noqa: C901
     """Bound structural action containers before nested rational parsing."""
 
@@ -125,6 +151,7 @@ def _require_raw_action_envelope(data: object) -> object:  # noqa: C901
             raw_entries = raw_matrix.get("entries")
             if not isinstance(raw_entries, (list, tuple)):
                 continue
+            _reject_nested_rational_components(raw_entries)
             for row in raw_entries:
                 if not isinstance(row, (list, tuple)):
                     continue
@@ -136,12 +163,6 @@ def _require_raw_action_envelope(data: object) -> object:  # noqa: C901
                     "budget_exceeded",
                     "generator matrix rows exceed the declared coordinate_axis"
                     " dimension before nested parsing",
-                )
-            if total_cells > MAX_CONSTRAINT_CELLS:
-                raise _validation_error(
-                    "budget_exceeded",
-                    "generator matrix cells exceed the structural bound of "
-                    f"{MAX_CONSTRAINT_CELLS} coefficients before nested parsing",
                 )
     else:
         # When the axis is missing, empty, or not a sequence, still bound the

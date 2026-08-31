@@ -252,6 +252,8 @@ def test_rref_pivots_are_strictly_increasing(matrix_data: list[list[int]]) -> No
 def test_exact_public_api_symbols() -> None:
     """Exact owner-local contract for the matrices public API."""
     expected = (
+        "EmbeddedRealSimpleNumberFieldMatrix",
+        "ExactRealMatrix",
         "SmithNormalForm",
         "SparseRationalMatrix",
         "SparseRationalMatrixEntry",

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+import time
+import typing
 from dataclasses import dataclass
 from fractions import Fraction
 from typing import Literal
@@ -15,6 +17,10 @@ from jacobian.math._singular import (
     read_singular_version,
     run_bounded_singular,
     singular_version_preamble,
+)
+from jacobian.math.polynomials._conversions import (
+    rational_function_from_sympy,
+    sparse_rational_polynomial_to_sympy,
 )
 from jacobian.math.polynomials.maps._generic_degree import (
     GenericFiberReplayLimitError,
@@ -39,6 +45,26 @@ from jacobian.math.polynomials.values import (
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
+
+
+def _make_generic_fiber_deadline_check(
+    deadline: float,
+) -> typing.Callable[[], None]:
+    """Return a request-local deadline check closure.
+
+    Each call gets its own deadline rather than sharing a module-level
+    global, so concurrent requests in worker threads do not clobber
+    each other's deadlines.
+    """
+
+    def _check() -> None:
+        if time.monotonic() > deadline:
+            raise TimeoutError(
+                "Singular coefficient reduction exceeded the wall-time limit"
+            )
+
+    return _check
+
 
 _GENERIC_FIBER_PROTOCOL_HEADER = "JACOBIAN_SINGULAR_GENERIC_FIBER_V1"
 _PARAMETER_FACTOR = re.compile(r"^jtp([1-9][0-9]*)(?:\^([1-9][0-9]*))?$")
@@ -291,6 +317,7 @@ def _parse_generic_fiber_coefficient(
     denominator_text: str,
     *,
     target_parameters: tuple[str, ...],
+    deadline_check: typing.Callable[[], None] | None = None,
 ) -> tuple[RationalFunction, int]:
     numerator = _parse_parameter_polynomial(
         numerator_text,
@@ -303,17 +330,31 @@ def _parse_generic_fiber_coefficient(
     if not numerator or not denominator:
         raise ValueError("Singular returned a zero generic-fiber coefficient")
     denominator_leading = denominator[max(denominator)]
-    value = RationalFunction(
-        variables=target_parameters,
-        numerator=_sparse_parameter_polynomial(
-            numerator,
-            scale=denominator_leading,
-        ),
-        denominator=_sparse_parameter_polynomial(
-            denominator,
-            scale=denominator_leading,
-        ),
+    numerator_value = _sparse_parameter_polynomial(
+        numerator,
+        scale=denominator_leading,
     )
+    denominator_value = _sparse_parameter_polynomial(
+        denominator,
+        scale=denominator_leading,
+    )
+    numerator_polynomial = sparse_rational_polynomial_to_sympy(
+        numerator_value, target_parameters
+    )
+    denominator_polynomial = sparse_rational_polynomial_to_sympy(
+        denominator_value, target_parameters
+    )
+    try:
+        value = rational_function_from_sympy(
+            numerator_polynomial.as_expr() / denominator_polynomial.as_expr(),
+            target_parameters,
+            maximum_terms=MAX_GENERIC_FIBER_PARAMETER_TERMS,
+            deadline_check=deadline_check,
+        )
+    except ValueError as exc:
+        raise _ResultLimitExceededError(
+            "normalized Singular coefficient exceeds the exact-result limit"
+        ) from exc
     return value, len(numerator) + len(denominator)
 
 
@@ -346,6 +387,7 @@ def _parse_generic_fiber_polynomial(
     *,
     source_count: int,
     target_parameters: tuple[str, ...],
+    deadline_check: typing.Callable[[], None] | None = None,
 ) -> tuple[GenericFiberPolynomial, int]:
     reader.expect("POLYNOMIAL")
     terms: list[GenericFiberTerm] = []
@@ -362,6 +404,7 @@ def _parse_generic_fiber_polynomial(
             reader.pop(),
             reader.pop(),
             target_parameters=target_parameters,
+            deadline_check=deadline_check,
         )
         terms.append(
             GenericFiberTerm(
@@ -482,6 +525,7 @@ def _parse_generic_fiber_output(
     output: bytes,
     *,
     polynomial_map: RationalPolynomialMap,
+    deadline_check: typing.Callable[[], None] | None = None,
 ) -> tuple[GenericFiberCertificate, int, int | None, str]:
     try:
         text = output.decode("ascii")
@@ -514,6 +558,7 @@ def _parse_generic_fiber_output(
             reader,
             source_count=source_count,
             target_parameters=target_parameters,
+            deadline_check=deadline_check,
         )
         basis.append(polynomial)
         certificate_terms += len(polynomial.terms)
@@ -526,6 +571,7 @@ def _parse_generic_fiber_output(
                 reader,
                 source_count=source_count,
                 target_parameters=target_parameters,
+                deadline_check=deadline_check,
             )
             row.append(polynomial)
             certificate_terms += len(polynomial.terms)
@@ -572,6 +618,8 @@ def run_singular_generic_fiber(
 ) -> SingularGenericFiberResult:
     """Compute one exact generic-fiber certificate in a bounded process."""
 
+    deadline = time.monotonic() + budget.wall_seconds
+    deadline_check = _make_generic_fiber_deadline_check(deadline)
     completed = run_bounded_singular(
         _generic_fiber_script(polynomial_map),
         wall_seconds=budget.wall_seconds,
@@ -608,10 +656,16 @@ def run_singular_generic_fiber(
                 "Singular failed without producing an exact generic-fiber certificate."
             ),
         )
+    if time.monotonic() > deadline:
+        return SingularGenericFiberResult(
+            outcome="TIMEOUT",
+            detail="Singular coefficient reduction exceeded the declared wall-time limit.",
+        )
     try:
         certificate, dimension, vector_dimension, version = _parse_generic_fiber_output(
             completed.stdout,
             polynomial_map=polynomial_map,
+            deadline_check=deadline_check,
         )
     except UnsupportedSingularVersionError:
         return SingularGenericFiberResult(
@@ -626,12 +680,24 @@ def run_singular_generic_fiber(
                 "result bound."
             ),
         )
+    except TimeoutError:
+        return SingularGenericFiberResult(
+            outcome="TIMEOUT",
+            detail="Singular coefficient reduction exceeded the declared wall-time limit.",
+        )
     except ValueError:
         return SingularGenericFiberResult(
             outcome="ERROR",
             detail=(
                 "Singular returned an invalid or unsupported generic-fiber certificate."
             ),
+        )
+    try:
+        deadline_check()
+    except TimeoutError:
+        return SingularGenericFiberResult(
+            outcome="TIMEOUT",
+            detail="Singular coefficient reduction exceeded the declared wall-time limit.",
         )
     return SingularGenericFiberResult(
         outcome="COMPUTED",

@@ -10,6 +10,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._models import StrictModel
 from jacobian.math.polynomials.values import (
     RationalFunction,
+    require_canonical_rational_function,
     require_sparse_polynomial_budget,
 )
 
@@ -42,6 +43,13 @@ def require_hermite_reduction_budget(function: RationalFunction) -> None:
         maximum_exponent=MAX_HERMITE_DENOMINATOR_DEGREE,
         maximum_coefficient_digits=MAX_HERMITE_COEFFICIENT_DIGITS,
         label="Hermite-reduction denominator",
+    )
+    require_canonical_rational_function(
+        function,
+        maximum_terms=MAX_HERMITE_NUMERATOR_DEGREE + 1,
+        maximum_exponent=MAX_HERMITE_NUMERATOR_DEGREE,
+        maximum_coefficient_digits=MAX_HERMITE_COEFFICIENT_DIGITS,
+        label="Hermite-reduction function",
     )
 
 

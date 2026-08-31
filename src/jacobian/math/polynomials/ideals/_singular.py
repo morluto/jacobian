@@ -6,6 +6,7 @@ import math
 import re
 import shutil
 import tempfile
+import time
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
@@ -85,6 +86,15 @@ def _singular_polynomial(polynomial: RationalPolynomial) -> str:
 
     if not polynomial.polynomial.terms:
         return "0"
+    if (
+        len(polynomial.polynomial.terms) == 1
+        and not any(polynomial.polynomial.terms[0].exponents)
+        and polynomial.polynomial.terms[0].coefficient.num != "0"
+    ):
+        # Every nonzero constant is the unit in QQ.  Canonical admission may
+        # retain a very wide unit coefficient because it is zero-work, but
+        # the backend must not materialize that irrelevant integer literal.
+        return "(1/1)"
     encoded_terms: list[str] = []
     for term in polynomial.polynomial.terms:
         numerator, denominator = term.coefficient.as_integer_ratio()
@@ -682,11 +692,16 @@ def run_bounded_stdin_python_kernel(
     payload_json: str,
     *,
     wall_seconds: float,
+    deadline: float | None = None,
     stdout_limit: int,
     stderr_limit: int,
-) -> tuple[bool, str, bool]:
-    """Run one bounded Python-kernel worker and return (timed_out, stdout,
-    output_limit_exceeded).
+) -> tuple[bool | str, str, bool]:
+    """Run one bounded Python-kernel worker and return its bounded status.
+
+    The first tuple member is ``True`` for timeout and ``"CANCELLED"`` when
+    the caller cancelled the process.  Keeping cancellation in the existing
+    three-field result preserves the private helper's call shape while
+    preventing partial worker output from being parsed as a kernel result.
 
     The child process is terminated on wall-budget expiry, so an admitted
     request cannot leave detached computations running inside the server.
@@ -706,11 +721,17 @@ def run_bounded_stdin_python_kernel(
     # Deliberately not resolved: following the interpreter symlink would
     # reparent the worker onto the base prefix without the environment's
     # site-packages.
+    if deadline is not None and deadline <= time.monotonic():
+        return True, "", False
     resolved = shutil.which(sys.executable) or sys.executable
     prlimit = shutil.which("prlimit")
     if prlimit is not None:
         prlimit = str(Path(prlimit).resolve())
     with tempfile.TemporaryDirectory(prefix="jacobian-sympy-") as directory:
+        if deadline is not None:
+            wall_seconds = deadline - time.monotonic()
+            if wall_seconds <= 0:
+                return True, "", False
         completed = run_bounded_process(
             [resolved, "-I", "-c", script],
             input_bytes=payload_json.encode("ascii"),
@@ -719,7 +740,7 @@ def run_bounded_stdin_python_kernel(
             stdout_limit=stdout_limit,
             stderr_limit=stderr_limit,
             resource_limits=ProcessResourceLimits(
-                cpu_seconds=int(wall_seconds),
+                cpu_seconds=max(1, math.ceil(wall_seconds)),
                 address_space_bytes=_SYMPY_ADDRESS_SPACE_BYTES,
                 file_size_bytes=_WORKER_FILE_SIZE_BYTES,
             ),
@@ -728,5 +749,7 @@ def run_bounded_stdin_python_kernel(
         )
     if completed.timed_out:
         return True, "", False
+    if completed.cancelled:
+        return "CANCELLED", "", False
     exceeded = completed.stdout_exceeded or completed.stderr_exceeded
     return False, completed.stdout.decode("ascii", errors="replace"), exceeded

@@ -94,11 +94,17 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "factor labels must be distinct and the product dimension at most 16.",
                 {
                     "left": {
-                        "matrix": {"entries": [[_q(1), _q(0)], [_q(0), _q(2)]]},
+                        "matrix": {
+                            "domain": "QQ",
+                            "entries": [[_q(1), _q(0)], [_q(0), _q(2)]],
+                        },
                         "factors": [_QUBIT],
                     },
                     "right": {
-                        "matrix": {"entries": [[_q(3), _q(0)], [_q(0), _q(4)]]},
+                        "matrix": {
+                            "domain": "QQ",
+                            "entries": [[_q(3), _q(0)], [_q(0), _q(4)]],
+                        },
                         "factors": [{"label": "r", "dimension": 2}],
                     },
                 },
@@ -124,12 +130,13 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 {
                     "matrix": {
                         "matrix": {
+                            "domain": "QQ",
                             "entries": [
                                 [_q(1), _q(0), _q(0), _q(0)],
                                 [_q(0), _q(1), _q(0), _q(0)],
                                 [_q(0), _q(0), _q(2), _q(0)],
                                 [_q(0), _q(0), _q(0), _q(2)],
-                            ]
+                            ],
                         },
                         "factors": [_QUBIT, {"label": "r", "dimension": 2}],
                     },
@@ -157,11 +164,17 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "must carry exactly equal factors and basis linearization.",
                 {
                     "left": {
-                        "matrix": {"entries": [[_q(0), _q(0)], [_q(0), _q(0)]]},
+                        "matrix": {
+                            "domain": "QQ",
+                            "entries": [[_q(0), _q(0)], [_q(0), _q(0)]],
+                        },
                         "factors": [_QUBIT],
                     },
                     "right": {
-                        "matrix": {"entries": [[_q(1), _q(0)], [_q(0), _q(2)]]},
+                        "matrix": {
+                            "domain": "QQ",
+                            "entries": [[_q(1), _q(0)], [_q(0), _q(2)]],
+                        },
                         "factors": [_QUBIT],
                     },
                 },

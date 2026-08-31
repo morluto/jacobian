@@ -54,6 +54,7 @@ jobs:
         env:
           PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           # Optional fine-grained PAT or app token. Pushes made with it raise
@@ -104,9 +105,14 @@ jobs:
           # GitHub suppresses workflow runs for pushes made with GITHUB_TOKEN,
           # so the new head would otherwise carry no fresh required checks and
           # stay unmergeable until a human pushes. Dispatch CI explicitly with
-          # the pull_request lane selection; its check runs
-          # attach to this exact head SHA. With AUTOFIX_TOKEN configured the
-          # push itself raises synchronize events, so no dispatch is needed.
+          # the pull_request lane selection and the immutable base/head range;
+          # its check runs attach to this exact head SHA. With AUTOFIX_TOKEN
+          # configured the push itself raises synchronize events, so no
+          # dispatch is needed.
           if [[ -z "${AUTOFIX_TOKEN}" ]]; then
-            gh workflow run ci.yml --ref "$PR_HEAD_REF" -f pr_lanes=true
+            gh workflow run ci.yml \
+              --ref "$PR_HEAD_REF" \
+              -f pr_lanes=true \
+              -f base_sha="$PR_BASE_SHA" \
+              -f head_sha="$(git rev-parse HEAD)"
           fi

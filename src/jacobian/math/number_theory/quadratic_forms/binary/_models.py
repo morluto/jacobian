@@ -157,9 +157,9 @@ class BinaryQuadraticFormReducedClassesRequest(StrictModel):
 class BinaryQuadraticFormClassComposeRequest(StrictModel):
     """Request the proper-class product of two reduced forms of one discriminant.
 
-    Both classes must have the same discriminant. Composition is admitted when
-    that discriminant fits the complete reduced-class scan envelope
-    ``A*(A+2) <= 10000`` published by ``reduced_classes.compute``.
+    Both classes must have the same discriminant. Composition is admitted by
+    its own work bounds (direct O(1) composition and O(log|D|) reduction),
+    independent of the reduced-class enumeration budget.
     """
 
     first: ProperBinaryQuadraticFormClass
@@ -193,6 +193,34 @@ def _require_reduced_class_search_budget(discriminant: int) -> int:
             "reduced-class enumeration exceeds the supported candidate budget",
         )
     return state_count
+
+
+def _require_composition_budget(
+    first: PrimitivePositiveDefiniteBinaryQuadraticForm,
+    second: PrimitivePositiveDefiniteBinaryQuadraticForm,
+) -> None:
+    """Admit a direct composition by its own work bounds.
+
+    Direct Gauss composition (Buell's ternary-Bezout formula) is O(1)
+    extended-gcd and exact-quotient work on operands bounded by
+    ``MAX_COEFFICIENT``.  Gauss reduction of the composite is O(log|D|)
+    iterations.  Neither requires class enumeration, so the admission
+    derives from the discriminant validity and the coefficient bounds
+    rather than the unrelated reduced-class scan budget.
+    """
+    if first.discriminant != second.discriminant:
+        raise ValueError("forms must have the same discriminant")
+    discriminant = first.discriminant
+    if discriminant > -3:
+        raise _validation_error(
+            "integral_binary_quadratic_form.discriminant_too_large",
+            "discriminant must be at most -3",
+        )
+    if discriminant % 4 not in (0, 1):
+        raise _validation_error(
+            "integral_binary_quadratic_form.invalid_discriminant_congruence",
+            "discriminant must be congruent to 0 or 1 modulo 4",
+        )
 
 
 def _representation_y_bound(

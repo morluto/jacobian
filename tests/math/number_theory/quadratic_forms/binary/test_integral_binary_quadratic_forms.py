@@ -567,18 +567,25 @@ class TestProperClassComposition:
 
         assert result.product == principal
 
-    def test_composition_rejects_discriminant_above_class_scan_budget(self) -> None:
+    def test_composition_admits_discriminant_above_class_scan_budget(self) -> None:
+        """Composition is O(1) + O(log|D|) reduction, not class enumeration."""
         principal = _proper_class(1, 0, 7_351)
-        with pytest.raises(OperationDomainValidationError) as exc_info:
+        result = compute_class_compose(
+            BinaryQuadraticFormClassComposeRequest(
+                first=principal, second=principal
+            )
+        )
+        assert result.product == principal
+
+    def test_composition_rejects_mismatched_discriminants(self) -> None:
+        first = _proper_class(1, 0, 7_351)
+        second = _proper_class(1, 0, 7)
+        with pytest.raises(ValueError, match="same discriminant"):
             compute_class_compose(
                 BinaryQuadraticFormClassComposeRequest(
-                    first=principal, second=principal
+                    first=first, second=second
                 )
             )
-        _assert_error_type(
-            exc_info,
-            "integral_binary_quadratic_form.reduced_class_candidate_budget",
-        )
 
 
 class TestRepresentations:

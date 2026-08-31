@@ -161,8 +161,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             example(
                 "compose_classes_discriminant_neg_23",
                 "Compose the class [2,-1,3] with itself at discriminant -23; "
-                "both inputs must be canonical reduced representatives within "
-                "the reduced-class scan envelope.",
+                "both inputs must be canonical reduced representatives of the same "
+                "discriminant.",
                 {
                     "first": {"representative": {"a": 2, "b": -1, "c": 3}},
                     "second": {"representative": {"a": 2, "b": -1, "c": 3}},

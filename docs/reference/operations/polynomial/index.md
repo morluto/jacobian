@@ -13,3 +13,7 @@ shared domain admission path before SymPy is called; a wire request model may
 invoke that path after parsing, while native callers use it directly. A bounded
 result is returned inline; no polynomial is implicitly published or retained
 for replay.
+
+## Focused contracts
+
+- [Monomial-ideal graded Betti profiles](monomial-ideal-graded-betti.md)

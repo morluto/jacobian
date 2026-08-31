@@ -12,7 +12,6 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.math.polynomials.values import (
-    PolynomialVariable,
     RationalPolynomial,
     RationalPolynomialIdeal,
     require_polynomial_budget,
@@ -112,6 +111,7 @@ class MonomialIdealBettiRequest(StrictModel):
     def require_monomial_ideal(self) -> Self:
         _admit_monomial_ideal(self.ideal)
         return self
+
 
 class LcmLatticeHomologyEntry(StrictModel):
     """Crosscut-chain ranks and reduced homology at one lcm-lattice element."""

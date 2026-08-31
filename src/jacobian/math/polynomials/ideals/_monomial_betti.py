@@ -109,12 +109,13 @@ def _crosscut_homology(
     return tuple(map(len, by_size)), ranks, tuple(dimensions)
 
 
-def compute_monomial_betti_kernel(ideal: RationalPolynomialIdeal) -> MonomialBettiKernelResult:
+def compute_monomial_betti_kernel(
+    ideal: RationalPolynomialIdeal,
+) -> MonomialBettiKernelResult:
     """Compute one complete source-bound Betti profile without replay."""
 
     generators = tuple(
-        generator.polynomial.terms[0].exponents
-        for generator in ideal.generators
+        generator.polynomial.terms[0].exponents for generator in ideal.generators
     )
     subset_lcms = _subset_lcms(generators)
     lattice = tuple(sorted(set(subset_lcms[1:])))

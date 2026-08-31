@@ -129,7 +129,7 @@ def test_transport_probe_charges_canonical_escape_size(
     fp = _f2()
     escaped = '""""'
     plain = "plain!!"
-    m = _matrix(fp, [[ [1], [0]], [[0], [1]]], [plain, escaped], [plain, escaped])
+    m = _matrix(fp, [[[1], [0]], [[0], [1]]], [plain, escaped], [plain, escaped])
     plain_probe = encode_strict_json(
         {
             "matrix": m.model_dump(mode="json"),

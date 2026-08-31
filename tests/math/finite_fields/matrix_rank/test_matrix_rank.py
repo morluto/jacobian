@@ -5,6 +5,9 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import encode_strict_json
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.finite_fields import _matrix_rank as matrix_rank_module
 from jacobian.math.finite_fields._matrix_rank import compute_rank
 from jacobian.math.finite_fields._matrix_rank_models import MatrixRankRequest
 from jacobian.math.finite_fields.operations import matrix_rank
@@ -118,6 +121,33 @@ def test_pivot_labels_preserved() -> None:
     result = compute_rank(MatrixRankRequest(matrix=m))
     assert result.pivot_rows == ("r0",)
     assert result.pivot_columns == ("c0",)
+
+
+def test_transport_probe_charges_canonical_escape_size(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fp = _f2()
+    escaped = '""""'
+    plain = "plain!!"
+    m = _matrix(fp, [[ [1], [0]], [[0], [1]]], [plain, escaped], [plain, escaped])
+    plain_probe = encode_strict_json(
+        {
+            "matrix": m.model_dump(mode="json"),
+            "rank": 2,
+            "pivot_rows": [plain, plain],
+            "pivot_columns": [plain, plain],
+        }
+    )
+
+    class _TestLimits:
+        max_output_bytes = len(plain_probe)
+
+    monkeypatch.setattr(matrix_rank_module, "CanonicalLimits", _TestLimits)
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="canonical output bound",
+    ):
+        matrix_rank_module.compute_matrix_rank(m, enforce_transport_limit=True)
 
 
 def test_pivot_labels_follow_row_swaps() -> None:

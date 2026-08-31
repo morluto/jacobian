@@ -58,6 +58,14 @@ def hermite_reduction(
     """
 
     require_hermite_reduction_budget(function)
+    return _hermite_reduction_admitted(function)
+
+
+def _hermite_reduction_admitted(
+    function: RationalFunction,
+) -> tuple[RationalFunction, RationalFunction]:
+    """Compute after the shared owner admission has succeeded."""
+
     rational_part, remainder = _hermite_parts(function)
     return (
         rational_function_from_sympy(rational_part, function.variables),

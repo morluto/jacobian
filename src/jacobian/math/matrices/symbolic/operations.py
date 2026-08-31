@@ -15,6 +15,7 @@ from pydantic_core import PydanticCustomError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.symbolic._models import (
     SymbolicMatrix,
+    _require_canonical_symbolic_values,
     _require_determinant_family_result_budget,
     _require_symbolic_product_admission,
 )
@@ -53,7 +54,7 @@ def _matrix_from_values(
     )
 
 
-def _require_matrix_values(
+def _require_matrix_structure(
     entries: tuple[tuple[RationalFunction, ...], ...],
     variables: tuple[str, ...],
 ) -> None:
@@ -87,6 +88,17 @@ def _require_matrix_values(
     )
     if term_count > MAX_SYMBOLIC_MATRIX_TERMS:
         raise ValueError("symbolic matrix exceeds the 512-term operation budget")
+
+
+def _require_matrix_values(
+    entries: tuple[tuple[RationalFunction, ...], ...],
+    variables: tuple[str, ...],
+) -> None:
+    _require_matrix_structure(entries, variables)
+    _require_canonical_symbolic_values(
+        tuple(value for row in entries for value in row),
+        label="symbolic matrix entry",
+    )
 
 
 def symbolic_determinant(
@@ -186,7 +198,7 @@ def _require_native_system(
         _require_linear_system_growth_admission,
     )
 
-    _require_matrix_values(entries, variables)
+    _require_matrix_structure(entries, variables)
     # Wire matrix shape/dimension limits are applied BEFORE growth admission:
     # an oversized shape must be rejected up front instead of paying the
     # admission scan over a shape the wire envelope would never accept.
@@ -202,6 +214,13 @@ def _require_native_system(
         if value.variables != variables:
             raise ValueError("the right-hand side must use the declared ordered field")
     _require_linear_system_growth_admission(entries, rhs)
+    _require_canonical_symbolic_values(
+        tuple(value for row in entries for value in row),
+        label="symbolic matrix entry",
+    )
+    _require_canonical_symbolic_values(
+        rhs, label="symbolic linear-system right-hand side"
+    )
 
 
 def symbolic_linear_system_solve(
@@ -313,12 +332,17 @@ def _admit_determinant(
     entries: tuple[tuple[RationalFunction, ...], ...],
     variables: tuple[str, ...],
 ) -> None:
-    _domain_call(_require_matrix_values, entries, variables)
+    _domain_call(_require_matrix_structure, entries, variables)
     _domain_call(_require_square_entries, entries, "determinant")
     _domain_call(
         _require_determinant_family_result_budget,
         entries,
         characteristic_polynomial=False,
+    )
+    _domain_call(
+        _require_canonical_symbolic_values,
+        tuple(value for row in entries for value in row),
+        label="symbolic determinant entry",
     )
 
 
@@ -326,10 +350,15 @@ def _admit_characteristic(
     entries: tuple[tuple[RationalFunction, ...], ...],
     variables: tuple[str, ...],
 ) -> None:
-    _domain_call(_require_matrix_values, entries, variables)
+    _domain_call(_require_matrix_structure, entries, variables)
     _domain_call(_require_square_entries, entries, "characteristic polynomial")
     _domain_call(
         _require_determinant_family_result_budget,
         entries,
         characteristic_polynomial=True,
+    )
+    _domain_call(
+        _require_canonical_symbolic_values,
+        tuple(value for row in entries for value in row),
+        label="symbolic characteristic-polynomial entry",
     )

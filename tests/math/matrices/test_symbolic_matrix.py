@@ -1175,7 +1175,7 @@ def test_public_matrix_entries_reject_expression_strings_without_execution(
     assert not marker.exists()
 
 
-def test_noncanonical_rational_functions_are_rejected() -> None:
+def test_nonmonic_rational_function_is_rejected_structurally() -> None:
     variables = ("x",)
     with pytest.raises(ValidationError):
         _rf(
@@ -1183,12 +1183,34 @@ def test_noncanonical_rational_functions_are_rejected() -> None:
             (1, 1, (0,)),
             denominator=((2, 1, (1,)),),
         )
-    with pytest.raises(ValidationError):
-        _rf(
-            variables,
-            (1, 1, (1,)),
-            denominator=((1, 1, (1,)),),
-        )
+
+
+def test_nonreduced_matrix_entry_parses_then_determinant_rejects_it() -> None:
+    variables = ("x",)
+    nonreduced = _rf(
+        variables,
+        (1, 1, (1,)),
+        denominator=((1, 1, (1,)),),
+    )
+    matrix = SymbolicMatrix(variables=variables, entries=((nonreduced,),))
+
+    with pytest.raises(OperationDomainValidationError, match="must be coprime"):
+        symbolic_determinant(matrix.entries, matrix.variables)
+
+
+def test_nonreduced_matrix_entry_is_rejected_on_the_product_path() -> None:
+    variables = ("x",)
+    nonreduced = _rf(
+        variables,
+        (1, 1, (1,)),
+        denominator=((1, 1, (1,)),),
+    )
+    one = _rf(variables, (1, 1, (0,)))
+    left = SymbolicMatrix(variables=variables, entries=((nonreduced,),))
+    right = SymbolicMatrix(variables=variables, entries=((one,),))
+
+    with pytest.raises(OperationDomainValidationError, match="must be coprime"):
+        symbolic_matrix_multiply(left, right)
 
 
 def test_symbolic_eigenvalues_returns_polynomial_for_unrepresentable_roots() -> None:

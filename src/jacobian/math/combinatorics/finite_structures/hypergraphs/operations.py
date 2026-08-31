@@ -4,6 +4,7 @@ import unicodedata
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
+    MAX_EDGE_INTERSECTION_RESULT_BYTES,
     MAX_HYPERGRAPH_INDEPENDENCE_INCIDENCES,
     MAX_HYPERGRAPH_INDEPENDENCE_VERTICES,
     MAX_INDUCED_PROFILE_RESULT_BYTES,
@@ -15,6 +16,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     CliqueExpansionResult,
     DualResult,
     EdgeIntersectionEntry,
+    EdgeIntersectionGraphResult,
     EdgeIntersectionsResult,
     FiniteHypergraph,
     HypergraphIndependenceBudget,
@@ -27,6 +29,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     ParametersResult,
     VertexDegreesResult,
     _admit_edge_intersection_profile,
+    _edge_intersection_graph_result_bytes,
     _induced_type_profile_admission_plan,
     _InducedTypeProfileAdmissionPlan,
     _maximum_edge_matching_result_bytes,
@@ -34,11 +37,16 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     _minimum_transversal_search_plan,
     _validation_error,
 )
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    MAX_GRAPH_LABEL_BYTES,
+    MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+    SimpleUndirectedGraph,
+)
 
 __all__ = [
     "clique_expansion",
     "dual",
+    "edge_intersection_graph",
     "edge_intersections",
     "incidence_graph",
     "independence_number",
@@ -99,6 +107,81 @@ def _admit_clique_expansion(hypergraph: FiniteHypergraph) -> None:
             code="hypergraph.clique_expansion.nfc_vertices",
             message="clique expansion requires NFC-normalized vertex labels",
         )
+
+
+def _admit_edge_intersection_graph(
+    hypergraph: FiniteHypergraph,
+) -> tuple[tuple[str, str], ...]:
+    if any(
+        not unicodedata.is_normalized("NFC", edge_id) for edge_id, _ in hypergraph.edges
+    ):
+        raise OperationDomainValidationError(
+            location=("hypergraph",),
+            code="hypergraph.edge_intersection_graph.nfc_edge_ids",
+            message=("edge-intersection graph requires NFC-normalized edge IDs"),
+        )
+    # Reject empty edge IDs: they would produce empty graph vertex labels
+    # that are incompatible with downstream consumers (e.g. GraphVertexLabel
+    # enforces min_length=1).
+    for edge_id, _ in hypergraph.edges:
+        if not edge_id:
+            raise OperationDomainValidationError(
+                location=("hypergraph",),
+                code="hypergraph.edge_intersection_graph.nonempty_edge_ids",
+                message="edge-intersection graph edge IDs must be nonempty",
+            )
+    # The edge-intersection graph maps each hyperedge to a graph vertex, so
+    # the number of hyperedges must fit the SimpleUndirectedGraph carrier.
+    if len(hypergraph.edges) > MAX_INDEXED_SIMPLE_GRAPH_VERTICES:
+        raise OperationDomainValidationError(
+            location=("hypergraph",),
+            code="hypergraph.edge_intersection_graph.carrier_vertex_bound",
+            message=(
+                "edge-intersection graph exceeds the "
+                f"{MAX_INDEXED_SIMPLE_GRAPH_VERTICES}-vertex graph carrier bound"
+            ),
+        )
+    # Vertex labels of the target graph are the edge IDs of the source
+    # hypergraph; they must fit the graph label length to compose with
+    # downstream graph operations.
+    for edge_id, _ in hypergraph.edges:
+        if len(edge_id) == 0 or len(edge_id.encode("utf-8")) > MAX_GRAPH_LABEL_BYTES:
+            raise OperationDomainValidationError(
+                location=("hypergraph",),
+                code="hypergraph.edge_intersection_graph.label_length",
+                message=(
+                    "edge-intersection graph edge IDs must be nonempty "
+                    f"and at most {MAX_GRAPH_LABEL_BYTES} UTF-8 bytes "
+                    "to fit the graph carrier"
+                ),
+            )
+    # Build the exact graph edge set once for admission and reuse it for the
+    # result.  Charging every admitted input as a complete graph rejects sparse
+    # graphs that are well within the canonical output boundary.
+    edge_ids = tuple(edge_id for edge_id, _ in hypergraph.edges)
+    member_sets = tuple(frozenset(members) for _, members in hypergraph.edges)
+    graph_edges = tuple(
+        (edge_ids[left], edge_ids[right])
+        if edge_ids[left] <= edge_ids[right]
+        else (edge_ids[right], edge_ids[left])
+        for left in range(len(edge_ids))
+        for right in range(left + 1, len(edge_ids))
+        if member_sets[left] & member_sets[right]
+    )
+    if (
+        _edge_intersection_graph_result_bytes(hypergraph, graph_edges)
+        > MAX_EDGE_INTERSECTION_RESULT_BYTES
+    ):
+        raise OperationDomainValidationError(
+            location=("hypergraph",),
+            code="hypergraph.edge_intersection_graph.result_bytes",
+            message=(
+                "the edge-intersection graph result would exceed the "
+                f"{MAX_EDGE_INTERSECTION_RESULT_BYTES}-byte canonical output "
+                "limit; shorten labels or reduce the edge family"
+            ),
+        )
+    return graph_edges
 
 
 def _admit_maximum_edge_matching(hypergraph: FiniteHypergraph) -> None:
@@ -409,6 +492,35 @@ def clique_expansion(hypergraph: FiniteHypergraph) -> CliqueExpansionResult:
     return CliqueExpansionResult(
         hypergraph=hypergraph,
         graph=_clique_expansion_graph(hypergraph),
+    )
+
+
+def _edge_intersection_graph_data(
+    hypergraph: FiniteHypergraph,
+    graph_edges: tuple[tuple[str, str], ...],
+) -> SimpleUndirectedGraph:
+    """Compute the canonical edge-intersection graph.
+
+    The graph's vertices are the hypergraph's edge IDs in declared order.
+    Two vertices are adjacent if and only if the corresponding hyperedges
+    have nonempty intersection.  Each undirected adjacency pair is emitted
+    in lexical order, following the ``SimpleUndirectedGraph`` convention
+    independently of the source hypergraph's declared edge ordering.
+    """
+
+    edge_ids = tuple(edge_id for edge_id, _ in _canonical_edges(hypergraph))
+    return SimpleUndirectedGraph(vertices=edge_ids, edges=graph_edges)
+
+
+def edge_intersection_graph(
+    hypergraph: FiniteHypergraph,
+) -> EdgeIntersectionGraphResult:
+    """Compute the edge-intersection graph of a finite hypergraph."""
+
+    graph_edges = _admit_edge_intersection_graph(hypergraph)
+    return EdgeIntersectionGraphResult(
+        hypergraph=hypergraph,
+        graph=_edge_intersection_graph_data(hypergraph, graph_edges),
     )
 
 

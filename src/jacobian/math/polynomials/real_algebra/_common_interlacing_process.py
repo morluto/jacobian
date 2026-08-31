@@ -22,6 +22,7 @@ from jacobian._execution import (
     bind_request_deadline,
     current_request_execution,
 )
+from jacobian.canonical import CanonicalizationError, loads_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.algebraic_numbers.real import (
     MAX_REAL_ALGEBRAIC_DEGREE,
@@ -342,12 +343,10 @@ def _profile_from_worker(
         root_profiles.append(_root_profile_from_worker(value, declared, root_counts))
     root_profiles_tuple = tuple(root_profiles)
     outcome = _OUTCOME.validate_python(payload.get("outcome"))
-    return CommonInterlacingProfile.model_validate(
-        {
-            "family": family,
-            "root_profiles": root_profiles_tuple,
-            "outcome": outcome,
-        }
+    return CommonInterlacingProfile._from_kernel(
+        family=family,
+        root_profiles=root_profiles_tuple,
+        outcome=outcome,
     )
 
 
@@ -458,8 +457,8 @@ def run_common_interlacing_profile(
             "bounded common-interlacing worker exceeded its output limit"
         )
     try:
-        payload = json.loads(completed.stdout.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        payload = loads_strict_json(completed.stdout)
+    except (CanonicalizationError, ValueError) as exc:
         raise RuntimeError(
             "bounded common-interlacing worker returned malformed output"
         ) from exc

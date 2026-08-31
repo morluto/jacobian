@@ -42,6 +42,7 @@ def __getattr__(name: str) -> object:
     globals()[name] = module
     return module
 
+
 __all__ = [
     "analysis",
     "cluster_algebras",

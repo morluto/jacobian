@@ -271,6 +271,7 @@ class RationalMatrixAction(StrictModel):
     congruence fixed-point condition for rational endomorphisms.
     """
 
+    action_type: Literal["RATIONAL"] = "RATIONAL"
     coordinate_axis: tuple[OpaqueLabel, ...] = Field(
         min_length=1, max_length=MAX_ACTION_DIMENSION
     )
@@ -373,6 +374,9 @@ class EmbeddedRealNumberFieldActionGenerator(StrictModel):
 class EmbeddedRealNumberFieldMatrixAction(StrictModel):
     """A finite labelled action by matrices in one embedded real field."""
 
+    action_type: Literal["EMBEDDED_REAL_NUMBER_FIELD"] = (
+        "EMBEDDED_REAL_NUMBER_FIELD"
+    )
     coordinate_axis: tuple[OpaqueLabel, ...] = Field(
         min_length=1, max_length=MAX_ACTION_DIMENSION
     )
@@ -416,6 +420,16 @@ class EmbeddedRealNumberFieldMatrixAction(StrictModel):
                 raise _validation_error(
                     "generator_shape",
                     "every generator matrix must be square on coordinate_axis",
+                )
+        if self.generators:
+            embedding = self.generators[0].matrix.embedding
+            if any(
+                generator.matrix.embedding != embedding
+                for generator in self.generators[1:]
+            ):
+                raise _validation_error(
+                    "generator_embedding",
+                    "every embedded generator must use one common field embedding",
                 )
         return self
 
@@ -535,11 +549,12 @@ class IntegralBilinearForm(StrictModel):
 
 
 class InvariantBilinearFormLatticeRequest(StrictModel):
-    """One rational matrix action and one integral form symmetry class."""
+    """One rational or common-embedding matrix action and one form class."""
 
-    action: RationalMatrixAction = Field(
+    action: MatrixAction = Field(
         description=(
-            "Canonical rational endomorphisms on one labelled lattice axis. "
+            "Canonical rational or common-embedding real number-field endomorphisms "
+            "on one labelled lattice axis. "
             "Admission requires generator_count * axis_dimension^2 * "
             f"coefficient_dimension <= {MAX_CONSTRAINT_CELLS:,}, couples that "
             "count to source and intermediate digit heights, and separately "

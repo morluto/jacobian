@@ -193,6 +193,22 @@ def test_empty_embedded_generator_family_returns_full_coefficient_lattice() -> N
     assert result.rank == 1
 
 
+def test_wire_request_preserves_the_empty_embedded_action_carrier() -> None:
+    request = InvariantBilinearFormLatticeRequest(
+        action=EmbeddedRealNumberFieldMatrixAction(
+            coordinate_axis=("x",),
+            generators=(),
+        ),
+        kind="BILINEAR",
+    )
+
+    decoded = InvariantBilinearFormLatticeRequest.model_validate(
+        request.model_dump(mode="json")
+    )
+
+    assert isinstance(decoded.action, EmbeddedRealNumberFieldMatrixAction)
+
+
 def test_strict_json_action_can_omit_the_defaulted_generator_family() -> None:
     request = InvariantBilinearFormLatticeRequest.model_validate_json(
         encode_strict_json(

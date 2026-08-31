@@ -8,6 +8,7 @@ from math import factorial, lcm
 from typing import Any
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import current_request_execution
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.complex import (
     algebraic_root_separation_denominator_bound,
@@ -16,6 +17,12 @@ from jacobian.math.number_theory.algebraic_numbers.complex import (
 from jacobian.math.number_theory.algebraic_numbers.real import (
     MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS,
     RationalIsolatingInterval,
+)
+from jacobian.math.number_theory.number_fields._real_embedding_order_protocol import (
+    SelectedImageWorkerRequest,
+)
+from jacobian.math.number_theory.number_fields._real_embedding_order_process import (
+    run_selected_image_worker,
 )
 from jacobian.math.number_theory.number_fields.values import (
     MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS,
@@ -425,38 +432,12 @@ def _normalize_minimal_polynomial(polynomial: Any) -> Any:
     return -primitive if primitive.LC() < 0 else primitive
 
 
-def isolate_backend_real_value(
+def _isolate_in_process(
     context: RecognizedRealEmbeddingContext,
     value: Any,
     admission: RealEmbeddingDifferenceAdmission,
 ) -> tuple[SimpleNumberFieldRealOrder, RationalIsolatingInterval]:
-    """Return exact sign and isolation evidence for one admitted backend value."""
-
-    if value == context.algebraic_field.zero:
-        zero = _canonical_rational(Fraction(0))
-        return (
-            "EQ",
-            RationalIsolatingInterval(
-                lower=zero,
-                upper=zero,
-                interval_type="SINGLETON",
-            ),
-        )
-
-    descending = list(value.to_list())
-    if len(descending) == 1:
-        rational = Fraction(
-            int(descending[0].numerator), int(descending[0].denominator)
-        )
-        canonical = _canonical_rational(rational)
-        return (
-            "LT" if rational < 0 else "GT",
-            RationalIsolatingInterval(
-                lower=canonical,
-                upper=canonical,
-                interval_type="SINGLETON",
-            ),
-        )
+    """In-process SymPy isolation (no deadline boundary)."""
 
     import sympy
 
@@ -521,6 +502,73 @@ def isolate_backend_real_value(
             interval_type="SINGLETON" if lower_fraction == upper_fraction else "OPEN",
         ),
     )
+
+
+def isolate_backend_real_value(
+    context: RecognizedRealEmbeddingContext,
+    value: Any,
+    admission: RealEmbeddingDifferenceAdmission,
+) -> tuple[SimpleNumberFieldRealOrder, RationalIsolatingInterval]:
+    """Return exact sign and isolation evidence for one admitted backend value.
+
+    When a request deadline is bound, the selected-image SymPy elimination
+    (minpoly, real_roots, intervals) runs in a killable subprocess so that the
+    deadline can terminate the work.  When no deadline is bound, the work
+    runs in-process for direct callers and tests.
+    """
+
+    if value == context.algebraic_field.zero:
+        zero = _canonical_rational(Fraction(0))
+        return (
+            "EQ",
+            RationalIsolatingInterval(
+                lower=zero,
+                upper=zero,
+                interval_type="SINGLETON",
+            ),
+        )
+
+    descending = list(value.to_list())
+    if len(descending) == 1:
+        rational = Fraction(
+            int(descending[0].numerator), int(descending[0].denominator)
+        )
+        canonical = _canonical_rational(rational)
+        return (
+            "LT" if rational < 0 else "GT",
+            RationalIsolatingInterval(
+                lower=canonical,
+                upper=canonical,
+                interval_type="SINGLETON",
+            ),
+        )
+
+    execution = current_request_execution()
+    deadline = execution.deadline if execution is not None else None
+    if deadline is None:
+        return _isolate_in_process(context, value, admission)
+
+    value_coefficients_descending = tuple(
+        f"{int(coefficient.numerator)}/{int(coefficient.denominator)}"
+        for coefficient in descending
+    )
+    coefficient_bound = format_canonical_integer(
+        admission.minimal_polynomial_coefficient_bound
+    )
+    request = SelectedImageWorkerRequest(
+        field=context.record.embedding.presentation,
+        real_root_index=context.record.embedding.root.real_root_index,
+        value_coefficients_descending=value_coefficients_descending,
+        minimal_polynomial_coefficient_bound=coefficient_bound,
+    )
+    from jacobian.math.number_theory.number_fields._real_embedding_order_protocol import (
+        SELECTED_IMAGE_WORKER_RESPONSE_ADAPTER,
+    )
+    raw = run_selected_image_worker(request, deadline=deadline)
+    response = SELECTED_IMAGE_WORKER_RESPONSE_ADAPTER.validate_json(raw, strict=True)
+    if response.kind == "error":
+        raise RuntimeError(response.message)
+    return response.order, response.isolating_interval
 
 
 def compare_real_embedding_elements(

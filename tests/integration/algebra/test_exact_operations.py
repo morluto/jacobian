@@ -300,6 +300,18 @@ def test_field_carrier_preserves_the_prior_discriminant_degree_envelope() -> Non
     assert NumberFieldRequest(field=field).field is field
 
 
+@pytest.mark.parametrize("consumer", (discriminant, ring_of_integers))
+def test_native_integral_basis_consumers_bound_the_widened_field_carrier(
+    consumer,
+) -> None:
+    field = SimpleNumberFieldPresentation(
+        coefficients_descending=("1", *("0",) * 125, "-2")
+    )
+
+    with pytest.raises(ValueError, match="limited to degree 8"):
+        consumer(field)
+
+
 def test_integral_basis_is_computed_in_the_defining_power_basis() -> None:
     field = SimpleNumberFieldPresentation(coefficients_descending=("1", "0", "-5"))
 

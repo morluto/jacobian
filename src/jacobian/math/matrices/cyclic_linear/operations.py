@@ -446,6 +446,8 @@ def _structural_rank_bound(coordinates: ComponentCoordinates) -> int:
 
 def _admit_cyclic_symbol(
     symbol: CyclicRationalBlockSymbol,
+    *,
+    enforce_transport_limit: bool,
 ) -> tuple[_ComponentAdmission, ...]:
     """Materialize bounded quotient data and prove all later exact outputs fit."""
 
@@ -661,7 +663,7 @@ def _admit_cyclic_symbol(
 
     predicted_result_bytes += predicted_global_basis_bytes
     maximum_result_bytes = CanonicalLimits().max_output_bytes
-    if predicted_result_bytes > maximum_result_bytes:
+    if enforce_transport_limit and predicted_result_bytes > maximum_result_bytes:
         raise CyclicRankKernelAdmissionError(
             "result_byte_bound",
             "the retained complete cyclic profile exceeds the "
@@ -981,6 +983,8 @@ def _reconstruct_global_kernel(
 
 def cyclic_rational_rank_kernel_profile(
     symbol: CyclicRationalBlockSymbol,
+    *,
+    enforce_transport_limit: bool = False,
 ) -> CyclicRationalRankKernelProfile:
     """Return every rational cyclotomic component rank and kernel exactly.
 
@@ -992,15 +996,23 @@ def cyclic_rational_rank_kernel_profile(
 
     if current_request_execution() is None:
         with request_execution(time.monotonic()):
-            return _cyclic_rational_rank_kernel_profile_in_request(symbol)
-    return _cyclic_rational_rank_kernel_profile_in_request(symbol)
+            return _cyclic_rational_rank_kernel_profile_in_request(
+                symbol, enforce_transport_limit=enforce_transport_limit
+            )
+    return _cyclic_rational_rank_kernel_profile_in_request(
+        symbol, enforce_transport_limit=enforce_transport_limit
+    )
 
 
 def _cyclic_rational_rank_kernel_profile_in_request(
     symbol: CyclicRationalBlockSymbol,
+    *,
+    enforce_transport_limit: bool,
 ) -> CyclicRationalRankKernelProfile:
     _bind_cyclic_profile_deadline()
-    admission = _admit_cyclic_symbol(symbol)
+    admission = _admit_cyclic_symbol(
+        symbol, enforce_transport_limit=enforce_transport_limit
+    )
     _require_execution_active("after cyclic-profile admission")
     components = tuple(_compute_component(item) for item in admission)
     global_kernel = _reconstruct_global_kernel(symbol, components)

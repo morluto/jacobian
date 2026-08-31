@@ -18,11 +18,11 @@ from jacobian.math.number_theory.algebraic_numbers.real import (
     MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS,
     RationalIsolatingInterval,
 )
-from jacobian.math.number_theory.number_fields._real_embedding_order_protocol import (
-    SelectedImageWorkerRequest,
-)
 from jacobian.math.number_theory.number_fields._real_embedding_order_process import (
     run_selected_image_worker,
+)
+from jacobian.math.number_theory.number_fields._real_embedding_order_protocol import (
+    SelectedImageWorkerRequest,
 )
 from jacobian.math.number_theory.number_fields.values import (
     MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS,
@@ -564,6 +564,7 @@ def isolate_backend_real_value(
     from jacobian.math.number_theory.number_fields._real_embedding_order_protocol import (
         SELECTED_IMAGE_WORKER_RESPONSE_ADAPTER,
     )
+
     raw = run_selected_image_worker(request, deadline=deadline)
     response = SELECTED_IMAGE_WORKER_RESPONSE_ADAPTER.validate_json(raw, strict=True)
     if response.kind == "error":

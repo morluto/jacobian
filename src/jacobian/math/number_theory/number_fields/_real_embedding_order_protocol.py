@@ -44,9 +44,7 @@ class SelectedImageWorkerError(StrictModel):
     message: str
 
 
-SelectedImageWorkerResponse = (
-    SelectedImageWorkerComplete | SelectedImageWorkerError
-)
+SelectedImageWorkerResponse = SelectedImageWorkerComplete | SelectedImageWorkerError
 
 SELECTED_IMAGE_WORKER_RESPONSE_ADAPTER: TypeAdapter[SelectedImageWorkerResponse] = (
     TypeAdapter(SelectedImageWorkerResponse)

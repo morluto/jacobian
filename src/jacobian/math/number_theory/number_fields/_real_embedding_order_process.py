@@ -44,9 +44,7 @@ def run_selected_image_worker(
         )
 
     try:
-        with TemporaryDirectory(
-            prefix="jacobian-selected-image-"
-        ) as worker_directory:
+        with TemporaryDirectory(prefix="jacobian-selected-image-") as worker_directory:
             completed = run_bounded_process(
                 [sys.executable, str(_WORKER)],
                 input_bytes=request.model_dump_json().encode("utf-8"),
@@ -79,9 +77,7 @@ def run_selected_image_worker(
         or completed.stderr_exceeded
         or completed.returncode != 0
     ):
-        raise RuntimeError(
-            "bounded selected-image worker did not establish a result"
-        )
+        raise RuntimeError("bounded selected-image worker did not establish a result")
 
     return completed.stdout
 

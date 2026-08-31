@@ -27,10 +27,7 @@ def compute_selected_image_isolation(
     field = request.field
     alpha = sympy.Symbol("alpha")
     polynomial = sympy.Poly.from_list(
-        [
-            parse_canonical_integer(value)
-            for value in field.coefficients_descending
-        ],
+        [parse_canonical_integer(value) for value in field.coefficients_descending],
         gens=alpha,
         domain=sympy.QQ,
     )
@@ -145,9 +142,7 @@ def compute_selected_image_isolation(
             "lower": f"{lower_fraction.numerator}/{lower_fraction.denominator}",
             "upper": f"{upper_fraction.numerator}/{upper_fraction.denominator}",
             "interval_type": (
-                "SINGLETON"
-                if lower_fraction == upper_fraction
-                else "OPEN"
+                "SINGLETON" if lower_fraction == upper_fraction else "OPEN"
             ),
         },
     )

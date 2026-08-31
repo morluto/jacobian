@@ -275,7 +275,9 @@ def _rank_bounds(
     # A rank-zero obstruction has no base point, but its pairing can retain a
     # denominator from the translated source and needs its own result bound.
     base_point_component_height = (
-        1 if rank == 0 else max(1, minor_height * common_denominator)
+        1
+        if rank == 0 or translation_is_zero
+        else max(1, minor_height * common_denominator)
     )
     obstruction_pairing_height = (
         max(1, common_denominator)
@@ -594,6 +596,13 @@ def build_affine_torus_plan(
         coordinate.as_integer_ratio()[0] == 0
         for coordinate in source.translation.coordinates
     )
+    source_wire_bytes = _source_wire_bytes(source)
+    if source_wire_bytes > _AFFINE_TORUS_WORKER_STDIN_LIMIT:
+        _reject(
+            "worker_input",
+            "the private affine-torus worker request exceeds its "
+            f"{_AFFINE_TORUS_WORKER_STDIN_LIMIT}-byte stdin limit",
+        )
     # Admit against the source's actually attainable rank.  The exact rank of
     # the displacement A - I bounds every unreachable-rank branch that could
     # otherwise fabricate a too-large point-height or transport rejection (for
@@ -640,13 +649,6 @@ def build_affine_torus_plan(
             f"carrier's {MAX_AFFINE_TORUS_POINT_DIGITS}-digit envelope",
         )
 
-    source_wire_bytes = _source_wire_bytes(source)
-    if source_wire_bytes > _AFFINE_TORUS_WORKER_STDIN_LIMIT:
-        _reject(
-            "worker_input",
-            "the private affine-torus worker request exceeds its "
-            f"{_AFFINE_TORUS_WORKER_STDIN_LIMIT}-byte stdin limit",
-        )
     result_bytes = max(
         _result_bytes_for_rank(
             dimension=dimension,

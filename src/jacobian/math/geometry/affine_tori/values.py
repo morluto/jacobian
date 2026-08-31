@@ -592,6 +592,25 @@ class FiniteTorusComponentPresentation(StrictModel):
             raise _validation_error(
                 "presentation_orders", "component generator orders must be positive"
             )
+        if rank > 0:
+            from flint import fmpq_mat
+
+            inverse = fmpq_mat(
+                [
+                    [parse_canonical_integer(value) for value in row]
+                    for row in self.relation_matrix.entries
+                ]
+            ).inv()
+            expected_orders = tuple(
+                lcm(*(int(inverse[row, column].q) for row in range(rank)))
+                for column in range(rank)
+            )
+            if orders != expected_orders:
+                raise _validation_error(
+                    "presentation_orders",
+                    "generator orders must match the corresponding standard "
+                    "generators of the declared relation matrix",
+                )
         if any(value <= 1 for value in factors) or any(
             right % left for left, right in pairwise(factors)
         ):

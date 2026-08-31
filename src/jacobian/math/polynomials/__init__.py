@@ -13,10 +13,6 @@ from jacobian.math.polynomials._elementary_kernel import (
     rational_polynomial_evaluate,
     rational_polynomial_integral,
 )
-from jacobian.math.polynomials.ideals.operations import (
-    ideal_containment,
-    ideal_equality,
-)
 from jacobian.math.polynomials.operations import (
     derivative,
     discriminant,
@@ -38,6 +34,16 @@ from jacobian.math.polynomials.operations import (
     resultant,
     square_free_decomposition,
 )
+
+
+def __getattr__(name: str) -> object:
+    if name not in {"ideal_containment", "ideal_equality"}:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    from jacobian.math.polynomials.ideals import operations
+
+    value = getattr(operations, name)
+    globals()[name] = value
+    return value
 
 __all__ = [
     "derivative",

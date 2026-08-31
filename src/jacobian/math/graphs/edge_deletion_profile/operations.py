@@ -395,7 +395,7 @@ def _chromatic_number(
     return max(component_numbers, default=1)
 
 
-def _min_clique_cover(  # noqa: C901
+def _min_clique_cover(
     vertices: list[str], edges: list[tuple[str, str]]
 ) -> int:
     """Return the minimum number of cliques covering all vertices.

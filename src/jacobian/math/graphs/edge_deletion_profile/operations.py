@@ -92,14 +92,18 @@ def _coloring_work_bound(graph: SimpleUndirectedGraph, deletion_order: int) -> i
     # profile row, then filters edges into per-component lists only for
     # active components (those containing edges).  Isolates never trigger
     # per-component filtering, so charge the one-time scan separately
-    # and multiply only by the active component count.
+    # and multiply only by the active component count.  Edge deletions
+    # can split a source component into as many as deletion_order + 1
+    # components, so the maximum post-deletion active component count
+    # is source_active_components + deletion_order.
     total += len(graph.vertices) + len(graph.edges)
     active_components = [
         c
         for c in components
         if any(left in c and right in c for left, right in graph.edges)
     ]
-    total += len(active_components) * (len(graph.vertices) + len(graph.edges))
+    max_active_after_deletion = len(active_components) + deletion_order
+    total += max_active_after_deletion * (len(graph.vertices) + len(graph.edges))
     for component in components:
         n = len(component)
         edge_count = sum(
@@ -110,11 +114,18 @@ def _coloring_work_bound(graph: SimpleUndirectedGraph, deletion_order: int) -> i
             continue
         complete_edge_count = n * (n - 1) // 2
         complete = edge_count == complete_edge_count
-        if complete and deletion_order <= 2:
+        if complete:
             total += n
             continue
-        if edge_count == complete_edge_count - 1 and deletion_order == 0:
-            total += n - 1
+        source_missing = complete_edge_count - edge_count
+        max_missing = source_missing + deletion_order
+        # Near-complete graph: K_n minus a set F of missing edges.
+        # The chromatic number is n minus the maximum matching size
+        # of F, which is computable in polynomial time without
+        # backtracking.  The kernel uses this formula when the total
+        # missing-edge count (source + deletions) is at most n.
+        if max_missing <= n:
+            total += n * max_missing * max_missing
             continue
         component_graph = SimpleUndirectedGraph(
             vertices=tuple(component),
@@ -131,12 +142,35 @@ def _coloring_work_bound(graph: SimpleUndirectedGraph, deletion_order: int) -> i
     return total
 
 
+# Characters that RFC 8785 escapes as a \uXXXX sequence occupy six
+# bytes in the canonical JSON representation instead of their raw UTF-8
+# length.  This conservative bound overestimates the encoded size of
+# every label so that the preflight also covers intermediate encodings.
+_JSON_ESCAPE_CHARS = frozenset(
+    '\x00\x01\x02\x03\x04\x05\x06\x07\x08\x0b\x0c\x0e\x0f'
+    '\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f'
+    '\x22\x5c'
+)
+
+
+def _json_escaped_size(label: str) -> int:
+    """Return a conservative upper bound on the canonical JSON string size."""
+
+    total = 2  # opening and closing quotes
+    for char in label:
+        if char in _JSON_ESCAPE_CHARS:
+            total += 6
+        else:
+            total += len(char.encode("utf-8"))
+    return total
+
+
 def _preflight_graph_wire_size(graph: SimpleUndirectedGraph) -> None:
     """Reject oversized native labels before materializing canonical JSON."""
 
     limit = CanonicalLimits().max_output_bytes
     try:
-        label_sizes = {vertex: len(vertex.encode("utf-8")) for vertex in graph.vertices}
+        label_sizes = {vertex: _json_escaped_size(vertex) for vertex in graph.vertices}
         estimated = 32 * (len(graph.vertices) + 1)
         for size in label_sizes.values():
             estimated += size
@@ -262,11 +296,9 @@ def compute_edge_deletion_profile(
             _require_execution_active("during profile enumeration")
             deleted = set(edge_indices)
             remaining_edges = [edges[i] for i in range(len(edges)) if i not in deleted]
-            deleted_edge_tuples = tuple(tuple(sorted(edges[i])) for i in edge_indices)
             chromatic = _chromatic_number(
                 vertices,
                 remaining_edges,
-                deleted_edges=deleted_edge_tuples,
             )
             rows.append(
                 DeletionRow(
@@ -285,8 +317,6 @@ def compute_edge_deletion_profile(
 def _chromatic_number(
     vertices: list[str],
     edges: list[tuple[str, str]],
-    *,
-    deleted_edges: tuple[tuple[str, str], ...] | None = None,
 ) -> int:
     """Compute the exact chromatic number by brute-force search."""
     _require_execution_active("during chromatic search")
@@ -322,39 +352,61 @@ def _chromatic_number(
         complete_edge_count = n * (n - 1) // 2
         if len(component_edges) == complete_edge_count:
             component_numbers.append(n)
-        elif len(component_edges) == complete_edge_count - 1:
-            component_numbers.append(n - 1)
-        elif len(component_edges) == complete_edge_count - 2:
-            if deleted_edges is not None:
-                component_missing_edges = [
-                    edge
-                    for edge in deleted_edges
-                    if edge[0] in component and edge[1] in component
-                ]
-            else:
+        elif len(component_edges) < complete_edge_count:
+            missing = complete_edge_count - len(component_edges)
+            # Near-complete graph: K_n minus a set F of missing edges.
+            # The chromatic number is n minus the maximum matching size
+            # of F, because two vertices can share a colour iff the edge
+            # between them is missing, and the maximum savings from
+            # pairing comes from the maximum matching in F.
+            #
+            # Only use the matching formula when the component is
+            # near-complete (missing few edges relative to complete);
+            # otherwise the complement is an arbitrary graph and the
+            # formula does not apply.
+            if missing <= n:
                 component_edge_set = set(component_edges)
                 component_missing_edges = [
-                    edge
+                    tuple(sorted(edge))
                     for edge in combinations(component_vertices, 2)
                     if tuple(sorted(edge)) not in component_edge_set
                 ]
-            missing_endpoints = [
-                endpoint
-                for left, right in component_missing_edges
-                for endpoint in (left, right)
-            ]
-            component_numbers.append(
-                n - 2 if len(set(missing_endpoints)) == 4 else n - 1
-            )
-        elif _is_bipartite_edges(component_vertices, component_edges):
-            component_numbers.append(2)
-        else:
-            for k in range(1, n + 1):
-                _require_execution_active("during chromatic search")
-                if _try_k_color(component_vertices, component_adjacency, k):
-                    component_numbers.append(k)
-                    break
+                max_matching = _max_matching(component_missing_edges)
+                component_numbers.append(n - max_matching)
+            elif _is_bipartite_edges(component_vertices, component_edges):
+                component_numbers.append(2)
+            else:
+                for k in range(1, n + 1):
+                    _require_execution_active("during chromatic search")
+                    if _try_k_color(component_vertices, component_adjacency, k):
+                        component_numbers.append(k)
+                        break
     return max(component_numbers, default=1)
+
+
+def _max_matching(edges: list[tuple[str, str]]) -> int:
+    """Return the size of a maximum matching in a small sparse graph."""
+
+    # For the bounded near-complete regime the missing-edge set is tiny,
+    # so an exhaustive search over subsets is both simple and exact.
+    best = 0
+    n = len(edges)
+    for mask in range(1 << n):
+        used: set[str] = set()
+        count = 0
+        ok = True
+        for i in range(n):
+            if mask & (1 << i):
+                left, right = edges[i]
+                if left in used or right in used:
+                    ok = False
+                    break
+                used.add(left)
+                used.add(right)
+                count += 1
+        if ok and count > best:
+            best = count
+    return best
 
 
 def _is_bipartite_edges(vertices: list[str], edges: list[tuple[str, str]]) -> bool:

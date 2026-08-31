@@ -60,7 +60,11 @@ TOOLS: MathTools = (
         examples=(
             example(
                 "k3_order1",
-                "K3 with deletion order 1.",
+                (
+                    "K3 with deletion order 1: returns the chromatic number "
+                    "of G-F for every edge subset F with |F| <= 1. "
+                    "deletion_order must not exceed the graph's edge count."
+                ),
                 {
                     "graph": {
                         "vertices": ["a", "b", "c"],

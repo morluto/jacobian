@@ -382,16 +382,22 @@ def test_noncompletion_revision_accepts_only_generated_forms(revision: str) -> N
             repository_revision=revision,
         )
 
-    assert PlaneComponentProfileNoncompletion(
-        status="BACKEND_UNAVAILABLE",
-        reason="SUPPORTED_QEPCAD_NOT_INSTALLED",
-        repository_revision="unknown",
-    ).repository_revision == "unknown"
-    assert PlaneComponentProfileNoncompletion(
-        status="BACKEND_UNAVAILABLE",
-        reason="SUPPORTED_QEPCAD_NOT_INSTALLED",
-        repository_revision="a" * 40,
-    ).repository_revision == "a" * 40
+    assert (
+        PlaneComponentProfileNoncompletion(
+            status="BACKEND_UNAVAILABLE",
+            reason="SUPPORTED_QEPCAD_NOT_INSTALLED",
+            repository_revision="unknown",
+        ).repository_revision
+        == "unknown"
+    )
+    assert (
+        PlaneComponentProfileNoncompletion(
+            status="BACKEND_UNAVAILABLE",
+            reason="SUPPORTED_QEPCAD_NOT_INSTALLED",
+            repository_revision="a" * 40,
+        ).repository_revision
+        == "a" * 40
+    )
 
 
 def test_computed_components_require_unique_canonical_representative_order() -> None:

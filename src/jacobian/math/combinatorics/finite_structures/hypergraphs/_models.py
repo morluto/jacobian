@@ -751,6 +751,15 @@ class EdgeIntersectionGraphResult(StrictModel):
     hypergraph: FiniteHypergraph
     graph: SimpleUndirectedGraph
 
+    @model_validator(mode="after")
+    def bind_graph_vertices_to_source_edges(self) -> Self:
+        expected_vertices = tuple(edge_id for edge_id, _ in self.hypergraph.edges)
+        if self.graph.vertices != expected_vertices:
+            raise _validation_error(
+                "graph vertices must be the hypergraph edge IDs in declared order",
+            )
+        return self
+
 
 class ParametersRequest(StrictModel):
     """Request the basic parameters of a finite hypergraph."""

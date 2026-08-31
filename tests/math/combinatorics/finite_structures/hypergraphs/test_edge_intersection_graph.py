@@ -83,6 +83,16 @@ class TestEdgeIntersectionGraph:
         restored = EdgeIntersectionGraphResult.model_validate_json(r.model_dump_json())
         assert restored == r
 
+    def test_deserialization_binds_graph_axis_to_source_edges(self) -> None:
+        source = FiniteHypergraph.model_validate(FIXTURE)
+        graph = SimpleUndirectedGraph(
+            vertices=("E1", "E0", "E2"),
+            edges=(),
+        )
+
+        with pytest.raises(ValueError, match="graph vertices"):
+            EdgeIntersectionGraphResult(hypergraph=source, graph=graph)
+
 
 class TestEdgeIntersectionGraphBoundary:
     def test_no_edges_empty_graph(self) -> None:

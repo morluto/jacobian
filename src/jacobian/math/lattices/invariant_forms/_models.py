@@ -288,6 +288,15 @@ class RationalActionGenerator(StrictModel):
     label: OpaqueLabel
     matrix: RationalMatrix
 
+    @model_validator(mode="after")
+    def require_canonical_label(self) -> Self:
+        if unicodedata.normalize("NFC", self.label) != self.label:
+            raise _validation_error(
+                "noncanonical_generator_label",
+                "generator labels must use NFC Unicode normalization",
+            )
+        return self
+
 
 class RationalMatrixAction(StrictModel):
     """A finite labelled family of rational square endomorphisms.
@@ -320,12 +329,42 @@ class RationalMatrixAction(StrictModel):
                         "invalid_coordinate_label",
                         "coordinate_axis labels must be strings",
                     )
+                if unicodedata.normalize("NFC", label) != label:
+                    raise _validation_error(
+                        "noncanonical_coordinate_label",
+                        "coordinate_axis labels must use NFC Unicode normalization",
+                    )
             data = dict(data)
             data["coordinate_axis"] = canonicalize_json_containers(axis)
+        if isinstance(data, dict):
+            generators = data.get("generators")
+            if isinstance(generators, (list, tuple)):
+                for generator in generators:
+                    label = (
+                        generator.get("label")
+                        if isinstance(generator, dict)
+                        else getattr(generator, "label", None)
+                    )
+                    if (
+                        isinstance(label, str)
+                        and unicodedata.normalize("NFC", label) != label
+                    ):
+                        raise _validation_error(
+                            "noncanonical_generator_label",
+                            "generator labels must use NFC Unicode normalization",
+                        )
         return _require_raw_action_envelope(data)
 
     @model_validator(mode="after")
     def require_common_axis(self) -> Self:
+        if any(
+            unicodedata.normalize("NFC", label) != label
+            for label in self.coordinate_axis
+        ):
+            raise _validation_error(
+                "noncanonical_coordinate_label",
+                "coordinate_axis labels must use NFC Unicode normalization",
+            )
         if len(set(self.coordinate_axis)) != len(self.coordinate_axis):
             raise _validation_error(
                 "duplicate_coordinate_label",
@@ -449,6 +488,11 @@ class IntegralBilinearForm(StrictModel):
                         "invalid_coordinate_label",
                         "coordinate_axis labels must be strings",
                     )
+                if unicodedata.normalize("NFC", label) != label:
+                    raise _validation_error(
+                        "noncanonical_coordinate_label",
+                        "form coordinate_axis labels must use NFC Unicode normalization",
+                    )
         normalized = dict(data)
         if isinstance(axis, list):
             normalized["coordinate_axis"] = tuple(axis)
@@ -462,6 +506,14 @@ class IntegralBilinearForm(StrictModel):
     @model_validator(mode="after")
     def require_form_shape(self) -> Self:
         dimension = len(self.coordinate_axis)
+        if any(
+            unicodedata.normalize("NFC", label) != label
+            for label in self.coordinate_axis
+        ):
+            raise _validation_error(
+                "noncanonical_coordinate_label",
+                "form coordinate_axis labels must use NFC Unicode normalization",
+            )
         if len(set(self.coordinate_axis)) != dimension:
             raise _validation_error(
                 "duplicate_coordinate_label",

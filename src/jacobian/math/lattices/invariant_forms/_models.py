@@ -76,9 +76,20 @@ def _canonicalize_generator_order(data: dict[str, object]) -> dict[str, object]:
     if isinstance(normalized_generators, (str, bytes, Mapping)):
         return normalized
     try:
-        generator_values = tuple(normalized_generators)
+        generator_iterator = iter(normalized_generators)
     except TypeError:
         return normalized
+    generator_values: list[object] = []
+    for _index in range(MAX_ACTION_GENERATORS + 1):
+        try:
+            generator_values.append(next(generator_iterator))
+        except StopIteration:
+            break
+    else:
+        raise _validation_error(
+            "budget_exceeded",
+            f"an action has at most {MAX_ACTION_GENERATORS} generators",
+        )
     labelled_generators: list[tuple[str, object]] = []
     for generator in generator_values:
         label = (

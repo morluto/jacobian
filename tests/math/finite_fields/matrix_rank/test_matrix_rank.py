@@ -145,7 +145,6 @@ def test_full_rank_row_swap_canonicalizes_pivot_sets_independently() -> None:
     assert result.pivot_columns == ("c0", "c1")
 
 
- 
 def test_native_matrix_rank_does_not_apply_transport_output_limit() -> None:
     fp = _f2()
     long_label = "r" * (CanonicalLimits().max_output_bytes + 1)
@@ -157,7 +156,6 @@ def test_native_matrix_rank_does_not_apply_transport_output_limit() -> None:
     assert result.pivot_rows == (long_label,)
 
 
- 
 def test_pivot_columns_follow_source_axis_order() -> None:
     fp = _f2()
     m = _matrix(fp, [[[1], [0]], [[0], [1]]], ["r0", "r1"], ["c0", "c1"])

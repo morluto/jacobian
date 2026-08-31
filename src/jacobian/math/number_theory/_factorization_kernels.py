@@ -368,7 +368,7 @@ def _divisors_from_factors(
     return ordered[:-1] if proper else ordered
 
 
-def _bounded_least_prime_factor(
+def _bounded_least_prime_factor(  # noqa: C901
     value: int,
     *,
     timeout_seconds: float = _FACTORIZATION_WORKER_TIMEOUT_SECONDS,

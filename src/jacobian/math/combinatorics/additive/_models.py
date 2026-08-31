@@ -18,7 +18,6 @@ from jacobian.canonical import (
     parse_canonical_integer,
     strict_json_object_size,
 )
-from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive._multiset_sum import (
     MAX_ARITY,
     MAX_ARITY_DIGITS,
@@ -38,7 +37,6 @@ from jacobian.math.combinatorics.additive.values import (
     indexed_sequence_item_ceiling,
 )
 from jacobian.math.combinatorics.finite_structures.sets._models import (
-    _MAX_FINITE_SET_WIRE_BYTES,
     FiniteIntegerSet,
 )
 
@@ -282,6 +280,14 @@ def _require_bounded_cartesian_product(
     left: FiniteIntegerSet,
     right: FiniteIntegerSet,
 ) -> None:
+    source_digits = sum(
+        len(element.lstrip("-")) for element in (*left.elements, *right.elements)
+    )
+    if source_digits > CanonicalLimits().max_input_bytes:
+        raise _validation_error(
+            "_require_bounded_cartesian_product",
+            "finite-set operands exceed the admitted aggregate integer parsing budget",
+        )
     pair_count = len(left.elements) * len(right.elements)
     if pair_count > _MAX_CARTESIAN_PAIR_COUNT:
         raise _validation_error(
@@ -291,49 +297,24 @@ def _require_bounded_cartesian_product(
         )
 
 
-def _require_sumset_result_transport_bound(
-    left: FiniteIntegerSet,
-    right: FiniteIntegerSet,
-) -> tuple[frozenset[int], frozenset[int]]:
-    """Admit the canonical support envelope before sumset enumeration.
-
-    A sumset has at most one support value per Cartesian pair.  Charging the
-    maximum possible decimal width of each pair's sum is conservative, but it
-    prevents a large-label request from doing the pairwise work only to fail
-    when the shared ``FiniteIntegerSet`` carrier validates its 5 MiB envelope.
-    """
-
-    pair_count = len(left.elements) * len(right.elements)
-    if pair_count == 0:
-        return frozenset(), frozenset()
-    left_values = frozenset(parse_canonical_integer(value) for value in left.elements)
-    right_values = frozenset(parse_canonical_integer(value) for value in right.elements)
-    # Every sum lies in the interval between the two endpoint sums.  This is a
-    # collision-sensitive support bound, while the endpoint combinations give
-    # the exact widest magnitude that any represented sum can have.
-    interval_bound = (
-        max(left_values) - min(left_values) + max(right_values) - min(right_values) + 1
+def _require_sumset_result_transport_bound(support: Iterable[int]) -> None:
+    """Reject sumsets whose complete result cannot fit canonical transport."""
+    values = tuple(format_canonical_integer(value) for value in support)
+    elements_size = (
+        2 + max(len(values) - 1, 0) + sum(len(value) + 2 for value in values)
     )
-    support_bound = min(pair_count, interval_bound)
-    endpoint_sums = tuple(
-        left_endpoint + right_endpoint
-        for left_endpoint in (min(left_values), max(left_values))
-        for right_endpoint in (min(right_values), max(right_values))
+    support_size = strict_json_object_size((("elements", elements_size),))
+    result_size = strict_json_object_size(
+        (("cardinality", len(str(len(values)))), ("support", support_size))
     )
-    max_sum_width = max(len(format_canonical_integer(value)) for value in endpoint_sums)
-    predicted = 64 + support_bound * (max_sum_width + 3)
-    if predicted > _MAX_FINITE_SET_WIRE_BYTES:
-        raise OperationDomainValidationError(
-            location=("left", "right"),
-            code="additive_combinatorics.sumset_result_transport_exceeded",
-            message=(
-                "sumset support may exceed the canonical finite-integer-set "
-                f"transport envelope ({predicted:,} > "
-                f"{_MAX_FINITE_SET_WIRE_BYTES:,} bytes); reduce operand "
-                "cardinality or integer width"
-            ),
+    limit = CanonicalLimits().max_output_bytes
+    if result_size > limit:
+        raise _validation_error(
+            "sumset_result_transport_exceeded",
+            "sumset result requires "
+            f"{result_size:,} canonical JSON bytes, exceeding the "
+            f"{limit:,}-byte output limit",
         )
-    return left_values, right_values
 
 
 def _decimal_digit_sum_through(value: int) -> int:
@@ -762,15 +743,15 @@ class SumsetCardinalityRequest(StrictModel):
 
 
 class SumsetCardinalityResult(StrictModel):
-    """Cardinality of the sumset and its canonical support set."""
+    """Cardinality of the sumset and its canonical finite-set support."""
 
     cardinality: int = Field(ge=0)
     support: FiniteIntegerSet
 
     @model_validator(mode="after")
     def require_canonical_support(self) -> Self:
-        elements = list(self.support.elements)
-        if tuple(elements) != _sorted_canonical_integers(elements):
+        sums = list(self.support.elements)
+        if tuple(sums) != _sorted_canonical_integers(sums):
             raise _validation_error(
                 "require_canonical_support", "sumset support must be sorted and unique"
             )
@@ -781,11 +762,8 @@ class SumsetCardinalityResult(StrictModel):
         return self
 
     @classmethod
-    def _from_kernel(cls, support: tuple[CanonicalInteger, ...]) -> Self:
-        return cls.model_construct(
-            cardinality=len(support),
-            support=FiniteIntegerSet(elements=support),
-        )
+    def _from_kernel(cls, support: FiniteIntegerSet) -> Self:
+        return cls.model_construct(cardinality=len(support.elements), support=support)
 
 
 # ---------------------------------------------------------------------------

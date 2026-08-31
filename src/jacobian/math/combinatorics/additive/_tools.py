@@ -255,7 +255,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     additive_combinatorics_operation(
         "additive.sumset_cardinality.compute",
         "Compute sumset cardinality",
-        "Return the exact cardinality and sorted support of the sumset A+B.",
+        "Return the exact cardinality and canonical finite-integer-set support "
+        "of the sumset A+B.",
         SumsetCardinalityRequest,
         SumsetCardinalityResult,
         _run_sumset_cardinality,

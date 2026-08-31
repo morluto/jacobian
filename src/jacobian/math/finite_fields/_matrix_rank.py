@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from functools import partial
 from time import monotonic
+from typing import Any
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
@@ -19,6 +20,12 @@ from jacobian.canonical import (
 )
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.math.finite_fields._flint import (
+    context as _backend_context,
+)
+from jacobian.math.finite_fields._flint import (
+    to_backend as _to_backend,
+)
 from jacobian.math.finite_fields._matrix_rank_kernels import (
     compute_matrix_rank as _compute_matrix_rank_kernel,
 )
@@ -51,6 +58,42 @@ def _require_deadline(deadline: float, stage: str) -> None:
         raise OperationExecutionTimeoutError(
             f"finite-field rank deadline expired {stage}"
         )
+
+
+def _largest_independent_indices(
+    vectors: list[tuple[Any, ...]],
+    *,
+    presentation: Any,
+    ordered_indices: list[int],
+) -> list[int]:
+    """Select a maximum-weight independent subset of finite-field vectors."""
+
+    active_context = _backend_context(presentation)
+    zero = active_context.zero()
+    basis: list[tuple[int, list[Any]]] = []
+    selected: list[int] = []
+    for index in ordered_indices:
+        candidate = [
+            _to_backend(value, active_context=active_context)
+            for value in vectors[index]
+        ]
+        for pivot, row in basis:
+            factor = candidate[pivot]
+            if factor != zero:
+                for column in range(pivot, len(candidate)):
+                    candidate[column] -= factor * row[column]
+        pivot = next(
+            (column for column, value in enumerate(candidate) if value != zero),
+            None,
+        )
+        if pivot is None:
+            continue
+        pivot_value = candidate[pivot]
+        for column in range(pivot, len(candidate)):
+            candidate[column] /= pivot_value
+        basis.append((pivot, candidate))
+        selected.append(index)
+    return selected
 
 
 _FIELD: dict[str, object] = {
@@ -89,41 +132,46 @@ def compute_matrix_rank(
         # Reserve the complete result envelope before the backend call so
         # that we do not waste CPU on a result known to be undeliverable.
         # The worst case is full rank with all pivot labels present.
-        nonzero_rows: list[int] = []
-        seen_rows: list[tuple[object, ...]] = []
-        for index, row in enumerate(matrix.entries):
-            if any(not entry.is_zero for entry in row) and not any(
-                row == seen for seen in seen_rows
-            ):
-                nonzero_rows.append(index)
-                seen_rows.append(row)
-        nonzero_columns: list[int] = []
-        seen_columns: list[tuple[object, ...]] = []
-        for index in range(len(matrix.column_axis.labels)):
-            column = tuple(
-                matrix.entries[row][index] for row in range(len(matrix.entries))
-            )
-            if any(not entry.is_zero for entry in column) and not any(
-                column == seen for seen in seen_columns
-            ):
-                nonzero_columns.append(index)
-                seen_columns.append(column)
-        max_rank = min(len(nonzero_rows), len(nonzero_columns))
+        row_vectors = [tuple(row) for row in matrix.entries]
+        column_vectors = [
+            tuple(matrix.entries[row][index] for row in range(len(matrix.entries)))
+            for index in range(len(matrix.column_axis.labels))
+        ]
+        row_order = sorted(
+            range(len(row_vectors)),
+            key=lambda index: (
+                len(encode_strict_json(matrix.row_axis.labels[index])),
+                matrix.row_axis.labels[index],
+            ),
+            reverse=True,
+        )
+        column_order = sorted(
+            range(len(column_vectors)),
+            key=lambda index: (
+                len(encode_strict_json(matrix.column_axis.labels[index])),
+                matrix.column_axis.labels[index],
+            ),
+            reverse=True,
+        )
+        possible_rows = _largest_independent_indices(
+            row_vectors,
+            presentation=matrix.presentation,
+            ordered_indices=row_order,
+        )
+        possible_columns = _largest_independent_indices(
+            column_vectors,
+            presentation=matrix.presentation,
+            ordered_indices=column_order,
+        )
+        max_rank = min(len(possible_rows), len(possible_columns))
         try:
-            pivot_row_labels = list(
-                sorted(
-                    (matrix.row_axis.labels[index] for index in nonzero_rows),
-                    key=lambda label: (len(encode_strict_json(label)), label),
-                    reverse=True,
-                )[:max_rank]
-            )
-            pivot_column_labels = list(
-                sorted(
-                    (matrix.column_axis.labels[index] for index in nonzero_columns),
-                    key=lambda label: (len(encode_strict_json(label)), label),
-                    reverse=True,
-                )[:max_rank]
-            )
+            pivot_row_labels = [
+                matrix.row_axis.labels[index] for index in possible_rows[:max_rank]
+            ]
+            pivot_column_labels = [
+                matrix.column_axis.labels[index]
+                for index in possible_columns[:max_rank]
+            ]
             result_probe = encode_strict_json(
                 {
                     "matrix": matrix.model_dump(mode="json"),

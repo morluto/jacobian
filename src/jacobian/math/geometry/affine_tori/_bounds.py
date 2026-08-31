@@ -269,7 +269,7 @@ def _selected_zero_lift_base_point_height(
     nonzero lift.
     """
 
-    if rank == 0:
+    if rank == 0 or all(value == 0 for value in translation):
         return 1
     rows, columns = _first_rank_minor(displacement, rank)
     augmented = [

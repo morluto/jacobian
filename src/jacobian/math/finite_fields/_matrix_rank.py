@@ -116,7 +116,7 @@ def compute_matrix_rank(
                 code="finite_field.matrix_rank.result_bound",
                 message="matrix-rank result exceeds the canonical output bound",
             ) from exc
-        if len(result_probe) + 1_024 > CanonicalLimits().max_output_bytes:
+        if len(result_probe) > CanonicalLimits().max_output_bytes:
             raise OperationDomainValidationError(
                 location=("matrix",),
                 code="finite_field.matrix_rank.result_bound",

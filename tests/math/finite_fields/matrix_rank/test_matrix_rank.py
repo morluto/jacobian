@@ -5,8 +5,9 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import CanonicalLimits
-from jacobian.math.finite_fields._matrix_rank import compute_rank
+from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.math.finite_fields import _matrix_rank as matrix_rank_module
+from jacobian.math.finite_fields._matrix_rank import compute_matrix_rank, compute_rank
 from jacobian.math.finite_fields._matrix_rank_models import MatrixRankRequest
 from jacobian.math.finite_fields.operations import matrix_rank
 from jacobian.math.finite_fields.values import (
@@ -154,6 +155,31 @@ def test_native_matrix_rank_does_not_apply_transport_output_limit() -> None:
 
     assert result.rank == 1
     assert result.pivot_rows == (long_label,)
+
+
+def test_transport_admission_accepts_a_probe_at_the_exact_output_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fp = _f2()
+    m = _matrix(fp, [[[1]]], ["r0"], ["c0"])
+    probe = encode_strict_json(
+        {
+            "matrix": m.model_dump(mode="json"),
+            "rank": 1,
+            "pivot_rows": ["r0"],
+            "pivot_columns": ["c0"],
+        }
+    )
+
+    class _ExactOutputLimit:
+        max_output_bytes = len(probe)
+
+    monkeypatch.setattr(matrix_rank_module, "CanonicalLimits", _ExactOutputLimit)
+
+    result = compute_matrix_rank(m, enforce_transport_limit=True)
+
+    assert result.rank == 1
+    assert len(encode_strict_json(result.model_dump(mode="json"))) == len(probe)
 
 
 def test_pivot_columns_follow_source_axis_order() -> None:

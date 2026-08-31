@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from fractions import Fraction
 import time
+from fractions import Fraction
 from typing import Literal, cast
 
 import pytest
@@ -13,9 +13,9 @@ from jacobian._execution import current_request_execution, request_execution
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.ideals import operations
 from jacobian.math.polynomials.ideals._models import (
+    IdealComputationBudget,
     IdealContainmentLedger,
     IdealContainmentRequest,
-    IdealComputationBudget,
     IdealEqualityRequest,
 )
 from jacobian.math.polynomials.ideals._tools import TOOLS

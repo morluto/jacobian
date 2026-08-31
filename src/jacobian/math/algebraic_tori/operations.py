@@ -81,11 +81,43 @@ def _lll_free_basis(smith_free_map: Matrix) -> tuple[Matrix, Matrix]:
     return reduced_map, smith_parameters_from_reduced
 
 
+def _admit_monomial_system(system: HomogeneousMonomialSystem) -> None:
+    """Re-enforce the public execution envelope for native callers.
+
+    A native caller can bypass model validators via ``model_construct`` or
+    an unvalidated ``model_copy``, so the owner must re-check the dimension
+    and exponent bounds before invoking the certified-SNF backend.
+    """
+
+    from jacobian.math.matrices.certified_snf.values import (
+        MAX_CERTIFIED_SNF_INPUT_DIMENSION,
+        MAX_CERTIFIED_SNF_INPUT_DIGITS,
+    )
+    matrix = system.exponent_matrix
+    if (
+        matrix.row_count > MAX_CERTIFIED_SNF_INPUT_DIMENSION
+        or matrix.column_count > MAX_CERTIFIED_SNF_INPUT_DIMENSION
+    ):
+        raise ValueError(
+            "monomial systems exponent matrix exceeds the certified-SNF "
+            f"dimension bound of {MAX_CERTIFIED_SNF_INPUT_DIMENSION}"
+        )
+    if any(
+        len(value.lstrip("-")) > MAX_CERTIFIED_SNF_INPUT_DIGITS
+        for row in matrix.entries
+        for value in row
+    ):
+        raise ValueError(
+            "monomial system exponents exceed the certified-SNF digit bound"
+        )
+
+
 def homogeneous_monomial_solution_subgroup(
     system: HomogeneousMonomialSystem,
 ) -> AlgebraicTorusSolutionSubgroup:
     """Return the exact torsion-by-free-torus subgroup solving ``x^A = 1``."""
 
+    _admit_monomial_system(system)
     source = [
         [parse_canonical_integer(value) for value in row]
         for row in system.exponent_matrix.entries

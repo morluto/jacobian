@@ -48,7 +48,7 @@ def main() -> int:
         # intervals() again for each factor.
         source_factors = []
         source_factor_root_counts = []
-        for source_index, source_plan in enumerate(plan.sources):
+        for _source_index, source_plan in enumerate(plan.sources):
             factors = [
                 [
                     list(factor_plan.canonical_coefficients),
@@ -56,17 +56,14 @@ def main() -> int:
                 ]
                 for factor_plan in source_plan.factors
             ]
-            # Count distinct root rows per factor from the computed profile.
-            profile = root_profiles[source_index]
-            factor_key_to_index = {
-                tuple(int(c) for c in factor_plan.canonical_coefficients): idx
-                for idx, factor_plan in enumerate(source_plan.factors)
-            }
-            root_counts = [0] * len(factors)
-            for root in profile.roots:
-                poly_key = tuple(int(c) for c in root.value.polynomial)
-                if poly_key in factor_key_to_index:
-                    root_counts[factor_key_to_index[poly_key]] += 1
+            # Authenticate the root-count projection from the source-bound
+            # irreducible factors inside the killable worker.  The parent only
+            # checks that the projected rows agree with these counts; it does
+            # not replay root isolation after the worker returns.
+            root_counts = [
+                len(factor_plan.polynomial.intervals())
+                for factor_plan in source_plan.factors
+            ]
             source_factors.append(factors)
             source_factor_root_counts.append(root_counts)
     except OperationDomainValidationError as exc:

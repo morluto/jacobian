@@ -33,10 +33,8 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.algebraic_numbers.real import (
     MAX_REAL_ALGEBRAIC_DEGREE,
     RealAlgebraicValue,
-    compare_real_algebraic,
 )
 from jacobian.math.polynomials.real_algebra._common_interlacing import (
-    _common_interlacing_outcome,
     _factor_digit_bound,
     _preflight_common_interlacing_sources,
 )
@@ -339,17 +337,9 @@ def _root_profile_from_worker(  # noqa: C901
         if factor_root_indices.get(fk, set()) != set(range(expected)):
             raise ValueError("worker root indices do not match projected real roots")
 
-    profile = SourceRootProfile.model_validate(
+    return SourceRootProfile.model_validate(
         {"source_index": source_index, "roots": tuple(roots)}
     )
-    for left, right in zip(profile.roots, profile.roots[1:], strict=False):
-        if left.value.polynomial == right.value.polynomial:
-            ordered = left.value.real_root_index < right.value.real_root_index
-        else:
-            ordered = compare_real_algebraic(left.value, right.value).order == "LT"
-        if not ordered:
-            raise ValueError("worker roots are not in increasing order")
-    return profile
 
 
 def _profile_from_worker(
@@ -378,7 +368,7 @@ def _profile_from_worker(
         raise ValueError("worker factor root counts are missing or malformed")
     if len(raw_profiles) != len(family):
         raise ValueError("worker root profiles are missing or malformed")
-    degree = _require_family_shape(family)
+    _require_family_shape(family)
 
     root_profiles: list[SourceRootProfile] = []
     for value in raw_profiles:
@@ -401,9 +391,6 @@ def _profile_from_worker(
         candidate.require_structural_profile()
     except (PydanticCustomError, ValidationError) as exc:
         raise ValueError("worker returned an inconsistent root profile") from exc
-    expected_outcome = _common_interlacing_outcome(root_profiles_tuple, degree)
-    if outcome != expected_outcome:
-        raise ValueError("worker outcome disagrees with the retained roots")
     return CommonInterlacingProfile._from_kernel(
         family=family,
         root_profiles=root_profiles_tuple,

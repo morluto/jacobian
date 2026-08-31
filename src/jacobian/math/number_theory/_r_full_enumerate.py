@@ -126,8 +126,7 @@ R_FULL_ENUMERATE_OPERATION = number_theory_operation(
     "Enumerate bounded r-full integers",
     "Given a minimum exponent r and a positive upper bound, return every r-full "
     "integer in [1, cutoff] exactly once in increasing order. An integer is r-full "
-    "when every prime factor occurs to exponent at least r. Uses multiplicative "
-    "generation from prime powers to avoid scanning every integer.",
+    "when every prime factor occurs to exponent at least r.",
     RFullEnumerateRequest,
     RFullEnumerateResult,
     enumerate_r_full_numbers,

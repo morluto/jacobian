@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from enum import StrEnum
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictInt, WithJsonSchema, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
@@ -20,6 +20,7 @@ from jacobian.canonical import (
 from jacobian.math.analysis.intervals import ClosedRationalInterval, RationalBox
 from jacobian.math.number_theory.algebraic_numbers.real import (
     MAX_REAL_ALGEBRAIC_DEGREE,
+    RealAlgebraicValue,
     _UnrecognizedRealAlgebraicValue,
 )
 from jacobian.math.polynomials.values import (
@@ -47,6 +48,26 @@ MAX_PLANE_COMPONENT_SAMPLE_COEFFICIENT_DIGITS = (
 )
 # Conservative owner headroom below the canonical structured-value boundary.
 MAX_PLANE_COMPONENT_RESULT_BYTES = CanonicalLimits().max_output_bytes - 4_096
+
+
+def _plane_coordinate_schema() -> dict[str, object]:
+    schema = RealAlgebraicValue.model_json_schema()
+    schema = dict(schema)
+    polynomial = schema.get("properties", {}).get("polynomial")
+    if isinstance(polynomial, dict):
+        polynomial = dict(polynomial)
+        polynomial["maxItems"] = MAX_PLANE_COMPONENT_POINT_TERMS
+        schema["properties"] = {
+            **schema.get("properties", {}),
+            "polynomial": polynomial,
+        }
+    return schema
+
+
+_PlaneCoordinate = Annotated[
+    _UnrecognizedRealAlgebraicValue,
+    WithJsonSchema(_plane_coordinate_schema()),
+]
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -167,8 +188,8 @@ class IsolatedRealPlanePoint(StrictModel):
 
     axis: tuple[PolynomialVariable, PolynomialVariable]
     coordinates: tuple[
-        _UnrecognizedRealAlgebraicValue,
-        _UnrecognizedRealAlgebraicValue,
+        _PlaneCoordinate,
+        _PlaneCoordinate,
     ] = Field(
         description=(
             "Canonical real-algebraic values for the first and second coordinates."

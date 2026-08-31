@@ -191,6 +191,12 @@ class RealNumberFieldEmbedding(StrictModel):
 
     @model_validator(mode="after")
     def bind_root_to_presentation(self) -> Self:
+        if self.presentation.degree > MAX_NUMBER_FIELD_EMBEDDING_DEGREE:
+            raise _validation_error(
+                "embedding_degree_bound",
+                "real number-field embeddings are limited to degree "
+                f"{MAX_NUMBER_FIELD_EMBEDDING_DEGREE}",
+            )
         if self.root.polynomial != self.presentation.coefficients_descending:
             raise _validation_error(
                 "embedding_polynomial",

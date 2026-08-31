@@ -212,6 +212,7 @@ def _rank_bounds(
     rank: int,
     displacement_height: int,
     common_denominator: int,
+    translation_is_zero: bool,
 ) -> AffineTorusRankBounds:
     nullity = dimension - rank
     minor_height = _rank_minor_height(rank, displacement_height)
@@ -274,7 +275,9 @@ def _rank_bounds(
     # empty locus.  Charging the translation lcm to that branch would fabricate
     # a denominator the result never carries, so leave it out for rank zero.
     base_point_component_height = (
-        1 if rank == 0 else max(1, minor_height * common_denominator)
+        1
+        if rank == 0 or translation_is_zero
+        else max(1, minor_height * common_denominator)
     )
     return AffineTorusRankBounds(
         rank=rank,
@@ -579,6 +582,10 @@ def build_affine_torus_plan(
             for coordinate in source.translation.coordinates
         )
     )
+    translation_is_zero = all(
+        coordinate.as_integer_ratio()[0] == 0
+        for coordinate in source.translation.coordinates
+    )
     # Admit against the source's actually attainable rank.  The exact rank of
     # the displacement A - I bounds every unreachable-rank branch that could
     # otherwise fabricate a too-large point-height or transport rejection (for
@@ -600,6 +607,7 @@ def build_affine_torus_plan(
             rank=attained_rank,
             displacement_height=displacement_height,
             common_denominator=common_denominator,
+            translation_is_zero=translation_is_zero,
         ),
     )
     if any(

@@ -11,3 +11,4 @@ and finite abelian-group decompositions are separate catalog entries.
 - [Powerful-number decision](integer-powerful-number-decision.md)
 - [Integer prime factorization](integer-prime-factorization-verification.md)
 - [Simple number-field embeddings](number-field-embeddings.md)
+- [Real-embedded binary power-sum gap profiles](binary-power-sum-gap-profile.md)

@@ -47,6 +47,25 @@ def test_exact_matrix_operations() -> None:
     assert pivots == (0,)
 
 
+def test_native_rank_accepts_dimension_retaining_sparse_values() -> None:
+    source = matrices.SparseRationalMatrix.model_validate(
+        {
+            "row_count": 1,
+            "column_count": 128,
+            "entries": [
+                {
+                    "row": 0,
+                    "column": 127,
+                    "value": {"num": "1", "den": "1"},
+                }
+            ],
+        }
+    )
+
+    assert matrices.rank(source) == (1, (127,))
+    assert matrices.SparseRationalMatrixEntry is type(source.entries[0])
+
+
 def test_characteristic_polynomial_preserves_exact_algebraic_inputs() -> None:
     source = sympy.Matrix([[sympy.sqrt(2), 0], [0, 1]])
 
@@ -234,6 +253,8 @@ def test_exact_public_api_symbols() -> None:
     """Exact owner-local contract for the matrices public API."""
     expected = (
         "SmithNormalForm",
+        "SparseRationalMatrix",
+        "SparseRationalMatrixEntry",
         "adjugate",
         "characteristic_polynomial",
         "determinant",

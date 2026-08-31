@@ -25,14 +25,6 @@ from jacobian.math.polynomials.maps._generic_degree import (
     GenericFiberReplayLimitError,
     enumerate_standard_monomials,
 )
-_generic_fiber_deadline: float | None = None
-
-
-def _check_generic_fiber_deadline() -> None:
-    if _generic_fiber_deadline is not None and time.monotonic() > _generic_fiber_deadline:
-        raise TimeoutError("Singular coefficient reduction exceeded the wall-time limit")
-
-
 from jacobian.math.polynomials.maps._models import (
     MAX_GENERIC_FIBER_BASIS_POLYNOMIALS,
     MAX_GENERIC_FIBER_CERTIFICATE_SOURCE_EXPONENT,
@@ -52,6 +44,19 @@ from jacobian.math.polynomials.values import (
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
+
+_generic_fiber_deadline: float | None = None
+
+
+def _check_generic_fiber_deadline() -> None:
+    if (
+        _generic_fiber_deadline is not None
+        and time.monotonic() > _generic_fiber_deadline
+    ):
+        raise TimeoutError(
+            "Singular coefficient reduction exceeded the wall-time limit"
+        )
+
 
 _GENERIC_FIBER_PROTOCOL_HEADER = "JACOBIAN_SINGULAR_GENERIC_FIBER_V1"
 _PARAMETER_FACTOR = re.compile(r"^jtp([1-9][0-9]*)(?:\^([1-9][0-9]*))?$")

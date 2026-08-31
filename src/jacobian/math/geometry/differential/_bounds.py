@@ -795,7 +795,7 @@ def _result_bytes_upper_bound(
         and any(component.raw_result.denominator.degrees)
     )
     distinct_guards = len(inherited_guards) + len(result_guard_polynomials)
-    for i, result_guard in enumerate(result_guard_polynomials):
+    for _i, result_guard in enumerate(result_guard_polynomials):
         for inherited_guard in inherited_guards:
             if result_guard == inherited_guard:
                 distinct_guards -= 1

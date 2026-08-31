@@ -139,7 +139,10 @@ def _admit_source(ideal: RationalPolynomialIdeal, *, label: str) -> None:
             raise _validation_error(
                 f"{label} exceeds the {MAX_GENERATORS}-generator operation budget"
             )
-        if sum(len(generator.polynomial.terms) for generator in ideal.generators) > MAX_INPUT_TERMS:
+        if (
+            sum(len(generator.polynomial.terms) for generator in ideal.generators)
+            > MAX_INPUT_TERMS
+        ):
             raise _validation_error(
                 f"{label} exceeds the {MAX_INPUT_TERMS}-term aggregate input budget"
             )

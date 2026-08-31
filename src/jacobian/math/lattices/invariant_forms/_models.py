@@ -290,6 +290,22 @@ class RationalMatrixAction(StrictModel):
                     )
             data = dict(data)
             data["coordinate_axis"] = canonicalize_json_containers(axis)
+        if isinstance(data, dict):
+            generators = data.get("generators")
+            if isinstance(generators, (list, tuple)):
+                for generator in generators:
+                    label = (
+                        generator.get("label")
+                        if isinstance(generator, dict)
+                        else getattr(generator, "label", None)
+                    )
+                    if isinstance(label, str) and unicodedata.normalize(
+                        "NFC", label
+                    ) != label:
+                        raise _validation_error(
+                            "noncanonical_generator_label",
+                            "generator labels must use NFC Unicode normalization",
+                        )
         return _require_raw_action_envelope(data)
 
     @model_validator(mode="after")

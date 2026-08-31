@@ -31,6 +31,7 @@ from jacobian.math.polynomials.ideals._models import (
     LcmLatticeHomologyEntry,
     MonomialIdealBettiResult,
     MultigradedBettiNumber,
+    _admit_monomial_ideal,
     _require_computed_minimal_prime_family,
     _require_ideal_budget,
     _require_provable_family_fit,
@@ -71,6 +72,7 @@ def monomial_ideal_graded_betti_table(
 ) -> MonomialIdealBettiResult:
     """Compute the complete minimal graded Betti profile of a monomial ideal."""
 
+    _run_admission(lambda: _admit_monomial_ideal(ideal))
     computed = compute_monomial_betti_kernel(ideal)
     lattice_homology = tuple(
         LcmLatticeHomologyEntry.model_construct(

@@ -44,6 +44,59 @@ CrosscutCardinality = Annotated[
 ]
 
 
+def _admit_monomial_ideal(ideal: RationalPolynomialIdeal) -> None:
+    """Validate that *ideal* is a canonical minimally-generated monomial ideal.
+
+    This shared admission runs for both the MCP request path (via
+    MonomialIdealBettiRequest) and the native Python API so that native and
+    MCP calls share the same contract.
+    """
+
+    if len(ideal.generators) > MAX_MONOMIAL_IDEAL_GENERATORS:
+        raise _validation_error(
+            "monomial-ideal exceeds the "
+            f"{MAX_MONOMIAL_IDEAL_GENERATORS}-generator operation budget"
+        )
+    if len(ideal.variables) > MAX_MONOMIAL_IDEAL_VARIABLES:
+        raise _validation_error(
+            "monomial-ideal exceeds the "
+            f"{MAX_MONOMIAL_IDEAL_VARIABLES}-variable operation budget"
+        )
+    for generator in ideal.generators:
+        terms = generator.polynomial.terms
+        if len(terms) != 1:
+            raise _validation_error(
+                "every monomial-ideal generator must be a single monomial term"
+            )
+        term = terms[0]
+        if term.coefficient != CanonicalRational(num="1", den="1"):
+            raise _validation_error(
+                "every monomial-ideal generator must have unit coefficient"
+            )
+    # Extract exponent vectors for canonical-form checks.
+    generators = tuple(
+        generator.polynomial.terms[0].exponents for generator in ideal.generators
+    )
+    if any(not any(generator) for generator in generators):
+        raise _validation_error(
+            "the unit ideal is outside this nontrivial-resolution scope"
+        )
+    if generators != tuple(sorted(generators, reverse=True)):
+        raise _validation_error(
+            "monomial generators must use descending lexicographic order"
+        )
+    for index, generator in enumerate(generators):
+        for other in generators[index + 1 :]:
+            if all(
+                left <= right for left, right in zip(generator, other, strict=True)
+            ) or all(
+                right <= left for left, right in zip(generator, other, strict=True)
+            ):
+                raise _validation_error(
+                    "monomial generators must be pairwise nondividing"
+                )
+
+
 class MonomialIdealBettiRequest(StrictModel):
     """Compute the complete graded Betti profile of one monomial ideal.
 
@@ -57,52 +110,8 @@ class MonomialIdealBettiRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_monomial_ideal(self) -> Self:
-        if len(self.ideal.generators) > MAX_MONOMIAL_IDEAL_GENERATORS:
-            raise _validation_error(
-                "monomial-ideal exceeds the "
-                f"{MAX_MONOMIAL_IDEAL_GENERATORS}-generator operation budget"
-            )
-        if len(self.ideal.variables) > MAX_MONOMIAL_IDEAL_VARIABLES:
-            raise _validation_error(
-                "monomial-ideal exceeds the "
-                f"{MAX_MONOMIAL_IDEAL_VARIABLES}-variable operation budget"
-            )
-        for generator in self.ideal.generators:
-            terms = generator.polynomial.terms
-            if len(terms) != 1:
-                raise _validation_error(
-                    "every monomial-ideal generator must be a single monomial term"
-                )
-            term = terms[0]
-            if term.coefficient != CanonicalRational(num="1", den="1"):
-                raise _validation_error(
-                    "every monomial-ideal generator must have unit coefficient"
-                )
-        # Extract exponent vectors for canonical-form checks.
-        generators = tuple(
-            generator.polynomial.terms[0].exponents
-            for generator in self.ideal.generators
-        )
-        if any(not any(generator) for generator in generators):
-            raise _validation_error(
-                "the unit ideal is outside this nontrivial-resolution scope"
-            )
-        if generators != tuple(sorted(generators, reverse=True)):
-            raise _validation_error(
-                "monomial generators must use descending lexicographic order"
-            )
-        for index, generator in enumerate(generators):
-            for other in generators[index + 1 :]:
-                if all(
-                    left <= right for left, right in zip(generator, other, strict=True)
-                ) or all(
-                    right <= left for left, right in zip(generator, other, strict=True)
-                ):
-                    raise _validation_error(
-                        "monomial generators must be pairwise nondividing"
-                    )
+        _admit_monomial_ideal(self.ideal)
         return self
-
 
 class LcmLatticeHomologyEntry(StrictModel):
     """Crosscut-chain ranks and reduced homology at one lcm-lattice element."""

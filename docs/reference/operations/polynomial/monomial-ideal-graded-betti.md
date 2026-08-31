@@ -37,12 +37,18 @@ resolutions,” *Mathematical Research Letters* 6 (1999), 521–532.
 ## Bounded domain
 
 One request admits at most eight variables and eight minimal generators, with
-each exponent at most 64. Thus it has at most 256 generator subsets and 255
-nonzero lcm-lattice elements. Every crosscut boundary matrix has at most 70
+each exponent at most 1,000,000. Thus it has at most 256 generator subsets and
+255 nonzero lcm-lattice elements. Every crosscut boundary matrix has at most 70
 rows or columns, and the returned profile has at most 255 lattice rows and
 2,040 nonzero Betti slots. These fixed limits bound subset enumeration,
 integer-matrix rank work, intermediate memory, and exact serialized output
 before the kernel runs.
+
+The exponential work is governed by generator count (which controls subset
+enumeration), not by exponent magnitude: the kernel only compares exponents
+and serializes their sums. Exponents are bounded by the shared polynomial
+representation limit, not by a scalar cap that would reject trivially
+computable cases such as `<x^65>`.
 
 The contract is specific to `QQ`: reduced homology is taken over the rational
 coefficient field, so it does not silently claim characteristic-independent

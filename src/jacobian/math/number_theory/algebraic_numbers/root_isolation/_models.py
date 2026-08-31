@@ -233,9 +233,7 @@ class AlgebraicCompareRequest(StrictModel):
             return data
         left = data.get("left")
         right = data.get("right")
-        left_polynomial = (
-            left.get("polynomial") if isinstance(left, Mapping) else None
-        )
+        left_polynomial = left.get("polynomial") if isinstance(left, Mapping) else None
         right_polynomial = (
             right.get("polynomial") if isinstance(right, Mapping) else None
         )

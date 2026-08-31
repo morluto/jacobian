@@ -320,6 +320,14 @@ class RationalMatrixAction(StrictModel):
 
     @model_validator(mode="after")
     def require_common_axis(self) -> Self:
+        if any(
+            unicodedata.normalize("NFC", label) != label
+            for label in self.coordinate_axis
+        ):
+            raise _validation_error(
+                "noncanonical_coordinate_label",
+                "coordinate_axis labels must use NFC Unicode normalization",
+            )
         if len(set(self.coordinate_axis)) != len(self.coordinate_axis):
             raise _validation_error(
                 "duplicate_coordinate_label",
@@ -377,6 +385,14 @@ class IntegralBilinearForm(StrictModel):
     @model_validator(mode="after")
     def require_form_shape(self) -> Self:
         dimension = len(self.coordinate_axis)
+        if any(
+            unicodedata.normalize("NFC", label) != label
+            for label in self.coordinate_axis
+        ):
+            raise _validation_error(
+                "noncanonical_coordinate_label",
+                "form coordinate_axis labels must use NFC Unicode normalization",
+            )
         if len(set(self.coordinate_axis)) != dimension:
             raise _validation_error(
                 "duplicate_coordinate_label",

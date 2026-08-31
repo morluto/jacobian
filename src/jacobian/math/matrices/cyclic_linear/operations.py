@@ -889,7 +889,9 @@ def _run_kernel_subprocess(
             )
 
         if proc.returncode != 0:
-            stderr = (proc.stderr.read() if proc.stderr else b"").decode("ascii", errors="replace")
+            stderr = (proc.stderr.read() if proc.stderr else b"").decode(
+                "ascii", errors="replace"
+            )
             raise RuntimeError(
                 f"cyclotomic kernel subprocess exited with code "
                 f"{proc.returncode}: {stderr[:500]}"

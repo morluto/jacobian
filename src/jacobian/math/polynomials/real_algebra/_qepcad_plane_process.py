@@ -233,8 +233,7 @@ def run_plane_sample_recognition(
             reason="SAMPLE_RECOGNITION_INVALID_OUTPUT",
         )
     if any(
-        _plane_point_identity_key(canonical_sample)
-        != _plane_point_identity_key(sample)
+        _plane_point_identity_key(canonical_sample) != _plane_point_identity_key(sample)
         for canonical_sample, sample in zip(
             response.canonical_samples, request.samples, strict=True
         )

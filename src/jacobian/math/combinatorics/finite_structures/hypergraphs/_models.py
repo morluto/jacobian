@@ -51,6 +51,46 @@ MAX_EDGE_INTERSECTION_CELLS = 65_536
 MAX_HYPERGRAPH_LABEL_BYTES = (MAX_VERTICES + MAX_EDGES) * MAX_LABEL_LENGTH * 4
 MAX_EDGE_INTERSECTION_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
+
+def _edge_intersection_graph_result_bytes(
+    hypergraph: FiniteHypergraph,
+) -> int:
+    """Return the exact canonical size of the edge-intersection graph result.
+
+    The result retains the source hypergraph and the produced graph.  The
+    graph has one vertex per hyperedge (the edge IDs) and at most one edge
+    per intersecting pair, bounded by the complete-graph maximum for the
+    given vertex count.
+    """
+    source_bytes = len(canonicalize_json(hypergraph.model_dump(mode="json")))
+    edge_ids = tuple(edge_id for edge_id, _ in hypergraph.edges)
+    n = len(edge_ids)
+    # Each graph vertex is a strict-JSON string (the edge ID).
+    vertex_bytes = _strict_json_array_size(
+        tuple(_strict_label_wire_bytes(edge_id) for edge_id in edge_ids)
+    )
+    # Worst case: complete graph with n*(n-1)/2 edges.  Each edge is a
+    # 2-element array of strict-JSON strings.  We use the longest edge ID
+    # as a conservative bound for both endpoints.
+    max_edge_id_bytes = (
+        max((_strict_label_wire_bytes(edge_id) for edge_id in edge_ids), default=0)
+        if edge_ids
+        else 0
+    )
+    max_graph_edges = n * (n - 1) // 2 if n > 1 else 0
+    edge_bytes = _strict_json_array_size(
+        tuple(
+            _strict_json_array_size((max_edge_id_bytes, max_edge_id_bytes))
+            for _ in range(max_graph_edges)
+        )
+    )
+    graph_bytes = strict_json_object_size(
+        (("vertices", vertex_bytes), ("edges", edge_bytes))
+    )
+    return strict_json_object_size(
+        (("hypergraph", source_bytes), ("graph", graph_bytes))
+    )
+
 # One pair entry's keys, punctuation, array brackets, commas, and bounded
 # integer occupy fewer than 128 bytes beyond its encoded labels.  The root
 # reserve covers the pair-array wrapper, histogram (at most 101 small integer

@@ -727,12 +727,14 @@ def homogeneous_fixed_subspace(
     )
     variable_count = len(action.variable_axis.labels)
     checkpoint("before generator validation")
-    if any(rank(matrix) != variable_count for matrix in action.generator_matrices):
-        raise OperationDomainValidationError(
-            location=("action", "generator_matrices"),
-            code="finite_field.linear_action_generator_invertible",
-            message="every linear-action generator matrix must be invertible",
-        )
+    for matrix in action.generator_matrices:
+        checkpoint("during generator validation")
+        if rank(matrix) != variable_count:
+            raise OperationDomainValidationError(
+                location=("action", "generator_matrices"),
+                code="finite_field.linear_action_generator_invertible",
+                message="every linear-action generator matrix must be invertible",
+            )
     monomial_basis = _homogeneous_monomial_basis(variable_count, degree)
     assert len(monomial_basis) == monomial_count
     equations: list[tuple[int, ...]] = []

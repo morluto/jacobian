@@ -46,10 +46,7 @@ def _require_active_request(stage: str) -> None:
             f"invariant-form lattice cancelled {stage}"
         )
     execution = current_request_execution()
-    if (
-        execution is not None
-        and execution.deadline is not None
-    ):
+    if execution is not None and execution.deadline is not None:
         import time
 
         if time.monotonic() >= execution.deadline:

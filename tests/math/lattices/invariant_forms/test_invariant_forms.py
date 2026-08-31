@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import time
-
 from collections.abc import Sequence
 from fractions import Fraction
 from typing import Any
@@ -12,8 +11,14 @@ import pytest
 from pydantic import ValidationError
 from sympy import Matrix
 from tests.fixtures.accounting import assert_charged_work_parity
-from jacobian._execution import request_execution, bind_request_deadline, OperationExecutionTimeoutError, request_cancellation, OperationExecutionCancelledError
 
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    request_cancellation,
+    request_execution,
+)
 from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lattices._lattice_ops import saturate_lattice

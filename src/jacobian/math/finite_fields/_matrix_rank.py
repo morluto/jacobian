@@ -110,8 +110,8 @@ def compute_matrix_rank(
                 {
                     "matrix": matrix.model_dump(mode="json"),
                     "rank": max_rank,
-                    "pivot_rows": pivot_row_labels,
-                    "pivot_columns": pivot_column_labels,
+                    "pivot_rows": list(pivot_row_labels),
+                    "pivot_columns": list(pivot_column_labels),
                 }
             )
         except CanonicalizationError as exc:

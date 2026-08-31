@@ -38,7 +38,9 @@ def enumerate_friable(
             location=("x", "y"), code=exc.type, message=exc.message()
         ) from exc
     return FriableEnumerateResult._from_kernel(
-        FriableEnumerateRequest(x=format_canonical_integer(x_value), y=format_canonical_integer(y_value)),
+        FriableEnumerateRequest(
+            x=format_canonical_integer(x_value), y=format_canonical_integer(y_value)
+        ),
         family=family,
     )
 

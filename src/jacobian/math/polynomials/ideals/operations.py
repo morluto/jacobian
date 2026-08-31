@@ -219,6 +219,20 @@ class _SympyKernelError(RuntimeError):
     """The bounded SymPy worker failed without producing an exact result."""
 
 
+def _decimal_digit_count(value: int) -> int:
+    """Return an exact decimal width without converting an integer to text."""
+
+    value = abs(value)
+    if value == 0:
+        return 1
+    estimate = (value.bit_length() * 30_103) // 100_000 + 1
+    if value < 10 ** (estimate - 1):
+        estimate -= 1
+    elif value >= 10**estimate:
+        estimate += 1
+    return estimate
+
+
 def _require_transportable_minimal_primes_result(
     result: IdealMinimalPrimesResult,
 ) -> None:
@@ -235,6 +249,18 @@ def _require_transportable_minimal_primes_result(
 _SYMPY_WORKER_SCRIPT = r"""
 import json
 import sys
+
+
+def _decimal_digit_count(value: int) -> int:
+    value = abs(value)
+    if value == 0:
+        return 1
+    estimate = (value.bit_length() * 30_103) // 100_000 + 1
+    if value < 10 ** (estimate - 1):
+        estimate -= 1
+    elif value >= 10**estimate:
+        estimate += 1
+    return estimate
 
 
 def main() -> None:
@@ -272,7 +298,9 @@ def main() -> None:
             # require_admissible_exponents does for exponents.
             from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
             for _, coeff in poly.terms():
-                digits = max(len(str(abs(coeff.p))), len(str(abs(coeff.q))))
+                digits = max(
+                    _decimal_digit_count(coeff.p), _decimal_digit_count(coeff.q)
+                )
                 if digits > MAX_CANONICAL_RATIONAL_DIGITS:
                     raise ValueError(
                         f"polynomial result exceeds the "
@@ -793,6 +821,17 @@ def _raise_if_relation_deadline_exceeded(deadline: float) -> None:
         raise _SympyKernelTimeoutError()
 
 
+def _run_relation_kernel_before_deadline(
+    payload: dict[str, Any], deadline: float
+) -> dict[str, Any]:
+    """Launch the worker only when a strictly positive budget remains."""
+    _raise_if_relation_deadline_exceeded(deadline)
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise _SympyKernelTimeoutError()
+    return _run_sympy_kernel(payload, remaining)
+
+
 def _relation_ledger(
     payload: dict[str, Any], *, deadline: float
 ) -> IdealContainmentLedger:
@@ -827,8 +866,7 @@ def ideal_containment(
     }
     outcome: IdealExecutionOutcome
     try:
-        _raise_if_relation_deadline_exceeded(deadline)
-        result = _run_sympy_kernel(payload, max(0.0, deadline - time.monotonic()))
+        result = _run_relation_kernel_before_deadline(payload, deadline)
         ledger = _relation_ledger(result["left_in_right"], deadline=deadline)
         _raise_if_relation_deadline_exceeded(deadline)
         computed = IdealContainmentResult._from_kernel(
@@ -880,8 +918,7 @@ def ideal_equality(
     }
     outcome: IdealExecutionOutcome
     try:
-        _raise_if_relation_deadline_exceeded(deadline)
-        result = _run_sympy_kernel(payload, max(0.0, deadline - time.monotonic()))
+        result = _run_relation_kernel_before_deadline(payload, deadline)
         left_in_right = _relation_ledger(result["left_in_right"], deadline=deadline)
         right_in_left = _relation_ledger(result["right_in_left"], deadline=deadline)
         _raise_if_relation_deadline_exceeded(deadline)

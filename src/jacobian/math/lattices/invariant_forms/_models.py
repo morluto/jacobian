@@ -107,6 +107,52 @@ def _canonicalize_generator_order(data: dict[str, object]) -> dict[str, object]:
     return normalized
 
 
+def _canonicalize_coordinate_axis(data: dict[str, object]) -> dict[str, object]:
+    """Bound arbitrary coordinate-axis iterables before Pydantic materializes them."""
+
+    normalized = dict(data)
+    axis = normalized.get("coordinate_axis")
+    if isinstance(axis, (str, bytes, Mapping)) or axis is None:
+        return normalized
+    if not isinstance(axis, (list, tuple)):
+        try:
+            axis_iterator = iter(axis)
+        except TypeError:
+            return normalized
+        axis_values: list[object] = []
+        for _index in range(MAX_ACTION_DIMENSION + 1):
+            try:
+                axis_values.append(next(axis_iterator))
+            except StopIteration:
+                break
+        else:
+            raise _validation_error(
+                "budget_exceeded",
+                f"coordinate_axis has at most {MAX_ACTION_DIMENSION} labels",
+            )
+        axis = tuple(axis_values)
+        normalized["coordinate_axis"] = axis
+    if isinstance(axis, (list, tuple)):
+        if len(axis) > MAX_ACTION_DIMENSION:
+            raise _validation_error(
+                "budget_exceeded",
+                f"coordinate_axis has at most {MAX_ACTION_DIMENSION} labels",
+            )
+        for label in axis:
+            if not isinstance(label, str):
+                raise _validation_error(
+                    "invalid_coordinate_label",
+                    "coordinate_axis labels must be strings",
+                )
+            if unicodedata.normalize("NFC", label) != label:
+                raise _validation_error(
+                    "noncanonical_coordinate_label",
+                    "coordinate_axis labels must use NFC Unicode normalization",
+                )
+        normalized["coordinate_axis"] = canonicalize_json_containers(axis)
+    return normalized
+
+
 def _reject_nested_rational_components(entries: object) -> None:
     """Reject non-string ``num``/``den`` values before recursive parsing.
 
@@ -296,26 +342,8 @@ class RationalMatrixAction(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_raw_envelope(cls, data: Any) -> Any:
-        if isinstance(data, dict) and isinstance(
-            data.get("coordinate_axis"), (list, tuple)
-        ):
-            axis = data["coordinate_axis"]
-            # Reject deeply nested or non-string labels before recursive
-            # conversion to avoid RecursionError on deeply nested payloads.
-            for label in axis:
-                if not isinstance(label, str):
-                    raise _validation_error(
-                        "invalid_coordinate_label",
-                        "coordinate_axis labels must be strings",
-                    )
-                if unicodedata.normalize("NFC", label) != label:
-                    raise _validation_error(
-                        "noncanonical_coordinate_label",
-                        "coordinate_axis labels must use NFC Unicode normalization",
-                    )
-            data = dict(data)
-            data["coordinate_axis"] = canonicalize_json_containers(axis)
         if isinstance(data, dict):
+            data = _canonicalize_coordinate_axis(data)
             generators = data.get("generators")
             if isinstance(generators, (list, tuple)):
                 for generator in generators:
@@ -383,7 +411,14 @@ class IntegralBilinearForm(StrictModel):
     def require_canonical_axis_labels(cls, data: Any) -> Any:
         if not isinstance(data, dict):
             return data
+        unknown = set(data).difference({"coordinate_axis", "kind", "matrix"})
+        if unknown:
+            raise _validation_error(
+                "shape_mismatch",
+                "forms contain unknown fields",
+            )
         axis = data.get("coordinate_axis")
+        normalized = dict(data)
         if isinstance(axis, (list, tuple)):
             for label in axis:
                 if not isinstance(label, str):
@@ -396,7 +431,8 @@ class IntegralBilinearForm(StrictModel):
                         "noncanonical_coordinate_label",
                         "form coordinate_axis labels must use NFC Unicode normalization",
                     )
-        return canonicalize_json_containers(data)
+            normalized["coordinate_axis"] = canonicalize_json_containers(axis)
+        return normalized
 
     @model_validator(mode="after")
     def require_form_shape(self) -> Self:

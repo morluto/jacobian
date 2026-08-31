@@ -580,6 +580,21 @@ def test_oversized_generator_matrices_are_rejected_before_nested_parsing() -> No
     )
 
 
+def test_oversized_raw_matrix_axes_are_rejected_before_cell_scanning() -> None:
+    action = {
+        "coordinate_axis": ["e1"],
+        "generators": [
+            {
+                "label": "g",
+                "matrix": {"entries": [[object()] for _ in range(129)]},
+            }
+        ],
+    }
+
+    with pytest.raises(ValidationError, match="at most 128 rows"):
+        RationalMatrixAction.model_validate(action)
+
+
 def test_cancellation_during_constraint_expansion() -> None:
     """A cancelled request raises during constraint expansion."""
 

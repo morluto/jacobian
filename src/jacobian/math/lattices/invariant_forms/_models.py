@@ -184,6 +184,24 @@ def _reject_nested_rational_components(entries: object) -> None:
                     )
 
 
+def _reject_oversized_raw_matrix(entries: object) -> None:
+    """Reject raw matrix axes before inspecting their scalar cells."""
+
+    if not isinstance(entries, (list, tuple)):
+        return
+    if len(entries) > MAX_RATIONAL_MATRIX_ORDER:
+        raise _validation_error(
+            "budget_exceeded",
+            f"generator matrices have at most {MAX_RATIONAL_MATRIX_ORDER} rows",
+        )
+    for row in entries:
+        if isinstance(row, (list, tuple)) and len(row) > MAX_RATIONAL_MATRIX_ORDER:
+            raise _validation_error(
+                "budget_exceeded",
+                f"generator matrices have at most {MAX_RATIONAL_MATRIX_ORDER} columns",
+            )
+
+
 def _require_raw_action_envelope(data: object) -> object:  # noqa: C901
     """Bound structural action containers before nested rational parsing."""
 
@@ -225,6 +243,7 @@ def _require_raw_action_envelope(data: object) -> object:  # noqa: C901
                 raw_entries = raw_matrix.get("entries")
                 if not isinstance(raw_entries, (list, tuple)):
                     continue
+                _reject_oversized_raw_matrix(raw_entries)
                 _reject_nested_rational_components(raw_entries)
                 for row in raw_entries:
                     if isinstance(row, (list, tuple)):
@@ -268,6 +287,7 @@ def _require_raw_action_envelope(data: object) -> object:  # noqa: C901
             raw_entries = raw_matrix.get("entries")
             if not isinstance(raw_entries, (list, tuple)):
                 continue
+            _reject_oversized_raw_matrix(raw_entries)
             for row in raw_entries:
                 if isinstance(row, (list, tuple)):
                     total_cells += len(row)

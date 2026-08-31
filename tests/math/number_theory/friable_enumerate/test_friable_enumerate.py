@@ -195,7 +195,7 @@ def test_operation_rejects_family_above_result_size_budget() -> None:
 
 def test_operation_example_executes() -> None:
     result = compute_friable_enumerate(FriableEnumerateRequest(x="20", y="5"))
-    assert result.family == tuple(str(v) for v in FIVE_SMOOTH_THROUGH_20)
+    assert result.family.elements == tuple(str(v) for v in FIVE_SMOOTH_THROUGH_20)
     assert result.x == "20"
     assert result.y == "5"
 
@@ -212,4 +212,4 @@ def test_operation_is_discoverable_with_one_executable_example() -> None:
     example = operation.examples[0]
     request = operation.request_type.model_validate(example.input)
     result = operation.run(request)
-    assert result.family == tuple(str(v) for v in FIVE_SMOOTH_THROUGH_20)
+    assert result.family.elements == tuple(str(v) for v in FIVE_SMOOTH_THROUGH_20)

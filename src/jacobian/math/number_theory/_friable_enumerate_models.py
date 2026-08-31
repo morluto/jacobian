@@ -9,6 +9,10 @@ from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalLimits
+from jacobian.math.combinatorics.finite_structures.sets._models import (
+    MAX_FINITE_INTEGER_SET_ELEMENTS,
+    FiniteIntegerSet,
+)
 from jacobian.math.number_theory._models import BoundedInteger, _validation_error
 
 # The enumeration shares the generated-exponent-vector regime with
@@ -18,7 +22,7 @@ from jacobian.math.number_theory._models import BoundedInteger, _validation_erro
 # bounds.
 MAX_FRIABLE_ENUMERATE_MATERIALIZED_X = 1_000_000
 MAX_FRIABLE_ENUMERATE_GENERATED_CUTOFF = 10_000
-MAX_FRIABLE_ENUMERATE_FAMILY_SIZE = 200_000
+MAX_FRIABLE_ENUMERATE_FAMILY_SIZE = MAX_FINITE_INTEGER_SET_ELEMENTS
 _MAX_FRIABLE_ENUMERATE_SOURCE_DIGITS = 256
 _MAX_FRIABLE_ENUMERATE_SOURCE_ABS = 10**_MAX_FRIABLE_ENUMERATE_SOURCE_DIGITS
 _MAX_FRIABLE_ENUMERATED_BYTES = CanonicalLimits().max_output_bytes
@@ -113,11 +117,11 @@ class FriableEnumerateResult(StrictModel):
 
     x: BoundedInteger
     y: BoundedInteger
-    family: tuple[BoundedInteger, ...]
+    family: FiniteIntegerSet
 
     @model_validator(mode="after")
     def require_nonempty_or_singleton(self) -> Self:
-        if not self.family and self.x != "0":
+        if not self.family.elements and self.x != "0":
             raise _validation_error(
                 "friable_enumerate_family_must_be_nonempty_when_x_is_positive",
                 "friable-enumerate family must be nonempty when x is positive",
@@ -136,8 +140,49 @@ class FriableEnumerateResult(StrictModel):
         return cls.model_construct(
             x=request.x,
             y=request.y,
-            family=tuple(str(value) for value in family),
+            family=FiniteIntegerSet(
+                elements=tuple(str(value) for value in family),
+            ),
         )
+
+
+def _count_friable_bounded(x: int, y: int) -> int:
+    """Count y-friable integers in 1..x, stopping at the family-size limit + 1.
+
+    This is a result-sensitive admission aid for the materialized regime:
+    it uses the same sieve logic as the kernel but stops counting as soon as
+    the family exceeds the result-size budget, avoiding the coarse x upper bound.
+    """
+
+    if x == 0:
+        return 0
+    if y <= 1:
+        return 1 if x >= 1 else 0
+
+    is_friable = bytearray(b"\x01") * (x + 1)
+    is_friable[0] = 0
+    is_prime = bytearray(b"\x01") * (x + 1)
+    is_prime[0:2] = b"\x00\x00"
+
+    count = 0
+    limit = MAX_FRIABLE_ENUMERATE_FAMILY_SIZE + 1
+    for candidate in range(2, x + 1):
+        if not is_prime[candidate]:
+            continue
+        if candidate * candidate <= x:
+            first = candidate * candidate
+            is_prime[first : x + 1 : candidate] = b"\x00" * (
+                (x - first) // candidate + 1
+            )
+        if candidate > y:
+            is_friable[candidate : x + 1 : candidate] = b"\x00" * (x // candidate)
+
+    for value in range(1, x + 1):
+        if is_friable[value]:
+            count += 1
+            if count > limit:
+                return count
+    return count
 
 
 def plan_friable_enumerate(
@@ -180,16 +225,21 @@ def plan_friable_enumerate(
         return "DIRECT", (), ()
 
     # Materialized regime: small enough to scan 1..x directly.
-    # Use x as the family-size upper bound (y >= x is handled above as DIRECT,
-    # but for y < x the family size is at most x).
+    # Count the actual friable family size instead of using the coarse x
+    # upper bound, so requests whose result is safely bounded are admitted.
     if x <= MAX_FRIABLE_ENUMERATE_MATERIALIZED_X:
-        max_family_size = x
-        if (
-            max_family_size <= MAX_FRIABLE_ENUMERATE_FAMILY_SIZE
-            and _estimate_serialized_bytes(x, max_family_size)
-            <= _MAX_FRIABLE_ENUMERATED_BYTES
-        ):
-            return "MATERIALIZED", (), ()
+        family_size = _count_friable_bounded(x, y)
+        if family_size > MAX_FRIABLE_ENUMERATE_FAMILY_SIZE:
+            raise _validation_error(
+                "friable_enumerate_family_exceeds_the_result_size_budget",
+                "friable-enumerate family exceeds the result-size budget",
+            )
+        if _estimate_serialized_bytes(x, family_size) > _MAX_FRIABLE_ENUMERATED_BYTES:
+            raise _validation_error(
+                "friable_enumerate_family_exceeds_the_serialized_byte_budget",
+                "friable-enumerate family exceeds the serialized-byte budget",
+            )
+        return "MATERIALIZED", (), ()
 
     # Generated regime: enumerate exponent vectors without materializing 1..x.
     if y > MAX_FRIABLE_ENUMERATE_GENERATED_CUTOFF:

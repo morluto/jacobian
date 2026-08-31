@@ -37,10 +37,9 @@ def enumerate_friable(
         raise OperationDomainValidationError(
             location=("x", "y"), code=exc.type, message=exc.message()
         ) from exc
-    return FriableEnumerateResult.model_construct(
-        x=format_canonical_integer(x_value),
-        y=format_canonical_integer(y_value),
-        family=tuple(format_canonical_integer(value) for value in family),
+    return FriableEnumerateResult._from_kernel(
+        FriableEnumerateRequest(x=format_canonical_integer(x_value), y=format_canonical_integer(y_value)),
+        family=family,
     )
 
 

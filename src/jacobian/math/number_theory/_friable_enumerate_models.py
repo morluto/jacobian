@@ -269,7 +269,7 @@ def plan_friable_enumerate(
     if x == 0:
         return "DIRECT", (), ()
     if y <= 1:
-        return "DIRECT", (), ()
+        return "DIRECT", (), (1,)
     if y >= x:
         if x > MAX_FRIABLE_ENUMERATE_FAMILY_SIZE:
             raise _validation_error(

@@ -21,7 +21,14 @@ def compute_friable_enumerate(
 ) -> FriableEnumerateResult:
     x_value = parse_canonical_integer(request.x)
     y_value = parse_canonical_integer(request.y)
-    family = _enumerate_friable_kernel(x_value, y_value, enforce_transport=True)
+    try:
+        family = _enumerate_friable_kernel(
+            x_value, y_value, enforce_transport=True
+        )
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=("x", "y"), code=exc.type, message=exc.message()
+        ) from exc
     return FriableEnumerateResult._from_kernel(
         FriableEnumerateRequest(
             x=format_canonical_integer(x_value), y=format_canonical_integer(y_value)

@@ -160,6 +160,7 @@ MATRIX_DETERMINANT_COMPUTE = matrix_operation(
             "Compute the determinant of [[0, 2], [3, 4]].",
             {
                 "matrix": {
+                    "domain": "QQ",
                     "entries": [
                         [
                             {"num": "0", "den": "1"},
@@ -169,7 +170,7 @@ MATRIX_DETERMINANT_COMPUTE = matrix_operation(
                             {"num": "3", "den": "1"},
                             {"num": "4", "den": "1"},
                         ],
-                    ]
+                    ],
                 }
             },
         ),
@@ -178,6 +179,7 @@ MATRIX_DETERMINANT_COMPUTE = matrix_operation(
             "Compute the determinant of a 3x3 identity (1); the matrix must be square (rows == columns).",
             {
                 "matrix": {
+                    "domain": "QQ",
                     "entries": [
                         [
                             {"num": "1", "den": "1"},
@@ -194,7 +196,7 @@ MATRIX_DETERMINANT_COMPUTE = matrix_operation(
                             {"num": "0", "den": "1"},
                             {"num": "1", "den": "1"},
                         ],
-                    ]
+                    ],
                 }
             },
         ),
@@ -256,16 +258,18 @@ TOOLS = (
                 "Multiply two 2x2 matrices over QQ.",
                 {
                     "left": {
+                        "domain": "QQ",
                         "entries": [
                             [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
                             [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
-                        ]
+                        ],
                     },
                     "right": {
+                        "domain": "QQ",
                         "entries": [
                             [{"num": "2", "den": "1"}, {"num": "0", "den": "1"}],
                             [{"num": "0", "den": "1"}, {"num": "2", "den": "1"}],
-                        ]
+                        ],
                     },
                 },
             ),
@@ -288,16 +292,18 @@ TOOLS = (
                 "Compute the Kronecker product of two 2x2 identity matrices.",
                 {
                     "left": {
+                        "domain": "QQ",
                         "entries": [
                             [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
                             [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
-                        ]
+                        ],
                     },
                     "right": {
+                        "domain": "QQ",
                         "entries": [
                             [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
                             [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
-                        ]
+                        ],
                     },
                 },
             ),
@@ -319,6 +325,7 @@ TOOLS = (
                 "Compute rank and pivots of a rectangular rational matrix.",
                 {
                     "matrix": {
+                        "domain": "QQ",
                         "entries": [
                             [
                                 {"num": "1", "den": "1"},
@@ -338,7 +345,7 @@ TOOLS = (
                                 {"num": "1", "den": "1"},
                                 {"num": "0", "den": "1"},
                             ],
-                        ]
+                        ],
                     }
                 },
             ),
@@ -378,10 +385,11 @@ TOOLS = (
                 "Solve a 2x2 identity linear system.",
                 {
                     "matrix": {
+                        "domain": "QQ",
                         "entries": [
                             [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
                             [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
-                        ]
+                        ],
                     },
                     "rhs": [{"num": "3", "den": "1"}, {"num": "4", "den": "1"}],
                 },
@@ -391,6 +399,7 @@ TOOLS = (
                 "Solve a 3x3 diagonal system; the matrix must be square and rhs length must match its order.",
                 {
                     "matrix": {
+                        "domain": "QQ",
                         "entries": [
                             [
                                 {"num": "2", "den": "1"},
@@ -407,7 +416,7 @@ TOOLS = (
                                 {"num": "0", "den": "1"},
                                 {"num": "4", "den": "1"},
                             ],
-                        ]
+                        ],
                     },
                     "rhs": [
                         {"num": "4", "den": "1"},
@@ -461,10 +470,11 @@ TOOLS = (
                 "Compute RREF of a rational matrix.",
                 {
                     "matrix": {
+                        "domain": "QQ",
                         "entries": [
                             [{"num": "1", "den": "1"}, {"num": "2", "den": "1"}],
                             [{"num": "2", "den": "1"}, {"num": "4", "den": "1"}],
-                        ]
+                        ],
                     }
                 },
             ),
@@ -493,6 +503,7 @@ TOOLS = (
                 ("Compute every rational relation among three ordered column vectors."),
                 {
                     "matrix": {
+                        "domain": "QQ",
                         "entries": [
                             [
                                 {"num": "1", "den": "1"},
@@ -504,7 +515,7 @@ TOOLS = (
                                 {"num": "1", "den": "1"},
                                 {"num": "1", "den": "1"},
                             ],
-                        ]
+                        ],
                     }
                 },
             ),
@@ -526,10 +537,11 @@ TOOLS = (
                 "Compute the characteristic polynomial of a 2x2 matrix.",
                 {
                     "matrix": {
+                        "domain": "QQ",
                         "entries": [
                             [{"num": "1", "den": "1"}, {"num": "2", "den": "1"}],
                             [{"num": "3", "den": "1"}, {"num": "4", "den": "1"}],
-                        ]
+                        ],
                     }
                 },
             ),
@@ -538,6 +550,7 @@ TOOLS = (
                 "Compute the characteristic polynomial of a diagonal 3x3; the matrix must be square.",
                 {
                     "matrix": {
+                        "domain": "QQ",
                         "entries": [
                             [
                                 {"num": "1", "den": "1"},
@@ -554,7 +567,7 @@ TOOLS = (
                                 {"num": "0", "den": "1"},
                                 {"num": "3", "den": "1"},
                             ],
-                        ]
+                        ],
                     }
                 },
             ),
@@ -596,6 +609,7 @@ TOOLS = (
                 "Compute the permanent of [[1, 2], [3, 4]].",
                 {
                     "matrix": {
+                        "domain": "QQ",
                         "entries": [
                             [
                                 {"num": "1", "den": "1"},
@@ -605,7 +619,7 @@ TOOLS = (
                                 {"num": "3", "den": "1"},
                                 {"num": "4", "den": "1"},
                             ],
-                        ]
+                        ],
                     }
                 },
             ),
@@ -614,6 +628,7 @@ TOOLS = (
                 "Compute the permanent (1) of a 3x3 identity; the matrix must be square.",
                 {
                     "matrix": {
+                        "domain": "QQ",
                         "entries": [
                             [
                                 {"num": "1", "den": "1"},
@@ -630,7 +645,7 @@ TOOLS = (
                                 {"num": "0", "den": "1"},
                                 {"num": "1", "den": "1"},
                             ],
-                        ]
+                        ],
                     }
                 },
             ),
@@ -653,6 +668,7 @@ TOOLS = (
                 "Trace out a 2x2 diagonal factor from a 4x4 Kronecker product.",
                 {
                     "matrix": {
+                        "domain": "QQ",
                         "entries": [
                             [
                                 {"num": "1", "den": "1"},
@@ -678,7 +694,7 @@ TOOLS = (
                                 {"num": "0", "den": "1"},
                                 {"num": "2", "den": "1"},
                             ],
-                        ]
+                        ],
                     },
                     "traced_dimension": 2,
                     "kept_dimension": 2,

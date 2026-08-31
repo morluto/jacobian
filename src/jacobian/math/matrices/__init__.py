@@ -16,12 +16,16 @@ from jacobian.math.matrices.operations import (
     trace,
 )
 from jacobian.math.matrices.values import (
+    EmbeddedRealSimpleNumberFieldMatrix,
+    ExactRealMatrix,
     SmithNormalForm,
     SparseRationalMatrix,
     SparseRationalMatrixEntry,
 )
 
 __all__ = [
+    "EmbeddedRealSimpleNumberFieldMatrix",
+    "ExactRealMatrix",
     "SmithNormalForm",
     "SparseRationalMatrix",
     "SparseRationalMatrixEntry",

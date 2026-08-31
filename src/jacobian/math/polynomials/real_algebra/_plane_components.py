@@ -244,9 +244,7 @@ def _noncompletion(
     if outcome.status == "COMPUTED" or outcome.reason is None:
         raise RuntimeError("computed QEPCAD result cannot become a noncompletion")
     status: PlaneComponentNoncompletionStatus = outcome.status
-    request_digest = sha256_digest(
-        encode_strict_json(request.model_dump(mode="json"))
-    )
+    request_digest = sha256_digest(encode_strict_json(request.model_dump(mode="json")))
     revision = os.environ.get("JACOBIAN_REVISION", "unknown")
     if not _GIT_SHA_PATTERN.fullmatch(revision):
         revision = "unknown"
@@ -257,9 +255,11 @@ def _noncompletion(
         if outcome.reason is not None and outcome.reason.startswith("QEPCAD_")
         else None
     )
-    elapsed_ms = round(
-        max(0.0, time.monotonic() - started_at) * 1_000
-    ) if started_at is not None else None
+    elapsed_ms = (
+        round(max(0.0, time.monotonic() - started_at) * 1_000)
+        if started_at is not None
+        else None
+    )
     return PlaneComponentProfileResult(
         semialgebraic_set=request.semialgebraic_set,
         samples=request.samples,

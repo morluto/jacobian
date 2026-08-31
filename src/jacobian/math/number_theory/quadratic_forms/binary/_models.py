@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -29,6 +29,9 @@ MAX_REDUCED_CLASS_OUTPUT_ROWS = MAX_REDUCED_CLASS_SEARCH_STATES
 # range; every accepted evaluation must stay inside it so ``math.run`` returns
 # a typed result instead of failing transport canonicalization.
 MAX_EVALUATED_VALUE = (1 << 53) - 1
+CompositionWitnessInteger = Annotated[
+    int, Field(ge=-MAX_EVALUATED_VALUE, le=MAX_EVALUATED_VALUE)
+]
 
 
 def _validation_error(code: str, message: str) -> PydanticCustomError:
@@ -55,6 +58,11 @@ def _require_positive_primitive_form(form: tuple[int, int, int]) -> None:
         )
 
 
+def _is_reduced_coefficients(a: int, b: int, c: int) -> bool:
+    """Return the canonical positive-definite Gauss-reduction predicate."""
+    return abs(b) <= a <= c and (abs(b) != a or b >= 0) and (a != c or b >= 0)
+
+
 class PrimitivePositiveDefiniteBinaryQuadraticForm(StrictModel):
     """A canonical primitive positive-definite integral binary quadratic form.
 
@@ -74,6 +82,27 @@ class PrimitivePositiveDefiniteBinaryQuadraticForm(StrictModel):
     def discriminant(self) -> int:
         """Return the derived discriminant ``b^2 - 4*a*c``."""
         return self.b * self.b - 4 * self.a * self.c
+
+
+class ProperBinaryQuadraticFormClass(StrictModel):
+    """One proper class identified by its canonical Gauss-reduced representative."""
+
+    representative: PrimitivePositiveDefiniteBinaryQuadraticForm
+
+    @model_validator(mode="after")
+    def require_reduced_representative(self) -> Self:
+        form = self.representative
+        if not _is_reduced_coefficients(form.a, form.b, form.c):
+            raise _validation_error(
+                "integral_binary_quadratic_form.class_representative_not_reduced",
+                "proper form classes require a canonical Gauss-reduced representative",
+            )
+        return self
+
+    @property
+    def discriminant(self) -> int:
+        """Return the discriminant of the represented quadratic order."""
+        return self.representative.discriminant
 
 
 class BinaryQuadraticFormCheckRequest(StrictModel):
@@ -125,6 +154,18 @@ class BinaryQuadraticFormReducedClassesRequest(StrictModel):
     )
 
 
+class BinaryQuadraticFormClassComposeRequest(StrictModel):
+    """Request the proper-class product of two reduced forms of one discriminant.
+
+    Both classes must have the same discriminant. Composition is admitted by
+    its own work bounds (direct O(1) composition and O(log|D|) reduction),
+    independent of the reduced-class enumeration budget.
+    """
+
+    first: ProperBinaryQuadraticFormClass
+    second: ProperBinaryQuadraticFormClass
+
+
 def _reduced_class_search_state_count(discriminant: int) -> int:
     """Return the exact number of ``(a,b)`` candidates in the reduced scan."""
     from math import isqrt
@@ -152,6 +193,45 @@ def _require_reduced_class_search_budget(discriminant: int) -> int:
             "reduced-class enumeration exceeds the supported candidate budget",
         )
     return state_count
+
+
+def _require_composition_budget(
+    first: PrimitivePositiveDefiniteBinaryQuadraticForm,
+    second: PrimitivePositiveDefiniteBinaryQuadraticForm,
+) -> None:
+    """Admit a direct composition by its own work bounds.
+
+    Direct Gauss composition (Buell's ternary-Bezout formula) is O(1)
+    extended-gcd and exact-quotient work on operands bounded by
+    ``MAX_COEFFICIENT``.  Gauss reduction of the composite is O(log|D|)
+    iterations.  Neither requires class enumeration, so the admission
+    derives from the discriminant validity and the coefficient bounds
+    rather than the unrelated reduced-class scan budget.
+
+    The direct composite coefficients and the reduced product can exceed
+    ``MAX_COEFFICIENT`` when the discriminant is large. A reduced form
+    of discriminant ``D`` satisfies ``a <= sqrt(|D|/3)`` and
+    ``c = (b^2 - D) / (4*a) <= |D| / 3``, so reject the request when
+    ``|D| / 3`` exceeds the coefficient bound.
+    """
+    if first.discriminant != second.discriminant:
+        raise ValueError("forms must have the same discriminant")
+    discriminant = first.discriminant
+    if discriminant > -3:
+        raise _validation_error(
+            "integral_binary_quadratic_form.discriminant_too_large",
+            "discriminant must be at most -3",
+        )
+    if discriminant % 4 not in (0, 1):
+        raise _validation_error(
+            "integral_binary_quadratic_form.invalid_discriminant_congruence",
+            "discriminant must be congruent to 0 or 1 modulo 4",
+        )
+    if abs(discriminant) // 3 > MAX_COEFFICIENT:
+        raise _validation_error(
+            "integral_binary_quadratic_form.composition_output_overflow",
+            "composition product exceeds the coefficient bound",
+        )
 
 
 def _representation_y_bound(
@@ -390,11 +470,80 @@ class ProperEquivalenceResult(StrictModel):
         )
 
 
+class DirectBinaryQuadraticCompositionMap(StrictModel):
+    """A bilinear map witnessing direct composition of two binary forms.
+
+    Coefficients use monomial order ``x1*x2, x1*y2, y1*x2, y1*y2``. If these
+    rows define ``X`` and ``Y``, then the composed form satisfies
+    ``H(X,Y) = F(x1,y1) * G(x2,y2)``.
+    """
+
+    x_coefficients: tuple[
+        CompositionWitnessInteger,
+        CompositionWitnessInteger,
+        CompositionWitnessInteger,
+        CompositionWitnessInteger,
+    ]
+    y_coefficients: tuple[
+        CompositionWitnessInteger,
+        CompositionWitnessInteger,
+        CompositionWitnessInteger,
+        CompositionWitnessInteger,
+    ]
+    monomial_order: Literal["X1_X2__X1_Y2__Y1_X2__Y1_Y2"] = "X1_X2__X1_Y2__Y1_X2__Y1_Y2"
+
+
+class BinaryQuadraticFormClassCompositionResult(StrictModel):
+    """One exact proper-class product with direct and reduction witnesses."""
+
+    first: ProperBinaryQuadraticFormClass
+    second: ProperBinaryQuadraticFormClass
+    composed_form: PrimitivePositiveDefiniteBinaryQuadraticForm
+    direct_composition_map: DirectBinaryQuadraticCompositionMap
+    product: ProperBinaryQuadraticFormClass
+    reduction_matrix: tuple[tuple[int, int], tuple[int, int]]
+
+    @model_validator(mode="after")
+    def require_one_discriminant(self) -> Self:
+        discriminants = {
+            self.first.discriminant,
+            self.second.discriminant,
+            self.composed_form.discriminant,
+            self.product.discriminant,
+        }
+        if len(discriminants) != 1:
+            raise _validation_error(
+                "integral_binary_quadratic_form.composition_discriminant_mismatch",
+                "composition sources, direct form, and reduced product must share one discriminant",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        first: ProperBinaryQuadraticFormClass,
+        second: ProperBinaryQuadraticFormClass,
+        composed_form: PrimitivePositiveDefiniteBinaryQuadraticForm,
+        direct_composition_map: DirectBinaryQuadraticCompositionMap,
+        product: ProperBinaryQuadraticFormClass,
+        reduction_matrix: tuple[tuple[int, int], tuple[int, int]],
+    ) -> Self:
+        return cls.model_construct(
+            first=first,
+            second=second,
+            composed_form=composed_form,
+            direct_composition_map=direct_composition_map,
+            product=product,
+            reduction_matrix=reduction_matrix,
+        )
+
+
 class ReducedClassesResult(StrictModel):
     """Result of enumerating reduced classes of a discriminant."""
 
     discriminant: int
-    classes: tuple[PrimitivePositiveDefiniteBinaryQuadraticForm, ...] = Field(
+    classes: tuple[ProperBinaryQuadraticFormClass, ...] = Field(
         max_length=MAX_REDUCED_CLASS_OUTPUT_ROWS
     )
     class_number: int
@@ -413,7 +562,7 @@ class ReducedClassesResult(StrictModel):
         cls,
         *,
         discriminant: int,
-        classes: tuple[PrimitivePositiveDefiniteBinaryQuadraticForm, ...],
+        classes: tuple[ProperBinaryQuadraticFormClass, ...],
     ) -> Self:
         """Construct a trusted result from the owner-local class enumerator."""
         return cls.model_construct(

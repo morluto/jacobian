@@ -27,6 +27,7 @@ from jacobian.math.lattices.invariant_forms import (
     compute_invariant_bilinear_form_lattice,
 )
 from jacobian.math.lattices.invariant_forms._models import (
+    EmbeddedRealNumberFieldMatrixAction,
     FormKind,
     IntegralBilinearForm,
     InvariantBilinearFormLattice,
@@ -177,6 +178,19 @@ def test_empty_generator_family_returns_full_coefficient_lattice(
     assert result.constraint_rank == 0
     assert result.rank == expected_dimension
     _assert_every_basis_form_is_invariant(result)
+
+
+def test_empty_embedded_generator_family_returns_full_coefficient_lattice() -> None:
+    action = EmbeddedRealNumberFieldMatrixAction(
+        coordinate_axis=("x", "y"),
+        generators=(),
+    )
+
+    result = compute_invariant_bilinear_form_lattice(action, "ALTERNATING")
+
+    assert result.coefficient_dimension == 1
+    assert result.constraint_rank == 0
+    assert result.rank == 1
 
 
 def test_strict_json_action_can_omit_the_defaulted_generator_family() -> None:

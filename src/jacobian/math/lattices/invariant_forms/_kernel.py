@@ -509,6 +509,11 @@ def _require_integer_kernel_work_envelope(plan: _ConstraintPlan) -> None:
 def _recognize_action_field(
     action: EmbeddedRealNumberFieldMatrixAction,
 ) -> RecognizedRealSimpleNumberField:
+    if not action.generators:
+        raise _validation_error(
+            "empty_embedded_action",
+            "an embedded action with no generators has no field to recognize",
+        )
     try:
         return recognize_real_simple_number_field(action.generators[0].matrix.embedding)
     except EmbeddedNumberFieldRecognitionError as exc:
@@ -523,7 +528,11 @@ def _build_constraint_plan(
 ) -> _ConstraintPlan:
     dimension = len(action.coordinate_axis)
     if isinstance(action, EmbeddedRealNumberFieldMatrixAction):
-        field_degree = action.generators[0].matrix.embedding.presentation.degree
+        field_degree = (
+            action.generators[0].matrix.embedding.presentation.degree
+            if action.generators
+            else 1
+        )
         if field_degree > MAX_NUMBER_FIELD_EMBEDDING_DEGREE:
             raise _validation_error(
                 "budget_exceeded",
@@ -563,10 +572,11 @@ def _build_constraint_plan(
     recognized = (
         recognized_field or _recognize_action_field(action)
         if isinstance(action, EmbeddedRealNumberFieldMatrixAction)
+        and action.generators
         else None
     )
     generator_matrices: tuple[tuple[tuple[Any, ...], ...], ...]
-    if isinstance(action, EmbeddedRealNumberFieldMatrixAction):
+    if isinstance(action, EmbeddedRealNumberFieldMatrixAction) and action.generators:
         assert recognized is not None
         generator_matrices = tuple(
             tuple(
@@ -730,6 +740,7 @@ def _admit_invariant_bilinear_form_lattice(
     recognized_field = (
         _recognize_action_field(action)
         if isinstance(action, EmbeddedRealNumberFieldMatrixAction)
+        and action.generators
         else None
     )
     plan = _build_constraint_plan(

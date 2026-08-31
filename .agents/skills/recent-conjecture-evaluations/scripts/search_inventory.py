@@ -12,7 +12,9 @@ TEXT_SUFFIXES = {".md", ".json", ".jsonl", ".txt", ".yaml", ".yml"}
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("query", help="Case-insensitive overlap phrase")
-    parser.add_argument("roots", nargs="+", type=Path, help="Report or trajectory roots")
+    parser.add_argument(
+        "roots", nargs="+", type=Path, help="Report or trajectory roots"
+    )
     parser.add_argument("--limit", type=int, default=100)
     args = parser.parse_args()
 

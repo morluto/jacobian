@@ -90,10 +90,7 @@ def determinant_and_rank(
     from flint import fmpq, fmpq_mat
 
     backend = fmpq_mat(
-        [
-            [fmpq(value.numerator, value.denominator) for value in row]
-            for row in rows
-        ]
+        [[fmpq(value.numerator, value.denominator) for value in row] for row in rows]
     )
     determinant = backend.det()
     return (

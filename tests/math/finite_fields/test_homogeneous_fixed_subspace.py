@@ -14,6 +14,7 @@ from jacobian.math.finite_fields import (
 )
 from jacobian.math.finite_fields._models import HomogeneousFixedSubspaceRequest
 from jacobian.math.finite_fields._tools import TOOLS
+from jacobian.math.finite_fields.values import PrimeFieldActionAxis
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
 
@@ -256,6 +257,18 @@ def test_one_variable_degree_is_bounded_by_derived_work_not_fixed_cap() -> None:
     assert result.basis_matrix.entries == ((1,),)
 
 
+def test_one_variable_basis_does_not_materialize_degree_sized_separator_pool() -> None:
+    action = PrimeFieldLinearAction(
+        variable_axis=Axis(name="polynomial_variables", labels=("x",)),
+        generator_matrices=(PrimeFieldMatrix(prime=3, entries=((1,),), columns=1),),
+    )
+
+    result = homogeneous_fixed_subspace(action, 10_000_000)
+
+    assert result.monomial_basis == ((10_000_000,),)
+    assert result.basis_matrix.entries == ((1,),)
+
+
 def test_nine_variable_degree_one_action_uses_derived_admission() -> None:
     variable_count = 9
     identity = tuple(
@@ -275,6 +288,26 @@ def test_nine_variable_degree_one_action_uses_derived_admission() -> None:
     result = homogeneous_fixed_subspace(action, 1)
 
     assert result.fixed_dimension == variable_count
+
+
+def test_action_axis_uses_the_shared_matrix_axis_bound() -> None:
+    variable_count = 257
+    identity = tuple(
+        tuple(int(row == column) for column in range(variable_count))
+        for row in range(variable_count)
+    )
+
+    action = PrimeFieldLinearAction(
+        variable_axis=PrimeFieldActionAxis(
+            name="polynomial_variables",
+            labels=tuple(f"x{index}" for index in range(variable_count)),
+        ),
+        generator_matrices=(
+            PrimeFieldMatrix(prime=3, entries=identity, columns=variable_count),
+        ),
+    )
+
+    assert len(action.variable_axis.labels) == variable_count
 
 
 def test_seventeen_one_variable_generators_use_derived_admission() -> None:
@@ -301,19 +334,55 @@ def test_huge_one_variable_degree_is_rejected_by_substitution_bound() -> None:
         homogeneous_fixed_subspace(action, 1_100_000_000)
 
 
-def test_raw_action_rejects_oversized_prime_and_matrix_before_nested_work() -> None:
+def test_native_action_preserves_the_exact_prime_fallback() -> None:
+    prime = 2_147_483_659
+    action = PrimeFieldLinearAction.model_validate(
+        {
+            "variable_axis": {"name": "polynomial_variables", "labels": ["x"]},
+            "generator_matrices": [
+                {"prime": prime, "entries": [[1]], "columns": 1}
+            ],
+        }
+    )
+
+    result = homogeneous_fixed_subspace(action, 1)
+
+    assert result.action.prime == prime
+    assert result.basis_matrix.entries == ((1,),)
+
+
+def test_catalog_action_rejects_non_word_safe_prime_before_nested_work() -> None:
     with pytest.raises(ValidationError, match="word-safe backend bound"):
-        PrimeFieldLinearAction.model_validate(
+        HomogeneousFixedSubspaceRequest.model_validate(
             {
-                "variable_axis": {
-                    "name": "polynomial_variables",
-                    "labels": ["x"],
+                "action": {
+                    "variable_axis": {
+                        "name": "polynomial_variables",
+                        "labels": ["x"],
+                    },
+                    "generator_matrices": [
+                        {"prime": 10**200, "entries": [[1]], "columns": 1}
+                    ],
                 },
-                "generator_matrices": [
-                    {"prime": 10**200, "entries": [[1]], "columns": 1}
-                ],
+                "degree": 1,
             }
         )
+
+
+def test_catalog_action_rejects_non_word_safe_canonical_action() -> None:
+    action = PrimeFieldLinearAction(
+        variable_axis=Axis(name="polynomial_variables", labels=("x",)),
+        generator_matrices=(
+            PrimeFieldMatrix(
+                prime=2_147_483_659,
+                entries=((1,),),
+                columns=1,
+            ),
+        ),
+    )
+
+    with pytest.raises(ValidationError, match="word-safe backend bound"):
+        HomogeneousFixedSubspaceRequest(action=action, degree=1)
 
 
 def test_raw_action_malformed_matrix_row_is_a_validation_error() -> None:

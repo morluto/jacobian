@@ -3,6 +3,7 @@
 from typing import Any
 
 from pydantic import Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.finite_fields.values import (
@@ -16,6 +17,7 @@ from jacobian.math.finite_fields.values import (
     ProjectiveLine,
     ProjectivePoint,
 )
+from jacobian.math.matrices.finite_fields._bounds import MAX_PRIME_FIELD_FLINT_PRIME
 
 _MAX_PROJECTIVE_POINTS = 4_096
 _MAX_DIRECTION_RANK_WORK = 1_000_000
@@ -67,7 +69,29 @@ class HomogeneousFixedSubspaceRequest(_FiniteFieldRequest):
                 else matrix
                 for matrix in matrices
             )
+        matrices = normalized_action.get("generator_matrices")
+        if isinstance(matrices, (list, tuple)):
+            for matrix in matrices:
+                prime = (
+                    matrix.get("prime")
+                    if isinstance(matrix, dict)
+                    else getattr(matrix, "prime", None)
+                )
+                if type(prime) is int and prime > MAX_PRIME_FIELD_FLINT_PRIME:
+                    raise PydanticCustomError(
+                        "finite_field.linear_action_prime_bound",
+                        "linear action prime exceeds the word-safe backend bound",
+                    )
         return {**data, "action": normalized_action}
+
+    @model_validator(mode="after")
+    def require_catalog_prime_bound(self) -> "HomogeneousFixedSubspaceRequest":
+        if self.action.prime > MAX_PRIME_FIELD_FLINT_PRIME:
+            raise PydanticCustomError(
+                "finite_field.linear_action_prime_bound",
+                "linear action prime exceeds the word-safe backend bound",
+            )
+        return self
 
 
 class RestrictScalarsRequest(_FiniteFieldRequest):

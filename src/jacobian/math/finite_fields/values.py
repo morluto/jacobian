@@ -12,7 +12,6 @@ from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import sha256_digest
 from jacobian.math.graphs.directed._models import DirectedGraph
 from jacobian.math.matrices.finite_fields._bounds import (
-    MAX_PRIME_FIELD_FLINT_PRIME,
     MAX_PRIME_FIELD_MATRIX_AXIS,
 )
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix, rank
@@ -394,14 +393,8 @@ class PrimeFieldLinearAction(StrictModel):
                 "linear action exceeds the generator-count bound",
             )
         for matrix in matrices:
-            prime = _raw_field(matrix, "prime")
             columns = _raw_field(matrix, "columns")
             entries = _raw_field(matrix, "entries")
-            if type(prime) is int and not 2 <= prime <= MAX_PRIME_FIELD_FLINT_PRIME:
-                raise _validation_error(
-                    "finite_field.linear_action_prime_bound",
-                    "linear action prime exceeds the word-safe backend bound",
-                )
             if type(columns) is int and columns != variable_count:
                 raise _validation_error(
                     "finite_field.linear_action_matrix_shape",
@@ -503,13 +496,6 @@ class HomogeneousFixedSubspace(StrictModel):
             raise _validation_error(
                 "finite_field.fixed_subspace_basis_parent",
                 "fixed-subspace basis must use the action prime",
-            )
-        if type(matrix_prime) is int and not (
-            2 <= matrix_prime <= MAX_PRIME_FIELD_FLINT_PRIME
-        ):
-            raise _validation_error(
-                "finite_field.fixed_subspace_prime_bound",
-                "fixed-subspace basis prime exceeds the word-safe backend bound",
             )
         if type(columns) is int and columns != monomial_count:
             raise _validation_error(

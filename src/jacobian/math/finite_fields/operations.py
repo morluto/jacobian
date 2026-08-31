@@ -110,17 +110,27 @@ def _homogeneous_fixed_subspace_output_bytes(
         len(action.variable_axis.labels), degree
     )
     largest_residue = action.prime - 1
+    # A reduced row-echelon basis with ``probe_rank`` pivots can have arbitrary
+    # residues only in its free columns.  Use that feasible worst-case shape;
+    # filling pivot columns and every row with a nonzero residue is not a
+    # possible RREF and overstates the transport envelope.
+    probe_rank = 1 if monomial_count == 1 else monomial_count // 2
+    probe_entries = [
+        [
+            1 if column == row else largest_residue if column >= probe_rank else 0
+            for column in range(monomial_count)
+        ]
+        for row in range(probe_rank)
+    ]
     payload = {
         "action": action.model_dump(mode="json"),
         "basis_matrix": {
             "columns": monomial_count,
-            "entries": [
-                [largest_residue] * monomial_count for _ in range(monomial_count)
-            ],
+            "entries": probe_entries,
             "prime": action.prime,
         },
         "degree": degree,
-        "fixed_dimension": monomial_count,
+        "fixed_dimension": probe_rank,
         "monomial_basis": [list(exponents) for exponents in monomial_basis],
     }
     try:
@@ -518,6 +528,9 @@ def _homogeneous_monomial_basis(
     variable_count: int, degree: int
 ) -> tuple[tuple[int, ...], ...]:
     """Return degree-d exponent vectors in descending lexicographic order."""
+
+    if variable_count == 1:
+        return ((degree,),)
 
     # A weak composition is determined by the positions of its variable_count
     # minus one separators among degree + variable_count - 1 slots. Reversing

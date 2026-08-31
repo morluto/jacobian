@@ -5,13 +5,9 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-<<<<<<< HEAD
-from jacobian.canonical import encode_strict_json
+from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields import _matrix_rank as matrix_rank_module
-=======
-from jacobian.canonical import CanonicalLimits
->>>>>>> refs/remotes/origin/main
 from jacobian.math.finite_fields._matrix_rank import compute_rank
 from jacobian.math.finite_fields._matrix_rank_models import MatrixRankRequest
 from jacobian.math.finite_fields.operations import matrix_rank

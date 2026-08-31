@@ -9,12 +9,11 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits, parse_canonical_integer
+from jacobian.canonical import parse_canonical_integer
 
 MAX_FINITE_SET_OPERAND_ELEMENTS = 50_000
 MAX_FINITE_INTEGER_SET_ELEMENTS = 2 * MAX_FINITE_SET_OPERAND_ELEMENTS
 MAX_FINITE_SET_COVERAGE_VALUES = MAX_FINITE_INTEGER_SET_ELEMENTS
-_MAX_FINITE_SET_WIRE_BYTES = CanonicalLimits().max_output_bytes // 2
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -33,14 +32,6 @@ class FiniteIntegerSet(StrictModel):
         if len(set(self.elements)) != len(self.elements):
             raise _validation_error(
                 "elements_not_unique", "finite set elements must be unique"
-            )
-        estimated = sum(len(value) + 3 for value in self.elements) + 64
-        if estimated > _MAX_FINITE_SET_WIRE_BYTES:
-            raise _validation_error(
-                "wire_bytes_exceeded",
-                "finite set request exceeds the "
-                f"{_MAX_FINITE_SET_WIRE_BYTES}-byte transport envelope; "
-                "partition the set into ≤10MiB chunks and compose",
             )
         return self
 

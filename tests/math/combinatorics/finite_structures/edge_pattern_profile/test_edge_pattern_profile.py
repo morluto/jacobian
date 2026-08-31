@@ -89,7 +89,7 @@ def test_numeric_color_keys_use_strict_delivery_sizing() -> None:
     hg = _hg(["num", "den"], [("e0", ("num", "den"))])
     result = compute_edge_pattern_profile(hg, {"num": "red", "den": "blue"})
 
-    assert result.vertex_colors == {"num": "red", "den": "blue"}
+    assert {(p.vertex, p.color) for p in result.vertex_colors} == {("den", "blue"), ("num", "red")}
 
 
 def test_result_preserves_source() -> None:
@@ -97,7 +97,7 @@ def test_result_preserves_source() -> None:
     colors = {"a": "red", "b": "blue"}
     result = compute_edge_pattern_profile(hg, colors)
     assert result.hypergraph == hg
-    assert result.vertex_colors == colors
+    assert {(p.vertex, p.color) for p in result.vertex_colors} == {("a", "red"), ("b", "blue")}
 
 
 def test_rejects_incomplete_colors() -> None:
@@ -109,9 +109,13 @@ def test_rejects_incomplete_colors() -> None:
 
 
 def test_native_rejects_oversized_color_before_normalization() -> None:
+    # Thread 3: The fixed per-label cap was replaced by an aggregate UTF-8 bound.
+    # A 65-character label on a one-vertex hypergraph is now admitted.
     hg = _hg(["a"], [])
-    with pytest.raises(OperationDomainValidationError, match="at most 64"):
-        compute_edge_pattern_profile(hg, {"a": "x" * 65})
+    result = compute_edge_pattern_profile(hg, {"a": "x" * 65})
+    assert len(result.vertex_colors) == 1
+    assert result.vertex_colors[0].vertex == "a"
+    assert result.vertex_colors[0].color == "x" * 65
 
 
 def test_native_rejects_unencodable_color() -> None:

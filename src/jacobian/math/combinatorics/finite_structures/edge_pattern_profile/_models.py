@@ -47,11 +47,18 @@ class EdgePatternEntry(StrictModel):
     color_labels: tuple[str, ...]
 
 
+class VertexColorPair(StrictModel):
+    """One vertex-color pair in an edge-pattern profile coloring."""
+
+    vertex: str
+    color: str
+
+
 class EdgePatternProfileResult(StrictModel):
     """The complete vertex-colour edge-pattern profile of a hypergraph."""
 
     hypergraph: FiniteHypergraph
-    vertex_colors: dict[str, str]
+    vertex_colors: tuple[VertexColorPair, ...]
     entries: tuple[EdgePatternEntry, ...]
     monochromatic_edge_ids: tuple[str, ...]
     rainbow_edge_ids: tuple[str, ...]
@@ -59,6 +66,7 @@ class EdgePatternProfileResult(StrictModel):
 
 __all__ = [
     "EdgePatternEntry",
+    "VertexColorPair",
     "EdgePatternProfileRequest",
     "EdgePatternProfileResult",
 ]

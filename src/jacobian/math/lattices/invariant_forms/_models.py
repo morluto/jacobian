@@ -137,6 +137,12 @@ def _require_raw_action_envelope(data: object) -> object:  # noqa: C901
                     "generator matrix rows exceed the declared coordinate_axis"
                     " dimension before nested parsing",
                 )
+            if total_cells > MAX_CONSTRAINT_CELLS:
+                raise _validation_error(
+                    "budget_exceeded",
+                    "generator matrix cells exceed the structural bound of "
+                    f"{MAX_CONSTRAINT_CELLS} coefficients before nested parsing",
+                )
     else:
         # When the axis is missing, empty, or not a sequence, still bound the
         # total raw cell count so Pydantic does not validate a billion cells

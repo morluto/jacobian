@@ -120,7 +120,7 @@ def _require_raw_action_envelope(data: object) -> object:  # noqa: C901
     """Bound structural action containers before nested rational parsing."""
 
     if not isinstance(data, dict):
-        return data
+        return canonicalize_json_containers(data)
     axis = data.get("coordinate_axis")
     if isinstance(axis, (list, tuple)) and len(axis) > MAX_ACTION_DIMENSION:
         raise _validation_error(
@@ -380,7 +380,7 @@ class IntegralBilinearForm(StrictModel):
                         "noncanonical_coordinate_label",
                         "form coordinate_axis labels must use NFC Unicode normalization",
                     )
-        return data
+        return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_form_shape(self) -> Self:

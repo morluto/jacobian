@@ -270,10 +270,17 @@ def _retained_action_bytes(action: RationalMatrixAction) -> int:
                 row_bytes = sum(len(str(value)) + 4 for value in row)
                 if row_bytes > max_row_bytes:
                     max_row_bytes = row_bytes
+        axis_label_bytes = sum(
+            len(label.encode("utf-8")) + 4 for label in action.coordinate_axis
+        )
+        generator_label_bytes = sum(
+            len(generator.label.encode("utf-8")) + 4 for generator in action.generators
+        )
         estimated_bytes = (
             4_096
-            + dimension * 8
-            + generator_count * (8 + dimension * max_row_bytes + 32)
+            + axis_label_bytes
+            + generator_label_bytes
+            + generator_count * (dimension * max_row_bytes + 32)
         )
         if estimated_bytes + 4_096 > MAX_INVARIANT_FORM_RESULT_BYTES:
             raise _validation_error(

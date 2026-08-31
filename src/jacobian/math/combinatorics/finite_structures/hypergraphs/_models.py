@@ -23,7 +23,11 @@ from jacobian.canonical import (
     sha256_digest,
     strict_json_object_size,
 )
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    MAX_GRAPH_LABEL_BYTES,
+    MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+    SimpleUndirectedGraph,
+)
 
 MAX_VERTICES = 256
 MAX_EDGES = 12_000
@@ -728,11 +732,25 @@ class EdgeIntersectionGraphRequest(StrictModel):
     The graph's vertices are the hypergraph's edge IDs and two vertices
     are adjacent if and only if the corresponding hyperedges have nonempty
     intersection.  Because the result is a canonical
-    :class:`SimpleUndirectedGraph`, whose value requires NFC-normalized
-    vertex labels, edge IDs must be NFC-normalized.
+    :class:`SimpleUndirectedGraph`, the operation admits at most
+    ``MAX_INDEXED_SIMPLE_GRAPH_VERTICES`` edge IDs; every ID must be nonempty,
+    NFC-normalized, and at most ``MAX_GRAPH_LABEL_BYTES`` UTF-8 bytes.
     """
 
-    hypergraph: FiniteHypergraph
+    hypergraph: FiniteHypergraph = Field(
+        description=(
+            "Canonical finite hypergraph with at most "
+            f"{MAX_INDEXED_SIMPLE_GRAPH_VERTICES} edges. For the graph carrier, "
+            "every edge ID must be nonempty, Unicode NFC-normalized, and at most "
+            f"{MAX_GRAPH_LABEL_BYTES} UTF-8 bytes."
+        ),
+        json_schema_extra={
+            "edge_id_nfc": True,
+            "edge_id_nonempty": True,
+            "edge_id_utf8_bytes_bound": MAX_GRAPH_LABEL_BYTES,
+            "graph_vertex_count_bound": MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+        },
+    )
 
 
 class EdgeIntersectionGraphResult(StrictModel):

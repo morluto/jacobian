@@ -243,7 +243,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "Compute the canonical simple undirected graph whose vertices are "
         "the hypergraph's edge IDs and in which two vertices are adjacent "
         "if and only if the corresponding hyperedges have nonempty "
-        "intersection.  Edge IDs must be NFC-normalized so the result "
+        "intersection.  The edge-ID carrier admits at most 256 nonempty "
+        "Unicode-NFC labels, each using at most 64 UTF-8 bytes, so the result "
         "composes directly with downstream graph operations.",
         EdgeIntersectionGraphRequest,
         EdgeIntersectionGraphResult,

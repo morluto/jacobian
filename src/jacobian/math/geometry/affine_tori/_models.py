@@ -81,7 +81,9 @@ class AffineTorusFixedLocusResult(StrictModel):
             displacement = fmpz_mat(
                 [
                     [
-                        parse_canonical_integer(self.source.linear_part.entries[row][column])
+                        parse_canonical_integer(
+                            self.source.linear_part.entries[row][column]
+                        )
                         - int(row == column)
                         for column in range(dimension)
                     ]
@@ -118,9 +120,10 @@ class AffineTorusFixedLocusResult(StrictModel):
             expected_component_count = 1
             for index in range(displacement_rank):
                 expected_component_count *= abs(int(smith[index, index]))
-            if parse_canonical_integer(
-                family.finite_components.component_count
-            ) != expected_component_count:
+            if (
+                parse_canonical_integer(family.finite_components.component_count)
+                != expected_component_count
+            ):
                 raise _validation_error(
                     "source_fixed_locus",
                     "component count must match the source fixed locus",
@@ -131,8 +134,7 @@ class AffineTorusFixedLocusResult(StrictModel):
                 for coordinate in self.source.translation.coordinates
             )
             base_point = tuple(
-                coordinate.as_fraction()
-                for coordinate in family.base_point.coordinates
+                coordinate.as_fraction() for coordinate in family.base_point.coordinates
             )
             for row in range(dimension):
                 base_displacement = translation[row] + sum(

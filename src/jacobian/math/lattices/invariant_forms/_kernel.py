@@ -473,7 +473,9 @@ def _build_constraint_plan(
         )
         for equation_row in range(dimension):
             for equation_column in range(dimension):
-                _require_active_request("during constraint expansion", deadline=deadline)
+                _require_active_request(
+                    "during constraint expansion", deadline=deadline
+                )
                 rational_row = tuple(
                     _constraint_coefficient(
                         matrix,

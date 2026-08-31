@@ -48,22 +48,6 @@ def _polynomial(
 
 def _conjugate_point_request() -> ProjectiveSingularityPointWorkerRequest:
     axis = ("X", "Y", "Z")
-    source = _polynomial(
-        axis,
-        (1, (2, 0, 1)),
-        (1, (0, 2, 1)),
-        (1, (0, 0, 3)),
-    )
-    partials = (
-        _polynomial(axis, (2, (1, 0, 1))),
-        _polynomial(axis, (2, (0, 1, 1))),
-        _polynomial(
-            axis,
-            (1, (2, 0, 0)),
-            (1, (0, 2, 0)),
-            (3, (0, 0, 2)),
-        ),
-    )
     component = RationalPolynomialIdeal(
         variables=("Y", "Z"),
         generators=(
@@ -72,8 +56,7 @@ def _conjugate_point_request() -> ProjectiveSingularityPointWorkerRequest:
         ),
     )
     return ProjectiveSingularityPointWorkerRequest(
-        source=source,
-        partials=partials,
+        variables=axis,
         chart_zero_components=(component,),
         chart_one_components=(),
         chart_two_present=False,

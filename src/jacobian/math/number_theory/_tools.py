@@ -8,6 +8,7 @@ from jacobian.math.number_theory._divisibility import DIVISIBILITY_OPERATIONS
 from jacobian.math.number_theory._divisibility_graph import (
     DIVISIBILITY_GRAPH_OPERATION,
 )
+from jacobian.math.number_theory._divisibility_poset import DIVISIBILITY_POSET_OPERATION
 from jacobian.math.number_theory._divisibility_profiles import (
     DIVISIBILITY_PROFILE_OPERATIONS,
 )
@@ -32,6 +33,7 @@ TOOLS: MathTools = (
     *DIVISIBILITY_OPERATIONS,
     *PRIME_OPERATIONS,
     POWERFUL_NUMBER_OPERATION,
+    DIVISIBILITY_POSET_OPERATION,
     POWERFUL_ENUMERATE_OPERATION,
     *MODULAR_OPERATIONS,
     *PERIODIC_CONGRUENCE_OPERATIONS,

@@ -1,4 +1,4 @@
-"""Independent defining-invariant replay for embedding-profile tests."""
+"""Independent defining-invariant checks for embedding-profile tests."""
 
 from __future__ import annotations
 
@@ -133,7 +133,7 @@ def require_rectangle_selects_root(
     value: ComplexAlgebraicValue,
     rectangle: RationalComplexIsolatingRectangle,
 ) -> Literal["NEGATIVE_IMAGINARY", "POSITIVE_IMAGINARY"]:
-    """Replay root identity, count, and half-plane for test evidence."""
+    """Check root identity, count, and half-plane for test evidence."""
 
     import sympy
 
@@ -181,7 +181,7 @@ def require_real_interval_selects_root(
     embedding: RealNumberFieldEmbedding,
     interval: RationalIsolatingInterval,
 ) -> None:
-    """Replay real root identity and count for test evidence."""
+    """Check real root identity and count for test evidence."""
 
     import sympy
 

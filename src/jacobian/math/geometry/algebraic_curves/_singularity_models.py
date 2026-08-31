@@ -148,7 +148,7 @@ class ProjectivePlaneCurveFirstJet(StrictModel):
             SimpleNumberFieldElement,
         ],
     ) -> Self:
-        """Construct the exact zero jet after owner-local replay established it."""
+        """Construct the exact zero jet established by point construction."""
 
         return cls.model_construct(value=value, gradient=gradient)
 

@@ -245,7 +245,7 @@ def _materialize_friable_bounded(x: int, y: int) -> tuple[int, ...]:
 
 
 def plan_friable_enumerate(
-    x: int, y: int
+    x: int, y: int, *, enforce_transport: bool = True
 ) -> tuple[str, tuple[int, ...], tuple[int, ...]]:
     """Validate and select one exact friable-enumerate execution regime.
 
@@ -276,7 +276,7 @@ def plan_friable_enumerate(
                 "friable_enumerate_family_exceeds_the_result_size_budget",
                 "friable-enumerate family exceeds the result-size budget",
             )
-        if (
+        if enforce_transport and (
             _exact_serialized_bytes(x, y, tuple(range(1, x + 1)))
             > _MAX_FRIABLE_ENUMERATED_BYTES
         ):
@@ -284,7 +284,7 @@ def plan_friable_enumerate(
                 "friable_enumerate_family_exceeds_the_serialized_byte_budget",
                 "friable-enumerate family exceeds the serialized-byte budget",
             )
-        return "DIRECT", (), ()
+        return "DIRECT", (), tuple(range(1, x + 1))
 
     # Materialized regime: small enough to scan 1..x directly.
     # Count the actual friable family size instead of using the coarse x
@@ -297,7 +297,7 @@ def plan_friable_enumerate(
                 "friable_enumerate_family_exceeds_the_result_size_budget",
                 "friable-enumerate family exceeds the result-size budget",
             )
-        if _exact_serialized_bytes(x, y, family) > _MAX_FRIABLE_ENUMERATED_BYTES:
+        if enforce_transport and _exact_serialized_bytes(x, y, family) > _MAX_FRIABLE_ENUMERATED_BYTES:
             raise _validation_error(
                 "friable_enumerate_family_exceeds_the_serialized_byte_budget",
                 "friable-enumerate family exceeds the serialized-byte budget",
@@ -319,7 +319,7 @@ def plan_friable_enumerate(
             "friable_enumerate_family_exceeds_the_result_size_budget",
             "friable-enumerate family exceeds the result-size budget",
         )
-    if _exact_serialized_bytes(x, y, family) > _MAX_FRIABLE_ENUMERATED_BYTES:
+    if enforce_transport and _exact_serialized_bytes(x, y, family) > _MAX_FRIABLE_ENUMERATED_BYTES:
         raise _validation_error(
             "friable_enumerate_family_exceeds_the_serialized_byte_budget",
             "friable-enumerate family exceeds the serialized-byte budget",

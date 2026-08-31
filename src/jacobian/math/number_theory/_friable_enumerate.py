@@ -19,8 +19,14 @@ from jacobian.math.number_theory.arithmetic.values import IntegerValue
 def compute_friable_enumerate(
     request: FriableEnumerateRequest,
 ) -> FriableEnumerateResult:
-    return enumerate_friable(
-        parse_canonical_integer(request.x), parse_canonical_integer(request.y)
+    x_value = parse_canonical_integer(request.x)
+    y_value = parse_canonical_integer(request.y)
+    family = _enumerate_friable_kernel(x_value, y_value, enforce_transport=True)
+    return FriableEnumerateResult._from_kernel(
+        FriableEnumerateRequest(
+            x=format_canonical_integer(x_value), y=format_canonical_integer(y_value)
+        ),
+        family=family,
     )
 
 
@@ -32,7 +38,9 @@ def enumerate_friable(
     x_value = parse_canonical_integer(x.value) if isinstance(x, IntegerValue) else x
     y_value = parse_canonical_integer(y.value) if isinstance(y, IntegerValue) else y
     try:
-        family = _enumerate_friable_kernel(x_value, y_value)
+        family = _enumerate_friable_kernel(
+            x_value, y_value, enforce_transport=False
+        )
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(
             location=("x", "y"), code=exc.type, message=exc.message()

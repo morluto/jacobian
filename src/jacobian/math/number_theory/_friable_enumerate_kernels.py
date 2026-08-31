@@ -65,7 +65,12 @@ def _enumerate_generated(x: int, primes: tuple[int, ...]) -> tuple[int, ...]:
     return tuple(values)
 
 
-def enumerate_friable(x: int | IntegerValue, y: int | IntegerValue) -> tuple[int, ...]:
+def enumerate_friable(
+    x: int | IntegerValue,
+    y: int | IntegerValue,
+    *,
+    enforce_transport: bool = False,
+) -> tuple[int, ...]:
     """Return the increasing tuple of positive y-friable integers at most x.
 
     The cutoff is inclusive. By convention, for positive x and y <= 1, only 1
@@ -77,15 +82,12 @@ def enumerate_friable(x: int | IntegerValue, y: int | IntegerValue) -> tuple[int
     if type(x) is not int or type(y) is not int:
         raise TypeError("friable-enumerate inputs must be integers")
 
-    regime, _primes, admitted_family = plan_friable_enumerate(x, y)
+    regime, _primes, admitted_family = plan_friable_enumerate(
+        x, y, enforce_transport=enforce_transport
+    )
 
     if regime == "DIRECT":
-        if x == 0:
-            return ()
-        if y <= 1:
-            return (1,)
-        # y >= x: every integer 1..x is friable
-        return tuple(range(1, x + 1))
+        return admitted_family
 
     if regime == "MATERIALIZED":
         return admitted_family

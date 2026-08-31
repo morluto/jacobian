@@ -339,9 +339,7 @@ def test_native_action_preserves_the_exact_prime_fallback() -> None:
     action = PrimeFieldLinearAction.model_validate(
         {
             "variable_axis": {"name": "polynomial_variables", "labels": ["x"]},
-            "generator_matrices": [
-                {"prime": prime, "entries": [[1]], "columns": 1}
-            ],
+            "generator_matrices": [{"prime": prime, "entries": [[1]], "columns": 1}],
         }
     )
 

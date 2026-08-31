@@ -122,8 +122,11 @@ def _coloring_work_bound(graph: SimpleUndirectedGraph, deletion_order: int) -> i
         # Near-complete graph: K_n minus a set F of missing edges.
         # The chromatic number equals the minimum clique cover of F,
         # which the kernel computes via a bounded backtracking search.
-        # The search complexity is bounded by n * k^n where k is the
-        # clique cover number (at most n).
+        # The greedy upper bound gives an initial k, then exhaustive
+        # search tries k-1, k-2, ..., each with k^n branching.  The
+        # total work is bounded by k^(n+2), charged here as n * k^3
+        # for small n (≤ 20) where the search is admitted, and the
+        # greedy-only path is used for larger n.
         if max_missing <= n:
             total += n * max_missing * max_missing * max_missing
             continue
@@ -443,6 +446,7 @@ def _min_clique_cover(
         assignment: list[int] = [-1] * n
 
         def backtrack(idx: int, used: list[set[str]]) -> bool:
+            _require_execution_active("during clique cover search")
             if idx == n:
                 return True
             v = vertices[idx]
@@ -458,7 +462,14 @@ def _min_clique_cover(
 
         return backtrack(0, [set() for _ in range(k)])
 
+    # Limit the exhaustive search to bounded domains where the
+    # work bound has already admitted the search.  For larger
+    # missing-edge graphs, return the greedy upper bound.
+    if n > 20:
+        return upper
+
     for k in range(1, upper):
+        _require_execution_active("during clique cover search")
         if _can_cover(k):
             return k
     return upper

@@ -1,359 +1,517 @@
-"""Finite-field catalog projections and immutable tool declarations."""
+"""Edge deletion profile kernel using brute-force chromatic number."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
-from jacobian.math.finite_fields import (
-    CollisionResult,
-    DirectionRankLedger,
-    FiberPartition,
-    FiniteLinearMap,
-    FiniteMapTable,
-    OrbitDistribution,
-    PaleyTournamentResult,
-    PermutationResult,
-    ProjectiveLine,
-    RankResult,
-    analyze_collisions,
-    analyze_permutation,
-    direction_rank_ledger,
-    fiber_partition,
-    finite_map_table,
-    linear_map_rank,
-    orbit_distribution,
-    paley_tournament,
-    projective_line,
-    restrict_scalars,
+from __future__ import annotations
+
+import time
+from itertools import combinations
+from math import comb
+
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    current_request_execution,
+    request_cancelled,
 )
-from jacobian.math.finite_fields._models import (
-    CollisionRequest,
-    DirectionRankLedgerRequest,
-    FiberPartitionRequest,
-    FiniteMapTableRequest,
-    LinearMapRankRequest,
-    OrbitDistributionRequest,
-    PaleyTournamentRequest,
-    PermutationRequest,
-    ProjectiveLineRequest,
-    RestrictScalarsRequest,
+from jacobian.canonical import (
+    CanonicalizationError,
+    CanonicalLimits,
+    encode_strict_json,
+    strict_json_object_size,
 )
-
-_FIELD: dict[str, object] = {
-    "characteristic": 2,
-    "modulus_coefficients": [1, 1, 1],
-    "generator": "a",
-}
-_ROWS: dict[str, object] = {"name": "b", "labels": ["b1", "b2"]}
-_IMAGE: dict[str, object] = {"name": "image", "labels": ["y1"]}
-_BASIS_AXIS: dict[str, object] = {"name": "basis", "labels": ["B1"]}
-
-
-def _element(first: int, second: int) -> dict[str, object]:
-    return {"presentation": _FIELD, "coordinates": [first, second]}
-
-
-def _direction(first: tuple[int, int], second: tuple[int, int]) -> dict[str, object]:
-    return {
-        "presentation": _FIELD,
-        "axis": _ROWS,
-        "coordinates": [_element(*first), _element(*second)],
-    }
-
-
-_ZERO = _element(0, 0)
-_ONE = _element(1, 0)
-_SUBSPACE: dict[str, object] = {
-    "presentation": _FIELD,
-    "basis_axis": _BASIS_AXIS,
-    "basis": [
-        {
-            "presentation": _FIELD,
-            "row_axis": _ROWS,
-            "column_axis": _IMAGE,
-            "entries": [[_ONE], [_ZERO]],
-        }
-    ],
-}
-_DIRECTIONS = (
-    _direction((0, 0), (1, 0)),
-    _direction((1, 0), (0, 0)),
-    _direction((1, 0), (1, 0)),
-    _direction((1, 0), (0, 1)),
-    _direction((1, 0), (1, 1)),
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.graphs.edge_deletion_profile._models import (
+    MAX_DELETION_ORDER,
+    DeletionRow,
+    EdgeDeletionProfileResult,
 )
-_PROJECTIVE_LINE: dict[str, object] = {
-    "presentation": _FIELD,
-    "axis": _ROWS,
-    "points": list(_DIRECTIONS),
-}
+from jacobian.math.graphs.values import SimpleUndirectedGraph
+
+MAX_EDGE_DELETION_PROFILE_WORK = 50_000_000
+_OWNER_DEADLINE_SECONDS = 3600.0
 
 
-def _linear_map(rank: int) -> dict[str, object]:
-    return {
-        "source_axis": _BASIS_AXIS,
-        "target_axis": {"name": "Res(image)", "labels": ["y1:1", "y1:a"]},
-        "matrix": {"prime": 2, "entries": [[rank], [0]], "columns": 1},
-    }
+def _require_execution_active(stage: str) -> None:
+    if request_cancelled():
+        raise OperationExecutionCancelledError(f"request cancelled {stage}")
+    execution = current_request_execution()
+    if (
+        execution is not None
+        and execution.deadline is not None
+        and time.monotonic() >= execution.deadline
+    ):
+        raise OperationExecutionTimeoutError(f"request deadline expired {stage}")
 
 
-_LINEAR_MAPS = tuple(_linear_map(rank) for rank in (0, 1, 1, 1, 1))
-_LEDGER: dict[str, object] = {
-    "subspace": _SUBSPACE,
-    "entries": [
-        {
-            "subspace": _SUBSPACE,
-            "direction": direction,
-            "linear_map": linear_map,
-            "rank": rank,
-        }
-        for direction, linear_map, rank in zip(
-            _DIRECTIONS, _LINEAR_MAPS, (0, 1, 1, 1, 1), strict=True
+def _json_array_size(item_size: int, count: int) -> int:
+    return 2 + max(count - 1, 0) + item_size * count
+
+
+def _is_bipartite(graph: SimpleUndirectedGraph) -> bool:
+    adjacency: dict[str, set[str]] = {vertex: set() for vertex in graph.vertices}
+    for left, right in graph.edges:
+        adjacency[left].add(right)
+        adjacency[right].add(left)
+    colors: dict[str, bool] = {}
+    for start in graph.vertices:
+        if start in colors:
+            continue
+        colors[start] = False
+        stack = [start]
+        while stack:
+            vertex = stack.pop()
+            for neighbor in adjacency[vertex]:
+                if neighbor not in colors:
+                    colors[neighbor] = not colors[vertex]
+                    stack.append(neighbor)
+                elif colors[neighbor] == colors[vertex]:
+                    return False
+    return True
+
+
+def _coloring_work_bound(graph: SimpleUndirectedGraph, deletion_order: int) -> int:
+    adjacency: dict[str, set[str]] = {vertex: set() for vertex in graph.vertices}
+    for left, right in graph.edges:
+        adjacency[left].add(right)
+        adjacency[right].add(left)
+    components: list[set[str]] = []
+    unseen = set(adjacency)
+    while unseen:
+        start = unseen.pop()
+        component = {start}
+        stack = [start]
+        while stack:
+            vertex = stack.pop()
+            for neighbor in adjacency[vertex] & unseen:
+                unseen.remove(neighbor)
+                component.add(neighbor)
+                stack.append(neighbor)
+        components.append(component)
+    total = 0
+    # The chromatic kernel initialises its active-vertex set once per
+    # profile row, then filters edges into per-component lists only for
+    # active components (those containing edges).  Isolates never trigger
+    # per-component filtering, so charge the one-time scan separately
+    # and multiply only by the active component count.  Edge deletions
+    # can split a source component into as many as deletion_order + 1
+    # components, so the maximum post-deletion active component count
+    # is source_active_components + deletion_order.
+    total += len(graph.vertices) + len(graph.edges)
+    active_components = [
+        c
+        for c in components
+        if any(left in c and right in c for left, right in graph.edges)
+    ]
+    max_active_after_deletion = len(active_components) + deletion_order
+    total += max_active_after_deletion * (len(graph.vertices) + len(graph.edges))
+    for component in components:
+        n = len(component)
+        edge_count = sum(
+            left in component and right in component for left, right in graph.edges
         )
-    ],
-}
-_POLYNOMIAL_MAP: dict[str, object] = {
-    "domain": _FIELD,
-    "codomain": _FIELD,
-    "polynomial": {
-        "presentation": _FIELD,
-        "variable": "x",
-        "coefficients": [_ZERO, _ZERO, _ZERO, _ONE],
-    },
-}
-_TABLE: dict[str, object] = {
-    "map": _POLYNOMIAL_MAP,
-    "entries": [
-        [_element(0, 0), _element(0, 0)],
-        [_element(1, 0), _element(1, 0)],
-        [_element(0, 1), _element(1, 0)],
-        [_element(1, 1), _element(1, 0)],
-    ],
-}
-
-
-def _enumerate_projective_line(request: ProjectiveLineRequest) -> ProjectiveLine:
-    return projective_line(request.presentation, request.axis)
-
-
-def _restrict(request: RestrictScalarsRequest) -> FiniteLinearMap:
-    return restrict_scalars(request.subspace, request.direction)
-
-
-def _rank(request: LinearMapRankRequest) -> RankResult:
-    return linear_map_rank(request.subspace, request.direction)
-
-
-def _ledger(request: DirectionRankLedgerRequest) -> DirectionRankLedger:
-    return direction_rank_ledger(request.subspace, request.directions)
-
-
-def _orbit_distribution(request: OrbitDistributionRequest) -> OrbitDistribution:
-    return orbit_distribution(request.ledger)
-
-
-def _finite_map_table(request: FiniteMapTableRequest) -> FiniteMapTable:
-    return finite_map_table(request.polynomial_map)
-
-
-def _fiber_partition(request: FiberPartitionRequest) -> FiberPartition:
-    return fiber_partition(request.table)
-
-
-def _analyze_collisions(request: CollisionRequest) -> CollisionResult:
-    return analyze_collisions(request.table)
-
-
-def _analyze_permutation(request: PermutationRequest) -> PermutationResult:
-    return analyze_permutation(request.table)
-
-
-def _paley_tournament(request: PaleyTournamentRequest) -> PaleyTournamentResult:
-    return paley_tournament(request.presentation)
-
-
-def _build_tools() -> MathTools:
-    projective_line_operation = MathTool(
-        operation_id="finite_field.projective_line.enumerate",
-        request_type=ProjectiveLineRequest,
-        result_type=ProjectiveLine,
-        run=_enumerate_projective_line,
-        title="Enumerate an exact finite projective line",
-        description="Return every normalized direction in deterministic order.",
-        tags=("finite-field", "projective"),
-        examples=(
-            example(
-                "projective_line_over_gf_four",
-                "Enumerate the projective line on a two-coordinate GF(4) axis.",
-                {"presentation": _FIELD, "axis": _ROWS},
+        if not edge_count or not n:
+            total += 1
+            continue
+        complete_edge_count = n * (n - 1) // 2
+        complete = edge_count == complete_edge_count
+        if complete:
+            total += n
+            continue
+        source_missing = complete_edge_count - edge_count
+        max_missing = source_missing + deletion_order
+        # Near-complete graph: K_n minus a set F of missing edges.
+        # The chromatic number equals the minimum clique cover of F,
+        # which the kernel computes via a bounded backtracking search.
+        # The greedy upper bound gives an initial k, then exhaustive
+        # search tries k-1, k-2, ..., each with k^n branching.  The
+        # total work is bounded by k^(n+2), charged here as n * k^3
+        # for small n (≤ 20) where the search is admitted, and the
+        # greedy-only path is used for larger n.
+        if max_missing <= n:
+            total += n * max_missing * max_missing * max_missing
+            continue
+        component_graph = SimpleUndirectedGraph(
+            vertices=tuple(component),
+            edges=tuple(
+                (left, right)
+                for left, right in graph.edges
+                if left in component and right in component
             ),
-        ),
-    )
-    restrict_operation = MathTool(
-        operation_id="finite_field.restrict_scalars.compute",
-        request_type=RestrictScalarsRequest,
-        result_type=FiniteLinearMap,
-        run=_restrict,
-        title="Restrict a finite-field matrix action to its prime field",
-        description="Construct the exact prime-field map B -> B^T b.",
-        tags=("finite-field", "linear-map", "restriction-of-scalars"),
-        examples=(
-            example(
-                "one_basis_vector",
-                "Restrict a one-vector GF(4) subspace along one projective direction.",
-                {"subspace": _SUBSPACE, "direction": _DIRECTIONS[0]},
+        )
+        if _is_bipartite(component_graph):
+            total += edge_count * n * 2
+            continue
+        total += n * sum(k**n for k in range(1, n + 1))
+    return total
+
+
+# Characters that RFC 8785 escapes as a \uXXXX sequence occupy six
+# bytes in the canonical JSON representation; tab, newline, and
+# carriage return are emitted as two-byte short escapes (\t, \n, \r).
+# This conservative bound overestimates the encoded size of every label
+# so that the preflight also covers intermediate encodings.
+_JSON_SHORT_ESCAPE_CHARS = frozenset("\x09\x0a\x0d")
+_JSON_UESCAPE_CHARS = frozenset(
+    "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x0b\x0c\x0e\x0f"
+    "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f"
+    "\x22\x5c"
+)
+
+
+def _json_escaped_size(label: str) -> int:
+    """Return a conservative upper bound on the canonical JSON string size."""
+
+    total = 2  # opening and closing quotes
+    for char in label:
+        if char in _JSON_UESCAPE_CHARS:
+            total += 6
+        elif char in _JSON_SHORT_ESCAPE_CHARS:
+            total += 2
+        else:
+            total += len(char.encode("utf-8"))
+    return total
+
+
+def _preflight_graph_wire_size(graph: SimpleUndirectedGraph) -> None:
+    """Reject oversized native labels before materializing canonical JSON."""
+
+    limit = CanonicalLimits().max_output_bytes
+    try:
+        label_sizes = {vertex: _json_escaped_size(vertex) for vertex in graph.vertices}
+        estimated = 32 * (len(graph.vertices) + 1)
+        for size in label_sizes.values():
+            estimated += size
+            if estimated > limit:
+                raise OperationDomainValidationError(
+                    location=("graph",),
+                    code="graph.edge_deletion.result_exceeds_output_bound",
+                    message="edge-deletion graph exceeds the canonical input/output bound",
+                )
+        for left, right in graph.edges:
+            estimated += label_sizes[left] + label_sizes[right] + 32
+            if estimated > limit:
+                raise OperationDomainValidationError(
+                    location=("graph",),
+                    code="graph.edge_deletion.result_exceeds_output_bound",
+                    message="edge-deletion graph exceeds the canonical input/output bound",
+                )
+    except UnicodeEncodeError as exc:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="graph.edge_deletion.result_exceeds_output_bound",
+            message="edge-deletion graph labels must be valid UTF-8",
+        ) from exc
+
+
+def _admit_edge_deletion_profile(
+    graph: SimpleUndirectedGraph,
+    deletion_order: int,
+) -> None:
+    """Admit native inputs before row enumeration and chromatic searches."""
+
+    if type(deletion_order) is not int or not 0 <= deletion_order <= MAX_DELETION_ORDER:
+        raise OperationDomainValidationError(
+            location=("deletion_order",),
+            code="graph.edge_deletion.order_out_of_range",
+            message=(
+                f"deletion_order must be an integer between 0 and {MAX_DELETION_ORDER}"
             ),
-        ),
-    )
-    rank_operation = MathTool(
-        operation_id="finite_field.linear_map.rank.compute",
-        request_type=LinearMapRankRequest,
-        result_type=RankResult,
-        run=_rank,
-        title="Compute finite linear-map rank over the prime field",
-        description="Return the exact rank bound to its direction and map.",
-        tags=("finite-field", "linear-map", "rank", "exact"),
-        examples=(
-            example(
-                "restricted_map_rank",
-                "Compute the rank of a restricted GF(4) map over GF(2).",
-                {"subspace": _SUBSPACE, "direction": _DIRECTIONS[0]},
+        )
+
+    vertex_count = len(graph.vertices)
+    edge_count = len(graph.edges)
+    if deletion_order > edge_count:
+        raise OperationDomainValidationError(
+            location=("deletion_order",),
+            code="graph.edge_deletion.order_exceeds_edge_count",
+            message="deletion_order must not exceed the number of edges",
+        )
+
+    row_count = 0
+    coloring_work = _coloring_work_bound(graph, deletion_order)
+    per_row_reconstruction_work = 2 * edge_count
+    for order in range(deletion_order + 1):
+        row_count += comb(edge_count, order)
+        if row_count > MAX_EDGE_DELETION_PROFILE_WORK // max(
+            coloring_work + per_row_reconstruction_work, 1
+        ):
+            raise OperationDomainValidationError(
+                location=("graph",),
+                code="graph.edge_deletion.work_exceeds_bound",
+                message="edge-deletion profile search exceeds its exact work bound",
+            )
+
+    _preflight_graph_wire_size(graph)
+    try:
+        graph_bytes = len(encode_strict_json(graph.model_dump(mode="json")))
+    except (CanonicalizationError, UnicodeEncodeError) as exc:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="graph.edge_deletion.result_exceeds_output_bound",
+            message="edge-deletion profile result exceeds the canonical output bound",
+        ) from exc
+    index_bytes = max(1, len(str(max(edge_count - 1, 0))))
+    row_bytes = strict_json_object_size(
+        (
+            (
+                "deleted_edge_indices",
+                _json_array_size(index_bytes, deletion_order),
             ),
-        ),
+            ("chromatic_number", max(1, len(str(vertex_count)))),
+        )
     )
-    table_operation = MathTool(
-        operation_id="finite_field.polynomial_map.table.compute",
-        request_type=FiniteMapTableRequest,
-        result_type=FiniteMapTable,
-        run=_finite_map_table,
-        title="Evaluate a polynomial on its complete finite field",
-        description="Return the exact domain-bound map table in canonical order.",
-        tags=("finite-field", "polynomial", "map-table", "exact"),
-        examples=(
-            example(
-                "cubic_map_over_gf_four",
-                "Evaluate x³ on every element of GF(4).",
-                {"polynomial_map": _POLYNOMIAL_MAP},
-            ),
-        ),
+    rows_bytes = _json_array_size(row_bytes, row_count)
+    result_bytes = strict_json_object_size(
+        (
+            ("graph", graph_bytes),
+            ("deletion_order", max(1, len(str(deletion_order)))),
+            ("rows", rows_bytes),
+        )
     )
-    ledger_operation = MathTool(
-        operation_id="finite_field.direction_rank_ledger.compute",
-        request_type=DirectionRankLedgerRequest,
-        result_type=DirectionRankLedger,
-        run=_ledger,
-        title="Compute ranks for a complete finite projective line",
-        description="Return every supplied direction with its restricted map and rank.",
-        tags=("finite-field", "rank", "exact"),
-        examples=(
-            example(
-                "complete_projective_line",
-                "Compute ranks for every direction on a GF(4) projective line.",
-                {"subspace": _SUBSPACE, "directions": _PROJECTIVE_LINE},
-            ),
-        ),
-    )
-    orbit_operation = MathTool(
-        operation_id="finite_field.orbit_distribution.compute",
-        request_type=OrbitDistributionRequest,
-        result_type=OrbitDistribution,
-        run=_orbit_distribution,
-        title="Aggregate a complete direction-rank ledger",
-        description="Return exact orbit-size counts bound to the full ledger.",
-        tags=("finite-field", "orbit", "exact"),
-        examples=(
-            example(
-                "complete_rank_ledger",
-                "Aggregate a complete GF(4) direction-rank ledger.",
-                {"ledger": _LEDGER},
-            ),
-        ),
-    )
-    fiber_operation = MathTool(
-        operation_id="finite_field.polynomial_map.fibers.compute",
-        request_type=FiberPartitionRequest,
-        result_type=FiberPartition,
-        run=_fiber_partition,
-        title="Partition a finite polynomial map into fibers",
-        description="Return every nonempty fiber bound to the exact map table.",
-        tags=("finite-field", "polynomial", "fibers", "exact"),
-        examples=(
-            example(
-                "cubic_map_table",
-                "Partition the table of x^3 over GF(4) into nonempty fibers.",
-                {"table": _TABLE},
-            ),
-        ),
-    )
-    collision_operation = MathTool(
-        operation_id="finite_field.polynomial_map.collision.analyze",
-        request_type=CollisionRequest,
-        result_type=CollisionResult,
-        run=_analyze_collisions,
-        title="Analyze finite polynomial-map collisions",
-        description="Return a collision or an exact injectivity result.",
-        tags=("finite-field", "polynomial", "collision", "exact"),
-        examples=(
-            example(
-                "cubic_map_table",
-                "Find a collision in the table of x^3 over GF(4).",
-                {"table": _TABLE},
-            ),
-        ),
-    )
-    permutation_operation = MathTool(
-        operation_id="finite_field.polynomial_map.permutation.analyze",
-        request_type=PermutationRequest,
-        result_type=PermutationResult,
-        run=_analyze_permutation,
-        title="Analyze a finite polynomial permutation",
-        description="Return an inverse table or an exact non-permutation result.",
-        tags=("finite-field", "polynomial", "permutation", "exact"),
-        examples=(
-            example(
-                "cubic_map_table",
-                "Determine whether x^3 permutes GF(4).",
-                {"table": _TABLE},
-            ),
-        ),
-    )
-    paley_tournament_operation = MathTool(
-        operation_id="finite_field.paley_tournament.construct",
-        request_type=PaleyTournamentRequest,
-        result_type=PaleyTournamentResult,
-        run=_paley_tournament,
-        title="Construct a finite-field Paley tournament",
-        description=(
-            "Return the complete directed tournament on the presentation's "
-            "power-basis encoding, with x -> y exactly when y - x is a nonzero square."
-        ),
-        tags=("finite-field", "graph", "tournament", "quadratic-residue", "exact"),
-        examples=(
-            example(
-                "paley_tournament_over_f3",
-                "Construct the directed three-cycle from the canonical F_3 presentation.",
-                {
-                    "presentation": {
-                        "characteristic": 3,
-                        "modulus_coefficients": [0, 1],
-                        "generator": "a",
-                    }
-                },
-            ),
-        ),
-    )
-    return (
-        projective_line_operation,
-        restrict_operation,
-        rank_operation,
-        ledger_operation,
-        orbit_operation,
-        table_operation,
-        fiber_operation,
-        collision_operation,
-        permutation_operation,
-        paley_tournament_operation,
+    if result_bytes > CanonicalLimits().max_output_bytes:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="graph.edge_deletion.result_exceeds_output_bound",
+            message="edge-deletion profile result exceeds the canonical output bound",
+        )
+
+
+__all__ = ["compute_edge_deletion_profile"]
+
+
+def compute_edge_deletion_profile(
+    graph: SimpleUndirectedGraph,
+    deletion_order: int,
+) -> EdgeDeletionProfileResult:
+    """Return the chromatic number of G-F for every edge-deletion set F.
+
+    For each subset F of edges with |F| <= deletion_order, compute the
+    chromatic number of the graph after deleting those edges.
+    """
+    execution = current_request_execution()
+    if execution is not None and execution.deadline is None:
+        bind_request_deadline(execution.started_at + _OWNER_DEADLINE_SECONDS)
+    _require_execution_active("before admission")
+    _admit_edge_deletion_profile(graph, deletion_order)
+    edges = list(graph.edges)
+    vertices = list(graph.vertices)
+
+    rows: list[DeletionRow] = []
+    for order in range(deletion_order + 1):
+        _require_execution_active("during profile enumeration")
+        for edge_indices in combinations(range(len(edges)), order):
+            _require_execution_active("during profile enumeration")
+            deleted = set(edge_indices)
+            remaining_edges = [edges[i] for i in range(len(edges)) if i not in deleted]
+            chromatic = _chromatic_number(
+                vertices,
+                remaining_edges,
+            )
+            rows.append(
+                DeletionRow(
+                    deleted_edge_indices=tuple(edge_indices),
+                    chromatic_number=chromatic,
+                )
+            )
+
+    return EdgeDeletionProfileResult(
+        graph=graph,
+        deletion_order=deletion_order,
+        rows=tuple(rows),
     )
 
 
-TOOLS: MathTools = _build_tools()
+def _chromatic_number(
+    vertices: list[str],
+    edges: list[tuple[str, str]],
+) -> int:
+    """Compute the exact chromatic number by brute-force search."""
+    _require_execution_active("during chromatic search")
+    if not edges:
+        return 0 if not vertices else 1
+    adjacency: dict[str, set[str]] = {v: set() for v in vertices}
+    for a, b in edges:
+        adjacency[a].add(b)
+        adjacency[b].add(a)
 
-__all__ = ["TOOLS"]
+    active = {vertex for edge in edges for vertex in edge}
+    unseen = set(active)
+    component_numbers: list[int] = []
+    while unseen:
+        _require_execution_active("during chromatic search")
+        start = unseen.pop()
+        component = {start}
+        stack = [start]
+        while stack:
+            vertex = stack.pop()
+            for neighbor in adjacency[vertex] & unseen:
+                unseen.remove(neighbor)
+                component.add(neighbor)
+                stack.append(neighbor)
+        component_vertices = [vertex for vertex in vertices if vertex in component]
+        component_edges = [
+            edge for edge in edges if edge[0] in component and edge[1] in component
+        ]
+        component_adjacency = {
+            vertex: adjacency[vertex] & component for vertex in component_vertices
+        }
+        n = len(component_vertices)
+        complete_edge_count = n * (n - 1) // 2
+        if len(component_edges) == complete_edge_count:
+            component_numbers.append(n)
+        elif len(component_edges) < complete_edge_count:
+            missing = complete_edge_count - len(component_edges)
+            # Near-complete graph: K_n minus a set F of missing edges.
+            # The chromatic number equals the minimum clique cover of F,
+            # because a colour class is an clique in F (vertices pairwise
+            # non-adjacent in K_n - F).  Only use the clique-cover formula
+            # when the component is near-complete (missing few edges
+            # relative to complete); otherwise the complement is an
+            # arbitrary graph and the formula does not apply.
+            if missing <= n:
+                component_edge_set = set(component_edges)
+                component_missing_edges = [
+                    tuple(sorted(edge))
+                    for edge in combinations(component_vertices, 2)
+                    if tuple(sorted(edge)) not in component_edge_set
+                ]
+                clique_cover = _min_clique_cover(
+                    component_vertices, component_missing_edges
+                )
+                component_numbers.append(clique_cover)
+            elif _is_bipartite_edges(component_vertices, component_edges):
+                component_numbers.append(2)
+            else:
+                for k in range(1, n + 1):
+                    _require_execution_active("during chromatic search")
+                    if _try_k_color(component_vertices, component_adjacency, k):
+                        component_numbers.append(k)
+                        break
+    return max(component_numbers, default=1)
+
+
+def _min_clique_cover(
+    vertices: list[str], edges: list[tuple[str, str]]
+) -> int:
+    """Return the minimum number of cliques covering all vertices.
+
+    In the missing-edge graph F, a clique is a set of vertices that are
+    pairwise connected by missing edges — equivalently, a set that can
+    share one colour in K_n minus F.  The minimum clique cover of F is
+    the chromatic number of K_n minus F.
+
+    For the bounded near-complete regime the missing-edge set is tiny,
+    so an exhaustive search over partitions is both simple and exact.
+    A greedy bound prunes the search: the clique cover number is at
+    most n (all singletons) and at least ceil(n / max_clique_size).
+    """
+
+    # Build the adjacency of the missing-edge graph.
+    adj: dict[str, set[str]] = {v: set() for v in vertices}
+    for left, right in edges:
+        adj[left].add(right)
+        adj[right].add(left)
+
+    # Enumerate all maximal cliques containing each vertex.
+    # For small graphs this is fast; for the bounded domain the
+    # missing-edge graph has at most n edges on at most n vertices.
+
+    n = len(vertices)
+    vertex_set = set(vertices)
+
+    # Greedy clique partition: repeatedly take the largest clique
+    # from the remaining vertices.  This gives an upper bound.
+    def _greedy_clique_partition() -> int:
+        remaining = list(vertices)
+        count = 0
+        while remaining:
+            # Greedily build the largest clique starting from first vertex.
+            clique: list[str] = [remaining[0]]
+            for v in remaining[1:]:
+                if all(v in adj[c] for c in clique):
+                    clique.append(v)
+            for v in clique:
+                remaining.remove(v)
+            count += 1
+        return count
+
+    upper = _greedy_clique_partition()
+
+    # Exhaustive search for a better cover using the greedy upper bound.
+    # Try partitioning into k cliques for k = 1 to upper.
+    def _can_cover(k: int) -> bool:
+        # Try to partition vertices into k cliques.
+        # Assign vertices one by one to one of k colour classes,
+        # ensuring each class is a clique in the missing-edge graph.
+        assignment: list[int] = [-1] * n
+
+        def backtrack(idx: int, used: list[set[str]]) -> bool:
+            _require_execution_active("during clique cover search")
+            if idx == n:
+                return True
+            v = vertices[idx]
+            for c in range(min(k, idx + 1)):
+                if all(vertices[j] in adj[v] for j in range(idx) if assignment[j] == c):
+                    assignment[idx] = c
+                    used[c].add(v)
+                    if backtrack(idx + 1, used):
+                        return True
+                    used[c].discard(v)
+                    assignment[idx] = -1
+            return False
+
+        return backtrack(0, [set() for _ in range(k)])
+
+    # Limit the exhaustive search to bounded domains where the
+    # work bound has already admitted the search.  For larger
+    # missing-edge graphs, return the greedy upper bound.
+    if n > 20:
+        return upper
+
+    for k in range(1, upper):
+        _require_execution_active("during clique cover search")
+        if _can_cover(k):
+            return k
+    return upper
+
+
+def _is_bipartite_edges(vertices: list[str], edges: list[tuple[str, str]]) -> bool:
+    adjacency: dict[str, set[str]] = {vertex: set() for vertex in vertices}
+    for left, right in edges:
+        adjacency[left].add(right)
+        adjacency[right].add(left)
+    colors: dict[str, bool] = {}
+    for start in vertices:
+        if start in colors:
+            continue
+        colors[start] = False
+        stack = [start]
+        while stack:
+            vertex = stack.pop()
+            for neighbor in adjacency[vertex]:
+                if neighbor not in colors:
+                    colors[neighbor] = not colors[vertex]
+                    stack.append(neighbor)
+                elif colors[neighbor] == colors[vertex]:
+                    return False
+    return True
+
+
+def _try_k_color(vertices: list[str], adjacency: dict[str, set[str]], k: int) -> bool:
+    """Check if the graph is k-colorable."""
+    colors: dict[str, int] = {}
+
+    def backtrack(idx: int) -> bool:
+        _require_execution_active("during coloring search")
+        if idx == len(vertices):
+            return True
+        v = vertices[idx]
+        for c in range(k):
+            if all(colors.get(n, -1) != c for n in adjacency[v]):
+                colors[v] = c
+                if backtrack(idx + 1):
+                    return True
+                del colors[v]
+        return False
+
+    return backtrack(0)

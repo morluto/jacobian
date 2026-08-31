@@ -10,8 +10,10 @@ from jacobian.canonical import (
     encode_strict_json,
 )
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.finite_fields._matrix_rank_kernels import compute_matrix_rank
-from jacobian.math.finite_fields._matrix_rank_models import MatrixRankResult
+from jacobian.math.finite_fields._matrix_rank_models import (
+    MatrixRankRequest,
+    MatrixRankResult,
+)
 from jacobian.math.finite_fields._models import (
     _MAX_DIRECTION_RANK_WORK,
     _MAX_PROJECTIVE_POINTS,
@@ -65,14 +67,9 @@ _PALEY_ORIENTATION: Literal["ARC_X_TO_Y_IFF_Y_MINUS_X_IS_NONZERO_SQUARE"] = (
 
 def matrix_rank(matrix: AxisBoundMatrix) -> MatrixRankResult:
     """Return the exact rank certificate for an axis-bound finite-field matrix."""
+    from jacobian.math.finite_fields._matrix_rank import compute_rank
 
-    data = compute_matrix_rank(matrix)
-    return MatrixRankResult(
-        matrix=matrix,
-        rank=data.rank,
-        pivot_rows=data.pivot_rows,
-        pivot_columns=data.pivot_columns,
-    )
+    return compute_rank(MatrixRankRequest(matrix=matrix))
 
 
 # Separate calibrated bound for the Python-level substitution loop in

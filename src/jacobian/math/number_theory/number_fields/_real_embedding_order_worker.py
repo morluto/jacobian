@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import Any
+from typing import Any, Literal
 
+from jacobian._exact import CanonicalRational
 from jacobian.canonical import parse_canonical_integer
+from jacobian.math.number_theory.algebraic_numbers.real import RationalIsolatingInterval
 from jacobian.math.number_theory.number_fields._real_embedding_order_protocol import (
     SelectedImageWorkerComplete,
     SelectedImageWorkerError,
@@ -49,11 +51,11 @@ def compute_selected_image_isolation(
         return SelectedImageWorkerComplete(
             kind="complete",
             order="EQ",
-            isolating_interval={
-                "lower": "0",
-                "upper": "0",
-                "interval_type": "SINGLETON",
-            },
+            isolating_interval=RationalIsolatingInterval(
+                lower=CanonicalRational(num="0", den="1"),
+                upper=CanonicalRational(num="0", den="1"),
+                interval_type="SINGLETON",
+            ),
         )
 
     descending = list(value.to_list())
@@ -62,15 +64,19 @@ def compute_selected_image_isolation(
             int(descending[0].numerator), int(descending[0].denominator)
         )
         endpoint = f"{rational.numerator}/{rational.denominator}"
-        order = "LT" if rational < 0 else "GT"
+        order: Literal["LT", "EQ", "GT"] = "LT" if rational < 0 else "GT"
         return SelectedImageWorkerComplete(
             kind="complete",
             order=order,
-            isolating_interval={
-                "lower": endpoint,
-                "upper": endpoint,
-                "interval_type": "SINGLETON",
-            },
+            isolating_interval=RationalIsolatingInterval(
+                lower=CanonicalRational(
+                    num=endpoint.split("/")[0], den=endpoint.split("/")[1]
+                ),
+                upper=CanonicalRational(
+                    num=endpoint.split("/")[0], den=endpoint.split("/")[1]
+                ),
+                interval_type="SINGLETON",
+            ),
         )
 
     image = algebraic_field.to_sympy(value)
@@ -138,13 +144,17 @@ def compute_selected_image_isolation(
     return SelectedImageWorkerComplete(
         kind="complete",
         order=order,
-        isolating_interval={
-            "lower": f"{lower_fraction.numerator}/{lower_fraction.denominator}",
-            "upper": f"{upper_fraction.numerator}/{upper_fraction.denominator}",
-            "interval_type": (
-                "SINGLETON" if lower_fraction == upper_fraction else "OPEN"
+        isolating_interval=RationalIsolatingInterval(
+            lower=CanonicalRational(
+                num=str(lower_fraction.numerator),
+                den=str(lower_fraction.denominator),
             ),
-        },
+            upper=CanonicalRational(
+                num=str(upper_fraction.numerator),
+                den=str(upper_fraction.denominator),
+            ),
+            interval_type=("SINGLETON" if lower_fraction == upper_fraction else "OPEN"),
+        ),
     )
 
 

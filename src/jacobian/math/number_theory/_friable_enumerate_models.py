@@ -139,24 +139,30 @@ class FriableEnumerateResult(StrictModel):
 
     @model_validator(mode="after")
     def require_nonempty_or_singleton(self) -> Self:
-        if self.x == "0" and self.family.elements:
+        x = int(self.x)
+        y = int(self.y)
+        values = tuple(int(value) for value in self.family.elements)
+        if x == 0 and self.family.elements:
             raise _validation_error(
                 "friable_enumerate_zero_source_must_be_empty",
                 "friable-enumerate family must be empty when x is zero",
             )
-        values = tuple(int(value) for value in self.family.elements)
-        x = int(self.x)
         if any(value < 1 or value > x for value in values):
             raise _validation_error(
                 "friable_enumerate_family_out_of_range",
                 "every friable-enumerate family member must lie in [1, x]",
             )
-        if self.x != "0" and int(self.y) <= 1 and self.family.elements != ("1",):
+        if values != tuple(sorted(values)):
+            raise _validation_error(
+                "friable_enumerate_family_must_be_increasing",
+                "friable-enumerate family must be in strictly increasing order",
+            )
+        if x != 0 and y <= 1 and self.family.elements != ("1",):
             raise _validation_error(
                 "friable_enumerate_small_cutoff_is_singleton",
                 "positive x with y at most one must have family {1}",
             )
-        if not self.family.elements and self.x != "0":
+        if not self.family.elements and x != 0:
             raise _validation_error(
                 "friable_enumerate_family_must_be_nonempty_when_x_is_positive",
                 "friable-enumerate family must be nonempty when x is positive",

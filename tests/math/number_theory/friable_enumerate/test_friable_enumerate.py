@@ -213,6 +213,18 @@ def test_result_rejects_impossible_degenerate_families() -> None:
         )
 
 
+def test_result_binds_zero_sources_by_value_and_requires_increasing_family() -> None:
+    result = FriableEnumerateResult.model_validate(
+        {"x": "-0", "y": "5", "family": {"elements": []}}
+    )
+    assert result.x == "-0"
+
+    with pytest.raises(ValueError, match="strictly increasing order"):
+        FriableEnumerateResult.model_validate(
+            {"x": "5", "y": "5", "family": {"elements": ["2", "1"]}}
+        )
+
+
 def test_operation_is_discoverable_with_one_executable_example() -> None:
     from jacobian.catalog.builtins import BUILTIN_TOOLS
 

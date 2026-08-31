@@ -1,38 +1,66 @@
-"""Typed declarations for the maximum-weight antichain operation."""
+"""Maximum weight antichain operation declarations."""
 
+from collections.abc import Callable
+
+from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.combinatorics.posets.weighted_antichain._models import (
-    WeightedAntichainRequest,
-    WeightedAntichainResult,
+    MaximumWeightAntichainRequest,
+    MaximumWeightAntichainResult,
 )
 from jacobian.math.combinatorics.posets.weighted_antichain.operations import (
     compute_maximum_weight_antichain,
 )
 
 
-def _compute(request: WeightedAntichainRequest) -> WeightedAntichainResult:
+def compute_mwa_op(
+    request: MaximumWeightAntichainRequest,
+) -> MaximumWeightAntichainResult:
     return compute_maximum_weight_antichain(request.poset, request.weights)
 
 
+def mwa_action[RequestT: StrictModel, ResultT: StrictModel](
+    operation_id: str,
+    title: str,
+    description: str,
+    request_model: type[RequestT],
+    result_model: type[ResultT],
+    operation: Callable[[RequestT], ResultT],
+    *tags: str,
+    examples: tuple[OperationExample, ...] = (),
+) -> MathTool[RequestT, ResultT]:
+    return MathTool(
+        operation_id=operation_id,
+        title=title,
+        description=description,
+        request_type=request_model,
+        result_type=result_model,
+        run=operation,
+        tags=tags,
+        examples=examples,
+    )
+
+
 TOOLS: MathTools = (
-    MathTool(
-        operation_id="poset.maximum_weight_antichain.compute",
-        title="Compute the exact maximum-weight antichain of a finite poset",
-        description=(
+    mwa_action(
+        "poset.maximum_weight_antichain.compute",
+        "Compute the maximum weight antichain of a poset",
+        (
             "For one bounded canonical finite poset and one nonnegative "
-            "rational weight on every poset element, return the exact maximum "
-            "total weight of an antichain and one deterministic maximizing "
-            "antichain."
+            "rational weight on every poset element, return the exact "
+            "maximum total weight of an antichain and one deterministic "
+            "maximizing antichain."
         ),
-        request_type=WeightedAntichainRequest,
-        result_type=WeightedAntichainResult,
-        run=_compute,
-        tags=("poset", "antichain", "weighted", "exact"),
+        MaximumWeightAntichainRequest,
+        MaximumWeightAntichainResult,
+        compute_mwa_op,
+        "posets",
+        "exact",
         examples=(
             example(
-                "chain_weights",
-                "Maximum weight antichain of a 3-element chain.",
+                "chain",
+                "A 3-element chain with weights 1, 2, 3.",
                 {
                     "poset": {
                         "elements": ["a", "b", "c"],
@@ -58,8 +86,8 @@ TOOLS: MathTools = (
                     },
                     "weights": [
                         {"num": "1", "den": "1"},
-                        {"num": "3", "den": "1"},
                         {"num": "2", "den": "1"},
+                        {"num": "3", "den": "1"},
                     ],
                 },
             ),

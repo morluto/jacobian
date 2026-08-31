@@ -390,7 +390,7 @@ def _chromatic_number(
     return max(component_numbers, default=1)
 
 
-def _min_clique_cover(
+def _min_clique_cover(  # noqa: C901
     vertices: list[str], edges: list[tuple[str, str]]
 ) -> int:
     """Return the minimum number of cliques covering all vertices.
@@ -417,7 +417,7 @@ def _min_clique_cover(
     # missing-edge graph has at most n edges on at most n vertices.
 
     n = len(vertices)
-    vertex_set = set(vertices)
+    set(vertices)
 
     # Greedy clique partition: repeatedly take the largest clique
     # from the remaining vertices.  This gives an upper bound.

@@ -262,6 +262,11 @@ def _require_raw_generator_envelope(data: object) -> object:
         ),
     ):
         permutation = data.get(field_name)
+        if permutation is not None and not isinstance(permutation, (list, tuple)):
+            raise _validation_error(
+                "symmetry_generator_shape",
+                f"{field_name} must be an array",
+            )
         if isinstance(permutation, (list, tuple)) and len(permutation) > maximum:
             raise _validation_error(
                 reason,

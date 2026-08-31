@@ -212,7 +212,7 @@ def test_slice_a_keeps_directions_bound_through_orbit_aggregation() -> None:
 def test_slice_a_rank_derives_the_restriction_from_its_source() -> None:
     subspace, directions = _slice_a_values()
     direction = directions.points[0]
-    _, _, rank_operation, *_ = TOOLS
+    _, _, _, rank_operation, *_ = TOOLS
 
     result = rank_operation.run(
         rank_operation.request_type.model_validate(
@@ -344,6 +344,7 @@ def test_exact_public_api_symbols() -> None:
         "FiniteMapTable",
         "FinitePolynomial",
         "FinitePolynomialMap",
+        "MatrixRankResult",
         "OrbitDistribution",
         "PaleyTournamentResult",
         "PermutationResult",
@@ -361,6 +362,7 @@ def test_exact_public_api_symbols() -> None:
         "finite_polynomial",
         "finite_polynomial_map",
         "linear_map_rank",
+        "matrix_rank",
         "orbit_distribution",
         "paley_tournament",
         "projective_line",

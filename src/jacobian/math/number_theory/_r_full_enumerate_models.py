@@ -58,11 +58,17 @@ def _estimate_member_bytes(value: int) -> int:
     Each member is serialized as a quoted decimal string plus separator
     overhead inside the JSON array.
     """
-    # len(str(value)) + 2 quotes + 1 comma separator
-    return len(str(value)) + 3
+    # len(decimal value) + 2 quotes + 1 comma separator.  The canonical
+    # formatter avoids CPython's configurable int-to-string digit ceiling.
+    return len(format_canonical_integer(value)) + 3
 
 
-def plan_r_full_family(minimum_exponent: int, cutoff: int) -> RFullFamilyPlan:
+def plan_r_full_family(
+    minimum_exponent: int,
+    cutoff: int,
+    *,
+    enforce_transport: bool = True,
+) -> RFullFamilyPlan:
     """Return a conservative, exponent-sensitive family-size estimate.
 
     The admission pass counts the multiplicative family itself, stopping as
@@ -73,10 +79,10 @@ def plan_r_full_family(minimum_exponent: int, cutoff: int) -> RFullFamilyPlan:
     huge interval; the first 200,001 prime powers already exceed the result
     budget at that boundary.
 
-    Wire-byte accumulation: during planning we sum each family member's
-    estimated canonical wire width so we can stop as soon as the result
-    envelope is exhausted, avoiding a post-hoc serialization that would
-    materialize the entire family as strings.
+    When ``enforce_transport`` is true, wire-byte accumulation during planning
+    stops as soon as the result envelope is exhausted.  Native callers return
+    Python integers directly and therefore use the mathematical family and
+    planning budgets without applying the MCP transport ceiling.
     """
     # Keep the aggregate native namespace free of packaged backends.  The
     # planner is the first execution path that needs SymPy, so import it only
@@ -91,11 +97,16 @@ def plan_r_full_family(minimum_exponent: int, cutoff: int) -> RFullFamilyPlan:
     family_set: set[int] = {1}
     sorted_family = [1]
     merge_work = 0
-    # Accumulate wire bytes during planning so we stop as soon as the
-    # transport budget is crossed, without a post-hoc full serialization.
-    # Reserve overhead for the JSON envelope (keys, separators, etc.).
-    result_bytes = 200 + len(str(minimum_exponent)) + len(str(cutoff))
-    result_bytes += _estimate_member_bytes(1)
+    if enforce_transport:
+        # Accumulate wire bytes during planning so we stop as soon as the
+        # transport budget is crossed, without a post-hoc full serialization.
+        # Reserve overhead for the JSON envelope (keys, separators, etc.).
+        result_bytes = (
+            200
+            + len(format_canonical_integer(minimum_exponent))
+            + len(format_canonical_integer(cutoff))
+            + _estimate_member_bytes(1)
+        )
     for prime in primerange(2, int(prime_bound) + 1):
         powers: list[int] = []
         current = int(prime) ** minimum_exponent
@@ -112,9 +123,10 @@ def plan_r_full_family(minimum_exponent: int, cutoff: int) -> RFullFamilyPlan:
                 if len(family_set) + len(new_values) >= MAX_R_FULL_FAMILY_SIZE:
                     return RFullFamilyPlan((), True, "family")
                 new_values.add(value)
-                result_bytes += _estimate_member_bytes(value)
-                if result_bytes > MAX_R_FULL_RESULT_BYTES:
-                    return RFullFamilyPlan((), True, "bytes")
+                if enforce_transport:
+                    result_bytes += _estimate_member_bytes(value)
+                    if result_bytes > MAX_R_FULL_RESULT_BYTES:
+                        return RFullFamilyPlan((), True, "bytes")
         fresh_values = sorted(value for value in new_values if value not in family_set)
         if fresh_values:
             merge_work += len(sorted_family) + len(fresh_values)

@@ -13,7 +13,6 @@ from jacobian.math.number_theory._r_full_enumerate_models import (
     MIN_R_FULL_EXPONENT,
     RFullEnumerateRequest,
     RFullEnumerateResult,
-    max_r_full_exponent,
     plan_r_full_family,
 )
 from jacobian.math.number_theory._support import number_theory_operation
@@ -23,7 +22,11 @@ def _enumerate_r_full_admitted(
     minimum_exponent: int, cutoff: int, *, enforce_transport: bool
 ) -> RFullEnumerateResult:
     canonical_cutoff = format_canonical_integer(cutoff)
-    plan = plan_r_full_family(minimum_exponent, cutoff)
+    plan = plan_r_full_family(
+        minimum_exponent,
+        cutoff,
+        enforce_transport=enforce_transport,
+    )
     if plan.exceeded:
         if plan.reason == "planning":
             raise OperationDomainValidationError(
@@ -82,17 +85,11 @@ def enumerate_r_full(minimum_exponent: int, cutoff: int) -> tuple[int, ...]:
             code="r_full_enumerate.cutoff_bound",
             message="cutoff must be a positive integer within the admitted bound",
         )
-    max_exp = max_r_full_exponent(cutoff)
-    if minimum_exponent > max_exp:
-        raise OperationDomainValidationError(
-            location=("minimum_exponent",),
-            code="r_full_enumerate.exponent_bound",
-            message=(
-                f"minimum_exponent {minimum_exponent} exceeds the maximum "
-                f"meaningful exponent {max_exp} for cutoff {cutoff}"
-            ),
-        )
-    plan = plan_r_full_family(minimum_exponent, cutoff)
+    plan = plan_r_full_family(
+        minimum_exponent,
+        cutoff,
+        enforce_transport=False,
+    )
     if plan.exceeded:
         if plan.reason == "planning":
             raise OperationDomainValidationError(
@@ -102,8 +99,16 @@ def enumerate_r_full(minimum_exponent: int, cutoff: int) -> tuple[int, ...]:
             )
         raise OperationDomainValidationError(
             location=("cutoff",),
-            code="r_full_enumerate_family_exceeds_result_budget",
-            message="r-full family exceeds the result-size budget",
+            code=(
+                "r_full_enumerate_family_exceeds_result_budget"
+                if plan.reason == "family"
+                else "r_full_enumerate_planning_work_exceeds_budget"
+            ),
+            message=(
+                "r-full family exceeds the result-size budget"
+                if plan.reason == "family"
+                else "r-full planning work exceeds the admitted budget"
+            ),
         )
     return plan.family
 

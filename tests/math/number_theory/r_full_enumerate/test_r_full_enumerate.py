@@ -6,6 +6,7 @@ import pytest
 from sympy.ntheory.factor_ import factorint
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.number_theory._r_full_enumerate import (
     enumerate_r_full,
     enumerate_r_full_numbers,
@@ -107,6 +108,29 @@ def test_exponent_bound_follows_cutoff_width() -> None:
     """Sparse exponents beyond the old fixed cap remain valid requests."""
     result = enumerate_r_full(257, 2**257)
     assert result == (1, 2**257)
+
+
+def test_native_path_does_not_apply_transport_byte_ceiling() -> None:
+    """Native callers retain a family admitted by the mathematical budgets."""
+    result = enumerate_r_full(64, 10**128)
+    assert len(result) == 148_860
+
+
+def test_large_admitted_cutoff_uses_canonical_integer_formatting() -> None:
+    """Large admitted integers do not hit CPython's decimal conversion cap."""
+    cutoff = "1" + "0" * 5_000
+    result = enumerate_r_full_numbers(
+        RFullEnumerateRequest(minimum_exponent=16_000, cutoff=cutoff)
+    )
+    assert result.cutoff == cutoff
+    assert result.family[0] == "1"
+    assert format_canonical_integer(2**16_000) in result.family
+    assert result.count == 611
+
+
+def test_native_path_admits_trivial_high_exponents() -> None:
+    """An exponent above the cutoff-derived bit length still has a valid family."""
+    assert enumerate_r_full(3, 1) == (1,)
 
 
 def test_result_uses_canonical_output_limit() -> None:

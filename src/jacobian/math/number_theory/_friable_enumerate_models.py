@@ -8,8 +8,8 @@ from typing import Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits
 from jacobian.math.combinatorics.finite_structures.sets._models import (
+    _MAX_FINITE_SET_WIRE_BYTES,
     MAX_FINITE_INTEGER_SET_ELEMENTS,
     FiniteIntegerSet,
 )
@@ -27,9 +27,6 @@ _MAX_FRIABLE_ENUMERATE_SOURCE_DIGITS = 256
 _MAX_FRIABLE_ENUMERATE_SOURCE_ABS = 10**_MAX_FRIABLE_ENUMERATE_SOURCE_DIGITS
 # FiniteIntegerSet enforces a wire envelope of max_output_bytes // 2;
 # admission must use that carrier limit, not the full output bound.
-from jacobian.math.combinatorics.finite_structures.sets._models import (
-    _MAX_FINITE_SET_WIRE_BYTES,
-)
 _MAX_FRIABLE_ENUMERATED_BYTES = _MAX_FINITE_SET_WIRE_BYTES
 _MAX_FRIABLE_ENUMERATE_COUNT_NODES = 2_000_000
 

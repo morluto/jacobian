@@ -11,6 +11,8 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     CliqueExpansionResult,
     DualRequest,
     DualResult,
+    EdgeIntersectionGraphRequest,
+    EdgeIntersectionGraphResult,
     EdgeIntersectionsRequest,
     EdgeIntersectionsResult,
     HypergraphIndependenceRequest,
@@ -31,6 +33,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 from jacobian.math.combinatorics.finite_structures.hypergraphs.operations import (
     clique_expansion,
     dual,
+    edge_intersection_graph,
     edge_intersections,
     incidence_graph,
     independence_number,
@@ -60,6 +63,12 @@ def _compute_edge_intersections(
     request: EdgeIntersectionsRequest,
 ) -> EdgeIntersectionsResult:
     return edge_intersections(request.hypergraph)
+
+
+def _compute_edge_intersection_graph(
+    request: EdgeIntersectionGraphRequest,
+) -> EdgeIntersectionGraphResult:
+    return edge_intersection_graph(request.hypergraph)
 
 
 def _compute_dual(request: DualRequest) -> DualResult:
@@ -224,6 +233,29 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "Compute every indexed edge-pair intersection and the linearity "
                 "profile of a 4-vertex, 3-edge hypergraph; the complete "
                 "worst-case intersection ledger must fit the advertised bounds.",
+                {"hypergraph": _HYPERGRAPH},
+            ),
+        ),
+    ),
+    _op(
+        "hypergraph.edge_intersection_graph.compute",
+        "Compute the edge-intersection graph of a finite hypergraph",
+        "Compute the canonical simple undirected graph whose vertices are "
+        "the hypergraph's edge IDs and in which two vertices are adjacent "
+        "if and only if the corresponding hyperedges have nonempty "
+        "intersection.  The edge-ID carrier admits at most 256 nonempty "
+        "Unicode-NFC labels, each using at most 64 UTF-8 bytes, so the result "
+        "composes directly with downstream graph operations.",
+        EdgeIntersectionGraphRequest,
+        EdgeIntersectionGraphResult,
+        _compute_edge_intersection_graph,
+        "combinatorics",
+        "hypergraph",
+        "exact",
+        examples=(
+            example(
+                "edge_intersection_graph_of_4_vertex_hypergraph",
+                "Compute the edge-intersection graph of a 4-vertex, 3-edge hypergraph.",
                 {"hypergraph": _HYPERGRAPH},
             ),
         ),

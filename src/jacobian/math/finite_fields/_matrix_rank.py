@@ -28,9 +28,8 @@ from jacobian.math.finite_fields._matrix_rank_models import (
 )
 from jacobian.math.finite_fields.values import AxisBoundMatrix
 
-# A generous killable safety ceiling; the admitted matrix work and result
-# envelope remain the authoritative bounds.
-_MATRIX_RANK_WALL_SECONDS = 3600.0
+_MATRIX_RANK_WALL_SECONDS = 600.0
+_MATRIX_RANK_TRANSPORT_RESERVE_BYTES = 1_024
 
 
 def _execution_deadline() -> float:
@@ -93,12 +92,22 @@ def compute_matrix_rank(
         # The worst case is full rank with all pivot labels present.
         max_rank = min(len(matrix.row_axis.labels), len(matrix.column_axis.labels))
         try:
+            longest_row_label = max(
+                matrix.row_axis.labels,
+                key=lambda label: len(encode_strict_json(label)),
+                default="",
+            )
+            longest_column_label = max(
+                matrix.column_axis.labels,
+                key=lambda label: len(encode_strict_json(label)),
+                default="",
+            )
             result_probe = encode_strict_json(
                 {
                     "matrix": matrix.model_dump(mode="json"),
                     "rank": max_rank,
-                    "pivot_rows": list(matrix.row_axis.labels[:max_rank]),
-                    "pivot_columns": list(matrix.column_axis.labels[:max_rank]),
+                    "pivot_rows": [longest_row_label] * max_rank,
+                    "pivot_columns": [longest_column_label] * max_rank,
                 }
             )
         except CanonicalizationError as exc:
@@ -107,7 +116,9 @@ def compute_matrix_rank(
                 code="finite_field.matrix_rank.result_bound",
                 message="matrix-rank result exceeds the canonical output bound",
             ) from exc
-        if len(result_probe) > CanonicalLimits().max_output_bytes:
+        if len(result_probe) + _MATRIX_RANK_TRANSPORT_RESERVE_BYTES > (
+            CanonicalLimits().max_output_bytes
+        ):
             raise OperationDomainValidationError(
                 location=("matrix",),
                 code="finite_field.matrix_rank.result_bound",

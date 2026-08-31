@@ -23,7 +23,11 @@ from jacobian.canonical import (
     sha256_digest,
     strict_json_object_size,
 )
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    MAX_GRAPH_LABEL_BYTES,
+    MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+    SimpleUndirectedGraph,
+)
 
 MAX_VERTICES = 256
 MAX_EDGES = 12_000
@@ -50,6 +54,62 @@ MAX_EDGE_INTERSECTION_CELLS = 65_536
 # envelope for a FiniteHypergraph source.
 MAX_HYPERGRAPH_LABEL_BYTES = (MAX_VERTICES + MAX_EDGES) * MAX_LABEL_LENGTH * 4
 MAX_EDGE_INTERSECTION_RESULT_BYTES = CanonicalLimits().max_output_bytes
+
+
+def _edge_intersection_graph_result_bytes(
+    hypergraph: FiniteHypergraph,
+    graph_edges: tuple[tuple[str, str], ...],
+) -> int:
+    """Return the exact canonical size of the edge-intersection graph result.
+
+    The result retains the source hypergraph and the produced graph.  The
+    graph has one vertex per hyperedge (the edge IDs), and ``graph_edges`` is
+    the already-admitted exact set of intersecting pairs.  The byte count must
+    follow that set rather than charging every input for a complete graph.
+    """
+    source_bytes = _hypergraph_wire_bytes(hypergraph)
+    edge_ids = tuple(edge_id for edge_id, _ in hypergraph.edges)
+    # Each graph vertex is a strict-JSON string (the edge ID).
+    vertex_bytes = _strict_json_array_size(
+        tuple(_strict_label_wire_bytes(edge_id) for edge_id in edge_ids)
+    )
+    edge_bytes = _strict_json_array_size(
+        tuple(
+            _strict_json_array_size(
+                (_strict_label_wire_bytes(left), _strict_label_wire_bytes(right))
+            )
+            for left, right in graph_edges
+        )
+    )
+    graph_bytes = strict_json_object_size(
+        (("vertices", vertex_bytes), ("edges", edge_bytes))
+    )
+    return strict_json_object_size(
+        (("hypergraph", source_bytes), ("graph", graph_bytes))
+    )
+
+
+def _hypergraph_wire_bytes(hypergraph: FiniteHypergraph) -> int:
+    """Return the exact source size without applying the final output cap."""
+
+    vertex_bytes = _strict_json_array_size(
+        tuple(_strict_label_wire_bytes(vertex) for vertex in hypergraph.vertices)
+    )
+    edge_bytes = _strict_json_array_size(
+        tuple(
+            _strict_json_array_size(
+                (
+                    _strict_label_wire_bytes(edge_id),
+                    _strict_json_array_size(
+                        tuple(_strict_label_wire_bytes(member) for member in members)
+                    ),
+                )
+            )
+            for edge_id, members in hypergraph.edges
+        )
+    )
+    return strict_json_object_size((("vertices", vertex_bytes), ("edges", edge_bytes)))
+
 
 # One pair entry's keys, punctuation, array brackets, commas, and bounded
 # integer occupy fewer than 128 bytes beyond its encoded labels.  The root
@@ -130,6 +190,7 @@ def _validation_error(message: str) -> PydanticCustomError:
         ("induced type profile", "induced_profile"),
         ("transversal", "transversal"),
         ("matching", "matching"),
+        ("graph vertices must be the hypergraph edge IDs", "source_axis"),
     )
     for fragment, reason in reason_fragments:
         if fragment in message:
@@ -479,7 +540,7 @@ def _edge_intersection_preflight_data(
     )
     maximum_pair_payload_bytes = largest_edge_id_bytes + possible_violation_members
 
-    source_bytes = len(encode_strict_json(hypergraph.model_dump(mode="json")))
+    source_bytes = _hypergraph_wire_bytes(hypergraph)
     estimated_result_bytes = (
         source_bytes
         + pair_count * _PAIR_ENTRY_OVERHEAD_BYTES
@@ -683,6 +744,60 @@ class EdgeIntersectionsResult(StrictModel):
             raise _validation_error(
                 "first_linearity_violation must be the first canonical pair "
                 "whose intersection has size greater than one"
+            )
+        return self
+
+
+class EdgeIntersectionGraphRequest(StrictModel):
+    """Request the edge-intersection graph of a finite hypergraph.
+
+    The graph's vertices are the hypergraph's edge IDs and two vertices
+    are adjacent if and only if the corresponding hyperedges have nonempty
+    intersection.  Because the result is a canonical
+    :class:`SimpleUndirectedGraph`, the operation admits at most
+    ``MAX_INDEXED_SIMPLE_GRAPH_VERTICES`` edge IDs; every ID must be nonempty,
+    NFC-normalized, and at most ``MAX_GRAPH_LABEL_BYTES`` UTF-8 bytes.
+    """
+
+    hypergraph: FiniteHypergraph = Field(
+        description=(
+            "Canonical finite hypergraph with at most "
+            f"{MAX_INDEXED_SIMPLE_GRAPH_VERTICES} edges. For the graph carrier, "
+            "every edge ID must be nonempty, Unicode NFC-normalized, and at most "
+            f"{MAX_GRAPH_LABEL_BYTES} UTF-8 bytes."
+        ),
+        json_schema_extra={
+            "edge_id_nfc": True,
+            "edge_id_nonempty": True,
+            "edge_id_utf8_bytes_bound": MAX_GRAPH_LABEL_BYTES,
+            "graph_vertex_count_bound": MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+        },
+    )
+
+
+class EdgeIntersectionGraphResult(StrictModel):
+    """The canonical edge-intersection graph of a finite hypergraph.
+
+    ``graph`` is the canonical :class:`SimpleUndirectedGraph` whose
+    vertices are exactly the hypergraph's edge IDs, in declared edge
+    order, and in which two distinct vertices are adjacent if and only if
+    the corresponding hyperedges share at least one vertex.  Each edge's
+    endpoints appear in lexical order per the canonical graph value's
+    own convention, independent of the source hypergraph's declared edge
+    ordering, so the value composes directly with downstream graph
+    operations without translation.  The producing kernel establishes
+    this defining property.
+    """
+
+    hypergraph: FiniteHypergraph
+    graph: SimpleUndirectedGraph
+
+    @model_validator(mode="after")
+    def bind_graph_vertices_to_source_edges(self) -> Self:
+        expected_vertices = tuple(edge_id for edge_id, _ in self.hypergraph.edges)
+        if self.graph.vertices != expected_vertices:
+            raise _validation_error(
+                "graph vertices must be the hypergraph edge IDs in declared order",
             )
         return self
 

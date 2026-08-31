@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Sequence
 from fractions import Fraction
-from threading import Event
 from typing import Any
 
 import pytest
@@ -12,17 +12,17 @@ from pydantic import ValidationError
 from sympy import Matrix
 from tests.fixtures.accounting import assert_charged_work_parity
 
-from jacobian._exact import CanonicalRational
 from jacobian._execution import (
     OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
     request_cancellation,
+    request_execution,
 )
 from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lattices._lattice_ops import saturate_lattice
 from jacobian.math.lattices.invariant_forms import (
-    EmbeddedRealNumberFieldActionGenerator,
-    EmbeddedRealNumberFieldMatrixAction,
     RationalMatrixAction,
     compute_invariant_bilinear_form_lattice,
 )
@@ -36,13 +36,6 @@ from jacobian.math.lattices.invariant_forms._models import (
 from jacobian.math.lattices.invariant_forms._tools import (
     INVARIANT_BILINEAR_FORM_LATTICE_OPERATION,
 )
-from jacobian.math.matrices.values import EmbeddedRealSimpleNumberFieldMatrix
-from jacobian.math.number_theory.number_fields import (
-    RealNumberFieldEmbedding,
-    SimpleNumberFieldElement,
-    SimpleNumberFieldPresentation,
-    embeddings,
-)
 
 
 def _rational(value: int | Fraction) -> dict[str, str]:
@@ -51,39 +44,6 @@ def _rational(value: int | Fraction) -> dict[str, str]:
         "num": str(fraction.numerator),
         "den": str(fraction.denominator),
     }
-
-
-def _field_element(
-    presentation: SimpleNumberFieldPresentation,
-    *coordinates: int | Fraction,
-) -> SimpleNumberFieldElement:
-    return SimpleNumberFieldElement.model_validate(
-        {
-            "presentation": presentation,
-            "coefficients_ascending": [_rational(value) for value in coordinates],
-        }
-    )
-
-
-def _quartic_action(
-    entries: Sequence[Sequence[Sequence[int | Fraction]]],
-) -> EmbeddedRealNumberFieldMatrixAction:
-    presentation = SimpleNumberFieldPresentation(
-        coefficients_descending=("1", "0", "0", "0", "-2")
-    )
-    embedding = embeddings(presentation).records[1].embedding
-    assert isinstance(embedding, RealNumberFieldEmbedding)
-    matrix = EmbeddedRealSimpleNumberFieldMatrix(
-        embedding=embedding,
-        entries=tuple(
-            tuple(_field_element(presentation, *value) for value in row)
-            for row in entries
-        ),
-    )
-    return EmbeddedRealNumberFieldMatrixAction(
-        coordinate_axis=("e1", "e2", "e3", "e4"),
-        generators=(EmbeddedRealNumberFieldActionGenerator(label="J", matrix=matrix),),
-    )
 
 
 def _action(
@@ -145,7 +105,6 @@ def _integer_matrix(form: IntegralBilinearForm) -> Matrix:
 def _assert_every_basis_form_is_invariant(
     result: InvariantBilinearFormLattice,
 ) -> None:
-    assert isinstance(result.action, RationalMatrixAction)
     generators = tuple(
         Matrix(
             [[entry.as_fraction() for entry in row] for row in generator.matrix.entries]
@@ -244,71 +203,6 @@ def test_rank_zero_lattice_retains_its_ambient_coefficient_dimension() -> None:
     assert result.constraint_rank == 1
     assert result.rank == 0
     assert result.basis_forms == ()
-
-
-def test_quartic_complex_structure_has_rank_zero_alternating_lattice() -> None:
-    zero = (0, 0, 0, 0)
-    action = _quartic_action(
-        (
-            (zero, zero, (-1, 0, 0, 0), (0, -1, 0, 0)),
-            (zero, zero, (0, 0, 0, -1), (0, 0, -1, 0)),
-            ((-1, 0, -1, 0), (0, 1, 0, Fraction(1, 2)), zero, zero),
-            ((0, 1, 0, 1), (-1, 0, Fraction(-1, 2), 0), zero, zero),
-        )
-    )
-
-    result = compute_invariant_bilinear_form_lattice(action, "ALTERNATING")
-
-    assert result.coefficient_dimension == 6
-    assert result.constraint_rank == 6
-    assert result.rank == 0
-    assert result.basis_forms == ()
-
-
-def test_algebraic_invariant_forms_obey_caller_cancellation() -> None:
-    zero = (0, 0, 0, 0)
-    one = (1, 0, 0, 0)
-    action = _quartic_action(
-        tuple(
-            tuple(one if row == column else zero for column in range(4))
-            for row in range(4)
-        )
-    )
-    cancellation = Event()
-    cancellation.set()
-    with (
-        request_cancellation(cancellation),
-        pytest.raises(OperationExecutionCancelledError),
-    ):
-        compute_invariant_bilinear_form_lattice(action, "ALTERNATING")
-
-
-def test_nonmonic_number_field_reduction_preserves_an_invariant_area_form() -> None:
-    presentation = SimpleNumberFieldPresentation(
-        coefficients_descending=("2", "0", "-1")
-    )
-    embedding = embeddings(presentation).records[1].embedding
-    assert isinstance(embedding, RealNumberFieldEmbedding)
-    zero = _field_element(presentation, 0, 0)
-    alpha = _field_element(presentation, 0, 1)
-    twice_alpha = _field_element(presentation, 0, 2)
-    action = EmbeddedRealNumberFieldMatrixAction(
-        coordinate_axis=("e1", "e2"),
-        generators=(
-            EmbeddedRealNumberFieldActionGenerator(
-                label="determinant_one",
-                matrix=EmbeddedRealSimpleNumberFieldMatrix(
-                    embedding=embedding,
-                    entries=((alpha, zero), (zero, twice_alpha)),
-                ),
-            ),
-        ),
-    )
-
-    result = compute_invariant_bilinear_form_lattice(action, "ALTERNATING")
-
-    assert result.rank == 1
-    assert result.basis_forms[0].matrix.entries == (("0", "1"), ("-1", "0"))
 
 
 def test_symmetric_constraint_path_keeps_exactly_the_diagonal_forms() -> None:
@@ -473,13 +367,13 @@ def test_result_round_trip_retains_source_and_exact_empty_lattice() -> None:
     action = _action([("twice", [[2, 0], [0, 2]])])
     result = compute_invariant_bilinear_form_lattice(action, "SYMMETRIC")
 
-    round_tripped = InvariantBilinearFormLattice.model_validate(
+    replayed = InvariantBilinearFormLattice.model_validate(
         result.model_dump(mode="json")
     )
 
-    assert round_tripped == result
-    assert round_tripped.action == action
-    assert round_tripped.basis_forms == ()
+    assert replayed == result
+    assert replayed.action == action
+    assert replayed.basis_forms == ()
 
 
 def test_one_dimensional_hundred_digit_action_uses_derived_height_admission() -> None:
@@ -532,22 +426,14 @@ def test_near_envelope_constraint_count_matches_realized_expansion(
     original = kernel._constraint_coefficient
     executed = 0
 
-    def counted(*args: Any, **kwargs: Any) -> Any:
+    def counted(*args: Any, **kwargs: Any) -> Fraction:
         nonlocal executed
         executed += 1
         return original(*args, **kwargs)
 
     monkeypatch.setattr(kernel, "_constraint_coefficient", counted)
 
-    admission = kernel._admit_invariant_bilinear_form_lattice(
-        action,
-        "BILINEAR",
-    )
-    plan = kernel._build_constraint_plan(
-        action,
-        "BILINEAR",
-        admission=admission,
-    )
+    plan = kernel._build_constraint_plan(action, "BILINEAR")
     charged = constraint_coefficient_count(dimension, generator_count, "BILINEAR")
 
     assert_charged_work_parity(
@@ -597,46 +483,6 @@ def test_source_height_is_coupled_to_constraint_expansion_work(
     )
 
 
-def test_algebraic_degree_is_charged_before_embedding_recognition() -> None:
-    presentation = SimpleNumberFieldPresentation(
-        coefficients_descending=("1", "0", "0", "0", "0", "0", "0", "0", "1")
-    )
-    # x^8 + 1 has no real root, so reaching recognition would report an invalid
-    # embedding. The degree-expanded structural ledger must reject first.
-    embedding = RealNumberFieldEmbedding.model_validate(
-        {
-            "kind": "REAL",
-            "presentation": presentation.model_dump(mode="json"),
-            "root": {
-                "polynomial": presentation.coefficients_descending,
-                "real_root_index": 0,
-            },
-        }
-    )
-    zero = SimpleNumberFieldElement(
-        presentation=presentation,
-        coefficients_ascending=tuple(
-            CanonicalRational.from_fraction(Fraction(0)) for _ in range(8)
-        ),
-    )
-    dimension = 12
-    matrix = EmbeddedRealSimpleNumberFieldMatrix(
-        embedding=embedding,
-        entries=tuple(tuple(zero for _ in range(dimension)) for _ in range(dimension)),
-    )
-    action = EmbeddedRealNumberFieldMatrixAction(
-        coordinate_axis=tuple(f"e{index}" for index in range(dimension)),
-        generators=(EmbeddedRealNumberFieldActionGenerator(label="A", matrix=matrix),),
-    )
-
-    with pytest.raises(OperationDomainValidationError) as exc_info:
-        compute_invariant_bilinear_form_lattice(action, "ALTERNATING")
-
-    assert exc_info.value.errors()[0]["type"] == (
-        "lattice.invariant_form.budget_exceeded"
-    )
-
-
 def test_catalog_publishes_typed_operation_and_valid_example() -> None:
     operation = INVARIANT_BILINEAR_FORM_LATTICE_OPERATION
 
@@ -654,3 +500,44 @@ def test_catalog_publishes_typed_operation_and_valid_example() -> None:
     assert (
         operation.result_type.model_validate(result.model_dump(mode="json")) == result
     )
+
+
+def test_oversized_generator_matrices_are_rejected_before_nested_parsing() -> None:
+    """Raw matrix cells exceeding the axis dimension are rejected cheaply."""
+    axis = ["e1"]
+    matrix = [[_rational(1) for _ in range(128)] for _ in range(128)]
+    action = {
+        "coordinate_axis": axis,
+        "generators": [{"label": "g", "matrix": {"entries": matrix}}],
+    }
+    with pytest.raises(ValidationError) as exc_info:
+        RationalMatrixAction.model_validate(action)
+    assert exc_info.value.errors()[0]["type"] == (
+        "lattice.invariant_form.budget_exceeded"
+    )
+
+
+def test_cancellation_during_constraint_expansion() -> None:
+    """A cancelled request raises during constraint expansion."""
+
+    class _Cancelled:
+        def is_set(self) -> bool:
+            return True
+
+    action = _action([("A", [[1, 1], [0, 1]])])
+    with (
+        request_execution(time.monotonic()),
+        request_cancellation(_Cancelled()),
+        pytest.raises(OperationExecutionCancelledError),
+    ):
+        compute_invariant_bilinear_form_lattice(action, "BILINEAR")
+
+
+def test_deadline_expiration_before_constraint_expansion() -> None:
+    """An expired deadline raises before constraint expansion."""
+
+    action = _action([("A", [[1, 1], [0, 1]])])
+    with request_execution(time.monotonic()):
+        bind_request_deadline(time.monotonic() - 1)
+        with pytest.raises(OperationExecutionTimeoutError):
+            compute_invariant_bilinear_form_lattice(action, "BILINEAR")

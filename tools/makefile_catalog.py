@@ -50,7 +50,9 @@ def discover_makefiles(root: Path, entrypoint: Path | None = None) -> MakefileCa
         if path in visited:
             return
         if not path.is_file():
-            raise MakefileCatalogError(f"included Makefile is missing: {relative.as_posix()}")
+            raise MakefileCatalogError(
+                f"included Makefile is missing: {relative.as_posix()}"
+            )
         visiting.add(path)
         files.append(path)
         for line_number, line in enumerate(

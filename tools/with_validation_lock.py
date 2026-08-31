@@ -90,7 +90,9 @@ def _run(target: str, command: list[str]) -> int:
         else:
             candidate = shutil.which(executable)
             if candidate is None:
-                print(f"validation command is unavailable: {executable}", file=sys.stderr)
+                print(
+                    f"validation command is unavailable: {executable}", file=sys.stderr
+                )
                 return 127
             resolved = candidate
         result = run_tool_command(

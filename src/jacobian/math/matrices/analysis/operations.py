@@ -5,7 +5,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
+from functools import partial
 from math import ceil, factorial, lcm, log10
+from time import monotonic
 from typing import Any, Literal
 
 from pydantic_core import PydanticCustomError
@@ -18,6 +20,9 @@ from jacobian._exact import (
 )
 from jacobian._execution import (
     OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    current_request_execution,
     request_cancelled,
 )
 from jacobian.canonical import (
@@ -81,6 +86,35 @@ class _InertiaExecutionPlan:
 def _require_inertia_execution_active(phase: str) -> None:
     if request_cancelled():
         raise OperationExecutionCancelledError(f"request cancelled {phase}")
+
+
+# The exact work ledger is the mathematical admission evidence. This generous
+# wall limit is only a cooperative request-occupancy backstop around bounded
+# in-process phases; it does not claim that the elimination or root-isolation
+# kernels are preemptible.
+_INERTIA_WALL_SECONDS = 600.0
+
+
+def _execution_deadline() -> float:
+    """Bind one owner deadline measured from the original request start."""
+
+    execution = current_request_execution()
+    started_at = execution.started_at if execution is not None else monotonic()
+    owner_deadline = started_at + _INERTIA_WALL_SECONDS
+    deadline = (
+        min(owner_deadline, execution.deadline)
+        if execution is not None and execution.deadline is not None
+        else owner_deadline
+    )
+    bind_request_deadline(deadline)
+    return deadline
+
+
+def _require_inertia_deadline(deadline: float, phase: str) -> None:
+    if request_cancelled():
+        raise OperationExecutionCancelledError(f"request cancelled {phase}")
+    if monotonic() >= deadline:
+        raise OperationExecutionTimeoutError(f"inertia deadline expired {phase}")
 
 
 def _admit_rational_spectrum_claim(
@@ -825,10 +859,16 @@ def compute_inertia(matrix: ExactRealMatrix) -> InertiaResult:
     """Compute Sylvester inertia over QQ or one exact real simple field."""
 
     try:
-        _require_inertia_execution_active("before exact inertia admission")
+        deadline = _execution_deadline()
+        execution_checkpoint = partial(_require_inertia_deadline, deadline)
+        execution_checkpoint("before exact inertia admission")
         admission = _admit_inertia(matrix)
-        _require_inertia_execution_active("after exact inertia admission")
-        return _compute_inertia(matrix, admission=admission)
+        execution_checkpoint("after exact inertia admission")
+        return _compute_inertia(
+            matrix,
+            admission=admission,
+            execution_checkpoint=execution_checkpoint,
+        )
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(
             location=("matrix",), code=exc.type, message=exc.message()

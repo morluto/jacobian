@@ -7,7 +7,14 @@ import pytest
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
+import jacobian.math.matrices.analysis.operations as analysis_operations
 from jacobian._exact import CanonicalRational
+from jacobian._execution import (
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    current_request_execution,
+    request_execution,
+)
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.analysis._models import (
@@ -110,6 +117,85 @@ class TestInertia:
         with pytest.raises(OperationDomainValidationError) as exc_info:
             compute_inertia(request)
         assert exc_info.value.errors()[0]["type"] == "matrix.shape_mismatch"
+
+    def test_native_inertia_binds_an_owner_deadline_from_request_start(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A direct matrix.inertia.compute call binds a wall deadline.
+
+        The admission and computation checkpoints share the request-start
+        envelope, so field recognition and repeated exact sign isolation stay
+        bounded by a cooperative backstop as well as the cancellation signal.
+        """
+        checks = 0
+
+        def monotonic() -> float:
+            nonlocal checks
+            checks += 1
+            # started_at=10 fixes the owner deadline at 610. The first expired
+            # observation occurs inside exact congruence elimination.
+            return 700.0 if checks >= 3 else 500.0
+
+        monkeypatch.setattr(analysis_operations, "monotonic", monotonic)
+        matrix = RationalMatrix(
+            entries=(
+                (
+                    CanonicalRational(num="0", den="1"),
+                    CanonicalRational(num="1", den="1"),
+                ),
+                (
+                    CanonicalRational(num="1", den="1"),
+                    CanonicalRational(num="0", den="1"),
+                ),
+            )
+        )
+        with (
+            request_execution(started_at=10.0),
+            pytest.raises(
+                OperationExecutionTimeoutError,
+                match="during exact rational congruence elimination",
+            ),
+        ):
+            compute_inertia_native(matrix)
+
+    def test_native_inertia_preserves_a_stricter_inherited_deadline(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The owner default must not loosen a tighter inherited deadline."""
+        checks = 0
+
+        def monotonic() -> float:
+            nonlocal checks
+            checks += 1
+            # The owner deadline would be 610, but the inherited 550 deadline
+            # must remain authoritative when elimination observes 560.
+            return 560.0 if checks >= 3 else 500.0
+
+        monkeypatch.setattr(analysis_operations, "monotonic", monotonic)
+        matrix = RationalMatrix(
+            entries=(
+                (
+                    CanonicalRational(num="0", den="1"),
+                    CanonicalRational(num="1", den="1"),
+                ),
+                (
+                    CanonicalRational(num="1", den="1"),
+                    CanonicalRational(num="0", den="1"),
+                ),
+            )
+        )
+        with request_execution(started_at=10.0):
+            bind_request_deadline(550.0)
+            with pytest.raises(
+                OperationExecutionTimeoutError,
+                match="during exact rational congruence elimination",
+            ):
+                compute_inertia_native(matrix)
+            execution = current_request_execution()
+            assert execution is not None
+            assert execution.deadline == 550.0
 
 
 class TestFarkas:

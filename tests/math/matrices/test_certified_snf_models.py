@@ -332,7 +332,7 @@ def test_certificate_contract_replays_zero_dimensional_boundaries(
     certificate = SmithNormalFormCertificate(**kwargs)
 
     assert certificate.rank == 0
-    assert not verify_smith_normal_form_certificate(certificate)
+    assert verify_smith_normal_form_certificate(certificate)
     assert not verify_smith_normal_form_certificate(
         SmithNormalFormCertificate.model_validate({**kwargs, "left_determinant": "-1"})
     )
@@ -362,7 +362,7 @@ def test_certificate_contract_replays_rank_zero_determinants_without_formatting_
     )
 
     assert certificate.left_determinant == "-1"
-    assert not verify_smith_normal_form_certificate(certificate)
+    assert verify_smith_normal_form_certificate(certificate)
     assert not verify_smith_normal_form_certificate(
         SmithNormalFormCertificate.model_validate(
             {

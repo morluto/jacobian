@@ -382,13 +382,14 @@ def _profile_from_worker(
         root_profiles.append(_root_profile_from_worker(value, declared, root_counts))
     root_profiles_tuple = tuple(root_profiles)
     outcome = _OUTCOME.validate_python(payload.get("outcome"))
-    candidate = CommonInterlacingProfile.model_construct(
-        family=family,
-        root_profiles=root_profiles_tuple,
-        outcome=outcome,
-    )
     try:
-        candidate.require_structural_profile()
+        CommonInterlacingProfile.model_validate(
+            {
+                "family": family,
+                "root_profiles": root_profiles_tuple,
+                "outcome": outcome,
+            }
+        )
     except (PydanticCustomError, ValidationError) as exc:
         raise ValueError("worker returned an inconsistent root profile") from exc
     return CommonInterlacingProfile._from_kernel(

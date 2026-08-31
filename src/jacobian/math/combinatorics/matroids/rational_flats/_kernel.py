@@ -43,9 +43,12 @@ from jacobian.math.matrices.values import (
 MAX_RATIONAL_FLAT_SEARCH_STATE_ORBITS = 100_000
 MAX_RATIONAL_FLAT_SEARCH_WORK = 5_000_000_000
 MAX_RATIONAL_FLAT_ORBIT_CACHE_ENTRIES = 500_000
-_RATIONAL_FLAT_WALL_SECONDS = 300.0
+# A generous killable safety ceiling; mathematical work and output ledgers are
+# the authoritative admission bounds.
+_RATIONAL_FLAT_WALL_SECONDS = 3600.0
 _RESULT_ENVELOPE_RESERVE_BYTES = 16_384
 _CANONICAL_PROJECTION_PASSES = 3
+_MAX_RATIONAL_FLAT_RETENTION_BYTES = 64 * 1024 * 1024
 
 type RationalRow = tuple[Fraction, ...]
 type IntegerRow = tuple[int, ...]
@@ -926,7 +929,7 @@ def _search_satisfying_states(
                 _state_bytes = 2 * object_bytes
                 if (
                     satisfying_retention_bytes + _state_bytes
-                    > CanonicalLimits().max_output_bytes
+                    > _MAX_RATIONAL_FLAT_RETENTION_BYTES
                 ):
                     raise _SearchStoppedError(
                         "RESULT_OUTPUT_LIMIT",

@@ -520,6 +520,10 @@ class ClauseConstrainedRationalFlatProblem(StrictModel):
                 label="rational-flat problem",
             )
             candidates = data.get("candidates")
+            if not isinstance(candidates, (dict, RationalVectorConfiguration)):
+                raise _validation_error(
+                    "candidate_shape", "candidates must be a mapping"
+                )
             if isinstance(candidates, dict):
                 _require_raw_configuration_envelope(candidates, label="candidate")
                 _require_raw_sparse_input_envelope(
@@ -527,11 +531,18 @@ class ClauseConstrainedRationalFlatProblem(StrictModel):
                     label="candidate",
                     maximum_rows=MAX_RATIONAL_FLAT_CANDIDATES,
                 )
-            _require_raw_sparse_input_envelope(
-                data.get("forbidden_vectors"),
-                label="forbidden",
-                maximum_rows=MAX_RATIONAL_FLAT_FORBIDDEN_VECTORS,
-            )
+            forbidden_vectors = data.get("forbidden_vectors")
+            if not isinstance(forbidden_vectors, (dict, SparseRationalMatrix)):
+                raise _validation_error(
+                    "forbidden_matrix_shape",
+                    "forbidden_vectors must be a mapping",
+                )
+            if isinstance(forbidden_vectors, dict):
+                _require_raw_sparse_input_envelope(
+                    forbidden_vectors,
+                    label="forbidden",
+                    maximum_rows=MAX_RATIONAL_FLAT_FORBIDDEN_VECTORS,
+                )
             for field_name in ("clauses", "symmetry_generators"):
                 value = data.get(field_name)
                 if value is not None and not isinstance(value, (list, tuple)):

@@ -8,10 +8,10 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.math.polynomials.ideals import (
-    MonomialIdealBettiRequest,
     MonomialIdealBettiResult,
     monomial_ideal_graded_betti_table,
 )
+from jacobian.math.polynomials.ideals._models import MonomialIdealBettiRequest
 from jacobian.math.polynomials.values import RationalPolynomialIdeal
 
 

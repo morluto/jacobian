@@ -299,9 +299,10 @@ class RationalMatrixAction(StrictModel):
                         if isinstance(generator, dict)
                         else getattr(generator, "label", None)
                     )
-                    if isinstance(label, str) and unicodedata.normalize(
-                        "NFC", label
-                    ) != label:
+                    if (
+                        isinstance(label, str)
+                        and unicodedata.normalize("NFC", label) != label
+                    ):
                         raise _validation_error(
                             "noncanonical_generator_label",
                             "generator labels must use NFC Unicode normalization",

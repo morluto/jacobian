@@ -63,9 +63,8 @@ def _edge_intersection_graph_result_bytes(
     the already-admitted exact set of intersecting pairs.  The byte count must
     follow that set rather than charging every input for a complete graph.
     """
-    source_bytes = len(canonicalize_json(hypergraph.model_dump(mode="json")))
+    source_bytes = len(encode_strict_json(hypergraph.model_dump(mode="json")))
     edge_ids = tuple(edge_id for edge_id, _ in hypergraph.edges)
-    n = len(edge_ids)
     # Each graph vertex is a strict-JSON string (the edge ID).
     vertex_bytes = _strict_json_array_size(
         tuple(_strict_label_wire_bytes(edge_id) for edge_id in edge_ids)

@@ -592,9 +592,7 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
                 normalized_embedding["root"] = normalized_root
             normalized["embedding"] = normalized_embedding
 
-        def materialize_bounded(
-            value: object, *, maximum: int, message: str
-        ) -> object:
+        def materialize_bounded(value: object, *, maximum: int, message: str) -> object:
             if isinstance(value, (list, tuple, str, bytes, Mapping)):
                 return value
             try:

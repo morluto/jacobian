@@ -163,7 +163,10 @@ def _smith_normal_form_killable(
     payload = json.dumps(
         {
             "entries": [
-                [format_canonical_integer(parse_canonical_integer(value)) for value in row]
+                [
+                    format_canonical_integer(parse_canonical_integer(value))
+                    for value in row
+                ]
                 for row in matrix.entries
             ]
         },
@@ -228,9 +231,8 @@ def _smith_normal_form_killable(
             "bounded alternating Smith worker returned malformed data"
         ) from exc
     dimension = len(matrix.entries)
-    if (
-        len(normal_form) != dimension
-        or any(len(row) != dimension for row in normal_form)
+    if len(normal_form) != dimension or any(
+        len(row) != dimension for row in normal_form
     ):
         raise RuntimeError(
             "bounded alternating Smith worker returned invalid dimensions"

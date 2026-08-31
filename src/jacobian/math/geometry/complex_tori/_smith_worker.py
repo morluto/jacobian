@@ -27,9 +27,7 @@ def main() -> None:
     input_bytes = sys.stdin.buffer.read()
     payload = loads_strict_json(input_bytes)
     entries = payload["entries"]
-    matrix = tuple(
-        tuple(_decode_integer(value) for value in row) for row in entries
-    )
+    matrix = tuple(tuple(_decode_integer(value) for value in row) for row in entries)
     normal_form = integer_smith_normal_form(matrix)
     json.dump(
         {

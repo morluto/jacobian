@@ -87,11 +87,7 @@ class TestInertia:
     def test_singular_all_ones_matrix_uses_original_schur_entries(self) -> None:
         req = _inertia_request(
             3,
-            {
-                (row, column): "1"
-                for row in range(3)
-                for column in range(3)
-            },
+            {(row, column): "1" for row in range(3) for column in range(3)},
         )
 
         result = compute_inertia(req)

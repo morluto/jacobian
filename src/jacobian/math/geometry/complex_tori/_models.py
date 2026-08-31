@@ -57,9 +57,8 @@ class LatticeComplexStructure(StrictModel):
         if not isinstance(data, dict):
             return data
         axis = data.get("coordinate_axis")
-        if (
-            axis is not None
-            and not isinstance(axis, (list, tuple, str, bytes, Mapping))
+        if axis is not None and not isinstance(
+            axis, (list, tuple, str, bytes, Mapping)
         ):
             try:
                 axis_iterator = iter(cast(Iterable[object], axis))

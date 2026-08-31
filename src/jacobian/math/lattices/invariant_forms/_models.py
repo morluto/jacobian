@@ -458,9 +458,7 @@ class EmbeddedRealNumberFieldActionGenerator(StrictModel):
 class EmbeddedRealNumberFieldMatrixAction(StrictModel):
     """A finite labelled action by matrices in one embedded real field."""
 
-    action_type: Literal["EMBEDDED_REAL_NUMBER_FIELD"] = (
-        "EMBEDDED_REAL_NUMBER_FIELD"
-    )
+    action_type: Literal["EMBEDDED_REAL_NUMBER_FIELD"] = "EMBEDDED_REAL_NUMBER_FIELD"
     coordinate_axis: tuple[OpaqueLabel, ...] = Field(
         min_length=1, max_length=MAX_ACTION_DIMENSION
     )

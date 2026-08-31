@@ -581,9 +581,7 @@ def _eliminate_1x1(matrix: list[list[Fraction]], index: int, pivot: int) -> int:
             continue
         factor = original[row][index] / diagonal
         for col in range(index + 1, len(matrix)):
-            matrix[row][col] = (
-                original[row][col] - factor * original[index][col]
-            )
+            matrix[row][col] = original[row][col] - factor * original[index][col]
     for row in range(index + 1, len(matrix)):
         for col in range(row + 1, len(matrix)):
             matrix[col][row] = matrix[row][col]
@@ -703,9 +701,7 @@ def _eliminate_algebraic_1x1(
     return diagonal_sign
 
 
-def _apply_algebraic_2x2_schur(
-    matrix: list[list[Any]], index: int, pivot: Any
-) -> None:
+def _apply_algebraic_2x2_schur(matrix: list[list[Any]], index: int, pivot: Any) -> None:
     if index + 2 >= len(matrix):
         return
     original = [row[:] for row in matrix]

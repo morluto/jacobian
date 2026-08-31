@@ -599,8 +599,7 @@ def _build_constraint_plan(
     stored_digits = 0
     recognized = (
         recognized_field or _recognize_action_field(action)
-        if isinstance(action, EmbeddedRealNumberFieldMatrixAction)
-        and action.generators
+        if isinstance(action, EmbeddedRealNumberFieldMatrixAction) and action.generators
         else None
     )
     generator_matrices: tuple[tuple[tuple[Any, ...], ...], ...]
@@ -844,8 +843,7 @@ def _admit_invariant_bilinear_form_lattice(
     # bounds via the existing _require_*_envelope helpers.
     recognized_field = (
         _recognize_action_field(action)
-        if isinstance(action, EmbeddedRealNumberFieldMatrixAction)
-        and action.generators
+        if isinstance(action, EmbeddedRealNumberFieldMatrixAction) and action.generators
         else None
     )
     plan = _build_constraint_plan(

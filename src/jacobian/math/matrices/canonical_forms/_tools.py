@@ -145,7 +145,7 @@ TOOLS: MathTools = (
                                 {"num": "1", "den": "1"},
                                 {"num": "0", "den": "1"},
                             ],
-                        ]
+                        ],
                     },
                     "polynomial": {
                         "variables": ["t"],

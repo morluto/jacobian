@@ -121,7 +121,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                                 {"num": "0", "den": "1"},
                                 {"num": "-1", "den": "1"},
                             ],
-                        ]
+                        ],
                     },
                     "claimed_profile": [
                         {

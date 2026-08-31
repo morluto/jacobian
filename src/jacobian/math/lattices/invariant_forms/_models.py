@@ -553,9 +553,10 @@ class InvariantBilinearFormLatticeRequest(StrictModel):
             action = data.get("action")
             if isinstance(action, dict):
                 raw_axis = action.get("coordinate_axis")
-                if isinstance(raw_axis, (list, tuple)) and len(
-                    raw_axis
-                ) > MAX_ACTION_DIMENSION:
+                if (
+                    isinstance(raw_axis, (list, tuple))
+                    and len(raw_axis) > MAX_ACTION_DIMENSION
+                ):
                     raise _validation_error(
                         "budget_exceeded",
                         f"coordinate_axis has at most {MAX_ACTION_DIMENSION} labels",

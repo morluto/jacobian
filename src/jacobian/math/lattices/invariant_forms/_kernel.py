@@ -48,7 +48,7 @@ _HNF_WORKER = Path(__file__).with_name("_hnf_worker.py")
 _HNF_STDERR_LIMIT = 64 * 1024
 
 
-def _require_active_request(stage: str) -> None:
+def _require_active_request(stage: str, *, deadline: float | None = None) -> None:
     """Raise if the request deadline expired or was cancelled during *stage*."""
 
     if request_cancelled():
@@ -56,13 +56,13 @@ def _require_active_request(stage: str) -> None:
             f"invariant-form lattice cancelled {stage}"
         )
     execution = current_request_execution()
-    if execution is not None and execution.deadline is not None:
-        import time
-
-        if time.monotonic() >= execution.deadline:
-            raise OperationExecutionTimeoutError(
-                f"invariant-form lattice deadline expired {stage}"
-            )
+    active_deadline = deadline
+    if active_deadline is None and execution is not None:
+        active_deadline = execution.deadline
+    if active_deadline is not None and monotonic() >= active_deadline:
+        raise OperationExecutionTimeoutError(
+            f"invariant-form lattice deadline expired {stage}"
+        )
 
 
 def _bind_request_deadline() -> float:
@@ -263,40 +263,32 @@ def _normalize_retained_strings(value: object) -> object:
     return value
 
 
-def _retained_action_bytes(action: RationalMatrixAction) -> int:
+def _retained_action_bytes(
+    action: RationalMatrixAction, *, deadline: float | None = None
+) -> int:
     """Measure the exact retained source before expanding any constraints."""
 
     # Preflight the expanded source-byte budget before model_dump and
     # encode_strict_json materialize the full canonical representation.
     # Accumulate a conservative size over every generator, not just the
     # first, since later generators may carry much larger rationals.
-    dimension = len(action.coordinate_axis)
     generator_count = len(action.generators)
     if generator_count > 0:
-        max_row_bytes = 0
-        for generator in action.generators:
-            for row in generator.matrix.entries:
-                row_bytes = sum(len(str(value)) + 4 for value in row)
-                if row_bytes > max_row_bytes:
-                    max_row_bytes = row_bytes
-        axis_label_bytes = sum(
+        estimated_bytes = 4_096 + sum(
             len(encode_strict_json(label)) + 1 for label in action.coordinate_axis
         )
-        generator_label_bytes = sum(
-            len(encode_strict_json(generator.label)) + 1
-            for generator in action.generators
-        )
-        estimated_bytes = (
-            4_096
-            + axis_label_bytes
-            + generator_label_bytes
-            + generator_count * (dimension * max_row_bytes + 32)
-        )
-        if estimated_bytes + 4_096 > MAX_INVARIANT_FORM_RESULT_BYTES:
-            raise _validation_error(
-                "budget_exceeded",
-                "the retained rational matrix action leaves no room for the canonical result",
-            )
+        for generator in action.generators:
+            _require_active_request("during retained action sizing", deadline=deadline)
+            estimated_bytes += len(encode_strict_json(generator.label)) + 64
+            for row in generator.matrix.entries:
+                estimated_bytes += 32
+                for value in row:
+                    estimated_bytes += len(value.num) + len(value.den) + 20
+                    if estimated_bytes + 4_096 > MAX_INVARIANT_FORM_RESULT_BYTES:
+                        raise _validation_error(
+                            "budget_exceeded",
+                            "the retained rational matrix action leaves no room for the canonical result",
+                        )
     try:
         retained_payload: object = action.model_dump(mode="json")
         retained_payload = _normalize_retained_strings(retained_payload)
@@ -442,7 +434,10 @@ def _require_integer_kernel_work_envelope(plan: _ConstraintPlan) -> None:
 
 
 def _build_constraint_plan(
-    action: RationalMatrixAction, kind: FormKind
+    action: RationalMatrixAction,
+    kind: FormKind,
+    *,
+    deadline: float | None = None,
 ) -> _ConstraintPlan:
     dimension = len(action.coordinate_axis)
     positions = _coefficient_positions(dimension, kind)
@@ -453,7 +448,7 @@ def _build_constraint_plan(
             "the congruence expansion exceeds the structural bound of "
             f"{MAX_CONSTRAINT_CELLS} coefficients",
         )
-    source_bytes = _retained_action_bytes(action)
+    source_bytes = _retained_action_bytes(action, deadline=deadline)
     if not positions:
         _require_result_envelope(
             action,
@@ -471,14 +466,14 @@ def _build_constraint_plan(
     constraints: set[IntegerConstraint] = set()
     stored_digits = 0
     for generator in action.generators:
-        _require_active_request("during constraint expansion")
+        _require_active_request("during constraint expansion", deadline=deadline)
         matrix = tuple(
             tuple(value.as_fraction() for value in row)
             for row in generator.matrix.entries
         )
         for equation_row in range(dimension):
             for equation_column in range(dimension):
-                _require_active_request("during constraint expansion")
+                _require_active_request("during constraint expansion", deadline=deadline)
                 rational_row = tuple(
                     _constraint_coefficient(
                         matrix,
@@ -500,7 +495,7 @@ def _build_constraint_plan(
                         f"{MAX_STORED_CONSTRAINT_DIGITS}-digit intermediate bound",
                     )
                 constraints.add(constraint)
-    _require_active_request("after constraint expansion")
+    _require_active_request("after constraint expansion", deadline=deadline)
     ordered_constraints = tuple(sorted(constraints))
     _require_result_envelope(
         action,
@@ -513,7 +508,9 @@ def _build_constraint_plan(
     return plan
 
 
-def _integer_kernel_basis(plan: _ConstraintPlan) -> tuple[list[list[int]], int]:
+def _integer_kernel_basis(
+    plan: _ConstraintPlan, *, deadline: float | None = None
+) -> tuple[list[list[int]], int]:
     """Extract the primitive kernel from a canonical graph-lattice HNF.
 
     Rows of ``[C^T | I_m]`` form the graph of ``x -> x C^T`` inside
@@ -536,8 +533,9 @@ def _integer_kernel_basis(plan: _ConstraintPlan) -> tuple[list[list[int]], int]:
             0,
         )
 
-    deadline = _bind_request_deadline()
-    _require_active_request("before the graph-lattice HNF")
+    if deadline is None:
+        deadline = _bind_request_deadline()
+    _require_active_request("before the graph-lattice HNF", deadline=deadline)
     from jacobian.process import (
         ProcessResourceLimits,
         run_bounded_process,
@@ -620,7 +618,7 @@ def _integer_kernel_basis(plan: _ConstraintPlan) -> tuple[list[list[int]], int]:
         raise RuntimeError(
             "bounded invariant-form HNF worker returned invalid dimensions"
         )
-    _require_active_request("after graph-lattice HNF")
+    _require_active_request("after graph-lattice HNF", deadline=deadline)
     if not primitive_kernel:
         return [], constraint_rank
     return primitive_kernel, constraint_rank
@@ -650,10 +648,10 @@ def invariant_bilinear_form_lattice_kernel(
 ) -> InvariantBilinearFormLattice:
     """Return the saturated integer lattice of forms fixed by every generator."""
 
-    _bind_request_deadline()
-    _require_active_request("before constraint expansion")
-    plan = _build_constraint_plan(action, kind)
-    basis, constraint_rank = _integer_kernel_basis(plan)
+    deadline = _bind_request_deadline()
+    _require_active_request("before constraint expansion", deadline=deadline)
+    plan = _build_constraint_plan(action, kind, deadline=deadline)
+    basis, constraint_rank = _integer_kernel_basis(plan, deadline=deadline)
     dimension = len(action.coordinate_axis)
     basis_forms = tuple(
         IntegralBilinearForm._from_kernel(
@@ -668,6 +666,7 @@ def invariant_bilinear_form_lattice_kernel(
         )
         for vector in basis
     )
+    _require_active_request("after result construction", deadline=deadline)
     return InvariantBilinearFormLattice._from_kernel(
         action=action,
         kind=kind,

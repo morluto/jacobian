@@ -254,8 +254,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             example(
                 "edge_intersection_graph_of_4_vertex_hypergraph",
-                "Compute the edge-intersection graph of a 4-vertex, 3-edge "
-                "hypergraph.",
+                "Compute the edge-intersection graph of a 4-vertex, 3-edge hypergraph.",
                 {"hypergraph": _HYPERGRAPH},
             ),
         ),

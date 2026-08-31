@@ -277,6 +277,7 @@ class TestEdgeIntersectionGraphCarrierBound:
 
         long_id = "x" * 65
         from pydantic import ValidationError
+
         with pytest.raises(ValidationError):
             _graph(
                 {

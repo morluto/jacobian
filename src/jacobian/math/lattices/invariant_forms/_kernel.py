@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import json
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from fractions import Fraction
 from math import ceil, gcd, lcm, log10
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from time import monotonic
 from typing import Any, cast
 from unicodedata import normalize
 
@@ -50,6 +55,8 @@ MAX_STORED_CONSTRAINT_DIGITS = 2_000_000
 MAX_INVARIANT_FORM_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 _INVARIANT_FORM_WALL_SECONDS = 3600.0
+_HNF_WORKER = Path(__file__).with_name("_hnf_worker.py")
+_HNF_STDERR_LIMIT = 64 * 1024
 
 
 def _require_active_request(stage: str) -> None:
@@ -546,6 +553,13 @@ def _build_constraint_plan(
     else:
         field_degree = 1
     positions = _coefficient_positions(dimension, kind)
+    cell_count = constraint_coefficient_count(dimension, len(action.generators), kind)
+    if cell_count > MAX_CONSTRAINT_CELLS:
+        raise _validation_error(
+            "budget_exceeded",
+            "the congruence expansion exceeds the structural bound of "
+            f"{MAX_CONSTRAINT_CELLS} coefficients",
+        )
     source_bytes = _retained_action_bytes(action)
     if not positions:
         _require_result_envelope(
@@ -680,36 +694,78 @@ def _integer_kernel_basis(plan: _ConstraintPlan) -> tuple[list[list[int]], int]:
             0,
         )
 
-    _bind_request_deadline()
+    deadline = _bind_request_deadline()
     _require_active_request("before the graph-lattice HNF")
-
-    from flint import fmpz_mat
-
-    constraint_count = len(plan.constraints)
-    graph = fmpz_mat(
-        [
-            [
-                *(
-                    plan.constraints[constraint][coordinate]
-                    for constraint in range(constraint_count)
-                ),
-                *(int(coordinate == column) for column in range(coefficient_count)),
-            ]
-            for coordinate in range(coefficient_count)
-        ]
+    from jacobian.process import (
+        ProcessResourceLimits,
+        run_bounded_process,
+        worker_environment,
     )
-    graph_hnf = graph.hnf()
-    primitive_kernel = [
-        [
-            int(graph_hnf[row, constraint_count + column])
-            for column in range(coefficient_count)
-        ]
-        for row in range(coefficient_count)
-        if all(
-            graph_hnf[row, constraint] == 0 for constraint in range(constraint_count)
+
+    remaining = deadline - monotonic()
+    if remaining <= 0:
+        raise OperationExecutionTimeoutError(
+            "invariant-form lattice deadline expired before graph-lattice HNF"
         )
-    ]
-    constraint_rank = coefficient_count - len(primitive_kernel)
+    payload = json.dumps(
+        {
+            "coefficient_count": coefficient_count,
+            "constraints": [list(row) for row in plan.constraints],
+        },
+        separators=(",", ":"),
+    ).encode("utf-8")
+    with TemporaryDirectory(prefix="jacobian-invariant-form-hnf-") as directory:
+        completed = run_bounded_process(
+            [sys.executable, str(_HNF_WORKER)],
+            input_bytes=payload,
+            timeout_seconds=remaining,
+            environment=worker_environment(locale="C.UTF-8"),
+            stdout_limit=MAX_INVARIANT_FORM_RESULT_BYTES,
+            stderr_limit=_HNF_STDERR_LIMIT,
+            resource_limits=ProcessResourceLimits(
+                cpu_seconds=max(1, ceil(_INVARIANT_FORM_WALL_SECONDS)),
+                address_space_bytes=1024 * 1024 * 1024,
+                file_size_bytes=1024 * 1024,
+            ),
+            cwd=directory,
+        )
+    if completed.cancelled:
+        raise OperationExecutionCancelledError(
+            "invariant-form lattice cancelled during graph-lattice HNF"
+        )
+    if completed.timed_out:
+        raise OperationExecutionTimeoutError(
+            "invariant-form lattice deadline expired during graph-lattice HNF"
+        )
+    if (
+        completed.stdout_exceeded
+        or completed.stderr_exceeded
+        or completed.returncode != 0
+    ):
+        raise RuntimeError("bounded invariant-form HNF worker did not return a basis")
+    try:
+        response = json.loads(completed.stdout)
+        primitive_kernel = response["primitive_kernel"]
+        constraint_rank = response["constraint_rank"]
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise RuntimeError(
+            "bounded invariant-form HNF worker returned malformed data"
+        ) from exc
+    if (
+        not isinstance(primitive_kernel, list)
+        or not isinstance(constraint_rank, int)
+        or constraint_rank != coefficient_count - len(primitive_kernel)
+        or any(
+            not isinstance(row, list)
+            or len(row) != coefficient_count
+            or any(not isinstance(value, int) for value in row)
+            for row in primitive_kernel
+        )
+    ):
+        raise RuntimeError(
+            "bounded invariant-form HNF worker returned invalid dimensions"
+        )
+    _require_active_request("after graph-lattice HNF")
     if not primitive_kernel:
         return [], constraint_rank
     return primitive_kernel, constraint_rank

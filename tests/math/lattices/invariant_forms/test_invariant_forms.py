@@ -373,6 +373,36 @@ def test_deep_unknown_data_is_rejected_without_recursive_preprocessing(
     assert exc_info.value.errors(include_input=False)[0]["type"] == "extra_forbidden"
 
 
+def test_coordinate_axis_iterables_are_bounded_before_tuple_materialization() -> None:
+    def labels() -> Any:
+        index = 0
+        while True:
+            yield f"e{index}"
+            index += 1
+
+    with pytest.raises(ValidationError, match="coordinate_axis has at most"):
+        RationalMatrixAction.model_validate(
+            {"coordinate_axis": labels(), "generators": []}
+        )
+
+
+def test_deep_unknown_form_data_is_rejected_before_recursive_canonicalization() -> None:
+    nested: object = None
+    for _ in range(1_500):
+        nested = {"next": nested}
+    action = _action([("A", [[-1, 0], [0, 1]])])
+    form = compute_invariant_bilinear_form_lattice(action, "BILINEAR").basis_forms[0]
+    payload = form.model_dump(mode="json")
+    payload["unknown"] = nested
+
+    with pytest.raises(ValidationError) as exc_info:
+        IntegralBilinearForm.model_validate(payload)
+
+    assert exc_info.value.errors(include_input=False)[0]["type"] == (
+        "lattice.invariant_form.shape_mismatch"
+    )
+
+
 def test_unimodular_coordinate_change_transports_the_invariant_lattice() -> None:
     action = _action([("A", [[-1, 0], [0, 1]])])
     conjugated_action = _action([("A", [[-1, -2], [0, 1]])])
@@ -559,6 +589,35 @@ def test_cancellation_during_constraint_expansion() -> None:
     with (
         request_execution(time.monotonic()),
         request_cancellation(_Cancelled()),
+        pytest.raises(OperationExecutionCancelledError),
+    ):
+        compute_invariant_bilinear_form_lattice(action, "BILINEAR")
+
+
+def test_cancellation_is_polled_inside_constraint_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.lattices.invariant_forms._kernel as kernel
+
+    class _Cancellation:
+        cancelled = False
+
+        def is_set(self) -> bool:
+            return self.cancelled
+
+    cancellation = _Cancellation()
+    original = kernel._constraint_coefficient
+
+    def cancel_after_one(*args: Any, **kwargs: Any) -> Fraction:
+        value = original(*args, **kwargs)
+        cancellation.cancelled = True
+        return value
+
+    monkeypatch.setattr(kernel, "_constraint_coefficient", cancel_after_one)
+    action = _action([("A", [[1, 1], [0, 1]])])
+    with (
+        request_execution(time.monotonic() + 10),
+        request_cancellation(cancellation),
         pytest.raises(OperationExecutionCancelledError),
     ):
         compute_invariant_bilinear_form_lattice(action, "BILINEAR")

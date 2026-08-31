@@ -83,8 +83,12 @@ def compute_divisibility_edge_profile(
         try:
             _bind_execution_deadline()
             _require_execution_active("before admission")
-            edge_plan = _validate_divisibility_edge_resources(request.values)
-            return _build_divisibility_edge_profile(request.values, edge_plan)
+            canonical_elements, edge_plan = _validate_divisibility_edge_resources(request.values)
+            if not canonical_elements:
+                return DivisibilityEdgeProfileResult(
+                    values=FiniteIntegerSet(elements=()), edges=()
+                )
+            return _build_divisibility_edge_profile(canonical_elements, edge_plan)
         except PydanticCustomError as exc:
             raise OperationDomainValidationError(
                 location=("values",), code=exc.type, message=exc.message()
@@ -98,14 +102,11 @@ def compute_divisibility_edge_profile(
 
 
 def _build_divisibility_edge_profile(
-    values: object,
+    canonical_elements: tuple[str, ...],
     edge_plan: tuple[tuple[int, int, int], ...],
 ) -> DivisibilityEdgeProfileResult:
     try:
-        elements = values.elements if hasattr(values, "elements") else values
-        data = construct_divisibility_edge_profile(
-            elements if isinstance(elements, tuple) else tuple(elements), edge_plan
-        )
+        data = construct_divisibility_edge_profile(canonical_elements, edge_plan)
     except FactorizationIncompleteError as exc:
         failure = exc.failure
         if failure is not None and failure.kind == "WORKER_CANCELLED":
@@ -129,7 +130,9 @@ def _build_divisibility_edge_profile(
         )
         for d in data
     )
-    result = DivisibilityEdgeProfileResult(values=values, edges=edges)
+    result = DivisibilityEdgeProfileResult(
+        values=FiniteIntegerSet(elements=canonical_elements), edges=edges
+    )
     _require_execution_active("after result construction")
     return result
 
@@ -148,7 +151,7 @@ def divisibility_edge_profile(
                     f"values must contain at most {MAX_DIVISIBILITY_EDGE_SET_SIZE} integers",
                 )
             _validate_divisibility_edge_shape(values)
-            edge_plan = _validate_divisibility_edge_resources(values)
+            canonical_elements, edge_plan = _validate_divisibility_edge_resources(values)
         except (
             CanonicalizationError,
             PydanticCustomError,
@@ -165,7 +168,11 @@ def divisibility_edge_profile(
                 location=("values",), code=code, message=message
             ) from exc
         try:
-            return _build_divisibility_edge_profile(values, edge_plan)
+            if not canonical_elements:
+                return DivisibilityEdgeProfileResult(
+                    values=FiniteIntegerSet(elements=()), edges=()
+                )
+            return _build_divisibility_edge_profile(canonical_elements, edge_plan)
         except FactorizationIncompleteError as exc:
             failure = exc.failure
             failure_kind = failure.kind if failure is not None else "UNKNOWN"

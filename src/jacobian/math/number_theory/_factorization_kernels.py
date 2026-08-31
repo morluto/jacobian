@@ -450,8 +450,23 @@ def _bounded_least_prime_factor(
         raw_factors = response["factors"]
         if not isinstance(raw_factors, list) or not raw_factors:
             raise ValueError("factors must be a non-empty list")
-        least_prime, _power = raw_factors[0]
-        return int(least_prime)
+        least_prime_pair = raw_factors[0]
+        if not isinstance(least_prime_pair, (list, tuple)) or len(least_prime_pair) < 2:
+            raise ValueError("factors must be (prime, power) pairs")
+        least_prime = int(least_prime_pair[0])
+        power = int(least_prime_pair[1])
+        # Structurally decode the LPF projection and bind it to the admitted
+        # quotient: the least prime factor must be ≥ 2 and must divide the
+        # value.  A malformed worker payload (e.g. a composite "prime" or a
+        # mismatched value) fails closed rather than corrupting the result.
+        if least_prime < 2:
+            raise ValueError("least prime factor must be at least 2")
+        if value % least_prime != 0:
+            raise ValueError("least prime factor does not divide the value")
+        # Verify the power is consistent: least_prime ** power must divide value
+        if value % (least_prime ** power) != 0:
+            raise ValueError("least prime factor power is inconsistent")
+        return least_prime
     except (
         IndexError,
         KeyError,

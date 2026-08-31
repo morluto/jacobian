@@ -82,10 +82,11 @@ def test_quotient_reconstructs() -> None:
         assert int(a) * int(edge.quotient) == int(b)
 
 
-def test_native_rejects_empty_source_set() -> None:
-    """Native and wire callers share the non-empty source-set admission."""
-    with pytest.raises(ValueError, match="at least one"):
-        divisibility_edge_profile(FiniteIntegerSet(elements=()))
+def test_native_accepts_empty_source_set() -> None:
+    """Empty finite-set value produces a degenerate profile with no edges."""
+    result = divisibility_edge_profile(FiniteIntegerSet(elements=()))
+    assert result.edges == ()
+    assert len(result.values.elements) == 0
 
 
 @pytest.mark.parametrize("values", [(True, "2"), ("02",)])

@@ -64,10 +64,7 @@ def _validate_divisibility_edge_values(values: tuple[str, ...]) -> None:
 def _validate_divisibility_edge_shape(values: object) -> tuple[str, ...]:
     elements = _extract_elements(values)
     if not elements:
-        raise PydanticCustomError(
-            "divisibility_edge.values_nonempty",
-            "values must contain at least one integer",
-        )
+        return ()
     if len(elements) > MAX_DIVISIBILITY_EDGE_SET_SIZE:
         raise PydanticCustomError(
             "divisibility_edge.values_size",
@@ -93,8 +90,16 @@ def _validate_divisibility_edge_shape(values: object) -> tuple[str, ...]:
 
 def _validate_divisibility_edge_resources(
     values: object,
-) -> tuple[tuple[int, int, int], ...]:
+) -> tuple[tuple[str, ...], tuple[tuple[int, int, int], ...]]:
+    """Return (canonicalized elements, edge plan) for the admitted values.
+
+    The elements are canonicalized (sorted by integer value) so the same
+    mathematical set produces the same edge plan and retained result
+    regardless of presentation order.
+    """
     elements = _extract_elements(values)
+    if not elements:
+        return (), ()
     # Canonicalize element order so the same mathematical set produces the
     # same edge plan and retained result regardless of presentation.
     elements = tuple(sorted(elements, key=int))
@@ -103,7 +108,8 @@ def _validate_divisibility_edge_resources(
     pair_scan_work = sum(
         digits[i] * digits[j]
         for i in range(len(elements))
-        for j in range(i + 1, len(elements))
+        for j in range(len(elements))
+        if i != j
     )
     if pair_scan_work > MAX_DIVISIBILITY_EDGE_PAIR_SCAN_WORK:
         raise PydanticCustomError(
@@ -146,7 +152,7 @@ def _validate_divisibility_edge_resources(
             "divisibility_edge.result_bytes",
             "divisibility edge profile exceeds the serialized-byte budget",
         )
-    return tuple(edge_plan)
+    return elements, tuple(edge_plan)
 
 
 class DivisibilityEdge(StrictModel):

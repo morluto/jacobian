@@ -157,9 +157,7 @@ def _verify_declared_factors(
         for _ in range(multiplicity):
             product = _multiply_integer_polynomials(product, factor_dense)
     if product != source_dense:
-        raise ValueError(
-            "declared factors do not reconstruct the source polynomial"
-        )
+        raise ValueError("declared factors do not reconstruct the source polynomial")
 
 
 def _root_profile_from_worker(  # noqa: C901
@@ -206,7 +204,9 @@ def _root_profile_from_worker(  # noqa: C901
         if len(coefficients) < 2:
             raise ValueError("worker root polynomial is constant")
         if coefficients[0] <= 0:
-            raise ValueError("worker root polynomial has non-positive leading coefficient")
+            raise ValueError(
+                "worker root polynomial has non-positive leading coefficient"
+            )
         content: int = 0
         for coefficient in coefficients:
             content = math.gcd(content, abs(coefficient))
@@ -245,9 +245,7 @@ def _root_profile_from_worker(  # noqa: C901
         root_payload = dict(raw_root)
         root_payload["value"] = algebraic_value
         root_payload["multiplicity"] = multiplicity
-        roots.append(
-            PolynomialRealRoot.model_validate(root_payload)
-        )
+        roots.append(PolynomialRealRoot.model_validate(root_payload))
 
     # Require factor-root-count projection to be complete and fail closed.
     if not factor_root_counts or len(factor_root_counts) != len(declared_factors):
@@ -275,14 +273,18 @@ def _profile_from_worker(
         raise ValueError("malformed root profiles")
 
     # Verify declared factors reconstruct each retained source.
-    if not isinstance(raw_source_factors, list) or len(raw_source_factors) != len(family):
+    if not isinstance(raw_source_factors, list) or len(raw_source_factors) != len(
+        family
+    ):
         raise ValueError("worker source factor declarations are missing or malformed")
     for source_index, source in enumerate(family):
         declared = raw_source_factors[source_index]
         _verify_declared_factors(source, declared)
 
     # Require factor-root-count projection aligned one-for-one with family.
-    if not isinstance(raw_factor_root_counts, list) or len(raw_factor_root_counts) != len(family):
+    if not isinstance(raw_factor_root_counts, list) or len(
+        raw_factor_root_counts
+    ) != len(family):
         raise ValueError("worker factor root counts are missing or malformed")
 
     root_profiles: list[SourceRootProfile] = []

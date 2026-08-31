@@ -19,11 +19,14 @@ from jacobian.canonical import (
 )
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationDomainValidationError
-from jacobian.math.finite_fields._matrix_rank_kernels import compute_matrix_rank
+from jacobian.math.finite_fields._matrix_rank_kernels import (
+    compute_matrix_rank as _compute_matrix_rank_kernel,
+)
 from jacobian.math.finite_fields._matrix_rank_models import (
     MatrixRankRequest,
     MatrixRankResult,
 )
+from jacobian.math.finite_fields.values import AxisBoundMatrix
 
 _MATRIX_RANK_WALL_SECONDS = 600.0
 
@@ -73,13 +76,12 @@ _MATRIX: dict[str, object] = {
 }
 
 
-def compute_rank(
-    request: MatrixRankRequest,
+def compute_matrix_rank(
+    matrix: AxisBoundMatrix,
     *,
     enforce_transport_limit: bool = False,
 ) -> MatrixRankResult:
     """Return the exact rank of a labelled matrix over its presented finite field."""
-    matrix = request.matrix
     deadline = _execution_deadline()
     execution_checkpoint = partial(_require_deadline, deadline)
     execution_checkpoint("before result admission")
@@ -111,7 +113,10 @@ def compute_rank(
             )
     execution_checkpoint("after result admission")
     # Compute the exact deterministic pivots using the maintained backend.
-    data = compute_matrix_rank(matrix, execution_checkpoint=execution_checkpoint)
+    data = _compute_matrix_rank_kernel(
+        matrix,
+        execution_checkpoint=execution_checkpoint,
+    )
     result = MatrixRankResult(
         matrix=matrix,
         rank=data.rank,
@@ -122,10 +127,16 @@ def compute_rank(
     return result
 
 
+def compute_rank(request: MatrixRankRequest) -> MatrixRankResult:
+    """Compute rank through the typed wire request adapter."""
+
+    return compute_matrix_rank(request.matrix)
+
+
 def _run_matrix_rank(request: MatrixRankRequest) -> MatrixRankResult:
     """Run matrix rank through the canonical delivery boundary."""
 
-    return compute_rank(request, enforce_transport_limit=True)
+    return compute_matrix_rank(request.matrix, enforce_transport_limit=True)
 
 
 MATRIX_RANK_OPERATION = MathTool(
@@ -150,4 +161,4 @@ MATRIX_RANK_OPERATION = MathTool(
 )
 
 
-__all__ = ["MATRIX_RANK_OPERATION", "compute_rank"]
+__all__ = ["MATRIX_RANK_OPERATION", "compute_matrix_rank", "compute_rank"]

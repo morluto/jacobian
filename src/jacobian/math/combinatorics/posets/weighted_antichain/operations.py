@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from fractions import Fraction
 from math import lcm as _lcm
+from typing import Any
 
 import networkx as nx
 
@@ -85,12 +87,14 @@ def _admit_maximum_weight_antichain(
     denominators = [w.denominator for w in weight_fracs]
     unique_denoms = len(set(denominators))
     if unique_denoms <= 1:
-        max_sum_digits = max_digits + (len(str(width)) if width > 1 else 0)
+        extra = math.ceil(math.log10(width)) if width > 1 else 0
+        max_sum_digits = max_digits + extra
     else:
         # The sum of up to width rationals with different denominators has
         # at most width * max_digits digits in the numerator and the LCM of
         # denominators (at most width * max_digits digits) in the denominator.
-        max_sum_digits = max(width, 1) * max_digits + len(str(max(width, 1)))
+        extra = math.ceil(math.log10(width)) if width > 1 else 0
+        max_sum_digits = max(width, 1) * max_digits + extra
     if max_sum_digits > 32_768:
         raise OperationDomainValidationError(
             location=("weights",),
@@ -162,21 +166,21 @@ def compute_maximum_weight_antichain(
     ]
 
     # Convert fractions to common denominator for integer flow network.
-    common_den = 1
+    common_den: int = 1
     for w in weight_fracs:
         common_den = _lcm(common_den, w.denominator)
     int_weights = [int(w * common_den) for w in weight_fracs]
-    total_weight_int = sum(int_weights)
+    total_weight_int: int = sum(int_weights)
 
     # Build NetworkX flow network
     source, sink = "source", "sink"
-    g = nx.DiGraph()
+    g: Any = nx.DiGraph()
     g.add_edge(source, sink, capacity=0)  # ensure nodes exist
 
     for i in range(n):
-        w = int_weights[i]
-        g.add_edge(source, f"L{i}", capacity=w)
-        g.add_edge(f"R{i}", sink, capacity=w)
+        weight_int = int_weights[i]
+        g.add_edge(source, f"L{i}", capacity=weight_int)
+        g.add_edge(f"R{i}", sink, capacity=weight_int)
 
     # Use total_weight_int + 1 as infinite capacity (always > any cut)
     inf_cap = total_weight_int + 1
@@ -198,7 +202,7 @@ def compute_maximum_weight_antichain(
     antichain_indices = [i for i in range(n) if i not in in_vertex_cover]
     antichain_indices.sort()
 
-    best_weight = Fraction(max_antichain_weight_int, common_den)
+    best_weight = Fraction(int(max_antichain_weight_int), int(common_den))
     best_antichain = tuple(elements[i] for i in antichain_indices)
 
     return MaximumWeightAntichainResult(
@@ -211,22 +215,19 @@ def compute_maximum_weight_antichain(
 
 def _poset_width(poset: FinitePoset, elements: list[str]) -> int:
     """Return the maximum antichain size via the bipartite matching theorem."""
-    index = {element: position for position, element in enumerate(elements)}
-    adjacent: list[list[int]] = [[] for _ in elements]
-    for pair in poset.strict_order_pairs:
-        adjacent[index[pair.lower]].append(index[pair.upper])
-
-    matched_upper = [-1] * len(elements)
-
-    def augment(lower: int, seen: set[int]) -> bool:
-        for upper in adjacent[lower]:
-            if upper in seen:
-                continue
-            seen.add(upper)
-            if matched_upper[upper] == -1 or augment(matched_upper[upper], seen):
-                matched_upper[upper] = lower
-                return True
-        return False
-
-    matching = sum(augment(lower, set()) for lower in range(len(elements)))
-    return len(elements) - matching
+    if not elements:
+        return 0
+    # Delegate width matching to the maintained NetworkX bipartite primitive
+    # (core/operations.py:171-182), avoiding a second correctness-sensitive
+    # augmenting-path kernel in this module.
+    left_nodes = [(0, element) for element in elements]
+    right_nodes = [(1, element) for element in elements]
+    graph: Any = nx.Graph()
+    graph.add_nodes_from(left_nodes, bipartite=0)
+    graph.add_nodes_from(right_nodes, bipartite=1)
+    graph.add_edges_from(
+        ((0, pair.lower), (1, pair.upper)) for pair in poset.strict_order_pairs
+    )
+    raw_matching = nx.algorithms.bipartite.maximum_matching(graph, top_nodes=left_nodes)
+    matching_size = len(raw_matching) // 2
+    return len(elements) - matching_size

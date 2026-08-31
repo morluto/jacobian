@@ -89,6 +89,15 @@ def _require_raw_matrix_envelope(
                 raise _validation_error(
                     "shape_mismatch", f"{label} rational scalar contains unknown fields"
                 )
+            if isinstance(scalar, dict):
+                for _key in ("num", "den"):
+                    _val = scalar.get(_key)
+                    if _val is not None and not isinstance(_val, str):
+                        raise _validation_error(
+                            "shape_mismatch",
+                            f"{label} rational {_key} must be a string"
+                            f", not {type(_val).__name__}",
+                        )
             components = (
                 (scalar.get("num"), scalar.get("den"))
                 if isinstance(scalar, dict)

@@ -138,23 +138,29 @@ def _require_raw_action_envelope(data: object) -> object:  # noqa: C901
     # before Pydantic canonicalizes every rational cell.  A native caller
     # can reuse one raw matrix object across generators, so bound the total
     # cell count from the raw shapes rather than the first dimension alone.
+    # Apply an absolute raw-cell ceiling so a valid-shape but over-large
+    # action (e.g. 128-axis x 65536 generators) is rejected before Pydantic
+    # parses one billion rational cells.
     if isinstance(axis, (list, tuple)) and axis:
         dimension = len(axis)
         total_cells = 0
         for generator in generators:
-            if not isinstance(generator, dict):
-                continue
-            raw_matrix = generator.get("matrix")
-            if not isinstance(raw_matrix, dict):
-                continue
-            raw_entries = raw_matrix.get("entries")
-            if not isinstance(raw_entries, (list, tuple)):
-                continue
-            _reject_nested_rational_components(raw_entries)
-            for row in raw_entries:
-                if not isinstance(row, (list, tuple)):
+            if isinstance(generator, dict):
+                raw_matrix = generator.get("matrix")
+                if not isinstance(raw_matrix, dict):
                     continue
-                total_cells += len(row)
+                raw_entries = raw_matrix.get("entries")
+                if not isinstance(raw_entries, (list, tuple)):
+                    continue
+                _reject_nested_rational_components(raw_entries)
+                for row in raw_entries:
+                    if isinstance(row, (list, tuple)):
+                        total_cells += len(row)
+            elif hasattr(generator, "matrix"):
+                # Already a canonical RationalActionGenerator instance.
+                total_cells += len(generator.matrix.entries) * (
+                    len(generator.matrix.entries[0]) if generator.matrix.entries else 0
+                )
         if dimension > 0 and total_cells > 0:
             max_cells = dimension * dimension * len(generators)
             if total_cells > max_cells:

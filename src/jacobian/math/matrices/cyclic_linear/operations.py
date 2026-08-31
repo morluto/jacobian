@@ -733,7 +733,7 @@ def _cyclotomic_kernel_child(
     rank = len(pivot_columns)
     source_dimension = len(backend_rows[0])
     kernel_coords: list[list[FieldCoordinates]] = []
-    nonzero_minor_data: tuple | None = None
+    nonzero_minor_data: tuple[Any, ...] | None = None
 
     if rank == 0:
         for free in range(source_dimension):

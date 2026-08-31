@@ -697,6 +697,8 @@ def _raw_semialgebraic_envelope(  # noqa: C901
             )
             if isinstance(polynomial, RationalPolynomial):
                 terms = polynomial.polynomial.terms
+            elif isinstance(polynomial, SparseRationalPolynomial):
+                terms = polynomial.terms
             elif isinstance(polynomial, Mapping) and isinstance(
                 polynomial.get("polynomial"), Mapping
             ):

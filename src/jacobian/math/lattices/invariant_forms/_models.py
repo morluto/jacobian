@@ -251,6 +251,15 @@ class RationalActionGenerator(StrictModel):
     label: OpaqueLabel
     matrix: RationalMatrix
 
+    @model_validator(mode="after")
+    def require_canonical_label(self) -> Self:
+        if unicodedata.normalize("NFC", self.label) != self.label:
+            raise _validation_error(
+                "noncanonical_generator_label",
+                "generator labels must use NFC Unicode normalization",
+            )
+        return self
+
 
 class RationalMatrixAction(StrictModel):
     """A finite labelled family of rational square endomorphisms.

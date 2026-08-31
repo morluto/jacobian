@@ -534,6 +534,7 @@ class IdealContainmentResult(StrictModel):
         ledger: IdealContainmentLedger,
         monomial_order: Literal["lex", "grlex", "grevlex"],
     ) -> Self:
+        _require_ledger_binding(ledger, source)
         return cls.model_construct(
             source=source,
             target=target,
@@ -595,6 +596,8 @@ class IdealEqualityResult(StrictModel):
         right_in_left: IdealContainmentLedger,
         monomial_order: Literal["lex", "grlex", "grevlex"],
     ) -> Self:
+        _require_ledger_binding(left_in_right, left)
+        _require_ledger_binding(right_in_left, right)
         return cls.model_construct(
             left=left,
             right=right,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any, Literal
 
 import sympy
@@ -728,6 +729,7 @@ def ideal_containment(
 
     resource_budget = resource_budget or IdealComputationBudget()
     _run_admission(lambda: _admit_relation(source, target))
+    deadline = time.monotonic() + resource_budget.wall_seconds
     payload = {
         "mode": "ideal_relation",
         "variables": list(source.variables),
@@ -742,6 +744,16 @@ def ideal_containment(
     outcome: IdealExecutionOutcome
     try:
         result = _run_sympy_kernel(payload, resource_budget.wall_seconds)
+        if time.monotonic() > deadline:
+            outcome = "TIMEOUT"
+            detail = "ideal containment exceeded the enforced wall-time budget"
+            return IdealContainmentResult(
+                source=source,
+                target=target,
+                outcome=outcome,
+                monomial_order=monomial_order,
+                detail=detail,
+            )
         ledger = _relation_ledger(result["left_in_right"])
         return IdealContainmentResult._from_kernel(
             source, target, ledger, monomial_order
@@ -775,6 +787,7 @@ def ideal_equality(
 
     resource_budget = resource_budget or IdealComputationBudget()
     _run_admission(lambda: _admit_relation(left, right))
+    deadline = time.monotonic() + resource_budget.wall_seconds
     payload = {
         "mode": "ideal_relation",
         "variables": list(left.variables),
@@ -787,6 +800,16 @@ def ideal_equality(
     outcome: IdealExecutionOutcome
     try:
         result = _run_sympy_kernel(payload, resource_budget.wall_seconds)
+        if time.monotonic() > deadline:
+            outcome = "TIMEOUT"
+            detail = "ideal equality exceeded the enforced wall-time budget"
+            return IdealEqualityResult(
+                left=left,
+                right=right,
+                outcome=outcome,
+                monomial_order=monomial_order,
+                detail=detail,
+            )
         left_in_right = _relation_ledger(result["left_in_right"])
         right_in_left = _relation_ledger(result["right_in_left"])
         return IdealEqualityResult._from_kernel(

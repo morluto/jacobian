@@ -17,6 +17,16 @@ on:
         description: Select the pull_request lane set instead of the main gate.
         type: boolean
         default: false
+      base_sha:
+        description: Exact PR base commit for an explicitly dispatched PR-lane run.
+        type: string
+        required: false
+        default: ""
+      head_sha:
+        description: Exact PR head commit for an explicitly dispatched PR-lane run.
+        type: string
+        required: false
+        default: ""
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -87,17 +97,36 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           PR_LANES: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.pr_lanes) }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || github.sha }}
-          HEAD_SHA: ${{ github.sha }}
+          DISPATCH_BASE_SHA: ${{ inputs.base_sha }}
+          DISPATCH_HEAD_SHA: ${{ inputs.head_sha }}
+          EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || github.sha }}
+          EVENT_HEAD_SHA: ${{ github.sha }}
         run: |
           event="$EVENT_NAME"
           if [ "$PR_LANES" = true ]; then
             event=pull_request
           fi
-          if [ "$event" = pull_request ] && [ "$BASE_SHA" = "$HEAD_SHA" ]; then
-            # A manually dispatched PR-lane run has no pull-request base SHA.
-            # Preserve evidence by using the planner's full-suite event policy.
-            event=workflow_dispatch
+          BASE_SHA="$EVENT_BASE_SHA"
+          HEAD_SHA="$EVENT_HEAD_SHA"
+          if [ "$EVENT_NAME" = workflow_dispatch ] && [ "$PR_LANES" = true ]; then
+            test -n "$DISPATCH_BASE_SHA" || {
+              echo "::error::PR-lane dispatch requires base_sha"
+              exit 1
+            }
+            test -n "$DISPATCH_HEAD_SHA" || {
+              echo "::error::PR-lane dispatch requires head_sha"
+              exit 1
+            }
+            BASE_SHA="$DISPATCH_BASE_SHA"
+            HEAD_SHA="$DISPATCH_HEAD_SHA"
+            test "$HEAD_SHA" = "$(git rev-parse HEAD)" || {
+              echo "::error::dispatched head_sha does not match the checked-out commit"
+              exit 1
+            }
+            git merge-base --is-ancestor "$BASE_SHA" "$HEAD_SHA" || {
+              echo "::error::dispatched base_sha is not an ancestor of head_sha"
+              exit 1
+            }
           fi
           if [ "$event" = pull_request ] || [ "$event" = merge_group ]; then
             git diff --no-ext-diff --no-textconv --name-only "$BASE_SHA...$HEAD_SHA" > changed-paths.txt

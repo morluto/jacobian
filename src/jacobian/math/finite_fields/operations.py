@@ -88,6 +88,8 @@ def matrix_rank(matrix: AxisBoundMatrix) -> MatrixRankResult:
 # one billion Python loop iterations take minutes.
 _MAX_PYTHON_SUBSTITUTION_WORK = 10_000_000
 _FIXED_SUBSPACE_WALL_SECONDS = 600.0
+
+
 def _fixed_subspace_checkpoint(deadline: float | None, stage: str) -> None:
     if request_cancelled():
         raise OperationExecutionCancelledError(

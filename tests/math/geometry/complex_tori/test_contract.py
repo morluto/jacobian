@@ -1,7 +1,9 @@
 """Public contract, admission, and error semantics for exact complex tori."""
 
 import copy
+from collections import deque
 from fractions import Fraction
+from itertools import repeat
 
 import pytest
 from jsonschema import Draft202012Validator
@@ -84,6 +86,22 @@ def test_complex_torus_axis_must_have_even_rank() -> None:
         )
 
     assert exc_info.value.errors()[0]["type"] == "complex_torus.odd_lattice_rank"
+
+
+def test_complex_torus_axis_iterables_are_bounded_before_materialization() -> None:
+    structure = _elliptic_torus().complex_structure
+
+    with pytest.raises(ValidationError, match="at most 128 axes"):
+        LatticeComplexStructure(
+            coordinate_axis=repeat("e1"),
+            complex_structure=structure,
+        )
+
+    with pytest.raises(ValidationError, match="NFC Unicode"):
+        LatticeComplexStructure(
+            coordinate_axis=deque(("e\u0301", "x")),
+            complex_structure=structure,
+        )
 
 
 def test_neron_severi_schema_requires_the_exact_real_domain_discriminator() -> None:
@@ -180,9 +198,9 @@ def test_neron_severi_owner_deadline_reaches_invariant_form_phases(
     def monotonic() -> float:
         nonlocal checks
         checks += 1
-        # started_at=10 fixes the owner deadline at 610. The first expired
+        # started_at=10 fixes the owner deadline at 3610. The first expired
         # observation occurs inside the nested invariant-form kernel.
-        return 700.0 if checks >= 7 else 500.0
+        return 4000.0 if checks >= 7 else 500.0
 
     monkeypatch.setattr(complex_torus_operations, "monotonic", monotonic)
     with (
@@ -209,7 +227,7 @@ def test_riemann_profile_preserves_a_stricter_deadline_through_inertia(
     def monotonic() -> float:
         nonlocal checks
         checks += 1
-        # The owner deadline would be 610, but the inherited 550 deadline must
+        # The owner deadline would be 3610, but the inherited 550 deadline must
         # remain authoritative when the nested inertia phase observes 560.
         return 560.0 if checks >= 8 else 500.0
 

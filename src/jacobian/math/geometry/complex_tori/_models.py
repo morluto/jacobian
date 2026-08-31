@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import unicodedata
-from typing import Annotated, Any, Literal, Self
+from collections.abc import Iterable, Mapping
+from typing import Annotated, Any, Literal, Self, cast
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -56,6 +57,27 @@ class LatticeComplexStructure(StrictModel):
         if not isinstance(data, dict):
             return data
         axis = data.get("coordinate_axis")
+        if (
+            axis is not None
+            and not isinstance(axis, (list, tuple, str, bytes, Mapping))
+        ):
+            try:
+                axis_iterator = iter(cast(Iterable[object], axis))
+            except TypeError:
+                pass
+            else:
+                axis_values: list[object] = []
+                for _index in range(MAX_ACTION_DIMENSION + 1):
+                    try:
+                        axis_values.append(next(axis_iterator))
+                    except StopIteration:
+                        break
+                else:
+                    raise _validation_error(
+                        "budget_exceeded",
+                        f"a complex-torus lattice has at most {MAX_ACTION_DIMENSION} axes",
+                    )
+                axis = tuple(axis_values)
         if isinstance(axis, (list, tuple)) and len(axis) > MAX_ACTION_DIMENSION:
             raise _validation_error(
                 "budget_exceeded",
@@ -76,6 +98,8 @@ class LatticeComplexStructure(StrictModel):
         normalized = dict(data)
         if isinstance(axis, list):
             normalized["coordinate_axis"] = tuple(axis)
+        elif isinstance(axis, tuple):
+            normalized["coordinate_axis"] = axis
         # Canonicalize only the bounded outer containers; leave the nested
         # complex_structure matrix for its owning model validator.
         for key in ("coordinate_axis",):

@@ -20,6 +20,7 @@ from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.quadratic import RealQuadraticValue
 from jacobian.math.number_theory.number_fields.values import (
+    MAX_SIMPLE_NUMBER_FIELD_DEGREE,
     RealNumberFieldEmbedding,
     SimpleNumberFieldElement,
 )
@@ -590,6 +591,34 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
                 normalized_root["polynomial"] = tuple(root["polynomial"])
                 normalized_embedding["root"] = normalized_root
             normalized["embedding"] = normalized_embedding
+
+        def materialize_bounded(
+            value: object, *, maximum: int, message: str
+        ) -> object:
+            if isinstance(value, (list, tuple, str, bytes, Mapping)):
+                return value
+            try:
+                iterator = iter(cast(Iterable[object], value))
+            except TypeError:
+                return value
+            values: list[object] = []
+            for _index in range(maximum + 1):
+                try:
+                    values.append(next(iterator))
+                except StopIteration:
+                    break
+            else:
+                raise _validation_error("budget_exceeded", message)
+            return tuple(values)
+
+        entries = materialize_bounded(
+            entries,
+            maximum=MAX_MATRIX_DIMENSION,
+            message=(
+                "embedded number-field matrices have at most "
+                f"{MAX_MATRIX_DIMENSION} rows"
+            ),
+        )
         if isinstance(entries, (list, tuple)):
             if len(entries) > MAX_MATRIX_DIMENSION:
                 raise _validation_error(
@@ -597,7 +626,16 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
                     "embedded number-field matrices have at most "
                     f"{MAX_MATRIX_DIMENSION} rows",
                 )
-            for row in entries:
+            normalized_entries: list[tuple[object, ...]] = []
+            for raw_row in entries:
+                row = materialize_bounded(
+                    raw_row,
+                    maximum=MAX_MATRIX_DIMENSION,
+                    message=(
+                        "embedded number-field matrices have at most "
+                        f"{MAX_MATRIX_DIMENSION} columns"
+                    ),
+                )
                 if not isinstance(row, (list, tuple)):
                     raise _validation_error(
                         "shape_mismatch",
@@ -609,8 +647,10 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
                         "embedded number-field matrices have at most "
                         f"{MAX_MATRIX_DIMENSION} columns",
                     )
+                normalized_row: list[object] = []
                 for scalar in row:
                     if isinstance(scalar, SimpleNumberFieldElement):
+                        normalized_row.append(scalar)
                         continue
                     if not isinstance(scalar, dict) or set(scalar).difference(
                         {"presentation", "coefficients_ascending"}
@@ -620,10 +660,21 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
                             "embedded number-field matrix entries must be field elements",
                         )
                     coordinates = scalar.get("coefficients_ascending")
+                    coordinates = materialize_bounded(
+                        coordinates,
+                        maximum=MAX_SIMPLE_NUMBER_FIELD_DEGREE,
+                        message=(
+                            "simple number-field elements have at most "
+                            f"{MAX_SIMPLE_NUMBER_FIELD_DEGREE} coordinates"
+                        ),
+                    )
                     if not isinstance(coordinates, (list, tuple)):
                         raise PydanticCustomError(
                             "tuple_type", "Input should be a valid tuple"
                         )
+                    if isinstance(scalar, dict):
+                        scalar = dict(scalar)
+                        scalar["coefficients_ascending"] = coordinates
                     for coordinate in coordinates:
                         if not isinstance(coordinate, dict):
                             raise _validation_error(
@@ -669,7 +720,9 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
                             raise PydanticCustomError(
                                 "string_type", "Input should be a valid string"
                             )
-            normalized["entries"] = tuple(tuple(row) for row in entries)
+                    normalized_row.append(scalar)
+                normalized_entries.append(tuple(normalized_row))
+            normalized["entries"] = tuple(normalized_entries)
         if isinstance(embedding, dict):
             presentation = embedding.get("presentation")
             if isinstance(presentation, dict):

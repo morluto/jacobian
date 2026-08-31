@@ -1,6 +1,7 @@
 """Canonical matrices over one exact real simple-number-field embedding."""
 
 from fractions import Fraction
+from itertools import repeat
 from threading import Event
 from typing import Any
 
@@ -109,6 +110,30 @@ def test_raw_embedded_matrix_rejects_deep_malformed_entries_without_recursing() 
     assert exc_info.value.errors(include_input=False)[0]["type"] == (
         "matrix.shape_mismatch"
     )
+
+
+def test_raw_embedded_matrix_bounds_iterable_axes_before_nested_validation() -> None:
+    presentation = SimpleNumberFieldPresentation(
+        coefficients_descending=("1", "0", "-2")
+    )
+    embedding = embeddings(presentation).records[1].embedding
+    assert isinstance(embedding, RealNumberFieldEmbedding)
+    element = {
+        "presentation": presentation.model_dump(mode="json"),
+        "coefficients_ascending": repeat({"num": "0", "den": "1"}),
+    }
+    payload = {
+        "domain": "EMBEDDED_REAL_SIMPLE_NUMBER_FIELD",
+        "embedding": embedding.model_dump(mode="json"),
+        "entries": [[element]],
+    }
+
+    with pytest.raises(ValidationError, match="at most 31 coordinates"):
+        EmbeddedRealSimpleNumberFieldMatrix.model_validate(payload)
+
+    payload["entries"] = repeat([])
+    with pytest.raises(ValidationError, match="at most 32 rows"):
+        EmbeddedRealSimpleNumberFieldMatrix.model_validate(payload)
 
 
 @pytest.mark.parametrize(

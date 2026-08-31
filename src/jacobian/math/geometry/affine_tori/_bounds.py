@@ -262,10 +262,7 @@ def _selected_rank_minor_inverse(
         return (), (), ()
     rows, columns = _first_rank_minor(displacement, rank)
     augmented = [
-        [
-            Fraction(displacement[row][column])
-            for column in columns
-        ]
+        [Fraction(displacement[row][column]) for column in columns]
         + [Fraction(int(row_index == column_index)) for column_index in range(rank)]
         for row_index, row in enumerate(rows)
     ]
@@ -290,8 +287,10 @@ def _selected_rank_minor_inverse(
                         augmented[row], augmented[column], strict=True
                     )
                 ]
-    return rows, columns, tuple(
-        tuple(row[rank + column] for column in range(rank)) for row in augmented
+    return (
+        rows,
+        columns,
+        tuple(tuple(row[rank + column] for column in range(rank)) for row in augmented),
     )
 
 
@@ -335,10 +334,7 @@ def _selected_zero_lift_base_point_height(
             raise AssertionError("selected minor coordinates are required")
         rows, columns, inverse = selected_rows, selected_columns, selected_inverse
     solution = [
-        sum(
-            inverse[column][row] * -translation[rows[column]]
-            for column in range(rank)
-        )
+        sum(inverse[column][row] * -translation[rows[column]] for column in range(rank))
         for row in range(rank)
     ]
 
@@ -817,9 +813,7 @@ def build_affine_torus_plan(
     selected_rows, selected_columns, selected_inverse = _selected_rank_minor_inverse(
         displacement, attained_rank
     )
-    component_generator_height = _selected_component_generator_height(
-        selected_inverse
-    )
+    component_generator_height = _selected_component_generator_height(selected_inverse)
     # Admission cannot use the worker's saturated character lattice without
     # replaying its backend work.  Keep the nonempty branch in the envelope;
     # the worker still determines the exact obstruction modulo Z^n.

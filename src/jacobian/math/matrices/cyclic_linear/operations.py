@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import multiprocessing
 import time
 from dataclasses import dataclass
 from fractions import Fraction
@@ -693,15 +694,25 @@ def _backend_coordinates(value: Any, degree: int) -> FieldCoordinates:
     )
 
 
-def _compute_component(admission: _ComponentAdmission) -> _ComputedComponent:
+def _cyclotomic_kernel_child(
+    order: int,
+    degree: int,
+    matrix_coordinates: ComponentCoordinates,
+    common_denominator: int,
+    conn: multiprocessing.connection.Connection,
+) -> None:
+    """Run SymPy rref/det/rref_den in a child process.
+
+    This function receives only picklable primitive data, reconstructs
+    the SymPy objects, performs the heavy linear algebra, and returns
+    plain coordinate tuples through the pipe.
+    """
     from sympy import QQ
     from sympy.polys.matrices import DomainMatrix
 
-    order = admission.order
-    _require_execution_active(f"before order-{order} field construction")
     field = QQ.cyclotomic_field(order)
     generator = field.convert(field.ext)
-    denominator = admission.common_denominator
+    denominator = common_denominator
     backend_rows = [
         [
             _backend_element(
@@ -711,43 +722,39 @@ def _compute_component(admission: _ComponentAdmission) -> _ComputedComponent:
             )
             for value in row
         ]
-        for row in admission.matrix_coordinates
+        for row in matrix_coordinates
     ]
     matrix = DomainMatrix(
         backend_rows,
         (len(backend_rows), len(backend_rows[0])),
         field,
     )
-    _require_execution_active(f"before order-{order} exact row reduction")
     _reduced, pivot_columns = matrix.rref()
-    _require_execution_active(f"after order-{order} exact row reduction")
     rank = len(pivot_columns)
     source_dimension = len(backend_rows[0])
-    kernel_vectors: list[tuple[Any, ...]] = []
-    nonzero_minor: CyclotomicNonzeroMinor | None = None
+    kernel_coords: list[list[FieldCoordinates]] = []
+    nonzero_minor_data: tuple | None = None
 
     if rank == 0:
-        kernel_vectors.extend(
-            tuple(
-                field.one if index == free else field.zero
-                for index in range(source_dimension)
-            )
-            for free in range(source_dimension)
-        )
+        for free in range(source_dimension):
+            vector = [field.zero for _ in range(source_dimension)]
+            vector[free] = field.one
+            kernel_coords.append([
+                _backend_coordinates(value, degree) for value in vector
+            ])
     else:
         column_basis = matrix.extract(range(len(backend_rows)), pivot_columns)
         _ignored, row_indices = column_basis.transpose().rref()
-        _require_execution_active(f"after order-{order} pivot-row selection")
         pivot_minor = matrix.extract(row_indices, pivot_columns)
         original_determinant_coordinates: FieldCoordinates
-        if admission.degree == 1:
+        if degree == 1:
             from jacobian.math.matrices._flint import rational_determinant
 
             original_determinant_coordinates = (
                 rational_determinant(
                     tuple(
                         tuple(
-                            admission.matrix_coordinates[row][column][0]
+                            matrix_coordinates[row][column][0]
                             for column in pivot_columns
                         )
                         for row in row_indices
@@ -767,18 +774,14 @@ def _compute_component(admission: _ComponentAdmission) -> _ComputedComponent:
             original_determinant_coordinates = _backend_coordinates(
                 scaled_determinant
                 * field.convert(QQ.convert(Fraction(1, denominator**rank))),
-                admission.degree,
+                degree,
             )
-        _require_execution_active(f"after order-{order} exact minor determinant")
         if not scaled_determinant:  # pragma: no cover
             raise RuntimeError("selected cyclotomic rank minor vanished")
-        nonzero_minor = CyclotomicNonzeroMinor(
-            row_indices=tuple(row_indices),
-            column_indices=tuple(pivot_columns),
-            determinant=_public_element(
-                admission.field,
-                original_determinant_coordinates,
-            ),
+        nonzero_minor_data = (
+            tuple(row_indices),
+            tuple(pivot_columns),
+            original_determinant_coordinates,
         )
         pivot_set = set(pivot_columns)
         free_columns = tuple(
@@ -789,10 +792,6 @@ def _compute_component(admission: _ComponentAdmission) -> _ComputedComponent:
         if free_columns:
             right_columns = matrix.extract(row_indices, free_columns)
             augmented = pivot_minor.hstack(right_columns)
-            # Fraction-free RREF expresses the solve by rank-minor numerators
-            # over one rank-minor denominator.  Admission's determinant bound
-            # therefore covers every coordinate retained below without an
-            # inverse or adjugate expansion.
             reduced, solution_denominator, augmented_pivots = augmented.rref_den(
                 method="FF"
             )
@@ -801,13 +800,99 @@ def _compute_component(admission: _ComponentAdmission) -> _ComputedComponent:
             solution_rows = reduced.extract(
                 range(rank), range(rank, rank + len(free_columns))
             ).to_list()
-            _require_execution_active(f"after order-{order} fraction-free kernel solve")
         for free_index, free in enumerate(free_columns):
             vector = [field.zero for _ in range(source_dimension)]
             vector[free] = solution_denominator
             for index, pivot in enumerate(pivot_columns):
                 vector[pivot] = -solution_rows[index][free_index]
-            kernel_vectors.append(tuple(vector))
+            kernel_coords.append([
+                _backend_coordinates(value, degree) for value in vector
+            ])
+
+    conn.send((rank, source_dimension, nonzero_minor_data, kernel_coords))
+
+
+def _compute_component(admission: _ComponentAdmission) -> _ComputedComponent:
+    from sympy import QQ
+
+    order = admission.order
+    _require_execution_active(f"before order-{order} kernel")
+
+    # Run the SymPy kernel (rref, det, rref_den) in a child process so
+    # the parent can kill it on deadline or cancellation.  Only picklable
+    # primitive data crosses the process boundary.
+    parent_conn, child_conn = multiprocessing.Pipe(duplex=False)
+    ctx = multiprocessing.get_context("fork")
+    child = ctx.Process(
+        target=_cyclotomic_kernel_child,
+        args=(
+            order,
+            admission.degree,
+            admission.matrix_coordinates,
+            admission.common_denominator,
+            child_conn,
+        ),
+    )
+    child.start()
+    child_conn.close()
+
+    # Poll the child, enforcing deadline and cancellation while it runs.
+    execution = current_request_execution()
+    while True:
+        if child.is_alive():
+            if request_cancelled():
+                child.kill()
+                child.join(timeout=5)
+                raise OperationExecutionCancelledError(
+                    f"request cancelled during order-{order} kernel"
+                )
+            if (
+                execution is not None
+                and execution.deadline is not None
+                and time.monotonic() >= execution.deadline
+            ):
+                child.kill()
+                child.join(timeout=5)
+                raise OperationExecutionTimeoutError(
+                    f"request deadline expired during order-{order} kernel"
+                )
+            child.join(timeout=0.1)
+        else:
+            child.join()
+            break
+
+    _require_execution_active(f"after order-{order} kernel")
+
+    if child.exitcode != 0:
+        raise RuntimeError(
+            f"cyclotomic kernel child exited with code {child.exitcode}"
+        )
+
+    rank, source_dimension, nonzero_minor_data, kernel_coords = parent_conn.recv()
+
+    field = QQ.cyclotomic_field(order)
+    generator = field.convert(field.ext)
+
+    nonzero_minor: CyclotomicNonzeroMinor | None = None
+    if nonzero_minor_data is not None:
+        row_indices, pivot_columns, determinant_coords = nonzero_minor_data
+        nonzero_minor = CyclotomicNonzeroMinor(
+            row_indices=tuple(row_indices),
+            column_indices=tuple(pivot_columns),
+            determinant=_public_element(
+                admission.field,
+                determinant_coords,
+            ),
+        )
+
+    # Reconstruct backend kernel vectors from serialized coordinates.
+    kernel_vectors: list[tuple[Any, ...]] = []
+    for vector_coords in kernel_coords:
+        vector = [
+            _backend_element(field, generator, tuple(coords))
+            for coords in vector_coords
+        ]
+        kernel_vectors.append(tuple(vector))
 
     public_kernel = RationalCyclotomicVectorSpaceBasis(
         field=admission.field,
@@ -816,11 +901,11 @@ def _compute_component(admission: _ComponentAdmission) -> _ComputedComponent:
             tuple(
                 _public_element(
                     admission.field,
-                    _backend_coordinates(value, admission.degree),
+                    coords,
                 )
-                for value in vector
+                for coords in vector_coords
             )
-            for vector in kernel_vectors
+            for vector_coords in kernel_coords
         ),
     )
     component = CyclotomicRankKernelComponent(

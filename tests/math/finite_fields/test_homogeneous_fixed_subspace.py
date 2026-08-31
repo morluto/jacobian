@@ -133,6 +133,25 @@ def test_multiple_generators_compute_their_simultaneous_fixed_space() -> None:
     assert result.basis_matrix.entries == ((0, 1, 0),)
 
 
+def test_repeated_generators_are_canonicalized_without_changing_the_fixed_space() -> (
+    None
+):
+    generator = PrimeFieldMatrix(prime=5, entries=((0, 1), (1, 0)), columns=2)
+    repeated = PrimeFieldLinearAction(
+        variable_axis=Axis(name="polynomial_variables", labels=("x", "y")),
+        generator_matrices=(generator, generator),
+    )
+    canonical = PrimeFieldLinearAction(
+        variable_axis=Axis(name="polynomial_variables", labels=("x", "y")),
+        generator_matrices=(generator,),
+    )
+
+    assert repeated.generator_matrices == (generator,)
+    assert homogeneous_fixed_subspace(repeated, 2) == homogeneous_fixed_subspace(
+        canonical, 2
+    )
+
+
 def test_source_d8_action_reproduces_every_reported_fixed_dimension() -> None:
     # The dimensions are the degree-zero-through-seven ledger cited in #1264
     # for the paper's five-variable U calculation, where k[U] = Sym(Q).

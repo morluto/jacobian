@@ -361,6 +361,8 @@ class PrimeFieldLinearAction(StrictModel):
     Matrix column ``j`` gives the coefficients of the image of variable
     ``j``. Invertibility is recognized once by operations that consume this
     structurally canonical source; it is not replayed while decoding results.
+    Repeated generator matrices are canonicalized to their first occurrence,
+    since they do not change the generated group or its fixed subspaces.
     """
 
     variable_axis: PrimeFieldActionAxis
@@ -415,6 +417,15 @@ class PrimeFieldLinearAction(StrictModel):
 
     @model_validator(mode="after")
     def require_common_prime_and_axes(self) -> Self:
+        unique_matrices: list[PrimeFieldMatrix] = []
+        seen_signatures: set[tuple[int, int, tuple[tuple[int, ...], ...]]] = set()
+        for matrix in self.generator_matrices:
+            signature = (matrix.prime, matrix.columns, matrix.entries)
+            if signature not in seen_signatures:
+                seen_signatures.add(signature)
+                unique_matrices.append(matrix)
+        if len(unique_matrices) != len(self.generator_matrices):
+            object.__setattr__(self, "generator_matrices", tuple(unique_matrices))
         variable_count = len(self.variable_axis.labels)
         prime = self.generator_matrices[0].prime
         if any(
@@ -426,12 +437,6 @@ class PrimeFieldLinearAction(StrictModel):
             raise _validation_error(
                 "finite_field.linear_action_common_parent",
                 "action matrices must be square on one variable axis over one prime",
-            )
-        signatures = tuple(matrix.entries for matrix in self.generator_matrices)
-        if len(set(signatures)) != len(signatures):
-            raise _validation_error(
-                "finite_field.linear_action_distinct_generators",
-                "action generator matrices must be distinct",
             )
         return self
 

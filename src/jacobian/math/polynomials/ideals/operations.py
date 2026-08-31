@@ -623,7 +623,9 @@ _STDOUT_LIMIT = 8 * 1024 * 1024
 _STDERR_LIMIT = 64 * 1024
 
 
-def _run_sympy_kernel(payload: dict[str, Any], wall_seconds: float) -> dict[str, Any]:
+def _run_sympy_kernel(
+    payload: dict[str, Any], wall_seconds: float, *, deadline: float | None = None
+) -> dict[str, Any]:
     """Run one exact Groebner-kernel computation in a killable worker.
 
     The killable-process launch and executable discovery live in the
@@ -631,13 +633,23 @@ def _run_sympy_kernel(payload: dict[str, Any], wall_seconds: float) -> dict[str,
     bounded outcome onto the typed kernel exceptions.
     """
     try:
-        timed_out, stdout, limit_exceeded = run_bounded_stdin_python_kernel(
-            _SYMPY_WORKER_SCRIPT,
-            json.dumps(payload),
-            wall_seconds=wall_seconds,
-            stdout_limit=_STDOUT_LIMIT,
-            stderr_limit=_STDERR_LIMIT,
-        )
+        if deadline is None:
+            timed_out, stdout, limit_exceeded = run_bounded_stdin_python_kernel(
+                _SYMPY_WORKER_SCRIPT,
+                json.dumps(payload),
+                wall_seconds=wall_seconds,
+                stdout_limit=_STDOUT_LIMIT,
+                stderr_limit=_STDERR_LIMIT,
+            )
+        else:
+            timed_out, stdout, limit_exceeded = run_bounded_stdin_python_kernel(
+                _SYMPY_WORKER_SCRIPT,
+                json.dumps(payload),
+                wall_seconds=wall_seconds,
+                deadline=deadline,
+                stdout_limit=_STDOUT_LIMIT,
+                stderr_limit=_STDERR_LIMIT,
+            )
     except OSError as error:
         raise _SympyKernelError(str(error)) from None
     if timed_out == "CANCELLED":
@@ -829,7 +841,7 @@ def _run_relation_kernel_before_deadline(
     remaining = deadline - time.monotonic()
     if remaining <= 0:
         raise _SympyKernelTimeoutError()
-    return _run_sympy_kernel(payload, remaining)
+    return _run_sympy_kernel(payload, remaining, deadline=deadline)
 
 
 def _relation_ledger(

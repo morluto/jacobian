@@ -6,6 +6,7 @@ import math
 import re
 import shutil
 import tempfile
+import time
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
@@ -682,6 +683,7 @@ def run_bounded_stdin_python_kernel(
     payload_json: str,
     *,
     wall_seconds: float,
+    deadline: float | None = None,
     stdout_limit: int,
     stderr_limit: int,
 ) -> tuple[bool | str, str, bool]:
@@ -710,11 +712,17 @@ def run_bounded_stdin_python_kernel(
     # Deliberately not resolved: following the interpreter symlink would
     # reparent the worker onto the base prefix without the environment's
     # site-packages.
+    if deadline is not None and deadline <= time.monotonic():
+        return True, "", False
     resolved = shutil.which(sys.executable) or sys.executable
     prlimit = shutil.which("prlimit")
     if prlimit is not None:
         prlimit = str(Path(prlimit).resolve())
     with tempfile.TemporaryDirectory(prefix="jacobian-sympy-") as directory:
+        if deadline is not None:
+            wall_seconds = deadline - time.monotonic()
+            if wall_seconds <= 0:
+                return True, "", False
         completed = run_bounded_process(
             [resolved, "-I", "-c", script],
             input_bytes=payload_json.encode("ascii"),

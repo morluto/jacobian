@@ -1027,6 +1027,7 @@ def test_work_budget_rejection_precedes_coprimality_recognition(
         "recognize_canonical_rational_functions",
         forbidden_recognition,
     )
+    monkeypatch.setattr(lie_bounds, "MAX_LIE_DERIVATIVE_WORK_UNITS", 1)
 
     with pytest.raises(OperationDomainValidationError, match="work budget") as error:
         lie_derivative(vector, tensor)

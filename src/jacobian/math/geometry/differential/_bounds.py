@@ -608,8 +608,17 @@ def _canonical_coefficient_digits(bound: FractionBound) -> int:
     content_ratio = (
         bound.numerator.rational_content / bound.denominator.rational_content
     )
-    numerator_factor_digits = _factor_coefficient_digits(bound.numerator)
-    denominator_factor_digits = _factor_coefficient_digits(bound.denominator)
+    denominator_is_unit = all(degree == 0 for degree in bound.denominator.degrees)
+    numerator_factor_digits = (
+        bound.numerator.coefficient_digits
+        if denominator_is_unit
+        else _factor_coefficient_digits(bound.numerator)
+    )
+    denominator_factor_digits = (
+        bound.denominator.coefficient_digits
+        if denominator_is_unit
+        else _factor_coefficient_digits(bound.denominator)
+    )
     return max(
         len(str(abs(content_ratio.numerator)))
         + bound.numerator.coefficient_digits
@@ -642,7 +651,11 @@ def _validate_canonical_result_bound(bound: FractionBound, ledger: _Ledger) -> i
         # When the denominator is the unit polynomial, there can be no
         # cancellation-induced support expansion, so the tracked sparse
         # term count is the accurate support bound.
-        denominator_is_unit = all(degree == 0 for degree in bound.denominator.degrees)
+        is_denominator = label == "denominator"
+        denominator_is_unit = (
+            is_denominator
+            and all(degree == 0 for degree in bound.denominator.degrees)
+        )
         support_terms = polynomial.terms if denominator_is_unit else dense_terms
         if support_terms > MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS:
             _reject(
@@ -657,9 +670,16 @@ def _validate_canonical_result_bound(bound: FractionBound, ledger: _Ledger) -> i
             "Lie-derivative normalization can exceed the canonical "
             f"{MAX_RATIONAL_TENSOR_COEFFICIENT_DIGITS}-digit coefficient bound",
         )
-    numerator_dense = _dense_term_bound(bound.numerator.degrees)
-    denominator_dense = _dense_term_bound(bound.denominator.degrees)
-    normalization_degree = numerator_dense + denominator_dense - 2
+    denominator_is_unit = all(degree == 0 for degree in bound.denominator.degrees)
+    numerator_dense = (
+        bound.numerator.terms
+        if denominator_is_unit
+        else _dense_term_bound(bound.numerator.degrees)
+    )
+    denominator_dense = 1 if denominator_is_unit else _dense_term_bound(
+        bound.denominator.degrees
+    )
+    normalization_degree = max(numerator_dense + denominator_dense - 2, 0)
     ledger.charge(
         "normalization",
         (numerator_dense + denominator_dense)
@@ -690,10 +710,12 @@ def _bounded_string_size(content_digits: int, *, possibly_negative: bool) -> int
     return content_digits + 2 + int(possibly_negative)
 
 
-def _polynomial_result_size(bound: PolynomialBound) -> int:
+def _polynomial_result_size(
+    bound: PolynomialBound, *, sparse: bool = False
+) -> int:
     if bound.is_zero:
         return strict_json_object_size((("terms", 2),))
-    term_count = _dense_term_bound(bound.degrees)
+    term_count = bound.terms if sparse else _dense_term_bound(bound.degrees)
     coefficient_size = strict_json_object_size(
         (
             (
@@ -720,20 +742,29 @@ def _rational_function_result_size(
     *,
     axis_size: int,
 ) -> int:
+    denominator_is_unit = all(degree == 0 for degree in bound.denominator.degrees)
     if bound.is_zero:
         variable_count = len(bound.numerator.degrees)
         numerator = _zero_polynomial(variable_count)
         denominator = _one_polynomial(variable_count)
     else:
         numerator = PolynomialBound(
-            terms=_dense_term_bound(bound.numerator.degrees),
+            terms=(
+                bound.numerator.terms
+                if denominator_is_unit
+                else _dense_term_bound(bound.numerator.degrees)
+            ),
             degrees=bound.numerator.degrees,
             minimum_exponents=(0,) * len(bound.numerator.degrees),
             coefficient_digits=coefficient_digits,
             rational_content=Fraction(1),
         )
         denominator = PolynomialBound(
-            terms=_dense_term_bound(bound.denominator.degrees),
+            terms=(
+                1
+                if denominator_is_unit
+                else _dense_term_bound(bound.denominator.degrees)
+            ),
             degrees=bound.denominator.degrees,
             minimum_exponents=(0,) * len(bound.denominator.degrees),
             coefficient_digits=coefficient_digits,
@@ -743,7 +774,10 @@ def _rational_function_result_size(
         (
             ("domain", 4),
             ("variables", axis_size),
-            ("numerator", _polynomial_result_size(numerator)),
+            (
+                "numerator",
+                _polynomial_result_size(numerator, sparse=denominator_is_unit),
+            ),
             ("denominator", _polynomial_result_size(denominator)),
         )
     )

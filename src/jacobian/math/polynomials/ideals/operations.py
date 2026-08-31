@@ -212,6 +212,21 @@ def main() -> None:
                     f"{MAX_POLYNOMIAL_EXPONENT}-exponent operation budget"
                 )
 
+        def require_admissible_coefficients(poly: object) -> None:
+            # Classify oversized normal-form coefficient widths as a
+            # result limit BEFORE canonical conversion, just as
+            # require_admissible_exponents does for exponents.
+            from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
+            for term in poly.terms():
+                coeff = term.coefficient
+                digits = max(len(str(abs(coeff.p))), len(str(abs(coeff.q))))
+                if digits > MAX_CANONICAL_RATIONAL_DIGITS:
+                    raise ValueError(
+                        f"polynomial result exceeds the "
+                        f"{MAX_CANONICAL_RATIONAL_DIGITS}-coefficient-digit "
+                        f"operation budget"
+                    )
+
         mode = payload["mode"]
         variables = tuple(payload["variables"])
         symbols = symbols_for_variables(variables)

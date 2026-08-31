@@ -348,8 +348,20 @@ class IdealQuotientRequest(StrictModel):
 class IdealContainmentRequest(StrictModel):
     """Decide ``source subseteq target`` in one exact ordered ``QQ`` ring."""
 
-    source: RationalPolynomialIdeal
-    target: RationalPolynomialIdeal
+    source: RationalPolynomialIdeal = Field(
+        description=(
+            "The source ideal in at most 8 variables with at most 32 "
+            "generators and 256 aggregate terms; generator total degree "
+            "is at most 20 and coefficient components are at most 128 "
+            "digits. Both operands must use the same ordered ring."
+        )
+    )
+    target: RationalPolynomialIdeal = Field(
+        description=(
+            "The target ideal with the same 8-variable, 32-generator, "
+            "256-term, degree-20, and 128-digit bounds as the source."
+        )
+    )
     monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex"
     resource_budget: IdealComputationBudget = Field(
         default_factory=IdealComputationBudget
@@ -367,8 +379,20 @@ class IdealContainmentRequest(StrictModel):
 class IdealEqualityRequest(StrictModel):
     """Decide equality by mutual containment in one ordered ``QQ`` ring."""
 
-    left: RationalPolynomialIdeal
-    right: RationalPolynomialIdeal
+    left: RationalPolynomialIdeal = Field(
+        description=(
+            "The left ideal in at most 8 variables with at most 32 "
+            "generators and 256 aggregate terms; generator total degree "
+            "is at most 20 and coefficient components are at most 128 "
+            "digits. Both operands must use the same ordered ring."
+        )
+    )
+    right: RationalPolynomialIdeal = Field(
+        description=(
+            "The right ideal with the same 8-variable, 32-generator, "
+            "256-term, degree-20, and 128-digit bounds as the left."
+        )
+    )
     monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex"
     resource_budget: IdealComputationBudget = Field(
         default_factory=IdealComputationBudget

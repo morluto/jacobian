@@ -27,11 +27,11 @@ from jacobian.math.lattices.invariant_forms import (
     compute_invariant_bilinear_form_lattice,
 )
 from jacobian.math.lattices.invariant_forms._models import (
+    MAX_ACTION_DIMENSION,
     FormKind,
     IntegralBilinearForm,
     InvariantBilinearFormLattice,
     InvariantBilinearFormLatticeRequest,
-    MAX_ACTION_DIMENSION,
     constraint_coefficient_count,
 )
 from jacobian.math.lattices.invariant_forms._tools import (

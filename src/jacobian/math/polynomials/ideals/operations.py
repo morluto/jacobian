@@ -822,9 +822,7 @@ def ideal_containment(
     outcome: IdealExecutionOutcome
     try:
         _raise_if_relation_deadline_exceeded(deadline)
-        result = _run_sympy_kernel(
-            payload, max(0.0, deadline - time.monotonic())
-        )
+        result = _run_sympy_kernel(payload, max(0.0, deadline - time.monotonic()))
         ledger = _relation_ledger(result["left_in_right"], deadline=deadline)
         _raise_if_relation_deadline_exceeded(deadline)
         computed = IdealContainmentResult._from_kernel(
@@ -874,15 +872,9 @@ def ideal_equality(
     outcome: IdealExecutionOutcome
     try:
         _raise_if_relation_deadline_exceeded(deadline)
-        result = _run_sympy_kernel(
-            payload, max(0.0, deadline - time.monotonic())
-        )
-        left_in_right = _relation_ledger(
-            result["left_in_right"], deadline=deadline
-        )
-        right_in_left = _relation_ledger(
-            result["right_in_left"], deadline=deadline
-        )
+        result = _run_sympy_kernel(payload, max(0.0, deadline - time.monotonic()))
+        left_in_right = _relation_ledger(result["left_in_right"], deadline=deadline)
+        right_in_left = _relation_ledger(result["right_in_left"], deadline=deadline)
         _raise_if_relation_deadline_exceeded(deadline)
         computed = IdealEqualityResult._from_kernel(
             left, right, left_in_right, right_in_left, monomial_order

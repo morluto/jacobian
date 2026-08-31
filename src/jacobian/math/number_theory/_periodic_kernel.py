@@ -226,9 +226,9 @@ def _merge_congruences(
     return merged
 
 
-def _measure_by_inclusion_exclusion(
-    source: PeriodicCongruenceUnionSource, period: int
-) -> int:
+def _inclusion_exclusion_terms(
+    source: PeriodicCongruenceUnionSource,
+) -> dict[tuple[int, int], int]:
     terms: dict[tuple[int, int], int] = {}
     for subset in source.subsets:
         modulus = parse_canonical_integer(subset.modulus)
@@ -245,6 +245,13 @@ def _measure_by_inclusion_exclusion(
                     terms[congruence] = coefficient
                 else:
                     terms.pop(congruence, None)
+    return terms
+
+
+def _measure_by_inclusion_exclusion(
+    source: PeriodicCongruenceUnionSource, period: int
+) -> int:
+    terms = _inclusion_exclusion_terms(source)
     count = sum(
         coefficient * (period // modulus)
         for (_residue, modulus), coefficient in terms.items()
@@ -252,6 +259,49 @@ def _measure_by_inclusion_exclusion(
     if not 0 <= count <= period:
         raise RuntimeError("generalized-CRT union count violated its cardinality bound")
     return count
+
+
+def rank_periodic_union(
+    source: PeriodicCongruenceUnionSource,
+    plan: _ExecutionPlan,
+    value: int,
+    *,
+    residues: tuple[int, ...] | None = None,
+    terms: dict[tuple[int, int], int] | None = None,
+) -> int:
+    """Return the normalized count of occupied integers at most ``value``.
+
+    The normalization has rank(-1) = 0, so interval counts are rank differences
+    even for negative endpoints.  This scalar path never materializes a full
+    common-period profile.
+    """
+
+    if plan.method == "FULL_UNION":
+        union_rank = value + 1
+    elif plan.method == "INCLUSION_EXCLUSION":
+        union_rank = 0
+        for (residue, modulus), coefficient in (
+            terms if terms is not None else _inclusion_exclusion_terms(source)
+        ).items():
+            quotient, remainder = divmod(value, modulus)
+            union_rank += coefficient * (quotient + (residue <= remainder))
+    else:
+        if plan.method == "PERIOD_LIFT":
+            if residues is None:
+                residues = tuple(
+                    index
+                    for index, occupied in enumerate(
+                        _union_mask(source, plan.common_period)
+                    )
+                    if occupied
+                )
+        elif residues is None:
+            residues = tuple(sorted(_sparse_union(source, plan.common_period)))
+        quotient, remainder = divmod(value, plan.common_period)
+        union_rank = quotient * len(residues) + sum(
+            residue <= remainder for residue in residues
+        )
+    return value + 1 - union_rank if source.complement else union_rank
 
 
 def measure_periodic_union(
@@ -297,6 +347,7 @@ __all__ = [
     "common_period",
     "materialize_periodic_union",
     "measure_periodic_union",
+    "rank_periodic_union",
     "require_admitted_periodic_source",
     "require_materializable_periodic_source",
 ]

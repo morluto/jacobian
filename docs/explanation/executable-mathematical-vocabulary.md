@@ -54,6 +54,21 @@ supplies the rules while operations are the legal moves: the agent chooses which
 moves to make and how to combine them, and Jacobian provides moves whose effects
 are typed, bounded, and mathematically checkable.
 
+Clear, named, typed operations give agents explicit ways to transform a
+mathematical state. This makes useful moves easier to identify and apply, while
+keeping implementation details out of the agent's context. Writing code can be
+part of mathematical work, but repeatedly reimplementing standard
+transformations often adds accidental overhead in choosing representations,
+finding library calls, handling edge cases, and debugging the surrounding code.
+
+Jacobian's hypothesis is that this vocabulary can shape an agent's effective
+reasoning space. Operations provide semantic landmarks: recognizable ways to
+transform a mathematical state and structured results to reason from. This may
+make useful transformations more salient, reduce low-level implementation
+paths, and leave more context for mathematical exploration. This is an
+interface-level effect, not a claim that Jacobian changes model weights or
+directly measures the model's latent geometry.
+
 ## Semantic atomicity
 
 **Atomic means one stable, reusable mathematical postcondition, not a small or

@@ -207,6 +207,12 @@ def _require_composition_budget(
     iterations.  Neither requires class enumeration, so the admission
     derives from the discriminant validity and the coefficient bounds
     rather than the unrelated reduced-class scan budget.
+
+    The direct composite coefficients and the reduced product can exceed
+    ``MAX_COEFFICIENT`` when the discriminant is large. A reduced form
+    of discriminant ``D`` satisfies ``a <= sqrt(|D|/3)`` and
+    ``c = (b^2 - D) / (4*a) <= |D| / 3``, so reject the request when
+    ``|D| / 3`` exceeds the coefficient bound.
     """
     if first.discriminant != second.discriminant:
         raise ValueError("forms must have the same discriminant")
@@ -220,6 +226,11 @@ def _require_composition_budget(
         raise _validation_error(
             "integral_binary_quadratic_form.invalid_discriminant_congruence",
             "discriminant must be congruent to 0 or 1 modulo 4",
+        )
+    if abs(discriminant) // 3 > MAX_COEFFICIENT:
+        raise _validation_error(
+            "integral_binary_quadratic_form.composition_output_overflow",
+            "composition product exceeds the coefficient bound",
         )
 
 

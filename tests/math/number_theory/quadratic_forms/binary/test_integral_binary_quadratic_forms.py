@@ -583,6 +583,17 @@ class TestProperClassComposition:
                 BinaryQuadraticFormClassComposeRequest(first=first, second=second)
             )
 
+    def test_composition_rejects_oversized_output_coefficients(self) -> None:
+        """Composition of large discriminant forms can exceed the coefficient bound."""
+        first = _proper_class(600_014, 0, 999_993)
+        second = _proper_class(666_662, 0, 900_021)
+        with pytest.raises(
+            OperationDomainValidationError, match="composition product exceeds"
+        ):
+            compute_class_compose(
+                BinaryQuadraticFormClassComposeRequest(first=first, second=second)
+            )
+
 
 class TestRepresentations:
     def test_schema_exposes_the_complete_y_scan_admission_condition(self) -> None:

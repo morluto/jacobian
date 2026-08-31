@@ -49,10 +49,10 @@ H(X,Y) = F(x1,y1) * G(x2,y2),
 ```
 
 and the canonical reduced product with an exact `SL_2(ZZ)` reduction matrix.
-The public execution envelope matches complete reduced-class enumeration:
-with `A = floor_sqrt((-D)//3)+1`, the discriminant is admitted when
-`A*(A+2) <= 10000`. This bounds the class operands, direct-composition
-intermediates, exact witness, and returned coefficients before execution.
+Composition is admitted by its own work bounds (direct O(1) Buell
+formula and O(log|D|) Gauss reduction), independent of the reduced-class
+enumeration budget. The reduced product coefficients are bounded by
+`|D|/3`, so the discriminant is admitted only when `|D|/3 <= 10^6`.
 
 The private kernel uses the classical direct Gauss-composition formula with a
 ternary Bézout relation, then applies the existing exact Gauss reduction. The

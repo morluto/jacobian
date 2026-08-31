@@ -9,6 +9,11 @@ from typing import Any, Literal
 import sympy
 from pydantic_core import PydanticCustomError
 
+from jacobian._execution import (
+    bind_request_deadline,
+    current_request_execution,
+    request_cancelled,
+)
 from jacobian.canonical import CanonicalizationError, canonicalize_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials._conversions import (
@@ -829,8 +834,20 @@ def ideal_saturation(
 
 
 def _raise_if_relation_deadline_exceeded(deadline: float) -> None:
+    if request_cancelled():
+        raise _SympyKernelCancelledError()
     if time.monotonic() > deadline:
         raise _SympyKernelTimeoutError()
+
+
+def _bind_relation_deadline(resource_budget: IdealComputationBudget) -> float:
+    execution = current_request_execution()
+    started_at = execution.started_at if execution is not None else time.monotonic()
+    deadline = started_at + resource_budget.wall_seconds
+    if execution is not None and execution.deadline is not None:
+        deadline = min(deadline, execution.deadline)
+    bind_request_deadline(deadline)
+    return deadline
 
 
 def _run_relation_kernel_before_deadline(
@@ -863,8 +880,10 @@ def ideal_containment(
     """Decide ``source subseteq target`` with a source-ordered exact ledger."""
 
     resource_budget = resource_budget or IdealComputationBudget()
+    deadline = _bind_relation_deadline(resource_budget)
+    _raise_if_relation_deadline_exceeded(deadline)
     _run_admission(lambda: _admit_relation(source, target))
-    deadline = time.monotonic() + resource_budget.wall_seconds
+    _raise_if_relation_deadline_exceeded(deadline)
     payload = {
         "mode": "ideal_relation",
         "variables": list(source.variables),
@@ -917,8 +936,10 @@ def ideal_equality(
     """Decide equality by two ledgers computed under one request deadline."""
 
     resource_budget = resource_budget or IdealComputationBudget()
+    deadline = _bind_relation_deadline(resource_budget)
+    _raise_if_relation_deadline_exceeded(deadline)
     _run_admission(lambda: _admit_relation(left, right))
-    deadline = time.monotonic() + resource_budget.wall_seconds
+    _raise_if_relation_deadline_exceeded(deadline)
     payload = {
         "mode": "ideal_relation",
         "variables": list(left.variables),

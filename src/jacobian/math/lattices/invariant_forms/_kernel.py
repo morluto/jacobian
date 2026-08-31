@@ -343,10 +343,11 @@ def _retained_action_bytes(action: MatrixAction) -> int:
                 if row_bytes > max_row_bytes:
                     max_row_bytes = row_bytes
         axis_label_bytes = sum(
-            len(label.encode("utf-8")) + 4 for label in action.coordinate_axis
+            len(encode_strict_json(label)) + 1 for label in action.coordinate_axis
         )
         generator_label_bytes = sum(
-            len(generator.label.encode("utf-8")) + 4 for generator in action.generators
+            len(encode_strict_json(generator.label)) + 1
+            for generator in action.generators
         )
         estimated_bytes = (
             4_096

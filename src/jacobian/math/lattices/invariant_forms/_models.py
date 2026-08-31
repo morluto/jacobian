@@ -532,7 +532,7 @@ class IntegralBilinearForm(StrictModel):
 
     @model_validator(mode="before")
     @classmethod
-    def require_canonical_axis_labels(cls, data: Any) -> Any:
+    def require_canonical_axis_labels(cls, data: Any) -> Any:  # noqa: C901
         if not isinstance(data, dict):
             return data
         unknown = set(data).difference({"coordinate_axis", "kind", "matrix"})

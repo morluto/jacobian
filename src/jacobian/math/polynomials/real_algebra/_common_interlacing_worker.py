@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 
@@ -21,7 +22,8 @@ def main() -> int:
     """Decode one family, compute its profile, and emit one bounded payload."""
 
     try:
-        raw_family = json.loads(sys.stdin.buffer.read().decode("utf-8"))
+        input_bytes = sys.stdin.buffer.read()
+        raw_family = json.loads(input_bytes.decode("utf-8"))
         if not isinstance(raw_family, list):
             raise ValueError("family payload must be a list")
         family = tuple(
@@ -81,6 +83,7 @@ def main() -> int:
         json.dumps(
             {
                 "ok": True,
+                "request_digest": hashlib.sha256(input_bytes).hexdigest(),
                 "source_factors": source_factors,
                 "source_factor_root_counts": source_factor_root_counts,
                 "root_profiles": [

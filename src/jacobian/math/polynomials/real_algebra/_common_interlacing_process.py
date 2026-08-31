@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import sys
@@ -250,18 +251,6 @@ def _root_profile_from_worker(  # noqa: C901
     if not declared_factor_set:
         raise ValueError("worker omitted source factor declarations")
 
-    import sympy
-
-    factor_real_root_counts: dict[tuple[int, ...], int] = {}
-    for entry in declared_factors:
-        factor_coefficients = tuple(
-            parse_canonical_integer(coefficient) for coefficient in entry[0]
-        )
-        polynomial = sympy.Poly.from_list(
-            list(factor_coefficients), gens=sympy.Symbol("x"), domain=sympy.ZZ
-        )
-        factor_real_root_counts[factor_coefficients] = len(polynomial.intervals())
-
     roots: list[PolynomialRealRoot] = []
     seen_identities: set[tuple[tuple[str, ...], int]] = set()
     factor_multiplicities: dict[tuple[int, ...], int] = {}
@@ -327,15 +316,10 @@ def _root_profile_from_worker(  # noqa: C901
         factor_row_counts[poly_key] = factor_row_counts.get(poly_key, 0) + 1
         factor_root_indices.setdefault(poly_key, set()).add(root_index)
 
-        try:
-            algebraic_value = RealAlgebraicValue.model_validate(
-                {
-                    "polynomial": polynomial,
-                    "real_root_index": root_index,
-                }
-            )
-        except ValidationError as exc:
-            raise ValueError("worker root is not an existing real root") from exc
+        algebraic_value = RealAlgebraicValue._from_admitted_polynomial(
+            polynomial=polynomial,
+            real_root_index=root_index,
+        )
         root_payload = dict(raw_root)
         root_payload["value"] = algebraic_value
         root_payload["multiplicity"] = multiplicity
@@ -349,8 +333,6 @@ def _root_profile_from_worker(  # noqa: C901
         expected = factor_root_counts[idx]
         if type(expected) is not int or not 0 <= expected <= len(fk) - 1:
             raise ValueError("worker factor root count is malformed")
-        if expected != factor_real_root_counts[fk]:
-            raise ValueError("worker factor root count disagrees with its factor")
         actual = factor_row_counts.get(fk, 0)
         if expected != actual:
             raise ValueError("worker omitted real roots of a source factor")
@@ -494,6 +476,7 @@ def run_common_interlacing_profile(
         [source.model_dump(mode="json") for source in family],
         separators=(",", ":"),
     ).encode("utf-8")
+    request_digest = hashlib.sha256(request_bytes).hexdigest()
     try:
         with TemporaryDirectory(prefix="jacobian-common-interlacing-") as directory:
             remaining = deadline - time.monotonic()
@@ -554,6 +537,10 @@ def run_common_interlacing_profile(
     if completed.returncode != 0 or payload.get("ok") is not True:
         raise RuntimeError(
             "bounded common-interlacing worker did not establish a profile"
+        )
+    if payload.get("request_digest") != request_digest:
+        raise RuntimeError(
+            "bounded common-interlacing worker returned a result for another request"
         )
     try:
         result = _profile_from_worker(payload, family)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from math import gcd
 from typing import TYPE_CHECKING, Annotated, Literal, Self
 
@@ -285,6 +286,33 @@ class RealAlgebraicOrderValue(StrictModel):
     comparison_basis: Literal["ORDERED_REAL_ROOT_ISOLATION"] = (
         "ORDERED_REAL_ROOT_ISOLATION"
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_comparison_degree_bound(cls, data: object) -> object:
+        if not isinstance(data, Mapping):
+            return data
+        left = data.get("left")
+        right = data.get("right")
+        if not isinstance(left, Mapping) or not isinstance(right, Mapping):
+            return data
+        left_polynomial = left.get("polynomial")
+        right_polynomial = right.get("polynomial")
+        if (
+            isinstance(left_polynomial, (list, tuple))
+            and isinstance(right_polynomial, (list, tuple))
+            and left_polynomial != right_polynomial
+            and any(
+                len(polynomial) - 1 > MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE
+                for polynomial in (left_polynomial, right_polynomial)
+            )
+        ):
+            raise _validation_error(
+                "comparison_degree_bound",
+                "exact algebraic comparison admits degree at most "
+                f"{MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE} for distinct polynomials",
+            )
+        return data
 
     @model_validator(mode="after")
     def require_admitted_distinct_polynomial_pair(self) -> Self:

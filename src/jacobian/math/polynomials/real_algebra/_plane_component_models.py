@@ -430,6 +430,17 @@ class PlaneComponentProfileNoncompletion(StrictModel):
                 "timeout_metadata",
                 "timeout outcomes must retain replay metadata",
             )
+        if self.status == "TIMEOUT":
+            expected_layer = (
+                "QEPCAD"
+                if self.reason == "QEPCAD_DEADLINE_EXPIRED"
+                else "SAMPLE_RECOGNITION"
+            )
+            if self.timeout_layer != expected_layer:
+                raise _validation_error(
+                    "timeout_metadata",
+                    "timeout_layer must match the timeout reason",
+                )
         return self
 
 

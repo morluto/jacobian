@@ -116,6 +116,7 @@ def test_raw_embedded_matrix_rejects_deep_malformed_entries_without_recursing() 
     (
         ("row_axis", "matrix.shape_mismatch"),
         ("coefficient_num", "string_type"),
+        ("coefficient_non_mapping", "matrix.shape_mismatch"),
         ("coefficient_axis", "tuple_type"),
         ("entry_presentation", "tuple_type"),
         ("entry_presentation_extra", "matrix.shape_mismatch"),
@@ -135,6 +136,9 @@ def test_raw_embedded_matrix_validation_is_total_at_every_nested_axis(
     nested: object = "0"
     for _ in range(1_500):
         nested = {"next": nested}
+    nested_list: object = []
+    for _ in range(1_500):
+        nested_list = [nested_list]
     element: dict[str, Any] = {
         "presentation": presentation.model_dump(mode="json"),
         "coefficients_ascending": [
@@ -151,6 +155,8 @@ def test_raw_embedded_matrix_validation_is_total_at_every_nested_axis(
         payload["entries"] = [1]
     elif malformed_part == "coefficient_num":
         element["coefficients_ascending"][0]["num"] = nested
+    elif malformed_part == "coefficient_non_mapping":
+        element["coefficients_ascending"][0] = nested_list
     elif malformed_part == "coefficient_axis":
         element["coefficients_ascending"] = nested
     elif malformed_part == "entry_presentation":

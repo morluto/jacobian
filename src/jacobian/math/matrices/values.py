@@ -581,7 +581,11 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
                         )
                     for coordinate in coordinates:
                         if not isinstance(coordinate, dict):
-                            continue
+                            raise _validation_error(
+                                "shape_mismatch",
+                                "embedded number-field matrix rational coordinates "
+                                "must be mappings",
+                            )
                         if set(coordinate).difference({"num", "den"}):
                             raise _validation_error(
                                 "shape_mismatch",

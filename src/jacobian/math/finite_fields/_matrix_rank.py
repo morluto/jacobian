@@ -28,7 +28,9 @@ from jacobian.math.finite_fields._matrix_rank_models import (
 )
 from jacobian.math.finite_fields.values import AxisBoundMatrix
 
-_MATRIX_RANK_WALL_SECONDS = 600.0
+# A generous killable safety ceiling; the admitted matrix work and result
+# envelope remain the authoritative bounds.
+_MATRIX_RANK_WALL_SECONDS = 3600.0
 
 
 def _execution_deadline() -> float:

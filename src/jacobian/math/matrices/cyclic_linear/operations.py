@@ -706,7 +706,7 @@ def _cyclotomic_kernel_child(
     matrix_coordinates: ComponentCoordinates,
     common_denominator: int,
     conn: multiprocessing.connection.Connection | None = None,
-) -> tuple:
+) -> tuple[Any, ...]:
     """Run SymPy rref/det/rref_den and return the result tuple.
 
     This function receives only picklable primitive data, reconstructs
@@ -828,7 +828,7 @@ def _run_kernel_subprocess(
     matrix_coordinates: ComponentCoordinates,
     common_denominator: int,
     deadline: float | None,
-) -> tuple:
+) -> tuple[Any, ...]:
     """Run the cyclotomic kernel in a subprocess.
 
     Uses ``subprocess.Popen`` with a ``python -c`` script instead of
@@ -889,7 +889,7 @@ def _run_kernel_subprocess(
             )
 
         if proc.returncode != 0:
-            stderr = proc.stderr.read().decode("ascii", errors="replace")
+            stderr = (proc.stderr.read() if proc.stderr else b"").decode("ascii", errors="replace")
             raise RuntimeError(
                 f"cyclotomic kernel subprocess exited with code "
                 f"{proc.returncode}: {stderr[:500]}"
@@ -899,7 +899,7 @@ def _run_kernel_subprocess(
             raise RuntimeError("cyclotomic kernel subprocess did not produce output")
 
         with open(output_path, "rb") as f:
-            return pickle.load(f)
+            return pickle.load(f)  # type: ignore[no-any-return]
 
 
 def _compute_component(admission: _ComponentAdmission) -> _ComputedComponent:

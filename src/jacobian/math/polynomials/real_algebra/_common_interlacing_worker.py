@@ -6,10 +6,12 @@ import hashlib
 import json
 import sys
 
+from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.real_algebra._common_interlacing import (
     _admit_common_interlacing,
     _common_interlacing_outcome,
+    _PrimitiveSourcePlan,
     _root_profile,
 )
 from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
@@ -23,15 +25,33 @@ def main() -> int:
 
     try:
         input_bytes = sys.stdin.buffer.read()
-        raw_family = json.loads(input_bytes.decode("utf-8"))
-        if not isinstance(raw_family, list):
-            raise ValueError("family payload must be a list")
+        raw_payload = json.loads(input_bytes.decode("utf-8"))
+        if not isinstance(raw_payload, dict):
+            raise ValueError("worker payload must be an object")
+        raw_family = raw_payload.get("family")
+        raw_primitives = raw_payload.get("primitive_sources")
+        if not isinstance(raw_family, list) or not isinstance(raw_primitives, list):
+            raise ValueError("worker payload is missing admitted sources")
         family = tuple(
             LabelledRationalPolynomial.model_validate(source) for source in raw_family
         )
+        primitive_sources = tuple(
+            _PrimitiveSourcePlan(
+                coefficients=tuple(
+                    parse_canonical_integer(value) for value in item["coefficients"]
+                ),
+                degree=int(item["degree"]),
+                height_digits=int(item["height_digits"]),
+                term_count=int(item["term_count"]),
+            )
+            for item in raw_primitives
+            if isinstance(item, dict)
+        )
+        if len(primitive_sources) != len(family):
+            raise ValueError("worker admitted source projection is malformed")
         # Factor the family once and reuse the plan for both the factor
         # projection and the profile computation, avoiding double work.
-        plan = _admit_common_interlacing(family)
+        plan = _admit_common_interlacing(family, primitive_sources=primitive_sources)
         root_profiles = tuple(
             _root_profile(source_index, source)
             for source_index, source in enumerate(plan.sources)

@@ -468,7 +468,7 @@ def run_common_interlacing_profile(
             code=exc.type,
             message=str(exc),
         ) from exc
-    _preflight_common_interlacing_sources(family)
+    primitive_sources = _preflight_common_interlacing_sources(family)
 
     execution = current_request_execution()
     started = execution.started_at if execution is not None else time.monotonic()
@@ -486,7 +486,20 @@ def run_common_interlacing_profile(
         )
 
     request_bytes = json.dumps(
-        [source.model_dump(mode="json") for source in family],
+        {
+            "family": [source.model_dump(mode="json") for source in family],
+            "primitive_sources": [
+                {
+                    "coefficients": [
+                        format_canonical_integer(value) for value in source.coefficients
+                    ],
+                    "degree": source.degree,
+                    "height_digits": source.height_digits,
+                    "term_count": source.term_count,
+                }
+                for source in primitive_sources
+            ],
+        },
         separators=(",", ":"),
     ).encode("utf-8")
     request_digest = hashlib.sha256(request_bytes).hexdigest()

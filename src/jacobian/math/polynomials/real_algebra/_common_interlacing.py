@@ -479,6 +479,8 @@ def _require_factored_plan_bounds(sources: tuple[_SourcePlan, ...]) -> None:
 
 def _admit_common_interlacing(
     family: tuple[LabelledRationalPolynomial, ...],
+    *,
+    primitive_sources: tuple[_PrimitiveSourcePlan, ...] | None = None,
 ) -> _CommonInterlacingPlan:
     if not 2 <= len(family) <= MAX_COMMON_INTERLACING_FAMILY_SIZE:
         _reject(
@@ -502,7 +504,8 @@ def _admit_common_interlacing(
             "variable_count",
             "common interlacing sources must be univariate",
         )
-    primitive_sources = _preflight_common_interlacing_sources(family)
+    if primitive_sources is None:
+        primitive_sources = _preflight_common_interlacing_sources(family)
     common_degree = primitive_sources[0].degree
 
     # This is the operation's only factorization layer.  The exact factor plan

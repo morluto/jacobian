@@ -25,7 +25,6 @@ from jacobian.math.finite_fields import (
     projective_line,
     restrict_scalars,
 )
-from jacobian.math.finite_fields._matrix_rank import MATRIX_RANK_OPERATION
 from jacobian.math.finite_fields._matrix_rank_models import (
     MatrixRankRequest,
     MatrixRankResult,
@@ -350,7 +349,46 @@ def _build_tools() -> MathTools:
             ),
         ),
     )
-    matrix_rank_operation = MATRIX_RANK_OPERATION
+    matrix_rank_operation = MathTool(
+        operation_id="finite_field.matrix.rank.compute",
+        title="Compute exact rank of a labelled matrix over its presented field",
+        description=(
+            "Given one AxisBoundMatrix bound to a FiniteFieldPresentation, return its "
+            "exact rank over that field with deterministic row and column pivot labels. "
+            "Supports both prime and extension fields."
+        ),
+        request_type=MatrixRankRequest,
+        result_type=MatrixRankResult,
+        run=_compute_matrix_rank,
+        tags=("finite-field", "matrix", "rank", "exact"),
+        examples=(
+            example(
+                "rank_one_over_f2",
+                "Rank [[1,1],[1,1]] over F_2 is 1; the matrix must use one consistent field presentation.",
+                {
+                    "matrix": {
+                        "presentation": {
+                            "characteristic": 2,
+                            "modulus_coefficients": [0, 1],
+                            "generator": "a",
+                        },
+                        "row_axis": {"name": "rows", "labels": ["r0", "r1"]},
+                        "column_axis": {"name": "cols", "labels": ["c0", "c1"]},
+                        "entries": [
+                            [
+                                {"presentation": {"characteristic": 2, "modulus_coefficients": [0, 1], "generator": "a"}, "coordinates": [1]},
+                                {"presentation": {"characteristic": 2, "modulus_coefficients": [0, 1], "generator": "a"}, "coordinates": [1]},
+                            ],
+                            [
+                                {"presentation": {"characteristic": 2, "modulus_coefficients": [0, 1], "generator": "a"}, "coordinates": [1]},
+                                {"presentation": {"characteristic": 2, "modulus_coefficients": [0, 1], "generator": "a"}, "coordinates": [1]},
+                            ],
+                        ],
+                    }
+                },
+            ),
+        ),
+    )
     return (
         projective_line_operation,
         matrix_rank_operation,

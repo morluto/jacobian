@@ -41,16 +41,19 @@ _MATRIX: dict[str, object] = {
 def compute_rank(request: MatrixRankRequest) -> MatrixRankResult:
     """Return the exact rank of a labelled matrix over its presented finite field."""
     matrix = request.matrix
-    # Compute the exact deterministic pivots using the maintained backend.
-    data = compute_matrix_rank(matrix)
-    # Validate the complete result envelope against the canonical output bound.
+    # Reserve the complete result envelope before the backend call so
+    # that we do not waste CPU on a result known to be undeliverable.
+    # The worst case is full rank with all pivot labels present.
+    max_rank = min(
+        len(matrix.row_axis.labels), len(matrix.column_axis.labels)
+    )
     try:
         result_probe = encode_strict_json(
             {
                 "matrix": matrix.model_dump(mode="json"),
-                "rank": data.rank,
-                "pivot_rows": list(data.pivot_rows),
-                "pivot_columns": list(data.pivot_columns),
+                "rank": max_rank,
+                "pivot_rows": list(matrix.row_axis.labels[:max_rank]),
+                "pivot_columns": list(matrix.column_axis.labels[:max_rank]),
             }
         )
     except CanonicalizationError as exc:
@@ -65,6 +68,8 @@ def compute_rank(request: MatrixRankRequest) -> MatrixRankResult:
             code="finite_field.matrix_rank.result_bound",
             message="matrix-rank result exceeds the canonical output bound",
         )
+    # Compute the exact deterministic pivots using the maintained backend.
+    data = compute_matrix_rank(matrix)
     return MatrixRankResult(
         matrix=matrix,
         rank=data.rank,

@@ -89,8 +89,43 @@ def compute_matrix_rank(matrix: AxisBoundMatrix) -> MatrixRankData:
         rank += 1
         col += 1
 
-    pivot_rows = tuple(matrix.row_axis.labels[i] for i in pivot_row_indices)
-    pivot_columns = tuple(matrix.column_axis.labels[i] for i in pivot_col_indices)
+    # Canonicalize pivot rows to declared row-axis order so that
+    # equivalent or impossible pivot-label sequences cannot become
+    # distinct exact values.
+    row_label_to_index = {
+        matrix.row_axis.labels[i]: i for i in pivot_row_indices
+    }
+    ordered_pivot_row_indices = sorted(
+        pivot_row_indices, key=lambda i: row_label_to_index[matrix.row_axis.labels[i]]
+    )
+    # Reorder pivot_rows and pivot_columns together based on the
+    # canonical row-axis order of pivot rows.
+    pivot_row_labels = [matrix.row_axis.labels[i] for i in ordered_pivot_row_indices]
+    row_label_to_pivot_pos = {
+        matrix.row_axis.labels[i]: pos
+        for pos, i in enumerate(ordered_pivot_row_indices)
+    }
+    # The pivot columns are paired with pivot rows; reorder them too.
+    original_pivot_col_labels = [matrix.column_axis.labels[i] for i in pivot_col_indices]
+    pivot_col_labels = [
+        original_pivot_col_labels[
+            list(pivot_row_indices).index(
+                matrix.row_axis.labels.index(label)
+            )
+        ]
+        for label in pivot_row_labels
+    ] if False else original_pivot_col_labels  # keep original for now
+
+    # Actually, the correct approach: sort pivot rows by row-axis order,
+    # and reorder the corresponding pivot columns accordingly.
+    # pivot_row_indices and pivot_col_indices are paired by elimination order.
+    pivot_pairs = list(zip(pivot_row_indices, pivot_col_indices))
+    pivot_pairs.sort(key=lambda pair: pair[0])  # sort by row index = row-axis order
+    canonical_row_indices = [r for r, _ in pivot_pairs]
+    canonical_col_indices = [c for _, c in pivot_pairs]
+
+    pivot_rows = tuple(matrix.row_axis.labels[i] for i in canonical_row_indices)
+    pivot_columns = tuple(matrix.column_axis.labels[i] for i in canonical_col_indices)
 
     return MatrixRankData(
         rank=rank,

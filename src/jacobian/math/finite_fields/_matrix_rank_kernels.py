@@ -7,6 +7,7 @@ backend degenerates to modular integer arithmetic.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -24,13 +25,19 @@ class MatrixRankData:
     pivot_columns: tuple[str, ...]
 
 
-def compute_matrix_rank(matrix: AxisBoundMatrix) -> MatrixRankData:
+def compute_matrix_rank(
+    matrix: AxisBoundMatrix,
+    *,
+    execution_checkpoint: Callable[[str], None] | None = None,
+) -> MatrixRankData:
     """Compute exact rank and pivot labels over the presented finite field.
 
     Delegates all finite-field arithmetic to python-flint's maintained
     ``fq_default`` backend rather than constructing SymPy polynomials.
     """
 
+    checkpoint = execution_checkpoint or (lambda _stage: None)
+    checkpoint("before finite-field context construction")
     presentation = matrix.presentation
     rows = len(matrix.row_axis.labels)
     cols = len(matrix.column_axis.labels)
@@ -44,10 +51,12 @@ def compute_matrix_rank(matrix: AxisBoundMatrix) -> MatrixRankData:
     # Convert entries to maintained backend elements once.
     entries: list[list[Any]] = []
     for r in range(rows):
+        checkpoint(f"before finite-field row {r} conversion")
         row = []
         for c in range(cols):
             row.append(_to_backend(matrix.entries[r][c], active_context=active_context))
         entries.append(row)
+        checkpoint(f"after finite-field row {r} conversion")
 
     # Gaussian elimination using the maintained backend's arithmetic.
     pivot_row_indices: list[int] = []
@@ -57,6 +66,7 @@ def compute_matrix_rank(matrix: AxisBoundMatrix) -> MatrixRankData:
     row_perm = list(range(rows))
 
     while rank < rows and col < cols:
+        checkpoint(f"before finite-field elimination column {col}")
         pivot_row = None
         for r in range(rank, rows):
             if entries[r][col] != zero:
@@ -88,39 +98,15 @@ def compute_matrix_rank(matrix: AxisBoundMatrix) -> MatrixRankData:
         pivot_col_indices.append(col)
         rank += 1
         col += 1
+        checkpoint(f"after finite-field elimination column {col - 1}")
 
-    # Canonicalize pivot rows to declared row-axis order so that
-    # equivalent or impossible pivot-label sequences cannot become
-    # distinct exact values.
-    row_label_to_index = {matrix.row_axis.labels[i]: i for i in pivot_row_indices}
-    ordered_pivot_row_indices = sorted(
-        pivot_row_indices, key=lambda i: row_label_to_index[matrix.row_axis.labels[i]]
+    # The public result exposes pivot row and column sets, not their elimination
+    # pairing. Canonicalize each set independently to satisfy both axis-order
+    # contracts after row swaps.
+    pivot_rows = tuple(matrix.row_axis.labels[i] for i in sorted(pivot_row_indices))
+    pivot_columns = tuple(
+        matrix.column_axis.labels[i] for i in sorted(pivot_col_indices)
     )
-    # Reorder pivot_rows and pivot_columns together based on the
-    # canonical row-axis order of pivot rows.
-    pivot_row_labels = [matrix.row_axis.labels[i] for i in ordered_pivot_row_indices]
-    {matrix.row_axis.labels[i]: pos for pos, i in enumerate(ordered_pivot_row_indices)}
-    # The pivot columns are paired with pivot rows; reorder them too.
-    original_pivot_col_labels = [
-        matrix.column_axis.labels[i] for i in pivot_col_indices
-    ]
-    [
-        original_pivot_col_labels[
-            list(pivot_row_indices).index(matrix.row_axis.labels.index(label))
-        ]
-        for label in pivot_row_labels
-    ] if False else original_pivot_col_labels  # keep original for now
-
-    # Actually, the correct approach: sort pivot rows by row-axis order,
-    # and reorder the corresponding pivot columns accordingly.
-    # pivot_row_indices and pivot_col_indices are paired by elimination order.
-    pivot_pairs = list(zip(pivot_row_indices, pivot_col_indices, strict=False))
-    pivot_pairs.sort(key=lambda pair: pair[0])  # sort by row index = row-axis order
-    canonical_row_indices = [r for r, _ in pivot_pairs]
-    canonical_col_indices = [c for _, c in pivot_pairs]
-
-    pivot_rows = tuple(matrix.row_axis.labels[i] for i in canonical_row_indices)
-    pivot_columns = tuple(matrix.column_axis.labels[i] for i in canonical_col_indices)
 
     return MatrixRankData(
         rank=rank,

@@ -2,6 +2,16 @@
 
 from __future__ import annotations
 
+from functools import partial
+from time import monotonic
+
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    current_request_execution,
+    request_cancelled,
+)
 from jacobian.canonical import (
     CanonicalizationError,
     CanonicalLimits,
@@ -9,11 +19,39 @@ from jacobian.canonical import (
 )
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationDomainValidationError
-from jacobian.math.finite_fields._matrix_rank_kernels import compute_matrix_rank
+from jacobian.math.finite_fields._matrix_rank_kernels import (
+    compute_matrix_rank as _compute_matrix_rank_kernel,
+)
 from jacobian.math.finite_fields._matrix_rank_models import (
     MatrixRankRequest,
     MatrixRankResult,
 )
+from jacobian.math.finite_fields.values import AxisBoundMatrix
+
+_MATRIX_RANK_WALL_SECONDS = 600.0
+
+
+def _execution_deadline() -> float:
+    execution = current_request_execution()
+    started_at = execution.started_at if execution is not None else monotonic()
+    owner_deadline = started_at + _MATRIX_RANK_WALL_SECONDS
+    deadline = (
+        min(owner_deadline, execution.deadline)
+        if execution is not None and execution.deadline is not None
+        else owner_deadline
+    )
+    bind_request_deadline(deadline)
+    return deadline
+
+
+def _require_deadline(deadline: float, stage: str) -> None:
+    if request_cancelled():
+        raise OperationExecutionCancelledError(f"finite-field rank cancelled {stage}")
+    if monotonic() >= deadline:
+        raise OperationExecutionTimeoutError(
+            f"finite-field rank deadline expired {stage}"
+        )
+
 
 _FIELD: dict[str, object] = {
     "characteristic": 2,
@@ -38,42 +76,67 @@ _MATRIX: dict[str, object] = {
 }
 
 
-def compute_rank(request: MatrixRankRequest) -> MatrixRankResult:
+def compute_matrix_rank(
+    matrix: AxisBoundMatrix,
+    *,
+    enforce_transport_limit: bool = False,
+) -> MatrixRankResult:
     """Return the exact rank of a labelled matrix over its presented finite field."""
-    matrix = request.matrix
-    # Reserve the complete result envelope before the backend call so
-    # that we do not waste CPU on a result known to be undeliverable.
-    # The worst case is full rank with all pivot labels present.
-    max_rank = min(len(matrix.row_axis.labels), len(matrix.column_axis.labels))
-    try:
-        result_probe = encode_strict_json(
-            {
-                "matrix": matrix.model_dump(mode="json"),
-                "rank": max_rank,
-                "pivot_rows": list(matrix.row_axis.labels[:max_rank]),
-                "pivot_columns": list(matrix.column_axis.labels[:max_rank]),
-            }
-        )
-    except CanonicalizationError as exc:
-        raise OperationDomainValidationError(
-            location=("matrix",),
-            code="finite_field.matrix_rank.result_bound",
-            message="matrix-rank result exceeds the canonical output bound",
-        ) from exc
-    if len(result_probe) > CanonicalLimits().max_output_bytes:
-        raise OperationDomainValidationError(
-            location=("matrix",),
-            code="finite_field.matrix_rank.result_bound",
-            message="matrix-rank result exceeds the canonical output bound",
-        )
+    deadline = _execution_deadline()
+    execution_checkpoint = partial(_require_deadline, deadline)
+    execution_checkpoint("before result admission")
+    if enforce_transport_limit:
+        # Reserve the complete result envelope before the backend call so
+        # that we do not waste CPU on a result known to be undeliverable.
+        # The worst case is full rank with all pivot labels present.
+        max_rank = min(len(matrix.row_axis.labels), len(matrix.column_axis.labels))
+        try:
+            result_probe = encode_strict_json(
+                {
+                    "matrix": matrix.model_dump(mode="json"),
+                    "rank": max_rank,
+                    "pivot_rows": list(matrix.row_axis.labels[:max_rank]),
+                    "pivot_columns": list(matrix.column_axis.labels[:max_rank]),
+                }
+            )
+        except CanonicalizationError as exc:
+            raise OperationDomainValidationError(
+                location=("matrix",),
+                code="finite_field.matrix_rank.result_bound",
+                message="matrix-rank result exceeds the canonical output bound",
+            ) from exc
+        if len(result_probe) > CanonicalLimits().max_output_bytes:
+            raise OperationDomainValidationError(
+                location=("matrix",),
+                code="finite_field.matrix_rank.result_bound",
+                message="matrix-rank result exceeds the canonical output bound",
+            )
+    execution_checkpoint("after result admission")
     # Compute the exact deterministic pivots using the maintained backend.
-    data = compute_matrix_rank(matrix)
-    return MatrixRankResult(
+    data = _compute_matrix_rank_kernel(
+        matrix,
+        execution_checkpoint=execution_checkpoint,
+    )
+    result = MatrixRankResult(
         matrix=matrix,
         rank=data.rank,
         pivot_rows=data.pivot_rows,
         pivot_columns=data.pivot_columns,
     )
+    execution_checkpoint("after result construction")
+    return result
+
+
+def compute_rank(request: MatrixRankRequest) -> MatrixRankResult:
+    """Compute rank through the typed wire request adapter."""
+
+    return compute_matrix_rank(request.matrix)
+
+
+def _run_matrix_rank(request: MatrixRankRequest) -> MatrixRankResult:
+    """Run matrix rank through the canonical delivery boundary."""
+
+    return compute_matrix_rank(request.matrix, enforce_transport_limit=True)
 
 
 MATRIX_RANK_OPERATION = MathTool(
@@ -86,7 +149,7 @@ MATRIX_RANK_OPERATION = MathTool(
     ),
     request_type=MatrixRankRequest,
     result_type=MatrixRankResult,
-    run=compute_rank,
+    run=_run_matrix_rank,
     tags=("finite-field", "matrix", "rank", "exact"),
     examples=(
         example(
@@ -98,4 +161,4 @@ MATRIX_RANK_OPERATION = MathTool(
 )
 
 
-__all__ = ["MATRIX_RANK_OPERATION", "compute_rank"]
+__all__ = ["MATRIX_RANK_OPERATION", "compute_matrix_rank", "compute_rank"]

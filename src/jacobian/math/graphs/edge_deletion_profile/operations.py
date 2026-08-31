@@ -115,8 +115,16 @@ def _coloring_work_bound(graph: SimpleUndirectedGraph, deletion_order: int) -> i
             continue
         complete_edge_count = n * (n - 1) // 2
         complete = edge_count == complete_edge_count
-        if complete:
+        if complete and deletion_order == 0:
             total += n
+            continue
+        if complete:
+            # Every nonzero deletion from K_n enters the near-complete
+            # missing-edge clique-cover kernel.  Each deleted edge can add a
+            # branching choice while the kernel assigns all n vertices; use
+            # that source-derived envelope rather than the source chromatic
+            # shortcut.
+            total += n ** (deletion_order + 1)
             continue
         source_missing = complete_edge_count - edge_count
         max_missing = source_missing + deletion_order

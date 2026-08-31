@@ -62,6 +62,14 @@ def test_k8_order2_uses_complete_graph_shortcuts() -> None:
     } == {6, 7}
 
 
+def test_large_complete_graph_with_deletions_is_rejected_for_clique_cover_work() -> None:
+    vertices = [f"v{index}" for index in range(20)]
+    edges = [tuple(sorted(edge)) for edge in combinations(vertices, 2)]
+
+    with pytest.raises(OperationDomainValidationError, match="work bound"):
+        compute_edge_deletion_profile(_graph(vertices, edges), 2)
+
+
 def test_order2_shortcut_canonicalizes_unsorted_vertex_axis() -> None:
     vertices = ["d", "c", "b", "a"]
     edges = [tuple(sorted(edge)) for edge in combinations(vertices, 2)]

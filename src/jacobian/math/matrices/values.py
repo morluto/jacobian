@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
 from fractions import Fraction
 from itertools import pairwise
-from typing import Annotated, Any, Literal, Self
+from typing import Any, Literal, Self
 
-from pydantic import Field, GetJsonSchemaHandler, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
@@ -19,10 +18,6 @@ from jacobian._exact import (
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.quadratic import RealQuadraticValue
-from jacobian.math.number_theory.number_fields.values import (
-    RealNumberFieldEmbedding,
-    SimpleNumberFieldElement,
-)
 
 MAX_MATRIX_DIMENSION = 32
 MAX_EXACT_LINEAR_MATRIX_AXIS = 64
@@ -62,89 +57,54 @@ def require_matrix_scalar_digits(
                 )
 
 
-def _prepare_raw_matrix_scalar(
-    scalar: object, *, label: str, scalar_domain: Literal["QQ", "ZZ"]
+def _require_raw_matrix_envelope(
+    data: object, *, maximum_axis: int, label: str
 ) -> object:
-    """Reject nested scalar containers and copy one valid-shaped QQ mapping."""
-
-    if isinstance(scalar, (list, tuple)) or (
-        scalar_domain == "ZZ" and isinstance(scalar, dict)
-    ):
-        raise _validation_error(
-            "shape_mismatch", f"{label} entries must be scalar values"
-        )
-    components: tuple[object, ...]
-    if isinstance(scalar, dict):
-        if set(scalar).difference({"num", "den"}):
-            raise _validation_error(
-                "shape_mismatch",
-                f"{label} rational scalar contains unknown fields",
-            )
-        components = (scalar.get("num"), scalar.get("den"))
-        if any(isinstance(component, (dict, list, tuple)) for component in components):
-            raise _validation_error(
-                "shape_mismatch",
-                f"{label} rational scalar components must be scalar values",
-            )
-        normalized: object = dict(scalar)
-    else:
-        components = (scalar,)
-        normalized = scalar
-    if any(
-        isinstance(component, str)
-        and len(component.lstrip("-")) > MAX_MATRIX_SCALAR_DIGITS
-        for component in components
-    ):
-        raise _validation_error(
-            "budget_exceeded",
-            f"{label} scalars are limited to {MAX_MATRIX_SCALAR_DIGITS} decimal digits",
-        )
-    return normalized
-
-
-def _prepare_raw_matrix_envelope(
-    data: object,
-    *,
-    maximum_axis: int,
-    label: str,
-    scalar_domain: Literal["QQ", "ZZ"],
-) -> object:
-    """Bound raw matrix depth and shallowly normalize its two array axes."""
+    """Bound raw matrix depth, axes, and scalar strings before tuple copying."""
 
     if not isinstance(data, dict):
         return data
     if set(data).difference({"domain", "entries"}):
         raise _validation_error("shape_mismatch", f"{label} contains unknown fields")
-    normalized = dict(data)
-    if "entries" not in data:
-        return normalized
     entries = data.get("entries")
     if not isinstance(entries, (list, tuple)):
-        raise _validation_error(
-            "shape_mismatch", f"{label} entries must be an array of rows"
-        )
+        return data
     if len(entries) > maximum_axis:
         raise _validation_error(
             "budget_exceeded", f"{label} has at most {maximum_axis} rows"
         )
-    normalized_rows: list[tuple[object, ...]] = []
     for row in entries:
         if not isinstance(row, (list, tuple)):
-            raise _validation_error("shape_mismatch", f"{label} rows must be arrays")
+            continue
         if len(row) > maximum_axis:
             raise _validation_error(
                 "budget_exceeded", f"{label} has at most {maximum_axis} columns"
             )
-        normalized_rows.append(
-            tuple(
-                _prepare_raw_matrix_scalar(
-                    scalar, label=label, scalar_domain=scalar_domain
+        for scalar in row:
+            if isinstance(scalar, (list, tuple)):
+                raise _validation_error(
+                    "shape_mismatch", f"{label} entries must be scalar values"
                 )
-                for scalar in row
+            if isinstance(scalar, dict) and set(scalar).difference({"num", "den"}):
+                raise _validation_error(
+                    "shape_mismatch", f"{label} rational scalar contains unknown fields"
+                )
+            components = (
+                (scalar.get("num"), scalar.get("den"))
+                if isinstance(scalar, dict)
+                else (scalar,)
             )
-        )
-    normalized["entries"] = tuple(normalized_rows)
-    return normalized
+            for component in components:
+                if (
+                    isinstance(component, (str, int))
+                    and len(str(component).lstrip("-")) > MAX_MATRIX_SCALAR_DIGITS
+                ):
+                    raise _validation_error(
+                        "budget_exceeded",
+                        f"{label} scalars are limited to "
+                        f"{MAX_MATRIX_SCALAR_DIGITS} decimal digits",
+                    )
+    return data
 
 
 class RationalMatrix(StrictModel):
@@ -159,14 +119,10 @@ class RationalMatrix(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_raw_matrix_envelope(cls, data: Any) -> Any:
-        return canonicalize_json_containers(
-            _prepare_raw_matrix_envelope(
-                data,
-                maximum_axis=MAX_RATIONAL_MATRIX_ORDER,
-                label="matrix",
-                scalar_domain="QQ",
-            )
+        data = _require_raw_matrix_envelope(
+            data, maximum_axis=MAX_RATIONAL_MATRIX_ORDER, label="matrix"
         )
+        return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_rectangular_nonempty_rows(self) -> Self:
@@ -187,130 +143,6 @@ class RationalMatrix(StrictModel):
             label="matrix",
         )
         return self
-
-
-class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
-    """One matrix over a simple number field at a selected real embedding.
-
-    Every entry retains the canonical abstract field element.  The common
-    embedding selects how those elements act as real scalars; consumers must
-    recognize the field and indexed root before doing mathematical work.
-    """
-
-    domain: Literal["EMBEDDED_REAL_SIMPLE_NUMBER_FIELD"] = (
-        "EMBEDDED_REAL_SIMPLE_NUMBER_FIELD"
-    )
-    embedding: RealNumberFieldEmbedding
-    entries: tuple[tuple[SimpleNumberFieldElement, ...], ...] = Field(
-        min_length=1,
-        max_length=MAX_RATIONAL_MATRIX_ORDER,
-    )
-
-    @model_validator(mode="before")
-    @classmethod
-    def require_raw_matrix_envelope(cls, data: Any) -> Any:
-        if not isinstance(data, dict):
-            return data
-        if set(data).difference({"domain", "embedding", "entries"}):
-            raise _validation_error(
-                "shape_mismatch",
-                "embedded number-field matrix contains unknown fields",
-            )
-        entries = data.get("entries")
-        normalized = dict(data)
-        embedding = normalized.get("embedding")
-        if isinstance(embedding, dict):
-            normalized_embedding = dict(embedding)
-            root = normalized_embedding.get("root")
-            if isinstance(root, dict) and isinstance(root.get("polynomial"), list):
-                normalized_root = dict(root)
-                normalized_root["polynomial"] = tuple(root["polynomial"])
-                normalized_embedding["root"] = normalized_root
-            normalized["embedding"] = normalized_embedding
-        if isinstance(entries, (list, tuple)):
-            if len(entries) > MAX_RATIONAL_MATRIX_ORDER:
-                raise _validation_error(
-                    "budget_exceeded",
-                    "embedded number-field matrices have at most "
-                    f"{MAX_RATIONAL_MATRIX_ORDER} rows",
-                )
-            for row in entries:
-                if not isinstance(row, (list, tuple)):
-                    raise _validation_error(
-                        "shape_mismatch",
-                        "embedded number-field matrix rows must be arrays",
-                    )
-                if len(row) > MAX_RATIONAL_MATRIX_ORDER:
-                    raise _validation_error(
-                        "budget_exceeded",
-                        "embedded number-field matrices have at most "
-                        f"{MAX_RATIONAL_MATRIX_ORDER} columns",
-                    )
-                for scalar in row:
-                    if isinstance(scalar, SimpleNumberFieldElement):
-                        continue
-                    if not isinstance(scalar, dict) or set(scalar).difference(
-                        {"presentation", "coefficients_ascending"}
-                    ):
-                        raise _validation_error(
-                            "shape_mismatch",
-                            "embedded number-field matrix entries must be field elements",
-                        )
-            normalized["entries"] = tuple(tuple(row) for row in entries)
-        return canonicalize_json_containers(normalized)
-
-    @model_validator(mode="after")
-    def require_common_embedding_and_rectangular_shape(self) -> Self:
-        column_count = len(self.entries[0])
-        if column_count == 0 or column_count > MAX_RATIONAL_MATRIX_ORDER:
-            raise _validation_error(
-                "budget_exceeded",
-                "embedded number-field matrix rows must contain between 1 and "
-                f"{MAX_RATIONAL_MATRIX_ORDER} entries",
-            )
-        if any(len(row) != column_count for row in self.entries):
-            raise _validation_error(
-                "shape_mismatch",
-                "embedded number-field matrix rows must have equal length",
-            )
-        presentation = self.embedding.presentation
-        if any(
-            entry.presentation != presentation for row in self.entries for entry in row
-        ):
-            raise _validation_error(
-                "embedding_presentation",
-                "every matrix entry must use the selected embedding's presentation",
-            )
-        return self
-
-
-class _RequiredExactRealMatrixDomainSchema:
-    """Publish the discriminator that strict exact-real parsing requires."""
-
-    @classmethod
-    def __get_pydantic_json_schema__(
-        cls,
-        core_schema: Any,
-        handler: GetJsonSchemaHandler,
-    ) -> JsonSchemaValue:
-        schema = deepcopy(handler(core_schema))
-        branches = []
-        for branch in schema["oneOf"]:
-            resolved = deepcopy(handler.resolve_ref_schema(branch))
-            required = list(resolved.get("required", ()))
-            if "domain" not in required:
-                required.insert(0, "domain")
-            resolved["required"] = required
-            branches.append(resolved)
-        schema["oneOf"] = branches
-        return schema
-
-
-ExactRealMatrix = Annotated[
-    RationalMatrix | EmbeddedRealSimpleNumberFieldMatrix,
-    Field(discriminator="domain"),
-    _RequiredExactRealMatrixDomainSchema,
-]
 
 
 def rational_matrix_from_fractions(
@@ -528,14 +360,10 @@ class IntegerMatrix(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_raw_matrix_envelope(cls, data: Any) -> Any:
-        return canonicalize_json_containers(
-            _prepare_raw_matrix_envelope(
-                data,
-                maximum_axis=MAX_INTEGER_MATRIX_ORDER,
-                label="matrix",
-                scalar_domain="ZZ",
-            )
+        data = _require_raw_matrix_envelope(
+            data, maximum_axis=MAX_INTEGER_MATRIX_ORDER, label="matrix"
         )
+        return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_rectangular_nonempty_rows(self) -> Self:
@@ -647,8 +475,6 @@ __all__ = [
     "MAX_RATIONAL_MATRIX_ORDER",
     "MAX_SPARSE_RATIONAL_MATRIX_AXIS",
     "MAX_SPARSE_RATIONAL_MATRIX_NONZEROS",
-    "EmbeddedRealSimpleNumberFieldMatrix",
-    "ExactRealMatrix",
     "IntegerMatrix",
     "RationalMatrix",
     "RationalVectorSpaceBasis",

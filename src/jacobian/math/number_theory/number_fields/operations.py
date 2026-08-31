@@ -57,7 +57,10 @@ from jacobian.math.number_theory.number_fields.values import (
     SimpleNumberFieldPresentation,
 )
 
-_MAX_NATIVE_INTEGRAL_BASIS_DEGREE = MAX_NUMBER_FIELD_EMBEDDING_DEGREE
+# The native integral-basis consumers retain their prior degree-31 envelope.
+# This is intentionally independent of the smaller degree bound for the
+# isolated all-embedding worker and the widened shared field carrier.
+_MAX_NATIVE_INTEGRAL_BASIS_DEGREE = 31
 
 
 class NumberFieldEmbeddingAdmissionError(ValueError):

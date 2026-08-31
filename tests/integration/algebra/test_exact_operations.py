@@ -301,14 +301,34 @@ def test_field_carrier_preserves_the_prior_discriminant_degree_envelope() -> Non
 
 
 @pytest.mark.parametrize("consumer", (discriminant, ring_of_integers))
+def test_native_integral_basis_consumers_preserve_degree_31_envelope(
+    consumer,
+) -> None:
+    field = SimpleNumberFieldPresentation(
+        coefficients_descending=("1", *("0",) * 30, "-2")
+    )
+
+    result = consumer(field)
+
+    if consumer is discriminant:
+        assert result == "-18327886165296381817380980351835033630345588173537542144"
+    else:
+        assert result == [
+            "1",
+            "alpha",
+            *[f"alpha**{power}" for power in range(2, field.degree)],
+        ]
+
+
+@pytest.mark.parametrize("consumer", (discriminant, ring_of_integers))
 def test_native_integral_basis_consumers_bound_the_widened_field_carrier(
     consumer,
 ) -> None:
     field = SimpleNumberFieldPresentation(
-        coefficients_descending=("1", *("0",) * 125, "-2")
+        coefficients_descending=("1", *("0",) * 31, "-2")
     )
 
-    with pytest.raises(ValueError, match="limited to degree 8"):
+    with pytest.raises(ValueError, match="limited to degree 31"):
         consumer(field)
 
 

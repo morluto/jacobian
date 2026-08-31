@@ -60,6 +60,7 @@ INVARIANT_BILINEAR_FORM_LATTICE_OPERATION = MathTool(
                         {
                             "label": "T",
                             "matrix": {
+                                "domain": "QQ",
                                 "entries": [
                                     [
                                         {"num": "1", "den": "1"},

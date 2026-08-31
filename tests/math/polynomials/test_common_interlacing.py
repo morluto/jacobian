@@ -388,6 +388,17 @@ def test_worker_root_factors_obey_algebraic_value_degree_bound() -> None:
         )
 
 
+def test_worker_factor_root_counts_reject_boolean_values() -> None:
+    factor = ["1", "0", "-1"]
+
+    with pytest.raises(ValueError, match="factor root count is malformed"):
+        _root_profile_from_worker(
+            {"source_index": 0, "roots": []},
+            [(factor, 1)],
+            [False],
+        )
+
+
 def test_aggregate_source_bounds_are_checked_before_worker_launch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

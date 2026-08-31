@@ -297,6 +297,8 @@ def _root_profile_from_worker(  # noqa: C901
     for idx, entry in enumerate(declared_factors):
         fk = tuple(int(c) for c in entry[0])
         expected = factor_root_counts[idx]
+        if type(expected) is not int or not 0 <= expected <= len(fk) - 1:
+            raise ValueError("worker factor root count is malformed")
         actual = factor_row_counts.get(fk, 0)
         if expected != actual:
             raise ValueError("worker omitted real roots of a source factor")

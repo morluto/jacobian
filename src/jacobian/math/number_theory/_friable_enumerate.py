@@ -2,7 +2,7 @@
 
 from pydantic_core import PydanticCustomError
 
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._friable_enumerate_kernels import (
@@ -27,10 +27,9 @@ def compute_friable_enumerate(
         raise OperationDomainValidationError(
             location=("x", "y"), code=exc.type, message=exc.message()
         ) from exc
-    return FriableEnumerateResult._from_kernel(
-        FriableEnumerateRequest(
-            x=format_canonical_integer(x_value), y=format_canonical_integer(y_value)
-        ),
+    return FriableEnumerateResult._from_kernel_values(
+        x_value,
+        y_value,
         family=family,
     )
 
@@ -48,10 +47,9 @@ def enumerate_friable(
         raise OperationDomainValidationError(
             location=("x", "y"), code=exc.type, message=exc.message()
         ) from exc
-    return FriableEnumerateResult._from_kernel(
-        FriableEnumerateRequest(
-            x=format_canonical_integer(x_value), y=format_canonical_integer(y_value)
-        ),
+    return FriableEnumerateResult._from_kernel_values(
+        x_value,
+        y_value,
         family=family,
     )
 

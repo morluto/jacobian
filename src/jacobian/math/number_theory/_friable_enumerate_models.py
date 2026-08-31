@@ -8,7 +8,11 @@ from typing import Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits, canonicalize_json
+from jacobian.canonical import (
+    CanonicalLimits,
+    canonicalize_json,
+    format_canonical_integer,
+)
 from jacobian.math.combinatorics.finite_structures.sets._models import (
     MAX_FINITE_INTEGER_SET_ELEMENTS,
     FiniteIntegerSet,
@@ -181,6 +185,24 @@ class FriableEnumerateResult(StrictModel):
         return cls.model_construct(
             x=request.x,
             y=request.y,
+            family=FiniteIntegerSet(
+                elements=tuple(str(value) for value in family),
+            ),
+        )
+
+    @classmethod
+    def _from_kernel_values(
+        cls,
+        x: int,
+        y: int,
+        *,
+        family: tuple[int, ...],
+    ) -> Self:
+        """Build a result directly from the native kernel's integer values."""
+
+        return cls.model_construct(
+            x=format_canonical_integer(x),
+            y=format_canonical_integer(y),
             family=FiniteIntegerSet(
                 elements=tuple(str(value) for value in family),
             ),

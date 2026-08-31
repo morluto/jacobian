@@ -28,16 +28,10 @@ from benchmarks.tooling.harbor_suite import (  # noqa: E402
 _CHECKSUM = re.compile(r'jacobian\.checksum="[^"]*"')
 
 
-def update(
-    dataset: str, tasks: tuple[str, ...], *, write_support: bool = False
-) -> int:
+def update(dataset: str, tasks: tuple[str, ...], *, write_support: bool = False) -> int:
     suite = get_suite(dataset)
     refs = select_task_refs(suite, tasks)
-    template = (
-        SUPPORT_TEMPLATE.read_bytes()
-        if write_support
-        else None
-    )
+    template = SUPPORT_TEMPLATE.read_bytes() if write_support else None
     for ref in refs:
         tests = ref.path / "tests"
         verifier = tests / "verifier.py"

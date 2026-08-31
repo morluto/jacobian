@@ -684,9 +684,13 @@ def run_bounded_stdin_python_kernel(
     wall_seconds: float,
     stdout_limit: int,
     stderr_limit: int,
-) -> tuple[bool, str, bool]:
-    """Run one bounded Python-kernel worker and return (timed_out, stdout,
-    output_limit_exceeded).
+) -> tuple[bool | str, str, bool]:
+    """Run one bounded Python-kernel worker and return its bounded status.
+
+    The first tuple member is ``True`` for timeout and ``"CANCELLED"`` when
+    the caller cancelled the process.  Keeping cancellation in the existing
+    three-field result preserves the private helper's call shape while
+    preventing partial worker output from being parsed as a kernel result.
 
     The child process is terminated on wall-budget expiry, so an admitted
     request cannot leave detached computations running inside the server.
@@ -719,7 +723,7 @@ def run_bounded_stdin_python_kernel(
             stdout_limit=stdout_limit,
             stderr_limit=stderr_limit,
             resource_limits=ProcessResourceLimits(
-                cpu_seconds=int(wall_seconds),
+                cpu_seconds=max(1, math.ceil(wall_seconds)),
                 address_space_bytes=_SYMPY_ADDRESS_SPACE_BYTES,
                 file_size_bytes=_WORKER_FILE_SIZE_BYTES,
             ),
@@ -728,5 +732,7 @@ def run_bounded_stdin_python_kernel(
         )
     if completed.timed_out:
         return True, "", False
+    if completed.cancelled:
+        return "CANCELLED", "", False
     exceeded = completed.stdout_exceeded or completed.stderr_exceeded
     return False, completed.stdout.decode("ascii", errors="replace"), exceeded

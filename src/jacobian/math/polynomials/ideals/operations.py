@@ -211,6 +211,10 @@ class _SympyKernelTimeoutError(TimeoutError):
     """The bounded SymPy worker exceeded the declared wall-time budget."""
 
 
+class _SympyKernelCancelledError(RuntimeError):
+    """The bounded SymPy worker was cancelled before producing a result."""
+
+
 class _SympyKernelError(RuntimeError):
     """The bounded SymPy worker failed without producing an exact result."""
 
@@ -608,6 +612,8 @@ def _run_sympy_kernel(payload: dict[str, Any], wall_seconds: float) -> dict[str,
         )
     except OSError as error:
         raise _SympyKernelError(str(error)) from None
+    if timed_out == "CANCELLED":
+        raise _SympyKernelCancelledError()
     if timed_out:
         raise _SympyKernelTimeoutError()
     if limit_exceeded:
@@ -830,6 +836,9 @@ def ideal_containment(
         )
         _raise_if_relation_deadline_exceeded(deadline)
         return computed
+    except _SympyKernelCancelledError:
+        outcome = "CANCELLED"
+        detail = "ideal containment was cancelled before producing a result"
     except _SympyKernelTimeoutError:
         outcome = "TIMEOUT"
         detail = "ideal containment exceeded the enforced wall-time budget"
@@ -881,6 +890,9 @@ def ideal_equality(
         )
         _raise_if_relation_deadline_exceeded(deadline)
         return computed
+    except _SympyKernelCancelledError:
+        outcome = "CANCELLED"
+        detail = "ideal equality was cancelled before producing a result"
     except _SympyKernelTimeoutError:
         outcome = "TIMEOUT"
         detail = "ideal equality exceeded the enforced wall-time budget"

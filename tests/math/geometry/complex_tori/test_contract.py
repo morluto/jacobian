@@ -207,7 +207,7 @@ def test_neron_severi_owner_deadline_reaches_invariant_form_phases(
         request_execution(started_at=10.0),
         pytest.raises(
             OperationExecutionTimeoutError,
-            match="during exact invariant-form constraint expansion",
+            match="deadline expired",
         ),
     ):
         compute_neron_severi_lattice(_elliptic_torus())

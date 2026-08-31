@@ -30,6 +30,9 @@ from jacobian.math.number_theory.number_fields import (
     SimpleNumberFieldPresentation,
     embeddings,
 )
+from jacobian.math.number_theory.number_fields.values import (
+    MAX_SIMPLE_NUMBER_FIELD_DEGREE,
+)
 
 
 def _rational(value: int | Fraction) -> CanonicalRational:
@@ -128,7 +131,10 @@ def test_raw_embedded_matrix_bounds_iterable_axes_before_nested_validation() -> 
         "entries": [[element]],
     }
 
-    with pytest.raises(ValidationError, match="at most 31 coordinates"):
+    with pytest.raises(
+        ValidationError,
+        match=f"at most {MAX_SIMPLE_NUMBER_FIELD_DEGREE} coordinates",
+    ):
         EmbeddedRealSimpleNumberFieldMatrix.model_validate(payload)
 
     payload["entries"] = repeat([])

@@ -27,6 +27,9 @@ from jacobian.math.number_theory.number_fields._discriminant_process import (
     compute_nf_discriminant,
 )
 from jacobian.math.number_theory.number_fields._models import NumberFieldRequest
+from jacobian.math.number_theory.number_fields.values import (
+    MAX_SIMPLE_NUMBER_FIELD_DEGREE,
+)
 from jacobian.math.number_theory.sequences.recurrence_solving._models import (
     ClosedFormRequest,
     RecurrenceFindRequest,
@@ -282,7 +285,10 @@ def test_field_discriminant_request_schema_uses_the_canonical_presentation() -> 
         "domain",
         "coefficients_descending",
     }
-    assert field_schema["properties"]["coefficients_descending"]["maxItems"] == 32
+    assert (
+        field_schema["properties"]["coefficients_descending"]["maxItems"]
+        == MAX_SIMPLE_NUMBER_FIELD_DEGREE + 1
+    )
 
 
 def test_field_carrier_preserves_the_prior_discriminant_degree_envelope() -> None:

@@ -1,6 +1,7 @@
 """Defining-invariant and boundary tests for the edge-intersection graph."""
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
@@ -90,8 +91,10 @@ class TestEdgeIntersectionGraph:
             edges=(),
         )
 
-        with pytest.raises(ValueError, match="graph vertices"):
+        with pytest.raises(ValidationError) as caught:
             EdgeIntersectionGraphResult(hypergraph=source, graph=graph)
+
+        assert caught.value.errors()[0]["type"] == "hypergraph.source_axis"
 
 
 class TestEdgeIntersectionGraphBoundary:

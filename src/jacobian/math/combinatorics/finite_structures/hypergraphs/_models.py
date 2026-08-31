@@ -164,6 +164,7 @@ def _validation_error(message: str) -> PydanticCustomError:
         ("induced type profile", "induced_profile"),
         ("transversal", "transversal"),
         ("matching", "matching"),
+        ("graph vertices must be the hypergraph edge IDs", "source_axis"),
     )
     for fragment, reason in reason_fragments:
         if fragment in message:

@@ -31,3 +31,31 @@ def test_public_form_value_and_native_functions_compose_after_serialization() ->
         )
         for row in rows
     )
+
+
+def test_public_proper_class_values_compose_without_representation_translation() -> (
+    None
+):
+    first = integral_binary_quadratic_forms.ProperBinaryQuadraticFormClass(
+        representative=integral_binary_quadratic_forms.PrimitivePositiveDefiniteBinaryQuadraticForm(
+            a=2, b=-1, c=3
+        )
+    )
+    second = integral_binary_quadratic_forms.ProperBinaryQuadraticFormClass.model_validate_json(
+        first.model_dump_json()
+    )
+
+    result = integral_binary_quadratic_forms.compose_classes(first, second)
+
+    assert isinstance(
+        result,
+        integral_binary_quadratic_forms.BinaryQuadraticFormClassCompositionResult,
+    )
+    assert (
+        result.product
+        == integral_binary_quadratic_forms.ProperBinaryQuadraticFormClass(
+            representative=integral_binary_quadratic_forms.PrimitivePositiveDefiniteBinaryQuadraticForm(
+                a=2, b=1, c=3
+            )
+        )
+    )

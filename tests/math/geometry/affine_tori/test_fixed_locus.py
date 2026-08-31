@@ -568,6 +568,22 @@ def test_zero_dimensional_matrices_and_discriminated_result_round_trip() -> None
         assert restored == result
 
 
+def test_component_relations_are_bound_to_the_declared_generators() -> None:
+    result = affine_torus_fixed_locus(_source(((3,),), (Fraction(0),))).model_dump(
+        mode="json"
+    )
+    outcome = dict(result["outcome"])
+    family = dict(outcome["fixed_locus"])
+    generator = dict(family["component_generators"][0])
+    generator["coordinates"] = [{"num": "1", "den": "3"}]
+    family["component_generators"] = [generator]
+    outcome["fixed_locus"] = family
+    result["outcome"] = outcome
+
+    with pytest.raises(ValidationError, match="relation_generators"):
+        AffineTorusFixedLocusResult.model_validate(result)
+
+
 def test_contradictory_discriminator_and_component_metadata_fail_closed() -> None:
     result = affine_torus_fixed_locus(_source(((3,),), (Fraction(0),))).model_dump(
         mode="json"
@@ -919,6 +935,24 @@ def test_admission_uses_the_exact_attainable_rank_not_the_nonzero_row_count() ->
     assert len(kernel.component_generators) == plan.rank_bounds[0].rank
     assert kernel.component_count == height
     assert plan.bounds_for_rank(1).source_minor_height >= height
+
+
+def test_admission_uses_the_selected_translated_solve_height() -> None:
+    height = 10**499
+    linear = ((height + 1, 0, 0), (0, height + 1, 0), (0, 0, 1))
+    source = _source(
+        linear,
+        (Fraction(1, height), Fraction(0), Fraction(0)),
+    )
+
+    plan = build_affine_torus_plan(source, deadline=monotonic() + 300)
+    result = affine_torus_fixed_locus(source)
+
+    assert isinstance(result.outcome, NonemptyAffineTorusFixedLocus)
+    assert result.outcome.fixed_locus.base_point.coordinates[0].as_fraction() == (
+        Fraction(height * height - 1, height * height)
+    )
+    assert plan.bounds_for_rank(2).base_point_component_height == height * height
 
 
 def test_translated_identity_is_empty_without_charging_the_translation_lcm() -> None:

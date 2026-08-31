@@ -609,8 +609,7 @@ def _validate_samples(
 ) -> PlaneSamplesValid | QepcadPlaneWorkerInvalid:
     try:
         canonical_samples = tuple(
-            canonicalize_isolated_plane_point(sample)
-            for sample in request.samples
+            canonicalize_isolated_plane_point(sample) for sample in request.samples
         )
     except QepcadSampleLimitError:
         return QepcadPlaneWorkerInvalid(reason="SAMPLE_RECOGNITION_LIMIT")

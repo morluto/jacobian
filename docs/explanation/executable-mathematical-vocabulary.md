@@ -9,6 +9,28 @@ The caller owns problem representation, decomposition, sequencing, strategy,
 interpretation, and stopping. Jacobian owns the public mathematical contracts,
 typed values, execution bounds, and honest result semantics around each move.
 
+## A dependency graph of executable results
+
+Mathematics is built in layers: foundational theories support mathematical
+objects, and those objects support lemmas and larger results. Jacobian does not
+try to encode that entire hierarchy or turn every lemma into a separate tool.
+It exposes selected reusable results as typed operations that agents can
+combine:
+
+```text
+mathematical objects -> executable operations -> larger investigations
+                              ^       |
+                              |       v
+                        typed results
+```
+
+The operation vocabulary is therefore closer to a dependency graph than to a
+flat list or a simple tree. One operation can use several mathematical inputs,
+and its result can be reused by many later operations. “Atomic” describes the
+boundary of one operation: it establishes one clear, independently useful
+mathematical postcondition. It does not mean that the operation is mathematically
+indivisible or internally simple.
+
 ## Semantic atomicity
 
 **Atomic means one stable, reusable mathematical postcondition, not a small or

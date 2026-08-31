@@ -899,8 +899,7 @@ def _run_kernel_subprocess(
 
         if proc.returncode != 0:
             raise RuntimeError(
-                f"cyclotomic kernel subprocess exited with code "
-                f"{proc.returncode}"
+                f"cyclotomic kernel subprocess exited with code {proc.returncode}"
             )
 
         if not os.path.exists(output_path):

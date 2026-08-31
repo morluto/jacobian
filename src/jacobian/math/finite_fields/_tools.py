@@ -232,12 +232,40 @@ def _build_tools() -> MathTools:
                         "column_axis": {"name": "cols", "labels": ["c0", "c1"]},
                         "entries": [
                             [
-                                {"presentation": {"characteristic": 2, "modulus_coefficients": [0, 1], "generator": "a"}, "coordinates": [1]},
-                                {"presentation": {"characteristic": 2, "modulus_coefficients": [0, 1], "generator": "a"}, "coordinates": [1]},
+                                {
+                                    "presentation": {
+                                        "characteristic": 2,
+                                        "modulus_coefficients": [0, 1],
+                                        "generator": "a",
+                                    },
+                                    "coordinates": [1],
+                                },
+                                {
+                                    "presentation": {
+                                        "characteristic": 2,
+                                        "modulus_coefficients": [0, 1],
+                                        "generator": "a",
+                                    },
+                                    "coordinates": [1],
+                                },
                             ],
                             [
-                                {"presentation": {"characteristic": 2, "modulus_coefficients": [0, 1], "generator": "a"}, "coordinates": [1]},
-                                {"presentation": {"characteristic": 2, "modulus_coefficients": [0, 1], "generator": "a"}, "coordinates": [1]},
+                                {
+                                    "presentation": {
+                                        "characteristic": 2,
+                                        "modulus_coefficients": [0, 1],
+                                        "generator": "a",
+                                    },
+                                    "coordinates": [1],
+                                },
+                                {
+                                    "presentation": {
+                                        "characteristic": 2,
+                                        "modulus_coefficients": [0, 1],
+                                        "generator": "a",
+                                    },
+                                    "coordinates": [1],
+                                },
                             ],
                         ],
                     }

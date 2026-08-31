@@ -46,7 +46,20 @@ def test_bundle_declares_atomic_inline_typed_operations() -> None:
         "finite_field.paley_tournament.construct",
         "finite_field.prime_linear_action.homogeneous_fixed_subspace.compute",
     )
-    projective, _, restrict_operation, rank_operation, _, _, table, _, _, _, paley, fixed = bundle
+    (
+        projective,
+        _,
+        restrict_operation,
+        rank_operation,
+        _,
+        _,
+        table,
+        _,
+        _,
+        _,
+        paley,
+        fixed,
+    ) = bundle
     for operation in bundle:
         assert isinstance(operation, MathTool)
         assert not hasattr(operation, "provider_binding")

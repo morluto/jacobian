@@ -1,6 +1,7 @@
 """Supported exact number-theory API."""
 
 from jacobian.math.number_theory._divisibility_poset import divisibility_poset
+from jacobian.math.number_theory._friable_enumerate import enumerate_friable
 from jacobian.math.number_theory._friable_kernel import count_friable
 from jacobian.math.number_theory._friable_models import FriableCountResult
 from jacobian.math.number_theory._prime_shift_models import PrimeShiftProfileResult
@@ -40,6 +41,7 @@ __all__ = [
     "chinese_remainder",
     "contiguous_sum_profile",
     "count_friable",
+    "enumerate_friable",
     "divisibility_poset",
     "euler_totient",
     "factorial_valuation",

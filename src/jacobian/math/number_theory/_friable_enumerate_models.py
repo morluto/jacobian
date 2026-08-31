@@ -85,12 +85,18 @@ def _generate_from_exponent_vectors(x: int, primes: tuple[int, ...]) -> tuple[in
 
 
 def _estimate_serialized_bytes(x: int, family_size: int) -> int:
-    """Estimate the serialized byte cost of the result family tuple."""
+    """Conservatively estimate the serialized byte cost before materialization."""
 
     if family_size == 0:
         return 0
     max_digits = max(1, len(str(x)))
     return family_size * (max_digits + 3)
+
+
+def _exact_serialized_bytes(family: tuple[int, ...]) -> int:
+    """Sum the actual canonical wire widths of a materialized family."""
+
+    return sum(max(1, len(str(v)) + 3) for v in family)
 
 
 class FriableEnumerateRequest(StrictModel):
@@ -250,7 +256,7 @@ def plan_friable_enumerate(
                 "friable_enumerate_family_exceeds_the_result_size_budget",
                 "friable-enumerate family exceeds the result-size budget",
             )
-        if _estimate_serialized_bytes(x, x) > _MAX_FRIABLE_ENUMERATED_BYTES:
+        if _exact_serialized_bytes(tuple(range(1, x + 1))) > _MAX_FRIABLE_ENUMERATED_BYTES:
             raise _validation_error(
                 "friable_enumerate_family_exceeds_the_serialized_byte_budget",
                 "friable-enumerate family exceeds the serialized-byte budget",
@@ -268,7 +274,7 @@ def plan_friable_enumerate(
                 "friable_enumerate_family_exceeds_the_result_size_budget",
                 "friable-enumerate family exceeds the result-size budget",
             )
-        if _estimate_serialized_bytes(x, family_size) > _MAX_FRIABLE_ENUMERATED_BYTES:
+        if _exact_serialized_bytes(family) > _MAX_FRIABLE_ENUMERATED_BYTES:
             raise _validation_error(
                 "friable_enumerate_family_exceeds_the_serialized_byte_budget",
                 "friable-enumerate family exceeds the serialized-byte budget",
@@ -290,7 +296,7 @@ def plan_friable_enumerate(
             "friable_enumerate_family_exceeds_the_result_size_budget",
             "friable-enumerate family exceeds the result-size budget",
         )
-    if _estimate_serialized_bytes(x, family_size) > _MAX_FRIABLE_ENUMERATED_BYTES:
+    if _exact_serialized_bytes(family) > _MAX_FRIABLE_ENUMERATED_BYTES:
         raise _validation_error(
             "friable_enumerate_family_exceeds_the_serialized_byte_budget",
             "friable-enumerate family exceeds the serialized-byte budget",

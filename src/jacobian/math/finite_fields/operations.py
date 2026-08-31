@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import json
+import math
+import sys
 import time
 from collections.abc import Callable
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Literal
 
 from jacobian._execution import (
@@ -60,9 +65,12 @@ from jacobian.math.matrices.finite_fields._bounds import (
 )
 from jacobian.math.matrices.finite_fields.linear_algebra import (
     PrimeFieldMatrix,
-    nullspace,
     rank,
-    rref,
+)
+from jacobian.process import (
+    ProcessResourceLimits,
+    run_bounded_process,
+    worker_environment,
 )
 
 _MAX_FINITE_MAP_WORK = 1_000_000
@@ -86,6 +94,12 @@ def matrix_rank(matrix: AxisBoundMatrix) -> MatrixRankResult:
 # one billion Python loop iterations take minutes.
 _MAX_PYTHON_SUBSTITUTION_WORK = 10_000_000
 _FIXED_SUBSPACE_WALL_SECONDS = 600.0
+_FIXED_SUBSPACE_WORKER = Path(__file__).resolve().with_name(
+    "_fixed_subspace_worker.py"
+)
+_FIXED_SUBSPACE_STDERR_BYTES = 64 * 1024
+_FIXED_SUBSPACE_ADDRESS_SPACE_BYTES = 2 * 1024 * 1024 * 1024
+_FIXED_SUBSPACE_FILE_SIZE_BYTES = 1024 * 1024
 
 
 def _fixed_subspace_checkpoint(deadline: float | None, stage: str) -> None:
@@ -204,6 +218,93 @@ def _homogeneous_fixed_subspace_envelope(
             )
     checkpoint("after result admission")
     return monomial_count
+
+
+def _run_fixed_subspace_linear_algebra(
+    equation_matrix: PrimeFieldMatrix,
+    *,
+    deadline: float,
+) -> tuple[tuple[int, ...], ...]:
+    """Run backend nullspace/RREF work behind a killable process boundary."""
+
+    remaining = deadline - time.monotonic()
+    if request_cancelled():
+        raise OperationExecutionCancelledError(
+            "finite-field fixed-subspace computation cancelled before linear algebra"
+        )
+    if remaining <= 0:
+        raise OperationExecutionTimeoutError(
+            "finite-field fixed-subspace deadline expired before linear algebra"
+        )
+    input_bytes = json.dumps(
+        {
+            "prime": equation_matrix.prime,
+            "entries": [list(row) for row in equation_matrix.entries],
+            "columns": equation_matrix.columns,
+        },
+        separators=(",", ":"),
+    ).encode("utf-8")
+    monomial_count = equation_matrix.columns
+    scalar_bytes = max(1, len(str(equation_matrix.prime - 1)))
+    stdout_limit = max(
+        4_096,
+        128 + monomial_count * monomial_count * (scalar_bytes + 4),
+    )
+    try:
+        with TemporaryDirectory(prefix="jacobian-fixed-subspace-") as directory:
+            completed = run_bounded_process(
+                [sys.executable, str(_FIXED_SUBSPACE_WORKER)],
+                input_bytes=input_bytes,
+                timeout_seconds=remaining,
+                environment=worker_environment(locale="C.UTF-8"),
+                stdout_limit=stdout_limit,
+                stderr_limit=_FIXED_SUBSPACE_STDERR_BYTES,
+                resource_limits=ProcessResourceLimits(
+                    cpu_seconds=max(1, math.ceil(remaining)),
+                    address_space_bytes=_FIXED_SUBSPACE_ADDRESS_SPACE_BYTES,
+                    file_size_bytes=_FIXED_SUBSPACE_FILE_SIZE_BYTES,
+                ),
+                cwd=directory,
+            )
+    except OSError as exc:
+        raise RuntimeError(
+            "bounded finite-field fixed-subspace worker could not start"
+        ) from exc
+    if completed.cancelled:
+        raise OperationExecutionCancelledError(
+            "finite-field fixed-subspace computation cancelled during linear algebra"
+        )
+    if completed.timed_out:
+        raise OperationExecutionTimeoutError(
+            "finite-field fixed-subspace deadline expired during linear algebra"
+        )
+    if (
+        completed.stdout_exceeded
+        or completed.stderr_exceeded
+        or completed.returncode != 0
+    ):
+        raise RuntimeError(
+            "bounded finite-field fixed-subspace worker did not establish a basis"
+        )
+    try:
+        decoded = json.loads(completed.stdout.decode("utf-8"))
+        raw_basis = decoded["basis_rows"]
+        if not isinstance(raw_basis, list) or len(raw_basis) > monomial_count:
+            raise ValueError("malformed fixed-subspace basis row count")
+        basis_rows: list[tuple[int, ...]] = []
+        for raw_row in raw_basis:
+            if not isinstance(raw_row, list) or len(raw_row) != monomial_count:
+                raise ValueError("malformed fixed-subspace basis row")
+            if any(type(value) is not int for value in raw_row):
+                raise ValueError("malformed fixed-subspace basis coefficient")
+            if any(not 0 <= value < equation_matrix.prime for value in raw_row):
+                raise ValueError("fixed-subspace basis coefficient is out of range")
+            basis_rows.append(tuple(raw_row))
+        return tuple(basis_rows)
+    except (KeyError, TypeError, ValueError, UnicodeDecodeError) as exc:
+        raise RuntimeError(
+            "bounded finite-field fixed-subspace worker returned malformed basis"
+        ) from exc
 
 
 def finite_field(
@@ -597,13 +698,12 @@ def homogeneous_fixed_subspace(
     """Compute one exact homogeneous simultaneous fixed subspace over GF(p)."""
 
     execution = current_request_execution()
-    deadline = None
-    if execution is not None:
-        deadline = min(
-            execution.started_at + _FIXED_SUBSPACE_WALL_SECONDS,
-            execution.deadline if execution.deadline is not None else float("inf"),
-        )
-        bind_request_deadline(deadline)
+    started_at = execution.started_at if execution is not None else time.monotonic()
+    deadline = min(
+        started_at + _FIXED_SUBSPACE_WALL_SECONDS,
+        execution.deadline if execution is not None and execution.deadline is not None else float("inf"),
+    )
+    bind_request_deadline(deadline)
 
     def checkpoint(stage: str) -> None:
         _fixed_subspace_checkpoint(deadline, stage)
@@ -640,20 +740,11 @@ def homogeneous_fixed_subspace(
         columns=len(monomial_basis),
     )
     checkpoint("before nullspace")
-    nullspace_rows = nullspace(equation_matrix)
-    checkpoint("after nullspace")
-    if nullspace_rows:
-        reduced, pivots = rref(
-            PrimeFieldMatrix(
-                prime=action.prime,
-                entries=nullspace_rows,
-                columns=len(monomial_basis),
-            )
-        )
-        checkpoint("after basis reduction")
-        basis_rows = reduced[: len(pivots)]
-    else:
-        basis_rows = ()
+    basis_rows = _run_fixed_subspace_linear_algebra(
+        equation_matrix,
+        deadline=deadline,
+    )
+    checkpoint("after basis reduction")
     basis_matrix = PrimeFieldMatrix(
         prime=action.prime,
         entries=basis_rows,

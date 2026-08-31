@@ -39,19 +39,32 @@ def _is_json_sequence(value: Any) -> TypeGuard[list[Any] | tuple[Any, ...]]:
 def _require_bounded_tensor_input_depth(value: Any) -> None:
     """Check nested Python input iteratively before immutable conversion."""
 
-    pending: list[tuple[Any, int]] = [(value, 0)]
+    pending: list[tuple[Any, int, bool]] = [(value, 0, False)]
+    active: set[int] = set()
     while pending:
-        item, depth = pending.pop()
+        item, depth, exiting = pending.pop()
         if depth > _MAX_RATIONAL_TENSOR_INPUT_DEPTH:
             raise _validation_error(
                 "tensor_input_depth",
                 "rational coordinate tensor input exceeds the "
                 f"{_MAX_RATIONAL_TENSOR_INPUT_DEPTH}-level nesting budget",
             )
-        if isinstance(item, dict):
-            pending.extend((nested, depth + 1) for nested in item.values())
-        elif _is_json_sequence(item):
-            pending.extend((nested, depth + 1) for nested in item)
+        is_container = isinstance(item, dict) or _is_json_sequence(item)
+        if not is_container:
+            continue
+        identity = id(item)
+        if exiting:
+            active.remove(identity)
+            continue
+        if identity in active:
+            raise _validation_error(
+                "tensor_input_cycle",
+                "rational coordinate tensor input must be acyclic",
+            )
+        active.add(identity)
+        pending.append((item, depth, True))
+        nested_values = item.values() if isinstance(item, dict) else item
+        pending.extend((nested, depth + 1, False) for nested in nested_values)
 
 
 def _polynomial_key(

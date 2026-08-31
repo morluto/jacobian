@@ -642,8 +642,7 @@ def _validate_canonical_result_bound(bound: FractionBound, ledger: _Ledger) -> i
         # When the denominator is the unit polynomial, there can be no
         # cancellation-induced support expansion, so the tracked sparse
         # term count is the accurate support bound.
-        is_denominator = label == "denominator"
-        denominator_is_unit = is_denominator and all(
+        denominator_is_unit = all(
             degree == 0 for degree in bound.denominator.degrees
         )
         support_terms = polynomial.terms if denominator_is_unit else dense_terms
@@ -917,11 +916,10 @@ def build_lie_derivative_plan(
     )
     tensor_bounds = tuple(_fraction_bound(value, ledger) for value in tensor.components)
     vector_derivatives = {
-        (component, axis): _differentiate_fraction(
-            vector_field.components[component],
-            vector_bounds[component],
-            axis,
-            ledger,
+        (component, axis): _zero_fraction(dimension)
+        if vector_bounds[component].is_zero
+        else _differentiate_fraction(
+            vector_field.components[component], vector_bounds[component], axis, ledger
         )
         for component in range(dimension)
         for axis in range(dimension)
@@ -932,6 +930,8 @@ def build_lie_derivative_plan(
         term_plans: list[LieProductTerm] = []
         result_bound = _zero_fraction(dimension)
         for axis in range(dimension):
+            if vector_bounds[axis].is_zero:
+                continue
             term = LieProductTerm(
                 sign=1,
                 left=FactorReference("VECTOR", axis, None),
@@ -972,6 +972,8 @@ def build_lie_derivative_plan(
                         right=FactorReference("TENSOR", replaced_component, None),
                     )
                     left_bound = vector_derivatives[(axis, component_index)]
+                if left_bound.is_zero:
+                    continue
                 term_plans.append(term)
                 result_bound = _add_fractions(
                     result_bound,

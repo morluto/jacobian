@@ -31,6 +31,22 @@ boundary of one operation: it establishes one clear, independently useful
 mathematical postcondition. It does not mean that the operation is mathematically
 indivisible or internally simple.
 
+## Why a partial vocabulary is useful
+
+An agent investigating a mathematical problem is navigating a large space of
+possible states: known values, assumptions, intermediate results, and open
+questions. A useful operation gives the agent a reliable way to transform one
+state into another—for example, by factoring a polynomial, computing a kernel,
+or deriving an invariant. The agent still chooses which transformation to try
+and how to combine the results; Jacobian supplies the well-defined moves.
+
+The vocabulary does not need to contain every mathematical operation before it
+can provide value. A partial collection is useful when its operations cover
+common, reusable transformations with precise contracts. This is similar to
+giving an agent a library of legal moves in a board game: the library does not
+play the game or search every possible line, but it makes meaningful moves
+explicit and dependable.
+
 ## Semantic atomicity
 
 **Atomic means one stable, reusable mathematical postcondition, not a small or

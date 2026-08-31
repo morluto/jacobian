@@ -272,4 +272,3 @@ def compute_eventual_hitting_profile(
         proper_states=proper_states,
         almost_sure_states=almost_sure,
     )
-

@@ -69,4 +69,4 @@ def solve_linear_system(
     ]
 
 
-__all__ = ["solve_stationary_class", "solve_linear_system"]
+__all__ = ["solve_linear_system", "solve_stationary_class"]

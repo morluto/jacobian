@@ -38,6 +38,9 @@ from jacobian.math.polynomials.real_algebra._common_interlacing_process import (
     _verify_declared_factors,
     run_common_interlacing_profile,
 )
+from jacobian.math.polynomials.real_algebra._common_interlacing_worker import (
+    _primitive_source_from_worker,
+)
 from jacobian.math.polynomials.real_algebra._tools import (
     TOOLS,
     compute_common_interlacing_profile,
@@ -455,6 +458,27 @@ def test_worker_factor_root_counts_require_a_list() -> None:
             [(["1", "0", "-1"], 1)],
             {"0": 0},  # type: ignore[arg-type]
         )
+
+
+def test_worker_admitted_source_projection_requires_canonical_metadata() -> None:
+    projection = {
+        "coefficients": ["1", "0", "-1"],
+        "degree": 2,
+        "height_digits": 1,
+        "term_count": 2,
+    }
+
+    assert _primitive_source_from_worker(projection).coefficients == (1, 0, -1)
+
+    for field, value in (
+        ("coefficients", ["01", "0", "-1"]),
+        ("degree", True),
+        ("height_digits", 2),
+        ("term_count", 0),
+    ):
+        malformed = {**projection, field: value}
+        with pytest.raises(ValueError, match="admitted source projection"):
+            _primitive_source_from_worker(malformed)
 
 
 def test_aggregate_source_bounds_are_checked_before_worker_launch(

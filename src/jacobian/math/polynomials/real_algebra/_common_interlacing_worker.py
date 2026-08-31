@@ -5,8 +5,9 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
+from math import gcd
 
-from jacobian.canonical import parse_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.real_algebra._common_interlacing import (
     _admit_common_interlacing,
@@ -15,9 +16,67 @@ from jacobian.math.polynomials.real_algebra._common_interlacing import (
     _root_profile,
 )
 from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
+    MAX_COMMON_INTERLACING_SOURCE_DEGREE,
+    MAX_COMMON_INTERLACING_SOURCE_TERMS,
     CommonInterlacingProfile,
     LabelledRationalPolynomial,
 )
+
+
+def _primitive_source_from_worker(value: object) -> _PrimitiveSourcePlan:
+    """Decode the parent's admitted primitive-source projection."""
+
+    if not isinstance(value, dict):
+        raise ValueError("worker admitted source projection is malformed")
+    raw_coefficients = value.get("coefficients")
+    degree = value.get("degree")
+    height_digits = value.get("height_digits")
+    term_count = value.get("term_count")
+    if (
+        not isinstance(raw_coefficients, list)
+        or type(degree) is not int
+        or type(height_digits) is not int
+        or type(term_count) is not int
+        or not 1 <= degree <= MAX_COMMON_INTERLACING_SOURCE_DEGREE
+        or not 1 <= term_count <= MAX_COMMON_INTERLACING_SOURCE_TERMS
+        or len(raw_coefficients) != degree + 1
+        or height_digits < 1
+    ):
+        raise ValueError("worker admitted source projection is malformed")
+    if any(not isinstance(coefficient, str) for coefficient in raw_coefficients):
+        raise ValueError("worker admitted source projection is malformed")
+    try:
+        coefficients = tuple(
+            parse_canonical_integer(coefficient) for coefficient in raw_coefficients
+        )
+    except (TypeError, ValueError):
+        raise ValueError("worker admitted source projection is malformed") from None
+    if any(
+        format_canonical_integer(coefficient) != raw
+        for coefficient, raw in zip(coefficients, raw_coefficients, strict=True)
+    ):
+        raise ValueError("worker admitted source projection is malformed")
+    if coefficients[0] <= 0:
+        raise ValueError("worker admitted source projection is malformed")
+    content = 0
+    for coefficient in coefficients:
+        content = gcd(content, abs(coefficient))
+    if content != 1:
+        raise ValueError("worker admitted source projection is malformed")
+    if (
+        max(
+            len(format_canonical_integer(coefficient).lstrip("-"))
+            for coefficient in coefficients
+        )
+        != height_digits
+    ):
+        raise ValueError("worker admitted source projection is malformed")
+    return _PrimitiveSourcePlan(
+        coefficients=coefficients,
+        degree=degree,
+        height_digits=height_digits,
+        term_count=term_count,
+    )
 
 
 def main() -> int:
@@ -36,16 +95,7 @@ def main() -> int:
             LabelledRationalPolynomial.model_validate(source) for source in raw_family
         )
         primitive_sources = tuple(
-            _PrimitiveSourcePlan(
-                coefficients=tuple(
-                    parse_canonical_integer(value) for value in item["coefficients"]
-                ),
-                degree=int(item["degree"]),
-                height_digits=int(item["height_digits"]),
-                term_count=int(item["term_count"]),
-            )
-            for item in raw_primitives
-            if isinstance(item, dict)
+            _primitive_source_from_worker(item) for item in raw_primitives
         )
         if len(primitive_sources) != len(family):
             raise ValueError("worker admitted source projection is malformed")

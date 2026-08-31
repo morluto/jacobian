@@ -20,7 +20,6 @@ from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 _MAX_FIELD_ORDER = 65536
 _MIN_MODULUS_COEFFICIENTS = 2
 _MAX_MODULUS_COEFFICIENTS = 17
-_MAX_AXIS_LABELS = MAX_PRIME_FIELD_MATRIX_AXIS
 _MAX_VALUE_AXIS_LABELS = 256
 _MAX_DERIVATION_WORK = 1_000_000
 _MAX_ACTION_GENERATORS = MAX_PRIME_FIELD_MATRIX_AXIS
@@ -295,7 +294,7 @@ class Axis(StrictModel):
             raise _validation_error(
                 "finite_field.axis_labels_nonempty", "axis labels must be nonempty"
             )
-        if len(self.labels) > _MAX_AXIS_LABELS:
+        if len(self.labels) > _MAX_VALUE_AXIS_LABELS:
             raise _validation_error(
                 "finite_field.axis_exceeds_supported_label_bound",
                 "axis exceeds the supported label bound",
@@ -675,7 +674,7 @@ class FiniteDimensionalSubspace(StrictModel):
             * len(first.column_axis.labels)
             * self.presentation.degree
         )
-        if flattened_dimension * len(self.basis) > _MAX_AXIS_LABELS**2:
+        if flattened_dimension * len(self.basis) > _MAX_VALUE_AXIS_LABELS**2:
             raise _validation_error(
                 "finite_field.subspace_rank_matrix_exceeds_supported_bound",
                 "subspace rank matrix exceeds its supported bound",

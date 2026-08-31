@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.finite_fields.values import (
     Axis,
     DirectionRankLedger,
@@ -21,7 +21,16 @@ _MAX_PROJECTIVE_POINTS = 4_096
 _MAX_DIRECTION_RANK_WORK = 1_000_000
 
 
-class HomogeneousFixedSubspaceRequest(StrictModel):
+class _FiniteFieldRequest(StrictModel):
+    """Strict wire request whose JSON arrays become canonical tuples."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_json_containers(cls, data: Any) -> Any:
+        return canonicalize_json_containers(data)
+
+
+class HomogeneousFixedSubspaceRequest(_FiniteFieldRequest):
     """Compute one homogeneous fixed space for explicit action generators."""
 
     action: PrimeFieldLinearAction
@@ -60,47 +69,47 @@ class HomogeneousFixedSubspaceRequest(StrictModel):
         return {**data, "action": normalized_action}
 
 
-class RestrictScalarsRequest(StrictModel):
+class RestrictScalarsRequest(_FiniteFieldRequest):
     subspace: FiniteDimensionalSubspace
     direction: ProjectivePoint
 
 
-class LinearMapRankRequest(StrictModel):
+class LinearMapRankRequest(_FiniteFieldRequest):
     subspace: FiniteDimensionalSubspace
     direction: ProjectivePoint
 
 
-class ProjectiveLineRequest(StrictModel):
+class ProjectiveLineRequest(_FiniteFieldRequest):
     presentation: FiniteFieldPresentation
     axis: Axis
 
 
-class DirectionRankLedgerRequest(StrictModel):
+class DirectionRankLedgerRequest(_FiniteFieldRequest):
     subspace: FiniteDimensionalSubspace
     directions: ProjectiveLine
 
 
-class OrbitDistributionRequest(StrictModel):
+class OrbitDistributionRequest(_FiniteFieldRequest):
     ledger: DirectionRankLedger
 
 
-class FiniteMapTableRequest(StrictModel):
+class FiniteMapTableRequest(_FiniteFieldRequest):
     polynomial_map: FinitePolynomialMap
 
 
-class FiberPartitionRequest(StrictModel):
+class FiberPartitionRequest(_FiniteFieldRequest):
     table: FiniteMapTable
 
 
-class CollisionRequest(StrictModel):
+class CollisionRequest(_FiniteFieldRequest):
     table: FiniteMapTable
 
 
-class PermutationRequest(StrictModel):
+class PermutationRequest(_FiniteFieldRequest):
     table: FiniteMapTable
 
 
-class PaleyTournamentRequest(StrictModel):
+class PaleyTournamentRequest(_FiniteFieldRequest):
     presentation: FiniteFieldPresentation
 
 

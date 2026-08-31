@@ -289,7 +289,7 @@ def _retained_action_bytes(action: RationalMatrixAction) -> int:
                 "the retained rational matrix action leaves no room for the canonical result",
             )
     try:
-        retained_payload = action.model_dump(mode="json")
+        retained_payload: object = action.model_dump(mode="json")
         retained_payload = _normalize_retained_strings(retained_payload)
         source_bytes = len(encode_strict_json(retained_payload))
     except CanonicalizationError:

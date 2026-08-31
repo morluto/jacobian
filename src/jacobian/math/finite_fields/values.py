@@ -21,6 +21,7 @@ _MAX_FIELD_ORDER = 65536
 _MIN_MODULUS_COEFFICIENTS = 2
 _MAX_MODULUS_COEFFICIENTS = 17
 _MAX_AXIS_LABELS = MAX_PRIME_FIELD_MATRIX_AXIS
+_MAX_VALUE_AXIS_LABELS = 256
 _MAX_DERIVATION_WORK = 1_000_000
 _MAX_ACTION_GENERATORS = MAX_PRIME_FIELD_MATRIX_AXIS
 # The matrix carrier and the fixed-subspace operation both cap the ambient
@@ -561,6 +562,21 @@ class HomogeneousFixedSubspace(StrictModel):
 class AxisBoundMatrix(StrictModel):
     """An immutable matrix bound to a field presentation and ordered axes."""
 
+    @model_validator(mode="before")
+    @classmethod
+    def require_legacy_axis_bound(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        for field in ("row_axis", "column_axis"):
+            axis = data.get(field)
+            labels = _raw_field(axis, "labels")
+            if isinstance(labels, (list, tuple)) and len(labels) > _MAX_VALUE_AXIS_LABELS:
+                raise _validation_error(
+                    "finite_field.axis_exceeds_supported_label_bound",
+                    "matrix axes exceed the supported label bound",
+                )
+        return data
+
     presentation: FiniteFieldPresentation
     row_axis: Axis
     column_axis: Axis
@@ -611,6 +627,19 @@ class FiniteDimensionalSubspace(StrictModel):
     presentation: FiniteFieldPresentation
     basis_axis: Axis
     basis: tuple[AxisBoundMatrix, ...]
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_basis_axis_bound(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            axis = data.get("basis_axis")
+            labels = _raw_field(axis, "labels")
+            if isinstance(labels, (list, tuple)) and len(labels) > _MAX_VALUE_AXIS_LABELS:
+                raise _validation_error(
+                    "finite_field.axis_exceeds_supported_label_bound",
+                    "subspace basis axes exceed the supported label bound",
+                )
+        return data
 
     @model_validator(mode="after")
     def validate_subspace(self) -> Self:

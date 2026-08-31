@@ -92,22 +92,26 @@ def compute_matrix_rank(
         # The worst case is full rank with all pivot labels present.
         max_rank = min(len(matrix.row_axis.labels), len(matrix.column_axis.labels))
         try:
-            longest_row_label = max(
-                matrix.row_axis.labels,
-                key=lambda label: len(encode_strict_json(label)),
-                default="",
+            pivot_row_labels = tuple(
+                sorted(
+                    matrix.row_axis.labels,
+                    key=lambda label: (len(encode_strict_json(label)), label),
+                    reverse=True,
+                )[:max_rank]
             )
-            longest_column_label = max(
-                matrix.column_axis.labels,
-                key=lambda label: len(encode_strict_json(label)),
-                default="",
+            pivot_column_labels = tuple(
+                sorted(
+                    matrix.column_axis.labels,
+                    key=lambda label: (len(encode_strict_json(label)), label),
+                    reverse=True,
+                )[:max_rank]
             )
             result_probe = encode_strict_json(
                 {
                     "matrix": matrix.model_dump(mode="json"),
                     "rank": max_rank,
-                    "pivot_rows": [longest_row_label] * max_rank,
-                    "pivot_columns": [longest_column_label] * max_rank,
+                    "pivot_rows": pivot_row_labels,
+                    "pivot_columns": pivot_column_labels,
                 }
             )
         except CanonicalizationError as exc:

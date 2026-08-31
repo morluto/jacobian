@@ -570,14 +570,18 @@ def _count_2x2_inertia(
 
 def _eliminate_1x1(matrix: list[list[Fraction]], index: int, pivot: int) -> int:
     _swap_symmetric(matrix, index, pivot)
+    original = [row[:] for row in matrix]
     diagonal = matrix[index][index]
     for row in range(index + 1, len(matrix)):
-        if matrix[row][index] == 0:
+        if original[row][index] == 0:
             continue
-        factor = matrix[row][index] / diagonal
+        factor = original[row][index] / diagonal
         for col in range(index + 1, len(matrix)):
-            matrix[row][col] -= factor * matrix[index][col]
-        for col in range(index + 1, len(matrix)):
+            matrix[row][col] = (
+                original[row][col] - factor * original[index][col]
+            )
+    for row in range(index + 1, len(matrix)):
+        for col in range(row + 1, len(matrix)):
             matrix[col][row] = matrix[row][col]
         matrix[row][index] = Fraction(0)
         matrix[index][row] = Fraction(0)
@@ -610,6 +614,7 @@ def _eliminate_2x2(matrix: list[list[Fraction]], index: int) -> tuple[int, int, 
         - matrix[index][index + 1] ** 2
     )
     if index + 2 < len(matrix) and det != 0:
+        original = [row[:] for row in matrix]
         inv00 = matrix[index + 1][index + 1] / det
         inv01 = -matrix[index][index + 1] / det
         inv11 = matrix[index][index] / det
@@ -618,15 +623,18 @@ def _eliminate_2x2(matrix: list[list[Fraction]], index: int) -> tuple[int, int, 
             matrix[index + 1][col] for col in range(index + 2, len(matrix))
         )
         for row in range(index + 2, len(matrix)):
-            left = matrix[row][index]
-            right = matrix[row][index + 1]
+            left = original[row][index]
+            right = original[row][index + 1]
             coeff0 = left * inv00 + right * inv01
             coeff1 = left * inv01 + right * inv11
             for offset, col in enumerate(range(index + 2, len(matrix))):
-                matrix[row][col] -= (
-                    coeff0 * pivot_row0[offset] + coeff1 * pivot_row1[offset]
+                matrix[row][col] = (
+                    original[row][col]
+                    - coeff0 * pivot_row0[offset]
+                    - coeff1 * pivot_row1[offset]
                 )
-            for col in range(index + 2, len(matrix)):
+        for row in range(index + 2, len(matrix)):
+            for col in range(row + 1, len(matrix)):
                 matrix[col][row] = matrix[row][col]
             matrix[row][index] = Fraction(0)
             matrix[row][index + 1] = Fraction(0)
@@ -688,17 +696,20 @@ def _symmetric_algebraic_inertia(
                 n_pos += 1
             else:
                 n_neg += 1
+            original = [row[:] for row in a]
             for row in range(index + 1, n):
-                if not a[row][index]:
+                if not original[row][index]:
                     continue
-                factor = a[row][index] / diagonal
+                factor = original[row][index] / diagonal
                 for column in range(row, n):
-                    a[row][column] -= factor * a[index][column]
-                a[row][index] = 0
-                a[index][row] = 0
+                    a[row][column] = (
+                        original[row][column] - factor * original[index][column]
+                    )
             for row in range(index + 1, n):
                 for column in range(row + 1, n):
                     a[column][row] = a[row][column]
+                a[row][index] = 0
+                a[index][row] = 0
             index += 1
             continue
 
@@ -725,18 +736,21 @@ def _symmetric_algebraic_inertia(
         n_pos += 1
         n_neg += 1
         if index + 2 < n:
+            original = [row[:] for row in a]
             inverse_off_diagonal = b**-1
             for row in range(index + 2, n):
-                left = a[row][index]
-                right = a[row][index + 1]
+                left = original[row][index]
+                right = original[row][index + 1]
                 coefficient0 = right * inverse_off_diagonal
                 coefficient1 = left * inverse_off_diagonal
                 for column in range(index + 2, n):
-                    a[row][column] -= (
-                        coefficient0 * a[index][column]
-                        + coefficient1 * a[index + 1][column]
+                    a[row][column] = (
+                        original[row][column]
+                        - coefficient0 * original[index][column]
+                        - coefficient1 * original[index + 1][column]
                     )
-                for column in range(index + 2, n):
+            for row in range(index + 2, n):
+                for column in range(row + 1, n):
                     a[column][row] = a[row][column]
                 a[row][index] = 0
                 a[row][index + 1] = 0

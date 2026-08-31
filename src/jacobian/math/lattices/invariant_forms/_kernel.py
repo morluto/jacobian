@@ -95,6 +95,7 @@ class _ConstraintPlan:
 
     positions: tuple[CoefficientPosition, ...]
     constraints: tuple[IntegerConstraint, ...]
+    expansion_digit_work: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -202,11 +203,11 @@ def _require_constraint_expansion_envelope(
     kind: FormKind,
     coefficient_count: int,
     coefficient_cells: int,
-) -> None:
+) -> int:
     """Bound Fraction construction, products, and row normalization by height."""
 
     if not action.generators or coefficient_count == 0:
-        return
+        return 0
     if isinstance(action, EmbeddedRealNumberFieldMatrixAction):
         values = tuple(
             coordinate
@@ -309,6 +310,7 @@ def _require_constraint_expansion_envelope(
             "congruence expansion and primitive row normalization exceed the "
             f"{MAX_CONSTRAINT_DIGIT_WORK:,}-unit digit-work bound",
         )
+    return digit_work
 
 
 def _normalize_retained_strings(value: object) -> object:
@@ -550,7 +552,7 @@ def _build_constraint_plan(
             constraints=(),
             source_bytes=source_bytes,
         )
-        return _ConstraintPlan(positions=(), constraints=())
+        return _ConstraintPlan(positions=(), constraints=(), expansion_digit_work=0)
     cell_count = (
         constraint_coefficient_count(dimension, len(action.generators), kind)
         * field_degree
@@ -561,7 +563,7 @@ def _build_constraint_plan(
             "the congruence expansion exceeds the structural bound of "
             f"{MAX_CONSTRAINT_CELLS} coefficients",
         )
-    _require_constraint_expansion_envelope(
+    expansion_digit_work = _require_constraint_expansion_envelope(
         action,
         kind=kind,
         coefficient_count=len(positions),
@@ -637,7 +639,11 @@ def _build_constraint_plan(
         constraints=ordered_constraints,
         source_bytes=source_bytes,
     )
-    plan = _ConstraintPlan(positions=positions, constraints=ordered_constraints)
+    plan = _ConstraintPlan(
+        positions=positions,
+        constraints=ordered_constraints,
+        expansion_digit_work=expansion_digit_work,
+    )
     _require_integer_kernel_work_envelope(plan)
     return plan
 
@@ -748,17 +754,12 @@ def _admit_invariant_bilinear_form_lattice(
         kind,
         recognized_field=recognized_field,
     )
-    expansion_work = 0
+    expansion_work = plan.expansion_digit_work
     if plan.positions and plan.constraints:
         constraint_digits = max(
             _integer_digit_count(value)
             for constraint in plan.constraints
             for value in constraint
-        )
-        expansion_work = (
-            len(action.generators)
-            * len(action.coordinate_axis) ** 2
-            * constraint_digits
         )
         kernel_work = (
             len(plan.positions) ** 2

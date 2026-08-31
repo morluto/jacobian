@@ -84,6 +84,20 @@ class TestInertia:
         assert result.n_negative == 1
         assert result.definiteness == "indefinite"
 
+    def test_singular_all_ones_matrix_uses_original_schur_entries(self) -> None:
+        req = _inertia_request(
+            3,
+            {
+                (row, column): "1"
+                for row in range(3)
+                for column in range(3)
+            },
+        )
+
+        result = compute_inertia(req)
+
+        assert (result.n_positive, result.n_negative, result.n_zero) == (1, 0, 2)
+
     def test_off_diagonal_hyperbolic_pair(self) -> None:
         req = _inertia_request(2, {(0, 1): "1"})
         result = compute_inertia(req)

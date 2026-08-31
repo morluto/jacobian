@@ -456,6 +456,7 @@ def test_near_envelope_constraint_count_matches_realized_expansion(
     )
     assert charged == 65_536
     assert plan.constraints == ()
+    assert plan.expansion_digit_work > 0
 
 
 def test_source_height_is_coupled_to_constraint_expansion_work(

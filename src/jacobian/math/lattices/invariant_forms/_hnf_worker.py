@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 
@@ -24,7 +25,8 @@ def _decode_integer(value: object) -> int:
 
 
 def main() -> None:
-    payload = loads_strict_json(sys.stdin.buffer.read())
+    input_bytes = sys.stdin.buffer.read()
+    payload = loads_strict_json(input_bytes)
     coefficient_count = payload["coefficient_count"]
     constraints = payload["constraints"]
     constraint_count = len(constraints)
@@ -53,6 +55,7 @@ def main() -> None:
     ]
     json.dump(
         {
+            "request_digest": hashlib.sha256(input_bytes).hexdigest(),
             "primitive_kernel": primitive_kernel,
             "constraint_rank": coefficient_count - len(primitive_kernel),
         },

@@ -11,7 +11,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import parse_canonical_integer
-from jacobian.math._labels import OpaqueLabel
+from jacobian.math._labels import MAX_OPAQUE_LABEL_LENGTH, OpaqueLabel
 from jacobian.math.matrices.values import (
     MAX_RATIONAL_MATRIX_ORDER,
     EmbeddedRealSimpleNumberFieldMatrix,
@@ -101,6 +101,11 @@ def _canonicalize_generator_order(data: dict[str, object]) -> dict[str, object]:
         )
         if not isinstance(label, str):
             return normalized
+        if len(label) > MAX_OPAQUE_LABEL_LENGTH:
+            raise _validation_error(
+                "budget_exceeded",
+                f"generator labels have at most {MAX_OPAQUE_LABEL_LENGTH} characters",
+            )
         labelled_generators.append((label, generator))
     normalized["generators"] = tuple(
         generator
@@ -146,6 +151,11 @@ def _canonicalize_coordinate_axis(data: dict[str, object]) -> dict[str, object]:
                     "invalid_coordinate_label",
                     "coordinate_axis labels must be strings",
                 )
+            if len(label) > MAX_OPAQUE_LABEL_LENGTH:
+                raise _validation_error(
+                    "budget_exceeded",
+                    f"coordinate labels have at most {MAX_OPAQUE_LABEL_LENGTH} characters",
+                )
             if unicodedata.normalize("NFC", label) != label:
                 raise _validation_error(
                     "noncanonical_coordinate_label",
@@ -178,6 +188,24 @@ def _reject_nested_rational_components(entries: object) -> None:
                         "rational_component",
                         f"rational {key} must be a string, not {type(value).__name__}",
                     )
+
+
+def _reject_oversized_raw_matrix(entries: object) -> None:
+    """Reject raw matrix axes before inspecting their scalar cells."""
+
+    if not isinstance(entries, (list, tuple)):
+        return
+    if len(entries) > MAX_RATIONAL_MATRIX_ORDER:
+        raise _validation_error(
+            "budget_exceeded",
+            f"generator matrices have at most {MAX_RATIONAL_MATRIX_ORDER} rows",
+        )
+    for row in entries:
+        if isinstance(row, (list, tuple)) and len(row) > MAX_RATIONAL_MATRIX_ORDER:
+            raise _validation_error(
+                "budget_exceeded",
+                f"generator matrices have at most {MAX_RATIONAL_MATRIX_ORDER} columns",
+            )
 
 
 def _require_raw_action_envelope(data: object) -> object:  # noqa: C901
@@ -221,6 +249,7 @@ def _require_raw_action_envelope(data: object) -> object:  # noqa: C901
                 raw_entries = raw_matrix.get("entries")
                 if not isinstance(raw_entries, (list, tuple)):
                     continue
+                _reject_oversized_raw_matrix(raw_entries)
                 _reject_nested_rational_components(raw_entries)
                 for row in raw_entries:
                     if isinstance(row, (list, tuple)):
@@ -264,6 +293,7 @@ def _require_raw_action_envelope(data: object) -> object:  # noqa: C901
             raw_entries = raw_matrix.get("entries")
             if not isinstance(raw_entries, (list, tuple)):
                 continue
+            _reject_oversized_raw_matrix(raw_entries)
             for row in raw_entries:
                 if isinstance(row, (list, tuple)):
                     total_cells += len(row)
@@ -507,6 +537,30 @@ class IntegralBilinearForm(StrictModel):
             )
         axis = data.get("coordinate_axis")
         normalized = dict(data)
+        if isinstance(axis, (str, bytes, Mapping)) or axis is None:
+            return normalized
+        if not isinstance(axis, (list, tuple)):
+            try:
+                axis_iterator = iter(cast(Iterable[object], axis))
+            except TypeError:
+                return normalized
+            axis_values: list[object] = []
+            for _index in range(MAX_ACTION_DIMENSION + 1):
+                try:
+                    axis_values.append(next(axis_iterator))
+                except StopIteration:
+                    break
+            else:
+                raise _validation_error(
+                    "budget_exceeded",
+                    f"coordinate_axis has at most {MAX_ACTION_DIMENSION} labels",
+                )
+            axis = tuple(axis_values)
+        if len(axis) > MAX_ACTION_DIMENSION:
+            raise _validation_error(
+                "budget_exceeded",
+                f"coordinate_axis has at most {MAX_ACTION_DIMENSION} labels",
+            )
         if isinstance(axis, (list, tuple)):
             for label in axis:
                 if not isinstance(label, str):
@@ -633,6 +687,16 @@ class InvariantBilinearFormLatticeRequest(StrictModel):
     def require_raw_operation_envelope(cls, data: Any) -> Any:
         if isinstance(data, dict):
             action = data.get("action")
+            if isinstance(action, dict):
+                raw_axis = action.get("coordinate_axis")
+                if (
+                    isinstance(raw_axis, (list, tuple))
+                    and len(raw_axis) > MAX_ACTION_DIMENSION
+                ):
+                    raise _validation_error(
+                        "budget_exceeded",
+                        f"coordinate_axis has at most {MAX_ACTION_DIMENSION} labels",
+                    )
             if isinstance(action, dict) and isinstance(
                 action.get("coordinate_axis"), (list, tuple)
             ):

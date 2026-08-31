@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from fractions import Fraction
 from itertools import pairwise
 from typing import Annotated, Any, ClassVar, Literal, Self
@@ -71,15 +72,54 @@ def _require_raw_matrix_envelope(  # noqa: C901
     if set(data).difference({"domain", "entries"}):
         raise _validation_error("shape_mismatch", f"{label} contains unknown fields")
     entries = data.get("entries")
-    if not isinstance(entries, (list, tuple)):
+    if isinstance(entries, (str, bytes, Mapping)):
         return data
+    if not isinstance(entries, (list, tuple)):
+        try:
+            iterator = iter(entries)
+        except TypeError:
+            return data
+        materialized: list[object] = []
+        for _index in range(maximum_axis + 1):
+            try:
+                materialized.append(next(iterator))
+            except StopIteration:
+                break
+        else:
+            raise _validation_error(
+                "budget_exceeded", f"{label} has at most {maximum_axis} rows"
+            )
+        entries = tuple(materialized)
+        data = dict(data)
+        data["entries"] = entries
     if len(entries) > maximum_axis:
         raise _validation_error(
             "budget_exceeded", f"{label} has at most {maximum_axis} rows"
         )
+    normalized_rows: list[object] = []
     for row in entries:
         if not isinstance(row, (list, tuple)):
-            continue
+            if isinstance(row, (str, bytes, Mapping)):
+                normalized_rows.append(row)
+                continue
+            try:
+                row_iterator = iter(row)
+            except TypeError:
+                normalized_rows.append(row)
+                continue
+            row_values: list[object] = []
+            for _index in range(maximum_axis + 1):
+                try:
+                    row_values.append(next(row_iterator))
+                except StopIteration:
+                    break
+            else:
+                raise _validation_error(
+                    "budget_exceeded",
+                    f"{label} has at most {maximum_axis} columns",
+                )
+            row = tuple(row_values)
+        normalized_rows.append(row)
         if len(row) > maximum_axis:
             raise _validation_error(
                 "budget_exceeded", f"{label} has at most {maximum_axis} columns"
@@ -139,6 +179,9 @@ def _require_raw_matrix_envelope(  # noqa: C901
                         f"{label} scalars are limited to "
                         f"{MAX_MATRIX_SCALAR_DIGITS} decimal digits",
                     )
+    if normalized_rows and tuple(normalized_rows) != entries:
+        data = dict(data)
+        data["entries"] = tuple(normalized_rows)
     return data
 
 

@@ -225,7 +225,10 @@ def _first_rank_minor(
     for row in range(len(matrix)):
         candidate = (*rows, row)
         candidate_rank = _exact_integer_rank(
-            tuple(tuple(matrix[index][column] for column in all_columns) for index in candidate)
+            tuple(
+                tuple(matrix[index][column] for column in all_columns)
+                for index in candidate
+            )
         )
         if candidate_rank > current_rank:
             rows.append(row)
@@ -270,10 +273,7 @@ def _selected_zero_lift_base_point_height(
         return 1
     rows, columns = _first_rank_minor(displacement, rank)
     augmented = [
-        [
-            Fraction(displacement[row][column])
-            for column in columns
-        ]
+        [Fraction(displacement[row][column]) for column in columns]
         + [-translation[row]]
         for row in rows
     ]
@@ -305,17 +305,17 @@ def _selected_zero_lift_base_point_height(
     # lift to be valid.  If they do not, the worker needs its character-lattice
     # lift and the conservative bound remains necessary.
     for row, equation in enumerate(displacement):
-        if sum(
-            Fraction(equation[column]) * solution[index]
-            for index, column in enumerate(columns)
-        ) != -translation[row]:
+        if (
+            sum(
+                Fraction(equation[column]) * solution[index]
+                for index, column in enumerate(columns)
+            )
+            != -translation[row]
+        ):
             return None
     return max(
         1,
-        *(
-            max((value % 1).numerator, (value % 1).denominator)
-            for value in solution
-        ),
+        *(max((value % 1).numerator, (value % 1).denominator) for value in solution),
     )
 
 

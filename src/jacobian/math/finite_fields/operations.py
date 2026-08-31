@@ -95,9 +95,7 @@ def matrix_rank(matrix: AxisBoundMatrix) -> MatrixRankResult:
 # one billion Python loop iterations take minutes.
 _MAX_PYTHON_SUBSTITUTION_WORK = 10_000_000
 _FIXED_SUBSPACE_WALL_SECONDS = 600.0
-_FIXED_SUBSPACE_WORKER = Path(__file__).resolve().with_name(
-    "_fixed_subspace_worker.py"
-)
+_FIXED_SUBSPACE_WORKER = Path(__file__).resolve().with_name("_fixed_subspace_worker.py")
 _FIXED_SUBSPACE_STDERR_BYTES = 64 * 1024
 _FIXED_SUBSPACE_ADDRESS_SPACE_BYTES = 2 * 1024 * 1024 * 1024
 _FIXED_SUBSPACE_FILE_SIZE_BYTES = 1024 * 1024
@@ -717,7 +715,9 @@ def homogeneous_fixed_subspace(
     started_at = execution.started_at if execution is not None else time.monotonic()
     deadline = min(
         started_at + _FIXED_SUBSPACE_WALL_SECONDS,
-        execution.deadline if execution is not None and execution.deadline is not None else float("inf"),
+        execution.deadline
+        if execution is not None and execution.deadline is not None
+        else float("inf"),
     )
     bind_request_deadline(deadline)
 

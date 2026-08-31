@@ -44,6 +44,7 @@ from jacobian.math.polynomials.real_algebra._plane_component_models import (
     MAX_PLANE_COMPONENT_TERMS_PER_POLYNOMIAL,
     MAX_PLANE_COMPONENT_TOTAL_DEGREE,
     MAX_PLANE_COMPONENT_TOTAL_TERMS,
+    PLANE_COMPONENT_WALL_SECONDS,
     IsolatedRealPlanePoint,
     PlaneComponentNoncompletionStatus,
     PlaneComponentProfileComputed,
@@ -62,7 +63,6 @@ from jacobian.math.polynomials.real_algebra._qepcad_plane_process import (
 )
 from jacobian.math.polynomials.values import require_polynomial_budget
 
-PLANE_COMPONENT_WALL_SECONDS = 600.0
 _PLANE_COMPONENT_FINALIZATION_SECONDS = 5.0
 _PLANE_COMPONENT_OPERATION_VERSION: Literal["1"] = "1"
 _GIT_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
@@ -248,13 +248,15 @@ def _noncompletion(
     revision = os.environ.get("JACOBIAN_REVISION", "unknown")
     if not _GIT_SHA_PATTERN.fullmatch(revision):
         revision = "unknown"
-    timeout_layer: Literal["QEPCAD", "SAMPLE_RECOGNITION"] | None = (
-        "SAMPLE_RECOGNITION"
-        if outcome.reason is not None and outcome.reason.startswith("SAMPLE_")
-        else "QEPCAD"
-        if outcome.reason is not None and outcome.reason.startswith("QEPCAD_")
-        else None
-    )
+    timeout_layer: Literal["QEPCAD", "SAMPLE_RECOGNITION"] | None = None
+    if status == "TIMEOUT":
+        timeout_layer = (
+            "SAMPLE_RECOGNITION"
+            if outcome.reason is not None and outcome.reason.startswith("SAMPLE_")
+            else "QEPCAD"
+            if outcome.reason is not None and outcome.reason.startswith("QEPCAD_")
+            else None
+        )
     elapsed_ms = (
         round(max(0.0, time.monotonic() - started_at) * 1_000)
         if started_at is not None
@@ -267,7 +269,7 @@ def _noncompletion(
             status=status,
             reason=outcome.reason,
             request_digest=request_digest,
-            budget_seconds=budget_seconds,
+            budget_seconds=min(budget_seconds, PLANE_COMPONENT_WALL_SECONDS),
             elapsed_ms=elapsed_ms,
             timeout_layer=timeout_layer,
             operation_version=_PLANE_COMPONENT_OPERATION_VERSION,

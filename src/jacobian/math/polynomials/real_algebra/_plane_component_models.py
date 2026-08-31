@@ -6,7 +6,13 @@ from collections.abc import Mapping
 from enum import StrEnum
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import Field, StrictInt, WithJsonSchema, model_validator
+from pydantic import (
+    Field,
+    StrictInt,
+    StringConstraints,
+    WithJsonSchema,
+    model_validator,
+)
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
@@ -46,6 +52,9 @@ MAX_PLANE_COMPONENT_SAMPLE_DEGREE = MAX_PLANE_COMPONENT_POINT_DEGREE
 MAX_PLANE_COMPONENT_SAMPLE_COEFFICIENT_DIGITS = (
     MAX_PLANE_COMPONENT_POINT_COEFFICIENT_DIGITS
 )
+# The operation's owner deadline is also the largest replay budget that a
+# non-completion may report.
+PLANE_COMPONENT_WALL_SECONDS = 600
 # Conservative owner headroom below the canonical structured-value boundary.
 MAX_PLANE_COMPONENT_RESULT_BYTES = CanonicalLimits().max_output_bytes - 4_096
 
@@ -395,11 +404,18 @@ class PlaneComponentProfileNoncompletion(StrictModel):
     status: PlaneComponentNoncompletionStatus
     reason: PlaneComponentNoncompletionReason
     request_digest: str | None = None
-    budget_seconds: StrictInt | None = Field(default=None, ge=1)
+    budget_seconds: StrictInt | None = Field(
+        default=None, ge=1, le=PLANE_COMPONENT_WALL_SECONDS
+    )
     elapsed_ms: StrictInt | None = Field(default=None, ge=0)
     timeout_layer: Literal["QEPCAD", "SAMPLE_RECOGNITION"] | None = None
     operation_version: Literal["1"] = "1"
-    repository_revision: str = "unknown"
+    repository_revision: Annotated[
+        str,
+        StringConstraints(
+            pattern=r"^(?:unknown|[0-9a-f]{40})$", max_length=40, strict=True
+        ),
+    ] = "unknown"
 
     @model_validator(mode="after")
     def bind_reason_to_status(self) -> Self:
@@ -462,6 +478,11 @@ class PlaneComponentProfileNoncompletion(StrictModel):
                     "timeout_metadata",
                     "timeout_layer must match the timeout reason",
                 )
+        if self.status != "TIMEOUT" and self.timeout_layer is not None:
+            raise _validation_error(
+                "timeout_metadata",
+                "timeout_layer is only valid for timeout outcomes",
+            )
         return self
 
 
@@ -1048,6 +1069,7 @@ __all__ = [
     "MAX_PLANE_COMPONENT_TERMS_PER_POLYNOMIAL",
     "MAX_PLANE_COMPONENT_TOTAL_DEGREE",
     "MAX_PLANE_COMPONENT_TOTAL_TERMS",
+    "PLANE_COMPONENT_WALL_SECONDS",
     "IsolatedRealPlanePoint",
     "PlaneComponentProfileComputed",
     "PlaneComponentProfileNoncompletion",

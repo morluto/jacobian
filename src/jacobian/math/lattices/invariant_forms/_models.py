@@ -109,6 +109,34 @@ def _require_raw_action_envelope(data: object) -> object:
             "budget_exceeded",
             f"an action has at most {MAX_ACTION_GENERATORS} generators",
         )
+    # Inspect each raw generator matrix against the declared axis dimension
+    # before Pydantic canonicalizes every rational cell.  A native caller
+    # can reuse one raw matrix object across generators, so bound the total
+    # cell count from the raw shapes rather than the first dimension alone.
+    if isinstance(axis, (list, tuple)) and axis:
+        dimension = len(axis)
+        total_cells = 0
+        for generator in generators:
+            if not isinstance(generator, dict):
+                continue
+            raw_matrix = generator.get("matrix")
+            if not isinstance(raw_matrix, dict):
+                continue
+            raw_entries = raw_matrix.get("entries")
+            if not isinstance(raw_entries, (list, tuple)):
+                continue
+            for row in raw_entries:
+                if not isinstance(row, (list, tuple)):
+                    continue
+                total_cells += len(row)
+        if dimension > 0 and total_cells > 0:
+            max_cells = dimension * dimension * len(generators)
+            if total_cells > max_cells:
+                raise _validation_error(
+                    "budget_exceeded",
+                    "generator matrix rows exceed the declared coordinate_axis"
+                    " dimension before nested parsing",
+                )
     return _canonicalize_generator_order(data)
 
 

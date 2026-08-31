@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 from collections.abc import Sequence
 from fractions import Fraction
 from typing import Any
@@ -10,6 +12,7 @@ import pytest
 from pydantic import ValidationError
 from sympy import Matrix
 from tests.fixtures.accounting import assert_charged_work_parity
+from jacobian._execution import request_execution, bind_request_deadline, OperationExecutionTimeoutError, request_cancellation, OperationExecutionCancelledError
 
 from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
@@ -492,3 +495,41 @@ def test_catalog_publishes_typed_operation_and_valid_example() -> None:
     assert (
         operation.result_type.model_validate(result.model_dump(mode="json")) == result
     )
+
+
+def test_oversized_generator_matrices_are_rejected_before_nested_parsing() -> None:
+    """Raw matrix cells exceeding the axis dimension are rejected cheaply."""
+    axis = ["e1"]
+    matrix = [[_rational(1) for _ in range(128)] for _ in range(128)]
+    action = {
+        "coordinate_axis": axis,
+        "generators": [{"label": "g", "matrix": {"entries": matrix}}],
+    }
+    with pytest.raises(ValidationError) as exc_info:
+        RationalMatrixAction.model_validate(action)
+    assert exc_info.value.errors()[0]["type"] == (
+        "lattice.invariant_form.budget_exceeded"
+    )
+
+
+def test_cancellation_during_constraint_expansion() -> None:
+    """A cancelled request raises during constraint expansion."""
+
+    class _Cancelled:
+        def is_set(self) -> bool:
+            return True
+
+    action = _action([("A", [[1, 1], [0, 1]])])
+    with request_execution(time.monotonic()), request_cancellation(_Cancelled()):
+        with pytest.raises(OperationExecutionCancelledError):
+            compute_invariant_bilinear_form_lattice(action, "BILINEAR")
+
+
+def test_deadline_expiration_before_constraint_expansion() -> None:
+    """An expired deadline raises before constraint expansion."""
+
+    action = _action([("A", [[1, 1], [0, 1]])])
+    with request_execution(time.monotonic()):
+        bind_request_deadline(time.monotonic() - 1)
+        with pytest.raises(OperationExecutionTimeoutError):
+            compute_invariant_bilinear_form_lattice(action, "BILINEAR")

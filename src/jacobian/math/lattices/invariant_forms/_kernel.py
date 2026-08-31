@@ -6,6 +6,12 @@ from dataclasses import dataclass
 from fractions import Fraction
 from math import ceil, gcd, lcm, log10
 
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    current_request_execution,
+    request_cancelled,
+)
 from jacobian.canonical import (
     CanonicalizationError,
     CanonicalLimits,
@@ -28,6 +34,45 @@ from jacobian.math.matrices.values import MAX_MATRIX_SCALAR_DIGITS
 MAX_CONSTRAINT_COMPONENT_DIGITS = 65_536
 MAX_STORED_CONSTRAINT_DIGITS = 2_000_000
 MAX_INVARIANT_FORM_RESULT_BYTES = CanonicalLimits().max_output_bytes
+
+_INVARIANT_FORM_WALL_SECONDS = 120.0
+
+
+def _require_active_request(stage: str) -> None:
+    """Raise if the request deadline expired or was cancelled during *stage*."""
+
+    if request_cancelled():
+        raise OperationExecutionCancelledError(
+            f"invariant-form lattice cancelled {stage}"
+        )
+    execution = current_request_execution()
+    if (
+        execution is not None
+        and execution.deadline is not None
+    ):
+        import time
+
+        if time.monotonic() >= execution.deadline:
+            raise OperationExecutionTimeoutError(
+                f"invariant-form lattice deadline expired {stage}"
+            )
+
+
+def _bind_request_deadline() -> float:
+    """Bind a conservative owner deadline if the request lacks one."""
+
+    import time
+
+    from jacobian._execution import bind_request_deadline
+
+    execution = current_request_execution()
+    if execution is not None and execution.deadline is not None:
+        return execution.deadline
+    started_at = execution.started_at if execution is not None else time.monotonic()
+    deadline = started_at + _INVARIANT_FORM_WALL_SECONDS
+    bind_request_deadline(deadline)
+    return deadline
+
 
 type CoefficientPosition = tuple[int, int]
 type IntegerConstraint = tuple[int, ...]
@@ -371,6 +416,7 @@ def _build_constraint_plan(
     constraints: set[IntegerConstraint] = set()
     stored_digits = 0
     for generator in action.generators:
+        _require_active_request("during constraint expansion")
         matrix = tuple(
             tuple(value.as_fraction() for value in row)
             for row in generator.matrix.entries
@@ -433,6 +479,9 @@ def _integer_kernel_basis(plan: _ConstraintPlan) -> tuple[list[list[int]], int]:
             0,
         )
 
+    _bind_request_deadline()
+    _require_active_request("before the graph-lattice HNF")
+
     from flint import fmpz_mat
 
     constraint_count = len(plan.constraints)
@@ -489,6 +538,8 @@ def invariant_bilinear_form_lattice_kernel(
 ) -> InvariantBilinearFormLattice:
     """Return the saturated integer lattice of forms fixed by every generator."""
 
+    _bind_request_deadline()
+    _require_active_request("before constraint expansion")
     plan = _build_constraint_plan(action, kind)
     basis, constraint_rank = _integer_kernel_basis(plan)
     dimension = len(action.coordinate_axis)

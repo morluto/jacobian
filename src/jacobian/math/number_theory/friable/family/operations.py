@@ -5,6 +5,7 @@ from __future__ import annotations
 from math import isqrt
 
 from jacobian.canonical import parse_canonical_integer
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.arithmetic.values import IntegerValue
 from jacobian.math.number_theory.friable.family._models import (
     plan_friable_family,
@@ -85,6 +86,18 @@ def enumerate_friable_family(x: int | IntegerValue, y: int | IntegerValue) -> li
     source-bound finite family; callers may form sumsets, gaps, or outer
     searches from it.
     """
+    if isinstance(x, IntegerValue) and isinstance(y, IntegerValue):
+        x_text = x.value
+        y_text = y.value
+        if x_text == "0" or y_text in {"0", "1"}:
+            return [] if x_text == "0" else [1]
+        for text in (x_text, y_text):
+            if len(text.lstrip("-")) > 256:
+                raise OperationDomainValidationError(
+                    location=("x", "y"),
+                    code="number_theory.friable_family.source_digit_bound",
+                    message="friable-family sources must have at most 256 decimal digits",
+                )
     x_val = _as_python_integer(x)
     y_val = _as_python_integer(y)
     if type(x_val) is not int or type(y_val) is not int:

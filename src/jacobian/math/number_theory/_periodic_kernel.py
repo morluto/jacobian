@@ -265,6 +265,9 @@ def rank_periodic_union(
     source: PeriodicCongruenceUnionSource,
     plan: _ExecutionPlan,
     value: int,
+    *,
+    residues: tuple[int, ...] | None = None,
+    terms: dict[tuple[int, int], int] | None = None,
 ) -> int:
     """Return the normalized count of occupied integers at most ``value``.
 
@@ -277,21 +280,22 @@ def rank_periodic_union(
         union_rank = value + 1
     elif plan.method == "INCLUSION_EXCLUSION":
         union_rank = 0
-        for (residue, modulus), coefficient in _inclusion_exclusion_terms(
-            source
+        for (residue, modulus), coefficient in (
+            terms if terms is not None else _inclusion_exclusion_terms(source)
         ).items():
             quotient, remainder = divmod(value, modulus)
             union_rank += coefficient * (quotient + (residue <= remainder))
     else:
         if plan.method == "PERIOD_LIFT":
-            residues = tuple(
-                index
-                for index, occupied in enumerate(
-                    _union_mask(source, plan.common_period)
+            if residues is None:
+                residues = tuple(
+                    index
+                    for index, occupied in enumerate(
+                        _union_mask(source, plan.common_period)
+                    )
+                    if occupied
                 )
-                if occupied
-            )
-        else:
+        elif residues is None:
             residues = tuple(sorted(_sparse_union(source, plan.common_period)))
         quotient, remainder = divmod(value, plan.common_period)
         union_rank = quotient * len(residues) + sum(

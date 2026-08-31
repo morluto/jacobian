@@ -9,6 +9,9 @@ from jacobian.canonical import (
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._periodic_kernel import (
+    _inclusion_exclusion_terms,
+    _sparse_union,
+    _union_mask,
     rank_periodic_union,
     require_admitted_periodic_source,
 )
@@ -70,8 +73,20 @@ def compute_periodic_interval_count(
             code="number_theory.periodic.execution_bound",
             message=str(exc),
         ) from exc
-    count = rank_periodic_union(source, plan, upper) - rank_periodic_union(
-        source, plan, lower - 1
+    residues: tuple[int, ...] | None = None
+    terms: dict[tuple[int, int], int] | None = None
+    if plan.method == "PERIOD_LIFT":
+        residues = tuple(
+            index for index, occupied in enumerate(_union_mask(source, plan.common_period)) if occupied
+        )
+    elif plan.method == "SPARSE_LIFT":
+        residues = tuple(sorted(_sparse_union(source, plan.common_period)))
+    elif plan.method == "INCLUSION_EXCLUSION":
+        terms = _inclusion_exclusion_terms(source)
+    count = rank_periodic_union(
+        source, plan, upper, residues=residues, terms=terms
+    ) - rank_periodic_union(
+        source, plan, lower - 1, residues=residues, terms=terms
     )
 
     return PeriodicIntervalCountResult(

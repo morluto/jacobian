@@ -33,7 +33,7 @@ class GowersCubeRequest(StrictModel):
                 "subset must contain distinct canonical residues modulo modulus",
             )
         if (
-            self.subset
+            len(self.subset) > 1
             and gowers_cube_work(self.modulus, self.order)
             > MAX_GOWERS_CUBE_VERTEX_CHECKS
         ):

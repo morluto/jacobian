@@ -26,6 +26,11 @@ def _result_wire_bytes(graph: SimpleUndirectedGraph, k: int) -> int:
     )
 
 
+def _is_complete(graph: SimpleUndirectedGraph) -> bool:
+    n = len(graph.vertices)
+    return len(graph.edges) == n * (n - 1) // 2
+
+
 class EquitableColoringRequest(StrictModel):
     """Request to decide equitable k-colourability."""
 
@@ -43,6 +48,7 @@ class EquitableColoringRequest(StrictModel):
         if (
             self.graph.edges
             and 0 < self.k < n
+            and not _is_complete(self.graph)
             and self.k**n > MAX_EQUITABLE_COLORING_SEARCH_NODES
         ):
             raise PydanticCustomError(

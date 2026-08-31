@@ -9,6 +9,7 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.coloring.equitable_k_coloring._models import (
     MAX_EQUITABLE_COLORING_SEARCH_NODES,
     EquitableColoringResult,
+    _is_complete,
     _result_wire_bytes,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -110,6 +111,8 @@ def _direct_result(
     k: int,
 ) -> EquitableColoringResult | None:
     n = len(graph.vertices)
+    if _is_complete(graph) and k < n:
+        return EquitableColoringResult(graph=graph, k=k, colorable=False)
     if k >= n:
         coloring = tuple(range(n))
     elif not graph.edges:

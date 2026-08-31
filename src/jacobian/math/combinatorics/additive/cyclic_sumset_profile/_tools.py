@@ -22,7 +22,7 @@ TOOLS: MathTools = (
         description=(
             "Given two finite subsets A, B of Z/mZ, return the complete exact "
             "cyclic representation function r_{A+B}(c) = |{(a,b) : a+b=c mod m}| "
-            "on every residue c."
+            "on its occupied support; omitted residues have representation count zero."
         ),
         request_type=CyclicSumsetRequest,
         result_type=CyclicSumsetResult,

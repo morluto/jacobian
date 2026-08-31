@@ -332,7 +332,7 @@ def _find_cycle_of_length(
     def dfs(
         start: int,
         current: int,
-        visited: list[int],
+        visited: list[bool],
         path: list[int],
     ) -> tuple[str, ...] | None:
         if len(path) == length:
@@ -343,16 +343,20 @@ def _find_cycle_of_length(
         # vertices are therefore eligible at every depth; restricting them to
         # ``current + 1`` misses cycles whose indices go down and then up.
         for nxt in range(start + 1, n):
-            if nxt not in visited and adj_matrix[current][nxt]:
-                visited.append(nxt)
-                result = dfs(start, nxt, visited, [*path, nxt])
+            if not visited[nxt] and adj_matrix[current][nxt]:
+                visited[nxt] = True
+                path.append(nxt)
+                result = dfs(start, nxt, visited, path)
                 if result is not None:
                     return result
-                visited.pop()
+                path.pop()
+                visited[nxt] = False
         return None
 
     for start in range(n):
-        result = dfs(start, start, [start], [start])
+        visited = [False] * n
+        visited[start] = True
+        result = dfs(start, start, visited, [start])
         if result is not None:
             canonical = _canonicalize_cycle(result)
             return canonical

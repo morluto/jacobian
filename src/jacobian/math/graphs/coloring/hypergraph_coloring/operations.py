@@ -90,6 +90,10 @@ def _find_coloring(
     palette_size: int,
 ) -> list[int] | None:
     colors = [-1] * vertex_count
+    incident_edges: list[list[tuple[int, ...]]] = [[] for _ in range(vertex_count)]
+    for edge in edges:
+        for vertex in edge:
+            incident_edges[vertex].append(edge)
 
     def backtrack(idx: int) -> list[int] | None:
         if idx == vertex_count:
@@ -97,7 +101,7 @@ def _find_coloring(
 
         for color in range(palette_size):
             colors[idx] = color
-            if all(_edge_is_safe(edge, colors) for edge in edges if idx in edge):
+            if all(_edge_is_safe(edge, colors) for edge in incident_edges[idx]):
                 result = backtrack(idx + 1)
                 if result is not None:
                     return result

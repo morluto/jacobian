@@ -19,9 +19,24 @@ def _hypergraph_coloring_admission_error(
     if palette_size < 1:
         return ("invalid_palette", "palette_size must be positive")
     vertex_count = len(hypergraph.vertices)
-    if not hypergraph.edges or palette_size <= 1 or palette_size >= vertex_count:
+    if (
+        not hypergraph.edges
+        or any(len(members) <= 1 for _, members in hypergraph.edges)
+        or palette_size <= 1
+        or palette_size >= vertex_count
+    ):
         return None
-    if palette_size**vertex_count > MAX_HYPERGRAPH_COLORING_SEARCH_STATES:
+    incidence_work = max(
+        (
+            sum(len(members) for _, members in hypergraph.edges if vertex in members)
+            for vertex in hypergraph.vertices
+        ),
+        default=1,
+    )
+    if (
+        palette_size**vertex_count * incidence_work
+        > MAX_HYPERGRAPH_COLORING_SEARCH_STATES
+    ):
         return (
             "search_bound",
             "hypergraph coloring exceeds the admitted backtracking-state bound",

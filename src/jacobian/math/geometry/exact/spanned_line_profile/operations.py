@@ -52,16 +52,17 @@ def compute_spanned_line_profile(
     points = configuration.points
     n = len(points)
 
-    def get_coords(i: int) -> tuple[Fraction, ...]:
-        return tuple(c.as_fraction() for c in points[i].coordinates)
+    point_coords = tuple(
+        tuple(c.as_fraction() for c in point.coordinates) for point in points
+    )
 
     line_to_pairs: dict[
         tuple[tuple[Fraction, ...], tuple[Fraction, ...]], list[tuple[int, int]]
     ] = {}
 
     for i, j in combinations(range(n), 2):
-        ci = get_coords(i)
-        cj = get_coords(j)
+        ci = point_coords[i]
+        cj = point_coords[j]
         if ci == cj:
             continue
 

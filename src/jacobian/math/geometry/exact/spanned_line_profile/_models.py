@@ -9,7 +9,7 @@ from jacobian.math.geometry.exact._models import PointConfiguration
 
 def _require_coordinate_distinctness(configuration: PointConfiguration) -> None:
     coordinates = [
-        tuple(coordinate.as_fraction() for coordinate in point.coordinates)
+        tuple((coordinate.num, coordinate.den) for coordinate in point.coordinates)
         for point in configuration.points
     ]
     if len(coordinates) != len(set(coordinates)):

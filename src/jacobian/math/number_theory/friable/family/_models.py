@@ -89,7 +89,9 @@ def _estimate_generated_candidates(x: int, primes: tuple[int, ...]) -> int:
     return visit(0, x)
 
 
-def plan_friable_family(x: int, y: int) -> tuple[_FriableFamilyRegime, tuple[int, ...]]:
+def plan_friable_family(  # noqa: C901
+    x: int, y: int
+) -> tuple[_FriableFamilyRegime, tuple[int, ...]]:
     """Validate and select one exact friable-family execution regime.
 
     Returns the regime label and, for the generated regime, the tuple of
@@ -102,15 +104,14 @@ def plan_friable_family(x: int, y: int) -> tuple[_FriableFamilyRegime, tuple[int
             "friable_family_sources_must_be_nonnegative",
             "friable-family sources must be nonnegative",
         )
+    # Constant-size direct regimes are independent of the source magnitude.
+    if x == 0 or y <= 1:
+        return "DIRECT", ()
     if x >= _MAX_FRIABLE_FAMILY_SOURCE_ABS or y >= _MAX_FRIABLE_FAMILY_SOURCE_ABS:
         raise _validation_error(
             f"friable_family_sources_must_have_at_most_{_MAX_FRIABLE_FAMILY_SOURCE_DIGITS}_decimal_digits",
             f"friable-family sources must have at most {_MAX_FRIABLE_FAMILY_SOURCE_DIGITS} decimal digits",
         )
-
-    # Constant-size direct regimes are independent of the source magnitude.
-    if x == 0 or y <= 1:
-        return "DIRECT", ()
     # When y >= x every positive integer through x is friable.  This shortcut
     # still materializes the complete family, so admit its rows and wire size.
     if y >= x:
@@ -151,6 +152,11 @@ def plan_friable_family(x: int, y: int) -> tuple[_FriableFamilyRegime, tuple[int
                 "generated friable family exceeds the search-node budget",
             )
 
+    if nodes_per_pass * 2 > MAX_FRIABLE_FAMILY_GENERATED_NODES:
+        raise _validation_error(
+            "generated_friable_family_exceeds_the_search_node_budget",
+            "generated friable family exceeds the search-node budget",
+        )
     candidate_count = _estimate_generated_candidates(x, primes)
     if candidate_count > MAX_FRIABLE_FAMILY_GENERATED_CANDIDATES:
         raise _validation_error(

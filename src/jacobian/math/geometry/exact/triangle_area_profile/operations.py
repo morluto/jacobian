@@ -12,6 +12,7 @@ from jacobian.math.geometry.exact._models import PointConfiguration
 from jacobian.math.geometry.exact.triangle_area_profile._models import (
     TriangleAreaEntry,
     TriangleAreaProfileResult,
+    _require_distinct_coordinates,
 )
 
 __all__ = ["compute_triangle_area_profile"]
@@ -21,6 +22,20 @@ def _admit_triangle_area_result(configuration: PointConfiguration) -> None:
     """Reject configurations whose complete profile cannot fit the wire limit."""
     points = configuration.points
     triangle_count = len(points) * (len(points) - 1) * (len(points) - 2) // 6
+    source_bytes = sum(
+        len(point.label)
+        + sum(len(coord.num) + len(coord.den) + 16 for coord in point.coordinates)
+        + 32
+        for point in points
+    )
+    if triangle_count == 0:
+        if source_bytes + 256 > CanonicalLimits().max_output_bytes:
+            raise OperationDomainValidationError(
+                location=("configuration",),
+                code="geometry.triangle_area_result_bytes",
+                message="triangle area profile exceeds the canonical output-byte limit",
+            )
+        return
     coordinate_widths = sorted(
         (
             max(len(coord.num.lstrip("-")), len(coord.den))
@@ -42,12 +57,6 @@ def _admit_triangle_area_result(configuration: PointConfiguration) -> None:
                 f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit bound"
             ),
         )
-    source_bytes = sum(
-        len(point.label)
-        + sum(len(coord.num) + len(coord.den) + 16 for coord in point.coordinates)
-        + 32
-        for point in points
-    )
     entry_bytes = 96 + 2 * derived_digits
     class_bytes = 128 + 2 * derived_digits
     estimated_bytes = source_bytes + 256 + triangle_count * (entry_bytes + class_bytes)
@@ -73,6 +82,7 @@ def compute_triangle_area_profile(
             code="geometry.triangle_area_planar_configuration",
             message="triangle area profiles require exactly two coordinates per point",
         )
+    _require_distinct_coordinates(configuration)
     _admit_triangle_area_result(configuration)
     points = configuration.points
     n = len(points)

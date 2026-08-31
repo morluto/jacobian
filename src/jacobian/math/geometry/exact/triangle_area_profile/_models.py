@@ -10,6 +10,18 @@ from jacobian._models import StrictModel
 from jacobian.math.geometry.exact._models import PointConfiguration
 
 
+def _require_distinct_coordinates(configuration: PointConfiguration) -> None:
+    coordinate_keys = [
+        tuple((coordinate.num, coordinate.den) for coordinate in point.coordinates)
+        for point in configuration.points
+    ]
+    if len(coordinate_keys) != len(set(coordinate_keys)):
+        raise PydanticCustomError(
+            "geometry.triangle_area_points_distinct",
+            "triangle area profiles require pairwise distinct point coordinates",
+        )
+
+
 class TriangleAreaProfileRequest(StrictModel):
     """Request the triangle area profile of a planar configuration."""
 
@@ -17,6 +29,7 @@ class TriangleAreaProfileRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_planar_configuration(self) -> Self:
+        _require_distinct_coordinates(self.configuration)
         if len(self.configuration.points[0].coordinates) != 2:
             raise PydanticCustomError(
                 "geometry.triangle_area_planar_configuration",

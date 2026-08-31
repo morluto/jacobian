@@ -23,12 +23,16 @@ class CollatzWielandtRequest(StrictModel):
                 "collatz_wielandt.square_matrix",
                 "matrix must be square and aligned with the vector",
             )
-        if any(value.as_fraction() < 0 for row in self.matrix for value in row):
+        if any(
+            value.num.startswith("-") and value.num != "0"
+            for row in self.matrix
+            for value in row
+        ):
             raise PydanticCustomError(
                 "collatz_wielandt.nonnegative_matrix",
                 "Collatz-Wielandt requires a nonnegative matrix",
             )
-        if any(value.as_fraction() <= 0 for value in self.vector):
+        if any(value.num.startswith("-") or value.num == "0" for value in self.vector):
             raise PydanticCustomError(
                 "collatz_wielandt.positive_vector",
                 "Collatz-Wielandt requires a strictly positive vector",

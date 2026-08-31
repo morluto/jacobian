@@ -72,11 +72,18 @@ def _admission_error(lower: int, upper: int, k: int) -> tuple[str, str, str] | N
             f"incidence count {incidences} exceeds the "
             f"{MAX_TOTAL_INCIDENCES}-incidence bound",
         )
-    vertex_label_bytes = max(len(str(lower)), len(str(upper)))
+    def decimal_width(value: int) -> int:
+        if value == 0:
+            return 1
+        return (abs(value).bit_length() * 30_103) // 100_000 + 1 + (value < 0)
+
+    vertex_label_bytes = max(decimal_width(lower), decimal_width(upper))
     max_difference = (n - 1) // (k - 1)
     max_start = upper - (k - 1)
     edge_label_bytes = (
-        3 + max(len(str(lower)), len(str(max_start))) + len(str(max_difference))
+        3
+        + max(decimal_width(lower), decimal_width(max_start))
+        + decimal_width(max_difference)
         if max_difference > 0
         else 0
     )

@@ -86,5 +86,5 @@ def test_wide_complete_profile_is_rejected_before_pair_arithmetic() -> None:
 
     with pytest.raises(OperationDomainValidationError, match="output-byte limit"):
         compute_cyclic_sumset_profile(10**101, left, right)
-    with pytest.raises(ValidationError, match="output-byte limit"):
-        CyclicSumsetRequest(modulus=10**101, left=left, right=right)
+    request = CyclicSumsetRequest(modulus=10**101, left=left, right=right)
+    assert request.left == left

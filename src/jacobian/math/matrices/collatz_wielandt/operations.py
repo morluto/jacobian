@@ -23,13 +23,7 @@ def _admit_result_size(
         + sum(len(value.num) + len(value.den) + 16 for row in matrix for value in row)
         + sum(len(value.num) + len(value.den) + 16 for value in vector)
     )
-    quotient_bytes = (len(vector) + 1) * (2 * MAX_CANONICAL_RATIONAL_DIGITS + 64)
-    if source_bytes + quotient_bytes > CanonicalLimits().max_output_bytes:
-        raise OperationDomainValidationError(
-            location=("matrix", "vector"),
-            code="collatz_wielandt.result_bound",
-            message="the complete Collatz-Wielandt profile exceeds the canonical output bound",
-        )
+    quotient_widths: list[int] = []
     for row_index, row in enumerate(matrix):
         derived_digits = (
             sum(
@@ -40,15 +34,24 @@ def _admit_result_size(
             + max(len(vector[row_index].num.lstrip("-")), len(vector[row_index].den))
             + 2
         )
-        if derived_digits > MAX_CANONICAL_RATIONAL_DIGITS:
-            raise OperationDomainValidationError(
-                location=("matrix", "vector"),
-                code="collatz_wielandt.quotient_growth",
-                message=(
-                    "derived Collatz-Wielandt quotient rational arithmetic exceeds "
-                    f"the {MAX_CANONICAL_RATIONAL_DIGITS}-digit bound"
-                ),
-            )
+        quotient_widths.append(derived_digits)
+    quotient_bytes = sum(2 * width + 64 for width in quotient_widths)
+    quotient_bytes += 2 * max(quotient_widths, default=1) + 64
+    if source_bytes + quotient_bytes > CanonicalLimits().max_output_bytes:
+        raise OperationDomainValidationError(
+            location=("matrix", "vector"),
+            code="collatz_wielandt.result_bound",
+            message="the complete Collatz-Wielandt profile exceeds the canonical output bound",
+        )
+    if any(width > MAX_CANONICAL_RATIONAL_DIGITS for width in quotient_widths):
+        raise OperationDomainValidationError(
+            location=("matrix", "vector"),
+            code="collatz_wielandt.quotient_growth",
+            message=(
+                "derived Collatz-Wielandt quotient rational arithmetic exceeds "
+                f"the {MAX_CANONICAL_RATIONAL_DIGITS}-digit bound"
+            ),
+        )
 
 
 def compute_collatz_wielandt_profile(

@@ -62,14 +62,6 @@ class CyclicSumsetRequest(StrictModel):
                 "cyclic_sumset.duplicate_operand",
                 "cyclic sumset operands must contain distinct residues",
             )
-        if (
-            _result_wire_bytes(self.modulus, self.left, self.right)
-            > CanonicalLimits().max_output_bytes
-        ):
-            raise PydanticCustomError(
-                "cyclic_sumset.result_bytes_exceeded",
-                "cyclic sumset profile exceeds the canonical output-byte limit",
-            )
         return self
 
 

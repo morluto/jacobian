@@ -99,7 +99,9 @@ def plan_r_full_family(  # noqa: C901
     family_set: set[int] = {1}
     sorted_family = [1]
     merge_work = 0
-    working_memory_bytes = sys.getsizeof(family_set) + sys.getsizeof(sorted_family) + 1_024
+    working_memory_bytes = (
+        sys.getsizeof(family_set) + sys.getsizeof(sorted_family) + 1_024
+    )
     if enforce_transport:
         # Accumulate wire bytes during planning so we stop as soon as the
         # transport budget is crossed, without a post-hoc full serialization.

@@ -218,3 +218,24 @@ def test_admitted_equality_partitions_are_reused_in_the_kernel() -> None:
     assert "e1" in result.monochromatic_edge_ids
     assert "e1" not in result.rainbow_edge_ids
     assert "e2" in result.rainbow_edge_ids
+
+
+def test_decomposed_labels_are_sized_for_non_normalizing_delivery() -> None:
+    # Sizing matches direct delivery (encode_strict_json on model_dump), which
+    # does not NFC-normalize. A decomposed e-acute edge/member label is kept
+    # in its raw form, so admission never undercounts the shipped bytes.
+    decomposed = "e\u0301"  # e + combining acute
+    hg = _hg([decomposed], [("edge\u0301id", (decomposed,))])
+    result = compute_edge_pattern_profile(hg, _colors({decomposed: "red"}))
+    assert result.entries[0].edge_id == "edge\u0301id"
+    assert result.entries[0].members == (decomposed,)
+    assert result.entries[0].color_labels == ("red",)
+
+
+def test_oversized_color_is_rejected_by_character_count_before_encoding() -> None:
+    # The aggregate character-count precheck rejects a color label whose total
+    # character count already exceeds the byte envelope, before the full UTF-8
+    # string is ever encoded (no host exhaustion).
+    hg = _hg(["a"], [])
+    with pytest.raises(OperationDomainValidationError, match="output envelope"):
+        compute_edge_pattern_profile(hg, _colors({"a": "x" * (12 * 1024 * 1024)}))

@@ -9,7 +9,6 @@ import rfc8785
 from jacobian.canonical import (
     CanonicalizationError,
     CanonicalLimits,
-    canonicalize_json,
     encode_strict_json,
     strict_json_object_size,
 )
@@ -40,7 +39,10 @@ def _strict_json_array_size(item_sizes: tuple[int, ...]) -> int:
 def _encoded_size(value: str, encoded: dict[str, int]) -> int:
     size = encoded.get(value)
     if size is None:
-        size = len(rfc8785.dumps(unicodedata.normalize("NFC", value)))
+        # Size with the same non-normalizing strict JSON used by direct
+        # delivery (encode_strict_json on model_dump), not the normalized
+        # canonical form, so decomposed labels cannot be undercounted.
+        size = len(rfc8785.dumps(value))
         encoded[value] = size
     return size
 
@@ -154,9 +156,21 @@ def _admit_edge_pattern_profile(
             code="edge_pattern.color_map_must_cover_all_vertices",
             message="vertex_colors must cover exactly all declared vertices",
         )
-    # Cheap aggregate raw UTF-8 bound before normalization/allocation work:
-    # every color label is echoed verbatim into the result, so a raw total that
-    # already exceeds the output envelope is rejected up front.
+    # Bounded aggregate color-label check before any encoding/allocation:
+    # every color label is echoed verbatim into the result. First reject any
+    # request whose aggregate character count already exceeds the byte
+    # envelope (each Unicode character encodes to at least one UTF-8 byte),
+    # then encode only the bounded remainder to compute the exact byte count.
+    total_chars = sum(len(pair.color) for pair in vertex_colors)
+    if total_chars > MAX_EDGE_PATTERN_PROFILE_RESULT_BYTES:
+        raise OperationDomainValidationError(
+            location=("vertex_colors",),
+            code="edge_pattern.result_too_large",
+            message=(
+                "the complete edge-pattern profile exceeds the canonical "
+                "output envelope"
+            ),
+        )
     try:
         total_color_bytes = sum(
             len(pair.color.encode("utf-8")) for pair in vertex_colors
@@ -194,7 +208,7 @@ def _admit_edge_pattern_profile(
             VertexColorPair(vertex=v, color=normalized_colors[v])
             for v in sorted(normalized_colors)
         )
-        source_size = len(canonicalize_json(hypergraph.model_dump(mode="json")))
+        source_size = len(encode_strict_json(hypergraph.model_dump(mode="json")))
         colors_size = len(
             encode_strict_json([p.model_dump(mode="json") for p in color_rows])
         )

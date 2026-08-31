@@ -217,8 +217,7 @@ def main() -> None:
             # result limit BEFORE canonical conversion, just as
             # require_admissible_exponents does for exponents.
             from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
-            for term in poly.terms():
-                coeff = term.coefficient
+            for _, coeff in poly.terms():
                 digits = max(len(str(abs(coeff.p))), len(str(abs(coeff.q))))
                 if digits > MAX_CANONICAL_RATIONAL_DIGITS:
                     raise ValueError(
@@ -241,6 +240,7 @@ def main() -> None:
                 expr, *symbols_for_variables(terms_variable), domain=sympy.QQ
             )
             require_admissible_exponents(poly)
+            require_admissible_coefficients(poly)
             converted = rational_polynomial_from_sympy(
                 poly, terms_variable, maximum_terms=maximum_terms
             )
@@ -280,6 +280,8 @@ def main() -> None:
                 domain=sympy.QQ,
             )
             remainder_poly = sympy.Poly(remainder, *symbols, domain=sympy.QQ)
+            require_admissible_exponents(remainder_poly)
+            require_admissible_coefficients(remainder_poly)
             converted = rational_polynomial_from_sympy(
                 remainder_poly, variables
             )
@@ -505,6 +507,7 @@ def main() -> None:
                         expr, *remaining_symbols, domain=sympy.QQ
                     )
                     require_admissible_exponents(converted_poly)
+                    require_admissible_coefficients(converted_poly)
                     converted = rational_polynomial_from_sympy(
                         converted_poly,
                         tuple(remaining),
@@ -729,8 +732,18 @@ def ideal_saturation(
     )
 
 
-def _relation_ledger(payload: dict[str, Any]) -> IdealContainmentLedger:
-    return IdealContainmentLedger.model_validate(payload)
+def _raise_if_relation_deadline_exceeded(deadline: float) -> None:
+    if time.monotonic() > deadline:
+        raise _SympyKernelTimeoutError()
+
+
+def _relation_ledger(
+    payload: dict[str, Any], *, deadline: float
+) -> IdealContainmentLedger:
+    _raise_if_relation_deadline_exceeded(deadline)
+    ledger = IdealContainmentLedger.model_validate(payload)
+    _raise_if_relation_deadline_exceeded(deadline)
+    return ledger
 
 
 def ideal_containment(
@@ -758,21 +771,17 @@ def ideal_containment(
     }
     outcome: IdealExecutionOutcome
     try:
-        result = _run_sympy_kernel(payload, resource_budget.wall_seconds)
-        if time.monotonic() > deadline:
-            outcome = "TIMEOUT"
-            detail = "ideal containment exceeded the enforced wall-time budget"
-            return IdealContainmentResult(
-                source=source,
-                target=target,
-                outcome=outcome,
-                monomial_order=monomial_order,
-                detail=detail,
-            )
-        ledger = _relation_ledger(result["left_in_right"])
-        return IdealContainmentResult._from_kernel(
+        _raise_if_relation_deadline_exceeded(deadline)
+        result = _run_sympy_kernel(
+            payload, max(0.0, deadline - time.monotonic())
+        )
+        ledger = _relation_ledger(result["left_in_right"], deadline=deadline)
+        _raise_if_relation_deadline_exceeded(deadline)
+        computed = IdealContainmentResult._from_kernel(
             source, target, ledger, monomial_order
         )
+        _raise_if_relation_deadline_exceeded(deadline)
+        return computed
     except _SympyKernelTimeoutError:
         outcome = "TIMEOUT"
         detail = "ideal containment exceeded the enforced wall-time budget"
@@ -814,22 +823,22 @@ def ideal_equality(
     }
     outcome: IdealExecutionOutcome
     try:
-        result = _run_sympy_kernel(payload, resource_budget.wall_seconds)
-        if time.monotonic() > deadline:
-            outcome = "TIMEOUT"
-            detail = "ideal equality exceeded the enforced wall-time budget"
-            return IdealEqualityResult(
-                left=left,
-                right=right,
-                outcome=outcome,
-                monomial_order=monomial_order,
-                detail=detail,
-            )
-        left_in_right = _relation_ledger(result["left_in_right"])
-        right_in_left = _relation_ledger(result["right_in_left"])
-        return IdealEqualityResult._from_kernel(
+        _raise_if_relation_deadline_exceeded(deadline)
+        result = _run_sympy_kernel(
+            payload, max(0.0, deadline - time.monotonic())
+        )
+        left_in_right = _relation_ledger(
+            result["left_in_right"], deadline=deadline
+        )
+        right_in_left = _relation_ledger(
+            result["right_in_left"], deadline=deadline
+        )
+        _raise_if_relation_deadline_exceeded(deadline)
+        computed = IdealEqualityResult._from_kernel(
             left, right, left_in_right, right_in_left, monomial_order
         )
+        _raise_if_relation_deadline_exceeded(deadline)
+        return computed
     except _SympyKernelTimeoutError:
         outcome = "TIMEOUT"
         detail = "ideal equality exceeded the enforced wall-time budget"

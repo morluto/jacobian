@@ -73,6 +73,26 @@ BoundedFactorizationTimeoutLayer = Literal[
 ]
 
 
+def _bounded_prime_power(base: int, exponent: int, limit: int) -> int | None:
+    """Compute ``base**exponent`` only while it can fit below ``limit``."""
+
+    result = 1
+    factor = base
+    remaining_exponent = exponent
+    while remaining_exponent:
+        if remaining_exponent & 1:
+            if result > limit // factor:
+                return None
+            result *= factor
+        remaining_exponent //= 2
+        if remaining_exponent:
+            if factor > limit // factor:
+                factor = limit + 1
+            else:
+                factor *= factor
+    return result
+
+
 @dataclass(frozen=True, slots=True)
 class BoundedFactorizationFailure:
     """Bounded evidence for one unsuccessful isolated factorization attempt."""
@@ -241,7 +261,7 @@ def _admit_nonzero(request: FactorizationRequest) -> None:
         )
 
 
-def _bounded_direct_factorization(
+def _bounded_direct_factorization(  # noqa: C901
     value: int,
     *,
     timeout_seconds: float = _FACTORIZATION_WORKER_TIMEOUT_SECONDS,
@@ -333,9 +353,16 @@ def _bounded_direct_factorization(
             raise ValueError("noncanonical factors")
         from sympy import isprime
 
-        if not all(isprime(int(factor.prime)) for factor in factors) or math.prod(
-            int(factor.prime) ** factor.power for factor in factors
-        ) != abs(value):
+        quotient = abs(value)
+        for factor in factors:
+            base = int(factor.prime)
+            if base > quotient:
+                raise ValueError("factor base exceeds the remaining quotient")
+            prime_power = _bounded_prime_power(base, factor.power, quotient)
+            if prime_power is None or not isprime(base):
+                raise ValueError("factorization contains an invalid prime power")
+            quotient //= prime_power
+        if quotient != 1:
             raise ValueError("factorization does not reconstruct the input")
         return factors
     except (

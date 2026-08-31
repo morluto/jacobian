@@ -95,9 +95,9 @@ def test_lanes_use_their_declared_worker_and_fixture_affinity() -> None:
     scale = makefile.split("_test-scale:", 1)[1].split("test-exhaustive:", 1)[0]
     exhaustive = makefile.split("_test-exhaustive:", 1)[1].split("test-property:", 1)[0]
 
-    assert "pytest -n auto --dist worksteal" in math
+    assert "pytest -n 2 --dist worksteal" in math
     assert "pytest -n 2 --dist worksteal" in catalog
-    assert "pytest -n 2 --dist worksteal" in integration
+    assert "pytest -n 1 --dist worksteal" in integration
     assert '-m "$(ORDINARY_MARKER_EXPRESSION)"' in integration
     assert "SCALE_WORKERS ?= 2" in makefile
     assert "pytest -n $(SCALE_WORKERS) --dist worksteal" in scale

@@ -20,6 +20,7 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 MAX_POSET_ELEMENTS = 64
 MAX_POSET_RELATIONS = MAX_POSET_ELEMENTS * MAX_POSET_ELEMENTS
+MAX_ELEMENT_LABEL_LENGTH = 32
 MAX_LINEAR_EXTENSION_ELEMENTS = 20
 MAX_ANTICHAIN_PROFILE_ELEMENTS = 14
 MAX_ANTICHAIN_PROFILE_CANDIDATES = 1 << MAX_ANTICHAIN_PROFILE_ELEMENTS
@@ -28,6 +29,7 @@ ElementLabel = Annotated[
     str,
     StringConstraints(
         pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,31}$",
+        max_length=MAX_ELEMENT_LABEL_LENGTH,
         strict=True,
     ),
 ]
@@ -772,6 +774,7 @@ class AntichainProfileResult(StrictModel):
 __all__ = [
     "MAX_ANTICHAIN_PROFILE_CANDIDATES",
     "MAX_ANTICHAIN_PROFILE_ELEMENTS",
+    "MAX_ELEMENT_LABEL_LENGTH",
     "MAX_LINEAR_EXTENSION_ELEMENTS",
     "MAX_POSET_ELEMENTS",
     "MAX_POSET_RELATIONS",

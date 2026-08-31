@@ -95,6 +95,89 @@ def test_sparse_rational_matrix_round_trips_through_its_dense_owner() -> None:
     assert dense_rational_matrix_from_sparse(restored) == dense
 
 
+@pytest.mark.parametrize(
+    ("row_count", "column_count"),
+    ((0, 5), (4, 0), (0, 0)),
+)
+def test_sparse_rational_matrix_strict_json_retains_zero_axes(
+    row_count: int, column_count: int
+) -> None:
+    payload = {
+        "domain": "QQ",
+        "row_count": row_count,
+        "column_count": column_count,
+        "entries": [],
+    }
+
+    matrix = SparseRationalMatrix.model_validate_json(json.dumps(payload), strict=True)
+
+    assert matrix.model_dump(mode="json") == payload
+    assert (
+        SparseRationalMatrix.model_validate_json(matrix.model_dump_json(), strict=True)
+        == matrix
+    )
+
+
+@pytest.mark.parametrize(
+    "payload",
+    (
+        {
+            "row_count": 0,
+            "column_count": 2,
+            "entries": [{"row": 0, "column": 1, "value": q(1)}],
+        },
+        {
+            "row_count": 2,
+            "column_count": 0,
+            "entries": [{"row": 1, "column": 0, "value": q(1)}],
+        },
+    ),
+)
+def test_sparse_rational_matrix_rejects_entries_on_a_zero_axis(
+    payload: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError, match="coordinates exceed declared axes"):
+        SparseRationalMatrix.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    ("row_count", "column_count"),
+    ((0, 5), (4, 0), (0, 0)),
+)
+def test_zero_axis_sparse_matrix_has_no_dense_canonical_conversion(
+    row_count: int, column_count: int
+) -> None:
+    matrix = SparseRationalMatrix(
+        row_count=row_count,
+        column_count=column_count,
+    )
+
+    with pytest.raises(ValueError, match="nonempty canonical dense matrix"):
+        dense_rational_matrix_from_sparse(matrix)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    (
+        {
+            "variables": ["x"],
+            "coefficients": {"row_count": 0, "column_count": 1, "entries": []},
+            "rhs": [],
+        },
+        {
+            "variables": [],
+            "coefficients": {"row_count": 1, "column_count": 0, "entries": []},
+            "rhs": [q(0)],
+        },
+    ),
+)
+def test_linear_rational_system_keeps_its_nonempty_domain(
+    payload: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError):
+        LinearRationalSystem.model_validate(payload)
+
+
 def _underdetermined_system() -> dict[str, object]:
     return _system(
         ["x", "y", "z"],

@@ -158,6 +158,7 @@ def _verify_declared_factors(
         raise ValueError("worker declared more factors than source degree")
     product: tuple[int, ...] = (1,)
     seen_factor_coefficients: set[tuple[int, ...]] = set()
+    aggregate_degree = 0
     for entry in declared_factors:
         if not isinstance(entry, (list, tuple)) or len(entry) != 2:
             raise ValueError("malformed source factor declaration")
@@ -170,6 +171,9 @@ def _verify_declared_factors(
             2 <= len(factor_coeffs) <= source_degree + 1
         ):
             raise ValueError("worker factor degree exceeds source degree")
+        aggregate_degree += (len(factor_coeffs) - 1) * multiplicity
+        if aggregate_degree > source_degree:
+            raise ValueError("worker factor degrees exceed source degree")
         factor_dense = tuple(int(c) for c in factor_coeffs)
         if factor_dense[0] <= 0:
             raise ValueError("worker factor has non-positive leading coefficient")

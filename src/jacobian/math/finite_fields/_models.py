@@ -41,6 +41,7 @@ class HomogeneousFixedSubspaceRequest(_FiniteFieldRequest):
     def normalize_json_array_fields(cls, data: Any) -> Any:
         """Convert transport arrays to the immutable tuple fields before strict parsing."""
 
+        data = canonicalize_json_containers(data)
         if not isinstance(data, dict) or not isinstance(data.get("action"), dict):
             return data
         action = data["action"]

@@ -8,7 +8,7 @@ import rfc8785
 from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import sha256_digest
 from jacobian.math.graphs.directed._models import DirectedGraph
 from jacobian.math.matrices.finite_fields._bounds import (
@@ -338,6 +338,7 @@ class PrimeFieldLinearAction(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_raw_action_envelope(cls, data: Any) -> Any:
+        data = canonicalize_json_containers(data)
         if not isinstance(data, dict):
             return data
         axis = data.get("variable_axis")
@@ -426,6 +427,7 @@ class HomogeneousFixedSubspace(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_raw_result_envelope(cls, data: Any) -> Any:
+        data = canonicalize_json_containers(data)
         if not isinstance(data, dict):
             return data
         action = data.get("action")
@@ -564,6 +566,7 @@ class AxisBoundMatrix(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_legacy_axis_bound(cls, data: Any) -> Any:
+        data = canonicalize_json_containers(data)
         if not isinstance(data, dict):
             return data
         for field in ("row_axis", "column_axis"):
@@ -633,6 +636,7 @@ class FiniteDimensionalSubspace(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_basis_axis_bound(cls, data: Any) -> Any:
+        data = canonicalize_json_containers(data)
         if isinstance(data, dict):
             axis = data.get("basis_axis")
             labels = _raw_field(axis, "labels")

@@ -20,7 +20,6 @@ from jacobian.math.combinatorics.finite_structures.edge_pattern_profile._models 
     VertexColorPair,
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
-    MAX_LABEL_LENGTH,
     FiniteHypergraph,
 )
 
@@ -83,7 +82,9 @@ def _compute_edge_admission(
             (
                 "equality_partition",
                 _strict_json_array_size(
-                    tuple(len(encode_strict_json(index)) for index in equality_partition)
+                    tuple(
+                        len(encode_strict_json(index)) for index in equality_partition
+                    )
                 ),
             ),
             ("num_color_blocks", len(encode_strict_json(num_blocks))),
@@ -110,7 +111,9 @@ def _admit_edge_pattern_profile(
     hypergraph: FiniteHypergraph, vertex_colors: dict[str, str]
 ) -> tuple[
     dict[str, str],
-    list[tuple[str, tuple[str, ...], tuple[int, ...], int, tuple[str, ...], bool, bool]],
+    list[
+        tuple[str, tuple[str, ...], tuple[int, ...], int, tuple[str, ...], bool, bool]
+    ],
     int,
 ]:
     """Admit the request and return the precomputed admission plan.
@@ -189,9 +192,7 @@ def _admit_edge_pattern_profile(
         )
         source_size = len(canonicalize_json(hypergraph.model_dump(mode="json")))
         colors_size = len(
-            encode_strict_json(
-                [p.model_dump(mode="json") for p in color_pairs]
-            )
+            encode_strict_json([p.model_dump(mode="json") for p in color_pairs])
         )
         entries_bytes = monochromatic_bytes = rainbow_bytes = 2
         entries_count = monochromatic_count = rainbow_count = 0
@@ -204,7 +205,11 @@ def _admit_edge_pattern_profile(
                 ("rainbow_edge_ids", rainbow_bytes),
             )
         )
-        edge_plans: list[tuple[str, tuple[str, ...], tuple[int, ...], int, tuple[str, ...], bool, bool]] = []
+        edge_plans: list[
+            tuple[
+                str, tuple[str, ...], tuple[int, ...], int, tuple[str, ...], bool, bool
+            ]
+        ] = []
         for edge_id, members in hypergraph.edges:
             colors = tuple(normalized_colors[member] for member in members)
             (
@@ -216,7 +221,15 @@ def _admit_edge_pattern_profile(
                 is_rainbow,
             ) = _compute_edge_admission(edge_id, members, colors, encoded)
             edge_plans.append(
-                (edge_id, members, equality_partition, num_blocks, color_labels, is_mono, is_rainbow)
+                (
+                    edge_id,
+                    members,
+                    equality_partition,
+                    num_blocks,
+                    color_labels,
+                    is_mono,
+                    is_rainbow,
+                )
             )
             entries_bytes += entry_size + (1 if entries_count else 0)
             entries_count += 1
@@ -237,7 +250,7 @@ def _admit_edge_pattern_profile(
                         monochromatic_bytes,
                     ),
                     ("rainbow_edge_ids", rainbow_bytes),
-                    ),
+                ),
             )
             if result_bytes > MAX_EDGE_PATTERN_PROFILE_RESULT_BYTES:
                 raise OperationDomainValidationError(
@@ -307,8 +320,7 @@ def compute_edge_pattern_profile(
 
     # Thread 2: Use a list of vertex-color pairs to avoid rational ambiguity
     color_pairs = tuple(
-        VertexColorPair(vertex=v, color=c)
-        for v, c in sorted(normalized_colors.items())
+        VertexColorPair(vertex=v, color=c) for v, c in sorted(normalized_colors.items())
     )
 
     return EdgePatternProfileResult(

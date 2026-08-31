@@ -66,7 +66,7 @@ class EdgePatternProfileResult(StrictModel):
 
 __all__ = [
     "EdgePatternEntry",
-    "VertexColorPair",
     "EdgePatternProfileRequest",
     "EdgePatternProfileResult",
+    "VertexColorPair",
 ]

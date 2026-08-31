@@ -89,7 +89,10 @@ def test_numeric_color_keys_use_strict_delivery_sizing() -> None:
     hg = _hg(["num", "den"], [("e0", ("num", "den"))])
     result = compute_edge_pattern_profile(hg, {"num": "red", "den": "blue"})
 
-    assert {(p.vertex, p.color) for p in result.vertex_colors} == {("den", "blue"), ("num", "red")}
+    assert {(p.vertex, p.color) for p in result.vertex_colors} == {
+        ("den", "blue"),
+        ("num", "red"),
+    }
 
 
 def test_result_preserves_source() -> None:
@@ -97,7 +100,10 @@ def test_result_preserves_source() -> None:
     colors = {"a": "red", "b": "blue"}
     result = compute_edge_pattern_profile(hg, colors)
     assert result.hypergraph == hg
-    assert {(p.vertex, p.color) for p in result.vertex_colors} == {("a", "red"), ("b", "blue")}
+    assert {(p.vertex, p.color) for p in result.vertex_colors} == {
+        ("a", "red"),
+        ("b", "blue"),
+    }
 
 
 def test_rejects_incomplete_colors() -> None:

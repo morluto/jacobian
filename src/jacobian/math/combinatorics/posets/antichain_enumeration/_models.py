@@ -1,0 +1,77 @@
+"""Typed contracts for the antichain enumeration operation."""
+
+from __future__ import annotations
+
+from math import comb
+from typing import Self
+
+from pydantic import Field, model_validator
+
+from jacobian._digest import Sha256Digest
+from jacobian._models import StrictModel
+from jacobian.math.combinatorics.posets.core._models import FinitePoset
+
+MAX_ELEMENTS = 24
+MAX_ANTICHAINS = 50_000
+_MAX_RESULT_BYTES = 10 * 1024 * 1024
+_MAX_LABEL_WIRE_BYTES = 35
+
+
+def require_antichain_enumeration_envelope(
+    poset: FinitePoset,
+    min_cardinality: int,
+    max_cardinality: int,
+) -> int:
+    n = len(poset.elements)
+    if n > MAX_ELEMENTS:
+        raise ValueError(
+            f"antichain enumeration supports at most {MAX_ELEMENTS} elements"
+        )
+    if min_cardinality < 0 or max_cardinality < min_cardinality:
+        raise ValueError(
+            "antichain cardinalities must form a nonnegative ordered range"
+        )
+    upper = min(max_cardinality, n)
+    candidates = sum(comb(n, size) for size in range(min_cardinality, upper + 1))
+    if candidates > MAX_ANTICHAINS:
+        raise ValueError(
+            f"antichain enumeration exceeds the {MAX_ANTICHAINS}-candidate bound"
+        )
+    worst_row_bytes = 3 + upper * _MAX_LABEL_WIRE_BYTES
+    if 256 + candidates * worst_row_bytes > _MAX_RESULT_BYTES:
+        raise ValueError("complete antichain family exceeds the canonical output bound")
+    return candidates
+
+
+class AntichainEnumerationRequest(StrictModel):
+    """Request to enumerate antichains of specified cardinalities."""
+
+    poset: FinitePoset
+    min_cardinality: int = Field(default=1, ge=0, le=MAX_ELEMENTS)
+    max_cardinality: int = Field(default=1, ge=0, le=MAX_ELEMENTS)
+
+    @model_validator(mode="after")
+    def require_bounded_family(self) -> Self:
+        require_antichain_enumeration_envelope(
+            self.poset, self.min_cardinality, self.max_cardinality
+        )
+        return self
+
+
+class AntichainEnumerationResult(StrictModel):
+    """A complete enumeration of antichains in the requested cardinality range."""
+
+    poset_digest: Sha256Digest
+    min_cardinality: int = Field(ge=0, le=MAX_ELEMENTS)
+    max_cardinality: int = Field(ge=0, le=MAX_ELEMENTS)
+    antichains: tuple[tuple[str, ...], ...] = Field(max_length=MAX_ANTICHAINS)
+    count: int = Field(ge=0, le=MAX_ANTICHAINS)
+
+
+__all__ = [
+    "MAX_ANTICHAINS",
+    "MAX_ELEMENTS",
+    "AntichainEnumerationRequest",
+    "AntichainEnumerationResult",
+    "require_antichain_enumeration_envelope",
+]

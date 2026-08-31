@@ -88,7 +88,9 @@ def test_public_values_and_functions_have_one_canonical_module() -> None:
     modules = tuple(
         "jacobian.math."
         + path.parent.relative_to(math_root).as_posix().replace("/", ".")
-        for path in math_root.rglob("__init__.py")
+        for path in sorted(
+            math_root.rglob("__init__.py"), key=lambda item: item.as_posix()
+        )
         if path.parent != math_root
     )
     function_locations: dict[object, list[str]] = {}

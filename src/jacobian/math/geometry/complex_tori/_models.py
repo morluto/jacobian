@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, model_validator
@@ -61,12 +62,17 @@ class LatticeComplexStructure(StrictModel):
                 f"a complex-torus lattice has at most {MAX_ACTION_DIMENSION} axes",
             )
         if isinstance(axis, (list, tuple)):
-            for label in axis:
-                if not isinstance(label, str):
-                    raise _validation_error(
-                        "invalid_coordinate_label",
-                        "coordinate_axis labels must be strings",
-                    )
+                for label in axis:
+                    if not isinstance(label, str):
+                        raise _validation_error(
+                            "invalid_coordinate_label",
+                            "coordinate_axis labels must be strings",
+                        )
+                    if unicodedata.normalize("NFC", label) != label:
+                        raise _validation_error(
+                            "noncanonical_coordinate_label",
+                            "coordinate_axis labels must use NFC Unicode normalization",
+                        )
         normalized = dict(data)
         if isinstance(axis, list):
             normalized["coordinate_axis"] = tuple(axis)

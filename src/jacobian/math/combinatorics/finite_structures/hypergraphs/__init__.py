@@ -8,6 +8,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 from jacobian.math.combinatorics.finite_structures.hypergraphs.operations import (
     clique_expansion,
     dual,
+    edge_intersection_graph,
     edge_intersections,
     incidence_graph,
     independence_number,
@@ -24,6 +25,7 @@ __all__ = [
     "FiniteHypergraph",
     "clique_expansion",
     "dual",
+    "edge_intersection_graph",
     "edge_intersections",
     "incidence_graph",
     "independence_number",

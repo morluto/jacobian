@@ -245,6 +245,8 @@ ignore_imports = [
     "jacobian.math.polynomials.multivariate._factor_backend -> jacobian.process",
     # Exact common-interlacing factorization and isolation run in one bounded worker.
     "jacobian.math.polynomials.real_algebra._common_interlacing_process -> jacobian.process",
+    # Rational-function coprimality runs in one deadline-bound SymPy worker.
+    "jacobian.math.geometry.differential._recognition_process -> jacobian.process",
 ]
 
 [[tool.importlinter.contracts]]

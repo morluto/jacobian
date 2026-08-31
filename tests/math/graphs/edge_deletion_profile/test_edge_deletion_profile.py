@@ -145,13 +145,9 @@ def test_rejects_many_component_filters_before_row_enumeration() -> None:
 def test_near_complete_large_graph_is_rejected_before_greedy_approximation() -> None:
     """A large near-complete graph cannot publish a greedy upper bound as exact."""
     vertices = [f"v{i:02}" for i in range(21)]
-    missing = {
-        tuple(sorted(pair)) for pair in pairwise(vertices[:4])
-    }
+    missing = {tuple(sorted(pair)) for pair in pairwise(vertices[:4])}
     edges = [
-        pair
-        for pair in combinations(vertices, 2)
-        if tuple(sorted(pair)) not in missing
+        pair for pair in combinations(vertices, 2) if tuple(sorted(pair)) not in missing
     ]
     with pytest.raises(OperationDomainValidationError, match="exact work bound"):
         compute_edge_deletion_profile(

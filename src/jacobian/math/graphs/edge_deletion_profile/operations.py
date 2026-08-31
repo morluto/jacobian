@@ -398,9 +398,7 @@ def _chromatic_number(
     return max(component_numbers, default=1)
 
 
-def _min_clique_cover(
-    vertices: list[str], edges: list[tuple[str, str]]
-) -> int:
+def _min_clique_cover(vertices: list[str], edges: list[tuple[str, str]]) -> int:
     """Return the minimum number of cliques covering all vertices.
 
     In the missing-edge graph F, a clique is a set of vertices that are

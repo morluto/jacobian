@@ -67,7 +67,7 @@ def enumerate_r_full(minimum_exponent: int, cutoff: int) -> tuple[int, ...]:
     wire-format transport model.
     """
     if type(minimum_exponent) is not int or not (
-        MIN_R_FULL_EXPONENT <= minimum_exponent
+        minimum_exponent >= MIN_R_FULL_EXPONENT
     ):
         raise OperationDomainValidationError(
             location=("minimum_exponent",),

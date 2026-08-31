@@ -2,6 +2,16 @@
 
 from __future__ import annotations
 
+from functools import partial
+from time import monotonic
+
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    current_request_execution,
+    request_cancelled,
+)
 from jacobian.canonical import (
     CanonicalizationError,
     CanonicalLimits,
@@ -14,6 +24,31 @@ from jacobian.math.finite_fields._matrix_rank_models import (
     MatrixRankRequest,
     MatrixRankResult,
 )
+
+_MATRIX_RANK_WALL_SECONDS = 600.0
+
+
+def _execution_deadline() -> float:
+    execution = current_request_execution()
+    started_at = execution.started_at if execution is not None else monotonic()
+    owner_deadline = started_at + _MATRIX_RANK_WALL_SECONDS
+    deadline = (
+        min(owner_deadline, execution.deadline)
+        if execution is not None and execution.deadline is not None
+        else owner_deadline
+    )
+    bind_request_deadline(deadline)
+    return deadline
+
+
+def _require_deadline(deadline: float, stage: str) -> None:
+    if request_cancelled():
+        raise OperationExecutionCancelledError(f"finite-field rank cancelled {stage}")
+    if monotonic() >= deadline:
+        raise OperationExecutionTimeoutError(
+            f"finite-field rank deadline expired {stage}"
+        )
+
 
 _FIELD: dict[str, object] = {
     "characteristic": 2,
@@ -41,6 +76,9 @@ _MATRIX: dict[str, object] = {
 def compute_rank(request: MatrixRankRequest) -> MatrixRankResult:
     """Return the exact rank of a labelled matrix over its presented finite field."""
     matrix = request.matrix
+    deadline = _execution_deadline()
+    execution_checkpoint = partial(_require_deadline, deadline)
+    execution_checkpoint("before result admission")
     # Reserve the complete result envelope before the backend call so
     # that we do not waste CPU on a result known to be undeliverable.
     # The worst case is full rank with all pivot labels present.
@@ -66,14 +104,17 @@ def compute_rank(request: MatrixRankRequest) -> MatrixRankResult:
             code="finite_field.matrix_rank.result_bound",
             message="matrix-rank result exceeds the canonical output bound",
         )
+    execution_checkpoint("after result admission")
     # Compute the exact deterministic pivots using the maintained backend.
-    data = compute_matrix_rank(matrix)
-    return MatrixRankResult(
+    data = compute_matrix_rank(matrix, execution_checkpoint=execution_checkpoint)
+    result = MatrixRankResult(
         matrix=matrix,
         rank=data.rank,
         pivot_rows=data.pivot_rows,
         pivot_columns=data.pivot_columns,
     )
+    execution_checkpoint("after result construction")
+    return result
 
 
 MATRIX_RANK_OPERATION = MathTool(

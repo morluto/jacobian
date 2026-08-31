@@ -128,6 +128,22 @@ def test_pivot_labels_follow_row_swaps() -> None:
     assert result.pivot_rows == ("r1",)
 
 
+def test_full_rank_row_swap_canonicalizes_pivot_sets_independently() -> None:
+    fp = _f2()
+    m = _matrix(
+        fp,
+        [[[0], [1]], [[1], [0]]],
+        ["r0", "r1"],
+        ["c0", "c1"],
+    )
+
+    result = matrix_rank(m)
+
+    assert result.rank == 2
+    assert result.pivot_rows == ("r0", "r1")
+    assert result.pivot_columns == ("c0", "c1")
+
+
 def test_pivot_columns_follow_source_axis_order() -> None:
     fp = _f2()
     m = _matrix(fp, [[[1], [0]], [[0], [1]]], ["r0", "r1"], ["c0", "c1"])

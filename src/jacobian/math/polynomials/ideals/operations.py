@@ -22,8 +22,10 @@ from jacobian.math.polynomials._conversions import (
 )
 from jacobian.math.polynomials.ideals._models import (
     MAX_COEFFICIENT_DIGITS,
+    MAX_GENERATORS,
     MAX_INPUT_EXPONENT,
     MAX_INPUT_TERMS,
+    MAX_VARS,
     EliminationIdealResult,
     GradedBettiNumber,
     GroebnerBasisResult,
@@ -120,6 +122,28 @@ def monomial_ideal_graded_betti_table(
 
 
 def _admit_source(ideal: RationalPolynomialIdeal, *, label: str) -> None:
+    # A nonzero constant already establishes the unit ideal.  Its coefficient
+    # never enters a Groebner expansion, so the kernel coefficient cap must not
+    # reject this exact zero-work case.
+    if any(
+        len(generator.polynomial.terms) == 1
+        and not any(generator.polynomial.terms[0].exponents)
+        and generator.polynomial.terms[0].coefficient.num != "0"
+        for generator in ideal.generators
+    ):
+        if len(ideal.variables) > MAX_VARS:
+            raise _validation_error(
+                f"{label} exceeds the {MAX_VARS}-variable operation budget"
+            )
+        if len(ideal.generators) > MAX_GENERATORS:
+            raise _validation_error(
+                f"{label} exceeds the {MAX_GENERATORS}-generator operation budget"
+            )
+        if sum(len(generator.polynomial.terms) for generator in ideal.generators) > MAX_INPUT_TERMS:
+            raise _validation_error(
+                f"{label} exceeds the {MAX_INPUT_TERMS}-term aggregate input budget"
+            )
+        return
     _require_ideal_budget(ideal, label=label)
 
 

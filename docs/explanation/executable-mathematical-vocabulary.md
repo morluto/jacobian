@@ -47,6 +47,13 @@ giving an agent a library of legal moves in a board game: the library does not
 play the game or search every possible line, but it makes meaningful moves
 explicit and dependable.
 
+Formalization gives mathematical objects, validity conditions, and relationships
+their precise meaning. Jacobian turns selected, well-defined transformations
+between those objects into executable operations. In this sense, formalization
+supplies the rules while operations are the legal moves: the agent chooses which
+moves to make and how to combine them, and Jacobian provides moves whose effects
+are typed, bounded, and mathematically checkable.
+
 ## Semantic atomicity
 
 **Atomic means one stable, reusable mathematical postcondition, not a small or

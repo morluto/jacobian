@@ -19,8 +19,8 @@ if str(ROOT) not in sys.path:
 from tools.command_runner import (  # noqa: E402
     ToolCommandRequest,
     ToolCommandStatus,
-    output_sink,
     operator_environment,
+    output_sink,
     run_tool_command,
 )
 

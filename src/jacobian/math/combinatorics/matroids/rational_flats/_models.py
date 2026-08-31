@@ -245,8 +245,13 @@ def _require_raw_configuration_envelope(data: object, *, label: str) -> None:
 
 
 def _require_raw_generator_envelope(data: object) -> object:
-    if not isinstance(data, dict):
+    if isinstance(data, RationalFlatSymmetryGenerator):
         return data
+    if not isinstance(data, dict):
+        raise _validation_error(
+            "symmetry_generator_shape",
+            "each rational-flat symmetry generator must be a mapping",
+        )
     _require_raw_mapping_keys(
         data,
         allowed=frozenset({"coordinate_permutation", "candidate_permutation"}),

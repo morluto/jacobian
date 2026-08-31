@@ -97,7 +97,10 @@ def compute_matrix_rank(
         nonzero_columns = [
             index
             for index in range(len(matrix.column_axis.labels))
-            if any(not matrix.entries[row][index].is_zero for row in range(len(matrix.entries)))
+            if any(
+                not matrix.entries[row][index].is_zero
+                for row in range(len(matrix.entries))
+            )
         ]
         max_rank = min(len(nonzero_rows), len(nonzero_columns))
         try:

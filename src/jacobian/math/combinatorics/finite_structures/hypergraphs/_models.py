@@ -54,13 +54,14 @@ MAX_EDGE_INTERSECTION_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 def _edge_intersection_graph_result_bytes(
     hypergraph: FiniteHypergraph,
+    graph_edges: tuple[tuple[str, str], ...],
 ) -> int:
     """Return the exact canonical size of the edge-intersection graph result.
 
     The result retains the source hypergraph and the produced graph.  The
-    graph has one vertex per hyperedge (the edge IDs) and at most one edge
-    per intersecting pair, bounded by the complete-graph maximum for the
-    given vertex count.
+    graph has one vertex per hyperedge (the edge IDs), and ``graph_edges`` is
+    the already-admitted exact set of intersecting pairs.  The byte count must
+    follow that set rather than charging every input for a complete graph.
     """
     source_bytes = len(canonicalize_json(hypergraph.model_dump(mode="json")))
     edge_ids = tuple(edge_id for edge_id, _ in hypergraph.edges)
@@ -69,19 +70,12 @@ def _edge_intersection_graph_result_bytes(
     vertex_bytes = _strict_json_array_size(
         tuple(_strict_label_wire_bytes(edge_id) for edge_id in edge_ids)
     )
-    # Worst case: complete graph with n*(n-1)/2 edges.  Each edge is a
-    # 2-element array of strict-JSON strings.  We use the longest edge ID
-    # as a conservative bound for both endpoints.
-    max_edge_id_bytes = (
-        max((_strict_label_wire_bytes(edge_id) for edge_id in edge_ids), default=0)
-        if edge_ids
-        else 0
-    )
-    max_graph_edges = n * (n - 1) // 2 if n > 1 else 0
     edge_bytes = _strict_json_array_size(
         tuple(
-            _strict_json_array_size((max_edge_id_bytes, max_edge_id_bytes))
-            for _ in range(max_graph_edges)
+            _strict_json_array_size(
+                (_strict_label_wire_bytes(left), _strict_label_wire_bytes(right))
+            )
+            for left, right in graph_edges
         )
     )
     graph_bytes = strict_json_object_size(

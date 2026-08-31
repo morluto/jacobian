@@ -109,7 +109,9 @@ def _admit_clique_expansion(hypergraph: FiniteHypergraph) -> None:
         )
 
 
-def _admit_edge_intersection_graph(hypergraph: FiniteHypergraph) -> None:
+def _admit_edge_intersection_graph(
+    hypergraph: FiniteHypergraph,
+) -> tuple[tuple[str, str], ...]:
     if any(
         not unicodedata.is_normalized("NFC", edge_id) for edge_id, _ in hypergraph.edges
     ):
@@ -153,14 +155,21 @@ def _admit_edge_intersection_graph(hypergraph: FiniteHypergraph) -> None:
                     "to fit the graph carrier"
                 ),
             )
-    # Bound the complete retained-source result size before execution.
-    # After the vertex-count check above, the maximum graph edge count is
-    # MAX_INDEXED_SIMPLE_GRAPH_VERTICES*(n-1)/2 <= MAX_INDEXED_SIMPLE_GRAPH_EDGES,
-    # so no independent edge-count preflight is needed; the result-byte bound
-    # below catches inputs whose serialized graph would exceed the canonical
-    # output limit.
+    # Build the exact graph edge set once for admission and reuse it for the
+    # result.  Charging every admitted input as a complete graph rejects sparse
+    # graphs that are well within the canonical output boundary.
+    edge_ids = tuple(edge_id for edge_id, _ in hypergraph.edges)
+    member_sets = tuple(frozenset(members) for _, members in hypergraph.edges)
+    graph_edges = tuple(
+        sorted(
+            tuple(sorted((edge_ids[left], edge_ids[right])))
+            for left in range(len(edge_ids))
+            for right in range(left + 1, len(edge_ids))
+            if member_sets[left] & member_sets[right]
+        )
+    )
     if (
-        _edge_intersection_graph_result_bytes(hypergraph)
+        _edge_intersection_graph_result_bytes(hypergraph, graph_edges)
         > MAX_EDGE_INTERSECTION_RESULT_BYTES
     ):
         raise OperationDomainValidationError(
@@ -172,6 +181,7 @@ def _admit_edge_intersection_graph(hypergraph: FiniteHypergraph) -> None:
                 "limit; shorten labels or reduce the edge family"
             ),
         )
+    return graph_edges
 
 
 def _admit_maximum_edge_matching(hypergraph: FiniteHypergraph) -> None:
@@ -487,6 +497,7 @@ def clique_expansion(hypergraph: FiniteHypergraph) -> CliqueExpansionResult:
 
 def _edge_intersection_graph_data(
     hypergraph: FiniteHypergraph,
+    graph_edges: tuple[tuple[str, str], ...],
 ) -> SimpleUndirectedGraph:
     """Compute the canonical edge-intersection graph.
 
@@ -497,21 +508,7 @@ def _edge_intersection_graph_data(
     independently of the source hypergraph's declared edge ordering.
     """
 
-    edges = _canonical_edges(hypergraph)
-    edge_ids = tuple(edge_id for edge_id, _ in edges)
-    member_sets = tuple(frozenset(members) for _, members in edges)
-    adjacent: dict[str, set[str]] = {edge_id: set() for edge_id in edge_ids}
-    for left in range(len(edges)):
-        for right in range(left + 1, len(edges)):
-            if member_sets[left] & member_sets[right]:
-                u, v = edge_ids[left], edge_ids[right]
-                adjacent[u].add(v)
-                adjacent[v].add(u)
-    graph_edges = tuple(
-        sorted(
-            (u, v) for u, neighbours in adjacent.items() for v in neighbours if u < v
-        )
-    )
+    edge_ids = tuple(edge_id for edge_id, _ in _canonical_edges(hypergraph))
     return SimpleUndirectedGraph(vertices=edge_ids, edges=graph_edges)
 
 
@@ -520,10 +517,10 @@ def edge_intersection_graph(
 ) -> EdgeIntersectionGraphResult:
     """Compute the edge-intersection graph of a finite hypergraph."""
 
-    _admit_edge_intersection_graph(hypergraph)
+    graph_edges = _admit_edge_intersection_graph(hypergraph)
     return EdgeIntersectionGraphResult(
         hypergraph=hypergraph,
-        graph=_edge_intersection_graph_data(hypergraph),
+        graph=_edge_intersection_graph_data(hypergraph, graph_edges),
     )
 
 

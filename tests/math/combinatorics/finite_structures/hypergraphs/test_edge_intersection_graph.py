@@ -288,3 +288,10 @@ class TestEdgeIntersectionGraphCarrierBound:
                     ],
                 }
             )
+
+    def test_sparse_graph_is_admitted_by_its_actual_output_size(self) -> None:
+        """A large sparse graph is not charged for absent complete-graph edges."""
+        edges = [[f"e{i:03}", [f"v{i}"]] for i in range(256)]
+        edges[1][1] = ["v0"]
+        result = _graph({"vertices": [f"v{i}" for i in range(256)], "edges": edges})
+        assert result.graph.edges == (("e000", "e001"),)

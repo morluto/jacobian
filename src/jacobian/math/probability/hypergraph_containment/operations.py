@@ -36,6 +36,7 @@ class _ContainmentAdmissionPlan:
     edge_masks: tuple[int, ...]
     active_vertices: tuple[int, ...]
     use_inclusion_exclusion: bool
+    use_singleton_closed_form: bool = False
 
 
 def _admit_hypergraph_vertex_containment(
@@ -67,6 +68,7 @@ def _admit_hypergraph_vertex_containment(
     n = len(hypergraph.vertices)
     state_count = 1 << n
     use_inclusion_exclusion = False
+    use_singleton_closed_form = False
     if not trivial_event:
         vertex_index = {
             vertex: index for index, vertex in enumerate(hypergraph.vertices)
@@ -94,27 +96,31 @@ def _admit_hypergraph_vertex_containment(
             for mask in minimal_masks
         )
         active_state_count = 1 << len(active_vertices)
+        use_singleton_closed_form = edge_masks and all(
+            mask.bit_count() == 1 for mask in edge_masks
+        )
         ie_terms = _inclusion_exclusion_terms(len(edge_masks), n)
         direct_work = len(edge_masks) * active_state_count + active_state_count * (
             n - len(active_vertices) + 1
         )
         ie_work = ie_terms * (n + len(edge_masks) + 2) if ie_terms is not None else None
         use_inclusion_exclusion = ie_work is not None and ie_work < direct_work
-        if active_state_count > MAX_SUBSET_STATES and not use_inclusion_exclusion:
-            raise OperationDomainValidationError(
-                location=("hypergraph", "vertices"),
-                code="hypergraph_containment.state_bound_exceeded",
-                message="the active subset-state envelope is exceeded",
-            )
-        lift_work = active_state_count * (n - len(active_vertices) + 1)
-        if not use_inclusion_exclusion and (
-            len(edge_masks) * active_state_count + lift_work > MAX_CONTAINMENT_WORK
-        ):
-            raise OperationDomainValidationError(
-                location=("hypergraph", "edges"),
-                code="hypergraph_containment.work_bound_exceeded",
-                message="the complete subset containment work envelope is exceeded",
-            )
+        if not use_singleton_closed_form:
+            if active_state_count > MAX_SUBSET_STATES and not use_inclusion_exclusion:
+                raise OperationDomainValidationError(
+                    location=("hypergraph", "vertices"),
+                    code="hypergraph_containment.state_bound_exceeded",
+                    message="the active subset-state envelope is exceeded",
+                )
+            lift_work = active_state_count * (n - len(active_vertices) + 1)
+            if not use_inclusion_exclusion and (
+                len(edge_masks) * active_state_count + lift_work > MAX_CONTAINMENT_WORK
+            ):
+                raise OperationDomainValidationError(
+                    location=("hypergraph", "edges"),
+                    code="hypergraph_containment.work_bound_exceeded",
+                    message="the complete subset containment work envelope is exceeded",
+                )
     else:
         edge_masks = ()
         active_vertices = ()
@@ -159,7 +165,8 @@ def _admit_hypergraph_vertex_containment(
             message="the complete containment profile exceeds the canonical output bound",
         )
     return _ContainmentAdmissionPlan(
-        edge_masks, active_vertices, use_inclusion_exclusion
+        edge_masks, active_vertices, use_inclusion_exclusion,
+        use_singleton_closed_form=use_singleton_closed_form,
     )
 
 
@@ -240,6 +247,25 @@ def compute_hypergraph_vertex_containment(
 
     active_n = len(plan.active_vertices)
     isolated_n = n - active_n
+    if plan.use_singleton_closed_form:
+        m = len(plan.edge_masks)
+        counts = [0] * (n + 1)
+        for k in range(n + 1):
+            counts[k] = comb(n, k) - comb(n - m, k) if k <= n - m else comb(n, k)
+        success = (1 << n) - (1 << (n - m))
+        p = retention_probability.as_fraction()
+        q = 1 - p
+        probability = 1 - q**m
+        return HypergraphVertexContainmentResult(
+            hypergraph=hypergraph,
+            retention_probability=retention_probability,
+            containing_subset_counts=tuple(
+                format_canonical_integer(value) for value in counts
+            ),
+            total_state_count=format_canonical_integer(1 << n),
+            success_count=format_canonical_integer(success),
+            probability=CanonicalRational.from_fraction(probability),
+        )
     if plan.use_inclusion_exclusion:
         edge_count = len(plan.edge_masks)
         ie_counts = [0] * (n + 1)

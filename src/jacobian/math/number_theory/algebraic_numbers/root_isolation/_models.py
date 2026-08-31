@@ -251,7 +251,7 @@ class AlgebraicCompareRequest(StrictModel):
                 "distinct-polynomial comparison admits degree at most "
                 f"{MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE}",
             )
-        return data
+        return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_pair_comparison_envelope(self) -> Self:

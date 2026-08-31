@@ -571,18 +571,19 @@ def _raw_polynomial_limit(  # noqa: C901
     if sparse is None:
         return
     if isinstance(sparse, SparseRationalPolynomial):
-        return
-    if not isinstance(sparse, Mapping):
+        terms = sparse.terms
+    elif isinstance(sparse, Mapping):
+        _raw_mapping_keys(
+            sparse,
+            allowed=frozenset({"terms"}),
+            reason="polynomial_shape",
+            label=f"{label} sparse value",
+        )
+        terms = sparse.get("terms")
+    else:
         raise _validation_error(
             "polynomial_shape", f"{label} sparse value must be an object"
         )
-    _raw_mapping_keys(
-        sparse,
-        allowed=frozenset({"terms"}),
-        reason="polynomial_shape",
-        label=f"{label} sparse value",
-    )
-    terms = sparse.get("terms")
     _raw_collection_limit(
         terms,
         maximum=maximum_terms,
@@ -593,6 +594,19 @@ def _raw_polynomial_limit(  # noqa: C901
         return
     for term in terms:
         if isinstance(term, RationalPolynomialTerm):
+            _raw_rational_limit(
+                term.coefficient,
+                maximum_digits=maximum_coefficient_digits,
+                label=f"{label} coefficient",
+            )
+            if any(
+                exponent < 0 or exponent > maximum_exponent
+                for exponent in term.exponents
+            ):
+                raise _validation_error(
+                    "exponent_bound",
+                    f"{label} exceeds the degree-{maximum_exponent} operation bound",
+                )
             continue
         if not isinstance(term, Mapping):
             raise _validation_error(
@@ -937,6 +951,7 @@ class PlaneComponentProfileResult(StrictModel):
             _raw_semialgebraic_envelope(
                 data.get("semialgebraic_set"), validate_model=True
             )
+            return canonicalize_json_containers(data)
         return data
 
     @model_validator(mode="after")

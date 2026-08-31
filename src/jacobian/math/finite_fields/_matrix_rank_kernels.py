@@ -90,9 +90,7 @@ def compute_matrix_rank(matrix: AxisBoundMatrix) -> MatrixRankData:
         col += 1
 
     pivot_rows = tuple(matrix.row_axis.labels[i] for i in pivot_row_indices)
-    pivot_columns = tuple(
-        matrix.column_axis.labels[i] for i in pivot_col_indices
-    )
+    pivot_columns = tuple(matrix.column_axis.labels[i] for i in pivot_col_indices)
 
     return MatrixRankData(
         rank=rank,

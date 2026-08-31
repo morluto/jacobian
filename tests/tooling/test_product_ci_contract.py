@@ -150,7 +150,7 @@ def test_autofix_dispatch_binds_pr_plans_to_the_exact_commit_range() -> None:
     assert 'BASE_SHA="$DISPATCH_BASE_SHA"' in ci
     assert 'HEAD_SHA="$DISPATCH_HEAD_SHA"' in ci
     assert 'test "$HEAD_SHA" = "$(git rev-parse HEAD)"' in ci
-    assert 'git merge-base --is-ancestor "$BASE_SHA" "$HEAD_SHA"' in ci
+    assert 'git merge-base "$BASE_SHA" "$HEAD_SHA" >/dev/null' in ci
     assert 'PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}' in autofix
     assert '-f base_sha="$PR_BASE_SHA"' in autofix
     assert '-f head_sha="$(git rev-parse HEAD)"' in autofix

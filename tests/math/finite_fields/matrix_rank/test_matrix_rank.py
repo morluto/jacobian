@@ -5,9 +5,13 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+<<<<<<< HEAD
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields import _matrix_rank as matrix_rank_module
+=======
+from jacobian.canonical import CanonicalLimits
+>>>>>>> refs/remotes/origin/main
 from jacobian.math.finite_fields._matrix_rank import compute_rank
 from jacobian.math.finite_fields._matrix_rank_models import MatrixRankRequest
 from jacobian.math.finite_fields.operations import matrix_rank
@@ -174,6 +178,19 @@ def test_full_rank_row_swap_canonicalizes_pivot_sets_independently() -> None:
     assert result.pivot_columns == ("c0", "c1")
 
 
+ 
+def test_native_matrix_rank_does_not_apply_transport_output_limit() -> None:
+    fp = _f2()
+    long_label = "r" * (CanonicalLimits().max_output_bytes + 1)
+    m = _matrix(fp, [[[1]]], [long_label], ["c0"])
+
+    result = matrix_rank(m)
+
+    assert result.rank == 1
+    assert result.pivot_rows == (long_label,)
+
+
+ 
 def test_pivot_columns_follow_source_axis_order() -> None:
     fp = _f2()
     m = _matrix(fp, [[[1], [0]], [[0], [1]]], ["r0", "r1"], ["c0", "c1"])

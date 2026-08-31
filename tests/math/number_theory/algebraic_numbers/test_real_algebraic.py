@@ -137,7 +137,7 @@ def test_comparison_preflights_raw_degree_before_algebraic_recognition() -> None
         AlgebraicCompareRequest.model_json_schema()["properties"]["left"]["properties"][
             "polynomial"
         ]["maxItems"]
-        == 9
+        == 17
     )
     assert not any(
         isinstance(entry.code, CodeType)

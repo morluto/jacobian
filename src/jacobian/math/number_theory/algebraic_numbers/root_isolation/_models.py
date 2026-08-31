@@ -226,6 +226,35 @@ class AlgebraicCompareRequest(StrictModel):
     left: _ComparisonRealAlgebraicValue
     right: _ComparisonRealAlgebraicValue
 
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_pair_comparison_envelope(cls, data: Any) -> Any:
+        if not isinstance(data, Mapping):
+            return data
+        left = data.get("left")
+        right = data.get("right")
+        left_polynomial = (
+            left.get("polynomial") if isinstance(left, Mapping) else None
+        )
+        right_polynomial = (
+            right.get("polynomial") if isinstance(right, Mapping) else None
+        )
+        if (
+            isinstance(left_polynomial, (list, tuple))
+            and isinstance(right_polynomial, (list, tuple))
+            and left_polynomial != right_polynomial
+            and (
+                len(left_polynomial) - 1 > MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE
+                or len(right_polynomial) - 1 > MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE
+            )
+        ):
+            raise _validation_error(
+                "comparison_degree_bound",
+                "distinct-polynomial comparison admits degree at most "
+                f"{MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE}",
+            )
+        return data
+
     @model_validator(mode="after")
     def require_pair_comparison_envelope(self) -> Self:
         if self.left.polynomial != self.right.polynomial and (

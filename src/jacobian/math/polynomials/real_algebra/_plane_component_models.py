@@ -608,7 +608,7 @@ def _raw_polynomial_limit(
                 )
 
 
-def _raw_semialgebraic_envelope(value: object) -> None:
+def _raw_semialgebraic_envelope(value: object) -> None:  # noqa: C901
     if isinstance(value, PlaneSemialgebraicSet):
         return
     if not isinstance(value, Mapping):
@@ -638,6 +638,7 @@ def _raw_semialgebraic_envelope(value: object) -> None:
         label="plane component polynomial family",
     )
     if isinstance(polynomials, (list, tuple)):
+        total_terms = 0
         for polynomial in polynomials:
             _raw_polynomial_limit(
                 polynomial,
@@ -645,6 +646,37 @@ def _raw_semialgebraic_envelope(value: object) -> None:
                 maximum_exponent=MAX_PLANE_COMPONENT_TOTAL_DEGREE,
                 maximum_coefficient_digits=MAX_PLANE_COMPONENT_COEFFICIENT_DIGITS,
                 label="plane sign polynomial",
+            )
+            if isinstance(polynomial, RationalPolynomial):
+                terms = polynomial.polynomial.terms
+            elif isinstance(polynomial, Mapping) and isinstance(
+                polynomial.get("polynomial"), Mapping
+            ):
+                terms = polynomial["polynomial"].get("terms")
+            else:
+                terms = None
+            if isinstance(terms, (list, tuple)):
+                total_terms += len(terms)
+                for term in terms:
+                    if isinstance(term, RationalPolynomialTerm):
+                        exponents = term.exponents
+                    elif isinstance(term, Mapping):
+                        exponents = term.get("exponents")
+                    else:
+                        exponents = None
+                    if isinstance(exponents, (list, tuple)) and sum(exponents) > (
+                        MAX_PLANE_COMPONENT_TOTAL_DEGREE
+                    ):
+                        raise _validation_error(
+                            "total_degree",
+                            "plane sign polynomial total degree exceeds the "
+                            "degree-four bound",
+                        )
+        if total_terms > MAX_PLANE_COMPONENT_TOTAL_TERMS:
+            raise _validation_error(
+                "total_terms",
+                "plane sign family admits at most "
+                f"{MAX_PLANE_COMPONENT_TOTAL_TERMS} terms",
             )
     sign_conditions = value.get("sign_conditions")
     _raw_collection_limit(

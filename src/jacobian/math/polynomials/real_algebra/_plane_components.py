@@ -239,7 +239,7 @@ def _noncompletion(
     outcome: QepcadPlaneProcessOutcome,
     *,
     started_at: float | None = None,
-    budget_seconds: int = int(PLANE_COMPONENT_WALL_SECONDS),
+    budget_seconds: int,
 ) -> PlaneComponentProfileResult:
     if outcome.status == "COMPUTED" or outcome.reason is None:
         raise RuntimeError("computed QEPCAD result cannot become a noncompletion")
@@ -279,6 +279,8 @@ def _noncompletion(
 def _computed_result(
     request: PlaneComponentProfileRequest,
     outcome: PlaneComponentProfileComputed,
+    *,
+    budget_seconds: int = int(PLANE_COMPONENT_WALL_SECONDS),
 ) -> PlaneComponentProfileResult:
     """Keep a computed profile only when its exact public value is deliverable."""
 
@@ -299,6 +301,7 @@ def _computed_result(
                 status="RESOURCE_LIMIT",
                 reason="RESULT_OUTPUT_LIMIT",
             ),
+            budget_seconds=budget_seconds,
         )
     return result
 
@@ -339,6 +342,7 @@ def compute_plane_component_profile(
         else min(owner_deadline, execution.deadline)
     )
     bind_request_deadline(deadline)
+    effective_budget_seconds = max(1, round(deadline - started))
     _require_active(deadline, "before semantic admission")
     _run_admission(request)
     _require_active(deadline, "after semantic admission")
@@ -357,7 +361,12 @@ def compute_plane_component_profile(
             _raise_sample_domain_error(exc)
         _require_active(deadline, "after exact sample recognition")
         if sample_outcome.status != "COMPUTED":
-            return _noncompletion(request, sample_outcome, started_at=started)
+            return _noncompletion(
+                request,
+                sample_outcome,
+                started_at=started,
+                budget_seconds=effective_budget_seconds,
+            )
         if sample_outcome.canonical_samples is None:
             return _noncompletion(
                 request,
@@ -366,6 +375,7 @@ def compute_plane_component_profile(
                     reason="SAMPLE_RECOGNITION_INVALID_OUTPUT",
                 ),
                 started_at=started,
+                budget_seconds=effective_budget_seconds,
             )
         validated_canonical_samples = sample_outcome.canonical_samples
 
@@ -379,6 +389,7 @@ def compute_plane_component_profile(
                     for index in range(len(request.samples))
                 ),
             ),
+            budget_seconds=effective_budget_seconds,
         )
         _require_active(deadline, "after exact result construction")
         return result
@@ -404,6 +415,7 @@ def compute_plane_component_profile(
                     for index in range(len(request.samples))
                 ),
             ),
+            budget_seconds=effective_budget_seconds,
         )
         _require_active(deadline, "after exact result construction")
         return result
@@ -420,7 +432,12 @@ def compute_plane_component_profile(
         _raise_sample_domain_error(exc)
     _require_active(deadline, "after QEPCAD execution")
     if outcome.status != "COMPUTED":
-        return _noncompletion(request, outcome, started_at=started)
+        return _noncompletion(
+            request,
+            outcome,
+            started_at=started,
+            budget_seconds=effective_budget_seconds,
+        )
     projection = outcome.projection
     if (
         projection is None
@@ -437,6 +454,7 @@ def compute_plane_component_profile(
                 reason="QEPCAD_INVALID_OUTPUT",
             ),
             started_at=started,
+            budget_seconds=effective_budget_seconds,
         )
     result = _computed_result(
         request,

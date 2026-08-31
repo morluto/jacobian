@@ -673,6 +673,59 @@ def _symmetric_inertia(
     return n_pos, n_neg, n_zero
 
 
+def _eliminate_algebraic_1x1(
+    matrix: list[list[Any]],
+    index: int,
+    pivot: int,
+    sign: Callable[[Any], int],
+) -> int:
+    _swap_symmetric(matrix, index, pivot)
+    diagonal = matrix[index][index]
+    diagonal_sign = sign(diagonal)
+    original = [row[:] for row in matrix]
+    for row in range(index + 1, len(matrix)):
+        if not original[row][index]:
+            continue
+        factor = original[row][index] / diagonal
+        for column in range(row, len(matrix)):
+            matrix[row][column] = (
+                original[row][column] - factor * original[index][column]
+            )
+    for row in range(index + 1, len(matrix)):
+        for column in range(row + 1, len(matrix)):
+            matrix[column][row] = matrix[row][column]
+        matrix[row][index] = 0
+        matrix[index][row] = 0
+    return diagonal_sign
+
+
+def _apply_algebraic_2x2_schur(
+    matrix: list[list[Any]], index: int, pivot: Any
+) -> None:
+    if index + 2 >= len(matrix):
+        return
+    original = [row[:] for row in matrix]
+    inverse_off_diagonal = pivot**-1
+    for row in range(index + 2, len(matrix)):
+        left = original[row][index]
+        right = original[row][index + 1]
+        coefficient0 = right * inverse_off_diagonal
+        coefficient1 = left * inverse_off_diagonal
+        for column in range(index + 2, len(matrix)):
+            matrix[row][column] = (
+                original[row][column]
+                - coefficient0 * original[index][column]
+                - coefficient1 * original[index + 1][column]
+            )
+    for row in range(index + 2, len(matrix)):
+        for column in range(row + 1, len(matrix)):
+            matrix[column][row] = matrix[row][column]
+        matrix[row][index] = 0
+        matrix[row][index + 1] = 0
+        matrix[index][row] = 0
+        matrix[index + 1][row] = 0
+
+
 def _symmetric_algebraic_inertia(
     matrix: list[list[Any]],
     *,
@@ -689,27 +742,9 @@ def _symmetric_algebraic_inertia(
         checkpoint("during exact algebraic congruence elimination")
         pivot = next((row for row in range(index, n) if bool(a[row][row])), None)
         if pivot is not None:
-            _swap_symmetric(a, index, pivot)
-            diagonal = a[index][index]
-            diagonal_sign = sign(diagonal)
-            if diagonal_sign > 0:
-                n_pos += 1
-            else:
-                n_neg += 1
-            original = [row[:] for row in a]
-            for row in range(index + 1, n):
-                if not original[row][index]:
-                    continue
-                factor = original[row][index] / diagonal
-                for column in range(row, n):
-                    a[row][column] = (
-                        original[row][column] - factor * original[index][column]
-                    )
-            for row in range(index + 1, n):
-                for column in range(row + 1, n):
-                    a[column][row] = a[row][column]
-                a[row][index] = 0
-                a[index][row] = 0
+            diagonal_sign = _eliminate_algebraic_1x1(a, index, pivot, sign)
+            n_pos += diagonal_sign > 0
+            n_neg += diagonal_sign < 0
             index += 1
             continue
 
@@ -735,27 +770,7 @@ def _symmetric_algebraic_inertia(
         b = a[index][index + 1]
         n_pos += 1
         n_neg += 1
-        if index + 2 < n:
-            original = [row[:] for row in a]
-            inverse_off_diagonal = b**-1
-            for row in range(index + 2, n):
-                left = original[row][index]
-                right = original[row][index + 1]
-                coefficient0 = right * inverse_off_diagonal
-                coefficient1 = left * inverse_off_diagonal
-                for column in range(index + 2, n):
-                    a[row][column] = (
-                        original[row][column]
-                        - coefficient0 * original[index][column]
-                        - coefficient1 * original[index + 1][column]
-                    )
-            for row in range(index + 2, n):
-                for column in range(row + 1, n):
-                    a[column][row] = a[row][column]
-                a[row][index] = 0
-                a[row][index + 1] = 0
-                a[index][row] = 0
-                a[index + 1][row] = 0
+        _apply_algebraic_2x2_schur(a, index, b)
         index += 2
     return n_pos, n_neg, n_zero
 

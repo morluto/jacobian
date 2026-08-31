@@ -120,12 +120,12 @@ def _coloring_work_bound(graph: SimpleUndirectedGraph, deletion_order: int) -> i
         source_missing = complete_edge_count - edge_count
         max_missing = source_missing + deletion_order
         # Near-complete graph: K_n minus a set F of missing edges.
-        # The chromatic number is n minus the maximum matching size
-        # of F, which is computable in polynomial time without
-        # backtracking.  The kernel uses this formula when the total
-        # missing-edge count (source + deletions) is at most n.
+        # The chromatic number equals the minimum clique cover of F,
+        # which the kernel computes via a bounded backtracking search.
+        # The search complexity is bounded by n * k^n where k is the
+        # clique cover number (at most n).
         if max_missing <= n:
-            total += n * max_missing * max_missing
+            total += n * max_missing * max_missing * max_missing
             continue
         component_graph = SimpleUndirectedGraph(
             vertices=tuple(component),
@@ -143,10 +143,12 @@ def _coloring_work_bound(graph: SimpleUndirectedGraph, deletion_order: int) -> i
 
 
 # Characters that RFC 8785 escapes as a \uXXXX sequence occupy six
-# bytes in the canonical JSON representation instead of their raw UTF-8
-# length.  This conservative bound overestimates the encoded size of
-# every label so that the preflight also covers intermediate encodings.
-_JSON_ESCAPE_CHARS = frozenset(
+# bytes in the canonical JSON representation; tab, newline, and
+# carriage return are emitted as two-byte short escapes (\t, \n, \r).
+# This conservative bound overestimates the encoded size of every label
+# so that the preflight also covers intermediate encodings.
+_JSON_SHORT_ESCAPE_CHARS = frozenset("\x09\x0a\x0d")
+_JSON_UESCAPE_CHARS = frozenset(
     "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x0b\x0c\x0e\x0f"
     "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f"
     "\x22\x5c"
@@ -158,8 +160,10 @@ def _json_escaped_size(label: str) -> int:
 
     total = 2  # opening and closing quotes
     for char in label:
-        if char in _JSON_ESCAPE_CHARS:
+        if char in _JSON_UESCAPE_CHARS:
             total += 6
+        elif char in _JSON_SHORT_ESCAPE_CHARS:
+            total += 2
         else:
             total += len(char.encode("utf-8"))
     return total
@@ -355,15 +359,12 @@ def _chromatic_number(
         elif len(component_edges) < complete_edge_count:
             missing = complete_edge_count - len(component_edges)
             # Near-complete graph: K_n minus a set F of missing edges.
-            # The chromatic number is n minus the maximum matching size
-            # of F, because two vertices can share a colour iff the edge
-            # between them is missing, and the maximum savings from
-            # pairing comes from the maximum matching in F.
-            #
-            # Only use the matching formula when the component is
-            # near-complete (missing few edges relative to complete);
-            # otherwise the complement is an arbitrary graph and the
-            # formula does not apply.
+            # The chromatic number equals the minimum clique cover of F,
+            # because a colour class is an clique in F (vertices pairwise
+            # non-adjacent in K_n - F).  Only use the clique-cover formula
+            # when the component is near-complete (missing few edges
+            # relative to complete); otherwise the complement is an
+            # arbitrary graph and the formula does not apply.
             if missing <= n:
                 component_edge_set = set(component_edges)
                 component_missing_edges = [
@@ -371,8 +372,10 @@ def _chromatic_number(
                     for edge in combinations(component_vertices, 2)
                     if tuple(sorted(edge)) not in component_edge_set
                 ]
-                max_matching = _max_matching(component_missing_edges)
-                component_numbers.append(n - max_matching)
+                clique_cover = _min_clique_cover(
+                    component_vertices, component_missing_edges
+                )
+                component_numbers.append(clique_cover)
             elif _is_bipartite_edges(component_vertices, component_edges):
                 component_numbers.append(2)
             else:
@@ -384,29 +387,81 @@ def _chromatic_number(
     return max(component_numbers, default=1)
 
 
-def _max_matching(edges: list[tuple[str, str]]) -> int:
-    """Return the size of a maximum matching in a small sparse graph."""
+def _min_clique_cover(
+    vertices: list[str], edges: list[tuple[str, str]]
+) -> int:
+    """Return the minimum number of cliques covering all vertices.
 
-    # For the bounded near-complete regime the missing-edge set is tiny,
-    # so an exhaustive search over subsets is both simple and exact.
-    best = 0
-    n = len(edges)
-    for mask in range(1 << n):
-        used: set[str] = set()
+    In the missing-edge graph F, a clique is a set of vertices that are
+    pairwise connected by missing edges — equivalently, a set that can
+    share one colour in K_n minus F.  The minimum clique cover of F is
+    the chromatic number of K_n minus F.
+
+    For the bounded near-complete regime the missing-edge set is tiny,
+    so an exhaustive search over partitions is both simple and exact.
+    A greedy bound prunes the search: the clique cover number is at
+    most n (all singletons) and at least ceil(n / max_clique_size).
+    """
+
+    # Build the adjacency of the missing-edge graph.
+    adj: dict[str, set[str]] = {v: set() for v in vertices}
+    for left, right in edges:
+        adj[left].add(right)
+        adj[right].add(left)
+
+    # Enumerate all maximal cliques containing each vertex.
+    # For small graphs this is fast; for the bounded domain the
+    # missing-edge graph has at most n edges on at most n vertices.
+
+    n = len(vertices)
+    vertex_set = set(vertices)
+
+    # Greedy clique partition: repeatedly take the largest clique
+    # from the remaining vertices.  This gives an upper bound.
+    def _greedy_clique_partition() -> int:
+        remaining = list(vertices)
         count = 0
-        ok = True
-        for i in range(n):
-            if mask & (1 << i):
-                left, right = edges[i]
-                if left in used or right in used:
-                    ok = False
-                    break
-                used.add(left)
-                used.add(right)
-                count += 1
-        if ok and count > best:
-            best = count
-    return best
+        while remaining:
+            # Greedily build the largest clique starting from first vertex.
+            clique: list[str] = [remaining[0]]
+            for v in remaining[1:]:
+                if all(v in adj[c] for c in clique):
+                    clique.append(v)
+            for v in clique:
+                remaining.remove(v)
+            count += 1
+        return count
+
+    upper = _greedy_clique_partition()
+
+    # Exhaustive search for a better cover using the greedy upper bound.
+    # Try partitioning into k cliques for k = 1 to upper.
+    def _can_cover(k: int) -> bool:
+        # Try to partition vertices into k cliques.
+        # Assign vertices one by one to one of k colour classes,
+        # ensuring each class is a clique in the missing-edge graph.
+        assignment: list[int] = [-1] * n
+
+        def backtrack(idx: int, used: list[set[str]]) -> bool:
+            if idx == n:
+                return True
+            v = vertices[idx]
+            for c in range(min(k, idx + 1)):
+                if all(vertices[j] in adj[v] for j in range(idx) if assignment[j] == c):
+                    assignment[idx] = c
+                    used[c].add(v)
+                    if backtrack(idx + 1, used):
+                        return True
+                    used[c].discard(v)
+                    assignment[idx] = -1
+            return False
+
+        return backtrack(0, [set() for _ in range(k)])
+
+    for k in range(1, upper):
+        if _can_cover(k):
+            return k
+    return upper
 
 
 def _is_bipartite_edges(vertices: list[str], edges: list[tuple[str, str]]) -> bool:

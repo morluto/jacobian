@@ -56,6 +56,36 @@ def _admit_certified_smith_input(matrix: CertifiedIntegerMatrix) -> None:
         )
 
 
+def _admit_smith_certificate_for_verification(
+    matrix: CertifiedIntegerMatrix,
+) -> None:
+    if (
+        matrix.row_count > MAX_CERTIFIED_SNF_INPUT_DIMENSION
+        or matrix.column_count > MAX_CERTIFIED_SNF_INPUT_DIMENSION
+    ):
+        raise OperationDomainValidationError(
+            location=("certificate", "source"),
+            code="matrix.budget_exceeded",
+            message=(
+                "certified Smith certificate sources may have at most "
+                f"{MAX_CERTIFIED_SNF_INPUT_DIMENSION} rows and columns"
+            ),
+        )
+    if any(
+        _integer_digits(value) > MAX_CERTIFIED_SNF_INPUT_DIGITS
+        for row in matrix.entries
+        for value in row
+    ):
+        raise OperationDomainValidationError(
+            location=("certificate", "source", "entries"),
+            code="matrix.budget_exceeded",
+            message=(
+                "certified Smith certificate source entries may contain at most "
+                f"{MAX_CERTIFIED_SNF_INPUT_DIGITS} decimal digits"
+            ),
+        )
+
+
 def smith_normal_form_certificate(
     matrix: CertifiedIntegerMatrix,
 ) -> SmithNormalFormCertificate:
@@ -319,7 +349,7 @@ def verify_smith_normal_form_certificate(
     """
 
     try:
-        _admit_certified_smith_input(certificate.source)
+        _admit_smith_certificate_for_verification(certificate.source)
     except OperationDomainValidationError:
         return False
 

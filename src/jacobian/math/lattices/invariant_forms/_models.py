@@ -111,8 +111,7 @@ def _reject_nested_rational_components(entries: object) -> None:
                 if value is not None and not isinstance(value, str):
                     raise _validation_error(
                         "rational_component",
-                        f"rational {key} must be a string, not "
-                        f"{type(value).__name__}",
+                        f"rational {key} must be a string, not {type(value).__name__}",
                     )
 
 

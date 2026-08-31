@@ -50,7 +50,9 @@ INVARIANT_BILINEAR_FORM_LATTICE_OPERATION = MathTool(
     examples=(
         example(
             "invariant_area_form",
-            "The standard alternating form is fixed by this determinant-one action.",
+            "Computes the invariant-form lattice of the determinant-one "
+            "action on two coordinates. Every generator matrix must be "
+            "square on coordinate_axis.",
             {
                 "action": {
                     "coordinate_axis": ["e1", "e2"],

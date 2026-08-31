@@ -6,7 +6,7 @@ from fractions import Fraction
 from typing import Any, Literal
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import parse_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.real import RationalIsolatingInterval
 from jacobian.math.number_theory.number_fields._real_embedding_order_protocol import (
     SelectedImageWorkerComplete,
@@ -63,20 +63,22 @@ def compute_selected_image_isolation(
         rational = Fraction(
             int(descending[0].numerator), int(descending[0].denominator)
         )
-        endpoint = f"{rational.numerator}/{rational.denominator}"
-        order: Literal["LT", "EQ", "GT"] = "LT" if rational < 0 else "GT"
+        order: Literal["LT", "GT"] = "LT" if rational < 0 else "GT"
+        rational_interval = RationalIsolatingInterval(
+            lower=CanonicalRational(
+                num=format_canonical_integer(rational.numerator),
+                den=format_canonical_integer(rational.denominator),
+            ),
+            upper=CanonicalRational(
+                num=format_canonical_integer(rational.numerator),
+                den=format_canonical_integer(rational.denominator),
+            ),
+            interval_type="SINGLETON",
+        )
         return SelectedImageWorkerComplete(
             kind="complete",
             order=order,
-            isolating_interval=RationalIsolatingInterval(
-                lower=CanonicalRational(
-                    num=endpoint.split("/")[0], den=endpoint.split("/")[1]
-                ),
-                upper=CanonicalRational(
-                    num=endpoint.split("/")[0], den=endpoint.split("/")[1]
-                ),
-                interval_type="SINGLETON",
-            ),
+            isolating_interval=rational_interval,
         )
 
     image = algebraic_field.to_sympy(value)
@@ -132,9 +134,9 @@ def compute_selected_image_isolation(
     lower_fraction = Fraction(int(lower.p), int(lower.q))
     upper_fraction = Fraction(int(upper.p), int(upper.q))
     if upper_fraction < 0:
-        order = "LT"
+        final_order: Literal["LT", "GT"] = "LT"
     elif lower_fraction > 0:
-        order = "GT"
+        final_order = "GT"
     else:
         return SelectedImageWorkerError(
             kind="error",
@@ -143,17 +145,17 @@ def compute_selected_image_isolation(
         )
     return SelectedImageWorkerComplete(
         kind="complete",
-        order=order,
+        order=final_order,
         isolating_interval=RationalIsolatingInterval(
             lower=CanonicalRational(
-                num=str(lower_fraction.numerator),
-                den=str(lower_fraction.denominator),
+                num=format_canonical_integer(lower_fraction.numerator),
+                den=format_canonical_integer(lower_fraction.denominator),
             ),
             upper=CanonicalRational(
-                num=str(upper_fraction.numerator),
-                den=str(upper_fraction.denominator),
+                num=format_canonical_integer(upper_fraction.numerator),
+                den=format_canonical_integer(upper_fraction.denominator),
             ),
-            interval_type=("SINGLETON" if lower_fraction == upper_fraction else "OPEN"),
+            interval_type="SINGLETON" if lower_fraction == upper_fraction else "OPEN",
         ),
     )
 

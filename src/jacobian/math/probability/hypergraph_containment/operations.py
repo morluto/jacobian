@@ -96,7 +96,7 @@ def _admit_hypergraph_vertex_containment(
             for mask in minimal_masks
         )
         active_state_count = 1 << len(active_vertices)
-        use_singleton_closed_form = edge_masks and all(
+        use_singleton_closed_form = bool(edge_masks) and all(
             mask.bit_count() == 1 for mask in edge_masks
         )
         ie_terms = _inclusion_exclusion_terms(len(edge_masks), n)
@@ -251,9 +251,9 @@ def compute_hypergraph_vertex_containment(
     isolated_n = n - active_n
     if plan.use_singleton_closed_form:
         m = len(plan.edge_masks)
-        counts = [0] * (n + 1)
+        singleton_counts = [0] * (n + 1)
         for k in range(n + 1):
-            counts[k] = comb(n, k) - comb(n - m, k) if k <= n - m else comb(n, k)
+            singleton_counts[k] = comb(n, k) - comb(n - m, k) if k <= n - m else comb(n, k)
         success = (1 << n) - (1 << (n - m))
         p = retention_probability.as_fraction()
         q = 1 - p
@@ -262,7 +262,7 @@ def compute_hypergraph_vertex_containment(
             hypergraph=hypergraph,
             retention_probability=retention_probability,
             containing_subset_counts=tuple(
-                format_canonical_integer(value) for value in counts
+                format_canonical_integer(value) for value in singleton_counts
             ),
             total_state_count=format_canonical_integer(1 << n),
             success_count=format_canonical_integer(success),

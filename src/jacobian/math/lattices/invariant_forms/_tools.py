@@ -50,9 +50,9 @@ INVARIANT_BILINEAR_FORM_LATTICE_OPERATION = MathTool(
     examples=(
         example(
             "invariant_area_form",
-            "Computes the invariant-form lattice of the determinant-one "
-            "action on two coordinates. Every generator matrix must be "
-            "square on coordinate_axis.",
+            "Computes the row-Hermite basis of integral matrices Q "
+            "satisfying A^T Q A = Q for the generator A. Every generator "
+            "matrix must be square on coordinate_axis.",
             {
                 "action": {
                     "coordinate_axis": ["e1", "e2"],

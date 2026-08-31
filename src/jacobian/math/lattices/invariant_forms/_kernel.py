@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from math import ceil, gcd, lcm, log10
 from typing import Any
+from unicodedata import normalize
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
@@ -310,6 +311,21 @@ def _require_constraint_expansion_envelope(
         )
 
 
+def _normalize_retained_strings(value: object) -> object:
+    """Normalize retained JSON strings without changing JSON container types."""
+
+    if isinstance(value, str):
+        return normalize("NFC", value)
+    if isinstance(value, list):
+        return [_normalize_retained_strings(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            _normalize_retained_strings(key): _normalize_retained_strings(item)
+            for key, item in value.items()
+        }
+    return value
+
+
 def _retained_action_bytes(action: MatrixAction) -> int:
     """Measure the exact retained source before expanding any constraints."""
 
@@ -337,7 +353,9 @@ def _retained_action_bytes(action: MatrixAction) -> int:
                 "the retained exact matrix action leaves no room for the canonical result",
             )
     try:
-        source_bytes = len(encode_strict_json(action.model_dump(mode="json")))
+        retained_payload = action.model_dump(mode="json")
+        retained_payload = _normalize_retained_strings(retained_payload)
+        source_bytes = len(encode_strict_json(retained_payload))
     except CanonicalizationError:
         raise _validation_error(
             "budget_exceeded",

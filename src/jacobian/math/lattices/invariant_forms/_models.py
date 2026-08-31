@@ -91,6 +91,31 @@ def _canonicalize_generator_order(data: dict[str, object]) -> dict[str, object]:
     return normalized
 
 
+def _reject_nested_rational_components(entries: object) -> None:
+    """Reject non-string ``num``/``den`` values before recursive parsing.
+
+    A deeply nested dict or list inside a recognized rational component
+    would pass the ``num``/``den`` key check but cause a ``RecursionError``
+    during ``canonicalize_json_containers``.  Reject it here instead.
+    """
+
+    if not isinstance(entries, (list, tuple)):
+        return
+    for row in entries:
+        if not isinstance(row, (list, tuple)):
+            continue
+        for cell in row:
+            if not isinstance(cell, dict):
+                continue
+            for key in ("num", "den"):
+                value = cell.get(key)
+                if value is not None and not isinstance(value, str):
+                    raise _validation_error(
+                        "rational_component",
+                        f"rational {key} must be a string, not {type(value).__name__}",
+                    )
+
+
 def _require_raw_action_envelope(data: object) -> object:  # noqa: C901
     """Bound structural action containers before nested rational parsing."""
 
@@ -114,22 +139,35 @@ def _require_raw_action_envelope(data: object) -> object:  # noqa: C901
     # before Pydantic canonicalizes every rational cell.  A native caller
     # can reuse one raw matrix object across generators, so bound the total
     # cell count from the raw shapes rather than the first dimension alone.
+    # Apply an absolute raw-cell ceiling so a valid-shape but over-large
+    # action (e.g. 128-axis x 65536 generators) is rejected before Pydantic
+    # parses one billion rational cells.
     if isinstance(axis, (list, tuple)) and axis:
         dimension = len(axis)
         total_cells = 0
+        raw_digit_work = 0
         for generator in generators:
-            if not isinstance(generator, dict):
-                continue
-            raw_matrix = generator.get("matrix")
-            if not isinstance(raw_matrix, dict):
-                continue
-            raw_entries = raw_matrix.get("entries")
-            if not isinstance(raw_entries, (list, tuple)):
-                continue
-            for row in raw_entries:
-                if not isinstance(row, (list, tuple)):
+            if isinstance(generator, dict):
+                raw_matrix = generator.get("matrix")
+                if not isinstance(raw_matrix, dict):
                     continue
-                total_cells += len(row)
+                raw_entries = raw_matrix.get("entries")
+                if not isinstance(raw_entries, (list, tuple)):
+                    continue
+                _reject_nested_rational_components(raw_entries)
+                for row in raw_entries:
+                    if isinstance(row, (list, tuple)):
+                        total_cells += len(row)
+                        for cell in row:
+                            if isinstance(cell, dict):
+                                for comp in (cell.get("num"), cell.get("den")):
+                                    if isinstance(comp, str):
+                                        raw_digit_work += len(comp.lstrip("-"))
+            elif isinstance(generator, RationalActionGenerator):
+                # Already a canonical RationalActionGenerator instance.
+                total_cells += len(generator.matrix.entries) * (
+                    len(generator.matrix.entries[0]) if generator.matrix.entries else 0
+                )
         if dimension > 0 and total_cells > 0:
             max_cells = dimension * dimension * len(generators)
             if total_cells > max_cells:
@@ -138,17 +176,18 @@ def _require_raw_action_envelope(data: object) -> object:  # noqa: C901
                     "generator matrix rows exceed the declared coordinate_axis"
                     " dimension before nested parsing",
                 )
-            if total_cells > MAX_CONSTRAINT_CELLS:
+            if raw_digit_work > MAX_CONSTRAINT_DIGIT_WORK:
                 raise _validation_error(
                     "budget_exceeded",
-                    "generator matrix cells exceed the structural bound of "
-                    f"{MAX_CONSTRAINT_CELLS} coefficients before nested parsing",
+                    "raw rational digit work exceeds the "
+                    f"{MAX_CONSTRAINT_DIGIT_WORK}-digit work bound",
                 )
     else:
         # When the axis is missing, empty, or not a sequence, still bound the
         # total raw cell count so Pydantic does not validate a billion cells
         # merely to report the axis error.
         total_cells = 0
+        raw_digit_work = 0
         for generator in generators:
             if not isinstance(generator, dict):
                 continue

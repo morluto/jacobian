@@ -155,13 +155,11 @@ def test_raw_embedded_matrix_bounds_field_polynomial_iterables(
         "entries": [[element]],
     }
     if location == "entry":
-        payload["entries"][0][0]["presentation"][
-            "coefficients_descending"
-        ] = repeat("0")
-    elif location == "embedding":
-        payload["embedding"]["presentation"]["coefficients_descending"] = repeat(
+        payload["entries"][0][0]["presentation"]["coefficients_descending"] = repeat(
             "0"
         )
+    elif location == "embedding":
+        payload["embedding"]["presentation"]["coefficients_descending"] = repeat("0")
     else:
         payload["embedding"]["root"]["polynomial"] = repeat("0")
 

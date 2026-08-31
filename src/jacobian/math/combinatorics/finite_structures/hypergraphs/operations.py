@@ -161,12 +161,12 @@ def _admit_edge_intersection_graph(
     edge_ids = tuple(edge_id for edge_id, _ in hypergraph.edges)
     member_sets = tuple(frozenset(members) for _, members in hypergraph.edges)
     graph_edges = tuple(
-        sorted(
-            tuple(sorted((edge_ids[left], edge_ids[right])))
-            for left in range(len(edge_ids))
-            for right in range(left + 1, len(edge_ids))
-            if member_sets[left] & member_sets[right]
-        )
+        (edge_ids[left], edge_ids[right])
+        if edge_ids[left] <= edge_ids[right]
+        else (edge_ids[right], edge_ids[left])
+        for left in range(len(edge_ids))
+        for right in range(left + 1, len(edge_ids))
+        if member_sets[left] & member_sets[right]
     )
     if (
         _edge_intersection_graph_result_bytes(hypergraph, graph_edges)

@@ -253,7 +253,9 @@ def compute_hypergraph_vertex_containment(
         m = len(plan.edge_masks)
         singleton_counts = [0] * (n + 1)
         for k in range(n + 1):
-            singleton_counts[k] = comb(n, k) - comb(n - m, k) if k <= n - m else comb(n, k)
+            singleton_counts[k] = (
+                comb(n, k) - comb(n - m, k) if k <= n - m else comb(n, k)
+            )
         success = (1 << n) - (1 << (n - m))
         p = retention_probability.as_fraction()
         q = 1 - p

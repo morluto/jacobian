@@ -1,14 +1,9 @@
-# ruff: noqa: B904, PTH118, PTH123, PTH110
+# ruff: noqa: B904
 """Exact cyclotomic decomposition of bounded rational cyclic linear maps."""
 
 from __future__ import annotations
 
 import multiprocessing
-import os
-import pickle
-import subprocess
-import sys
-import tempfile
 import time
 from dataclasses import dataclass
 from fractions import Fraction
@@ -822,103 +817,18 @@ def _cyclotomic_kernel_child(
     return result
 
 
-def _run_kernel_subprocess(
-    order: int,
-    degree: int,
-    matrix_coordinates: ComponentCoordinates,
-    common_denominator: int,
-    deadline: float | None,
-) -> tuple[Any, ...]:
-    """Run the cyclotomic kernel in a subprocess.
-
-    Uses ``subprocess.Popen`` with a ``python -c`` script instead of
-    ``multiprocessing.Process`` so callers do not need a ``__main__``
-    guard and the approach works cross-platform (no forkserver/spawn
-    start-method dependency). The subprocess communicates via a
-    temporary file: the parent writes pickled input, the child writes
-    pickled output, and the parent reads it back.
-    """
-
-    input_data = pickle.dumps((order, degree, matrix_coordinates, common_denominator))
-
-    runner_script = (
-        "import pickle, sys\n"
-        "from jacobian.math.matrices.cyclic_linear.operations import "
-        "_cyclotomic_kernel_child\n"
-        "input_path = sys.argv[1]\n"
-        "output_path = sys.argv[2]\n"
-        "with open(input_path, 'rb') as f:\n"
-        "    data = pickle.load(f)\n"
-        "order, degree, matrix_coordinates, common_denominator = data\n"
-        "result = _cyclotomic_kernel_child(\n"
-        "    order, degree, matrix_coordinates, common_denominator\n"
-        ")\n"
-        "with open(output_path, 'wb') as f:\n"
-        "    pickle.dump(result, f)\n"
-    )
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        input_path = os.path.join(tmpdir, "input.pkl")
-        output_path = os.path.join(tmpdir, "output.pkl")
-        with open(input_path, "wb") as f:
-            f.write(input_data)
-
-        proc = subprocess.Popen(
-            [
-                sys.executable,
-                "-c",
-                runner_script,
-                input_path,
-                output_path,
-            ],
-            # The child communicates through the bounded temporary output
-            # file. Redirecting both standard streams avoids pipe-buffer
-            # backpressure while it runs; diagnostics are not part of the
-            # mathematical result.
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-
-        while proc.poll() is None:
-            if request_cancelled():
-                proc.kill()
-                proc.wait(timeout=5)
-                raise OperationExecutionCancelledError(
-                    "cyclotomic kernel subprocess was cancelled"
-                )
-            if deadline is not None and time.monotonic() >= deadline:
-                proc.kill()
-                proc.wait(timeout=5)
-                raise OperationExecutionTimeoutError(
-                    "cyclotomic kernel subprocess exceeded the wall-time limit"
-                )
-            try:
-                proc.wait(timeout=0.1)
-            except subprocess.TimeoutExpired:
-                continue
-
-        if proc.returncode != 0:
-            raise RuntimeError(
-                f"cyclotomic kernel subprocess exited with code {proc.returncode}"
-            )
-
-        if not os.path.exists(output_path):
-            raise RuntimeError("cyclotomic kernel subprocess did not produce output")
-
-        with open(output_path, "rb") as f:
-            return pickle.load(f)  # type: ignore[no-any-return]
-
-
 def _compute_component(admission: _ComponentAdmission) -> _ComputedComponent:
     from sympy import QQ
 
     order = admission.order
     _require_execution_active(f"before order-{order} kernel")
 
-    # Run the SymPy kernel (rref, det, rref_den) in a subprocess so
-    # the parent can kill it on deadline or cancellation.  Using
-    # subprocess.Popen avoids requiring a __main__ guard or a specific
-    # multiprocessing start method, working cross-platform.
+    # Run the SymPy kernel (rref, det, rref_den) in a bounded worker so the
+    # parent can kill it on deadline or cancellation.
+    from jacobian.math.matrices.cyclic_linear._kernel_process import (
+        run_cyclotomic_kernel,
+    )
+
     execution = current_request_execution()
     deadline = execution.deadline if execution is not None else None
 
@@ -929,7 +839,7 @@ def _compute_component(admission: _ComponentAdmission) -> _ComputedComponent:
 
     try:
         rank, source_dimension, nonzero_minor_data, kernel_coords = (
-            _run_kernel_subprocess(
+            run_cyclotomic_kernel(
                 order,
                 admission.degree,
                 admission.matrix_coordinates,

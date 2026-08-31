@@ -13,6 +13,10 @@ from jacobian.math.polynomials._elementary_kernel import (
     rational_polynomial_evaluate,
     rational_polynomial_integral,
 )
+from jacobian.math.polynomials.ideals.operations import (
+    ideal_containment,
+    ideal_equality,
+)
 from jacobian.math.polynomials.operations import (
     derivative,
     discriminant,
@@ -44,6 +48,8 @@ __all__ = [
     "gcdex",
     "groebner_basis",
     "hermite_reduction",
+    "ideal_containment",
+    "ideal_equality",
     "integer_polynomial_compose",
     "integer_polynomial_content",
     "integer_polynomial_evaluate",

@@ -447,7 +447,7 @@ class ClauseConstrainedRationalFlatProblem(StrictModel):
 
     @model_validator(mode="before")
     @classmethod
-    def require_raw_problem_envelope(  # noqa: C901cls, data: Any) -> Any:
+    def require_raw_problem_envelope(cls, data: Any) -> Any:  # noqa: C901
         if isinstance(data, dict):
             _require_raw_mapping_keys(
                 data,

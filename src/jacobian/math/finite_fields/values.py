@@ -570,7 +570,10 @@ class AxisBoundMatrix(StrictModel):
         for field in ("row_axis", "column_axis"):
             axis = data.get(field)
             labels = _raw_field(axis, "labels")
-            if isinstance(labels, (list, tuple)) and len(labels) > _MAX_VALUE_AXIS_LABELS:
+            if (
+                isinstance(labels, (list, tuple))
+                and len(labels) > _MAX_VALUE_AXIS_LABELS
+            ):
                 raise _validation_error(
                     "finite_field.axis_exceeds_supported_label_bound",
                     "matrix axes exceed the supported label bound",
@@ -634,7 +637,10 @@ class FiniteDimensionalSubspace(StrictModel):
         if isinstance(data, dict):
             axis = data.get("basis_axis")
             labels = _raw_field(axis, "labels")
-            if isinstance(labels, (list, tuple)) and len(labels) > _MAX_VALUE_AXIS_LABELS:
+            if (
+                isinstance(labels, (list, tuple))
+                and len(labels) > _MAX_VALUE_AXIS_LABELS
+            ):
                 raise _validation_error(
                     "finite_field.axis_exceeds_supported_label_bound",
                     "subspace basis axes exceed the supported label bound",

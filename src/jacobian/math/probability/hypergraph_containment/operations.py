@@ -165,7 +165,9 @@ def _admit_hypergraph_vertex_containment(
             message="the complete containment profile exceeds the canonical output bound",
         )
     return _ContainmentAdmissionPlan(
-        edge_masks, active_vertices, use_inclusion_exclusion,
+        edge_masks,
+        active_vertices,
+        use_inclusion_exclusion,
         use_singleton_closed_form=use_singleton_closed_form,
     )
 

@@ -1,113 +1,99 @@
 """Typed contracts for the cycle-length profile operation."""
 
-import math
+from __future__ import annotations
+
 from typing import Self
 
-from pydantic import model_validator
-from pydantic_core import PydanticCustomError
+from pydantic import Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits, encode_strict_json
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import (
+    MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+    SimpleUndirectedGraph,
+)
 
-MAX_CYCLE_LENGTH_SEARCH_WORK = 5_000_000
-
-
-def _has_bounded_cycle_structure(graph: SimpleUndirectedGraph) -> bool:
-    """Return whether path enumeration is polynomial for this source graph."""
-    parent = {vertex: vertex for vertex in graph.vertices}
-    degrees = dict.fromkeys(graph.vertices, 0)
-
-    def find(vertex: str) -> str:
-        while parent[vertex] != vertex:
-            parent[vertex] = parent[parent[vertex]]
-            vertex = parent[vertex]
-        return vertex
-
-    forest = True
-    for left, right in graph.edges:
-        degrees[left] += 1
-        degrees[right] += 1
-        left_root, right_root = find(left), find(right)
-        if left_root == right_root:
-            forest = False
-        else:
-            parent[left_root] = right_root
-    return forest or max(degrees.values(), default=0) <= 2
+MAX_VERTICES = MAX_INDEXED_SIMPLE_GRAPH_VERTICES
 
 
-def _cycle_search_work(graph: SimpleUndirectedGraph) -> int:
-    """Conservatively bound all simple paths explored across target lengths."""
-    vertex_count = len(graph.vertices)
-    if _has_bounded_cycle_structure(graph):
-        return vertex_count**3
-    paths_per_source = sum(
-        math.perm(vertex_count - 1, depth) for depth in range(vertex_count)
-    )
-    return vertex_count * vertex_count * paths_per_source
+class CycleLengthProfileRequest(StrictModel):
+    """Request for the simple-cycle length profile of a graph."""
 
-
-def _cycle_profile_result_wire_bytes(graph: SimpleUndirectedGraph) -> int:
-    """Conservatively reserve the echoed graph and every possible witness."""
-    entries = [
-        {"length": length, "witness": list(graph.vertices)}
-        for length in range(3, len(graph.vertices) + 1)
-    ]
-    return len(
-        encode_strict_json(
-            {
-                "graph": graph.model_dump(mode="json"),
-                "entries": entries,
-                "cycle_lengths": list(range(3, len(graph.vertices) + 1)),
-            },
-            limits=CanonicalLimits(max_output_bytes=1 << 60),
+    graph: SimpleUndirectedGraph = Field(
+        description=(
+            "Canonical simple graph. Admission also requires the complete first-"
+            "witness search to fit the 10,000,000-unit work bound and the complete "
+            "profile to fit the canonical output envelope."
         )
     )
 
 
-class CycleLengthProfileRequest(StrictModel):
-    """Request the complete simple-cycle length profile of a graph."""
+class CycleLengthRow(StrictModel):
+    """One cycle length with a canonical witness cycle."""
 
-    graph: SimpleUndirectedGraph
+    cycle_length: StrictInt = Field(ge=3, le=MAX_VERTICES)
+    witness: tuple[str, ...] = Field(min_length=3, max_length=MAX_VERTICES)
+
+    @classmethod
+    def _from_kernel(cls, cycle_length: int, witness: tuple[str, ...]) -> Self:
+        """Construct a row after the owner kernel established its invariants."""
+
+        return cls.model_construct(cycle_length=cycle_length, witness=witness)
 
     @model_validator(mode="after")
-    def require_bounded_search(self) -> Self:
-        if (
-            _cycle_profile_result_wire_bytes(self.graph)
-            > CanonicalLimits().max_output_bytes
-        ):
-            raise PydanticCustomError(
-                "cycle_length.result_bytes_exceeded",
-                "cycle-length profile exceeds the canonical output-byte limit",
-            )
-        if _cycle_search_work(self.graph) > MAX_CYCLE_LENGTH_SEARCH_WORK:
-            raise PydanticCustomError(
-                "cycle_length.search_work_exceeded",
-                "cycle-length enumeration exceeds the admitted simple-path work bound",
+    def require_matching_witness_length(self) -> Self:
+        if self.cycle_length != len(self.witness):
+            raise ValueError("cycle witness length must match cycle_length")
+        if len(set(self.witness)) != len(self.witness):
+            raise ValueError("cycle witnesses must have distinct vertices")
+        rotations = [
+            self.witness[index:] + self.witness[:index]
+            for index in range(len(self.witness))
+        ]
+        reversed_witness = (self.witness[0], *reversed(self.witness[1:]))
+        rotations.extend(
+            reversed_witness[index:] + reversed_witness[:index]
+            for index in range(len(self.witness))
+        )
+        if self.witness != min(rotations):
+            raise ValueError(
+                "cycle witnesses must use canonical rotation and orientation"
             )
         return self
-
-
-class CycleLengthEntry(StrictModel):
-    """One cycle length and a witness cycle."""
-
-    length: int
-    witness: tuple[str, ...]
 
 
 class CycleLengthProfileResult(StrictModel):
     """The complete cycle-length profile of a graph."""
 
     graph: SimpleUndirectedGraph
-    entries: tuple[CycleLengthEntry, ...]
-    cycle_lengths: tuple[int, ...]
+    rows: tuple[CycleLengthRow, ...] = Field(max_length=MAX_VERTICES - 2)
+
+    @model_validator(mode="after")
+    def require_sorted_unique_lengths(self) -> Self:
+        if len(self.graph.vertices) > MAX_VERTICES:
+            raise ValueError(f"cycle profiles support at most {MAX_VERTICES} vertices")
+        lengths = tuple(row.cycle_length for row in self.rows)
+        if lengths != tuple(sorted(lengths)) or len(set(lengths)) != len(lengths):
+            raise ValueError("cycle profile rows must be sorted and unique")
+        vertices = set(self.graph.vertices)
+        for row in self.rows:
+            if not set(row.witness) <= vertices:
+                raise ValueError("cycle witnesses must use graph vertices")
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        graph: SimpleUndirectedGraph,
+        rows: tuple[CycleLengthRow, ...],
+    ) -> Self:
+        """Construct a result after the owner admission and kernel checks."""
+
+        return cls.model_construct(graph=graph, rows=rows)
 
 
 __all__ = [
-    "MAX_CYCLE_LENGTH_SEARCH_WORK",
-    "CycleLengthEntry",
+    "MAX_VERTICES",
     "CycleLengthProfileRequest",
     "CycleLengthProfileResult",
-    "_cycle_profile_result_wire_bytes",
-    "_cycle_search_work",
+    "CycleLengthRow",
 ]

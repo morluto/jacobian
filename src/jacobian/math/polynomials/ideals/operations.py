@@ -626,6 +626,7 @@ main()
 
 _STDOUT_LIMIT = 8 * 1024 * 1024
 _STDERR_LIMIT = 64 * 1024
+_RELATION_RESULT_RESERVE_SECONDS = 0.25
 
 
 def _run_sympy_kernel(
@@ -841,13 +842,18 @@ def _raise_if_relation_deadline_exceeded(deadline: float) -> None:
 
 
 def _bind_relation_deadline(resource_budget: IdealComputationBudget) -> float:
+    """Reserve delivery time after the relation kernel's private deadline."""
     execution = current_request_execution()
     started_at = execution.started_at if execution is not None else time.monotonic()
-    deadline = started_at + resource_budget.wall_seconds
+    request_deadline = started_at + resource_budget.wall_seconds
     if execution is not None and execution.deadline is not None:
-        deadline = min(deadline, execution.deadline)
-    bind_request_deadline(deadline)
-    return deadline
+        request_deadline = min(request_deadline, execution.deadline)
+    # The direct MCP adapter must still be able to build and serialize the
+    # typed TIMEOUT result after the worker allowance expires. Keep the full
+    # request deadline in the shared execution context and give the relation
+    # kernel a slightly earlier private cutoff.
+    bind_request_deadline(request_deadline)
+    return max(started_at, request_deadline - _RELATION_RESULT_RESERVE_SECONDS)
 
 
 def _run_relation_kernel_before_deadline(

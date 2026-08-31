@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 from fractions import Fraction
+import time
 from typing import Literal, cast
 
 import pytest
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import current_request_execution, request_execution
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.ideals import operations
 from jacobian.math.polynomials.ideals._models import (
     IdealContainmentLedger,
     IdealContainmentRequest,
+    IdealComputationBudget,
     IdealEqualityRequest,
 )
 from jacobian.math.polynomials.ideals._tools import TOOLS
@@ -195,6 +198,21 @@ def test_native_relation_admission_rejects_oversized_source() -> None:
 
     with pytest.raises(OperationDomainValidationError, match="generator"):
         ideal_containment(source, target)
+
+
+def test_relation_kernel_deadline_reserves_typed_result_delivery_time() -> None:
+    started = time.monotonic()
+
+    with request_execution(started):
+        kernel_deadline = operations._bind_relation_deadline(
+            IdealComputationBudget(wall_seconds=1)
+        )
+        execution = current_request_execution()
+
+    assert execution is not None
+    assert execution.deadline is not None
+    assert execution.deadline > kernel_deadline
+    assert execution.deadline - kernel_deadline == pytest.approx(0.25)
 
 
 def test_ledger_rejects_a_false_positive_shape() -> None:

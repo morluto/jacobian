@@ -881,22 +881,22 @@ def ideal_containment(
 
     resource_budget = resource_budget or IdealComputationBudget()
     deadline = _bind_relation_deadline(resource_budget)
-    _raise_if_relation_deadline_exceeded(deadline)
-    _run_admission(lambda: _admit_relation(source, target))
-    _raise_if_relation_deadline_exceeded(deadline)
-    payload = {
-        "mode": "ideal_relation",
-        "variables": list(source.variables),
-        "generators": [item.model_dump(mode="json") for item in source.generators],
-        "right_generators": [
-            item.model_dump(mode="json") for item in target.generators
-        ],
-        "order": monomial_order,
-        "maximum_terms": resource_budget.maximum_output_terms,
-        "mutual": False,
-    }
     outcome: IdealExecutionOutcome
     try:
+        _raise_if_relation_deadline_exceeded(deadline)
+        _run_admission(lambda: _admit_relation(source, target))
+        _raise_if_relation_deadline_exceeded(deadline)
+        payload = {
+            "mode": "ideal_relation",
+            "variables": list(source.variables),
+            "generators": [item.model_dump(mode="json") for item in source.generators],
+            "right_generators": [
+                item.model_dump(mode="json") for item in target.generators
+            ],
+            "order": monomial_order,
+            "maximum_terms": resource_budget.maximum_output_terms,
+            "mutual": False,
+        }
         result = _run_relation_kernel_before_deadline(payload, deadline)
         ledger = _relation_ledger(result["left_in_right"], deadline=deadline)
         _raise_if_relation_deadline_exceeded(deadline)
@@ -937,20 +937,22 @@ def ideal_equality(
 
     resource_budget = resource_budget or IdealComputationBudget()
     deadline = _bind_relation_deadline(resource_budget)
-    _raise_if_relation_deadline_exceeded(deadline)
-    _run_admission(lambda: _admit_relation(left, right))
-    _raise_if_relation_deadline_exceeded(deadline)
-    payload = {
-        "mode": "ideal_relation",
-        "variables": list(left.variables),
-        "generators": [item.model_dump(mode="json") for item in left.generators],
-        "right_generators": [item.model_dump(mode="json") for item in right.generators],
-        "order": monomial_order,
-        "maximum_terms": resource_budget.maximum_output_terms,
-        "mutual": True,
-    }
     outcome: IdealExecutionOutcome
     try:
+        _raise_if_relation_deadline_exceeded(deadline)
+        _run_admission(lambda: _admit_relation(left, right))
+        _raise_if_relation_deadline_exceeded(deadline)
+        payload = {
+            "mode": "ideal_relation",
+            "variables": list(left.variables),
+            "generators": [item.model_dump(mode="json") for item in left.generators],
+            "right_generators": [
+                item.model_dump(mode="json") for item in right.generators
+            ],
+            "order": monomial_order,
+            "maximum_terms": resource_budget.maximum_output_terms,
+            "mutual": True,
+        }
         result = _run_relation_kernel_before_deadline(payload, deadline)
         left_in_right = _relation_ledger(result["left_in_right"], deadline=deadline)
         right_in_left = _relation_ledger(result["right_in_left"], deadline=deadline)

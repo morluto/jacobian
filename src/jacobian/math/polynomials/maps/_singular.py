@@ -692,6 +692,13 @@ def run_singular_generic_fiber(
                 "Singular returned an invalid or unsupported generic-fiber certificate."
             ),
         )
+    try:
+        deadline_check()
+    except TimeoutError:
+        return SingularGenericFiberResult(
+            outcome="TIMEOUT",
+            detail="Singular coefficient reduction exceeded the declared wall-time limit.",
+        )
     return SingularGenericFiberResult(
         outcome="COMPUTED",
         certificate=certificate,

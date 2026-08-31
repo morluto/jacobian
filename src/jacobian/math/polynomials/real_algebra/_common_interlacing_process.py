@@ -31,7 +31,9 @@ from jacobian.canonical import (
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.algebraic_numbers.real import (
+    MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS,
     MAX_REAL_ALGEBRAIC_DEGREE,
+    RationalIsolatingInterval,
     RealAlgebraicValue,
 )
 from jacobian.math.polynomials.real_algebra._common_interlacing import (
@@ -272,11 +274,23 @@ def _root_profile_from_worker(  # noqa: C901
         raw_value = raw_root.get("value")
         if not isinstance(raw_value, dict):
             raise ValueError("malformed algebraic value")
-        polynomial = _CANONICAL_POLYNOMIAL.validate_python(raw_value.get("polynomial"))
+        raw_polynomial = raw_value.get("polynomial")
+        if not isinstance(raw_polynomial, (list, tuple)):
+            raise ValueError("worker root polynomial is malformed")
+        if not 2 <= len(raw_polynomial) <= MAX_REAL_ALGEBRAIC_DEGREE + 1:
+            raise ValueError("worker root polynomial exceeds its length bound")
+        polynomial = _CANONICAL_POLYNOMIAL.validate_python(raw_polynomial)
         root_index = raw_value.get("real_root_index")
         if type(root_index) is not int or root_index < 0:
             raise ValueError("malformed algebraic root index")
         coefficients = [int(coefficient) for coefficient in polynomial]
+        if any(
+            len(coefficient.lstrip("-")) > MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS
+            for coefficient in polynomial
+        ):
+            raise ValueError(
+                "worker root polynomial coefficient exceeds its digit bound"
+            )
         if len(coefficients) < 2:
             raise ValueError("worker root polynomial is constant")
         if coefficients[0] <= 0:
@@ -343,10 +357,15 @@ def _root_profile_from_worker(  # noqa: C901
             polynomial=polynomial,
             real_root_index=root_index,
         )
-        root_payload = dict(raw_root)
-        root_payload["value"] = algebraic_value
-        root_payload["multiplicity"] = multiplicity
-        roots.append(PolynomialRealRoot.model_validate(root_payload))
+        roots.append(
+            PolynomialRealRoot._from_worker(
+                value=algebraic_value,
+                multiplicity=multiplicity,
+                isolating_interval=RationalIsolatingInterval.model_validate(
+                    raw_interval
+                ),
+            )
+        )
 
     # Require factor-root-count projection to be complete and fail closed.
     if not factor_root_counts or len(factor_root_counts) != len(declared_factors):
@@ -362,8 +381,9 @@ def _root_profile_from_worker(  # noqa: C901
         if factor_root_indices.get(fk, set()) != set(range(expected)):
             raise ValueError("worker root indices do not match projected real roots")
 
-    return SourceRootProfile.model_validate(
-        {"source_index": source_index, "roots": tuple(roots)}
+    return SourceRootProfile._from_worker(
+        source_index=source_index,
+        roots=tuple(roots),
     )
 
 
@@ -408,20 +428,13 @@ def _profile_from_worker(
     root_profiles_tuple = tuple(root_profiles)
     outcome = _OUTCOME.validate_python(payload.get("outcome"))
     try:
-        CommonInterlacingProfile.model_validate(
-            {
-                "family": family,
-                "root_profiles": root_profiles_tuple,
-                "outcome": outcome,
-            }
+        return CommonInterlacingProfile._from_worker(
+            family=family,
+            root_profiles=root_profiles_tuple,
+            outcome=outcome,
         )
-    except (PydanticCustomError, ValidationError) as exc:
+    except (PydanticCustomError, ValidationError, IndexError) as exc:
         raise ValueError("worker returned an inconsistent root profile") from exc
-    return CommonInterlacingProfile._from_kernel(
-        family=family,
-        root_profiles=root_profiles_tuple,
-        outcome=outcome,
-    )
 
 
 def _domain_error(payload: dict[str, Any]) -> OperationDomainValidationError:

@@ -185,6 +185,22 @@ class PolynomialRealRoot(StrictModel):
     )
     isolating_interval: RationalIsolatingInterval
 
+    @classmethod
+    def _from_worker(
+        cls,
+        *,
+        value: _UnrecognizedRealAlgebraicValue,
+        multiplicity: int,
+        isolating_interval: RationalIsolatingInterval,
+    ) -> Self:
+        """Bind a structurally decoded worker row without public validation."""
+
+        return cls.model_construct(
+            value=value,
+            multiplicity=multiplicity,
+            isolating_interval=isolating_interval,
+        )
+
 
 class SourceRootProfile(StrictModel):
     """Distinct real roots of one family source in strictly increasing order."""
@@ -198,8 +214,7 @@ class SourceRootProfile(StrictModel):
         max_length=MAX_COMMON_INTERLACING_SOURCE_DEGREE,
     )
 
-    @model_validator(mode="after")
-    def require_ordered_isolating_intervals(self) -> Self:
+    def _validate_ordered_isolating_intervals(self) -> Self:
         for left, right in pairwise(self.roots):
             left_upper = left.isolating_interval.upper.as_fraction()
             right_lower = right.isolating_interval.lower.as_fraction()
@@ -215,6 +230,22 @@ class SourceRootProfile(StrictModel):
                     "source root intervals must be strictly ordered and pairwise disjoint",
                 )
         return self
+
+    @model_validator(mode="after")
+    def require_ordered_isolating_intervals(self) -> Self:
+        return self._validate_ordered_isolating_intervals()
+
+    @classmethod
+    def _from_worker(
+        cls,
+        *,
+        source_index: int,
+        roots: tuple[PolynomialRealRoot, ...],
+    ) -> Self:
+        """Bind a structurally decoded worker profile without public validation."""
+
+        profile = cls.model_construct(source_index=source_index, roots=roots)
+        return profile._validate_ordered_isolating_intervals()
 
 
 class PolynomialRootReference(StrictModel):
@@ -391,8 +422,7 @@ class CommonInterlacingProfile(StrictModel):
                 "root reference distinct_root_index must select a retained root",
             )
 
-    @model_validator(mode="after")
-    def require_structural_profile(self) -> Self:  # noqa: C901
+    def _validate_structural_profile(self) -> Self:  # noqa: C901
         if len(self.family) != len(self.root_profiles):
             raise _validation_error(
                 "source_axis",
@@ -521,6 +551,27 @@ class CommonInterlacingProfile(StrictModel):
                             "(gap_index+1)-th expanded root positions",
                         )
         return self
+
+    @model_validator(mode="after")
+    def require_structural_profile(self) -> Self:
+        return self._validate_structural_profile()
+
+    @classmethod
+    def _from_worker(
+        cls,
+        *,
+        family: tuple[LabelledRationalPolynomial, ...],
+        root_profiles: tuple[SourceRootProfile, ...],
+        outcome: CommonInterlacingOutcome,
+    ) -> Self:
+        """Bind a worker projection after private structural checks."""
+
+        result = cls.model_construct(
+            family=family,
+            root_profiles=root_profiles,
+            outcome=outcome,
+        )
+        return result._validate_structural_profile()
 
     @classmethod
     def _from_kernel(

@@ -14,12 +14,14 @@ from jacobian.math.polynomials.real_algebra._common_interlacing import (
     _common_interlacing_outcome,
     _PrimitiveSourcePlan,
     _root_profile,
+    _SourcePlan,
 )
 from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
     MAX_COMMON_INTERLACING_SOURCE_DEGREE,
     MAX_COMMON_INTERLACING_SOURCE_TERMS,
     CommonInterlacingProfile,
     LabelledRationalPolynomial,
+    SourceRootProfile,
 )
 
 
@@ -79,6 +81,25 @@ def _primitive_source_from_worker(value: object) -> _PrimitiveSourcePlan:
     )
 
 
+def _factor_root_counts(
+    source_plan: _SourcePlan,
+    profile: SourceRootProfile,
+) -> list[int]:
+    """Count factor rows from the root profile isolated on the source axis."""
+
+    factor_indices = {
+        factor.canonical_coefficients: index
+        for index, factor in enumerate(source_plan.factors)
+    }
+    counts = [0] * len(source_plan.factors)
+    for root in profile.roots:
+        factor_index = factor_indices.get(tuple(root.value.polynomial))
+        if factor_index is None:  # pragma: no cover - worker invariant
+            raise RuntimeError("worker root profile contains an unknown factor")
+        counts[factor_index] += 1
+    return counts
+
+
 def main() -> int:
     """Decode one family, compute its profile, and emit one bounded payload."""
 
@@ -118,7 +139,7 @@ def main() -> int:
         # intervals() again for each factor.
         source_factors = []
         source_factor_root_counts = []
-        for _source_index, source_plan in enumerate(plan.sources):
+        for source_index, source_plan in enumerate(plan.sources):
             factors = [
                 [
                     list(factor_plan.canonical_coefficients),
@@ -126,14 +147,10 @@ def main() -> int:
                 ]
                 for factor_plan in source_plan.factors
             ]
-            # Authenticate the root-count projection from the source-bound
-            # irreducible factors inside the killable worker.  The parent only
-            # checks that the projected rows agree with these counts; it does
-            # not replay root isolation after the worker returns.
-            root_counts = [
-                len(factor_plan.polynomial.intervals())
-                for factor_plan in source_plan.factors
-            ]
+            root_counts = _factor_root_counts(
+                source_plan,
+                root_profiles[source_index],
+            )
             source_factors.append(factors)
             source_factor_root_counts.append(root_counts)
     except OperationDomainValidationError as exc:

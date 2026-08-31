@@ -23,6 +23,11 @@ from jacobian.math.number_theory.algebraic_numbers.real import (
     compare_real_algebraic,
 )
 from jacobian.math.polynomials.real_algebra import common_interlacing_profile
+from jacobian.math.polynomials.real_algebra._common_interlacing import (
+    _admit_common_interlacing,
+    _common_interlacing_outcome,
+    _root_profile,
+)
 from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
     CommonInterlacingDoesNotExist,
     CommonInterlacingExists,
@@ -34,11 +39,13 @@ from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
     PolynomialRootReference,
 )
 from jacobian.math.polynomials.real_algebra._common_interlacing_process import (
+    _profile_from_worker,
     _root_profile_from_worker,
     _verify_declared_factors,
     run_common_interlacing_profile,
 )
 from jacobian.math.polynomials.real_algebra._common_interlacing_worker import (
+    _factor_root_counts,
     _primitive_source_from_worker,
 )
 from jacobian.math.polynomials.real_algebra._tools import (
@@ -407,10 +414,88 @@ def test_worker_root_intervals_are_bounded_before_model_validation() -> None:
         )
 
 
+def test_worker_root_polynomial_length_is_capped_before_decoding() -> None:
+    factor = ["1", "0", "-1"]
+    oversized_polynomial = ["1"] + ["0"] * 9
+
+    with pytest.raises(ValueError, match="root polynomial exceeds its length"):
+        _root_profile_from_worker(
+            {
+                "source_index": 0,
+                "roots": [
+                    {
+                        "value": {
+                            "polynomial": oversized_polynomial,
+                            "real_root_index": 0,
+                        },
+                        "multiplicity": 1,
+                    }
+                ],
+            },
+            [(factor, 1)],
+            [1],
+        )
+
+
+def test_worker_factor_root_counts_reuse_the_computed_root_profile() -> None:
+    family = (
+        _source("first", (1, 2), (1, 1), (-2, 0)),
+        _source("second", (1, 2), (1, 1), (-3, 0)),
+    )
+    plan = _admit_common_interlacing(family)
+    profile = _root_profile(0, plan.sources[0])
+
+    assert _factor_root_counts(plan.sources[0], profile) == [1, 1]
+
+
+def test_worker_profile_binding_does_not_call_public_result_validation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    family = (
+        _source("first", (1, 2), (1, 1), (-2, 0)),
+        _source("second", (1, 2), (1, 1), (-3, 0)),
+    )
+    plan = _admit_common_interlacing(family)
+    root_profiles = tuple(
+        _root_profile(source_index, source)
+        for source_index, source in enumerate(plan.sources)
+    )
+    outcome = _common_interlacing_outcome(root_profiles, plan.common_degree)
+    payload = {
+        "source_factors": [
+            [
+                [list(factor.canonical_coefficients), factor.multiplicity]
+                for factor in source.factors
+            ]
+            for source in plan.sources
+        ],
+        "source_factor_root_counts": [
+            _factor_root_counts(source, profile)
+            for source, profile in zip(plan.sources, root_profiles, strict=True)
+        ],
+        "root_profiles": [profile.model_dump(mode="json") for profile in root_profiles],
+        "outcome": outcome.model_dump(mode="json"),
+    }
+
+    def reject_public_validation(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("worker binding called public result validation")
+
+    monkeypatch.setattr(
+        CommonInterlacingProfile,
+        "model_validate",
+        classmethod(reject_public_validation),
+    )
+
+    result = _profile_from_worker(payload, family)
+
+    assert result.family == family
+    assert result.root_profiles == root_profiles
+
+
 def test_worker_root_factors_obey_algebraic_value_degree_bound() -> None:
     factor = ["1", *(["0"] * 8), "-2"]
 
-    with pytest.raises(ValueError, match="algebraic value degree bound"):
+    with pytest.raises(ValueError, match="root polynomial exceeds its length"):
         _root_profile_from_worker(
             {
                 "source_index": 0,

@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Annotated, Any, Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import BeforeValidator, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.matrices.values import RealQuadraticMatrix
+from jacobian.math.number_theory.algebraic_numbers.real import (
+    MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE,
+)
 from jacobian.math.number_theory.algebraic_numbers.root_isolation._models import (
     _ComparisonRealAlgebraicValue,
 )
@@ -24,10 +27,30 @@ Definiteness = Literal[
 ]
 
 
+def _require_spectrum_value_degree(value: Any) -> Any:
+    polynomial = (
+        value.get("polynomial")
+        if isinstance(value, dict)
+        else getattr(value, "polynomial", None)
+    )
+    if isinstance(polynomial, (list, tuple)) and len(polynomial) - 1 > (
+        MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE
+    ):
+        raise _validation_error(
+            "spectrum_degree_bound",
+            "quadratic spectral values admit degree at most "
+            f"{MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE}",
+        )
+    return value
+
+
 class RealAlgebraicMultiplicity(StrictModel):
     """One exact real algebraic value and its spectral multiplicity."""
 
-    value: _ComparisonRealAlgebraicValue
+    value: Annotated[
+        _ComparisonRealAlgebraicValue,
+        BeforeValidator(_require_spectrum_value_degree),
+    ]
     multiplicity: StrictInt = Field(ge=1, le=2)
 
 

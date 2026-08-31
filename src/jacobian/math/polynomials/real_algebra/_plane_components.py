@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import os
+import re
 import time
 from fractions import Fraction
-from typing import NoReturn
+from typing import Literal, NoReturn
 
 from pydantic_core import PydanticCustomError
 
@@ -21,6 +23,7 @@ from jacobian.canonical import (
     CanonicalLimits,
     encode_strict_json,
     format_canonical_integer,
+    sha256_digest,
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis.intervals import ClosedRationalInterval, RationalBox
@@ -61,6 +64,8 @@ from jacobian.math.polynomials.values import require_polynomial_budget
 
 PLANE_COMPONENT_WALL_SECONDS = 600.0
 _PLANE_COMPONENT_FINALIZATION_SECONDS = 5.0
+_PLANE_COMPONENT_OPERATION_VERSION: Literal["1"] = "1"
+_GIT_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -232,16 +237,41 @@ def _rational_point(
 def _noncompletion(
     request: PlaneComponentProfileRequest,
     outcome: QepcadPlaneProcessOutcome,
+    *,
+    started_at: float | None = None,
+    budget_seconds: int = int(PLANE_COMPONENT_WALL_SECONDS),
 ) -> PlaneComponentProfileResult:
     if outcome.status == "COMPUTED" or outcome.reason is None:
         raise RuntimeError("computed QEPCAD result cannot become a noncompletion")
     status: PlaneComponentNoncompletionStatus = outcome.status
+    request_digest = sha256_digest(
+        encode_strict_json(request.model_dump(mode="json"))
+    )
+    revision = os.environ.get("JACOBIAN_REVISION", "unknown")
+    if not _GIT_SHA_PATTERN.fullmatch(revision):
+        revision = "unknown"
+    timeout_layer: Literal["QEPCAD", "SAMPLE_RECOGNITION"] | None = (
+        "SAMPLE_RECOGNITION"
+        if outcome.reason is not None and outcome.reason.startswith("SAMPLE_")
+        else "QEPCAD"
+        if outcome.reason is not None and outcome.reason.startswith("QEPCAD_")
+        else None
+    )
+    elapsed_ms = round(
+        max(0.0, time.monotonic() - started_at) * 1_000
+    ) if started_at is not None else None
     return PlaneComponentProfileResult(
         semialgebraic_set=request.semialgebraic_set,
         samples=request.samples,
         outcome=PlaneComponentProfileNoncompletion(
             status=status,
             reason=outcome.reason,
+            request_digest=request_digest,
+            budget_seconds=budget_seconds,
+            elapsed_ms=elapsed_ms,
+            timeout_layer=timeout_layer,
+            operation_version=_PLANE_COMPONENT_OPERATION_VERSION,
+            repository_revision=revision,
         ),
     )
 
@@ -327,7 +357,7 @@ def compute_plane_component_profile(
             _raise_sample_domain_error(exc)
         _require_active(deadline, "after exact sample recognition")
         if sample_outcome.status != "COMPUTED":
-            return _noncompletion(request, sample_outcome)
+            return _noncompletion(request, sample_outcome, started_at=started)
         if sample_outcome.canonical_samples is None:
             return _noncompletion(
                 request,
@@ -335,6 +365,7 @@ def compute_plane_component_profile(
                     status="BACKEND_ERROR",
                     reason="SAMPLE_RECOGNITION_INVALID_OUTPUT",
                 ),
+                started_at=started,
             )
         validated_canonical_samples = sample_outcome.canonical_samples
 
@@ -389,7 +420,7 @@ def compute_plane_component_profile(
         _raise_sample_domain_error(exc)
     _require_active(deadline, "after QEPCAD execution")
     if outcome.status != "COMPUTED":
-        return _noncompletion(request, outcome)
+        return _noncompletion(request, outcome, started_at=started)
     projection = outcome.projection
     if (
         projection is None
@@ -405,6 +436,7 @@ def compute_plane_component_profile(
                 status="BACKEND_ERROR",
                 reason="QEPCAD_INVALID_OUTPUT",
             ),
+            started_at=started,
         )
     result = _computed_result(
         request,

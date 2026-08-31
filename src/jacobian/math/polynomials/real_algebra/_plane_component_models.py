@@ -372,6 +372,12 @@ class PlaneComponentProfileNoncompletion(StrictModel):
 
     status: PlaneComponentNoncompletionStatus
     reason: PlaneComponentNoncompletionReason
+    request_digest: str | None = None
+    budget_seconds: StrictInt | None = Field(default=None, ge=1)
+    elapsed_ms: StrictInt | None = Field(default=None, ge=0)
+    timeout_layer: Literal["QEPCAD", "SAMPLE_RECOGNITION"] | None = None
+    operation_version: Literal["1"] = "1"
+    repository_revision: str = "unknown"
 
     @model_validator(mode="after")
     def bind_reason_to_status(self) -> Self:
@@ -412,6 +418,16 @@ class PlaneComponentProfileNoncompletion(StrictModel):
             raise _validation_error(
                 "noncompletion_reason",
                 "plane-component non-completion reason does not match its status",
+            )
+        if self.status == "TIMEOUT" and (
+            self.request_digest is None
+            or self.budget_seconds is None
+            or self.elapsed_ms is None
+            or self.timeout_layer is None
+        ):
+            raise _validation_error(
+                "timeout_metadata",
+                "timeout outcomes must retain replay metadata",
             )
         return self
 

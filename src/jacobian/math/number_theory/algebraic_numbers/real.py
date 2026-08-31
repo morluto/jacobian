@@ -286,6 +286,19 @@ class RealAlgebraicOrderValue(StrictModel):
         "ORDERED_REAL_ROOT_ISOLATION"
     )
 
+    @model_validator(mode="after")
+    def require_admitted_distinct_polynomial_pair(self) -> Self:
+        if self.left.polynomial != self.right.polynomial and any(
+            len(value.polynomial) - 1 > MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE
+            for value in (self.left, self.right)
+        ):
+            raise _validation_error(
+                "comparison_degree_bound",
+                "exact algebraic comparison admits degree at most "
+                f"{MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE} for distinct polynomials",
+            )
+        return self
+
     @classmethod
     def _from_kernel(
         cls,

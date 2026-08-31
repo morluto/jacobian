@@ -13,6 +13,7 @@ from jacobian.canonical import parse_canonical_integer
 from jacobian.math._labels import OpaqueLabel
 from jacobian.math.matrices.values import (
     MAX_RATIONAL_MATRIX_ORDER,
+    EmbeddedRealSimpleNumberFieldMatrix,
     IntegerMatrix,
     RationalMatrix,
 )
@@ -353,6 +354,75 @@ class RationalMatrixAction(StrictModel):
         return self
 
 
+class EmbeddedRealNumberFieldActionGenerator(StrictModel):
+    """One labelled endomorphism over an embedded real number field."""
+
+    label: OpaqueLabel
+    matrix: EmbeddedRealSimpleNumberFieldMatrix
+
+    @model_validator(mode="after")
+    def require_canonical_label(self) -> Self:
+        if unicodedata.normalize("NFC", self.label) != self.label:
+            raise _validation_error(
+                "noncanonical_generator_label",
+                "generator labels must use NFC Unicode normalization",
+            )
+        return self
+
+
+class EmbeddedRealNumberFieldMatrixAction(StrictModel):
+    """A finite labelled action by matrices in one embedded real field."""
+
+    coordinate_axis: tuple[OpaqueLabel, ...] = Field(
+        min_length=1, max_length=MAX_ACTION_DIMENSION
+    )
+    generators: tuple[EmbeddedRealNumberFieldActionGenerator, ...] = Field(
+        default=(), max_length=MAX_ACTION_GENERATORS
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_envelope(cls, data: Any) -> Any:
+        return _require_raw_action_envelope(data)
+
+    @model_validator(mode="after")
+    def require_common_axis(self) -> Self:
+        if any(
+            unicodedata.normalize("NFC", label) != label
+            for label in self.coordinate_axis
+        ):
+            raise _validation_error(
+                "noncanonical_coordinate_label",
+                "coordinate_axis labels must use NFC Unicode normalization",
+            )
+        if len(set(self.coordinate_axis)) != len(self.coordinate_axis):
+            raise _validation_error(
+                "duplicate_coordinate_label",
+                "coordinate_axis labels must be pairwise distinct",
+            )
+        if len({generator.label for generator in self.generators}) != len(
+            self.generators
+        ):
+            raise _validation_error(
+                "duplicate_generator_label",
+                "generator labels must be pairwise distinct",
+            )
+        dimension = len(self.coordinate_axis)
+        for generator in self.generators:
+            entries = generator.matrix.entries
+            if len(entries) != dimension or any(
+                len(row) != dimension for row in entries
+            ):
+                raise _validation_error(
+                    "generator_shape",
+                    "every generator matrix must be square on coordinate_axis",
+                )
+        return self
+
+
+MatrixAction = RationalMatrixAction | EmbeddedRealNumberFieldMatrixAction
+
+
 class IntegralBilinearForm(StrictModel):
     """One integral form matrix on an explicitly ordered coordinate axis."""
 
@@ -583,11 +653,14 @@ __all__ = [
     "MAX_ACTION_GENERATORS",
     "MAX_CONSTRAINT_CELLS",
     "MAX_FORM_COEFFICIENT_DIMENSION",
+    "EmbeddedRealNumberFieldActionGenerator",
+    "EmbeddedRealNumberFieldMatrixAction",
     "FormCoefficientOrder",
     "FormKind",
     "IntegralBilinearForm",
     "InvariantBilinearFormLattice",
     "InvariantBilinearFormLatticeRequest",
+    "MatrixAction",
     "RationalActionGenerator",
     "RationalMatrixAction",
 ]

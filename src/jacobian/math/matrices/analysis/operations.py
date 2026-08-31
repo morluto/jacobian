@@ -613,14 +613,18 @@ def _eliminate_2x2(matrix: list[list[Fraction]], index: int) -> tuple[int, int, 
         inv00 = matrix[index + 1][index + 1] / det
         inv01 = -matrix[index][index + 1] / det
         inv11 = matrix[index][index] / det
+        pivot_row0 = tuple(matrix[index][col] for col in range(index + 2, len(matrix)))
+        pivot_row1 = tuple(
+            matrix[index + 1][col] for col in range(index + 2, len(matrix))
+        )
         for row in range(index + 2, len(matrix)):
             left = matrix[row][index]
             right = matrix[row][index + 1]
             coeff0 = left * inv00 + right * inv01
             coeff1 = left * inv01 + right * inv11
-            for col in range(index + 2, len(matrix)):
+            for offset, col in enumerate(range(index + 2, len(matrix))):
                 matrix[row][col] -= (
-                    coeff0 * matrix[index][col] + coeff1 * matrix[index + 1][col]
+                    coeff0 * pivot_row0[offset] + coeff1 * pivot_row1[offset]
                 )
             for col in range(index + 2, len(matrix)):
                 matrix[col][row] = matrix[row][col]

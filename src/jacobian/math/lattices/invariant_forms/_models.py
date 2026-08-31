@@ -354,6 +354,26 @@ class IntegralBilinearForm(StrictModel):
     kind: FormKind
     matrix: IntegerMatrix
 
+    @model_validator(mode="before")
+    @classmethod
+    def require_canonical_axis_labels(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        axis = data.get("coordinate_axis")
+        if isinstance(axis, (list, tuple)):
+            for label in axis:
+                if not isinstance(label, str):
+                    raise _validation_error(
+                        "invalid_coordinate_label",
+                        "form coordinate_axis labels must be strings",
+                    )
+                if unicodedata.normalize("NFC", label) != label:
+                    raise _validation_error(
+                        "noncanonical_coordinate_label",
+                        "form coordinate_axis labels must use NFC Unicode normalization",
+                    )
+        return data
+
     @model_validator(mode="after")
     def require_form_shape(self) -> Self:
         dimension = len(self.coordinate_axis)

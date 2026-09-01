@@ -385,15 +385,17 @@ def test_fixed_point_source_and_result_envelopes_cover_exact_boundaries() -> Non
     )
     assert len(byte_result.prefix.letters) == 500
 
-    rejected_symbol = "x" * 46
-    byte_above = ProlongableSubstitution(
-        substitution=_substitution(((rejected_symbol,) * 10_000,), (rejected_symbol,)),
-        seed=rejected_symbol,
+    wider_symbol = "x" * 46
+    width_above_old_transport_estimate = ProlongableSubstitution(
+        substitution=_substitution(((wider_symbol,) * 10_000,), (wider_symbol,)),
+        seed=wider_symbol,
     )
-    with pytest.raises(OperationDomainValidationError, match="byte bound"):
-        compute_substitution_fixed_point_prefix(
-            SubstitutionFixedPointPrefixRequest(source=byte_above, prefix_length=500)
+    wider_result = compute_substitution_fixed_point_prefix(
+        SubstitutionFixedPointPrefixRequest(
+            source=width_above_old_transport_estimate, prefix_length=500
         )
+    )
+    assert len(wider_result.prefix.letters) == 500
 
 
 def test_fixed_point_generation_caps_the_intermediate_prefix() -> None:

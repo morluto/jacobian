@@ -16,12 +16,7 @@ from jacobian.math.logic.languages.regular.values import (
 _MAX_DP_UPDATES = 2_000_000
 _MAX_VECTOR_UPDATE_WORK = 20_000_000
 _MAX_VECTOR_COORDINATES = 4_000_000
-MAX_TRANSITION_PROFILE_RESULT_BYTES = 4 * 1024 * 1024
 _MAX_COMPOSITION_CELLS = 20_000_000
-_AUTOMATON_BASE_WIRE_BYTES = 256
-_AUTOMATON_TRANSITION_WIRE_BYTES = 128
-_PROFILE_BASE_WIRE_BYTES = 256
-_PROFILE_ENTRY_BASE_WIRE_BYTES = 96
 
 
 @dataclass(frozen=True)
@@ -159,23 +154,6 @@ def admit_transition_profile(
             "transition-Parikh multiplicity digit bound exceeded; reduce the path "
             "length or transition branching"
         )
-    coordinate_digits = len(str(max(1, path_length)))
-    estimated_entry_bytes = (
-        _PROFILE_ENTRY_BASE_WIRE_BYTES
-        + transition_count * (coordinate_digits + 2)
-        + count_digits
-    )
-    estimated_bytes = (
-        _AUTOMATON_BASE_WIRE_BYTES
-        + transition_count * _AUTOMATON_TRANSITION_WIRE_BYTES
-        + _PROFILE_BASE_WIRE_BYTES
-        + profile_cells * estimated_entry_bytes
-    )
-    if estimated_bytes > MAX_TRANSITION_PROFILE_RESULT_BYTES:
-        raise ValueError(
-            "transition-Parikh serialized-result bound exceeded; reduce the "
-            "transition axis or profile support"
-        )
     return TransitionParikhAdmissionPlan(
         expected_path_count=target_count,
         outgoing=outgoing,
@@ -183,7 +161,6 @@ def admit_transition_profile(
 
 
 __all__ = [
-    "MAX_TRANSITION_PROFILE_RESULT_BYTES",
     "TransitionParikhAdmissionPlan",
     "admit_transition_profile",
 ]

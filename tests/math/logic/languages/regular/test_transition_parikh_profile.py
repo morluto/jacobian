@@ -13,9 +13,6 @@ from jacobian.canonical import encode_strict_json, parse_canonical_integer
 from jacobian.math.logic.languages.regular._models import (
     TransitionParikhProfileRequest,
 )
-from jacobian.math.logic.languages.regular._profile_admission import (
-    MAX_TRANSITION_PROFILE_RESULT_BYTES,
-)
 from jacobian.math.logic.languages.regular._tools import (
     compute_transition_parikh_profile,
 )
@@ -537,7 +534,7 @@ def test_owner_rejects_excessive_intermediate_vector_coordinates() -> None:
     )
 
 
-def test_owner_rejects_excessive_serialized_result() -> None:
+def test_structurally_admitted_profile_is_not_capped_by_serialization_size() -> None:
     accepted = TransitionParikhProfileRequest(
         automaton=_loop_automaton(129),
         source_state=0,
@@ -547,7 +544,7 @@ def test_owner_rejects_excessive_serialized_result() -> None:
     encoded = encode_strict_json(
         compute_transition_parikh_profile(accepted).model_dump(mode="json")
     )
-    assert len(encoded) <= MAX_TRANSITION_PROFILE_RESULT_BYTES
+    assert encoded
 
     request = TransitionParikhProfileRequest(
         automaton=_loop_automaton(130),
@@ -555,8 +552,8 @@ def test_owner_rejects_excessive_serialized_result() -> None:
         target_state=0,
         path_length=2,
     )
-    with pytest.raises(ValueError, match="serialized-result bound"):
-        compute_transition_parikh_profile(request)
+    result = compute_transition_parikh_profile(request)
+    assert len(result.entries) == 8_515
 
 
 def test_length_bound_keeps_large_degenerate_cases_typed() -> None:

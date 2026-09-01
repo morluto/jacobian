@@ -59,6 +59,10 @@ def test_singular_backend_has_a_pinned_required_ci_lane() -> None:
     assert '"singular=${SINGULAR_DEBIAN_VERSION}"' in singular
     assert 'system("version")' in singular
     assert "make test-singular" in singular
+    assert "QEPCAD_DEBIAN_VERSION: 1.74+ds-5" in singular
+    assert '"qepcad=${QEPCAD_DEBIAN_VERSION}"' in singular
+    assert 'qepcad -v | grep -F "Version B 1.74,"' in singular
+    assert "make test-qepcad" in singular
     assert (
         "needs: [plan, static, math, scale, catalog, catalog_examples, python, boundaries, singular, wheel, coverage]"
         in required

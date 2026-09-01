@@ -13,11 +13,9 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalInteger, CanonicalRational
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import parse_canonical_integer
-from jacobian.math.number_theory.algebraic_numbers.real import (
-    MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS,
-    MAX_REAL_ALGEBRAIC_DEGREE,
-)
 
+MAX_COMPLEX_ALGEBRAIC_DEGREE = 8
+MAX_COMPLEX_ALGEBRAIC_COEFFICIENT_DIGITS = 1_000
 MAX_COMPLEX_ISOLATOR_COMPONENT_DIGITS = 4_096
 
 
@@ -223,7 +221,7 @@ class _ComplexAlgebraicValueShape(StrictModel):
 
     polynomial: tuple[CanonicalInteger, ...] = Field(
         min_length=2,
-        max_length=MAX_REAL_ALGEBRAIC_DEGREE + 1,
+        max_length=MAX_COMPLEX_ALGEBRAIC_DEGREE + 1,
         description=(
             "Primitive irreducible ZZ[x] coefficients in descending degree, "
             "with positive leading coefficient."
@@ -231,7 +229,7 @@ class _ComplexAlgebraicValueShape(StrictModel):
     )
     root_index: StrictInt = Field(
         ge=0,
-        le=MAX_REAL_ALGEBRAIC_DEGREE - 1,
+        le=MAX_COMPLEX_ALGEBRAIC_DEGREE - 1,
         description=(
             "Index in the real-first, positive-representative conjugate-pair "
             "order declared by ComplexAlgebraicValue."
@@ -245,20 +243,20 @@ class _ComplexAlgebraicValueShape(StrictModel):
             return data
         polynomial = data.get("polynomial")
         if isinstance(polynomial, (list, tuple)):
-            if len(polynomial) > MAX_REAL_ALGEBRAIC_DEGREE + 1:
+            if len(polynomial) > MAX_COMPLEX_ALGEBRAIC_DEGREE + 1:
                 raise _validation_error(
                     "degree_bound",
                     "complex algebraic degree exceeds the bounded root envelope",
                 )
             if any(
                 isinstance(value, str)
-                and len(value.lstrip("-")) > MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS
+                and len(value.lstrip("-")) > MAX_COMPLEX_ALGEBRAIC_COEFFICIENT_DIGITS
                 for value in polynomial
             ):
                 raise _validation_error(
                     "coefficient_bound",
                     "complex algebraic polynomial coefficients exceed the "
-                    f"{MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS}-digit bound",
+                    f"{MAX_COMPLEX_ALGEBRAIC_COEFFICIENT_DIGITS}-digit bound",
                 )
         return canonicalize_json_containers(data)
 
@@ -326,6 +324,8 @@ _UnrecognizedComplexAlgebraicValue = Annotated[
 
 
 __all__ = [
+    "MAX_COMPLEX_ALGEBRAIC_COEFFICIENT_DIGITS",
+    "MAX_COMPLEX_ALGEBRAIC_DEGREE",
     "MAX_COMPLEX_ISOLATOR_COMPONENT_DIGITS",
     "ComplexAlgebraicValue",
     "RationalComplexIsolatingRectangle",

@@ -347,7 +347,7 @@ jobs:
           collect-coverage: ${{ needs.plan.outputs.pr_lanes != 'true' }}
 
   singular:
-    name: Singular Runtime
+    name: Exact Algebra Runtimes
     needs: plan
     if: ${{ needs.plan.outputs.run_singular == 'true' }}
     runs-on: ubuntu-latest
@@ -358,19 +358,23 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Install the fixed Singular backend
+      - name: Install the fixed exact-algebra backends
         env:
           DEBIAN_FRONTEND: noninteractive
           SINGULAR_DEBIAN_VERSION: 1:4.4.1+ds-2
+          QEPCAD_DEBIAN_VERSION: 1.74+ds-5
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
             make \
-            "singular=${SINGULAR_DEBIAN_VERSION}"
+            "singular=${SINGULAR_DEBIAN_VERSION}" \
+            "qepcad=${QEPCAD_DEBIAN_VERSION}"
           test "$(Singular -q --execute 'system("version");quit;' \
             | tr -d '[:space:]')" = "44100"
+          qepcad -v | grep -F "Version B 1.74,"
       - run: uv sync --locked
       - run: make test-singular
+      - run: make test-qepcad
 
   wheel:
     name: wheel (Python ${{ matrix.python-version }})

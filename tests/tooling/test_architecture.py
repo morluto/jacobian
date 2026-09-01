@@ -70,6 +70,25 @@ def test_bounded_process_gateway_requires_external_tool_owner(tmp_path: Path) ->
     ]
 
 
+def test_worker_dialogue_gateway_requires_an_already_supervised_worker(
+    tmp_path: Path,
+) -> None:
+    source = (
+        "from jacobian.process import run_bounded_worker_dialogue\n"
+        "run_bounded_worker_dialogue(['tool'], lambda dialogue: None)\n"
+    )
+    _write(tmp_path, "src/jacobian/math/example/_solver_worker.py", source)
+    _write(tmp_path, "src/jacobian/math/example/_solver_process.py", source)
+    _write(tmp_path, "src/jacobian/math/example/_helpers.py", source)
+
+    assert _violations(tmp_path, "bounded-process-gateway") == [
+        "src/jacobian/math/example/_helpers.py",
+        "src/jacobian/math/example/_helpers.py",
+        "src/jacobian/math/example/_solver_process.py",
+        "src/jacobian/math/example/_solver_process.py",
+    ]
+
+
 def test_executable_resolution_requires_external_tool_owner(tmp_path: Path) -> None:
     source = "import shutil\nshutil.which('tool')\n"
     _write(tmp_path, "src/jacobian/math/example/_solver_backend.py", source)

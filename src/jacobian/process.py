@@ -1,12 +1,18 @@
-"""Bounded one-shot subprocess capture for concrete external operations.
+"""Bounded subprocess execution for concrete external operations.
 
-Children run in their own process group. Reader threads cap retained output and
-terminate the whole group as soon as either stream exceeds its limit. Timeouts
-also terminate descendants rather than only the immediate worker.
+One-shot children run in their own process group. Reader threads cap retained
+output and terminate the whole group as soon as either stream exceeds its
+limit. Timeouts also terminate descendants rather than only the immediate
+worker.
 
-It is a small low-level primitive for genuinely isolated one-shot commands.
-Each domain operation owns its command, temporary files, input, and conversion
-to a typed mathematical result. There are no process sessions or protocols.
+The ordinary gateway is a small low-level primitive for genuinely isolated
+one-shot commands. A second, narrower gateway supports one adaptive exchange
+from inside an already supervised worker. That nested child inherits the
+worker's process group, is visible only through one callback-scoped dialogue,
+and is never exposed as a reusable process session.
+
+Each domain operation owns its command, temporary files, input, dialogue, and
+conversion to a typed mathematical result.
 """
 
 from __future__ import annotations
@@ -21,8 +27,9 @@ import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
-from typing import BinaryIO, cast
+from typing import BinaryIO, Never, cast
 
 from jacobian._execution import (
     RequestCancellationSignal,
@@ -33,11 +40,16 @@ from jacobian._execution import (
 
 __all__ = [
     "BoundedProcessResult",
+    "BoundedWorkerDialogue",
+    "BoundedWorkerDialogueCompleted",
+    "BoundedWorkerDialogueError",
+    "BoundedWorkerDialogueErrorReason",
     "ProcessPlatformTools",
     "ProcessResourceLimits",
     "bounded_process_cancellation",
     "bounded_process_cancelled",
     "run_bounded_process",
+    "run_bounded_worker_dialogue",
     "worker_environment",
 ]
 
@@ -55,6 +67,370 @@ class BoundedProcessResult:
     stderr_exceeded: bool
     timed_out: bool
     cancelled: bool = False
+
+
+class BoundedWorkerDialogueErrorReason(StrEnum):
+    """Operational reason one callback-scoped worker dialogue could not finish."""
+
+    START_FAILED = "START_FAILED"
+    DEADLINE_EXPIRED = "DEADLINE_EXPIRED"
+    STDOUT_LIMIT = "STDOUT_LIMIT"
+    STDERR_LIMIT = "STDERR_LIMIT"
+    CLOSED = "CLOSED"
+    NONZERO_EXIT = "NONZERO_EXIT"
+
+
+class BoundedWorkerDialogueError(RuntimeError):
+    """Typed failure from :func:`run_bounded_worker_dialogue`."""
+
+    reason: BoundedWorkerDialogueErrorReason
+    stderr: bytes
+
+    def __init__(
+        self,
+        reason: BoundedWorkerDialogueErrorReason,
+        *,
+        stderr: bytes,
+    ) -> None:
+        self.reason = reason
+        self.stderr = stderr
+        super().__init__(reason.value)
+
+
+@dataclass(frozen=True, slots=True)
+class BoundedWorkerDialogueCompleted[ValueT]:
+    """Value returned by a dialogue callback and its cumulative stdout use."""
+
+    value: ValueT
+    stdout_bytes: int
+
+
+class _WorkerDialogueControlError(Exception):
+    def __init__(self, reason: BoundedWorkerDialogueErrorReason) -> None:
+        self.reason = reason
+        super().__init__(reason.value)
+
+
+@dataclass(slots=True)
+class _DialogueWrite:
+    done: bool = False
+    error: BaseException | None = None
+
+
+class _BoundedWorkerDialogueState:
+    """Process-owned state hidden behind the callback-scoped public surface."""
+
+    def __init__(
+        self,
+        process: subprocess.Popen[bytes],
+        *,
+        execution_deadline: float,
+        absolute_deadline: float,
+        stdout_limit: int,
+        stderr_limit: int,
+    ) -> None:
+        assert process.stdin is not None
+        assert process.stdout is not None
+        assert process.stderr is not None
+        self._process = process
+        self._stdin = process.stdin
+        self._stdout = process.stdout
+        self._stderr = process.stderr
+        self._execution_deadline = execution_deadline
+        self._absolute_deadline = absolute_deadline
+        self._stdout_limit = stdout_limit
+        self._stderr_limit = stderr_limit
+        self._condition = threading.Condition()
+        self._stdout_buffer = bytearray()
+        self._stderr_buffer = bytearray()
+        self._stdout_bytes = 0
+        self._stderr_bytes = 0
+        self._stdout_closed = False
+        self._failure: BoundedWorkerDialogueErrorReason | None = None
+        self._active = True
+        self._writers: list[threading.Thread] = []
+        self._readers = (
+            threading.Thread(
+                target=self._capture_stdout,
+                name="bounded-worker-dialogue-stdout",
+                daemon=True,
+            ),
+            threading.Thread(
+                target=self._capture_stderr,
+                name="bounded-worker-dialogue-stderr",
+                daemon=True,
+            ),
+        )
+
+    @property
+    def stderr(self) -> bytes:
+        with self._condition:
+            return bytes(self._stderr_buffer)
+
+    @property
+    def stdout_bytes(self) -> int:
+        with self._condition:
+            return self._stdout_bytes
+
+    def start(self) -> None:
+        for reader in self._readers:
+            reader.start()
+
+    def deactivate(self) -> None:
+        with self._condition:
+            self._active = False
+            self._condition.notify_all()
+
+    def _require_active_locked(self) -> None:
+        if not self._active:
+            raise RuntimeError("worker dialogue scope has ended")
+
+    def _record_failure_locked(self, reason: BoundedWorkerDialogueErrorReason) -> None:
+        if self._failure is None:
+            self._failure = reason
+        self._condition.notify_all()
+
+    def _kill_immediate_child(self) -> None:
+        if self._process.poll() is None:
+            with suppress(OSError):
+                self._process.kill()
+
+    def _fail(self, reason: BoundedWorkerDialogueErrorReason) -> Never:
+        with self._condition:
+            self._record_failure_locked(reason)
+        self._kill_immediate_child()
+        raise _WorkerDialogueControlError(reason)
+
+    def _raise_recorded_failure_locked(self) -> None:
+        if self._failure is not None:
+            raise _WorkerDialogueControlError(self._failure)
+
+    def _capture_stdout(self) -> None:
+        self._capture_stream(stdout=True)
+
+    def _capture_stderr(self) -> None:
+        self._capture_stream(stdout=False)
+
+    def _capture_stream(self, *, stdout: bool) -> None:
+        stream = self._stdout if stdout else self._stderr
+        limit = self._stdout_limit if stdout else self._stderr_limit
+        reason = (
+            BoundedWorkerDialogueErrorReason.STDOUT_LIMIT
+            if stdout
+            else BoundedWorkerDialogueErrorReason.STDERR_LIMIT
+        )
+        try:
+            while chunk := stream.read(64 * 1024):
+                exceeded = False
+                with self._condition:
+                    previous = self._stdout_bytes if stdout else self._stderr_bytes
+                    accepted = max(0, limit - previous)
+                    if stdout:
+                        self._stdout_buffer.extend(chunk[:accepted])
+                        self._stdout_bytes = previous + len(chunk)
+                    else:
+                        self._stderr_buffer.extend(chunk[:accepted])
+                        self._stderr_bytes = previous + len(chunk)
+                    exceeded = previous + len(chunk) > limit
+                    if exceeded:
+                        self._record_failure_locked(reason)
+                    else:
+                        self._condition.notify_all()
+                if exceeded:
+                    self._kill_immediate_child()
+                    return
+        except (OSError, ValueError):
+            pass
+        finally:
+            with self._condition:
+                if stdout:
+                    self._stdout_closed = True
+                self._condition.notify_all()
+
+    def _closed_reason(self) -> BoundedWorkerDialogueErrorReason:
+        returncode = self._process.poll()
+        if returncode is not None and returncode != 0:
+            return BoundedWorkerDialogueErrorReason.NONZERO_EXIT
+        return BoundedWorkerDialogueErrorReason.CLOSED
+
+    def send(self, payload: bytes) -> None:
+        with self._condition:
+            self._require_active_locked()
+            self._raise_recorded_failure_locked()
+            deadline_expired = time.monotonic() >= self._execution_deadline
+        if deadline_expired:
+            self._fail(BoundedWorkerDialogueErrorReason.DEADLINE_EXPIRED)
+        if not payload:
+            return
+
+        write = _DialogueWrite()
+
+        def write_payload() -> None:
+            try:
+                remaining = memoryview(payload)
+                while remaining:
+                    written = self._stdin.write(remaining)
+                    if written is None or written <= 0:
+                        raise BrokenPipeError("worker stdin closed")
+                    remaining = remaining[written:]
+            except BaseException as exc:  # recorded for the coordinating thread
+                write.error = exc
+            finally:
+                with self._condition:
+                    write.done = True
+                    self._condition.notify_all()
+
+        writer = threading.Thread(
+            target=write_payload,
+            name="bounded-worker-dialogue-stdin",
+            daemon=True,
+        )
+        self._writers.append(writer)
+        writer.start()
+
+        while True:
+            with self._condition:
+                self._require_active_locked()
+                self._raise_recorded_failure_locked()
+                deadline_expired = time.monotonic() >= self._execution_deadline
+                if deadline_expired:
+                    pass
+                elif write.done:
+                    if write.error is not None:
+                        reason = self._closed_reason()
+                        self._record_failure_locked(reason)
+                        raise _WorkerDialogueControlError(reason) from write.error
+                    return
+                remaining_seconds = self._execution_deadline - time.monotonic()
+                if remaining_seconds > 0:
+                    self._condition.wait(timeout=remaining_seconds)
+                    continue
+            self._fail(BoundedWorkerDialogueErrorReason.DEADLINE_EXPIRED)
+
+    def read_until(self, marker: bytes, *, frame_limit: int) -> bytes:
+        if not marker:
+            raise ValueError("worker dialogue marker must not be empty")
+        if frame_limit <= 0:
+            raise ValueError("worker dialogue frame limit must be positive")
+        if len(marker) > frame_limit:
+            raise ValueError("worker dialogue marker exceeds the frame limit")
+
+        while True:
+            with self._condition:
+                self._require_active_locked()
+                self._raise_recorded_failure_locked()
+                deadline_expired = time.monotonic() >= self._execution_deadline
+                marker_start = self._stdout_buffer.find(marker)
+                if deadline_expired:
+                    self._record_failure_locked(
+                        BoundedWorkerDialogueErrorReason.DEADLINE_EXPIRED
+                    )
+                elif marker_start >= 0:
+                    frame_end = marker_start + len(marker)
+                    if frame_end <= frame_limit:
+                        frame = bytes(self._stdout_buffer[:frame_end])
+                        del self._stdout_buffer[:frame_end]
+                        return frame
+                    self._record_failure_locked(
+                        BoundedWorkerDialogueErrorReason.STDOUT_LIMIT
+                    )
+                elif len(self._stdout_buffer) < frame_limit:
+                    if self._stdout_closed:
+                        reason = self._closed_reason()
+                        self._record_failure_locked(reason)
+                    else:
+                        remaining_seconds = self._execution_deadline - time.monotonic()
+                        if remaining_seconds > 0:
+                            self._condition.wait(timeout=remaining_seconds)
+                            continue
+                        self._record_failure_locked(
+                            BoundedWorkerDialogueErrorReason.DEADLINE_EXPIRED
+                        )
+                else:
+                    self._record_failure_locked(
+                        BoundedWorkerDialogueErrorReason.STDOUT_LIMIT
+                    )
+                assert self._failure is not None
+                reason = self._failure
+            self._kill_immediate_child()
+            raise _WorkerDialogueControlError(reason)
+
+    def finish(self) -> None:
+        with self._condition:
+            self._raise_recorded_failure_locked()
+        if time.monotonic() >= self._execution_deadline:
+            self._fail(BoundedWorkerDialogueErrorReason.DEADLINE_EXPIRED)
+
+        # Pipes are unbuffered, so closing stdin cannot acquire an implicit
+        # flush budget. EOF lets command-line tools finish after the callback.
+        with suppress(OSError):
+            self._stdin.close()
+        remaining_seconds = self._execution_deadline - time.monotonic()
+        if remaining_seconds <= 0:
+            self._fail(BoundedWorkerDialogueErrorReason.DEADLINE_EXPIRED)
+        try:
+            self._process.wait(timeout=remaining_seconds)
+        except subprocess.TimeoutExpired:
+            self._fail(BoundedWorkerDialogueErrorReason.DEADLINE_EXPIRED)
+
+        for reader in self._readers:
+            reader.join(timeout=max(0.0, self._absolute_deadline - time.monotonic()))
+        with self._condition:
+            self._raise_recorded_failure_locked()
+        if any(reader.is_alive() for reader in self._readers):
+            self._fail(BoundedWorkerDialogueErrorReason.DEADLINE_EXPIRED)
+        if self._process.returncode != 0:
+            raise _WorkerDialogueControlError(
+                BoundedWorkerDialogueErrorReason.NONZERO_EXIT
+            )
+
+    def cleanup(self, *, kill: bool) -> None:
+        if kill:
+            self._kill_immediate_child()
+        with suppress(OSError):
+            self._stdin.close()
+        remaining_seconds = max(0.0, self._absolute_deadline - time.monotonic())
+        try:
+            self._process.wait(timeout=remaining_seconds)
+        except subprocess.TimeoutExpired:
+            self._kill_immediate_child()
+            with suppress(subprocess.TimeoutExpired):
+                self._process.wait(
+                    timeout=max(0.0, self._absolute_deadline - time.monotonic())
+                )
+        threads = (*self._readers, *self._writers)
+        for thread in threads:
+            if thread.ident is not None:
+                thread.join(
+                    timeout=max(0.0, self._absolute_deadline - time.monotonic())
+                )
+        for stream in (self._stdout, self._stderr):
+            with suppress(OSError):
+                stream.close()
+        for thread in threads:
+            if thread.ident is not None:
+                thread.join(
+                    timeout=max(0.0, self._absolute_deadline - time.monotonic())
+                )
+
+
+class BoundedWorkerDialogue:
+    """Callback-scoped byte dialogue with one already supervised child."""
+
+    __slots__ = ("__state",)
+
+    def __init__(self, state: _BoundedWorkerDialogueState) -> None:
+        self.__state = state
+
+    def send(self, payload: bytes) -> None:
+        """Write all *payload* before the operation's absolute deadline."""
+
+        self.__state.send(payload)
+
+    def read_until(self, marker: bytes, *, frame_limit: int) -> bytes:
+        """Read through *marker*, preserving any later bytes for the next frame."""
+
+        return self.__state.read_until(marker, frame_limit=frame_limit)
 
 
 @contextmanager
@@ -493,6 +869,100 @@ def run_bounded_process(
         timed_out=timed_out,
         cancelled=cancelled,
     )
+
+
+def run_bounded_worker_dialogue[ValueT](
+    command: Sequence[str],
+    dialogue: Callable[[BoundedWorkerDialogue], ValueT],
+    *,
+    absolute_deadline: float,
+    environment: Mapping[str, str],
+    stdout_limit: int,
+    stderr_limit: int,
+    cwd: str | None = None,
+) -> BoundedWorkerDialogueCompleted[ValueT]:
+    """Run one adaptive child exchange inside an already supervised worker.
+
+    The nested child deliberately inherits the worker's process group. Local
+    failures kill and reap only that immediate child; the outer
+    :func:`run_bounded_process` supervisor remains responsible for the whole
+    group. The callback receives no process object, PID, or reusable session.
+
+    ``absolute_deadline`` is a finite :func:`time.monotonic` deadline shared by
+    launch admission, every read and write, child exit, stream drain, and
+    cleanup. ``stdout_limit`` is cumulative across all frames; ``frame_limit``
+    on :meth:`BoundedWorkerDialogue.read_until` bounds one unread frame.
+    """
+
+    if stdout_limit < 0 or stderr_limit < 0:
+        raise ValueError("worker dialogue output limits must be nonnegative")
+    if not math.isfinite(absolute_deadline):
+        raise ValueError("worker dialogue deadline must be finite")
+
+    started = time.monotonic()
+    if started >= absolute_deadline:
+        raise BoundedWorkerDialogueError(
+            BoundedWorkerDialogueErrorReason.DEADLINE_EXPIRED,
+            stderr=b"",
+        )
+    cleanup_allowance = min(
+        _PIPE_DRAIN_GRACE_SECONDS,
+        (absolute_deadline - started) / 100,
+    )
+    execution_deadline = absolute_deadline - cleanup_allowance
+    if time.monotonic() >= execution_deadline:
+        raise BoundedWorkerDialogueError(
+            BoundedWorkerDialogueErrorReason.DEADLINE_EXPIRED,
+            stderr=b"",
+        )
+
+    try:
+        process = subprocess.Popen(
+            list(command),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            bufsize=0,
+            env=environment,
+            cwd=cwd,
+            start_new_session=False,
+            creationflags=0,
+        )
+    except OSError as exc:
+        raise BoundedWorkerDialogueError(
+            BoundedWorkerDialogueErrorReason.START_FAILED,
+            stderr=b"",
+        ) from exc
+
+    state = _BoundedWorkerDialogueState(
+        process,
+        execution_deadline=execution_deadline,
+        absolute_deadline=absolute_deadline,
+        stdout_limit=stdout_limit,
+        stderr_limit=stderr_limit,
+    )
+    bounded_dialogue = BoundedWorkerDialogue(state)
+    try:
+        state.start()
+        if time.monotonic() >= execution_deadline:
+            raise _WorkerDialogueControlError(
+                BoundedWorkerDialogueErrorReason.DEADLINE_EXPIRED
+            )
+        value = dialogue(bounded_dialogue)
+        state.finish()
+    except _WorkerDialogueControlError as exc:
+        state.deactivate()
+        state.cleanup(kill=True)
+        raise BoundedWorkerDialogueError(exc.reason, stderr=state.stderr) from None
+    except BaseException:
+        state.deactivate()
+        state.cleanup(kill=True)
+        raise
+
+    stdout_bytes = state.stdout_bytes
+    state.deactivate()
+    state.cleanup(kill=False)
+    return BoundedWorkerDialogueCompleted(value=value, stdout_bytes=stdout_bytes)
 
 
 def worker_environment(

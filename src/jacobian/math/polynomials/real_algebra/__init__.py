@@ -14,8 +14,20 @@ from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
     PolynomialRootReference,
     SourceRootProfile,
 )
+from jacobian.math.polynomials.real_algebra._plane_component_models import (
+    IsolatedRealPlanePoint,
+    PlaneComponentProfileComputed,
+    PlaneComponentProfileNoncompletion,
+    PlaneComponentProfileResult,
+    PlaneSampleDisposition,
+    PlaneSemialgebraicComponent,
+    PlaneSemialgebraicSet,
+    PlaneSign,
+    PlaneSignCondition,
+)
 from jacobian.math.polynomials.real_algebra.operations import (
     common_interlacing_profile,
+    compute_plane_component_profile,
     root_count,
     sturm_chain,
 )
@@ -28,12 +40,22 @@ __all__ = [
     "CommonInterlacingOutcome",
     "CommonInterlacingProfile",
     "EmptyGapObstruction",
+    "IsolatedRealPlanePoint",
     "LabelledRationalPolynomial",
     "NonRealRootObstruction",
+    "PlaneComponentProfileComputed",
+    "PlaneComponentProfileNoncompletion",
+    "PlaneComponentProfileResult",
+    "PlaneSampleDisposition",
+    "PlaneSemialgebraicComponent",
+    "PlaneSemialgebraicSet",
+    "PlaneSign",
+    "PlaneSignCondition",
     "PolynomialRealRoot",
     "PolynomialRootReference",
     "SourceRootProfile",
     "common_interlacing_profile",
+    "compute_plane_component_profile",
     "root_count",
     "sturm_chain",
 ]

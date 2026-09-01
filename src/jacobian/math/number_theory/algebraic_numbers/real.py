@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from math import gcd
 from typing import TYPE_CHECKING, Annotated, Literal, Self
 
@@ -9,7 +10,7 @@ from pydantic import Field, StrictInt, ValidateAs, WithJsonSchema, model_validat
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger, CanonicalRational
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math._root_isolation import strict_root_count
 
@@ -17,14 +18,15 @@ if TYPE_CHECKING:
     from sympy import Poly
     from sympy.core.numbers import Rational as SympyRational
 
-# A degree-eight value covers every singular value of a 2 by 2 matrix over a
-# real quadratic field.  The coefficient budget also bounds exact comparison:
-# the product of two defining polynomials has degree at most sixteen and
-# coefficient height below 2,002 decimal digits.  Mignotte's root-separation
-# bound then needs fewer than 32,768 decimal digits for rational isolating
-# endpoints, so every accepted comparison remains representable by the shared
-# canonical scalar envelope.
-MAX_REAL_ALGEBRAIC_DEGREE = 8
+# A degree-sixteen carrier includes coordinate projections of isolated
+# intersections of plane quartics. Pairwise comparison retains its proven
+# degree-eight envelope: the product of two such defining polynomials has
+# degree at most sixteen and coefficient height below 2,002 decimal digits.
+# Mignotte's root-separation bound then needs fewer than 32,768 decimal digits
+# for rational isolating endpoints, so every accepted comparison remains
+# representable by the shared canonical scalar envelope.
+MAX_REAL_ALGEBRAIC_DEGREE = 16
+MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE = 8
 MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS = 1_000
 
 
@@ -169,10 +171,18 @@ def _unrecognized_real_value_from_shape(
     )
 
 
+def _number_field_embedding_root_schema() -> dict[str, object]:
+    schema = RealAlgebraicValue.model_json_schema()
+    polynomial = schema.get("properties", {}).get("polynomial")
+    if isinstance(polynomial, dict):
+        polynomial["maxItems"] = MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE + 1
+    return schema
+
+
 _UnrecognizedRealAlgebraicValue = Annotated[
     RealAlgebraicValue,
     ValidateAs(_RealAlgebraicValueShape, _unrecognized_real_value_from_shape),
-    WithJsonSchema(RealAlgebraicValue.model_json_schema()),
+    WithJsonSchema(_number_field_embedding_root_schema()),
 ]
 
 
@@ -239,6 +249,15 @@ def _order_data(
         )
         return order, left_interval, right_interval
 
+    if any(
+        len(value.polynomial) - 1 > MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE
+        for value in (left, right)
+    ):
+        raise ValueError(
+            "exact algebraic comparison admits degree at most "
+            f"{MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE}"
+        )
+
     # Distinct canonical minimal polynomials are coprime.  Isolating the roots
     # of their square-free product gives one exact common ordered axis, avoiding
     # floating-point matching between separately isolated root lists.
@@ -275,6 +294,46 @@ class RealAlgebraicOrderValue(StrictModel):
     comparison_basis: Literal["ORDERED_REAL_ROOT_ISOLATION"] = (
         "ORDERED_REAL_ROOT_ISOLATION"
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_raw_comparison_degree_bound(cls, data: object) -> object:
+        if not isinstance(data, Mapping):
+            return data
+        left = data.get("left")
+        right = data.get("right")
+        if not isinstance(left, Mapping) or not isinstance(right, Mapping):
+            return data
+        left_polynomial = left.get("polynomial")
+        right_polynomial = right.get("polynomial")
+        if (
+            isinstance(left_polynomial, (list, tuple))
+            and isinstance(right_polynomial, (list, tuple))
+            and left_polynomial != right_polynomial
+            and any(
+                len(polynomial) - 1 > MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE
+                for polynomial in (left_polynomial, right_polynomial)
+            )
+        ):
+            raise _validation_error(
+                "comparison_degree_bound",
+                "exact algebraic comparison admits degree at most "
+                f"{MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE} for distinct polynomials",
+            )
+        return canonicalize_json_containers(data)
+
+    @model_validator(mode="after")
+    def require_admitted_distinct_polynomial_pair(self) -> Self:
+        if self.left.polynomial != self.right.polynomial and any(
+            len(value.polynomial) - 1 > MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE
+            for value in (self.left, self.right)
+        ):
+            raise _validation_error(
+                "comparison_degree_bound",
+                "exact algebraic comparison admits degree at most "
+                f"{MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE} for distinct polynomials",
+            )
+        return self
 
     @classmethod
     def _from_kernel(
@@ -315,6 +374,7 @@ def compare_real_algebraic(
 
 __all__ = [
     "MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS",
+    "MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE",
     "MAX_REAL_ALGEBRAIC_DEGREE",
     "RationalIsolatingInterval",
     "RealAlgebraicOrderValue",

@@ -6,14 +6,10 @@ from collections.abc import Iterator, Mapping
 from itertools import permutations
 from math import factorial
 
-from jacobian.canonical import encode_strict_json
 from jacobian.math.graphs.values import ColoredUndirectedGraph, SimpleUndirectedGraph
 
 MAX_CANONICAL_PERMUTATIONS = factorial(9)
 MAX_CANONICALIZATION_WORK = 100_000_000
-MAX_CANONICALIZATION_RESULT_BYTES = 10 * 1024 * 1024
-"""Aggregate canonical-output budget aligned with Jacobian's 10 MiB JSON limit."""
-_RESULT_ENVELOPE_RESERVE_BYTES = 1_024
 
 
 def _canonical_vertex_labels(vertex_count: int) -> tuple[str, ...]:
@@ -135,27 +131,6 @@ def apply_colored_graph_relabeling(
     return _relabel_graph(graph, target_by_source)
 
 
-def canonicalization_result_wire_bytes(graph: ColoredUndirectedGraph) -> int:
-    """Return an exact shape-based upper bound for the public result bytes."""
-
-    canonical_vertices = _canonical_vertex_labels(len(graph.graph.vertices))
-    placeholder = _relabel_graph(graph, canonical_vertices)
-    payload = {
-        "source_graph": graph.model_dump(mode="json"),
-        "canonical_graph": placeholder.model_dump(mode="json"),
-        "relabeling": [
-            {
-                "source_vertex": source,
-                "canonical_vertex": target,
-            }
-            for source, target in zip(
-                graph.graph.vertices, canonical_vertices, strict=True
-            )
-        ],
-    }
-    return len(encode_strict_json(payload)) + _RESULT_ENVELOPE_RESERVE_BYTES
-
-
 def canonicalize_colored_graph_data(
     graph: ColoredUndirectedGraph,
 ) -> tuple[ColoredUndirectedGraph, tuple[tuple[str, str], ...]]:
@@ -241,12 +216,10 @@ def canonicalize_colored_graph_data(
 
 
 __all__ = [
-    "MAX_CANONICALIZATION_RESULT_BYTES",
     "MAX_CANONICALIZATION_WORK",
     "MAX_CANONICAL_PERMUTATIONS",
     "apply_colored_graph_relabeling",
     "canonical_permutation_count",
-    "canonicalization_result_wire_bytes",
     "canonicalization_work",
     "canonicalize_colored_graph_data",
 ]

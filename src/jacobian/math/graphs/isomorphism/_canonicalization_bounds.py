@@ -4,10 +4,8 @@ from pydantic_core import PydanticCustomError
 
 from jacobian.math.graphs.isomorphism._canonicalization import (
     MAX_CANONICAL_PERMUTATIONS,
-    MAX_CANONICALIZATION_RESULT_BYTES,
     MAX_CANONICALIZATION_WORK,
     canonical_permutation_count,
-    canonicalization_result_wire_bytes,
     canonicalization_work,
 )
 from jacobian.math.graphs.values import ColoredUndirectedGraph
@@ -32,17 +30,6 @@ def require_admitted_colored_graph_canonicalization(
             "colored-graph canonicalization exceeds the "
             f"{MAX_CANONICALIZATION_WORK}-unit execution work bound",
         )
-    result_bytes = canonicalization_result_wire_bytes(graph)
-    if result_bytes > MAX_CANONICALIZATION_RESULT_BYTES:
-        raise PydanticCustomError(
-            "graph.colored_canonicalization_exceeds_max_canonicalization_result_bytes",
-            "colored-graph canonicalization exceeds the "
-            f"{MAX_CANONICALIZATION_RESULT_BYTES}-byte result bound",
-        )
-
-
 __all__ = [
-    "MAX_CANONICALIZATION_RESULT_BYTES",
-    "canonicalization_result_wire_bytes",
     "require_admitted_colored_graph_canonicalization",
 ]

@@ -21,12 +21,7 @@ from jacobian._execution import (
     current_request_execution,
     request_cancelled,
 )
-from jacobian.canonical import (
-    CanonicalLimits,
-    encode_strict_json,
-    format_canonical_integer,
-    parse_canonical_integer,
-)
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.certified_snf.operations import (
     Matrix,
@@ -101,7 +96,6 @@ class IntegralHomologyExecutionPlan:
     smith_work: int
     result_construction_work: int
     output_scalar_count: int
-    output_byte_bound: int
     total_work: int
     deadline: float
 
@@ -1076,31 +1070,6 @@ def _result_construction_work(
     return coordinate_projection + cycle_basis_copy + representatives + 1
 
 
-_RESULT_ROOT_RESERVE_BYTES = 4_096
-_RESULT_GROUP_RESERVE_BYTES = 16_384
-
-
-def _decimal_chars_for_bits(bits: int) -> int:
-    """Bound decimal magnitude characters for an integer of ``bits`` bits."""
-
-    return max(1, (max(1, bits) * 30_103 + 99_999) // 100_000 + 1)
-
-
-def _group_result_byte_bound(*, scalar_count: int, maximum_bits: int) -> int:
-    """Bound one group's canonical JSON without materializing its result.
-
-    Every exact integer is serialized as a quoted decimal string.  Four bytes
-    beyond the magnitude cover a possible sign, quotes, and one separator.
-    The fixed reserve is larger than all field names, literal tags, object and
-    array punctuation in one group; it does not depend on mathematical output.
-    """
-
-    return (
-        scalar_count * (_decimal_chars_for_bits(maximum_bits) + 4)
-        + _RESULT_GROUP_RESERVE_BYTES
-    )
-
-
 def _deadline() -> float:
     execution = current_request_execution()
     started = execution.started_at if execution is not None else monotonic()
@@ -1155,10 +1124,6 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
     # The result retains the complete source complex in addition to the
     # per-degree certificates and representatives.
     output_scalar_count = matrix_cells + len(source.basis_sizes) + 8
-    output_byte_bound = (
-        len(encode_strict_json(source.model_dump(mode="json")))
-        + _RESULT_ROOT_RESERVE_BYTES
-    )
     for index, chain_rank in enumerate(source.basis_sizes):
         degree = source.degree_min + index
         _require_deadline(deadline, f"before degree {degree} admission")
@@ -1365,13 +1330,6 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
             incoming_chain_rank,
         )
         output_scalar_count += degree_output_scalars
-        output_byte_bound += max(
-            _group_result_byte_bound(
-                scalar_count=degree_output_scalars,
-                maximum_bits=bounds_by_cycle_rank[cycle_rank][3],
-            )
-            for cycle_rank in cycle_ranks
-        )
         degree_plans.append(
             IntegralHomologyDegreePlan(
                 degree=degree,
@@ -1411,13 +1369,6 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
             f"has a conservative bound of {output_scalar_count} integer scalars, above the "
             f"{MAX_INTEGRAL_HOMOLOGY_OUTPUT_SCALARS}-scalar output envelope",
         )
-    if output_byte_bound > CanonicalLimits().max_output_bytes:
-        raise _domain_error(
-            "integral_homology_output_byte_budget_exceeded",
-            "the complete retained complex, certificates, generators, and "
-            "bounding chains exceed the canonical "
-            f"{CanonicalLimits().max_output_bytes}-byte output envelope",
-        )
     _require_deadline(deadline, "after complete admission")
     return IntegralHomologyExecutionPlan(
         source=source,
@@ -1427,7 +1378,6 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
         smith_work=smith_work,
         result_construction_work=result_construction_work,
         output_scalar_count=output_scalar_count,
-        output_byte_bound=output_byte_bound,
         total_work=total_work,
         deadline=deadline,
     )

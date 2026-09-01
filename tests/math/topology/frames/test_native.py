@@ -12,7 +12,6 @@ from jacobian.math.topology.frames._models import (
     VectorFamilyRequest,
 )
 from jacobian.math.topology.frames._tools import _coherence, _frame_potential, _gram
-from jacobian.math.topology.frames.operations import _gram_result, _gram_result_bytes
 from jacobian.math.topology.frames.values import MAX_VECTOR_CELLS
 
 
@@ -61,8 +60,7 @@ def test_frame_operations_reject_undercomplete_families_before_rank(
     assert error.value.errors()[0]["type"] == "frames.frame_does_not_span"
 
 
-def test_native_gram_returns_exact_matrix_beyond_mcp_byte_cap() -> None:
-    """MCP output size is a transport-only constraint; native gram stays exact."""
+def test_native_and_catalog_gram_return_the_same_large_exact_matrix() -> None:
     dimension = 512
     basis = tuple(
         tuple(1_000 if row == column else 999 for column in range(dimension))
@@ -74,12 +72,9 @@ def test_native_gram_returns_exact_matrix_beyond_mcp_byte_cap() -> None:
     off_diagonal = 2 * 1_000 * 999 + (dimension - 2) * 999**2
 
     assert len(vectors) == MAX_VECTOR_CELLS // dimension
-    assert _gram_result_bytes(_gram_result(family)) > 10_485_760
-    with pytest.raises(OperationDomainValidationError) as error:
-        _gram(VectorFamilyRequest(vectors=vectors))
-    assert error.value.errors()[0]["type"] == "frames.result_byte_budget"
-
     result = gram(family)
+    catalog_result = _gram(VectorFamilyRequest(vectors=vectors))
+    assert catalog_result == result
     assert result.gram[0][0] == diagonal
     assert result.gram[0][1] == off_diagonal
     assert result.gram[0][dimension] == diagonal

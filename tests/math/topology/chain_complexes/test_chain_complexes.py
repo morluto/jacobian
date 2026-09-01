@@ -601,35 +601,6 @@ class TestIntegralHomology:
             "chain_complex.integral_homology_height_budget_exceeded"
         )
 
-    def test_canonical_result_byte_bound_rejects_before_backend_execution(self) -> None:
-        from jacobian.canonical import CanonicalLimits
-        from jacobian.math.topology.chain_complexes._integral_homology import (
-            admit_integral_homology,
-        )
-
-        def upper_bidiagonal_complex(rank: int) -> ChainComplexValue:
-            coefficient = "9" * 32
-            matrix = tuple(
-                tuple(
-                    "1" if row == column else coefficient if column == row + 1 else "0"
-                    for column in range(rank)
-                )
-                for row in range(rank)
-            )
-            return self._complex(
-                (rank, rank),
-                (matrix,),
-            )
-
-        admitted = admit_integral_homology(upper_bidiagonal_complex(24))
-        assert admitted.output_byte_bound <= CanonicalLimits().max_output_bytes
-
-        with pytest.raises(OperationDomainValidationError) as exc_info:
-            homology_groups(upper_bidiagonal_complex(28))
-        assert exc_info.value.errors()[0]["type"] == (
-            "chain_complex.integral_homology_output_byte_budget_exceeded"
-        )
-
     def test_group_discriminators_are_required_in_schema(self) -> None:
         schema = HomologyResult.model_json_schema()
         for definition in (
@@ -858,17 +829,11 @@ class TestIntegralHomology:
             + plan.result_construction_work
             + plan.output_scalar_count
         )
-        from jacobian.canonical import CanonicalLimits, encode_strict_json
-
-        assert plan.output_byte_bound <= CanonicalLimits().max_output_bytes
         result = HomologyResult._from_kernel(
             homology_groups=compute_integral_homology(plan),
             source_complex=complex_value,
         )
-        assert (
-            len(encode_strict_json(result.model_dump(mode="json")))
-            <= plan.output_byte_bound
-        )
+        assert result.complex == complex_value
 
     def test_expired_dispatch_deadline_stops_before_integral_admission(self) -> None:
         from time import monotonic

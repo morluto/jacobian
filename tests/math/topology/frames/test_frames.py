@@ -4,7 +4,7 @@ from fractions import Fraction
 
 import pytest
 
-from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.topology.frames._models import (
     CoherenceRequest,
@@ -12,12 +12,7 @@ from jacobian.math.topology.frames._models import (
     VectorFamilyRequest,
 )
 from jacobian.math.topology.frames._tools import _coherence, _frame_potential, _gram
-from jacobian.math.topology.frames.operations import (
-    _RESULT_RESERVE_BYTES,
-    _gram_result,
-    _gram_result_bytes,
-    gram,
-)
+from jacobian.math.topology.frames.operations import gram
 from jacobian.math.topology.frames.values import (
     MAX_VECTOR_CELLS,
     VectorFamily,
@@ -151,42 +146,26 @@ def test_result_sensitive_operations_diverge_at_full_carrier_boundary() -> None:
         dimension - 1,
         MAX_VECTOR_CELLS // dimension - 1,
     )
-    assert (
-        len(encode_strict_json(gram_result.model_dump(mode="json")))
-        <= CanonicalLimits().max_output_bytes
-    )
-    assert (
-        len(encode_strict_json(potential.model_dump(mode="json")))
-        <= CanonicalLimits().max_output_bytes
-    )
+    assert encode_strict_json(gram_result.model_dump(mode="json"))
+    assert encode_strict_json(potential.model_dump(mode="json"))
 
 
 def test_sparse_high_height_gram_is_admitted_by_occupancy() -> None:
     dimension = 512
     vectors = tuple(
         tuple(1_000 * entry for entry in vector)
-        for vector in _repeated_standard_basis(dimension=512, repeats=2)
+        for vector in _repeated_standard_basis(dimension=dimension, repeats=2)
     )
     family = VectorFamily(vectors=vectors)
     naive_entry_bound = 512 * 1_000**2
     naive_chars = len(str(naive_entry_bound)) + int(naive_entry_bound > 0)
-    naive_bytes = (
-        (MAX_VECTOR_CELLS // dimension) ** 2 * (naive_chars + 1)
-        + 2 * (MAX_VECTOR_CELLS // dimension)
-        + len(encode_strict_json(family.model_dump(mode="json")))
-        + _RESULT_RESERVE_BYTES
-    )
-
-    assert naive_bytes > CanonicalLimits().max_output_bytes
+    assert naive_chars > 0
     result = gram(family)
     encoded = encode_strict_json(result.model_dump(mode="json"))
-    assert (
-        _gram_result_bytes(_gram_result(family)) <= CanonicalLimits().max_output_bytes
-    )
     assert result.gram[0][0] == 1_000_000
     assert result.gram[0][1] == 0
     assert result.gram[0][512] == 1_000_000
-    assert len(encoded) <= CanonicalLimits().max_output_bytes
+    assert encoded
 
 
 def test_sparse_row_norm_controls_gram_entry_admission() -> None:
@@ -197,34 +176,30 @@ def test_sparse_row_norm_controls_gram_entry_admission() -> None:
     assert result.gram == ((4_900_000_000_000_000,),)
 
 
-def test_dense_high_height_gram_is_rejected_before_backend_expansion() -> None:
+def test_dense_high_height_gram_uses_the_structural_work_bound() -> None:
     dimension = 512
     basis = tuple(
         tuple(1_000 if row == column else 999 for column in range(dimension))
         for row in range(dimension)
     )
     vectors = basis * 2
-    family = VectorFamily(vectors=vectors)
-
-    assert _gram_result_bytes(_gram_result(family)) > CanonicalLimits().max_output_bytes
-    with pytest.raises(OperationDomainValidationError) as error:
-        _gram(VectorFamilyRequest(vectors=vectors))
-    assert error.value.errors()[0]["type"] == "frames.result_byte_budget"
+    result = _gram(VectorFamilyRequest(vectors=vectors))
 
     potential = _frame_potential(FiniteFrameRequest(vectors=vectors))
     diagonal = 1_000**2 + (dimension - 1) * 999**2
     off_diagonal = 2 * 1_000 * 999 + (dimension - 2) * 999**2
     expected = 4 * dimension * (diagonal**2 + (dimension - 1) * off_diagonal**2)
+    assert result.gram[0][0] == diagonal
     assert potential.potential == str(expected)
 
 
-def test_oversized_gram_measurement_is_a_domain_rejection() -> None:
+def test_high_coefficients_remain_exact_within_the_cell_bound() -> None:
     dimension = 512
     vectors = ((4_000_000,) * dimension,) * (MAX_VECTOR_CELLS // dimension)
 
-    with pytest.raises(OperationDomainValidationError) as error:
-        _gram(VectorFamilyRequest(vectors=vectors))
-    assert error.value.errors()[0]["type"] == "frames.result_byte_budget"
+    result = _gram(VectorFamilyRequest(vectors=vectors))
+
+    assert result.gram[0][0] == dimension * 4_000_000**2
 
 
 def test_flint_rank_rejects_nonspanning_family_above_previous_boundary() -> None:

@@ -1,7 +1,11 @@
 """Finite delta-matroid operation declarations."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    MathTools,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidFromFeasibleSetsRequest,
     DeltaMatroidRecognitionResult,
@@ -39,10 +43,10 @@ TOOLS: MathTools = (
         run=_from_feasible_sets,
         tags=("delta-matroid", "symmetric-exchange", "exact"),
         examples=(
-            example(
-                "two_element_delta_matroid",
-                "Recognize the complete feasible family on two labelled elements.",
-                {
+            OperationExample(
+                name="two_element_delta_matroid",
+                description="Recognize the complete feasible family on two labelled elements.",
+                input={
                     "system": {
                         "ground": ["a", "b"],
                         "feasible": [[], [0], [1], [0, 1]],

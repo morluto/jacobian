@@ -1,10 +1,7 @@
 """Context-free language operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.logic.languages.context_free._models import (
     DependencyGraphRequest,
@@ -33,45 +30,21 @@ def compute_first_sets(request: FirstSetsRequest) -> FirstSetsResult:
     return FirstSetsResult(first_sets=first_sets(request.grammar))
 
 
-def _op[RequestT: StrictModel, ResultT: StrictModel](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "grammar.symbol_profiles.compute",
-        "Compute nullable nonterminals of a CFG",
-        "Compute which nonterminals are nullable (can derive epsilon) via "
+    MathTool(
+        operation_id="grammar.symbol_profiles.compute",
+        title="Compute nullable nonterminals of a CFG",
+        description="Compute which nonterminals are nullable (can derive epsilon) via "
         "fixed-point iteration.",
-        SymbolProfilesRequest,
-        SymbolProfilesResult,
-        compute_symbol_profiles,
-        "grammar",
-        "nullable",
-        "exact",
+        request_type=SymbolProfilesRequest,
+        result_type=SymbolProfilesResult,
+        run=compute_symbol_profiles,
+        tags=("grammar", "nullable", "exact"),
         examples=(
-            example(
-                "simple_grammar",
-                "Compute nullable symbols in S -> aS | epsilon.",
-                {
+            OperationExample(
+                name="simple_grammar",
+                description="Compute nullable symbols in S -> aS | epsilon.",
+                input={
                     "grammar": {
                         "nonterminals": ["S"],
                         "terminals": ["a"],
@@ -85,22 +58,20 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "grammar.dependency_graph.compute",
-        "Compute the dependency graph of a CFG",
-        "Compute the dependency graph: A depends on B if A has a rule "
+    MathTool(
+        operation_id="grammar.dependency_graph.compute",
+        title="Compute the dependency graph of a CFG",
+        description="Compute the dependency graph: A depends on B if A has a rule "
         "containing B in its body.",
-        DependencyGraphRequest,
-        DependencyGraphResult,
-        compute_dependency_graph,
-        "grammar",
-        "dependency-graph",
-        "exact",
+        request_type=DependencyGraphRequest,
+        result_type=DependencyGraphResult,
+        run=compute_dependency_graph,
+        tags=("grammar", "dependency-graph", "exact"),
         examples=(
-            example(
-                "simple_grammar",
-                "Dependency graph of S -> aS | epsilon.",
-                {
+            OperationExample(
+                name="simple_grammar",
+                description="Dependency graph of S -> aS | epsilon.",
+                input={
                     "grammar": {
                         "nonterminals": ["S"],
                         "terminals": ["a"],
@@ -114,21 +85,19 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "grammar.first_sets.compute",
-        "Compute FIRST sets of a CFG",
-        "Compute the FIRST set for each nonterminal via fixed-point iteration.",
-        FirstSetsRequest,
-        FirstSetsResult,
-        compute_first_sets,
-        "grammar",
-        "first-sets",
-        "exact",
+    MathTool(
+        operation_id="grammar.first_sets.compute",
+        title="Compute FIRST sets of a CFG",
+        description="Compute the FIRST set for each nonterminal via fixed-point iteration.",
+        request_type=FirstSetsRequest,
+        result_type=FirstSetsResult,
+        run=compute_first_sets,
+        tags=("grammar", "first-sets", "exact"),
         examples=(
-            example(
-                "simple_grammar",
-                "FIRST sets of S -> aS | epsilon.",
-                {
+            OperationExample(
+                name="simple_grammar",
+                description="FIRST sets of S -> aS | epsilon.",
+                input={
                     "grammar": {
                         "nonterminals": ["S"],
                         "terminals": ["a"],

@@ -2,8 +2,7 @@
 
 from typing import Any
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.geometry.framework._models import (
     PlanarRigidityProfile,
     PlanarRigidityProfileRequest,
@@ -37,12 +36,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         run=_run_planar_rigidity_profile,
         tags=("geometry", "framework", "rigidity-matrix", "exact-rational"),
         examples=(
-            example(
-                "rational_triangle",
-                "Compute the exact rigidity matrix and rank of a non-collinear "
+            OperationExample(
+                name="rational_triangle",
+                description="Compute the exact rigidity matrix and rank of a non-collinear "
                 "rational triangle; the graph labels must exactly match the "
                 "planar configuration labels.",
-                {
+                input={
                     "configuration": {
                         "points": [
                             {

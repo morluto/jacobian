@@ -1,10 +1,7 @@
 """Graph morphism operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.morphisms._models import (
     FixedLengthCycleRequest,
@@ -37,28 +34,6 @@ def _compute_subgraph_pattern_find(
     request: SubgraphPatternFindRequest,
 ) -> SubgraphPatternFindResult:
     return subgraph_pattern_find(request.pattern, request.host)
-
-
-def _op[RequestT: StrictModel, ResultT: StrictModel](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
 
 
 CYCLE_C4_WITH_CHORD = {
@@ -105,23 +80,21 @@ SUBGRAPH_P3_NOT_IN_MATCHING = {
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "graph.homomorphism.check",
-        "Check one complete graph vertex map",
-        "Check a complete canonical vertex map between two labelled simple "
+    MathTool(
+        operation_id="graph.homomorphism.check",
+        title="Check one complete graph vertex map",
+        description="Check a complete canonical vertex map between two labelled simple "
         "graphs. Returns either the source-bound checked homomorphism or the "
         "first source edge whose image is not a target edge.",
-        HomomorphismCheckRequest,
-        HomomorphismCheckResult,
-        _compute_homomorphism_check,
-        "graph",
-        "homomorphism",
-        "exact",
+        request_type=HomomorphismCheckRequest,
+        result_type=HomomorphismCheckResult,
+        run=_compute_homomorphism_check,
+        tags=("graph", "homomorphism", "exact"),
         examples=(
-            example(
-                "identity_homomorphism",
-                "Check the canonical identity map on a single edge graph.",
-                {
+            OperationExample(
+                name="identity_homomorphism",
+                description="Check the canonical identity map on a single edge graph.",
+                input={
                     "vertex_map": {
                         "source_graph": {
                             "vertices": ["a", "b"],
@@ -140,78 +113,74 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "graph.cycle.fixed_length.decide",
-        "Decide a fixed-length simple cycle",
-        "Given a bounded simple graph and an integer k >= 3, decide whether "
+    MathTool(
+        operation_id="graph.cycle.fixed_length.decide",
+        title="Decide a fixed-length simple cycle",
+        description="Given a bounded simple graph and an integer k >= 3, decide whether "
         "the graph contains a simple cycle of exactly length k, returning an "
         "ordered cycle witness when one exists. The cycle is a subgraph and "
         "may have chords; this is distinct from girth (shortest cycle) and "
         "from Hamiltonicity (spanning). Accepts the canonical "
         "`SimpleUndirectedGraph` so `explicit_graph` output composes directly.",
-        FixedLengthCycleRequest,
-        FixedLengthCycleResult,
-        _compute_fixed_length_cycle,
-        "graph",
-        "cycle",
-        "subgraph",
+        request_type=FixedLengthCycleRequest,
+        result_type=FixedLengthCycleResult,
+        run=_compute_fixed_length_cycle,
+        tags=("graph", "cycle", "subgraph"),
         examples=(
-            example(
-                "c4_with_chord_has_triangle",
-                (
+            OperationExample(
+                name="c4_with_chord_has_triangle",
+                description=(
                     "A 4-cycle with a chord contains a 3-cycle (triangle); "
                     "length k is 3..vertex count. Preconditions: at most 64 "
                     "vertices, inside the path budget, and enough output "
                     "headroom for the echoed source graph."
                 ),
-                CYCLE_C4_WITH_CHORD_SIMPLE,
+                input=CYCLE_C4_WITH_CHORD_SIMPLE,
             ),
-            example(
-                "c4_plain_no_triangle",
-                (
+            OperationExample(
+                name="c4_plain_no_triangle",
+                description=(
                     "A plain 4-cycle has no 3-cycle. Preconditions: length 3..64 "
                     "and at most the vertex count, the per-pass path budget "
                     "holds, and the retained graph plus result envelope fit "
                     "the canonical output limit."
                 ),
-                CYCLE_C4_PLAIN,
+                input=CYCLE_C4_PLAIN,
             ),
         ),
     ),
-    _op(
-        "graph.subgraph_pattern.find",
-        "Find a subgraph-pattern embedding",
-        "Given bounded canonical simple graphs pattern H and host G, find an "
+    MathTool(
+        operation_id="graph.subgraph_pattern.find",
+        title="Find a subgraph-pattern embedding",
+        description="Given bounded canonical simple graphs pattern H and host G, find an "
         "injective non-induced embedding. Returns one vertex map in pattern order "
         "when found. Assignment search is admission-bounded; runtime candidate-"
         "check exhaustion returns BUDGET_EXCEEDED, a typed non-conclusion. Both "
         "graphs and the result envelope must fit the canonical output limit.",
-        SubgraphPatternFindRequest,
-        SubgraphPatternFindResult,
-        _compute_subgraph_pattern_find,
-        "graph",
-        "subgraph",
-        "monomorphism",
+        request_type=SubgraphPatternFindRequest,
+        result_type=SubgraphPatternFindResult,
+        run=_compute_subgraph_pattern_find,
+        tags=("graph", "subgraph", "monomorphism"),
         examples=(
-            example(
-                "triangle_in_c4_with_chord",
-                (
+            OperationExample(
+                name="triangle_in_c4_with_chord",
+                description=(
                     "A triangle pattern embeds in a 4-cycle-with-chord host. "
                     "Preconditions: pattern at most 64 vertices, no larger than "
                     "host, inside the assignment budget, and enough "
                     "output headroom for the echoed sources."
                 ),
-                SUBGRAPH_TRIANGLE_IN_C4_CHORD,
+                input=SUBGRAPH_TRIANGLE_IN_C4_CHORD,
             ),
-            example(
-                "p3_not_in_matching",
-                (
+            OperationExample(
+                name="p3_not_in_matching",
+                description=(
                     "A path P3 does not embed in two disjoint host edges. "
                     "Preconditions: at most 64 pattern vertices, no larger than "
                     "the host, the per-pass budget holds, and retained graphs "
                     "plus the result envelope fit the canonical output limit."
                 ),
-                SUBGRAPH_P3_NOT_IN_MATCHING,
+                input=SUBGRAPH_P3_NOT_IN_MATCHING,
             ),
         ),
     ),

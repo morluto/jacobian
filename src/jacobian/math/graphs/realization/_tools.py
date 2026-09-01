@@ -1,10 +1,7 @@
 """Exact graph realization operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.realization._models import (
     DegreeSequenceRequest,
@@ -33,95 +30,61 @@ def _run_realization_check(request: RealizationCheckRequest) -> RealizationCheck
     return realization_check(request.graph, request.sequence)
 
 
-def graph_realization_operation[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    graph_realization_operation(
-        "graph.realization.is_graphical.compute",
-        "Determine if a degree sequence is graphical",
-        "Determine whether a degree sequence is realized by a simple graph using the Erdos-Gallai theorem.",
-        DegreeSequenceRequest,
-        DegreeSequenceResult,
-        _run_degree_sequence,
-        "graph",
-        "realization",
-        "graphicality",
-        "exact",
+    MathTool(
+        operation_id="graph.realization.is_graphical.compute",
+        title="Determine if a degree sequence is graphical",
+        description="Determine whether a degree sequence is realized by a simple graph using the Erdos-Gallai theorem.",
+        request_type=DegreeSequenceRequest,
+        result_type=DegreeSequenceResult,
+        run=_run_degree_sequence,
+        tags=("graph", "realization", "graphicality", "exact"),
         examples=(
-            example(
-                "graphical_path",
-                "Check the degree sequence of a four-vertex path.",
-                {"sequence": {"degrees": [1, 2, 2, 1]}},
+            OperationExample(
+                name="graphical_path",
+                description="Check the degree sequence of a four-vertex path.",
+                input={"sequence": {"degrees": [1, 2, 2, 1]}},
             ),
         ),
     ),
-    graph_realization_operation(
-        "graph.realization.construct.compute",
-        "Construct a simple graph realizing a degree sequence",
-        "Construct a simple undirected graph that realizes a graphical degree "
+    MathTool(
+        operation_id="graph.realization.construct.compute",
+        title="Construct a simple graph realizing a degree sequence",
+        description="Construct a simple undirected graph that realizes a graphical degree "
         "sequence using the Havel-Hakimi algorithm. Returns the edges of the "
         "realized graph; if the sequence is not graphical, no edges are returned.",
-        GraphRealizationRequest,
-        GraphRealizationResult,
-        _run_graph_realization,
-        "graph",
-        "realization",
-        "construction",
-        "exact",
+        request_type=GraphRealizationRequest,
+        result_type=GraphRealizationResult,
+        run=_run_graph_realization,
+        tags=("graph", "realization", "construction", "exact"),
         examples=(
-            example(
-                "realize_path",
-                "Construct a simple path on 4 vertices from its degree sequence.",
-                {"sequence": {"degrees": [1, 2, 2, 1]}},
+            OperationExample(
+                name="realize_path",
+                description="Construct a simple path on 4 vertices from its degree sequence.",
+                input={"sequence": {"degrees": [1, 2, 2, 1]}},
             ),
-            example(
-                "realize_cycle",
-                "Construct a 4-cycle from its degree sequence.",
-                {"sequence": {"degrees": [2, 2, 2, 2]}},
+            OperationExample(
+                name="realize_cycle",
+                description="Construct a 4-cycle from its degree sequence.",
+                input={"sequence": {"degrees": [2, 2, 2, 2]}},
             ),
         ),
     ),
-    graph_realization_operation(
-        "graph.realization.check.compute",
-        "Verify that a graph realizes a degree sequence",
-        "Verify that a given simple undirected graph (vertex_count + edges) "
+    MathTool(
+        operation_id="graph.realization.check.compute",
+        title="Verify that a graph realizes a degree sequence",
+        description="Verify that a given simple undirected graph (vertex_count + edges) "
         "realizes a degree sequence by computing the graph's vertex degrees and "
         "comparing them to the expected sequence.",
-        RealizationCheckRequest,
-        RealizationCheckResult,
-        _run_realization_check,
-        "graph",
-        "realization",
-        "check",
-        "exact",
+        request_type=RealizationCheckRequest,
+        result_type=RealizationCheckResult,
+        run=_run_realization_check,
+        tags=("graph", "realization", "check", "exact"),
         examples=(
-            example(
-                "valid_realization",
-                "A valid realization of the degree sequence [1, 2, 2, 1].",
-                {
+            OperationExample(
+                name="valid_realization",
+                description="A valid realization of the degree sequence [1, 2, 2, 1].",
+                input={
                     "sequence": {"degrees": [1, 2, 2, 1]},
                     "graph": {
                         "vertex_count": 4,

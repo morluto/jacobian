@@ -1,7 +1,6 @@
 """Public declaration for clause-constrained rational-flat classification."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.combinatorics.matroids.rational_flats._models import (
     ClauseConstrainedRationalFlatClassification,
     ClauseConstrainedRationalFlatRequest,
@@ -50,13 +49,13 @@ CLASSIFY_CONSTRAINED_RATIONAL_FLATS_OPERATION = MathTool(
         "forbidden row-span incidence",
     ),
     examples=(
-        example(
-            "line_and_plane_containing_one_required_equation",
-            "Classify the closed spans containing x+y=0 in a three-row "
+        OperationExample(
+            name="line_and_plane_containing_one_required_equation",
+            description="Classify the closed spans containing x+y=0 in a three-row "
             "configuration; candidate and forbidden matrices must retain the "
             "two-coordinate ambient axis and an empty generator tuple means "
             "trivial symmetry.",
-            {
+            input={
                 "problem": {
                     "candidates": {
                         "coordinate_axis": ["x", "y"],

@@ -2,8 +2,7 @@
 
 from typing import Any
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.polynomials.intervals._models import (
     BOX_ENCLOSURE_ADMISSION_SUMMARY,
     PolynomialBoxEnclosureRequest,
@@ -65,11 +64,11 @@ TOOLS: MathTools = (
             "bounded",
         ),
         examples=(
-            example(
-                "positive_bivariate_box",
-                "Enclose x^2 + y + 1 on [1,2] x [0,1]; the box must use "
+            OperationExample(
+                name="positive_bivariate_box",
+                description="Enclose x^2 + y + 1 on [1,2] x [0,1]; the box must use "
                 "the polynomial's complete ordered (x, y) axis.",
-                {
+                input={
                     "polynomial": {
                         "domain": "QQ",
                         "variables": ["x", "y"],

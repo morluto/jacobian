@@ -1,7 +1,6 @@
 """Coherent-configuration operation declarations."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.combinatorics.designs.coherent_configurations._models import (
     CoherentConfigurationAnalyzeRequest,
     CoherentConfigurationAnalyzeResult,
@@ -37,10 +36,10 @@ TOOLS: MathTools = (
             "bounded",
         ),
         examples=(
-            example(
-                "complete_graph_rank_two",
-                "Analyze the two-relation coherent configuration of K3.",
-                {
+            OperationExample(
+                name="complete_graph_rank_two",
+                description="Analyze the two-relation coherent configuration of K3.",
+                input={
                     "configuration": {
                         "points": ["a", "b", "c"],
                         "relation_ids": ["diagonal", "edge"],

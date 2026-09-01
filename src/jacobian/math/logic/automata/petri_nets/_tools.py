@@ -1,10 +1,7 @@
 """Petri net operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -75,31 +72,6 @@ def compute_siphon_trap(request: SiphonTrapRequest) -> SiphonTrapResult:
         ) from error
 
 
-def _op[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 # Simple net: 2 places, 2 transitions
 # t0: p0 -> p1 (pre=[[1,0],[0,0]], post=[[0,0],[0,1]])
 # t1: p1 -> p0 (pre=[[0,0],[0,1]], post=[[1,0],[0,0]])
@@ -122,46 +94,42 @@ _NET2 = {
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "petri_net.enabled_transitions.compute",
-        "Find enabled transitions in a Petri net",
-        "Return the indices of all transitions enabled at the given marking, "
+    MathTool(
+        operation_id="petri_net.enabled_transitions.compute",
+        title="Find enabled transitions in a Petri net",
+        description="Return the indices of all transitions enabled at the given marking, "
         "where a transition is enabled iff every place has enough tokens for "
         "its pre-condition.",
-        EnabledTransitionsRequest,
-        EnabledTransitionsResult,
-        compute_enabled_transitions,
-        "petri-net",
-        "enabled",
-        "exact",
+        request_type=EnabledTransitionsRequest,
+        result_type=EnabledTransitionsResult,
+        run=compute_enabled_transitions,
+        tags=("petri-net", "enabled", "exact"),
         examples=(
-            example(
-                "simple_net",
-                "Enabled transitions of a 2-place, 2-transition net.",
-                {
+            OperationExample(
+                name="simple_net",
+                description="Enabled transitions of a 2-place, 2-transition net.",
+                input={
                     "net": _NET["net"],
                     "marking": {"tokens": [2, 0]},
                 },
             ),
         ),
     ),
-    _op(
-        "petri_net.fire_transition.compute",
-        "Fire one transition in a Petri net",
-        "Fire a single transition at the given marking and return whether it "
+    MathTool(
+        operation_id="petri_net.fire_transition.compute",
+        title="Fire one transition in a Petri net",
+        description="Fire a single transition at the given marking and return whether it "
         "succeeded and the resulting marking. If the transition is not "
         "enabled, it does not fire.",
-        FireTransitionRequest,
-        FireTransitionResult,
-        compute_fire_transition,
-        "petri-net",
-        "firing",
-        "exact",
+        request_type=FireTransitionRequest,
+        result_type=FireTransitionResult,
+        run=compute_fire_transition,
+        tags=("petri-net", "firing", "exact"),
         examples=(
-            example(
-                "fire_t0",
-                "Fire transition 0 from marking [2, 0].",
-                {
+            OperationExample(
+                name="fire_t0",
+                description="Fire transition 0 from marking [2, 0].",
+                input={
                     "net": _NET["net"],
                     "marking": {"tokens": [2, 0]},
                     "transition": 0,
@@ -169,41 +137,37 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "petri_net.incidence_matrix.compute",
-        "Compute the incidence matrix of a Petri net",
-        "Return the incidence matrix C = Post - Pre for the given Petri net.",
-        IncidenceMatrixRequest,
-        IncidenceMatrixResult,
-        compute_incidence,
-        "petri-net",
-        "incidence",
-        "exact",
+    MathTool(
+        operation_id="petri_net.incidence_matrix.compute",
+        title="Compute the incidence matrix of a Petri net",
+        description="Return the incidence matrix C = Post - Pre for the given Petri net.",
+        request_type=IncidenceMatrixRequest,
+        result_type=IncidenceMatrixResult,
+        run=compute_incidence,
+        tags=("petri-net", "incidence", "exact"),
         examples=(
-            example(
-                "simple_net_incidence",
-                "Incidence matrix of a 2-place, 2-transition net.",
-                {"net": _NET2["net"]},
+            OperationExample(
+                name="simple_net_incidence",
+                description="Incidence matrix of a 2-place, 2-transition net.",
+                input={"net": _NET2["net"]},
             ),
         ),
     ),
-    _op(
-        "petri_net.reachability_graph.compute",
-        "Compute the bounded reachability graph of a Petri net",
-        "Return the bounded reachability graph from an initial marking via "
+    MathTool(
+        operation_id="petri_net.reachability_graph.compute",
+        title="Compute the bounded reachability graph of a Petri net",
+        description="Return the bounded reachability graph from an initial marking via "
         "BFS, including all reachable markings and firing edges. The graph "
         "is truncated at max_states to bound the state space.",
-        ReachabilityRequest,
-        ReachabilityResult,
-        compute_reachability,
-        "petri-net",
-        "reachability",
-        "exact",
+        request_type=ReachabilityRequest,
+        result_type=ReachabilityResult,
+        run=compute_reachability,
+        tags=("petri-net", "reachability", "exact"),
         examples=(
-            example(
-                "simple_net_reachability",
-                "Reachability graph of a simple 2-place net.",
-                {
+            OperationExample(
+                name="simple_net_reachability",
+                description="Reachability graph of a simple 2-place net.",
+                input={
                     "net": _NET["net"],
                     "initial_marking": {"tokens": [1, 0]},
                     "max_states": 100,
@@ -211,25 +175,22 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "petri_net.siphon_trap.check",
-        "Check for siphons and traps in a Petri net",
-        "Return all minimal siphons and minimal traps of the given Petri net. "
+    MathTool(
+        operation_id="petri_net.siphon_trap.check",
+        title="Check for siphons and traps in a Petri net",
+        description="Return all minimal siphons and minimal traps of the given Petri net. "
         "A siphon is a set of places that never gains tokens once it loses "
         "them; a trap is a set of places that never loses tokens once it has "
         "them.",
-        SiphonTrapRequest,
-        SiphonTrapResult,
-        compute_siphon_trap,
-        "petri-net",
-        "siphon",
-        "trap",
-        "exact",
+        request_type=SiphonTrapRequest,
+        result_type=SiphonTrapResult,
+        run=compute_siphon_trap,
+        tags=("petri-net", "siphon", "trap", "exact"),
         examples=(
-            example(
-                "cyclic_net",
-                "Siphons and traps of a cyclic 2-place net.",
-                {
+            OperationExample(
+                name="cyclic_net",
+                description="Siphons and traps of a cyclic 2-place net.",
+                input={
                     "net": {
                         "place_count": 2,
                         "transition_count": 2,

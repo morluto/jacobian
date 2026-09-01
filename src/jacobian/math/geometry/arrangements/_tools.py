@@ -1,10 +1,7 @@
 """Hyperplane arrangement operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.geometry.arrangements._models import (
     ChamberCountRequest,
@@ -39,44 +36,20 @@ def _run_chamber_count(request: ChamberCountRequest) -> ChamberCountResult:
     return chamber_count(request.ambient_dimension, request.hyperplane_count)
 
 
-def _op[RequestT: StrictModel, ResultT: StrictModel](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "arrangement.construct",
-        "Construct a hyperplane arrangement",
-        "Construct a hyperplane arrangement and check if it is central.",
-        HyperplaneArrangementRequest,
-        HyperplaneArrangementResult,
-        _run_arrangement,
-        "hyperplane",
-        "arrangement",
-        "exact",
+    MathTool(
+        operation_id="arrangement.construct",
+        title="Construct a hyperplane arrangement",
+        description="Construct a hyperplane arrangement and check if it is central.",
+        request_type=HyperplaneArrangementRequest,
+        result_type=HyperplaneArrangementResult,
+        run=_run_arrangement,
+        tags=("hyperplane", "arrangement", "exact"),
         examples=(
-            example(
-                "central_2d",
-                "Two central hyperplanes in R^2.",
-                {
+            OperationExample(
+                name="central_2d",
+                description="Two central hyperplanes in R^2.",
+                input={
                     "ambient_dimension": 2,
                     "hyperplanes": [
                         {
@@ -98,41 +71,37 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "arrangement.characteristic_polynomial.compute",
-        "Compute the characteristic polynomial of a generic arrangement",
-        "Compute the characteristic polynomial chi(t) of a generic central "
+    MathTool(
+        operation_id="arrangement.characteristic_polynomial.compute",
+        title="Compute the characteristic polynomial of a generic arrangement",
+        description="Compute the characteristic polynomial chi(t) of a generic central "
         "hyperplane arrangement using the Zaslavsky formula.",
-        CharacteristicPolynomialRequest,
-        CharacteristicPolynomialResult,
-        _run_characteristic_polynomial,
-        "hyperplane",
-        "characteristic-polynomial",
-        "exact",
+        request_type=CharacteristicPolynomialRequest,
+        result_type=CharacteristicPolynomialResult,
+        run=_run_characteristic_polynomial,
+        tags=("hyperplane", "characteristic-polynomial", "exact"),
         examples=(
-            example(
-                "generic_2_2",
-                "Characteristic polynomial of 2 hyperplanes in R^2.",
-                {"ambient_dimension": 2, "hyperplane_count": 2},
+            OperationExample(
+                name="generic_2_2",
+                description="Characteristic polynomial of 2 hyperplanes in R^2.",
+                input={"ambient_dimension": 2, "hyperplane_count": 2},
             ),
         ),
     ),
-    _op(
-        "arrangement.chamber_count.compute",
-        "Count chambers of a generic central arrangement",
-        "Count the number of chambers (regions) of a generic central "
+    MathTool(
+        operation_id="arrangement.chamber_count.compute",
+        title="Count chambers of a generic central arrangement",
+        description="Count the number of chambers (regions) of a generic central "
         "hyperplane arrangement using the central formula 2 * sum C(m-1, k).",
-        ChamberCountRequest,
-        ChamberCountResult,
-        _run_chamber_count,
-        "hyperplane",
-        "chamber-count",
-        "exact",
+        request_type=ChamberCountRequest,
+        result_type=ChamberCountResult,
+        run=_run_chamber_count,
+        tags=("hyperplane", "chamber-count", "exact"),
         examples=(
-            example(
-                "generic_2_2",
-                "Chamber count of 2 hyperplanes in R^2.",
-                {"ambient_dimension": 2, "hyperplane_count": 2},
+            OperationExample(
+                name="generic_2_2",
+                description="Chamber count of 2 hyperplanes in R^2.",
+                input={"ambient_dimension": 2, "hyperplane_count": 2},
             ),
         ),
     ),

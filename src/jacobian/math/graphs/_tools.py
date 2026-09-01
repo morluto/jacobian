@@ -5,11 +5,11 @@ from __future__ import annotations
 from pydantic import Field, StrictStr
 
 from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import (
     MathTool,
     MathTools,
     OperationDomainValidationError,
+    OperationExample,
 )
 from jacobian.math.graphs.graph6 import (
     Graph6DecodeValue,
@@ -46,10 +46,10 @@ TOOLS: MathTools = (
         run=_decode,
         tags=("graph", "encoding", "graph6", "deterministic", "exact"),
         examples=(
-            example(
-                "triangle_graph6",
-                "Decode the graph6 representation of the triangle graph.",
-                {"graph6": "Bw"},
+            OperationExample(
+                name="triangle_graph6",
+                description="Decode the graph6 representation of the triangle graph.",
+                input={"graph6": "Bw"},
             ),
         ),
     ),

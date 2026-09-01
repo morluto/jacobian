@@ -2,8 +2,7 @@
 
 from typing import Any
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.dynamics.symbolic import operations as native
 from jacobian.math.dynamics.symbolic._models import (
     ArtinMazurZetaRequest,
@@ -81,10 +80,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         run=construct_finite_type_shift,
         tags=("symbolic-dynamics", "shift-of-finite-type", "presentation", "exact"),
         examples=(
-            example(
-                "golden_mean_presentation",
-                "Construct the presentation forbidding the block 11.",
-                {"shift": _GOLDEN_MEAN},
+            OperationExample(
+                name="golden_mean_presentation",
+                description="Construct the presentation forbidding the block 11.",
+                input={"shift": _GOLDEN_MEAN},
             ),
         ),
     ),
@@ -101,10 +100,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         run=compute_block_language,
         tags=("symbolic-dynamics", "block-language", "exact", "complete"),
         examples=(
-            example(
-                "golden_mean_blocks_3",
-                "Enumerate every occurring length-three block.",
-                {"shift": _GOLDEN_MEAN, "block_length": 3},
+            OperationExample(
+                name="golden_mean_blocks_3",
+                description="Enumerate every occurring length-three block.",
+                input={"shift": _GOLDEN_MEAN, "block_length": 3},
             ),
         ),
     ),
@@ -120,10 +119,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         run=compute_periodic_point_profile,
         tags=("symbolic-dynamics", "periodic-points", "mobius-inversion", "exact"),
         examples=(
-            example(
-                "golden_mean_periodic_points",
-                "Compute the profile through period five.",
-                {
+            OperationExample(
+                name="golden_mean_periodic_points",
+                description="Compute the profile through period five.",
+                input={
                     "shift": {"matrix": [[1, 1], [1, 0]], "two_sided": True},
                     "max_period": 5,
                 },
@@ -143,10 +142,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         run=compute_artin_mazur_zeta,
         tags=("symbolic-dynamics", "artin-mazur-zeta", "periodic-points", "exact"),
         examples=(
-            example(
-                "golden_mean_zeta",
-                "Compute the Golden Mean shift zeta function through five replay coefficients.",
-                {
+            OperationExample(
+                name="golden_mean_zeta",
+                description="Compute the Golden Mean shift zeta function through five replay coefficients.",
+                input={
                     "shift": {"matrix": [[1, 1], [1, 0]], "two_sided": True},
                 },
             ),
@@ -164,10 +163,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         run=compute_higher_block,
         tags=("symbolic-dynamics", "higher-block", "presentation", "exact"),
         examples=(
-            example(
-                "golden_mean_two_block",
-                "Construct the two-block presentation of the Golden Mean shift.",
-                {"shift": _GOLDEN_MEAN, "block_length": 2},
+            OperationExample(
+                name="golden_mean_two_block",
+                description="Construct the two-block presentation of the Golden Mean shift.",
+                input={"shift": _GOLDEN_MEAN, "block_length": 2},
             ),
         ),
     ),

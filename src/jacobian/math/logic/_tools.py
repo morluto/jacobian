@@ -1,7 +1,6 @@
 """Catalog declarations for bounded logic operations."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.logic._cnf import (
     CnfCanonicalizeRequest,
     CnfCanonicalizeResult,
@@ -33,10 +32,10 @@ TOOLS: MathTools = (
         run=canonicalize_cnf,
         tags=("sat", "cnf", "canonical"),
         examples=(
-            example(
-                "two_variables",
-                "Normalize a small named CNF.",
-                {"variable_names": ["b", "a"], "clauses": [[1, -2], [2]]},
+            OperationExample(
+                name="two_variables",
+                description="Normalize a small named CNF.",
+                input={"variable_names": ["b", "a"], "clauses": [[1, -2], [2]]},
             ),
         ),
     ),
@@ -49,10 +48,10 @@ TOOLS: MathTools = (
         run=check_sat_assignment,
         tags=("sat", "cnf", "assignment", "predicate"),
         examples=(
-            example(
-                "satisfying_assignment",
-                "Check a total assignment against a canonical CNF.",
-                {
+            OperationExample(
+                name="satisfying_assignment",
+                description="Check a total assignment against a canonical CNF.",
+                input={
                     "cnf": {"variables": ["a", "b"], "clauses": [[-1, 2], [1]]},
                     "assignment": [True, True],
                 },
@@ -68,10 +67,10 @@ TOOLS: MathTools = (
         run=solve_sat,
         tags=("sat", "cnf", "solve", "z3"),
         examples=(
-            example(
-                "two_variable_cnf",
-                "Solve a small canonical CNF.",
-                {"cnf": {"variables": ["a", "b"], "clauses": [[-1, 2], [1]]}},
+            OperationExample(
+                name="two_variable_cnf",
+                description="Solve a small canonical CNF.",
+                input={"cnf": {"variables": ["a", "b"], "clauses": [[-1, 2], [1]]}},
             ),
         ),
     ),
@@ -88,10 +87,10 @@ TOOLS: MathTools = (
         run=check_sat_refutation,
         tags=("sat", "cnf", "lpr", "refutation", "certificate"),
         examples=(
-            example(
-                "unit_contradiction",
-                "Check an LPR empty-clause derivation from two contradictory units.",
-                {
+            OperationExample(
+                name="unit_contradiction",
+                description="Check an LPR empty-clause derivation from two contradictory units.",
+                input={
                     "cnf": {"variables": ["x"], "clauses": [[-1], [1]]},
                     "refutation": {
                         "profile": "LPR_ASCII_V1",
@@ -118,10 +117,10 @@ TOOLS: MathTools = (
         run=solve_smt,
         tags=("smt", "solve", "smtlib", "z3"),
         examples=(
-            example(
-                "positive_integer",
-                "Solve a bounded quantifier-free linear-integer query.",
-                {
+            OperationExample(
+                name="positive_integer",
+                description="Solve a bounded quantifier-free linear-integer query.",
+                input={
                     "logic": "QF_LIA",
                     "smtlib": "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)",
                 },

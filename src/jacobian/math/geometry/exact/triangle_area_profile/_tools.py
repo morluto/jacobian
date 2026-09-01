@@ -1,7 +1,6 @@
 """Typed declarations for the triangle area profile operation."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.geometry.exact.triangle_area_profile._models import (
     TriangleAreaProfileRequest,
     TriangleAreaProfileResult,
@@ -29,10 +28,10 @@ TOOLS: MathTools = (
         run=_compute,
         tags=("geometry", "triangle", "area", "exact"),
         examples=(
-            example(
-                "unit_square",
-                "Triangle areas of the unit square corners.",
-                {
+            OperationExample(
+                name="unit_square",
+                description="Triangle areas of the unit square corners.",
+                input={
                     "configuration": {
                         "points": [
                             {

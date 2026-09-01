@@ -1,7 +1,6 @@
 """Exact optimization operation declarations."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.optimization._general_linear_program import general_linear_program
 from jacobian.math.optimization._general_models import (
     GeneralRationalLinearProgramRequest,
@@ -47,10 +46,10 @@ RATIONAL_LINEAR_OPERATIONS: MathTools = (
             "bounded",
         ),
         examples=(
-            example(
-                "one_variable_unit_lp",
-                "Optimize x subject to x=1 and x>=0.",
-                {
+            OperationExample(
+                name="one_variable_unit_lp",
+                description="Optimize x subject to x=1 and x>=0.",
+                input={
                     "program": {
                         "variables": ["x"],
                         "objective": [{"num": "1", "den": "1"}],
@@ -85,10 +84,10 @@ RATIONAL_LINEAR_OPERATIONS = (
             "bounded",
         ),
         examples=(
-            example(
-                "bounded_inequality_lp",
-                "Minimize x subject to x>=1; all rows and bounds are closed exact rationals.",
-                {
+            OperationExample(
+                name="bounded_inequality_lp",
+                description="Minimize x subject to x>=1; all rows and bounds are closed exact rationals.",
+                input={
                     "program": {
                         "variables": [
                             {

@@ -1,7 +1,6 @@
 """Public operations for exact lattice-presented complex tori."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.geometry.complex_tori._models import (
     NeronSeveriLatticeRequest,
     RiemannFormProfile,
@@ -49,10 +48,10 @@ NERON_SEVERI_LATTICE_OPERATION = MathTool(
         "Hodge alternating forms",
     ),
     examples=(
-        example(
-            "elliptic_curve_hodge_lattice",
-            "Compute the rank-one Hodge lattice for the standard elliptic torus.",
-            {
+        OperationExample(
+            name="elliptic_curve_hodge_lattice",
+            description="Compute the rank-one Hodge lattice for the standard elliptic torus.",
+            input={
                 "torus": {
                     "coordinate_axis": ["e1", "e2"],
                     "complex_structure": {
@@ -95,10 +94,10 @@ RIEMANN_FORM_PROFILE_OPERATION = MathTool(
         "Hermitian signature of an integral alternating form",
     ),
     examples=(
-        example(
-            "elliptic_degree_six_polarization",
-            "Profile the degree-six positive form on the standard elliptic torus.",
-            {
+        OperationExample(
+            name="elliptic_degree_six_polarization",
+            description="Profile the degree-six positive form on the standard elliptic torus.",
+            input={
                 "torus": {
                     "coordinate_axis": ["e1", "e2"],
                     "complex_structure": {

@@ -17,8 +17,11 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.probability.local_lemma import (
     MAX_LOCAL_LEMMA_EVENTS,
     MAX_LOCAL_LEMMA_INCIDENCES,
@@ -416,10 +419,10 @@ ASYMMETRIC_LOCAL_LEMMA_OPERATION = MathTool(
         "bounded",
     ),
     examples=(
-        example(
-            "two_event_directed_witness",
-            "Check two exact directed asymmetric local-lemma inequalities; all arrays share the ordered event axis, neighborhoods are strictly increasing index sets, and each witness lies in [0,1).",
-            {
+        OperationExample(
+            name="two_event_directed_witness",
+            description="Check two exact directed asymmetric local-lemma inequalities; all arrays share the ordered event axis, neighborhoods are strictly increasing index sets, and each witness lies in [0,1).",
+            input={
                 "event_labels": ["A", "B"],
                 "probability_upper_bounds": [
                     {"num": "1", "den": "4"},

@@ -1,10 +1,7 @@
 """Combinatorial-matrix operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.matrices.combinatorial._models import (
     DeterminantProfileRequest,
@@ -49,133 +46,98 @@ def compute_sylvester(request: SylvesterRequest) -> SylvesterResult:
     return sylvester(request.k)
 
 
-def _op[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 # The order-2 Hadamard matrix.
 _H2 = [[1, 1], [1, -1]]
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "matrix.sign.profile.compute",
-        "Compute the sign profile of a sign matrix",
-        "Return dimensions, entry counts, row/column sums, and square-ness "
+    MathTool(
+        operation_id="matrix.sign.profile.compute",
+        title="Compute the sign profile of a sign matrix",
+        description="Return dimensions, entry counts, row/column sums, and square-ness "
         "for a general {-1, +1} sign matrix.",
-        SignProfileRequest,
-        SignProfileResult,
-        compute_sign_profile,
-        "combinatorial-matrix",
-        "sign-profile",
-        "exact",
+        request_type=SignProfileRequest,
+        result_type=SignProfileResult,
+        run=compute_sign_profile,
+        tags=("combinatorial-matrix", "sign-profile", "exact"),
         examples=(
-            example(
-                "order_2_sign_profile",
-                "Sign profile of the order-2 Hadamard matrix.",
-                {"matrix": {"rows": _H2}},
+            OperationExample(
+                name="order_2_sign_profile",
+                description="Sign profile of the order-2 Hadamard matrix.",
+                input={"matrix": {"rows": _H2}},
             ),
         ),
     ),
-    _op(
-        "matrix.hadamard.gram_profile.compute",
-        "Compute the Gram profile of a sign matrix",
-        "Return order, exact H H^T, diagonal residuals from n, all nonzero "
+    MathTool(
+        operation_id="matrix.hadamard.gram_profile.compute",
+        title="Compute the Gram profile of a sign matrix",
+        description="Return order, exact H H^T, diagonal residuals from n, all nonzero "
         "off-diagonal inner products, and is_hadamard. Row and column counts "
         "are admitted by Gram multiply-add work and exact-result size.",
-        GramProfileRequest,
-        GramProfileResult,
-        compute_gram_profile,
-        "combinatorial-matrix",
-        "gram-profile",
-        "exact",
+        request_type=GramProfileRequest,
+        result_type=GramProfileResult,
+        run=compute_gram_profile,
+        tags=("combinatorial-matrix", "gram-profile", "exact"),
         examples=(
-            example(
-                "order_2_gram_profile",
-                "Gram profile of the order-2 Hadamard matrix.",
-                {"matrix": {"rows": _H2}},
+            OperationExample(
+                name="order_2_gram_profile",
+                description="Gram profile of the order-2 Hadamard matrix.",
+                input={"matrix": {"rows": _H2}},
             ),
         ),
     ),
-    _op(
-        "matrix.hadamard.normalize.compute",
-        "Normalize a sign matrix so first row/column are all +1",
-        "Return a deterministically normalized sign matrix whose first row "
+    MathTool(
+        operation_id="matrix.hadamard.normalize.compute",
+        title="Normalize a sign matrix so first row/column are all +1",
+        description="Return a deterministically normalized sign matrix whose first row "
         "and first column are all +1, plus the exact row/column sign switches "
         "used. Normalization preserves the full matrix and is idempotent.",
-        NormalizeRequest,
-        NormalizeResult,
-        compute_normalize,
-        "combinatorial-matrix",
-        "normalize",
-        "exact",
+        request_type=NormalizeRequest,
+        result_type=NormalizeResult,
+        run=compute_normalize,
+        tags=("combinatorial-matrix", "normalize", "exact"),
         examples=(
-            example(
-                "order_2_normalize",
-                "Normalize the order-2 Hadamard matrix.",
-                {"matrix": {"rows": _H2}},
+            OperationExample(
+                name="order_2_normalize",
+                description="Normalize the order-2 Hadamard matrix.",
+                input={"matrix": {"rows": _H2}},
             ),
         ),
     ),
-    _op(
-        "matrix.hadamard.determinant_profile.compute",
-        "Compute the determinant profile of a Hadamard matrix",
-        "For a square sign matrix of order n, return |det H| = n^(n/2), "
+    MathTool(
+        operation_id="matrix.hadamard.determinant_profile.compute",
+        title="Compute the determinant profile of a Hadamard matrix",
+        description="For a square sign matrix of order n, return |det H| = n^(n/2), "
         "the Gram determinant = n^n, and the identity det(H)^2 = "
         "det(H H^T) when H H^T = n I_n exactly. Determinant magnitude is "
         "not inferred from a matrix that fails exact orthogonality.",
-        DeterminantProfileRequest,
-        DeterminantProfileResult,
-        compute_determinant_profile,
-        "combinatorial-matrix",
-        "determinant-profile",
-        "exact",
+        request_type=DeterminantProfileRequest,
+        result_type=DeterminantProfileResult,
+        run=compute_determinant_profile,
+        tags=("combinatorial-matrix", "determinant-profile", "exact"),
         examples=(
-            example(
-                "order_2_determinant",
-                "Determinant profile of the order-2 Hadamard matrix.",
-                {"matrix": {"rows": _H2}},
+            OperationExample(
+                name="order_2_determinant",
+                description="Determinant profile of the order-2 Hadamard matrix.",
+                input={"matrix": {"rows": _H2}},
             ),
         ),
     ),
-    _op(
-        "matrix.hadamard.sylvester.compute",
-        "Construct the Sylvester Hadamard matrix of order 2^k",
-        "For bounded k, return the recursively defined order 2^k Hadamard "
+    MathTool(
+        operation_id="matrix.hadamard.sylvester.compute",
+        title="Construct the Sylvester Hadamard matrix of order 2^k",
+        description="For bounded k, return the recursively defined order 2^k Hadamard "
         "matrix with construction ledger. A finite constructor, not an "
         "existence search.",
-        SylvesterRequest,
-        SylvesterResult,
-        compute_sylvester,
-        "combinatorial-matrix",
-        "sylvester",
-        "exact",
+        request_type=SylvesterRequest,
+        result_type=SylvesterResult,
+        run=compute_sylvester,
+        tags=("combinatorial-matrix", "sylvester", "exact"),
         examples=(
-            example(
-                "sylvester_k1",
-                "Sylvester construction for k=1 (order 2).",
-                {"k": 1},
+            OperationExample(
+                name="sylvester_k1",
+                description="Sylvester construction for k=1 (order 2).",
+                input={"k": 1},
             ),
         ),
     ),

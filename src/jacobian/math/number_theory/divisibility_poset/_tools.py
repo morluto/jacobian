@@ -1,7 +1,6 @@
 """Operation declarations for divisibility-poset construction."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.number_theory.divisibility_poset._models import (
     DivisibilityPosetRequest,
     IntegerDivisibilityPosetResult,
@@ -40,19 +39,19 @@ TOOLS: MathTools = (
             "exact",
         ),
         examples=(
-            example(
-                "divisors_of_12",
-                "The set {1, 2, 3, 4, 6, 12} forms a divisibility poset.",
-                {
+            OperationExample(
+                name="divisors_of_12",
+                description="The set {1, 2, 3, 4, 6, 12} forms a divisibility poset.",
+                input={
                     "source_set": {
                         "elements": ["1", "2", "3", "4", "6", "12"],
                     },
                 },
             ),
-            example(
-                "pair_coprime",
-                "The set {2, 3} has no divisibility relations; the poset is an antichain.",
-                {
+            OperationExample(
+                name="pair_coprime",
+                description="The set {2, 3} has no divisibility relations; the poset is an antichain.",
+                input={
                     "source_set": {
                         "elements": ["2", "3"],
                     },

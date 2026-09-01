@@ -1,10 +1,7 @@
 """Root isolation operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicOrderValue
 from jacobian.math.number_theory.algebraic_numbers.root_isolation._models import (
@@ -17,49 +14,23 @@ from jacobian.math.number_theory.algebraic_numbers.root_isolation._sympy import 
     compute_root_isolation,
 )
 
-
-def ri_operation[RequestT: StrictModel, ResultT: StrictModel](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    ri_operation(
-        "polynomial.roots.isolate",
-        "Isolate real roots of a univariate polynomial",
-        "Normalize one bounded QQ polynomial to a primitive integer source and "
+    MathTool(
+        operation_id="polynomial.roots.isolate",
+        title="Isolate real roots of a univariate polynomial",
+        description="Normalize one bounded QQ polynomial to a primitive integer source and "
         "return every distinct real root with its exact multiplicity, disjoint "
         "rational isolating interval, and directly composable canonical "
         "algebraic identity.",
-        UnivariatePolynomialRequest,
-        RootIsolationResult,
-        compute_root_isolation,
-        "polynomial",
-        "roots",
-        "isolation",
-        "exact",
+        request_type=UnivariatePolynomialRequest,
+        result_type=RootIsolationResult,
+        run=compute_root_isolation,
+        tags=("polynomial", "roots", "isolation", "exact"),
         examples=(
-            example(
-                "quadratic_roots",
-                "Roots of x^2-2.",
-                {
+            OperationExample(
+                name="quadratic_roots",
+                description="Roots of x^2-2.",
+                input={
                     "coefficients_descending": [
                         {"num": "1", "den": "1"},
                         {"num": "0", "den": "1"},
@@ -67,10 +38,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     ]
                 },
             ),
-            example(
-                "cubic_with_leading_nonzero",
-                "Isolate the three real roots of x^3-x; the leading coefficient must be nonzero.",
-                {
+            OperationExample(
+                name="cubic_with_leading_nonzero",
+                description="Isolate the three real roots of x^3-x; the leading coefficient must be nonzero.",
+                input={
                     "coefficients_descending": [
                         {"num": "1", "den": "1"},
                         {"num": "0", "den": "1"},
@@ -81,27 +52,25 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    ri_operation(
-        "algebraic_number.compare",
-        "Compare two algebraic numbers",
-        "Decide the exact order (LT, EQ, GT) of two bounded real algebraic "
+    MathTool(
+        operation_id="algebraic_number.compare",
+        title="Compare two algebraic numbers",
+        description="Decide the exact order (LT, EQ, GT) of two bounded real algebraic "
         "numbers. Each value uses its primitive irreducible integer minimal "
         "polynomial and increasing real-root index; the source-bound result "
         "returns exact rational root-isolation evidence.",
-        AlgebraicCompareRequest,
-        RealAlgebraicOrderValue,
-        compute_algebraic_compare,
-        "algebraic",
-        "comparison",
-        "exact",
+        request_type=AlgebraicCompareRequest,
+        result_type=RealAlgebraicOrderValue,
+        run=compute_algebraic_compare,
+        tags=("algebraic", "comparison", "exact"),
         examples=(
-            example(
-                "compare_sqrt_two_and_three",
-                "Compare sqrt(2) with sqrt(3) using canonical minimal "
+            OperationExample(
+                name="compare_sqrt_two_and_three",
+                description="Compare sqrt(2) with sqrt(3) using canonical minimal "
                 "polynomials and increasing real-root indices; each polynomial "
                 "must be primitive, irreducible, degree at most eight, and use "
                 "coefficients of at most 1,000 digits.",
-                {
+                input={
                     "left": {
                         "polynomial": ["1", "0", "-2"],
                         "real_root_index": 1,

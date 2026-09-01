@@ -1,8 +1,12 @@
 """Public declaration for the exact bounded friable-family operation."""
 
 from jacobian.canonical import parse_canonical_integer
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    MathTools,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.number_theory.friable.family._models import (
     FriableFamilyRequest,
     FriableFamilyResult,
@@ -49,15 +53,15 @@ TOOLS: MathTools = (
             "exact",
         ),
         examples=(
-            example(
-                "five_friable_through_100",
-                (
+            OperationExample(
+                name="five_friable_through_100",
+                description=(
                     "Enumerate the positive 5-friable integers at most 100; x "
                     "and y must be canonical nonnegative decimals and the "
                     "selected exact enumeration regime must fit its work "
                     "budget."
                 ),
-                {"x": "100", "y": "5"},
+                input={"x": "100", "y": "5"},
             ),
         ),
     ),

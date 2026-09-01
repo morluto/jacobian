@@ -1,7 +1,6 @@
 """Public declaration for bounded generalized exact cover."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.combinatorics.exact_cover import (
     GeneralizedExactCoverRequest,
     GeneralizedExactCoverResult,
@@ -41,12 +40,12 @@ GENERALIZED_EXACT_COVER_OPERATION = MathTool(
         "deterministic",
     ),
     examples=(
-        example(
-            "two_constraints_one_resource",
-            "Select one row for each of two primary constraints while using "
+        OperationExample(
+            name="two_constraints_one_resource",
+            description="Select one row for each of two primary constraints while using "
             "the optional resource at most once; item and row labels must be "
             "declared in sorted canonical order.",
-            {
+            input={
                 "instance": {
                     "primary_items": ["constraint:a", "constraint:b"],
                     "secondary_items": ["resource:x"],

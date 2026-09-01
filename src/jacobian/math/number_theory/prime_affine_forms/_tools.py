@@ -1,11 +1,8 @@
 """Public operation declarations for prime-affine local arithmetic."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
 from jacobian.canonical import parse_canonical_integer
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory.prime_affine_forms._admissibility import (
     PrimeTupleAdmissibilityRequest,
@@ -146,28 +143,6 @@ def compute_interval_enumerate(
     )
 
 
-def _operation[RequestT: StrictModel, ResultT: StrictModel](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...],
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 _TWIN_PRIME_SOURCE = {
     "forms": [
         {"form_id": "n", "coefficient": "1", "constant": "0"},
@@ -203,227 +178,193 @@ _TWIN_PRIME_WHEEL = {
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _operation(
-        "number_theory.prime_affine_forms.local_factor.compute",
-        "Compute one prime-affine local factor",
-        "For a finite tuple of primitive affine forms and one bounded modulus "
+    MathTool(
+        operation_id="number_theory.prime_affine_forms.local_factor.compute",
+        title="Compute one prime-affine local factor",
+        description="For a finite tuple of primitive affine forms and one bounded modulus "
         "p, return the complete residue partition and the exact Hardy-Littlewood "
         "density term (1-nu_p/p)/(1-1/p)^k.",
-        PrimeTupleLocalFactorRequest,
-        PrimeTupleLocalFactorResult,
-        compute_local_factor,
-        "number-theory",
-        "local-obstruction",
-        "hardy-littlewood",
-        "exact",
+        request_type=PrimeTupleLocalFactorRequest,
+        result_type=PrimeTupleLocalFactorResult,
+        run=compute_local_factor,
+        tags=("number-theory", "local-obstruction", "hardy-littlewood", "exact"),
         examples=(
-            example(
-                "twin_prime_local_factor_mod_3",
-                "Compute the complete modulo-3 local profile of n and n+2; "
+            OperationExample(
+                name="twin_prime_local_factor_mod_3",
+                description="Compute the complete modulo-3 local profile of n and n+2; "
                 "the forms must be distinct, primitive, and nonconstant.",
-                {"source": _TWIN_PRIME_SOURCE, "prime": 3},
+                input={"source": _TWIN_PRIME_SOURCE, "prime": 3},
             ),
         ),
     ),
-    _operation(
-        "number_theory.prime_affine_forms.local_factors.compute",
-        "Compute a finite prime-affine factor product",
-        "Compute compact exact local-factor rows for a finite canonical prime "
+    MathTool(
+        operation_id="number_theory.prime_affine_forms.local_factors.compute",
+        title="Compute a finite prime-affine factor product",
+        description="Compute compact exact local-factor rows for a finite canonical prime "
         "set and their exact finite product. The result makes no infinite "
         "singular-series or asymptotic claim.",
-        PrimeTupleLocalFactorsRequest,
-        FinitePrimeTupleFactorProduct,
-        compute_local_factors,
-        "number-theory",
-        "prime-tuple",
-        "finite-product",
-        "exact",
+        request_type=PrimeTupleLocalFactorsRequest,
+        result_type=FinitePrimeTupleFactorProduct,
+        run=compute_local_factors,
+        tags=("number-theory", "prime-tuple", "finite-product", "exact"),
         examples=(
-            example(
-                "twin_prime_factors_2_3",
-                "Compute the finite local-factor product for p=2 and p=3; "
+            OperationExample(
+                name="twin_prime_factors_2_3",
+                description="Compute the finite local-factor product for p=2 and p=3; "
                 "the prime tuple must be strictly increasing and duplicate-free.",
-                {"source": _TWIN_PRIME_SOURCE, "primes": [2, 3]},
+                input={"source": _TWIN_PRIME_SOURCE, "primes": [2, 3]},
             ),
         ),
     ),
-    _operation(
-        "number_theory.prime_affine_forms.local_admissibility.compute",
-        "Decide local admissibility of primitive affine forms",
-        "Check every prime through the form count k, then use primitivity to "
+    MathTool(
+        operation_id="number_theory.prime_affine_forms.local_admissibility.compute",
+        title="Decide local admissibility of primitive affine forms",
+        description="Check every prime through the form count k, then use primitivity to "
         "prove that each form excludes at most one residue and every p>k has "
         "a permitted class. This does not assert simultaneous primality.",
-        PrimeTupleAdmissibilityRequest,
-        PrimeTupleAdmissibilityResult,
-        compute_local_admissibility,
-        "number-theory",
-        "prime-tuple",
-        "admissibility",
-        "exact",
+        request_type=PrimeTupleAdmissibilityRequest,
+        result_type=PrimeTupleAdmissibilityResult,
+        run=compute_local_admissibility,
+        tags=("number-theory", "prime-tuple", "admissibility", "exact"),
         examples=(
-            example(
-                "twin_prime_admissibility",
-                "Decide local admissibility of n and n+2; every supplied form "
+            OperationExample(
+                name="twin_prime_admissibility",
+                description="Decide local admissibility of n and n+2; every supplied form "
                 "must be primitive and have a nonzero coefficient.",
-                {"source": _TWIN_PRIME_SOURCE},
+                input={"source": _TWIN_PRIME_SOURCE},
             ),
         ),
     ),
-    _operation(
-        "number_theory.prime_affine_forms.residue_wheel.compute",
-        "Construct a compact exact prime-affine residue wheel",
-        "Return a source-bound product of valid local residue sets, its CRT "
+    MathTool(
+        operation_id="number_theory.prime_affine_forms.residue_wheel.compute",
+        title="Construct a compact exact prime-affine residue wheel",
+        description="Return a source-bound product of valid local residue sets, its CRT "
         "modulus, and exact valid count without expanding every combined residue.",
-        PrimeTupleResidueWheelRequest,
-        PrimeTupleResidueWheel,
-        compute_residue_wheel,
-        "number-theory",
-        "prime-tuple",
-        "crt",
-        "exact",
+        request_type=PrimeTupleResidueWheelRequest,
+        result_type=PrimeTupleResidueWheel,
+        run=compute_residue_wheel,
+        tags=("number-theory", "prime-tuple", "crt", "exact"),
         examples=(
-            example(
-                "twin_prime_wheel_6",
-                "Construct the compact modulo-6 wheel of n and n+2 from primes "
+            OperationExample(
+                name="twin_prime_wheel_6",
+                description="Construct the compact modulo-6 wheel of n and n+2 from primes "
                 "2 and 3; primes must be distinct and strictly increasing.",
-                {"source": _TWIN_PRIME_SOURCE, "primes": [2, 3]},
+                input={"source": _TWIN_PRIME_SOURCE, "primes": [2, 3]},
             ),
         ),
     ),
-    _operation(
-        "number_theory.prime_affine_forms.residue_wheel.enumerate.compute",
-        "Enumerate every residue of a compact prime-affine wheel",
-        "Materialize every permitted CRT residue and its aligned prime components "
+    MathTool(
+        operation_id="number_theory.prime_affine_forms.residue_wheel.enumerate.compute",
+        title="Enumerate every residue of a compact prime-affine wheel",
+        description="Materialize every permitted CRT residue and its aligned prime components "
         "from a supplied compact wheel under separate residue, work, and output "
         "bounds.",
-        PrimeTupleResidueWheelEnumerationRequest,
-        PrimeTupleResidueWheelEnumeration,
-        compute_residue_wheel_enumeration,
-        "number-theory",
-        "prime-tuple",
-        "crt",
-        "enumeration",
-        "exact",
+        request_type=PrimeTupleResidueWheelEnumerationRequest,
+        result_type=PrimeTupleResidueWheelEnumeration,
+        run=compute_residue_wheel_enumeration,
+        tags=("number-theory", "prime-tuple", "crt", "enumeration", "exact"),
         examples=(
-            example(
-                "enumerate_twin_prime_wheel_6",
-                "Enumerate the sole permitted residue of the compact modulo-6 "
+            OperationExample(
+                name="enumerate_twin_prime_wheel_6",
+                description="Enumerate the sole permitted residue of the compact modulo-6 "
                 "twin-prime wheel; the supplied wheel must be complete and "
                 "source-bound.",
-                {"wheel": _TWIN_PRIME_WHEEL},
+                input={"wheel": _TWIN_PRIME_WHEEL},
             ),
         ),
     ),
-    _operation(
-        "number_theory.prime_affine_forms.wheel_membership.compute",
-        "Check membership in a prime-affine residue wheel",
-        "Reduce one exact integer through a source-bound residue wheel and "
+    MathTool(
+        operation_id="number_theory.prime_affine_forms.wheel_membership.compute",
+        title="Check membership in a prime-affine residue wheel",
+        description="Reduce one exact integer through a source-bound residue wheel and "
         "return its CRT components plus the first excluded prime and vanishing "
         "forms when it is not locally permitted.",
-        PrimeTupleWheelMembershipRequest,
-        PrimeTupleWheelMembershipResult,
-        compute_wheel_membership,
-        "number-theory",
-        "prime-tuple",
-        "crt",
-        "membership",
-        "exact",
+        request_type=PrimeTupleWheelMembershipRequest,
+        result_type=PrimeTupleWheelMembershipResult,
+        run=compute_wheel_membership,
+        tags=("number-theory", "prime-tuple", "crt", "membership", "exact"),
         examples=(
-            example(
-                "twin_prime_wheel_member",
-                "Check that 5 is permitted by the exact modulo-6 twin-prime "
+            OperationExample(
+                name="twin_prime_wheel_member",
+                description="Check that 5 is permitted by the exact modulo-6 twin-prime "
                 "wheel; the wheel must be a complete source-bound result.",
-                {"wheel": _TWIN_PRIME_WHEEL, "value": "5"},
+                input={"wheel": _TWIN_PRIME_WHEEL, "value": "5"},
             ),
         ),
     ),
-    _operation(
-        "number_theory.prime_affine_forms.interval_count.compute",
-        "Count exact prime-affine matches on an interval",
-        "Count every integer n in a bounded closed interval for which all source "
+    MathTool(
+        operation_id="number_theory.prime_affine_forms.interval_count.compute",
+        title="Count exact prime-affine matches on an interval",
+        description="Count every integer n in a bounded closed interval for which all source "
         "forms have ordinary positive-prime values. Every positive candidate "
         "is admitted below SymPy's deterministic 2^64 primality boundary.",
-        PrimeAffineIntervalCountRequest,
-        PrimePatternIntervalCountResult,
-        compute_interval_count,
-        "number-theory",
-        "prime-tuple",
-        "interval",
-        "exact",
+        request_type=PrimeAffineIntervalCountRequest,
+        result_type=PrimePatternIntervalCountResult,
+        run=compute_interval_count,
+        tags=("number-theory", "prime-tuple", "interval", "exact"),
         examples=(
-            example(
-                "twin_primes_through_10_count",
-                "Count twin-prime starts from 0 through 10 exactly; lower and "
+            OperationExample(
+                name="twin_primes_through_10_count",
+                description="Count twin-prime starts from 0 through 10 exactly; lower and "
                 "upper must form a nonempty canonical integer interval.",
-                {"source": _TWIN_PRIME_SOURCE, "lower": "0", "upper": "10"},
+                input={"source": _TWIN_PRIME_SOURCE, "lower": "0", "upper": "10"},
             ),
         ),
     ),
-    _operation(
-        "number_theory.prime_affine_forms.interval_enumerate.compute",
-        "Enumerate exact prime-affine matches on an interval",
-        "Return every integer n and aligned affine-value tuple for which all "
+    MathTool(
+        operation_id="number_theory.prime_affine_forms.interval_enumerate.compute",
+        title="Enumerate exact prime-affine matches on an interval",
+        description="Return every integer n and aligned affine-value tuple for which all "
         "forms are ordinary positive primes on a bounded closed interval. The "
         "complete match output has a stricter bound than count-only execution.",
-        PrimeAffineIntervalEnumerateRequest,
-        PrimePatternIntervalEnumerateResult,
-        compute_interval_enumerate,
-        "number-theory",
-        "prime-tuple",
-        "interval",
-        "enumeration",
-        "exact",
+        request_type=PrimeAffineIntervalEnumerateRequest,
+        result_type=PrimePatternIntervalEnumerateResult,
+        run=compute_interval_enumerate,
+        tags=("number-theory", "prime-tuple", "interval", "enumeration", "exact"),
         examples=(
-            example(
-                "twin_primes_through_10",
-                "Enumerate twin-prime starts from 0 through 10 exactly; lower "
+            OperationExample(
+                name="twin_primes_through_10",
+                description="Enumerate twin-prime starts from 0 through 10 exactly; lower "
                 "and upper must form a nonempty canonical integer interval.",
-                {"source": _TWIN_PRIME_SOURCE, "lower": "0", "upper": "10"},
+                input={"source": _TWIN_PRIME_SOURCE, "lower": "0", "upper": "10"},
             ),
         ),
     ),
-    _operation(
-        "number_theory.prime_affine_forms.interval_residue_profile.compute",
-        "Enumerate interval survivors of a prime-affine wheel",
-        "Return every integer in a bounded closed interval whose residue is "
+    MathTool(
+        operation_id="number_theory.prime_affine_forms.interval_residue_profile.compute",
+        title="Enumerate interval survivors of a prime-affine wheel",
+        description="Return every integer in a bounded closed interval whose residue is "
         "permitted by the supplied exact wheel. Wheel survival is only local "
         "divisibility data and does not assert primality.",
-        PrimeTupleIntervalResidueProfileRequest,
-        PrimeTupleIntervalResidueProfileResult,
-        compute_interval_residue_profile,
-        "number-theory",
-        "prime-tuple",
-        "crt",
-        "interval",
-        "exact",
+        request_type=PrimeTupleIntervalResidueProfileRequest,
+        result_type=PrimeTupleIntervalResidueProfileResult,
+        run=compute_interval_residue_profile,
+        tags=("number-theory", "prime-tuple", "crt", "interval", "exact"),
         examples=(
-            example(
-                "twin_prime_wheel_survivors",
-                "Enumerate modulo-6 twin-prime wheel survivors from 0 through "
+            OperationExample(
+                name="twin_prime_wheel_survivors",
+                description="Enumerate modulo-6 twin-prime wheel survivors from 0 through "
                 "12; the supplied wheel must be complete and source-bound.",
-                {"wheel": _TWIN_PRIME_WHEEL, "lower": "0", "upper": "12"},
+                input={"wheel": _TWIN_PRIME_WHEEL, "lower": "0", "upper": "12"},
             ),
         ),
     ),
-    _operation(
-        "number_theory.prime_affine_forms.translation.compute",
-        "Translate a primitive affine-form tuple",
-        "Apply n -> n+c exactly to every labelled primitive affine form, "
+    MathTool(
+        operation_id="number_theory.prime_affine_forms.translation.compute",
+        title="Translate a primitive affine-form tuple",
+        description="Apply n -> n+c exactly to every labelled primitive affine form, "
         "preserving form IDs and producing a canonical tuple whose local factors "
         "are transported by residue translation.",
-        PrimeAffineTranslationRequest,
-        PrimeAffineTranslationResult,
-        compute_translation,
-        "number-theory",
-        "prime-tuple",
-        "translation",
-        "exact",
+        request_type=PrimeAffineTranslationRequest,
+        result_type=PrimeAffineTranslationResult,
+        run=compute_translation,
+        tags=("number-theory", "prime-tuple", "translation", "exact"),
         examples=(
-            example(
-                "translate_twin_prime_tuple",
-                "Translate n and n+2 by one to obtain n+1 and n+3; the resulting "
+            OperationExample(
+                name="translate_twin_prime_tuple",
+                description="Translate n and n+2 by one to obtain n+1 and n+3; the resulting "
                 "constants must remain within the canonical component bound.",
-                {"source": _TWIN_PRIME_SOURCE, "shift": "1"},
+                input={"source": _TWIN_PRIME_SOURCE, "shift": "1"},
             ),
         ),
     ),

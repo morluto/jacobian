@@ -1,10 +1,7 @@
 """Number field operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -37,28 +34,6 @@ from jacobian.math.number_theory.number_fields.values import (
     NumberFieldEmbeddingProfile,
     SimpleNumberFieldRealEmbeddingOrder,
 )
-
-
-def nf_operation[RequestT: StrictModel, ResultT: StrictModel](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
 
 
 def _compute_embeddings(
@@ -107,21 +82,19 @@ def _compute_binary_power_sum_gap_profile(
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    nf_operation(
-        "number_field.discriminant.compute",
-        "Compute the discriminant of a number field",
-        "Compute the field discriminant of one canonical SimpleNumberFieldPresentation in an isolated SymPy worker, or return UNKNOWN if its bounded execution cannot establish a result.",
-        NumberFieldRequest,
-        NumberFieldDiscriminantResult,
-        compute_nf_discriminant,
-        "number-field",
-        "discriminant",
-        "exact",
+    MathTool(
+        operation_id="number_field.discriminant.compute",
+        title="Compute the discriminant of a number field",
+        description="Compute the field discriminant of one canonical SimpleNumberFieldPresentation in an isolated SymPy worker, or return UNKNOWN if its bounded execution cannot establish a result.",
+        request_type=NumberFieldRequest,
+        result_type=NumberFieldDiscriminantResult,
+        run=compute_nf_discriminant,
+        tags=("number-field", "discriminant", "exact"),
         examples=(
-            example(
-                "quadratic_disc",
-                "Discriminant of x^2-2.",
-                {
+            OperationExample(
+                name="quadratic_disc",
+                description="Discriminant of x^2-2.",
+                input={
                     "field": {
                         "domain": "QQ",
                         "coefficients_descending": ["1", "0", "-2"],
@@ -130,22 +103,19 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    nf_operation(
-        "number_field.embeddings.compute",
-        "Compute every exact embedding of a simple number field",
-        "Return all real and complex embeddings of one bounded primitive irreducible ZZ presentation of QQ(alpha), ordered by exact roots, with certified rational isolation, signature, conjugate-pair grouping, and defining-polynomial discriminant. Degree is at most 8, coefficients have at most 256 digits, and a request-deadline-bound one-shot worker performs recognition, exact signature, conditional elimination, and one all-root isolation pass within the admitted 32,768-bit refinement, 2,097,152-bit resultant-storage, and 10,485,760-byte result envelopes.",
-        NumberFieldEmbeddingsRequest,
-        NumberFieldEmbeddingProfile,
-        _compute_embeddings,
-        "number-field",
-        "embedding",
-        "algebraic-number",
-        "exact",
+    MathTool(
+        operation_id="number_field.embeddings.compute",
+        title="Compute every exact embedding of a simple number field",
+        description="Return all real and complex embeddings of one bounded primitive irreducible ZZ presentation of QQ(alpha), ordered by exact roots, with certified rational isolation, signature, conjugate-pair grouping, and defining-polynomial discriminant. Degree is at most 8, coefficients have at most 256 digits, and a request-deadline-bound one-shot worker performs recognition, exact signature, conditional elimination, and one all-root isolation pass within the admitted 32,768-bit refinement, 2,097,152-bit resultant-storage, and 10,485,760-byte result envelopes.",
+        request_type=NumberFieldEmbeddingsRequest,
+        result_type=NumberFieldEmbeddingProfile,
+        run=_compute_embeddings,
+        tags=("number-field", "embedding", "algebraic-number", "exact"),
         examples=(
-            example(
-                "gaussian_field",
-                "Both embeddings of QQ(i), grouped as one conjugate pair.",
-                {
+            OperationExample(
+                name="gaussian_field",
+                description="Both embeddings of QQ(i), grouped as one conjugate pair.",
+                input={
                     "field": {
                         "domain": "QQ",
                         "coefficients_descending": ["1", "0", "1"],
@@ -154,27 +124,24 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    nf_operation(
-        "number_field.real_embedding.element_order.compare",
-        "Compare field elements under one selected real embedding",
-        "Return the exact LT, EQ, or GT order of two reduced elements of one "
+    MathTool(
+        operation_id="number_field.real_embedding.element_order.compare",
+        title="Compare field elements under one selected real embedding",
+        description="Return the exact LT, EQ, or GT order of two reduced elements of one "
         "simple number field at one exact real embedding record. The consumer "
         "recomputes the complete bounded embedding profile and requires an "
         "exact producer-record match before canonical SymPy quotient-field "
         "arithmetic and selected-image real-root isolation. Equality is exact "
         "in QQ[x]/(f), independently of the selected real order.",
-        NumberFieldRealEmbeddingOrderRequest,
-        SimpleNumberFieldRealEmbeddingOrder,
-        _compare_real_embedding_elements,
-        "number-field",
-        "embedding",
-        "order",
-        "exact",
+        request_type=NumberFieldRealEmbeddingOrderRequest,
+        result_type=SimpleNumberFieldRealEmbeddingOrder,
+        run=_compare_real_embedding_elements,
+        tags=("number-field", "embedding", "order", "exact"),
         examples=(
-            example(
-                "rational_field",
-                "Compare 3/2 and 1 at the unique embedding of QQ.",
-                {
+            OperationExample(
+                name="rational_field",
+                description="Compare 3/2 and 1 at the unique embedding of QQ.",
+                input={
                     "left": {
                         "element": {
                             "presentation": {
@@ -235,10 +202,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    nf_operation(
-        "number_field.real_embedding.binary_power_sum_gap_profile.compute",
-        "Compute an exact real-embedded binary power-sum gap profile",
-        "For one structurally bound field element q, selected real embedding, "
+    MathTool(
+        operation_id="number_field.real_embedding.binary_power_sum_gap_profile.compute",
+        title="Compute an exact real-embedded binary power-sum gap profile",
+        description="For one structurally bound field element q, selected real embedding, "
         "and exponent count m, require 1 < sigma(q) < 2 and return every "
         "distinct sum of epsilon_i*q^i in exact increasing embedded order. "
         "The result partitions all 2^m indexed bit vectors by exact quotient-"
@@ -247,19 +214,15 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "and reports exact multiplicity and least/largest-gap summaries. The "
         "finite exhaustive envelope admits at most 4,096 representations and "
         "preflights field growth, comparisons, and complete result bytes.",
-        NumberFieldBinaryPowerSumGapProfileRequest,
-        BinaryPowerSumGapProfile,
-        _compute_binary_power_sum_gap_profile,
-        "number-field",
-        "embedding",
-        "power-sum",
-        "gap-profile",
-        "exact",
+        request_type=NumberFieldBinaryPowerSumGapProfileRequest,
+        result_type=BinaryPowerSumGapProfile,
+        run=_compute_binary_power_sum_gap_profile,
+        tags=("number-field", "embedding", "power-sum", "gap-profile", "exact"),
         examples=(
-            example(
-                "three_halves",
-                "All eight binary power sums for q=3/2 in QQ and m=3.",
-                {
+            OperationExample(
+                name="three_halves",
+                description="All eight binary power sums for q=3/2 in QQ and m=3.",
+                input={
                     "base": {
                         "element": {
                             "presentation": {

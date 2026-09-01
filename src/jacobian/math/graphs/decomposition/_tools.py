@@ -1,10 +1,7 @@
 """Exact structural graph decomposition operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.decomposition._models import (
     BiconnectedComponentsRequest,
@@ -51,54 +48,25 @@ def _compute_spqr_tree(request: SPQRTreeRequest) -> SPQRTreeResult:
     return spqr_tree(request.graph)
 
 
-def graph_decomposition_operation[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    graph_decomposition_operation(
-        "graph.decomposition.spqr_tree.compute",
-        "Compute a normalized SPQR tree of an undirected graph",
-        "Compute a deterministic normalized S/P/Q/R decomposition of a"
+    MathTool(
+        operation_id="graph.decomposition.spqr_tree.compute",
+        title="Compute a normalized SPQR tree of an undirected graph",
+        description="Compute a deterministic normalized S/P/Q/R decomposition of a"
         " biconnected finite simple graph. Real source edges occur in exactly"
         " one skeleton; paired virtual edges encode each separator gluing and"
         " the returned tree replays to exactly the source graph. A graph outside"
         " the biconnected minimum-size convention returns a concrete witness.",
-        SPQRTreeRequest,
-        SPQRTreeResult,
-        _compute_spqr_tree,
-        "graph",
-        "decomposition",
-        "spqr",
-        "triconnected",
-        "exact",
+        request_type=SPQRTreeRequest,
+        result_type=SPQRTreeResult,
+        run=_compute_spqr_tree,
+        tags=("graph", "decomposition", "spqr", "triconnected", "exact"),
         examples=(
-            example(
-                "k4_rigid",
-                "Compute the rigid SPQR skeleton of K4; the source graph is"
+            OperationExample(
+                name="k4_rigid",
+                description="Compute the rigid SPQR skeleton of K4; the source graph is"
                 " biconnected and has at least three vertices.",
-                {
+                input={
                     "graph": {
                         "vertex_count": 4,
                         "edges": [
@@ -114,22 +82,19 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    graph_decomposition_operation(
-        "graph.decomposition.block_cut_tree.compute",
-        "Compute the block-cut tree of an undirected graph",
-        "Decompose an undirected graph into its biconnected components (blocks) and articulation points using NetworkX. Returns the blocks, the articulation points, and the edges of the bipartite block-cut tree joining each block to the articulation points it contains.",
-        BlockCutTreeRequest,
-        BlockCutTreeResult,
-        _compute_block_cut_tree,
-        "graph",
-        "decomposition",
-        "block-cut",
-        "exact",
+    MathTool(
+        operation_id="graph.decomposition.block_cut_tree.compute",
+        title="Compute the block-cut tree of an undirected graph",
+        description="Decompose an undirected graph into its biconnected components (blocks) and articulation points using NetworkX. Returns the blocks, the articulation points, and the edges of the bipartite block-cut tree joining each block to the articulation points it contains.",
+        request_type=BlockCutTreeRequest,
+        result_type=BlockCutTreeResult,
+        run=_compute_block_cut_tree,
+        tags=("graph", "decomposition", "block-cut", "exact"),
         examples=(
-            example(
-                "two_triangle_blocks",
-                "Compute the block-cut tree of a graph with two triangles sharing one vertex.",
-                {
+            OperationExample(
+                name="two_triangle_blocks",
+                description="Compute the block-cut tree of a graph with two triangles sharing one vertex.",
+                input={
                     "graph": {
                         "vertex_count": 5,
                         "edges": [
@@ -145,22 +110,19 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    graph_decomposition_operation(
-        "graph.decomposition.bridge_block_tree.compute",
-        "Compute the bridge-block tree of an undirected graph",
-        "Decompose an undirected graph into its 2-edge-connected components (bridge-blocks) using NetworkX. Returns the components, the bridges as normalised (u, v) pairs, and the edges of the bridge block tree joining adjacent components across each bridge.",
-        BridgeBlockRequest,
-        BridgeBlockResult,
-        _compute_bridge_block_tree,
-        "graph",
-        "decomposition",
-        "bridge",
-        "exact",
+    MathTool(
+        operation_id="graph.decomposition.bridge_block_tree.compute",
+        title="Compute the bridge-block tree of an undirected graph",
+        description="Decompose an undirected graph into its 2-edge-connected components (bridge-blocks) using NetworkX. Returns the components, the bridges as normalised (u, v) pairs, and the edges of the bridge block tree joining adjacent components across each bridge.",
+        request_type=BridgeBlockRequest,
+        result_type=BridgeBlockResult,
+        run=_compute_bridge_block_tree,
+        tags=("graph", "decomposition", "bridge", "exact"),
         examples=(
-            example(
-                "two_triangles_bridge",
-                "Compute the bridge-block tree of two triangles joined by a single bridge edge.",
-                {
+            OperationExample(
+                name="two_triangles_bridge",
+                description="Compute the bridge-block tree of two triangles joined by a single bridge edge.",
+                input={
                     "graph": {
                         "vertex_count": 6,
                         "edges": [
@@ -177,22 +139,19 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    graph_decomposition_operation(
-        "graph.decomposition.ear.compute",
-        "Compute an open ear decomposition of a biconnected graph",
-        "Compute an open ear decomposition of a biconnected undirected graph. The first ear is a cycle and each subsequent ear is a path whose internal vertices are disjoint from all earlier ears. A graph that is not biconnected returns biconnected=false and no ears.",
-        EarDecompositionRequest,
-        EarDecompositionResult,
-        _compute_ear_decomposition,
-        "graph",
-        "decomposition",
-        "ear",
-        "exact",
+    MathTool(
+        operation_id="graph.decomposition.ear.compute",
+        title="Compute an open ear decomposition of a biconnected graph",
+        description="Compute an open ear decomposition of a biconnected undirected graph. The first ear is a cycle and each subsequent ear is a path whose internal vertices are disjoint from all earlier ears. A graph that is not biconnected returns biconnected=false and no ears.",
+        request_type=EarDecompositionRequest,
+        result_type=EarDecompositionResult,
+        run=_compute_ear_decomposition,
+        tags=("graph", "decomposition", "ear", "exact"),
         examples=(
-            example(
-                "cycle_c4",
-                "Compute an ear decomposition of a 4-cycle (a single ear).",
-                {
+            OperationExample(
+                name="cycle_c4",
+                description="Compute an ear decomposition of a 4-cycle (a single ear).",
+                input={
                     "graph": {
                         "vertex_count": 4,
                         "edges": [
@@ -206,22 +165,19 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    graph_decomposition_operation(
-        "graph.decomposition.biconnected_components.compute",
-        "List the biconnected components of an undirected graph",
-        "List all biconnected components of an undirected graph. Each component is returned as a sorted tuple of vertices.",
-        BiconnectedComponentsRequest,
-        BiconnectedComponentsResult,
-        _compute_biconnected_components,
-        "graph",
-        "decomposition",
-        "biconnected",
-        "exact",
+    MathTool(
+        operation_id="graph.decomposition.biconnected_components.compute",
+        title="List the biconnected components of an undirected graph",
+        description="List all biconnected components of an undirected graph. Each component is returned as a sorted tuple of vertices.",
+        request_type=BiconnectedComponentsRequest,
+        result_type=BiconnectedComponentsResult,
+        run=_compute_biconnected_components,
+        tags=("graph", "decomposition", "biconnected", "exact"),
         examples=(
-            example(
-                "two_triangle_blocks",
-                "List the biconnected components of two triangles sharing one vertex.",
-                {
+            OperationExample(
+                name="two_triangle_blocks",
+                description="List the biconnected components of two triangles sharing one vertex.",
+                input={
                     "graph": {
                         "vertex_count": 5,
                         "edges": [[0, 1], [1, 2], [0, 2], [0, 3], [3, 4], [0, 4]],

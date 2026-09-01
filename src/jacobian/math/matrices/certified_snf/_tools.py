@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.matrices.certified_snf._models import (
     CertifiedSmithNormalFormRequest,
     CertifiedSmithNormalFormResult,
@@ -43,10 +42,10 @@ TOOLS: MathTools = (
             "bounded",
         ),
         examples=(
-            example(
-                "certified_smith_two_by_two",
-                "Compute D, U, and V for a two-by-two integer matrix.",
-                {
+            OperationExample(
+                name="certified_smith_two_by_two",
+                description="Compute D, U, and V for a two-by-two integer matrix.",
+                input={
                     "matrix": {
                         "row_count": 2,
                         "column_count": 2,

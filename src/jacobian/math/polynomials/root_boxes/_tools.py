@@ -2,8 +2,7 @@
 
 from typing import Any
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 
 from ._models import (
     ROOT_BOX_ADMISSION_SUMMARY,
@@ -64,12 +63,12 @@ TOOLS: MathTools = (
             "bounded",
         ),
         examples=(
-            example(
-                "square_root_two",
-                "Certify the unique positive zero of x^2 - 2 in [1, 2]; "
+            OperationExample(
+                name="square_root_two",
+                description="Certify the unique positive zero of x^2 - 2 in [1, 2]; "
                 "the system must be square and the box must use its complete "
                 "ordered axis.",
-                {
+                input={
                     "polynomial_map": {
                         "input_variables": ["x"],
                         "output_polynomials": [

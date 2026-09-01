@@ -2,8 +2,7 @@
 
 from typing import Any
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.combinatorics.matroids.oriented._models import (
     ChirotopeCheckRequest,
     ChirotopeCheckResult,
@@ -47,11 +46,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         run=_run_chirotope_check,
         tags=("oriented-matroid", "chirotope", "exact"),
         examples=(
-            example(
-                "alternating_rank3_four_elements",
-                "Check the alternating rank-3 chirotope on four indexed elements; "
+            OperationExample(
+                name="alternating_rank3_four_elements",
+                description="Check the alternating rank-3 chirotope on four indexed elements; "
                 "the input lists every increasing triple in lexicographic order.",
-                _ALTERNATING_RANK3_EXAMPLE,
+                input=_ALTERNATING_RANK3_EXAMPLE,
             ),
         ),
     ),

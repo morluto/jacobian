@@ -3,8 +3,11 @@
 from pydantic_core import PydanticCustomError
 
 from jacobian.canonical import parse_canonical_integer
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.number_theory._friable_enumerate_kernels import (
     enumerate_friable as _enumerate_friable_kernel,
 )
@@ -12,7 +15,6 @@ from jacobian.math.number_theory._friable_enumerate_models import (
     FriableEnumerateRequest,
     FriableEnumerateResult,
 )
-from jacobian.math.number_theory._support import number_theory_operation
 from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
 
@@ -54,32 +56,28 @@ def enumerate_friable(
     )
 
 
-FRIABLE_ENUMERATE_OPERATION = number_theory_operation(
-    "integer.friable.enumerate",
-    "Enumerate friable integers exactly",
-    (
+FRIABLE_ENUMERATE_OPERATION = MathTool(
+    operation_id="integer.friable.enumerate",
+    title="Enumerate friable integers exactly",
+    description=(
         "Return the complete increasing tuple of positive integers at most x "
         "whose prime factors are all at most the inclusive cutoff y. The kernel "
         "generates prime-exponent vectors whose product is at most x, maps them "
         "to positive integer products, and sorts/deduplicates canonically."
     ),
-    FriableEnumerateRequest,
-    FriableEnumerateResult,
-    compute_friable_enumerate,
-    "number-theory",
-    "friable",
-    "smooth-number",
-    "enumeration",
-    "exact",
+    request_type=FriableEnumerateRequest,
+    result_type=FriableEnumerateResult,
+    run=compute_friable_enumerate,
+    tags=("number-theory", "friable", "smooth-number", "enumeration", "exact"),
     examples=(
-        example(
-            "five_friable_through_20",
-            (
+        OperationExample(
+            name="five_friable_through_20",
+            description=(
                 "Enumerate the positive 5-friable integers at most 20; x and y "
                 "must be canonical nonnegative decimals and the selected exact "
                 "enumeration regime must fit its work budget."
             ),
-            {"x": "20", "y": "5"},
+            input={"x": "20", "y": "5"},
         ),
     ),
 )

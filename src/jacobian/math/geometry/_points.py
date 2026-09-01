@@ -1,7 +1,6 @@
 """Point-owned exact geometry operations."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.geometry._models import (
     CircleInversionRequest,
     GeometryBooleanResult,
@@ -12,7 +11,6 @@ from jacobian.math.geometry._models import (
     PointQuadrupleRequest,
     PointSetRequest,
 )
-from jacobian.math.geometry._support import geometry_operation
 from jacobian.math.geometry._tools import (
     circle_inversion,
     concyclic,
@@ -21,20 +19,19 @@ from jacobian.math.geometry._tools import (
 )
 
 POINT_OPERATIONS: MathTools = (
-    geometry_operation(
-        "geometry.points.compute.squared_distance",
-        "Compute squared distance",
-        "Compute exact squared Euclidean distance between two rational points.",
-        PointPairRequest,
-        GeometryRationalResult,
-        squared_distance,
-        "geometry",
-        "distance",
+    MathTool(
+        operation_id="geometry.points.compute.squared_distance",
+        title="Compute squared distance",
+        description="Compute exact squared Euclidean distance between two rational points.",
+        request_type=PointPairRequest,
+        result_type=GeometryRationalResult,
+        run=squared_distance,
+        tags=("geometry", "distance"),
         examples=(
-            example(
-                "diagonal_squared_distance",
-                "Compute the squared distance from (0,0) to (2,2).",
-                {
+            OperationExample(
+                name="diagonal_squared_distance",
+                description="Compute the squared distance from (0,0) to (2,2).",
+                input={
                     "first": {
                         "x": {"num": "0", "den": "1"},
                         "y": {"num": "0", "den": "1"},
@@ -47,20 +44,19 @@ POINT_OPERATIONS: MathTools = (
             ),
         ),
     ),
-    geometry_operation(
-        "geometry.points.decide.concyclic",
-        "Decide concyclicity",
-        "Decide whether four rational points lie on one circle.",
-        PointQuadrupleRequest,
-        GeometryBooleanResult,
-        concyclic,
-        "geometry",
-        "circle",
+    MathTool(
+        operation_id="geometry.points.decide.concyclic",
+        title="Decide concyclicity",
+        description="Decide whether four rational points lie on one circle.",
+        request_type=PointQuadrupleRequest,
+        result_type=GeometryBooleanResult,
+        run=concyclic,
+        tags=("geometry", "circle"),
         examples=(
-            example(
-                "unit_circle_points",
-                "Check four points on the unit circle.",
-                {
+            OperationExample(
+                name="unit_circle_points",
+                description="Check four points on the unit circle.",
+                input={
                     "first": {
                         "x": {"num": "1", "den": "1"},
                         "y": {"num": "0", "den": "1"},
@@ -81,20 +77,19 @@ POINT_OPERATIONS: MathTools = (
             ),
         ),
     ),
-    geometry_operation(
-        "geometry.points.compute.convex_hull",
-        "Construct planar convex hull",
-        "Construct the exact convex hull vertices of a finite rational point set.",
-        PointSetRequest,
-        GeometryConvexHullResult,
-        convex_hull_points,
-        "geometry",
-        "convexity",
+    MathTool(
+        operation_id="geometry.points.compute.convex_hull",
+        title="Construct planar convex hull",
+        description="Construct the exact convex hull vertices of a finite rational point set.",
+        request_type=PointSetRequest,
+        result_type=GeometryConvexHullResult,
+        run=convex_hull_points,
+        tags=("geometry", "convexity"),
         examples=(
-            example(
-                "square_convex_hull",
-                "Construct the hull of a rational square.",
-                {
+            OperationExample(
+                name="square_convex_hull",
+                description="Construct the hull of a rational square.",
+                input={
                     "points": [
                         {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},
                         {"x": {"num": "2", "den": "1"}, "y": {"num": "0", "den": "1"}},
@@ -103,10 +98,10 @@ POINT_OPERATIONS: MathTools = (
                     ]
                 },
             ),
-            example(
-                "triangle_convex_hull",
-                "Construct the convex hull of a triangle; the input points must be unique.",
-                {
+            OperationExample(
+                name="triangle_convex_hull",
+                description="Construct the convex hull of a triangle; the input points must be unique.",
+                input={
                     "points": [
                         {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},
                         {"x": {"num": "3", "den": "1"}, "y": {"num": "0", "den": "1"}},
@@ -116,27 +111,25 @@ POINT_OPERATIONS: MathTools = (
             ),
         ),
     ),
-    geometry_operation(
-        "geometry.points.compute.circle_inversion",
-        "Invert a point in a circle",
-        "Given a rational planar center c, a positive rational inversion power "
+    MathTool(
+        operation_id="geometry.points.compute.circle_inversion",
+        title="Invert a point in a circle",
+        description="Given a rational planar center c, a positive rational inversion power "
         "s (the squared inversion radius), and a rational planar point p != c, "
         "return the exact inverted point I_{c,s}(p) = c + (s / ||p - c||^2) * "
         "(p - c) using Jacobian's canonical rational planar point value.",
-        CircleInversionRequest,
-        GeometryPointResult,
-        circle_inversion,
-        "geometry",
-        "inversion",
-        "circle",
+        request_type=CircleInversionRequest,
+        result_type=GeometryPointResult,
+        run=circle_inversion,
+        tags=("geometry", "inversion", "circle"),
         examples=(
-            example(
-                "unit_inversion_of_two_zero",
-                (
+            OperationExample(
+                name="unit_inversion_of_two_zero",
+                description=(
                     "Unit inversion (s=1) centered at the origin maps (2,0) to "
                     "(1/2, 0). The point must differ from the center."
                 ),
-                {
+                input={
                     "center": {
                         "x": {"num": "0", "den": "1"},
                         "y": {"num": "0", "den": "1"},

@@ -3,14 +3,16 @@
 from pydantic_core import PydanticCustomError
 
 from jacobian.canonical import parse_canonical_integer
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.number_theory._friable_kernel import count_friable as count_friable
 from jacobian.math.number_theory._friable_models import (
     FriableCountRequest,
     FriableCountResult,
 )
-from jacobian.math.number_theory._support import number_theory_operation
 
 
 def compute_friable_count(request: FriableCountRequest) -> FriableCountResult:
@@ -28,32 +30,28 @@ def compute_friable_count(request: FriableCountRequest) -> FriableCountResult:
     return FriableCountResult._from_kernel(request, count=count)
 
 
-FRIABLE_COUNT_OPERATION = number_theory_operation(
-    "number_theory.friable.count.compute",
-    "Count friable integers exactly",
-    (
+FRIABLE_COUNT_OPERATION = MathTool(
+    operation_id="number_theory.friable.count.compute",
+    title="Count friable integers exactly",
+    description=(
         "Return the exact number Psi(x, y) of positive integers at most x whose "
         "prime factors are all at most the inclusive cutoff y. The result retains "
         "x and y alongside the exact count from the admitted materialized or "
         "generated-search envelope."
     ),
-    FriableCountRequest,
-    FriableCountResult,
-    compute_friable_count,
-    "number-theory",
-    "friable",
-    "smooth-number",
-    "counting",
-    "exact",
+    request_type=FriableCountRequest,
+    result_type=FriableCountResult,
+    run=compute_friable_count,
+    tags=("number-theory", "friable", "smooth-number", "counting", "exact"),
     examples=(
-        example(
-            "five_friable_through_100",
-            (
+        OperationExample(
+            name="five_friable_through_100",
+            description=(
                 "Count the positive 5-friable integers at most 100; x and y "
                 "must be canonical nonnegative decimals and the selected exact "
                 "counting regime must fit its work budget."
             ),
-            {"x": "100", "y": "5"},
+            input={"x": "100", "y": "5"},
         ),
     ),
 )

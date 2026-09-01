@@ -2,8 +2,11 @@
 
 from typing import Any
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.matrices.cyclic_linear._models import (
     CyclicRationalRankKernelProfile,
     CyclicRationalRankKernelProfileRequest,
@@ -58,10 +61,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         discovery_terms=("Fourier mode", "circulant matrix", "root of unity"),
         examples=(
-            example(
-                "first_difference_on_six_cycle",
-                "The scalar symbol x-1 on C_6 drops rank only on the trivial component.",
-                {
+            OperationExample(
+                name="first_difference_on_six_cycle",
+                description="The scalar symbol x-1 on C_6 drops rank only on the trivial component.",
+                input={
                     "symbol": {
                         "period": 6,
                         "target_block_dimension": 1,

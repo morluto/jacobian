@@ -1,11 +1,8 @@
 """Arithmetic dynamics operation declarations."""
 
-from collections.abc import Callable
 from typing import Any, NoReturn
 
 from jacobian._exact import CanonicalRational
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -169,48 +166,21 @@ def compute_finite_field_map(request: FiniteFieldMapRequest) -> FiniteFieldMapRe
     )
 
 
-def _op[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "arithmetic_dynamics.map.iterate.compute",
-        "Compute the n-th iterate of a polynomial map",
-        "Compute phi^n by exact polynomial composition. "
+    MathTool(
+        operation_id="arithmetic_dynamics.map.iterate.compute",
+        title="Compute the n-th iterate of a polynomial map",
+        description="Compute phi^n by exact polynomial composition. "
         "Phi^0 is the identity; coefficients are low-to-high.",
-        MapIterateRequest,
-        MapIterateResult,
-        compute_map_iterate,
-        "arithmetic-dynamics",
-        "polynomial",
-        "exact",
+        request_type=MapIterateRequest,
+        result_type=MapIterateResult,
+        run=compute_map_iterate,
+        tags=("arithmetic-dynamics", "polynomial", "exact"),
         examples=(
-            example(
-                "f_x_squared_plus_1_iterate_2",
-                "Compute f^2 for f(x)=x^2+1; n must be non-negative.",
-                {
+            OperationExample(
+                name="f_x_squared_plus_1_iterate_2",
+                description="Compute f^2 for f(x)=x^2+1; n must be non-negative.",
+                input={
                     "coefficients": [
                         {"num": "1", "den": "1"},
                         {"num": "0", "den": "1"},
@@ -221,25 +191,23 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "arithmetic_dynamics.point.orbit.compute",
-        "Compute orbit prefix of a point",
-        "Compute P, f(P), ..., f^N(P) for a polynomial map and detect "
+    MathTool(
+        operation_id="arithmetic_dynamics.point.orbit.compute",
+        title="Compute orbit prefix of a point",
+        description="Compute P, f(P), ..., f^N(P) for a polynomial map and detect "
         "the first repeat if one occurs within the prefix. A repeat includes "
         "typed preperiod/period evidence; exhausting a step or output bound is "
         "explicitly truncated and makes no eventual-behavior claim.",
-        OrbitPrefixRequest,
-        OrbitPrefixResult,
-        compute_orbit_prefix,
-        "arithmetic-dynamics",
-        "orbit",
-        "exact",
+        request_type=OrbitPrefixRequest,
+        result_type=OrbitPrefixResult,
+        run=compute_orbit_prefix,
+        tags=("arithmetic-dynamics", "orbit", "exact"),
         examples=(
-            example(
-                "orbit_of_0_under_x2",
-                "Orbit of 0 under f(x)=x^2 for 5 steps; "
+            OperationExample(
+                name="orbit_of_0_under_x2",
+                description="Orbit of 0 under f(x)=x^2 for 5 steps; "
                 "start must be a rational number.",
-                {
+                input={
                     "coefficients": [
                         {"num": "0", "den": "1"},
                         {"num": "0", "den": "1"},
@@ -251,23 +219,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "arithmetic_dynamics.dynatomic_polynomial.compute",
-        "Compute the n-th dynatomic polynomial",
-        "Compute the Mobius-normalized formal-period polynomial "
+    MathTool(
+        operation_id="arithmetic_dynamics.dynatomic_polynomial.compute",
+        title="Compute the n-th dynatomic polynomial",
+        description="Compute the Mobius-normalized formal-period polynomial "
         "Phi*_n(x) = product_{d|n} (f^d(x)-x)^{mu(n/d)} for a "
         "degree-at-least-two map, using exact polynomial division.",
-        DynatomicPolynomialRequest,
-        DynatomicPolynomialResult,
-        compute_dynatomic_polynomial,
-        "arithmetic-dynamics",
-        "dynatomic",
-        "exact",
+        request_type=DynatomicPolynomialRequest,
+        result_type=DynatomicPolynomialResult,
+        run=compute_dynatomic_polynomial,
+        tags=("arithmetic-dynamics", "dynatomic", "exact"),
         examples=(
-            example(
-                "dynatomic_n1_x2",
-                "Dynatomic polynomial for n=1 of f(x)=x^2; n must be at least 1.",
-                {
+            OperationExample(
+                name="dynatomic_n1_x2",
+                description="Dynatomic polynomial for n=1 of f(x)=x^2; n must be at least 1.",
+                input={
                     "coefficients": [
                         {"num": "0", "den": "1"},
                         {"num": "0", "den": "1"},
@@ -278,25 +244,22 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "arithmetic_dynamics.cycle.multiplier.compute",
-        "Compute the multiplier of a periodic cycle",
-        "Compute the product of f'(P_i) over all cycle points, "
+    MathTool(
+        operation_id="arithmetic_dynamics.cycle.multiplier.compute",
+        title="Compute the multiplier of a periodic cycle",
+        description="Compute the product of f'(P_i) over all cycle points, "
         "giving the exact multiplier of a periodic cycle. The request is "
         "accepted only when the distinct points follow the map in order.",
-        CycleMultiplierRequest,
-        CycleMultiplierResult,
-        compute_cycle_multiplier,
-        "arithmetic-dynamics",
-        "cycle",
-        "multiplier",
-        "exact",
+        request_type=CycleMultiplierRequest,
+        result_type=CycleMultiplierResult,
+        run=compute_cycle_multiplier,
+        tags=("arithmetic-dynamics", "cycle", "multiplier", "exact"),
         examples=(
-            example(
-                "multiplier_fixed_0_x2",
-                "Multiplier of the fixed point 0 under f(x)=x^2; "
+            OperationExample(
+                name="multiplier_fixed_0_x2",
+                description="Multiplier of the fixed point 0 under f(x)=x^2; "
                 "cycle points must be rational.",
-                {
+                input={
                     "coefficients": [
                         {"num": "0", "den": "1"},
                         {"num": "0", "den": "1"},
@@ -307,23 +270,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "arithmetic_dynamics.finite_field.functional_graph.compute",
-        "Compute functional graph of a polynomial map over GF(p)",
-        "Compute the complete functional graph of a polynomial map "
+    MathTool(
+        operation_id="arithmetic_dynamics.finite_field.functional_graph.compute",
+        title="Compute functional graph of a polynomial map over GF(p)",
+        description="Compute the complete functional graph of a polynomial map "
         "over a finite field, including cycles, tail lengths, and "
         "all edges.",
-        FiniteFieldMapRequest,
-        FiniteFieldMapResult,
-        compute_finite_field_map,
-        "arithmetic-dynamics",
-        "finite-field",
-        "exact",
+        request_type=FiniteFieldMapRequest,
+        result_type=FiniteFieldMapResult,
+        run=compute_finite_field_map,
+        tags=("arithmetic-dynamics", "finite-field", "exact"),
         examples=(
-            example(
-                "x2_mod_5",
-                "Functional graph of x^2 over GF(5); prime must be a prime number.",
-                {"prime": 5, "coefficients": ["0", "0", "1"]},
+            OperationExample(
+                name="x2_mod_5",
+                description="Functional graph of x^2 over GF(5); prime must be a prime number.",
+                input={"prime": 5, "coefficients": ["0", "0", "1"]},
             ),
         ),
     ),

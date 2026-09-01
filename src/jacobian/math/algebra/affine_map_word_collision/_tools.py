@@ -1,9 +1,5 @@
 """Affine-map word collision profile operation declarations."""
 
-from collections.abc import Callable
-
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.algebra.affine_map_word_collision._models import (
     WordCollisionProfileRequest,
@@ -26,53 +22,26 @@ def compute_word_collision_profile_op(
     )
 
 
-def awc_operation[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: MathTools = (
-    awc_operation(
-        "algebra.affine_map.word_collision_profile.compute",
-        "Compute the word collision profile of an affine-map family",
-        (
+    MathTool(
+        operation_id="algebra.affine_map.word_collision_profile.compute",
+        title="Compute the word collision profile of an affine-map family",
+        description=(
             "Given a finite indexed family of exact univariate affine maps "
             "x -> a_i*x + b_i and a fixed positive word length d, return the "
             "complete partition of all generator words of length d by their "
             "exact composed affine map. Convention: word (i_1,...,i_d) "
             "represents f_{i_d} o ... o f_{i_1}."
         ),
-        WordCollisionProfileRequest,
-        WordCollisionProfileResult,
-        compute_word_collision_profile_op,
-        "algebra",
-        "affine-maps",
-        "exact",
+        request_type=WordCollisionProfileRequest,
+        result_type=WordCollisionProfileResult,
+        run=compute_word_collision_profile_op,
+        tags=("algebra", "affine-maps", "exact"),
         examples=(
-            example(
-                "two_identity_maps",
-                "Two copies of x->x+1 at depth 1 collide into one class.",
-                {
+            OperationExample(
+                name="two_identity_maps",
+                description="Two copies of x->x+1 at depth 1 collide into one class.",
+                input={
                     "generators": [
                         {
                             "slope": {"num": "1", "den": "1"},

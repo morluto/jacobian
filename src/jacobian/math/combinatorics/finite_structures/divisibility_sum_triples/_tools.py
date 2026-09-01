@@ -1,9 +1,5 @@
 """Divisibility-sum triple hypergraph operation declarations."""
 
-from collections.abc import Callable
-
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.combinatorics.finite_structures.divisibility_sum_triples._models import (
     DivisibilitySumTriplesRequest,
@@ -23,51 +19,24 @@ def compute_divisibility_sum_triples(
     )
 
 
-def dst_operation[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: MathTools = (
-    dst_operation(
-        "hypergraph.divisibility_sum_triples.construct",
-        "Construct the divisibility-sum triple hypergraph on an integer interval",
-        (
+    MathTool(
+        operation_id="hypergraph.divisibility_sum_triples.construct",
+        title="Construct the divisibility-sum triple hypergraph on an integer interval",
+        description=(
             "Construct the 3-uniform hypergraph whose vertices are the "
             "integers in [L, U] and whose edges are the increasing triples "
             "(a, b, c) with L <= a < b < c <= U and a dividing b + c."
         ),
-        DivisibilitySumTriplesRequest,
-        DivisibilitySumTriplesResult,
-        compute_divisibility_sum_triples,
-        "combinatorics",
-        "divisibility",
-        "exact",
+        request_type=DivisibilitySumTriplesRequest,
+        result_type=DivisibilitySumTriplesResult,
+        run=compute_divisibility_sum_triples,
+        tags=("combinatorics", "divisibility", "exact"),
         examples=(
-            example(
-                "interval_1_to_4",
-                "Divisibility-sum triples on [1, 4].",
-                {"lower_bound": 1, "upper_bound": 4},
+            OperationExample(
+                name="interval_1_to_4",
+                description="Divisibility-sum triples on [1, 4].",
+                input={"lower_bound": 1, "upper_bound": 4},
             ),
         ),
     ),

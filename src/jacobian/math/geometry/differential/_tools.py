@@ -2,8 +2,7 @@
 
 from typing import Any
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.geometry.differential._models import (
     RationalLieDerivativeProfile,
     RationalLieDerivativeRequest,
@@ -63,11 +62,11 @@ TOOLS = (
         ),
         discovery_terms=("coordinate tensor", "Lie bracket", "infinitesimal pullback"),
         examples=(
-            example(
-                "scalar_directional_derivative",
-                "Compute L_X(x^2 y) for X = y partial_x + x partial_y on "
+            OperationExample(
+                name="scalar_directional_derivative",
+                description="Compute L_X(x^2 y) for X = y partial_x + x partial_y on "
                 "the ordered chart (x, y). Rank-zero tensors have one component.",
-                {
+                input={
                     "vector_field": {
                         "coordinate_axis": ["x", "y"],
                         "variance": ["CONTRAVARIANT"],

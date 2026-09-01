@@ -1,7 +1,7 @@
 """Immutable declarations for elementary counting operations."""
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
-from jacobian.catalog._examples import example
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.combinatorics import operations as native
 from jacobian.math.combinatorics._counting_models import (
     IntegerListRequest,
@@ -10,9 +10,6 @@ from jacobian.math.combinatorics._counting_models import (
 from jacobian.math.combinatorics._models import (
     IntegerResult,
     NonnegativeIntegerRequest,
-)
-from jacobian.math.combinatorics._support import (
-    combinatorics_operation,
 )
 
 
@@ -62,147 +59,162 @@ def compositions(request: SparseCountingPairRequest) -> IntegerResult:
 
 
 COUNTING_OPERATIONS = (
-    combinatorics_operation(
-        "combinatorics.compute.factorial",
-        "Compute factorial",
-        "Compute n factorial exactly.",
-        NonnegativeIntegerRequest,
-        IntegerResult,
-        factorial,
-        "combinatorics",
-        "counting",
-        examples=(example("factorial_5", "Compute 5 factorial.", {"n": 5}),),
-    ),
-    combinatorics_operation(
-        "combinatorics.compute.double_factorial",
-        "Compute double factorial",
-        "Compute n double factorial exactly.",
-        NonnegativeIntegerRequest,
-        IntegerResult,
-        double_factorial,
-        "combinatorics",
-        "counting",
+    MathTool(
+        operation_id="combinatorics.compute.factorial",
+        title="Compute factorial",
+        description="Compute n factorial exactly.",
+        request_type=NonnegativeIntegerRequest,
+        result_type=IntegerResult,
+        run=factorial,
+        tags=("combinatorics", "counting"),
         examples=(
-            example("double_factorial_7", "Compute 7 double factorial.", {"n": 7}),
+            OperationExample(
+                name="factorial_5", description="Compute 5 factorial.", input={"n": 5}
+            ),
         ),
     ),
-    combinatorics_operation(
-        "combinatorics.compute.derangements",
-        "Count derangements",
-        "Count fixed-point-free permutations of n labeled objects.",
-        NonnegativeIntegerRequest,
-        IntegerResult,
-        derangements,
-        "combinatorics",
-        "counting",
+    MathTool(
+        operation_id="combinatorics.compute.double_factorial",
+        title="Compute double factorial",
+        description="Compute n double factorial exactly.",
+        request_type=NonnegativeIntegerRequest,
+        result_type=IntegerResult,
+        run=double_factorial,
+        tags=("combinatorics", "counting"),
         examples=(
-            example("derangements_4", "Count derangements of 4 objects.", {"n": 4}),
+            OperationExample(
+                name="double_factorial_7",
+                description="Compute 7 double factorial.",
+                input={"n": 7},
+            ),
         ),
     ),
-    combinatorics_operation(
-        "combinatorics.compute.binomial",
-        "Compute binomial coefficient",
-        "Compute the exact integer binomial coefficient n choose k, counting "
+    MathTool(
+        operation_id="combinatorics.compute.derangements",
+        title="Count derangements",
+        description="Count fixed-point-free permutations of n labeled objects.",
+        request_type=NonnegativeIntegerRequest,
+        result_type=IntegerResult,
+        run=derangements,
+        tags=("combinatorics", "counting"),
+        examples=(
+            OperationExample(
+                name="derangements_4",
+                description="Count derangements of 4 objects.",
+                input={"n": 4},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="combinatorics.compute.binomial",
+        title="Compute binomial coefficient",
+        description="Compute the exact integer binomial coefficient n choose k, counting "
         "k-element subsets of an n-element set.",
-        SparseCountingPairRequest,
-        IntegerResult,
-        binomial,
-        "combinatorics",
-        "counting",
-        "number-theory",
+        request_type=SparseCountingPairRequest,
+        result_type=IntegerResult,
+        run=binomial,
+        tags=("combinatorics", "counting", "number-theory"),
         examples=(
-            example("binomial_5_choose_2", "Compute 5 choose 2.", {"n": 5, "k": 2}),
-        ),
-    ),
-    combinatorics_operation(
-        "combinatorics.compute.multinomial",
-        "Compute multinomial coefficient",
-        "Count arrangements with the supplied nonnegative part sizes.",
-        IntegerListRequest,
-        IntegerResult,
-        multinomial,
-        "combinatorics",
-        "counting",
-        examples=(
-            example(
-                "multinomial_2_1_2",
-                "Compute a multinomial coefficient for parts 2, 1, and 2.",
-                {"values": ["2", "1", "2"]},
+            OperationExample(
+                name="binomial_5_choose_2",
+                description="Compute 5 choose 2.",
+                input={"n": 5, "k": 2},
             ),
         ),
     ),
-    combinatorics_operation(
-        "combinatorics.compute.permutations",
-        "Count partial permutations",
-        "Count ordered selections of k objects from n.",
-        SparseCountingPairRequest,
-        IntegerResult,
-        permutations,
-        "combinatorics",
-        "counting",
+    MathTool(
+        operation_id="combinatorics.compute.multinomial",
+        title="Compute multinomial coefficient",
+        description="Count arrangements with the supplied nonnegative part sizes.",
+        request_type=IntegerListRequest,
+        result_type=IntegerResult,
+        run=multinomial,
+        tags=("combinatorics", "counting"),
         examples=(
-            example(
-                "permutations_5_2",
-                "Count ordered selections of 2 from 5.",
-                {"n": 5, "k": 2},
+            OperationExample(
+                name="multinomial_2_1_2",
+                description="Compute a multinomial coefficient for parts 2, 1, and 2.",
+                input={"values": ["2", "1", "2"]},
             ),
         ),
     ),
-    combinatorics_operation(
-        "combinatorics.compute.catalan",
-        "Compute Catalan number",
-        "Compute the nth Catalan number.",
-        NonnegativeIntegerRequest,
-        IntegerResult,
-        catalan,
-        "combinatorics",
-        "counting",
+    MathTool(
+        operation_id="combinatorics.compute.permutations",
+        title="Count partial permutations",
+        description="Count ordered selections of k objects from n.",
+        request_type=SparseCountingPairRequest,
+        result_type=IntegerResult,
+        run=permutations,
+        tags=("combinatorics", "counting"),
         examples=(
-            example("catalan_4", "Compute the fourth Catalan number.", {"n": 4}),
-        ),
-    ),
-    combinatorics_operation(
-        "combinatorics.compute.motzkin",
-        "Compute Motzkin number",
-        "Compute the nth Motzkin path count.",
-        NonnegativeIntegerRequest,
-        IntegerResult,
-        motzkin,
-        "combinatorics",
-        "counting",
-        examples=(example("motzkin_5", "Compute the fifth Motzkin number.", {"n": 5}),),
-    ),
-    combinatorics_operation(
-        "combinatorics.compute.central_binomial",
-        "Compute central binomial coefficient",
-        "Compute binomial(2n,n) exactly.",
-        NonnegativeIntegerRequest,
-        IntegerResult,
-        central_binomial,
-        "combinatorics",
-        "counting",
-        examples=(
-            example(
-                "central_binomial_4",
-                "Compute the central binomial coefficient for n=4.",
-                {"n": 4},
+            OperationExample(
+                name="permutations_5_2",
+                description="Count ordered selections of 2 from 5.",
+                input={"n": 5, "k": 2},
             ),
         ),
     ),
-    combinatorics_operation(
-        "combinatorics.compute.compositions",
-        "Count positive compositions",
-        "Count ordered positive-part compositions of n into k parts.",
-        SparseCountingPairRequest,
-        IntegerResult,
-        compositions,
-        "combinatorics",
-        "counting",
+    MathTool(
+        operation_id="combinatorics.compute.catalan",
+        title="Compute Catalan number",
+        description="Compute the nth Catalan number.",
+        request_type=NonnegativeIntegerRequest,
+        result_type=IntegerResult,
+        run=catalan,
+        tags=("combinatorics", "counting"),
         examples=(
-            example(
-                "compositions_5_2",
-                "Count positive compositions of 5 into 2 parts.",
-                {"n": 5, "k": 2},
+            OperationExample(
+                name="catalan_4",
+                description="Compute the fourth Catalan number.",
+                input={"n": 4},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="combinatorics.compute.motzkin",
+        title="Compute Motzkin number",
+        description="Compute the nth Motzkin path count.",
+        request_type=NonnegativeIntegerRequest,
+        result_type=IntegerResult,
+        run=motzkin,
+        tags=("combinatorics", "counting"),
+        examples=(
+            OperationExample(
+                name="motzkin_5",
+                description="Compute the fifth Motzkin number.",
+                input={"n": 5},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="combinatorics.compute.central_binomial",
+        title="Compute central binomial coefficient",
+        description="Compute binomial(2n,n) exactly.",
+        request_type=NonnegativeIntegerRequest,
+        result_type=IntegerResult,
+        run=central_binomial,
+        tags=("combinatorics", "counting"),
+        examples=(
+            OperationExample(
+                name="central_binomial_4",
+                description="Compute the central binomial coefficient for n=4.",
+                input={"n": 4},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="combinatorics.compute.compositions",
+        title="Count positive compositions",
+        description="Count ordered positive-part compositions of n into k parts.",
+        request_type=SparseCountingPairRequest,
+        result_type=IntegerResult,
+        run=compositions,
+        tags=("combinatorics", "counting"),
+        examples=(
+            OperationExample(
+                name="compositions_5_2",
+                description="Count positive compositions of 5 into 2 parts.",
+                input={"n": 5, "k": 2},
             ),
         ),
     ),

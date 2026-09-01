@@ -1,10 +1,7 @@
 """Impartial-game operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -113,31 +110,6 @@ def compute_disjunctive_sum(
     return _disjunctive_sum_result(request.components, request.start_positions)
 
 
-def _op[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...],
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 _GAME = {
     "positions": ["0", "1", "2", "3"],
     "moves": [
@@ -164,145 +136,125 @@ _GAME_B = {
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "game.impartial.grundy_table.compute",
-        "Compute a complete Grundy table",
-        "Compute every exact Grundy value and canonical option-value set for a "
+    MathTool(
+        operation_id="game.impartial.grundy_table.compute",
+        title="Compute a complete Grundy table",
+        description="Compute every exact Grundy value and canonical option-value set for a "
         "bounded finite normal-play impartial game DAG.",
-        GrundyTableRequest,
-        GrundyTableResult,
-        compute_grundy_table,
-        "game-theory",
-        "impartial",
-        "grundy",
-        "exact",
+        request_type=GrundyTableRequest,
+        result_type=GrundyTableResult,
+        run=compute_grundy_table,
+        tags=("game-theory", "impartial", "grundy", "exact"),
         examples=(
-            example(
-                "four_position_game",
-                "Compute the complete Grundy table of a four-position DAG.",
-                {"game": _GAME},
+            OperationExample(
+                name="four_position_game",
+                description="Compute the complete Grundy table of a four-position DAG.",
+                input={"game": _GAME},
             ),
         ),
     ),
-    _op(
-        "game.impartial.birthday.compute",
-        "Compute all position birthdays",
-        "Compute the exact DAG height of every position, with terminals at zero.",
-        BirthdayRequest,
-        BirthdayResult,
-        compute_birthday,
-        "game-theory",
-        "impartial",
-        "birthday",
-        "exact",
+    MathTool(
+        operation_id="game.impartial.birthday.compute",
+        title="Compute all position birthdays",
+        description="Compute the exact DAG height of every position, with terminals at zero.",
+        request_type=BirthdayRequest,
+        result_type=BirthdayResult,
+        run=compute_birthday,
+        tags=("game-theory", "impartial", "birthday", "exact"),
         examples=(
-            example(
-                "four_position_birthdays",
-                "Compute every birthday in a four-position game DAG.",
-                {"game": _GAME},
+            OperationExample(
+                name="four_position_birthdays",
+                description="Compute every birthday in a four-position game DAG.",
+                input={"game": _GAME},
             ),
         ),
     ),
-    _op(
-        "game.subtraction.grundy_prefix.compute",
-        "Compute a bounded subtraction-game Grundy prefix",
-        "Compute exact Grundy values and canonical option-value sets for every "
+    MathTool(
+        operation_id="game.subtraction.grundy_prefix.compute",
+        title="Compute a bounded subtraction-game Grundy prefix",
+        description="Compute exact Grundy values and canonical option-value sets for every "
         "heap from zero through the explicit maximum; no periodicity is implied.",
-        SubtractionGrundyPrefixRequest,
-        SubtractionGrundyPrefixResult,
-        compute_subtraction_grundy_prefix,
-        "game-theory",
-        "subtraction",
-        "grundy",
-        "exact",
+        request_type=SubtractionGrundyPrefixRequest,
+        result_type=SubtractionGrundyPrefixResult,
+        run=compute_subtraction_grundy_prefix,
+        tags=("game-theory", "subtraction", "grundy", "exact"),
         examples=(
-            example(
-                "subtract_one_or_three",
-                "Compute heaps zero through five for subtraction set {1,3}.",
-                {"subtraction_set": [1, 3], "max_heap": 5},
+            OperationExample(
+                name="subtract_one_or_three",
+                description="Compute heaps zero through five for subtraction set {1,3}.",
+                input={"subtraction_set": [1, 3], "max_heap": 5},
             ),
         ),
     ),
-    _op(
-        "game.nim.nim_sum.compute",
-        "Compute the nim sum of a Nim position",
-        "Compute the exact bitwise xor of a canonical sorted heap multiset, "
+    MathTool(
+        operation_id="game.nim.nim_sum.compute",
+        title="Compute the nim sum of a Nim position",
+        description="Compute the exact bitwise xor of a canonical sorted heap multiset, "
         "determining the P/N outcome under normal play.",
-        NimSumRequest,
-        NimSumResult,
-        compute_nim_sum,
-        "game-theory",
-        "nim",
-        "exact",
+        request_type=NimSumRequest,
+        result_type=NimSumResult,
+        run=compute_nim_sum,
+        tags=("game-theory", "nim", "exact"),
         examples=(
-            example(
-                "nim_sum_1_2_3",
-                "Compute the nim sum of heaps (1, 2, 3); "
+            OperationExample(
+                name="nim_sum_1_2_3",
+                description="Compute the nim sum of heaps (1, 2, 3); "
                 "heaps must be nonnegative integers in nondecreasing order.",
-                {"position": {"heaps": [1, 2, 3]}},
+                input={"position": {"heaps": [1, 2, 3]}},
             ),
         ),
     ),
-    _op(
-        "game.nim.options.compute",
-        "Enumerate every distinct legal Nim option",
-        "Return the complete canonical one-move option family of a sorted Nim "
+    MathTool(
+        operation_id="game.nim.options.compute",
+        title="Enumerate every distinct legal Nim option",
+        description="Return the complete canonical one-move option family of a sorted Nim "
         "heap multiset, retaining every source heap index collapsed by "
         "multiset deduplication.",
-        NimOptionsRequest,
-        NimOptionsResult,
-        compute_nim_options,
-        "game-theory",
-        "nim",
-        "options",
-        "exact",
+        request_type=NimOptionsRequest,
+        result_type=NimOptionsResult,
+        run=compute_nim_options,
+        tags=("game-theory", "nim", "options", "exact"),
         examples=(
-            example(
-                "deduplicated_equal_heaps",
-                "Enumerate every distinct option of Nim heaps (1,2,2); heaps "
+            OperationExample(
+                name="deduplicated_equal_heaps",
+                description="Enumerate every distinct option of Nim heaps (1,2,2); heaps "
                 "must be nondecreasing, and zero heaps are retained.",
-                {"position": {"heaps": [1, 2, 2]}},
+                input={"position": {"heaps": [1, 2, 2]}},
             ),
         ),
     ),
-    _op(
-        "game.impartial.outcome_profile.compute",
-        "Compute the P/N outcome partition",
-        "Partition positions into P-positions (Grundy=0, previous player "
+    MathTool(
+        operation_id="game.impartial.outcome_profile.compute",
+        title="Compute the P/N outcome partition",
+        description="Partition positions into P-positions (Grundy=0, previous player "
         "wins) and N-positions (Grundy>0, next player wins), with the "
         "complete Grundy table and terminal positions.",
-        OutcomeProfileRequest,
-        OutcomeProfileResult,
-        compute_outcome_profile,
-        "game-theory",
-        "impartial",
-        "outcome",
-        "exact",
+        request_type=OutcomeProfileRequest,
+        result_type=OutcomeProfileResult,
+        run=compute_outcome_profile,
+        tags=("game-theory", "impartial", "outcome", "exact"),
         examples=(
-            example(
-                "four_position_outcome",
-                "Compute the P/N outcome partition of a four-position DAG.",
-                {"game": _GAME},
+            OperationExample(
+                name="four_position_outcome",
+                description="Compute the P/N outcome partition of a four-position DAG.",
+                input={"game": _GAME},
             ),
         ),
     ),
-    _op(
-        "game.impartial.disjunctive_sum.compute",
-        "Compute the Grundy value of a disjunctive sum",
-        "Compute the exact Grundy value of a disjunctive sum of finite "
+    MathTool(
+        operation_id="game.impartial.disjunctive_sum.compute",
+        title="Compute the Grundy value of a disjunctive sum",
+        description="Compute the exact Grundy value of a disjunctive sum of finite "
         "impartial game components by XOR of their component Grundy values.",
-        DisjunctiveSumRequest,
-        DisjunctiveSumResult,
-        compute_disjunctive_sum,
-        "game-theory",
-        "impartial",
-        "disjunctive-sum",
-        "exact",
+        request_type=DisjunctiveSumRequest,
+        result_type=DisjunctiveSumResult,
+        run=compute_disjunctive_sum,
+        tags=("game-theory", "impartial", "disjunctive-sum", "exact"),
         examples=(
-            example(
-                "two_component_sum",
-                "Compute the disjunctive sum of two game components.",
-                {
+            OperationExample(
+                name="two_component_sum",
+                description="Compute the disjunctive sum of two game components.",
+                input={
                     "components": [_GAME_A, _GAME_B],
                     "start_positions": ["a", "c"],
                 },

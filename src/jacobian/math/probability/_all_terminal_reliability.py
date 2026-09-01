@@ -16,8 +16,11 @@ from jacobian._exact import (
 )
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.probability.all_terminal_reliability import (
     MAX_ALL_TERMINAL_RELIABILITY_EDGES,
@@ -235,15 +238,15 @@ ALL_TERMINAL_RELIABILITY_OPERATION = MathTool(
         "bounded",
     ),
     examples=(
-        example(
-            "fair_edge_triangle_all_terminal_reliability",
-            (
+        OperationExample(
+            name="fair_edge_triangle_all_terminal_reliability",
+            description=(
                 "Compute the exact probability that a fair-edge triangle is "
                 "connected on all declared vertices; the graph must be nonempty, "
                 "have at most 20 edges, use one rational edge probability, and "
                 "fit the retained-result output limit."
             ),
-            {
+            input={
                 "graph": {
                     "vertices": ["a", "b", "c"],
                     "edges": [["a", "b"], ["a", "c"], ["b", "c"]],

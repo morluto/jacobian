@@ -1,14 +1,10 @@
 """Maximal-clique hypergraph operation declarations."""
 
-from collections.abc import Callable
-
-from jacobian._models import StrictModel
 from jacobian.canonical import (
     CanonicalizationError,
     CanonicalLimits,
     encode_strict_json,
 )
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import (
     MathTool,
     MathTools,
@@ -42,53 +38,26 @@ def compute_maximal_clique_hypergraph(
     return result
 
 
-def mch_operation[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: MathTools = (
-    mch_operation(
-        "graph.maximal_clique_hypergraph.construct",
-        "Construct the maximal-clique hypergraph of a graph",
-        (
+    MathTool(
+        operation_id="graph.maximal_clique_hypergraph.construct",
+        title="Construct the maximal-clique hypergraph of a graph",
+        description=(
             "Construct a source-bound FiniteHypergraph whose vertices are "
             "the graph's vertices and whose hyperedges are the inclusion-"
             "maximal complete vertex sets of cardinality at least two "
             "(nontrivial maximal cliques). The complete family is returned "
             "in deterministic source-vertex order."
         ),
-        MaximalCliqueHypergraphRequest,
-        MaximalCliqueHypergraphResult,
-        compute_maximal_clique_hypergraph,
-        "graph",
-        "hypergraph",
-        "exact",
+        request_type=MaximalCliqueHypergraphRequest,
+        result_type=MaximalCliqueHypergraphResult,
+        run=compute_maximal_clique_hypergraph,
+        tags=("graph", "hypergraph", "exact"),
         examples=(
-            example(
-                "triangle_with_pendant",
-                "Triangle 0-1-2 with pendant vertex 3 attached to 2.",
-                {
+            OperationExample(
+                name="triangle_with_pendant",
+                description="Triangle 0-1-2 with pendant vertex 3 attached to 2.",
+                input={
                     "graph": {
                         "vertices": ["0", "1", "2", "3"],
                         "edges": [

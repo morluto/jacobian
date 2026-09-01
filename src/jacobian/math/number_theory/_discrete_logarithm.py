@@ -7,11 +7,13 @@ from typing import Literal, Self
 from pydantic import Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.number_theory._models import _validation_error
 from jacobian.math.number_theory._modular_basic_models import MAX_MODULUS
-from jacobian.math.number_theory._support import number_theory_operation
 
 
 class DiscreteLogarithmRequest(StrictModel):
@@ -81,28 +83,24 @@ def _compute(request: DiscreteLogarithmRequest) -> DiscreteLogarithmResult:
     )
 
 
-DISCRETE_LOGARITHM_OPERATION = number_theory_operation(
-    "modular.compute.discrete_logarithm",
-    "Compute a bounded discrete logarithm",
-    "Compute a modular discrete logarithm through bounded brute-force search.",
-    DiscreteLogarithmRequest,
-    DiscreteLogarithmResult,
-    _compute,
-    "number-theory",
-    "modular",
-    "discrete-logarithm",
-    "bounded",
-    "brute-force",
+DISCRETE_LOGARITHM_OPERATION = MathTool(
+    operation_id="modular.compute.discrete_logarithm",
+    title="Compute a bounded discrete logarithm",
+    description="Compute a modular discrete logarithm through bounded brute-force search.",
+    request_type=DiscreteLogarithmRequest,
+    result_type=DiscreteLogarithmResult,
+    run=_compute,
+    tags=("number-theory", "modular", "discrete-logarithm", "bounded", "brute-force"),
     examples=(
-        example(
-            "two_to_one_mod_three",
-            "Solve 2^x = 1 modulo 3.",
-            {"base": 2, "target": 1, "modulus": 3},
+        OperationExample(
+            name="two_to_one_mod_three",
+            description="Solve 2^x = 1 modulo 3.",
+            input={"base": 2, "target": 1, "modulus": 3},
         ),
-        example(
-            "three_to_two_mod_five",
-            "Solve 3^x = 2 modulo 5; base and target must each be less than the modulus.",
-            {"base": 3, "target": 2, "modulus": 5},
+        OperationExample(
+            name="three_to_two_mod_five",
+            description="Solve 3^x = 2 modulo 5; base and target must each be less than the modulus.",
+            input={"base": 3, "target": 2, "modulus": 5},
         ),
     ),
 )

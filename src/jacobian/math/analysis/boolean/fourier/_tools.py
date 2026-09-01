@@ -1,10 +1,7 @@
 """Exact Boolean function analysis operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.analysis.boolean.fourier._models import (
     ErasureNoiseRequest,
@@ -42,109 +39,72 @@ def _run_erasure_noise(request: ErasureNoiseRequest) -> ErasureNoiseResult:
     return erasure_noise(request.truth_table, request.probability, request.base_input)
 
 
-def boolean_analysis_operation[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 def _z(n: str) -> dict[str, str]:
     return {"num": n, "den": "1"}
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    boolean_analysis_operation(
-        "boolean.truth_table.compute",
-        "Evaluate a Boolean function over all 2^n inputs",
-        "Return a complete Boolean truth table with its variable count and ordering convention.",
-        TruthTableRequest,
-        TruthTableResult,
-        _run_truth_table,
-        "boolean",
-        "truth-table",
-        "exact",
+    MathTool(
+        operation_id="boolean.truth_table.compute",
+        title="Evaluate a Boolean function over all 2^n inputs",
+        description="Return a complete Boolean truth table with its variable count and ordering convention.",
+        request_type=TruthTableRequest,
+        result_type=TruthTableResult,
+        run=_run_truth_table,
+        tags=("boolean", "truth-table", "exact"),
         examples=(
-            example(
-                "single_variable",
-                "Return the truth table of a one-variable Boolean function.",
-                {"truth_table": [_z("0"), _z("1")]},
+            OperationExample(
+                name="single_variable",
+                description="Return the truth table of a one-variable Boolean function.",
+                input={"truth_table": [_z("0"), _z("1")]},
             ),
         ),
     ),
-    boolean_analysis_operation(
-        "boolean.fourier_spectrum.compute",
-        "Compute a Boolean Fourier spectrum",
-        "Compute the exact Walsh-Hadamard spectrum of a Boolean function from its complete truth table.",
-        FourierSpectrumRequest,
-        FourierSpectrumResult,
-        _run_fourier_spectrum,
-        "boolean",
-        "fourier",
-        "walsh",
-        "exact",
+    MathTool(
+        operation_id="boolean.fourier_spectrum.compute",
+        title="Compute a Boolean Fourier spectrum",
+        description="Compute the exact Walsh-Hadamard spectrum of a Boolean function from its complete truth table.",
+        request_type=FourierSpectrumRequest,
+        result_type=FourierSpectrumResult,
+        run=_run_fourier_spectrum,
+        tags=("boolean", "fourier", "walsh", "exact"),
         examples=(
-            example(
-                "and_function",
-                "Compute the Walsh spectrum of the two-bit AND function.",
-                {"truth_table": [_z("0"), _z("0"), _z("0"), _z("1")]},
+            OperationExample(
+                name="and_function",
+                description="Compute the Walsh spectrum of the two-bit AND function.",
+                input={"truth_table": [_z("0"), _z("0"), _z("0"), _z("1")]},
             ),
         ),
     ),
-    boolean_analysis_operation(
-        "boolean.multilinear_extension.compute",
-        "Compute the multilinear extension polynomial of a Boolean function",
-        "Compute the unique multilinear polynomial over the rationals that agrees with the Boolean function on {0,1}^n. Returns a canonical SymPy polynomial string.",
-        MultilinearExtensionRequest,
-        MultilinearExtensionResult,
-        _run_multilinear_extension,
-        "boolean",
-        "multilinear",
-        "polynomial",
-        "exact",
+    MathTool(
+        operation_id="boolean.multilinear_extension.compute",
+        title="Compute the multilinear extension polynomial of a Boolean function",
+        description="Compute the unique multilinear polynomial over the rationals that agrees with the Boolean function on {0,1}^n. Returns a canonical SymPy polynomial string.",
+        request_type=MultilinearExtensionRequest,
+        result_type=MultilinearExtensionResult,
+        run=_run_multilinear_extension,
+        tags=("boolean", "multilinear", "polynomial", "exact"),
         examples=(
-            example(
-                "single_variable",
-                "Compute the multilinear extension of f(0)=0, f(1)=1 (the identity).",
-                {"truth_table": [_z("0"), _z("1")]},
+            OperationExample(
+                name="single_variable",
+                description="Compute the multilinear extension of f(0)=0, f(1)=1 (the identity).",
+                input={"truth_table": [_z("0"), _z("1")]},
             ),
         ),
     ),
-    boolean_analysis_operation(
-        "boolean.erasure_noise.compute",
-        "Compute the expected value of a Boolean function under erasure noise",
-        "With probability p each coordinate of the supplied base assignment is kept; with probability (1-p) it is replaced by an independent uniform random bit. Returns the exact rational expected value T_p f(x), computed via the Fourier expansion weighted by p^|S| chi_S(x).",
-        ErasureNoiseRequest,
-        ErasureNoiseResult,
-        _run_erasure_noise,
-        "boolean",
-        "noise",
-        "erasure",
-        "fourier",
-        "exact",
+    MathTool(
+        operation_id="boolean.erasure_noise.compute",
+        title="Compute the expected value of a Boolean function under erasure noise",
+        description="With probability p each coordinate of the supplied base assignment is kept; with probability (1-p) it is replaced by an independent uniform random bit. Returns the exact rational expected value T_p f(x), computed via the Fourier expansion weighted by p^|S| chi_S(x).",
+        request_type=ErasureNoiseRequest,
+        result_type=ErasureNoiseResult,
+        run=_run_erasure_noise,
+        tags=("boolean", "noise", "erasure", "fourier", "exact"),
         examples=(
-            example(
-                "single_variable_p_half",
-                "Compute the erasure-noise expected value of f(0)=0, f(1)=1 at the origin with p=1/2.",
-                {
+            OperationExample(
+                name="single_variable_p_half",
+                description="Compute the erasure-noise expected value of f(0)=0, f(1)=1 at the origin with p=1/2.",
+                input={
                     "truth_table": [_z("0"), _z("1")],
                     "probability": {"num": "1", "den": "2"},
                     "base_input": [0],

@@ -1,7 +1,6 @@
 """Exact multicommodity-flow operation declarations."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.graphs.flows.multicommodity._models import (
     MulticommodityFlowProfileRequest,
     MulticommodityFlowProfileResult,
@@ -41,12 +40,12 @@ TOOLS: MathTools = (
             "bounded",
         ),
         examples=(
-            example(
-                "two_commodities_share_a_bottleneck",
-                "Profile two exact commodity flows sharing a directed bottleneck; "
+            OperationExample(
+                name="two_commodities_share_a_bottleneck",
+                description="Profile two exact commodity flows sharing a directed bottleneck; "
                 "network edges, commodities, and nonzero entries must use their "
                 "published canonical sort orders.",
-                {
+                input={
                     "flow": {
                         "network": {
                             "vertex_count": 4,

@@ -1,7 +1,6 @@
 """Rooted-tree operation declarations."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.graphs.rooted_trees._models import (
     RootedTreeFinePartitionRequest,
 )
@@ -42,14 +41,14 @@ TOOLS: MathTools = (
             "bounded shrubs",
         ),
         examples=(
-            example(
-                "path_fine_partition",
-                (
+            OperationExample(
+                name="path_fine_partition",
+                description=(
                     "Construct a 2-fine partition of a five-vertex rooted path; "
                     "the supplied graph must be a tree, and "
                     "component_size_limit=2 bounds every returned shrub."
                 ),
-                {
+                input={
                     "graph": {
                         "vertices": ["a", "b", "c", "d", "e"],
                         "edges": [["a", "b"], ["b", "c"], ["c", "d"], ["d", "e"]],

@@ -1,7 +1,6 @@
 """Poset closure, dual, and subposet operation declarations."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.combinatorics.posets.core import operations as native
 from jacobian.math.combinatorics.posets.core._closure_models import (
     DualPosetRequest,
@@ -43,10 +42,10 @@ CLOSURE_OPERATIONS: MathTools = (
         run=lower_closure,
         tags=("poset", "order-ideal", "closure"),
         examples=(
-            example(
-                "lower_closure_chain",
-                "Compute the lower closure of the top element of a 3-chain.",
-                {
+            OperationExample(
+                name="lower_closure_chain",
+                description="Compute the lower closure of the top element of a 3-chain.",
+                input={
                     "poset": {
                         "elements": ["a", "b", "c"],
                         "strict_order_pairs": [
@@ -85,10 +84,10 @@ CLOSURE_OPERATIONS: MathTools = (
         run=upper_closure,
         tags=("poset", "order-filter", "closure"),
         examples=(
-            example(
-                "upper_closure_chain_bottom",
-                "Compute the upper closure of the bottom element of a 3-chain.",
-                {
+            OperationExample(
+                name="upper_closure_chain_bottom",
+                description="Compute the upper closure of the bottom element of a 3-chain.",
+                input={
                     "poset": {
                         "elements": ["a", "b", "c"],
                         "strict_order_pairs": [
@@ -128,10 +127,10 @@ CLOSURE_OPERATIONS: MathTools = (
         run=dual_poset,
         tags=("poset", "dual", "order-reversal"),
         examples=(
-            example(
-                "dual_chain",
-                "Compute the dual of a 3-element chain a < b < c.",
-                {
+            OperationExample(
+                name="dual_chain",
+                description="Compute the dual of a 3-element chain a < b < c.",
+                input={
                     "poset": {
                         "elements": ["a", "b", "c"],
                         "strict_order_pairs": [
@@ -170,10 +169,10 @@ CLOSURE_OPERATIONS: MathTools = (
         run=induced_subposet,
         tags=("poset", "subposet", "restriction"),
         examples=(
-            example(
-                "induced_subposet_chain",
-                "Compute the subposet induced on {a, b} of a 3-chain.",
-                {
+            OperationExample(
+                name="induced_subposet_chain",
+                description="Compute the subposet induced on {a, b} of a 3-chain.",
+                input={
                     "poset": {
                         "elements": ["a", "b", "c"],
                         "strict_order_pairs": [

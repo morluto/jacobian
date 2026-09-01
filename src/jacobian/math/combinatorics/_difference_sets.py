@@ -5,8 +5,11 @@ from __future__ import annotations
 import math
 from collections import Counter
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.combinatorics._difference_set_models import (
     MAX_CYCLIC_DIFFERENCE_SET_MODULUS,
     MAX_DIFFERENCE_SET_ADDITIONAL_ELEMENTS,
@@ -22,9 +25,6 @@ from jacobian.math.combinatorics._difference_set_models import (
     OrderedIntegerDifference,
     _integer_sidon_profile,
     _IntegerSidonAdmissionPlan,
-)
-from jacobian.math.combinatorics._support import (
-    combinatorics_operation,
 )
 
 
@@ -228,69 +228,75 @@ def decide_cyclic_difference_set_extension(
 
 
 DIFFERENCE_SET_OPERATIONS = (
-    combinatorics_operation(
-        "combinatorics.integer_set.sidon.decide",
-        "Decide the integer Sidon property",
-        (
+    MathTool(
+        operation_id="combinatorics.integer_set.sidon.decide",
+        title="Decide the integer Sidon property",
+        description=(
             "Materialize every ordered nonzero integer difference of one bounded "
             "finite set and decide whether all such differences are distinct."
         ),
-        IntegerSidonRequest,
-        IntegerSidonResult,
-        decide_integer_sidon,
-        "combinatorics",
-        "additive-combinatorics",
-        "sidon-set",
-        "ordered-differences",
+        request_type=IntegerSidonRequest,
+        result_type=IntegerSidonResult,
+        run=decide_integer_sidon,
+        tags=(
+            "combinatorics",
+            "additive-combinatorics",
+            "sidon-set",
+            "ordered-differences",
+        ),
         examples=(
-            example(
-                "mian_chowla_prefix",
-                "Decide whether 1, 2, 4, 8, 13 is Sidon; the integer-set elements must be unique.",
-                {"elements": ["1", "2", "4", "8", "13"]},
+            OperationExample(
+                name="mian_chowla_prefix",
+                description="Decide whether 1, 2, 4, 8, 13 is Sidon; the integer-set elements must be unique.",
+                input={"elements": ["1", "2", "4", "8", "13"]},
             ),
         ),
     ),
-    combinatorics_operation(
-        "combinatorics.cyclic_difference_set.perfect.decide",
-        "Decide the cyclic perfect-difference-set property",
-        (
+    MathTool(
+        operation_id="combinatorics.cyclic_difference_set.perfect.decide",
+        title="Decide the cyclic perfect-difference-set property",
+        description=(
             "Compute the complete nonzero residue-difference multiplicity profile "
             "and decide whether one finite residue set is perfect."
         ),
-        CyclicPerfectDifferenceSetRequest,
-        CyclicPerfectDifferenceSetResult,
-        decide_cyclic_perfect_difference_set,
-        "combinatorics",
-        "additive-combinatorics",
-        "difference-set",
-        "finite-design",
+        request_type=CyclicPerfectDifferenceSetRequest,
+        result_type=CyclicPerfectDifferenceSetResult,
+        run=decide_cyclic_perfect_difference_set,
+        tags=(
+            "combinatorics",
+            "additive-combinatorics",
+            "difference-set",
+            "finite-design",
+        ),
         examples=(
-            example(
-                "fano_difference_set",
-                "Decide whether 0, 1, 3 is a perfect difference set modulo 7.",
-                {"modulus": 7, "residues": [0, 1, 3]},
+            OperationExample(
+                name="fano_difference_set",
+                description="Decide whether 0, 1, 3 is a perfect difference set modulo 7.",
+                input={"modulus": 7, "residues": [0, 1, 3]},
             ),
         ),
     ),
-    combinatorics_operation(
-        "combinatorics.cyclic_difference_set.extension.decide",
-        "Decide fixed-order perfect-difference-set extension",
-        (
+    MathTool(
+        operation_id="combinatorics.cyclic_difference_set.extension.decide",
+        title="Decide fixed-order perfect-difference-set extension",
+        description=(
             "Completely decide whether the reduced residues of one bounded integer "
             "set extend to a cyclic perfect difference set of one fixed order."
         ),
-        CyclicDifferenceSetExtensionRequest,
-        CyclicDifferenceSetExtensionResult,
-        decide_cyclic_difference_set_extension,
-        "combinatorics",
-        "additive-combinatorics",
-        "difference-set",
-        "bounded-completion",
+        request_type=CyclicDifferenceSetExtensionRequest,
+        result_type=CyclicDifferenceSetExtensionResult,
+        run=decide_cyclic_difference_set_extension,
+        tags=(
+            "combinatorics",
+            "additive-combinatorics",
+            "difference-set",
+            "bounded-completion",
+        ),
         examples=(
-            example(
-                "mian_chowla_order_six",
-                "Decide fixed-order extension of 1, 2, 4, 8, 13 at order 6.",
-                {
+            OperationExample(
+                name="mian_chowla_order_six",
+                description="Decide fixed-order extension of 1, 2, 4, 8, 13 at order 6.",
+                input={
                     "base_elements": ["1", "2", "4", "8", "13"],
                     "target_order": 6,
                 },

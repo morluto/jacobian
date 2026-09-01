@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.geometry.affine_tori._models import (
     AffineTorusFixedLocusRequest,
     AffineTorusFixedLocusResult,
@@ -39,12 +38,12 @@ TOOLS: MathTools = (
             "bounded",
         ),
         examples=(
-            example(
-                "two_components_on_a_circle",
-                "Compute the two fixed points of multiplication by three on T^1; "
+            OperationExample(
+                name="two_components_on_a_circle",
+                description="Compute the two fixed points of multiplication by three on T^1; "
                 "the linear part is square and the translation is represented on "
                 "that same standard torus.",
-                {
+                input={
                     "affine_map": {
                         "torus": {"dimension": 1},
                         "linear_part": {

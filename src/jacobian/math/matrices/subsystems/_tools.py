@@ -1,10 +1,7 @@
 """Immutable catalog declarations for subsystem-aware exact matrices."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.matrices.subsystems._models import (
     PsdOrderRequest,
@@ -43,31 +40,6 @@ def decide_psd_order(request: PsdOrderRequest) -> PsdOrderResult:
     return psd_order(request.left, request.right)
 
 
-def _operation[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...],
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 def _q(value: int) -> dict[str, str]:
     return {"num": str(value), "den": "1"}
 
@@ -76,23 +48,21 @@ _QUBIT = {"label": "q", "dimension": 2}
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _operation(
-        "matrix.subsystem.kronecker_product.compute",
-        "Compute an axis-bound exact Kronecker product",
-        "Compute the exact Kronecker product of two bounded rational Hermitian "
+    MathTool(
+        operation_id="matrix.subsystem.kronecker_product.compute",
+        title="Compute an axis-bound exact Kronecker product",
+        description="Compute the exact Kronecker product of two bounded rational Hermitian "
         "matrices and concatenate their ordered subsystem factors.",
-        SubsystemKroneckerProductRequest,
-        SubsystemKroneckerProductResult,
-        compute_kronecker_product,
-        "matrix",
-        "kronecker-product",
-        "subsystem-axis",
+        request_type=SubsystemKroneckerProductRequest,
+        result_type=SubsystemKroneckerProductResult,
+        run=compute_kronecker_product,
+        tags=("matrix", "kronecker-product", "subsystem-axis"),
         examples=(
-            example(
-                "two_labelled_qubits",
-                "Compute the product of two diagonal 2x2 subsystem matrices; "
+            OperationExample(
+                name="two_labelled_qubits",
+                description="Compute the product of two diagonal 2x2 subsystem matrices; "
                 "factor labels must be distinct and the product dimension at most 16.",
-                {
+                input={
                     "left": {
                         "matrix": {
                             "domain": "QQ",
@@ -111,23 +81,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _operation(
-        "matrix.subsystem.partial_trace.compute",
-        "Compute an axis-bound exact partial trace",
-        "Trace one or more named factors from a bounded rational Hermitian "
+    MathTool(
+        operation_id="matrix.subsystem.partial_trace.compute",
+        title="Compute an axis-bound exact partial trace",
+        description="Trace one or more named factors from a bounded rational Hermitian "
         "matrix while retaining every untraced subsystem in source order.",
-        SubsystemPartialTraceRequest,
-        SubsystemPartialTraceResult,
-        compute_partial_trace,
-        "matrix",
-        "partial-trace",
-        "subsystem-axis",
+        request_type=SubsystemPartialTraceRequest,
+        result_type=SubsystemPartialTraceResult,
+        run=compute_partial_trace,
+        tags=("matrix", "partial-trace", "subsystem-axis"),
         examples=(
-            example(
-                "trace_first_labelled_qubit",
-                "Trace factor q from a diagonal 4x4 two-qubit matrix; the named "
+            OperationExample(
+                name="trace_first_labelled_qubit",
+                description="Trace factor q from a diagonal 4x4 two-qubit matrix; the named "
                 "factor must occur once in the explicit product basis.",
-                {
+                input={
                     "matrix": {
                         "matrix": {
                             "domain": "QQ",
@@ -145,24 +113,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _operation(
-        "matrix.subsystem.psd_order.decide",
-        "Decide exact PSD order on one subsystem basis",
-        "Decide whether right minus left is positive semidefinite for two "
+    MathTool(
+        operation_id="matrix.subsystem.psd_order.decide",
+        title="Decide exact PSD order on one subsystem basis",
+        description="Decide whether right minus left is positive semidefinite for two "
         "bounded rational Hermitian matrices on exactly the same ordered factors.",
-        PsdOrderRequest,
-        PsdOrderResult,
-        decide_psd_order,
-        "matrix",
-        "positive-semidefinite",
-        "loewner-order",
-        "subsystem-axis",
+        request_type=PsdOrderRequest,
+        result_type=PsdOrderResult,
+        run=decide_psd_order,
+        tags=("matrix", "positive-semidefinite", "loewner-order", "subsystem-axis"),
         examples=(
-            example(
-                "diagonal_psd_order",
-                "Decide 0 <= diag(1, 2) on one labelled subsystem; both matrices "
+            OperationExample(
+                name="diagonal_psd_order",
+                description="Decide 0 <= diag(1, 2) on one labelled subsystem; both matrices "
                 "must carry exactly equal factors and basis linearization.",
-                {
+                input={
                     "left": {
                         "matrix": {
                             "domain": "QQ",

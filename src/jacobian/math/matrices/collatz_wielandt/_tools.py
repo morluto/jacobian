@@ -1,7 +1,6 @@
 """Typed declarations for the Collatz-Wielandt quotient profile operation."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.matrices.collatz_wielandt._models import (
     CollatzWielandtRequest,
     CollatzWielandtResult,
@@ -30,10 +29,10 @@ TOOLS: MathTools = (
         run=_compute,
         tags=("matrix", "collatz", "wielandt", "exact"),
         examples=(
-            example(
-                "identity",
-                "Identity matrix with uniform vector.",
-                {
+            OperationExample(
+                name="identity",
+                description="Identity matrix with uniform vector.",
+                input={
                     "matrix": [
                         [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
                         [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],

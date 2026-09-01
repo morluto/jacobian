@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.probability import operations as native
 from jacobian.math.probability._directed_bond_reliability import (
     DIRECTED_BOND_CONNECTION_PROBABILITY_OPERATION,
@@ -120,10 +119,10 @@ FINITE_PROBABILITY_OPERATIONS = (
         run=_event_probability,
         tags=("probability", "event", "finite", "exact", "python-flint"),
         examples=(
-            example(
-                "fair_bit_event",
-                "Compute the probability that a fair bit equals one.",
-                {
+            OperationExample(
+                name="fair_bit_event",
+                description="Compute the probability that a fair bit equals one.",
+                input={
                     "distribution": _FAIR_BIT,
                     "event_values": [{"num": "1", "den": "1"}],
                 },
@@ -152,10 +151,10 @@ FINITE_PROBABILITY_OPERATIONS = (
             "python-flint",
         ),
         examples=(
-            example(
-                "fair_bit_second_moment",
-                "Compute the second raw moment of a fair distribution on 0 and 1.",
-                {
+            OperationExample(
+                name="fair_bit_second_moment",
+                description="Compute the second raw moment of a fair distribution on 0 and 1.",
+                input={
                     "atoms": _FAIR_BIT["atoms"],
                     "order": 2,
                 },
@@ -174,10 +173,10 @@ FINITE_PROBABILITY_OPERATIONS = (
         run=_condition,
         tags=("probability", "conditioning", "finite", "exact", "python-flint"),
         examples=(
-            example(
-                "fair_bit_given_one",
-                "Condition a fair bit on the positive-mass event that it equals one.",
-                {
+            OperationExample(
+                name="fair_bit_given_one",
+                description="Condition a fair bit on the positive-mass event that it equals one.",
+                input={
                     "distribution": _FAIR_BIT,
                     "event_values": [{"num": "1", "den": "1"}],
                 },
@@ -196,10 +195,10 @@ FINITE_PROBABILITY_OPERATIONS = (
         run=_pushforward,
         tags=("probability", "pushforward", "finite", "exact", "python-flint"),
         examples=(
-            example(
-                "collapse_fair_bit",
-                "Map both atoms of a fair bit to one exact target.",
-                {
+            OperationExample(
+                name="collapse_fair_bit",
+                description="Map both atoms of a fair bit to one exact target.",
+                input={
                     "distribution": _FAIR_BIT,
                     "mapping": [
                         {
@@ -213,10 +212,10 @@ FINITE_PROBABILITY_OPERATIONS = (
                     ],
                 },
             ),
-            example(
-                "fair_die_pair_merge",
-                "Push forward a fair die by merging atoms; mapping sources must cover distribution atoms in canonical order.",
-                {
+            OperationExample(
+                name="fair_die_pair_merge",
+                description="Push forward a fair die by merging atoms; mapping sources must cover distribution atoms in canonical order.",
+                input={
                     "distribution": _FAIR_DIE_3,
                     "mapping": [
                         {
@@ -255,15 +254,15 @@ FINITE_PROBABILITY_OPERATIONS = (
             "python-flint",
         ),
         examples=(
-            example(
-                "two_fair_bits",
-                "Compute the exact distribution of the sum of two fair bits.",
-                {"left": _FAIR_BIT, "right": _FAIR_BIT},
+            OperationExample(
+                name="two_fair_bits",
+                description="Compute the exact distribution of the sum of two fair bits.",
+                input={"left": _FAIR_BIT, "right": _FAIR_BIT},
             ),
-            example(
-                "die_plus_bit",
-                "Convolve a fair die with a fair bit; pair product and aggregated atoms have bounded limits.",
-                {"left": _FAIR_DIE_3, "right": _FAIR_BIT},
+            OperationExample(
+                name="die_plus_bit",
+                description="Convolve a fair die with a fair bit; pair product and aggregated atoms have bounded limits.",
+                input={"left": _FAIR_DIE_3, "right": _FAIR_BIT},
             ),
         ),
     ),
@@ -287,10 +286,10 @@ FINITE_PROBABILITY_OPERATIONS = (
             "python-flint",
         ),
         examples=(
-            example(
-                "three_fair_bits",
-                "Compute the exact distribution of the sum of three fair bits.",
-                {"distribution": _FAIR_BIT, "exponent": 3},
+            OperationExample(
+                name="three_fair_bits",
+                description="Compute the exact distribution of the sum of three fair bits.",
+                input={"distribution": _FAIR_BIT, "exponent": 3},
             ),
         ),
     ),
@@ -314,10 +313,10 @@ FINITE_PROBABILITY_OPERATIONS = (
             "python-flint",
         ),
         examples=(
-            example(
-                "three_fair_bit_peaks",
-                "Find both central peaks of the sum of three fair bits.",
-                {"distribution": _FAIR_BIT, "exponent": 3},
+            OperationExample(
+                name="three_fair_bit_peaks",
+                description="Find both central peaks of the sum of three fair bits.",
+                input={"distribution": _FAIR_BIT, "exponent": 3},
             ),
         ),
     ),
@@ -345,10 +344,10 @@ FINITE_PROBABILITY_OPERATIONS = (
             "python-flint",
         ),
         examples=(
-            example(
-                "sum_of_two_gaussians_second_moment",
-                "Compute E[(X_1 + X_2)^2] for independent standard real Gaussians.",
-                {
+            OperationExample(
+                name="sum_of_two_gaussians_second_moment",
+                description="Compute E[(X_1 + X_2)^2] for independent standard real Gaussians.",
+                input={
                     "polynomial": {
                         "variable_count": 2,
                         "terms": [

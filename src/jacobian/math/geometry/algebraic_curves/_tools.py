@@ -1,10 +1,7 @@
 """Plane algebraic curve operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.geometry.algebraic_curves._models import (
     AffineChartRequest,
@@ -93,50 +90,25 @@ def _polynomial(
     }
 
 
-def _op[RequestT: StrictModel, ResultT: StrictModel](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "algebraic_geometry.projective_plane_curve.singularity_profile.compute",
-        "Compute a projective plane-curve singularity profile",
-        "Compute the complete saturated projective Jacobian locus over the "
+    MathTool(
+        operation_id="algebraic_geometry.projective_plane_curve.singularity_profile.compute",
+        title="Compute a projective plane-curve singularity profile",
+        description="Compute the complete saturated projective Jacobian locus over the "
         "algebraic closure of QQ for one bounded homogeneous ternary polynomial. "
         "The result distinguishes the unit-ideal smooth case, a complete finite "
         "family of exact embedded number-field points, a positive-dimensional "
         "locus, and operational noncompletion.",
-        ProjectivePlaneCurveSingularityRequest,
-        ProjectivePlaneCurveSingularityProfile,
-        compute_projective_plane_curve_singularity_profile,
-        "algebraic-geometry",
-        "projective-curve",
-        "singular-locus",
-        "exact",
+        request_type=ProjectivePlaneCurveSingularityRequest,
+        result_type=ProjectivePlaneCurveSingularityProfile,
+        run=compute_projective_plane_curve_singularity_profile,
+        tags=("algebraic-geometry", "projective-curve", "singular-locus", "exact"),
         examples=(
-            example(
-                "conjugate_singularities",
-                "Find both non-rational singular points [1:i:0] and [1:-i:0] "
+            OperationExample(
+                name="conjugate_singularities",
+                description="Find both non-rational singular points [1:i:0] and [1:-i:0] "
                 "of Z*(X^2+Y^2+Z^2), retaining their distinct exact embeddings.",
-                {
+                input={
                     "polynomial": _polynomial(
                         ("X", "Y", "Z"),
                         (1, (2, 0, 1)),
@@ -147,23 +119,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "algebraic_geometry.affine_plane_curve.check",
-        "Check an affine plane curve",
-        "Check that a polynomial defines a valid affine plane curve f(x,y)=0 "
+    MathTool(
+        operation_id="algebraic_geometry.affine_plane_curve.check",
+        title="Check an affine plane curve",
+        description="Check that a polynomial defines a valid affine plane curve f(x,y)=0 "
         "and return its degree.",
-        AffineCurveRequest,
-        AffineCurveResult,
-        compute_affine_curve_check,
-        "algebraic-geometry",
-        "affine-curve",
-        "exact",
+        request_type=AffineCurveRequest,
+        result_type=AffineCurveResult,
+        run=compute_affine_curve_check,
+        tags=("algebraic-geometry", "affine-curve", "exact"),
         examples=(
-            example(
-                "circle",
-                "Check the unit circle x^2 + y^2 - 1 = 0; an affine plane "
+            OperationExample(
+                name="circle",
+                description="Check the unit circle x^2 + y^2 - 1 = 0; an affine plane "
                 "curve polynomial must use exactly two ordered variables.",
-                {
+                input={
                     "polynomial": _polynomial(
                         ("x", "y"),
                         (1, (2, 0)),
@@ -174,22 +144,20 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "algebraic_geometry.plane_curve.projective_closure.compute",
-        "Compute the projective closure of an affine curve",
-        "Homogenize an affine plane curve to obtain its projective closure.",
-        ProjectiveClosureRequest,
-        ProjectiveClosureResult,
-        compute_projective_closure,
-        "algebraic-geometry",
-        "projective-closure",
-        "exact",
+    MathTool(
+        operation_id="algebraic_geometry.plane_curve.projective_closure.compute",
+        title="Compute the projective closure of an affine curve",
+        description="Homogenize an affine plane curve to obtain its projective closure.",
+        request_type=ProjectiveClosureRequest,
+        result_type=ProjectiveClosureResult,
+        run=compute_projective_closure,
+        tags=("algebraic-geometry", "projective-closure", "exact"),
         examples=(
-            example(
-                "circle_closure",
-                "Compute the projective closure of x^2 + y^2 - 1; the affine "
+            OperationExample(
+                name="circle_closure",
+                description="Compute the projective closure of x^2 + y^2 - 1; the affine "
                 "axis must have two variables and leave z available.",
-                {
+                input={
                     "polynomial": _polynomial(
                         ("x", "y"),
                         (1, (2, 0)),
@@ -200,26 +168,23 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "algebraic_geometry.conic.rational_parametrization.compute",
-        "Parametrize a smooth rational conic",
-        "Construct canonical rational coordinate functions, their inverse chart, "
+    MathTool(
+        operation_id="algebraic_geometry.conic.rational_parametrization.compute",
+        title="Parametrize a smooth rational conic",
+        description="Construct canonical rational coordinate functions, their inverse chart, "
         "the finite affine-denominator locus, and the exceptional source point "
         "from a smooth rational affine conic with a supplied rational point.",
-        RationalConicParametrizationRequest,
-        RationalConicParametrizationResult,
-        compute_rational_conic_parametrization,
-        "algebraic-geometry",
-        "conic",
-        "rational-parametrization",
-        "exact",
+        request_type=RationalConicParametrizationRequest,
+        result_type=RationalConicParametrizationResult,
+        run=compute_rational_conic_parametrization,
+        tags=("algebraic-geometry", "conic", "rational-parametrization", "exact"),
         examples=(
-            example(
-                "smooth_conic_from_point",
-                "Parametrize x^2 + x*y - y^2 - 1 = 0 from (1,0); the "
+            OperationExample(
+                name="smooth_conic_from_point",
+                description="Parametrize x^2 + x*y - y^2 - 1 = 0 from (1,0); the "
                 "polynomial must have smooth projective closure and the checked "
                 "point must lie on it.",
-                {
+                input={
                     "polynomial": _polynomial(
                         ("x", "y"),
                         (1, (2, 0)),
@@ -239,23 +204,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "algebraic_geometry.projective_curve.affine_chart.compute",
-        "Extract an affine chart from a projective curve",
-        "Dehomogenize a projective curve at the given chart variable by "
+    MathTool(
+        operation_id="algebraic_geometry.projective_curve.affine_chart.compute",
+        title="Extract an affine chart from a projective curve",
+        description="Dehomogenize a projective curve at the given chart variable by "
         "setting that variable to 1.",
-        AffineChartRequest,
-        AffineChartResult,
-        compute_affine_chart,
-        "algebraic-geometry",
-        "affine-chart",
-        "exact",
+        request_type=AffineChartRequest,
+        result_type=AffineChartResult,
+        run=compute_affine_chart,
+        tags=("algebraic-geometry", "affine-chart", "exact"),
         examples=(
-            example(
-                "chart_z",
-                "Extract the z=1 chart of x^2 + y^2 - z^2; the canonical "
+            OperationExample(
+                name="chart_z",
+                description="Extract the z=1 chart of x^2 + y^2 - z^2; the canonical "
                 "projective polynomial must be homogeneous in three variables.",
-                {
+                input={
                     "polynomial": _polynomial(
                         ("x", "y", "z"),
                         (1, (2, 0, 0)),

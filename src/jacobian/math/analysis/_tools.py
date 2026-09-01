@@ -1,7 +1,6 @@
 """Validated real-analysis operation declarations."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.analysis._adaptive_range_enclosure import (
     ADAPTIVE_RANGE_ENCLOSURE_OPERATIONS,
 )
@@ -73,10 +72,10 @@ POINT_ENCLOSURE_OPERATIONS = (
             "cos",
         ),
         examples=(
-            example(
-                "sqrt_zero",
-                "Enclose sqrt(0) at 32-bit precision.",
-                {
+            OperationExample(
+                name="sqrt_zero",
+                description="Enclose sqrt(0) at 32-bit precision.",
+                input={
                     "function": "SQRT",
                     "argument": {"num": "0", "den": "1"},
                     "precision_bits": 32,
@@ -108,10 +107,10 @@ POINT_ENCLOSURE_OPERATIONS = (
             "log",
         ),
         examples=(
-            example(
-                "sqrt_zero",
-                "Independently check the exact claimed enclosure sqrt(0) = 0.",
-                {
+            OperationExample(
+                name="sqrt_zero",
+                description="Independently check the exact claimed enclosure sqrt(0) = 0.",
+                input={
                     "enclosure": {
                         "function": "SQRT",
                         "argument": {"num": "0", "den": "1"},
@@ -135,10 +134,10 @@ EXPRESSION_ENCLOSURE_OPERATIONS = (
         run=_expression_request,
         tags=("analysis", "interval", "expression", "arb", "exact", "bounded"),
         examples=(
-            example(
-                "log_137_80",
-                "Enclose log(137/80); the expression must use the bounded typed tree grammar.",
-                {
+            OperationExample(
+                name="log_137_80",
+                description="Enclose log(137/80); the expression must use the bounded typed tree grammar.",
+                input={
                     "expression": {
                         "op": "log",
                         "children": [
@@ -183,10 +182,10 @@ SECOND_JET_ENCLOSURE_OPERATIONS = (
             "bounded",
         ),
         examples=(
-            example(
-                "quadratic_unit_box",
-                "Enclose x^2 + y^2 and all derivatives over the unit square.",
-                {
+            OperationExample(
+                name="quadratic_unit_box",
+                description="Enclose x^2 + y^2 and all derivatives over the unit square.",
+                input={
                     "expression": {
                         "op": "add",
                         "children": [

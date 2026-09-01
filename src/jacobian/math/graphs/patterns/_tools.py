@@ -1,8 +1,7 @@
 """Induced graph-pattern count operation declaration."""
 
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.graphs.patterns._models import (
     MAX_INDUCED_PATTERN_CANDIDATES,
     MAX_INDUCED_PATTERN_TOTAL_WORK_UNITS,
@@ -51,13 +50,13 @@ TOOLS: MathTools = (
             "bounded",
         ),
         examples=(
-            example(
-                "two_induced_p4_in_p5",
-                "Count two P4 subsets in P5. Admission preflights 5 subsets, 6 "
+            OperationExample(
+                name="two_induced_p4_in_p5",
+                description="Count two P4 subsets in P5. Admission preflights 5 subsets, 6 "
                 "direct host-edge probes and one local graph per subset, plus "
                 f"per-subset VF2++ work; limits are {MAX_INDUCED_PATTERN_CANDIDATES:,} subsets "
                 f"and {MAX_INDUCED_PATTERN_TOTAL_WORK_UNITS:,} work units.",
-                {
+                input={
                     "host": {
                         "vertices": ["a", "b", "c", "d", "e"],
                         "edges": [["a", "b"], ["b", "c"], ["c", "d"], ["d", "e"]],
@@ -68,10 +67,10 @@ TOOLS: MathTools = (
                     },
                 },
             ),
-            example(
-                "c4_does_not_induce_p4",
-                "Count zero P4 subsets in C4 because its closing edge is retained; both inputs must be canonical finite simple undirected graphs.",
-                {
+            OperationExample(
+                name="c4_does_not_induce_p4",
+                description="Count zero P4 subsets in C4 because its closing edge is retained; both inputs must be canonical finite simple undirected graphs.",
+                input={
                     "host": {
                         "vertices": ["a", "b", "c", "d"],
                         "edges": [["a", "b"], ["a", "d"], ["b", "c"], ["c", "d"]],
@@ -82,10 +81,10 @@ TOOLS: MathTools = (
                     },
                 },
             ),
-            example(
-                "one_induced_two_edge_matching",
-                "Count the single full vertex subset of 2K2 inducing 2K2; each subset contributes once regardless of pattern automorphisms.",
-                {
+            OperationExample(
+                name="one_induced_two_edge_matching",
+                description="Count the single full vertex subset of 2K2 inducing 2K2; each subset contributes once regardless of pattern automorphisms.",
+                input={
                     "host": {
                         "vertices": ["a", "b", "c", "d"],
                         "edges": [["a", "b"], ["c", "d"]],

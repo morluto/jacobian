@@ -1,7 +1,6 @@
 """Finite-integer-set operation declarations."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.combinatorics.finite_structures.sets import operations as native
 from jacobian.math.combinatorics.finite_structures.sets._models import (
     FiniteSetBooleanResult,
@@ -10,9 +9,6 @@ from jacobian.math.combinatorics.finite_structures.sets._models import (
     FiniteSetCoverageResult,
     FiniteSetElementListResult,
     FiniteSetPairRequest,
-)
-from jacobian.math.combinatorics.finite_structures.sets._support import (
-    finite_set_operation,
 )
 
 
@@ -83,136 +79,178 @@ def union_cardinality(request: FiniteSetPairRequest) -> FiniteSetCardinalityResu
 _PAIR = {"left": {"elements": ["1", "2"]}, "right": {"elements": ["2", "3"]}}
 
 TOOLS: MathTools = (
-    finite_set_operation(
-        "finite_set.compute.union",
-        "Compute finite-set union",
-        "Return the sorted union of two finite integer sets.",
-        FiniteSetPairRequest,
-        FiniteSetElementListResult,
-        set_union,
-        "finite-set",
-        "exact",
-        examples=(example("overlapping_sets", "Union two finite sets.", _PAIR),),
-    ),
-    finite_set_operation(
-        "finite_set.compute.intersection",
-        "Compute finite-set intersection",
-        "Return the sorted intersection of two finite integer sets.",
-        FiniteSetPairRequest,
-        FiniteSetElementListResult,
-        set_intersection,
-        "finite-set",
-        "exact",
-        examples=(example("overlapping_sets", "Intersect two finite sets.", _PAIR),),
-    ),
-    finite_set_operation(
-        "finite_set.compute.difference",
-        "Compute finite-set difference",
-        "Return elements in the first finite set but not the second.",
-        FiniteSetPairRequest,
-        FiniteSetElementListResult,
-        set_difference,
-        "finite-set",
-        "exact",
-        examples=(example("overlapping_sets", "Subtract two finite sets.", _PAIR),),
-    ),
-    finite_set_operation(
-        "finite_set.compute.symmetric_difference",
-        "Compute symmetric difference",
-        "Return elements occurring in exactly one of two finite integer sets.",
-        FiniteSetPairRequest,
-        FiniteSetElementListResult,
-        set_symmetric_difference,
-        "finite-set",
-        "exact",
+    MathTool(
+        operation_id="finite_set.compute.union",
+        title="Compute finite-set union",
+        description="Return the sorted union of two finite integer sets.",
+        request_type=FiniteSetPairRequest,
+        result_type=FiniteSetElementListResult,
+        run=set_union,
+        tags=("finite-set", "exact"),
         examples=(
-            example("overlapping_sets", "Compute the symmetric difference.", _PAIR),
-        ),
-    ),
-    finite_set_operation(
-        "finite_set.decide.exact_cover",
-        "Decide exact finite-set coverage",
-        "Decide whether a sequence contains every scope element exactly once.",
-        FiniteSetCoverageRequest,
-        FiniteSetCoverageResult,
-        decide_exact_cover,
-        "finite-set",
-        "predicate",
-        examples=(
-            example(
-                "cover_once",
-                "Check an exactly-once cover.",
-                {"scope": {"elements": ["1", "2", "3"]}, "values": ["3", "1", "2"]},
+            OperationExample(
+                name="overlapping_sets",
+                description="Union two finite sets.",
+                input=_PAIR,
             ),
         ),
     ),
-    finite_set_operation(
-        "finite_set.decide.subset",
-        "Decide subset relation",
-        "Decide whether every left-set element occurs in the right set.",
-        FiniteSetPairRequest,
-        FiniteSetBooleanResult,
-        decide_subset,
-        "finite-set",
-        "predicate",
-        examples=(example("overlapping_sets", "Check the subset relation.", _PAIR),),
-    ),
-    finite_set_operation(
-        "finite_set.decide.proper_subset",
-        "Decide proper subset",
-        "Decide whether the left set is a strict subset of the right set.",
-        FiniteSetPairRequest,
-        FiniteSetBooleanResult,
-        decide_proper_subset,
-        "finite-set",
-        "predicate",
+    MathTool(
+        operation_id="finite_set.compute.intersection",
+        title="Compute finite-set intersection",
+        description="Return the sorted intersection of two finite integer sets.",
+        request_type=FiniteSetPairRequest,
+        result_type=FiniteSetElementListResult,
+        run=set_intersection,
+        tags=("finite-set", "exact"),
         examples=(
-            example("overlapping_sets", "Check the proper-subset relation.", _PAIR),
+            OperationExample(
+                name="overlapping_sets",
+                description="Intersect two finite sets.",
+                input=_PAIR,
+            ),
         ),
     ),
-    finite_set_operation(
-        "finite_set.decide.disjoint",
-        "Decide disjointness",
-        "Decide whether two finite integer sets have empty intersection.",
-        FiniteSetPairRequest,
-        FiniteSetBooleanResult,
-        decide_disjoint,
-        "finite-set",
-        "predicate",
-        examples=(example("overlapping_sets", "Check disjointness.", _PAIR),),
+    MathTool(
+        operation_id="finite_set.compute.difference",
+        title="Compute finite-set difference",
+        description="Return elements in the first finite set but not the second.",
+        request_type=FiniteSetPairRequest,
+        result_type=FiniteSetElementListResult,
+        run=set_difference,
+        tags=("finite-set", "exact"),
+        examples=(
+            OperationExample(
+                name="overlapping_sets",
+                description="Subtract two finite sets.",
+                input=_PAIR,
+            ),
+        ),
     ),
-    finite_set_operation(
-        "finite_set.compute.left_cardinality",
-        "Count left finite set",
-        "Count distinct elements in the left finite integer set.",
-        FiniteSetPairRequest,
-        FiniteSetCardinalityResult,
-        left_cardinality,
-        "finite-set",
-        "counting",
-        examples=(example("overlapping_sets", "Count the left set.", _PAIR),),
+    MathTool(
+        operation_id="finite_set.compute.symmetric_difference",
+        title="Compute symmetric difference",
+        description="Return elements occurring in exactly one of two finite integer sets.",
+        request_type=FiniteSetPairRequest,
+        result_type=FiniteSetElementListResult,
+        run=set_symmetric_difference,
+        tags=("finite-set", "exact"),
+        examples=(
+            OperationExample(
+                name="overlapping_sets",
+                description="Compute the symmetric difference.",
+                input=_PAIR,
+            ),
+        ),
     ),
-    finite_set_operation(
-        "finite_set.compute.intersection_cardinality",
-        "Count set intersection",
-        "Count common elements of two finite integer sets.",
-        FiniteSetPairRequest,
-        FiniteSetCardinalityResult,
-        intersection_cardinality,
-        "finite-set",
-        "counting",
-        examples=(example("overlapping_sets", "Count the intersection.", _PAIR),),
+    MathTool(
+        operation_id="finite_set.decide.exact_cover",
+        title="Decide exact finite-set coverage",
+        description="Decide whether a sequence contains every scope element exactly once.",
+        request_type=FiniteSetCoverageRequest,
+        result_type=FiniteSetCoverageResult,
+        run=decide_exact_cover,
+        tags=("finite-set", "predicate"),
+        examples=(
+            OperationExample(
+                name="cover_once",
+                description="Check an exactly-once cover.",
+                input={
+                    "scope": {"elements": ["1", "2", "3"]},
+                    "values": ["3", "1", "2"],
+                },
+            ),
+        ),
     ),
-    finite_set_operation(
-        "finite_set.compute.union_cardinality",
-        "Count set union",
-        "Count distinct elements occurring in either finite integer set.",
-        FiniteSetPairRequest,
-        FiniteSetCardinalityResult,
-        union_cardinality,
-        "finite-set",
-        "counting",
-        examples=(example("overlapping_sets", "Count the union.", _PAIR),),
+    MathTool(
+        operation_id="finite_set.decide.subset",
+        title="Decide subset relation",
+        description="Decide whether every left-set element occurs in the right set.",
+        request_type=FiniteSetPairRequest,
+        result_type=FiniteSetBooleanResult,
+        run=decide_subset,
+        tags=("finite-set", "predicate"),
+        examples=(
+            OperationExample(
+                name="overlapping_sets",
+                description="Check the subset relation.",
+                input=_PAIR,
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="finite_set.decide.proper_subset",
+        title="Decide proper subset",
+        description="Decide whether the left set is a strict subset of the right set.",
+        request_type=FiniteSetPairRequest,
+        result_type=FiniteSetBooleanResult,
+        run=decide_proper_subset,
+        tags=("finite-set", "predicate"),
+        examples=(
+            OperationExample(
+                name="overlapping_sets",
+                description="Check the proper-subset relation.",
+                input=_PAIR,
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="finite_set.decide.disjoint",
+        title="Decide disjointness",
+        description="Decide whether two finite integer sets have empty intersection.",
+        request_type=FiniteSetPairRequest,
+        result_type=FiniteSetBooleanResult,
+        run=decide_disjoint,
+        tags=("finite-set", "predicate"),
+        examples=(
+            OperationExample(
+                name="overlapping_sets", description="Check disjointness.", input=_PAIR
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="finite_set.compute.left_cardinality",
+        title="Count left finite set",
+        description="Count distinct elements in the left finite integer set.",
+        request_type=FiniteSetPairRequest,
+        result_type=FiniteSetCardinalityResult,
+        run=left_cardinality,
+        tags=("finite-set", "counting"),
+        examples=(
+            OperationExample(
+                name="overlapping_sets", description="Count the left set.", input=_PAIR
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="finite_set.compute.intersection_cardinality",
+        title="Count set intersection",
+        description="Count common elements of two finite integer sets.",
+        request_type=FiniteSetPairRequest,
+        result_type=FiniteSetCardinalityResult,
+        run=intersection_cardinality,
+        tags=("finite-set", "counting"),
+        examples=(
+            OperationExample(
+                name="overlapping_sets",
+                description="Count the intersection.",
+                input=_PAIR,
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="finite_set.compute.union_cardinality",
+        title="Count set union",
+        description="Count distinct elements occurring in either finite integer set.",
+        request_type=FiniteSetPairRequest,
+        result_type=FiniteSetCardinalityResult,
+        run=union_cardinality,
+        tags=("finite-set", "counting"),
+        examples=(
+            OperationExample(
+                name="overlapping_sets", description="Count the union.", input=_PAIR
+            ),
+        ),
     ),
 )
 

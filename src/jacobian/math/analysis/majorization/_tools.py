@@ -1,10 +1,7 @@
 """Majorization operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.analysis.majorization._models import (
     BirkhoffDecompositionRequest,
@@ -62,46 +59,22 @@ def _schur_horn_check(request: SchurHornCheckRequest) -> SchurHornCheckResult:
     return schur_horn_check(request.eigenvalues, request.diagonal)
 
 
-def _op[RequestT: StrictModel, ResultT: StrictModel](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "majorization.check.compute",
-        "Check majorization relation",
-        "Check if vector x majorizes vector y (ordinary majorization): "
+    MathTool(
+        operation_id="majorization.check.compute",
+        title="Check majorization relation",
+        description="Check if vector x majorizes vector y (ordinary majorization): "
         "after sorting both in nonincreasing order, verify prefix-sum "
         "inequalities and total-sum equality.",
-        MajorizationCheckRequest,
-        MajorizationCheckResult,
-        _majorization_check,
-        "linear-algebra",
-        "majorization",
-        "exact",
+        request_type=MajorizationCheckRequest,
+        result_type=MajorizationCheckResult,
+        run=_majorization_check,
+        tags=("linear-algebra", "majorization", "exact"),
         examples=(
-            example(
-                "majorizes",
-                "Check that (3, 1) majorizes (2, 2) with labelled rational vectors.",
-                {
+            OperationExample(
+                name="majorizes",
+                description="Check that (3, 1) majorizes (2, 2) with labelled rational vectors.",
+                input={
                     "x": {
                         "labels": ["a", "b"],
                         "values": [{"num": "3", "den": "1"}, {"num": "1", "den": "1"}],
@@ -114,22 +87,20 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "majorization.weak_check.compute",
-        "Check weak majorization",
-        "Check weak majorization: sub (x weakly submajorizes y) or "
+    MathTool(
+        operation_id="majorization.weak_check.compute",
+        title="Check weak majorization",
+        description="Check weak majorization: sub (x weakly submajorizes y) or "
         "super (x weakly supermajorizes y) without total-sum equality.",
-        WeakMajorizationCheckRequest,
-        WeakMajorizationCheckResult,
-        _weak_majorization_check,
-        "linear-algebra",
-        "majorization",
-        "exact",
+        request_type=WeakMajorizationCheckRequest,
+        result_type=WeakMajorizationCheckResult,
+        run=_weak_majorization_check,
+        tags=("linear-algebra", "majorization", "exact"),
         examples=(
-            example(
-                "weak_sub",
-                "Check weak submajorization for labelled rational vectors.",
-                {
+            OperationExample(
+                name="weak_sub",
+                description="Check weak submajorization for labelled rational vectors.",
+                input={
                     "x": {
                         "labels": ["a", "b"],
                         "values": [{"num": "4", "den": "1"}, {"num": "1", "den": "1"}],
@@ -143,23 +114,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "majorization.t_transform.compute",
-        "Compute T-transform sequence",
-        "Compute an exact T-transform sequence from x to y when x "
+    MathTool(
+        operation_id="majorization.t_transform.compute",
+        title="Compute T-transform sequence",
+        description="Compute an exact T-transform sequence from x to y when x "
         "majorizes y. Returns steps, intermediate vectors, and the "
         "composed doubly stochastic matrix.",
-        TTransformSequenceRequest,
-        TTransformSequenceResult,
-        _t_transform_sequence,
-        "linear-algebra",
-        "majorization",
-        "exact",
+        request_type=TTransformSequenceRequest,
+        result_type=TTransformSequenceResult,
+        run=_t_transform_sequence,
+        tags=("linear-algebra", "majorization", "exact"),
         examples=(
-            example(
-                "t_transform_4_0_to_2_2",
-                "Compute T-transform sequence from (4,0) to (2,2) where (4,0) majorizes (2,2).",
-                {
+            OperationExample(
+                name="t_transform_4_0_to_2_2",
+                description="Compute T-transform sequence from (4,0) to (2,2) where (4,0) majorizes (2,2).",
+                input={
                     "x": {
                         "labels": ["a", "b"],
                         "values": [{"num": "4", "den": "1"}, {"num": "0", "den": "1"}],
@@ -172,22 +141,20 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "majorization.doubly_stochastic.check",
-        "Check doubly stochastic matrix",
-        "Check if a rational square matrix is doubly stochastic "
+    MathTool(
+        operation_id="majorization.doubly_stochastic.check",
+        title="Check doubly stochastic matrix",
+        description="Check if a rational square matrix is doubly stochastic "
         "(non-negative, rows and columns sum to 1).",
-        DoublyStochasticCheckRequest,
-        DoublyStochasticCheckResult,
-        _doubly_stochastic_check,
-        "linear-algebra",
-        "majorization",
-        "exact",
+        request_type=DoublyStochasticCheckRequest,
+        result_type=DoublyStochasticCheckResult,
+        run=_doubly_stochastic_check,
+        tags=("linear-algebra", "majorization", "exact"),
         examples=(
-            example(
-                "identity",
-                "Check the 2x2 identity matrix.",
-                {
+            OperationExample(
+                name="identity",
+                description="Check the 2x2 identity matrix.",
+                input={
                     "matrix": {
                         "domain": "QQ",
                         "entries": [
@@ -199,22 +166,20 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "majorization.birkhoff_decomposition.compute",
-        "Birkhoff-von Neumann decomposition",
-        "Decompose a doubly stochastic matrix into a convex combination "
+    MathTool(
+        operation_id="majorization.birkhoff_decomposition.compute",
+        title="Birkhoff-von Neumann decomposition",
+        description="Decompose a doubly stochastic matrix into a convex combination "
         "of permutation matrices using the greedy matching algorithm.",
-        BirkhoffDecompositionRequest,
-        BirkhoffDecompositionResult,
-        _birkhoff_decomposition,
-        "linear-algebra",
-        "majorization",
-        "exact",
+        request_type=BirkhoffDecompositionRequest,
+        result_type=BirkhoffDecompositionResult,
+        run=_birkhoff_decomposition,
+        tags=("linear-algebra", "majorization", "exact"),
         examples=(
-            example(
-                "birkhoff_2x2_average",
-                "Decompose the 2x2 averaging matrix [[1/2,1/2],[1/2,1/2]] which is doubly stochastic.",
-                {
+            OperationExample(
+                name="birkhoff_2x2_average",
+                description="Decompose the 2x2 averaging matrix [[1/2,1/2],[1/2,1/2]] which is doubly stochastic.",
+                input={
                     "matrix": {
                         "domain": "QQ",
                         "entries": [
@@ -226,22 +191,20 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "majorization.schur_horn.check",
-        "Check Schur-Horn feasibility",
-        "Check if a diagonal vector is realizable as the diagonal of a "
+    MathTool(
+        operation_id="majorization.schur_horn.check",
+        title="Check Schur-Horn feasibility",
+        description="Check if a diagonal vector is realizable as the diagonal of a "
         "Hermitian matrix with given eigenvalues (Schur-Horn theorem).",
-        SchurHornCheckRequest,
-        SchurHornCheckResult,
-        _schur_horn_check,
-        "linear-algebra",
-        "majorization",
-        "exact",
+        request_type=SchurHornCheckRequest,
+        result_type=SchurHornCheckResult,
+        run=_schur_horn_check,
+        tags=("linear-algebra", "majorization", "exact"),
         examples=(
-            example(
-                "feasible",
-                "Check if (1, 0) is feasible for eigenvalues (2, -1).",
-                {
+            OperationExample(
+                name="feasible",
+                description="Check if (1, 0) is feasible for eigenvalues (2, -1).",
+                input={
                     "eigenvalues": [
                         {"num": "2", "den": "1"},
                         {"num": "-1", "den": "1"},

@@ -1,10 +1,7 @@
 """Projective coordinate operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.geometry.projective.coordinates._models import (
     ChartTransitionRequest,
@@ -33,45 +30,21 @@ def _chart_transition(request: ChartTransitionRequest) -> ChartTransitionResult:
     return chart_transition(request.point, request.chart_i, request.chart_j)
 
 
-def _op[RequestT: StrictModel, ResultT: StrictModel](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "projective.rational_point.construct",
-        "Construct a canonical rational projective point",
-        "Canonicalize a rational projective point by scaling so the first "
+    MathTool(
+        operation_id="projective.rational_point.construct",
+        title="Construct a canonical rational projective point",
+        description="Canonicalize a rational projective point by scaling so the first "
         "nonzero coordinate is 1.",
-        RationalPointConstructRequest,
-        RationalPointConstructResult,
-        _construct,
-        "projective",
-        "rational",
-        "exact",
+        request_type=RationalPointConstructRequest,
+        result_type=RationalPointConstructResult,
+        run=_construct,
+        tags=("projective", "rational", "exact"),
         examples=(
-            example(
-                "p1_point",
-                "Construct [2 : 4] in P^1(Q).",
-                {
+            OperationExample(
+                name="p1_point",
+                description="Construct [2 : 4] in P^1(Q).",
+                input={
                     "coordinates": [
                         {"num": "2", "den": "1"},
                         {"num": "4", "den": "1"},
@@ -80,22 +53,20 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "projective.standard_chart.compute",
-        "Dehomogenize at a standard affine chart",
-        "Dehomogenize a projective point at the given chart index by "
+    MathTool(
+        operation_id="projective.standard_chart.compute",
+        title="Dehomogenize at a standard affine chart",
+        description="Dehomogenize a projective point at the given chart index by "
         "dividing all coordinates by that coordinate.",
-        StandardChartRequest,
-        StandardChartResult,
-        _standard_chart,
-        "projective",
-        "affine-chart",
-        "exact",
+        request_type=StandardChartRequest,
+        result_type=StandardChartResult,
+        run=_standard_chart,
+        tags=("projective", "affine-chart", "exact"),
         examples=(
-            example(
-                "chart_0",
-                "Dehomogenize [1 : 2 : 3] at chart 0.",
-                {
+            OperationExample(
+                name="chart_0",
+                description="Dehomogenize [1 : 2 : 3] at chart 0.",
+                input={
                     "point": {
                         "coordinates": [
                             {"num": "1", "den": "1"},
@@ -108,22 +79,20 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "projective.chart_transition.compute",
-        "Compute the transition map between two charts",
-        "Return the complete target-chart coordinates for a projective point, "
+    MathTool(
+        operation_id="projective.chart_transition.compute",
+        title="Compute the transition map between two charts",
+        description="Return the complete target-chart coordinates for a projective point, "
         "or OUTSIDE_TARGET_CHART when the target coordinate vanishes.",
-        ChartTransitionRequest,
-        ChartTransitionResult,
-        _chart_transition,
-        "projective",
-        "chart-transition",
-        "exact",
+        request_type=ChartTransitionRequest,
+        result_type=ChartTransitionResult,
+        run=_chart_transition,
+        tags=("projective", "chart-transition", "exact"),
         examples=(
-            example(
-                "transition_0_to_1",
-                "Transition from chart 0 to chart 1 for [1 : 2 : 3].",
-                {
+            OperationExample(
+                name="transition_0_to_1",
+                description="Transition from chart 0 to chart 1 for [1 : 2 : 3].",
+                input={
                     "point": {
                         "coordinates": [
                             {"num": "1", "den": "1"},

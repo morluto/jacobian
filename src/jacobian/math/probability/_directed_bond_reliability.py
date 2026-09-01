@@ -14,8 +14,11 @@ from jacobian.canonical import (
     encode_strict_json,
     format_canonical_integer,
 )
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.graphs.directed._models import DirectedGraph
 from jacobian.math.probability._models import MAX_INPUT_RATIONAL_DIGITS
 
@@ -523,11 +526,11 @@ DIRECTED_BOND_CONNECTION_PROBABILITY_OPERATION = MathTool(
         "python-flint",
     ),
     examples=(
-        example(
-            "two_arc_directed_series",
-            "Compute the exact probability of the directed path 0 -> 1 -> 2; "
+        OperationExample(
+            name="two_arc_directed_series",
+            description="Compute the exact probability of the directed path 0 -> 1 -> 2; "
             "each directed graph arc has one independent rational open probability.",
-            {
+            input={
                 "graph": {
                     "vertex_count": 3,
                     "edges": [[0, 1], [1, 2]],

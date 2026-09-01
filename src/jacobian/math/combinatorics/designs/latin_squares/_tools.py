@@ -1,10 +1,7 @@
 """Latin square operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.combinatorics.designs.latin_squares._models import (
     LatinSquareCheckResult,
@@ -43,44 +40,20 @@ def compute_latin_square_transpose(
     )
 
 
-def _op[RequestT: StrictModel, ResultT: StrictModel](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "latin_square.check",
-        "Check if a matrix is a Latin square",
-        "Verify that each row and column contains every symbol 0..n-1 exactly once.",
-        LatinSquareRequest,
-        LatinSquareCheckResult,
-        compute_latin_square_check,
-        "latin-square",
-        "verification",
-        "exact",
+    MathTool(
+        operation_id="latin_square.check",
+        title="Check if a matrix is a Latin square",
+        description="Verify that each row and column contains every symbol 0..n-1 exactly once.",
+        request_type=LatinSquareRequest,
+        result_type=LatinSquareCheckResult,
+        run=compute_latin_square_check,
+        tags=("latin-square", "verification", "exact"),
         examples=(
-            example(
-                "z2_latin_square",
-                "Check the 2x2 Latin square [[0,1],[1,0]].",
-                {
+            OperationExample(
+                name="z2_latin_square",
+                description="Check the 2x2 Latin square [[0,1],[1,0]].",
+                input={
                     "square": {
                         "order": 2,
                         "cells": [[0, 1], [1, 0]],
@@ -89,22 +62,20 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "latin_square.orthogonality.check",
-        "Check orthogonality of two Latin squares",
-        "Check whether two Latin squares of the same order are orthogonal, "
+    MathTool(
+        operation_id="latin_square.orthogonality.check",
+        title="Check orthogonality of two Latin squares",
+        description="Check whether two Latin squares of the same order are orthogonal, "
         "i.e., all ordered pairs of entries are distinct.",
-        OrthogonalityRequest,
-        OrthogonalityResult,
-        compute_orthogonality,
-        "latin-square",
-        "orthogonality",
-        "exact",
+        request_type=OrthogonalityRequest,
+        result_type=OrthogonalityResult,
+        run=compute_orthogonality,
+        tags=("latin-square", "orthogonality", "exact"),
         examples=(
-            example(
-                "orthogonal_z2",
-                "Check orthogonality of [[0,1],[1,0]] and [[0,1],[1,0]].",
-                {
+            OperationExample(
+                name="orthogonal_z2",
+                description="Check orthogonality of [[0,1],[1,0]] and [[0,1],[1,0]].",
+                input={
                     "square_a": {
                         "order": 2,
                         "cells": [[0, 1], [1, 0]],
@@ -117,21 +88,19 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "latin_square.transpose.compute",
-        "Transpose a Latin square",
-        "Swap rows and columns of a Latin square.",
-        TransposeRequest,
-        LatinSquareTransposeResult,
-        compute_latin_square_transpose,
-        "latin-square",
-        "transpose",
-        "exact",
+    MathTool(
+        operation_id="latin_square.transpose.compute",
+        title="Transpose a Latin square",
+        description="Swap rows and columns of a Latin square.",
+        request_type=TransposeRequest,
+        result_type=LatinSquareTransposeResult,
+        run=compute_latin_square_transpose,
+        tags=("latin-square", "transpose", "exact"),
         examples=(
-            example(
-                "transpose_z2",
-                "Transpose [[0,1],[1,0]].",
-                {
+            OperationExample(
+                name="transpose_z2",
+                description="Transpose [[0,1],[1,0]].",
+                input={
                     "square": {
                         "order": 2,
                         "cells": [[0, 1], [1, 0]],

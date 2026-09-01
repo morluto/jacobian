@@ -17,8 +17,11 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian.canonical import CanonicalizationError, format_canonical_integer
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.combinatorics.finite_structures.sets._models import FiniteIntegerSet
 from jacobian.math.number_theory._divisibility_edge_profile_kernels import (
     FactorizationIncompleteError,
@@ -32,7 +35,6 @@ from jacobian.math.number_theory._divisibility_edge_profile_models import (
     _validate_divisibility_edge_resources,
     _validate_divisibility_edge_shape,
 )
-from jacobian.math.number_theory._support import number_theory_operation
 
 _DIVISIBILITY_EDGE_PROFILE_WALL_SECONDS = 600.0
 
@@ -185,27 +187,29 @@ def divisibility_edge_profile(
             ) from exc
 
 
-DIVISIBILITY_EDGE_PROFILE_OPERATION = number_theory_operation(
-    "integer.divisibility_edge_profile.compute",
-    "Profile quotient and least-prime-factor data on divisibility edges",
-    "Given an ordered finite source set of positive integers, return the "
+DIVISIBILITY_EDGE_PROFILE_OPERATION = MathTool(
+    operation_id="integer.divisibility_edge_profile.compute",
+    title="Profile quotient and least-prime-factor data on divisibility edges",
+    description="Given an ordered finite source set of positive integers, return the "
     "complete directed proper-divisibility edge table. Each edge a -> b "
     "carries the quotient b/a and its least prime factor.",
-    DivisibilityEdgeProfileRequest,
-    DivisibilityEdgeProfileResult,
-    compute_divisibility_edge_profile,
-    "number-theory",
-    "divisibility",
-    "primitive-set",
-    "least-prime-factor",
-    "exact",
+    request_type=DivisibilityEdgeProfileRequest,
+    result_type=DivisibilityEdgeProfileResult,
+    run=compute_divisibility_edge_profile,
+    tags=(
+        "number-theory",
+        "divisibility",
+        "primitive-set",
+        "least-prime-factor",
+        "exact",
+    ),
     examples=(
-        example(
-            "divisibility_edges_24612",
-            "For (2,4,6,12), profile all proper-divisibility edges with "
+        OperationExample(
+            name="divisibility_edges_24612",
+            description="For (2,4,6,12), profile all proper-divisibility edges with "
             "quotient and least-prime-factor data; values must be positive "
             "canonical decimal integers.",
-            {"values": {"elements": ["2", "4", "6", "12"]}},
+            input={"values": {"elements": ["2", "4", "6", "12"]}},
         ),
     ),
 )

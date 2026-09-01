@@ -1,9 +1,5 @@
 """Maximum weight antichain operation declarations."""
 
-from collections.abc import Callable
-
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.combinatorics.posets.weighted_antichain._models import (
     MaximumWeightAntichainRequest,
@@ -20,48 +16,25 @@ def compute_mwa_op(
     return compute_maximum_weight_antichain(request.poset, request.weights)
 
 
-def mwa_action[RequestT: StrictModel, ResultT: StrictModel](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: MathTools = (
-    mwa_action(
-        "poset.maximum_weight_antichain.compute",
-        "Compute the maximum weight antichain of a poset",
-        (
+    MathTool(
+        operation_id="poset.maximum_weight_antichain.compute",
+        title="Compute the maximum weight antichain of a poset",
+        description=(
             "For one bounded canonical finite poset and one nonnegative "
             "rational weight on every poset element, return the exact "
             "maximum total weight of an antichain and one deterministic "
             "maximizing antichain."
         ),
-        MaximumWeightAntichainRequest,
-        MaximumWeightAntichainResult,
-        compute_mwa_op,
-        "posets",
-        "exact",
+        request_type=MaximumWeightAntichainRequest,
+        result_type=MaximumWeightAntichainResult,
+        run=compute_mwa_op,
+        tags=("posets", "exact"),
         examples=(
-            example(
-                "chain",
-                "A 3-element chain with weights 1, 2, 3.",
-                {
+            OperationExample(
+                name="chain",
+                description="A 3-element chain with weights 1, 2, 3.",
+                input={
                     "poset": {
                         "elements": ["a", "b", "c"],
                         "strict_order_pairs": [

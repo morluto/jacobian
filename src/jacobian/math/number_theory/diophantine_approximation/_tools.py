@@ -1,10 +1,7 @@
 """Diophantine approximation operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory.diophantine_approximation import operations as native
 from jacobian.math.number_theory.diophantine_approximation._models import (
@@ -31,85 +28,57 @@ def compute_pell_equation(request: PellEquationRequest) -> PellEquationResult:
     return native.solve_pell(request.discriminant)
 
 
-def da_operation[RequestT: StrictModel, ResultT: StrictModel](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    da_operation(
-        "diophantine.continued_fraction.compute",
-        "Compute the continued fraction expansion of sqrt(D)",
-        "Compute the exact continued fraction [a_0; a_1, ...] of sqrt(D) "
+    MathTool(
+        operation_id="diophantine.continued_fraction.compute",
+        title="Compute the continued fraction expansion of sqrt(D)",
+        description="Compute the exact continued fraction [a_0; a_1, ...] of sqrt(D) "
         "for a squarefree positive integer D, using SymPy's exact "
         "continued_fraction_periodic.",
-        ContinuedFractionRequest,
-        ContinuedFractionResult,
-        compute_continued_fraction,
-        "number-theory",
-        "continued-fraction",
-        "exact",
+        request_type=ContinuedFractionRequest,
+        result_type=ContinuedFractionResult,
+        run=compute_continued_fraction,
+        tags=("number-theory", "continued-fraction", "exact"),
         examples=(
-            example(
-                "sqrt_2",
-                "Continued fraction of sqrt(2) is [1; 2, 2, 2, ...].",
-                {"discriminant": 2, "term_count": 5},
+            OperationExample(
+                name="sqrt_2",
+                description="Continued fraction of sqrt(2) is [1; 2, 2, 2, ...].",
+                input={"discriminant": 2, "term_count": 5},
             ),
         ),
     ),
-    da_operation(
-        "diophantine.convergents.compute",
-        "Compute convergents of sqrt(D)",
-        "Compute the first n convergents p_k/q_k of sqrt(D) using the exact "
+    MathTool(
+        operation_id="diophantine.convergents.compute",
+        title="Compute convergents of sqrt(D)",
+        description="Compute the first n convergents p_k/q_k of sqrt(D) using the exact "
         "continued-fraction recurrence.",
-        ConvergentRequest,
-        ConvergentResult,
-        compute_convergents,
-        "number-theory",
-        "convergents",
-        "exact",
+        request_type=ConvergentRequest,
+        result_type=ConvergentResult,
+        run=compute_convergents,
+        tags=("number-theory", "convergents", "exact"),
         examples=(
-            example(
-                "sqrt_2_convergents",
-                "Compute the first five convergents of sqrt(2).",
-                {"discriminant": 2, "convergent_count": 5},
+            OperationExample(
+                name="sqrt_2_convergents",
+                description="Compute the first five convergents of sqrt(2).",
+                input={"discriminant": 2, "convergent_count": 5},
             ),
         ),
     ),
-    da_operation(
-        "diophantine.pell_equation.solve",
-        "Solve the Pell equation x^2 - D*y^2 = 1",
-        "Find the fundamental solution (x, y) to the Pell equation "
+    MathTool(
+        operation_id="diophantine.pell_equation.solve",
+        title="Solve the Pell equation x^2 - D*y^2 = 1",
+        description="Find the fundamental solution (x, y) to the Pell equation "
         "x^2 - D*y^2 = 1 by iterating through continued fraction "
         "convergents of sqrt(D).",
-        PellEquationRequest,
-        PellEquationResult,
-        compute_pell_equation,
-        "number-theory",
-        "pell-equation",
-        "exact",
+        request_type=PellEquationRequest,
+        result_type=PellEquationResult,
+        run=compute_pell_equation,
+        tags=("number-theory", "pell-equation", "exact"),
         examples=(
-            example(
-                "pell_2",
-                "The fundamental solution to x^2 - 2*y^2 = 1 is (3, 2).",
-                {"discriminant": 2},
+            OperationExample(
+                name="pell_2",
+                description="The fundamental solution to x^2 - 2*y^2 = 1 is (3, 2).",
+                input={"discriminant": 2},
             ),
         ),
     ),

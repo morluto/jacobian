@@ -1,6 +1,6 @@
 """Domain-owned elementary integer and rational polynomial operations."""
 
-from jacobian.catalog._examples import example
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.polynomials._elementary_kernel import (
     integer_polynomial_evaluate,
     integer_polynomial_gcd,
@@ -17,7 +17,6 @@ from jacobian.math.polynomials._models import (
     RationalPolynomialEvaluationResult,
     RationalPolynomialRequest,
 )
-from jacobian.math.polynomials._support import polynomial_operation
 
 
 def _run_integer_gcd(
@@ -45,63 +44,57 @@ def _run_rational_derivative(
 
 
 INTEGER_POLYNOMIAL_OPERATIONS = (
-    polynomial_operation(
-        "polynomial.integer.compute.gcd",
-        "Compute an integer-polynomial GCD",
-        (
+    MathTool(
+        operation_id="polynomial.integer.compute.gcd",
+        title="Compute an integer-polynomial GCD",
+        description=(
             "Compute the nonnegative-leading GCD in ZZ[x], including the content "
             "of both inputs and the result."
         ),
-        IntegerPolynomialPairRequest,
-        IntegerPolynomialGcdResult,
-        _run_integer_gcd,
-        "polynomial",
-        "integer",
-        "gcd",
+        request_type=IntegerPolynomialPairRequest,
+        result_type=IntegerPolynomialGcdResult,
+        run=_run_integer_gcd,
+        tags=("polynomial", "integer", "gcd"),
         examples=(
-            example(
-                "integer_gcd",
-                "Compute the GCD of two integer polynomials.",
-                {
+            OperationExample(
+                name="integer_gcd",
+                description="Compute the GCD of two integer polynomials.",
+                input={
                     "left": {"coefficients": ["6", "6", "0"]},
                     "right": {"coefficients": ["8", "8", "0"]},
                 },
             ),
         ),
     ),
-    polynomial_operation(
-        "polynomial.integer.compute.evaluate",
-        "Evaluate an integer polynomial",
-        "Evaluate one bounded polynomial in ZZ[x] at an exact integer point.",
-        IntegerPolynomialEvaluationRequest,
-        IntegerPolynomialEvaluationResult,
-        _run_integer_evaluation,
-        "polynomial",
-        "integer",
-        "evaluation",
+    MathTool(
+        operation_id="polynomial.integer.compute.evaluate",
+        title="Evaluate an integer polynomial",
+        description="Evaluate one bounded polynomial in ZZ[x] at an exact integer point.",
+        request_type=IntegerPolynomialEvaluationRequest,
+        result_type=IntegerPolynomialEvaluationResult,
+        run=_run_integer_evaluation,
+        tags=("polynomial", "integer", "evaluation"),
         examples=(
-            example(
-                "evaluate_at_four",
-                "Evaluate 2x²-3x+1 at 4.",
-                {"polynomial": {"coefficients": ["2", "-3", "1"]}, "point": "4"},
+            OperationExample(
+                name="evaluate_at_four",
+                description="Evaluate 2x²-3x+1 at 4.",
+                input={"polynomial": {"coefficients": ["2", "-3", "1"]}, "point": "4"},
             ),
         ),
     ),
-    polynomial_operation(
-        "polynomial.rational.compute.evaluate",
-        "Evaluate a rational polynomial",
-        "Evaluate one bounded polynomial in QQ[x] at an exact rational point.",
-        RationalPolynomialEvaluationRequest,
-        RationalPolynomialEvaluationResult,
-        _run_rational_evaluation,
-        "polynomial",
-        "rational",
-        "evaluation",
+    MathTool(
+        operation_id="polynomial.rational.compute.evaluate",
+        title="Evaluate a rational polynomial",
+        description="Evaluate one bounded polynomial in QQ[x] at an exact rational point.",
+        request_type=RationalPolynomialEvaluationRequest,
+        result_type=RationalPolynomialEvaluationResult,
+        run=_run_rational_evaluation,
+        tags=("polynomial", "rational", "evaluation"),
         examples=(
-            example(
-                "rational_evaluate_x2_plus_one",
-                "Evaluate x²+1 at 2.",
-                {
+            OperationExample(
+                name="rational_evaluate_x2_plus_one",
+                description="Evaluate x²+1 at 2.",
+                input={
                     "polynomial": {
                         "domain": "QQ",
                         "variables": ["x"],
@@ -123,21 +116,19 @@ INTEGER_POLYNOMIAL_OPERATIONS = (
             ),
         ),
     ),
-    polynomial_operation(
-        "polynomial.rational.compute.derivative",
-        "Differentiate a rational polynomial",
-        "Compute the formal derivative of one bounded polynomial in QQ[x].",
-        RationalPolynomialRequest,
-        RationalPolynomialDerivativeResult,
-        _run_rational_derivative,
-        "polynomial",
-        "rational",
-        "derivative",
+    MathTool(
+        operation_id="polynomial.rational.compute.derivative",
+        title="Differentiate a rational polynomial",
+        description="Compute the formal derivative of one bounded polynomial in QQ[x].",
+        request_type=RationalPolynomialRequest,
+        result_type=RationalPolynomialDerivativeResult,
+        run=_run_rational_derivative,
+        tags=("polynomial", "rational", "derivative"),
         examples=(
-            example(
-                "cubic_derivative",
-                "Differentiate one half x³ minus 2x.",
-                {
+            OperationExample(
+                name="cubic_derivative",
+                description="Differentiate one half x³ minus 2x.",
+                input={
                     "polynomial": {
                         "domain": "QQ",
                         "variables": ["x"],

@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.number_theory._r_full_enumerate_kernels import (
     enumerate_r_full as enumerate_r_full_kernel,
 )
@@ -16,7 +19,6 @@ from jacobian.math.number_theory._r_full_enumerate_models import (
     RFullFamilyPlan,
     plan_r_full_family,
 )
-from jacobian.math.number_theory._support import number_theory_operation
 
 
 def _enumerate_r_full_admitted(
@@ -121,26 +123,22 @@ def enumerate_r_full(minimum_exponent: int, cutoff: int) -> tuple[int, ...]:
     return tuple(family)
 
 
-R_FULL_ENUMERATE_OPERATION = number_theory_operation(
-    "integer.r_full.enumerate",
-    "Enumerate bounded r-full integers",
-    "Given a minimum exponent r and a positive upper bound, return every r-full "
+R_FULL_ENUMERATE_OPERATION = MathTool(
+    operation_id="integer.r_full.enumerate",
+    title="Enumerate bounded r-full integers",
+    description="Given a minimum exponent r and a positive upper bound, return every r-full "
     "integer in [1, cutoff] exactly once in increasing order. An integer is r-full "
     "when every prime factor occurs to exponent at least r.",
-    RFullEnumerateRequest,
-    RFullEnumerateResult,
-    enumerate_r_full_numbers,
-    "number-theory",
-    "r-full",
-    "powerful",
-    "enumerate",
-    "exact",
+    request_type=RFullEnumerateRequest,
+    result_type=RFullEnumerateResult,
+    run=enumerate_r_full_numbers,
+    tags=("number-theory", "r-full", "powerful", "enumerate", "exact"),
     examples=(
-        example(
-            "three_full_to_20",
-            "Enumerate every 3-full (cubefull) integer up to 20; the cutoff "
+        OperationExample(
+            name="three_full_to_20",
+            description="Enumerate every 3-full (cubefull) integer up to 20; the cutoff "
             "must be a positive integer and minimum_exponent must be at least 2.",
-            {"minimum_exponent": 3, "cutoff": "20"},
+            input={"minimum_exponent": 3, "cutoff": "20"},
         ),
     ),
 )

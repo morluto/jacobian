@@ -84,8 +84,7 @@ def _admit_tree(graph: SimpleUndirectedGraph) -> _TreeProfile:
     )
     if retained_label_characters > MAX_TREE_POLYNOMIAL_RETAINED_LABEL_CHARACTERS:
         raise TreeIndependencePolynomialAdmissionError(
-            "tree independence polynomial exceeds the retained "
-            "label-character bound"
+            "tree independence polynomial exceeds the retained label-character bound"
         )
     return _admitted_tree_profile(graph)
 

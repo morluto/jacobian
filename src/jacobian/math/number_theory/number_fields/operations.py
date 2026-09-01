@@ -57,6 +57,11 @@ from jacobian.math.number_theory.number_fields.values import (
     SimpleNumberFieldPresentation,
 )
 
+# The native integral-basis consumers retain their prior degree-31 envelope.
+# This is intentionally independent of the smaller degree bound for the
+# isolated all-embedding worker and the widened shared field carrier.
+_MAX_NATIVE_INTEGRAL_BASIS_DEGREE = 31
+
 
 class NumberFieldEmbeddingAdmissionError(ValueError):
     """A proved owner-local resource rejection for embedding enumeration."""
@@ -352,6 +357,11 @@ def embeddings(
 def _integral_basis(
     field: SimpleNumberFieldPresentation,
 ) -> tuple[Any, Any, Any, int]:
+    if field.degree > _MAX_NATIVE_INTEGRAL_BASIS_DEGREE:
+        raise ValueError(
+            "native number-field integral-basis operations are limited to degree "
+            f"{_MAX_NATIVE_INTEGRAL_BASIS_DEGREE}"
+        )
     integral_basis = recognized_integral_basis(field)
     if integral_basis is None:
         raise ValueError("simple number-field polynomial must be irreducible over QQ")

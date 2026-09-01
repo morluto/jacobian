@@ -22,7 +22,9 @@ from jacobian.math.number_theory.algebraic_numbers.real import (
     _UnrecognizedRealAlgebraicValue,
 )
 
-MAX_SIMPLE_NUMBER_FIELD_DEGREE = 31
+# Cyclotomic order 67 is admitted by the cyclic profile and has
+# phi(67) = 66; the shared carrier must represent that returned value.
+MAX_SIMPLE_NUMBER_FIELD_DEGREE = 126
 MAX_NUMBER_FIELD_EMBEDDING_DEGREE = 8
 MAX_SIMPLE_NUMBER_FIELD_COEFFICIENT_DIGITS = 256
 MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS = 256

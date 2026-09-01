@@ -80,11 +80,11 @@ def test_native_operation_is_exported_by_owner_package() -> None:
     assert exported is compute_cyclic_sumset_profile
 
 
-def test_wide_complete_profile_is_rejected_before_pair_arithmetic() -> None:
+def test_modulus_must_fit_the_interoperable_integer_carrier() -> None:
     left = tuple(10**99 + index for index in range(50_000))
     right = (0,)
 
-    with pytest.raises(OperationDomainValidationError, match="output-byte limit"):
+    with pytest.raises(OperationDomainValidationError, match="interoperable JSON"):
         compute_cyclic_sumset_profile(10**101, left, right)
-    request = CyclicSumsetRequest(modulus=10**101, left=left, right=right)
-    assert request.left == left
+    with pytest.raises(ValidationError):
+        CyclicSumsetRequest(modulus=10**101, left=left, right=right)

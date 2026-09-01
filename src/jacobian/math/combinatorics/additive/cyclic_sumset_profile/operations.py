@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.cyclic_sumset_profile._models import (
+    MAX_CYCLIC_SUMSET_MODULUS,
     MAX_CYCLIC_SUMSET_PAIRS,
     CyclicSumsetEntry,
     CyclicSumsetResult,
-    _result_wire_bytes,
 )
 
 __all__ = ["compute_cyclic_sumset_profile"]
@@ -20,11 +19,14 @@ def compute_cyclic_sumset_profile(
     right: tuple[int, ...],
 ) -> CyclicSumsetResult:
     """Return the complete cyclic representation function r_{A+B}(c)."""
-    if modulus <= 0:
+    if not 0 < modulus <= MAX_CYCLIC_SUMSET_MODULUS:
         raise OperationDomainValidationError(
             location=("modulus",),
             code="cyclic_sumset.positive_modulus",
-            message="cyclic sumset modulus must be positive",
+            message=(
+                "cyclic sumset modulus must be positive and fit the "
+                "interoperable JSON integer range"
+            ),
         )
     if len(left) * len(right) > MAX_CYCLIC_SUMSET_PAIRS:
         raise OperationDomainValidationError(
@@ -43,12 +45,6 @@ def compute_cyclic_sumset_profile(
             location=("left", "right"),
             code="cyclic_sumset.duplicate_operand",
             message="cyclic sumset operands must contain distinct residues",
-        )
-    if _result_wire_bytes(modulus, left, right) > CanonicalLimits().max_output_bytes:
-        raise OperationDomainValidationError(
-            location=("left", "right"),
-            code="cyclic_sumset.result_bytes_exceeded",
-            message="cyclic sumset profile exceeds the canonical output-byte limit",
         )
     counts: dict[int, int] = {}
     for a in left:

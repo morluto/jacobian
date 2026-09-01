@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from collections.abc import Iterable, Mapping
 from typing import Annotated, Self
 
@@ -16,7 +15,6 @@ from jacobian.canonical import (
     CanonicalLimits,
     format_canonical_integer,
     parse_canonical_integer,
-    strict_json_object_size,
 )
 from jacobian.math.combinatorics.additive._multiset_sum import (
     MAX_ARITY,
@@ -49,20 +47,9 @@ _MAX_RESULT_SIZE = _MAX_SET_SIZE * _MAX_SET_SIZE
 _MAX_DIMENSION = 1_024
 _MAX_COORDINATE_DIGITS = 6
 
-# ``direct_sum_predicate`` returns a complete partition of Z_n: every residue
-# occurs exactly once in either ``representatives`` or ``missing``.  Collisions
-# are an additional, distinct-residue diagnostic.  Reserve the real canonical
-# transport budget before enumerating the missing set, rather than allowing a
-# valid computation to fail only when dispatch serializes its result.
-_MAX_DIRECT_SUM_RESULT_BYTES = CanonicalLimits().max_output_bytes
-
-# The cardinality ceiling remains a cheap parser bound. Ordered-difference
-# execution separately charges its actual dimension and pair profile.
-_MAX_ENTRY_WIRE_BYTES = 256
-_MAX_PROFILE_RESULT_BUDGET_BYTES = 4 * 1024 * 1024
-_MAX_VECTOR_SET_SIZE = (
-    math.isqrt(4 * (_MAX_PROFILE_RESULT_BUDGET_BYTES // _MAX_ENTRY_WIRE_BYTES) + 1) + 1
-) // 2
+# The materialized vector family is bounded directly; execution separately
+# charges its actual dimension and ordered-pair profile.
+_MAX_VECTOR_SET_SIZE = 128
 _MAX_TOTAL_ORDERED_PAIRS = _MAX_VECTOR_SET_SIZE * (_MAX_VECTOR_SET_SIZE - 1)
 
 
@@ -294,100 +281,6 @@ def _require_bounded_cartesian_product(
             "_require_bounded_cartesian_product",
             f"Cartesian product has {pair_count} pairs, exceeding the "
             f"{_MAX_CARTESIAN_PAIR_COUNT}-pair bound",
-        )
-
-
-def _require_sumset_result_transport_bound(support: Iterable[int]) -> None:
-    """Reject sumsets whose complete result cannot fit canonical transport."""
-    values = tuple(format_canonical_integer(value) for value in support)
-    elements_size = (
-        2 + max(len(values) - 1, 0) + sum(len(value) + 2 for value in values)
-    )
-    support_size = strict_json_object_size((("elements", elements_size),))
-    result_size = strict_json_object_size(
-        (("cardinality", len(str(len(values)))), ("support", support_size))
-    )
-    limit = CanonicalLimits().max_output_bytes
-    if result_size > limit:
-        raise _validation_error(
-            "sumset_result_transport_exceeded",
-            "sumset result requires "
-            f"{result_size:,} canonical JSON bytes, exceeding the "
-            f"{limit:,}-byte output limit",
-        )
-
-
-def _decimal_digit_sum_through(value: int) -> int:
-    """Return the total decimal digit count of the integers in ``[0, value)``."""
-
-    if value <= 0:
-        return 0
-    total = 0
-    lower = 1
-    digits = 1
-    while lower < value:
-        upper = min(value, lower * 10)
-        total += (upper - lower) * digits
-        lower = upper
-        digits += 1
-    return total + 1  # The residue 0 has one decimal digit.
-
-
-def _direct_sum_predicate_result_upper_bound(
-    modulus: int,
-    source_pair_count: int,
-) -> int:
-    """Bound the canonical JSON result for one admitted direct-sum request.
-
-    The representatives and missing lists partition the residue classes, so
-    their combined decimal text is exact. A collision needs two distinct
-    source pairs, hence at most ``source_pair_count // 2`` distinct collision
-    residues can be reported. For those optional entries, charging the widest
-    residue text is conservative.
-    """
-
-    partition_value_bytes = (
-        _decimal_digit_sum_through(modulus)
-        + 2 * modulus  # JSON string quotes
-        + modulus  # at most one comma per partition entry across two arrays
-        + 4  # the two array delimiters
-    )
-    collision_count = min(modulus, source_pair_count // 2)
-    collision_digit_bound = len(str(modulus - 1))
-    collision_value_bytes = (
-        2 if collision_count == 0 else collision_count * (collision_digit_bound + 3) + 1
-    )
-    return (
-        strict_json_object_size(
-            (
-                ("holds", len("false")),
-                ("modulus", len(str(modulus))),
-                ("representatives", 0),
-                ("collisions", collision_value_bytes),
-                ("missing", 0),
-            )
-        )
-        + partition_value_bytes
-    )
-
-
-def _require_direct_sum_result_transport_bound(
-    modulus: int,
-    left: FiniteIntegerSet,
-    right: FiniteIntegerSet,
-) -> None:
-    source_pair_count = len(left.elements) * len(right.elements)
-    predicted = _direct_sum_predicate_result_upper_bound(
-        modulus,
-        source_pair_count,
-    )
-    if predicted > _MAX_DIRECT_SUM_RESULT_BYTES:
-        raise _validation_error(
-            "direct_sum_result_transport_exceeded",
-            "direct-sum diagnostics would use up to "
-            f"{predicted:,} canonical JSON bytes, exceeding the "
-            f"{_MAX_DIRECT_SUM_RESULT_BYTES:,}-byte output limit; reduce the "
-            "modulus or partition the residue classes",
         )
 
 

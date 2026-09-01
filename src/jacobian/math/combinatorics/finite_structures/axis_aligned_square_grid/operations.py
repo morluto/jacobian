@@ -2,11 +2,6 @@
 
 from __future__ import annotations
 
-from jacobian.canonical import (
-    CanonicalLimits,
-    encode_strict_json,
-    strict_json_object_size,
-)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.axis_aligned_square_grid._models import (
     MAX_SIDE_LENGTH,
@@ -19,13 +14,6 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 )
 
 __all__ = ["construct_axis_aligned_square_grid"]
-
-MAX_RESULT_BYTES = CanonicalLimits().max_output_bytes
-
-
-def _array_size(item_sizes: list[int]) -> int:
-    return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
-
 
 def _admit_side_length(side_length: int) -> int:
     if isinstance(side_length, bool) or not isinstance(side_length, int):
@@ -59,24 +47,6 @@ def _admit_side_length(side_length: int) -> int:
             ),
         )
 
-    vertex_digit_bytes = len(encode_strict_json(f"({n - 1},{n - 1})"))
-    edge_id_bytes = len(encode_strict_json(f"square_{max(edge_count - 1, 0)}"))
-    edge_member_bytes = _array_size([vertex_digit_bytes] * 4)
-    edge_bytes = _array_size([edge_id_bytes, edge_member_bytes])
-    vertices_bytes = _array_size([vertex_digit_bytes] * (n * n))
-    edges_bytes = _array_size([edge_bytes] * edge_count)
-    hypergraph_bytes = strict_json_object_size(
-        (("vertices", vertices_bytes), ("edges", edges_bytes))
-    )
-    result_bytes = strict_json_object_size(
-        (("side_length", len(str(n))), ("hypergraph", hypergraph_bytes))
-    )
-    if result_bytes > MAX_RESULT_BYTES:
-        raise OperationDomainValidationError(
-            location=("side_length",),
-            code="square_grid.result_size_bound",
-            message=f"the grid result exceeds the {MAX_RESULT_BYTES}-byte output bound",
-        )
     return n
 
 

@@ -8,12 +8,7 @@ from itertools import combinations
 from math import gcd
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-    format_canonical_integer,
-)
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.rational_fixed_arity._models import (
     RationalFixedAritySumResult,
@@ -23,7 +18,6 @@ from jacobian.math.combinatorics.additive.rational_fixed_arity._models import (
 __all__ = ["compute_rational_fixed_arity_sum_profile"]
 
 MAX_ENUMERATION_WORK = 20_000_000
-MAX_RESULT_BYTES = CanonicalLimits().max_output_bytes
 MAX_SAFE_JSON_INTEGER = (1 << 53) - 1
 
 
@@ -247,7 +241,7 @@ def _capped_combination(n: int, k: int, cap: int) -> int:
     return result
 
 
-def _admit(  # noqa: C901
+def _admit(
     values: tuple[CanonicalRational, ...],
     arity: int,
 ) -> _AdmissionPlan:
@@ -294,15 +288,6 @@ def _admit(  # noqa: C901
             ("values",),
             "rational_fixed_arity.work_bound",
             "fixed-arity enumeration exceeds the admitted work bound",
-        )
-    source_size_estimate = 64 + sum(
-        len(value.num) + len(value.den) + 24 for value in values
-    )
-    if source_size_estimate > MAX_RESULT_BYTES:
-        _reject(
-            ("values",),
-            "rational_fixed_arity.result_bound",
-            "the rational source exceeds the canonical output bound",
         )
     fractions = tuple(value.as_fraction() for value in values)
 
@@ -364,7 +349,7 @@ def _admit(  # noqa: C901
     # Equal source values can collapse many index tuples to the same sum.  The
     # number of attainable value-count vectors is a safe support bound and is
     # much tighter for repeated inputs than the raw combination count.
-    support_bound, support_presolve_work, projection_work = _support_bound(
+    _, support_presolve_work, projection_work = _support_bound(
         fractions, arity, candidate_count
     )
     if work + support_presolve_work + projection_work > MAX_ENUMERATION_WORK:
@@ -372,28 +357,6 @@ def _admit(  # noqa: C901
             ("values",),
             "rational_fixed_arity.work_bound",
             "fixed-arity enumeration and support presolve exceed the admitted work bound",
-        )
-    try:
-        source_bytes = len(
-            encode_strict_json(
-                {"values": [value.model_dump(mode="json") for value in values]}
-            )
-        )
-    except CanonicalizationError:
-        _reject(
-            ("values",),
-            "rational_fixed_arity.result_bound",
-            "the complete sum profile exceeds the canonical output bound",
-        )
-    row_bytes = (
-        sum_numerator_digits + sum_denominator_digits + len(str(candidate_count)) + 64
-    )
-    result_bytes = 256 + source_bytes + support_bound * row_bytes
-    if result_bytes > MAX_RESULT_BYTES:
-        _reject(
-            ("values",),
-            "rational_fixed_arity.result_bound",
-            "the exact sum profile exceeds the canonical output bound",
         )
     return _AdmissionPlan(
         fractions=fractions,

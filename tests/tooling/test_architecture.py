@@ -272,6 +272,28 @@ def test_model_validators_cannot_import_backends_or_processes(tmp_path: Path) ->
     ]
 
 
+def test_model_validators_cannot_hide_relative_backend_imports(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "src/jacobian/math/example/_models.py",
+        "class ExampleValue:\n"
+        "    @model_validator(mode='after')\n"
+        "    def verify(self):\n"
+        "        from ._backend import solve\n"
+        "        from ._process import run\n"
+        "        from . import _backend\n"
+        "        from jacobian import process\n"
+        "        return self\n",
+    )
+
+    assert _violations(tmp_path, "validator-backend-import") == [
+        "src/jacobian/math/example/_models.py",
+        "src/jacobian/math/example/_models.py",
+        "src/jacobian/math/example/_models.py",
+        "src/jacobian/math/example/_models.py",
+    ]
+
+
 def test_profiles_and_certificates_cannot_hide_kernel_replay(tmp_path: Path) -> None:
     _write(
         tmp_path,

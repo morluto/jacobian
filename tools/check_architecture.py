@@ -662,16 +662,22 @@ def _validator_backend_import_violations(
             for node in ast.walk(function)
             if isinstance(node, (ast.Import, ast.ImportFrom))
         ):
-            modules = (
-                tuple(alias.name for alias in imported.names)
-                if isinstance(imported, ast.Import)
-                else (imported.module or "",)
-            )
+            if isinstance(imported, ast.Import):
+                modules = tuple(alias.name for alias in imported.names)
+            else:
+                parent = imported.module or ""
+                modules = (
+                    parent,
+                    *(
+                        f"{parent}.{alias.name}" if parent else alias.name
+                        for alias in imported.names
+                    ),
+                )
             if any(
                 module == "flint"
                 or module == "subprocess"
                 or module == "jacobian.process"
-                or module.endswith(("._backend", "._process"))
+                or module.rsplit(".", maxsplit=1)[-1] in {"_backend", "_process"}
                 for module in modules
             ):
                 violations.append(

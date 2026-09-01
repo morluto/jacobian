@@ -16,6 +16,7 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 __all__ = ["compute_common_neighbor_profile"]
 
 MAX_COMMON_NEIGHBOR_CELLS = 5_000_000
+MAX_COMMON_NEIGHBOR_LABEL_CHARACTERS = 20_000_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,28 +43,32 @@ def _admit_graph(
     for left, right in graph.edges:
         adjacency[left].add(right)
         adjacency[right].add(left)
-    common_neighbor_cells = sum(
-        len(adjacency[left] & adjacency[right])
-        for index, left in enumerate(vertices)
-        for right in vertices[index + 1 :]
+    rows: list[tuple[str, str, tuple[str, ...]]] = []
+    common_neighbor_cells = 0
+    retained_label_characters = sum(len(vertex) for vertex in graph.vertices) + sum(
+        len(left) + len(right) for left, right in graph.edges
     )
-    if common_neighbor_cells > MAX_COMMON_NEIGHBOR_CELLS:
-        _reject(
-            "result_cells_exceeded",
-            "complete profile exceeds the "
-            f"{MAX_COMMON_NEIGHBOR_CELLS:,}-common-neighbor-cell result bound",
-        )
+    for index, left in enumerate(vertices):
+        for right in vertices[index + 1 :]:
+            common = tuple(sorted(adjacency[left] & adjacency[right]))
+            common_neighbor_cells += len(common)
+            retained_label_characters += (
+                len(left) + len(right) + sum(len(vertex) for vertex in common)
+            )
+            if common_neighbor_cells > MAX_COMMON_NEIGHBOR_CELLS:
+                _reject(
+                    "result_cells_exceeded",
+                    "complete profile exceeds the "
+                    f"{MAX_COMMON_NEIGHBOR_CELLS:,}-common-neighbor-cell result bound",
+                )
+            if retained_label_characters > MAX_COMMON_NEIGHBOR_LABEL_CHARACTERS:
+                _reject(
+                    "retained_labels_exceeded",
+                    "complete profile exceeds the retained label-character bound",
+                )
+            rows.append((left, right, common))
 
-    rows = tuple(
-        (
-            left,
-            right,
-            tuple(sorted(adjacency[left] & adjacency[right])),
-        )
-        for index, left in enumerate(vertices)
-        for right in vertices[index + 1 :]
-    )
-    return adjacency, _ProfilePlan(rows=rows)
+    return adjacency, _ProfilePlan(rows=tuple(rows))
 
 
 def compute_common_neighbor_profile(

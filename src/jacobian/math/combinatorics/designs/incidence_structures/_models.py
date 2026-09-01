@@ -59,6 +59,23 @@ class IncidenceStructure(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_incidence(self) -> Self:
+        for kind, labels in (
+            ("point label", self.points),
+            ("block ID", self.block_ids),
+        ):
+            for label in labels:
+                try:
+                    encoded = label.encode("utf-8")
+                except UnicodeEncodeError as exc:
+                    raise _validation_error(
+                        "label_not_unicode_scalar_text",
+                        f"{kind} must contain only valid Unicode scalar values",
+                    ) from exc
+                if len(encoded) > MAX_LABEL_BYTES:
+                    raise _validation_error(
+                        "label_exceeds_byte_bound",
+                        f"{kind} must use at most {MAX_LABEL_BYTES} UTF-8 bytes",
+                    )
         if len(set(self.points)) != len(self.points):
             raise _validation_error(
                 "point_labels_not_distinct", "point labels must be distinct"

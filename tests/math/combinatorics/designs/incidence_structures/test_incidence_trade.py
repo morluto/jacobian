@@ -220,6 +220,14 @@ def test_profile_admission_charges_structure_not_serialized_label_repetition() -
     assert len(result.subset_profile) == 4_950
 
 
+def test_incidence_rejects_labels_above_intrinsic_byte_bound() -> None:
+    with pytest.raises(ValueError, match="1024 UTF-8 bytes"):
+        _family((("x" * 1_025,),), "b", points=("x" * 1_025,))
+
+    with pytest.raises(ValueError, match="1024 UTF-8 bytes"):
+        _family(((),), "b" * 1_025, points=("p",))
+
+
 def test_trade_admission_is_budget_derived_with_conservative_order_ceiling() -> None:
     points = tuple(f"p{index}" for index in range(33))
     left = _family(((),), "l", points=points)
@@ -281,9 +289,9 @@ def _long_id_family(prefix: str, filler: str, id_length: int) -> IncidenceStruct
     )
 
 
-def test_trade_admission_does_not_inherit_a_serialized_output_limit() -> None:
-    left = _long_id_family("l", "x", 3_000)
-    right = _long_id_family("r", "y", 3_000)
+def test_trade_accepts_block_ids_at_the_carrier_byte_bound() -> None:
+    left = _long_id_family("l", "x", 1_024)
+    right = _long_id_family("r", "y", 1_024)
 
     result = _incidence_trade(
         IncidenceTradeRequest(left=left, right=right, max_order=1)
@@ -292,8 +300,8 @@ def test_trade_admission_does_not_inherit_a_serialized_output_limit() -> None:
 
 
 def test_admitted_trade_returns_typed_result() -> None:
-    left = _long_id_family("l", "x", 1_400)
-    right = _long_id_family("r", "y", 1_400)
+    left = _long_id_family("l", "x", 1_000)
+    right = _long_id_family("r", "y", 1_000)
 
     result = check_incidence_trade(left, right, 1)
 

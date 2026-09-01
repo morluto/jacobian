@@ -4,6 +4,7 @@ import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.common_neighbor_profile.operations import (
+    MAX_COMMON_NEIGHBOR_LABEL_CHARACTERS,
     compute_common_neighbor_profile,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -89,6 +90,22 @@ def test_result_preserves_source() -> None:
     g = _graph(["a", "b"], [("a", "b")])
     result = compute_common_neighbor_profile(g)
     assert result.graph == g
+
+
+def test_native_admission_rejects_unbounded_retained_labels() -> None:
+    label = "x" * (MAX_COMMON_NEIGHBOR_LABEL_CHARACTERS // 16 + 1)
+    vertices = [f"{label}{suffix}" for suffix in ("a", "b", "c")]
+    graph = _graph(
+        vertices,
+        [
+            (vertices[0], vertices[1]),
+            (vertices[0], vertices[2]),
+            (vertices[1], vertices[2]),
+        ],
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="label-character"):
+        compute_common_neighbor_profile(graph)
 
 
 def test_native_admission_rejects_complete_profile_over_cell_bound() -> None:

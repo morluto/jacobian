@@ -349,6 +349,7 @@ def test_exact_public_api_symbols() -> None:
         "OrbitDistribution",
         "PaleyTournamentResult",
         "PermutationResult",
+        "PrimeFieldActionAxis",
         "PrimeFieldLinearAction",
         "ProjectiveLine",
         "ProjectivePoint",

@@ -9,13 +9,13 @@ from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields import (
     HomogeneousFixedSubspace,
+    PrimeFieldActionAxis,
     PrimeFieldLinearAction,
     homogeneous_fixed_subspace,
 )
 from jacobian.math.finite_fields import operations as operations_module
 from jacobian.math.finite_fields._models import HomogeneousFixedSubspaceRequest
 from jacobian.math.finite_fields._tools import TOOLS
-from jacobian.math.finite_fields.values import PrimeFieldActionAxis
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
 

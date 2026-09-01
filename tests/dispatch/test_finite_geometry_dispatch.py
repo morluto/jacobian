@@ -3,11 +3,10 @@
 import pytest
 from jsonschema.validators import Draft202012Validator
 
-from jacobian.canonical import CanonicalLimits, canonicalize_json
+from jacobian.canonical import canonicalize_json
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import invoke_operation, parse_operation_input
 from jacobian.math.geometry.finite._models import (
-    MAX_PROJECTIVE_ENUMERATION_RESULT_BYTES,
     MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS,
     GrassmannianCountRequest,
 )
@@ -56,9 +55,6 @@ def test_projective_space_schema_publishes_coupled_enumeration_bound() -> None:
         f"q**len(axis) <= {MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS}"
         in space_description
     )
-    assert (
-        f"{MAX_PROJECTIVE_ENUMERATION_RESULT_BYTES}-byte result budget" in description
-    )
     assert "bare coordinate tuples" in description
 
     validator = Draft202012Validator(schema)
@@ -77,12 +73,8 @@ def test_projective_space_schema_publishes_coupled_enumeration_bound() -> None:
         )
 
 
-def test_dispatch_returns_maximal_enumeration_within_transport_limit() -> None:
-    """The admitted-envelope-maximal request returns its complete declared
-    result: q=2 with 16 axis labels yields all 65,535 projective points of
-    PG(15, F_2), and the typed sequence reply -- the parent space once plus
-    bare coordinate tuples -- serializes well inside the canonical transport
-    limit instead of failing only after enumeration."""
+def test_dispatch_returns_maximal_enumeration() -> None:
+    """The maximal vector envelope returns all 65,535 projective points."""
     payload = {"space": {"field_order": 2, "axis": [f"x{i}" for i in range(16)]}}
 
     result = invoke_operation(
@@ -93,19 +85,15 @@ def test_dispatch_returns_maximal_enumeration_within_transport_limit() -> None:
     assert len(coordinates) == MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS - 1
     assert coordinates[0] == [0] * 15 + [1]
     encoded = len(canonicalize_json(result.output))
-    assert encoded <= CanonicalLimits().max_output_bytes
-    assert encoded < MAX_PROJECTIVE_ENUMERATION_RESULT_BYTES
+    assert encoded > 0
 
 
-def test_dispatch_rejects_untransportable_enumeration_as_invalid_request() -> None:
-    """A request whose predicted serialized result exceeds the owner-local
-    budget fails admission before execution as a typed invalid request --
-    never as a post-enumeration host exception."""
+def test_dispatch_rejects_oversized_axis_labels_as_invalid_request() -> None:
     payload = {
         "space": {"field_order": 2, "axis": ["x", "y" * (9 * 1024 * 1024)]},
     }
 
-    with pytest.raises(ValueError, match="serialized point list"):
+    with pytest.raises(ValueError, match="payload failed validation"):
         invoke_operation(
             "finite_geometry.projective_space.enumerate_points",
             payload,

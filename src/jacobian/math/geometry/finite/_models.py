@@ -22,18 +22,6 @@ from jacobian.math.geometry.finite.values import (
 )
 
 MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS = 65_536
-# Owner-local serialized-result budget for the complete enumeration reply,
-# kept below Jacobian's 10 MiB canonical transport limit. Admission predicts
-# the worst-case canonical bytes from mathematics alone: at most
-# (q**n - 1)/(q - 1) points, each encoded as a bare coordinate array whose
-# entries carry at most len(str(q - 1)) digits (canonical residues are < q),
-# plus the declared parent space echoed once and a fixed key/method header.
-# Every admitted request therefore returns its complete declared result
-# instead of failing transport validation only after enumeration.
-MAX_PROJECTIVE_ENUMERATION_RESULT_BYTES = 8 * 1024 * 1024
-# Conservative fixed overhead for result keys, the method string, the count
-# digits, enclosing braces, and array punctuation outside per-point entries.
-_PROJECTIVE_ENUMERATION_ENVELOPE_BYTES = 256
 
 
 class LinearSubspace(StrictModel):
@@ -167,18 +155,13 @@ class ProjectiveSpaceEnumerateRequest(StrictModel):
         json_schema_extra={
             "description": (
                 "One finite projective space whose complete canonical point "
-                "list fits the transport envelope. It admits exactly q**n <= "
+                "list fits the enumeration envelope. It admits exactly q**n <= "
                 f"{MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS}, where q is the "
                 "prime field order and n is the length of its ordered coordinate "
                 "axis; this leaves at most "
                 f"{MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS - 1} canonical "
                 "projective points, returned as a typed point sequence holding "
-                "the parent space once plus bare coordinate tuples. Admission "
-                "also predicts the complete serialized result before execution "
-                "and rejects any request whose canonical output would exceed "
-                f"the {MAX_PROJECTIVE_ENUMERATION_RESULT_BYTES}-byte result "
-                "budget, so every accepted request returns its declared "
-                "result inside the canonical transport limit."
+                "the parent space once plus bare coordinate tuples."
             )
         }
     )
@@ -187,10 +170,7 @@ class ProjectiveSpaceEnumerateRequest(StrictModel):
         description=(
             "An ordered coordinate space over the prime field F_q. Complete "
             "enumeration requires q**len(axis) <= "
-            f"{MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS} plus a predicted "
-            f"serialized result within the "
-            f"{MAX_PROJECTIVE_ENUMERATION_RESULT_BYTES}-byte budget; the "
-            "canonical sequence holds at most "
+            f"{MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS}; the canonical sequence holds at most "
             f"{MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS - 1} bare coordinate "
             "tuples in this axis order."
         )

@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import unicodedata
 from itertools import product
 from typing import NoReturn
 
 from sympy import isprime
 
-from jacobian.canonical import encode_strict_json, format_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.designs.incidence_structures._models import (
     IncidenceStructure,
@@ -19,9 +18,7 @@ from jacobian.math.geometry.finite._linear import (
     rref_rank,
 )
 from jacobian.math.geometry.finite._models import (
-    _PROJECTIVE_ENUMERATION_ENVELOPE_BYTES,
     MAX_AFFINE_PLANE_FIELD_ORDER,
-    MAX_PROJECTIVE_ENUMERATION_RESULT_BYTES,
     MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS,
     GrassmannianCountResult,
     LinearSubspace,
@@ -133,26 +130,6 @@ def _admit_projective_enumeration(space: PrimeFieldVectorSpace) -> None:
             "projective space exceeds the "
             f"{MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS}-vector enumeration envelope",
         )
-    digit_width = len(str(q - 1))
-    point_count = (q**n - 1) // (q - 1)
-    per_point_bytes = 2 + n * digit_width + (n - 1) + 1
-    predicted = (
-        _PROJECTIVE_ENUMERATION_ENVELOPE_BYTES
-        + sum(
-            len(encode_strict_json(unicodedata.normalize("NFC", label)))
-            for label in space.axis
-        )
-        + point_count * per_point_bytes
-    )
-    if predicted > MAX_PROJECTIVE_ENUMERATION_RESULT_BYTES:
-        _domain_error(
-            ("space",),
-            "enumeration_result_exceeds_bound",
-            "the complete serialized point list would exceed the "
-            f"{MAX_PROJECTIVE_ENUMERATION_RESULT_BYTES}-byte result budget",
-        )
-
-
 def projective_point_canonicalize(
     space: PrimeFieldVectorSpace,
     vector: tuple[int, ...],

@@ -116,7 +116,7 @@ def test_rejects_accumulated_coefficient_growth() -> None:
         rational_polynomial_multiply(request)
 
 
-def test_rejects_serialized_result_budget() -> None:
+def test_accepts_large_product_within_term_and_digit_bounds() -> None:
     coefficient = {"num": "9" * 256, "den": "1"}
     left_terms = [
         {"coefficient": coefficient, "exponents": [0, 0, index]}
@@ -141,8 +141,9 @@ def test_rejects_serialized_result_budget() -> None:
     request = RationalPolynomialMultiplyRequest.model_validate(
         {"left": left, "right": right}
     )
-    with pytest.raises(OperationDomainValidationError, match="serialized result size"):
-        rational_polynomial_multiply(request)
+    result = rational_polynomial_multiply(request)
+
+    assert len(result.polynomial.terms) == len(left_terms) * len(right_terms)
 
 
 def test_accepts_product_sensitive_operand_budgets() -> None:

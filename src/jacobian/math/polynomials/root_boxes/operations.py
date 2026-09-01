@@ -38,7 +38,6 @@ from ._models import (
     MAX_ROOT_BOX_ENDPOINT_DIGITS,
     MAX_ROOT_BOX_INTERMEDIATE_DIGITS,
     MAX_ROOT_BOX_POINT_VALUE_DIGITS,
-    MAX_ROOT_BOX_RESULT_BYTES,
     MAX_ROOT_BOX_RESULT_COMPONENT_DIGITS,
     MAX_ROOT_BOX_SOURCE_BYTES,
     MAX_ROOT_BOX_TOTAL_DEGREE,
@@ -55,12 +54,6 @@ from ._models import (
     RootBoxSingularMidpointAttempt,
     RootBoxUnknown,
 )
-
-_RESULT_RATIONAL_COMPONENTS = (
-    4 * MAX_ROOT_BOX_DIMENSION * MAX_ROOT_BOX_DIMENSION + 4 * MAX_ROOT_BOX_DIMENSION
-)
-_RESULT_ENVELOPE_RESERVE_BYTES = 8_192
-
 
 type _PreparedRootBox = ComponentExclusionKernelResult | MidpointKernelData
 
@@ -155,15 +148,6 @@ def _admit_source_shape(
         raise _domain_error(
             "root-box retained source exceeds the "
             f"{MAX_ROOT_BOX_SOURCE_BYTES:,}-byte budget"
-        )
-    maximum_result_bytes = (
-        source_bytes
-        + _RESULT_RATIONAL_COMPONENTS * (2 * MAX_ROOT_BOX_RESULT_COMPONENT_DIGITS + 64)
-        + _RESULT_ENVELOPE_RESERVE_BYTES
-    )
-    if maximum_result_bytes > MAX_ROOT_BOX_RESULT_BYTES:
-        raise _domain_error(
-            "root-box exact evidence would exceed the canonical output bound"
         )
 
 

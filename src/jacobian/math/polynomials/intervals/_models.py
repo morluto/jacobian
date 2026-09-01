@@ -13,7 +13,6 @@ from jacobian._digest import Sha256Digest
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.canonical import (
-    CanonicalLimits,
     encode_strict_json,
     format_canonical_integer,
     sha256_digest,
@@ -45,7 +44,6 @@ MAX_BOX_ENCLOSURE_ENDPOINT_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
 # polynomial endpoint is exponentiated.
 MAX_BOX_ENCLOSURE_INTERMEDIATE_DIGITS = 2 * MAX_CANONICAL_RATIONAL_DIGITS
 MAX_BOX_ENCLOSURE_RESULT_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
-MAX_BOX_ENCLOSURE_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 BOX_ENCLOSURE_ADMISSION_SUMMARY = (
     f"Bounds: {MAX_BOX_ENCLOSURE_TERMS:,} terms; degree "
@@ -55,11 +53,8 @@ BOX_ENCLOSURE_ADMISSION_SUMMARY = (
     f"{MAX_BOX_ENCLOSURE_ENDPOINT_DIGITS}-digit input-endpoint components; "
     f"{MAX_BOX_ENCLOSURE_TERM_AXIS_PAIRS:,} term-axis pairs; "
     f"{MAX_BOX_ENCLOSURE_INTERMEDIATE_DIGITS:,}-digit intermediate components; "
-    f"{MAX_BOX_ENCLOSURE_RESULT_DIGITS:,}-digit result components; "
-    f"{MAX_BOX_ENCLOSURE_RESULT_BYTES:,}-byte canonical retained-source result."
+    f"{MAX_BOX_ENCLOSURE_RESULT_DIGITS:,}-digit result components."
 )
-
-_RESULT_ENVELOPE_RESERVE_BYTES = 512
 
 
 def _validation_error(message: str) -> PydanticCustomError:
@@ -71,7 +66,6 @@ class _GrowthEstimate:
     result_numerator_digits: int
     result_denominator_digits: int
     intermediate_digits: int
-    estimated_result_bytes: int
 
 
 def _integer_digits(value: int) -> int:
@@ -185,7 +179,6 @@ def _estimate_growth(
     polynomial: RationalPolynomial,
     box: RationalBox,
 ) -> _GrowthEstimate:
-    source_bytes = len(encode_strict_json(_source_payload(polynomial, box)))
     effective_terms = tuple(
         term
         for term in polynomial.polynomial.terms
@@ -196,7 +189,6 @@ def _estimate_growth(
             result_numerator_digits=1,
             result_denominator_digits=1,
             intermediate_digits=1,
-            estimated_result_bytes=source_bytes + _RESULT_ENVELOPE_RESERVE_BYTES,
         )
 
     term_bounds = tuple(_term_component_bounds(term, box) for term in effective_terms)
@@ -244,16 +236,10 @@ def _estimate_growth(
             output_comparison_digits,
         )
 
-    estimated_result_bytes = (
-        source_bytes
-        + 2 * (result_numerator_digits + result_denominator_digits + 64)
-        + _RESULT_ENVELOPE_RESERVE_BYTES
-    )
     return _GrowthEstimate(
         result_numerator_digits=result_numerator_digits,
         result_denominator_digits=result_denominator_digits,
         intermediate_digits=intermediate_digits,
-        estimated_result_bytes=estimated_result_bytes,
     )
 
 
@@ -293,11 +279,6 @@ def _require_enclosure_preflight(
         raise _validation_error(
             "polynomial-box enclosure exceeds the "
             f"{MAX_BOX_ENCLOSURE_INTERMEDIATE_DIGITS}-digit intermediate bound"
-        )
-    if growth.estimated_result_bytes > MAX_BOX_ENCLOSURE_RESULT_BYTES:
-        raise _validation_error(
-            "polynomial-box enclosure result would exceed the "
-            f"{MAX_BOX_ENCLOSURE_RESULT_BYTES}-byte canonical output bound"
         )
     return growth
 
@@ -366,7 +347,6 @@ __all__ = [
     "MAX_BOX_ENCLOSURE_ENDPOINT_DIGITS",
     "MAX_BOX_ENCLOSURE_INTERMEDIATE_DIGITS",
     "MAX_BOX_ENCLOSURE_PER_VARIABLE_DEGREE",
-    "MAX_BOX_ENCLOSURE_RESULT_BYTES",
     "MAX_BOX_ENCLOSURE_RESULT_DIGITS",
     "MAX_BOX_ENCLOSURE_TERMS",
     "MAX_BOX_ENCLOSURE_TERM_AXIS_PAIRS",

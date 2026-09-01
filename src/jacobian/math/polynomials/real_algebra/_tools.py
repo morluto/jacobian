@@ -26,7 +26,11 @@ from jacobian.math.polynomials.real_algebra._strict_sublevel_models import (
 )
 from jacobian.math.polynomials.real_algebra.operations import (
     common_interlacing_profile as _common_interlacing_profile_native,
+)
+from jacobian.math.polynomials.real_algebra.operations import (
     compute_plane_component_profile as _compute_plane_component_profile_native,
+)
+from jacobian.math.polynomials.real_algebra.operations import (
     compute_root_count as _compute_root_count_native,
 )
 from jacobian.math.polynomials.real_algebra.operations import (

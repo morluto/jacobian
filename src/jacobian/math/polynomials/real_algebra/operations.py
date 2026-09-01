@@ -49,8 +49,8 @@ from jacobian.math.polynomials.values import (
 )
 
 __all__ = [
-    "compute_plane_component_profile",
     "common_interlacing_profile",
+    "compute_plane_component_profile",
     "compute_root_count",
     "compute_strict_sublevel_measure",
     "compute_sturm_chain",

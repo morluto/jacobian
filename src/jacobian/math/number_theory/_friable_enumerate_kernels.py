@@ -68,8 +68,6 @@ def _enumerate_generated(x: int, primes: tuple[int, ...]) -> tuple[int, ...]:
 def enumerate_friable(
     x: int | IntegerValue,
     y: int | IntegerValue,
-    *,
-    enforce_transport: bool = False,
 ) -> tuple[int, ...]:
     """Return the increasing tuple of positive y-friable integers at most x.
 
@@ -82,9 +80,7 @@ def enumerate_friable(
     if type(x) is not int or type(y) is not int:
         raise TypeError("friable-enumerate inputs must be integers")
 
-    regime, _primes, admitted_family = plan_friable_enumerate(
-        x, y, enforce_transport=enforce_transport
-    )
+    regime, _primes, admitted_family = plan_friable_enumerate(x, y)
 
     if regime == "DIRECT":
         return admitted_family

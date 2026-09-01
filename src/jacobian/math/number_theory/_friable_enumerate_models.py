@@ -8,11 +8,7 @@ from typing import Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.canonical import (
-    CanonicalLimits,
-    canonicalize_json,
-    format_canonical_integer,
-)
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.combinatorics.finite_structures.sets._models import (
     MAX_FINITE_INTEGER_SET_ELEMENTS,
     FiniteIntegerSet,
@@ -29,9 +25,6 @@ MAX_FRIABLE_ENUMERATE_GENERATED_CUTOFF = 10_000
 MAX_FRIABLE_ENUMERATE_FAMILY_SIZE = MAX_FINITE_INTEGER_SET_ELEMENTS
 _MAX_FRIABLE_ENUMERATE_SOURCE_DIGITS = 256
 _MAX_FRIABLE_ENUMERATE_SOURCE_ABS = 10**_MAX_FRIABLE_ENUMERATE_SOURCE_DIGITS
-# The final operation result is delivered under the canonical output boundary;
-# the finite-set carrier itself does not enforce the half-budget constant.
-_MAX_FRIABLE_ENUMERATED_BYTES = CanonicalLimits().max_output_bytes
 _MAX_FRIABLE_ENUMERATE_COUNT_NODES = 2_000_000
 
 
@@ -86,31 +79,6 @@ def _generate_from_exponent_vectors(x: int, primes: tuple[int, ...]) -> tuple[in
                 break
             product *= prime
     return tuple(sorted(values))
-
-
-def _estimate_serialized_bytes(x: int, family_size: int) -> int:
-    """Conservatively estimate the serialized byte cost before materialization."""
-
-    if family_size == 0:
-        return 0
-    max_digits = max(1, len(str(x)))
-    return family_size * (max_digits + 3)
-
-
-def _exact_serialized_bytes(x: int, y: int, family: tuple[int, ...]) -> int:
-    """Measure the complete final result in the canonical wire format."""
-
-    payload = {
-        "family": {"elements": [str(value) for value in family]},
-        "x": str(x),
-        "y": str(y),
-    }
-    return len(
-        canonicalize_json(
-            payload,
-            limits=CanonicalLimits(max_output_bytes=(1 << 63) - 1),
-        )
-    )
 
 
 class FriableEnumerateRequest(StrictModel):
@@ -290,7 +258,7 @@ def _materialize_friable_bounded(x: int, y: int) -> tuple[int, ...]:
 
 
 def plan_friable_enumerate(
-    x: int, y: int, *, enforce_transport: bool = True
+    x: int, y: int
 ) -> tuple[str, tuple[int, ...], tuple[int, ...]]:
     """Validate and select one exact friable-enumerate execution regime.
 
@@ -321,14 +289,6 @@ def plan_friable_enumerate(
                 "friable_enumerate_family_exceeds_the_result_size_budget",
                 "friable-enumerate family exceeds the result-size budget",
             )
-        if enforce_transport and (
-            _exact_serialized_bytes(x, y, tuple(range(1, x + 1)))
-            > _MAX_FRIABLE_ENUMERATED_BYTES
-        ):
-            raise _validation_error(
-                "friable_enumerate_family_exceeds_the_serialized_byte_budget",
-                "friable-enumerate family exceeds the serialized-byte budget",
-            )
         return "DIRECT", (), tuple(range(1, x + 1))
 
     # Materialized regime: small enough to scan 1..x directly.
@@ -341,14 +301,6 @@ def plan_friable_enumerate(
             raise _validation_error(
                 "friable_enumerate_family_exceeds_the_result_size_budget",
                 "friable-enumerate family exceeds the result-size budget",
-            )
-        if (
-            enforce_transport
-            and _exact_serialized_bytes(x, y, family) > _MAX_FRIABLE_ENUMERATED_BYTES
-        ):
-            raise _validation_error(
-                "friable_enumerate_family_exceeds_the_serialized_byte_budget",
-                "friable-enumerate family exceeds the serialized-byte budget",
             )
         return "MATERIALIZED", (), family
 
@@ -366,14 +318,6 @@ def plan_friable_enumerate(
         raise _validation_error(
             "friable_enumerate_family_exceeds_the_result_size_budget",
             "friable-enumerate family exceeds the result-size budget",
-        )
-    if (
-        enforce_transport
-        and _exact_serialized_bytes(x, y, family) > _MAX_FRIABLE_ENUMERATED_BYTES
-    ):
-        raise _validation_error(
-            "friable_enumerate_family_exceeds_the_serialized_byte_budget",
-            "friable-enumerate family exceeds the serialized-byte budget",
         )
     return "GENERATED", primes, family
 

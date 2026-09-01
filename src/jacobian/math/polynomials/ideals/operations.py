@@ -14,7 +14,6 @@ from jacobian._execution import (
     current_request_execution,
     request_cancelled,
 )
-from jacobian.canonical import CanonicalizationError, canonicalize_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials._conversions import (
     rational_polynomial_to_sympy,
@@ -284,19 +283,6 @@ def _decimal_digit_count(value: int) -> int:
     elif value >= 10**estimate:
         estimate += 1
     return estimate
-
-
-def _require_transportable_minimal_primes_result(
-    result: IdealMinimalPrimesResult,
-) -> None:
-    """Reject a family whose complete public result exceeds JSON limits."""
-
-    try:
-        canonicalize_json(result.model_dump(mode="json"))
-    except CanonicalizationError as error:
-        raise _ResultLimitExceededError(
-            "the exact minimal-prime result exceeds the canonical transport bound"
-        ) from error
 
 
 _SYMPY_WORKER_SCRIPT = r"""
@@ -781,7 +767,6 @@ def ideal_minimal_primes(
             components=components,
             backend_version=backend.backend_version,
         )
-        _require_transportable_minimal_primes_result(result)
         return result
     except _ResultLimitExceededError as error:
         return IdealMinimalPrimesResult(

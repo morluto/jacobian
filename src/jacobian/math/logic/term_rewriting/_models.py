@@ -292,7 +292,6 @@ class CriticalPairsRequest(StrictModel):
             "x-jacobian-bounds": {
                 "max_overlap_candidates": 32,
                 "max_result_nodes": 42752,
-                "max_result_bytes": 4194304,
                 "max_variable_label": MAX_VARIABLE_LABEL,
                 "max_term_depth": MAX_TERM_DEPTH,
                 "max_result_term_depth": MAX_TERM_DEPTH - 1,

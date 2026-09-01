@@ -11,11 +11,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import (
-    CanonicalLimits,
-    format_canonical_integer,
-    parse_canonical_integer,
-)
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.combinatorics.additive._multiset_sum import (
     MAX_ARITY,
     MAX_ARITY_DIGITS,
@@ -42,6 +38,7 @@ from jacobian.math.combinatorics.finite_structures.sets._models import (
 # execution envelope; binary Cartesian operations retain their pair cap below.
 _MAX_SET_SIZE = 4096
 _MAX_CARTESIAN_PAIR_COUNT = 256 * 256
+MAX_CARTESIAN_SOURCE_DIGITS = 10_000_000
 _MAX_RESULT_SIZE = _MAX_SET_SIZE * _MAX_SET_SIZE
 _MAX_DIMENSION = 1_024
 _MAX_COORDINATE_DIGITS = 6
@@ -269,7 +266,7 @@ def _require_bounded_cartesian_product(
     source_digits = sum(
         len(element.lstrip("-")) for element in (*left.elements, *right.elements)
     )
-    if source_digits > CanonicalLimits().max_input_bytes:
+    if source_digits > MAX_CARTESIAN_SOURCE_DIGITS:
         raise _validation_error(
             "_require_bounded_cartesian_product",
             "finite-set operands exceed the admitted aggregate integer parsing budget",

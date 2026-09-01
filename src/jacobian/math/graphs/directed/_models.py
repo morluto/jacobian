@@ -9,7 +9,6 @@ from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits
 
 # These are the execution envelope for the four direct NetworkX operations
 # below.  ``DirectedGraph`` itself remains reusable by consumers whose work is
@@ -17,18 +16,9 @@ from jacobian.canonical import CanonicalLimits
 MAX_DIRECTED_OPERATION_VERTICES = 256
 MAX_DIRECTED_OPERATION_EDGES = 512
 
-# Parse-safety envelope for the shared carrier's edge list: a transport guard,
-# not admission.  The minimal canonical JSON encoding of one arc inside
-# ``edges`` is ``[0,0],`` -- five content bytes plus one separator byte --
-# so a maximal 10 MiB request document could still minimally encode roughly
-# 1.75 million arcs.  This envelope deliberately sits far below that: it is
-# one sixty-fourth of ``CanonicalLimits().max_input_bytes`` (163,840 arcs),
-# so even a worst-case admitted list consumes under a tenth of the transport
-# input envelope while remaining 320x the loosest current admission (the
-# direct operations' 512 arcs above; directed bond reliability admits 12).  No schema-admitted request can reach it, and
-# payloads beyond it reject here in O(1) instead of paying the full
-# duplicate-detecting scan first.
-MAX_DIRECTED_GRAPH_PARSE_EDGES = CanonicalLimits().max_input_bytes // 64
+# A cheap raw-item guard rejects pathological carrier lists before the
+# duplicate-detecting structural scan. Operation admission remains much tighter.
+MAX_DIRECTED_GRAPH_PARSE_EDGES = 163_840
 
 
 class DirectedGraph(StrictModel):

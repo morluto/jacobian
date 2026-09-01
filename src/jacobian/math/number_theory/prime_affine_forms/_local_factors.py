@@ -22,15 +22,12 @@ from jacobian.math.number_theory.prime_affine_forms._models import (
     MAX_LOCAL_PROFILE_PRIME,
     MAX_LOCAL_PROFILE_WORK,
     MAX_PRIME_BATCH,
-    MAX_RESULT_CHARACTER_BUDGET,
     CompactPrime,
     PrimeTupleBadResidueRow,
     PrimeTupleLocalSummary,
     PrimeTupleResidueRow,
     _require_prime,
     _require_prime_set,
-    _source_character_upper_bound,
-    _summary_character_upper_bound,
     _validation_error,
 )
 from jacobian.math.number_theory.prime_affine_forms.values import PrimeAffineTuple
@@ -186,17 +183,6 @@ def _admit_local_factors(source: PrimeAffineTuple, primes: tuple[int, ...]) -> N
         raise _validation_error(
             "finite factor product exceeds the conservative exact rational "
             f"digit bound {MAX_FACTOR_PRODUCT_DIGITS}"
-        )
-    estimated_characters = (
-        _source_character_upper_bound(source)
-        + sum(_summary_character_upper_bound(source, prime) for prime in primes)
-        + 128 * len(primes)
-        + 4 * sum(digit_bounds)
-        + 256
-    )
-    if estimated_characters > MAX_RESULT_CHARACTER_BUDGET:
-        raise _validation_error(
-            "finite factor result exceeds the conservative serialized bound"
         )
 
 

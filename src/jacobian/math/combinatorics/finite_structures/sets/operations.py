@@ -30,7 +30,7 @@ def _integers(value: FiniteIntegerSet) -> set[int]:
             message="finite-set elements exceed the canonical integer digit bound",
         )
     total_digits = sum(len(element.lstrip("-")) for element in value.elements)
-    if total_digits > CanonicalLimits().max_input_bytes:
+    if total_digits > MAX_FINITE_SET_TOTAL_DIGITS:
         raise OperationDomainValidationError(
             location=("value",),
             code="finite_set.aggregate_digit_bound",
@@ -172,3 +172,4 @@ __all__ = [
     "set_union",
     "union_cardinality",
 ]
+MAX_FINITE_SET_TOTAL_DIGITS = 10_000_000

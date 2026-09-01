@@ -5,11 +5,9 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import encode_strict_json
 from jacobian.math.graphs.values import (
     IndexedSimpleUndirectedGraph,
     SimpleUndirectedGraph,
-    simple_undirected_graph_wire_bytes,
 )
 
 
@@ -39,14 +37,6 @@ def test_graph_rejects_duplicate_edges() -> None:
             vertices=("a", "b"),
             edges=(("a", "b"), ("a", "b")),
         )
-
-
-def test_graph_wire_size_matches_its_canonical_value_serialization() -> None:
-    graph = SimpleUndirectedGraph(vertices=("a", "é"), edges=(("a", "é"),))
-
-    assert simple_undirected_graph_wire_bytes(graph) == len(
-        encode_strict_json(graph.model_dump(mode="json"))
-    )
 
 
 def test_indexed_null_graph_is_a_canonical_value() -> None:

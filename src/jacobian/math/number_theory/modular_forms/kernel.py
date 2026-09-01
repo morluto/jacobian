@@ -21,7 +21,7 @@ NAMED_LEVEL_ONE_FORMS = frozenset(("E4", "E6", "DELTA"))
 # products. FLINT selects faster kernels where applicable, so the estimate is
 # conservative without depending on one private multiplication algorithm.
 MAX_LEVEL_ONE_WORK_TERMS = 4_000_000
-MAX_LEVEL_ONE_SERIALIZED_CHARACTERS = 65_536
+MAX_LEVEL_ONE_COEFFICIENT_DIGITS = 65_536
 
 
 def divisor_power_sum(index: int, exponent: int) -> int:
@@ -141,19 +141,17 @@ def require_level_one_admission(
         )
 
     digits = coefficient_digit_bound(form, p)
-    # ``num`` and ``den`` are canonical integer strings; these fixed 28
-    # characters cover their JSON punctuation, field names, and a separator.
-    serialized_characters = 512 + p * (digits + 28)
-    if serialized_characters > MAX_LEVEL_ONE_SERIALIZED_CHARACTERS:
+    coefficient_digits = p * digits
+    if coefficient_digits > MAX_LEVEL_ONE_COEFFICIENT_DIGITS:
         raise OperationDomainValidationError(
             location=("truncation_order",),
-            code="modular_form.serialized_result_bound_exceeded",
-            message="level-one q-expansion exceeds the serialized result bound",
+            code="modular_form.coefficient_digit_bound_exceeded",
+            message="level-one q-expansion exceeds the aggregate coefficient-digit bound",
         )
 
 
 __all__ = [
-    "MAX_LEVEL_ONE_SERIALIZED_CHARACTERS",
+    "MAX_LEVEL_ONE_COEFFICIENT_DIGITS",
     "MAX_LEVEL_ONE_WORK_TERMS",
     "NAMED_LEVEL_ONE_FORMS",
     "NamedLevelOneModularForm",

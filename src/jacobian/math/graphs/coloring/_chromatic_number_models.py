@@ -21,7 +21,6 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_CHROMATIC_CERTIFICATE_VERTICES = 20
@@ -151,24 +150,6 @@ class _CertificateEvaluation:
     blocking_independent_set_weight: Fraction | None = None
 
 
-def _source_wire_bytes(
-    graph: SimpleUndirectedGraph,
-    claimed_chromatic_number: int,
-    coloring: tuple[int, ...],
-    weights: tuple[CanonicalRational, ...],
-) -> int:
-    return len(
-        encode_strict_json(
-            {
-                "graph": graph.model_dump(mode="json"),
-                "claimed_chromatic_number": claimed_chromatic_number,
-                "coloring": list(coloring),
-                "weights": [weight.model_dump(mode="json") for weight in weights],
-            }
-        )
-    )
-
-
 def _intermediate_digit_bound(weights: tuple[CanonicalRational, ...]) -> int:
     """Bound the common denominator, scaled weights, and every subset sum."""
     if not weights:
@@ -237,19 +218,6 @@ def _require_bounded_sources(
             weight,
             max_digits=MAX_CHROMATIC_CERTIFICATE_RATIONAL_DIGITS,
             label="chromatic-number certificate weight",
-        )
-
-    source_bytes = _source_wire_bytes(
-        graph,
-        claimed_chromatic_number,
-        coloring,
-        weights,
-    )
-    limits = CanonicalLimits()
-    if source_bytes > limits.max_input_bytes:
-        raise PydanticCustomError(
-            "graph.chromatic_number_certificate_source_exceeds_canonical_input",
-            "chromatic-number certificate source exceeds the canonical input limit",
         )
 
     intermediate_digits = _intermediate_digit_bound(weights)

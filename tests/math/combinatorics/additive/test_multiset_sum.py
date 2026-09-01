@@ -8,7 +8,6 @@ import pytest
 from pydantic import ValidationError
 from sympy import primerange
 
-from jacobian.canonical import CanonicalLimits, canonicalize_json
 from jacobian.math.combinatorics.additive._models import (
     _MAX_SET_SIZE,
     FiniteIntegerSet,
@@ -23,7 +22,6 @@ from jacobian.math.combinatorics.additive._multiset_sum import (
     MAX_INTEGER_LENGTH,
     MAX_RESULT_DIGITS,
     MAX_SUPPORT_SIZE,
-    RESULT_BUDGET_BYTES,
     _bar_position_tuples,
 )
 from jacobian.math.combinatorics.additive.operations import (
@@ -339,7 +337,7 @@ def test_widened_source_axis_preserves_cartesian_pair_bound() -> None:
 
 
 @pytest.mark.scale
-def test_near_maximal_full_profile_stays_inside_owner_result_budget() -> None:
+def test_near_maximal_full_profile_materializes_every_admitted_pair() -> None:
     source_size = 360
     # With spacing above every i^2+j^2, a pair sum encodes i+j and i^2+j^2
     # without carry; those two symmetric values determine the unordered pair.
@@ -348,11 +346,6 @@ def test_near_maximal_full_profile_stays_inside_owner_result_budget() -> None:
     source = tuple(offset + spacing * i + i * i for i in range(source_size))
     result = _run_multiset(_request(source, 2))
     assert len(result.entries) == source_size * (source_size + 1) // 2
-    encoded = canonicalize_json(
-        result.model_dump(mode="json"),
-        limits=CanonicalLimits(max_output_bytes=RESULT_BUDGET_BYTES),
-    )
-    assert len(encoded) <= RESULT_BUDGET_BYTES
 
 
 @pytest.mark.scale

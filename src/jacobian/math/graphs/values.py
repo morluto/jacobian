@@ -9,7 +9,6 @@ from pydantic import ConfigDict, Field, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.canonical import encode_strict_json
 
 GraphCompositionOperation = Literal[
     "DISJOINT_UNION",
@@ -132,12 +131,6 @@ class IndexedSimpleUndirectedGraph(StrictModel):
         return self
 
 
-def simple_undirected_graph_wire_bytes(graph: SimpleUndirectedGraph) -> int:
-    """Return the exact canonical JSON size of a simple graph value."""
-
-    return len(encode_strict_json(graph.model_dump(mode="json")))
-
-
 class ColoredUndirectedGraph(StrictModel):
     """One materialized finite simple graph with optional total colorings.
 
@@ -223,5 +216,4 @@ __all__ = [
     "GraphVertexLabel",
     "IndexedSimpleUndirectedGraph",
     "SimpleUndirectedGraph",
-    "simple_undirected_graph_wire_bytes",
 ]

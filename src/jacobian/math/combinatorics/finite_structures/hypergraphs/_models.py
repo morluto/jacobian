@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import unicodedata
 from dataclasses import dataclass
 from typing import Literal, Self
 
@@ -16,12 +15,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._digest import Sha256Digest
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import (
-    canonicalize_json,
-    encode_strict_json,
-    sha256_digest,
-    strict_json_object_size,
-)
+from jacobian.canonical import encode_strict_json, sha256_digest
 from jacobian.math.graphs.values import (
     MAX_GRAPH_LABEL_BYTES,
     MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
@@ -52,61 +46,6 @@ MAX_EDGE_INTERSECTION_CELLS = 65_536
 # per-label and vertex/edge-count limits, this is the complete aggregate label
 # envelope for a FiniteHypergraph source.
 MAX_HYPERGRAPH_LABEL_BYTES = (MAX_VERTICES + MAX_EDGES) * MAX_LABEL_LENGTH * 4
-
-
-def _edge_intersection_graph_result_bytes(
-    hypergraph: FiniteHypergraph,
-    graph_edges: tuple[tuple[str, str], ...],
-) -> int:
-    """Return the exact canonical size of the edge-intersection graph result.
-
-    The result retains the source hypergraph and the produced graph.  The
-    graph has one vertex per hyperedge (the edge IDs), and ``graph_edges`` is
-    the already-admitted exact set of intersecting pairs.  The byte count must
-    follow that set rather than charging every input for a complete graph.
-    """
-    source_bytes = _hypergraph_wire_bytes(hypergraph)
-    edge_ids = tuple(edge_id for edge_id, _ in hypergraph.edges)
-    # Each graph vertex is a strict-JSON string (the edge ID).
-    vertex_bytes = _strict_json_array_size(
-        tuple(_strict_label_wire_bytes(edge_id) for edge_id in edge_ids)
-    )
-    edge_bytes = _strict_json_array_size(
-        tuple(
-            _strict_json_array_size(
-                (_strict_label_wire_bytes(left), _strict_label_wire_bytes(right))
-            )
-            for left, right in graph_edges
-        )
-    )
-    graph_bytes = strict_json_object_size(
-        (("vertices", vertex_bytes), ("edges", edge_bytes))
-    )
-    return strict_json_object_size(
-        (("hypergraph", source_bytes), ("graph", graph_bytes))
-    )
-
-
-def _hypergraph_wire_bytes(hypergraph: FiniteHypergraph) -> int:
-    """Return the exact source size without applying the final output cap."""
-
-    vertex_bytes = _strict_json_array_size(
-        tuple(_strict_label_wire_bytes(vertex) for vertex in hypergraph.vertices)
-    )
-    edge_bytes = _strict_json_array_size(
-        tuple(
-            _strict_json_array_size(
-                (
-                    _strict_label_wire_bytes(edge_id),
-                    _strict_json_array_size(
-                        tuple(_strict_label_wire_bytes(member) for member in members)
-                    ),
-                )
-            )
-            for edge_id, members in hypergraph.edges
-        )
-    )
-    return strict_json_object_size((("vertices", vertex_bytes), ("edges", edge_bytes)))
 
 
 # One pair entry's keys, punctuation, array brackets, commas, and bounded
@@ -476,12 +415,6 @@ class HypergraphIndependenceResult(StrictModel):
 
 def _label_utf8_bytes(label: str) -> int:
     return len(_encoded_utf8_label(label))
-
-
-def _strict_label_wire_bytes(label: str) -> int:
-    """Return the exact encoded size used by the public result wrapper."""
-
-    return len(encode_strict_json(label))
 
 
 def _edge_intersection_preflight_data(
@@ -998,12 +931,6 @@ class InducedTypeProfileRequest(StrictModel):
     )
 
 
-def _strict_json_array_size(item_sizes: tuple[int, ...]) -> int:
-    """Return the exact canonical JSON size of an array from item sizes."""
-
-    return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
-
-
 def _induced_type_profile_admission_plan(
     hypergraph: FiniteHypergraph,
     subset_size: int,
@@ -1123,29 +1050,6 @@ def _minimum_transversal_search_plan(
     )
 
 
-def _minimum_transversal_result_bytes(
-    hypergraph: FiniteHypergraph,
-    active_vertices: tuple[str, ...],
-) -> int:
-    """Return the exact worst-case canonical size of a transversal result."""
-
-    normalized_active_vertices = tuple(
-        unicodedata.normalize("NFC", vertex) for vertex in active_vertices
-    )
-    source_size = len(canonicalize_json(hypergraph.model_dump(mode="json")))
-    witness_size = _strict_json_array_size(
-        tuple(_strict_label_wire_bytes(vertex) for vertex in normalized_active_vertices)
-    )
-    cardinality_size = len(encode_strict_json(len(normalized_active_vertices)))
-    return strict_json_object_size(
-        (
-            ("hypergraph", source_size),
-            ("transversal", witness_size),
-            ("cardinality", cardinality_size),
-        )
-    )
-
-
 class MinimumTransversalRequest(StrictModel):
     """Request an exact minimum-cardinality transversal (hitting set).
 
@@ -1212,37 +1116,13 @@ class MinimumTransversalResult(StrictModel):
 MAX_MATCHING_EDGES = 20
 
 
-def _maximum_edge_matching_result_bytes(
-    hypergraph: FiniteHypergraph,
-    edge_ids: tuple[str, ...],
-) -> int:
-    """Return the exact canonical size of a worst-case matching result."""
-
-    normalized_edge_ids = tuple(
-        unicodedata.normalize("NFC", edge_id) for edge_id in edge_ids
-    )
-    source_size = len(canonicalize_json(hypergraph.model_dump(mode="json")))
-    matching_size = _strict_json_array_size(
-        tuple(_strict_label_wire_bytes(edge_id) for edge_id in normalized_edge_ids)
-    )
-    count_size = len(encode_strict_json(len(normalized_edge_ids)))
-    return strict_json_object_size(
-        (
-            ("hypergraph", source_size),
-            ("matching", matching_size),
-            ("count", count_size),
-        )
-    )
-
-
 class MaximumEdgeMatchingRequest(StrictModel):
     """Request an exact maximum-cardinality edge matching.
 
     A matching is a set of pairwise-disjoint hyperedges.  The exact bounded
     search enumerates nonempty edge subsets by decreasing cardinality and
     admits at most ``MAX_MATCHING_EDGES`` search edges.  Empty edges form a
-    mandatory witness prefix because they are disjoint from every edge,
-    subject to the canonical result-byte bound.
+    mandatory witness prefix because they are disjoint from every edge.
     """
 
     hypergraph: FiniteHypergraph = Field(

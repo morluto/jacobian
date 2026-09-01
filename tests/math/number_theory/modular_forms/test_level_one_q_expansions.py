@@ -137,20 +137,18 @@ def test_eisenstein_prefixes_beyond_the_former_carrier_ceiling_are_admitted() ->
     assert len(e4.q_expansion.coefficients) == 1477
 
 
-def test_requests_above_the_serialized_budget_name_the_controlling_quantity() -> None:
-    request = LevelOneNamedQExpansionRequest(form="E6", truncation_order=1301)
-    with pytest.raises(OperationDomainValidationError, match="serialized result bound"):
+def test_requests_above_the_coefficient_digit_bound_name_the_quantity() -> None:
+    request = LevelOneNamedQExpansionRequest(form="E6", truncation_order=3000)
+    with pytest.raises(OperationDomainValidationError, match="coefficient-digit bound"):
         level_one_named_q_expansion(request.form, request.truncation_order)
-    with pytest.raises(OperationDomainValidationError, match="serialized result bound"):
-        require_level_one_admission("E4", 1478)
 
 
-def test_delta_above_the_serialized_budget_names_the_controlling_quantity() -> None:
-    request = LevelOneNamedQExpansionRequest(form="DELTA", truncation_order=1355)
-    with pytest.raises(OperationDomainValidationError, match="serialized result bound"):
+def test_delta_above_the_work_budget_names_the_controlling_quantity() -> None:
+    request = LevelOneNamedQExpansionRequest(form="DELTA", truncation_order=1800)
+    with pytest.raises(OperationDomainValidationError, match="exact work bound"):
         level_one_named_q_expansion(request.form, request.truncation_order)
-    with pytest.raises(OperationDomainValidationError, match="serialized result bound"):
-        require_level_one_admission("DELTA", 1355)
+    with pytest.raises(OperationDomainValidationError, match="exact work bound"):
+        require_level_one_admission("DELTA", 1800)
 
 
 def test_delta_backend_does_not_read_or_mutate_global_series_precision() -> None:
@@ -226,8 +224,7 @@ def _beyond_budget_e4_payload() -> dict[str, object]:
 
 
 def test_exact_expansions_beyond_the_producer_envelope_remain_canonical() -> None:
-    with pytest.raises(OperationDomainValidationError, match="serialized result bound"):
-        require_level_one_admission("E4", 1478)
+    require_level_one_admission("E4", 1478)
 
     value = LevelOneModularQExpansion.model_validate(_beyond_budget_e4_payload())
     assert value.q_expansion.truncation_order == 1478

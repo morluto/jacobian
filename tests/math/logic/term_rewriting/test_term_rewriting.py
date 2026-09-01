@@ -630,7 +630,6 @@ class TestCriticalPairs:
         assert rules["maxItems"] == 8
         assert rules["x-jacobian-bounds"] == {
             "max_overlap_candidates": 32,
-            "max_result_bytes": 4 * 1024 * 1024,
             "max_result_nodes": 42_752,
             "max_result_term_depth": MAX_TERM_DEPTH - 1,
             "max_term_depth": MAX_TERM_DEPTH,

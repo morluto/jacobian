@@ -705,14 +705,14 @@ def test_request_boundaries_reject_before_expansion() -> None:
         )
 
     cancellation_source = _tuple(_form("shifted_n", 1, -(10**63)))
-    with pytest.raises(OperationDomainValidationError):
-        compute_interval_enumerate(
-            PrimeAffineIntervalEnumerateRequest(
-                source=cancellation_source,
-                lower=str(10**63),
-                upper=str(10**63 + 20_000),
-            )
+    cancellation_result = compute_interval_enumerate(
+        PrimeAffineIntervalEnumerateRequest(
+            source=cancellation_source,
+            lower=str(10**63),
+            upper=str(10**63 + 20_000),
         )
+    )
+    assert len(cancellation_result.matches) == 2_262
 
     compute_interval_count(
         PrimeAffineIntervalCountRequest(

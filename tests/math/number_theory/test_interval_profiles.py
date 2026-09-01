@@ -8,7 +8,7 @@ from sympy import factorint, isprime
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._interval_profile_models import (
     MAX_INTERVAL_WIDTH,
-    MAX_PROFILE_RESULT_BYTES,
+    MAX_PROFILE_RESULT_ITEMS,
     MAX_SIEVE_WORK,
     DivisorCountProfileRequest,
     DivisorSumProfileRequest,
@@ -134,12 +134,12 @@ class TestSquarefreeProfile:
         with pytest.raises(ValueError, match="interval width exceeds"):
             _admit(request)
 
-    def test_request_rejects_result_over_canonical_budget(self) -> None:
-        request = DivisorCountProfileRequest(
+    def test_request_rejects_result_over_materialized_item_bound(self) -> None:
+        request = SquarefreeProfileRequest(
             lower_bound=1,
-            upper_bound=MAX_INTERVAL_WIDTH,
+            upper_bound=MAX_PROFILE_RESULT_ITEMS + 1,
         )
-        with pytest.raises(ValueError, match="canonical output budget"):
+        with pytest.raises(ValueError, match="materialized item bound"):
             _admit(request)
 
     def test_operation_specific_result_bounds_preserve_sparse_profiles(self) -> None:
@@ -149,20 +149,22 @@ class TestSquarefreeProfile:
 
         assert squarefree.width() == sparse_width
         assert prime_gap.width() == sparse_width
-        assert _admit(squarefree).estimated_result_bytes <= MAX_PROFILE_RESULT_BYTES
-        assert _admit(prime_gap).estimated_result_bytes <= MAX_PROFILE_RESULT_BYTES
-        with pytest.raises(ValueError, match="canonical output budget"):
+        with pytest.raises(ValueError, match="materialized item bound"):
+            _admit(squarefree)
+        assert _admit(prime_gap).estimated_result_items <= MAX_PROFILE_RESULT_ITEMS
+        dense_width = 10_000
+        assert (
             _admit(
-                DivisorCountProfileRequest(
-                    lower_bound=1, upper_bound=MAX_INTERVAL_WIDTH
-                )
-            )
-        with pytest.raises(ValueError, match="canonical output budget"):
+                DivisorCountProfileRequest(lower_bound=1, upper_bound=dense_width)
+            ).estimated_result_items
+            == dense_width
+        )
+        assert (
             _admit(
-                GreatestPrimeFactorProfileRequest(
-                    lower_bound=1, upper_bound=MAX_INTERVAL_WIDTH
-                )
-            )
+                GreatestPrimeFactorProfileRequest(lower_bound=1, upper_bound=dense_width)
+            ).estimated_result_items
+            == dense_width
+        )
 
     def test_narrow_high_intervals_use_work_and_result_budgets(self) -> None:
         requests = (
@@ -176,7 +178,7 @@ class TestSquarefreeProfile:
             request = request_type(lower_bound=10_000_001, upper_bound=10_000_001)
             admission = _admit(request)
             assert admission.estimated_work <= MAX_SIEVE_WORK
-            assert admission.estimated_result_bytes <= MAX_PROFILE_RESULT_BYTES
+            assert admission.estimated_result_items <= MAX_PROFILE_RESULT_ITEMS
 
     def test_prime_gap_bounds_rows_by_interval_density(self) -> None:
         request = PrimeGapProfileRequest(
@@ -184,7 +186,7 @@ class TestSquarefreeProfile:
             upper_bound=10_000_000,
         )
 
-        assert _admit(request).estimated_result_bytes <= MAX_PROFILE_RESULT_BYTES
+        assert _admit(request).estimated_result_items <= MAX_PROFILE_RESULT_ITEMS
 
     def test_prime_gap_work_charges_successor_search(self) -> None:
         request = PrimeGapProfileRequest(lower_bound=1, upper_bound=1_000_001)

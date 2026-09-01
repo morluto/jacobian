@@ -22,7 +22,7 @@ from jacobian._execution import (
     current_request_execution,
 )
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import encode_strict_json, parse_canonical_integer
+from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory.number_fields._embeddings_process import (
     embeddings_worker_cancelled,
 )
@@ -51,7 +51,6 @@ MAX_BINARY_POWER_SUM_EXPONENT_COUNT = (
 MAX_BINARY_POWER_SUM_REPRESENTATION_BIT_SLOTS = 49_152
 MAX_BINARY_POWER_SUM_FIELD_OPERATIONS = 16_384
 MAX_BINARY_POWER_SUM_COMPARISONS = 100_000
-MAX_BINARY_POWER_SUM_RESULT_BYTES = 10 * 1024 * 1024
 MAX_BINARY_POWER_SUM_SHARED_ROOT_REFINEMENT_BITS = 4_096
 BINARY_POWER_SUM_WALL_SECONDS = 600.0
 
@@ -472,7 +471,6 @@ class BinaryPowerSumAdmission:
     gap_difference_admission: RealEmbeddingDifferenceAdmission
     base_lower_admission: RealEmbeddingDifferenceAdmission
     base_upper_admission: RealEmbeddingDifferenceAdmission
-    predicted_result_bytes: int
 
     def work_bounds(self) -> dict[str, int]:
         """Return the preflight charge for every executed mathematical phase."""
@@ -672,38 +670,6 @@ def _admit_power_sum_difference_envelope(
     )
 
 
-def _predicted_result_bytes(
-    base: SimpleNumberFieldRealEmbeddingBinding,
-    *,
-    exponent_count: int,
-    representation_count: int,
-    coordinate_digits: int,
-    isolator_digits: int,
-) -> int:
-    field = base.element.presentation
-    source_bytes = len(encode_strict_json(base.model_dump(mode="json")))
-    field_bytes = len(encode_strict_json(field.model_dump(mode="json")))
-    rational_bytes = 2 * coordinate_digits + 32
-    element_bytes = field_bytes + field.degree * rational_bytes + 256
-    enclosure_bytes = 4 * isolator_digits + 192
-    representation_bytes = representation_count * (2 * exponent_count + 8)
-    value_bytes = representation_count * (element_bytes + 192)
-    gap_bytes = max(representation_count - 1, 0) * (
-        element_bytes + enclosure_bytes + 256
-    )
-    # Two summary elements are retained in the largest possible result. The
-    # fixed allowance covers field names, counters, indices, enums, and JSON
-    # punctuation in both the result and outer operation projection.
-    return (
-        8_192
-        + source_bytes
-        + representation_bytes
-        + value_bytes
-        + gap_bytes
-        + 2 * element_bytes
-    )
-
-
 def admit_binary_power_sum_gap_profile(
     base: SimpleNumberFieldRealEmbeddingBinding,
     exponent_count: int,
@@ -820,26 +786,6 @@ def admit_binary_power_sum_gap_profile(
     except NumberFieldRealEmbeddingOrderError as exc:
         raise BinaryPowerSumAdmissionError(exc.reason, str(exc)) from exc
 
-    coordinate_digits = max(
-        _decimal_digits_from_bits(value_difference_numerator_bound.bit_length()),
-        _decimal_digits_from_bits(denominator_bound.bit_length()),
-    )
-    isolator_digits = value_difference_admission.predicted_isolator_component_digits
-    if all(coordinate == 0 for coordinate in _element_coordinates(base.element)[1:]):
-        isolator_digits = max(isolator_digits, coordinate_digits)
-    predicted_result_bytes = _predicted_result_bytes(
-        base,
-        exponent_count=exponent_count,
-        representation_count=representation_count,
-        coordinate_digits=coordinate_digits,
-        isolator_digits=isolator_digits,
-    )
-    if predicted_result_bytes > MAX_BINARY_POWER_SUM_RESULT_BYTES:
-        raise BinaryPowerSumAdmissionError(
-            "result_byte_bound",
-            "the complete retained power-sum profile exceeds the "
-            f"{MAX_BINARY_POWER_SUM_RESULT_BYTES:,}-byte result bound",
-        )
     return BinaryPowerSumAdmission(
         source_representation_count=representation_count,
         representation_bit_slots=representation_bit_slots,
@@ -860,7 +806,6 @@ def admit_binary_power_sum_gap_profile(
         gap_difference_admission=gap_difference_admission,
         base_lower_admission=base_lower_admission,
         base_upper_admission=base_upper_admission,
-        predicted_result_bytes=predicted_result_bytes,
     )
 
 
@@ -1324,10 +1269,6 @@ def _execute_binary_power_sum_gap_profile(
     )
     _require_work_within_admission(admission, work)
     _require_execution_active(deadline, "after binary power-sum result construction")
-    actual_result_bytes = len(encode_strict_json(result.model_dump(mode="json")))
-    if actual_result_bytes > admission.predicted_result_bytes:
-        raise RuntimeError("binary power-sum result exceeded its admitted byte bound")
-    _require_execution_active(deadline, "after binary power-sum serialization check")
     return _BinaryPowerSumExecution(
         result=result,
         admission=admission,
@@ -1351,7 +1292,6 @@ __all__ = [
     "MAX_BINARY_POWER_SUM_EXPONENT_COUNT",
     "MAX_BINARY_POWER_SUM_FIELD_OPERATIONS",
     "MAX_BINARY_POWER_SUM_REPRESENTATION_BIT_SLOTS",
-    "MAX_BINARY_POWER_SUM_RESULT_BYTES",
     "MAX_BINARY_POWER_SUM_SHARED_ROOT_REFINEMENT_BITS",
     "MAX_BINARY_POWER_SUM_SOURCE_REPRESENTATIONS",
     "BinaryPowerSumAdmission",

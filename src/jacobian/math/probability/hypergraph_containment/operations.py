@@ -10,12 +10,7 @@ from jacobian._exact import (
     CanonicalRational,
     canonical_rational_component_digits,
 )
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-    format_canonical_integer,
-)
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
@@ -27,9 +22,6 @@ from jacobian.math.probability.hypergraph_containment._models import (
 )
 
 __all__ = ["compute_hypergraph_vertex_containment"]
-
-MAX_RESULT_BYTES = CanonicalLimits().max_output_bytes
-
 
 @dataclass(frozen=True, slots=True)
 class _ContainmentAdmissionPlan:
@@ -66,7 +58,6 @@ def _admit_hypergraph_vertex_containment(
         not members for _, members in hypergraph.edges
     )
     n = len(hypergraph.vertices)
-    state_count = 1 << n
     use_inclusion_exclusion = False
     use_singleton_closed_form = False
     if not trivial_event:
@@ -135,34 +126,6 @@ def _admit_hypergraph_vertex_containment(
             location=("retention_probability",),
             code="hypergraph_containment.result_growth_exceeded",
             message="probability rational growth exceeds the canonical digit envelope",
-        )
-    try:
-        result_probe = {
-            "hypergraph": hypergraph.model_dump(mode="json"),
-            "retention_probability": retention_probability.model_dump(mode="json"),
-            "containing_subset_counts": [
-                format_canonical_integer(10 ** len(str(comb(n, k))) - 1)
-                for k in range(n + 1)
-            ],
-            "total_state_count": format_canonical_integer(state_count),
-            "success_count": format_canonical_integer(state_count),
-            "probability": {
-                "num": "9" * max(1, probability_digits),
-                "den": "9" * max(1, probability_digits),
-            },
-        }
-        result_bytes = len(encode_strict_json(result_probe))
-    except CanonicalizationError as exc:
-        raise OperationDomainValidationError(
-            location=("hypergraph",),
-            code="hypergraph_containment.result_size_bound",
-            message="the complete containment profile exceeds the canonical output bound",
-        ) from exc
-    if result_bytes > MAX_RESULT_BYTES:
-        raise OperationDomainValidationError(
-            location=("hypergraph",),
-            code="hypergraph_containment.result_size_bound",
-            message="the complete containment profile exceeds the canonical output bound",
         )
     return _ContainmentAdmissionPlan(
         edge_masks,

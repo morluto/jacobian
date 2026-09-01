@@ -10,7 +10,6 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.probability._all_terminal_reliability import (
@@ -353,11 +352,12 @@ def test_request_allows_more_vertices_when_the_state_space_is_small() -> None:
     assert result.reliability_probability.as_fraction() == 0
 
 
-def test_native_boundary_rejects_an_oversized_retained_graph() -> None:
-    graph = _graph(("x" * CanonicalLimits().max_output_bytes,), ())
+def test_native_boundary_preserves_a_large_retained_graph_label() -> None:
+    graph = _graph(("x" * 1_000_000,), ())
 
-    with pytest.raises(ValueError):
-        all_terminal_reliability(graph, Fraction(1, 2))
+    result = all_terminal_reliability(graph, Fraction(1, 2))
+
+    assert result.graph == graph
 
 
 def test_native_boundary_rejects_huge_probability_components_preflight() -> None:

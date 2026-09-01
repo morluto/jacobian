@@ -7,7 +7,6 @@ from fractions import Fraction
 from math import comb
 from typing import TYPE_CHECKING, Literal
 
-from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 if TYPE_CHECKING:
@@ -25,10 +24,6 @@ _MAX_ALL_TERMINAL_RELIABILITY_INPUT_ABS = 10**MAX_ALL_TERMINAL_RELIABILITY_INPUT
 _MAX_ALL_TERMINAL_RELIABILITY_RESULT_ABS = (
     10**MAX_ALL_TERMINAL_RELIABILITY_RESULT_DIGITS
 )
-# The largest non-graph fields contain two 128-digit probability components,
-# two 2,561-digit result components, 21 seven-digit coefficients, and fixed
-# JSON field names. Eight KiB leaves conservative headroom for that payload.
-_RESULT_ENVELOPE_RESERVE_BYTES = 8_192
 
 
 def _require_bounded_problem(
@@ -58,29 +53,6 @@ def _require_bounded_problem(
             "open_probability exceeds the "
             f"{MAX_ALL_TERMINAL_RELIABILITY_INPUT_DIGITS}-digit bound"
         )
-
-    output_limit = CanonicalLimits().max_output_bytes
-    output_error = (
-        "the all-terminal reliability result retains its source graph and "
-        f"would exceed the {output_limit}-byte canonical output limit; "
-        "shorten vertex labels"
-    )
-    # Every label code point occupies at least one output byte. This cheap lower
-    # bound rejects arbitrarily large native values before RFC 8785 expansion.
-    # Once it passes, JSON escaping can expand by at most a fixed factor within
-    # the canonical output limit, so the exact serialization below is bounded.
-    retained_label_code_points = sum(len(vertex) for vertex in graph.vertices) + sum(
-        len(left) + len(right) for left, right in graph.edges
-    )
-    if retained_label_code_points + _RESULT_ENVELOPE_RESERVE_BYTES > output_limit:
-        raise ValueError(output_error)
-    try:
-        graph_bytes = len(encode_strict_json(graph.model_dump(mode="json")))
-    except ValueError as exc:
-        raise ValueError(output_error) from exc
-    if graph_bytes + _RESULT_ENVELOPE_RESERVE_BYTES > output_limit:
-        raise ValueError(output_error)
-
 
 def _indexed_graph(
     graph: SimpleUndirectedGraph,

@@ -8,7 +8,7 @@ from math import gcd
 from typing import Any
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
-from jacobian.canonical import CanonicalLimits, format_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.probability._distribution import (
     MAX_FINITE_CONVOLUTION_OUTPUT_ATOMS,
@@ -50,7 +50,6 @@ from jacobian.math.probability._models import (
 )
 
 MAX_CONVOLUTION_POWER_COEFFICIENT_PRODUCTS = 50_000_000
-MAX_CONVOLUTION_POWER_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 
 @dataclass(frozen=True)
@@ -63,8 +62,6 @@ class _ConvolutionPowerPlan:
     exponent: int
     degree: int
     multiplication_shapes: tuple[tuple[int, int], ...]
-    profile_result_bytes: int
-    peak_result_bytes: int
 
 
 def _wire(value: Any) -> CanonicalRational:
@@ -336,19 +333,6 @@ def _power_multiplication_shapes(
     return tuple(shapes)
 
 
-def _admit_identity_convolution(distribution: FiniteRationalDistribution) -> int:
-    """Measure the retained source without constructing a private power lattice."""
-
-    return sum(
-        len(atom.value.num)
-        + len(atom.value.den)
-        + len(atom.probability.num)
-        + len(atom.probability.den)
-        + 64
-        for atom in distribution.atoms
-    )
-
-
 def _plan_convolution_power(
     distribution: FiniteRationalDistribution,
     exponent: int,
@@ -446,9 +430,7 @@ def _plan_convolution_power(
                 f"{MAX_RESULT_RATIONAL_DIGITS}-digit result bound"
             ),
         )
-    coefficient_digits = len(str(powered_probability_denominator))
     minimum_value = origin * exponent
-    maximum_value = minimum_value + step * degree
     if validate_profile_values:
         try:
             for index in range(output_slots):
@@ -464,27 +446,6 @@ def _plan_convolution_power(
                 message=str(exc),
             ) from exc
 
-    source_bytes = sum(
-        len(atom.value.num)
-        + len(atom.value.den)
-        + len(atom.probability.num)
-        + len(atom.probability.den)
-        + 64
-        for atom in distribution.atoms
-    )
-    value_digits = max(
-        len(str(abs(component)))
-        for value in (minimum_value, maximum_value)
-        for component in (value.numerator, value.denominator)
-    )
-    row_bytes = value_digits * 2 + coefficient_digits * 2 + 96
-    profile_result_bytes = source_bytes + output_slots * row_bytes + 4_096
-    # A peak can tie at every attainable lattice position, but stores the
-    # maximum probability once instead of repeating one mass per value.
-    tie_bytes = value_digits * 2 + 48
-    peak_result_bytes = (
-        source_bytes + output_slots * tie_bytes + coefficient_digits * 2 + 4_096
-    )
     return _ConvolutionPowerPlan(
         positions=positions,
         weights=weights,
@@ -494,8 +455,6 @@ def _plan_convolution_power(
         exponent=exponent,
         degree=degree,
         multiplication_shapes=multiplication_shapes,
-        profile_result_bytes=profile_result_bytes,
-        peak_result_bytes=peak_result_bytes,
     )
 
 
@@ -503,17 +462,7 @@ def _admit_convolution_power(
     distribution: FiniteRationalDistribution,
     exponent: int,
 ) -> _ConvolutionPowerPlan:
-    plan = _plan_convolution_power(distribution, exponent)
-    if plan.profile_result_bytes > MAX_CONVOLUTION_POWER_RESULT_BYTES:
-        raise OperationDomainValidationError(
-            location=("distribution", "exponent"),
-            code="probability.convolution_power.result_bound",
-            message=(
-                "convolution-power profile exceeds the "
-                f"{MAX_CONVOLUTION_POWER_RESULT_BYTES:,}-byte result bound"
-            ),
-        )
-    return plan
+    return _plan_convolution_power(distribution, exponent)
 
 
 def _admit_convolution_peak(
@@ -796,16 +745,6 @@ def convolution_power(
     """Return the complete exact law of a positive i.i.d. convolution power."""
 
     if type(exponent) is int and exponent == 1:
-        source_bytes = _admit_identity_convolution(distribution)
-        if source_bytes * 2 + 4_096 > MAX_CONVOLUTION_POWER_RESULT_BYTES:
-            raise OperationDomainValidationError(
-                location=("distribution", "exponent"),
-                code="probability.convolution_power.result_bound",
-                message=(
-                    "convolution-power profile exceeds the "
-                    f"{MAX_CONVOLUTION_POWER_RESULT_BYTES:,}-byte result bound"
-                ),
-            )
         return FiniteConvolutionPowerResult._from_kernel(
             source=distribution,
             exponent=exponent,
@@ -840,23 +779,7 @@ def convolution_peak(
     """Return the exact largest atom mass and all values attaining it."""
 
     if type(exponent) is int and exponent == 1:
-        source_bytes = _admit_identity_convolution(distribution)
         maximum = max(atom.probability.as_fraction() for atom in distribution.atoms)
-        maximum_value_bytes = max(
-            len(atom.value.num) + len(atom.value.den) for atom in distribution.atoms
-        )
-        if (
-            source_bytes + len(distribution.atoms) * (maximum_value_bytes + 48) + 4_096
-            > MAX_CONVOLUTION_POWER_RESULT_BYTES
-        ):
-            raise OperationDomainValidationError(
-                location=("distribution", "exponent"),
-                code="probability.convolution_power.result_bound",
-                message=(
-                    "convolution-power peak ties exceed the "
-                    f"{MAX_CONVOLUTION_POWER_RESULT_BYTES:,}-byte result bound"
-                ),
-            )
         return FiniteConvolutionPeakResult._from_kernel(
             source=distribution,
             exponent=exponent,
@@ -889,34 +812,6 @@ def convolution_peak(
             code="probability.convolution_power.height_bound",
             message=str(exc),
         ) from exc
-    value_digits = max(
-        len(str(abs(component)))
-        for value in maximizing_fractions
-        for component in (value.numerator, value.denominator)
-    )
-    source_bytes = sum(
-        len(atom.value.num)
-        + len(atom.value.den)
-        + len(atom.probability.num)
-        + len(atom.probability.den)
-        + 64
-        for atom in distribution.atoms
-    )
-    peak_result_bytes = (
-        source_bytes
-        + len(maximizing_fractions) * (value_digits * 2 + 48)
-        + len(str(denominator)) * 2
-        + 4_096
-    )
-    if peak_result_bytes > MAX_CONVOLUTION_POWER_RESULT_BYTES:
-        raise OperationDomainValidationError(
-            location=("distribution", "exponent"),
-            code="probability.convolution_power.result_bound",
-            message=(
-                "convolution-power peak ties exceed the "
-                f"{MAX_CONVOLUTION_POWER_RESULT_BYTES:,}-byte result bound"
-            ),
-        )
     return FiniteConvolutionPeakResult._from_kernel(
         source=distribution,
         exponent=exponent,

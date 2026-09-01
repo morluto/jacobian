@@ -114,7 +114,6 @@ def _hypergraph_wire_bytes(hypergraph: FiniteHypergraph) -> int:
 # reserve covers the pair-array wrapper, histogram (at most 101 small integer
 # pairs), scalar fields, and retained-source field name.
 _PAIR_ENTRY_OVERHEAD_BYTES = 128
-_RESULT_ENVELOPE_RESERVE_BYTES = 4_096
 
 
 def _validation_error(message: str) -> PydanticCustomError:
@@ -1003,49 +1002,6 @@ def _strict_json_array_size(item_sizes: tuple[int, ...]) -> int:
     """Return the exact canonical JSON size of an array from item sizes."""
 
     return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
-
-
-def _induced_profile_result_bytes(
-    hypergraph: FiniteHypergraph,
-    expected_subsets: tuple[tuple[str, ...], ...],
-) -> int:
-    """Return a safe serialized-size bound for an induced-profile result.
-
-    The count for each entry is not known until the kernel computes it, so its
-    widest possible value is reserved. Subset labels and the retained source
-    are measured using the same canonical normalization as the transport
-    boundary, rather than a fixed per-entry estimate.
-    """
-
-    subset_size = len(expected_subsets[0])
-    vertex_wire_bytes = {
-        vertex: len(encode_strict_json(unicodedata.normalize("NFC", vertex)))
-        for vertex in hypergraph.vertices
-    }
-    maximum_count = min(len(hypergraph.edges), (1 << subset_size) - 1)
-    count_wire_bytes = len(encode_strict_json(maximum_count))
-    entry_sizes: list[int] = []
-    for subset in expected_subsets:
-        subset_wire_bytes = _strict_json_array_size(
-            tuple(vertex_wire_bytes[vertex] for vertex in subset)
-        )
-        entry_sizes.append(
-            strict_json_object_size(
-                (
-                    ("vertex_subset", subset_wire_bytes),
-                    ("induced_edge_count", count_wire_bytes),
-                )
-            )
-        )
-    entries_size = _strict_json_array_size(tuple(entry_sizes))
-    source_size = len(canonicalize_json(hypergraph.model_dump(mode="json")))
-    return strict_json_object_size(
-        (
-            ("hypergraph", source_size),
-            ("subset_size", len(encode_strict_json(subset_size))),
-            ("entries", entries_size),
-        )
-    )
 
 
 def _induced_type_profile_admission_plan(

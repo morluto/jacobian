@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import OperationRequestValidationError, invoke_operation
 
 

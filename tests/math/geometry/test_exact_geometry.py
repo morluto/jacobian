@@ -4,7 +4,6 @@ from fractions import Fraction
 from typing import TypedDict
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.exact._models import (
     COORDINATE_DIGITS,
@@ -514,83 +513,14 @@ class TestPinnedLineDistance:
                 distance_multiplicities=tuple([(_cr(1), 1)] * (MAX_PAIRS + 1)),
             )
 
-    def test_aggregate_output_budget_rejects_unencodable_profiles(self) -> None:
-        import pytest
-
-        from jacobian.math.geometry.exact._models import (
-            MAX_PINNED_PROFILE_RESULT_BYTES,
-            _maximum_pinned_profile_wire_bytes,
-        )
-
-        def big_pt(index: int) -> PointWire:
-            fx = Fraction(1, 10**249 + index * 10**123 + 2 * index + 1)
-            fy = Fraction(index + 1, 10**250 + index + 7)
-            return {
-                "label": f"p{index:02d}",
-                "coordinates": [
-                    {
-                        "num": format_canonical_integer(fx.numerator),
-                        "den": format_canonical_integer(fx.denominator),
-                    },
-                    {
-                        "num": format_canonical_integer(fy.numerator),
-                        "den": format_canonical_integer(fy.denominator),
-                    },
-                ],
-            }
-
-        cfg = PointConfiguration(
-            points=tuple(
-                LabelledRationalPoint.model_validate(big_pt(index))
-                for index in range(64)
-            )
-        )
-        anchor = (
-            CanonicalRational(num="0", den="1"),
-            CanonicalRational(num="0", den="1"),
-        )
-        assert (
-            _maximum_pinned_profile_wire_bytes(cfg, anchor)
-            > MAX_PINNED_PROFILE_RESULT_BYTES
-        )
-        request = PinnedLineDistanceRequest.model_validate(
-            {
-                "configuration": cfg.model_dump(mode="json"),
-                "anchor": anchor,
-            }
-        )
-        with pytest.raises(OperationDomainValidationError, match="aggregate result"):
-            compute_pinned_line_distance_profile(request)
-
-    def test_estimate_dominates_actual_encoding_for_admitted_requests(self) -> None:
-        from jacobian.canonical import encode_strict_json
-        from jacobian.math.geometry.exact._models import (
-            MAX_PINNED_PROFILE_RESULT_BYTES,
-            _maximum_pinned_profile_wire_bytes,
-        )
-
-        cfg = self._cfg([("a", 0, 0), ("b", 1, 0), ("c", 0, 1), ("d", 5, 3)])
-        request = PinnedLineDistanceRequest(
-            configuration=cfg,
-            anchor=self._anchor(0, 0),
-        )
-        result = compute_pinned_line_distance_profile(request)
-        actual = len(encode_strict_json(result.model_dump(mode="json")))
-        assert actual <= MAX_PINNED_PROFILE_RESULT_BYTES
-        assert actual <= _maximum_pinned_profile_wire_bytes(cfg, request.anchor)
-
-    def test_result_budget_metadata_is_schema_published(self) -> None:
+    def test_coordinate_digit_metadata_is_schema_published(self) -> None:
         from jacobian.math.geometry.exact._models import (
             COORDINATE_DIGITS,
-            MAX_PINNED_PROFILE_RESULT_BYTES,
         )
 
         schema = PinnedLineDistanceRequest.model_json_schema()
         metadata = schema["properties"]["configuration"]
         assert metadata["coordinate_digit_bound"] == COORDINATE_DIGITS
-        assert (
-            metadata["aggregate_result_budget_bytes"] == MAX_PINNED_PROFILE_RESULT_BYTES
-        )
 
 
 class TestCanonicalPointValueComposition:
@@ -1052,13 +982,13 @@ class TestAuthoredComponentBudget:
         # least two characters per canonical rational, so this much raw
         # numerator text cannot belong to an admissible profile.
         from jacobian.math.geometry.exact._models import (
-            MAX_PINNED_PROFILE_RESULT_BYTES as _MAX_BYTES,
+            MAX_PINNED_PROFILE_AUTHORED_RATIONAL_CHARACTERS as _MAX_CHARACTERS,
         )
         from jacobian.math.geometry.exact._models import (
             PinnedLineDistanceResult,
         )
 
-        huge = "1" * (_MAX_BYTES + 1)
+        huge = "1" * (_MAX_CHARACTERS + 1)
         payload = {
             "dimension": 2,
             "point_count": 2,
@@ -1088,11 +1018,11 @@ class TestAuthoredComponentCoverage:
         from pydantic import ValidationError
 
         from jacobian.math.geometry.exact._models import (
-            MAX_PINNED_PROFILE_RESULT_BYTES,
+            MAX_PINNED_PROFILE_AUTHORED_RATIONAL_CHARACTERS,
             PinnedLineDistanceResult,
         )
 
-        huge = "1" * (MAX_PINNED_PROFILE_RESULT_BYTES + 1)
+        huge = "1" * (MAX_PINNED_PROFILE_AUTHORED_RATIONAL_CHARACTERS + 1)
         payload = {
             "dimension": 2,
             "point_count": 2,
@@ -1118,11 +1048,11 @@ class TestAuthoredComponentCoverage:
         from pydantic import ValidationError
 
         from jacobian.math.geometry.exact._models import (
-            MAX_PINNED_PROFILE_RESULT_BYTES,
+            MAX_PINNED_PROFILE_AUTHORED_RATIONAL_CHARACTERS,
             PinnedLineDistanceResult,
         )
 
-        huge = "1" * (MAX_PINNED_PROFILE_RESULT_BYTES + 1)
+        huge = "1" * (MAX_PINNED_PROFILE_AUTHORED_RATIONAL_CHARACTERS + 1)
         payload = {
             "dimension": 2,
             "point_count": 2,

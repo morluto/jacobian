@@ -18,7 +18,6 @@ from jacobian._execution import (
     current_request_execution,
     request_execution,
 )
-from jacobian.canonical import CanonicalizationError, encode_strict_json
 from jacobian.math.geometry.algebraic_curves._singularity_models import (
     MAX_PROJECTIVE_SINGULAR_COMPONENTS,
     MAX_PROJECTIVE_SINGULAR_FIELD_DEGREE,
@@ -72,12 +71,6 @@ _MAX_BACKEND_TERMS = 1_024
 _MAX_IDEAL_GENERATOR_DEGREE = 4
 _MAX_POINT_COORDINATE_DIGITS = 256
 _MAX_SHAPE_ATTEMPTS = comb(MAX_PROJECTIVE_SINGULAR_FIELD_DEGREE, 2) + 1
-_PROFILE_FIXED_BYTES = 64 * 1_024
-_IDEAL_TERM_FRAMING_BYTES = 192
-_IDEAL_GENERATOR_FRAMING_BYTES = 512
-_IDEAL_COMPONENT_FRAMING_BYTES = 256
-_IDEAL_FAMILY_FIXED_BYTES = 4_096
-_CANONICAL_RESULT_BYTES = 10 * 1_024 * 1_024
 
 FailureStage = Literal[
     "SATURATION",
@@ -115,7 +108,6 @@ class _SingularityAdmission:
     quotient_degree_bound: int
     geometric_point_bound: int
     shape_attempt_bound: int
-    predicted_result_bytes: int
     has_repeated_component: bool
 
 
@@ -143,38 +135,6 @@ def _normalized_source(polynomial: RationalPolynomial) -> sympy.Poly:
     if primitive.LC() < 0:
         primitive = -primitive
     return sympy.Poly(primitive, *source.gens, domain=sympy.QQ)
-
-
-def _predicted_point_record_bytes() -> int:
-    degree = MAX_PROJECTIVE_SINGULAR_FIELD_DEGREE
-    integer_bytes = _MAX_POINT_COORDINATE_DIGITS + 3
-    rational_bytes = 2 * _MAX_POINT_COORDINATE_DIGITS + 32
-    presentation_bytes = (degree + 1) * integer_bytes + 256
-    element_bytes = presentation_bytes + degree * rational_bytes + 256
-    # The point has three coordinates and its first jet has four values.  An
-    # embedding repeats the presentation once in its indexed root identity.
-    embedding_bytes = 2 * presentation_bytes + 512
-    return embedding_bytes + 7 * element_bytes + 2_048
-
-
-def _predicted_profile_bytes(component_digits: int) -> int:
-    """Bound the largest retained positive- or zero-dimensional profile."""
-
-    term_bytes = 2 * component_digits + _IDEAL_TERM_FRAMING_BYTES
-    ideal_family_bytes = (
-        _IDEAL_FAMILY_FIXED_BYTES
-        + MAX_PROJECTIVE_SINGULAR_COMPONENTS * _IDEAL_COMPONENT_FRAMING_BYTES
-        + _MAX_BACKEND_GENERATORS * _IDEAL_GENERATOR_FRAMING_BYTES
-        + _MAX_BACKEND_TERMS * term_bytes
-    )
-    # The positive branch is the larger ideal shape: one saturation plus one
-    # complete minimal-prime family.  The alternate finite branch replaces the
-    # latter with at most four embedded point records.
-    return (
-        2 * ideal_family_bytes
-        + MAX_PROJECTIVE_SINGULAR_POINTS * _predicted_point_record_bytes()
-        + _PROFILE_FIXED_BYTES
-    )
 
 
 def _admit_singularity(source: sympy.Poly) -> _SingularityAdmission:
@@ -209,8 +169,6 @@ def _admit_singularity(source: sympy.Poly) -> _SingularityAdmission:
             "the derived elimination minors exceed the 256-digit point-carrier bound"
         )
 
-    predicted_result_bytes = _predicted_profile_bytes(minor_digits)
-
     quotient_degree = (degree - 1) ** 2
     admission = _SingularityAdmission(
         degree=degree,
@@ -224,14 +182,12 @@ def _admit_singularity(source: sympy.Poly) -> _SingularityAdmission:
         quotient_degree_bound=quotient_degree,
         geometric_point_bound=quotient_degree,
         shape_attempt_bound=comb(quotient_degree, 2) + 1,
-        predicted_result_bytes=predicted_result_bytes,
         has_repeated_component=not source.is_sqf,
     )
     if (
         admission.quotient_degree_bound > MAX_PROJECTIVE_SINGULAR_FIELD_DEGREE
         or admission.geometric_point_bound > MAX_PROJECTIVE_SINGULAR_POINTS
         or admission.shape_attempt_bound > _MAX_SHAPE_ATTEMPTS
-        or admission.predicted_result_bytes >= _CANONICAL_RESULT_BYTES
     ):
         raise _SingularityAdmissionError(
             "the derived quotient, point, shape, or exact-result envelope is exceeded"
@@ -633,19 +589,6 @@ def _bounded_result_profile(
             outcome=_timeout_failure("RESULT_CONSTRUCTION"),
         )
     profile = _profile(source=source, partials=partials, outcome=outcome)
-    try:
-        encoded_bytes = len(encode_strict_json(profile.model_dump(mode="json")))
-    except CanonicalizationError:
-        encoded_bytes = _CANONICAL_RESULT_BYTES + 1
-    if encoded_bytes > admission.predicted_result_bytes:
-        return _profile(
-            source=source,
-            partials=partials,
-            outcome=_limit_failure(
-                "RESULT_CONSTRUCTION",
-                "the exact singularity profile exceeds its admitted byte bound",
-            ),
-        )
     if _remaining(deadline) <= 0:
         return _profile(
             source=source,

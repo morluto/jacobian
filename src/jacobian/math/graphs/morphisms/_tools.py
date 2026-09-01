@@ -43,14 +43,6 @@ CYCLE_C4_WITH_CHORD = {
     },
     "length": 3,
 }
-# For the chorded case we need at least triangle a-b-c. Using edges a-b, b-c, a-c plus rest.
-CYCLE_C4_WITH_CHORD_SIMPLE = {
-    "graph": {
-        "vertices": ["a", "b", "c", "d"],
-        "edges": [["a", "b"], ["a", "c"], ["a", "d"], ["b", "c"], ["c", "d"]],
-    },
-    "length": 3,
-}
 CYCLE_C4_PLAIN = {
     "graph": {
         "vertices": ["a", "b", "c", "d"],
@@ -134,7 +126,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "length k is 3..vertex count. Preconditions: at most 64 "
                     "vertices and inside the path-search budget."
                 ),
-                input=CYCLE_C4_WITH_CHORD_SIMPLE,
+                input=CYCLE_C4_WITH_CHORD,
             ),
             OperationExample(
                 name="c4_plain_no_triangle",

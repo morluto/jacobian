@@ -138,7 +138,9 @@ invoke that owner once, and project the typed result once. The internal
 `execute_operation` seam owns this complete envelope for `math.run`, direct
 operation tools, and native dispatch; only the final projector differs. The
 request context remains bound through canonical projection. It does not contain
-domain admission, backend logic, result-specific replay, or workflow state.
+domain admission, backend logic, result-specific replay, workflow state, or a
+transport byte ceiling. An HTTP request-body limit is enforced before shared
+dispatch; stdio and in-process composition do not inherit it.
 
 Owners call `request_checkpoint(stage)` immediately after an external or
 backend return and at documented bounded intervals in long native loops. The

@@ -36,6 +36,18 @@ def test_generic_private_operation_shadows_are_rejected(tmp_path: Path) -> None:
     ]
 
 
+def test_mathematical_value_carriers_cannot_own_output_byte_limits(
+    tmp_path: Path,
+) -> None:
+    source = "from jacobian.canonical import CanonicalLimits\nlimit = CanonicalLimits().max_output_bytes\n"
+    _write(tmp_path, "src/jacobian/math/example/values.py", source)
+    _write(tmp_path, "src/jacobian/math/example/operations.py", source)
+
+    assert _violations(tmp_path, "carrier-transport-limit") == [
+        "src/jacobian/math/example/values.py"
+    ]
+
+
 def test_direct_process_use_is_confined_to_process_owner(tmp_path: Path) -> None:
     _write(tmp_path, "src/jacobian/process.py", "import subprocess\n")
     _write(tmp_path, "src/jacobian/math/example.py", "import subprocess\n")

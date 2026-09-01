@@ -215,7 +215,9 @@ partitioning must not introduce kernel-owned durable state.
   exported Python functions or values.
 - Validate the complete request envelope before invoking a backend. Request
   admission must account for mathematical work, intermediate growth, exact
-  output, and any *actual* final canonical transport limit. Every accepted
+  output cardinality or representation growth, and any *actual, explicitly
+  configured* final transport limit. The canonical codec's default is not a
+  mathematical or MCP response-byte limit. Every accepted
   request must return a typed result rather than expose a backend, transport,
   or host exception. Follow the
   [operation library](docs/reference/domain-operation-library.md) when changing

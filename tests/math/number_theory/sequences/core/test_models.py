@@ -5,6 +5,7 @@ from pydantic import ValidationError
 
 from jacobian.math.number_theory.sequences.core.values import (
     MAX_INTEGER_SEQUENCE_ITEM_DIGITS,
+    MAX_SEQUENCE_TOTAL_DIGITS,
     IntegerSequence,
 )
 
@@ -26,3 +27,14 @@ def test_integer_sequence_rejects_items_over_digit_bound(sign: str) -> None:
         IntegerSequence(values=(value,))
 
     assert exc_info.value.errors()[0]["type"] == "sequences.item_too_large"
+
+
+def test_integer_sequence_bounds_total_mathematical_representation() -> None:
+    value = "1" * MAX_INTEGER_SEQUENCE_ITEM_DIGITS
+    accepted_count = MAX_SEQUENCE_TOTAL_DIGITS // len(value)
+
+    assert IntegerSequence(values=(value,) * accepted_count)
+    with pytest.raises(ValidationError) as exc_info:
+        IntegerSequence(values=(value,) * (accepted_count + 1))
+
+    assert exc_info.value.errors()[0]["type"] == "sequences.representation_too_large"

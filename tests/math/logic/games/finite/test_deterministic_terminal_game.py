@@ -366,7 +366,7 @@ def test_threshold_work_is_admitted_and_rejected_before_solving() -> None:
     assert exc_info.value.errors()[0]["type"] == "finite_game.threshold_work_exceeded"
 
 
-def test_result_size_is_rejected_independently_of_threshold_work() -> None:
+def test_result_bytes_do_not_reject_admitted_threshold_work() -> None:
     size = 170
     labels = tuple(f"v{index:04d}" + "x" * 59 for index in range(size))
     payload = {
@@ -380,9 +380,10 @@ def test_result_size_is_rejected_independently_of_threshold_work() -> None:
     }
 
     game = DeterministicTerminalGame.model_validate(payload)
-    with pytest.raises(OperationDomainValidationError) as exc_info:
-        solve_terminal_game(game)
-    assert exc_info.value.errors()[0]["type"] == "finite_game.result_size_exceeded"
+    result = solve_terminal_game(game)
+
+    assert result.game == game
+    assert len(result.max_strategy) == size
 
 
 def test_public_request_and_example_return_the_declared_result() -> None:

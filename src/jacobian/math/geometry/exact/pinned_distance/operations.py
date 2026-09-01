@@ -8,13 +8,7 @@ from math import gcd
 from typing import NoReturn
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-    format_canonical_integer,
-    strict_json_object_size,
-)
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.exact._models import PointConfiguration
 from jacobian.math.geometry.exact.pinned_distance._models import (
@@ -25,12 +19,7 @@ from jacobian.math.geometry.exact.pinned_distance._models import (
 
 __all__ = ["compute_pinned_distance_support_profile"]
 
-MAX_RESULT_BYTES = CanonicalLimits().max_output_bytes
 MAX_DISTANCE_INTERMEDIATE_DIGITS = 4 * MAX_CANONICAL_RATIONAL_DIGITS
-
-
-def _array_size(item_sizes: list[int]) -> int:
-    return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,61 +42,9 @@ def _reject(code: str, message: str) -> NoReturn:
     )
 
 
-def _result_bytes(
-    configuration: PointConfiguration,
-    source_bytes: int,
-    plans: tuple[_EntryPlan, ...],
-) -> int:
-    label_sizes = {
-        point.label: len(encode_strict_json(point.label))
-        for point in configuration.points
-    }
-    entry_sizes: list[int] = []
-    for entry in plans:
-        class_sizes = [
-            strict_json_object_size(
-                (
-                    (
-                        "squared_distance",
-                        len(
-                            encode_strict_json(
-                                item.squared_distance.model_dump(mode="json")
-                            )
-                        ),
-                    ),
-                    (
-                        "target_labels",
-                        _array_size(
-                            [label_sizes[label] for label in item.target_labels]
-                        ),
-                    ),
-                )
-            )
-            for item in entry.distance_classes
-        ]
-        entry_sizes.append(
-            strict_json_object_size(
-                (
-                    ("source_label", label_sizes[entry.source_label]),
-                    ("distance_classes", _array_size(class_sizes)),
-                )
-            )
-        )
-    return strict_json_object_size(
-        (
-            ("configuration", source_bytes),
-            ("entries", _array_size(entry_sizes)),
-        )
-    )
-
-
 def _admit_configuration(configuration: PointConfiguration) -> tuple[_EntryPlan, ...]:
     if not isinstance(configuration, PointConfiguration):
         _reject("invalid_configuration", "configuration must be a point configuration")
-    try:
-        source_bytes = len(encode_strict_json(configuration.model_dump(mode="json")))
-    except CanonicalizationError as exc:
-        _reject("source_representation", str(exc))
 
     distances_by_source: list[dict[Fraction, list[str]]] = [
         {} for _point in configuration.points
@@ -148,18 +85,7 @@ def _admit_configuration(configuration: PointConfiguration) -> tuple[_EntryPlan,
             _EntryPlan(source_label=source.label, distance_classes=tuple(classes))
         )
 
-    completed_plans = tuple(plans)
-    try:
-        result_bytes = _result_bytes(configuration, source_bytes, completed_plans)
-    except CanonicalizationError as exc:
-        _reject("result_representation", str(exc))
-    if result_bytes > MAX_RESULT_BYTES:
-        _reject(
-            "result_size_bound",
-            f"the complete distance profile exceeds the {MAX_RESULT_BYTES}-byte output bound",
-        )
-
-    return completed_plans
+    return tuple(plans)
 
 
 def compute_pinned_distance_support_profile(

@@ -150,6 +150,9 @@ contracts and validate it through its own repository-local workflow.
 
 - Do not turn a timeout, cancellation, error, incomplete enumeration, or
   missing witness into a mathematical conclusion.
+- Bound mathematical output through cardinality and intrinsic representation
+  growth. Use encoded bytes only for a concrete configured transport or worker
+  channel; the canonical encoder's ordinary mode is not an admission budget.
 - Keep execution status, input validity, and the domain mathematical conclusion
   separate.
 - Do not promote an evaluator score, solver status, model answer, or search

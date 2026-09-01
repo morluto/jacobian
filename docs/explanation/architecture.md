@@ -114,10 +114,21 @@ computational engines behind Jacobian's public mathematical contracts.
 
 ## Transport and mathematical ownership
 
-The MCP Python SDK owns the fixed transport boundary: registration of
+The MCP Python SDK owns the transport boundary: registration of
 `math.find` and `math.run`, their outer argument and output schemas, protocol
 validation, and structured JSON delivery. Jacobian does not duplicate those
-checks.
+checks. The SDK's Streamable HTTP request-body ceiling is an input constraint;
+it does not define a tool-result byte ceiling. No MCP response-size limit is
+therefore inferred from the canonical codec's defaults.
+
+Mathematical values enforce canonical representation and intrinsic
+representation bounds, never JSON response bytes. Operation owners bound work,
+intermediate growth, and unavoidable result cardinality. Native functions
+return their exact typed values without inheriting an MCP or JSON byte budget.
+If a deployment adds a real delivery ceiling, the MCP adapter owns and applies
+that ceiling explicitly. Canonical encoding is deterministic measurement by
+default and enforces output bytes only when its caller supplies limits for a
+concrete boundary.
 
 `math.run` still needs a small dispatch boundary because
 its `payload` has an operation-specific schema that is known only after its
@@ -127,7 +138,9 @@ invoke that owner once, and project the typed result once. The internal
 `execute_operation` seam owns this complete envelope for `math.run`, direct
 operation tools, and native dispatch; only the final projector differs. The
 request context remains bound through canonical projection. It does not contain
-domain admission, backend logic, result-specific replay, or workflow state.
+domain admission, backend logic, result-specific replay, workflow state, or a
+transport byte ceiling. An HTTP request-body limit is enforced before shared
+dispatch; stdio and in-process composition do not inherit it.
 
 Owners call `request_checkpoint(stage)` immediately after an external or
 backend return and at documented bounded intervals in long native loops. The
@@ -188,9 +201,10 @@ Defining-invariant evidence belongs in the operation's tests; a full replay is
 not part of ordinary execution. An adapter may reject malformed backend data
 while converting it, but that is integration safety rather than a separate
 mathematical result stage.
-After owner admission succeeds, dispatch and MCP project the typed result into
-the final transport envelope; they must not discover a mathematical or work
-bound only after execution. Independently supplied result data uses an
+After owner admission succeeds, dispatch and MCP project the typed result for
+delivery. A configured delivery limit may still fail operationally, but it
+does not retroactively make the mathematical request invalid. Independently
+supplied result data uses an
 explicit, bounded replay verifier rather than ordinary result construction.
 
 ## Bounded worker adapters

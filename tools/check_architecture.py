@@ -1162,6 +1162,28 @@ def _generic_operation_shadow_violations(
     return ()
 
 
+def _carrier_transport_limit_violations(
+    relative: PurePosixPath, tree: ast.Module
+) -> tuple[Violation, ...]:
+    """Keep JSON response-byte policy out of reusable mathematical values."""
+
+    if not (
+        relative.is_relative_to(PurePosixPath("src/jacobian/math"))
+        and relative.name == "values.py"
+    ):
+        return ()
+    return tuple(
+        _violation(
+            relative,
+            node,
+            "carrier-transport-limit",
+            "mathematical values must use representation bounds, not canonical output-byte limits",
+        )
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute) and node.attr == "max_output_bytes"
+    )
+
+
 def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
     relative = PurePosixPath(path.relative_to(root).as_posix())
     try:
@@ -1170,6 +1192,7 @@ def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
         return (Violation(str(relative), "parse-error", f"cannot parse file: {exc}"),)
     return (
         *_generic_operation_shadow_violations(relative),
+        *_carrier_transport_limit_violations(relative, tree),
         *_process_violations(relative, tree),
         *_bounded_process_violations(relative, tree),
         *_resolver_violations(relative, tree),

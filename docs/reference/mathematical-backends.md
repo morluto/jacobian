@@ -141,7 +141,10 @@ self-contained bounded value do not need an artificial source digest.
 Structurally decode projections, but do not pass worker output through the
 complete public result model or any nested validator that replays mathematical
 work. Size stdin and stdout limits for the actual UTF-8 worker payload, not for
-a different public representation.
+a different public representation. Pass those channel-specific limits to both
+the process supervisor and any canonical encoder or decoder at that boundary;
+the codec's ordinary unbounded-output mode must not silently substitute a
+different default.
 
 Child processes use the shared bounded-process supervisor. Backend adapters test
 their codec, source binding, and outcome projection; the supervisor's owning

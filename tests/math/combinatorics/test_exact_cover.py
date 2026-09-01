@@ -428,9 +428,7 @@ def test_search_and_retained_output_boundaries_are_preflighted() -> None:
             search_node_limit=MAX_EXACT_COVER_SEARCH_NODES_PER_PASS + 1,
         )
 
-    # The item/row/incidence counts alone do not bound UTF-8 source bytes.
-    # This canonical instance fits every combinatorial count but its retained
-    # source would exceed the transport's identical output limit.
+    # UTF-8 bytes do not narrow the mathematical cardinality/work envelope.
     prefix = "🟦" * 60
     primary = tuple(f"{prefix}p{index:03d}" for index in range(128))
     secondary = tuple(f"{prefix}s{index:03d}" for index in range(128))
@@ -444,11 +442,11 @@ def test_search_and_retained_output_boundaries_are_preflighted() -> None:
         ),
     )
     request = GeneralizedExactCoverRequest(instance=large_source)
-    with pytest.raises(ValueError, match="canonical output"):
-        find_generalized_exact_cover(
-            request.instance,
-            search_node_limit=request.search_node_limit,
-        )
+    result = find_generalized_exact_cover(
+        request.instance,
+        search_node_limit=request.search_node_limit,
+    )
+    assert result.status == "FOUND"
 
 
 def test_schema_publishes_the_exact_cover_contract() -> None:

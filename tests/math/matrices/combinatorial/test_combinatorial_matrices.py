@@ -155,14 +155,14 @@ class TestGramProfile:
             == "combinatorial_matrix.gram_work_budget"
         )
 
-    def test_tall_gram_above_result_budget_is_rejected(self) -> None:
+    def test_tall_gram_above_result_cardinality_is_rejected(self) -> None:
         matrix = SignMatrix(rows=((1,),) * MAX_MATERIALIZED_SIGN_MATRIX_AXIS)
 
         with pytest.raises(OperationDomainValidationError) as exc_info:
             gram_profile(matrix)
         assert (
             exc_info.value.errors()[0]["type"]
-            == "combinatorial_matrix.gram_result_budget"
+            == "combinatorial_matrix.gram_result_entries"
         )
 
     def test_wide_thin_gram_is_admitted_by_predicted_work(self) -> None:

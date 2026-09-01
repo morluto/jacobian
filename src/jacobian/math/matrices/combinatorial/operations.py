@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from jacobian.canonical import CanonicalLimits, format_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 
 from ._flint import integer_gram
@@ -19,19 +19,8 @@ from .values import HadamardMatrix, SignMatrix
 # Cube-root of the Gram multiply-add work budget.
 MAX_GRAM_PROFILE_AXIS = 512
 MAX_GRAM_PROFILE_MULTIPLY_ADDS = MAX_GRAM_PROFILE_AXIS**3
+MAX_GRAM_PROFILE_ENTRIES = 1_000_000
 MAX_KRONECKER_ORDER = 128
-
-
-def _gram_profile_result_bound(row_count: int, column_count: int) -> int:
-    """Conservatively bound canonical bytes for the complete Gram profile."""
-
-    value_chars = len(str(column_count)) + 1
-    index_chars = len(str(max(0, row_count - 1)))
-    gram_bytes = row_count * row_count * (value_chars + 1) + 2 * row_count
-    residual_bytes = 2 * row_count
-    pair_count = row_count * (row_count - 1) // 2
-    off_diagonal_bytes = pair_count * (2 * index_chars + value_chars + 5)
-    return 160 + gram_bytes + residual_bytes + off_diagonal_bytes
 
 
 def _require_gram_profile_admission(matrix: SignMatrix) -> None:
@@ -43,14 +32,14 @@ def _require_gram_profile_admission(matrix: SignMatrix) -> None:
             code="combinatorial_matrix.gram_work_budget",
             message="Gram profile exceeds the exact multiply-add work budget",
         )
-    if (
-        _gram_profile_result_bound(row_count, column_count)
-        > CanonicalLimits().max_output_bytes
-    ):
+    if row_count * row_count > MAX_GRAM_PROFILE_ENTRIES:
         raise OperationDomainValidationError(
             location=("matrix", "rows"),
-            code="combinatorial_matrix.gram_result_budget",
-            message="Gram profile exceeds the canonical result-byte budget",
+            code="combinatorial_matrix.gram_result_entries",
+            message=(
+                "Gram profile exceeds the "
+                f"{MAX_GRAM_PROFILE_ENTRIES:,}-entry result bound"
+            ),
         )
 
 

@@ -71,12 +71,12 @@ def test_derived_quotient_must_fit_the_rational_carrier() -> None:
         compute_collatz_wielandt_profile(matrix, vector)
 
 
-def test_aggregate_result_bound_is_checked_before_arithmetic() -> None:
+def test_quotient_height_is_checked_before_arithmetic() -> None:
     denominator = "1" + "0" * 32_767
     value = CanonicalRational(num="1", den=denominator)
     matrix = tuple(tuple(value for _ in range(17)) for _ in range(17))
     vector = tuple(value for _ in range(17))
-    with pytest.raises(OperationDomainValidationError, match="profile exceeds"):
+    with pytest.raises(OperationDomainValidationError, match="quotient rational"):
         compute_collatz_wielandt_profile(matrix, vector)
 
 

@@ -25,11 +25,6 @@ from jacobian._execution import (
     current_request_execution,
     request_cancelled,
 )
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices._number_field import (
     EmbeddedNumberFieldRecognitionError,
@@ -44,7 +39,6 @@ from jacobian.math.matrices.analysis._models import (
     _RATIONAL_SPECTRUM_CLAIM_BYTES,
     _RATIONAL_SPECTRUM_MATRIX_ENTRY_BYTES,
     _RATIONAL_SPECTRUM_RESULT_BASE_BYTES,
-    _RESULT_ENVELOPE_RESERVE_BYTES,
     MAX_INERTIA_DIGIT_WORK,
     MAX_RATIONAL_SPECTRUM_INPUT_DIGITS,
     MAX_RATIONAL_SPECTRUM_MINOR_DIGITS,
@@ -414,18 +408,6 @@ def _admit_inertia(matrix: ExactRealMatrix) -> _InertiaExecutionPlan:
         for column in range(row + 1, order)
     ):
         raise _validation_error("shape_mismatch", "inertia requires a symmetric matrix")
-    output_limit = CanonicalLimits().max_output_bytes
-    try:
-        retained_bytes = len(encode_strict_json(matrix.model_dump(mode="json")))
-    except CanonicalizationError:
-        retained_bytes = output_limit + 1
-    if retained_bytes + _RESULT_ENVELOPE_RESERVE_BYTES > output_limit:
-        raise _validation_error(
-            "budget_exceeded",
-            "the inertia result retains its source matrix and would exceed "
-            "the canonical output limit",
-        )
-
     diagonal = _is_diagonal(matrix)
     if isinstance(matrix, EmbeddedRealSimpleNumberFieldMatrix):
         degree = matrix.embedding.presentation.degree

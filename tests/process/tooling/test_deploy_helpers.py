@@ -25,8 +25,8 @@ from deploy.smoke_remote import _validate_discovery_response, _validate_tool_sur
 
 def _current_discovery_payload() -> dict[str, object]:
     return {
-        "kind": "discovery",
-        "query": "exact determinant",
+        "kind": "matches",
+        "need": "exact determinant",
         "namespace": None,
         "matches": [
             {

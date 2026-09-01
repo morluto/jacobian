@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import runpy
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from benchmarks.tooling.codex_visibility import (
@@ -24,6 +25,7 @@ from benchmarks.tooling.codex_visibility import (
 from benchmarks.tooling.codex_visibility import load_suite as load_agent_suite
 from benchmarks.tooling.mcp_catalog_evaluation import (
     TaskCategory,
+    _run_discovery,
     load_suite,
     run_evaluation,
 )
@@ -98,8 +100,10 @@ def test_surface_arms_are_disjoint_where_the_comparison_requires_it() -> None:
         "matrix.determinant.compute",
         "sat.assignment.check",
     }
-    assert _visible_tool_names(all_names, SurfaceArm.DIRECT_FIND) == all_names - {
-        "math.run"
+    assert _visible_tool_names(all_names, SurfaceArm.DIRECT_FIND) == {
+        "math.find",
+        "matrix.determinant.compute",
+        "sat.assignment.check",
     }
     assert _visible_tool_names(all_names, SurfaceArm.FIND_ONLY) == {"math.find"}
 
@@ -225,6 +229,48 @@ def test_semantic_discovery_is_scored_without_requiring_execution() -> None:
 
     assert classification["contract_satisfied"] is True
     assert classification["observed"]["invoked"] is False
+
+
+def test_discovery_probe_paginates_to_its_declared_limit() -> None:
+    class PagedClient:
+        def __init__(self) -> None:
+            self.requests: list[dict[str, object]] = []
+
+        async def call_tool(
+            self, name: str, arguments: dict[str, object]
+        ) -> SimpleNamespace:
+            assert name == "math.find"
+            request = arguments["request"]
+            assert isinstance(request, dict)
+            self.requests.append(request)
+            start = 0 if "cursor" not in request else 10
+            payload: dict[str, object] = {
+                "matches": [
+                    {"operation_id": f"example.operation.{index:02d}"}
+                    for index in range(start, start + 10)
+                ]
+            }
+            if start == 0:
+                payload["next_cursor"] = "example.operation.09"
+            return SimpleNamespace(structured_content=payload)
+
+    client = PagedClient()
+    report = asyncio.run(
+        _run_discovery(
+            client,  # type: ignore[arg-type]
+            query="twenty ranked candidates",
+            namespace=None,
+            limit=20,
+            required_operation_ids=("example.operation.19",),
+            maximum_rank=20,
+        )
+    )
+
+    assert report["success"] is True
+    assert report["ranks"] == {"example.operation.19": 20}
+    assert len(report["match_ids"]) == 20
+    assert [request["limit"] for request in client.requests] == [10, 10]
+    assert client.requests[1]["cursor"] == "example.operation.09"
 
 
 def test_local_catalog_controls_pass_but_external_removal_gates_remain_open() -> None:

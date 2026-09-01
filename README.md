@@ -19,10 +19,9 @@
 </p>
 
 Jacobian is an MCP server that gives AI agents a searchable vocabulary of typed
-mathematical operations. `math.find` discovers an operation, and `math.run`
-executes exactly one bounded mathematical contract and returns its typed
-result. The same mathematical library is also available through a CLI and
-native Python API.
+mathematical operations. `math.find` matches a mathematical need or inspects one
+exact contract, and `math.run` executes it and returns its typed result. The same
+mathematical library is also available through a CLI and native Python API.
 
 Each operation establishes one stable, reusable mathematical postcondition
 rather than prescribing a workflow or proof strategy. Results are exact where
@@ -104,8 +103,8 @@ jacobian run integer.compute.extended_gcd --json '{"left":"84","right":"30"}'
 ```
 
 The second command returns the gcd and Bézout coefficients as JSON. In an MCP
-host, use `math.find` to inspect the same contract and `math.run` with the same
-payload shape. See [Discover and invoke operations](docs/how-to/invoke-domain-operations.md)
+host, use `math.find` in inspection mode to read the same contract and `math.run`
+with the same payload shape. See [Discover and invoke operations](docs/how-to/invoke-domain-operations.md)
 for that agent workflow.
 
 ## Available mathematics
@@ -119,8 +118,8 @@ The built-in portfolio covers work in:
 - finite algebra, probability, geometry, and topology.
 
 SAT and SMT operations use the maintained Z3 Python binding directly. Use
-`math.find` to search for an operation, browse an unfamiliar domain, and inspect
-one operation before calling `math.run` once.
+`math.find` to match the mathematical result needed, then use its inspection
+mode on a promising operation before calling `math.run` once.
 
 See the [domain operation library](docs/reference/domain-operation-library.md)
 for the maintained operation portfolio and

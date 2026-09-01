@@ -558,9 +558,7 @@ def _build_operation_description(
             if isinstance(response, Mapping) and isinstance(response.get("kind"), str)
             else None
         ),
-        "query": (
-            request.get("query") if isinstance(request.get("query"), str) else None
-        ),
+        "need": (request.get("need") if isinstance(request.get("need"), str) else None),
         "namespace": (
             request.get("namespace")
             if isinstance(request.get("namespace"), str)

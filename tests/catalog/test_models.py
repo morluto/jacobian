@@ -9,8 +9,8 @@ from jacobian.catalog.models import (
     OperationCatalogSnapshot,
     OperationDescriptor,
     OperationDiscoveryMatch,
-    OperationDiscoveryRequest,
-    OperationDiscoveryResult,
+    OperationMatchRequest,
+    OperationMatchResult,
 )
 
 
@@ -28,10 +28,10 @@ def _error_type(error: ValidationError) -> str:
     return error.errors()[0]["type"]
 
 
-def test_catalog_discovery_text_has_no_arbitrary_character_cap() -> None:
+def test_catalog_need_accepts_a_concise_mathematical_description() -> None:
     long_text = "x" * 513
 
-    request = OperationDiscoveryRequest(query=long_text)
+    request = OperationMatchRequest(need=long_text)
     descriptor = OperationDescriptor(
         operation_id="integer.compute.gcd",
         title="integer.compute.gcd",
@@ -50,7 +50,7 @@ def test_catalog_discovery_text_has_no_arbitrary_character_cap() -> None:
         description=long_text,
     )
 
-    assert request.query == long_text
+    assert request.need == long_text
     assert descriptor.description == long_text
     assert match.description == long_text
     assert card.description == long_text
@@ -58,7 +58,7 @@ def test_catalog_discovery_text_has_no_arbitrary_character_cap() -> None:
 
 def test_discovery_page_metadata_is_bound_to_returned_matches() -> None:
     base = {
-        "query": "gcd",
+        "need": "gcd",
         "matches": [
             {
                 "operation_id": "integer.compute.gcd",
@@ -69,7 +69,7 @@ def test_discovery_page_metadata_is_bound_to_returned_matches() -> None:
         "total_matches": 2,
     }
     with pytest.raises(ValidationError) as error:
-        OperationDiscoveryResult.model_validate(
+        OperationMatchResult.model_validate(
             {**base, "next_cursor": "integer.compute.lcm"}
         )
     assert _error_type(error.value) == "catalog.cursor_position"
@@ -91,11 +91,9 @@ def test_discovery_match_rejects_removed_routing_metadata(removed_field: str) ->
         )
 
 
-@pytest.mark.parametrize(
-    "result_type", (OperationDiscoveryResult, OperationBrowseResult)
-)
+@pytest.mark.parametrize("result_type", (OperationMatchResult, OperationBrowseResult))
 def test_discovery_pages_reject_removed_truncation_flag(
-    result_type: type[OperationDiscoveryResult] | type[OperationBrowseResult],
+    result_type: type[OperationMatchResult] | type[OperationBrowseResult],
 ) -> None:
     with pytest.raises(ValidationError):
         result_type.model_validate({"truncated": False})

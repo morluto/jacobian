@@ -1,7 +1,7 @@
 # Jacobian documentation
 
-Jacobian is a stateless mathematical tool layer for agents: `math.find`
-discovers typed operations, `math.run` executes one bounded operation, and the
+Jacobian is a stateless mathematical tool layer for agents: `math.find` matches
+typed operations or reads one exact contract, `math.run` executes it, and the
 caller composes the returned mathematical values.
 
 ## Choose a path
@@ -9,7 +9,7 @@ caller composes the returned mathematical values.
 ### Use Jacobian
 
 - [Discover and invoke operations](how-to/invoke-domain-operations.md) — the
-  agent workflow: search, inspect, run, and compose one bounded result.
+  agent workflow: find, inspect, run, and compose one bounded result.
 - [Tool surface](reference/tools.md) — exact MCP contracts and result/error
   boundaries.
 - [Native Python API](reference/python-api.md) — supported `jacobian.math`
@@ -45,7 +45,7 @@ caller composes the returned mathematical values.
 - [Testing strategy](reference/testing-strategy.md) — validation ownership and
   focused test lanes.
 
-The live `math.find` catalog is authoritative for available operations and their
+The live `math.find` tool is authoritative for available operations and their
 current schemas.
 
 ## Contributing

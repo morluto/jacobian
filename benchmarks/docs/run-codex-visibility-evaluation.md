@@ -9,7 +9,7 @@ Jacobian surfaces:
 
 | Arm | Visible MCP tools | Question |
 | --- | --- | --- |
-| `legacy` | `math.find`, `math.run` | Can the agent discover and execute through the generic pair? |
+| `legacy` | `math.find`, `math.run` | Can the agent discover, inspect, and execute through the generic tools? |
 | `direct` | catalog operation tools | Can the agent select, invoke, and compose typed tools directly? |
 | `direct_find` | direct tools plus `math.find` | Does semantic vocabulary search improve selection? |
 | `find_only` | `math.find` | Which mathematical vocabulary is discoverable independently of execution? |

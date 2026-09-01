@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import re
+from collections import Counter
 from collections.abc import Sequence
+from math import log
 from typing import Protocol
 
 from jacobian.catalog.models import (
     OperationBrowseCard,
     OperationBrowseResult,
     OperationDiscoveryMatch,
-    OperationDiscoveryRequest,
-    OperationDiscoveryResult,
+    OperationMatchRequest,
+    OperationMatchResult,
 )
 
 
@@ -78,24 +80,35 @@ class SearchableOperation(Protocol):
     def discovery_terms(self) -> tuple[str, ...]: ...
 
 
-def discover_operations(
+def match_operations(
     operations: Sequence[SearchableOperation],
-    request: OperationDiscoveryRequest,
-) -> OperationDiscoveryResult:
-    """Search immutable operation declarations deterministically."""
+    request: OperationMatchRequest,
+) -> OperationMatchResult:
+    """Match a local mathematical need against immutable operation declarations."""
 
     normalized_namespace = (
         normalize_namespace(request.namespace)
         if request.namespace is not None
         else None
     )
-    ranked: list[tuple[int, OperationDiscoveryMatch]] = []
-    for descriptor in operations:
-        if normalized_namespace is not None and not matches_namespace(
-            descriptor, normalized_namespace
-        ):
-            continue
-        score = discovery_relevance(descriptor, request.query)
+    eligible = tuple(
+        descriptor
+        for descriptor in operations
+        if normalized_namespace is None
+        or matches_namespace(descriptor, normalized_namespace)
+    )
+    operation_fields = tuple(_operation_field_terms(item) for item in eligible)
+    document_terms = tuple(frozenset().union(*fields) for fields in operation_fields)
+    document_frequency = Counter(term for terms in document_terms for term in terms)
+    need_terms = discovery_terms(request.need)
+    ranked: list[tuple[float, OperationDiscoveryMatch]] = []
+    for descriptor, fields in zip(eligible, operation_fields, strict=True):
+        score = need_relevance(
+            fields,
+            need_terms,
+            document_frequency=document_frequency,
+            document_count=len(document_terms),
+        )
         match = OperationDiscoveryMatch(
             operation_id=descriptor.operation_id,
             title=descriptor.title,
@@ -125,8 +138,8 @@ def discover_operations(
     next_cursor = (
         page[-1][1].operation_id if page and start + len(page) < total_matches else None
     )
-    return OperationDiscoveryResult(
-        query=request.query,
+    return OperationMatchResult(
+        need=request.need,
         namespace=normalized_namespace,
         matches=tuple(match for _, match in page),
         total_matches=total_matches,
@@ -186,17 +199,6 @@ def browse_operations(
     )
 
 
-def normalize_discovery_text(value: str) -> str:
-    return "-".join(_DISCOVERY_TOKEN_PATTERN.findall(value.casefold()))
-
-
-def normalize_discovery_terms_text(value: str) -> str:
-    return "-".join(
-        normalize_discovery_term(term)
-        for term in _DISCOVERY_TOKEN_PATTERN.findall(value.casefold())
-    )
-
-
 def normalize_discovery_term(term: str) -> str:
     """Return one conservative comparison form for a lexical search token."""
 
@@ -229,51 +231,56 @@ def token_set(value: str) -> frozenset[str]:
     )
 
 
-def discovery_relevance(
+def _operation_field_terms(
     operation: SearchableOperation,
-    query: str,
-) -> int:
-    query_terms = discovery_terms(query)
-    if not query_terms:
+) -> tuple[frozenset[str], ...]:
+    """Return normalized identifier, title, prose, tag, and alias fields."""
+
+    return (
+        token_set(operation.operation_id),
+        token_set(operation.title),
+        token_set(operation.description),
+        frozenset(term for tag in operation.tags for term in token_set(tag)),
+        frozenset(
+            term
+            for discovery_term in operation.discovery_terms
+            for term in token_set(discovery_term)
+        ),
+    )
+
+
+def need_relevance(
+    document_fields: tuple[frozenset[str], ...],
+    need_terms: frozenset[str],
+    *,
+    document_frequency: Counter[str],
+    document_count: int,
+) -> float:
+    """Score one operation with a deterministic field-weighted BM25-style formula."""
+
+    if not need_terms or not document_fields or document_count == 0:
         return 0
-    identifier_terms = token_set(operation.operation_id)
-    tag_terms = frozenset(term for tag in operation.tags for term in token_set(tag))
-    declared_discovery_terms = frozenset(
-        term
-        for discovery_term in operation.discovery_terms
-        for term in token_set(discovery_term)
+    k1 = 1.2
+    field_weights = (2, 3, 1, 2, 4)
+    return sum(
+        log(
+            1.0
+            + (document_count - document_frequency[term] + 0.5)
+            / (document_frequency[term] + 0.5)
+        )
+        * (weighted_frequency * (k1 + 1.0))
+        / (weighted_frequency + k1)
+        for term in need_terms
+        if (
+            weighted_frequency := sum(
+                weight
+                for weight, field_terms in zip(
+                    field_weights, document_fields, strict=True
+                )
+                if term in field_terms
+            )
+        )
     )
-    title_terms = token_set(operation.title)
-    description_terms = token_set(operation.description)
-    score = 0
-    for terms, weight in (
-        (identifier_terms, 12),
-        (tag_terms, 10),
-        (declared_discovery_terms, 10),
-        (title_terms, 8),
-        (description_terms, 3),
-    ):
-        overlap = query_terms & terms
-        if overlap:
-            score += weight * len(overlap)
-    exact_query = normalize_discovery_text(query)
-    normalized_text = normalize_discovery_text(
-        f"{operation.operation_id} {operation.title} {operation.description}"
-    )
-    if exact_query and f"-{exact_query}-" in f"-{normalized_text}-":
-        score += 20
-    normalized_query = normalize_discovery_terms_text(query)
-    normalized_declared_terms = tuple(
-        normalize_discovery_terms_text(discovery_term)
-        for discovery_term in operation.discovery_terms
-    )
-    matching_term_lengths = (
-        len(token_set(discovery_term))
-        for discovery_term in normalized_declared_terms
-        if discovery_term and f"-{discovery_term}-" in f"-{normalized_query}-"
-    )
-    score += 12 * max(matching_term_lengths, default=0)
-    return score
 
 
 def normalize_namespace(value: str) -> str:
@@ -294,9 +301,9 @@ def matches_namespace(
 
 __all__ = [
     "browse_operations",
-    "discover_operations",
-    "discovery_relevance",
+    "match_operations",
     "matches_namespace",
+    "need_relevance",
     "normalize_namespace",
     "operation_namespace",
 ]

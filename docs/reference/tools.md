@@ -2,8 +2,9 @@
 
 Jacobian exposes two MCP tools for atomic mathematics.
 
-- `math.find` searches, browses, or inspects the immutable built-in operation
-  catalog.
+- `math.find` either matches one concise mathematical need against the immutable
+  built-in operation catalog or returns the exact schemas and examples for one
+  known operation ID.
 - `math.run` executes one operation with a typed `payload` and returns that
   operation's typed mathematical result.
 
@@ -45,11 +46,11 @@ and canonical serialization. Cancellation and deadline checks also run between
 those phases; expiry after mathematical computation but before delivery is an
 operational failure, not a mathematical conclusion.
 
-Use `math.find` progressively: `search` finds a few relevance-ranked candidates,
-`browse` pages compact operation cards in operation-ID order (optionally within
-one exact primary namespace), and `inspect` supplies the selected operation's
-exact input/output schemas and valid examples. Search and browse results retain
-`catalog_resource` as the explicit pointer to the bulk catalog export.
+Use `math.find` with `request.op="match"` and a short description of the local
+result needed. Its compact matches retain `catalog_resource` as an explicit
+pointer to the bulk catalog export. Then call `math.find` with
+`request.op="inspect"` to obtain the selected operation's exact input/output
+schemas and valid examples.
 
 ## Form a payload from an inspected contract
 
@@ -65,7 +66,5 @@ correction before drawing a mathematical conclusion. A timeout or backend
 failure is an operational error instead; it does not show that the request is
 mathematically inadmissible and establishes no mathematical conclusion.
 
-`browse` is recomputed from immutable declarations on every request, with a
-caller-supplied pagination cursor. The built-in MCP resource
-`operation://catalog` provides an exact bulk export; ordinary discovery should
-prefer `math.find`.
+The built-in MCP resource `operation://catalog` provides an exact bulk export;
+ordinary discovery should prefer `math.find`.

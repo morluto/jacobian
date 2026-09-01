@@ -10,36 +10,31 @@ SERVER_INSTRUCTIONS = (
     "Jacobian provides local typed operations for mathematical computation and "
     "structural analysis. Reach for math.find and math.run proactively when a problem "
     "contains an exact computation, finite search, or structural analysis that may "
-    "match a public MCP operation. Use math.find to discover or inspect operations and "
-    "math.run to execute them. Each call returns an operation-owned canonical "
-    "mathematical value that a caller may retain and reuse when a later contract accepts it."
+    "match a public MCP operation. Use math.find to match candidates or inspect one "
+    "exact contract, and math.run to execute it. Each call returns an "
+    "operation-owned canonical mathematical value that a caller may retain and reuse "
+    "when a later contract accepts it."
 )
 
 MATH_FIND_DESCRIPTION = """\
-Search, browse, or inspect public Jacobian MCP operations. This is authoritative for
-their local discovery and exact operation inspection; it does not enumerate the broader
-native Python API. Use math.find when a task may benefit from one exact computation,
-finite search, or structural analysis.
+Find or inspect public Jacobian MCP operations.
 
 Forms:
-- `request.op="search"`: a short atomic mathematical outcome (compact cards), not a
-  complete proof goal. Search globally unless the primary namespace is already known.
-- `request.op="browse"`: compact operation cards in operation-ID order for one known
-  primary namespace.
-- `search` accepts optional exact `namespace` and `limit` 1-20 (default 5); `browse`
-  accepts the same namespace filter (default limit 20). A namespace matches the first
-  operation-ID segment only; declaration tags never filter results.
-- Follow `next_cursor` with the same query or namespace filter to continue.
-- Ranking is deterministic lexical retrieval; ordered matches are candidates, not
-  recommendations or applicability claims.
-- `request.op="inspect"`: exact ID with authoritative schemas and examples.
-- `operation://catalog` is the exact bulk-export fallback when the full catalog is
-  needed, not the ordinary discovery path.
+- `request.op="match"`: describe one local mathematical need in ordinary language.
+  Preserve the supplied objects and constraints, the computation or decision, and
+  whether you need a value, witness, certificate, profile, or exhaustive result. Do
+  not translate the need into catalog tags or submit the surrounding proof goal.
+- `request.op="inspect"`: pass one exact `operation_id` to receive its authoritative
+  input and output schemas plus operator-authored examples.
+
+For matching, use `namespace` only when the primary operation-ID namespace is already
+known with high confidence. Follow `next_cursor` with the same need and namespace to
+continue. Ordered matches are deterministic retrieval candidates, not applicability
+claims; inspect a promising operation before math.run. Read `operation://catalog` only
+when the complete bulk catalog is genuinely needed.
 
 Examples:
-- `{"request":{"op":"search","query":"matrix determinant","namespace":"matrix","limit":3}}`
-- `{"request":{"op":"browse","namespace":"matrix","limit":20}}`
-- `{"request":{"op":"search","query":"counterexample to associativity"}}`
+- `{"request":{"op":"match","need":"exact determinant of a rational matrix","namespace":"matrix","limit":3}}`
 - `{"request":{"op":"inspect","operation_id":"polynomial.compute.gcd"}}`
 """
 

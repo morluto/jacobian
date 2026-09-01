@@ -3,21 +3,21 @@ from __future__ import annotations
 import pytest
 
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import OperationDiscoveryRequest
+from jacobian.catalog.models import OperationMatchRequest
 
 
 @pytest.mark.parametrize(
     ("query", "operation_id"),
     (
-        ("positive divisors", "integer.compute.divisors"),
-        ("sum positive divisors", "integer.compute.divisor_sum"),
+        ("return every positive divisor of an integer", "integer.compute.divisors"),
+        ("return the sum of all positive divisors", "integer.compute.divisor_sum"),
     ),
 )
 def test_positive_divisor_language_keeps_existing_first_rank(
     query: str,
     operation_id: str,
 ) -> None:
-    result = Catalog.open().search(OperationDiscoveryRequest(query=query, limit=8))
+    result = Catalog.open().match(OperationMatchRequest(need=query, limit=8))
 
     assert result.matches[0].operation_id == operation_id
 

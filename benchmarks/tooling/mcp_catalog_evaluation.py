@@ -251,16 +251,32 @@ async def _run_discovery(
     required_operation_ids: Sequence[str],
     maximum_rank: int,
 ) -> dict[str, Any]:
-    request: dict[str, Any] = {"op": "search", "query": query, "limit": limit}
-    if namespace is not None:
-        request["namespace"] = namespace
     started = time.perf_counter()
-    result = await client.call_tool("math.find", {"request": request})
+    match_ids: list[str] = []
+    response_bytes = 0
+    cursor: str | None = None
+    while len(match_ids) < limit:
+        request: dict[str, Any] = {
+            "op": "match",
+            "need": query,
+            "limit": min(10, limit - len(match_ids)),
+        }
+        if namespace is not None:
+            request["namespace"] = namespace
+        if cursor is not None:
+            request["cursor"] = cursor
+        result = await client.call_tool("math.find", {"request": request})
+        payload = result.structured_content
+        if not isinstance(payload, dict):
+            raise RuntimeError("math.find omitted structured discovery output")
+        page_ids = _match_ids(payload)
+        match_ids.extend(page_ids)
+        response_bytes += len(_json_bytes(payload))
+        next_cursor = payload.get("next_cursor")
+        if not page_ids or not isinstance(next_cursor, str):
+            break
+        cursor = next_cursor
     elapsed = time.perf_counter() - started
-    payload = result.structured_content
-    if not isinstance(payload, dict):
-        raise RuntimeError("math.find omitted structured discovery output")
-    match_ids = _match_ids(payload)
     ranks = {
         operation_id: (
             match_ids.index(operation_id) + 1 if operation_id in match_ids else None
@@ -279,7 +295,7 @@ async def _run_discovery(
             rank is not None and rank <= maximum_rank for rank in ranks.values()
         ),
         "elapsed_ms": round(elapsed * 1_000, 6),
-        "response_bytes": len(_json_bytes(payload)),
+        "response_bytes": response_bytes,
     }
 
 

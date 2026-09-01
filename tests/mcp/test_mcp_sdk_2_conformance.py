@@ -205,7 +205,10 @@ def test_mcp_v2_uses_sdk_typed_tools_lifespan_and_structured_resources(
         assert hasattr(server, "list_tools") and hasattr(server, "call_tool")
         async with Client(server, raise_exceptions=True) as client:
             listed = await client.list_tools()
-            assert {tool.name for tool in listed.tools} == {"math.find", "math.run"}
+            assert {tool.name for tool in listed.tools} == {
+                "math.find",
+                "math.run",
+            }
 
             invoke = next(tool for tool in listed.tools if tool.name == "math.run")
             assert set(invoke.input_schema["properties"]) == {
@@ -224,37 +227,14 @@ def test_mcp_v2_uses_sdk_typed_tools_lifespan_and_structured_resources(
             assert set(find.input_schema["properties"]) == {"request"}
             assert find.input_schema["properties"]["request"]["discriminator"] == {
                 "mapping": {
-                    "browse": "#/$defs/OperationBrowseRequest",
                     "inspect": "#/$defs/OperationInspectRequest",
-                    "search": "#/$defs/OperationSearchRequest",
+                    "match": "#/$defs/OperationMatchRequest",
                 },
                 "propertyName": "op",
             }
+            assert find.input_schema["required"] == ["request"]
             assert find.output_schema is not None
             assert find.output_schema["type"] == "object"
-            search_schema = find.input_schema["$defs"]["OperationSearchRequest"]
-            browse_schema = find.input_schema["$defs"]["OperationBrowseRequest"]
-            assert "namespace" in search_schema["properties"]
-            assert "domain" not in search_schema["properties"]
-            assert "namespace" in browse_schema["properties"]
-            assert "domain" not in browse_schema["properties"]
-
-            browse = await client.call_tool(
-                "math.find",
-                {
-                    "request": {
-                        "op": "browse",
-                        "namespace": "matrix",
-                        "limit": 1,
-                    }
-                },
-            )
-            assert isinstance(browse.structured_content, dict)
-            assert browse.structured_content["kind"] == "browse"
-            assert (
-                browse.structured_content["catalog_resource"] == "operation://catalog"
-            )
-            assert "truncated" not in browse.structured_content
 
             serialized_tools = serialize_server_result(
                 "tools/list",
@@ -273,6 +253,16 @@ def test_mcp_v2_uses_sdk_typed_tools_lifespan_and_structured_resources(
                 for item in invalid_request.content
                 if isinstance(item, TextContent)
             ), "error text must identify the missing request field"
+
+            blank_need = await client.call_tool(
+                "math.find", {"request": {"op": "match", "need": "   "}}
+            )
+            assert blank_need.is_error is True
+            assert any(
+                "non-whitespace" in item.text
+                for item in blank_need.content
+                if isinstance(item, TextContent)
+            )
 
             contract_result = await client.call_tool(
                 "math.find",

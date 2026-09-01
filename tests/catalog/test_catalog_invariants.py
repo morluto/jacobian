@@ -6,7 +6,7 @@ import pytest
 
 from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import OperationDiscoveryRequest
+from jacobian.catalog.models import OperationMatchRequest
 from jacobian.catalog.search import matches_namespace
 
 
@@ -103,13 +103,13 @@ def test_linear_code_dual_and_syndrome_have_one_operation_family() -> None:
     }
 
 
-def test_search_browse_and_inspect_results_stay_within_the_public_catalog() -> None:
+def test_match_browse_and_inspect_results_stay_within_the_public_catalog() -> None:
     catalog = Catalog.open()
     public_ids = {
         descriptor.operation_id for descriptor in catalog.snapshot().operations
     }
-    search = catalog.search(
-        OperationDiscoveryRequest(query="finite field factorization", limit=5)
+    search = catalog.match(
+        OperationMatchRequest(need="finite field factorization", limit=5)
     )
     browse = catalog.browse(namespace="graph", limit=5, cursor=None)
     inspected = catalog.inspect("integer.compute.extended_gcd")

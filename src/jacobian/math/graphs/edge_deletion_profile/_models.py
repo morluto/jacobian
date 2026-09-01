@@ -13,8 +13,6 @@ from jacobian.math.graphs.values import (
     SimpleUndirectedGraph,
 )
 
-MAX_VERTICES = 8
-MAX_EDGES = 12
 MAX_DELETION_ORDER = MAX_INDEXED_SIMPLE_GRAPH_EDGES
 
 
@@ -68,8 +66,6 @@ class EdgeDeletionProfileResult(StrictModel):
 
 __all__ = [
     "MAX_DELETION_ORDER",
-    "MAX_EDGES",
-    "MAX_VERTICES",
     "DeletionRow",
     "EdgeDeletionGraph",
     "EdgeDeletionProfileRequest",

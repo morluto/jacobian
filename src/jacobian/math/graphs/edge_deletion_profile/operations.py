@@ -1,4 +1,4 @@
-"""Edge deletion profile kernel using brute-force chromatic number."""
+"""Edge-deletion profile kernel with bounded exact coloring algorithms."""
 
 from __future__ import annotations
 
@@ -114,28 +114,18 @@ def _coloring_work_bound(
         if complete and deletion_order == 0:
             total += n
             continue
-        if complete:
-            # Every nonzero deletion from K_n enters the near-complete
-            # missing-edge clique-cover kernel.  Each deleted edge can add a
-            # branching choice while the kernel assigns all n vertices; use
-            # that source-derived envelope rather than the source chromatic
-            # shortcut.
-            total += n ** (deletion_order + 1)
-            continue
         source_missing = complete_edge_count - edge_count
         max_missing = source_missing + deletion_order
         # Near-complete graph: K_n minus a set F of missing edges.
         # The chromatic number equals the minimum clique cover of F,
-        # which the kernel computes via a bounded backtracking search.
-        # The greedy upper bound gives an initial k, then exhaustive
-        # search tries k-1, k-2, ..., each with k^n branching.  The
-        # Charge the actual exhaustive search envelope. The kernel tries
-        # every cover size below the greedy upper bound and its assignment
-        # tree has at most k**n leaves for a k-cover.
+        # whose nontrivial part is supported only on vertices incident to a
+        # missing edge. Each deletion can add at most two such vertices.
         if max_missing <= n:
-            if n > 20:
-                return MAX_EDGE_DELETION_PROFILE_WORK + 1
-            total += sum(k**n for k in range(1, n + 1))
+            source_missing_support = sum(
+                len(adjacency[vertex] & component) < n - 1 for vertex in component
+            )
+            support = min(n, source_missing_support + 2 * deletion_order)
+            total += n * n + 2**support + 3**support
             continue
         if source_is_bipartite:
             total += edge_count * n * 2
@@ -151,7 +141,11 @@ def _coloring_work_bound(
         if _is_bipartite(component_graph):
             total += edge_count * n * 2
             continue
-        total += n * sum(k**n for k in range(1, n + 1))
+        # The general exact kernel uses subset dynamic programming.  It
+        # classifies every vertex subset once and then enumerates only
+        # independent colour classes containing one fixed pivot.  Across all
+        # states this visits fewer than 2**n + 3**n bounded bit-mask states.
+        total += n * n + 2**n + 3**n
     return total
 
 
@@ -266,7 +260,7 @@ def _chromatic_number(
     *,
     source_is_bipartite: bool = False,
 ) -> int:
-    """Compute the exact chromatic number by brute-force search."""
+    """Compute the exact chromatic number with structural and subset kernels."""
     _require_execution_active("during chromatic search")
     if source_is_bipartite:
         return 0 if not vertices else 1 if not edges else 2
@@ -329,11 +323,12 @@ def _chromatic_number(
             elif _is_bipartite_edges(component_vertices, component_edges):
                 component_numbers.append(2)
             else:
-                for k in range(1, n + 1):
-                    _require_execution_active("during chromatic search")
-                    if _try_k_color(component_vertices, component_adjacency, k):
-                        component_numbers.append(k)
-                        break
+                component_numbers.append(
+                    _chromatic_number_subset_dp(
+                        component_vertices,
+                        component_adjacency,
+                    )
+                )
     return max(component_numbers, default=1)
 
 
@@ -345,72 +340,24 @@ def _min_clique_cover(vertices: list[str], edges: list[tuple[str, str]]) -> int:
     share one colour in K_n minus F.  The minimum clique cover of F is
     the chromatic number of K_n minus F.
 
-    For the bounded near-complete regime the missing-edge set is tiny,
-    so an exhaustive search over partitions is both simple and exact.
-    A greedy bound prunes the search: the clique cover number is at
-    most n (all singletons) and at least ceil(n / max_clique_size).
+    Vertices outside the support of the missing edges are isolated in F and
+    therefore contribute one singleton clique each. The remaining exact
+    partition is computed only on the missing-edge support.
     """
 
-    # Build the adjacency of the missing-edge graph.
     adj: dict[str, set[str]] = {v: set() for v in vertices}
     for left, right in edges:
         adj[left].add(right)
         adj[right].add(left)
 
-    # Enumerate all maximal cliques containing each vertex.
-    # For small graphs this is fast; for the bounded domain the
-    # missing-edge graph has at most n edges on at most n vertices.
-
-    n = len(vertices)
-
-    # Greedy clique partition: repeatedly take the largest clique
-    # from the remaining vertices.  This gives an upper bound.
-    def _greedy_clique_partition() -> int:
-        remaining = list(vertices)
-        count = 0
-        while remaining:
-            # Greedily build the largest clique starting from first vertex.
-            clique: list[str] = [remaining[0]]
-            for v in remaining[1:]:
-                if all(v in adj[c] for c in clique):
-                    clique.append(v)
-            for v in clique:
-                remaining.remove(v)
-            count += 1
-        return count
-
-    upper = _greedy_clique_partition()
-
-    # Exhaustive search for a better cover using the greedy upper bound.
-    # Try partitioning into k cliques for k = 1 to upper.
-    def _can_cover(k: int) -> bool:
-        # Try to partition vertices into k cliques.
-        # Assign vertices one by one to one of k colour classes,
-        # ensuring each class is a clique in the missing-edge graph.
-        assignment: list[int] = [-1] * n
-
-        def backtrack(idx: int, used: list[set[str]]) -> bool:
-            _require_execution_active("during clique cover search")
-            if idx == n:
-                return True
-            v = vertices[idx]
-            for c in range(min(k, idx + 1)):
-                if all(vertices[j] in adj[v] for j in range(idx) if assignment[j] == c):
-                    assignment[idx] = c
-                    used[c].add(v)
-                    if backtrack(idx + 1, used):
-                        return True
-                    used[c].discard(v)
-                    assignment[idx] = -1
-            return False
-
-        return backtrack(0, [set() for _ in range(k)])
-
-    for k in range(1, upper):
-        _require_execution_active("during clique cover search")
-        if _can_cover(k):
-            return k
-    return upper
+    active_vertices = [vertex for vertex in vertices if adj[vertex]]
+    inactive_count = len(vertices) - len(active_vertices)
+    vertex_indices = {vertex: index for index, vertex in enumerate(active_vertices)}
+    compatibility_masks = [
+        sum(1 << vertex_indices[neighbor] for neighbor in adj[vertex])
+        for vertex in active_vertices
+    ]
+    return inactive_count + _minimum_compatible_partition(compatibility_masks)
 
 
 def _is_bipartite_edges(vertices: list[str], edges: list[tuple[str, str]]) -> bool:
@@ -435,21 +382,60 @@ def _is_bipartite_edges(vertices: list[str], edges: list[tuple[str, str]]) -> bo
     return True
 
 
-def _try_k_color(vertices: list[str], adjacency: dict[str, set[str]], k: int) -> bool:
-    """Check if the graph is k-colorable."""
-    colors: dict[str, int] = {}
+def _chromatic_number_subset_dp(
+    vertices: list[str], adjacency: dict[str, set[str]]
+) -> int:
+    """Return the exact chromatic number by partitioning into independent sets."""
 
-    def backtrack(idx: int) -> bool:
-        _require_execution_active("during coloring search")
-        if idx == len(vertices):
-            return True
-        v = vertices[idx]
-        for c in range(k):
-            if all(colors.get(n, -1) != c for n in adjacency[v]):
-                colors[v] = c
-                if backtrack(idx + 1):
-                    return True
-                del colors[v]
-        return False
+    order = len(vertices)
+    if order == 0:
+        return 0
 
-    return backtrack(0)
+    vertex_indices = {vertex: index for index, vertex in enumerate(vertices)}
+    adjacency_masks = [
+        sum(1 << vertex_indices[neighbor] for neighbor in adjacency[vertex])
+        for vertex in vertices
+    ]
+    full_mask = (1 << order) - 1
+    compatibility_masks = [
+        full_mask ^ (1 << index) ^ adjacency_masks[index] for index in range(order)
+    ]
+    return _minimum_compatible_partition(compatibility_masks)
+
+
+def _minimum_compatible_partition(compatibility_masks: list[int]) -> int:
+    """Partition vertices into the fewest pairwise-compatible classes."""
+
+    order = len(compatibility_masks)
+    state_count = 1 << order
+
+    compatible = [False] * state_count
+    compatible[0] = True
+    for mask in range(1, state_count):
+        _require_execution_active("during compatible-subset classification")
+        pivot = mask & -mask
+        pivot_index = pivot.bit_length() - 1
+        remainder = mask ^ pivot
+        compatible[mask] = compatible[remainder] and (
+            remainder & ~compatibility_masks[pivot_index] == 0
+        )
+
+    partition_counts = [order + 1] * state_count
+    partition_counts[0] = 0
+    for mask in range(1, state_count):
+        _require_execution_active("during subset partition search")
+        pivot = mask & -mask
+        remainder = mask ^ pivot
+        submask = remainder
+        while True:
+            partition_class = submask | pivot
+            if compatible[partition_class]:
+                partition_counts[mask] = min(
+                    partition_counts[mask],
+                    partition_counts[mask ^ partition_class] + 1,
+                )
+            if submask == 0:
+                break
+            submask = (submask - 1) & remainder
+
+    return partition_counts[-1]

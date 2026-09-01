@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from itertools import combinations, pairwise
+from collections.abc import Sequence
+from itertools import combinations, pairwise, product
 
 import pytest
 
@@ -12,11 +13,27 @@ from jacobian.math.graphs.edge_deletion_profile.operations import (
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
-def _graph(vertices, edges):
+def _graph(
+    vertices: Sequence[str], edges: Sequence[Sequence[str]]
+) -> SimpleUndirectedGraph:
     return SimpleUndirectedGraph(
         vertices=tuple(vertices),
-        edges=tuple((a, b) for a, b in edges),
+        edges=tuple((edge[0], edge[1]) for edge in edges),
     )
+
+
+def _exhaustive_chromatic_number(
+    vertices: tuple[str, ...], edges: tuple[tuple[str, str], ...]
+) -> int:
+    vertex_indices = {vertex: index for index, vertex in enumerate(vertices)}
+    for color_count in range(1, len(vertices) + 1):
+        for coloring in product(range(color_count), repeat=len(vertices)):
+            if all(
+                coloring[vertex_indices[left]] != coloring[vertex_indices[right]]
+                for left, right in edges
+            ):
+                return color_count
+    return 0
 
 
 def test_k3_order0() -> None:
@@ -40,6 +57,56 @@ def test_k3_order1() -> None:
     for row in result.rows:
         if row.deleted_edge_indices != ():
             assert row.chromatic_number == 2
+
+
+def test_order1_profile_matches_independently_solved_scalar_rows() -> None:
+    vertices = tuple("abcdefgh")
+    edges = (
+        ("a", "b"),
+        ("a", "c"),
+        ("a", "d"),
+        ("b", "c"),
+        ("b", "d"),
+        ("c", "d"),
+        ("a", "e"),
+        ("b", "e"),
+        ("c", "e"),
+        ("b", "f"),
+        ("c", "f"),
+        ("d", "f"),
+        ("c", "g"),
+        ("d", "g"),
+        ("e", "g"),
+        ("d", "h"),
+        ("e", "h"),
+        ("f", "h"),
+    )
+
+    result = compute_edge_deletion_profile(_graph(vertices, edges), 1)
+
+    assert len(result.rows) == 19
+    expected: dict[tuple[int, ...], int] = {(): 4}
+    expected.update({(index,): 3 if index == 3 else 4 for index in range(len(edges))})
+    assert {
+        row.deleted_edge_indices: row.chromatic_number for row in result.rows
+    } == expected
+
+
+def test_order_zero_matches_exhaustive_coloring_oracle_on_five_vertices() -> None:
+    vertices = tuple("abcde")
+    possible_edges = tuple(combinations(vertices, 2))
+
+    for edge_mask in range(1 << len(possible_edges)):
+        edges = tuple(
+            edge
+            for index, edge in enumerate(possible_edges)
+            if edge_mask & (1 << index)
+        )
+        result = compute_edge_deletion_profile(_graph(vertices, edges), 0)
+
+        assert result.rows[0].chromatic_number == _exhaustive_chromatic_number(
+            vertices, edges
+        )
 
 
 def test_k8_order1_uses_complete_graph_shortcuts() -> None:
@@ -73,14 +140,14 @@ def test_k8_order2_uses_complete_graph_shortcuts() -> None:
     } == {6, 7}
 
 
-def test_large_complete_graph_with_deletions_is_rejected_for_clique_cover_work() -> (
-    None
-):
+def test_large_complete_graph_prices_clique_cover_by_missing_edge_support() -> None:
     vertices = [f"v{index}" for index in range(20)]
     edges = [tuple(sorted(edge)) for edge in combinations(vertices, 2)]
 
-    with pytest.raises(OperationDomainValidationError, match="work bound"):
-        compute_edge_deletion_profile(_graph(vertices, edges), 2)
+    result = compute_edge_deletion_profile(_graph(vertices, edges), 2)
+
+    assert len(result.rows) == 1 + len(edges) + len(list(combinations(edges, 2)))
+    assert {row.chromatic_number for row in result.rows} == {18, 19, 20}
 
 
 def test_order2_shortcut_canonicalizes_unsorted_vertex_axis() -> None:
@@ -95,7 +162,7 @@ def test_order2_shortcut_canonicalizes_unsorted_vertex_axis() -> None:
     assert row.chromatic_number == 3
 
 
-def test_near_complete_graph_order0_uses_matching_shortcut() -> None:
+def test_near_complete_graph_order0_uses_missing_edge_support() -> None:
     vertices = [f"v{index}" for index in range(8)]
     edges = list(combinations(vertices, 2))
     edges.remove(("v0", "v1"))
@@ -118,6 +185,21 @@ def test_edgeless_graph() -> None:
     result = compute_edge_deletion_profile(g, 0)
     assert len(result.rows) == 1
     assert result.rows[0].chromatic_number == 1
+
+
+def test_null_graph_has_chromatic_number_zero() -> None:
+    result = compute_edge_deletion_profile(_graph([], []), 0)
+
+    assert result.rows[0].chromatic_number == 0
+
+
+def test_deleting_every_bipartite_edge_uses_exact_fast_path() -> None:
+    graph = _graph(["a", "b", "c"], [("a", "b"), ("b", "c")])
+
+    result = compute_edge_deletion_profile(graph, 2)
+
+    assert result.rows[-1].deleted_edge_indices == (0, 1)
+    assert result.rows[-1].chromatic_number == 1
 
 
 def test_row_count() -> None:
@@ -163,17 +245,27 @@ def test_rejects_many_component_filters_before_row_enumeration() -> None:
         compute_edge_deletion_profile(graph, 2)
 
 
-def test_near_complete_large_graph_is_rejected_before_greedy_approximation() -> None:
-    """A large near-complete graph cannot publish a greedy upper bound as exact."""
+def test_large_subset_family_is_rejected_before_expansion() -> None:
+    vertices = [f"v{i:02d}" for i in range(80)]
+    edges = [(vertices[2 * index], vertices[2 * index + 1]) for index in range(40)]
+    graph = _graph(vertices, edges)
+
+    with pytest.raises(OperationDomainValidationError, match="work bound"):
+        compute_edge_deletion_profile(graph, 20)
+
+
+def test_near_complete_large_graph_uses_exact_missing_edge_support() -> None:
     vertices = [f"v{i:02}" for i in range(21)]
     missing = {tuple(sorted(pair)) for pair in pairwise(vertices[:4])}
     edges = [
         pair for pair in combinations(vertices, 2) if tuple(sorted(pair)) not in missing
     ]
-    with pytest.raises(OperationDomainValidationError, match="exact work bound"):
-        compute_edge_deletion_profile(
-            SimpleUndirectedGraph(vertices=tuple(vertices), edges=tuple(edges)), 0
-        )
+
+    result = compute_edge_deletion_profile(
+        SimpleUndirectedGraph(vertices=tuple(vertices), edges=tuple(edges)), 0
+    )
+
+    assert result.rows[0].chromatic_number == 19
 
 
 def test_admits_disconnected_triangle_and_path() -> None:

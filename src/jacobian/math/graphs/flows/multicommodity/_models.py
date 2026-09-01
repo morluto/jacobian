@@ -10,11 +10,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.canonical import (
-    encode_strict_json,
-    format_canonical_integer,
-    parse_canonical_integer,
-)
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.graphs.flows._models import FlowGraph
 
 # This operation scans a sparse commodity-by-edge tensor and materializes one
@@ -48,22 +44,6 @@ MAX_COMMODITY_VERTEX_CELLS = 512
 # still fails closed.  Demands take part only in exact conservation
 # comparisons, never in arithmetic, so they are covered by the measured
 # source echo instead of these budgets.
-
-# A result echoes its source tensor, then includes one divergence row per
-# commodity-vertex cell, one edge row per network edge, and one congestion
-# value. A derived rational occupies at most num+den+24 canonical JSON bytes
-# when its own component bounds limit the two sides separately; the
-# conservative row overhead reserves ASCII keys, labels, separators, and
-# vertices. This envelope belongs to the profile operation, not to the
-# canonical tensor value: the profile operation performs one component scan,
-# admits work and result envelope from it, and hands the measured components
-# directly to the producer. The work ledger records that one bounded scan;
-# request and result parsing do not perform mathematical execution.
-MAX_PROFILE_RESULT_BYTES = 8 * 1024 * 1024
-_DIVERGENCE_ROW_OVERHEAD_BYTES = 128
-_EDGE_ROW_OVERHEAD_BYTES = 128
-_RATIONAL_JSON_OVERHEAD_BYTES = 24
-_PROFILE_RESULT_HEADER_BYTES = 1_024
 
 # One pass performs at most 6F+E additions/subtractions, K negations, at
 # most E divisions, and K*V+3E comparisons. Each sparse entry performs three
@@ -506,108 +486,8 @@ def _require_profile_output_admission(flow: MulticommodityFlow) -> AdmittedProfi
     one charged pass.
     """
 
-    _require_profile_source_room(flow)
     scan = measured_profile_components(flow)
-    _require_admitted_profile_rows(
-        flow,
-        scan.cell_bounds,
-        scan.load_bounds,
-        scan.slack_bounds,
-        scan.congestion_bound,
-    )
     return scan
-
-
-def _require_profile_source_room(flow: MulticommodityFlow) -> None:
-    """Reject tensors whose echoed source leaves no room for any result.
-
-    The echoed source is measured before any exact component work. Every
-    admitted result contains at least the header, one congestion rational,
-    and one divergence and one edge row (FlowGraph admits no zero-edge
-    graphs and commodities at least one source/sink pair), so a serialized
-    source that already leaves no room for that skeleton can never pass the
-    priced estimate below and fails closed immediately instead of paying
-    the full component scan first.
-    """
-
-    source_bytes = len(encode_strict_json(flow.model_dump(mode="json")))
-    minimum_result_bytes = (
-        source_bytes
-        + _PROFILE_RESULT_HEADER_BYTES
-        # One congestion rational and the mandatory first divergence row,
-        # each priced at one digit per side like the estimate below.
-        + _RATIONAL_JSON_OVERHEAD_BYTES
-        + 2
-        + _DIVERGENCE_ROW_OVERHEAD_BYTES
-        + _RATIONAL_JSON_OVERHEAD_BYTES
-        + 2
-        # The mandatory first edge row prices two rationals.
-        + _EDGE_ROW_OVERHEAD_BYTES
-        + 2 * _RATIONAL_JSON_OVERHEAD_BYTES
-        + 4
-    )
-    if minimum_result_bytes > MAX_PROFILE_RESULT_BYTES:
-        raise PydanticCustomError(
-            "graph.multicommodity_flow_profile_result_would_exceed_max",
-            "multicommodity-flow profile result would exceed the "
-            f"{MAX_PROFILE_RESULT_BYTES}-byte aggregate result bound",
-        )
-
-
-def _require_admitted_profile_rows(
-    flow: MulticommodityFlow,
-    cell_bounds: dict[tuple[str, int], tuple[int, int]],
-    load_bounds: dict[tuple[int, int], tuple[int, int]],
-    slack_bounds: dict[tuple[int, int], tuple[int, int]],
-    congestion_bound: tuple[int, int] | None,
-) -> None:
-    """Price every returned row against the aggregate result envelope.
-
-    The bounds are the ones the kernel's single measured scan already
-    produced, so admission prices the result without a second arithmetic
-    pass and the one-pass work ledger stays exact. A null congestion bound
-    is the loaded zero-capacity-edge case whose result serializes a null:
-    the reserved rational overhead alone covers that field's bytes.
-    """
-
-    divergence_bytes = sum(
-        num_digits
-        + den_digits
-        + _RATIONAL_JSON_OVERHEAD_BYTES
-        + _DIVERGENCE_ROW_OVERHEAD_BYTES
-        for num_digits, den_digits in cell_bounds.values()
-    )
-    edge_bytes = 0
-    congestion_bytes = (
-        _RATIONAL_JSON_OVERHEAD_BYTES
-        if congestion_bound is None
-        else (sum(congestion_bound) + _RATIONAL_JSON_OVERHEAD_BYTES)
-    )
-    for edge in flow.network.edges:
-        edge_key = (edge.source, edge.target)
-        load_num, load_den = load_bounds[edge_key]
-        slack_num, slack_den = slack_bounds[edge_key]
-        edge_bytes += (
-            load_num
-            + load_den
-            + slack_num
-            + slack_den
-            + 2 * _RATIONAL_JSON_OVERHEAD_BYTES
-            + _EDGE_ROW_OVERHEAD_BYTES
-        )
-    estimated_bytes = (
-        len(encode_strict_json(flow.model_dump(mode="json")))
-        + divergence_bytes
-        + edge_bytes
-        + congestion_bytes
-        + _PROFILE_RESULT_HEADER_BYTES
-    )
-    if estimated_bytes > MAX_PROFILE_RESULT_BYTES:
-        raise PydanticCustomError(
-            "graph.multicommodity_flow_profile_result_would_exceed_max",
-            "multicommodity-flow profile result would exceed the "
-            f"{MAX_PROFILE_RESULT_BYTES}-byte aggregate result bound",
-        )
 
 
 class MulticommodityFlow(StrictModel):
@@ -794,7 +674,6 @@ __all__ = [
     "MAX_PROFILE_FOLD_INTERMEDIATE_DIGITS",
     "MAX_PROFILE_LOGICAL_STEPS",
     "MAX_PROFILE_NEGATIONS_PER_PASS",
-    "MAX_PROFILE_RESULT_BYTES",
     "MAX_SPARSE_FLOW_ENTRIES",
     "CommodityDemand",
     "CommodityDivergence",

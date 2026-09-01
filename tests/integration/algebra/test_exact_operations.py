@@ -27,6 +27,9 @@ from jacobian.math.number_theory.number_fields._discriminant_process import (
     compute_nf_discriminant,
 )
 from jacobian.math.number_theory.number_fields._models import NumberFieldRequest
+from jacobian.math.number_theory.number_fields.values import (
+    MAX_SIMPLE_NUMBER_FIELD_DEGREE,
+)
 from jacobian.math.number_theory.sequences.recurrence_solving._models import (
     ClosedFormRequest,
     RecurrenceFindRequest,
@@ -282,7 +285,10 @@ def test_field_discriminant_request_schema_uses_the_canonical_presentation() -> 
         "domain",
         "coefficients_descending",
     }
-    assert field_schema["properties"]["coefficients_descending"]["maxItems"] == 32
+    assert (
+        field_schema["properties"]["coefficients_descending"]["maxItems"]
+        == MAX_SIMPLE_NUMBER_FIELD_DEGREE + 1
+    )
 
 
 def test_field_carrier_preserves_the_prior_discriminant_degree_envelope() -> None:
@@ -292,6 +298,58 @@ def test_field_carrier_preserves_the_prior_discriminant_degree_envelope() -> Non
 
     assert field.degree == 31
     assert NumberFieldRequest(field=field).field is field
+
+
+@pytest.mark.parametrize("consumer", (discriminant, ring_of_integers))
+def test_native_integral_basis_consumers_preserve_degree_31_envelope(
+    consumer,
+) -> None:
+    field = SimpleNumberFieldPresentation(
+        coefficients_descending=("1", *("0",) * 30, "-2")
+    )
+
+    result = consumer(field)
+
+    if consumer is discriminant:
+        assert result == "-18327886165296381817380980351835033630345588173537542144"
+    else:
+        assert result == [
+            "1",
+            "alpha",
+            *[f"alpha**{power}" for power in range(2, field.degree)],
+        ]
+
+
+@pytest.mark.parametrize("consumer", (discriminant, ring_of_integers))
+def test_native_integral_basis_consumers_accept_degree_nine_field(
+    consumer,
+) -> None:
+    field = SimpleNumberFieldPresentation(
+        coefficients_descending=("1", *("0",) * 8, "-2")
+    )
+
+    result = consumer(field)
+
+    if consumer is discriminant:
+        assert result == "99179645184"
+    else:
+        assert result == [
+            "1",
+            "alpha",
+            *[f"alpha**{power}" for power in range(2, field.degree)],
+        ]
+
+
+@pytest.mark.parametrize("consumer", (discriminant, ring_of_integers))
+def test_native_integral_basis_consumers_bound_the_widened_field_carrier(
+    consumer,
+) -> None:
+    field = SimpleNumberFieldPresentation(
+        coefficients_descending=("1", *("0",) * 31, "-2")
+    )
+
+    with pytest.raises(ValueError, match="limited to degree 31"):
+        consumer(field)
 
 
 def test_integral_basis_is_computed_in_the_defining_power_basis() -> None:

@@ -21,7 +21,7 @@ from jacobian.math.number_theory.sequences.core._models import (
     IntegerSequenceValueResult,
 )
 from jacobian.math.number_theory.sequences.core.values import (
-    MAX_SEQUENCE_WIRE_BYTES,
+    MAX_SEQUENCE_TOTAL_DIGITS,
     IntegerSequence,
 )
 
@@ -49,14 +49,14 @@ def _admit(
                 f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit bound"
             ),
         )
-    estimated = output_items * (output_digits + 3) + 64
-    if output_items and estimated > MAX_SEQUENCE_WIRE_BYTES:
+    total_output_digits = output_items * output_digits
+    if output_items and total_output_digits > MAX_SEQUENCE_TOTAL_DIGITS:
         raise OperationDomainValidationError(
             location=("values",),
-            code="sequences.result_transport_too_large",
+            code="sequences.result_representation_too_large",
             message=(
                 "the exact result exceeds the "
-                f"{MAX_SEQUENCE_WIRE_BYTES}-byte transport envelope"
+                f"{MAX_SEQUENCE_TOTAL_DIGITS}-digit representation bound"
             ),
         )
     return values

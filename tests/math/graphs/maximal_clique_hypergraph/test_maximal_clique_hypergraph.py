@@ -263,7 +263,7 @@ def test_rejects_complete_family_above_hypergraph_edge_bound() -> None:
         construct_maximal_clique_hypergraph(graph)
 
 
-def test_wire_adapter_rejects_result_beyond_transport_limit() -> None:
+def test_wire_adapter_does_not_impose_an_unconfigured_transport_limit() -> None:
     left = [f"{chr(0x1D552) * 60}L{index:03}" for index in range(102)]
     right = [f"{chr(0x1D553) * 60}R{index:03}" for index in range(102)]
     graph = _graph(
@@ -273,11 +273,11 @@ def test_wire_adapter_rejects_result_beyond_transport_limit() -> None:
     native = construct_maximal_clique_hypergraph(graph)
     assert native.clique_count == 10_404
 
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="canonical output bound",
-    ):
-        compute_maximal_clique_hypergraph(MaximalCliqueHypergraphRequest(graph=graph))
+    projected = compute_maximal_clique_hypergraph(
+        MaximalCliqueHypergraphRequest(graph=graph)
+    )
+
+    assert projected == native
 
 
 def test_hypergraph_serializes_unchanged_into_transversal_consumer() -> None:

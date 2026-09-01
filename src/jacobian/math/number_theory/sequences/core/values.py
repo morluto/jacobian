@@ -14,11 +14,13 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits
 
 MAX_SEQUENCE_LENGTH = 100_000
 MAX_INTEGER_SEQUENCE_ITEM_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
-MAX_SEQUENCE_WIRE_BYTES = CanonicalLimits().max_output_bytes // 2
+# Bound validation and resident exact-source work directly. This admits all
+# 100,000 entries when their average magnitude has at most 50 decimal digits;
+# it is independent of JSON escaping and delivery format.
+MAX_SEQUENCE_TOTAL_DIGITS = 5_000_000
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -48,13 +50,12 @@ class IntegerSequence(StrictModel):
                 "sequence item exceeds the "
                 f"{MAX_INTEGER_SEQUENCE_ITEM_DIGITS}-digit bound",
             )
-        estimated = sum(len(value) + 3 for value in self.values) + 64
-        if estimated > MAX_SEQUENCE_WIRE_BYTES:
+        total_digits = sum(len(value.lstrip("-")) for value in self.values)
+        if total_digits > MAX_SEQUENCE_TOTAL_DIGITS:
             raise _validation_error(
-                "transport_too_large",
-                "sequence request exceeds the "
-                f"{MAX_SEQUENCE_WIRE_BYTES}-byte transport envelope; "
-                "chunk the sequence into <=10MiB pieces and compose via typed values",
+                "representation_too_large",
+                "sequence exceeds the "
+                f"{MAX_SEQUENCE_TOTAL_DIGITS}-digit representation bound",
             )
         return self
 
@@ -62,6 +63,6 @@ class IntegerSequence(StrictModel):
 __all__ = [
     "MAX_INTEGER_SEQUENCE_ITEM_DIGITS",
     "MAX_SEQUENCE_LENGTH",
-    "MAX_SEQUENCE_WIRE_BYTES",
+    "MAX_SEQUENCE_TOTAL_DIGITS",
     "IntegerSequence",
 ]

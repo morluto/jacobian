@@ -238,7 +238,7 @@ def test_long_target_labels_are_counted_once_per_entry() -> None:
     assert len(result.entries) == 64
 
 
-def test_oversized_source_is_rejected_at_operation_boundary() -> None:
+def test_large_canonical_source_is_not_rejected_by_json_bytes() -> None:
     huge = CanonicalRational.from_fraction(Fraction(10**32767))
     config = PointConfiguration(
         points=tuple(
@@ -250,17 +250,7 @@ def test_oversized_source_is_rejected_at_operation_boundary() -> None:
         )
     )
 
-    with pytest.raises(OperationDomainValidationError, match="JSON exceeds"):
-        compute_pinned_distance_support_profile(config)
+    result = compute_pinned_distance_support_profile(config)
 
-
-def test_aggregate_profile_size_is_rejected_before_result_construction() -> None:
-    scale = 10**15999
-    config = PointConfiguration(
-        points=tuple(_pt(f"p{index}", (index * scale,)) for index in range(24))
-    )
-
-    with pytest.raises(
-        OperationDomainValidationError, match="complete distance profile"
-    ):
-        compute_pinned_distance_support_profile(config)
+    assert result.configuration == config
+    assert len(result.entries) == len(config.points)

@@ -11,13 +11,11 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits, canonicalize_json
 from jacobian.math._labels import OpaqueLabel
 
 MAX_TERMINAL_GAME_POSITIONS = 4_096
 MAX_TERMINAL_GAME_MOVES = 65_536
 MAX_TERMINAL_GAME_WORK_UNITS = 3_000_000
-MAX_TERMINAL_GAME_RESULT_BYTES = 4 * 1024 * 1024
 
 PositionOwner = Literal["MAX", "MIN", "TERMINAL"]
 
@@ -304,54 +302,10 @@ def _require_terminal_game_envelope(game: DeterministicTerminalGame) -> None:
             "payoff levels, arena size, or payoff digit length",
         )
 
-    labels = tuple(position.label for position in game.positions)
-    longest_label = max(labels, key=lambda label: len(canonicalize_json([label])))
-    widest_payoff = max(
-        payoffs,
-        key=lambda payoff: len(payoff.num) + len(payoff.den),
-    )
-    max_positions = tuple(
-        position for position in game.positions if position.owner == "MAX"
-    )
-    min_positions = tuple(
-        position for position in game.positions if position.owner == "MIN"
-    )
-    result_upper_bound = {
-        "game": game.model_dump(mode="json"),
-        "value_classes": [
-            {
-                "payoff": widest_payoff.model_dump(mode="json"),
-                "positions": [position.label],
-            }
-            for position in game.positions
-        ],
-        "max_strategy": [
-            {"position": position.label, "target": longest_label}
-            for position in max_positions
-        ],
-        "min_strategy": [
-            {"position": position.label, "target": longest_label}
-            for position in min_positions
-        ],
-    }
-    try:
-        canonicalize_json(
-            result_upper_bound,
-            limits=CanonicalLimits(
-                max_output_bytes=MAX_TERMINAL_GAME_RESULT_BYTES,
-            ),
-        )
-    except ValueError as exc:
-        raise PydanticCustomError(
-            "finite_game.result_size_exceeded",
-            "terminal-game solution exceeds the exact result-size bound",
-        ) from exc
-
 
 __all__ = [
     "MAX_TERMINAL_GAME_MOVES",
     "MAX_TERMINAL_GAME_POSITIONS",
-    "MAX_TERMINAL_GAME_RESULT_BYTES",
     "MAX_TERMINAL_GAME_WORK_UNITS",
     "DeterministicGameMove",
     "DeterministicGamePosition",

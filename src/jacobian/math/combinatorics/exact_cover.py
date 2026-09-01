@@ -9,10 +9,6 @@ from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.canonical import (
-    CanonicalizationError,
-    encode_strict_json,
-)
 from jacobian.math._labels import OpaqueLabel
 
 
@@ -142,68 +138,6 @@ class GeneralizedExactCoverInstance(StrictModel):
                 f"{MAX_EXACT_COVER_INCIDENCES}-incidence bound"
             )
         return self
-
-
-def _coverage_wire_value(
-    instance: GeneralizedExactCoverInstance,
-) -> list[dict[str, object]]:
-    return [
-        {"item_id": item, "kind": "PRIMARY", "multiplicity": 1}
-        for item in instance.primary_items
-    ] + [
-        {"item_id": item, "kind": "SECONDARY", "multiplicity": 1}
-        for item in instance.secondary_items
-    ]
-
-
-def _require_output_headroom(instance: GeneralizedExactCoverInstance) -> None:
-    """Prove that every result shape fits before the search begins.
-
-    A witness contains at most one selected row per primary item. The coverage
-    ledger contains one bounded record per declared item. The exact source is
-    retained once so conclusions remain replayable. Materializing the largest
-    possible FOUND wire value and both non-positive wire values gives the exact
-    serialized upper bound for this source; it does not rely on label lengths
-    or a fixed structural reserve.
-    """
-
-    try:
-        source = instance.model_dump(mode="json")
-        selected_count = min(len(instance.primary_items), len(instance.rows))
-        selected_row_ids = sorted(
-            instance.rows,
-            key=lambda row: len(encode_strict_json(row.row_id)),
-            reverse=True,
-        )[:selected_count]
-        common = {
-            "instance": source,
-            "search_node_limit": MAX_EXACT_COVER_SEARCH_NODES_PER_PASS,
-        }
-        found_wire = {
-            **common,
-            "status": "FOUND",
-            "selected_row_ids": sorted(row.row_id for row in selected_row_ids),
-            "item_multiplicities": _coverage_wire_value(instance),
-        }
-        no_cover_wire = {
-            **common,
-            "status": "NO_COVER",
-            "selected_row_ids": None,
-            "item_multiplicities": None,
-        }
-        unknown_wire = {
-            **common,
-            "status": "UNKNOWN",
-            "selected_row_ids": None,
-            "item_multiplicities": None,
-        }
-        for wire in (found_wire, no_cover_wire, unknown_wire):
-            encode_strict_json(wire)
-    except CanonicalizationError as exc:
-        raise _combinatorics_validation_error(
-            "the exact-cover result retains its source and would exceed the "
-            "canonical output limit; shorten labels or shrink the incidence data"
-        ) from exc
 
 
 class GeneralizedExactCoverRequest(StrictModel):
@@ -423,7 +357,6 @@ def find_generalized_exact_cover(
             "search_node_limit must be between 1 and "
             f"{MAX_EXACT_COVER_SEARCH_NODES_PER_PASS}"
         )
-    _require_output_headroom(instance)
     return _solve_generalized_exact_cover(instance, search_node_limit)
 
 

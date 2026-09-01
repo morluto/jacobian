@@ -1,0 +1,1097 @@
+"""One admission plan and deadline for affine-torus fixed loci."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from fractions import Fraction
+from math import gcd, lcm
+from time import monotonic
+from typing import Literal, NoReturn
+
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    current_request_execution,
+    request_cancelled,
+)
+from jacobian.canonical import (
+    CanonicalLimits,
+    format_canonical_integer,
+    parse_canonical_integer,
+    strict_json_object_size,
+)
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.geometry.affine_tori.values import (
+    MAX_AFFINE_TORUS_POINT_DIGITS,
+    RationalAffineTorusMap,
+)
+
+# The dense upper-triangular 16-by-16, 32-digit boundary fixture completes in
+# well under one second on an ordinary development host. Two minutes leaves a
+# generous platform margin while retaining one finite owner deadline.
+AFFINE_TORUS_FIXED_LOCUS_WALL_SECONDS = 120.0
+_AFFINE_TORUS_WORKER_STDIN_LIMIT = 64 * 1024
+
+type AffineTorusBackendEnvelopeCategory = Literal[
+    "integer_rank",
+    "integer_hnf",
+    "rational_solve",
+    "integer_snf",
+    "rational_inverse",
+    "integer_multiply",
+]
+
+
+@dataclass(frozen=True, slots=True)
+class AffineTorusRankBounds:
+    """Exact height envelope conditional on one possible rank of ``A-I``."""
+
+    rank: int
+    nullity: int
+    source_minor_height: int
+    component_generator_height: int
+    source_hnf_transform_height: int
+    character_hnf_transform_height: int
+    image_saturation_height: int
+    leading_solution_height: int
+    integral_lift_height: int
+    image_coordinate_height: int
+    rational_intermediate_height: int
+    base_point_component_height: int
+    obstruction_pairing_height: int
+
+
+@dataclass(frozen=True, slots=True)
+class AffineTorusBackendEnvelope:
+    """Structural bounds for the maintained FLINT primitive schedule.
+
+    Counts are direct backend invocations, not a proxy for FLINT's private
+    scalar instruction count. Operand dimensions and exact heights are bounded
+    independently by the admitted source and every possible rank of ``A-I``.
+    """
+
+    primitive_call_limits: tuple[tuple[AffineTorusBackendEnvelopeCategory, int], ...]
+    maximum_integer_rows: int
+    maximum_integer_columns: int
+    maximum_integer_height: int
+    maximum_rational_rows: int
+    maximum_rational_columns: int
+    maximum_rational_height: int
+
+
+@dataclass(frozen=True, slots=True)
+class AffineTorusFixedLocusPlan:
+    """Source-derived structural admission and delivery bounds."""
+
+    dimension: int
+    deadline: float
+    displacement_height: int
+    translation_common_denominator: int
+    rank_bounds: tuple[AffineTorusRankBounds, ...]
+    worker_input_bytes_upper_bound: int
+    result_bytes_upper_bound: int
+    backend_envelope: AffineTorusBackendEnvelope
+
+    def bounds_for_rank(self, rank: int) -> AffineTorusRankBounds:
+        """Return the precomputed envelope for the kernel's exact source rank."""
+
+        for bounds in self.rank_bounds:
+            if bounds.rank == rank:
+                return bounds
+        raise AssertionError("affine-torus rank is outside its admitted plan")
+
+
+def _reject(reason: str, message: str) -> NoReturn:
+    raise OperationDomainValidationError(
+        location=("affine_map",),
+        code=f"affine_torus.fixed_locus.{reason}",
+        message=message,
+    )
+
+
+def begin_affine_torus_deadline() -> float:
+    """Bind the one deadline covering admission, FLINT, result, and projection."""
+
+    execution = current_request_execution()
+    started_at = execution.started_at if execution is not None else monotonic()
+    owner_deadline = started_at + AFFINE_TORUS_FIXED_LOCUS_WALL_SECONDS
+    deadline = (
+        min(owner_deadline, execution.deadline)
+        if execution is not None and execution.deadline is not None
+        else owner_deadline
+    )
+    bind_request_deadline(deadline)
+    require_affine_torus_deadline(deadline, "before semantic admission")
+    return deadline
+
+
+def require_affine_torus_deadline(deadline: float, stage: str) -> None:
+    """Stop without a mathematical conclusion when the request envelope expires."""
+
+    if request_cancelled():
+        raise OperationExecutionCancelledError(
+            f"affine-torus fixed-locus computation cancelled {stage}"
+        )
+    if monotonic() >= deadline:
+        raise OperationExecutionTimeoutError(
+            f"affine-torus fixed-locus deadline expired {stage}"
+        )
+
+
+def _decimal_digits(value: int) -> int:
+    return len(format_canonical_integer(abs(value)))
+
+
+def _rank_minor_height(rank: int, source_height: int) -> int:
+    """Hadamard-bound every rank minor by ``(r ||M||_inf)^r``."""
+
+    if rank == 0:
+        return 1
+    return int((rank * max(1, source_height)) ** rank)
+
+
+def _augmented_hnf_transform_height(rows: int, minor_height: int) -> int:
+    """Bound the transform extracted from ``HNF([B | I])``.
+
+    Every full-row minor of ``[B | I]`` is a minor of ``B``. For a pivot
+    minor ``P``, HNF pivot entries are at most its determinant. Cramer's rule
+    for each remaining column then bounds every HNF entry, including the
+    right-hand transform block, by ``rows * Delta^2``.
+    """
+
+    if rows == 0:
+        return 1
+    return rows * minor_height * minor_height
+
+
+def _exact_integer_rank(matrix: tuple[tuple[int, ...], ...]) -> int:
+    """Return the exact rational rank of a square integer matrix.
+
+    Fraction-free (Bareiss-style) Gaussian elimination is exact over the
+    integers, so it agrees with the tightened FLINT kernel's ``rank`` without
+    requiring the isolated backend here.  The matrix is bounded by the admitted
+    dimension and entry digit envelope, keeping admission one bounded pass.
+    """
+
+    if not matrix:
+        return 0
+    row_count = len(matrix)
+    column_count = len(matrix[0])
+    if column_count == 0:
+        return 0
+    pivot_rows = [[Fraction(value) for value in row] for row in matrix]
+    rank = 0
+    previous_pivot: int | Fraction = 1
+    for column in range(column_count):
+        pivot_row = -1
+        for row in range(rank, len(matrix)):
+            if pivot_rows[row][column] != 0:
+                pivot_row = row
+                break
+        if pivot_row == -1:
+            continue
+        pivot_rows[rank], pivot_rows[pivot_row] = (
+            pivot_rows[pivot_row],
+            pivot_rows[rank],
+        )
+        pivot = pivot_rows[rank][column]
+        for row in range(rank + 1, row_count):
+            factor = pivot_rows[row][column]
+            if factor == 0:
+                continue
+            for inner in range(column + 1, column_count):
+                pivot_rows[row][inner] = (
+                    pivot_rows[row][inner] * pivot - pivot_rows[rank][inner] * factor
+                )
+                if rank > 0:
+                    pivot_rows[row][inner] /= previous_pivot
+        previous_pivot = pivot
+        rank += 1
+        if rank == min(row_count, column_count):
+            break
+    return rank
+
+
+def _first_rank_minor(
+    matrix: tuple[tuple[int, ...], ...], rank: int
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """Select the same lexicographic full-rank minor as the worker."""
+
+    if rank == 0:
+        return (), ()
+    all_columns = tuple(range(len(matrix[0])))
+    rows: list[int] = []
+    current_rank = 0
+    for row in range(len(matrix)):
+        candidate = (*rows, row)
+        candidate_rank = _exact_integer_rank(
+            tuple(
+                tuple(matrix[index][column] for column in all_columns)
+                for index in candidate
+            )
+        )
+        if candidate_rank > current_rank:
+            rows.append(row)
+            current_rank = candidate_rank
+            if current_rank == rank:
+                break
+    columns: list[int] = []
+    current_rank = 0
+    for column in all_columns:
+        candidate = (*columns, column)
+        candidate_rank = _exact_integer_rank(
+            tuple(tuple(matrix[row][index] for index in candidate) for row in rows)
+        )
+        if candidate_rank > current_rank:
+            columns.append(column)
+            current_rank = candidate_rank
+            if current_rank == rank:
+                break
+    if len(rows) != rank or len(columns) != rank:
+        raise AssertionError("rank-minor selection did not reach the matrix rank")
+    return tuple(rows), tuple(columns)
+
+
+def _selected_rank_minor_inverse(
+    displacement: tuple[tuple[int, ...], ...], rank: int
+) -> tuple[tuple[int, ...], tuple[int, ...], tuple[tuple[Fraction, ...], ...]]:
+    """Return the worker's selected minor and its exact rational inverse."""
+
+    if rank == 0:
+        return (), (), ()
+    rows, columns = _first_rank_minor(displacement, rank)
+    augmented = [
+        [Fraction(displacement[row][column]) for column in columns]
+        + [Fraction(int(row_index == column_index)) for column_index in range(rank)]
+        for row_index, row in enumerate(rows)
+    ]
+    for column in range(rank):
+        pivot = next(
+            (row for row in range(column, rank) if augmented[row][column]),
+            None,
+        )
+        if pivot is None:
+            raise AssertionError("selected rank minor is singular")
+        augmented[column], augmented[pivot] = augmented[pivot], augmented[column]
+        pivot_value = augmented[column][column]
+        augmented[column] = [value / pivot_value for value in augmented[column]]
+        for row in range(rank):
+            if row == column:
+                continue
+            factor = augmented[row][column]
+            if factor:
+                augmented[row] = [
+                    left - factor * right
+                    for left, right in zip(
+                        augmented[row], augmented[column], strict=True
+                    )
+                ]
+    return (
+        rows,
+        columns,
+        tuple(tuple(row[rank + column] for column in range(rank)) for row in augmented),
+    )
+
+
+def _selected_component_generator_height(
+    inverse: tuple[tuple[Fraction, ...], ...],
+) -> int:
+    """Bound selected component generators by the selected solve denominator."""
+
+    if not inverse:
+        return 1
+    return max(1, lcm(*(value.denominator for row in inverse for value in row)))
+
+
+def _extended_gcd(left: int, right: int) -> tuple[int, int, int]:
+    """Return ``(g, s, t)`` with ``g = s*left + t*right >= 0``."""
+
+    old_remainder, remainder = left, right
+    old_left, current_left = 1, 0
+    old_right, current_right = 0, 1
+    while remainder:
+        quotient = old_remainder // remainder
+        old_remainder, remainder = (
+            remainder,
+            old_remainder - quotient * remainder,
+        )
+        old_left, current_left = (
+            current_left,
+            old_left - quotient * current_left,
+        )
+        old_right, current_right = (
+            current_right,
+            old_right - quotient * current_right,
+        )
+    if old_remainder < 0:
+        return -old_remainder, -old_left, -old_right
+    return old_remainder, old_left, old_right
+
+
+def _congruence_kernel_basis(
+    constraints: tuple[tuple[int, ...], ...], *, dimension: int, modulus: int
+) -> tuple[tuple[int, ...], ...]:
+    """Return a basis for ``{z: constraint*z = 0 (mod modulus)}``.
+
+    The basis is built by reducing one congruence at a time with unimodular
+    column operations.  It is a small exact lattice calculation used only to
+    identify the modular obstruction; it does not invoke the FLINT worker.
+    """
+
+    if modulus <= 0:
+        raise AssertionError("congruence modulus must be positive")
+    basis = [
+        [int(row == column) for column in range(dimension)] for row in range(dimension)
+    ]
+    for constraint in constraints:
+        if len(constraint) != dimension:
+            raise AssertionError("congruence constraint has the wrong dimension")
+        transformed = [
+            sum(constraint[row] * basis[row][column] for row in range(dimension))
+            for column in range(dimension)
+        ]
+        unimodular = [
+            [int(row == column) for column in range(dimension)]
+            for row in range(dimension)
+        ]
+        for column in range(1, dimension):
+            left, right = transformed[0], transformed[column]
+            if right == 0:
+                continue
+            gcd_value, left_multiplier, right_multiplier = _extended_gcd(left, right)
+            first_column = [unimodular[row][0] for row in range(dimension)]
+            other_column = [unimodular[row][column] for row in range(dimension)]
+            for row in range(dimension):
+                unimodular[row][0] = (
+                    left_multiplier * first_column[row]
+                    + right_multiplier * other_column[row]
+                )
+                unimodular[row][column] = (
+                    -(right // gcd_value) * first_column[row]
+                    + (left // gcd_value) * other_column[row]
+                )
+            transformed[0] = gcd_value
+            transformed[column] = 0
+        transformed_basis = [
+            [
+                sum(
+                    basis[row][inner] * unimodular[inner][column]
+                    for inner in range(dimension)
+                )
+                for column in range(dimension)
+            ]
+            for row in range(dimension)
+        ]
+        gcd_value = 0
+        for value in transformed:
+            gcd_value = gcd(gcd_value, abs(value))
+        step = modulus // gcd(modulus, gcd_value)
+        for row in range(dimension):
+            transformed_basis[row][0] *= step
+        basis = transformed_basis
+    return tuple(
+        tuple(basis[row][column] for row in range(dimension))
+        for column in range(dimension)
+    )
+
+
+def _modular_obstruction_pairing_height(
+    displacement: tuple[tuple[int, ...], ...],
+    translation: tuple[Fraction, ...],
+    rank: int,
+    *,
+    selected_rows: tuple[int, ...],
+    selected_columns: tuple[int, ...],
+    selected_inverse: tuple[tuple[Fraction, ...], ...],
+) -> tuple[bool, int]:
+    """Classify the torus congruence and bound every empty-branch pairing."""
+
+    dimension = len(displacement)
+    remaining_rows = tuple(row for row in range(dimension) if row not in selected_rows)
+    nullity = len(remaining_rows)
+    if nullity == 0:
+        return False, 1
+    row_relations = tuple(
+        tuple(
+            sum(
+                displacement[row][selected_columns[column]]
+                * selected_inverse[column][selected_row]
+                for column in range(rank)
+            )
+            for selected_row in range(rank)
+        )
+        for row in remaining_rows
+    )
+    relation_denominator = lcm(
+        *(value.denominator for row in row_relations for value in row), 1
+    )
+    constraints = tuple(
+        tuple(
+            int(row_relations[row][column] * relation_denominator)
+            for row in range(nullity)
+        )
+        for column in range(rank)
+    )
+    kernel_basis = _congruence_kernel_basis(
+        constraints, dimension=nullity, modulus=relation_denominator
+    )
+    pairings: list[Fraction] = []
+    for coefficients in kernel_basis:
+        character = [Fraction(0)] * dimension
+        for row, coefficient in zip(remaining_rows, coefficients, strict=True):
+            character[row] = Fraction(coefficient)
+        for selected_row in range(rank):
+            character[selected_rows[selected_row]] = -sum(
+                (
+                    Fraction(coefficient) * row_relations[row][selected_row]
+                    for row, coefficient in enumerate(coefficients)
+                ),
+                Fraction(0),
+            )
+        if any(value.denominator != 1 for value in character):
+            raise AssertionError(
+                "congruence basis did not produce an integer character"
+            )
+        pairings.append(
+            sum(
+                (character[index] * translation[index] for index in range(dimension)),
+                Fraction(0),
+            )
+            % 1
+        )
+    nonzero_pairings = [pairing for pairing in pairings if pairing]
+    if not nonzero_pairings:
+        return False, 1
+    return True, lcm(*(pairing.denominator for pairing in nonzero_pairings), 1)
+
+
+def _selected_zero_lift_base_point_height(
+    displacement: tuple[tuple[int, ...], ...],
+    translation: tuple[Fraction, ...],
+    rank: int,
+    *,
+    selected_inverse: tuple[tuple[Fraction, ...], ...] | None = None,
+    selected_rows: tuple[int, ...] | None = None,
+    selected_columns: tuple[int, ...] | None = None,
+) -> int | None:
+    """Bound the selected solve when the zero integer lift is exact.
+
+    The worker solves the selected rank minor after choosing an integer lift
+    from the saturated character lattice.  When ``-translation`` already lies
+    in the rational image of the displacement, that lift is zero.  Solving the
+    same selected minor here lets admission account for the actual determinant
+    and cancellations in the retained source instead of charging a global
+    Hadamard bound times the translation LCM.  ``None`` deliberately falls
+    back to the conservative lift envelope for translated systems that need a
+    nonzero lift.
+    """
+
+    if rank == 0 or all(value == 0 for value in translation):
+        return 1
+    if selected_inverse is None:
+        rows, columns, inverse = _selected_rank_minor_inverse(displacement, rank)
+    else:
+        if selected_rows is None or selected_columns is None:
+            raise AssertionError("selected minor coordinates are required")
+        rows, columns, inverse = selected_rows, selected_columns, selected_inverse
+    solution = [
+        sum(inverse[column][row] * -translation[rows[column]] for column in range(rank))
+        for row in range(rank)
+    ]
+
+    # The selected equations must solve every retained equation for the zero
+    # lift to be valid.  If they do not, the worker needs its character-lattice
+    # lift and the conservative bound remains necessary.
+    for row, equation in enumerate(displacement):
+        if (
+            sum(
+                Fraction(equation[column]) * solution[index]
+                for index, column in enumerate(columns)
+            )
+            != -translation[row]
+        ):
+            return None
+    return max(
+        1,
+        *(max((value % 1).numerator, (value % 1).denominator) for value in solution),
+    )
+
+
+def _rank_bounds(
+    *,
+    dimension: int,
+    rank: int,
+    displacement_height: int,
+    common_denominator: int,
+    translation_is_zero: bool,
+    selected_base_point_height: int | None = None,
+    component_generator_height: int | None = None,
+    obstruction_pairing_height: int | None = None,
+) -> AffineTorusRankBounds:
+    nullity = dimension - rank
+    minor_height = _rank_minor_height(rank, displacement_height)
+    source_transform_height = _augmented_hnf_transform_height(dimension, minor_height)
+
+    # The bottom rows of HNF([M^t | I]) are the canonical HNF basis of the
+    # saturated kernel. Their primitive Plucker coordinates are the rank
+    # minors of M divided by their gcd, so their entries are <= minor_height.
+    # The next augmented HNF sees at most ``nullity`` such columns.
+    character_augmented_minor = (
+        1 if nullity == 0 else (nullity * minor_height) ** nullity
+    )
+    character_transform_height = _augmented_hnf_transform_height(
+        dimension, character_augmented_minor
+    )
+    # The kernel of the character matrix is the saturated image of M. Its
+    # canonical HNF basis has the same primitive Plucker coordinates as M's
+    # rational image, hence is bounded directly by M's rank minors even though
+    # the transformation used to recover it has the coarser bound above.
+    image_saturation_height = minor_height
+    component_generator_height = (
+        minor_height
+        if component_generator_height is None
+        else component_generator_height
+    )
+
+    pairing_height = max(1, dimension * minor_height)
+    # The character lattice is primitive. Its HNF leading block is therefore
+    # the identity, so the leading solution is the integral pairing vector.
+    leading_solution_height = pairing_height
+    integral_lift_height = max(
+        1,
+        nullity * character_transform_height * leading_solution_height,
+    )
+
+    if rank == 0:
+        image_coordinate_height = 1
+        rational_intermediate_height = 1
+    else:
+        cofactor_height = (rank * minor_height) ** (rank - 1)
+        image_coordinate_height = max(
+            1,
+            rank * cofactor_height * max(1, displacement_height),
+        )
+        component_solve_height = max(
+            1,
+            rank * cofactor_height * image_saturation_height,
+        )
+        base_rhs_height = common_denominator * (integral_lift_height + 1)
+        base_solve_height = max(
+            1,
+            rank * cofactor_height * base_rhs_height,
+            minor_height * common_denominator,
+        )
+        rational_intermediate_height = max(
+            image_coordinate_height,
+            component_solve_height,
+            base_solve_height,
+        )
+
+    # After reduction modulo one, generator denominators divide a rank minor.
+    # A rank-zero obstruction has no base point, but its pairing can retain a
+    # denominator from the translated source and needs its own result bound.
+    base_point_component_height = (
+        1
+        if rank == 0 or translation_is_zero
+        else (
+            selected_base_point_height
+            if selected_base_point_height is not None
+            else max(1, minor_height * common_denominator)
+        )
+    )
+    result_obstruction_pairing_height = (
+        max(1, common_denominator)
+        if rank == 0 and not translation_is_zero
+        else base_point_component_height
+    )
+    if obstruction_pairing_height is not None:
+        result_obstruction_pairing_height = max(1, obstruction_pairing_height)
+    return AffineTorusRankBounds(
+        rank=rank,
+        nullity=nullity,
+        source_minor_height=minor_height,
+        component_generator_height=component_generator_height,
+        source_hnf_transform_height=source_transform_height,
+        character_hnf_transform_height=character_transform_height,
+        image_saturation_height=image_saturation_height,
+        leading_solution_height=leading_solution_height,
+        integral_lift_height=integral_lift_height,
+        image_coordinate_height=image_coordinate_height,
+        rational_intermediate_height=rational_intermediate_height,
+        base_point_component_height=base_point_component_height,
+        obstruction_pairing_height=result_obstruction_pairing_height,
+    )
+
+
+def _array_wire_bytes(count: int, item_bytes: int) -> int:
+    """Return the exact compact-JSON size of ``count`` equal-width items."""
+
+    return 2 + max(count - 1, 0) + count * item_bytes
+
+
+def _array_item_wire_bytes(item_bytes: tuple[int, ...]) -> int:
+    """Return the exact compact-JSON size of a heterogeneous array."""
+
+    return 2 + max(len(item_bytes) - 1, 0) + sum(item_bytes)
+
+
+def _nonnegative_integer_wire_bytes(value: int) -> int:
+    return _decimal_digits(value)
+
+
+def _integer_string_wire_bytes(height: int) -> int:
+    """Bound a signed canonical integer string, including JSON quotes."""
+
+    return _decimal_digits(height) + 3
+
+
+def _rational_wire_bytes(height: int) -> int:
+    """Bound a rational object with a signed numerator and positive denominator."""
+
+    digits = _decimal_digits(height)
+    return strict_json_object_size(
+        (
+            ("num", digits + 3),
+            ("den", digits + 2),
+        )
+    )
+
+
+def _torus_wire_bytes(dimension: int) -> int:
+    return strict_json_object_size(
+        (("dimension", _nonnegative_integer_wire_bytes(dimension)),)
+    )
+
+
+def _integer_matrix_wire_bytes(*, rows: int, columns: int, height: int) -> int:
+    entry_bytes = _integer_string_wire_bytes(height)
+    row_bytes = _array_wire_bytes(columns, entry_bytes)
+    entries_bytes = _array_wire_bytes(rows, row_bytes)
+    return strict_json_object_size(
+        (
+            ("domain", 4),  # canonical JSON string ``"ZZ"``
+            ("row_count", _nonnegative_integer_wire_bytes(rows)),
+            ("column_count", _nonnegative_integer_wire_bytes(columns)),
+            ("entries", entries_bytes),
+        )
+    )
+
+
+def _point_wire_bytes(*, dimension: int, height: int) -> int:
+    return strict_json_object_size(
+        (
+            ("torus", _torus_wire_bytes(dimension)),
+            (
+                "coordinates",
+                _array_wire_bytes(dimension, _rational_wire_bytes(height)),
+            ),
+        )
+    )
+
+
+def _source_wire_bytes(source: RationalAffineTorusMap) -> int:
+    """Return the exact compact-JSON size of the retained canonical source."""
+
+    dimension = source.torus.dimension
+    entry_rows = tuple(
+        _array_item_wire_bytes(tuple(len(entry) + 2 for entry in row))
+        for row in source.linear_part.entries
+    )
+    linear_part_bytes = strict_json_object_size(
+        (
+            ("domain", 4),  # canonical JSON string ``"ZZ"``
+            ("row_count", _nonnegative_integer_wire_bytes(dimension)),
+            ("column_count", _nonnegative_integer_wire_bytes(dimension)),
+            ("entries", _array_item_wire_bytes(entry_rows)),
+        )
+    )
+    coordinate_bytes = tuple(
+        strict_json_object_size(
+            (
+                ("num", len(coordinate.num) + 2),
+                ("den", len(coordinate.den) + 2),
+            )
+        )
+        for coordinate in source.translation.coordinates
+    )
+    torus_bytes = _torus_wire_bytes(dimension)
+    translation_bytes = strict_json_object_size(
+        (
+            ("torus", torus_bytes),
+            ("coordinates", _array_item_wire_bytes(coordinate_bytes)),
+        )
+    )
+    return strict_json_object_size(
+        (
+            ("torus", torus_bytes),
+            ("linear_part", linear_part_bytes),
+            ("translation", translation_bytes),
+        )
+    )
+
+
+def _worker_input_wire_bytes(source: RationalAffineTorusMap) -> int:
+    """Return the exact compact-JSON size of the private worker request."""
+
+    dimension = source.torus.dimension
+    linear_rows = tuple(
+        _array_item_wire_bytes(tuple(len(entry) + 2 for entry in row))
+        for row in source.linear_part.entries
+    )
+    linear_part_bytes = _array_item_wire_bytes(linear_rows)
+    translation_entries = tuple(
+        strict_json_object_size(
+            (
+                ("num", len(coordinate.num) + 2),
+                ("den", len(coordinate.den) + 2),
+            )
+        )
+        for coordinate in source.translation.coordinates
+    )
+    translation_bytes = _array_item_wire_bytes(translation_entries)
+    return strict_json_object_size(
+        (
+            ("protocol_version", 1),
+            ("dimension", _nonnegative_integer_wire_bytes(dimension)),
+            ("linear_part", linear_part_bytes),
+            ("translation", translation_bytes),
+        )
+    )
+
+
+def _result_bytes_for_rank(
+    *,
+    dimension: int,
+    source_wire_bytes: int,
+    bounds: AffineTorusRankBounds,
+    include_nonempty: bool = True,
+) -> int:
+    """Bound both branches using the transport's exact compact-JSON grammar."""
+
+    rank = bounds.rank
+    nullity = bounds.nullity
+    torus_bytes = _torus_wire_bytes(dimension)
+    base_point_bytes = _point_wire_bytes(
+        dimension=dimension,
+        height=bounds.base_point_component_height,
+    )
+    generator_bytes = _point_wire_bytes(
+        dimension=dimension,
+        height=bounds.component_generator_height,
+    )
+    integer_bytes = _integer_string_wire_bytes(bounds.source_minor_height)
+    identity_component_bytes = strict_json_object_size(
+        (
+            ("ambient_torus", torus_bytes),
+            (
+                "parameter_dimension",
+                _nonnegative_integer_wire_bytes(nullity),
+            ),
+            (
+                "embedding",
+                _integer_matrix_wire_bytes(
+                    rows=dimension,
+                    columns=nullity,
+                    height=bounds.source_minor_height,
+                ),
+            ),
+        )
+    )
+    finite_components_bytes = strict_json_object_size(
+        (
+            ("generator_count", _nonnegative_integer_wire_bytes(rank)),
+            (
+                "relation_matrix",
+                _integer_matrix_wire_bytes(
+                    rows=rank,
+                    columns=rank,
+                    height=bounds.source_minor_height,
+                ),
+            ),
+            ("generator_orders", _array_wire_bytes(rank, integer_bytes)),
+            ("invariant_factors", _array_wire_bytes(rank, integer_bytes)),
+            ("component_count", integer_bytes),
+        )
+    )
+    fixed_locus_bytes = strict_json_object_size(
+        (
+            ("ambient_torus", torus_bytes),
+            ("base_point", base_point_bytes),
+            ("identity_component", identity_component_bytes),
+            (
+                "component_generators",
+                _array_wire_bytes(rank, generator_bytes),
+            ),
+            ("finite_components", finite_components_bytes),
+        )
+    )
+    branch_bytes: list[int] = []
+    if include_nonempty:
+        nonempty_outcome_bytes = strict_json_object_size(
+            (
+                ("status", 10),  # canonical JSON string ``"NONEMPTY"``
+                ("fixed_locus", fixed_locus_bytes),
+            )
+        )
+        branch_bytes.append(
+            strict_json_object_size(
+                (
+                    ("source", source_wire_bytes),
+                    ("outcome", nonempty_outcome_bytes),
+                )
+            )
+        )
+    if nullity:
+        obstruction_bytes = strict_json_object_size(
+            (
+                ("torus", torus_bytes),
+                (
+                    "coefficients",
+                    _array_wire_bytes(dimension, integer_bytes),
+                ),
+            )
+        )
+        empty_outcome_bytes = strict_json_object_size(
+            (
+                ("status", 7),  # canonical JSON string ``"EMPTY"``
+                ("obstruction", obstruction_bytes),
+                (
+                    "obstruction_pairing",
+                    _rational_wire_bytes(bounds.obstruction_pairing_height),
+                ),
+            )
+        )
+        branch_bytes.append(
+            strict_json_object_size(
+                (
+                    ("source", source_wire_bytes),
+                    ("outcome", empty_outcome_bytes),
+                )
+            )
+        )
+    return max(branch_bytes)
+
+
+def _backend_envelope(
+    *,
+    dimension: int,
+    displacement_height: int,
+    rank_bounds: tuple[AffineTorusRankBounds, ...],
+) -> AffineTorusBackendEnvelope:
+    """Bound the exact maintained primitive schedule and its operand shapes."""
+
+    positive_dimension = int(dimension > 0)
+    integer_height = max(
+        1,
+        displacement_height,
+        *(
+            height
+            for bounds in rank_bounds
+            for height in (
+                bounds.source_minor_height,
+                bounds.source_hnf_transform_height,
+                bounds.character_hnf_transform_height,
+                bounds.image_saturation_height,
+                bounds.leading_solution_height,
+                bounds.integral_lift_height,
+                bounds.image_coordinate_height,
+            )
+        ),
+    )
+    rational_height = max(
+        1,
+        *(bounds.rational_intermediate_height for bounds in rank_bounds),
+    )
+    return AffineTorusBackendEnvelope(
+        primitive_call_limits=(
+            ("integer_rank", 1 + 2 * dimension),
+            ("integer_hnf", 3 + positive_dimension),
+            ("rational_solve", 3 * positive_dimension),
+            ("integer_snf", 1),
+            ("rational_inverse", positive_dimension),
+            ("integer_multiply", positive_dimension),
+        ),
+        maximum_integer_rows=dimension,
+        maximum_integer_columns=2 * dimension,
+        maximum_integer_height=integer_height,
+        maximum_rational_rows=dimension,
+        maximum_rational_columns=dimension,
+        maximum_rational_height=rational_height,
+    )
+
+
+def build_affine_torus_plan(
+    source: RationalAffineTorusMap, *, deadline: float
+) -> AffineTorusFixedLocusPlan:
+    """Build structural and exact-result envelopes before the first FLINT call."""
+
+    require_affine_torus_deadline(deadline, "before work accounting")
+    dimension = source.torus.dimension
+    displacement_height = max(
+        (
+            abs(
+                parse_canonical_integer(source.linear_part.entries[row][column])
+                - int(row == column)
+            )
+            for row in range(dimension)
+            for column in range(dimension)
+        ),
+        default=0,
+    )
+    common_denominator = lcm(
+        *(
+            coordinate.as_integer_ratio()[1]
+            for coordinate in source.translation.coordinates
+        )
+    )
+    translation_is_zero = all(
+        coordinate.as_integer_ratio()[0] == 0
+        for coordinate in source.translation.coordinates
+    )
+    source_wire_bytes = _source_wire_bytes(source)
+    worker_input_bytes = _worker_input_wire_bytes(source)
+    if worker_input_bytes > _AFFINE_TORUS_WORKER_STDIN_LIMIT:
+        _reject(
+            "worker_input",
+            "the private affine-torus worker request exceeds its "
+            f"{_AFFINE_TORUS_WORKER_STDIN_LIMIT}-byte stdin limit",
+        )
+    # Admit against the source's actually attainable rank.  The exact rank of
+    # the displacement A - I bounds every unreachable-rank branch that could
+    # otherwise fabricate a too-large point-height or transport rejection (for
+    # example dependent non-zero rows in a low-rank displacement).  Computing
+    # it once here lets the admission gates look only at the result the kernel
+    # will build at that rank rather than an over-large worst case.
+    displacement = tuple(
+        tuple(
+            parse_canonical_integer(source.linear_part.entries[row][column])
+            - int(row == column)
+            for column in range(dimension)
+        )
+        for row in range(dimension)
+    )
+    attained_rank = _exact_integer_rank(displacement)
+    translation = tuple(
+        coordinate.as_fraction() for coordinate in source.translation.coordinates
+    )
+    selected_rows, selected_columns, selected_inverse = _selected_rank_minor_inverse(
+        displacement, attained_rank
+    )
+    component_generator_height = _selected_component_generator_height(selected_inverse)
+    inconsistent, obstruction_pairing_height = _modular_obstruction_pairing_height(
+        displacement,
+        translation,
+        attained_rank,
+        selected_rows=selected_rows,
+        selected_columns=selected_columns,
+        selected_inverse=selected_inverse,
+    )
+    # Reject conservative point-height failures before attempting the selected
+    # rational solve. That solve is only useful when the modular preflight says
+    # the fixed locus can be nonempty.
+    rank_bounds = (
+        _rank_bounds(
+            dimension=dimension,
+            rank=attained_rank,
+            displacement_height=displacement_height,
+            common_denominator=common_denominator,
+            translation_is_zero=translation_is_zero,
+            selected_base_point_height=None,
+            component_generator_height=component_generator_height,
+            obstruction_pairing_height=obstruction_pairing_height,
+        ),
+    )
+    if any(
+        _decimal_digits(bounds.component_generator_height)
+        > MAX_AFFINE_TORUS_POINT_DIGITS
+        for bounds in rank_bounds
+        if not inconsistent
+        if bounds.rank > 0
+    ):
+        _reject(
+            "point_height",
+            "the exact fixed-locus point bound exceeds the canonical torus-point "
+            f"carrier's {MAX_AFFINE_TORUS_POINT_DIGITS}-digit envelope",
+        )
+
+    if not inconsistent:
+        selected_base_point_height = _selected_zero_lift_base_point_height(
+            displacement,
+            translation,
+            attained_rank,
+            selected_inverse=selected_inverse,
+            selected_rows=selected_rows,
+            selected_columns=selected_columns,
+        )
+        rank_bounds = (
+            _rank_bounds(
+                dimension=dimension,
+                rank=attained_rank,
+                displacement_height=displacement_height,
+                common_denominator=common_denominator,
+                translation_is_zero=translation_is_zero,
+                selected_base_point_height=selected_base_point_height,
+                component_generator_height=component_generator_height,
+            ),
+        )
+        if any(
+            _decimal_digits(
+                max(
+                    bounds.base_point_component_height,
+                    bounds.component_generator_height,
+                )
+            )
+            > MAX_AFFINE_TORUS_POINT_DIGITS
+            for bounds in rank_bounds
+            if bounds.rank > 0
+        ):
+            _reject(
+                "point_height",
+                "the exact fixed-locus point bound exceeds the canonical torus-point "
+                f"carrier's {MAX_AFFINE_TORUS_POINT_DIGITS}-digit envelope",
+            )
+
+    result_bytes = max(
+        _result_bytes_for_rank(
+            dimension=dimension,
+            source_wire_bytes=source_wire_bytes,
+            bounds=bounds,
+            include_nonempty=not inconsistent,
+        )
+        for bounds in rank_bounds
+    )
+    transport_limit = CanonicalLimits().max_output_bytes
+    if result_bytes > transport_limit:
+        _reject(
+            "canonical_output",
+            f"predicted exact result of {result_bytes} bytes exceeds the actual "
+            f"{transport_limit}-byte canonical transport limit",
+        )
+
+    require_affine_torus_deadline(deadline, "after semantic admission")
+    return AffineTorusFixedLocusPlan(
+        dimension=dimension,
+        deadline=deadline,
+        displacement_height=displacement_height,
+        translation_common_denominator=common_denominator,
+        rank_bounds=rank_bounds,
+        worker_input_bytes_upper_bound=worker_input_bytes,
+        result_bytes_upper_bound=result_bytes,
+        backend_envelope=_backend_envelope(
+            dimension=dimension,
+            displacement_height=displacement_height,
+            rank_bounds=rank_bounds,
+        ),
+    )
+
+
+__all__ = [
+    "AFFINE_TORUS_FIXED_LOCUS_WALL_SECONDS",
+    "AffineTorusBackendEnvelope",
+    "AffineTorusFixedLocusPlan",
+    "AffineTorusRankBounds",
+    "begin_affine_torus_deadline",
+    "build_affine_torus_plan",
+    "require_affine_torus_deadline",
+]

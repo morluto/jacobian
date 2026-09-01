@@ -7,7 +7,7 @@ import asyncio
 import os
 from pathlib import Path
 
-EXPECTED_TOOL_NAMES = {"math.find", "math.inspect", "math.run"}
+EXPECTED_TOOL_NAMES = {"math.find", "math.run"}
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -37,13 +37,18 @@ async def inspect(server: Path, *, timeout_seconds: float) -> None:
             )
         described = await asyncio.wait_for(
             client.call_tool(
-                "math.inspect",
-                {"operation_id": "integer.compute.extended_gcd"},
+                "math.find",
+                {
+                    "request": {
+                        "op": "inspect",
+                        "operation_id": "integer.compute.extended_gcd",
+                    }
+                },
             ),
             timeout_seconds,
         )
         if not isinstance(described.structured_content, dict):
-            raise RuntimeError("math.inspect response was not structured")
+            raise RuntimeError("math.find inspection was not structured")
         for left, right, expected in (("84", "30", "6"), ("35", "14", "7")):
             result = await asyncio.wait_for(
                 client.call_tool(

@@ -57,7 +57,7 @@ from mcp import Client
 
 _ROOT = Path(__file__).resolve().parents[3]
 _DEFAULT_CASES = _ROOT / "benchmarks/config/codex-visibility-v2.json"
-_FIXED_TOOLS = frozenset({"math.find", "math.inspect", "math.run"})
+_FIXED_TOOLS = frozenset({"math.find", "math.run"})
 _CODEX_ENVIRONMENT = (
     "HOME",
     "PATH",
@@ -392,7 +392,7 @@ def _visible_tool_names(
     if surface_arm is SurfaceArm.DIRECT:
         return set(tool_names - _FIXED_TOOLS)
     if surface_arm is SurfaceArm.DIRECT_FIND:
-        return set(tool_names - {"math.inspect", "math.run"})
+        return set(tool_names - {"math.run"})
     return {"math.find"}
 
 
@@ -424,11 +424,11 @@ def _codex_arguments(
         f"default_tools_approval_mode={json.dumps(_MCP_TOOL_APPROVAL_MODE)}",
     ]
     if surface_arm is SurfaceArm.LEGACY:
-        server_config.append('enabled_tools=["math.find","math.inspect","math.run"]')
+        server_config.append('enabled_tools=["math.find","math.run"]')
     elif surface_arm is SurfaceArm.DIRECT:
-        server_config.append('disabled_tools=["math.find","math.inspect","math.run"]')
+        server_config.append('disabled_tools=["math.find","math.run"]')
     elif surface_arm is SurfaceArm.DIRECT_FIND:
-        server_config.append('disabled_tools=["math.inspect","math.run"]')
+        server_config.append('disabled_tools=["math.run"]')
     elif surface_arm is SurfaceArm.FIND_ONLY:
         server_config.append('enabled_tools=["math.find"]')
     if os.environ.get("JACOBIAN_MCP_BEARER_TOKEN"):

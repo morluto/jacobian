@@ -18,7 +18,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/morluto/jacobian" alt="MIT 许可证"></a>
 </p>
 
-Jacobian 是一个 MCP 服务器，为 AI 智能体提供一套可搜索、类型化的数学操作。`math.find` 用来发现候选操作，`math.inspect` 读取一个操作的精确契约，`math.run` 执行该契约并返回类型化结果。同样的数学库也可以通过 CLI 和原生 Python API 直接使用。
+Jacobian 是一个 MCP 服务器，为 AI 智能体提供一套可搜索、类型化的数学操作。`math.find` 用来匹配候选操作或读取一个操作的精确契约，`math.run` 执行该契约并返回类型化结果。同样的数学库也可以通过 CLI 和原生 Python API 直接使用。
 
 每个操作只确立一个稳定、可复用的数学后置条件，而不是规定工作流或证明策略。声称精确的地方就会保持精确，近似、不完备或不确定性也会显式标出。
 
@@ -71,7 +71,7 @@ jacobian run integer.compute.extended_gcd --json '{"left":"84","right":"30"}'
 ```
 
 第二条命令会以 JSON 返回最大公约数和 Bézout 系数。在 MCP 主机中，用
-`math.inspect` 查看同一份契约，再用相同形状的 payload 调用 `math.run`。具体的
+用 `math.find` 的检查模式查看同一份契约，再用相同形状的 payload 调用 `math.run`。具体的
 智能体调用流程见[发现和调用操作](docs/how-to/invoke-domain-operations.md)。
 
 ## 可用的数学能力
@@ -84,7 +84,7 @@ jacobian run integer.compute.extended_gcd --json '{"left":"84","right":"30"}'
 - 有界 SAT 和 SMT 求解；
 - 有限代数、概率、几何与拓扑。
 
-SAT 和 SMT 操作直接调用 Z3 的 Python 绑定。用 `math.find` 描述所需的数学结果，再用 `math.inspect` 查看候选操作的契约，最后用 `math.run` 执行一次。
+SAT 和 SMT 操作直接调用 Z3 的 Python 绑定。用 `math.find` 匹配所需的数学结果并查看候选操作的契约，最后用 `math.run` 执行一次。
 
 请参阅[领域操作库](docs/reference/domain-operation-library.md)了解操作契约与准入规则，用 `math.find` 查找实际操作，并参阅[后端要求](docs/how-to/backend-requirements.md)。
 

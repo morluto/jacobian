@@ -20,7 +20,7 @@ from mcp import Client
 
 from .smoke import exit_for_smoke_failure, raise_for_http_error
 
-REQUIRED_TOOLS = {"math.find", "math.inspect", "math.run"}
+REQUIRED_TOOLS = {"math.find", "math.run"}
 
 
 def _require_server_info(server_info: Implementation | None) -> Implementation:
@@ -182,7 +182,7 @@ async def inspect(
             )
         discovery_result = await client.call_tool(
             "math.find",
-            {"need": need, "limit": 5},
+            {"request": {"op": "match", "need": need, "limit": 5}},
         )
         if discovery_result.is_error:
             failures.append("deployed operation discovery returned an MCP error")

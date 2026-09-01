@@ -24,16 +24,13 @@ from jacobian.dispatch import (
     execute_operation,
 )
 from jacobian.mcp.models import (
-    OperationCursor,
     OperationDiscoveryError,
     OperationDiscoveryErrorDetail,
+    OperationFindRequest,
     OperationFindResponse,
     OperationInspectionResult,
-    OperationInspectResponse,
     OperationInvalidRequestData,
-    OperationMatchLimit,
-    OperationNamespace,
-    OperationNeed,
+    OperationMatchRequest,
     OperationValidationIssue,
 )
 from jacobian.mcp.projections import _operation_match_response
@@ -49,39 +46,29 @@ _MAX_VALIDATION_LOCATION_LENGTH = 128
 
 
 def math_find(
-    need: OperationNeed,
-    namespace: OperationNamespace = None,
-    limit: OperationMatchLimit = 5,
-    cursor: OperationCursor = None,
+    request: OperationFindRequest,
     *,
     ctx: Context[AppState, Any],
 ) -> OperationFindResponse:
     active_catalog = _catalog(ctx)
-    match_response = _operation_match_response(
-        active_catalog,
-        need=need,
-        namespace=namespace,
-        limit=limit,
-        cursor=cursor,
-    )
-    return OperationFindResponse(root=match_response)
+    if isinstance(request, OperationMatchRequest):
+        match_response = _operation_match_response(
+            active_catalog,
+            need=request.need,
+            namespace=request.namespace,
+            limit=request.limit,
+            cursor=request.cursor,
+        )
+        return OperationFindResponse(root=match_response)
 
-
-def math_inspect(
-    operation_id: OperationId,
-    *,
-    ctx: Context[AppState, Any],
-) -> OperationInspectResponse:
-    """Return the exact contract for one known operation ID."""
-
-    active_catalog = _catalog(ctx)
+    operation_id = request.operation_id
     descriptor = active_catalog.inspect(operation_id)
     if descriptor is None:
         hint = (
             "Call math.find with a local mathematical need to match installed "
             "operations."
         )
-        return OperationInspectResponse(
+        return OperationFindResponse(
             root=OperationDiscoveryError(
                 kind="error",
                 error=OperationDiscoveryErrorDetail(
@@ -92,7 +79,7 @@ def math_inspect(
                 ),
             )
         )
-    return OperationInspectResponse(
+    return OperationFindResponse(
         OperationInspectionResult(kind="operation", operation=descriptor)
     )
 

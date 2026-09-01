@@ -1,11 +1,10 @@
 # Tool reference
 
-Jacobian exposes three MCP tools for atomic mathematics.
+Jacobian exposes two MCP tools for atomic mathematics.
 
-- `math.find` matches one concise mathematical need against the immutable
-  built-in operation catalog.
-- `math.inspect` returns the exact schemas and examples for one known operation
-  ID.
+- `math.find` either matches one concise mathematical need against the immutable
+  built-in operation catalog or returns the exact schemas and examples for one
+  known operation ID.
 - `math.run` executes one operation with a typed `payload` and returns that
   operation's typed mathematical result.
 
@@ -47,9 +46,10 @@ and canonical serialization. Cancellation and deadline checks also run between
 those phases; expiry after mathematical computation but before delivery is an
 operational failure, not a mathematical conclusion.
 
-Use `math.find` with a short description of the local result needed. Its compact
-matches retain `catalog_resource` as an explicit pointer to the bulk catalog
-export. Use `math.inspect` to obtain the selected operation's exact input/output
+Use `math.find` with `request.op="match"` and a short description of the local
+result needed. Its compact matches retain `catalog_resource` as an explicit
+pointer to the bulk catalog export. Then call `math.find` with
+`request.op="inspect"` to obtain the selected operation's exact input/output
 schemas and valid examples.
 
 ## Form a payload from an inspected contract

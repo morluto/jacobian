@@ -100,8 +100,13 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
 
         async with Client(create_server(), raise_exceptions=True) as client:
             described = await client.call_tool(
-                "math.inspect",
-                {"operation_id": "integer.compute.extended_gcd"},
+                "math.find",
+                {
+                    "request": {
+                        "op": "inspect",
+                        "operation_id": "integer.compute.extended_gcd",
+                    }
+                },
             )
             assert isinstance(described.structured_content, dict)
             contract = described.structured_content
@@ -187,7 +192,7 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
                     }
                 ],
                 "hint": (
-                    "Inspect the operation with math.inspect and correct the fields at "
+                    "Inspect the operation with math.find and correct the fields at "
                     "the reported locations before retrying."
                 ),
             }
@@ -301,8 +306,13 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
             ] == [["left"], ["right"]]
 
             matching_description = await client.call_tool(
-                "math.inspect",
-                {"operation_id": "graph.invariant.maximum_matching.compute"},
+                "math.find",
+                {
+                    "request": {
+                        "op": "inspect",
+                        "operation_id": ("graph.invariant.maximum_matching.compute"),
+                    }
+                },
             )
             assert isinstance(matching_description.structured_content, dict)
             matching_contract = matching_description.structured_content

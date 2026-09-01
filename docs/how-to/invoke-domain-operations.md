@@ -1,7 +1,8 @@
 # Discover and invoke domain operations
 
-Use `math.find`, `math.inspect`, then `math.run` once with the selected operation
-ID and a `payload` matching its request model. The ordinary path is:
+Use `math.find` to match and inspect an operation, then call `math.run` once with
+the selected operation ID and a `payload` matching its request model. The
+ordinary path is:
 
 1. Describe the local mathematical result you need when the operation is
    unknown. Preserve the supplied objects and constraints, the computation or
@@ -17,11 +18,11 @@ For example, search for a small number of matrix operations, then inspect an
 exact candidate:
 
 ```json
-{"need":"exact determinant of a rational matrix","namespace":"matrix","limit":3}
+{"request":{"op":"match","need":"exact determinant of a rational matrix","namespace":"matrix","limit":3}}
 ```
 
 ```json
-{"operation_id":"matrix.determinant.compute"}
+{"request":{"op":"inspect","operation_id":"matrix.determinant.compute"}}
 ```
 
 The optional `namespace` filter matches only the first segment of an operation

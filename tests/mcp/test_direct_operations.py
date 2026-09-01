@@ -26,7 +26,7 @@ from jacobian.mcp.direct_tools import (
 from jacobian.mcp.runtime import AppState
 from jacobian.mcp.server import _build_server, create_server
 
-_FIXED_TOOLS = {"math.find", "math.inspect", "math.run"}
+_FIXED_TOOLS = {"math.find", "math.run"}
 
 
 def _operations(*operation_ids: str) -> tuple[MathTool[Any, Any], ...]:

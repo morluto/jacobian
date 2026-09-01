@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import runpy
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from benchmarks.tooling.codex_visibility import (
@@ -24,6 +25,7 @@ from benchmarks.tooling.codex_visibility import (
 from benchmarks.tooling.codex_visibility import load_suite as load_agent_suite
 from benchmarks.tooling.mcp_catalog_evaluation import (
     TaskCategory,
+    _run_discovery,
     load_suite,
     run_evaluation,
 )
@@ -85,7 +87,6 @@ def test_agent_and_local_corpora_freeze_the_same_cases_and_operations() -> None:
 def test_surface_arms_are_disjoint_where_the_comparison_requires_it() -> None:
     all_names = {
         "math.find",
-        "math.inspect",
         "math.run",
         "matrix.determinant.compute",
         "sat.assignment.check",
@@ -93,7 +94,6 @@ def test_surface_arms_are_disjoint_where_the_comparison_requires_it() -> None:
 
     assert _visible_tool_names(all_names, SurfaceArm.LEGACY) == {
         "math.find",
-        "math.inspect",
         "math.run",
     }
     assert _visible_tool_names(all_names, SurfaceArm.DIRECT) == {
@@ -110,7 +110,7 @@ def test_surface_arms_are_disjoint_where_the_comparison_requires_it() -> None:
 
 def test_production_tool_surface_is_valid_for_the_legacy_arm() -> None:
     _validate_server_tool_surface(
-        {"math.find", "math.inspect", "math.run"},
+        {"math.find", "math.run"},
         {"matrix.determinant.compute", "sat.assignment.check"},
         SurfaceArm.LEGACY,
     )
@@ -118,7 +118,7 @@ def test_production_tool_surface_is_valid_for_the_legacy_arm() -> None:
 
 def test_production_tool_surface_is_valid_for_the_full_arm() -> None:
     _validate_server_tool_surface(
-        {"math.find", "math.inspect", "math.run"},
+        {"math.find", "math.run"},
         {"matrix.determinant.compute", "sat.assignment.check"},
         SurfaceArm.FULL,
     )
@@ -127,7 +127,7 @@ def test_production_tool_surface_is_valid_for_the_full_arm() -> None:
 def test_production_tool_surface_cannot_run_a_direct_arm() -> None:
     with pytest.raises(RuntimeError, match="direct MCP tools"):
         _validate_server_tool_surface(
-            {"math.find", "math.inspect", "math.run"},
+            {"math.find", "math.run"},
             {"matrix.determinant.compute", "sat.assignment.check"},
             SurfaceArm.DIRECT,
         )
@@ -229,6 +229,48 @@ def test_semantic_discovery_is_scored_without_requiring_execution() -> None:
 
     assert classification["contract_satisfied"] is True
     assert classification["observed"]["invoked"] is False
+
+
+def test_discovery_probe_paginates_to_its_declared_limit() -> None:
+    class PagedClient:
+        def __init__(self) -> None:
+            self.requests: list[dict[str, object]] = []
+
+        async def call_tool(
+            self, name: str, arguments: dict[str, object]
+        ) -> SimpleNamespace:
+            assert name == "math.find"
+            request = arguments["request"]
+            assert isinstance(request, dict)
+            self.requests.append(request)
+            start = 0 if "cursor" not in request else 10
+            payload: dict[str, object] = {
+                "matches": [
+                    {"operation_id": f"example.operation.{index:02d}"}
+                    for index in range(start, start + 10)
+                ]
+            }
+            if start == 0:
+                payload["next_cursor"] = "example.operation.09"
+            return SimpleNamespace(structured_content=payload)
+
+    client = PagedClient()
+    report = asyncio.run(
+        _run_discovery(
+            client,  # type: ignore[arg-type]
+            query="twenty ranked candidates",
+            namespace=None,
+            limit=20,
+            required_operation_ids=("example.operation.19",),
+            maximum_rank=20,
+        )
+    )
+
+    assert report["success"] is True
+    assert report["ranks"] == {"example.operation.19": 20}
+    assert len(report["match_ids"]) == 20
+    assert [request["limit"] for request in client.requests] == [10, 10]
+    assert client.requests[1]["cursor"] == "example.operation.09"
 
 
 def test_local_catalog_controls_pass_but_external_removal_gates_remain_open() -> None:

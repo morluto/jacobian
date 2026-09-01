@@ -21,7 +21,7 @@ from benchmarks.tooling.heldout_manifest import (
     validate_manifest,
 )
 
-_REQUIRED_MCP_TOOLS = {"math.find", "math.inspect", "math.run"}
+_REQUIRED_MCP_TOOLS = {"math.find", "math.run"}
 _ZERO_DIGEST = "sha256:" + "0" * 64
 
 

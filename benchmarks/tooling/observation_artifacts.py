@@ -610,9 +610,7 @@ def trial_artifacts(
         )
     ]
     ignored_tools = (
-        frozenset({"math.find", "math.inspect", "math.run"})
-        if runtime_logs
-        else frozenset()
+        frozenset({"math.find", "math.run"}) if runtime_logs else frozenset()
     )
     errors = sum(
         _read_trace(path, calls, ignored_tools=ignored_tools) for path in agent_traces

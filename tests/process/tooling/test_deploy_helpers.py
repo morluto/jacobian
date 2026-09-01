@@ -60,7 +60,6 @@ def test_remote_smoke_rejects_eager_catalog_tool_exposure() -> None:
     listed = SimpleNamespace(
         tools=[
             SimpleNamespace(name="math.find"),
-            SimpleNamespace(name="math.inspect"),
             SimpleNamespace(name="math.run"),
             SimpleNamespace(name="matrix.determinant.compute"),
         ]
@@ -71,7 +70,6 @@ def test_remote_smoke_rejects_eager_catalog_tool_exposure() -> None:
 
     assert tool_names == {
         "math.find",
-        "math.inspect",
         "math.run",
         "matrix.determinant.compute",
     }

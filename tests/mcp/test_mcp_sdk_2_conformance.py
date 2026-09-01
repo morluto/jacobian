@@ -207,7 +207,6 @@ def test_mcp_v2_uses_sdk_typed_tools_lifespan_and_structured_resources(
             listed = await client.list_tools()
             assert {tool.name for tool in listed.tools} == {
                 "math.find",
-                "math.inspect",
                 "math.run",
             }
 
@@ -225,20 +224,17 @@ def test_mcp_v2_uses_sdk_typed_tools_lifespan_and_structured_resources(
             assert find.annotations is not None
             assert find.annotations.read_only_hint is True
             assert find.annotations.idempotent_hint is True
-            assert set(find.input_schema["properties"]) == {
-                "need",
-                "namespace",
-                "limit",
-                "cursor",
+            assert set(find.input_schema["properties"]) == {"request"}
+            assert find.input_schema["properties"]["request"]["discriminator"] == {
+                "mapping": {
+                    "inspect": "#/$defs/OperationInspectRequest",
+                    "match": "#/$defs/OperationMatchRequest",
+                },
+                "propertyName": "op",
             }
-            assert find.input_schema["required"] == ["need"]
+            assert find.input_schema["required"] == ["request"]
             assert find.output_schema is not None
             assert find.output_schema["type"] == "object"
-            inspect_tool = next(
-                tool for tool in listed.tools if tool.name == "math.inspect"
-            )
-            assert set(inspect_tool.input_schema["properties"]) == {"operation_id"}
-            assert inspect_tool.input_schema["required"] == ["operation_id"]
 
             serialized_tools = serialize_server_result(
                 "tools/list",
@@ -253,12 +249,14 @@ def test_mcp_v2_uses_sdk_typed_tools_lifespan_and_structured_resources(
             assert invalid_request.is_error is True
             assert invalid_request.content, "error responses must carry diagnostic text"
             assert any(
-                "need" in item.text
+                "request" in item.text
                 for item in invalid_request.content
                 if isinstance(item, TextContent)
-            ), "error text must identify the missing need field"
+            ), "error text must identify the missing request field"
 
-            blank_need = await client.call_tool("math.find", {"need": "   "})
+            blank_need = await client.call_tool(
+                "math.find", {"request": {"op": "match", "need": "   "}}
+            )
             assert blank_need.is_error is True
             assert any(
                 "non-whitespace" in item.text
@@ -267,8 +265,13 @@ def test_mcp_v2_uses_sdk_typed_tools_lifespan_and_structured_resources(
             )
 
             contract_result = await client.call_tool(
-                "math.inspect",
-                {"operation_id": "matrix.determinant.compute"},
+                "math.find",
+                {
+                    "request": {
+                        "op": "inspect",
+                        "operation_id": "matrix.determinant.compute",
+                    }
+                },
             )
             assert isinstance(contract_result.structured_content, dict)
             contract = contract_result.structured_content

@@ -47,7 +47,7 @@ def _c2_routing_contract(routing_status: str = "AVAILABLE_UNUSED") -> dict:
             "reachable": True,
             "server_version_observed": "1.0.0",
             "catalog_digest_observed": "sha256:" + "2" * 64,
-            "tool_names": ["math.find", "math.inspect", "math.run"],
+            "tool_names": ["math.find", "math.run"],
             "discovery_matches": ["cap-1"],
             "probe_digest": "sha256:" + "0" * 64,
             "diagnostic": None,

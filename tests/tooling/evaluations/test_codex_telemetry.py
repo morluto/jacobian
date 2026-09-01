@@ -95,8 +95,11 @@ def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
         _tool_event(
             "math.find",
             {
-                "need": "find a graph counterexample",
-                "namespace": "graph",
+                "request": {
+                    "op": "match",
+                    "need": "find a graph counterexample",
+                    "namespace": "graph",
+                },
             },
             {
                 "kind": "matches",
@@ -107,8 +110,13 @@ def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
             },
         ),
         _tool_event(
-            "math.inspect",
-            {"operation_id": "graph.search.atlas"},
+            "math.find",
+            {
+                "request": {
+                    "op": "inspect",
+                    "operation_id": "graph.search.atlas",
+                }
+            },
             {
                 "kind": "operation",
                 "operation": {"operation_id": "graph.search.atlas"},
@@ -172,8 +180,13 @@ def test_agent_telemetry_does_not_count_unknown_exact_inspection(
 ) -> None:
     events = [
         _tool_event(
-            "math.inspect",
-            {"operation_id": "missing.operation"},
+            "math.find",
+            {
+                "request": {
+                    "op": "inspect",
+                    "operation_id": "missing.operation",
+                }
+            },
             {
                 "kind": "error",
                 "error": {"code": "UNKNOWN_OPERATION"},
@@ -546,17 +559,22 @@ def test_agent_telemetry_counts_response_bytes_and_repeated_calls(
     events = [
         _tool_event(
             "math.find",
-            {"need": "SAT materialization"},
+            {"request": {"op": "match", "need": "SAT materialization"}},
             {"matches": [{"operation_id": "sat.cnf.materialize"}]},
         ),
         _tool_event(
             "math.find",
-            {"need": "SAT materialization"},
+            {"request": {"op": "match", "need": "SAT materialization"}},
             {"matches": [{"operation_id": "sat.cnf.materialize"}]},
         ),
         _tool_event(
-            "math.inspect",
-            {"operation_id": "sat.cnf.materialize"},
+            "math.find",
+            {
+                "request": {
+                    "op": "inspect",
+                    "operation_id": "sat.cnf.materialize",
+                }
+            },
             {"operation": {"operation_id": "sat.cnf.materialize"}},
         ),
     ]

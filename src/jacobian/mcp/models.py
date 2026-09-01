@@ -58,6 +58,25 @@ OperationCursor = Annotated[
 ]
 
 
+class OperationMatchRequest(StrictModel):
+    op: Literal["match"]
+    need: OperationNeed
+    namespace: OperationNamespace = None
+    limit: OperationMatchLimit = 5
+    cursor: OperationCursor = None
+
+
+class OperationInspectRequest(StrictModel):
+    op: Literal["inspect"]
+    operation_id: OperationId
+
+
+OperationFindRequest = Annotated[
+    OperationMatchRequest | OperationInspectRequest,
+    Field(discriminator="op"),
+]
+
+
 class OperationDiscoveryErrorDetail(StrictModel):
     code: Literal["INVALID_CURSOR", "UNKNOWN_OPERATION"]
     stage: Literal["operation_discovery", "operation_resolution"]
@@ -101,8 +120,8 @@ class OperationInvalidRequestData(StrictModel):
         max_length=64,
     )
     hint: str = (
-        "Inspect the operation with math.inspect and correct the fields at the "
-        "reported locations before retrying."
+        "Inspect the operation with math.find and correct the fields at the reported "
+        "locations before retrying."
     )
 
 
@@ -114,7 +133,7 @@ class OperationDiscoveryError(StrictModel):
 class OperationFindResponse(
     RootModel[
         Annotated[
-            OperationFindResult | OperationDiscoveryError,
+            OperationFindResult | OperationInspectionResult | OperationDiscoveryError,
             Field(discriminator="kind"),
         ]
     ]
@@ -124,29 +143,18 @@ class OperationFindResponse(
     model_config = ConfigDict(json_schema_extra={"type": "object"})
 
 
-class OperationInspectResponse(
-    RootModel[
-        Annotated[
-            OperationInspectionResult | OperationDiscoveryError,
-            Field(discriminator="kind"),
-        ]
-    ]
-):
-    """Closed result of resolving one exact operation ID."""
-
-    model_config = ConfigDict(json_schema_extra={"type": "object"})
-
-
 __all__ = [
     "OperationCursor",
     "OperationDiscoveryError",
     "OperationDiscoveryErrorDetail",
+    "OperationFindRequest",
     "OperationFindResponse",
     "OperationFindResult",
-    "OperationInspectResponse",
+    "OperationInspectRequest",
     "OperationInspectionResult",
     "OperationInvalidRequestData",
     "OperationMatchLimit",
+    "OperationMatchRequest",
     "OperationNamespace",
     "OperationNeed",
     "OperationValidationIssue",

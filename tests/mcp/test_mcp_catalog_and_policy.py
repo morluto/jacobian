@@ -65,7 +65,13 @@ def test_mcp_compact_operation_matches_are_paginated() -> None:
 
             listed = await client.call_tool(
                 "math.find",
-                {"need": "exact mathematical computation", "limit": 10},
+                {
+                    "request": {
+                        "op": "match",
+                        "need": "exact mathematical computation",
+                        "limit": 10,
+                    }
+                },
             )
             assert isinstance(listed.structured_content, dict)
             index = listed.structured_content
@@ -85,9 +91,12 @@ def test_mcp_compact_operation_matches_are_paginated() -> None:
                 next_page = await client.call_tool(
                     "math.find",
                     {
-                        "need": "exact mathematical computation",
-                        "cursor": cursor,
-                        "limit": 10,
+                        "request": {
+                            "op": "match",
+                            "need": "exact mathematical computation",
+                            "cursor": cursor,
+                            "limit": 10,
+                        }
                     },
                 )
                 assert isinstance(next_page.structured_content, dict)
@@ -105,7 +114,13 @@ def test_mcp_compact_operation_matches_are_paginated() -> None:
 
             first_page = await client.call_tool(
                 "math.find",
-                {"need": "exact mathematical computation", "limit": 10},
+                {
+                    "request": {
+                        "op": "match",
+                        "need": "exact mathematical computation",
+                        "limit": 10,
+                    }
+                },
             )
             assert isinstance(first_page.structured_content, dict)
             first = first_page.structured_content
@@ -114,9 +129,12 @@ def test_mcp_compact_operation_matches_are_paginated() -> None:
             second_page = await client.call_tool(
                 "math.find",
                 {
-                    "need": "exact mathematical computation",
-                    "cursor": first["next_cursor"],
-                    "limit": 10,
+                    "request": {
+                        "op": "match",
+                        "need": "exact mathematical computation",
+                        "cursor": first["next_cursor"],
+                        "limit": 10,
+                    }
                 },
             )
             assert isinstance(second_page.structured_content, dict)
@@ -128,12 +146,16 @@ def test_mcp_compact_operation_matches_are_paginated() -> None:
             invalid_cursor = await client.call_tool(
                 "math.find",
                 {
-                    # Keep the cursor invalid for this filtered result. The catalog
-                    # contains many descriptions mentioning "operation", so that
-                    # word is not a stable no-match fixture as the library grows.
-                    "need": "zqx",
-                    "cursor": "integer.compute.unknown",
-                    "limit": 10,
+                    "request": {
+                        "op": "match",
+                        # Keep the cursor invalid for this filtered result. The
+                        # catalog contains many descriptions mentioning "operation",
+                        # so that word is not a stable no-match fixture as the
+                        # library grows.
+                        "need": "zqx",
+                        "cursor": "integer.compute.unknown",
+                        "limit": 10,
+                    }
                 },
             )
             invalid = json.loads(_content_text(invalid_cursor.content[0]))

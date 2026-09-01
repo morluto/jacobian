@@ -5,8 +5,9 @@ from typing import Any, cast
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationMatchResult
+from jacobian.mcp.models import OperationInspectRequest, OperationMatchRequest
 from jacobian.mcp.runtime import AppState
-from jacobian.mcp.tools import math_find, math_inspect
+from jacobian.mcp.tools import math_find
 
 
 class _Catalog:
@@ -28,21 +29,23 @@ def test_math_find_does_not_acquire_an_execution_runtime() -> None:
     context = SimpleNamespace(request_context=SimpleNamespace(lifespan_context=state))
 
     result = math_find(
-        "compute an exact greatest common divisor",
+        OperationMatchRequest(
+            op="match", need="compute an exact greatest common divisor"
+        ),
         ctx=cast(Any, context),
     )
 
     assert result.root.kind == "matches"
 
 
-def test_math_inspect_does_not_acquire_an_execution_runtime() -> None:
+def test_math_find_inspection_does_not_acquire_an_execution_runtime() -> None:
     state = AppState(
         operation_catalog=cast(Catalog, _Catalog()),
     )
     context = SimpleNamespace(request_context=SimpleNamespace(lifespan_context=state))
 
-    result = math_inspect(
-        "integer.compute.unknown",
+    result = math_find(
+        OperationInspectRequest(op="inspect", operation_id="integer.compute.unknown"),
         ctx=cast(Any, context),
     )
 

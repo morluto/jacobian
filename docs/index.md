@@ -1,8 +1,8 @@
 # Jacobian documentation
 
-Jacobian is a stateless mathematical tool layer for agents: `math.find`
-discovers typed operations, `math.inspect` reads one exact contract, `math.run`
-executes it, and the caller composes the returned mathematical values.
+Jacobian is a stateless mathematical tool layer for agents: `math.find` matches
+typed operations or reads one exact contract, `math.run` executes it, and the
+caller composes the returned mathematical values.
 
 ## Choose a path
 
@@ -45,8 +45,8 @@ executes it, and the caller composes the returned mathematical values.
 - [Testing strategy](reference/testing-strategy.md) — validation ownership and
   focused test lanes.
 
-The live `math.find` and `math.inspect` tools are authoritative for available
-operations and their current schemas.
+The live `math.find` tool is authoritative for available operations and their
+current schemas.
 
 ## Contributing
 

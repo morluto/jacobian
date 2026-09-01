@@ -11,7 +11,6 @@ from pathlib import Path
 
 MCP_TOOL_NAMES = {
     "math.find",
-    "math.inspect",
     "math.run",
 }
 

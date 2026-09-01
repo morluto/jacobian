@@ -326,7 +326,6 @@ def test_inertia_canonical_request_has_one_schema_truthful_matrix_field() -> Non
         "max_matrix_order": MAX_RATIONAL_MATRIX_ORDER,
         "max_algebraic_field_degree": 8,
         "max_exact_digit_work": 500_000_000,
-        "result_envelope_reserve_bytes": 1_024,
         "diagonal_fast_path": True,
     }
     valid = {

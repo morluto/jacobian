@@ -227,7 +227,7 @@ def test_dispatch_projects_finite_map_work_admission_as_an_invalid_request() -> 
     )
 
 
-def test_dispatch_projects_triangle_profile_admission_as_an_invalid_request() -> None:
+def test_dispatch_returns_large_triangle_profile_when_work_fits() -> None:
     vertices = tuple(f"{index:03d}" + "x" * 61 for index in range(100))
     graph = SimpleUndirectedGraph(
         vertices=vertices,
@@ -238,15 +238,12 @@ def test_dispatch_projects_triangle_profile_admission_as_an_invalid_request() ->
         ),
     )
 
-    with pytest.raises(OperationDomainValidationError) as error:
-        invoke_operation(
-            "graph.triangle_profile.compute",
-            {"graph": graph.model_dump(mode="json")},
-            Catalog.open(),
-        )
-
-    assert error.value.errors()[0]["loc"] == ("graph",)
-    assert error.value.errors()[0]["type"] == "graph.triangle_profile.output_budget"
+    result = invoke_operation(
+        "graph.triangle_profile.compute",
+        {"graph": graph.model_dump(mode="json")},
+        Catalog.open(),
+    )
+    assert result.output["triangle_count"] == 161_700
 
 
 def test_dispatch_classifies_noncanonical_json_as_request_validation() -> None:

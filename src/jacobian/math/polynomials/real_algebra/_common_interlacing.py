@@ -17,12 +17,12 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math._root_isolation import strict_root_count
 from jacobian.math.number_theory.algebraic_numbers.real import (
     MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS,
-    MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE,
     RationalIsolatingInterval,
     RealAlgebraicValue,
     compare_real_algebraic,
 )
 from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
+    MAX_COMMON_INTERLACING_FACTOR_DEGREE,
     MAX_COMMON_INTERLACING_FAMILY_SIZE,
     MAX_COMMON_INTERLACING_INPUT_DIGITS,
     MAX_COMMON_INTERLACING_SOURCE_DEGREE,
@@ -567,12 +567,12 @@ def _root_profile(source_index: int, plan: _SourcePlan) -> SourceRootProfile:
             )
         factor_index = matches[0]
         factor = plan.factors[factor_index]
-        if factor.polynomial.degree() > MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE:
+        if factor.polynomial.degree() > MAX_COMMON_INTERLACING_FACTOR_DEGREE:
             _reject(
                 ("family", source_index, "polynomial"),
                 "factor_degree",
                 "an irreducible factor with real roots exceeds the degree-"
-                f"{MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE} comparison bound",
+                f"{MAX_COMMON_INTERLACING_FACTOR_DEGREE} result bound",
             )
         real_root_index = factor_root_indices[factor_index]
         factor_root_indices[factor_index] += 1

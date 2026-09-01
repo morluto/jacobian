@@ -32,7 +32,6 @@ from jacobian.canonical import (
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.algebraic_numbers.real import (
     MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS,
-    MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE,
     RationalIsolatingInterval,
     RealAlgebraicValue,
 )
@@ -42,6 +41,7 @@ from jacobian.math.polynomials.real_algebra._common_interlacing import (
     _preflight_common_interlacing_sources,
 )
 from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
+    MAX_COMMON_INTERLACING_FACTOR_DEGREE,
     MAX_COMMON_INTERLACING_FAMILY_SIZE,
     MAX_COMMON_INTERLACING_INPUT_DIGITS,
     MAX_COMMON_INTERLACING_SOURCE_TERMS,
@@ -277,7 +277,7 @@ def _root_profile_from_worker(  # noqa: C901
         raw_polynomial = raw_value.get("polynomial")
         if not isinstance(raw_polynomial, (list, tuple)):
             raise ValueError("worker root polynomial is malformed")
-        if not 2 <= len(raw_polynomial) <= MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE + 1:
+        if not 2 <= len(raw_polynomial) <= MAX_COMMON_INTERLACING_FACTOR_DEGREE + 1:
             raise ValueError("worker root polynomial exceeds its length bound")
         polynomial = _CANONICAL_POLYNOMIAL.validate_python(raw_polynomial)
         root_index = raw_value.get("real_root_index")
@@ -304,7 +304,7 @@ def _root_profile_from_worker(  # noqa: C901
             raise ValueError("worker root polynomial is not primitive canonical form")
         if root_index >= len(coefficients) - 1:
             raise ValueError("worker root index is outside its canonical factor")
-        if len(coefficients) - 1 > MAX_REAL_ALGEBRAIC_COMPARISON_DEGREE:
+        if len(coefficients) - 1 > MAX_COMMON_INTERLACING_FACTOR_DEGREE:
             raise ValueError(
                 "worker root factor exceeds the algebraic value degree bound"
             )

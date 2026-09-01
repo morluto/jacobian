@@ -23,6 +23,10 @@ from jacobian.math.polynomials.values import (
 
 MAX_COMMON_INTERLACING_FAMILY_SIZE = 8
 MAX_COMMON_INTERLACING_SOURCE_DEGREE = 32
+# Common interlacing returns roots of irreducible factors through its
+# degree-eight comparison/result envelope, even when the shared algebraic
+# carrier admits degree-sixteen plane-component coordinates.
+MAX_COMMON_INTERLACING_FACTOR_DEGREE = 8
 MAX_COMMON_INTERLACING_SOURCE_TERMS = MAX_COMMON_INTERLACING_SOURCE_DEGREE + 1
 MAX_COMMON_INTERLACING_TOTAL_DEGREE = 128
 MAX_COMMON_INTERLACING_TOTAL_TERMS = (

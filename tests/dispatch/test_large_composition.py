@@ -29,9 +29,7 @@ def test_dispatch_accepts_valid_payload_beyond_default_transport_bytes() -> None
     payload = {"hypergraph": {"vertices": vertices, "edges": edges}}
 
     assert len(encode_strict_json(payload)) > CanonicalLimits().max_input_bytes
-    result = invoke_operation(
-        "hypergraph.parameters.compute", payload, Catalog.open()
-    )
+    result = invoke_operation("hypergraph.parameters.compute", payload, Catalog.open())
 
     assert result.output["edge_count"] == 9_000
     assert result.output["total_incidences"] == 36_000

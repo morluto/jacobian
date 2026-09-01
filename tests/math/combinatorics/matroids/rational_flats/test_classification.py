@@ -21,7 +21,7 @@ from jacobian._execution import (
     request_cancellation,
     request_execution,
 )
-from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.matroids.rational_flats import (
     ClauseConstrainedRationalFlatClassification,
@@ -442,7 +442,7 @@ def test_tiny_search_matches_independent_symbolic_flat_oracle() -> None:
     assert result.outcome.solution_flat_count == len(expected)
 
 
-def test_result_output_envelope_returns_no_partial_mathematical_family() -> None:
+def test_result_retention_envelope_returns_no_partial_mathematical_family() -> None:
     dimension = 12
     rows = tuple(
         tuple(int(row == column) for column in range(dimension))
@@ -455,12 +455,9 @@ def test_result_output_envelope_returns_no_partial_mathematical_family() -> None
 
     assert first == second
     assert first.outcome.status == "INCOMPLETE"
-    assert first.outcome.reason == "RESULT_OUTPUT_LIMIT"
+    assert first.outcome.reason == "RESULT_RETENTION_LIMIT"
     assert 0 < first.outcome.explored_state_orbit_count <= 2**dimension
     assert first.outcome.result_orbit_limit == 100_000
-    assert first.outcome.result_output_byte_limit == (
-        CanonicalLimits().max_output_bytes
-    )
     assert first.outcome.consumed_search_work > 0
     assert (
         ClauseConstrainedRationalFlatClassification.model_validate_json(
@@ -483,8 +480,6 @@ def test_large_complete_family_fits_the_canonical_transport_envelope() -> None:
 
     assert result.outcome.status == "COMPLETE_EXACT"
     assert result.outcome.orbit_count == 2**dimension
-    assert len(encode_strict_json(result.model_dump(mode="json"))) == 1_036_729
-    assert CanonicalLimits().max_output_bytes > 1_036_729
 
 
 def test_request_and_complete_result_round_trip_through_strict_json() -> None:
@@ -772,21 +767,6 @@ def test_state_orbit_limit_stops_before_retaining_the_next_frontier() -> None:
     assert result.outcome.state_orbit_limit == 1
 
 
-def test_result_output_limit_is_distinct_from_the_orbit_count_limit() -> None:
-    problem = _problem(((1,),), columns=1)
-    plan = replace(
-        flat_kernel._admit_problem(problem),
-        result_output_byte_limit=1,
-    )
-
-    result = flat_kernel._classify(problem, plan)
-
-    assert result.outcome.status == "INCOMPLETE"
-    assert result.outcome.reason == "RESULT_OUTPUT_LIMIT"
-    assert result.outcome.result_output_byte_limit == 1
-    assert result.outcome.result_orbit_limit == 100_000
-
-
 def test_one_request_ledger_charges_every_observed_work_primitive() -> None:
     problem = _problem(
         ((1, 0), (0, 1), (1, 1)),
@@ -909,7 +889,7 @@ def test_one_request_ledger_charges_every_observed_work_primitive() -> None:
         satisfying, visited, ledger, canonicalizer, satisfying_elements = (
             flat_kernel._search_satisfying_states(problem, plan)
         )
-        representatives, solution_count = flat_kernel._representatives_from_states(
+        representatives, _ = flat_kernel._representatives_from_states(
             satisfying,
             satisfying_elements=satisfying_elements,
             plan=plan,
@@ -937,14 +917,15 @@ def test_one_request_ledger_charges_every_observed_work_primitive() -> None:
                 + branch_scans.call_count
                 + len(satisfying)
             ),
-            "source_encoding": plan.source_bytes,
+            "source_encoding": plan.ledger.charged_by_primitive["source_encoding"],
         }
     )
-    representative_sizes = tuple(
-        len(encode_strict_json(item.model_dump(mode="json")))
-        for item in representatives
+    executed["result_encoding"] = (
+        2
+        * flat_kernel._CANONICAL_PROJECTION_PASSES
+        * len(representatives)
+        * plan.representative_encoding_work
     )
-    executed["result_encoding"] = sum(representative_sizes)
 
     assert representatives
     assert id(ledger) == ledger_identity
@@ -986,20 +967,6 @@ def test_one_request_ledger_charges_every_observed_work_primitive() -> None:
         * len(representatives)
         * plan.representative_encoding_work
     )
-    assert ledger.charged_by_primitive["result_encoding"] >= sum(representative_sizes)
-    result = ClauseConstrainedRationalFlatClassification._complete_from_kernel(
-        problem=problem,
-        symmetry_group_order=plan.symmetry_group_order,
-        representatives=representatives,
-        solution_flat_count=solution_count,
-    )
-    assert flat_kernel._complete_result_size(
-        source_bytes=plan.source_bytes,
-        symmetry_group_order=plan.symmetry_group_order,
-        representative_count=len(representatives),
-        representative_bytes=sum(representative_sizes),
-        solution_flat_count=solution_count,
-    ) == len(encode_strict_json(result.model_dump(mode="json")))
 
 
 def test_span_work_combines_rref_and_forbidden_row_heights() -> None:

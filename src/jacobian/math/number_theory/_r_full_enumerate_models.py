@@ -12,21 +12,12 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-    format_canonical_integer,
-    parse_canonical_integer,
-)
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 
 MAX_R_FULL_CUTOFF_DIGITS = 32_768
 MAX_R_FULL_CUTOFF = 10**MAX_R_FULL_CUTOFF_DIGITS
 MIN_R_FULL_EXPONENT = 2
 MAX_R_FULL_FAMILY_SIZE = 200_000
-# Leave room for the typed OperationResult envelope added by dispatch before
-# the canonical payload reaches the transport boundary.
-MAX_R_FULL_RESULT_BYTES = CanonicalLimits().max_output_bytes - 1_024
 MAX_R_FULL_MERGE_WORK = 20_000_000
 MAX_R_FULL_WORKING_MEMORY_BYTES = 256 * 1024 * 1024
 _MAX_PRIME_SEARCH_BOUND = 3_000_000
@@ -51,25 +42,12 @@ class RFullFamilyPlan(NamedTuple):
 
     family: tuple[int, ...]
     exceeded: bool
-    reason: Literal["none", "family", "planning", "bytes"] = "none"
+    reason: Literal["none", "family", "planning"] = "none"
 
 
-def _estimate_member_bytes(value: int) -> int:
-    """Estimate the canonical wire bytes for one family member.
-
-    Each member is serialized as a quoted decimal string plus separator
-    overhead inside the JSON array.
-    """
-    # len(decimal value) + 2 quotes + 1 comma separator.  The canonical
-    # formatter avoids CPython's configurable int-to-string digit ceiling.
-    return len(format_canonical_integer(value)) + 3
-
-
-def plan_r_full_family(  # noqa: C901
+def plan_r_full_family(
     minimum_exponent: int,
     cutoff: int,
-    *,
-    enforce_transport: bool = True,
 ) -> RFullFamilyPlan:
     """Return a conservative, exponent-sensitive family-size estimate.
 
@@ -81,10 +59,6 @@ def plan_r_full_family(  # noqa: C901
     huge interval; the first 200,001 prime powers already exceed the result
     budget at that boundary.
 
-    When ``enforce_transport`` is true, wire-byte accumulation during planning
-    stops as soon as the result envelope is exhausted.  Native callers return
-    Python integers directly and therefore use the mathematical family and
-    planning budgets without applying the MCP transport ceiling.
     """
     # Keep the aggregate native namespace free of packaged backends.  The
     # planner is the first execution path that needs SymPy, so import it only
@@ -102,16 +76,6 @@ def plan_r_full_family(  # noqa: C901
     working_memory_bytes = (
         sys.getsizeof(family_set) + sys.getsizeof(sorted_family) + 1_024
     )
-    if enforce_transport:
-        # Accumulate wire bytes during planning so we stop as soon as the
-        # transport budget is crossed, without a post-hoc full serialization.
-        # Reserve overhead for the JSON envelope (keys, separators, etc.).
-        result_bytes = (
-            200
-            + len(format_canonical_integer(minimum_exponent))
-            + len(format_canonical_integer(cutoff))
-            + _estimate_member_bytes(1)
-        )
     for prime in primerange(2, int(prime_bound) + 1):
         powers: list[int] = []
         current = int(prime) ** minimum_exponent
@@ -134,10 +98,6 @@ def plan_r_full_family(  # noqa: C901
                 if working_memory_bytes > MAX_R_FULL_WORKING_MEMORY_BYTES:
                     return RFullFamilyPlan((), True, "planning")
                 new_values.add(value)
-                if enforce_transport:
-                    result_bytes += _estimate_member_bytes(value)
-                    if result_bytes > MAX_R_FULL_RESULT_BYTES:
-                        return RFullFamilyPlan((), True, "bytes")
         fresh_values = sorted(value for value in new_values if value not in family_set)
         if fresh_values:
             merge_work += len(sorted_family) + len(fresh_values)
@@ -154,27 +114,6 @@ def estimate_r_full_family_size(minimum_exponent: int, cutoff: int) -> int:
     """Return the admitted family size, or one past the family limit."""
     plan = plan_r_full_family(minimum_exponent, cutoff)
     return MAX_R_FULL_FAMILY_SIZE + 1 if plan.exceeded else len(plan.family)
-
-
-def estimate_r_full_result_bytes(
-    minimum_exponent: int, cutoff: int, family: tuple[int, ...]
-) -> int:
-    """Measure the canonical result payload for an admitted family."""
-    payload = {
-        "minimum_exponent": minimum_exponent,
-        "cutoff": format_canonical_integer(cutoff),
-        "count": len(family),
-        "family": [format_canonical_integer(value) for value in family],
-    }
-    try:
-        return len(
-            encode_strict_json(
-                payload,
-                limits=CanonicalLimits(max_output_bytes=MAX_R_FULL_RESULT_BYTES),
-            )
-        )
-    except CanonicalizationError:
-        return MAX_R_FULL_RESULT_BYTES + 1
 
 
 class RFullEnumerateRequest(StrictModel):
@@ -286,7 +225,6 @@ __all__ = [
     "RFullEnumerateResult",
     "RFullFamilyPlan",
     "estimate_r_full_family_size",
-    "estimate_r_full_result_bytes",
     "max_r_full_exponent",
     "plan_r_full_family",
 ]

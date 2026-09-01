@@ -19,7 +19,6 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import (
-    CanonicalLimits,
     encode_strict_json,
     parse_canonical_integer,
     sha256_digest,
@@ -57,7 +56,6 @@ MAX_PLANE_COMPONENT_SAMPLE_COEFFICIENT_DIGITS = (
 # non-completion may report.
 PLANE_COMPONENT_WALL_SECONDS = 600
 # Conservative owner headroom below the canonical structured-value boundary.
-MAX_PLANE_COMPONENT_RESULT_BYTES = CanonicalLimits().max_output_bytes - 4_096
 
 
 def _plane_coordinate_schema() -> dict[str, object]:
@@ -1130,7 +1128,6 @@ __all__ = [
     "MAX_PLANE_COMPONENT_POINT_ISOLATOR_DIGITS",
     "MAX_PLANE_COMPONENT_POINT_TERMS",
     "MAX_PLANE_COMPONENT_POLYNOMIALS",
-    "MAX_PLANE_COMPONENT_RESULT_BYTES",
     "MAX_PLANE_COMPONENT_SAMPLES",
     "MAX_PLANE_COMPONENT_SAMPLE_COEFFICIENT_DIGITS",
     "MAX_PLANE_COMPONENT_SAMPLE_DEGREE",

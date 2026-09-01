@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Literal
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import CanonicalLimits, parse_canonical_integer
+from jacobian.canonical import parse_canonical_integer
 from jacobian.math._singular import (
     SINGULAR_ARGUMENTS,
     SingularProtocolReader,
@@ -46,7 +46,6 @@ _STDERR_LIMIT = 64 * 1024
 _SINGULAR_ADDRESS_SPACE_BYTES = 1024 * 1024 * 1024
 _SYMPY_ADDRESS_SPACE_BYTES = 2 * 1024 * 1024 * 1024
 _WORKER_FILE_SIZE_BYTES = 1024 * 1024
-_CANONICAL_OUTPUT_LIMIT = CanonicalLimits().max_output_bytes
 
 SingularOperation = Literal["radical", "quotient", "saturation"]
 SingularOutcome = Literal[
@@ -396,12 +395,11 @@ def _minimal_primes_stdout_limit(
     generator_scaffolding = len("GENERATOR\n") + len("END_GENERATOR\n")
     component_scaffolding = len("COMPONENT\n") + 3 + len("END_COMPONENT\n")
     scaffolding = len(_PROTOCOL_HEADER) + 1 + 8 + 3 + len("END\n")
-    return min(
-        _CANONICAL_OUTPUT_LIMIT,
+    return (
         budget.maximum_output_terms * term_record
         + budget.maximum_output_generators
         * (generator_scaffolding + component_scaffolding)
-        + scaffolding,
+        + scaffolding
     )
 
 

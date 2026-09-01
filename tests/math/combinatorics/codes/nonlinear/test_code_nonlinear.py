@@ -9,22 +9,18 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.codes.nonlinear import (
     ExplicitBinaryCode,
     to_set_system,
 )
 from jacobian.math.combinatorics.codes.nonlinear._budget import (
-    MAX_CODE_RESULT_BYTES,
     MAX_GENERATED_CODE_ENTRIES,
     MAX_PROFILE_BITSET_CHUNK_WORK,
     MAX_PROFILE_PAIRS,
     PROFILE_PAIR_PASSES,
     require_constant_weight_admission,
     require_profile_admission,
-    require_word_distance_output_bound,
-    source_wire_upper_bound,
 )
 from jacobian.math.combinatorics.codes.nonlinear._models import (
     BinaryCodeDistanceWitness,
@@ -216,22 +212,14 @@ class TestWordDistance:
         assert result.weight1 == result.weight2 == 0
         assert result.support_intersection == 0
 
-    def test_word_distance_output_bound_covers_the_canonical_result(self) -> None:
-        word = [0] * MAX_EXPLICIT_CODE_LENGTH
-        request = WordDistanceRequest.model_validate({"word1": word, "word2": word})
-        result = word_distance(request.word1, request.word2)
-        bound = require_word_distance_output_bound(request.word1, request.word2)
-        assert len(encode_strict_json(result.model_dump(mode="json"))) <= bound
-        assert bound <= MAX_CODE_RESULT_BYTES
-
-    def test_all_different_maximal_words_still_exceed_the_result_bound(self) -> None:
+    def test_all_different_maximal_words_return_the_exact_distance(self) -> None:
         left = [0] * MAX_EXPLICIT_CODE_LENGTH
         right = [1] * MAX_EXPLICIT_CODE_LENGTH
         request = WordDistanceRequest.model_validate({"word1": left, "word2": right})
-        with pytest.raises(OperationDomainValidationError, match="result can use"):
-            word_distance(request.word1, request.word2)
+        result = word_distance(request.word1, request.word2)
+        assert result.distance == MAX_EXPLICIT_CODE_LENGTH
 
-    def test_differing_coordinate_wire_size_tracks_actual_difference_positions(
+    def test_differing_coordinates_track_actual_positions(
         self,
     ) -> None:
         left = [0] * MAX_EXPLICIT_CODE_LENGTH
@@ -249,8 +237,9 @@ class TestWordDistance:
         ):
             high[index] = 1
         request = WordDistanceRequest.model_validate({"word1": left, "word2": high})
-        with pytest.raises(OperationDomainValidationError, match="result can use"):
-            word_distance(request.word1, request.word2)
+        result = word_distance(request.word1, request.word2)
+        assert result.distance == 300_000
+        assert result.differing_coordinates[0] == MAX_EXPLICIT_CODE_LENGTH - 300_000
 
 
 class TestExplicitProfile:
@@ -310,13 +299,8 @@ class TestExplicitProfile:
         assert plan.bitset_chunks == 1
         assert plan.bitset_chunk_work == 4_474_536
         assert plan.bitset_chunk_work <= MAX_PROFILE_BITSET_CHUNK_WORK
-        assert plan.result_wire_upper_bound <= MAX_CODE_RESULT_BYTES
 
         result = explicit_profile(source)
-        assert (
-            len(encode_strict_json(result.model_dump(mode="json")))
-            <= plan.result_wire_upper_bound
-        )
         assert result.minimum_distance == 6
         assert result.maximum_distance == 20
         assert result.weight_distribution[10] == 2_992
@@ -517,7 +501,7 @@ class TestDerivedAdmissionBoundaries:
         ):
             explicit_profile(request.code)
 
-    def test_profile_output_size_immediate_boundary(self) -> None:
+    def test_profile_admission_is_not_derived_from_serialized_size(self) -> None:
         accepted_length = 100_770
         accepted = ExplicitProfileRequest(
             code=_code(
@@ -526,10 +510,7 @@ class TestDerivedAdmissionBoundaries:
                 length=accepted_length,
             )
         )
-        assert (
-            require_profile_admission(accepted.code).result_wire_upper_bound
-            <= MAX_CODE_RESULT_BYTES
-        )
+        assert require_profile_admission(accepted.code).pair_count == 1
         request = ExplicitProfileRequest(
             code=_code(
                 (0,) * (accepted_length + 1),
@@ -537,27 +518,17 @@ class TestDerivedAdmissionBoundaries:
                 length=accepted_length + 1,
             )
         )
-        with pytest.raises(
-            OperationDomainValidationError, match="canonical JSON bytes"
-        ):
-            explicit_profile(request.code)
+        assert require_profile_admission(request.code).pair_count == 1
 
     @pytest.mark.parametrize("length", [200_000, MAX_EXPLICIT_CODE_LENGTH])
-    def test_empty_profile_charges_no_witnesses_and_fits_output_bound(
+    def test_empty_profile_charges_no_pair_work(
         self, length: int
     ) -> None:
         source = ExplicitBinaryCode(length=length, codewords=())
         plan = require_profile_admission(source)
-        histogram_bytes = 1 + (length + 1) * 2
         assert plan.pair_count == 0
-        assert plan.result_wire_upper_bound == (
-            source_wire_upper_bound(source) + 3 * histogram_bytes + 2_048
-        )
 
         result = explicit_profile(source)
-        actual_wire_bytes = len(encode_strict_json(result.model_dump(mode="json")))
-        assert actual_wire_bytes <= plan.result_wire_upper_bound
-        assert plan.result_wire_upper_bound <= MAX_CODE_RESULT_BYTES
         assert result.minimum_distance_witness is None
         assert result.maximum_distance_witness is None
 
@@ -565,19 +536,13 @@ class TestDerivedAdmissionBoundaries:
         length = 200_000
         source = ExplicitBinaryCode(length=length, codewords=((0,) * length,))
         plan = require_profile_admission(source)
-        histogram_bytes = 1 + (length + 1) * 2
         assert plan.pair_count == 0
-        assert plan.result_wire_upper_bound == (
-            source_wire_upper_bound(source) + 3 * histogram_bytes + 2_048
-        )
 
         result = explicit_profile(source)
-        actual_wire_bytes = len(encode_strict_json(result.model_dump(mode="json")))
-        assert actual_wire_bytes <= plan.result_wire_upper_bound
         assert result.minimum_distance_witness is None
         assert result.maximum_distance_witness is None
 
-    def test_set_system_output_size_immediate_boundary(self) -> None:
+    def test_set_system_is_not_capped_by_serialized_size(self) -> None:
         operation = next(
             tool
             for tool in TOOLS
@@ -587,14 +552,11 @@ class TestDerivedAdmissionBoundaries:
         accepted = ToSetSystemRequest(
             code=_code((1,) * accepted_length, length=accepted_length)
         )
-        operation.run(accepted)
+        assert len(operation.run(accepted).coordinate_axis) == accepted_length
         request = ToSetSystemRequest(
             code=_code((1,) * (accepted_length + 1), length=accepted_length + 1)
         )
-        with pytest.raises(
-            OperationDomainValidationError, match="canonical JSON bytes"
-        ):
-            operation.run(request)
+        assert len(operation.run(request).coordinate_axis) == accepted_length + 1
 
     @pytest.mark.parametrize(
         ("length", "weight", "expected"),

@@ -12,11 +12,7 @@ from pathlib import Path
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import (
-    CanonicalLimits,
-    format_canonical_integer,
-    parse_canonical_integer,
-)
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.polynomials.ideals._models import (
     MAX_OUTPUT_TERMS,
     IdealComputationBudget,
@@ -781,36 +777,6 @@ def test_near_envelope_high_digit_family_decodes_fully(
     assert all(
         generator.polynomial.terms[0].coefficient == expected
         for generator in generators
-    )
-
-
-def test_family_over_canonical_output_limit_is_typed_result_limit(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A representable family cannot escape the canonical output envelope."""
-
-    numerator = "9" * 32_768
-    denominator = "9" * 32_767 + "8"
-    records = ["JACOBIAN_SINGULAR_IDEAL_V1", "44000", "1", "COMPONENT", "1"]
-    records.append("GENERATOR")
-    records.extend(
-        f"{numerator}/{denominator}|{exponent}," + ",".join("0" for _ in range(7))
-        for exponent in range(161)
-    )
-    records.extend(("END_GENERATOR", "END_COMPONENT", "END"))
-    protocol = "\n".join(records) + "\n"
-    assert len(protocol.encode("ascii")) > CanonicalLimits().max_output_bytes
-
-    executable = _executable(tmp_path, f"import sys; sys.stdout.write({protocol!r})")
-    _select_executable(monkeypatch, executable)
-
-    result = run_singular_minimal_primes(_ideal(), IdealComputationBudget())
-
-    assert result.outcome == "LIMIT_EXCEEDED"
-    assert result.components is None
-    assert result.detail == (
-        "The exact Singular minimal-prime family exceeds the declared result bound."
     )
 
 

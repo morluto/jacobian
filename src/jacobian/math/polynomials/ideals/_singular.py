@@ -377,11 +377,10 @@ def _minimal_primes_stdout_limit(
     at most ``budget.maximum_output_generators`` generator marker pairs
     across at most that many components with their count lines; and the
     fixed version, top-level count, and end scaffolding. A capture limit
-    derived from this admitted envelope lets every result within the
-    canonical transport limit reach ``_parse_minimal_primes_output`` intact.
-    The transport cap is included here as an early result bound; the operation
-    also checks the complete serialized result envelope after decoding because
-    protocol bytes do not include the public JSON framing.
+    derived from this admitted envelope lets every admissible worker projection
+    reach ``_parse_minimal_primes_output`` intact. This is the limit for the
+    one-shot Singular stdout channel, not a byte limit on the mathematical
+    result returned by the native operation.
     """
 
     coefficient_width = (

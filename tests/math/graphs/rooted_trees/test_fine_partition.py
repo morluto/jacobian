@@ -353,17 +353,13 @@ def test_utf8_label_byte_boundary_is_admitted_before_construction() -> None:
     assert caught.value.errors()[0]["type"].endswith("label_bytes")
 
 
-def test_unencodable_label_is_rejected_by_native_admission() -> None:
+def test_unencodable_label_is_rejected_by_the_graph_carrier() -> None:
     surrogate = "\ud800"
-    graph = SimpleUndirectedGraph(
-        vertices=("root", surrogate),
-        edges=(("root", surrogate),),
-    )
-
-    with pytest.raises(OperationDomainValidationError) as caught:
-        construct_fine_partition(graph, "root", 1)
-
-    assert caught.value.errors()[0]["type"].endswith("label_utf8")
+    with pytest.raises(ValidationError, match="valid Unicode scalar values"):
+        SimpleUndirectedGraph(
+            vertices=("root", surrogate),
+            edges=(("root", surrogate),),
+        )
 
 
 def test_empty_source_label_is_rejected_before_result_construction() -> None:

@@ -1171,46 +1171,52 @@ def _mathematical_transport_limit_violations(
         return ()
     if relative.name.endswith(("_process.py", "_worker.py", "_protocol.py")):
         return ()
-    if any(
-        (
-            isinstance(node, ast.Name)
-            and node.id == "run_bounded_process"
-        )
-        or (
-            isinstance(node, ast.ImportFrom)
-            and node.module == "jacobian.process"
-            and any(alias.name == "run_bounded_process" for alias in node.names)
-        )
-        for node in ast.walk(tree)
-    ):
+
+    channel_tokens = ("WORKER", "PROCESS", "STDIN", "STDOUT", "STDERR")
+
+    def assignment_targets(node: ast.AST) -> tuple[ast.expr, ...]:
+        if isinstance(node, ast.Assign):
+            return tuple(node.targets)
+        if isinstance(node, ast.AnnAssign):
+            return (node.target,)
         return ()
+
+    def is_channel_assignment(node: ast.AST) -> bool:
+        return any(
+            isinstance(target, ast.Name)
+            and any(channel in target.id.upper() for channel in channel_tokens)
+            for target in assignment_targets(node)
+        )
+
+    allowed_channel_attributes = {
+        id(descendant)
+        for node in ast.walk(tree)
+        if is_channel_assignment(node)
+        for descendant in ast.walk(node)
+        if isinstance(descendant, ast.Attribute)
+    }
+
     def owns_transport_policy(node: ast.AST) -> bool:
         if isinstance(node, ast.Attribute):
-            return node.attr == "max_output_bytes"
+            return (
+                node.attr == "max_output_bytes"
+                and id(node) not in allowed_channel_attributes
+            )
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             name = node.name.upper()
             return (
                 any(token in name for token in ("RESULT", "OUTPUT"))
                 and name.endswith(("BYTES", "CHARS", "CHARACTERS", "BYTE_BOUND"))
-                and not any(
-                    channel in name
-                    for channel in ("WORKER", "PROCESS", "STDIN", "STDOUT", "STDERR")
-                )
+                and not any(channel in name for channel in channel_tokens)
             )
-        targets: tuple[ast.expr, ...] = ()
-        if isinstance(node, ast.Assign):
-            targets = tuple(node.targets)
-        elif isinstance(node, ast.AnnAssign):
-            targets = (node.target,)
         return any(
             isinstance(target, ast.Name)
-            and any(token in target.id.upper() for token in ("RESULT", "OUTPUT", "WIRE"))
-            and target.id.upper().endswith(("BYTES", "CHARS", "CHARACTERS"))
-            and not any(
-                channel in target.id.upper()
-                for channel in ("WORKER", "PROCESS", "STDIN", "STDOUT", "STDERR")
+            and any(
+                token in target.id.upper() for token in ("RESULT", "OUTPUT", "WIRE")
             )
-            for target in targets
+            and target.id.upper().endswith(("BYTES", "CHARS", "CHARACTERS"))
+            and not any(channel in target.id.upper() for channel in channel_tokens)
+            for target in assignment_targets(node)
         )
 
     return tuple(

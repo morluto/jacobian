@@ -16,6 +16,11 @@ def test_graph_rejects_non_nfc_vertices() -> None:
         SimpleUndirectedGraph(vertices=("e\u0301",), edges=())
 
 
+def test_graph_rejects_unencodable_surrogate_vertices() -> None:
+    with pytest.raises(ValidationError, match="valid Unicode scalar values"):
+        SimpleUndirectedGraph(vertices=("\ud800",), edges=())
+
+
 def test_graph_rejects_duplicate_vertices() -> None:
     with pytest.raises(ValidationError):
         SimpleUndirectedGraph(vertices=("a", "a"), edges=())

@@ -17,13 +17,7 @@ from typing import TYPE_CHECKING, Any, cast
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-    format_canonical_integer,
-    parse_canonical_integer,
-)
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices import _conversions as conversions
 from jacobian.math.matrices._operation_models import (
@@ -563,53 +557,6 @@ def _sparse_rank_work(
             for component in components
         )
     )
-
-
-def _require_sparse_rank_transport_envelope(
-    matrix: SparseRationalMatrix,
-    *,
-    rank_bound: int,
-    active_columns: tuple[int, ...],
-) -> None:
-    """Prove that any exact pivot result fits the canonical output boundary."""
-
-    largest_possible_pivots = list(active_columns[-rank_bound:]) if rank_bound else []
-    output_limit = CanonicalLimits().max_output_bytes
-    try:
-        encode_strict_json(
-            {
-                "matrix": matrix.model_dump(mode="json"),
-                "rank": rank_bound,
-                "pivot_columns": largest_possible_pivots,
-            }
-        )
-    except CanonicalizationError as exc:
-        raise _validation_error(
-            "budget_exceeded",
-            "the sparse rank result retains its source matrix and would exceed "
-            f"the {output_limit:,}-byte canonical output limit",
-        ) from exc
-
-
-def _require_dense_rank_transport_envelope(matrix: RationalMatrix) -> None:
-    """Prove that a dense rank result retaining its source fits transport."""
-    row_count = len(matrix.entries)
-    column_count = len(matrix.entries[0])
-    rank_bound = min(row_count, column_count)
-    try:
-        encode_strict_json(
-            {
-                "matrix": matrix.model_dump(mode="json"),
-                "rank": rank_bound,
-                "pivot_columns": list(range(column_count - rank_bound, column_count)),
-            }
-        )
-    except CanonicalizationError as exc:
-        raise _validation_error(
-            "budget_exceeded",
-            "the dense rank result retains its source matrix and would exceed "
-            f"the {CanonicalLimits().max_output_bytes:,}-byte canonical output limit",
-        ) from exc
 
 
 def _admit_sparse_rank(matrix: SparseRationalMatrix) -> _SparseRankPlan:
@@ -1210,41 +1157,12 @@ def determinant_result(matrix: RationalMatrix) -> MatrixDeterminantResult:
 
 def rank_result(
     matrix: RationalMatrix | SparseRationalMatrix,
-    *,
-    enforce_transport_limit: bool = False,
 ) -> MatrixRankResult:
     if isinstance(matrix, SparseRationalMatrix):
         plan = _admit(_admit_sparse_rank, matrix)
-        if enforce_transport_limit:
-            try:
-                _require_sparse_rank_transport_envelope(
-                    matrix,
-                    rank_bound=sum(
-                        min(len(component.rows), len(component.columns))
-                        for component in plan.components
-                    ),
-                    active_columns=tuple(
-                        sorted(
-                            column
-                            for component in plan.components
-                            for column in component.columns
-                        )
-                    ),
-                )
-            except PydanticCustomError as exc:
-                raise OperationDomainValidationError(
-                    location=("matrix",), code=exc.type, message=exc.message()
-                ) from exc
         pivot_columns = _sympy_sparse_rank_pivots(plan)
     else:
         _admit(_admit_exact_linear_matrix, matrix.entries)
-        if enforce_transport_limit:
-            try:
-                _require_dense_rank_transport_envelope(matrix)
-            except PydanticCustomError as exc:
-                raise OperationDomainValidationError(
-                    location=("matrix",), code=exc.type, message=exc.message()
-                ) from exc
         _, pivot_columns = _flint_rref(matrix)
     return MatrixRankResult._from_kernel(
         matrix=matrix,

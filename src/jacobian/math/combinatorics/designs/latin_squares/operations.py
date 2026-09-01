@@ -1,6 +1,5 @@
 """Exact Latin-square operations."""
 
-from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.designs.latin_squares._models import (
     LatinSquare,
@@ -10,7 +9,6 @@ from jacobian.math.combinatorics.designs.latin_squares._models import (
 MAX_LATIN_CHECK_CELLS = 1_048_576
 MAX_LATIN_ORTHOGONALITY_PAIR_CELLS = 1_048_576
 MAX_LATIN_TRANSPOSE_CELLS = 1_048_576
-_LATIN_TRANSPOSE_RESULT_RESERVE_BYTES = 4_096
 
 
 def _reject(location: tuple[str | int, ...], code: str, message: str) -> None:
@@ -84,18 +82,6 @@ def transpose(square: LatinSquare) -> LatinSquare:
             ("square", "cells"),
             "transpose_cells_exceeded",
             "Latin-square transpose exceeds the source-cell work budget",
-        )
-    symbol_digits = len(str(square.order - 1))
-    predicted_bytes = (
-        cells * (symbol_digits + 1)
-        + 2 * square.order
-        + _LATIN_TRANSPOSE_RESULT_RESERVE_BYTES
-    )
-    if predicted_bytes > CanonicalLimits().max_output_bytes:
-        _reject(
-            ("square", "cells"),
-            "transpose_result_bytes_exceeded",
-            "Latin-square transpose exceeds the canonical output-byte limit",
         )
     # The transpose of a Latin square is Latin, so construct the canonical
     # carrier without re-running the Latin-property validator.

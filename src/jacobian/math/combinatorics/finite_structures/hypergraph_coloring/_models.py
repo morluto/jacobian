@@ -9,11 +9,6 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-)
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_EDGES,
     MAX_VERTICES,
@@ -77,33 +72,6 @@ def _validate_coloring_envelope(
             f"coloring search requires at most {MAX_COLORING_WORK} edge checks",
         )
 
-    # A COLORABLE result retains the source hypergraph and one assignment per
-    # vertex. This is the largest result shape produced by the kernel.
-    payload = {
-        "hypergraph": hypergraph.model_dump(mode="json"),
-        "palette_size": palette_size,
-        "outcome": "NOT_COLORABLE" if has_forced_failure else "COLORABLE",
-    }
-    if not has_forced_failure:
-        payload["witness"] = {
-            "assignments": [
-                [vertex, index] for index, vertex in enumerate(hypergraph.vertices)
-            ]
-        }
-    else:
-        payload["witness"] = None
-    try:
-        result_bytes = len(encode_strict_json(payload))
-    except CanonicalizationError as exc:
-        raise PydanticCustomError(
-            "hypergraph_coloring.result_too_large",
-            "the retained coloring result exceeds the canonical output limit",
-        ) from exc
-    if result_bytes > CanonicalLimits().max_output_bytes:
-        raise PydanticCustomError(
-            "hypergraph_coloring.result_too_large",
-            "the retained coloring result exceeds the canonical output limit",
-        )
     return _ColoringAdmission(
         has_forced_failure=has_forced_failure,
         has_injective_witness=has_injective_witness,

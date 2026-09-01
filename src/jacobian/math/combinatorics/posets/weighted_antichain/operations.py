@@ -14,11 +14,6 @@ from jacobian._exact import (
     CanonicalRational,
     canonical_rational_component_digits,
 )
-from jacobian.canonical import (
-    CanonicalLimits,
-    encode_strict_json,
-    strict_json_object_size,
-)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.posets.core._models import FinitePoset
 from jacobian.math.combinatorics.posets.weighted_antichain._models import (
@@ -100,38 +95,6 @@ def _admit_maximum_weight_antichain(
             location=("weights",),
             code="weighted_antichain.result_growth_exceeded",
             message="maximum-weight rational growth exceeds the canonical digit envelope",
-        )
-    rational_size = strict_json_object_size(
-        (
-            ("num", len(encode_strict_json("9" * max_sum_digits))),
-            ("den", len(encode_strict_json("9" * max_sum_digits))),
-        )
-    )
-    labels_size = (
-        2
-        + max(n - 1, 0)
-        + sum(len(encode_strict_json(element)) for element in poset.elements)
-    )
-    result_bytes = strict_json_object_size(
-        (
-            ("poset", len(encode_strict_json(poset.model_dump(mode="json")))),
-            (
-                "weights",
-                len(
-                    encode_strict_json(
-                        [weight.model_dump(mode="json") for weight in weights]
-                    )
-                ),
-            ),
-            ("maximum_weight", rational_size),
-            ("antichain", labels_size),
-        )
-    )
-    if result_bytes > CanonicalLimits().max_output_bytes:
-        raise OperationDomainValidationError(
-            location=("poset", "weights"),
-            code="weighted_antichain.result_too_large",
-            message="maximum-weight antichain result exceeds the canonical output envelope",
         )
     return _MaximumWeightAntichainAdmission(weights=weight_fracs)
 

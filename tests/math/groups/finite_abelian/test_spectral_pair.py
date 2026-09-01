@@ -9,7 +9,6 @@ from sympy import Poly, Symbol, cyclotomic_poly
 from sympy.polys.domains import ZZ
 from tests.math.groups.finite_abelian._support import finite_abelian_validation_error
 
-from jacobian.canonical import encode_strict_json
 from jacobian.math.groups import finite_abelian as domain
 from jacobian.math.groups._tools import TOOLS as GROUP_TOOLS
 from jacobian.math.groups.finite_abelian import (
@@ -305,10 +304,6 @@ def test_maximum_equal_size_work_boundary_is_admitted() -> None:
         work.remainder_coefficient_bits
         <= domain.MAX_SPECTRAL_REMAINDER_COEFFICIENT_BITS
     )
-    assert work.predicted_result_bytes <= domain.MAX_SPECTRAL_RESULT_BYTES
-    assert len(encode_strict_json(result.model_dump(mode="json"))) < (
-        domain.MAX_SPECTRAL_RESULT_BYTES
-    )
     assert result.is_spectral is True
 
 
@@ -421,7 +416,6 @@ def test_equal_size_pair_beyond_the_former_rank_cap_fits_budgets() -> None:
     work = domain._spectral_pair_work(source)
 
     assert work.character_terms == 4
-    assert work.predicted_result_bytes <= domain.MAX_SPECTRAL_RESULT_BYTES
 
     result = decide_finite_abelian_spectral_pair(source)
 
@@ -438,8 +432,6 @@ def test_singleton_pair_in_z2_power_65_is_decided_without_reduction() -> None:
 
     assert work.cyclotomic_degree is None
     assert work.character_terms == 0
-    assert work.predicted_result_bytes == 4_128
-    assert work.predicted_result_bytes <= domain.MAX_SPECTRAL_RESULT_BYTES
 
     request = FiniteAbelianSpectralPairRequest(source=source)
     result = FINITE_ABELIAN_SPECTRAL_PAIR_OPERATION.run(request)
@@ -480,10 +472,9 @@ def test_singleton_axis_envelope_boundary_is_admitted() -> None:
     result = decide_finite_abelian_spectral_pair(source)
 
     assert result.is_spectral is True
-    assert domain._spectral_pair_work(source).predicted_result_bytes == 32_760
 
 
-def test_singleton_axis_envelope_boundary_is_rejected() -> None:
+def test_singleton_axis_above_old_serialized_boundary_is_admitted() -> None:
     rank = 1_259
     source = _source(
         (2,) * rank,
@@ -491,14 +482,11 @@ def test_singleton_axis_envelope_boundary_is_rejected() -> None:
         ((1,) + (0,) * (rank - 1),),
     )
 
-    request = FiniteAbelianSpectralPairRequest(source=source)
-    with pytest.raises(ValueError, match="spectral-pair result"):
-        decide_finite_abelian_spectral_pair(request.source)
+    result = decide_finite_abelian_spectral_pair(source)
+    assert result.is_spectral is True
 
 
-def test_singleton_source_over_the_source_byte_bound_is_rejected_before_lcm() -> None:
-    # At this rank the serialized source alone exceeds the byte budget, so
-    # rejection precedes any exponent arithmetic on the declared moduli.
+def test_large_singleton_source_is_admitted_by_trivial_decision() -> None:
     rank = 4_000
     source = _source(
         (2,) * rank,
@@ -506,11 +494,7 @@ def test_singleton_source_over_the_source_byte_bound_is_rejected_before_lcm() ->
         ((1,) + (0,) * (rank - 1),),
     )
 
-    with pytest.raises(
-        ValueError,
-        match="spectral-pair result exceeds its serialized byte bound",
-    ):
-        decide_finite_abelian_spectral_pair(source)
+    assert decide_finite_abelian_spectral_pair(source).is_spectral is True
 
 
 def test_forged_witness_elements_remain_structurally_parseable() -> None:
@@ -546,14 +530,10 @@ def test_singleton_at_modulus_bound_serializes_within_budget() -> None:
     work = domain._spectral_pair_work(source)
 
     assert work.cyclotomic_degree is None
-    assert work.predicted_result_bytes <= domain.MAX_SPECTRAL_RESULT_BYTES
 
     result = decide_finite_abelian_spectral_pair(source)
 
     assert result.is_spectral is True
-    assert len(encode_strict_json(result.model_dump(mode="json"))) < (
-        domain.MAX_SPECTRAL_RESULT_BYTES
-    )
 
 
 def test_equal_size_pair_in_group_above_order_cap_fits_derived_budgets() -> None:
@@ -616,7 +596,7 @@ def test_equal_size_sets_over_character_term_budget_are_still_rejected() -> None
         decide_finite_abelian_spectral_pair(request.source)
 
 
-def test_serialized_source_bytes_reject_oversized_mismatch_sets() -> None:
+def test_large_mismatched_sets_use_the_trivial_decision() -> None:
     source = _source(
         (1_000_000,),
         tuple((value,) for value in range(2_400)),
@@ -624,8 +604,9 @@ def test_serialized_source_bytes_reject_oversized_mismatch_sets() -> None:
     )
 
     assert len(source.points) < domain.MAX_SPECTRAL_SET_SIZE
-    with pytest.raises(ValueError, match="serialized byte bound"):
-        decide_finite_abelian_spectral_pair(source)
+    result = decide_finite_abelian_spectral_pair(source)
+    assert result.is_spectral is False
+    assert result.reason == "CARDINALITY_MISMATCH"
 
 
 @pytest.mark.parametrize("field", ("is_spectral", "reason"))

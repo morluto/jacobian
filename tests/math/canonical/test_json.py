@@ -43,6 +43,17 @@ def test_strict_json_encoding_preserves_unreduced_rationals_and_unicode() -> Non
     assert encode_strict_json(decomposed) == b'"e\xcc\x81"'
 
 
+def test_canonical_encoding_enforces_only_a_caller_supplied_byte_limit() -> None:
+    value = {"value": "longer than this boundary"}
+
+    assert encode_strict_json(value)
+    assert canonicalize_json(value)
+    with pytest.raises(CanonicalizationError, match="configured size limit"):
+        encode_strict_json(value, limits=CanonicalLimits(max_output_bytes=8))
+    with pytest.raises(CanonicalizationError, match="configured size limit"):
+        canonicalize_json(value, limits=CanonicalLimits(max_output_bytes=8))
+
+
 @pytest.mark.parametrize(
     ("fields", "value"),
     [

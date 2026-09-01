@@ -219,7 +219,7 @@ def encode_strict_json(
     *,
     limits: CanonicalLimits | None = None,
 ) -> bytes:
-    """Encode bounded JSON deterministically without semantic normalization."""
+    """Encode JSON deterministically, enforcing bytes only when requested."""
 
     active_limits = limits or CanonicalLimits()
     _validate_json_value(value, limits=active_limits, depth=0)
@@ -227,7 +227,7 @@ def encode_strict_json(
         encoded = rfc8785.dumps(value)
     except (rfc8785.CanonicalizationError, RecursionError) as exc:
         raise CanonicalizationError("value cannot be encoded as strict JSON") from exc
-    if len(encoded) > active_limits.max_output_bytes:
+    if limits is not None and len(encoded) > active_limits.max_output_bytes:
         raise CanonicalizationError("JSON exceeds the configured size limit")
     return encoded
 
@@ -273,7 +273,7 @@ def canonicalize_json(
     *,
     limits: CanonicalLimits | None = None,
 ) -> bytes:
-    """Normalize exact JSON and encode it using RFC 8785 key ordering."""
+    """Normalize exact JSON, enforcing encoded bytes only when requested."""
 
     active_limits = limits or CanonicalLimits()
     parsed = (
@@ -286,6 +286,6 @@ def canonicalize_json(
         encoded = rfc8785.dumps(normalized)
     except (rfc8785.CanonicalizationError, RecursionError) as exc:
         raise CanonicalizationError("value cannot be canonically encoded") from exc
-    if len(encoded) > active_limits.max_output_bytes:
+    if limits is not None and len(encoded) > active_limits.max_output_bytes:
         raise CanonicalizationError("canonical JSON exceeds the configured size limit")
     return encoded

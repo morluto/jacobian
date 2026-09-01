@@ -501,17 +501,18 @@ their owners:
    quantities bound that finite region?
 3. **Computation:** what bounds the algorithm's work and intermediate values
    before the backend expands, enumerates, or solves anything?
-4. **Output:** what bounds the exact returned value, witness, residual, or
-   certificate, and how is that bound related to the admitted request?
+4. **Output:** what bounds the unavoidable cardinality and representation
+   growth of the exact returned value, witness, residual, or certificate?
 
 The operation's mathematical contract owns the semantic domain and result
 meaning. The domain owner owns request admission and the execution plan. The
 kernel or maintained backend performs only the work described by that plan.
 Result construction owns conversion; the operation's tests own defining-
 invariant evidence. Dispatch and MCP own only the final transport projection.
-A transport failure must therefore
-be rejected by request admission or returned as a typed operational outcome;
-it must not first appear as an uncaught post-execution serializer exception.
+A transport-specific byte ceiling is not mathematical admission: when a real
+delivery boundary configures one, exceeding it is a typed operational outcome.
+Do not copy that ceiling into a request model, shared carrier, native function,
+or owner work plan.
 
 The operation identifier and result semantics own the first obligation. The
 request contract enforces the second and the preconditions needed for the
@@ -519,11 +520,21 @@ third and fourth. Tightening or widening a safe execution envelope must not
 silently change the mathematical meaning of the operation.
 
 A backend or result conversion may still validate an invariant, but it must
-not be the first place an accepted request discovers that its exact answer is
-too large. If a bound is conservative, name the quantity it bounds, state why
-it is safe for the algorithm, and test both the rejected adversarial case and a
-useful case near the boundary. Do not use a post-hoc output-term cap,
-truncation, sentinel, or host exception as a hidden computational budget.
+not discover an unbounded cardinality or host representation failure only after
+performing the work. If a bound is conservative, name the mathematical
+quantity it bounds, state why it is safe for the algorithm, and test both the
+rejected adversarial case and a useful case near the boundary. Do not use JSON
+bytes, a post-hoc output-term cap, truncation, sentinel, or host exception as a
+hidden computational budget.
+
+Use encoded byte counts only at a concrete byte boundary: bounded process
+stdin/stdout, a digest whose definition includes encoded bytes, or an explicitly
+configured transport limit. The canonical encoder measures without an output
+ceiling by default; pass `CanonicalLimits` only when the caller owns such a
+boundary. An unexplained reserve added to the codec's default is not an output
+proof. The architecture check rejects `max_output_bytes` in reusable
+`values.py` carriers; express their safety envelope through cardinality,
+component digits, depth, or another intrinsic representation quantity.
 
 For every non-trivially priced operation, owner tests must instrument the
 priced kernel primitives on a representative near-envelope request and assert

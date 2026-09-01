@@ -11,6 +11,12 @@ Built-in membership follows the
 [public mathematical operation admission contract](public-operation-admission.md),
 which keeps the public catalog distinct from the broader native Python API.
 
+MCP tool results do not inherit the canonical codec's default byte ceiling.
+The Python MCP SDK limits incoming Streamable HTTP request bodies, not tool
+result responses. A deployment may configure a concrete response limit, but
+that is an operational delivery policy owned by the adapter: it does not narrow
+the mathematical domain, shared result type, or native Python API.
+
 Larger workflows are caller-owned: retain the returned value and choose the
 next operation. When its inspected input schema accepts a canonical value from
 the first result, pass that value unchanged; otherwise construct the requested

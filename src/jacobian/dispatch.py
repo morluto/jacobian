@@ -17,7 +17,11 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalizationError, encode_strict_json
+from jacobian.canonical import (
+    CanonicalizationError,
+    CanonicalLimits,
+    encode_strict_json,
+)
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -62,7 +66,9 @@ def parse_operation_input[ModelT: BaseModel](
 ) -> ModelT:
     """Parse one bounded request once into its owning strict model."""
 
-    encoded = encode_strict_json(payload)
+    # This is the encoded request boundary, so the canonical input ceiling is
+    # explicit. Result projection does not inherit this transport policy.
+    encoded = encode_strict_json(payload, limits=CanonicalLimits())
     return model.model_validate_json(encoded, strict=True)
 
 

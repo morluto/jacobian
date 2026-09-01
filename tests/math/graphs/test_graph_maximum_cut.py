@@ -10,12 +10,10 @@ import networkx as nx
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.optimization import _maximum_cut, _maximum_cut_process
 from jacobian.math.graphs.optimization._maximum_cut import (
     MAXIMUM_CUT_CANDIDATE_PARTITIONS,
-    MAXIMUM_CUT_RESULT_BYTES,
     GraphMaximumCutRequest,
     GraphMaximumCutResult,
     compute_maximum_cut,
@@ -316,43 +314,6 @@ def test_large_bipartite_graph_is_not_rejected_by_a_coarse_order_cap() -> None:
     result = _validated_result(graph)
 
     assert result.cut_value == 255
-
-
-def test_projected_result_bytes_are_rejected_before_search() -> None:
-    left = "a" * 1_400_000
-    right = "b" * 1_400_000
-    graph = _graph((left, right), ((left, right),))
-
-    request = GraphMaximumCutRequest(graph=graph)
-    with pytest.raises(OperationDomainValidationError, match="projected exact result"):
-        compute_maximum_cut(request)
-
-
-def test_result_size_boundary_accepts_the_largest_fit_and_rejects_the_next() -> None:
-    probe = _validated_result(_graph(("a", "b"), ()))
-    fixed_result_bytes = len(encode_strict_json(probe.model_dump(mode="json"))) - 4
-    accepted_label_length = (MAXIMUM_CUT_RESULT_BYTES - fixed_result_bytes) // 4
-    accepted_graph = _graph(
-        ("a" * accepted_label_length, "b" * accepted_label_length),
-        (),
-    )
-
-    accepted = _validated_result(accepted_graph)
-    accepted_bytes = len(encode_strict_json(accepted.model_dump(mode="json")))
-
-    assert accepted_bytes > MAXIMUM_CUT_RESULT_BYTES - 4
-    assert accepted_bytes <= MAXIMUM_CUT_RESULT_BYTES
-    request = GraphMaximumCutRequest(
-        graph=_graph(
-            (
-                "a" * (accepted_label_length + 1),
-                "b" * (accepted_label_length + 1),
-            ),
-            (),
-        )
-    )
-    with pytest.raises(OperationDomainValidationError, match="projected exact result"):
-        compute_maximum_cut(request)
 
 
 def test_public_contract_explains_bounds_without_private_kernel_details() -> None:

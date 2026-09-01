@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from jacobian.canonical import CanonicalLimits
-
 # Strict JSON transports integer scalars only through IEEE-754's interoperable
 # integer range.  ``FixedLengthPathsResult`` deliberately exposes its counts
 # as integer scalars (rather than an operation-specific decimal wrapper), so
@@ -15,25 +13,11 @@ MAX_TRANSPORTABLE_PATH_COUNT = (1 << 53) - 1
 
 @dataclass(frozen=True)
 class FixedLengthPathsEnvelope:
-    """Conservative work, intermediate, and strict-JSON result bounds."""
+    """Conservative work and intermediate bounds."""
 
     path_count_bound: int
     maximum_entry_digits: int
     matrix_scalar_products: int
-    result_json_bytes: int
-
-
-def _matrix_json_bound(vertex_count: int, entry_digits: int) -> int:
-    """Return a byte bound for a matrix of nonnegative decimal integers."""
-
-    # ``[[e,...,e],...]``: every row has two brackets, n entries, and n - 1
-    # commas; the outer array adds two brackets and n - 1 separators.
-    return (
-        2
-        + vertex_count * (2 + vertex_count * entry_digits + vertex_count - 1)
-        + vertex_count
-        - 1
-    )
 
 
 def fixed_length_paths_envelope(
@@ -57,27 +41,10 @@ def fixed_length_paths_envelope(
         )
 
     entry_digits = len(str(path_count_bound))
-    matrix_bytes = _matrix_json_bound(vertex_count, entry_digits)
-    # Exact field punctuation plus the maximum decimal total and fixed method.
-    result_json_bytes = (
-        len('{"path_matrix":')
-        + matrix_bytes
-        + len(',"total_paths":')
-        + entry_digits
-        + len(',"method":"MATRIX_POWER"}')
-    )
-    output_limit = CanonicalLimits().max_output_bytes
-    if result_json_bytes > output_limit:
-        raise ValueError(
-            "fixed-length path result can exceed the "
-            f"{output_limit}-byte canonical JSON output limit"
-        )
-
     return FixedLengthPathsEnvelope(
         path_count_bound=path_count_bound,
         maximum_entry_digits=entry_digits,
         matrix_scalar_products=max(length - 1, 0) * vertex_count**3,
-        result_json_bytes=result_json_bytes,
     )
 
 

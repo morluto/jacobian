@@ -18,13 +18,9 @@ The result retains the complete declared source action - canonical graph,
 generator mappings, and declared colors - through the domain-owned request
 value, and its explicit bounded verifier replays the exact vertex and edge
 orbits of that declared generated subgroup against the returned partitions.
-Because the
-result echoes its complete source plus the derived partitions, request
-validation also applies one aggregate retained-result bound: it measures the
-complete canonical serialization before execution and rejects any request
-whose result would exceed Jacobian's canonical output limit, even when every
-field-level bound is satisfied. This aggregate envelope is published in the
-request schema alongside the per-field bounds.
+The result echoes its complete source plus the derived partitions. Request
+admission bounds graph, generator, vertex-orbit, and edge-orbit cardinalities;
+native execution does not inherit a JSON response-byte ceiling.
 
 The operation has no global symmetry registry, stored graph source, or replay
 product.

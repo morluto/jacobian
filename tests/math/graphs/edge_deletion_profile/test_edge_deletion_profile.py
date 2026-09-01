@@ -191,16 +191,12 @@ def test_native_negative_order_is_typed() -> None:
         compute_edge_deletion_profile(graph, -1)
 
 
-def test_native_non_utf8_label_is_typed() -> None:
-    graph = _graph(["\ud800"], [])
-    with pytest.raises(OperationDomainValidationError):
-        compute_edge_deletion_profile(graph, 0)
-
-
-def test_native_oversized_label_is_rejected_before_encoding() -> None:
+def test_native_result_does_not_inherit_json_output_limit() -> None:
     graph = _graph(["x" * 11_000_000], [])
-    with pytest.raises(OperationDomainValidationError, match="input/output bound"):
-        compute_edge_deletion_profile(graph, 0)
+    result = compute_edge_deletion_profile(graph, 0)
+
+    assert result.graph == graph
+    assert len(result.rows) == 1
 
 
 def test_result_preserves_source() -> None:

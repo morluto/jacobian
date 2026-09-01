@@ -4,12 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-    strict_json_object_size,
-)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.values import (
     MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
@@ -23,19 +17,6 @@ class OpenNeighborhoodAdmission:
 
     selected_vertices: tuple[str, ...]
     neighborhood: tuple[str, ...]
-
-
-def _encoded_size(value: object, *, location: tuple[str, ...]) -> int:
-    try:
-        return len(encode_strict_json(value))
-    except CanonicalizationError as exc:
-        raise OperationDomainValidationError(
-            location=location,
-            code="graph.open_neighborhood.output_budget",
-            message=(
-                "the open-neighbourhood result cannot fit the canonical output budget"
-            ),
-        ) from exc
 
 
 def admit_open_neighborhood(
@@ -84,47 +65,7 @@ def admit_open_neighborhood(
     )
 
 
-def require_open_neighborhood_output_budget(
-    graph: SimpleUndirectedGraph,
-    selected_vertices: tuple[str, ...],
-    neighborhood: tuple[str, ...],
-) -> None:
-    """Reject a result that cannot cross the canonical transport boundary."""
-
-    graph_bytes = _encoded_size(
-        graph.model_dump(mode="json"),
-        location=("graph",),
-    )
-    selected_bytes = _encoded_size(
-        list(selected_vertices),
-        location=("selected_vertices",),
-    )
-    neighborhood_bytes = _encoded_size(
-        list(neighborhood),
-        location=("graph",),
-    )
-    output_bytes = strict_json_object_size(
-        (
-            ("graph", graph_bytes),
-            ("selected_vertices", selected_bytes),
-            ("neighborhood", neighborhood_bytes),
-        )
-    )
-    output_limit = CanonicalLimits().max_output_bytes
-    if output_bytes > output_limit:
-        raise OperationDomainValidationError(
-            location=("graph",),
-            code="graph.open_neighborhood.output_budget",
-            message=(
-                "the open-neighbourhood result retains its source graph, selected "
-                f"axis, and exact neighbourhood ({output_bytes:,} bytes), exceeding "
-                f"the {output_limit:,}-byte canonical output budget"
-            ),
-        )
-
-
 __all__ = [
     "OpenNeighborhoodAdmission",
     "admit_open_neighborhood",
-    "require_open_neighborhood_output_budget",
 ]

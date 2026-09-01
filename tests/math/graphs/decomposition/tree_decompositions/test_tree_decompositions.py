@@ -188,16 +188,12 @@ class TestReroot:
             == public_result
         )
 
-    def test_rejects_projection_over_the_canonical_transport_limit(self) -> None:
-        # ASCII labels are unchanged by NFC, so the canonical projection
-        # itself exceeds the limit and admission must still reject.
+    def test_reroot_has_no_transport_derived_output_ceiling(self) -> None:
         td = _labeled_path_decomposition(node_count=256, label_body="x" * 394)
         request = RerootRequest(decomposition=td, root=td.tree_nodes[0])
-        with pytest.raises(OperationDomainValidationError) as exc_info:
-            compute_reroot(request)
-        assert exc_info.value.errors()[0]["type"] == (
-            "graph.reroot_result_exceeds_transport_limit"
-        )
+        result = compute_reroot(request)
+
+        assert len(result.paths) == 256
 
     def test_rejects_labels_colliding_after_canonicalization(self) -> None:
         # The raw spellings are distinct, so TreeDecomposition admits them;

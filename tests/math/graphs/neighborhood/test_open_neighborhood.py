@@ -186,7 +186,7 @@ def test_every_neighborhood_vertex_replays_against_an_incident_edge() -> None:
     )
 
 
-def test_rejects_result_that_would_exceed_canonical_output_budget() -> None:
+def test_native_result_does_not_inherit_canonical_output_budget() -> None:
     long_label = "z" * 4_000_000
     g = _graph(["a", long_label], [("a", long_label)])
     request = NeighborhoodRequest(graph=g, selected_vertices=("a",))
@@ -198,8 +198,4 @@ def test_rejects_result_that_would_exceed_canonical_output_budget() -> None:
     native_result = open_neighborhood(g, ("a",))
     assert native_result.neighborhood == (long_label,)
 
-    with pytest.raises(
-        OperationDomainValidationError,
-        match=r"exceeding the .* canonical output budget",
-    ):
-        compute_open_neighborhood(request)
+    assert compute_open_neighborhood(request) == native_result

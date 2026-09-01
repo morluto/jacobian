@@ -9,7 +9,7 @@ import sympy
 from sympy import Poly, Symbol, expand
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import CanonicalLimits, format_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.polynomials._models import (
     MAX_GRAPH_POLYNOMIAL_EDGES,
@@ -18,9 +18,7 @@ from jacobian.math.graphs.polynomials._models import (
     MAX_MATCHING_VERTICES,
     MultivariatePolynomialTerm,
     PolynomialTerm,
-    TreeIndependencePolynomialAdmissionError,
     _admitted_tree_profile,
-    _maximum_independence_result_bytes,
     _TreeProfile,
 )
 from jacobian.math.graphs.values import (
@@ -78,17 +76,7 @@ def _compute_independence_coefficients(
 
 
 def _admit_tree(graph: SimpleUndirectedGraph) -> _TreeProfile:
-    profile = _admitted_tree_profile(graph)
-    output_limit = CanonicalLimits().max_output_bytes
-    if (
-        _maximum_independence_result_bytes(graph, profile.independence_degree)
-        > output_limit
-    ):
-        raise TreeIndependencePolynomialAdmissionError(
-            "tree independence polynomial would exceed the canonical output "
-            "limit after retaining its source; shorten vertex labels"
-        )
-    return profile
+    return _admitted_tree_profile(graph)
 
 
 def independence_polynomial_coefficients(

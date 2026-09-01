@@ -302,7 +302,7 @@ def test_canonical_graph_size_bound_rejects_257_vertices() -> None:
         )
 
 
-def test_request_reserves_exact_output_headroom_for_retained_sources() -> None:
+def test_native_result_does_not_inherit_canonical_output_limit() -> None:
     limits = CanonicalLimits()
     pattern = _empty(0, "p")
     base_host = _graph(("x",), [])
@@ -320,8 +320,9 @@ def test_request_reserves_exact_output_headroom_for_retained_sources() -> None:
     assert len(encode_strict_json(request_payload)) == limits.max_input_bytes
 
     request = InducedVertexSubsetPatternCountRequest(host=host, pattern=pattern)
-    with pytest.raises(OperationDomainValidationError):
-        TOOLS[0].run(request)
+    result = TOOLS[0].run(request)
+
+    assert result.occurrence_count == "1"
 
 
 def test_numeric_admission_caps_are_visible_in_schema_and_tool_description() -> None:
@@ -331,9 +332,6 @@ def test_numeric_admission_caps_are_visible_in_schema_and_tool_description() -> 
     )
     assert f"{MAX_INDUCED_PATTERN_CANDIDATES:,} candidate subsets" in schema
     assert f"{MAX_INDUCED_PATTERN_TOTAL_WORK_UNITS:,} total work units" in schema
-    assert (
-        f"{CanonicalLimits().max_output_bytes:,}-byte canonical output bound" in schema
-    )
     assert "C(|V(host)|, |V(pattern)|)" in schema
     assert "C(|V(pattern)|, 2) direct host-edge probes" in schema
     assert "partial-injection state bound" in schema

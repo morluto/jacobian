@@ -14,12 +14,6 @@ from jacobian._execution import (
     request_cancelled,
     request_execution,
 )
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-    strict_json_object_size,
-)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.edge_deletion_profile._models import (
     MAX_DELETION_ORDER,
@@ -42,10 +36,6 @@ def _require_execution_active(stage: str) -> None:
         and time.monotonic() >= execution.deadline
     ):
         raise OperationExecutionTimeoutError(f"request deadline expired {stage}")
-
-
-def _json_array_size(item_size: int, count: int) -> int:
-    return 2 + max(count - 1, 0) + item_size * count
 
 
 def _is_bipartite(graph: SimpleUndirectedGraph) -> bool:
@@ -164,65 +154,6 @@ def _coloring_work_bound(
     return total
 
 
-# Characters that RFC 8785 escapes as a \uXXXX sequence occupy six
-# bytes in the canonical JSON representation; tab, newline, and
-# carriage return are emitted as two-byte short escapes (\t, \n, \r).
-# This conservative bound overestimates the encoded size of every label
-# so that the preflight also covers intermediate encodings.
-_JSON_SHORT_ESCAPE_CHARS = frozenset("\x09\x0a\x0d\x22\x5c")
-_JSON_UESCAPE_CHARS = frozenset(
-    "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x0b\x0c\x0e\x0f"
-    "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f"
-)
-
-
-def _json_escaped_size(label: str) -> int:
-    """Return a conservative upper bound on the canonical JSON string size."""
-
-    total = 2  # opening and closing quotes
-    for char in label:
-        if char in _JSON_UESCAPE_CHARS:
-            total += 6
-        elif char in _JSON_SHORT_ESCAPE_CHARS:
-            total += 2
-        else:
-            total += len(char.encode("utf-8"))
-    return total
-
-
-def _preflight_graph_wire_size(graph: SimpleUndirectedGraph) -> None:
-    """Reject oversized native labels before materializing canonical JSON."""
-
-    limit = CanonicalLimits().max_output_bytes
-    try:
-        label_sizes: dict[str, int] = {}
-        estimated = 32 * (len(graph.vertices) + 1)
-        for vertex in graph.vertices:
-            size = _json_escaped_size(vertex)
-            label_sizes[vertex] = size
-            estimated += size
-            if estimated > limit:
-                raise OperationDomainValidationError(
-                    location=("graph",),
-                    code="graph.edge_deletion.result_exceeds_output_bound",
-                    message="edge-deletion graph exceeds the canonical input/output bound",
-                )
-        for left, right in graph.edges:
-            estimated += label_sizes[left] + label_sizes[right] + 32
-            if estimated > limit:
-                raise OperationDomainValidationError(
-                    location=("graph",),
-                    code="graph.edge_deletion.result_exceeds_output_bound",
-                    message="edge-deletion graph exceeds the canonical input/output bound",
-                )
-    except UnicodeEncodeError as exc:
-        raise OperationDomainValidationError(
-            location=("graph",),
-            code="graph.edge_deletion.result_exceeds_output_bound",
-            message="edge-deletion graph labels must be valid UTF-8",
-        ) from exc
-
-
 def _admit_edge_deletion_profile(
     graph: SimpleUndirectedGraph,
     deletion_order: int,
@@ -238,7 +169,6 @@ def _admit_edge_deletion_profile(
             ),
         )
 
-    vertex_count = len(graph.vertices)
     edge_count = len(graph.edges)
     if deletion_order > edge_count:
         raise OperationDomainValidationError(
@@ -266,39 +196,6 @@ def _admit_edge_deletion_profile(
                 message="edge-deletion profile search exceeds its exact work bound",
             )
 
-    _preflight_graph_wire_size(graph)
-    try:
-        graph_bytes = len(encode_strict_json(graph.model_dump(mode="json")))
-    except (CanonicalizationError, UnicodeEncodeError) as exc:
-        raise OperationDomainValidationError(
-            location=("graph",),
-            code="graph.edge_deletion.result_exceeds_output_bound",
-            message="edge-deletion profile result exceeds the canonical output bound",
-        ) from exc
-    index_bytes = max(1, len(str(max(edge_count - 1, 0))))
-    row_bytes = strict_json_object_size(
-        (
-            (
-                "deleted_edge_indices",
-                _json_array_size(index_bytes, deletion_order),
-            ),
-            ("chromatic_number", max(1, len(str(vertex_count)))),
-        )
-    )
-    rows_bytes = _json_array_size(row_bytes, row_count)
-    result_bytes = strict_json_object_size(
-        (
-            ("graph", graph_bytes),
-            ("deletion_order", max(1, len(str(deletion_order)))),
-            ("rows", rows_bytes),
-        )
-    )
-    if result_bytes > CanonicalLimits().max_output_bytes:
-        raise OperationDomainValidationError(
-            location=("graph",),
-            code="graph.edge_deletion.result_exceeds_output_bound",
-            message="edge-deletion profile result exceeds the canonical output bound",
-        )
     return source_is_bipartite
 
 

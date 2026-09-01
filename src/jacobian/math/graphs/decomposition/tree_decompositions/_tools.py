@@ -2,7 +2,6 @@
 
 from typing import Any
 
-from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -21,7 +20,6 @@ from jacobian.math.graphs.decomposition.tree_decompositions._models import (
     WidthRequest,
     WidthResult,
     _normalized_tree_nodes,
-    _reroot_result_wire_bytes,
 )
 from jacobian.math.graphs.decomposition.tree_decompositions.operations import (
     adhesions,
@@ -63,14 +61,6 @@ def compute_reroot(request: RerootRequest) -> RerootResult:
             location=("decomposition", "tree_nodes"),
             code="graph.reroot_tree_node_labels_collide_after_normalization",
             message="tree node labels collide after Unicode NFC normalization",
-        )
-    output_limit = CanonicalLimits().max_output_bytes
-    if _reroot_result_wire_bytes(request.decomposition, request.root) > output_limit:
-        raise OperationDomainValidationError(
-            location=("decomposition", "tree_nodes"),
-            code="graph.reroot_result_exceeds_transport_limit",
-            message="rerooted tree-decomposition paths exceed the "
-            f"{output_limit}-byte canonical output limit",
         )
     return reroot(request.decomposition, request.root)
 

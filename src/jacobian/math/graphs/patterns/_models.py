@@ -10,13 +10,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-    format_canonical_integer,
-    parse_canonical_integer,
-)
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.graphs.values import (
     MAX_INDEXED_SIMPLE_GRAPH_EDGES,
     MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
@@ -79,44 +73,10 @@ def _per_candidate_work(pattern_order: int) -> int:
     )
 
 
-def _encode_with_bound(
-    payload: object,
-    *,
-    limit: int,
-    error: str,
-) -> int:
-    try:
-        encoded = encode_strict_json(
-            payload,
-            limits=CanonicalLimits(max_output_bytes=limit),
-        )
-    except CanonicalizationError as exc:
-        raise PydanticCustomError(
-            "graph.error_from_exc_return_len_encoded", error
-        ) from exc
-    return len(encoded)
-
-
 def _require_bounded_request(
     host: SimpleUndirectedGraph,
     pattern: SimpleUndirectedGraph,
 ) -> None:
-    limits = CanonicalLimits()
-    host_payload = host.model_dump(mode="json")
-    pattern_payload = pattern.model_dump(mode="json")
-    source_payload = {
-        "host": host_payload,
-        "pattern": pattern_payload,
-    }
-    source_bytes = _encode_with_bound(
-        source_payload,
-        limit=limits.max_input_bytes,
-        error=(
-            "host and pattern exceed the canonical "
-            f"{limits.max_input_bytes}-byte input bound"
-        ),
-    )
-
     host_order = len(host.vertices)
     pattern_order = len(pattern.vertices)
     candidate_count = _candidate_subset_count(host_order, pattern_order)
@@ -127,21 +87,6 @@ def _require_bounded_request(
             f"{MAX_INDUCED_PATTERN_CANDIDATES:,}-candidate bound",
         )
 
-    maximum_count = format_canonical_integer(candidate_count)
-    result_payload = {
-        "host": host_payload,
-        "pattern": pattern_payload,
-        "occurrence_count": maximum_count,
-    }
-    result_bytes = _encode_with_bound(
-        result_payload,
-        limit=limits.max_output_bytes,
-        error=(
-            "the induced-pattern count result retains host and pattern and exceeds "
-            f"the canonical {limits.max_output_bytes}-byte output bound"
-        ),
-    )
-
     graph_records = (
         len(host.vertices)
         + len(host.edges)
@@ -149,9 +94,7 @@ def _require_bounded_request(
         + len(pattern.edges)
     )
     total_work = (
-        source_bytes
-        + result_bytes
-        + graph_records
+        graph_records
         + max(1, pattern_order * pattern_order)
         + candidate_count * _per_candidate_work(pattern_order)
     )
@@ -177,17 +120,13 @@ class InducedVertexSubsetPatternCountRequest(StrictModel):
                 f"{MAX_INDEXED_SIMPLE_GRAPH_VERTICES:,} vertices and "
                 f"{MAX_INDEXED_SIMPLE_GRAPH_EDGES:,} edges). Admission "
                 "preflights the exact candidate count "
-                "C(|V(host)|, |V(pattern)|), encoded request and retained-result "
-                "bytes, graph records, explicit candidate construction from "
+                "C(|V(host)|, |V(pattern)|), graph records, and explicit candidate construction from "
                 "C(|V(pattern)|, 2) direct host-edge probes per subset, local "
                 "candidate scans, and a worst-case VF2++ partial-injection state "
                 "bound for every subset. It permits at most "
                 f"{MAX_INDUCED_PATTERN_CANDIDATES:,} candidate subsets and "
                 f"{MAX_INDUCED_PATTERN_TOTAL_WORK_UNITS:,} total work units "
-                "for the one exact count. "
-                "The retained result must fit the "
-                f"{CanonicalLimits().max_output_bytes:,}-byte canonical output "
-                "bound. These are conservative "
+                "for the one exact count. These are conservative "
                 "current-backend limits, not restrictions on the mathematical "
                 "definition."
             )

@@ -1162,22 +1162,34 @@ def _generic_operation_shadow_violations(
     return ()
 
 
-def _carrier_transport_limit_violations(
+def _mathematical_transport_limit_violations(
     relative: PurePosixPath, tree: ast.Module
 ) -> tuple[Violation, ...]:
-    """Keep JSON response-byte policy out of reusable mathematical values."""
+    """Keep transport byte policy out of mathematical contracts and admission."""
 
-    if not (
-        relative.is_relative_to(PurePosixPath("src/jacobian/math"))
-        and relative.name == "values.py"
+    if not relative.is_relative_to(PurePosixPath("src/jacobian/math")):
+        return ()
+    if relative.name.endswith(("_process.py", "_worker.py", "_protocol.py")):
+        return ()
+    if any(
+        (
+            isinstance(node, ast.Name)
+            and node.id == "run_bounded_process"
+        )
+        or (
+            isinstance(node, ast.ImportFrom)
+            and node.module == "jacobian.process"
+            and any(alias.name == "run_bounded_process" for alias in node.names)
+        )
+        for node in ast.walk(tree)
     ):
         return ()
     return tuple(
         _violation(
             relative,
             node,
-            "carrier-transport-limit",
-            "mathematical values must use representation bounds, not canonical output-byte limits",
+            "mathematical-transport-limit",
+            "mathematical contracts and admission must use cardinality, digit, or allocation bounds, not transport bytes",
         )
         for node in ast.walk(tree)
         if isinstance(node, ast.Attribute) and node.attr == "max_output_bytes"
@@ -1192,7 +1204,7 @@ def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
         return (Violation(str(relative), "parse-error", f"cannot parse file: {exc}"),)
     return (
         *_generic_operation_shadow_violations(relative),
-        *_carrier_transport_limit_violations(relative, tree),
+        *_mathematical_transport_limit_violations(relative, tree),
         *_process_violations(relative, tree),
         *_bounded_process_violations(relative, tree),
         *_resolver_violations(relative, tree),

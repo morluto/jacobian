@@ -700,14 +700,14 @@ partitioning is acceptable only when the partition is a stable mathematical
 subdomain and the result identifies exactly what was searched. The caller may
 compose disjoint partitions, but no partition may claim global absence or
 completeness. A timeout, node limit, or truncated witness list is not such a
-claim. Keep the transport envelope separate from the mathematical output bound,
-but make the relationship executable: the mathematical result bound must imply
-that the complete canonical serialized result—including envelope metadata,
-echoed fields, IPC framing, and JSON overhead—fits the transport limit. The
-operation's estimator or exact size calculation must be shared by request
-admission and the final projection, and boundary tests must exercise the
-serialize -> parse -> canonicalize round trip. An accepted request must not
-discover transport overflow only after the backend has run.
+claim. Keep the transport envelope separate from the mathematical output bound.
+A native or in-process operation proves cardinality, digit growth, depth, and
+allocation safety without assuming a delivery format. When a concrete adapter
+adds a byte ceiling, that adapter measures the complete encoded envelope,
+including metadata, echoed fields, framing, and escaping. Worker adapters do
+the same for their own stdin and stdout channels. Do not move either byte
+ceiling into the shared request model merely so every possible consumer shares
+the most restrictive transport.
 
 Compare the complete canonical encoding with the actual enforcing limit. Do not
 subtract an unexplained safety reserve or add a second, duplicate size probe:

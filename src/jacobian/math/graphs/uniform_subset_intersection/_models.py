@@ -9,7 +9,6 @@ from typing import Literal
 from pydantic import Field, StrictInt
 
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits
 from jacobian.math.graphs.values import (
     MAX_GRAPH_LABEL_BYTES,
     MAX_INDEXED_SIMPLE_GRAPH_EDGES,
@@ -28,7 +27,6 @@ class _UniformSubsetIntersectionPlan:
 
     vertex_count: int
     edge_count: int
-    result_wire_upper_bound: int
 
 
 def _combination_at_most(n: int, k: int, limit: int) -> int:
@@ -129,25 +127,9 @@ def _admit_uniform_subset_intersection(
             "the selected intersection relation exceeds the "
             f"{MAX_INDEXED_SIMPLE_GRAPH_EDGES}-edge graph bound"
         )
-    largest_label_bytes = _largest_subset_label_bytes(
-        ground_set_size, subset_cardinality
-    )
-    # This counts every occurrence of a label in the vertex and edge arrays,
-    # plus delimiters and a conservative fixed envelope for result field names
-    # and scalar metadata. JSON escaping cannot expand these ASCII labels.
-    result_wire_upper_bound = (vertex_count + 2 * edge_count) * (
-        largest_label_bytes + 4
-    ) + 512
-    output_limit = CanonicalLimits().max_output_bytes
-    if result_wire_upper_bound > output_limit:
-        raise ValueError(
-            "the materialized graph result exceeds the "
-            f"{output_limit}-byte canonical output bound"
-        )
     return _UniformSubsetIntersectionPlan(
         vertex_count=vertex_count,
         edge_count=edge_count,
-        result_wire_upper_bound=result_wire_upper_bound,
     )
 
 

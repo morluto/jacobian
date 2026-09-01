@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-from pydantic_core import PydanticCustomError
-
-from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.morphisms._models import (
-    _RESULT_ENVELOPE_RESERVE_BYTES,
     MAX_CYCLE_SEARCH_PATHS,
     MORPHISM_MAX_VERTICES,
     FixedLengthCycleResult,
@@ -18,13 +14,8 @@ from jacobian.math.graphs.morphisms._models import (
     SubgraphPatternFindResult,
     _canonical_max_degree,
     _first_homomorphism_obstruction,
-    _label_wire_bytes,
-    _require_output_headroom,
 )
-from jacobian.math.graphs.values import (
-    SimpleUndirectedGraph,
-    simple_undirected_graph_wire_bytes,
-)
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 __all__ = ["fixed_length_cycle", "homomorphism_check", "subgraph_pattern_find"]
 
@@ -60,43 +51,10 @@ def _admit_cycle_request(graph: SimpleUndirectedGraph, length: int) -> None:
                 f"{MAX_CYCLE_SEARCH_PATHS}-path work budget"
             ),
         )
-    try:
-        _require_output_headroom(
-            simple_undirected_graph_wire_bytes(graph),
-            _label_wire_bytes(graph.vertices),
-            "fixed-length cycle",
-        )
-    except PydanticCustomError as exc:
-        raise OperationDomainValidationError(
-            location=("graph",), code="graph.cycle.output_bound", message=str(exc)
-        ) from exc
 
 
 def _admit_homomorphism_request(vertex_map: GraphVertexMap) -> None:
-    """Admit the source-bound result envelope for a map check."""
-    max_label_bytes = max(
-        (
-            len(encode_strict_json(label))
-            for label in vertex_map.source_graph.vertices
-            + vertex_map.target_graph.vertices
-        ),
-        default=0,
-    )
-    estimated_result_bytes = (
-        len(encode_strict_json(vertex_map.model_dump(mode="json")))
-        + 4 * max_label_bytes
-        + _RESULT_ENVELOPE_RESERVE_BYTES
-    )
-    output_limit = CanonicalLimits().max_output_bytes
-    if estimated_result_bytes > output_limit:
-        raise OperationDomainValidationError(
-            location=("vertex_map",),
-            code="graph.homomorphism.output_bound",
-            message=(
-                "the source-bound graph-homomorphism result would exceed the "
-                f"{output_limit}-byte canonical output limit"
-            ),
-        )
+    """Admit one structurally bounded source map."""
 
 
 def _admit_subgraph_request(
@@ -128,19 +86,6 @@ def _admit_subgraph_request(
                     f"{MAX_CYCLE_SEARCH_PATHS}-assignment work budget"
                 ),
             )
-    try:
-        _require_output_headroom(
-            simple_undirected_graph_wire_bytes(pattern)
-            + simple_undirected_graph_wire_bytes(host),
-            _label_wire_bytes(host.vertices),
-            "subgraph-pattern",
-        )
-    except PydanticCustomError as exc:
-        raise OperationDomainValidationError(
-            location=("pattern", "host"),
-            code="graph.subgraph.output_bound",
-            message=str(exc),
-        ) from exc
 
 
 def homomorphism_check(vertex_map: GraphVertexMap) -> HomomorphismCheckResult:

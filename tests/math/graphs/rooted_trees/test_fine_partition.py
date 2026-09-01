@@ -411,9 +411,7 @@ def test_shared_maximum_order_path_is_admitted() -> None:
     _assert_fine_partition(result)
 
 
-def test_retained_non_tree_must_fit_the_canonical_output_budget() -> None:
-    # NUL consumes one UTF-8 byte but six canonical JSON bytes, exercising the
-    # distinction between label-byte admission and the retained wire bound.
+def test_non_tree_diagnostic_does_not_inherit_json_output_budget() -> None:
     vertices = tuple(f"{index:03d}" + "\x00" * 61 for index in range(180))
     graph = SimpleUndirectedGraph(
         vertices=vertices,
@@ -424,10 +422,10 @@ def test_retained_non_tree_must_fit_the_canonical_output_budget() -> None:
         ),
     )
 
-    with pytest.raises(OperationDomainValidationError) as caught:
-        construct_fine_partition(graph, vertices[0], 1)
+    result = construct_fine_partition(graph, vertices[0], 1)
 
-    assert caught.value.errors()[0]["type"].endswith("output_budget")
+    assert isinstance(result.outcome, RootedTreeNotATree)
+    assert result.outcome.has_cycle
 
 
 def test_every_nonisomorphic_tree_through_order_seven_satisfies_contract() -> None:

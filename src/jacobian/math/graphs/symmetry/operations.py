@@ -14,9 +14,7 @@ from jacobian.math.graphs.symmetry._models import (
     GraphAutomorphismGenerator,
     GraphEdgeOrbit,
     GraphSymmetryOrbitResult,
-    GraphSymmetryOrbitSource,
     GraphVertexOrbit,
-    _require_result_output_headroom,
     _validate_automorphism_generator,
 )
 from jacobian.math.graphs.symmetry._orbits import declared_orbit_partitions
@@ -77,9 +75,6 @@ def _admit_graph_symmetry_orbit(
                 vertex_colors,
                 edge_colors,
             )
-        _require_result_output_headroom(
-            GraphSymmetryOrbitSource(graph=graph, generators=generators)
-        )
     except PydanticCustomError as error:
         raise OperationDomainValidationError(
             location=("graph",), code=error.type, message=str(error)

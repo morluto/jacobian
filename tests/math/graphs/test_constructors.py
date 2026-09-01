@@ -143,7 +143,7 @@ class TestTriangleProfile:
         assert len(result.triangles) == 4
         assert isinstance(result.triangles, tuple)
 
-    def test_dense_graph_is_rejected_by_output_budget(self) -> None:
+    def test_dense_graph_is_rejected_by_row_bound(self) -> None:
         vertices = tuple(f"{index:03d}" for index in range(256))
         graph = SimpleUndirectedGraph(
             vertices=vertices,
@@ -158,7 +158,7 @@ class TestTriangleProfile:
             compute_triangle_profile(graph)
         error = caught.value.errors()[0]
         assert error["loc"] == ("graph",)
-        assert error["type"] == "graph.triangle_profile.output_budget"
+        assert error["type"] == "graph.triangle_profile.row_bound"
 
     def test_large_edgeless_graph_is_admitted_by_actual_work(self) -> None:
         """An edgeless graph has no candidate triangle rows to materialize."""
@@ -188,8 +188,7 @@ class TestTriangleProfile:
         assert result.triangle_count == 1
         assert result.triangles[0].vertices == vertices[:3]
 
-    def test_long_labels_are_charged_in_dense_output_bound(self) -> None:
-        """A K_100 with maximum-length labels cannot fit its retained rows."""
+    def test_long_labels_do_not_change_the_row_bound(self) -> None:
         vertices = tuple(f"{index:03d}" + "x" * 61 for index in range(100))
         graph = SimpleUndirectedGraph(
             vertices=vertices,
@@ -200,8 +199,9 @@ class TestTriangleProfile:
             ),
         )
 
-        with pytest.raises(ValueError, match=r"labelled rows.*canonical output budget"):
-            compute_triangle_profile(graph)
+        result = compute_triangle_profile(graph)
+
+        assert result.triangle_count == 161_700
 
     def test_request_construction_defers_result_admission(self) -> None:
         """Request parsing does not enumerate K_100's triangle rows."""
@@ -218,8 +218,6 @@ class TestTriangleProfile:
         request = TriangleProfileRequest(graph=graph)
 
         assert request.graph == graph
-        with pytest.raises(ValueError, match=r"labelled rows.*canonical output budget"):
-            compute_triangle_profile(request.graph)
 
     def test_short_labels_can_admit_the_same_dense_graph(self) -> None:
         """The label-aware bound admits K_100 when its actual rows fit."""

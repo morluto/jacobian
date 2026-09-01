@@ -6,7 +6,6 @@ from dataclasses import dataclass
 
 from pydantic_core import PydanticCustomError
 
-from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.boolean_lattice_intersection._models import (
     BooleanLatticeIntersectionResult,
@@ -57,28 +56,6 @@ def _admit_boolean_lattice_intersection(
                     (min(left_label, right_label), max(left_label, right_label))
                 )
     canonical_edges = tuple(edges)
-    payload = {
-        "ground_set_size": ground_set_size,
-        "threshold": threshold,
-        "relation": relation,
-        "graph": {
-            "vertices": list(vertices),
-            "edges": [list(edge) for edge in canonical_edges],
-        },
-    }
-    try:
-        if len(encode_strict_json(payload)) > CanonicalLimits().max_output_bytes:
-            raise OperationDomainValidationError(
-                location=(),
-                code="boolean_lattice.result_bytes_exceeded",
-                message="the Boolean-lattice graph exceeds the canonical output-byte limit",
-            )
-    except ValueError as error:
-        raise OperationDomainValidationError(
-            location=(),
-            code="boolean_lattice.result_not_canonical",
-            message="the Boolean-lattice graph cannot be represented in canonical JSON",
-        ) from error
     return BooleanLatticeIntersectionAdmission(vertices, canonical_edges)
 
 

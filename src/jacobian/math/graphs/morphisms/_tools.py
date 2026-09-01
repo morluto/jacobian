@@ -132,8 +132,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 description=(
                     "A 4-cycle with a chord contains a 3-cycle (triangle); "
                     "length k is 3..vertex count. Preconditions: at most 64 "
-                    "vertices, inside the path budget, and enough output "
-                    "headroom for the echoed source graph."
+                    "vertices and inside the path-search budget."
                 ),
                 input=CYCLE_C4_WITH_CHORD_SIMPLE,
             ),
@@ -141,9 +140,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="c4_plain_no_triangle",
                 description=(
                     "A plain 4-cycle has no 3-cycle. Preconditions: length 3..64 "
-                    "and at most the vertex count, the per-pass path budget "
-                    "holds, and the retained graph plus result envelope fit "
-                    "the canonical output limit."
+                    "and at most the vertex count, and the per-pass path budget holds."
                 ),
                 input=CYCLE_C4_PLAIN,
             ),
@@ -156,7 +153,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "injective non-induced embedding. Returns one vertex map in pattern order "
         "when found. Assignment search is admission-bounded; runtime candidate-"
         "check exhaustion returns BUDGET_EXCEEDED, a typed non-conclusion. Both "
-        "graphs and the result envelope must fit the canonical output limit.",
+        "returned maps are bounded by the admitted pattern cardinality.",
         request_type=SubgraphPatternFindRequest,
         result_type=SubgraphPatternFindResult,
         run=_compute_subgraph_pattern_find,
@@ -167,8 +164,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 description=(
                     "A triangle pattern embeds in a 4-cycle-with-chord host. "
                     "Preconditions: pattern at most 64 vertices, no larger than "
-                    "host, inside the assignment budget, and enough "
-                    "output headroom for the echoed sources."
+                    "host and inside the assignment budget."
                 ),
                 input=SUBGRAPH_TRIANGLE_IN_C4_CHORD,
             ),
@@ -177,8 +173,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 description=(
                     "A path P3 does not embed in two disjoint host edges. "
                     "Preconditions: at most 64 pattern vertices, no larger than "
-                    "the host, the per-pass budget holds, and retained graphs "
-                    "plus the result envelope fit the canonical output limit."
+                    "the host, and the per-pass budget holds."
                 ),
                 input=SUBGRAPH_P3_NOT_IN_MATCHING,
             ),

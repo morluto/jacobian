@@ -8,9 +8,7 @@ from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.math.graphs.symmetry._edges import canonical_edge
-from jacobian.math.graphs.symmetry._orbits import declared_orbit_partitions
 from jacobian.math.graphs.values import ColoredUndirectedGraph
 
 MAX_GRAPH_SYMMETRY_VERTICES = 256
@@ -85,145 +83,6 @@ def _validate_automorphism_generator(
         )
 
 
-_ORBIT_OBJECT_FIXED_WIRE_BYTES = 47
-
-
-def _quoted_wire_size(value: str) -> int:
-    """Strict-JSON wire size of one retained string, including its quotes.
-
-    Every retained graph-symmetry string is Unicode NFC, so this strict
-    measurement equals the string's canonicalized wire size.
-    """
-
-    return len(encode_strict_json(value))
-
-
-def _json_array_wire_bytes(element_sizes: list[int] | tuple[int, ...]) -> int:
-    """Exact wire size of a JSON array from exact element sizes."""
-
-    return 2 + sum(element_sizes) + max(len(element_sizes) - 1, 0)
-
-
-def _orbit_result_fixed_frame_bytes() -> int:
-    """Exact key-name, punctuation, and constant-literal cost of the result.
-
-    Derived from ``GraphSymmetryOrbitResult`` itself - the field-name tuple
-    and the defaulted constant literals - so this admission bound cannot
-    drift from the published wire contract. Covers the object braces, the
-    commas between the top-level fields, every quoted key name with its colon,
-    and the four fixed literal values.
-    """
-
-    fields = GraphSymmetryOrbitResult.model_fields
-    names = tuple(fields)
-    frame_bytes = (
-        2
-        + sum(len(encode_strict_json(name)) + 1 for name in names)
-        + max(len(names) - 1, 0)
-    )
-    constants = (
-        fields["action"].default,
-        fields["generator_validation"].default,
-        fields["orbit_completeness"].default,
-        fields["automorphism_group_completeness"].default,
-    )
-    return frame_bytes + sum(_quoted_wire_size(value) for value in constants)
-
-
-def _orbit_result_canonical_wire_bytes(source: GraphSymmetryOrbitSource) -> int:
-    """Exact canonical wire size of this request's orbit result.
-
-    Defining invariant: for every admitted request, canonicalizing the
-    produced ``GraphSymmetryOrbitResult`` yields exactly this many bytes, so
-    output-headroom admission rejects precisely those requests whose typed
-    result cannot fit the canonical output envelope - with no reserve and
-    no per-orbit padding. Exactness holds because every term measures the
-    same encoder: all retained strings are Unicode NFC (vertices through the
-    canonical graph value, generator identifiers through request admission),
-    so strict-JSON measurements equal their canonicalized sizes; the fixed
-    frame derives from the result model itself; and every variable component
-    is charged exactly - the echoed source, both label axes with the array
-    and intra-partition separators implied by the computed orbits, one
-    representative per computed orbit, each orbit list's enclosing brackets,
-    each orbit object's fixed structure plus its index's digit width and its
-    single separating comma, the retained generator identifiers, the three
-    count values' digit widths, and the two color-mode literals selected by
-    the declared colors.
-    """
-    vertices = tuple(sorted(source.graph.graph.vertices))
-    edges = tuple(sorted(source.graph.graph.edges))
-    vertex_members, edge_members = declared_orbit_partitions(
-        vertices,
-        edges,
-        tuple(dict(generator.mapping) for generator in source.generators),
-    )
-
-    vertex_label_sizes = [_quoted_wire_size(vertex) for vertex in vertices]
-    edge_pair_sizes = [
-        _quoted_wire_size(left) + _quoted_wire_size(right) + 3 for left, right in edges
-    ]
-    generator_id_sizes = [
-        _quoted_wire_size(generator.generator_id) for generator in source.generators
-    ]
-
-    vertex_orbit_count = len(vertex_members)
-    edge_orbit_count = len(edge_members)
-
-    vertex_member_bytes = sum(vertex_label_sizes) + max(
-        len(vertices) - vertex_orbit_count, 0
-    )
-    edge_member_bytes = sum(edge_pair_sizes) + max(len(edges) - edge_orbit_count, 0)
-    representative_bytes = sum(
-        _quoted_wire_size(members[0]) for members in vertex_members
-    ) + sum(
-        _quoted_wire_size(left) + _quoted_wire_size(right) + 3
-        for left, right in (members[0] for members in edge_members)
-    )
-    orbit_object_bytes = (
-        4
-        + (vertex_orbit_count + edge_orbit_count) * _ORBIT_OBJECT_FIXED_WIRE_BYTES
-        + sum(len(str(index)) for index in range(vertex_orbit_count))
-        + sum(len(str(index)) for index in range(edge_orbit_count))
-        + max(vertex_orbit_count - 1, 0)
-        + max(edge_orbit_count - 1, 0)
-        + representative_bytes
-    )
-    color_mode_bytes = sum(
-        _quoted_wire_size("DECLARED" if declared else "UNCOLORED")
-        for declared in (
-            bool(source.graph.vertex_colors),
-            bool(source.graph.edge_colors),
-        )
-    )
-
-    return (
-        _orbit_result_fixed_frame_bytes()
-        + len(encode_strict_json(source.model_dump(mode="json")))
-        + _json_array_wire_bytes(vertex_label_sizes)
-        + _json_array_wire_bytes(edge_pair_sizes)
-        + vertex_member_bytes
-        + edge_member_bytes
-        + _json_array_wire_bytes(generator_id_sizes)
-        + orbit_object_bytes
-        + len(str(len(source.generators)))
-        + len(str(vertex_orbit_count))
-        + len(str(edge_orbit_count))
-        + color_mode_bytes
-    )
-
-
-def _require_result_output_headroom(source: GraphSymmetryOrbitSource) -> None:
-    output_limit = CanonicalLimits().max_output_bytes
-    if _orbit_result_canonical_wire_bytes(source) > output_limit:
-        raise PydanticCustomError(
-            "graph.symmetry_orbit_result_retains_its_declared_source",
-            "the graph symmetry orbit result retains its declared source and "
-            "its complete canonical serialization would exceed the "
-            f"{output_limit}-byte canonical output limit; shorten vertex "
-            "labels or shrink the graph",
-        )
-
-
 class GraphSymmetryOrbitSource(StrictModel):
     """Canonical source action for a declared graph-symmetry computation."""
 
@@ -237,14 +96,7 @@ class GraphSymmetryOrbitSource(StrictModel):
 
 
 class GraphSymmetryOrbitRequest(GraphSymmetryOrbitSource):
-    """Declared color-preserving generators of one bounded graph's subgroup.
-
-    Admission is aggregate as well as field-level: the result retains this
-    complete request as its source and adds the derived orbit partitions,
-    so a request whose complete canonical result would exceed Jacobian's
-    canonical output limit is rejected here, before execution, even when
-    every field-level bound is satisfied.
-    """
+    """Declared color-preserving generators of one bounded graph's subgroup."""
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -256,12 +108,7 @@ class GraphSymmetryOrbitRequest(GraphSymmetryOrbitSource):
                 "order; generator identifiers and color names must already "
                 "be normalized to Unicode NFC. The computed result retains "
                 "this complete request as its source plus the derived "
-                "vertex and edge orbits, so request validation also applies "
-                "an aggregate retained-result bound: a request whose "
-                "complete canonical result would exceed Jacobian's "
-                f"{CanonicalLimits().max_output_bytes}-byte canonical "
-                "output limit is rejected at admission even when every "
-                "field-level bound is satisfied."
+                "vertex and edge orbits."
             )
         }
     )

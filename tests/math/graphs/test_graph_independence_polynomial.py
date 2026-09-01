@@ -246,15 +246,17 @@ def test_full_vertex_envelope_path_is_admitted_and_over_envelope_is_rejected() -
         TreeIndependencePolynomialRequest(graph=_path(257))
 
 
-def test_request_reserves_output_headroom_for_the_retained_source() -> None:
+def test_native_result_does_not_inherit_canonical_output_limit() -> None:
     output_limit = CanonicalLimits().max_output_bytes
     graph = explicit_graph(("v" * (output_limit - 300),), ())
     encoded_request = encode_strict_json({"graph": graph.model_dump(mode="json")})
 
     assert len(encoded_request) <= output_limit
     request = TreeIndependencePolynomialRequest(graph=graph)
-    with pytest.raises(ValueError, match="output limit"):
-        _run_independence(request)
+    result = _run_independence(request)
+
+    assert result.graph == graph
+    assert result.coefficients == ("1", "1")
 
 
 def test_request_schema_exposes_tree_and_work_preconditions() -> None:

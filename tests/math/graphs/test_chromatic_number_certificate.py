@@ -459,7 +459,7 @@ def test_rational_digit_and_total_work_boundaries() -> None:
     assert len(request.graph.vertices) == full_order
 
 
-def test_retained_source_output_headroom_boundary() -> None:
+def test_retained_source_has_no_transport_derived_output_ceiling() -> None:
     limit = CanonicalLimits().max_output_bytes
     admitted_label = "a" * (limit // 2 - 8192)
     admitted = _check(
@@ -478,13 +478,13 @@ def test_retained_source_output_headroom_boundary() -> None:
         coloring=(0,),
         weights=(_rational(2),),
     )
-    with pytest.raises(OperationDomainValidationError):
-        chromatic_number_certificate(
-            request.graph,
-            request.claimed_chromatic_number,
-            request.coloring,
-            request.weights,
-        )
+    rejected = chromatic_number_certificate(
+        request.graph,
+        request.claimed_chromatic_number,
+        request.coloring,
+        request.weights,
+    )
+    assert rejected.reason == "INDEPENDENT_SET_OVERWEIGHT"
 
 
 def test_schema_and_tool_expose_bounds_axis_and_example() -> None:

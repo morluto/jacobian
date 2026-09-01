@@ -88,12 +88,21 @@ make test-timings JUNIT=pytest.xml TIMING=timing.json
 
 ## CI lifecycle
 
-Pull requests always run static validation. The checked-in CI planner selects
+Pull requests normally run static validation. The checked-in CI planner selects
 changed mathematical owners and changed dispatch, CLI, tooling, integration,
 process, MCP, Singular, and installed-wheel boundaries. A public operation,
 model, admission, or canonical contract change also selects catalog conformance
 and the advertised-example integration test. Shared runtime, CI, dependency,
 and unmapped paths fail closed to the complete ordinary suite.
+
+When automatic linting adds a formatting commit, the default GitHub token does
+not emit the ordinary pull-request synchronization event. The lint workflow
+therefore dispatches the same CI workflow with the exact pull-request base and
+head revisions. A pull request may briefly show a withheld, queued, or duplicate
+event record while that dispatched run is starting; identify the evidence by
+its head SHA and the `required` result, not by an older event record. A token
+with permission to emit pull-request events follows the normal synchronization
+path instead.
 
 Merge-group candidates run the complete ordinary suite plus optional
 near-envelope scale evidence. `main` runs the landed-tree ordinary suite and
@@ -117,6 +126,18 @@ Markers are execution tiers, not synonyms for slow tests:
 
 Keep a small ordinary regression for the same public behavior when moving a
 near-envelope case to `scale`.
+
+## Adversarial closure
+
+A review finding is closed only when the behavior is fixed at the public
+boundary and a behavioral regression proves the failure can no longer recur.
+For findings about malformed or over-sized input, cover the smallest valid
+near-boundary case, the malformed boundary form, and deeply nested data when
+canonicalization or parsing is involved. For findings about exact results,
+also cover the defining invariant, generated-schema/runtime parity, native and
+MCP parity when both are public, producer-consumer round trips, and late
+serialization or deadline phases. Prefer tests that exercise the supported
+interface; do not assert private helper names or copied source text.
 
 ## What to test
 

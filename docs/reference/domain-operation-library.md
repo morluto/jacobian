@@ -70,6 +70,14 @@ contract.
 Use maintained backends through thin private adapters. Direct bounded results
 compose by being supplied as the next operation's typed payload.
 
+Keep canonical carriers generic across owners when they represent the same
+mathematical value. If a limit belongs only to one operation's admitted
+execution envelope, enforce it in that operation's admission path and expose
+it in its request schema or description. Do not create a bespoke value subtype
+or schema override merely to move an operation-specific ceiling into a shared
+carrier. A new subtype is appropriate when it changes the mathematical meaning
+or establishes invariants that all of its consumers need.
+
 The logic family illustrates the boundary. `sat.cnf.canonicalize` returns a
 canonical CNF value; `sat.assignment.check` and `sat.solve` accept that value
 directly. `smt.solve` accepts one bounded QF SMT-LIB query.
@@ -687,6 +695,13 @@ operation's estimator or exact size calculation must be shared by request
 admission and the final projection, and boundary tests must exercise the
 serialize -> parse -> canonicalize round trip. An accepted request must not
 discover transport overflow only after the backend has run.
+
+Compare the complete canonical encoding with the actual enforcing limit. Do not
+subtract an unexplained safety reserve or add a second, duplicate size probe:
+either can reject useful requests without being the real boundary, while still
+missing bytes introduced by escaping, framing, echoed context, or final
+serialization. A finite cleanup or reaping allowance is different: name it,
+bound it, and include it in the operation's documented deadline envelope.
 
 A transport limit is a concrete ingress, egress, IPC, persistence, or host
 limit—not a speculative JSON-size policy. Do not truncate exact mathematical

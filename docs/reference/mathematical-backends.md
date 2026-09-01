@@ -105,6 +105,16 @@ backend-specific mechanics, not an interchangeable-backend framework. Mutable
 backend context, including global precision, requires explicit request-lifetime
 and concurrency ownership rather than an unguarded set-and-restore sequence.
 
+### Reusing a worker projection as IPC
+
+A compact worker projection can also serve as an internal IPC protocol when
+that is the same boundary the operation already needs. Document its framing,
+version, byte and structural bounds, source binding, and typed failure
+semantics at the boundary. Keep the projection narrower than the public result
+and construct the public value in the parent from the retained canonical
+source. Do not make an internal projection a second public schema merely
+because another process can parse it.
+
 ## Child-process adapters
 
 A child-process adapter has the same obligations plus:

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from itertools import pairwise
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import BeforeValidator, Field, StrictInt, WithJsonSchema, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
@@ -14,6 +14,7 @@ from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math._labels import OpaqueLabel
 from jacobian.math.number_theory.algebraic_numbers.real import (
     RationalIsolatingInterval,
+    RealAlgebraicValue,
     _UnrecognizedRealAlgebraicValue,
 )
 from jacobian.math.polynomials.values import (
@@ -33,6 +34,40 @@ MAX_COMMON_INTERLACING_TOTAL_TERMS = (
     MAX_COMMON_INTERLACING_TOTAL_DEGREE + MAX_COMMON_INTERLACING_FAMILY_SIZE
 )
 MAX_COMMON_INTERLACING_INPUT_DIGITS = 64
+
+
+def _require_common_interlacing_factor_degree(value: Any) -> Any:
+    polynomial = (
+        value.polynomial
+        if isinstance(value, RealAlgebraicValue)
+        else value.get("polynomial")
+        if isinstance(value, Mapping)
+        else None
+    )
+    if isinstance(polynomial, (list, tuple)) and len(polynomial) - 1 > (
+        MAX_COMMON_INTERLACING_FACTOR_DEGREE
+    ):
+        raise _validation_error(
+            "factor_degree",
+            "common interlacing roots admit factor degree at most "
+            f"{MAX_COMMON_INTERLACING_FACTOR_DEGREE}",
+        )
+    return value
+
+
+def _common_interlacing_factor_schema() -> dict[str, Any]:
+    schema = RealAlgebraicValue.model_json_schema()
+    polynomial = schema.get("properties", {}).get("polynomial")
+    if isinstance(polynomial, dict):
+        polynomial["maxItems"] = MAX_COMMON_INTERLACING_FACTOR_DEGREE + 1
+    return schema
+
+
+_CommonInterlacingRealAlgebraicValue = Annotated[
+    _UnrecognizedRealAlgebraicValue,
+    BeforeValidator(_require_common_interlacing_factor_degree),
+    WithJsonSchema(_common_interlacing_factor_schema()),
+]
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -182,7 +217,7 @@ class CommonInterlacingRequest(StrictModel):
 class PolynomialRealRoot(StrictModel):
     """One distinct source root with exact multiplicity and algebraic identity."""
 
-    value: _UnrecognizedRealAlgebraicValue
+    value: _CommonInterlacingRealAlgebraicValue
     multiplicity: StrictInt = Field(
         ge=1,
         le=MAX_COMMON_INTERLACING_SOURCE_DEGREE,

@@ -4,16 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-    format_canonical_integer,
-)
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._models import MAX_INTEGER_DIGITS
 from jacobian.math.number_theory._preimage_models import (
-    MAX_INTERVAL_PROFILE_RESULT_BYTES,
     MAX_INTERVAL_PROFILE_ROWS,
     MAX_INTERVAL_PROFILE_WORK,
     MAX_KSIGMA_MULTIPLIER,
@@ -42,33 +36,6 @@ def _primality_work_units(prime: int) -> int:
     # existing work-unit scale. The preflight charge is checked before the
     # backend call, so an oversized prime never reaches isprime.
     return int(pow(len(str(prime)), PRIMALITY_WORK_DIGIT_EXPONENT))
-
-
-def _profile_result_payload(
-    start: int,
-    length: int,
-    prime: int,
-    *,
-    rows: tuple[tuple[int, int], ...],
-    total_valuation: int,
-    maximum_valuation: int,
-) -> dict[str, object]:
-    """Build the canonical payload whose size is part of request admission."""
-
-    return {
-        "start": format_canonical_integer(start),
-        "length": format_canonical_integer(length),
-        "prime": format_canonical_integer(prime),
-        "rows": [
-            {
-                "valuation": valuation,
-                "count": format_canonical_integer(count),
-            }
-            for valuation, count in rows
-        ],
-        "total_valuation": format_canonical_integer(total_valuation),
-        "maximum_valuation": maximum_valuation,
-    }
 
 
 def _admit_p_adic_interval_profile(
@@ -160,42 +127,6 @@ def _admit_p_adic_interval_profile(
         )
 
     maximum_valuation = rows[-1][0] if rows else 0
-    payload = _profile_result_payload(
-        start,
-        length,
-        prime,
-        rows=rows,
-        total_valuation=total_valuation,
-        maximum_valuation=maximum_valuation,
-    )
-    try:
-        result_bytes = len(
-            encode_strict_json(
-                payload,
-                limits=CanonicalLimits(
-                    max_output_bytes=MAX_INTERVAL_PROFILE_RESULT_BYTES
-                ),
-            )
-        )
-    except CanonicalizationError as exc:
-        raise OperationDomainValidationError(
-            location=("length",),
-            code="number_theory.p_adic_interval_result_bytes",
-            message=(
-                "exact profile result must fit the "
-                f"{MAX_INTERVAL_PROFILE_RESULT_BYTES}-byte canonical output bound"
-            ),
-        ) from exc
-    if result_bytes > MAX_INTERVAL_PROFILE_RESULT_BYTES:
-        raise OperationDomainValidationError(
-            location=("length",),
-            code="number_theory.p_adic_interval_result_bytes",
-            message=(
-                "exact profile result must fit the "
-                f"{MAX_INTERVAL_PROFILE_RESULT_BYTES}-byte canonical output bound"
-            ),
-        )
-
     return _PAdicIntervalProfilePlan(
         rows=rows,
         total_valuation=total_valuation,

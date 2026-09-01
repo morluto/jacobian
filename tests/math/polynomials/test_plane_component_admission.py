@@ -40,6 +40,7 @@ from jacobian.math.polynomials.real_algebra._plane_component_models import (
     MAX_PLANE_COMPONENTS,
     IsolatedRealPlanePoint,
     PlaneComponentProfileComputed,
+    PlaneComponentProfileNoncompletion,
     PlaneComponentProfileRequest,
     PlaneComponentProfileResult,
     PlaneSemialgebraicComponent,
@@ -311,6 +312,37 @@ def test_request_schema_exposes_the_runtime_polynomial_envelope() -> None:
     for candidate in candidates:
         with pytest.raises(ValidationError):
             PlaneComponentProfileRequest.model_validate(candidate)
+
+
+def test_result_schema_exposes_the_runtime_polynomial_envelope() -> None:
+    schema = PlaneComponentProfileResult.model_json_schema()
+    polynomial = schema["properties"]["semialgebraic_set"]["properties"]["polynomials"][
+        "items"
+    ]
+    terms = polynomial["properties"]["polynomial"]["properties"]["terms"]
+    assert terms["maxItems"] == MAX_PLANE_COMPONENT_TERMS_PER_POLYNOMIAL
+
+    result = PlaneComponentProfileResult(
+        semialgebraic_set=PlaneSemialgebraicSet(
+            axis=("x", "y"),
+            polynomials=(_polynomial(((1, (1, 0)),)),),
+            sign_conditions=(),
+        ),
+        samples=(),
+        outcome=PlaneComponentProfileNoncompletion(
+            status="BACKEND_UNAVAILABLE",
+            reason="SUPPORTED_QEPCAD_NOT_INSTALLED",
+        ),
+    ).model_dump(mode="json")
+    result["semialgebraic_set"]["polynomials"][0]["polynomial"]["terms"].extend(
+        {
+            "coefficient": {"num": "1", "den": "1"},
+            "exponents": [0, 0],
+        }
+        for _ in range(MAX_PLANE_COMPONENT_TERMS_PER_POLYNOMIAL)
+    )
+    with pytest.raises(ValidationError):
+        PlaneComponentProfileResult.model_validate(result)
 
 
 def test_term_and_total_term_boundaries_reject_before_backend_execution() -> None:

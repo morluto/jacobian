@@ -321,6 +321,26 @@ def test_native_integral_basis_consumers_preserve_degree_31_envelope(
 
 
 @pytest.mark.parametrize("consumer", (discriminant, ring_of_integers))
+def test_native_integral_basis_consumers_accept_degree_nine_field(
+    consumer,
+) -> None:
+    field = SimpleNumberFieldPresentation(
+        coefficients_descending=("1", *("0",) * 8, "-2")
+    )
+
+    result = consumer(field)
+
+    if consumer is discriminant:
+        assert result == "99179645184"
+    else:
+        assert result == [
+            "1",
+            "alpha",
+            *[f"alpha**{power}" for power in range(2, field.degree)],
+        ]
+
+
+@pytest.mark.parametrize("consumer", (discriminant, ring_of_integers))
 def test_native_integral_basis_consumers_bound_the_widened_field_carrier(
     consumer,
 ) -> None:

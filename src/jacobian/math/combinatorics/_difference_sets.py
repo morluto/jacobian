@@ -14,7 +14,6 @@ from jacobian.math.combinatorics._difference_set_models import (
     MAX_CYCLIC_DIFFERENCE_SET_MODULUS,
     MAX_DIFFERENCE_SET_ADDITIONAL_ELEMENTS,
     MAX_DIFFERENCE_SET_EXTENSION_CANDIDATES,
-    MAX_SIDON_RESULT_BYTES,
     CyclicDifferenceMultiplicity,
     CyclicDifferenceSetExtensionRequest,
     CyclicDifferenceSetExtensionResult,
@@ -48,18 +47,9 @@ def decide_integer_sidon(request: IntegerSidonRequest) -> IntegerSidonResult:
 def _require_integer_sidon_result_admission(
     elements: tuple[int, ...],
 ) -> _IntegerSidonAdmissionPlan:
-    """Reserve the complete canonical result and retain its difference wires."""
+    """Build the bounded ordered-difference plan once."""
 
-    plan = _integer_sidon_profile(elements)
-    if plan.result_bytes > MAX_SIDON_RESULT_BYTES:
-        raise OperationDomainValidationError(
-            location=("elements",),
-            code="combinatorics.sidon_result_bound",
-            message=(
-                "complete ordered-difference profile exceeds the canonical output bound"
-            ),
-        )
-    return plan
+    return _integer_sidon_profile(elements)
 
 
 def _difference_counts(residues: tuple[int, ...], modulus: int) -> Counter[int]:

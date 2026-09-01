@@ -5,11 +5,9 @@ from itertools import combinations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import encode_strict_json
 from jacobian.math.combinatorics.finite_structures.hypergraphs import operations
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_EDGE_INTERSECTION_CELLS,
-    MAX_EDGE_INTERSECTION_RESULT_BYTES,
     MAX_EDGE_PAIR_COUNT,
     EdgeIntersectionEntry,
     EdgeIntersectionsRequest,
@@ -236,9 +234,7 @@ class TestEdgeIntersectionPreflight:
             edges=tuple((f"e{i:03}", vertices) for i in range(100)),
         )
         request = EdgeIntersectionsRequest(hypergraph=hypergraph)
-        pair_count, incidences, cells, estimated_bytes = (
-            _edge_intersection_preflight_data(hypergraph)
-        )
+        pair_count, incidences, cells = _edge_intersection_preflight_data(hypergraph)
 
         assert pair_count == 4_950
         assert incidences == 1_300
@@ -248,8 +244,6 @@ class TestEdgeIntersectionPreflight:
         assert (
             sum(entry.intersection_size for entry in result.pair_intersections) == cells
         )
-        actual_bytes = len(encode_strict_json(result.model_dump(mode="json")))
-        assert actual_bytes <= estimated_bytes <= MAX_EDGE_INTERSECTION_RESULT_BYTES
 
     def test_immediately_larger_intersection_cell_family_is_rejected(self) -> None:
         vertices = tuple(f"v{i:02}" for i in range(14))
@@ -279,9 +273,7 @@ class TestEdgeIntersectionPreflight:
         )
         hypergraph = FiniteHypergraph(vertices=vertices, edges=edges)
 
-        pair_count, incidences, cells, estimated_bytes = (
-            _edge_intersection_preflight_data(hypergraph)
-        )
+        pair_count, incidences, cells = _edge_intersection_preflight_data(hypergraph)
         request = EdgeIntersectionsRequest(hypergraph=hypergraph)
         result = edge_intersections(request.hypergraph)
 
@@ -291,8 +283,6 @@ class TestEdgeIntersectionPreflight:
         assert (
             sum(entry.intersection_size for entry in result.pair_intersections) == cells
         )
-        actual_bytes = len(encode_strict_json(result.model_dump(mode="json")))
-        assert actual_bytes <= estimated_bytes <= MAX_EDGE_INTERSECTION_RESULT_BYTES
 
     def test_more_than_one_hundred_indexed_edges_is_admitted(self) -> None:
         request = EdgeIntersectionsRequest.model_validate(
@@ -306,46 +296,6 @@ class TestEdgeIntersectionPreflight:
 
         assert len(request.hypergraph.edges) == 101
 
-    def test_serialized_output_bound_is_rejected_before_pair_materialization(
-        self,
-    ) -> None:
-        # Control characters are one UTF-8 byte each but require six canonical
-        # JSON bytes.  This stays well inside the source label-byte bound while
-        # making the complete 64,350-membership ledger exceed 10 MiB.
-        vertices = tuple(chr(codepoint) * 64 for codepoint in range(1, 14))
-
-        request = EdgeIntersectionsRequest.model_validate(
-            {
-                "hypergraph": {
-                    "vertices": vertices,
-                    "edges": tuple((f"e{i:03}", vertices) for i in range(100)),
-                }
-            }
-        )
-        with pytest.raises(ValueError, match="canonical output limit"):
-            edge_intersections(request.hypergraph)
-
-    def test_output_bound_preserves_exact_non_normalized_label_bytes(self) -> None:
-        # Each 63-code-point label is 189 UTF-8 bytes, but NFC would compose
-        # every three Jamo into one 3-byte Hangul syllable. Dispatch preserves
-        # the exact source strings, so a normalized estimate would undercount
-        # this complete ledger by more than eight MiB and admit an oversized
-        # result.
-        vertices = tuple(
-            (chr(0x1100 + index) + "\u1161\u11a8") * 21 for index in range(13)
-        )
-
-        request = EdgeIntersectionsRequest.model_validate(
-            {
-                "hypergraph": {
-                    "vertices": vertices,
-                    "edges": tuple((f"e{i:03}", vertices) for i in range(100)),
-                }
-            }
-        )
-        with pytest.raises(ValueError, match="canonical output limit"):
-            edge_intersections(request.hypergraph)
-
     def test_schema_exposes_complete_profile_bounds(self) -> None:
         request_schema = EdgeIntersectionsRequest.model_json_schema()
         metadata = request_schema["properties"]["hypergraph"]
@@ -353,10 +303,6 @@ class TestEdgeIntersectionPreflight:
 
         assert metadata["edge_pair_bound"] == MAX_EDGE_PAIR_COUNT
         assert metadata["intersection_cells_bound"] == MAX_EDGE_INTERSECTION_CELLS
-        assert (
-            metadata["canonical_result_bytes_bound"]
-            == MAX_EDGE_INTERSECTION_RESULT_BYTES
-        )
         assert (
             result_schema["properties"]["pair_intersections"]["maxItems"]
             == MAX_EDGE_PAIR_COUNT

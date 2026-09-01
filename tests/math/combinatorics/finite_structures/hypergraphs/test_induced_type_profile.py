@@ -4,7 +4,6 @@ from itertools import combinations
 
 import pytest
 
-from jacobian.canonical import CanonicalLimits, canonicalize_json
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
     InducedTypeProfileResult,
@@ -128,21 +127,15 @@ class TestInducedTypeProfile:
         with pytest.raises(ValueError):
             _profile(hg, 10)
 
-    def test_profile_bound_accounts_for_actual_subset_label_bytes(self) -> None:
+    def test_profile_bound_depends_on_subset_cardinality_not_label_bytes(self) -> None:
         wide_vertices = [f"{index:03d}" + "😀" * 61 for index in range(256)]
-        with pytest.raises(ValueError, match="canonical output limit"):
-            _profile(
-                {"vertices": wide_vertices, "edges": []},
-                255,
-            )
+        wide = _profile({"vertices": wide_vertices, "edges": []}, 255)
 
         compact = _profile(
             {"vertices": [f"v{index}" for index in range(256)], "edges": []},
             255,
         )
-        assert len(canonicalize_json(compact.model_dump(mode="json"))) <= (
-            CanonicalLimits().max_output_bytes
-        )
+        assert len(wide.entries) == len(compact.entries) == 256
 
     def test_entries_in_lexicographic_order(self) -> None:
         result = _profile(

@@ -14,7 +14,6 @@ from jacobian._exact import (
     require_bounded_rational,
 )
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import encode_strict_json
 from jacobian.math.polynomials.values import (
     PolynomialVariable,
     RationalPolynomial,
@@ -40,7 +39,6 @@ MAX_HERMITE_SCALED_ENTRY_DIGITS = MAX_POINTS * _MAX_RATIONAL_DIGITS + 64
 MAX_HERMITE_INTERMEDIATE_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
 """Hadamard envelope for fraction-free minors in the maintained backend."""
 
-MAX_HERMITE_RESULT_BYTES = 2 * 1024 * 1024
 """Aggregate canonical-result envelope for polynomial, source, and replay."""
 
 
@@ -264,33 +262,9 @@ def _hadamard_determinant_digits(row_digits: tuple[int, ...]) -> int:
     return sum(row_digits) + euclidean_norm_digits + 1
 
 
-def _predicted_hermite_result_bytes(
-    table: OrdinaryDerivativeJetTable,
-    coefficient_digits: int,
-) -> int:
-    multiplicity = _total_multiplicity(table)
-    source_bytes = len(encode_strict_json(table.model_dump(mode="json")))
-    replay_bytes = sum(
-        len(encode_strict_json(jet.node.model_dump(mode="json")))
-        + 2 * len(encode_strict_json(derivative.value.model_dump(mode="json")))
-        + 160
-        for jet in table.jets
-        for derivative in jet.derivatives
-    )
-    polynomial_bytes = multiplicity * (2 * coefficient_digits + 192)
-    leading_coefficient_bytes = 2 * coefficient_digits + 192
-    return (
-        source_bytes
-        + replay_bytes
-        + polynomial_bytes
-        + leading_coefficient_bytes
-        + 4_096
-    )
-
-
 def _require_hermite_preflight(
     table: OrdinaryDerivativeJetTable,
-) -> tuple[int, int]:
+) -> int:
     """Validate allocation, exact-work, intermediate, and result envelopes."""
 
     multiplicity = _total_multiplicity(table)
@@ -340,13 +314,7 @@ def _require_hermite_preflight(
             "Hermite coefficient growth exceeds the canonical "
             f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit bound"
         )
-    predicted_result_bytes = _predicted_hermite_result_bytes(table, coefficient_digits)
-    if predicted_result_bytes > MAX_HERMITE_RESULT_BYTES:
-        raise _validation_error(
-            "the complete Hermite result exceeds the "
-            f"{MAX_HERMITE_RESULT_BYTES}-byte aggregate result bound"
-        )
-    return coefficient_digits, predicted_result_bytes
+    return coefficient_digits
 
 
 class HermiteInterpolationRequest(StrictModel):
@@ -432,13 +400,6 @@ class HermiteInterpolationResult(StrictModel):
         ):
             raise _validation_error(
                 "replay rows must cover the declared multiplicity in canonical order"
-            )
-        if (
-            len(encode_strict_json(self.model_dump(mode="json")))
-            > MAX_HERMITE_RESULT_BYTES
-        ):
-            raise _validation_error(
-                "complete Hermite result exceeds the aggregate result bound"
             )
         return self
 
@@ -537,7 +498,6 @@ class NewtonEvaluateResult(StrictModel):
 __all__ = [
     "MAX_HERMITE_CUBIC_WORK_CELLS",
     "MAX_HERMITE_INTERMEDIATE_DIGITS",
-    "MAX_HERMITE_RESULT_BYTES",
     "MAX_HERMITE_SCALED_ENTRY_DIGITS",
     "MAX_HERMITE_SYSTEM_CELLS",
     "DividedDifferencesRequest",

@@ -9,7 +9,6 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials import interpolation
 from jacobian.math.polynomials._elementary_kernel import (
@@ -26,7 +25,6 @@ from jacobian.math.polynomials.interpolation import (
 from jacobian.math.polynomials.interpolation._models import (
     _MAX_RATIONAL_DIGITS,
     MAX_HERMITE_CUBIC_WORK_CELLS,
-    MAX_HERMITE_RESULT_BYTES,
     MAX_HERMITE_SYSTEM_CELLS,
     HermiteInterpolationRequest,
 )
@@ -366,32 +364,22 @@ def test_intermediate_growth_boundary_rejects_before_matrix_construction() -> No
         hermite_interpolation(rejected)
 
 
-def test_aggregate_result_boundary_is_checked_during_request_preflight() -> None:
-    # A 256-digit final derivative keeps the minor estimate admissible, while
-    # these adjacent node heights straddle the complete 2 MiB result envelope.
+def test_request_preflight_is_not_derived_from_serialized_result_size() -> None:
     accepted = OrdinaryDerivativeJetTable.model_validate(
         _full_multiplicity_payload(61, last_value_digits=256)
     )
     result = hermite_interpolation(accepted)
-    assert (
-        len(encode_strict_json(result.model_dump(mode="json")))
-        < MAX_HERMITE_RESULT_BYTES
-    )
-    rejected = OrdinaryDerivativeJetTable.model_validate(
+    assert result.polynomial.polynomial.terms
+    larger = OrdinaryDerivativeJetTable.model_validate(
         _full_multiplicity_payload(62, last_value_digits=256)
     )
-    with pytest.raises(OperationDomainValidationError):
-        hermite_interpolation(rejected)
+    assert hermite_interpolation(larger).polynomial.polynomial.terms
 
 
-def test_result_size_is_bounded_and_round_trips() -> None:
+def test_result_round_trips() -> None:
     result = hermite_interpolation(
         _table(_jet(0, (0, 1), (0, 1)), _jet(1, (1, 1), (2, 1)))
     )
     serialized = result.model_dump(mode="json")
 
-    assert (
-        len(encode_strict_json(result.model_dump(mode="json")))
-        < MAX_HERMITE_RESULT_BYTES
-    )
     assert HermiteInterpolationResult.model_validate(serialized) == result

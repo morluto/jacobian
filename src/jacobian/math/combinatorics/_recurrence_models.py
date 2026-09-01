@@ -15,10 +15,6 @@ from jacobian._exact import (
     require_bounded_rational,
 )
 from jacobian._models import StrictModel
-from jacobian.canonical import (
-    CanonicalLimits,
-    canonicalize_json,
-)
 
 MAX_LINEAR_RECURRENCE_ORDER = 16
 MAX_LINEAR_RECURRENCE_INDEX = 512
@@ -33,7 +29,6 @@ MAX_RATIONAL_SERIES_TRUNCATION_ORDER = 250_000
 MAX_RATIONAL_SERIES_WORK_UNITS = 250_000
 MAX_COMBINATORICS_INPUT_RATIONAL_DIGITS = 64
 MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS = 32_768
-MAX_COMBINATORICS_RESULT_ARTIFACT_BYTES = 10 * 1024 * 1024
 MAX_FIBONACCI_INDEX = 10_000
 
 
@@ -67,21 +62,6 @@ def _require_bounded_rational(
     except builtins.ValueError as exc:
         raise _recurrence_validation_error(
             f"{label} exceeds the {max_digits}-digit bound"
-        ) from exc
-
-
-def _validate_result_inline_size(payload: dict[str, object]) -> None:
-    try:
-        canonicalize_json(
-            payload,
-            limits=CanonicalLimits(
-                max_output_bytes=MAX_COMBINATORICS_RESULT_ARTIFACT_BYTES,
-                max_integer_digits=MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
-            ),
-        )
-    except ValueError as exc:
-        raise _recurrence_validation_error(
-            "the exact combinatorics result exceeds the bounded result limit"
         ) from exc
 
 

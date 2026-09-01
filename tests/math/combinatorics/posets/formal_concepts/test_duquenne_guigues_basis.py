@@ -23,7 +23,6 @@ from jacobian.math.combinatorics.posets.formal_concepts.basis import (
     MAX_DG_ATTRIBUTES,
     MAX_DG_CANDIDATE_STATES,
     MAX_DG_LOGICAL_WORK,
-    MAX_DG_RESULT_BYTES,
     _require_dg_canonical_carrier_fit,
 )
 from jacobian.math.combinatorics.posets.formal_concepts.values import MAX_IMPLICATIONS
@@ -280,7 +279,6 @@ def test_nine_attribute_contranominal_context_admitted_with_empty_basis() -> Non
     assert result.pseudo_intents == ()
     assert result.basis.implications == ()
     assert 0 < result.work.reserved_logical_work <= MAX_DG_LOGICAL_WORK
-    assert result.work.reserved_result_bytes <= MAX_DG_RESULT_BYTES
 
     request = DuquenneGuiguesBasisRequest(context=context)
     replayed = compute_duquenne_guigues_basis(request)
@@ -308,7 +306,7 @@ def test_public_invocation_computes_semantic_admission_once(
 
 
 @pytest.mark.scale
-def test_candidate_work_and_output_envelopes_at_boundary() -> None:
+def test_candidate_and_work_envelopes_at_boundary() -> None:
     boundary = _contranominal_context(MAX_DG_ATTRIBUTES)
     request = DuquenneGuiguesBasisRequest(context=boundary)
     result = compute_duquenne_guigues_basis(request)
@@ -317,7 +315,6 @@ def test_candidate_work_and_output_envelopes_at_boundary() -> None:
         MAX_DG_CANDIDATE_STATES * MAX_DG_ATTRIBUTES
     )
     assert 0 < result.work.reserved_logical_work < MAX_DG_LOGICAL_WORK
-    assert result.work.reserved_result_bytes <= MAX_DG_RESULT_BYTES
 
     over_boundary = _contranominal_context(MAX_DG_ATTRIBUTES + 1)
     with pytest.raises(ValueError, match="candidate-state"):
@@ -415,34 +412,7 @@ def test_native_and_catalog_invocations_report_identical_exact_work() -> None:
     assert native.work.context_closure_queries == len(native.closure_matrix)
 
 
-@pytest.mark.scale
-def test_result_byte_reservation_accepts_its_last_byte_and_rejects_the_next() -> None:
-    def accepts(label_length: int) -> bool:
-        context = FormalContext(
-            objects=("g" * label_length,),
-            attributes=("m",),
-            incidence=(),
-        )
-        try:
-            duquenne_guigues_basis(context)
-        except ValueError:
-            return False
-        return True
-
-    low = 1
-    high = MAX_DG_RESULT_BYTES + 1
-    while low + 1 < high:
-        middle = (low + high) // 2
-        if accepts(middle):
-            low = middle
-        else:
-            high = middle
-
-    assert accepts(low)
-    assert not accepts(low + 1)
-
-
-def test_request_schema_discloses_state_work_and_output_envelopes() -> None:
+def test_request_schema_discloses_state_and_work_envelopes() -> None:
     schema = DuquenneGuiguesBasisRequest.model_json_schema()
     description = schema["description"]
 
@@ -450,7 +420,6 @@ def test_request_schema_discloses_state_work_and_output_envelopes() -> None:
     assert f"{MAX_DG_ATTRIBUTES} attributes" in description
     assert f"{MAX_IMPLICATIONS}-implication" in description
     assert f"{MAX_DG_LOGICAL_WORK:,}" in description
-    assert f"{MAX_DG_RESULT_BYTES:,}" in description
 
 
 def test_adapter_returns_the_source_bound_native_value() -> None:

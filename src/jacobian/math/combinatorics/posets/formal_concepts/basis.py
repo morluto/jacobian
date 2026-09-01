@@ -8,11 +8,6 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-)
 from jacobian.math.combinatorics.posets.formal_concepts.values import (
     MAX_IMPLICATION_MEMBERSHIPS,
     MAX_IMPLICATIONS,
@@ -36,17 +31,12 @@ from jacobian.math.combinatorics.posets.formal_concepts.values import (
 #     check below keeps that basis inside MAX_IMPLICATIONS rows and
 #     MAX_IMPLICATION_MEMBERSHIPS memberships, so
 #     every admitted query also stays under MAX_CANONICAL_CLOSURE_WORK;
-#   * serialized result bytes -- a worst-case payload shaped by the probed
-#     basis size with full-width rows, measured through the strict-JSON
-#     canonical encoder.
-#
 # Contexts whose exact basis exceeds the canonical implication carrier
 # are rejected on the probe, so every accepted request returns the declared
 # typed result.
 MAX_DG_CANDIDATE_STATES = 4_096
 MAX_DG_ATTRIBUTES = MAX_DG_CANDIDATE_STATES.bit_length() - 1
 MAX_DG_LOGICAL_WORK = 1 << 30
-MAX_DG_RESULT_BYTES = 1 * 1_024 * 1_024
 
 _DGAttributeIndex = Annotated[
     StrictInt,
@@ -166,61 +156,6 @@ def _reserved_dg_logical_work(
     )
 
 
-def _dg_output_reservation_payload(
-    context: FormalContext,
-    states: int,
-    pseudo_intent_count: int,
-    reserved_logical_work: int,
-) -> dict[str, object]:
-    attribute_count = len(context.attributes)
-    full_subset = list(range(attribute_count))
-    largest_state = states - 1
-    closure_row = {
-        "candidate_state": largest_state,
-        "subset": full_subset,
-        "closure": full_subset,
-    }
-    pseudo_intent = {
-        "candidate_state": largest_state,
-        "premise": full_subset,
-        "closure": full_subset,
-        "basis_implication_index": largest_state,
-    }
-    implication = {"premise": full_subset, "conclusion": full_subset}
-    return {
-        "context": context.model_dump(mode="json"),
-        "source_attribute_indices": list(range(attribute_count)),
-        "lectic_order": "BINARY_LECTIC_BY_MAXIMUM_DIFFERENCE",
-        "closure_matrix": [closure_row for _ in range(states)],
-        "pseudo_intents": [pseudo_intent for _ in range(pseudo_intent_count)],
-        "basis": {
-            "attributes": list(_basis_attribute_labels(attribute_count)),
-            "implications": [implication for _ in range(pseudo_intent_count)],
-        },
-        "work": {
-            "candidate_states": states,
-            "context_closure_queries": states,
-            "context_object_row_checks": states * len(context.objects),
-            "context_incidence_loads": len(context.incidence),
-            "context_row_intersections": states * len(context.objects),
-            "pseudo_intent_subset_comparisons": states * states,
-            "pseudo_intent_closure_comparisons": states * states,
-            "basis_closure_queries": states,
-            "basis_closure_work": MAX_DG_CANDIDATE_STATES
-            * (attribute_count + 1)
-            * (MAX_IMPLICATIONS + MAX_IMPLICATION_MEMBERSHIPS),
-            "closure_matrix_memberships": 2 * states * attribute_count,
-            "pseudo_intent_memberships": 2 * states * attribute_count,
-            "implication_count": pseudo_intent_count,
-            "implication_memberships": MAX_IMPLICATION_MEMBERSHIPS,
-            "accounted_logical_work": reserved_logical_work,
-            "reserved_logical_work": reserved_logical_work,
-            "reserved_result_bytes": MAX_DG_RESULT_BYTES,
-            "serialized_result_bytes": MAX_DG_RESULT_BYTES,
-        },
-    }
-
-
 @dataclass(frozen=True)
 class _DGBasisAdmissionPlan:
     """One admitted closure carrier and its exact execution reservations."""
@@ -232,7 +167,6 @@ class _DGBasisAdmissionPlan:
     closure_comparisons: int
     row_intersections: int
     reserved_logical_work: int
-    reserved_result_bytes: int
 
 
 def _admit_duquenne_guigues_basis(context: FormalContext) -> _DGBasisAdmissionPlan:
@@ -271,24 +205,6 @@ def _admit_duquenne_guigues_basis(context: FormalContext) -> _DGBasisAdmissionPl
             f"limit of {MAX_DG_LOGICAL_WORK}"
         )
 
-    payload = _dg_output_reservation_payload(
-        context,
-        states,
-        len(pseudo_intent_pairs),
-        reserved_logical_work,
-    )
-    try:
-        reserved_result_bytes = len(
-            encode_strict_json(
-                payload,
-                limits=CanonicalLimits(max_output_bytes=MAX_DG_RESULT_BYTES),
-            )
-        )
-    except CanonicalizationError as exc:
-        raise ValueError(
-            "Duquenne-Guigues basis worst-case result exceeds the bounded "
-            f"serialized-result limit of {MAX_DG_RESULT_BYTES} bytes"
-        ) from exc
     return _DGBasisAdmissionPlan(
         states=states,
         closure_masks=closure_masks,
@@ -297,7 +213,6 @@ def _admit_duquenne_guigues_basis(context: FormalContext) -> _DGBasisAdmissionPl
         closure_comparisons=closure_comparisons,
         row_intersections=row_intersections,
         reserved_logical_work=reserved_logical_work,
-        reserved_result_bytes=reserved_result_bytes,
     )
 
 
@@ -396,8 +311,6 @@ class DGBasisWork(StrictModel):
     )
     accounted_logical_work: StrictInt = Field(ge=0, le=MAX_DG_LOGICAL_WORK)
     reserved_logical_work: StrictInt = Field(ge=0, le=MAX_DG_LOGICAL_WORK)
-    reserved_result_bytes: StrictInt = Field(ge=1, le=MAX_DG_RESULT_BYTES)
-    serialized_result_bytes: StrictInt = Field(ge=1, le=MAX_DG_RESULT_BYTES)
 
     @model_validator(mode="after")
     def bind_aggregate_work(self) -> Self:
@@ -418,8 +331,6 @@ class DGBasisWork(StrictModel):
             )
         if self.accounted_logical_work > self.reserved_logical_work:
             raise ValueError("exact work exceeds the preflight logical-work reserve")
-        if self.serialized_result_bytes > self.reserved_result_bytes:
-            raise ValueError("serialized result exceeds its preflight byte reserve")
         return self
 
 
@@ -498,7 +409,6 @@ __all__ = [
     "MAX_DG_ATTRIBUTES",
     "MAX_DG_CANDIDATE_STATES",
     "MAX_DG_LOGICAL_WORK",
-    "MAX_DG_RESULT_BYTES",
     "CanonicalImplicationBasisResult",
     "DGBasisClosureRow",
     "DGBasisWork",

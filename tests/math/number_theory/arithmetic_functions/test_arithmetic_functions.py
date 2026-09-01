@@ -461,8 +461,8 @@ def test_mobius_mixed_two_prime_denominators_match_the_defining_sum() -> None:
         assert result.values[index - 1].as_fraction() == expected
 
 
-def test_mobius_admission_rejects_exploding_denominator_lcm() -> None:
-    """Many small prime dens keep max(den) tiny while the LCM explodes."""
+def test_mobius_admission_uses_rational_height_not_encoded_size() -> None:
+    """Many small denominators may grow the LCM within the height bound."""
 
     primes: list[int] = []
     candidate = 2
@@ -480,11 +480,10 @@ def test_mobius_admission_rejects_exploding_denominator_lcm() -> None:
         for index in range(_MAX_DIVISOR_PREFIX_LENGTH)
     )
 
-    with pytest.raises(OperationDomainValidationError) as exc_info:
-        compute_mobius_transform(MobiusTransformRequest(values=values))
-    assert exc_info.value.errors()[0]["type"] == (
-        "arithmetic_functions.result_bytes_exceeded"
-    )
+    result = compute_mobius_transform(MobiusTransformRequest(values=values))
+
+    assert len(result.values) == len(values)
+    assert max(len(value.den) for value in result.values) <= len(str(common))
 
 
 def test_convolution_admission_preserves_shared_denominators() -> None:

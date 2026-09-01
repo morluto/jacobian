@@ -26,7 +26,6 @@ from jacobian.math.number_theory.number_fields._binary_power_sum import (
     binary_power_sum_gap_profile,
 )
 from jacobian.math.number_theory.number_fields._embedding_limits import (
-    MAX_NUMBER_FIELD_EMBEDDING_RESULT_BYTES,
     MAX_NUMBER_FIELD_REAL_PART_RESULTANT_STORAGE_BITS,
     MAX_NUMBER_FIELD_ROOT_REFINEMENT_BITS,
 )
@@ -76,7 +75,6 @@ class NumberFieldEmbeddingAdmission:
     root_isolation_bits: int
     evidence_grid_bits: int
     predicted_worker_output_bytes: int
-    predicted_result_bytes: int
 
 
 def _decimal_digits_from_bits(bits: int) -> int:
@@ -93,7 +91,7 @@ def _require_embedding_execution_active(deadline: float, phase: str) -> None:
 def _admit_number_field_embeddings(
     field: SimpleNumberFieldPresentation,
 ) -> NumberFieldEmbeddingAdmission:
-    """Preflight root work, intermediates, exact output, and serialization."""
+    """Preflight root work, intermediates, and the worker projection."""
 
     coefficients = tuple(
         parse_canonical_integer(coefficient)
@@ -185,16 +183,6 @@ def _admit_number_field_embeddings(
             "intermediate storage bound",
         )
 
-    # Every record repeats one field presentation and one indexed polynomial;
-    # complex evidence is the larger case at four bounded rationals.  The
-    # fixed allowance covers all field names, enum literals, tuple delimiters,
-    # signature/pair records, and canonical JSON punctuation at degree <= 8.
-    source_bytes = len(field.model_dump_json().encode("utf-8"))
-    polynomial_bytes = (
-        sum(len(coefficient) for coefficient in field.coefficients_descending)
-        + 3 * (degree + 1)
-        + 64
-    )
     rational_bytes = 2 * isolator_digits + 32
     # The worker projection carries either one two-rational interval per real
     # root or one four-rational rectangle per conjugate pair.  Both cases use
@@ -203,23 +191,10 @@ def _admit_number_field_embeddings(
     predicted_worker_output_bytes = (
         degree * (2 * rational_bytes + 256) + discriminant_digits + 1_024
     )
-    embedding_bytes = source_bytes + polynomial_bytes + 256
-    record_bytes = embedding_bytes + 4 * rational_bytes + 512
-    predicted_result_bytes = (
-        source_bytes + degree * record_bytes + discriminant_digits + 4_096
-    )
-    if predicted_result_bytes > MAX_NUMBER_FIELD_EMBEDDING_RESULT_BYTES:
-        raise NumberFieldEmbeddingAdmissionError(
-            "result_byte_bound",
-            "the complete retained-source embedding profile exceeds the "
-            f"{MAX_NUMBER_FIELD_EMBEDDING_RESULT_BYTES:,}-byte result bound",
-        )
-
     return NumberFieldEmbeddingAdmission(
         root_isolation_bits=isolation_bits,
         evidence_grid_bits=separation_bits + 4,
         predicted_worker_output_bytes=predicted_worker_output_bytes,
-        predicted_result_bytes=predicted_result_bytes,
     )
 
 

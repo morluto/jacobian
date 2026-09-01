@@ -6,7 +6,7 @@ from fractions import Fraction
 from math import gcd
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import CanonicalLimits, parse_canonical_integer
+from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math._rational_height import RationalHeight, sum_heights
 from jacobian.math.number_theory.arithmetic_functions._models import (
@@ -15,8 +15,6 @@ from jacobian.math.number_theory.arithmetic_functions._models import (
 )
 
 MAX_DIVISOR_INCIDENCES = 600_000
-_RESULT_ENTRY_RESERVE_BYTES = 32
-_RESULT_RESERVE_BYTES = 256
 
 
 def _rational(value: Fraction | int) -> CanonicalRational:
@@ -159,18 +157,6 @@ def _require_result_envelope(
 ) -> None:
     for height in heights:
         _require_result_height(height, operation)
-    predicted_bytes = _RESULT_RESERVE_BYTES + sum(
-        height.numerator_digits
-        + height.denominator_digits
-        + _RESULT_ENTRY_RESERVE_BYTES
-        for height in heights
-    )
-    if predicted_bytes > CanonicalLimits().max_output_bytes:
-        raise OperationDomainValidationError(
-            location=("values",),
-            code="arithmetic_functions.result_bytes_exceeded",
-            message=(f"{operation} result exceeds the canonical output-byte limit"),
-        )
 
 
 def _require_length(

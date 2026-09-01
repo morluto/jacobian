@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-from jacobian.canonical import (
-    CanonicalLimits,
-    canonicalize_json,
-    format_canonical_integer,
-)
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._periodic_kernel import (
     _inclusion_exclusion_terms,
@@ -24,6 +20,8 @@ from jacobian.math.number_theory.periodic_interval_count._models import (
 
 __all__ = ["compute_periodic_interval_count"]
 
+MAX_PERIODIC_INTERVAL_ENDPOINT_DIGITS = 100_000
+
 
 def _integer_decimal_digit_bound(value: int) -> int:
     if value == 0:
@@ -36,14 +34,14 @@ def _admit_interval_result(
 ) -> None:
     lower_digits = _integer_decimal_digit_bound(lower)
     upper_digits = _integer_decimal_digit_bound(upper)
-    count_digits = max(lower_digits, upper_digits) + 1
-    source_bytes = len(canonicalize_json(source.model_dump(mode="json")))
-    predicted_bytes = source_bytes + lower_digits + upper_digits + count_digits + 512
-    if predicted_bytes > CanonicalLimits().max_output_bytes:
+    if max(lower_digits, upper_digits) > MAX_PERIODIC_INTERVAL_ENDPOINT_DIGITS:
         raise OperationDomainValidationError(
             location=("lower", "upper"),
             code="number_theory.periodic.result_bound",
-            message="periodic interval endpoints and count exceed the output budget",
+            message=(
+                "periodic interval endpoints exceed the "
+                f"{MAX_PERIODIC_INTERVAL_ENDPOINT_DIGITS}-digit bound"
+            ),
         )
 
 

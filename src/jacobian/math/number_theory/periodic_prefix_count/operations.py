@@ -4,12 +4,7 @@ from __future__ import annotations
 
 from typing import NoReturn
 
-from jacobian.canonical import (
-    CanonicalLimits,
-    encode_strict_json,
-    format_canonical_integer,
-    parse_canonical_integer,
-)
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._periodic_kernel import (
     _ExecutionPlan,
@@ -27,9 +22,6 @@ from jacobian.math.number_theory.periodic_prefix_count._models import (
 )
 
 __all__ = ["compute_periodic_union_prefix_count"]
-
-MAX_RESULT_BYTES = CanonicalLimits().max_output_bytes
-
 
 def _reject(
     code: str, message: str, *, location: tuple[str | int, ...] = ("source",)
@@ -118,23 +110,6 @@ def _admit_source(source: PeriodicCongruenceUnionSource, cutoff: int) -> _Execut
         plan = require_admitted_periodic_source(source)
     except ValueError as exc:
         _reject("execution_bound", str(exc))
-    period = plan.common_period
-    cutoff_text = format_canonical_integer(cutoff)
-    try:
-        source_bytes = len(encode_strict_json(source.model_dump(mode="json")))
-    except ValueError as exc:
-        _reject("source_representation", str(exc))
-    scalar_bytes = (
-        source_bytes
-        + len(cutoff_text) * 2
-        + len(format_canonical_integer(period))
-        + 256
-    )
-    if scalar_bytes > MAX_RESULT_BYTES:
-        _reject(
-            "result_size_bound",
-            f"the scalar result exceeds the {MAX_RESULT_BYTES}-byte output bound",
-        )
     return plan
 
 

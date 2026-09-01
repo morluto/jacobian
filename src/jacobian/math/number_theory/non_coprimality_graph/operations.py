@@ -5,11 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from math import gcd
 
-from jacobian.canonical import (
-    CanonicalLimits,
-    encode_strict_json,
-    format_canonical_integer,
-)
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.number_theory.non_coprimality_graph._models import (
@@ -100,23 +96,6 @@ def _admit_non_coprimality_graph(
                     (min(left_label, right_label), max(left_label, right_label))
                 )
     canonical_edges = tuple(edges)
-    payload = {
-        "integers": list(source),
-        "graph": {"vertices": list(vertices), "edges": [list(edge) for edge in edges]},
-    }
-    try:
-        if len(encode_strict_json(payload)) > CanonicalLimits().max_output_bytes:
-            raise OperationDomainValidationError(
-                location=("integers",),
-                code="non_coprimality.result_too_large",
-                message="the graph result exceeds the canonical output limit",
-            )
-    except ValueError as error:
-        raise OperationDomainValidationError(
-            location=("integers",),
-            code="non_coprimality.result_not_canonical",
-            message="the graph result cannot be represented in canonical JSON",
-        ) from error
     return NonCoprimalityGraphAdmission(tuple(source), vertices, canonical_edges)
 
 

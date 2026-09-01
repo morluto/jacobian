@@ -60,7 +60,6 @@ def _admit_edge_pattern_profile(
     list[
         tuple[str, tuple[str, ...], tuple[int, ...], int, tuple[str, ...], bool, bool]
     ],
-    int,
 ]:
     """Admit the request and return the precomputed admission plan.
 

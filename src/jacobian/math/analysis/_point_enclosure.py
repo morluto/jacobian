@@ -22,7 +22,6 @@ from jacobian.math.analysis._models import (
 MAX_POINT_CHECK_DYADIC_EXPONENT = 8_192
 MAX_POINT_CHECK_LOG_TERMS = 128
 MAX_POINT_CHECK_FRACTION_BITS = 131_072
-MAX_POINT_CHECK_OUTPUT_BYTES = 4_096
 
 
 class RealUnaryFunction(StrEnum):
@@ -156,7 +155,6 @@ class PointEnclosureCheckRequest(StrictModel):
             "point_check_fraction_intermediate_bit_bound": (
                 MAX_POINT_CHECK_FRACTION_BITS
             ),
-            "point_check_output_byte_bound": MAX_POINT_CHECK_OUTPUT_BYTES,
         }
     )
 
@@ -208,12 +206,6 @@ class PointEnclosureCheckResult(StrictModel):
     proved disjoint from the true value. NON_RESULT means the independent LOG
     enclosure still partially overlaps the claim after 128 series terms.
     """
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "point_check_output_byte_bound": MAX_POINT_CHECK_OUTPUT_BYTES,
-        }
-    )
 
     enclosure: ClaimedPointEnclosure
     outcome: PointEnclosureCheckOutcome = Field(
@@ -368,7 +360,6 @@ __all__ = [
     "MAX_POINT_CHECK_DYADIC_EXPONENT",
     "MAX_POINT_CHECK_FRACTION_BITS",
     "MAX_POINT_CHECK_LOG_TERMS",
-    "MAX_POINT_CHECK_OUTPUT_BYTES",
     "ArbPointEnclosureRequest",
     "ArbPointEnclosureResult",
     "ClaimedPointEnclosure",

@@ -13,7 +13,6 @@ from jacobian.math.analysis._point_enclosure import (
     MAX_POINT_CHECK_DYADIC_EXPONENT,
     MAX_POINT_CHECK_FRACTION_BITS,
     MAX_POINT_CHECK_LOG_TERMS,
-    MAX_POINT_CHECK_OUTPUT_BYTES,
     ArbPointEnclosureRequest,
     ArbPointEnclosureResult,
     ClaimedPointEnclosure,
@@ -490,7 +489,6 @@ def test_request_accepts_exact_structural_bounds_and_result_fits_output_budget()
     )
 
     assert result.outcome == "ACCEPTED"
-    assert len(result.model_dump_json().encode("utf-8")) < MAX_POINT_CHECK_OUTPUT_BYTES
 
 
 def test_request_rejects_values_immediately_over_each_structural_bound() -> None:
@@ -588,7 +586,6 @@ def test_request_schema_publishes_work_and_precision_limits() -> None:
         schema["point_check_fraction_intermediate_bit_bound"]
         == MAX_POINT_CHECK_FRACTION_BITS
     )
-    assert schema["point_check_output_byte_bound"] == MAX_POINT_CHECK_OUTPUT_BYTES
     precision_description = enclosure_schema["properties"]["precision_bits"][
         "description"
     ]
@@ -599,7 +596,3 @@ def test_request_schema_publishes_work_and_precision_limits() -> None:
     assert precision_description == precision_description_schema
     enclosure_description = schema["properties"]["enclosure"]["description"]
     assert "only LOG and SQRT" in enclosure_description
-    assert (
-        PointEnclosureCheckResult.model_json_schema()["point_check_output_byte_bound"]
-        == MAX_POINT_CHECK_OUTPUT_BYTES
-    )

@@ -355,6 +355,24 @@ def _raw_field(value: object, name: str) -> object:
     return getattr(value, name, None)
 
 
+def _raw_prime_field_matrix_signature(
+    value: object,
+) -> tuple[int, int, tuple[tuple[int, ...], ...]] | None:
+    """Return a hashable signature for a structurally canonical raw matrix."""
+
+    prime = _raw_field(value, "prime")
+    columns = _raw_field(value, "columns")
+    entries = _raw_field(value, "entries")
+    if type(prime) is not int or type(columns) is not int:
+        return None
+    if not isinstance(entries, tuple) or any(
+        not isinstance(row, tuple) or any(type(item) is not int for item in row)
+        for row in entries
+    ):
+        return None
+    return prime, columns, entries
+
+
 class PrimeFieldLinearAction(StrictModel):
     """Explicit generator substitutions on an ordered polynomial-variable axis.
 
@@ -389,12 +407,20 @@ class PrimeFieldLinearAction(StrictModel):
                 "finite_field.linear_action_variable_bound",
                 "linear action exceeds the variable-count bound",
             )
-        if not 1 <= len(matrices) <= _MAX_ACTION_GENERATORS:
+        unique_matrices: list[Any] = []
+        seen_signatures: set[tuple[int, int, tuple[tuple[int, ...], ...]]] = set()
+        for matrix in matrices:
+            signature = _raw_prime_field_matrix_signature(matrix)
+            if signature is None or signature not in seen_signatures:
+                unique_matrices.append(matrix)
+                if signature is not None:
+                    seen_signatures.add(signature)
+        if not 1 <= len(unique_matrices) <= _MAX_ACTION_GENERATORS:
             raise _validation_error(
                 "finite_field.linear_action_generator_bound",
                 "linear action exceeds the generator-count bound",
             )
-        for matrix in matrices:
+        for matrix in unique_matrices:
             columns = _raw_field(matrix, "columns")
             entries = _raw_field(matrix, "entries")
             if type(columns) is int and columns != variable_count:
@@ -413,7 +439,9 @@ class PrimeFieldLinearAction(StrictModel):
                     "finite_field.linear_action_matrix_shape",
                     "every action matrix must be square on the variable axis",
                 )
-        return data
+        normalized = dict(data)
+        normalized["generator_matrices"] = tuple(unique_matrices)
+        return normalized
 
     @model_validator(mode="after")
     def require_common_prime_and_axes(self) -> Self:

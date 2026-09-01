@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import time
 from collections.abc import Callable
 from itertools import combinations
@@ -18,6 +19,7 @@ from jacobian.canonical import (
     CanonicalizationError,
     CanonicalLimits,
     encode_strict_json,
+    strict_json_object_size,
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields._fixed_subspace_process import (
@@ -90,6 +92,13 @@ _MAX_PYTHON_SUBSTITUTION_WORK = 10_000_000
 _FIXED_SUBSPACE_WALL_SECONDS = 600.0
 
 
+def _prime_exceeds_worker_json_limit(prime: int) -> bool:
+    """Check the interpreter's decimal-integer JSON conversion boundary."""
+
+    digit_limit = sys.get_int_max_str_digits()
+    return digit_limit > 0 and prime >= 10**digit_limit
+
+
 def _fixed_subspace_checkpoint(deadline: float | None, stage: str) -> None:
     if request_cancelled():
         raise OperationExecutionCancelledError(
@@ -104,44 +113,62 @@ def _fixed_subspace_checkpoint(deadline: float | None, stage: str) -> None:
 def _homogeneous_fixed_subspace_output_bytes(
     action: PrimeFieldLinearAction, degree: int, monomial_count: int
 ) -> int:
-    """Measure a conservative complete canonical result before execution."""
+    """Measure the largest feasible canonical RREF result before execution."""
 
     monomial_basis = _homogeneous_monomial_basis(
         len(action.variable_axis.labels), degree
     )
-    largest_residue = action.prime - 1
-    # A reduced row-echelon basis with ``probe_rank`` pivots can have arbitrary
-    # residues only in its free columns.  Use that feasible worst-case shape;
-    # filling pivot columns and every row with a nonzero residue is not a
-    # possible RREF and overstates the transport envelope.
-    probe_rank = 1 if monomial_count == 1 else monomial_count // 2
-    probe_entries = [
-        [
-            1 if column == row else largest_residue if column >= probe_rank else 0
-            for column in range(monomial_count)
-        ]
-        for row in range(probe_rank)
-    ]
-    payload = {
-        "action": action.model_dump(mode="json"),
-        "basis_matrix": {
-            "columns": monomial_count,
-            "entries": probe_entries,
-            "prime": action.prime,
-        },
-        "degree": degree,
-        "fixed_dimension": probe_rank,
-        "monomial_basis": [list(exponents) for exponents in monomial_basis],
-    }
+
+    def array_size(item_sizes: list[int]) -> int:
+        return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
+
+    action_size = len(encode_strict_json(action.model_dump(mode="json")))
+    monomial_basis_size = len(
+        encode_strict_json([list(exponents) for exponents in monomial_basis])
+    )
+    degree_size = len(encode_strict_json(degree))
+    columns_size = len(encode_strict_json(monomial_count))
+    prime_size = len(encode_strict_json(action.prime))
+    largest_residue_size = len(encode_strict_json(action.prime - 1))
+
+    def result_size(fixed_dimension: int) -> int:
+        # In canonical RREF, the fixed-dimension pivot columns contain only
+        # zeroes and ones. Every other cell can contain the largest residue.
+        # This accounts for every feasible rank without materializing one
+        # million-cell probes for all ranks.
+        row_value_size = fixed_dimension + (
+            monomial_count - fixed_dimension
+        ) * largest_residue_size
+        row_size = 2 + max(monomial_count - 1, 0) + row_value_size
+        entries_size = array_size([row_size] * fixed_dimension)
+        basis_matrix_size = strict_json_object_size(
+            (
+                ("columns", columns_size),
+                ("entries", entries_size),
+                ("prime", prime_size),
+            )
+        )
+        return strict_json_object_size(
+            (
+                ("action", action_size),
+                ("basis_matrix", basis_matrix_size),
+                ("degree", degree_size),
+                ("fixed_dimension", len(encode_strict_json(fixed_dimension))),
+                ("monomial_basis", monomial_basis_size),
+            )
+        )
+
     try:
-        encoded = encode_strict_json(payload)
+        return max(
+            result_size(fixed_dimension)
+            for fixed_dimension in range(monomial_count + 1)
+        )
     except CanonicalizationError as error:
         raise OperationDomainValidationError(
             location=("action",),
             code="finite_field.fixed_subspace_output_bound",
             message="canonical fixed-subspace result is not transportable",
         ) from error
-    return len(encoded)
 
 
 def _homogeneous_fixed_subspace_envelope(
@@ -157,6 +184,12 @@ def _homogeneous_fixed_subspace_envelope(
             location=("degree",),
             code="finite_field.fixed_subspace_degree_bound",
             message="degree must be a nonnegative integer",
+        )
+    if _prime_exceeds_worker_json_limit(action.prime):
+        raise OperationDomainValidationError(
+            location=("action", "generator_matrices"),
+            code="finite_field.linear_action_prime_serialization_bound",
+            message="linear-action prime exceeds the worker JSON integer serialization bound",
         )
     variable_count = len(action.variable_axis.labels)
     generator_count = len(action.generator_matrices)

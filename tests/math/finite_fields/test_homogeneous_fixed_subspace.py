@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields import (
     Axis,
@@ -12,6 +13,7 @@ from jacobian.math.finite_fields import (
     PrimeFieldLinearAction,
     homogeneous_fixed_subspace,
 )
+from jacobian.math.finite_fields import operations as operations_module
 from jacobian.math.finite_fields._models import HomogeneousFixedSubspaceRequest
 from jacobian.math.finite_fields._tools import TOOLS
 from jacobian.math.finite_fields.values import PrimeFieldActionAxis
@@ -139,7 +141,7 @@ def test_repeated_generators_are_canonicalized_without_changing_the_fixed_space(
     generator = PrimeFieldMatrix(prime=5, entries=((0, 1), (1, 0)), columns=2)
     repeated = PrimeFieldLinearAction(
         variable_axis=Axis(name="polynomial_variables", labels=("x", "y")),
-        generator_matrices=(generator, generator),
+        generator_matrices=tuple(generator for _ in range(1_025)),
     )
     canonical = PrimeFieldLinearAction(
         variable_axis=Axis(name="polynomial_variables", labels=("x", "y")),
@@ -197,6 +199,34 @@ def test_result_round_trips_and_its_action_composes_unchanged() -> None:
 
     assert decoded == produced
     assert consumed == produced
+
+
+def test_transport_admission_accounts_for_full_rank_canonical_basis(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    variable_count = 5
+    identity = tuple(
+        tuple(int(row == column) for column in range(variable_count))
+        for row in range(variable_count)
+    )
+    action = PrimeFieldLinearAction(
+        variable_axis=Axis(
+            name="polynomial_variables",
+            labels=tuple(f"x{index}" for index in range(variable_count)),
+        ),
+        generator_matrices=(
+            PrimeFieldMatrix(prime=2, entries=identity, columns=variable_count),
+        ),
+    )
+    result = homogeneous_fixed_subspace(action, 9)
+    encoded_size = len(encode_strict_json(result.model_dump(mode="json")))
+
+    class _JustBelowResultLimit:
+        max_output_bytes = encoded_size - 1
+
+    monkeypatch.setattr(operations_module, "CanonicalLimits", _JustBelowResultLimit)
+    with pytest.raises(OperationDomainValidationError, match="output-size envelope"):
+        homogeneous_fixed_subspace(action, 9, enforce_transport_limit=True)
 
 
 def test_singular_generator_is_rejected_by_operation_admission() -> None:
@@ -366,6 +396,21 @@ def test_native_action_preserves_the_exact_prime_fallback() -> None:
 
     assert result.action.prime == prime
     assert result.basis_matrix.entries == ((1,),)
+
+
+def test_native_action_rejects_a_prime_the_worker_cannot_serialize() -> None:
+    prime = 2**19_937 - 1
+    action = PrimeFieldLinearAction(
+        variable_axis=Axis(name="polynomial_variables", labels=("x",)),
+        generator_matrices=(
+            PrimeFieldMatrix(prime=prime, entries=((1,),), columns=1),
+        ),
+    )
+
+    with pytest.raises(
+        OperationDomainValidationError, match="worker JSON integer serialization"
+    ):
+        homogeneous_fixed_subspace(action, 1)
 
 
 def test_catalog_action_rejects_non_word_safe_prime_before_nested_work() -> None:

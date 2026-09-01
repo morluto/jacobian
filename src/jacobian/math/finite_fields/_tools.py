@@ -189,15 +189,13 @@ def _paley_tournament(request: PaleyTournamentRequest) -> PaleyTournamentResult:
 def _compute_matrix_rank(request: MatrixRankRequest) -> MatrixRankResult:
     from jacobian.math.finite_fields._matrix_rank import compute_matrix_rank
 
-    return compute_matrix_rank(request.matrix, enforce_transport_limit=True)
+    return compute_matrix_rank(request.matrix)
 
 
 def _homogeneous_fixed_subspace(
     request: HomogeneousFixedSubspaceRequest,
 ) -> HomogeneousFixedSubspace:
-    return homogeneous_fixed_subspace(
-        request.action, request.degree, enforce_transport_limit=True
-    )
+    return homogeneous_fixed_subspace(request.action, request.degree)
 
 
 def _build_tools() -> MathTools:

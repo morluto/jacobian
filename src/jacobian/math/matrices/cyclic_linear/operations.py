@@ -19,7 +19,6 @@ from jacobian._execution import (
     request_cancelled,
     request_execution,
 )
-from jacobian.canonical import CanonicalLimits
 from jacobian.math.matrices.cyclic_linear._models import (
     MAX_CYCLIC_FIELD_ELEMENT_DIGITS,
     MAX_CYCLIC_FIELD_WORK,
@@ -465,8 +464,6 @@ def _structural_rank_bound(coordinates: ComponentCoordinates) -> int:
 
 def _admit_cyclic_symbol(
     symbol: CyclicRationalBlockSymbol,
-    *,
-    enforce_transport_limit: bool,
 ) -> tuple[_ComponentAdmission, ...]:
     """Materialize bounded quotient data and prove all later exact outputs fit."""
 
@@ -478,10 +475,7 @@ def _admit_cyclic_symbol(
         variable**symbol.period - 1, variable, domain=sympy.QQ
     )
     components: list[_ComponentAdmission] = []
-    predicted_result_bytes = len(symbol.model_dump_json().encode("utf-8")) + 8_192
-    predicted_global_basis_bytes = 0
     field_work = 0
-    global_dimension = symbol.period * symbol.source_block_dimension
     source_scalar_bits = max(
         (
             max(
@@ -550,14 +544,6 @@ def _admit_cyclic_symbol(
         ) = _idempotent_height(idempotent_coefficients)
 
         component_matrix = _public_component_matrix(field, matrix_coordinates)
-        field_bytes = len(field.model_dump_json().encode("utf-8"))
-        fixed_component_bytes = (
-            len(component_matrix.model_dump_json().encode("utf-8"))
-            + len(crt_idempotent.model_dump_json().encode("utf-8"))
-            + 4_096
-        )
-        maximum_component_bytes = 0
-        maximum_global_component_bytes = 0
         cyclotomic_structure_scalar_bits = max(
             multiplication_norm.bit_length(),
             idempotent_scalar_bits,
@@ -593,12 +579,7 @@ def _admit_cyclic_symbol(
                 possible_determinant_bound is None or possible_denominator_bound is None
             ):  # pragma: no cover - the maximum-rank guard dominates
                 raise RuntimeError("admitted rank height was not monotone")
-            possible_determinant_digits = max(
-                _decimal_digits(possible_determinant_bound),
-                _decimal_digits(possible_denominator_bound),
-            )
             nullity = symbol.source_block_dimension - possible_rank
-            reconstruction_digits = 1
             if nullity:
                 reconstruction_numerator_bound = _bounded_product(
                     degree,
@@ -613,30 +594,11 @@ def _admit_cyclic_symbol(
                         "CRT kernel reconstruction can exceed the "
                         f"{MAX_CYCLIC_FIELD_ELEMENT_DIGITS}-digit rational basis envelope",
                     )
-                reconstruction_digits = max(
-                    _decimal_digits(max(reconstruction_numerator_bound, 1)),
-                    _decimal_digits(idempotent_denominator),
-                )
                 reconstruction_scalar_bits = max(
                     reconstruction_scalar_bits,
                     reconstruction_numerator_bound.bit_length(),
                     idempotent_denominator.bit_length(),
                 )
-            scalar_bytes = (
-                field_bytes + degree * (2 * possible_determinant_digits + 80) + 256
-            )
-            maximum_component_bytes = max(
-                maximum_component_bytes,
-                fixed_component_bytes
-                + (symbol.source_block_dimension * nullity + int(possible_rank > 0))
-                * scalar_bytes,
-            )
-            maximum_global_component_bytes = max(
-                maximum_global_component_bytes,
-                degree * nullity * global_dimension * (2 * reconstruction_digits + 64),
-            )
-        predicted_result_bytes += maximum_component_bytes
-        predicted_global_basis_bytes += maximum_global_component_bytes
         # Price source-height arithmetic separately from the small fixed
         # cyclotomic structure constants used to construct this component.
         source_specialization_units = degree * max(len(symbol.entries), 1)
@@ -680,14 +642,6 @@ def _admit_cyclic_symbol(
         )
         _require_execution_active(f"after order-{order} admission")
 
-    predicted_result_bytes += predicted_global_basis_bytes
-    maximum_result_bytes = CanonicalLimits().max_output_bytes
-    if enforce_transport_limit and predicted_result_bytes > maximum_result_bytes:
-        raise CyclicRankKernelAdmissionError(
-            "result_byte_bound",
-            "the retained complete cyclic profile exceeds the "
-            f"{maximum_result_bytes:,}-byte canonical result envelope",
-        )
     return tuple(components)
 
 
@@ -1002,8 +956,6 @@ def _reconstruct_global_kernel(
 
 def cyclic_rational_rank_kernel_profile(
     symbol: CyclicRationalBlockSymbol,
-    *,
-    enforce_transport_limit: bool = False,
 ) -> CyclicRationalRankKernelProfile:
     """Return every rational cyclotomic component rank and kernel exactly.
 
@@ -1015,23 +967,15 @@ def cyclic_rational_rank_kernel_profile(
 
     if current_request_execution() is None:
         with request_execution(time.monotonic()):
-            return _cyclic_rational_rank_kernel_profile_in_request(
-                symbol, enforce_transport_limit=enforce_transport_limit
-            )
-    return _cyclic_rational_rank_kernel_profile_in_request(
-        symbol, enforce_transport_limit=enforce_transport_limit
-    )
+            return _cyclic_rational_rank_kernel_profile_in_request(symbol)
+    return _cyclic_rational_rank_kernel_profile_in_request(symbol)
 
 
 def _cyclic_rational_rank_kernel_profile_in_request(
     symbol: CyclicRationalBlockSymbol,
-    *,
-    enforce_transport_limit: bool,
 ) -> CyclicRationalRankKernelProfile:
     _bind_cyclic_profile_deadline()
-    admission = _admit_cyclic_symbol(
-        symbol, enforce_transport_limit=enforce_transport_limit
-    )
+    admission = _admit_cyclic_symbol(symbol)
     _require_execution_active("after cyclic-profile admission")
     components = tuple(_compute_component(item) for item in admission)
     global_kernel = _reconstruct_global_kernel(symbol, components)

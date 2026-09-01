@@ -250,16 +250,6 @@ def smith_reduce_in_worker(
         worker_environment,
     )
 
-    input_bytes = encode_strict_json(
-        {
-            "matrix": [
-                [format_canonical_integer(value) for value in row] for row in source
-            ],
-            "row_count": rows,
-            "column_count": columns,
-        },
-    )
-    request_digest = hashlib.sha256(input_bytes).hexdigest()
     stdout_limit = _stdout_limit(
         rows=rows,
         columns=columns,
@@ -269,6 +259,17 @@ def smith_reduce_in_worker(
         left_inverse_bits=left_inverse_bits,
         right_inverse_bits=right_inverse_bits,
     )
+    input_bytes = encode_strict_json(
+        {
+            "matrix": [
+                [format_canonical_integer(value) for value in row] for row in source
+            ],
+            "row_count": rows,
+            "column_count": columns,
+            "output_limit": stdout_limit,
+        },
+    )
+    request_digest = hashlib.sha256(input_bytes).hexdigest()
     _require_active_deadline(deadline, stage="before")
     try:
         with TemporaryDirectory(

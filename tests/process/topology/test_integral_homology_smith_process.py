@@ -6,7 +6,9 @@ import threading
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
+from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -15,12 +17,13 @@ from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
 )
+from jacobian.canonical import encode_strict_json, loads_strict_json
 from jacobian.math.matrices.certified_snf.operations import (
     identity_matrix,
     matrix_determinant,
     matrix_multiply,
 )
-from jacobian.math.topology.chain_complexes import _smith_process
+from jacobian.math.topology.chain_complexes import _smith_process, _smith_worker
 from jacobian.process import bounded_process_cancellation
 
 
@@ -168,6 +171,83 @@ def test_worker_round_trips_integer_beyond_python_decimal_conversion_limit() -> 
     assert result.reduction.source == [[value]]
     assert result.reduction.diagonal == [[value]]
     assert result.reduction.invariant_factors == (value,)
+
+
+def test_worker_encoder_uses_the_admitted_projection_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    admitted_limit: int | None = None
+
+    def inspect_launch(
+        *args: Any, input_bytes: bytes, stdout_limit: int, **kwargs: Any
+    ) -> Any:
+        nonlocal admitted_limit
+        del args, kwargs
+        payload = loads_strict_json(input_bytes)
+        admitted_limit = payload["output_limit"]
+        assert admitted_limit == stdout_limit
+        raise OSError("stop after inspecting the worker protocol")
+
+    monkeypatch.setattr("jacobian.process.run_bounded_process", inspect_launch)
+
+    with pytest.raises(RuntimeError, match="could not start"):
+        _run_smith(time.monotonic() + 20)
+
+    assert admitted_limit is not None
+    assert admitted_limit == _smith_process._stdout_limit(
+        rows=2,
+        columns=2,
+        left_bits=64,
+        right_bits=64,
+        diagonal_bits=64,
+        left_inverse_bits=128,
+        right_inverse_bits=128,
+    )
+
+
+def test_worker_applies_the_parent_projection_limit_to_canonical_encoding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_limit = 12 * 1024 * 1024
+    input_bytes = encode_strict_json(
+        {
+            "matrix": [["1"]],
+            "row_count": 1,
+            "column_count": 1,
+            "output_limit": output_limit,
+        }
+    )
+    stdout = BytesIO()
+    observed_limit: int | None = None
+    real_encode = encode_strict_json
+
+    def inspect_encode(value: Any, *, limits: Any = None) -> bytes:
+        nonlocal observed_limit
+        observed_limit = limits.max_output_bytes
+        return real_encode(value, limits=limits)
+
+    projection = {
+        "diagonal": [[1]],
+        "left": [[1]],
+        "right": [[1]],
+        "rank": 1,
+        "invariant_factors": (1,),
+        "left_determinant": 1,
+        "right_determinant": 1,
+        "left_inverse": [[1]],
+        "right_inverse": [[1]],
+    }
+    monkeypatch.setattr(
+        _smith_worker, "_smith_projection", lambda *args, **kwargs: projection
+    )
+    monkeypatch.setattr(_smith_worker, "encode_strict_json", inspect_encode)
+    monkeypatch.setattr(
+        _smith_worker.sys, "stdin", SimpleNamespace(buffer=BytesIO(input_bytes))
+    )
+    monkeypatch.setattr(_smith_worker.sys, "stdout", SimpleNamespace(buffer=stdout))
+
+    assert _smith_worker.main() == 0
+    assert observed_limit == output_limit
 
 
 def test_worker_decoder_rejects_noninteroperable_json_integer() -> None:

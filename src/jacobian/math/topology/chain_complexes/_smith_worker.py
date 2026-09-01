@@ -8,6 +8,7 @@ from itertools import pairwise
 from typing import Any
 
 from jacobian.canonical import (
+    CanonicalLimits,
     encode_strict_json,
     format_canonical_integer,
     loads_strict_json,
@@ -118,6 +119,13 @@ def main() -> int:
     source = payload["matrix"]
     rows = payload["row_count"]
     columns = payload["column_count"]
+    output_limit = payload["output_limit"]
+    if (
+        not isinstance(output_limit, int)
+        or isinstance(output_limit, bool)
+        or output_limit < 1
+    ):
+        raise ValueError("worker output limit is invalid")
 
     projection = _smith_projection(source, rows=rows, columns=columns)
     response = {
@@ -134,7 +142,12 @@ def main() -> int:
         "left_inverse": _encode_matrix(projection["left_inverse"]),
         "right_inverse": _encode_matrix(projection["right_inverse"]),
     }
-    sys.stdout.buffer.write(encode_strict_json(response))
+    sys.stdout.buffer.write(
+        encode_strict_json(
+            response,
+            limits=CanonicalLimits(max_output_bytes=output_limit),
+        )
+    )
     return 0
 
 

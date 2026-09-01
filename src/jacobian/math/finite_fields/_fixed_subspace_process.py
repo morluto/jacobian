@@ -22,6 +22,17 @@ _FIXED_SUBSPACE_ADDRESS_SPACE_BYTES = 2 * 1024 * 1024 * 1024
 _FIXED_SUBSPACE_FILE_SIZE_BYTES = 1024 * 1024
 
 
+def _require_active(deadline: float, stage: str) -> None:
+    if request_cancelled():
+        raise OperationExecutionCancelledError(
+            f"finite-field fixed-subspace computation cancelled {stage}"
+        )
+    if time.monotonic() >= deadline:
+        raise OperationExecutionTimeoutError(
+            f"finite-field fixed-subspace deadline expired {stage}"
+        )
+
+
 def _run_fixed_subspace_worker(
     input_bytes: bytes,
     *,
@@ -34,15 +45,8 @@ def _run_fixed_subspace_worker(
         worker_environment,
     )
 
+    _require_active(deadline, "before linear algebra")
     remaining = deadline - time.monotonic()
-    if request_cancelled():
-        raise OperationExecutionCancelledError(
-            "finite-field fixed-subspace computation cancelled before linear algebra"
-        )
-    if remaining <= 0:
-        raise OperationExecutionTimeoutError(
-            "finite-field fixed-subspace deadline expired before linear algebra"
-        )
     try:
         with TemporaryDirectory(prefix="jacobian-fixed-subspace-") as directory:
             completed = run_bounded_process(
@@ -142,22 +146,13 @@ def run_fixed_subspace_generator_validation(
     """Check generator invertibility behind the same killable worker boundary."""
 
     variable_count = generator_matrices[0].columns
-    input_bytes = json.dumps(
-        {
-            "operation": "generator_ranks",
-            "prime": generator_matrices[0].prime,
-            "columns": variable_count,
-            "matrices": [
-                [list(row) for row in generator.entries]
-                for generator in generator_matrices
-            ],
-        },
-        separators=(",", ":"),
-    ).encode("utf-8")
+    input_bytes = _generator_worker_input(generator_matrices, deadline=deadline)
     stdout = _run_fixed_subspace_worker(
         input_bytes,
         deadline=deadline,
-        stdout_limit=4_096,
+        stdout_limit=_generator_ranks_stdout_limit(
+            len(generator_matrices), variable_count
+        ),
     )
     try:
         decoded = json.loads(stdout.decode("utf-8"))
@@ -171,6 +166,38 @@ def run_fixed_subspace_generator_validation(
         raise RuntimeError(
             "bounded finite-field fixed-subspace worker returned malformed rank"
         ) from exc
+
+
+def _generator_worker_input(
+    generator_matrices: tuple[PrimeFieldMatrix, ...], *, deadline: float
+) -> bytes:
+    """Marshal admitted generators while observing the request envelope."""
+
+    first = generator_matrices[0]
+    encoded = bytearray(
+        f'{{"operation":"generator_ranks","prime":{first.prime},'
+        f'"columns":{first.columns},"matrices":['.encode()
+    )
+    for matrix_index, generator in enumerate(generator_matrices):
+        _require_active(deadline, "during generator marshalling")
+        if matrix_index:
+            encoded.append(ord(","))
+        encoded.append(ord("["))
+        for row_index, row in enumerate(generator.entries):
+            if row_index:
+                encoded.append(ord(","))
+            encoded.extend(json.dumps(row, separators=(",", ":")).encode("utf-8"))
+            _require_active(deadline, "during generator marshalling")
+        encoded.append(ord("]"))
+    encoded.extend(b"]}")
+    return bytes(encoded)
+
+
+def _generator_ranks_stdout_limit(generator_count: int, variable_count: int) -> int:
+    """Return the exact largest compact JSON rank-projection size."""
+
+    rank_digits = len(str(variable_count))
+    return 11 + generator_count * (rank_digits + 1)
 
 
 __all__ = [

@@ -7,12 +7,13 @@ from dataclasses import dataclass
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
-# The profile kernel builds adjacency once, scans common neighbors once to
-# count triangles, and scans them once more to retain the exact rows. The
+# The profile kernel builds adjacency once and scans common neighbors once to
+# count and retain the exact rows. The
 # graph's 256-vertex representation bound keeps this conservative work budget
 # finite, while the actual edge neighborhoods determine each request's cost.
 MAX_TRIANGLE_PROFILE_WORK_UNITS = 64_000_000
 MAX_TRIANGLE_PROFILE_ROWS = 1_000_000
+MAX_TRIANGLE_PROFILE_RETAINED_LABEL_CHARACTERS = 100_000_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,26 +23,6 @@ class TriangleProfileAdmission:
     triangle_indices: tuple[tuple[int, int, int], ...]
     triangle_count: int
     work_units: int
-
-
-def _triangle_indices(
-    graph: SimpleUndirectedGraph,
-    adjacency: tuple[frozenset[int], ...],
-) -> tuple[tuple[int, int, int], ...]:
-    """Return triangle indices in the graph's authoritative vertex order."""
-
-    vertex_index = {vertex: index for index, vertex in enumerate(graph.vertices)}
-    triangles: list[tuple[int, int, int]] = []
-    for left, right in graph.edges:
-        left_index = vertex_index[left]
-        right_index = vertex_index[right]
-        first, second = sorted((left_index, right_index))
-        triangles.extend(
-            (first, second, third)
-            for third in adjacency[first] & adjacency[second]
-            if third > second
-        )
-    return tuple(triangles)
 
 
 def admit_triangle_profile(graph: SimpleUndirectedGraph) -> TriangleProfileAdmission:
@@ -56,8 +37,11 @@ def admit_triangle_profile(graph: SimpleUndirectedGraph) -> TriangleProfileAdmis
         adjacency_sets[right_index].add(left_index)
     adjacency = tuple(frozenset(neighbors) for neighbors in adjacency_sets)
 
-    triangle_count = 0
+    triangle_indices: list[tuple[int, int, int]] = []
     common_neighbor_work = 0
+    retained_label_characters = sum(len(vertex) for vertex in graph.vertices) + sum(
+        len(left) + len(right) for left, right in graph.edges
+    )
     for left, right in graph.edges:
         left_index = vertex_index[left]
         right_index = vertex_index[right]
@@ -68,11 +52,29 @@ def admit_triangle_profile(graph: SimpleUndirectedGraph) -> TriangleProfileAdmis
         )
         for third in adjacency[first] & adjacency[second]:
             if third > second:
-                triangle_count += 1
+                triangle_indices.append((first, second, third))
+                retained_label_characters += (
+                    len(graph.vertices[first])
+                    + len(graph.vertices[second])
+                    + len(graph.vertices[third])
+                )
+                if (
+                    retained_label_characters
+                    > MAX_TRIANGLE_PROFILE_RETAINED_LABEL_CHARACTERS
+                ):
+                    raise OperationDomainValidationError(
+                        location=("graph",),
+                        code="graph.triangle_profile.retained_labels_exceed_bound",
+                        message=(
+                            "triangle profile exceeds the retained "
+                            "label-character bound"
+                        ),
+                    )
+    triangle_count = len(triangle_indices)
     work_units = (
         len(graph.vertices)
         + len(graph.edges)
-        + 2 * common_neighbor_work
+        + common_neighbor_work
         + 3 * triangle_count
     )
     if triangle_count > MAX_TRIANGLE_PROFILE_ROWS:
@@ -96,13 +98,14 @@ def admit_triangle_profile(graph: SimpleUndirectedGraph) -> TriangleProfileAdmis
         )
 
     return TriangleProfileAdmission(
-        triangle_indices=_triangle_indices(graph, adjacency),
+        triangle_indices=tuple(triangle_indices),
         triangle_count=triangle_count,
         work_units=work_units,
     )
 
 
 __all__ = [
+    "MAX_TRIANGLE_PROFILE_RETAINED_LABEL_CHARACTERS",
     "MAX_TRIANGLE_PROFILE_ROWS",
     "MAX_TRIANGLE_PROFILE_WORK_UNITS",
     "TriangleProfileAdmission",

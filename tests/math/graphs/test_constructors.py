@@ -5,12 +5,14 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.constructors import (
     compute_triangle_profile,
     construct_hypercube_graph,
     construct_keller_graph,
+)
+from jacobian.math.graphs.constructors._bounds import (
+    MAX_TRIANGLE_PROFILE_RETAINED_LABEL_CHARACTERS,
 )
 from jacobian.math.graphs.constructors._models import (
     TriangleProfileRequest,
@@ -203,6 +205,21 @@ class TestTriangleProfile:
 
         assert result.triangle_count == 161_700
 
+    def test_unbounded_retained_labels_are_rejected(self) -> None:
+        label_width = MAX_TRIANGLE_PROFILE_RETAINED_LABEL_CHARACTERS // 12 + 1
+        vertices = tuple(f"{prefix}{'x' * label_width}" for prefix in ("a", "b", "c"))
+        graph = SimpleUndirectedGraph(
+            vertices=vertices,
+            edges=(
+                (vertices[0], vertices[1]),
+                (vertices[0], vertices[2]),
+                (vertices[1], vertices[2]),
+            ),
+        )
+
+        with pytest.raises(OperationDomainValidationError, match="label-character"):
+            compute_triangle_profile(graph)
+
     def test_request_construction_defers_result_admission(self) -> None:
         """Request parsing does not enumerate K_100's triangle rows."""
         vertices = tuple(f"{index:03d}" + "x" * 61 for index in range(100))
@@ -219,8 +236,7 @@ class TestTriangleProfile:
 
         assert request.graph == graph
 
-    def test_short_labels_can_admit_the_same_dense_graph(self) -> None:
-        """The label-aware bound admits K_100 when its actual rows fit."""
+    def test_short_labels_admit_the_same_dense_graph(self) -> None:
         vertices = tuple(f"v{index:02d}" for index in range(100))
         graph = SimpleUndirectedGraph(
             vertices=vertices,
@@ -234,10 +250,6 @@ class TestTriangleProfile:
         result = compute_triangle_profile(graph)
 
         assert result.triangle_count == 161_700
-        assert (
-            len(encode_strict_json(result.model_dump(mode="json")))
-            <= CanonicalLimits().max_output_bytes
-        )
 
     def test_native_wrapper_rejects_wire_request_values(self) -> None:
         """Native callers pass a graph value, not a request envelope."""

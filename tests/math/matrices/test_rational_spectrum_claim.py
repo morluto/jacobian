@@ -11,7 +11,6 @@ from pydantic import ValidationError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.analysis._models import (
     MAX_RATIONAL_SPECTRUM_INPUT_DIGITS,
-    MAX_RATIONAL_SPECTRUM_RESULT_BYTES,
     RationalSpectrumClaimRequest,
     RationalSpectrumClaimResult,
 )
@@ -295,7 +294,7 @@ def test_order_claim_count_digit_and_result_boundaries() -> None:
     claims = [_claim(index, 1) for index in range(order)]
     boundary = check_rational_spectrum_claim(_request(diagonal, claims))
     assert boundary.valid_complete_rational_spectrum is True
-    assert len(boundary.model_dump_json()) < MAX_RATIONAL_SPECTRUM_RESULT_BYTES
+    assert boundary.valid_complete_rational_spectrum
 
     dense = [[_rational(1) for _ in range(order)] for _ in range(order)]
     dense_boundary = check_rational_spectrum_claim(

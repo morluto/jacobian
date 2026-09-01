@@ -18,16 +18,6 @@ from jacobian.math.number_theory.number_fields.values import (
     MAX_NUMBER_FIELD_EMBEDDING_DEGREE,
 )
 
-# The inertia result echoes its source matrix in the domain's dense
-# canonical form, so a request whose normalized echo is near the canonical
-# output limit can produce a response past the identical limit. Admission
-# reserves this much for the inertia counts, definiteness label, and
-# operation envelope beyond the echoed matrix.
-_RESULT_ENVELOPE_RESERVE_BYTES = 1_024
-_RATIONAL_SPECTRUM_RESULT_BASE_BYTES = 2_048
-_RATIONAL_SPECTRUM_MATRIX_ENTRY_BYTES = 96
-_RATIONAL_SPECTRUM_CLAIM_BYTES = 256
-
 MAX_RATIONAL_SPECTRUM_ORDER = 32
 MAX_RATIONAL_SPECTRUM_CLAIMS = 32
 MAX_RATIONAL_SPECTRUM_INPUT_DIGITS = 64
@@ -35,7 +25,6 @@ MAX_RATIONAL_SPECTRUM_NONZERO_ENTRIES = 1_024
 MAX_RATIONAL_SPECTRUM_SHIFTED_DIGITS = 129
 MAX_RATIONAL_SPECTRUM_RANK_WORK = 1_048_576
 MAX_RATIONAL_SPECTRUM_MINOR_DIGITS = 132_256
-MAX_RATIONAL_SPECTRUM_RESULT_BYTES = 384 * 1024
 MAX_INERTIA_DIGIT_WORK = 500_000_000
 
 InertiaDefiniteness = Literal[
@@ -158,7 +147,6 @@ class SymmetricMatrixRequest(StrictModel):
                 "max_matrix_order": MAX_RATIONAL_MATRIX_ORDER,
                 "max_algebraic_field_degree": MAX_NUMBER_FIELD_EMBEDDING_DEGREE,
                 "max_exact_digit_work": MAX_INERTIA_DIGIT_WORK,
-                "result_envelope_reserve_bytes": _RESULT_ENVELOPE_RESERVE_BYTES,
                 "diagonal_fast_path": True,
             }
         }

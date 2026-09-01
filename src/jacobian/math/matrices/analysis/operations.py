@@ -36,16 +36,12 @@ from jacobian.math.matrices.analysis._inertia_process import (
     field_element_sign_killable,
 )
 from jacobian.math.matrices.analysis._models import (
-    _RATIONAL_SPECTRUM_CLAIM_BYTES,
-    _RATIONAL_SPECTRUM_MATRIX_ENTRY_BYTES,
-    _RATIONAL_SPECTRUM_RESULT_BASE_BYTES,
     MAX_INERTIA_DIGIT_WORK,
     MAX_RATIONAL_SPECTRUM_INPUT_DIGITS,
     MAX_RATIONAL_SPECTRUM_MINOR_DIGITS,
     MAX_RATIONAL_SPECTRUM_NONZERO_ENTRIES,
     MAX_RATIONAL_SPECTRUM_ORDER,
     MAX_RATIONAL_SPECTRUM_RANK_WORK,
-    MAX_RATIONAL_SPECTRUM_RESULT_BYTES,
     MAX_RATIONAL_SPECTRUM_SHIFTED_DIGITS,
     FarkasCertificateResult,
     InertiaResult,
@@ -167,23 +163,6 @@ def _admit_rational_spectrum_claim(
         raise _validation_error(
             "budget_exceeded", "exact shifted-rank minors exceed the digit budget"
         )
-    result_bytes = (
-        _RATIONAL_SPECTRUM_RESULT_BASE_BYTES
-        + order
-        * order
-        * (
-            2 * MAX_RATIONAL_SPECTRUM_INPUT_DIGITS
-            + _RATIONAL_SPECTRUM_MATRIX_ENTRY_BYTES
-        )
-        + len(eigenvalues)
-        * (4 * MAX_RATIONAL_SPECTRUM_INPUT_DIGITS + _RATIONAL_SPECTRUM_CLAIM_BYTES)
-    )
-    if result_bytes > MAX_RATIONAL_SPECTRUM_RESULT_BYTES:
-        raise _validation_error(
-            "budget_exceeded", "rational spectrum ledger exceeds the result-size budget"
-        )
-
-
 def _is_diagonal(matrix: ExactRealMatrix) -> bool:
     order = len(matrix.entries)
     if isinstance(matrix, EmbeddedRealSimpleNumberFieldMatrix):

@@ -373,11 +373,11 @@ def test_request_schema_exposes_the_retained_result_limit() -> None:
     schema = AllTerminalReliabilityRequest.model_json_schema()
 
     assert (
-        "retained graph plus the fixed exact-result envelope"
+        "exact coefficient profile is bounded"
         in str(schema["description"]).lower()
     )
     assert (
-        "retained graph plus fixed result headroom"
+        "complete coefficient profile has at most 21 entries"
         in str(schema["properties"]["graph"]["description"]).lower()
     )
 

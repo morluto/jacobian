@@ -6,12 +6,11 @@ from jacobian.canonical import strict_json_object_size
 from jacobian.math.finite_categories.values import (
     MAX_CATEGORY_COMPOSABLE_PAIRS,
     MAX_CATEGORY_COMPOSABLE_TRIPLES,
-    MAX_CATEGORY_IDENTIFIER_BYTES,
+    MAX_CATEGORY_IDENTIFIER_CHARACTERS,
     MAX_CATEGORY_IDENTIFIER_DEPTH,
     MAX_CATEGORY_IDENTIFIER_LEAVES,
     MAX_CATEGORY_MORPHISMS,
     MAX_CATEGORY_OBJECTS,
-    MAX_CATEGORY_VALUE_BYTES,
     CategoryIdentifier,
     FiniteCategory,
     FiniteCategoryProduct,
@@ -19,8 +18,8 @@ from jacobian.math.finite_categories.values import (
     ProductMorphismProjection,
     ProductObjectProjection,
     _category_counts,
+    _identifier_character_count,
     _identifier_shape,
-    _identifier_wire_size,
 )
 
 MAX_CATEGORY_PRODUCT_EXECUTION_STEPS = 1_000_000
@@ -49,7 +48,10 @@ def _source_identifier_sizes(
         | set(right.objects)
         | {morphism.morphism_id for morphism in right.morphisms}
     )
-    return {identifier: _identifier_wire_size(identifier) for identifier in identifiers}
+    return {
+        identifier: _identifier_character_count(identifier)
+        for identifier in identifiers
+    }
 
 
 def _array_size(count: int, item_bytes: int) -> int:
@@ -102,10 +104,10 @@ def _require_pair_identifier_budget(
             "product_identifier_leaf_budget",
             f"{label} exceed the structural identifier-leaf budget",
         )
-    if wire_size > MAX_CATEGORY_IDENTIFIER_BYTES:
+    if wire_size > MAX_CATEGORY_IDENTIFIER_CHARACTERS:
         raise _product_admission_error(
-            "product_identifier_wire_budget",
-            f"{label} exceed the structural identifier wire budget",
+            "product_identifier_character_budget",
+            f"{label} exceed the structural identifier character budget",
         )
 
 
@@ -167,7 +169,7 @@ def _product_category_wire_size(
 
 
 def _admit_product(left: FiniteCategory, right: FiniteCategory) -> None:
-    """Admit one product and return its exact serialized result size."""
+    """Admit one product from its structural counts and execution work."""
 
     object_count = len(left.objects) * len(right.objects)
     morphism_count = len(left.morphisms) * len(right.morphisms)
@@ -229,15 +231,6 @@ def _admit_product(left: FiniteCategory, right: FiniteCategory) -> None:
             "product construction exceeds the bounded execution work budget of "
             f"{MAX_CATEGORY_PRODUCT_EXECUTION_STEPS} steps",
         )
-
-    product_category_size = _product_category_wire_size(left, right, identifier_sizes)
-    if product_category_size > MAX_CATEGORY_VALUE_BYTES:
-        raise _product_admission_error(
-            "product_wire_size_budget",
-            "product category exceeds the bounded canonical category wire size of "
-            f"{MAX_CATEGORY_VALUE_BYTES} bytes",
-        )
-
 
 def _product_data(
     left: FiniteCategory, right: FiniteCategory

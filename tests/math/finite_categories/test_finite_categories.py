@@ -409,13 +409,12 @@ class TestProduct:
         with pytest.raises(ValueError, match="triple"):
             compute_category_product(request)
 
-    def test_wire_preflight_is_result_sensitive_to_identifier_size(self) -> None:
+    def test_product_admission_uses_structural_identifier_bounds(self) -> None:
         short = _parallel_arrow_category(50, 4)
         CategoryProductRequest(left=short, right=short)
 
         long = _parallel_arrow_category(50, 64)
-        with pytest.raises(ValueError, match="wire"):
-            compute_category_product(CategoryProductRequest(left=long, right=long))
+        compute_category_product(CategoryProductRequest(left=long, right=long))
 
     def test_identifier_nesting_is_bounded_before_another_product(self) -> None:
         terminal = FiniteCategory.model_validate(TERMINAL_CATEGORY)

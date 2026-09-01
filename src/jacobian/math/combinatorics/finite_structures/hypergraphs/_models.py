@@ -473,15 +473,14 @@ class EdgeIntersectionsRequest(StrictModel):
 
     Every unordered pair of distinct indexed edges is returned.  Admission
     bounds the pair family, aggregate source incidences, exact returned
-    intersection memberships, label bytes, and canonical serialized result
-    before any pair intersection is materialized.
+    intersection memberships and label bytes before any pair intersection is
+    materialized.
     """
 
     hypergraph: FiniteHypergraph = Field(
         description=(
             "Canonical finite hypergraph. The complete profile is admitted only when its "
-            "pair intersections contain at most 65,536 memberships "
-            "and its retained-source result fits the canonical output limit."
+            "pair intersections contain at most 65,536 memberships."
         ),
         json_schema_extra={
             "edge_pair_bound": MAX_EDGE_PAIR_COUNT,

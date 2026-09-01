@@ -19,9 +19,9 @@ from jacobian.canonical import parse_canonical_integer
 from jacobian.math.matrices.certified_snf.values import CertifiedIntegerMatrix
 
 # Conservative preflight fallback: the derived admission in
-# build_affine_torus_plan is the actual gate, checking result bytes against
-# the transport limit and point-height against its carrier envelope.  These
-# caps only reject absurdly large raw input before the plan runs.
+# build_affine_torus_plan is the actual gate, checking mathematical work and
+# point height as well as the private worker channel. These caps only reject
+# absurdly large raw input before the plan runs.
 #
 # The dimension envelope is capped by the reused integer-matrix carrier
 # (`CertifiedIntegerMatrix`, whose rows and columns are bounded at 32), so the

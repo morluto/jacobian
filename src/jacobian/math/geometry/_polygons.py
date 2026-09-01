@@ -37,11 +37,8 @@ POLYGON_OPERATIONS: MathTools = (
             f"simple rational polygon of 4 to {MAX_EUCLIDEAN_TRIANGULATION_VERTICES} "
             "vertices, charging each selected "
             "non-hull diagonal once by its Euclidean length; admission bounds "
-            "the complete serialized result - split table, echoed source "
-            "ring, and metadata - against the published output bound from "
-            "the exact source, so translated sources pay for their echoed "
-            "coordinates even though the mathematical work depends only on "
-            "pairwise coordinate differences. Returns "
+            "the dynamic-program work, exact expression terms, and retained "
+            "diagonal cardinality. Returns "
             "the exact "
             "sum-of-square-roots cost expression only when every finite DP "
             "comparison is separated by a pinned 128-bit outward-rounded Arb "
@@ -66,8 +63,7 @@ POLYGON_OPERATIONS: MathTools = (
                     "Triangulate a unit square under the non-hull Euclidean "
                     "diagonal-length objective; the polygon must be simple and "
                     f"strictly CCW convex with 4 to {MAX_EUCLIDEAN_TRIANGULATION_VERTICES} "
-                    "vertices whose complete serialized result, including the "
-                    "echoed source ring, stays inside its output bound."
+                    "vertices."
                 ),
                 input={"polygon": {"points": _UNIT_SQUARE}},
             ),

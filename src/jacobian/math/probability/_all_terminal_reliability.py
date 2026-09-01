@@ -46,8 +46,8 @@ class AllTerminalReliabilityRequest(StrictModel):
                 "simple undirected graph. Every edge is independently open with "
                 "the same exact rational `open_probability`. The graph may have "
                 "at most 20 edges, bounding each complete enumeration to 2^20 "
-                "states. The retained graph plus the fixed exact-result envelope "
-                "must fit the canonical output limit."
+                "states. The exact coefficient profile is bounded by the same "
+                "finite edge-subset family."
             )
         }
     )
@@ -56,8 +56,7 @@ class AllTerminalReliabilityRequest(StrictModel):
         description=(
             "Nonempty canonical simple undirected graph with at most 20 edges. "
             "Isolated declared vertices participate in the all-terminal event. "
-            "The retained graph plus fixed result headroom must fit the canonical "
-            "output limit."
+            "The complete coefficient profile has at most 21 entries."
         )
     )
     open_probability: CanonicalRational = Field(

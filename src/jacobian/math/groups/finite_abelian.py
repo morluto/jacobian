@@ -188,7 +188,7 @@ class FiniteAbelianSpectralPairSource(StrictModel):
     lexicographically. Distinctness is checked after reduction, so this value
     has one canonical residue-tuple representation. The per-set row cap is a
     defensive materialization fallback; operation admission is governed by
-    serialized result bytes and the derived reduction budgets.
+    cardinality, exact arithmetic growth, and derived reduction work.
     """
 
     group: FiniteAbelianProductGroup
@@ -240,11 +240,11 @@ class FiniteAbelianSpectralPairRequest(StrictModel):
 
     Equal-size sources with at least two frequencies are admitted through the
     derived reduction envelope: 60-degree cyclotomics, 258,048 point-character
-    terms, 4,032 exact reductions, bounded construction intermediates, and a
-    32,768-byte serialized result; those counts include the result model's
+    terms, 4,032 exact reductions, and bounded construction intermediates;
+    those counts include the result model's
     independent replay. Cardinality mismatches, singleton pairs, and the
     equal-empty pair need no cyclotomic reduction and are admitted by source
-    and result size alone.
+    cardinality alone.
     """
 
     source: FiniteAbelianSpectralPairSource

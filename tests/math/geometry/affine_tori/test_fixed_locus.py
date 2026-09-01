@@ -1078,6 +1078,33 @@ def test_translated_identity_is_empty_without_charging_the_translation_lcm() -> 
     assert result.outcome.status == "EMPTY"
 
 
+def test_empty_locus_is_classified_before_large_nonempty_point_solve() -> None:
+    denominators = (10**499, 10**499 + 1, 10**499 + 3)
+    linear = (
+        (2, 0, 0, 0),
+        (0, 1, 0, 0),
+        (0, 0, 1, 0),
+        (0, 0, 0, 1),
+    )
+    source = _source(
+        linear,
+        (
+            Fraction(0),
+            *(Fraction(1, denominator) for denominator in denominators),
+        ),
+    )
+
+    plan = build_affine_torus_plan(source, deadline=monotonic() + 300)
+    result = affine_torus_fixed_locus(source)
+
+    bounds = plan.bounds_for_rank(1)
+    assert len(str(bounds.obstruction_pairing_height)) > MAX_AFFINE_TORUS_POINT_DIGITS
+    assert isinstance(result.outcome, EmptyAffineTorusFixedLocus)
+    assert result.outcome.obstruction_pairing.as_fraction() == Fraction(
+        1, denominators[0]
+    )
+
+
 def test_dimension_envelope_agrees_with_the_matrix_carrier() -> None:
     # The affine-matrix schema and preflight must not advertise a dimension the
     # reused integer-matrix carrier cannot parse: a 33-axis linear part is

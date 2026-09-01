@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from fractions import Fraction
-from math import lcm
+from math import gcd, lcm
 from time import monotonic
 from typing import Literal, NoReturn
 
@@ -304,6 +304,168 @@ def _selected_component_generator_height(
     return max(1, lcm(*(value.denominator for row in inverse for value in row)))
 
 
+def _extended_gcd(left: int, right: int) -> tuple[int, int, int]:
+    """Return ``(g, s, t)`` with ``g = s*left + t*right >= 0``."""
+
+    old_remainder, remainder = left, right
+    old_left, current_left = 1, 0
+    old_right, current_right = 0, 1
+    while remainder:
+        quotient = old_remainder // remainder
+        old_remainder, remainder = (
+            remainder,
+            old_remainder - quotient * remainder,
+        )
+        old_left, current_left = (
+            current_left,
+            old_left - quotient * current_left,
+        )
+        old_right, current_right = (
+            current_right,
+            old_right - quotient * current_right,
+        )
+    if old_remainder < 0:
+        return -old_remainder, -old_left, -old_right
+    return old_remainder, old_left, old_right
+
+
+def _congruence_kernel_basis(
+    constraints: tuple[tuple[int, ...], ...], *, dimension: int, modulus: int
+) -> tuple[tuple[int, ...], ...]:
+    """Return a basis for ``{z: constraint*z = 0 (mod modulus)}``.
+
+    The basis is built by reducing one congruence at a time with unimodular
+    column operations.  It is a small exact lattice calculation used only to
+    identify the modular obstruction; it does not invoke the FLINT worker.
+    """
+
+    if modulus <= 0:
+        raise AssertionError("congruence modulus must be positive")
+    basis = [
+        [int(row == column) for column in range(dimension)] for row in range(dimension)
+    ]
+    for constraint in constraints:
+        if len(constraint) != dimension:
+            raise AssertionError("congruence constraint has the wrong dimension")
+        transformed = [
+            sum(constraint[row] * basis[row][column] for row in range(dimension))
+            for column in range(dimension)
+        ]
+        unimodular = [
+            [int(row == column) for column in range(dimension)]
+            for row in range(dimension)
+        ]
+        for column in range(1, dimension):
+            left, right = transformed[0], transformed[column]
+            if right == 0:
+                continue
+            gcd_value, left_multiplier, right_multiplier = _extended_gcd(left, right)
+            first_column = [unimodular[row][0] for row in range(dimension)]
+            other_column = [unimodular[row][column] for row in range(dimension)]
+            for row in range(dimension):
+                unimodular[row][0] = (
+                    left_multiplier * first_column[row]
+                    + right_multiplier * other_column[row]
+                )
+                unimodular[row][column] = (
+                    -(right // gcd_value) * first_column[row]
+                    + (left // gcd_value) * other_column[row]
+                )
+            transformed[0] = gcd_value
+            transformed[column] = 0
+        transformed_basis = [
+            [
+                sum(
+                    basis[row][inner] * unimodular[inner][column]
+                    for inner in range(dimension)
+                )
+                for column in range(dimension)
+            ]
+            for row in range(dimension)
+        ]
+        gcd_value = 0
+        for value in transformed:
+            gcd_value = gcd(gcd_value, abs(value))
+        step = modulus // gcd(modulus, gcd_value)
+        for row in range(dimension):
+            transformed_basis[row][0] *= step
+        basis = transformed_basis
+    return tuple(
+        tuple(basis[row][column] for row in range(dimension))
+        for column in range(dimension)
+    )
+
+
+def _modular_obstruction_pairing_height(
+    displacement: tuple[tuple[int, ...], ...],
+    translation: tuple[Fraction, ...],
+    rank: int,
+    *,
+    selected_rows: tuple[int, ...],
+    selected_columns: tuple[int, ...],
+    selected_inverse: tuple[tuple[Fraction, ...], ...],
+) -> tuple[bool, int]:
+    """Classify the torus congruence and bound every empty-branch pairing."""
+
+    dimension = len(displacement)
+    remaining_rows = tuple(row for row in range(dimension) if row not in selected_rows)
+    nullity = len(remaining_rows)
+    if nullity == 0:
+        return False, 1
+    row_relations = tuple(
+        tuple(
+            sum(
+                displacement[row][selected_columns[column]]
+                * selected_inverse[column][selected_row]
+                for column in range(rank)
+            )
+            for selected_row in range(rank)
+        )
+        for row in remaining_rows
+    )
+    relation_denominator = lcm(
+        *(value.denominator for row in row_relations for value in row), 1
+    )
+    constraints = tuple(
+        tuple(
+            int(row_relations[row][column] * relation_denominator)
+            for row in range(nullity)
+        )
+        for column in range(rank)
+    )
+    kernel_basis = _congruence_kernel_basis(
+        constraints, dimension=nullity, modulus=relation_denominator
+    )
+    pairings: list[Fraction] = []
+    for coefficients in kernel_basis:
+        character = [Fraction(0)] * dimension
+        for row, coefficient in zip(remaining_rows, coefficients, strict=True):
+            character[row] = Fraction(coefficient)
+        for selected_row in range(rank):
+            character[selected_rows[selected_row]] = -sum(
+                (
+                    Fraction(coefficient) * row_relations[row][selected_row]
+                    for row, coefficient in enumerate(coefficients)
+                ),
+                Fraction(0),
+            )
+        if any(value.denominator != 1 for value in character):
+            raise AssertionError(
+                "congruence basis did not produce an integer character"
+            )
+        pairings.append(
+            sum(
+                (character[index] * translation[index] for index in range(dimension)),
+                Fraction(0),
+            )
+            % 1
+        )
+    nonzero_pairings = [pairing for pairing in pairings if pairing]
+    if not nonzero_pairings:
+        return False, 1
+    return True, lcm(*(pairing.denominator for pairing in nonzero_pairings), 1)
+
+
 def _selected_zero_lift_base_point_height(
     displacement: tuple[tuple[int, ...], ...],
     translation: tuple[Fraction, ...],
@@ -365,6 +527,7 @@ def _rank_bounds(
     translation_is_zero: bool,
     selected_base_point_height: int | None = None,
     component_generator_height: int | None = None,
+    obstruction_pairing_height: int | None = None,
 ) -> AffineTorusRankBounds:
     nullity = dimension - rank
     minor_height = _rank_minor_height(rank, displacement_height)
@@ -437,11 +600,13 @@ def _rank_bounds(
             else max(1, minor_height * common_denominator)
         )
     )
-    obstruction_pairing_height = (
+    result_obstruction_pairing_height = (
         max(1, common_denominator)
         if rank == 0 and not translation_is_zero
         else base_point_component_height
     )
+    if obstruction_pairing_height is not None:
+        result_obstruction_pairing_height = max(1, obstruction_pairing_height)
     return AffineTorusRankBounds(
         rank=rank,
         nullity=nullity,
@@ -455,7 +620,7 @@ def _rank_bounds(
         image_coordinate_height=image_coordinate_height,
         rational_intermediate_height=rational_intermediate_height,
         base_point_component_height=base_point_component_height,
-        obstruction_pairing_height=obstruction_pairing_height,
+        obstruction_pairing_height=result_obstruction_pairing_height,
     )
 
 
@@ -814,13 +979,17 @@ def build_affine_torus_plan(
         displacement, attained_rank
     )
     component_generator_height = _selected_component_generator_height(selected_inverse)
-    # Admission cannot use the worker's saturated character lattice without
-    # replaying its backend work.  Keep the nonempty branch in the envelope;
-    # the worker still determines the exact obstruction modulo Z^n.
-    inconsistent = False
+    inconsistent, obstruction_pairing_height = _modular_obstruction_pairing_height(
+        displacement,
+        translation,
+        attained_rank,
+        selected_rows=selected_rows,
+        selected_columns=selected_columns,
+        selected_inverse=selected_inverse,
+    )
     # Reject conservative point-height failures before attempting the selected
-    # rational solve. That solve is only useful when the envelope admits the
-    # nonempty result.
+    # rational solve. That solve is only useful when the modular preflight says
+    # the fixed locus can be nonempty.
     rank_bounds = (
         _rank_bounds(
             dimension=dimension,
@@ -830,6 +999,7 @@ def build_affine_torus_plan(
             translation_is_zero=translation_is_zero,
             selected_base_point_height=None,
             component_generator_height=component_generator_height,
+            obstruction_pairing_height=obstruction_pairing_height,
         ),
     )
     if any(
@@ -845,39 +1015,42 @@ def build_affine_torus_plan(
             f"carrier's {MAX_AFFINE_TORUS_POINT_DIGITS}-digit envelope",
         )
 
-    selected_base_point_height = _selected_zero_lift_base_point_height(
-        displacement,
-        translation,
-        attained_rank,
-        selected_inverse=selected_inverse,
-        selected_rows=selected_rows,
-        selected_columns=selected_columns,
-    )
-    rank_bounds = (
-        _rank_bounds(
-            dimension=dimension,
-            rank=attained_rank,
-            displacement_height=displacement_height,
-            common_denominator=common_denominator,
-            translation_is_zero=translation_is_zero,
-            selected_base_point_height=selected_base_point_height,
-            component_generator_height=component_generator_height,
-        ),
-    )
-    if any(
-        _decimal_digits(
-            max(bounds.base_point_component_height, bounds.component_generator_height)
+    if not inconsistent:
+        selected_base_point_height = _selected_zero_lift_base_point_height(
+            displacement,
+            translation,
+            attained_rank,
+            selected_inverse=selected_inverse,
+            selected_rows=selected_rows,
+            selected_columns=selected_columns,
         )
-        > MAX_AFFINE_TORUS_POINT_DIGITS
-        for bounds in rank_bounds
-        if not inconsistent
-        if bounds.rank > 0
-    ):
-        _reject(
-            "point_height",
-            "the exact fixed-locus point bound exceeds the canonical torus-point "
-            f"carrier's {MAX_AFFINE_TORUS_POINT_DIGITS}-digit envelope",
+        rank_bounds = (
+            _rank_bounds(
+                dimension=dimension,
+                rank=attained_rank,
+                displacement_height=displacement_height,
+                common_denominator=common_denominator,
+                translation_is_zero=translation_is_zero,
+                selected_base_point_height=selected_base_point_height,
+                component_generator_height=component_generator_height,
+            ),
         )
+        if any(
+            _decimal_digits(
+                max(
+                    bounds.base_point_component_height,
+                    bounds.component_generator_height,
+                )
+            )
+            > MAX_AFFINE_TORUS_POINT_DIGITS
+            for bounds in rank_bounds
+            if bounds.rank > 0
+        ):
+            _reject(
+                "point_height",
+                "the exact fixed-locus point bound exceeds the canonical torus-point "
+                f"carrier's {MAX_AFFINE_TORUS_POINT_DIGITS}-digit envelope",
+            )
 
     result_bytes = max(
         _result_bytes_for_rank(

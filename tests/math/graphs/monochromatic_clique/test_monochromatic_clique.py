@@ -165,7 +165,7 @@ def test_native_admission_rejects_missing_total_coloring() -> None:
         )
 
 
-def test_native_admission_rejects_untransportable_result() -> None:
+def test_native_admission_rejects_labels_outside_the_hypergraph_carrier() -> None:
     vertices = tuple("x" * 400_000 + str(index) for index in range(4))
     graph = SimpleUndirectedGraph(
         vertices=vertices,
@@ -178,7 +178,7 @@ def test_native_admission_rejects_untransportable_result() -> None:
     colored_graph = ColoredUndirectedGraph.model_construct(
         graph=graph, edge_colors=("red",) * len(graph.edges)
     )
-    with pytest.raises(OperationDomainValidationError, match="output-byte limit"):
+    with pytest.raises(OperationDomainValidationError, match="label bound"):
         construct_monochromatic_clique_hypergraph(colored_graph, 2)
 
 

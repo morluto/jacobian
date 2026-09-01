@@ -2,30 +2,19 @@
 
 from __future__ import annotations
 
-import unicodedata
-from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import cast
 
-import networkx as nx
-import rfc8785
-
-from jacobian.canonical import CanonicalizationError, CanonicalLimits
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.cycle_length_profile._models import (
     MAX_VERTICES,
     CycleLengthProfileResult,
     CycleLengthRow,
 )
-from jacobian.math.graphs.values import (
-    SimpleUndirectedGraph,
-    simple_undirected_graph_wire_bytes,
-)
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 __all__ = ["compute_cycle_length_profile"]
 
 MAX_SEARCH_WORK = 10_000_000
-MAX_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,59 +170,6 @@ def _cycle_core_vertices(graph: SimpleUndirectedGraph) -> set[str]:
     return core_vertices
 
 
-def _cycle_block_feasible_lengths(
-    graph: SimpleUndirectedGraph,
-) -> list[tuple[frozenset[int], list[int]]]:
-    """Return conservative cycle lengths and their supporting block sizes.
-
-    A block that is itself a simple cycle contributes only its full length;
-    charging every shorter row for it needlessly reserves output space for
-    witnesses the kernel cannot produce.
-    """
-    topology: nx.Graph[str] = nx.Graph()
-    topology.add_nodes_from(graph.vertices)
-    topology.add_edges_from(graph.edges)
-    feasible: list[tuple[frozenset[int], list[int]]] = []
-    for raw_block in nx.biconnected_components(topology):
-        block = cast(set[str], raw_block)
-        if len(block) < 3:
-            continue
-        edge_count = sum(
-            left in block and right in block for left, right in graph.edges
-        )
-        degrees = {
-            vertex: sum(
-                edge[0] in block and edge[1] in block and vertex in edge
-                for edge in graph.edges
-                if edge[0] != edge[1]
-            )
-            for vertex in block
-        }
-        if edge_count == len(block) and all(degree == 2 for degree in degrees.values()):
-            lengths: Iterable[int] = (len(block),)
-        elif nx.is_bipartite(topology.subgraph(block)):
-            coloring = nx.bipartite.color(topology.subgraph(block))
-            part_sizes = (
-                sum(not color for color in coloring.values()),
-                sum(color for color in coloring.values()),
-            )
-            maximum_length = min(edge_count, 2 * min(part_sizes))
-            lengths = range(4, maximum_length + 1, 2)
-        else:
-            block_subgraph = topology.subgraph(block)
-            shortest_cycle = int(nx.girth(block_subgraph))
-            lengths = range(shortest_cycle, min(len(block), edge_count) + 1)
-        label_sizes = sorted(
-            (
-                len(rfc8785.dumps(unicodedata.normalize("NFC", label)))
-                for label in block
-            ),
-            reverse=True,
-        )
-        feasible.append((frozenset(lengths), label_sizes))
-    return feasible
-
-
 def _reject(code: str, message: str) -> None:
     raise OperationDomainValidationError(
         location=("graph",), code=code, message=message
@@ -260,32 +196,6 @@ def _admit(graph: SimpleUndirectedGraph) -> _AdmissionPlan:
             "complete cycle-profile search exceeds the admitted work bound",
         )
 
-    try:
-        result_bytes = simple_undirected_graph_wire_bytes(graph) + 256
-    except CanonicalizationError:
-        _reject(
-            "cycle_profile.result_bound",
-            "the complete cycle profile exceeds the canonical output bound",
-        )
-    if graph.edges:
-        # The transport path NFC-normalizes strings and RFC-8785 escapes control
-        # characters, so raw UTF-8 lengths undercount the actual result.
-        block_feasible_lengths = _cycle_block_feasible_lengths(graph)
-        witness_label_bytes_by_length: dict[int, int] = {}
-        for lengths, label_sizes in block_feasible_lengths:
-            for length in lengths:
-                witness_label_bytes_by_length[length] = max(
-                    witness_label_bytes_by_length.get(length, 0),
-                    sum(label_sizes[:length]),
-                )
-        for length in sorted(witness_label_bytes_by_length):
-            witness_label_bytes = witness_label_bytes_by_length[length]
-            result_bytes += 32 + witness_label_bytes + 2 * length
-    if result_bytes > MAX_RESULT_BYTES:
-        _reject(
-            "cycle_profile.result_bound",
-            "the complete cycle profile exceeds the canonical output bound",
-        )
     return _AdmissionPlan(graph=graph, wheel_order=wheel_order)
 
 

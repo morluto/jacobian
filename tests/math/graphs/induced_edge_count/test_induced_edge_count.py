@@ -109,14 +109,14 @@ def test_native_admission_rejects_excessive_subset_edge_work() -> None:
         compute_induced_edge_count_profile(g, 10)
 
 
-def test_native_admission_rejects_untransportable_retained_result() -> None:
+def test_wide_labels_do_not_define_native_admission() -> None:
     labels = tuple("x" * 240_000 + str(index) for index in range(20))
     g = _graph(
         labels,
         [(labels[0], labels[1]), (labels[1], labels[2]), (labels[2], labels[3])],
     )
-    with pytest.raises(OperationDomainValidationError, match="output-byte limit"):
-        compute_induced_edge_count_profile(g, 10)
+    result = compute_induced_edge_count_profile(g, 10)
+    assert result.graph is g
 
 
 def test_result_preserves_source() -> None:

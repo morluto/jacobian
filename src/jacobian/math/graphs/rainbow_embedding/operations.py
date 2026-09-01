@@ -6,12 +6,6 @@ from dataclasses import dataclass
 from itertools import permutations
 from math import perm
 
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-    strict_json_object_size,
-)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.rainbow_embedding._models import (
     MAX_HOST_VERTICES,
@@ -73,6 +67,15 @@ def _admit_rainbow_embedding_profile(
             code="graph.rainbow_embedding.edge_colors_must_cover_edges",
             message="edge_colors must be empty or align with every host edge",
         )
+    try:
+        for label in (*pattern.vertices, *host.graph.vertices, *host.edge_colors):
+            label.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise OperationDomainValidationError(
+            location=("pattern", "host"),
+            code="graph.rainbow_embedding.invalid_unicode_label",
+            message="graph and color labels must contain valid Unicode scalar values",
+        ) from exc
 
     candidate_count = 0
     if (
@@ -94,64 +97,6 @@ def _admit_rainbow_embedding_profile(
         )
     rainbow_possible = len(set(host.edge_colors)) >= len(pattern.edges)
 
-    try:
-        pattern_bytes = len(encode_strict_json(pattern.model_dump(mode="json")))
-        host_bytes = len(encode_strict_json(host.model_dump(mode="json")))
-    except (CanonicalizationError, UnicodeEncodeError) as exc:
-        raise OperationDomainValidationError(
-            location=("pattern", "host"),
-            code="graph.rainbow_embedding.result_exceeds_output_bound",
-            message="rainbow embedding profile exceeds the canonical output bound",
-        ) from exc
-    map_item_sizes = [
-        _json_array_size(
-            [
-                len(encode_strict_json(pattern_vertex)),
-                len(encode_strict_json(host_vertex)),
-            ]
-        )
-        for pattern_vertex in pattern.vertices
-        for host_vertex in host.graph.vertices[:1]
-    ]
-    # Every witness uses one host label per pattern label. The largest host
-    # label is the conservative bound for any assignment.
-    if host.graph.vertices:
-        max_host_label = max(
-            len(encode_strict_json(vertex)) for vertex in host.graph.vertices
-        )
-        map_item_sizes = [
-            _json_array_size([len(encode_strict_json(pattern_vertex)), max_host_label])
-            for pattern_vertex in pattern.vertices
-        ]
-    mapping_bytes = _json_array_size(map_item_sizes)
-    max_color = max(
-        (len(encode_strict_json(color)) for color in host.edge_colors),
-        default=0,
-    )
-    colors_bytes = _json_array_size([max_color] * len(pattern.edges))
-    witness_bytes = strict_json_object_size(
-        (
-            ("pattern_to_host", mapping_bytes),
-            ("edge_color_labels", colors_bytes),
-        )
-    )
-    witness_count = candidate_count if rainbow_possible else 0
-    embeddings_bytes = _repeated_array_size(witness_bytes, witness_count)
-    result_bytes = strict_json_object_size(
-        (
-            ("pattern", pattern_bytes),
-            ("host", host_bytes),
-            ("embeddings", embeddings_bytes),
-            ("total_embeddings", max(1, len(str(candidate_count)))),
-            ("rainbow_count", max(1, len(str(candidate_count)))),
-        )
-    )
-    if result_bytes > CanonicalLimits().max_output_bytes:
-        raise OperationDomainValidationError(
-            location=("pattern",),
-            code="graph.rainbow_embedding.result_exceeds_output_bound",
-            message="rainbow embedding profile exceeds the canonical output bound",
-        )
     return _RainbowAdmissionPlan(candidate_count, rainbow_possible)
 
 

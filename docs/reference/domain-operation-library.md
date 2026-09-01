@@ -534,9 +534,11 @@ ceiling by default; pass `CanonicalLimits` only when the caller owns such a
 boundary. Shared dispatch is not such a boundary: it preserves strict JSON
 semantics without imposing an HTTP, stdio, or in-process payload size. An
 unexplained reserve added to the codec's default is not an output
-proof. The architecture check rejects `max_output_bytes` in reusable
-`values.py` carriers; express their safety envelope through cardinality,
-component digits, depth, or another intrinsic representation quantity.
+proof. The architecture check rejects canonical output defaults and result-byte
+policies in mathematical carriers and operation owners, while allowing limits
+whose names identify a concrete worker or process channel. Express mathematical
+safety through cardinality, component digits, depth, or another intrinsic
+representation quantity.
 
 For every non-trivially priced operation, owner tests must instrument the
 priced kernel primitives on a representative near-envelope request and assert
@@ -685,7 +687,7 @@ itself state any of those obligations.
 
 A decision or first-witness operation must admit the full negative-case work,
 but may have constant-size output. An all-witness operation or complete profile
-must additionally admit its worst-case witness count and serialized result.
+must additionally admit its worst-case witness count and retained exact data.
 Prefer retaining the source value once and referring to indexed components over
 repeating labels, parents, or other source context in every output entry.
 

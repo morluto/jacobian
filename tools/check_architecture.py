@@ -1184,6 +1184,35 @@ def _mathematical_transport_limit_violations(
         for node in ast.walk(tree)
     ):
         return ()
+    def owns_transport_policy(node: ast.AST) -> bool:
+        if isinstance(node, ast.Attribute):
+            return node.attr == "max_output_bytes"
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            name = node.name.upper()
+            return (
+                any(token in name for token in ("RESULT", "OUTPUT"))
+                and name.endswith(("BYTES", "CHARS", "CHARACTERS", "BYTE_BOUND"))
+                and not any(
+                    channel in name
+                    for channel in ("WORKER", "PROCESS", "STDIN", "STDOUT", "STDERR")
+                )
+            )
+        targets: tuple[ast.expr, ...] = ()
+        if isinstance(node, ast.Assign):
+            targets = tuple(node.targets)
+        elif isinstance(node, ast.AnnAssign):
+            targets = (node.target,)
+        return any(
+            isinstance(target, ast.Name)
+            and any(token in target.id.upper() for token in ("RESULT", "OUTPUT", "WIRE"))
+            and target.id.upper().endswith(("BYTES", "CHARS", "CHARACTERS"))
+            and not any(
+                channel in target.id.upper()
+                for channel in ("WORKER", "PROCESS", "STDIN", "STDOUT", "STDERR")
+            )
+            for target in targets
+        )
+
     return tuple(
         _violation(
             relative,
@@ -1192,7 +1221,7 @@ def _mathematical_transport_limit_violations(
             "mathematical contracts and admission must use cardinality, digit, or allocation bounds, not transport bytes",
         )
         for node in ast.walk(tree)
-        if isinstance(node, ast.Attribute) and node.attr == "max_output_bytes"
+        if owns_transport_policy(node)
     )
 
 

@@ -21,13 +21,8 @@ diagonal exactly once, when it is the boundary of its non-root subproblem.
 
 `geometry.polygon.triangulation.minimum_euclidean_weight.compute` instead owns
 the non-hull Euclidean-length objective for one strict counter-clockwise convex
-rational polygon with 4 to 68 vertices, the closed-form ceiling implied by the
-published output budget. Admission bounds the complete serialized result from
-the exact source: the split-table estimate sums each span's own term count
-over the pairwise coordinate differences that control the dynamic program,
-and the echoed source ring plus fixed result metadata are measured directly,
-so translated sources pay for their echoed coordinates even though every raw
-coordinate stays inside the shared canonical rational cap. A successful result
+rational polygon with 4 to 68 vertices. Admission bounds the dynamic-program
+work, exact expression terms, and retained diagonal cardinality directly. A successful result
 retains every selected diagonal's exact rational
 squared length and represents the source-bound optimum exactly as the ordered
 sum of their positive square roots. It never labels a decimal approximation as

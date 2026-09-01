@@ -19,7 +19,6 @@ from jacobian._execution import (
 )
 from jacobian._flint import flint_workprec
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import CanonicalLimits, canonicalize_json
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -33,7 +32,6 @@ from jacobian.math.analysis._box_enclosure import (
 )
 from jacobian.math.analysis._models import (
     MAX_BOX_PREFLIGHT_TEMPORARY_BITS,
-    MAX_DYADIC_MANTISSA_DIGITS,
     MAX_RATIONAL_BOX_ENDPOINT_DIGITS,
     MAX_RATIONAL_BOX_PARTITION_DEPTH,
     MAX_RATIONAL_DIGITS,
@@ -57,7 +55,6 @@ MAX_ADAPTIVE_RANGE_EVALUATIONS = 4_096
 MAX_ADAPTIVE_RANGE_NODE_EVALUATIONS = 131_072
 MAX_ADAPTIVE_RANGE_PRECISION_WORK = 268_435_456
 MAX_ADAPTIVE_RANGE_WALL_SECONDS = 120
-MAX_ADAPTIVE_RANGE_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 # Admission bounds every exact source-box value by an 8,192-bit rational and
 # every Arb work precision by 4,096 bits. An outward endpoint can therefore
@@ -741,42 +738,6 @@ def _midpoint_component_digits(box: RationalIntervalBox, depth: int) -> int:
     return 2 * source_digits + depth + 2
 
 
-def _estimated_result_bytes(
-    problem: _AdaptiveRangeProblem,
-    *,
-    plan: _AdaptiveRangeExecutionPlan | None = None,
-) -> int:
-    active_plan = plan if plan is not None else _plan_adaptive_range(problem)
-    source_bytes = len(
-        canonicalize_json(
-            {
-                "expression": problem.expression.model_dump(mode="json"),
-                "box": problem.box.model_dump(mode="json"),
-                "target_width": problem.target_width.model_dump(mode="json"),
-                "precision_bits": problem.precision_bits,
-                "maximum_precision_bits": problem.maximum_precision_bits,
-                "max_leaves": problem.max_leaves,
-                "max_depth": problem.max_depth,
-                "max_evaluations": problem.max_evaluations,
-                "wall_seconds": problem.wall_seconds,
-            }
-        )
-    )
-    endpoint_digits = _midpoint_component_digits(
-        problem.box, active_plan.planned_maximum_leaf_depth
-    )
-    axis_bytes = sum(
-        len(variable.encode("utf-8")) + 3 for variable in problem.box.variables
-    )
-    box_bytes = (
-        128 + axis_bytes + len(problem.box.variables) * (4 * endpoint_digits + 128)
-    )
-    dyadic_interval_bytes = 2 * (MAX_DYADIC_MANTISSA_DIGITS + 64) + 64
-    path_bytes = 2 * active_plan.planned_maximum_leaf_depth + 32
-    leaf_bytes = box_bytes + dyadic_interval_bytes + path_bytes + 128
-    return source_bytes + active_plan.planned_leaf_count * leaf_bytes + 4_096
-
-
 def _require_deadline(deadline: float, stage: str) -> None:
     if monotonic() >= deadline:
         raise OperationExecutionTimeoutError(
@@ -933,17 +894,6 @@ def _admit_adaptive_range(
                 f"exceeds the {MAX_ADAPTIVE_RANGE_PRECISION_WORK}-unit bound"
             ),
         )
-    estimated_result_bytes = _estimated_result_bytes(problem, plan=plan)
-    if estimated_result_bytes > MAX_ADAPTIVE_RANGE_RESULT_BYTES:
-        raise OperationDomainValidationError(
-            location=("max_leaves", "max_depth", "box"),
-            code="analysis.adaptive_range.result_bytes",
-            message=(
-                f"adaptive range result estimate of {estimated_result_bytes} bytes "
-                f"exceeds the {MAX_ADAPTIVE_RANGE_RESULT_BYTES}-byte canonical output bound"
-            ),
-        )
-
     try:
         preflight = _preflight_box_expression(
             problem.expression, _rational_box_bounds(problem.box)
@@ -1417,7 +1367,6 @@ __all__ = [
     "MAX_ADAPTIVE_RANGE_LEAVES",
     "MAX_ADAPTIVE_RANGE_NODE_EVALUATIONS",
     "MAX_ADAPTIVE_RANGE_PRECISION_WORK",
-    "MAX_ADAPTIVE_RANGE_RESULT_BYTES",
     "MAX_ADAPTIVE_RANGE_WALL_SECONDS",
     "AdaptiveRangeBudgetExhausted",
     "AdaptiveRangeDomainUnproven",

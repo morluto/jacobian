@@ -18,7 +18,6 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian._flint import flint_workprec
-from jacobian.canonical import canonicalize_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math import analysis
 from jacobian.math.analysis._box_enclosure import (
@@ -28,7 +27,6 @@ from jacobian.math.analysis._box_enclosure import (
 from jacobian.math.analysis._definite_integral_enclosure import (
     MAX_DEFINITE_INTEGRAL_LEAVES,
     MAX_DEFINITE_INTEGRAL_PRECISION_WORK,
-    MAX_DEFINITE_INTEGRAL_RESULT_BYTES,
     MAX_DEFINITE_INTEGRAL_WALL_SECONDS,
     DefiniteIntegralBudgetExhausted,
     DefiniteIntegralDomainUnproven,
@@ -41,7 +39,6 @@ from jacobian.math.analysis._definite_integral_enclosure import (
     _admit_definite_integral,
     _compute_definite_integral_enclosure,
     _enclosure_width,
-    _estimated_result_bytes,
     _interval_at_path,
 )
 from jacobian.math.analysis._models import (
@@ -784,23 +781,6 @@ def test_leaf_and_wall_field_bounds_reject_one_beyond() -> None:
     payload["wall_seconds"] = MAX_DEFINITE_INTEGRAL_WALL_SECONDS + 1
     with pytest.raises(ValidationError):
         DefiniteIntegralEnclosureRequest.model_validate(payload)
-
-
-def test_result_size_estimator_dominates_the_actual_canonical_result() -> None:
-    request = _request(_var(), max_leaves=16, target_mantissa="0", target_exponent=0)
-    result = _compute_definite_integral_enclosure(request)
-    actual = len(canonicalize_json(result.model_dump(mode="json")))
-    assert actual <= _estimated_result_bytes(request)
-
-
-def test_maximum_result_reservation_fits_the_real_transport_limit() -> None:
-    request = _request(
-        _const(1),
-        target_mantissa="0",
-        target_exponent=0,
-        max_leaves=MAX_DEFINITE_INTEGRAL_LEAVES,
-    )
-    assert _estimated_result_bytes(request) <= MAX_DEFINITE_INTEGRAL_RESULT_BYTES
 
 
 def test_admission_charges_every_executed_partition_primitive(

@@ -44,6 +44,7 @@ type ComponentCoordinates = tuple[tuple[FieldCoordinates, ...], ...]
 
 _MAX_CYCLOTOMIC_SCALAR_MAGNITUDE = 10**MAX_CYCLIC_FIELD_ELEMENT_DIGITS - 1
 _CYCLIC_PROFILE_WALL_SECONDS = 3_600.0
+_ADMISSION_CHECK_INTERVAL = 256
 
 
 class CyclicRankKernelAdmissionError(ValueError):
@@ -261,12 +262,21 @@ def _multiplication_norm(polynomial: Any, degree: int, variable: Any) -> int:
     import sympy
 
     output_sums = [0] * degree
-    remainders = tuple(
-        sympy.Poly(variable**power, variable, domain=sympy.QQ).rem(polynomial)
-        for power in range(2 * degree - 1)
-    )
+    remainders = []
+    for power in range(2 * degree - 1):
+        if power and power % _ADMISSION_CHECK_INTERVAL == 0:
+            _require_execution_active("during cyclotomic remainder admission")
+        remainders.append(
+            sympy.Poly(variable**power, variable, domain=sympy.QQ).rem(polynomial)
+        )
+    operation_count = 0
     for left_power in range(degree):
         for right_power in range(degree):
+            operation_count += 1
+            if operation_count % _ADMISSION_CHECK_INTERVAL == 0:
+                _require_execution_active(
+                    "during cyclotomic multiplication-norm admission"
+                )
             coordinates = _polynomial_coordinates(
                 remainders[left_power + right_power], degree
             )
@@ -285,13 +295,16 @@ def _component_coordinates(
 ) -> ComponentCoordinates:
     import sympy
 
-    shift_coordinates = tuple(
-        _polynomial_coordinates(
-            sympy.Poly(variable**shift, variable, domain=sympy.QQ).rem(polynomial),
-            degree,
+    shift_coordinates = []
+    for shift in range(symbol.period):
+        if shift and shift % _ADMISSION_CHECK_INTERVAL == 0:
+            _require_execution_active("during cyclotomic shift-coordinate admission")
+        shift_coordinates.append(
+            _polynomial_coordinates(
+                sympy.Poly(variable**shift, variable, domain=sympy.QQ).rem(polynomial),
+                degree,
+            )
         )
-        for shift in range(symbol.period)
-    )
     rows = [
         [
             [Fraction(0) for _ in range(degree)]
@@ -299,10 +312,16 @@ def _component_coordinates(
         ]
         for _ in range(symbol.target_block_dimension)
     ]
-    for entry in symbol.entries:
+    for entry_index, entry in enumerate(symbol.entries):
+        if entry_index and entry_index % _ADMISSION_CHECK_INTERVAL == 0:
+            _require_execution_active("during cyclotomic matrix-coordinate admission")
         coefficient = entry.coefficient.as_fraction()
         target = rows[entry.target_coordinate][entry.source_coordinate]
         for power, reduced_coefficient in enumerate(shift_coordinates[entry.shift]):
+            if power and power % _ADMISSION_CHECK_INTERVAL == 0:
+                _require_execution_active(
+                    "during cyclotomic matrix-coordinate admission"
+                )
             target[power] += coefficient * reduced_coefficient
     return tuple(
         tuple(tuple(coordinate for coordinate in value) for value in row)

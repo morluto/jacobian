@@ -727,6 +727,25 @@ def test_owner_checkpoint_observes_existing_request_deadline() -> None:
         cyclic_rational_rank_kernel_profile(_symbol(period=3, entries=((0, 0, 0, 1),)))
 
 
+def test_owner_checkpoint_observes_deadline_inside_cyclotomic_admission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock_values = iter((0.0, 0.0, 0.0, 0.0))
+    monkeypatch.setattr(
+        time,
+        "monotonic",
+        lambda: next(clock_values, _CYCLIC_PROFILE_WALL_SECONDS + 1),
+    )
+
+    with (
+        request_execution(started_at=0.0),
+        pytest.raises(OperationExecutionTimeoutError, match="multiplication-norm"),
+    ):
+        cyclic_rational_rank_kernel_profile(
+            _symbol(period=127, entries=((0, 0, 0, 1),))
+        )
+
+
 def test_owner_binds_deadline_from_original_request_start() -> None:
     started = time.monotonic() - _CYCLIC_PROFILE_WALL_SECONDS - 1
     with (

@@ -3,10 +3,43 @@
 ## [0.16.0](https://github.com/morluto/jacobian/compare/jacobian-v0.15.2...jacobian-v0.16.0) (2026-09-01)
 
 
+### ⚠ BREAKING CHANGES
+
+* **matrices:** `matrix.inertia.compute` now accepts one canonical exact-real
+  `matrix` value. Replace the former top-level `dimension` and sparse `entries`
+  fields with `{"matrix":{"domain":"QQ","entries":[...]}}` (or the equivalent
+  real simple-number-field matrix carrier).
+* **topology:** the six `chain_complex.*` operations now name the coefficient
+  carrier with `coefficient_ring`. Rename the former `coefficient_field` field;
+  its existing `QQ` and `GF_p` values are unchanged, and `ZZ` is now supported.
+
+
 ### Features
 
 * **math:** construct finite-field Paley tournaments ([#3058](https://github.com/morluto/jacobian/issues/3058)) ([ae0bd4e](https://github.com/morluto/jacobian/commit/ae0bd4e6fdc891b82fbbd8e1ef98b477f8be771c))
 * **polynomials:** compute monomial ideal Betti profiles ([2021dcd](https://github.com/morluto/jacobian/commit/2021dcd65cd0081d1c6edf5244152b422efbb13e))
+
+
+### Published Operations
+
+* **additive combinatorics:** `additive.cyclic_sumset.representation_profile.compute`,
+  `additive.finite_abelian_subset.gowers_cube_profile.compute`, and
+  `multiplicative.product_representation_profile.compute` ([#3057](https://github.com/morluto/jacobian/issues/3057)) ([e0bb9e5](https://github.com/morluto/jacobian/commit/e0bb9e531))
+* **combinatorics and geometry:** `hypergraph.arithmetic_progression.construct`,
+  `poset.antichain.enumerate`, `geometry.points.spanned_line_profile.compute`, and
+  `geometry.points.triangle_area_profile.compute` ([#3057](https://github.com/morluto/jacobian/issues/3057)) ([e0bb9e5](https://github.com/morluto/jacobian/commit/e0bb9e531))
+* **graphs:** `graph.coloring.equitable_k_colorability.decide`,
+  `hypergraph.coloring.non_monochromatic.decide`, and `graph.tree.free.enumerate`
+  ([#3057](https://github.com/morluto/jacobian/issues/3057)) ([e0bb9e5](https://github.com/morluto/jacobian/commit/e0bb9e531))
+* **matrices and number theory:** `matrix.collatz_wielandt.quotient_profile.compute`,
+  `number_theory.divisibility_poset.compute`, `number_theory.friable.family.enumerate`,
+  `congruence.periodic_union.interval_count.compute`, and
+  `number_theory.r_full.enumerate` ([#3057](https://github.com/morluto/jacobian/issues/3057)) ([e0bb9e5](https://github.com/morluto/jacobian/commit/e0bb9e531))
+* **complex tori and lattices:** `complex_torus.neron_severi_lattice.compute`,
+  `complex_torus.riemann_form.profile.compute`, and
+  `lattice.invariant_bilinear_form_lattice.compute` ([#3081](https://github.com/morluto/jacobian/issues/3081)) ([8340bae](https://github.com/morluto/jacobian/commit/8340bae8c))
+* **real algebra:** `polynomial.real.common_interlacing_profile.compute`
+  ([#3061](https://github.com/morluto/jacobian/issues/3061)) ([b00af1c](https://github.com/morluto/jacobian/commit/b00af1c98))
 
 
 ### Bug Fixes

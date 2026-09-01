@@ -23,6 +23,7 @@ from jacobian.math.graphs.edge_deletion_profile._models import (
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_EDGE_DELETION_PROFILE_WORK = 50_000_000
+MAX_RETAINED_LABEL_CHARACTERS = 16_384
 _OWNER_DEADLINE_SECONDS = 3600.0
 
 
@@ -175,6 +176,17 @@ def _admit_edge_deletion_profile(
             location=("deletion_order",),
             code="graph.edge_deletion.order_exceeds_edge_count",
             message="deletion_order must not exceed the number of edges",
+        )
+
+    retained_label_characters = sum(len(vertex) for vertex in graph.vertices)
+    if retained_label_characters > MAX_RETAINED_LABEL_CHARACTERS:
+        raise OperationDomainValidationError(
+            location=("graph", "vertices"),
+            code="graph.edge_deletion.retained_labels_exceed_bound",
+            message=(
+                "edge-deletion profile source labels exceed the retained-character "
+                "bound"
+            ),
         )
 
     row_count = 0

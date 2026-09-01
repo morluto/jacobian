@@ -6,6 +6,7 @@ import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.edge_deletion_profile.operations import (
+    MAX_RETAINED_LABEL_CHARACTERS,
     compute_edge_deletion_profile,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -191,12 +192,19 @@ def test_native_negative_order_is_typed() -> None:
         compute_edge_deletion_profile(graph, -1)
 
 
-def test_native_result_does_not_inherit_json_output_limit() -> None:
-    graph = _graph(["x" * 11_000_000], [])
+def test_native_result_accepts_retained_labels_at_character_bound() -> None:
+    graph = _graph(["x" * MAX_RETAINED_LABEL_CHARACTERS], [])
     result = compute_edge_deletion_profile(graph, 0)
 
     assert result.graph == graph
     assert len(result.rows) == 1
+
+
+def test_native_result_rejects_labels_above_retained_character_bound() -> None:
+    graph = _graph(["x" * (MAX_RETAINED_LABEL_CHARACTERS + 1)], [])
+
+    with pytest.raises(OperationDomainValidationError, match="retained-character"):
+        compute_edge_deletion_profile(graph, 0)
 
 
 def test_result_preserves_source() -> None:

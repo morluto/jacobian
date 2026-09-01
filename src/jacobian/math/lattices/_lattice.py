@@ -5,8 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.lattices import reduce_basis
 from jacobian.math.lattices._models import (
     LatticeReductionRequest,
@@ -69,10 +68,10 @@ LATTICE_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         run=reduce_lattice_basis,
         tags=("lattice", "lll", "exact-integer", "bounded"),
         examples=(
-            example(
-                "unit_basis",
-                "Reduce the one-dimensional unit basis.",
-                {"basis": {"entries": [["1"]]}},
+            OperationExample(
+                name="unit_basis",
+                description="Reduce the one-dimensional unit basis.",
+                input={"basis": {"entries": [["1"]]}},
             ),
         ),
     ),

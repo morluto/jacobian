@@ -10,8 +10,11 @@ from pydantic.json_schema import JsonSchemaValue
 
 from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalLimits, encode_strict_json
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAXIMUM_CUT_CANDIDATE_PARTITIONS = 1_048_576
@@ -628,13 +631,13 @@ MAXIMUM_CUT_OPERATION: MathTool[
         "bounded",
     ),
     examples=(
-        example(
-            "cycle_five",
-            (
+        OperationExample(
+            name="cycle_five",
+            description=(
                 "Compute an exact maximum cut of the five-cycle; the materialized "
                 "simple graph must satisfy the published exact work and result bounds."
             ),
-            {
+            input={
                 "graph": {
                     "vertices": ["0", "1", "2", "3", "4"],
                     "edges": [

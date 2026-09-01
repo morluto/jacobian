@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from jsonschema import Draft202012Validator
 
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import MathTool
 from jacobian.dispatch import OperationRequestValidationError, invoke_operation
@@ -33,6 +35,12 @@ def test_advertised_invocation_example_executes_successfully(
     examples = operation.examples
     assert examples, f"{operation_id} must advertise one executable example"
     for invocation_example in examples:
+        schema = operation.request_type.model_json_schema()
+        Draft202012Validator.check_schema(schema)
+        Draft202012Validator(schema).validate(invocation_example.input)
+        operation.request_type.model_validate_json(
+            encode_strict_json(invocation_example.input), strict=True
+        )
         public_result = invoke_operation(
             operation_id,
             invocation_example.input,

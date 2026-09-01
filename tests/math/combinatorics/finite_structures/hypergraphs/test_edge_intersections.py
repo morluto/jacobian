@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.canonical import encode_strict_json
+from jacobian.math.combinatorics.finite_structures.hypergraphs import operations
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_EDGE_INTERSECTION_CELLS,
     MAX_EDGE_INTERSECTION_RESULT_BYTES,
@@ -208,6 +209,26 @@ class TestEdgeIntersectionBinding:
 
 
 class TestEdgeIntersectionPreflight:
+    def test_public_invocation_computes_semantic_admission_once(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls = 0
+        admit = operations._admit_edge_intersection_profile
+
+        def counted_admission(hypergraph: FiniteHypergraph) -> None:
+            nonlocal calls
+            calls += 1
+            admit(hypergraph)
+
+        monkeypatch.setattr(
+            operations, "_admit_edge_intersection_profile", counted_admission
+        )
+        request = EdgeIntersectionsRequest.model_validate({"hypergraph": NONLINEAR})
+
+        edge_intersections(request.hypergraph)
+
+        assert calls == 1
+
     def test_near_intersection_cell_boundary_is_accepted(self) -> None:
         vertices = tuple(f"v{i:02}" for i in range(13))
         hypergraph = FiniteHypergraph(

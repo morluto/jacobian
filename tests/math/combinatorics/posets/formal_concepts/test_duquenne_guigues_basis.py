@@ -11,6 +11,7 @@ from jacobian.math.combinatorics.posets.formal_concepts import (
     FormalContext,
     duquenne_guigues_basis,
     implication_closure,
+    operations,
 )
 from jacobian.math.combinatorics.posets.formal_concepts._models import (
     DuquenneGuiguesBasisRequest,
@@ -285,6 +286,25 @@ def test_nine_attribute_contranominal_context_admitted_with_empty_basis() -> Non
     replayed = compute_duquenne_guigues_basis(request)
     assert isinstance(replayed, CanonicalImplicationBasisResult)
     assert replayed.work.candidate_states == 512
+
+
+def test_public_invocation_computes_semantic_admission_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+    admit = operations._admit_duquenne_guigues_basis
+
+    def counted_admission(context: FormalContext):
+        nonlocal calls
+        calls += 1
+        return admit(context)
+
+    monkeypatch.setattr(operations, "_admit_duquenne_guigues_basis", counted_admission)
+    request = DuquenneGuiguesBasisRequest(context=_contranominal_context(4))
+
+    compute_duquenne_guigues_basis(request)
+
+    assert calls == 1
 
 
 @pytest.mark.scale

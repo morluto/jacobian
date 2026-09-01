@@ -455,7 +455,7 @@ def edge_intersections(
         is_linear,
         first_linearity_violation,
     ) = _edge_intersections_data(hypergraph)
-    return EdgeIntersectionsResult(
+    return EdgeIntersectionsResult._from_kernel(
         hypergraph=hypergraph,
         pair_intersections=pair_intersections,
         pair_count=pair_count,

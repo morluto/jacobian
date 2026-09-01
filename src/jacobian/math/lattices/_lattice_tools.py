@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.lattices._models import (
     CanonicalBasisResult,
     DirectSumRequest,
@@ -112,10 +111,10 @@ RANK_GRAM_OPERATION: MathTool[Any, Any] = MathTool(
     run=compute_rank_gram,
     tags=("lattice", "gram", "exact-integer", "bounded"),
     examples=(
-        example(
-            "identity_lattice",
-            "Compute the Gram matrix and covolume of ZZ^2.",
-            {"lattice": _lattice(2, [[1, 0], [0, 1]])},
+        OperationExample(
+            name="identity_lattice",
+            description="Compute the Gram matrix and covolume of ZZ^2.",
+            input={"lattice": _lattice(2, [[1, 0], [0, 1]])},
         ),
     ),
 )
@@ -132,10 +131,10 @@ CANONICAL_BASIS_OPERATION: MathTool[Any, Any] = MathTool(
     run=_compute_canonical_basis_native,
     tags=("lattice", "hermite-normal-form", "canonical-basis", "exact-integer"),
     examples=(
-        example(
-            "identity_lattice",
-            "Canonical basis of ZZ^2.",
-            _lattice(2, [[1, 0], [0, 1]]),
+        OperationExample(
+            name="identity_lattice",
+            description="Canonical basis of ZZ^2.",
+            input=_lattice(2, [[1, 0], [0, 1]]),
         ),
     ),
 )
@@ -152,10 +151,10 @@ DUAL_OPERATION: MathTool[Any, Any] = MathTool(
     run=compute_dual,
     tags=("lattice", "dual", "exact-rational", "bounded"),
     examples=(
-        example(
-            "identity_lattice",
-            "Dual of ZZ^2 is itself.",
-            {"lattice": _lattice(2, [[1, 0], [0, 1]])},
+        OperationExample(
+            name="identity_lattice",
+            description="Dual of ZZ^2 is itself.",
+            input={"lattice": _lattice(2, [[1, 0], [0, 1]])},
         ),
     ),
 )
@@ -172,10 +171,10 @@ SATURATION_OPERATION: MathTool[Any, Any] = MathTool(
     run=_compute_saturation_native,
     tags=("lattice", "saturation", "exact-integer", "bounded"),
     examples=(
-        example(
-            "identity_lattice",
-            "Saturation of ZZ^2 is itself.",
-            _lattice(2, [[1, 0], [0, 1]]),
+        OperationExample(
+            name="identity_lattice",
+            description="Saturation of ZZ^2 is itself.",
+            input=_lattice(2, [[1, 0], [0, 1]]),
         ),
     ),
 )
@@ -192,10 +191,10 @@ SUBLATTICE_INDEX_OPERATION: MathTool[Any, Any] = MathTool(
     run=compute_sublattice_index,
     tags=("lattice", "smith-normal-form", "quotient", "exact-integer"),
     examples=(
-        example(
-            "double_sublattice",
-            "Index of 2 ZZ inside ZZ.",
-            {
+        OperationExample(
+            name="double_sublattice",
+            description="Index of 2 ZZ inside ZZ.",
+            input={
                 "sublattice": _lattice(1, [[2]]),
                 "parent": _lattice(1, [[1]]),
                 "embedding": {"entries": [["2"]]},
@@ -216,10 +215,10 @@ DISCRIMINANT_GROUP_OPERATION: MathTool[Any, Any] = MathTool(
     run=compute_discriminant_group,
     tags=("lattice", "discriminant-group", "exact-integer", "bounded"),
     examples=(
-        example(
-            "identity_lattice",
-            "Discriminant group of ZZ^2 is trivial.",
-            {"lattice": _lattice(2, [[1, 0], [0, 1]])},
+        OperationExample(
+            name="identity_lattice",
+            description="Discriminant group of ZZ^2 is trivial.",
+            input={"lattice": _lattice(2, [[1, 0], [0, 1]])},
         ),
     ),
 )
@@ -236,10 +235,10 @@ ORTHOGONAL_COMPLEMENT_OPERATION: MathTool[Any, Any] = MathTool(
     run=compute_orthogonal_complement,
     tags=("lattice", "orthogonal-complement", "exact-rational", "bounded"),
     examples=(
-        example(
-            "line_in_plane",
-            "Orthogonal complement of a line in QQ^2.",
-            {"lattice": _lattice(2, [[1, 0]])},
+        OperationExample(
+            name="line_in_plane",
+            description="Orthogonal complement of a line in QQ^2.",
+            input={"lattice": _lattice(2, [[1, 0]])},
         ),
     ),
 )
@@ -256,10 +255,10 @@ DIRECT_SUM_OPERATION: MathTool[Any, Any] = MathTool(
     run=compute_direct_sum,
     tags=("lattice", "direct-sum", "exact-integer", "bounded"),
     examples=(
-        example(
-            "z2_plus_z2",
-            "Direct sum of ZZ^2 with ZZ^2 is ZZ^4.",
-            {
+        OperationExample(
+            name="z2_plus_z2",
+            description="Direct sum of ZZ^2 with ZZ^2 is ZZ^4.",
+            input={
                 "first": _lattice(2, [[1, 0], [0, 1]]),
                 "second": _lattice(2, [[1, 0], [0, 1]]),
             },
@@ -279,10 +278,10 @@ ORTHOGONAL_SUM_OPERATION: MathTool[Any, Any] = MathTool(
     run=compute_orthogonal_sum,
     tags=("lattice", "orthogonal-sum", "exact-integer", "bounded"),
     examples=(
-        example(
-            "z2_plus_z2",
-            "Orthogonal sum of ZZ^2 with ZZ^2 is ZZ^4.",
-            {
+        OperationExample(
+            name="z2_plus_z2",
+            description="Orthogonal sum of ZZ^2 with ZZ^2 is ZZ^4.",
+            input={
                 "first": _lattice(2, [[1, 0], [0, 1]]),
                 "second": _lattice(2, [[1, 0], [0, 1]]),
             },

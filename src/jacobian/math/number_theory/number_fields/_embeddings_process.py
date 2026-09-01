@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
+    request_cancelled,
 )
 from jacobian.math.number_theory.number_fields._embedding_protocol import (
     NUMBER_FIELD_EMBEDDING_WORKER_RESPONSE_ADAPTER,
@@ -111,9 +112,7 @@ def run_embeddings_worker(
 def embeddings_worker_cancelled() -> bool:
     """Report cancellation through the shared bounded-process context."""
 
-    from jacobian.process import bounded_process_cancelled
-
-    return bounded_process_cancelled()
+    return request_cancelled()
 
 
 __all__ = [

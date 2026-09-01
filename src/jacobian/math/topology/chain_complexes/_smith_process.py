@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import math
 import sys
 import time
@@ -18,13 +17,21 @@ from jacobian._execution import (
     OperationExecutionTimeoutError,
     request_cancelled,
 )
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import (
+    CanonicalizationError,
+    CanonicalLimits,
+    encode_strict_json,
+    format_canonical_integer,
+    loads_strict_json,
+    parse_canonical_integer,
+)
 from jacobian.math.matrices.certified_snf.operations import Matrix, SmithReduction
 
 _SMITH_WORKER = Path(__file__).resolve().with_name("_smith_worker.py")
 _SMITH_STDERR_LIMIT = 64 * 1024
 _SMITH_ADDRESS_SPACE_BYTES = 2 * 1024 * 1024 * 1024
 _SMITH_FILE_SIZE_BYTES = 1024 * 1024
+_MAX_SAFE_JSON_INTEGER = (1 << 53) - 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,9 +97,9 @@ def _stdout_limit(
 
 
 def _strict_int(value: Any) -> int:
-    # Accept legacy safe JSON numbers in decoded fixtures, while requiring
-    # worker-produced values to use the unbounded canonical string form.
     if isinstance(value, int) and not isinstance(value, bool):
+        if abs(value) > _MAX_SAFE_JSON_INTEGER:
+            raise ValueError("Smith worker JSON integer is not interoperable")
         return value
     if not isinstance(value, str):
         raise ValueError("Smith worker scalar is not an integer string")
@@ -243,7 +250,7 @@ def smith_reduce_in_worker(
         worker_environment,
     )
 
-    input_bytes = json.dumps(
+    input_bytes = encode_strict_json(
         {
             "matrix": [
                 [format_canonical_integer(value) for value in row] for row in source
@@ -251,8 +258,7 @@ def smith_reduce_in_worker(
             "row_count": rows,
             "column_count": columns,
         },
-        separators=(",", ":"),
-    ).encode("utf-8")
+    )
     request_digest = hashlib.sha256(input_bytes).hexdigest()
     stdout_limit = _stdout_limit(
         rows=rows,
@@ -313,7 +319,10 @@ def smith_reduce_in_worker(
             "bounded integral-homology Smith worker did not establish a reduction"
         )
     try:
-        decoded = json.loads(completed.stdout.decode("utf-8"))
+        decoded = loads_strict_json(
+            completed.stdout,
+            limits=CanonicalLimits(max_input_bytes=stdout_limit),
+        )
         result = _decode_result(
             decoded,
             request_digest=request_digest,
@@ -328,7 +337,7 @@ def smith_reduce_in_worker(
         )
         _require_active_deadline(deadline, stage="after decoding the")
         return result
-    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+    except (CanonicalizationError, TypeError, ValueError) as exc:
         raise RuntimeError(
             "bounded integral-homology Smith worker returned malformed output"
         ) from exc

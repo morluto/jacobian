@@ -652,6 +652,30 @@ class EdgeIntersectionsResult(StrictModel):
     is_linear: bool
     first_linearity_violation: EdgeIntersectionEntry | None = None
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        hypergraph: FiniteHypergraph,
+        pair_intersections: tuple[EdgeIntersectionEntry, ...],
+        pair_count: int,
+        histogram: tuple[tuple[int, int], ...],
+        maximum_intersection_size: int,
+        is_linear: bool,
+        first_linearity_violation: EdgeIntersectionEntry | None,
+    ) -> Self:
+        """Construct a result after the owner established the complete profile."""
+
+        return cls.model_construct(
+            hypergraph=hypergraph,
+            pair_intersections=pair_intersections,
+            pair_count=pair_count,
+            histogram=histogram,
+            maximum_intersection_size=maximum_intersection_size,
+            is_linear=is_linear,
+            first_linearity_violation=first_linearity_violation,
+        )
+
     @model_validator(mode="before")
     @classmethod
     def require_aggregate_intersection_bound(cls, data: object) -> object:

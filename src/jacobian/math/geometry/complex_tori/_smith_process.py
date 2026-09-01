@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import sys
 from math import ceil
 from pathlib import Path
@@ -18,6 +17,7 @@ from jacobian._execution import (
 from jacobian.canonical import (
     CanonicalizationError,
     CanonicalLimits,
+    encode_strict_json,
     format_canonical_integer,
     loads_strict_json,
     parse_canonical_integer,
@@ -49,7 +49,7 @@ def smith_normal_form_killable(
     )
 
     _require_active(deadline, "before alternating Smith kernel")
-    payload = json.dumps(
+    payload = encode_strict_json(
         {
             "entries": [
                 [
@@ -59,8 +59,7 @@ def smith_normal_form_killable(
                 for row in matrix.entries
             ]
         },
-        separators=(",", ":"),
-    ).encode("utf-8")
+    )
     remaining = deadline - monotonic()
     if remaining <= 0:
         raise OperationExecutionTimeoutError(

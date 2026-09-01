@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.independence import (
     IndependenceNumberRequest,
     IndependenceNumberResult,
@@ -32,10 +31,10 @@ INDEPENDENCE_NUMBER_OPERATION = MathTool(
         "z3",
     ),
     examples=(
-        example(
-            "cycle_five",
-            "Compute the independence number of a five-cycle.",
-            {
+        OperationExample(
+            name="cycle_five",
+            description="Compute the independence number of a five-cycle.",
+            input={
                 "graph": {
                     "vertices": ["0", "1", "2", "3", "4"],
                     "edges": [

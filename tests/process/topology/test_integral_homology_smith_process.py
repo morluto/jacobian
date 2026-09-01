@@ -43,6 +43,21 @@ def _run_smith(deadline: float) -> _smith_process.SmithProcessResult:
     )
 
 
+def _run_singleton(value: int) -> _smith_process.SmithProcessResult:
+    bits = value.bit_length() + 1
+    return _smith_process.smith_reduce_in_worker(
+        [[value]],
+        rows=1,
+        columns=1,
+        deadline=time.monotonic() + 20,
+        left_bits=bits,
+        right_bits=bits,
+        diagonal_bits=bits,
+        left_inverse_bits=bits,
+        right_inverse_bits=bits,
+    )
+
+
 def test_cancellation_kills_the_smith_worker(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -143,6 +158,21 @@ def test_worker_projection_is_bound_to_the_admitted_source() -> None:
     assert (
         matrix_determinant(result.reduction.right) == result.reduction.right_determinant
     )
+
+
+def test_worker_round_trips_integer_beyond_python_decimal_conversion_limit() -> None:
+    value = 10**4_999 + 1
+
+    result = _run_singleton(value)
+
+    assert result.reduction.source == [[value]]
+    assert result.reduction.diagonal == [[value]]
+    assert result.reduction.invariant_factors == (value,)
+
+
+def test_worker_decoder_rejects_noninteroperable_json_integer() -> None:
+    with pytest.raises(ValueError, match="not interoperable"):
+        _smith_process._strict_int(1 << 53)
 
 
 def test_wrong_worker_digest_is_rejected(

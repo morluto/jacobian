@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from fractions import Fraction
-from itertools import pairwise
-from math import gcd, lcm
+from math import gcd
 from typing import Annotated, Self
 
 from pydantic import Field, StrictInt, WithJsonSchema, model_validator
@@ -489,44 +487,6 @@ class ConnectedSubtorusParameterization(StrictModel):
                 "subtorus_dimension",
                 "subtorus parameter dimension must not exceed ambient torus dimension",
             )
-        if self.parameter_dimension == 0:
-            return self
-        embedding = tuple(
-            tuple(parse_canonical_integer(value) for value in row)
-            for row in self.embedding.entries
-        )
-        if self.parameter_dimension == 1:
-            column = tuple(row[0] for row in embedding)
-            if not any(column):
-                raise _validation_error(
-                    "subtorus_rank", "subtorus embedding must have full column rank"
-                )
-            divisor = 0
-            for value in column:
-                divisor = gcd(divisor, abs(value))
-            if divisor != 1:
-                raise _validation_error(
-                    "subtorus_primitive",
-                    "subtorus embedding column must generate a primitive sublattice",
-                )
-        else:
-            from flint import fmpz_mat
-
-            matrix = fmpz_mat([list(row) for row in embedding])
-            if int(matrix.rank()) != self.parameter_dimension:
-                raise _validation_error(
-                    "subtorus_rank",
-                    "subtorus embedding must have full column rank",
-                )
-            smith = matrix.snf()
-            if any(
-                abs(int(smith[index, index])) != 1
-                for index in range(self.parameter_dimension)
-            ):
-                raise _validation_error(
-                    "subtorus_primitive",
-                    "subtorus embedding columns must generate a primitive sublattice",
-                )
         return self
 
 
@@ -562,87 +522,6 @@ class FiniteTorusComponentPresentation(StrictModel):
                 "presentation_invariants",
                 "invariant factor count must not exceed generator count",
             )
-        if rank > 0:
-            from flint import fmpz_mat
-
-            relation_matrix = fmpz_mat(
-                [
-                    [parse_canonical_integer(value) for value in row]
-                    for row in self.relation_matrix.entries
-                ]
-            )
-            if int(relation_matrix.rank()) != rank:
-                raise _validation_error(
-                    "presentation_rank",
-                    "finite component relation matrix must have full rank",
-                )
-            smith = relation_matrix.snf()
-            computed_factors = tuple(
-                abs(int(smith[index, index])) for index in range(rank)
-            )
-        else:
-            computed_factors = ()
-        orders = tuple(
-            parse_canonical_integer(value) for value in self.generator_orders
-        )
-        factors = tuple(
-            parse_canonical_integer(value) for value in self.invariant_factors
-        )
-        count = parse_canonical_integer(self.component_count)
-        if any(value <= 0 for value in orders):
-            raise _validation_error(
-                "presentation_orders", "component generator orders must be positive"
-            )
-        if rank > 0:
-            from flint import fmpq_mat
-
-            inverse = fmpq_mat(
-                [
-                    [parse_canonical_integer(value) for value in row]
-                    for row in self.relation_matrix.entries
-                ]
-            ).inv()
-            expected_orders = tuple(
-                lcm(*(int(inverse[row, column].q) for row in range(rank)))
-                for column in range(rank)
-            )
-            if orders != expected_orders:
-                raise _validation_error(
-                    "presentation_orders",
-                    "generator orders must match the corresponding standard "
-                    "generators of the declared relation matrix",
-                )
-        if any(value <= 1 for value in factors) or any(
-            right % left for left, right in pairwise(factors)
-        ):
-            raise _validation_error(
-                "presentation_invariants",
-                "nontrivial invariant factors must be positive and divide successively",
-            )
-        if computed_factors != tuple([1] * (rank - len(factors)) + list(factors)):
-            raise _validation_error(
-                "presentation_invariants",
-                "invariant factors must be the Smith factors of the relation matrix",
-            )
-        product = 1
-        for factor in factors:
-            product *= factor
-        if count <= 0 or product != count:
-            raise _validation_error(
-                "presentation_count",
-                "component count must equal the product of nontrivial invariant factors",
-            )
-        exponent = factors[-1] if factors else 1
-        if any(count % order for order in orders) or lcm(1, *orders) != exponent:
-            raise _validation_error(
-                "presentation_orders",
-                "generator orders must divide the component count and recover its exponent",
-            )
-        if rank == 0 and (orders or factors or count != 1):
-            raise _validation_error(
-                "presentation_zero_rank",
-                "the zero-generator presentation has one component",
-            )
         return self
 
 
@@ -674,65 +553,6 @@ class RationalTorusCosetFamily(StrictModel):
                 "generator_count",
                 "component generators must match the finite presentation",
             )
-        rank = self.finite_components.generator_count
-        if rank:
-            from flint import fmpz_mat
-
-            from jacobian.math.geometry.affine_tori._flint import (
-                _saturated_integer_kernel,
-            )
-
-            embedding = self.identity_component.embedding
-            embedding_matrix = fmpz_mat(
-                [
-                    [parse_canonical_integer(value) for value in row]
-                    for row in embedding.entries
-                ]
-            )
-            embedding_rank = int(embedding_matrix.rank())
-            if embedding_rank != embedding.column_count:
-                raise _validation_error(
-                    "subtorus_rank",
-                    "identity-component embedding must have full column rank",
-                )
-            annihilator = _saturated_integer_kernel(
-                embedding_matrix.transpose(),
-                rank=embedding_rank,
-            ).basis
-            relation_matrix = self.finite_components.relation_matrix.entries
-            for relation_column in range(rank):
-                relation_point = tuple(
-                    sum(
-                        (
-                            parse_canonical_integer(
-                                relation_matrix[row][relation_column]
-                            )
-                            * self.component_generators[row]
-                            .coordinates[coordinate]
-                            .as_fraction()
-                            for row in range(rank)
-                        ),
-                        Fraction(0),
-                    )
-                    for coordinate in range(self.ambient_torus.dimension)
-                )
-                for annihilator_column in range(
-                    self.ambient_torus.dimension - embedding_rank
-                ):
-                    pairing = sum(
-                        (
-                            int(annihilator[coordinate, annihilator_column])
-                            * relation_point[coordinate]
-                            for coordinate in range(self.ambient_torus.dimension)
-                        ),
-                        Fraction(0),
-                    )
-                    if pairing.denominator != 1:
-                        raise _validation_error(
-                            "relation_generators",
-                            "component generators must satisfy every declared relation "
-                            "modulo the identity component",
-                        )
         return self
 
 

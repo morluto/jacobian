@@ -12,7 +12,6 @@ from tempfile import TemporaryDirectory
 from typing import Any, cast
 
 from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -305,10 +304,10 @@ DOMINATION_MINIMUM_OPERATION = _operation(
     "domination",
     "minimum",
     examples=(
-        example(
-            "path_3",
-            "Path graph on 3 vertices.",
-            {
+        OperationExample(
+            name="path_3",
+            description="Path graph on 3 vertices.",
+            input={
                 "graph": {
                     "vertices": ["a", "b", "c"],
                     "edges": [["a", "b"], ["b", "c"]],
@@ -328,10 +327,10 @@ MINIMUM_MAXIMAL_MATCHING_OPERATION = _operation(
     "saturation_number",
     "minimum",
     examples=(
-        example(
-            "path_3_matching",
-            "Minimum maximal matching of path graph P3.",
-            {
+        OperationExample(
+            name="path_3_matching",
+            description="Minimum maximal matching of path graph P3.",
+            input={
                 "graph": {
                     "vertices": ["a", "b", "c"],
                     "edges": [["a", "b"], ["b", "c"]],
@@ -350,10 +349,10 @@ INDUCED_FOREST_MAXIMUM_OPERATION = _operation(
     "induced_forest",
     "maximum",
     examples=(
-        example(
-            "path_3",
-            "Path graph P3.",
-            {
+        OperationExample(
+            name="path_3",
+            description="Path graph P3.",
+            input={
                 "graph": {
                     "vertices": ["a", "b", "c"],
                     "edges": [["a", "b"], ["b", "c"]],
@@ -372,10 +371,10 @@ INDUCED_TREE_MAXIMUM_OPERATION = _operation(
     "induced_tree",
     "maximum",
     examples=(
-        example(
-            "path_3",
-            "Path graph P3.",
-            {
+        OperationExample(
+            name="path_3",
+            description="Path graph P3.",
+            input={
                 "graph": {
                     "vertices": ["a", "b", "c"],
                     "edges": [["a", "b"], ["b", "c"]],
@@ -394,10 +393,10 @@ INDUCED_BIPARTITE_MAXIMUM_OPERATION = _operation(
     "induced_bipartite",
     "maximum",
     examples=(
-        example(
-            "path_3",
-            "Path graph P3.",
-            {
+        OperationExample(
+            name="path_3",
+            description="Path graph P3.",
+            input={
                 "graph": {
                     "vertices": ["a", "b", "c"],
                     "edges": [["a", "b"], ["b", "c"]],

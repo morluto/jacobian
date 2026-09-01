@@ -16,8 +16,11 @@ from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.logic._smt import (
     SmtLogic,
     SmtSolveRequest,
@@ -1430,13 +1433,13 @@ SMT_UNSAT_CORE_OPERATION = MathTool(
     run=compute_smt_unsat_core,
     tags=("smt", "unsat", "core", "constraints", "z3"),
     examples=(
-        example(
-            "contradictory_integer_bounds",
-            (
+        OperationExample(
+            name="contradictory_integer_bounds",
+            description=(
                 "Extract an indexed core from contradictory integer bounds; the "
                 "SMT-LIB source must end in one check-sat and uses zero-based assertion indices."
             ),
-            {
+            input={
                 "logic": "QF_LIA",
                 "smtlib": (
                     "(set-logic QF_LIA)\n"

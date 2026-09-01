@@ -214,7 +214,7 @@ def test_strict_json_action_can_omit_the_defaulted_generator_family() -> None:
     request = InvariantBilinearFormLatticeRequest.model_validate_json(
         encode_strict_json(
             {
-                "action": {"coordinate_axis": ["e1"]},
+                "action": {"action_type": "RATIONAL", "coordinate_axis": ["e1"]},
                 "kind": "ALTERNATING",
             }
         ),
@@ -281,6 +281,7 @@ def test_raw_request_rejects_unknown_kind_before_nested_action_parsing() -> None
         InvariantBilinearFormLatticeRequest.model_validate(
             {
                 "action": {
+                    "action_type": "RATIONAL",
                     "coordinate_axis": ["x"],
                     "generators": [
                         {

@@ -1,9 +1,6 @@
 """Typed contracts for the hypergraph colouring decision operation."""
 
-from typing import Self
-
-from pydantic import model_validator
-from pydantic_core import PydanticCustomError
+from pydantic import Field
 
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
@@ -48,17 +45,7 @@ class HypergraphColoringRequest(StrictModel):
     """Request to decide q-colourability of a hypergraph."""
 
     hypergraph: FiniteHypergraph
-    palette_size: int
-
-    @model_validator(mode="after")
-    def require_bounded_search(self) -> Self:
-        failure = _hypergraph_coloring_admission_error(
-            self.hypergraph, self.palette_size
-        )
-        if failure is not None:
-            code, message = failure
-            raise PydanticCustomError(f"hypergraph_coloring.{code}", message)
-        return self
+    palette_size: int = Field(ge=1)
 
 
 class HypergraphColoringResult(StrictModel):

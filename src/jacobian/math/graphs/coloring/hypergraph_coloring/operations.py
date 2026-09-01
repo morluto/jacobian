@@ -43,13 +43,7 @@ def decide_hypergraph_coloring(
             palette_size=palette_size,
             colorable=False,
         )
-    if not edges or palette_size < 1:
-        if palette_size < 1:
-            return HypergraphColoringResult(
-                hypergraph=hypergraph,
-                palette_size=palette_size,
-                colorable=False,
-            )
+    if not edges:
         return HypergraphColoringResult(
             hypergraph=hypergraph,
             palette_size=palette_size,

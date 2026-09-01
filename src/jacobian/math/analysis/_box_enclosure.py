@@ -8,8 +8,11 @@ from typing import Any, Literal, Self
 from pydantic import Field, model_validator
 
 from jacobian._flint import flint_workprec
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.analysis._arb import arb_source_interval, dyadic_endpoints
 from jacobian.math.analysis._models import (
     MAX_BOX_PREFLIGHT_TEMPORARY_BITS,
@@ -359,10 +362,10 @@ BOX_EXPRESSION_ENCLOSURE_OPERATIONS = (
             "bounded",
         ),
         examples=(
-            example(
-                "exp_unit_interval",
-                "Enclose exp(x) over the exact rational interval 0 <= x <= 1.",
-                {
+            OperationExample(
+                name="exp_unit_interval",
+                description="Enclose exp(x) over the exact rational interval 0 <= x <= 1.",
+                input={
                     "expression": {
                         "op": "exp",
                         "children": [{"op": "var", "variable": "x"}],

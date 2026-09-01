@@ -20,8 +20,11 @@ from jacobian._execution import (
 from jacobian._flint import flint_workprec
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import CanonicalLimits, canonicalize_json
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.analysis._arb import arb_source_interval, dyadic_endpoints
 from jacobian.math.analysis._box_enclosure import (
     _BoxEvaluationFailure,
@@ -1359,14 +1362,14 @@ ADAPTIVE_RANGE_ENCLOSURE_OPERATIONS = (
             "bounded",
         ),
         examples=(
-            example(
-                "quadratic_unit_interval",
-                (
+            OperationExample(
+                name="quadratic_unit_interval",
+                description=(
                     "Enclose x(1-x) over 0 <= x <= 1 until width 7/16; "
                     "the complete named source axis and finite refinement budgets "
                     "must be supplied."
                 ),
-                {
+                input={
                     "expression": {
                         "op": "mul",
                         "children": [

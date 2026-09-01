@@ -643,6 +643,48 @@ def _result_validator_replay_violations(
     return tuple(violations)
 
 
+def _validator_backend_import_violations(
+    relative: PurePosixPath, tree: ast.AST
+) -> tuple[Violation, ...]:
+    """Keep backend and process imports out of Pydantic validator bodies."""
+
+    if not relative.is_relative_to(PurePosixPath("src/jacobian/math")):
+        return ()
+    violations: list[Violation] = []
+    for function in (
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and _is_model_validator(node)
+    ):
+        for imported in (
+            node
+            for node in ast.walk(function)
+            if isinstance(node, (ast.Import, ast.ImportFrom))
+        ):
+            modules = (
+                tuple(alias.name for alias in imported.names)
+                if isinstance(imported, ast.Import)
+                else (imported.module or "",)
+            )
+            if any(
+                module == "flint"
+                or module == "subprocess"
+                or module == "jacobian.process"
+                or module.endswith(("._backend", "._process"))
+                for module in modules
+            ):
+                violations.append(
+                    _violation(
+                        relative,
+                        imported,
+                        "validator-backend-import",
+                        "Pydantic validators must not invoke backends or processes; move mathematical verification to the owner operation or an explicit verifier",
+                    )
+                )
+    return tuple(violations)
+
+
 def _literal_string_sequence(tree: ast.AST, name: str) -> tuple[str, ...]:
     """Return a literal ``list`` or ``tuple`` assignment when one is present."""
 
@@ -1128,6 +1170,7 @@ def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
         *_environment_violations(relative, tree),
         *_evaluator_parser_violations(relative, tree),
         *_owner_operation_reentry_violations(relative, tree),
+        *_validator_backend_import_violations(relative, tree),
         *_result_validator_replay_violations(relative, tree),
         *_native_operations_wire_violations(root, relative, tree),
         *_unsafe_wire_conversion_violations(relative, tree),

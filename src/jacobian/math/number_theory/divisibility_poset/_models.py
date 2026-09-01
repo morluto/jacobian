@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
-
-from pydantic import Field, model_validator
-from pydantic_core import PydanticCustomError
+from pydantic import Field
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
@@ -46,16 +43,6 @@ class DivisibilityPosetRequest(StrictModel):
     """A bounded finite set of distinct positive integers for poset construction."""
 
     source_set: FiniteIntegerSet
-
-    @model_validator(mode="after")
-    def require_positive_and_bounded(self) -> Self:
-        failure = _divisibility_poset_admission_error(self.source_set)
-        if failure is not None:
-            code, message = failure
-            raise PydanticCustomError(
-                f"number_theory.divisibility_poset.{code}", message
-            )
-        return self
 
 
 class ElementSource(StrictModel):

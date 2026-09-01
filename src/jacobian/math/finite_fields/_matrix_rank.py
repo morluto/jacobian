@@ -17,8 +17,11 @@ from jacobian.canonical import (
     CanonicalLimits,
     encode_strict_json,
 )
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.finite_fields._matrix_rank_models import (
     MatrixRankRequest,
     MatrixRankResult,
@@ -182,10 +185,10 @@ MATRIX_RANK_OPERATION = MathTool(
     run=_run_matrix_rank,
     tags=("finite-field", "matrix", "rank", "exact"),
     examples=(
-        example(
-            "rank_one_over_f2",
-            "Rank [[1,1],[1,1]] over F_2 is 1; the matrix must use one consistent field presentation.",
-            {"matrix": _MATRIX},
+        OperationExample(
+            name="rank_one_over_f2",
+            description="Rank [[1,1],[1,1]] over F_2 is 1; the matrix must use one consistent field presentation.",
+            input={"matrix": _MATRIX},
         ),
     ),
 )

@@ -15,6 +15,7 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 __all__ = ["compute_cycle_length_profile"]
 
 MAX_SEARCH_WORK = 10_000_000
+MAX_CYCLE_PROFILE_RETAINED_LABEL_CHARACTERS = 100_000_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -194,6 +195,18 @@ def _admit(graph: SimpleUndirectedGraph) -> _AdmissionPlan:
         _reject(
             "cycle_profile.work_bound",
             "complete cycle-profile search exceeds the admitted work bound",
+        )
+    label_lengths = sorted((len(vertex) for vertex in graph.vertices), reverse=True)
+    retained_label_characters = sum(label_lengths) + sum(
+        len(left) + len(right) for left, right in graph.edges
+    )
+    retained_label_characters += sum(
+        sum(label_lengths[:length]) for length in range(3, vertex_count + 1)
+    )
+    if retained_label_characters > MAX_CYCLE_PROFILE_RETAINED_LABEL_CHARACTERS:
+        _reject(
+            "cycle_profile.retained_labels_exceed_bound",
+            "cycle profile exceeds the retained label-character bound",
         )
 
     return _AdmissionPlan(graph=graph, wheel_order=wheel_order)

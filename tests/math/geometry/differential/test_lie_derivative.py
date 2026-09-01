@@ -42,7 +42,9 @@ from jacobian.math.geometry.differential._recognition_process import (
 )
 from jacobian.math.geometry.differential.values import (
     MAX_RATIONAL_TENSOR_COMPONENTS,
+    MAX_RATIONAL_TENSOR_LOCUS_GUARDS,
     MAX_RATIONAL_TENSOR_RANK,
+    canonical_locus_guards,
 )
 from jacobian.math.polynomials._conversions import (
     rational_function_from_sympy,
@@ -1029,6 +1031,46 @@ def test_work_budget_rejection_precedes_coprimality_recognition(
         lie_derivative(vector, tensor)
 
     assert error.value.errors()[0]["type"].endswith("work_budget")
+
+
+def test_locus_guard_rejection_precedes_coprimality_recognition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    variables = ("x", "y")
+    one = _function(variables, (1, (0, 0)))
+    guards = canonical_locus_guards(
+        tuple(
+            SparseRationalPolynomial.model_validate(
+                _guard((1, (1, 0)), (index + 1, (0, 0)))
+            )
+            for index in range(MAX_RATIONAL_TENSOR_LOCUS_GUARDS + 1)
+        ),
+        variable_count=2,
+    )
+    vector = _tensor(
+        variables,
+        ("CONTRAVARIANT",),
+        (one, one),
+        guards=tuple(guard.model_dump(mode="json") for guard in guards[:385]),
+    )
+    scalar = _tensor(
+        variables,
+        (),
+        (one,),
+        guards=tuple(guard.model_dump(mode="json") for guard in guards[385:]),
+    )
+
+    def forbidden_recognition(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("doomed locus request reached recognition")
+
+    monkeypatch.setattr(
+        lie_bounds,
+        "recognize_canonical_rational_functions",
+        forbidden_recognition,
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="guard representation"):
+        lie_derivative(vector, scalar)
 
 
 def test_dispatch_start_owns_one_deadline_through_result_construction(

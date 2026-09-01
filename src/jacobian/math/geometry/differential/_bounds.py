@@ -21,6 +21,7 @@ from jacobian.math.geometry.differential._recognition_process import (
 from jacobian.math.geometry.differential.values import (
     MAX_RATIONAL_TENSOR_COEFFICIENT_DIGITS,
     MAX_RATIONAL_TENSOR_EXPONENT,
+    MAX_RATIONAL_TENSOR_LOCUS_GUARDS,
     MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS,
     RationalCoordinateTensor,
     canonical_locus_guards,
@@ -748,6 +749,17 @@ def build_lie_derivative_plan(
             location=("vector_field", "variance"),
         )
     dimension = len(tensor.coordinate_axis)
+    inherited_guards = canonical_locus_guards(
+        vector_field.retained_nonzero_denominators,
+        tensor.retained_nonzero_denominators,
+        variable_count=dimension,
+    )
+    if len(inherited_guards) > MAX_RATIONAL_TENSOR_LOCUS_GUARDS:
+        _reject(
+            "result_locus_guards",
+            "Lie-derivative retained locus exceeds the "
+            f"{MAX_RATIONAL_TENSOR_LOCUS_GUARDS}-guard representation budget",
+        )
     ledger = _Ledger(deadline=deadline)
     vector_bounds = tuple(
         _fraction_bound(value, ledger) for value in vector_field.components
@@ -830,12 +842,21 @@ def build_lie_derivative_plan(
             )
         )
 
-    inherited_guards = canonical_locus_guards(
-        vector_field.retained_nonzero_denominators,
-        tensor.retained_nonzero_denominators,
-        variable_count=dimension,
-    )
     plans = tuple(component_plans)
+    possible_result_guards = sum(
+        not component.raw_result.is_zero
+        and any(component.raw_result.denominator.degrees)
+        for component in plans
+    )
+    if (
+        len(inherited_guards) + possible_result_guards
+        > MAX_RATIONAL_TENSOR_LOCUS_GUARDS
+    ):
+        _reject(
+            "result_locus_guards",
+            "Lie-derivative retained locus can exceed the "
+            f"{MAX_RATIONAL_TENSOR_LOCUS_GUARDS}-guard representation budget",
+        )
     recognition_candidates = canonical_recognition_candidates(vector_field, tensor)
     for candidate in recognition_candidates:
         source_bounds = (

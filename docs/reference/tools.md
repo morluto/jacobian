@@ -34,6 +34,11 @@ time, error, timeout layer, and repository revision before retrying or
 reporting a gap. A retry should state what changed: budget, backend,
 representation, or deterministic partition.
 
+One request deadline covers strict parsing, owner execution, result projection,
+and canonical serialization. Cancellation and deadline checks also run between
+those phases; expiry after mathematical computation but before delivery is an
+operational failure, not a mathematical conclusion.
+
 Use `math.find` progressively: `search` finds a few relevance-ranked candidates,
 `browse` pages compact operation cards in operation-ID order (optionally within
 one exact primary namespace), and `inspect` supplies the selected operation's

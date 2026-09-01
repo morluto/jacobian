@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from contextlib import nullcontext
 from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
 from jacobian._execution import (
     OperationExecutionTimeoutError,
-    current_request_execution,
+    RequestCancellationSignal,
+    request_cancellation,
+    request_checkpoint,
     request_execution,
 )
 from jacobian._models import StrictModel
@@ -55,15 +57,6 @@ class _OperationResolutionError(ValueError):
     """The immutable catalog has no binding for the requested operation."""
 
 
-@dataclass(frozen=True, slots=True)
-class _PreparedOperation:
-    """One request parsed against its selected immutable operation binding."""
-
-    operation_id: OperationId
-    run: Callable[[StrictModel], StrictModel]
-    request: StrictModel
-
-
 def parse_operation_input[ModelT: BaseModel](
     model: type[ModelT], payload: dict[str, Any]
 ) -> ModelT:
@@ -80,66 +73,55 @@ def invoke_operation(
 ) -> OperationResult:
     """Select, parse, call, and project one typed mathematical operation."""
 
-    started = time.monotonic()
-    with request_execution(started):
-        return _invoke_prepared_operation(
-            _prepare_operation(operation_id, payload, catalog),
-            started=started,
-        )
-
-
-def _prepare_operation(
-    operation_id: OperationId,
-    payload: dict[str, Any],
-    catalog: Catalog,
-) -> _PreparedOperation:
-    """Select and parse one request before its kernel execution is scheduled."""
-
-    binding = catalog._binding(operation_id)
-    if binding is None:
-        raise _OperationResolutionError(f"unknown operation: {operation_id}")
-    try:
-        parsed = parse_operation_input(binding.request_type, payload)
-    except (CanonicalizationError, ValidationError) as exc:
-        raise OperationRequestValidationError(exc) from exc
-    return _PreparedOperation(
-        operation_id=operation_id,
-        run=binding.run,
-        request=parsed,
+    return execute_operation(
+        operation_id,
+        payload,
+        catalog,
+        projector=_operation_result_projector,
     )
 
 
-def _invoke_prepared_operation(
-    prepared: _PreparedOperation,
+def execute_operation[ProjectedT](
+    operation_id: OperationId,
+    payload: dict[str, Any],
+    catalog: Catalog,
     *,
-    started: float | None = None,
+    projector: Callable[[OperationId, StrictModel, float], ProjectedT],
+    cancellation_signal: RequestCancellationSignal | None = None,
+) -> ProjectedT:
+    """Own one complete parse, invocation, and projection execution envelope."""
+
+    started = time.monotonic()
+    cancellation_context = (
+        request_cancellation(cancellation_signal)
+        if cancellation_signal is not None
+        else nullcontext()
+    )
+    with request_execution(started), cancellation_context:
+        request_checkpoint("before parsing")
+        binding = catalog._binding(operation_id)
+        if binding is None:
+            raise _OperationResolutionError(f"unknown operation: {operation_id}")
+        try:
+            request = parse_operation_input(binding.request_type, payload)
+        except (CanonicalizationError, ValidationError) as exc:
+            raise OperationRequestValidationError(exc) from exc
+        request_checkpoint("after parsing")
+        result = binding.run(request)
+        request_checkpoint("after operation execution")
+        projected = projector(operation_id, result, started)
+        request_checkpoint("after result projection")
+        return projected
+
+
+def _operation_result_projector(
+    operation_id: OperationId,
+    result: StrictModel,
+    started: float,
 ) -> OperationResult:
-    """Run one already-admitted request and project its typed result."""
-
-    if started is None:
-        started = time.monotonic()
-    result = prepared.run(prepared.request)
-    execution = current_request_execution()
-    if (
-        execution is not None
-        and execution.deadline is not None
-        and time.monotonic() >= execution.deadline
-    ):
-        raise OperationExecutionTimeoutError(
-            "request deadline expired before result serialization"
-        )
     output = result.model_dump(mode="json")
-    if (
-        execution is not None
-        and execution.deadline is not None
-        and time.monotonic() >= execution.deadline
-    ):
-        raise OperationExecutionTimeoutError(
-            "request deadline expired during result serialization"
-        )
-
     return OperationResult(
-        operation_id=prepared.operation_id,
+        operation_id=operation_id,
         runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
         output=output,
     )
@@ -149,6 +131,7 @@ __all__ = [
     "OperationDomainValidationError",
     "OperationExecutionTimeoutError",
     "OperationRequestValidationError",
+    "execute_operation",
     "invoke_operation",
     "parse_operation_input",
 ]

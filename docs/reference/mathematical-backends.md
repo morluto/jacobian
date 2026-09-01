@@ -126,13 +126,22 @@ A child-process adapter has the same obligations plus:
 - distinct typed unavailable, timeout, cancellation, and execution-error
   outcomes.
 
-The parent owns admission, the retained canonical source, and final result
-construction. A worker returns a compact derived projection only; it must not
-echo or replace source values. Bind its projection to the admitted parent source
-before trusted result construction. Structurally decode the projection, but do
-not pass worker output through the complete public result model or any nested
-validator that replays mathematical work. Size stdin and stdout limits for the
-actual UTF-8 worker payload, not for a different public representation.
+The parent owns admission and final result construction. Every worker boundary
+checks object shape, collection cardinality, row widths, and scalar syntax
+before materializing nested values. Use the canonical codec when encoded bytes
+participate in a digest or size proof; otherwise a strict, deterministic,
+non-evaluating codec is sufficient. Mathematical integers that may exceed the
+interoperable JSON range use canonical decimal strings, while intrinsically
+bounded counters may remain JSON integers.
+
+When a worker returns a derived projection of canonical source retained by the
+parent, it must not echo or replace that source. Bind the projection to the
+admitted source before trusted result construction. Workers that return a
+self-contained bounded value do not need an artificial source digest.
+Structurally decode projections, but do not pass worker output through the
+complete public result model or any nested validator that replays mathematical
+work. Size stdin and stdout limits for the actual UTF-8 worker payload, not for
+a different public representation.
 
 Child processes use the shared bounded-process supervisor. Backend adapters test
 their codec, source binding, and outcome projection; the supervisor's owning

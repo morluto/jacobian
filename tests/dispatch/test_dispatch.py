@@ -6,13 +6,18 @@ from typing import cast
 import pytest
 from pydantic import ValidationError, field_serializer, model_validator
 
-from jacobian._execution import bind_request_deadline, current_request_execution
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    bind_request_deadline,
+    current_request_execution,
+)
 from jacobian._models import StrictModel
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import (
     OperationExecutionTimeoutError,
     OperationRequestValidationError,
+    execute_operation,
     invoke_operation,
 )
 from jacobian.math.finite_fields import (
@@ -270,12 +275,45 @@ def test_runtime_includes_canonical_result_projection(
 def test_dispatch_deadline_covers_parsing_execution_and_serialization(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    clock = iter((100.0, 101.0, 103.0, 103.0))
+    clock = iter((100.0, 101.0, 103.0, 103.0, 103.0))
     monkeypatch.setattr(time, "monotonic", lambda: next(clock))
 
-    with pytest.raises(OperationExecutionTimeoutError, match="serialization"):
+    with pytest.raises(OperationExecutionTimeoutError, match="after result projection"):
         invoke_operation(
             "test.request-envelope",
             {"value": 7},
             cast(Catalog, _CatalogWithRequestEnvelope()),
+        )
+
+
+def test_shared_execution_rejects_cancellation_before_parsing() -> None:
+    class Cancelled:
+        @staticmethod
+        def is_set() -> bool:
+            return True
+
+    with pytest.raises(OperationExecutionCancelledError, match="before parsing"):
+        execute_operation(
+            "test.invalid-result",
+            {"value": 1},
+            cast(Catalog, _CatalogWithInvalidResult()),
+            projector=lambda _operation_id, result, _started: result,
+            cancellation_signal=Cancelled(),
+        )
+
+
+def test_shared_execution_checks_deadline_after_projection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = iter((100.0, 101.0, 101.0, 103.0))
+    monkeypatch.setattr(time, "monotonic", lambda: next(clock))
+
+    with pytest.raises(OperationExecutionTimeoutError, match="after result projection"):
+        execute_operation(
+            "test.request-envelope",
+            {"value": 7},
+            cast(Catalog, _CatalogWithRequestEnvelope()),
+            projector=lambda _operation_id, result, _started: result.model_dump(
+                mode="json"
+            ),
         )

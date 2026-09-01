@@ -35,7 +35,6 @@ from jacobian._execution import (
     RequestCancellationSignal,
     current_request_cancellation,
     request_cancellation,
-    request_cancelled,
 )
 
 __all__ = [
@@ -47,7 +46,6 @@ __all__ = [
     "ProcessPlatformTools",
     "ProcessResourceLimits",
     "bounded_process_cancellation",
-    "bounded_process_cancelled",
     "run_bounded_process",
     "run_bounded_worker_dialogue",
     "worker_environment",
@@ -441,12 +439,6 @@ def bounded_process_cancellation(
 
     with request_cancellation(event):
         yield
-
-
-def bounded_process_cancelled() -> bool:
-    """Report whether the current operation worker has lost its client."""
-
-    return request_cancelled()
 
 
 @dataclass(frozen=True, slots=True)

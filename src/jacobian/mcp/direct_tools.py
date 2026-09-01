@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -13,27 +12,23 @@ from mcp.server.mcpserver.utilities.func_metadata import ArgModelBase, FuncMetad
 from mcp.shared.exceptions import MCPError
 from mcp.shared.tool_name_validation import validate_tool_name
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
-from pydantic import ValidationError
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
-    current_request_execution,
-    request_execution,
 )
-from jacobian.canonical import CanonicalizationError, encode_strict_json
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.dispatch import (
     OperationExecutionTimeoutError,
     OperationRequestValidationError,
-    parse_operation_input,
+    execute_operation,
 )
 from jacobian.mcp.runtime import AppState, _authorize
 from jacobian.mcp.tools import (
     _invalid_request_error,
     _request_cancellation,
 )
-from jacobian.process import bounded_process_cancellation
 
 _FIXED_TOOL_NAMES = frozenset({"math.find", "math.run"})
 
@@ -67,8 +62,7 @@ def _direct_operation_tool(
     catalog: Catalog,
 ) -> Tool:
     operation_id = _operation_tool_name(operation.operation_id)
-    binding = catalog._binding(operation_id)
-    if binding is None:  # pragma: no cover - catalog iteration and binding are atomic
+    if catalog._binding(operation_id) is None:  # pragma: no cover
         raise RuntimeError(f"catalog binding disappeared for {operation_id}")
 
     def execute(
@@ -79,25 +73,24 @@ def _direct_operation_tool(
         _authorize(ctx)
         cancellation = _request_cancellation(ctx)
         try:
-            started = time.monotonic()
-            with bounded_process_cancellation(cancellation), request_execution(started):
-                if cancellation.is_set():
-                    raise ToolError("operation cancelled before execution")
-                try:
-                    request = parse_operation_input(operation.request_type, payload)
-                except (CanonicalizationError, ValidationError) as cause:
-                    raise OperationRequestValidationError(cause) from cause
-                if cancellation.is_set():
-                    raise ToolError("operation cancelled before execution")
-                result = binding.run(request)
-                _require_active_deadline("before result serialization")
+
+            def project(
+                _operation_id: str, result: Any, _started: float
+            ) -> CallToolResult:
                 structured_content = result.model_dump(mode="json", by_alias=True)
                 content = encode_strict_json(structured_content).decode("utf-8")
-                _require_active_deadline("during result serialization")
                 return CallToolResult(
                     content=[TextContent(type="text", text=content)],
                     structured_content=structured_content,
                 )
+
+            return execute_operation(
+                operation_id,
+                payload,
+                catalog,
+                projector=project,
+                cancellation_signal=cancellation,
+            )
         except (OperationRequestValidationError, OperationDomainValidationError) as exc:
             raise _invalid_request_error(operation_id, exc) from exc
         except OperationExecutionTimeoutError as exc:
@@ -199,16 +192,6 @@ def _operation_tool_name(operation_id: str) -> str:
     if not validation.is_valid:
         raise ValueError(f"operation ID is not an MCP-safe tool name: {operation_id}")
     return operation_id
-
-
-def _require_active_deadline(stage: str) -> None:
-    execution = current_request_execution()
-    if (
-        execution is not None
-        and execution.deadline is not None
-        and time.monotonic() >= execution.deadline
-    ):
-        raise OperationExecutionTimeoutError(f"request deadline expired {stage}")
 
 
 __all__ = ["direct_operation_tools"]

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
@@ -73,6 +74,20 @@ def request_cancelled() -> bool:
     return event is not None and event.is_set()
 
 
+def request_checkpoint(stage: str) -> None:
+    """Reject a cancelled or expired request at one documented execution stage."""
+
+    if request_cancelled():
+        raise OperationExecutionCancelledError(f"request cancelled {stage}")
+    execution = current_request_execution()
+    if (
+        execution is not None
+        and execution.deadline is not None
+        and time.monotonic() >= execution.deadline
+    ):
+        raise OperationExecutionTimeoutError(f"request deadline expired {stage}")
+
+
 class OperationExecutionTimeoutError(TimeoutError):
     """The request-scoped owner envelope expired."""
 
@@ -99,5 +114,6 @@ __all__ = [
     "current_request_execution",
     "request_cancellation",
     "request_cancelled",
+    "request_checkpoint",
     "request_execution",
 ]

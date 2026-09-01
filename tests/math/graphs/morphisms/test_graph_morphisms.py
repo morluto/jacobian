@@ -17,6 +17,7 @@ from jacobian.math.graphs.morphisms._tools import (
     _compute_homomorphism_check,
 )
 from jacobian.math.graphs.morphisms.operations import (
+    MAX_MORPHISM_RETAINED_LABEL_CHARACTERS,
     fixed_length_cycle,
     homomorphism_check,
     subgraph_pattern_find,
@@ -215,6 +216,14 @@ def test_homomorphism_check_has_no_transport_derived_ceiling() -> None:
     )
 
     assert result.status == "HOMOMORPHISM"
+
+
+def test_homomorphism_check_rejects_unbounded_retained_labels() -> None:
+    label = "a" * (MAX_MORPHISM_RETAINED_LABEL_CHARACTERS // 6 + 1)
+    vertex_map = _vertex_map((label,), (), ("b",), (), ((label, "b"),))
+
+    with pytest.raises(OperationDomainValidationError, match="label-character"):
+        homomorphism_check(vertex_map)
 
 
 def _canonical_graph(
@@ -538,7 +547,7 @@ class TestSubgraphPatternFind:
         assert MAX_CYCLE_SEARCH_PATHS > 11 * 10 * 9 * 8 * 7 * 6 * 5 * 4
         assert SubgraphPatternFindRequest(pattern=pat, host=host).pattern == pat
 
-    def test_cycle_result_has_no_transport_derived_ceiling(self) -> None:
+    def test_cycle_result_rejects_unbounded_retained_labels(self) -> None:
         from jacobian.math.graphs.morphisms._models import FixedLengthCycleRequest
         from jacobian.math.graphs.morphisms._tools import (
             _compute_fixed_length_cycle,
@@ -551,9 +560,8 @@ class TestSubgraphPatternFind:
         labels = [huge] + [f"w{i}" for i in range(19)]
         g = self._g(labels, [])
         request = FixedLengthCycleRequest(graph=g, length=3)
-        result = _compute_fixed_length_cycle(request)
-
-        assert result.decision == "DOES_NOT_EXIST"
+        with pytest.raises(OperationDomainValidationError, match="label-character"):
+            _compute_fixed_length_cycle(request)
 
     def test_negative_decision_is_structural_inside_request_domain(self) -> None:
         import pytest

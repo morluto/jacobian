@@ -191,9 +191,9 @@ class FixedLengthCycleRequest(StrictModel):
                 "cycle of length `length` (3..64) in a graph with at most 64 "
                 "vertices. The request is rejected when "
                 "the worst-case exhaustive search would exceed the work budget, "
-                "or when the retained source graph plus witness labels would not "
-                "leave enough canonical-output headroom for the echoed-source "
-                "response. Accepts the domain-owned `SimpleUndirectedGraph` so "
+                "or when the retained source graph plus witness labels exceed "
+                "the owner-local representation bound. Accepts the domain-owned "
+                "`SimpleUndirectedGraph` so "
                 "callers can compose the output of `explicit_graph` or "
                 "`compose_graphs` directly."
             )

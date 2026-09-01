@@ -19,6 +19,22 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 __all__ = ["fixed_length_cycle", "homomorphism_check", "subgraph_pattern_find"]
 
+MAX_MORPHISM_RETAINED_LABEL_CHARACTERS = 10_000_000
+
+
+def _graph_label_characters(graph: SimpleUndirectedGraph) -> int:
+    return sum(len(vertex) for vertex in graph.vertices) + sum(
+        len(left) + len(right) for left, right in graph.edges
+    )
+
+
+def _reject_retained_labels(location: tuple[str, ...]) -> None:
+    raise OperationDomainValidationError(
+        location=location,
+        code="graph.morphism.retained_labels_exceed_bound",
+        message="morphism result exceeds the retained label-character bound",
+    )
+
 
 def _admit_cycle_request(graph: SimpleUndirectedGraph, length: int) -> None:
     """Admit the cross-field search and retained-result envelope."""
@@ -51,10 +67,28 @@ def _admit_cycle_request(graph: SimpleUndirectedGraph, length: int) -> None:
                 f"{MAX_CYCLE_SEARCH_PATHS}-path work budget"
             ),
         )
+    largest_label = max((len(vertex) for vertex in graph.vertices), default=0)
+    if (
+        _graph_label_characters(graph) + length * largest_label
+        > MAX_MORPHISM_RETAINED_LABEL_CHARACTERS
+    ):
+        _reject_retained_labels(("graph",))
 
 
 def _admit_homomorphism_request(vertex_map: GraphVertexMap) -> None:
-    """Admit one structurally bounded source map."""
+    """Admit one source map and its largest possible retained obstruction."""
+
+    labels = vertex_map.source_graph.vertices + vertex_map.target_graph.vertices
+    retained = (
+        _graph_label_characters(vertex_map.source_graph)
+        + _graph_label_characters(vertex_map.target_graph)
+        + sum(
+            len(row.source_vertex) + len(row.target_vertex) for row in vertex_map.rows
+        )
+        + 4 * max((len(label) for label in labels), default=0)
+    )
+    if retained > MAX_MORPHISM_RETAINED_LABEL_CHARACTERS:
+        _reject_retained_labels(("vertex_map",))
 
 
 def _admit_subgraph_request(
@@ -86,6 +120,14 @@ def _admit_subgraph_request(
                     f"{MAX_CYCLE_SEARCH_PATHS}-assignment work budget"
                 ),
             )
+    largest_host_label = max((len(vertex) for vertex in host.vertices), default=0)
+    retained = (
+        _graph_label_characters(pattern)
+        + _graph_label_characters(host)
+        + pattern_size * largest_host_label
+    )
+    if retained > MAX_MORPHISM_RETAINED_LABEL_CHARACTERS:
+        _reject_retained_labels(("pattern", "host"))
 
 
 def homomorphism_check(vertex_map: GraphVertexMap) -> HomomorphismCheckResult:

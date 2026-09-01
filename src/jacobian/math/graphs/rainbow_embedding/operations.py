@@ -21,6 +21,7 @@ from jacobian.math.graphs.values import (
 __all__ = ["compute_rainbow_embedding_profile"]
 
 MAX_RAINBOW_EMBEDDING_WORK = 50_000_000
+MAX_RAINBOW_RETAINED_LABEL_CHARACTERS = 20_000_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,12 +30,10 @@ class _RainbowAdmissionPlan:
     rainbow_possible: bool
 
 
-def _json_array_size(item_sizes: list[int]) -> int:
-    return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
-
-
-def _repeated_array_size(item_size: int, count: int) -> int:
-    return 2 + max(count - 1, 0) + item_size * count
+def _graph_label_characters(graph: SimpleUndirectedGraph) -> int:
+    return sum(len(vertex) for vertex in graph.vertices) + sum(
+        len(left) + len(right) for left, right in graph.edges
+    )
 
 
 def _admit_rainbow_embedding_profile(
@@ -67,16 +66,6 @@ def _admit_rainbow_embedding_profile(
             code="graph.rainbow_embedding.edge_colors_must_cover_edges",
             message="edge_colors must be empty or align with every host edge",
         )
-    try:
-        for label in (*pattern.vertices, *host.graph.vertices, *host.edge_colors):
-            label.encode("utf-8")
-    except UnicodeEncodeError as exc:
-        raise OperationDomainValidationError(
-            location=("pattern", "host"),
-            code="graph.rainbow_embedding.invalid_unicode_label",
-            message="graph and color labels must contain valid Unicode scalar values",
-        ) from exc
-
     candidate_count = 0
     if (
         pattern_order <= host_order
@@ -96,6 +85,28 @@ def _admit_rainbow_embedding_profile(
             message="rainbow embedding enumeration exceeds its exact work bound",
         )
     rainbow_possible = len(set(host.edge_colors)) >= len(pattern.edges)
+    witness_count = candidate_count if rainbow_possible else 0
+    largest_host_labels = sorted(
+        (len(vertex) for vertex in host.graph.vertices), reverse=True
+    )[:pattern_order]
+    largest_color = max((len(color) for color in host.edge_colors), default=0)
+    witness_label_characters = (
+        sum(len(vertex) for vertex in pattern.vertices)
+        + sum(largest_host_labels)
+        + len(pattern.edges) * largest_color
+    )
+    retained_label_characters = (
+        _graph_label_characters(pattern)
+        + _graph_label_characters(host.graph)
+        + sum(len(color) for color in host.edge_colors)
+        + witness_count * witness_label_characters
+    )
+    if retained_label_characters > MAX_RAINBOW_RETAINED_LABEL_CHARACTERS:
+        raise OperationDomainValidationError(
+            location=("pattern", "host"),
+            code="graph.rainbow_embedding.retained_labels_exceed_bound",
+            message="rainbow embedding result exceeds the retained label-character bound",
+        )
 
     return _RainbowAdmissionPlan(candidate_count, rainbow_possible)
 

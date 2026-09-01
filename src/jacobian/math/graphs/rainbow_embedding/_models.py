@@ -42,7 +42,7 @@ RainbowPatternGraph = Annotated[
             maximum=MAX_PATTERN_VERTICES,
             description=(
                 "A pattern graph within the canonical simple-graph vertex bound; "
-                "admission uses the exact work and output envelopes."
+                "admission uses exact work and retained-label bounds."
             ),
         )
     ),
@@ -55,8 +55,8 @@ RainbowHostGraph = Annotated[
             maximum=MAX_HOST_VERTICES,
             description=(
                 "A coloured host graph within the canonical simple-graph vertex "
-                "bound and with a total edge coloring; admission uses the exact "
-                "work and output envelopes."
+                "bound and with a total edge coloring; admission uses exact work "
+                "and retained-label bounds."
             ),
         )
     ),

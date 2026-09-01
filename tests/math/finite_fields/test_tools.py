@@ -9,6 +9,7 @@ from jacobian.math.finite_fields import (
     FiniteFieldPresentation,
     FiniteLinearMap,
     FiniteMapTable,
+    HomogeneousFixedSubspace,
     ProjectiveLine,
     RankResult,
     direction_rank_ledger,
@@ -43,10 +44,22 @@ def test_bundle_declares_atomic_inline_typed_operations() -> None:
         "finite_field.polynomial_map.collision.analyze",
         "finite_field.polynomial_map.permutation.analyze",
         "finite_field.paley_tournament.construct",
+        "finite_field.prime_linear_action.homogeneous_fixed_subspace.compute",
     )
-    projective, _, restrict_operation, rank_operation, _, _, table, _, _, _, paley = (
-        bundle
-    )
+    (
+        projective,
+        _,
+        restrict_operation,
+        rank_operation,
+        _,
+        _,
+        table,
+        _,
+        _,
+        _,
+        paley,
+        fixed,
+    ) = bundle
     for operation in bundle:
         assert isinstance(operation, MathTool)
         assert not hasattr(operation, "provider_binding")
@@ -56,6 +69,7 @@ def test_bundle_declares_atomic_inline_typed_operations() -> None:
     assert rank_operation.result_type is RankResult
     assert table.result_type is FiniteMapTable
     assert paley.request_type is PaleyTournamentRequest
+    assert fixed.result_type is HomogeneousFixedSubspace
 
 
 def test_projective_enumeration_refuses_large_output_before_allocation() -> None:
@@ -149,14 +163,14 @@ def test_oversized_presentation_rejects_during_request_parsing() -> None:
     )
 
 
-def test_oversized_axis_rejects_during_request_parsing() -> None:
+def test_axis_beyond_shared_matrix_bound_rejects_during_request_parsing() -> None:
     with pytest.raises(ValidationError) as error:
         ProjectiveLineRequest(
             presentation=FiniteFieldPresentation(
                 characteristic=2,
                 modulus_coefficients=(1, 1, 1),
             ),
-            axis=Axis(name="large", labels=tuple(f"x{i}" for i in range(257))),
+            axis=Axis(name="large", labels=tuple(f"x{i}" for i in range(1025))),
         )
     assert (
         error.value.errors()[0]["type"]

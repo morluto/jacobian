@@ -2,14 +2,29 @@
 
 from __future__ import annotations
 
+import sys
+import time
+from collections.abc import Callable
+from itertools import combinations
 from typing import Literal
 
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    current_request_execution,
+    request_cancelled,
+)
 from jacobian.canonical import (
     CanonicalizationError,
     CanonicalLimits,
     encode_strict_json,
+    strict_json_object_size,
 )
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.finite_fields._fixed_subspace_process import (
+    run_fixed_subspace_linear_algebra,
+)
 from jacobian.math.finite_fields._matrix_rank import compute_matrix_rank
 from jacobian.math.finite_fields._matrix_rank_models import MatrixRankResult
 from jacobian.math.finite_fields._models import (
@@ -29,19 +44,30 @@ from jacobian.math.finite_fields.values import (
     FiniteMapTable,
     FinitePolynomial,
     FinitePolynomialMap,
+    HomogeneousFixedSubspace,
     OrbitDistribution,
     PaleyTournamentResult,
     PermutationResult,
+    PrimeFieldLinearAction,
     ProjectiveLine,
     ProjectivePoint,
     RankResult,
     _direction_rank_work,
+    _homogeneous_monomial_count,
 )
 from jacobian.math.graphs.directed._models import (
     MAX_DIRECTED_GRAPH_PARSE_EDGES,
     DirectedGraph,
 )
-from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
+from jacobian.math.matrices.finite_fields._bounds import (
+    MAX_PRIME_FIELD_ELIMINATION_WORK,
+    MAX_PRIME_FIELD_MATRIX_AXIS,
+    MAX_PRIME_FIELD_MATRIX_CELLS,
+)
+from jacobian.math.matrices.finite_fields.linear_algebra import (
+    PrimeFieldMatrix,
+    rank,
+)
 
 _MAX_FINITE_MAP_WORK = 1_000_000
 _MAX_PALEY_TOURNAMENT_WORK = 4_000_000
@@ -53,6 +79,176 @@ _PALEY_ORIENTATION: Literal["ARC_X_TO_Y_IFF_Y_MINUS_X_IS_NONZERO_SQUARE"] = (
 def matrix_rank(matrix: AxisBoundMatrix) -> MatrixRankResult:
     """Return the exact rank certificate for an axis-bound finite-field matrix."""
     return compute_matrix_rank(matrix)
+
+
+# Separate calibrated bound for the Python-level substitution loop in
+# _induced_action_matrix. Each monomial substitution performs sum(exponents)
+# calls to _multiply_by_linear_form, each iterating over at most
+# monomial_count terms. The bound is monomial_count * degree * monomial_count
+# per generator. FLINT elimination work and Python substitution work are not
+# interchangeable: one billion FLINT matrix-rank cells finish in seconds, but
+# one billion Python loop iterations take minutes.
+_MAX_PYTHON_SUBSTITUTION_WORK = 10_000_000
+_FIXED_SUBSPACE_WALL_SECONDS = 600.0
+
+
+def _prime_exceeds_worker_json_limit(prime: int) -> bool:
+    """Check the interpreter's decimal-integer JSON conversion boundary."""
+
+    digit_limit = sys.get_int_max_str_digits()
+    return digit_limit > 0 and prime >= 10**digit_limit
+
+
+def _fixed_subspace_checkpoint(deadline: float | None, stage: str) -> None:
+    if request_cancelled():
+        raise OperationExecutionCancelledError(
+            f"finite-field fixed-subspace computation cancelled {stage}"
+        )
+    if deadline is not None and time.monotonic() >= deadline:
+        raise OperationExecutionTimeoutError(
+            f"finite-field fixed-subspace deadline expired {stage}"
+        )
+
+
+def _homogeneous_fixed_subspace_output_bytes(
+    action: PrimeFieldLinearAction, degree: int, monomial_count: int
+) -> int:
+    """Measure the largest feasible canonical RREF result before execution."""
+
+    monomial_basis = _homogeneous_monomial_basis(
+        len(action.variable_axis.labels), degree
+    )
+
+    def array_size(item_sizes: list[int]) -> int:
+        return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
+
+    action_size = len(encode_strict_json(action.model_dump(mode="json")))
+    monomial_basis_size = len(
+        encode_strict_json([list(exponents) for exponents in monomial_basis])
+    )
+    degree_size = len(encode_strict_json(degree))
+    columns_size = len(encode_strict_json(monomial_count))
+    prime_size = len(encode_strict_json(action.prime))
+    largest_residue_size = len(encode_strict_json(action.prime - 1))
+
+    def result_size(fixed_dimension: int) -> int:
+        # In canonical RREF, the fixed-dimension pivot columns contain only
+        # zeroes and ones. Every other cell can contain the largest residue.
+        # This accounts for every feasible rank without materializing one
+        # million-cell probes for all ranks.
+        row_value_size = (
+            fixed_dimension + (monomial_count - fixed_dimension) * largest_residue_size
+        )
+        row_size = 2 + max(monomial_count - 1, 0) + row_value_size
+        entries_size = array_size([row_size] * fixed_dimension)
+        basis_matrix_size = strict_json_object_size(
+            (
+                ("columns", columns_size),
+                ("entries", entries_size),
+                ("prime", prime_size),
+            )
+        )
+        return strict_json_object_size(
+            (
+                ("action", action_size),
+                ("basis_matrix", basis_matrix_size),
+                ("degree", degree_size),
+                ("fixed_dimension", len(encode_strict_json(fixed_dimension))),
+                ("monomial_basis", monomial_basis_size),
+            )
+        )
+
+    try:
+        return max(
+            result_size(fixed_dimension)
+            for fixed_dimension in range(monomial_count + 1)
+        )
+    except CanonicalizationError as error:
+        raise OperationDomainValidationError(
+            location=("action",),
+            code="finite_field.fixed_subspace_output_bound",
+            message="canonical fixed-subspace result is not transportable",
+        ) from error
+
+
+def _homogeneous_fixed_subspace_envelope(
+    action: PrimeFieldLinearAction,
+    degree: int,
+    *,
+    enforce_transport_limit: bool,
+    checkpoint: Callable[[str], None],
+) -> int:
+    checkpoint("before admission")
+    if type(degree) is not int or degree < 0:
+        raise OperationDomainValidationError(
+            location=("degree",),
+            code="finite_field.fixed_subspace_degree_bound",
+            message="degree must be a nonnegative integer",
+        )
+    if _prime_exceeds_worker_json_limit(action.prime):
+        raise OperationDomainValidationError(
+            location=("action", "generator_matrices"),
+            code="finite_field.linear_action_prime_serialization_bound",
+            message="linear-action prime exceeds the worker JSON integer serialization bound",
+        )
+    variable_count = len(action.variable_axis.labels)
+    generator_count = len(action.generator_matrices)
+    monomial_count = _homogeneous_monomial_count(variable_count, degree)
+    checkpoint("after shape admission")
+    equation_rows = generator_count * monomial_count
+    equation_entries = generator_count * monomial_count**2
+    output_entries = monomial_count**2
+    expansion_work = (
+        generator_count * max(1, degree) * variable_count * monomial_count**2
+    )
+    # One elimination solves the stacked fixed equations; the second puts the
+    # returned nullspace rows into backend-independent canonical RREF form.
+    elimination_work = (generator_count + 1) * monomial_count**3
+    action_rank_work = generator_count * variable_count**3
+    # The Python substitution loop does sum(exponents) calls to
+    # _multiply_by_linear_form per monomial, each iterating over at most
+    # monomial_count terms. Bound it separately from FLINT work.
+    substitution_work = generator_count * max(1, degree) * monomial_count**2
+    if equation_rows > MAX_PRIME_FIELD_MATRIX_AXIS:
+        raise OperationDomainValidationError(
+            location=("action", "generator_matrices"),
+            code="finite_field.fixed_subspace_equation_axis_bound",
+            message="stacked fixed-subspace equations exceed the matrix axis bound",
+        )
+    if (
+        equation_entries > MAX_PRIME_FIELD_MATRIX_CELLS
+        or output_entries > MAX_PRIME_FIELD_MATRIX_CELLS
+    ):
+        raise OperationDomainValidationError(
+            location=("action",),
+            code="finite_field.fixed_subspace_matrix_bound",
+            message="fixed-subspace equation or result matrix exceeds its cell bound",
+        )
+    if substitution_work > _MAX_PYTHON_SUBSTITUTION_WORK:
+        raise OperationDomainValidationError(
+            location=("degree",),
+            code="finite_field.fixed_subspace_substitution_bound",
+            message="Python substitution loop exceeds the separately calibrated expansion bound",
+        )
+    work = expansion_work + elimination_work + action_rank_work
+    if work > MAX_PRIME_FIELD_ELIMINATION_WORK:
+        raise OperationDomainValidationError(
+            location=("action",),
+            code="finite_field.fixed_subspace_work_bound",
+            message="homogeneous fixed-subspace computation exceeds its work bound",
+        )
+    if enforce_transport_limit:
+        result_bytes = _homogeneous_fixed_subspace_output_bytes(
+            action, degree, monomial_count
+        )
+        if result_bytes > CanonicalLimits().max_output_bytes:
+            raise OperationDomainValidationError(
+                location=("action",),
+                code="finite_field.fixed_subspace_output_bound",
+                message="canonical fixed-subspace result exceeds the output-size envelope",
+            )
+    checkpoint("after result admission")
+    return monomial_count
 
 
 def finite_field(
@@ -359,6 +555,170 @@ def linear_map_rank(
         linear_map=linear_map,
         rank=_flint.matrix_rank(linear_map.matrix),
     )
+
+
+def _homogeneous_monomial_basis(
+    variable_count: int, degree: int
+) -> tuple[tuple[int, ...], ...]:
+    """Return degree-d exponent vectors in descending lexicographic order."""
+
+    if variable_count == 1:
+        return ((degree,),)
+
+    # A weak composition is determined by the positions of its variable_count
+    # minus one separators among degree + variable_count - 1 slots. Reversing
+    # the lexicographically ordered separator choices gives the established
+    # descending exponent order without recursive calls or a deep Python stack.
+    slot_count = degree + variable_count - 1
+    separator_count = variable_count - 1
+    compositions: list[tuple[int, ...]] = []
+    for separators in reversed(tuple(combinations(range(slot_count), separator_count))):
+        previous = -1
+        exponents: list[int] = []
+        for separator in separators:
+            exponents.append(separator - previous - 1)
+            previous = separator
+        exponents.append(slot_count - previous - 1)
+        compositions.append(tuple(exponents))
+    return tuple(compositions)
+
+
+def _multiply_by_linear_form(
+    polynomial: dict[tuple[int, ...], int],
+    coefficients: tuple[int, ...],
+    *,
+    prime: int,
+) -> dict[tuple[int, ...], int]:
+    """Multiply one sparse homogeneous polynomial by a GF(p) linear form."""
+
+    product: dict[tuple[int, ...], int] = {}
+    for exponents, coefficient in polynomial.items():
+        for index, linear_coefficient in enumerate(coefficients):
+            if linear_coefficient == 0:
+                continue
+            target = list(exponents)
+            target[index] += 1
+            target_tuple = tuple(target)
+            product[target_tuple] = (
+                product.get(target_tuple, 0) + coefficient * linear_coefficient
+            ) % prime
+    return {
+        exponents: coefficient
+        for exponents, coefficient in product.items()
+        if coefficient
+    }
+
+
+def _induced_action_matrix(
+    action: PrimeFieldLinearAction,
+    monomial_basis: tuple[tuple[int, ...], ...],
+    generator: PrimeFieldMatrix,
+    *,
+    checkpoint: Callable[[str], None] | None = None,
+) -> tuple[tuple[int, ...], ...]:
+    """Substitute one generator into every ordered homogeneous monomial."""
+
+    monomial_index = {
+        exponents: index for index, exponents in enumerate(monomial_basis)
+    }
+    matrix = [[0] * len(monomial_basis) for _ in monomial_basis]
+    variable_count = len(action.variable_axis.labels)
+    zero_exponents = (0,) * variable_count
+    substitution_steps = 0
+    for column, source_exponents in enumerate(monomial_basis):
+        if checkpoint is not None:
+            checkpoint("during substitution")
+        polynomial: dict[tuple[int, ...], int] = {zero_exponents: 1}
+        for source_variable, exponent in enumerate(source_exponents):
+            coefficients = tuple(
+                generator.entries[target_variable][source_variable]
+                for target_variable in range(variable_count)
+            )
+            for _ in range(exponent):
+                polynomial = _multiply_by_linear_form(
+                    polynomial, coefficients, prime=action.prime
+                )
+                substitution_steps += 1
+                if checkpoint is not None and substitution_steps % 1_024 == 0:
+                    checkpoint("during substitution")
+        for target_exponents, coefficient in polynomial.items():
+            matrix[monomial_index[target_exponents]][column] = coefficient
+    return tuple(tuple(row) for row in matrix)
+
+
+def homogeneous_fixed_subspace(
+    action: PrimeFieldLinearAction,
+    degree: int,
+    *,
+    enforce_transport_limit: bool = False,
+) -> HomogeneousFixedSubspace:
+    """Compute one exact homogeneous simultaneous fixed subspace over GF(p)."""
+
+    execution = current_request_execution()
+    started_at = execution.started_at if execution is not None else time.monotonic()
+    deadline = min(
+        started_at + _FIXED_SUBSPACE_WALL_SECONDS,
+        execution.deadline
+        if execution is not None and execution.deadline is not None
+        else float("inf"),
+    )
+    bind_request_deadline(deadline)
+
+    def checkpoint(stage: str) -> None:
+        _fixed_subspace_checkpoint(deadline, stage)
+
+    monomial_count = _homogeneous_fixed_subspace_envelope(
+        action,
+        degree,
+        enforce_transport_limit=enforce_transport_limit,
+        checkpoint=checkpoint,
+    )
+    variable_count = len(action.variable_axis.labels)
+    checkpoint("before generator validation")
+    for matrix in action.generator_matrices:
+        checkpoint("during generator validation")
+        if rank(matrix) != variable_count:
+            raise OperationDomainValidationError(
+                location=("action", "generator_matrices"),
+                code="finite_field.linear_action_generator_invertible",
+                message="every linear-action generator matrix must be invertible",
+            )
+    monomial_basis = _homogeneous_monomial_basis(variable_count, degree)
+    assert len(monomial_basis) == monomial_count
+    equations: list[tuple[int, ...]] = []
+    for generator in action.generator_matrices:
+        induced = _induced_action_matrix(
+            action, monomial_basis, generator, checkpoint=checkpoint
+        )
+        for row_index, row in enumerate(induced):
+            checkpoint("during equation assembly")
+            equation = list(row)
+            equation[row_index] = (equation[row_index] - 1) % action.prime
+            equations.append(tuple(equation))
+    equation_matrix = PrimeFieldMatrix(
+        prime=action.prime,
+        entries=tuple(equations),
+        columns=len(monomial_basis),
+    )
+    checkpoint("before nullspace")
+    basis_rows = run_fixed_subspace_linear_algebra(
+        equation_matrix,
+        deadline=deadline,
+    )
+    checkpoint("after basis reduction")
+    basis_matrix = PrimeFieldMatrix(
+        prime=action.prime,
+        entries=basis_rows,
+        columns=len(monomial_basis),
+    )
+    result = HomogeneousFixedSubspace._from_kernel(
+        action=action,
+        degree=degree,
+        monomial_basis=monomial_basis,
+        basis_matrix=basis_matrix,
+    )
+    checkpoint("after result construction")
+    return result
 
 
 def direction_rank_ledger(

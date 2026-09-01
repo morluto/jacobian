@@ -7,7 +7,7 @@ from typing import Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.finite_fields.values import AxisBoundMatrix
 
 
@@ -15,6 +15,11 @@ class MatrixRankRequest(StrictModel):
     """Compute the rank of one labelled matrix over its presented finite field."""
 
     matrix: AxisBoundMatrix
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_json_containers(cls, data: object) -> object:
+        return canonicalize_json_containers(data)
 
 
 class MatrixRankResult(StrictModel):

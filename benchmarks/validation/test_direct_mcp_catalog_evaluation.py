@@ -16,6 +16,8 @@ from benchmarks.tooling.codex_visibility import (
     SurfaceArm,
     VisibilityCase,
     _normalized_skill_source,
+    _parse_codex_skill_surface,
+    _validate_server_tool_surface,
     _visible_tool_names,
     classify_visibility,
 )
@@ -102,6 +104,31 @@ def test_surface_arms_are_disjoint_where_the_comparison_requires_it() -> None:
     assert _visible_tool_names(all_names, SurfaceArm.FIND_ONLY) == {"math.find"}
 
 
+def test_production_tool_surface_is_valid_for_the_legacy_arm() -> None:
+    _validate_server_tool_surface(
+        {"math.find", "math.run"},
+        {"matrix.determinant.compute", "sat.assignment.check"},
+        SurfaceArm.LEGACY,
+    )
+
+
+def test_production_tool_surface_is_valid_for_the_full_arm() -> None:
+    _validate_server_tool_surface(
+        {"math.find", "math.run"},
+        {"matrix.determinant.compute", "sat.assignment.check"},
+        SurfaceArm.FULL,
+    )
+
+
+def test_production_tool_surface_cannot_run_a_direct_arm() -> None:
+    with pytest.raises(RuntimeError, match="direct MCP tools"):
+        _validate_server_tool_surface(
+            {"math.find", "math.run"},
+            {"matrix.determinant.compute", "sat.assignment.check"},
+            SurfaceArm.DIRECT,
+        )
+
+
 def test_visibility_package_has_an_executable_module_entrypoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -138,6 +165,38 @@ def test_isolated_skill_paths_normalize_across_filesystem_symlinks(
 
     assert normalized == "$CODEX_HOME/skills/.system/example/SKILL.md"
     assert external is False
+
+
+def test_skill_surface_parser_ignores_short_root_alias_declarations(
+    tmp_path: Path,
+) -> None:
+    block = """\
+<skills_instructions>
+## Skills
+### Skill roots
+- `r0` = `/isolated/codex-home/skills/.system`
+### Available skills
+- example: Example system skill. (file: r0/example/SKILL.md)
+</skills_instructions>
+"""
+    surface = _parse_codex_skill_surface(
+        [{"content": [{"text": block}]}],
+        tmp_path,
+        {
+            "HOME": str(tmp_path / "home"),
+            "CODEX_HOME": str(tmp_path / "codex-home"),
+        },
+    )
+
+    assert surface["skill_count"] == 1
+    assert surface["skills"] == [
+        {
+            "name": "example",
+            "source_kind": "file",
+            "source": "r0/example/SKILL.md",
+        }
+    ]
+    assert surface["external_file_sources"] == []
 
 
 def test_semantic_discovery_is_scored_without_requiring_execution() -> None:

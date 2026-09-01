@@ -347,8 +347,7 @@ async def inspect_surface(
             if isinstance(operation, Mapping)
             and isinstance(operation.get("operation_id"), str)
         }
-        if tool_names - _FIXED_TOOLS != catalog_ids:
-            raise RuntimeError("direct MCP tools do not match the catalog snapshot")
+        _validate_server_tool_surface(tool_names, catalog_ids, surface_arm)
         visible_names = _visible_tool_names(tool_names, surface_arm)
         visible_records = [
             record for record in tool_records if record["name"] in visible_names
@@ -395,6 +394,19 @@ def _visible_tool_names(
     if surface_arm is SurfaceArm.DIRECT_FIND:
         return set(tool_names - {"math.run"})
     return {"math.find"}
+
+
+def _validate_server_tool_surface(
+    tool_names: set[str],
+    catalog_ids: set[str],
+    surface_arm: SurfaceArm,
+) -> None:
+    """Reject incomplete experimental direct surfaces without rejecting production."""
+
+    direct_names = tool_names - _FIXED_TOOLS
+    direct_required = surface_arm in {SurfaceArm.DIRECT, SurfaceArm.DIRECT_FIND}
+    if (direct_required or direct_names) and direct_names != catalog_ids:
+        raise RuntimeError("direct MCP tools do not match the catalog snapshot")
 
 
 def _codex_arguments(
@@ -509,29 +521,15 @@ def _normalized_skill_source(
     return source, True
 
 
-def _inspect_codex_skill_surface(
+def _parse_codex_skill_surface(
+    messages: object,
     workspace: Path,
     environment: Mapping[str, str],
 ) -> dict[str, Any]:
-    """Render and record the skills actually visible to the evaluated Codex."""
+    """Parse and normalize the skill block rendered by Codex."""
 
-    result = run_operator_command(
-        "codex",
-        ("debug", "prompt-input", "evaluation skill-surface snapshot"),
-        cwd=workspace,
-        timeout_seconds=30,
-        stdout_limit_bytes=4 * 1024 * 1024,
-        stderr_limit_bytes=1024 * 1024,
-        environment=environment,
-    )
-    if result.status is not ToolCommandStatus.EXITED or result.exit_code != 0:
-        raise RuntimeError("codex skill-surface inspection failed")
-    try:
-        messages = json.loads(result.stdout)
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise RuntimeError(
-            "codex skill-surface inspection returned invalid JSON"
-        ) from error
+    if not isinstance(messages, list):
+        raise RuntimeError("codex skill-surface inspection returned invalid JSON")
     blocks = [
         match.group(0)
         for message in messages
@@ -558,8 +556,12 @@ def _inspect_codex_skill_surface(
         records.append(record)
         if external and match.group("kind") == "file":
             external_file_sources.append(source)
+    available_marker = "### Available skills"
+    if available_marker not in blocks[0]:
+        raise RuntimeError("codex skill surface omits the available-skills section")
+    available_section = blocks[0].split(available_marker, maxsplit=1)[1]
     candidate_entries = [
-        line for line in blocks[0].splitlines() if line.startswith("- ")
+        line for line in available_section.splitlines() if line.startswith("- ")
     ]
     if len(records) != len(candidate_entries):
         raise RuntimeError("codex skill-surface entries use an unknown format")
@@ -577,6 +579,32 @@ def _inspect_codex_skill_surface(
             normalized_block.encode("utf-8")
         ),
     }
+
+
+def _inspect_codex_skill_surface(
+    workspace: Path,
+    environment: Mapping[str, str],
+) -> dict[str, Any]:
+    """Render and record the skills actually visible to the evaluated Codex."""
+
+    result = run_operator_command(
+        "codex",
+        ("debug", "prompt-input", "evaluation skill-surface snapshot"),
+        cwd=workspace,
+        timeout_seconds=30,
+        stdout_limit_bytes=4 * 1024 * 1024,
+        stderr_limit_bytes=1024 * 1024,
+        environment=environment,
+    )
+    if result.status is not ToolCommandStatus.EXITED or result.exit_code != 0:
+        raise RuntimeError("codex skill-surface inspection failed")
+    try:
+        messages = json.loads(result.stdout)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise RuntimeError(
+            "codex skill-surface inspection returned invalid JSON"
+        ) from error
+    return _parse_codex_skill_surface(messages, workspace, environment)
 
 
 def _command_version(workspace: Path, environment: Mapping[str, str]) -> str:

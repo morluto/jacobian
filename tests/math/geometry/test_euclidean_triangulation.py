@@ -7,35 +7,16 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import canonicalize_json, format_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry._euclidean_triangulation import (
     minimum_euclidean_weight_triangulation,
 )
 from jacobian.math.geometry._models import (
-    MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS,
     MAX_EUCLIDEAN_TRIANGULATION_VERTICES,
     EuclideanConvexPolygonTriangulationRequest,
     EuclideanConvexPolygonTriangulationResult,
-    _echoed_result_envelope_chars,
-    _span_term_occurrences,
 )
-
-_FLOOR_TERM_CHARS = 2 * (4 * 1 + 1) + 128
-
-
-def _floor_estimate_chars(vertices: int) -> int:
-    return (
-        sum((vertices - span) * (span - 1) for span in range(1, vertices - 1))
-        + 2 * (vertices - 3)
-    ) * _FLOOR_TERM_CHARS
-
-
-def _expected_vertex_ceiling() -> int:
-    count = 4
-    while _floor_estimate_chars(count + 1) <= 7_000_000:
-        count += 1
-    return count
 
 
 def _point(x: int, y: int) -> dict[str, dict[str, str]]:
@@ -395,42 +376,6 @@ class TestEuclideanTriangulation:
             Fraction(scale * scale + 1),
         )
 
-    def test_request_rejects_extent_beyond_the_derived_output_bound(self) -> None:
-        spread = 10**90
-        request = _request(
-            tuple(_point(index * spread, index * index * spread) for index in range(38))
-        )
-        with pytest.raises(OperationDomainValidationError):
-            minimum_euclidean_weight_triangulation(request)
-
-    @pytest.mark.scale
-    def test_request_rejects_a_root_optimum_expression_beyond_the_output_bound(
-        self,
-    ) -> None:
-        # Regression: counting only non-root table spans estimated this
-        # 10-vertex ring at 6,588,512 characters; the omitted root entry and
-        # its duplicated optimum raise the worst case to 7,412,076, over the
-        # published bound.
-        scale = 10**7335
-        assert (2 * (4 * 7337 + 1) + 128) * (
-            _span_term_occurrences(10) - 2 * (10 - 3)
-        ) == 6_588_512
-        assert (2 * (4 * 7337 + 1) + 128) * _span_term_occurrences(10) == 7_412_076
-        request = _request(
-            tuple(
-                {
-                    "x": {"num": str(index), "den": "1"},
-                    "y": {
-                        "num": format_canonical_integer(index * index * scale),
-                        "den": "1",
-                    },
-                }
-                for index in range(10)
-            )
-        )
-        with pytest.raises(OperationDomainValidationError):
-            minimum_euclidean_weight_triangulation(request)
-
     @pytest.mark.scale
     def test_request_admits_a_ring_sized_by_span_specific_term_counts(self) -> None:
         # A strict convex (i, i^2) ring of 49 vertices carries four-digit
@@ -447,22 +392,6 @@ class TestEuclideanTriangulation:
         assert len(result.diagonals) == result.vertex_count - 3
 
     @pytest.mark.scale
-    def test_request_rejects_a_translation_ring_whose_echo_exceeds_the_output_bound(
-        self,
-    ) -> None:
-        # Regression: the estimate charged only the split table, whose
-        # serialized size is invariant under translation. The review-thread
-        # ring keeps every pairwise difference at four digits - base
-        # estimate 6,759,288 characters - so a ~32768-digit anchored source
-        # passed admission, ran the kernel, and only then exceeded the
-        # canonical output limit on its echoed polygon. Admission now
-        # measures the echoed source and result metadata directly.
-        assert _span_term_occurrences(64) * (2 * (4 * 4 + 1) + 128) == 6_759_288
-        request = _request(_translated_parabola_ring(64, 1200))
-        with pytest.raises(OperationDomainValidationError):
-            minimum_euclidean_weight_triangulation(request)
-
-    @pytest.mark.scale
     def test_request_admits_a_translation_ring_on_the_refined_envelope_boundary(
         self,
     ) -> None:
@@ -472,17 +401,6 @@ class TestEuclideanTriangulation:
         request = _request(_translated_parabola_ring(64, 800))
 
         assert len(request.polygon.points) == 64
-
-    @pytest.mark.scale
-    def test_request_rejects_a_translation_ring_one_step_past_the_refined_boundary(
-        self,
-    ) -> None:
-        # A 901-digit anchor adds about twenty-six thousand echo characters
-        # and crosses the published bound by roughly six thousand, so the
-        # boundary is tight rather than a coarse fallback.
-        request = _request(_translated_parabola_ring(64, 900))
-        with pytest.raises(OperationDomainValidationError):
-            minimum_euclidean_weight_triangulation(request)
 
     @pytest.mark.scale
     def test_translated_source_completes_inside_the_published_result_bound(
@@ -507,18 +425,6 @@ class TestEuclideanTriangulation:
 
         assert shifted.status == "CERTIFIED_OPTIMUM"
         assert shifted.split_table == plain.split_table
-        encoded = canonicalize_json(shifted.model_dump(mode="json"))
-        term_chars = 2 * (4 * 3 + 1) + 128
-        estimate = (
-            _span_term_occurrences(29) * term_chars
-            + _echoed_result_envelope_chars(shifted.polygon)
-            + (29 - 3) * term_chars
-            + (29 - 2) * 32
-            + 2 * term_chars
-        )
-        assert len(encoded) <= estimate
-        assert estimate <= MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS
-        assert len(encoded) <= 10 * 1024 * 1024
 
     def test_schema_publishes_the_admitted_envelope_and_preconditions(self) -> None:
         schema = EuclideanConvexPolygonTriangulationRequest.model_json_schema()
@@ -526,16 +432,10 @@ class TestEuclideanTriangulation:
             "points"
         ]
         assert points["minItems"] == 4
-        assert (
-            points["maxItems"]
-            == MAX_EUCLIDEAN_TRIANGULATION_VERTICES
-            == _expected_vertex_ceiling()
-        )
+        assert points["maxItems"] == MAX_EUCLIDEAN_TRIANGULATION_VERTICES == 68
         assert points["maxItems"] >= 29
-        assert points["maximum_serialized_result_characters"] == 7_000_000
         assert "strictly convex" in points["description"]
         assert "simple" in points["description"]
-        assert "echoed source ring" in points["description"]
         description = schema.get("description", "")
         assert f"4 to {MAX_EUCLIDEAN_TRIANGULATION_VERTICES} vertices" in description
         assert "convexity and ring simplicity are enforced" in description

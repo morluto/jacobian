@@ -20,7 +20,7 @@ from jacobian.math.combinatorics.additive._subset_sum_residue import (
 from jacobian.math.combinatorics.additive._subset_sum_target import (
     MAX_SUBSET_SUM_INTEGER_DIGITS,
     MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS,
-    MAX_SUBSET_SUM_SOURCE_WIRE_BYTES,
+    MAX_SUBSET_SUM_SOURCE_CHARACTERS,
     SubsetSumTargetRequest,
     SubsetSumTargetResult,
     _SubsetSumTargetScalar,
@@ -254,7 +254,7 @@ def test_request_rejects_immediately_above_each_search_bound() -> None:
         )
 
     widest = "9" * MAX_SUBSET_SUM_INTEGER_DIGITS
-    above_wire_count = (MAX_SUBSET_SUM_SOURCE_WIRE_BYTES - 64) // (len(widest) + 4) + 1
+    above_wire_count = MAX_SUBSET_SUM_SOURCE_CHARACTERS // len(widest) + 1
     with pytest.raises(ValidationError):
         SubsetSumTargetRequest(
             source={"items": [widest] * above_wire_count},  # type: ignore[arg-type]

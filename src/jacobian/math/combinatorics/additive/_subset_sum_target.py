@@ -26,7 +26,7 @@ from jacobian.math.combinatorics.additive.values import (
 MAX_SUBSET_SUM_INTEGER_DIGITS = 256
 MAX_SUBSET_SUM_REACHABLE_STATES = 65_536
 MAX_SUBSET_SUM_TRANSITIONS = 500_000
-MAX_SUBSET_SUM_SOURCE_WIRE_BYTES = 4 * 1024 * 1024
+MAX_SUBSET_SUM_SOURCE_CHARACTERS = 4 * 1024 * 1024
 MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS = 262
 
 _SubsetSumTargetScalar = Annotated[
@@ -91,19 +91,19 @@ def _raw_source_item_count(source: object) -> int | None:
             f"{MAX_SUBSET_SUM_TRANSITIONS:,}-transition work bound",
         )
 
-    source_wire_bound = 64
+    source_characters = 0
     for value in values:
         if not isinstance(value, str):
             continue
         digit_count = len(value) - value.startswith("-")
         if digit_count > MAX_SUBSET_SUM_INTEGER_DIGITS:
             _require_integer_digits(value, "source item", MAX_SUBSET_SUM_INTEGER_DIGITS)
-        source_wire_bound += len(value) + 4
-        if source_wire_bound > MAX_SUBSET_SUM_SOURCE_WIRE_BYTES:
+        source_characters += len(value)
+        if source_characters > MAX_SUBSET_SUM_SOURCE_CHARACTERS:
             raise _validation_error(
                 "_raw_source_item_count",
                 "subset-sum source exceeds the "
-                f"{MAX_SUBSET_SUM_SOURCE_WIRE_BYTES:,}-byte wire-size bound",
+                f"{MAX_SUBSET_SUM_SOURCE_CHARACTERS:,}-character source bound",
             )
     return item_count
 
@@ -117,7 +117,7 @@ class SubsetSumTargetRequest(StrictModel):
             "request admission bounds this operation to at most "
             f"{MAX_SUBSET_SUM_TRANSITIONS:,} items of at most "
             f"{MAX_SUBSET_SUM_INTEGER_DIGITS} digits each with a "
-            f"{MAX_SUBSET_SUM_SOURCE_WIRE_BYTES:,}-byte wire bound across the "
+            f"{MAX_SUBSET_SUM_SOURCE_CHARACTERS:,}-character bound across the "
             "whole source."
         )
     )
@@ -368,14 +368,14 @@ def _admit_subset_sum_target(
             code="additive_combinatorics.subset_sum.argument_domain",
             message="subset-sum target must be canonical text and the flag a boolean",
         )
-    source_wire_bound = 64 + sum(len(value) + 4 for value in source.items)
-    if source_wire_bound > MAX_SUBSET_SUM_SOURCE_WIRE_BYTES:
+    source_characters = sum(map(len, source.items))
+    if source_characters > MAX_SUBSET_SUM_SOURCE_CHARACTERS:
         raise OperationDomainValidationError(
             location=("source",),
-            code="additive_combinatorics.subset_sum.source_wire_bound",
+            code="additive_combinatorics.subset_sum.source_character_bound",
             message=(
                 "subset-sum source exceeds the "
-                f"{MAX_SUBSET_SUM_SOURCE_WIRE_BYTES:,}-byte wire-size bound"
+                f"{MAX_SUBSET_SUM_SOURCE_CHARACTERS:,}-character source bound"
             ),
         )
     for value in source.items:

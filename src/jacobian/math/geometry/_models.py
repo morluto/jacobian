@@ -17,7 +17,7 @@ from jacobian._exact import (
 )
 from jacobian._flint import flint_workprec
 from jacobian._models import StrictModel
-from jacobian.canonical import encode_strict_json, format_canonical_integer
+from jacobian.canonical import format_canonical_integer
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -28,11 +28,6 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 MAX_CONFIGURATION_POINTS = 32
 MAX_COORDINATE_DIGITS = 256
-# Serialized-output budget for the circumradius profile, kept below the 10 MiB
-# transport envelope to leave room for request and JSON overhead.
-_MAX_PROFILE_OUTPUT_CHARS = 8_000_000
-_CIRCUMRADIUS_DIGIT_GROWTH = 80
-_CIRCUMRADIUS_ENTRY_OVERHEAD = 80
 # Joint work bound for the exhaustive general-position search.  The sweep
 # performs one exact 4x4 determinant per point quadruple, so the determinant
 # count grows as C(n,4) while every Fraction multiplication grows
@@ -87,37 +82,6 @@ def _require_general_position_work_bound(
             f"(C(n,4)*digits^2={work} > "
             f"{_MAX_GENERAL_POSITION_DETERMINANT_WORK}); reduce point count "
             "or coordinate size",
-        )
-
-
-def _require_circumradius_output_bound(points: tuple[RationalPoint2D, ...]) -> None:
-    """Bound the serialized profile size before execution.
-
-    Derivation from exact rational growth with ``d`` = max coordinate digits:
-    a coordinate difference has numerator and denominator of at most ``2d``
-    digits; a squared length reaches ``8d`` digits on each side; the squared
-    circumradius ``|AB||BC||CA| / (2*cross)^2`` therefore carries at most
-    ``40d`` digits in its numerator and ``40d`` in its denominator. Allowing
-    80 characters of sign/slash/JSON overhead per entry gives the conservative
-    per-entry estimate ``80*d + 80`` characters.
-    """
-
-    n = len(points)
-    if n == 0:
-        return
-    max_digits = _max_coordinate_digits(points)
-    triples = n * (n - 1) * (n - 2) // 6
-    estimated_chars = triples * (
-        _CIRCUMRADIUS_DIGIT_GROWTH * max_digits + _CIRCUMRADIUS_ENTRY_OVERHEAD
-    )
-    if estimated_chars > _MAX_PROFILE_OUTPUT_CHARS:
-        raise _validation_error(
-            "circumradius_profile_n_points_max_digits",
-            f"circumradius profile for {n} points with {max_digits}-digit "
-            f"coordinates can serialize up to {estimated_chars} characters "
-            f"(worst-case rational growth), exceeding the "
-            f"{_MAX_PROFILE_OUTPUT_CHARS}-character output budget; reduce "
-            "point count or coordinate size",
         )
 
 
@@ -791,15 +755,6 @@ def _reconstruct_split_triangulation(
     return tuple(sorted(diagonals)), tuple(sorted(triangles))
 
 
-# Serialized-output budget for the weighted triangulation result, kept below
-# the 10 MiB canonical transport envelope to leave room for request and
-# JSON envelope overhead.
-MAX_TRIANGULATION_OUTPUT_CHARS = 8_000_000
-_TRIANGULATION_ENTRY_OVERHEAD_CHARS = 96
-_TRIANGULATION_TRIANGLE_ENTRY_CHARS = 32
-_TRIANGULATION_RESULT_SLACK_CHARS = 512
-
-
 def _bounded_split_table_rationals(
     count: int,
     diagonal_weights: tuple[WeightedPolygonDiagonal, ...],
@@ -814,19 +769,9 @@ def _bounded_split_table_rationals(
     representable. A request is rejected only when a state the result must
     serialize genuinely exceeds the cap.
 
-    Per-entry caps alone cannot bound the aggregate payload: every retained
-    optimum may sit just under the cap while their combined serialization
-    outgrows the transport envelope. The same exact computation therefore also
-    sums each retained optimum's own serialized size - numerator plus
-    denominator digits beside fixed punctuation - and charges every echoed
-    weight at its own height. Admission reconstructs the deterministic
-    selected-diagonal set from the shared split table, adds the duplicated
-    top-level optimum, then fixed triangle and header slack. Execution consumes
-    that admitted split table directly, so this estimate soundly bounds the
-    complete serialized result without
-    charging unselected or small entries at the largest component height,
-    and a genuinely oversized aggregate is rejected at request validation
-    instead of failing canonical output validation after computation.
+    Execution consumes this admitted split table directly, so the exact
+    recurrence is computed once and every retained rational is known to fit
+    its carrier before result construction.
     """
 
     weights = {
@@ -840,7 +785,6 @@ def _bounded_split_table_rationals(
         return weights[first, second]
 
     optimum, split = _triangulation_subproblem_costs(count, diagonal_cost)
-    ledger_chars = 0
     for span in range(2, count):
         for start in range(count - span):
             end = start + span
@@ -856,37 +800,6 @@ def _bounded_split_table_rationals(
                     f"rational components, exceeding the canonical "
                     f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit rational limit",
                 )
-            ledger_chars += 2 * digits + _TRIANGULATION_ENTRY_OVERHEAD_CHARS
-    selected_diagonals, _ = _reconstruct_split_triangulation(count, split)
-    selected_weight_chars = sum(
-        2
-        * max(
-            len(format_canonical_integer(weights[pair].numerator)),
-            len(format_canonical_integer(weights[pair].denominator)),
-        )
-        + _TRIANGULATION_ENTRY_OVERHEAD_CHARS
-        for pair in selected_diagonals
-    )
-    root = optimum[0, count - 1]
-    estimated_chars = (
-        ledger_chars
-        + selected_weight_chars
-        + 2
-        * max(
-            len(format_canonical_integer(root.numerator)),
-            len(format_canonical_integer(root.denominator)),
-        )
-        + _TRIANGULATION_ENTRY_OVERHEAD_CHARS
-        + (count - 2) * _TRIANGULATION_TRIANGLE_ENTRY_CHARS
-        + _TRIANGULATION_RESULT_SLACK_CHARS
-    )
-    if estimated_chars > MAX_TRIANGULATION_OUTPUT_CHARS:
-        raise _validation_error(
-            "weighted_triangulation_result_serialize_up_f",
-            f"weighted triangulation result can serialize up to "
-            f"{estimated_chars} characters, exceeding the "
-            f"{MAX_TRIANGULATION_OUTPUT_CHARS}-character output bound",
-        )
     return optimum, split
 
 
@@ -903,9 +816,7 @@ class ConvexPolygonTriangulationRequest(StrictModel):
                 "- 3 pairwise noncrossing selected weights - so admission "
                 "computes the bounded recurrence exactly and rejects requests "
                 "whose derived split-table rationals exceed the canonical "
-                "32,768-digit rational limit or whose complete serialized "
-                "result exceeds the "
-                f"{MAX_TRIANGULATION_OUTPUT_CHARS}-character output bound."
+                "32,768-digit rational limit."
             ),
         },
     )
@@ -918,9 +829,7 @@ class ConvexPolygonTriangulationRequest(StrictModel):
             "Exactly one nonnegative exact rational weight per non-hull "
             "diagonal in lexicographic pair order; the exact derived "
             "split-table rationals must stay inside the canonical "
-            "32,768-digit limit and the aggregate serialized result must "
-            f"stay inside the {MAX_TRIANGULATION_OUTPUT_CHARS}-character "
-            "output bound."
+            "32,768-digit limit."
         ),
     )
     objective: Literal["NON_HULL_DIAGONAL_WEIGHT_SUM"] = "NON_HULL_DIAGONAL_WEIGHT_SUM"
@@ -952,89 +861,7 @@ class ConvexPolygonTriangulationResult(StrictModel):
 # Euclidean convex-polygon triangulation
 # ---------------------------------------------------------------------------
 
-MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS = 7_000_000
-_MIN_EUCLIDEAN_SPLIT_TERM_CHARS = 2 * (4 * 1 + 1) + 128
-_EUCLIDEAN_TRIANGLE_ENTRY_CHARS = 32
-_EUCLIDEAN_RESULT_ENVELOPE_SLACK_CHARS = 512
-
-
-def _span_term_occurrences(count: int) -> int:
-    """Total retained expression term occurrences charged by a ``count``-vertex source.
-
-    A non-root span-``s`` state carries at most ``s - 1`` terms - its
-    subpolygon triangulates with ``s - 2`` diagonals plus one charged
-    boundary - and spans ``1..count - 2`` each occur ``count - s`` times.
-    The root span ``count - 1`` carries exactly ``count - 3`` terms, since
-    its boundary is an uncharged hull edge, and it occurs once in the
-    retained table plus once more as the duplicated top-level optimum, so
-    the serialized envelope counts both copies rather than charging every
-    state the root's term count.
-    """
-
-    return sum((count - span) * (span - 1) for span in range(1, count - 1)) + 2 * (
-        count - 3
-    )
-
-
-def _echoed_result_envelope_chars(polygon: PolygonRequest) -> int:
-    """Canonical characters charged for the echoed source and fixed envelope.
-
-    Every certified or unresolved result repeats the complete source ring
-    beside literal header fields, so admission measures that echo directly;
-    the difference-based estimates below are translation-invariant and
-    cannot see absolute positions. The returned charge adds slack for the
-    status-specific fields the shared template cannot carry: an unresolved
-    comparison swaps a longer status string and carries its comparison
-    skeleton, while a certified result lists per-entry ledgers charged
-    separately by the caller.
-    """
-
-    return (
-        len(
-            encode_strict_json(
-                {
-                    "comparison_basis": "ARB_OUTWARD_ROUNDED_INTERVAL",
-                    "comparison_precision_bits": (
-                        EUCLIDEAN_TRIANGULATION_COMPARISON_PRECISION_BITS
-                    ),
-                    "objective": "NON_HULL_EUCLIDEAN_LENGTH_SUM",
-                    "polygon": polygon.model_dump(mode="json"),
-                    "status": "CERTIFIED_OPTIMUM",
-                    "vertex_count": 0,
-                }
-            )
-        )
-        + _EUCLIDEAN_RESULT_ENVELOPE_SLACK_CHARS
-    )
-
-
-def _euclidean_envelope_vertex_ceiling() -> int:
-    """Largest vertex count that admission could ever accept.
-
-    The split-table estimate multiplies ``_span_term_occurrences`` by
-    ``term_chars``, which grows with the pairwise-difference digit count
-    derived from the source and never drops below one digit, so that
-    product evaluated at the one-digit floor is a necessary condition for
-    every admitted source. The returned ceiling restates this closed-form
-    consequence of ``MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS`` for schemas
-    that need static bounds; the echoed-source and metadata charges in the
-    full envelope are strictly positive, so it can never reject a source
-    whose estimate fits the budget and the derived envelope alone decides
-    admission.
-    """
-
-    count = 4
-    while True:
-        candidate = count + 1
-        if (
-            _span_term_occurrences(candidate) * _MIN_EUCLIDEAN_SPLIT_TERM_CHARS
-            > MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS
-        ):
-            return count
-        count = candidate
-
-
-MAX_EUCLIDEAN_TRIANGULATION_VERTICES = _euclidean_envelope_vertex_ceiling()
+MAX_EUCLIDEAN_TRIANGULATION_VERTICES = 68
 EUCLIDEAN_TRIANGULATION_COMPARISON_PRECISION_BITS = 128
 
 
@@ -1130,21 +957,6 @@ def _require_euclidean_triangulation_envelope(
                     f"{digits} digits, exceeding the canonical "
                     f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit rational limit",
                 )
-    term_chars = 2 * (4 * difference_digits + 1) + 128
-    estimated_chars = (
-        _span_term_occurrences(count) * term_chars
-        + _echoed_result_envelope_chars(polygon)
-        + (count - 3) * term_chars
-        + (count - 2) * _EUCLIDEAN_TRIANGLE_ENTRY_CHARS
-        + 2 * term_chars
-    )
-    if estimated_chars > MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS:
-        raise _validation_error(
-            "euclidean_triangulation_result_serialize_up_f",
-            "Euclidean triangulation result can serialize up to "
-            f"{estimated_chars} characters, exceeding the "
-            f"{MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS}-character output bound",
-        )
     return points
 
 
@@ -1184,17 +996,10 @@ class EuclideanTriangulationPolygonRequest(PolygonRequest):
         max_length=MAX_EUCLIDEAN_TRIANGULATION_VERTICES,
         description=(
             "Ring vertices listed counterclockwise; the closed ring must be "
-            "simple and strictly convex. Admission bounds the complete "
-            "serialized result - the split table, the echoed source ring, "
-            "and fixed result metadata - from the exact source, so absolute "
-            "positions consume the published output budget even though the "
-            "mathematical work depends only on pairwise differences."
+            "simple and strictly convex. The vertex count bounds split-table "
+            "allocation, and every derived squared length must remain within "
+            "the canonical rational digit bound."
         ),
-        json_schema_extra={
-            "maximum_serialized_result_characters": (
-                MAX_EUCLIDEAN_TRIANGULATION_OUTPUT_CHARS
-            ),
-        },
     )
 
 
@@ -1206,9 +1011,7 @@ class EuclideanConvexPolygonTriangulationRequest(StrictModel):
             "description": (
                 "Minimum Euclidean triangulation of one strict CCW convex "
                 "simple rational polygon. Admitted requests contain 4 to "
-                f"{MAX_EUCLIDEAN_TRIANGULATION_VERTICES} vertices whose "
-                "complete serialized result, including the echoed source "
-                "ring, stays inside the published output bound; strict "
+                f"{MAX_EUCLIDEAN_TRIANGULATION_VERTICES} vertices; strict "
                 "counterclockwise convexity and ring simplicity are enforced "
                 "by the request validator after parsing."
             ),
@@ -1520,11 +1323,7 @@ class GeneralPositionResult(StrictModel):
 
 
 class CircumradiusProfileRequest(StrictModel):
-    """Compute circumradius data for every unordered triple in a point configuration.
-
-    The serialized profile is bounded before execution using the exact-rational
-    growth estimate owned by this operation.
-    """
+    """Compute circumradius data for every unordered triple in a point configuration."""
 
     points: tuple[RationalPoint2D, ...] = Field(
         min_length=3,
@@ -1533,10 +1332,7 @@ class CircumradiusProfileRequest(StrictModel):
             f"Bounded point configuration with 3..{MAX_CONFIGURATION_POINTS} points; "
             f"each rational coordinate is bounded to at most {MAX_COORDINATE_DIGITS} "
             "digits (operation-specific, stricter than CanonicalRational's "
-            f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit limit); additionally "
-            f"C(n,3)*({_CIRCUMRADIUS_DIGIT_GROWTH}*max_digits+"
-            f"{_CIRCUMRADIUS_ENTRY_OVERHEAD}) characters of worst-case profile size "
-            f"must stay within the {_MAX_PROFILE_OUTPUT_CHARS}-character output budget"
+            f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit limit)."
         ),
     )
 

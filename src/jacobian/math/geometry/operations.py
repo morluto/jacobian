@@ -35,7 +35,6 @@ from jacobian.math.geometry._models import (
     _is_simple_ring,
     _point_key,
     _require_bounded_configuration,
-    _require_circumradius_output_bound,
     _require_general_position_work_bound,
     _require_inversion_admission_bound,
 )
@@ -141,17 +140,14 @@ def _admit_configuration(
         )
 
     try:
-        if output_bound:
-            _require_circumradius_output_bound(points)
-        else:
+        if not output_bound:
             _require_general_position_work_bound(points)
     except ValueError as exc:
-        code = (
-            "geometry.circumradius_profile_n_points_max_digits"
-            if output_bound
-            else "geometry.general_position_search_n_points_max"
+        _reject_geometry_domain(
+            location=("points",),
+            code="geometry.general_position_search_n_points_max",
+            message=str(exc),
         )
-        _reject_geometry_domain(location=("points",), code=code, message=str(exc))
 
 
 def _admit_circumcircle(

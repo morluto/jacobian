@@ -9,7 +9,6 @@ from hypothesis import given
 from hypothesis import strategies as st
 from pydantic import ValidationError
 
-from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.games.impartial._models import (
     NimOptionsRequest,
@@ -23,7 +22,6 @@ from jacobian.math.logic.games.impartial._tools import (
 )
 from jacobian.math.logic.games.impartial.values import (
     MAX_NIM_DISTINCT_OPTIONS,
-    MAX_NIM_OPTION_RESULT_BYTES,
     MAX_NIM_RAW_CANDIDATES,
     NimPosition,
 )
@@ -125,20 +123,19 @@ def test_nim_options_preflight_distinguishes_raw_and_distinct_counts() -> None:
         )
 
 
-def test_nim_options_reject_result_bytes_before_option_expansion() -> None:
-    with pytest.raises(OperationDomainValidationError):
-        compute_nim_options(
-            NimOptionsRequest(position=NimPosition(heaps=tuple(range(951, 1_001))))
-        )
+def test_nim_options_are_bounded_by_distinct_option_count() -> None:
+    result = compute_nim_options(
+        NimOptionsRequest(position=NimPosition(heaps=tuple(range(951, 1_001))))
+    )
+
+    assert result.distinct_option_count == sum(range(951, 1_001))
 
 
-def test_nim_options_result_is_source_bound_and_canonical_json_bounded() -> None:
+def test_nim_options_result_is_source_bound() -> None:
     result = compute_nim_options(
         NimOptionsRequest(position=NimPosition(heaps=(1, 2, 2)))
     )
     payload = result.model_dump(mode="json")
-
-    assert len(encode_strict_json(payload)) <= MAX_NIM_OPTION_RESULT_BYTES
     assert (
         NimOptionsRequest.model_validate(
             {"position": result.options[0].resulting_position.model_dump(mode="json")}

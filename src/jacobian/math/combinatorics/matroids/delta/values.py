@@ -8,13 +8,11 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.canonical import canonicalize_json
 from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 
 MAX_DELTA_MEMBERSHIPS = 1_024
 MAX_DELTA_LABEL_BYTES = 2_048
 MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS = 250_000
-MAX_DELTA_RESULT_BYTES = 65_536
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -85,19 +83,6 @@ def _exchange_work(
     return instances, candidate_space
 
 
-def _wire_size(system: FiniteFeasibleSetSystem) -> int:
-    """Exact size of the source portion repeated by recognition results."""
-
-    return len(
-        canonicalize_json(
-            {
-                "ground": list(system.ground),
-                "feasible": [list(row) for row in system.feasible],
-            }
-        )
-    )
-
-
 def require_delta_matroid_admission(system: FiniteFeasibleSetSystem) -> None:
     """Bound all work and the canonical recognition result before replay."""
 
@@ -129,15 +114,6 @@ def require_delta_matroid_admission(system: FiniteFeasibleSetSystem) -> None:
             "candidate_work_exceeded",
             "delta-matroid symmetric-exchange candidate checks exceed the "
             f"{MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS}-check envelope",
-        )
-    # A valid result carries the source and canonical value, while an invalid
-    # result carries the source and one bounded obstruction.  The factor and
-    # fixed headroom cover both public shapes without expanding a new family.
-    if 2 * _wire_size(system) + 4_096 > MAX_DELTA_RESULT_BYTES:
-        raise DeltaMatroidAdmissionError(
-            "result_bytes_exceeded",
-            "delta-matroid recognition result exceeds the "
-            f"{MAX_DELTA_RESULT_BYTES}-byte envelope",
         )
 
 
@@ -207,7 +183,6 @@ __all__ = [
     "MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS",
     "MAX_DELTA_LABEL_BYTES",
     "MAX_DELTA_MEMBERSHIPS",
-    "MAX_DELTA_RESULT_BYTES",
     "DeltaMatroidObstruction",
     "FiniteDeltaMatroid",
     "canonical_feasible_rows",

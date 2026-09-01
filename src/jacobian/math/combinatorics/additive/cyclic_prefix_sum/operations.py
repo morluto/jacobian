@@ -13,7 +13,6 @@ from jacobian.canonical import (
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.cyclic_prefix_sum._models import (
     MAX_MODULUS_DIGITS,
-    MAX_RESULT_BYTES,
     MAX_SEQUENCE_LENGTH,
     CyclicPrefixSumResidueProfileResult,
     PrefixSumResidueRow,
@@ -93,20 +92,6 @@ def _admit(
             "prefix-sum modular arithmetic exceeds the admitted work bound",
         )
 
-    row_count = min(item_count, modulus_value)
-    position_digits = len(str(max(item_count, 1)))
-    result_bytes = (
-        256
-        + modulus_digits
-        + row_count * (modulus_digits + 32)
-        + item_count * (position_digits + 2)
-    )
-    if result_bytes > MAX_RESULT_BYTES:
-        _reject(
-            ("sequence",),
-            "cyclic_prefix_sum.result_bound",
-            "the exact residue profile exceeds the canonical output bound",
-        )
     return _AdmissionPlan(sequence=sequence.as_int_tuple(), modulus=modulus_value)
 
 

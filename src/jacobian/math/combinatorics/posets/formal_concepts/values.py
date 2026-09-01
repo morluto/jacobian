@@ -14,19 +14,19 @@ MAX_OBJECTS = 64
 MAX_ATTRIBUTES = 64
 MAX_IMPLICATIONS = 256
 MAX_IMPLICATION_MEMBERSHIPS = 4_096
+MAX_IMPLICATION_SYSTEM_ATTRIBUTES = 4_096
 
 # One synchronous forward-chaining round rescans the whole canonical family,
 # and the closing satisfaction scan does so once more; every productive round
 # adds at least one carrier attribute, so exact logical work is at most
 # ``(carrier_size + 1) * (rows + memberships)``.  Admission below bounds
 # exactly that product, so the accepted implication-system carrier axis is
-# limited by predicted work and serialized-result size rather than by a fixed
-# attribute count.  This budget admits a full-budget family (256 rows and
+# limited by predicted work and a direct carrier-cardinality bound. This budget
+# admits a full-budget family (256 rows and
 # 4,096 memberships) over a 64-attribute carrier and proportionally smaller
 # families over larger carriers.
 MAX_FORWARD_CHAIN_WORK = 2 * 65 * (MAX_IMPLICATIONS + MAX_IMPLICATION_MEMBERSHIPS)
 MAX_CANONICAL_CLOSURE_WORK = MAX_FORWARD_CHAIN_WORK // 2
-MAX_IMPLICATION_CLOSURE_RESULT_BYTES = 128 * 1_024
 
 # Attribute indices are carrier members: each owning model validator below
 # checks them against the declared attribute axis instead of a fixed ceiling.
@@ -80,16 +80,17 @@ class FiniteAttributeImplicationSystem(StrictModel):
 
     The normalized family has at most 256 duplicate-free rows and at most 4,096
     premise-plus-conclusion memberships in aggregate.  The carrier axis has no
-    fixed count: admission derives its envelope from predicted forward-chaining
-    work and serialized-result size.
+    fixed small count: admission derives its work envelope from forward chaining
+    and caps the materialized carrier directly.
     """
 
     attributes: tuple[OpaqueLabel, ...] = Field(
+        max_length=MAX_IMPLICATION_SYSTEM_ATTRIBUTES,
         description=(
             "Ordered unique attribute labels. Implication and subset indices "
             "refer to this axis. The accepted carrier size is bounded by the "
-            "predicted work and serialized-result budgets enforced below, not "
-            "by a fixed attribute count."
+            f"predicted work and the {MAX_IMPLICATION_SYSTEM_ATTRIBUTES}-attribute "
+            "carrier bound enforced below."
         ),
     )
     implications: tuple[AttributeImplication, ...] = Field(
@@ -149,25 +150,6 @@ class FiniteAttributeImplicationSystem(StrictModel):
                 "formal_concept_analysis.forward_chain_work_exceeded",
                 "predicted forward-chaining work exceeds the bounded limit of "
                 f"{MAX_FORWARD_CHAIN_WORK}",
-            )
-
-        # Conservative strict-JSON envelope: four UTF-8 bytes per label code
-        # point, row framing plus carrier indices for the retained system, and
-        # enough per-attribute space for seed/closure/added indices and a
-        # complete three-field lineage row.  The fixed allowance covers result
-        # keys and the largest admitted work counters.
-        predicted_result_bytes = (
-            4_096
-            + sum(4 * len(label) for label in self.attributes)
-            + 96 * len(canonical)
-            + 12 * memberships
-            + 128 * attribute_count
-        )
-        if predicted_result_bytes > MAX_IMPLICATION_CLOSURE_RESULT_BYTES:
-            raise PydanticCustomError(
-                "formal_concept_analysis.result_size_exceeded",
-                "predicted closure result exceeds the aggregate serialized-result "
-                f"limit of {MAX_IMPLICATION_CLOSURE_RESULT_BYTES} bytes",
             )
 
         object.__setattr__(self, "implications", canonical)
@@ -311,8 +293,8 @@ __all__ = [
     "MAX_CANONICAL_CLOSURE_WORK",
     "MAX_FORWARD_CHAIN_WORK",
     "MAX_IMPLICATIONS",
-    "MAX_IMPLICATION_CLOSURE_RESULT_BYTES",
     "MAX_IMPLICATION_MEMBERSHIPS",
+    "MAX_IMPLICATION_SYSTEM_ATTRIBUTES",
     "MAX_OBJECTS",
     "AttributeImplication",
     "FiniteAttributeImplicationSystem",

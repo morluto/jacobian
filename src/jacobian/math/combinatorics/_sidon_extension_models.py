@@ -10,16 +10,13 @@ from pydantic import Field, StrictBool, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics._difference_set_models import (
-    MAX_ADDITIVE_DIFFERENCE_INTEGER_LENGTH,
     AdditiveDifferenceInteger,
     AdditiveInteger,
     _difference_set_validation_error,
 )
 
 MAX_EXTENSION_WORK = 4_000_000
-MAX_EXTENSION_RESULT_BYTES = 8 * 1024 * 1024
 MAX_EXTENSION_INTERMEDIATE_BYTES = 256 * 1024 * 1024
-_EXTENSION_RESULT_ENVELOPE_BYTES = 4_096
 _PYTHON_DICT_SLOT_BYTES = 64
 _PYTHON_TUPLE_BYTES = 56
 
@@ -32,7 +29,6 @@ class _SidonExtensionAdmissionPlan:
     """Request-scoped admission data reused by the owner-local kernel."""
 
     source_differences: Mapping[int, _DifferencePair]
-    candidate_obstructions: tuple[_CandidateObstruction | None, ...] | None = None
 
 
 def _python_int_storage_bytes(decimal_digits: int) -> int:
@@ -94,121 +90,6 @@ def _extension_work_units(source_count: int, candidate_count: int) -> int:
     per_candidate = 4 * source_count + 16
     return source_pairs + candidate_count * per_candidate
 
-
-def _maximum_result_bytes(
-    source_elements: tuple[AdditiveInteger, ...],
-    candidate_elements: tuple[AdditiveInteger, ...],
-    candidate_obstructions: tuple[_CandidateObstruction | None, ...] | None = None,
-) -> int:
-    """Bound canonical result bytes without constructing a hypothetical profile.
-
-    All accepted integer strings contain only ASCII digits and an optional
-    minus sign, so their canonical JSON string size is their character length
-    plus two quote bytes. Without candidate outcomes, every candidate is
-    charged for the larger of its scalar admissible row and its
-    certificate-shaped rejected row. An admitted request-scoped profile may
-    provide the actual candidate outcomes to price the attainable partition.
-    """
-
-    def string_bytes(character_count: int) -> int:
-        return character_count + 2
-
-    def array_bytes(values: tuple[AdditiveInteger, ...]) -> int:
-        if not values:
-            return 2
-        return 1 + sum(len(value) + 3 for value in values)
-
-    def pair_array_bytes(character_count: int) -> int:
-        return 1 + 2 * (character_count + 3)
-
-    def object_bytes(fields: tuple[tuple[str, int], ...]) -> int:
-        return 2 + sum(len(key) + 3 + value for key, value in fields) + len(fields) - 1
-
-    source_bytes = array_bytes(source_elements)
-    candidate_bytes = array_bytes(candidate_elements)
-    widest_element_length = max(
-        max((len(value) for value in source_elements), default=0),
-        max((len(value) for value in candidate_elements), default=0),
-    )
-
-    def obstruction_bytes(
-        obstruction: _CandidateObstruction | None,
-        candidate_length: int,
-    ) -> int:
-        if obstruction is None:
-            difference_length = MAX_ADDITIVE_DIFFERENCE_INTEGER_LENGTH
-            pair_length = widest_element_length
-        else:
-            difference, pair_a, pair_b = obstruction
-            pair_length = max(
-                len(str(pair_a[0])),
-                len(str(pair_a[1])),
-                len(str(pair_b[0])),
-                len(str(pair_b[1])),
-            )
-            difference_length = len(str(difference))
-        return object_bytes(
-            (
-                ("candidate", string_bytes(candidate_length)),
-                ("repeated_difference", string_bytes(difference_length)),
-                ("pair_a", pair_array_bytes(pair_length)),
-                ("pair_b", pair_array_bytes(pair_length)),
-            )
-        )
-
-    partition_content_bytes = 0
-    all_candidates_admissible = len(source_elements) <= 1
-    for index, candidate in enumerate(candidate_elements):
-        admissible_bytes = string_bytes(len(candidate))
-        if candidate_obstructions is not None:
-            outcome = candidate_obstructions[index]
-            row_bytes = (
-                admissible_bytes
-                if outcome is None
-                else object_bytes(
-                    (
-                        ("candidate", admissible_bytes),
-                        ("is_admissible", len("false")),
-                        (
-                            "obstruction",
-                            obstruction_bytes(outcome, len(candidate)),
-                        ),
-                    )
-                )
-            )
-            partition_content_bytes += row_bytes
-        elif all_candidates_admissible:
-            partition_content_bytes += admissible_bytes
-        else:
-            rejected_bytes = object_bytes(
-                (
-                    ("candidate", admissible_bytes),
-                    ("is_admissible", len("false")),
-                    ("obstruction", obstruction_bytes(None, len(candidate))),
-                )
-            )
-            partition_content_bytes += max(admissible_bytes, rejected_bytes)
-        # The two partition arrays share exactly the candidate count, but this
-        # check must stop before a large rejected-profile estimate accumulates.
-        if partition_content_bytes > MAX_EXTENSION_RESULT_BYTES:
-            return MAX_EXTENSION_RESULT_BYTES + 1
-
-    # Two arrays are always present.  Their combined separators and brackets
-    # are at most four bytes plus one separator per partitioned candidate.
-    partition_bytes = 4 + len(candidate_elements) + partition_content_bytes
-    result_bytes = (
-        object_bytes(
-            (
-                ("source_elements", source_bytes),
-                ("candidate_elements", candidate_bytes),
-                ("admissible", 0),
-                ("rejected", 0),
-            )
-        )
-        + partition_bytes
-        + _EXTENSION_RESULT_ENVELOPE_BYTES
-    )
-    return result_bytes
 
 
 def _validate_source_and_candidates(
@@ -463,7 +344,6 @@ def _candidate_obstruction(
 
 __all__ = [
     "MAX_EXTENSION_INTERMEDIATE_BYTES",
-    "MAX_EXTENSION_RESULT_BYTES",
     "MAX_EXTENSION_WORK",
     "SidonExtensionCandidateResult",
     "SidonExtensionObstruction",

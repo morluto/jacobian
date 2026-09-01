@@ -7,7 +7,6 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import encode_strict_json
 from jacobian.math.combinatorics import _sidon_extension_kernel as sidon_kernel
 from jacobian.math.combinatorics import (
     _sidon_extension_models as sidon_models,
@@ -16,12 +15,10 @@ from jacobian.math.combinatorics._sidon_extension import (
     compute_sidon_extension_profile,
 )
 from jacobian.math.combinatorics._sidon_extension_models import (
-    MAX_EXTENSION_RESULT_BYTES,
     SidonExtensionCandidateResult,
     SidonExtensionObstruction,
     SidonExtensionProfileRequest,
     SidonExtensionProfileResult,
-    _maximum_result_bytes,
 )
 
 
@@ -123,8 +120,7 @@ class TestSidonExtensionProfile:
 
         assert "Sidon source-difference profiling" in str(error.value)
 
-    def test_large_all_admissible_profile_fits_result_budget(self) -> None:
-        """An empty source rules out rejected rows in the result bound."""
+    def test_large_all_admissible_profile_fits_work_bound(self) -> None:
         candidates = tuple(str(value) for value in range(250_000))
         request = SidonExtensionProfileRequest(
             source_elements=(),
@@ -133,9 +129,6 @@ class TestSidonExtensionProfile:
         result = compute_sidon_extension_profile(request)
         assert result.admissible == candidates
         assert result.rejected == ()
-        assert len(encode_strict_json(result.model_dump(mode="json"))) <= (
-            MAX_EXTENSION_RESULT_BYTES
-        )
 
     def test_two_element_source_admits_attainable_profile(self) -> None:
         """A source of two elements can still have an all-admissible profile."""
@@ -144,9 +137,6 @@ class TestSidonExtensionProfile:
 
         assert result.admissible == candidates
         assert result.rejected == ()
-        assert len(encode_strict_json(result.model_dump(mode="json"))) <= (
-            MAX_EXTENSION_RESULT_BYTES
-        )
 
     def test_candidate_work_excludes_source_profile_copies(self) -> None:
         """A large source and candidate batch stays within candidate-local work."""
@@ -154,15 +144,6 @@ class TestSidonExtensionProfile:
         candidates = [str(-value) for value in range(1, 2_377)]
         result = _extension(source, candidates)
         assert len(result.admissible) + len(result.rejected) == len(candidates)
-
-    def test_result_bound_covers_the_actual_canonical_result(self) -> None:
-        result = _extension(["1", "2", "5"], ["3", "4", "10", "20"])
-        actual = len(encode_strict_json(result.model_dump(mode="json")))
-        estimated = _maximum_result_bytes(
-            result.source_elements,
-            result.candidate_elements,
-        )
-        assert actual <= estimated <= MAX_EXTENSION_RESULT_BYTES
 
     def test_result_rejects_an_incomplete_partition(self) -> None:
         with pytest.raises(ValidationError):

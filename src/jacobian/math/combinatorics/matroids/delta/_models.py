@@ -13,7 +13,6 @@ from jacobian.math.combinatorics.matroids.delta.values import (
     MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS,
     MAX_DELTA_LABEL_BYTES,
     MAX_DELTA_MEMBERSHIPS,
-    MAX_DELTA_RESULT_BYTES,
     DeltaMatroidObstruction,
     FiniteDeltaMatroid,
 )
@@ -34,7 +33,7 @@ class DeltaMatroidFromFeasibleSetsRequest(StrictModel):
                 "result-sensitive: there are no separate ground-size or "
                 "row-count caps, and the shared finite feasible-set carrier "
                 "is structural only; the derived membership, UTF-8 label-byte, "
-                "candidate-work and result-size bounds below "
+                "candidate-work bounds below "
                 "admit every complete family whose recognition fits."
             ),
             "admission_limits": {
@@ -43,7 +42,6 @@ class DeltaMatroidFromFeasibleSetsRequest(StrictModel):
                 "max_symmetric_exchange_candidate_checks_per_replay": (
                     MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS
                 ),
-                "max_result_bytes": MAX_DELTA_RESULT_BYTES,
             },
         }
     )
@@ -54,9 +52,7 @@ class DeltaMatroidFromFeasibleSetsRequest(StrictModel):
             f"allows at most {MAX_DELTA_MEMBERSHIPS} total feasible-row "
             f"memberships, {MAX_DELTA_LABEL_BYTES} UTF-8 ground-label bytes, and "
             f"{MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS} symmetric-exchange candidate "
-            "checks in its single complete axiom pass, "
-            f"and the serialized recognition result is at most "
-            f"{MAX_DELTA_RESULT_BYTES} bytes."
+            "checks in its single complete axiom pass."
         )
     )
 

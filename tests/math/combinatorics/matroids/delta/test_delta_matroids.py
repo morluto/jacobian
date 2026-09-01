@@ -197,7 +197,6 @@ def test_request_schema_exposes_every_delta_specific_admission_limit() -> None:
         "max_feasible_set_memberships": 1_024,
         "max_ground_label_utf8_bytes": 2_048,
         "max_symmetric_exchange_candidate_checks_per_replay": 250_000,
-        "max_result_bytes": 65_536,
     }
     assert "no separate ground-size or row-count caps" in schema["description"]
     assert "structural only" in schema["description"]

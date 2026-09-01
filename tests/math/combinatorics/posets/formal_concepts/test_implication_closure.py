@@ -7,7 +7,6 @@ from itertools import combinations, islice
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import encode_strict_json
 from jacobian.math.combinatorics.posets.formal_concepts import (
     AttributeImplication,
     FiniteAttributeImplicationSystem,
@@ -21,7 +20,6 @@ from jacobian.math.combinatorics.posets.formal_concepts._tools import (
 )
 from jacobian.math.combinatorics.posets.formal_concepts.values import (
     MAX_ATTRIBUTES,
-    MAX_IMPLICATION_CLOSURE_RESULT_BYTES,
     MAX_IMPLICATION_MEMBERSHIPS,
     MAX_IMPLICATIONS,
     ImplicationClosureResult,
@@ -259,8 +257,8 @@ def test_genuine_work_overload_is_rejected_by_the_work_budget() -> None:
         FiniteAttributeImplicationSystem(attributes=attributes, implications=rules)
 
 
-def test_wide_long_label_carrier_is_rejected_by_the_result_budget() -> None:
-    attributes = tuple(f"{index:03d}" + "x" * 22 for index in range(700))
+def test_implication_carrier_cardinality_boundary() -> None:
+    attributes = tuple(f"a{index}" for index in range(4_097))
 
     with pytest.raises(ValidationError):
         FiniteAttributeImplicationSystem(attributes=attributes)
@@ -289,7 +287,7 @@ def test_implication_count_boundary() -> None:
         )
 
 
-def test_aggregate_membership_and_result_size_boundaries() -> None:
+def test_aggregate_membership_boundary() -> None:
     attributes = tuple(f"{index:02d}" + "x" * 62 for index in range(MAX_ATTRIBUTES))
     premises = tuple(islice(combinations(range(MAX_ATTRIBUTES), 16), MAX_IMPLICATIONS))
     rules = tuple(
@@ -301,10 +299,7 @@ def test_aggregate_membership_and_result_size_boundaries() -> None:
         implications=rules,
     )
     result = implication_closure(system, frozenset())
-    assert (
-        len(encode_strict_json(result.model_dump(mode="json")))
-        <= MAX_IMPLICATION_CLOSURE_RESULT_BYTES
-    )
+    assert len(result.closure) <= MAX_ATTRIBUTES
 
     extra = next(
         attribute

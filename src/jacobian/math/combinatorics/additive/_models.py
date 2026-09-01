@@ -26,7 +26,6 @@ from jacobian.math.combinatorics.additive._multiset_sum import (
 )
 from jacobian.math.combinatorics.additive._subset_sum_profile import (
     MAX_SUBSET_SUM_DP_TRANSITIONS,
-    MAX_SUBSET_SUM_PROFILE_RESULT_BYTES,
 )
 from jacobian.math.combinatorics.additive.values import (
     MAX_SUBSET_SUM_ITEMS,
@@ -517,9 +516,8 @@ class SubsetSumProfileRequest(StrictModel):
             "positive_sum-negative_sum+1, product(m_v+1) over distinct "
             f"nonzero values v) must fit {MAX_SUBSET_SUM_PROFILE_ENTRIES:,} "
             f"rows, 2*n*S must not exceed {MAX_SUBSET_SUM_DP_TRANSITIONS:,} "
-            "dictionary transitions during construction, "
-            "and the conservative serialized-result estimate must not exceed "
-            f"{MAX_SUBSET_SUM_PROFILE_RESULT_BYTES:,} bytes."
+            "dictionary transitions during construction. Returned support and "
+            "integer digit lengths use the same published structural bounds."
         ),
     )
 

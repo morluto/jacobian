@@ -22,7 +22,6 @@ from jacobian.math.combinatorics.additive._models import (
 )
 from jacobian.math.combinatorics.additive._subset_sum_profile import (
     MAX_SUBSET_SUM_DP_TRANSITIONS,
-    MAX_SUBSET_SUM_PROFILE_RESULT_BYTES,
 )
 from jacobian.math.combinatorics.additive._subset_sum_residue import (
     MAX_RESIDUE_PROFILE_DP_CELLS,
@@ -291,9 +290,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     f"{MAX_SUBSET_SUM_ITEMS:,}-item, "
                     f"{MAX_SUBSET_SUM_ITEM_DIGITS:,}-digit, "
                     f"{MAX_SUBSET_SUM_PROFILE_ENTRIES:,}-row, "
-                    f"{MAX_SUBSET_SUM_DP_TRANSITIONS:,}-transition, and "
-                    f"{MAX_SUBSET_SUM_PROFILE_RESULT_BYTES // (1024 * 1024)} MiB "
-                    "profile bounds."
+                    f"{MAX_SUBSET_SUM_DP_TRANSITIONS:,}-transition profile bounds."
                 ),
                 input=_SUBSET_SUM_PROFILE_EXAMPLE,
             ),

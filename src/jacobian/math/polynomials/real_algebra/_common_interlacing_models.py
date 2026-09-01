@@ -37,6 +37,7 @@ MAX_COMMON_INTERLACING_INPUT_DIGITS = 64
 
 
 def _require_common_interlacing_factor_degree(value: Any) -> Any:
+    value = canonicalize_json_containers(value)
     polynomial = (
         value.polynomial
         if isinstance(value, RealAlgebraicValue)

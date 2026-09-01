@@ -9,11 +9,6 @@ from typing import NoReturn
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.exact._models import PointConfiguration
 from jacobian.math.geometry.framework._bounds import (
@@ -171,53 +166,14 @@ def _rigidity_matrix(admission: _FrameworkAdmission) -> SparseRationalMatrix:
     )
 
 
-def _reserve_profile_output_bytes(
-    configuration: PointConfiguration,
-    graph: SimpleUndirectedGraph,
-    admission: _FrameworkAdmission,
-    matrix: SparseRationalMatrix,
-) -> int:
-    """Preflight the largest canonical profile for this exact retained source."""
-
-    rank_bound = min(matrix.row_count, matrix.column_count)
-    largest_pivots = tuple(range(matrix.column_count - rank_bound, matrix.column_count))
-    maximal_rank = 2 * len(admission.vertex_axis) - 3
-    candidate = {
-        "configuration": configuration.model_dump(mode="json"),
-        "graph": graph.model_dump(mode="json"),
-        "vertex_axis": list(admission.vertex_axis),
-        "edge_axis": [list(edge) for edge in admission.edge_axis],
-        "matrix_rank": {
-            "matrix": matrix.model_dump(mode="json"),
-            "rank": rank_bound,
-            "pivot_columns": list(largest_pivots),
-        },
-        "maximal_infinitesimal_rigidity_rank": maximal_rank,
-        "is_infinitesimally_rigid": False,
-    }
-    try:
-        return len(encode_strict_json(candidate))
-    except CanonicalizationError:
-        _reject(
-            ("configuration",),
-            "result_exceeds_canonical_output",
-            "the complete source-bound rigidity profile would exceed the "
-            f"{CanonicalLimits().max_output_bytes:,}-byte canonical output limit",
-        )
-
-
 def planar_rigidity_profile(
     configuration: PointConfiguration,
     graph: SimpleUndirectedGraph,
-    *,
-    enforce_transport_limit: bool = False,
 ) -> PlanarRigidityProfile:
     """Return the exact planar rigidity matrix and rational rank."""
 
     admission = _admit_framework(configuration, graph)
     matrix = _rigidity_matrix(admission)
-    if enforce_transport_limit:
-        _reserve_profile_output_bytes(configuration, graph, admission, matrix)
     try:
         matrix_rank = rank_result(matrix)
     except OperationDomainValidationError as exc:

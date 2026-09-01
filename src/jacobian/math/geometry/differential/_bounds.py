@@ -11,7 +11,6 @@ from typing import Literal, NoReturn
 from jacobian._models import StrictModel
 from jacobian.canonical import (
     CanonicalizationError,
-    CanonicalLimits,
     encode_strict_json,
     strict_json_object_size,
 )
@@ -39,7 +38,6 @@ from jacobian.math.polynomials.values import (
 )
 
 MAX_LIE_DERIVATIVE_WORK_UNITS = 25_000_000
-MAX_LIE_DERIVATIVE_RESULT_BYTES = CanonicalLimits().max_output_bytes
 MAX_LIE_DERIVATIVE_RAW_POLYNOMIAL_TERMS = 4_096
 MAX_LIE_DERIVATIVE_RAW_COEFFICIENT_DIGITS = 4_096
 
@@ -119,7 +117,6 @@ class LieDerivativePlan:
     components: tuple[LieComponentPlan, ...]
     recognition_candidates: tuple[RationalFunctionRecognitionCandidate, ...]
     inherited_locus_guards: tuple[SparseRationalPolynomial, ...]
-    result_bytes_upper_bound: int
     work_units_by_category: tuple[tuple[LieWorkCategory, int], ...]
 
     @property
@@ -1012,15 +1009,6 @@ def build_lie_derivative_plan(
         variable_count=dimension,
     )
     plans = tuple(component_plans)
-    result_bytes = _result_bytes_upper_bound(
-        vector_field, tensor, plans, inherited_guards
-    )
-    if result_bytes > MAX_LIE_DERIVATIVE_RESULT_BYTES:
-        _reject(
-            "result_bytes",
-            f"Lie-derivative result estimate of {result_bytes} bytes exceeds the "
-            f"{MAX_LIE_DERIVATIVE_RESULT_BYTES}-byte canonical output budget",
-        )
     recognition_candidates = canonical_recognition_candidates(vector_field, tensor)
     for candidate in recognition_candidates:
         source_bounds = (
@@ -1034,7 +1022,6 @@ def build_lie_derivative_plan(
         components=plans,
         recognition_candidates=recognition_candidates,
         inherited_locus_guards=inherited_guards,
-        result_bytes_upper_bound=result_bytes,
         work_units_by_category=ledger.by_category,
     )
     recognition = recognize_canonical_rational_functions(
@@ -1053,7 +1040,6 @@ def build_lie_derivative_plan(
 
 
 __all__ = [
-    "MAX_LIE_DERIVATIVE_RESULT_BYTES",
     "MAX_LIE_DERIVATIVE_WORK_UNITS",
     "FactorReference",
     "LieComponentPlan",

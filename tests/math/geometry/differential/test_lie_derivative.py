@@ -42,11 +42,7 @@ from jacobian.math.geometry.differential._recognition_process import (
 )
 from jacobian.math.geometry.differential.values import (
     MAX_RATIONAL_TENSOR_COMPONENTS,
-    MAX_RATIONAL_TENSOR_EXPONENT,
-    MAX_RATIONAL_TENSOR_LOCUS_GUARDS,
-    MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS,
     MAX_RATIONAL_TENSOR_RANK,
-    canonical_locus_guards,
 )
 from jacobian.math.polynomials._conversions import (
     rational_function_from_sympy,
@@ -1035,61 +1031,6 @@ def test_work_budget_rejection_precedes_coprimality_recognition(
     assert error.value.errors()[0]["type"].endswith("work_budget")
 
 
-def _result_byte_rejection_inputs() -> tuple[
-    RationalCoordinateTensor, RationalCoordinateTensor
-]:
-    variables = ("x", "y")
-    one = _function(variables, (1, (0, 0)))
-    vector = _tensor(variables, ("CONTRAVARIANT",), (one, one))
-    nonconstant_exponents = tuple(
-        exponent
-        for exponent in sorted(
-            product(range(MAX_RATIONAL_TENSOR_EXPONENT + 1), repeat=2),
-            reverse=True,
-        )
-        if exponent != (0, 0)
-    )[: MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS // 2 - 1]
-    guards = tuple(
-        SparseRationalPolynomial.model_validate(
-            _sparse(
-                *((1, exponent) for exponent in nonconstant_exponents),
-                (index + 1, (0, 0)),
-            )
-        )
-        for index in range(MAX_RATIONAL_TENSOR_LOCUS_GUARDS)
-    )
-    ordered_guards = canonical_locus_guards(guards, variable_count=2)
-    scalar = RationalCoordinateTensor(
-        coordinate_axis=variables,
-        variance=(),
-        components=(one,),
-        retained_nonzero_denominators=ordered_guards,
-    )
-    return vector, scalar
-
-
-def test_result_byte_rejection_precedes_coprimality_recognition(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    vector, scalar = _result_byte_rejection_inputs()
-
-    def forbidden_recognition(*args: Any, **kwargs: Any) -> Any:
-        raise AssertionError("doomed output request reached recognition")
-
-    monkeypatch.setattr(
-        lie_bounds,
-        "recognize_canonical_rational_functions",
-        forbidden_recognition,
-    )
-
-    with pytest.raises(
-        OperationDomainValidationError, match="canonical output budget"
-    ) as error:
-        lie_derivative(vector, scalar)
-
-    assert error.value.errors()[0]["type"].endswith("result_bytes")
-
-
 def test_dispatch_start_owns_one_deadline_through_result_construction(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1125,7 +1066,7 @@ def test_dispatch_start_owns_one_deadline_through_result_construction(
     assert {bound_deadline for _, _, bound_deadline in observed} == {
         started + LIE_DERIVATIVE_WALL_SECONDS
     }
-    assert observed[-1][0] == "after result-size serialization"
+    assert observed[-1][0] == "after profile construction"
 
 
 def test_expired_dispatch_deadline_stops_before_semantic_preflight() -> None:

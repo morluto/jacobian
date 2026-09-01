@@ -6,7 +6,7 @@ from fractions import Fraction
 from itertools import combinations
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import CanonicalLimits, format_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.exact._models import PointConfiguration
 from jacobian.math.geometry.exact.triangle_area_profile._models import (
@@ -22,19 +22,7 @@ def _admit_triangle_area_result(configuration: PointConfiguration) -> None:
     """Reject configurations whose complete profile cannot fit the wire limit."""
     points = configuration.points
     triangle_count = len(points) * (len(points) - 1) * (len(points) - 2) // 6
-    source_bytes = sum(
-        len(point.label)
-        + sum(len(coord.num) + len(coord.den) + 16 for coord in point.coordinates)
-        + 32
-        for point in points
-    )
     if triangle_count == 0:
-        if source_bytes + 256 > CanonicalLimits().max_output_bytes:
-            raise OperationDomainValidationError(
-                location=("configuration",),
-                code="geometry.triangle_area_result_bytes",
-                message="triangle area profile exceeds the canonical output-byte limit",
-            )
         return
     coordinate_widths = sorted(
         (
@@ -56,15 +44,6 @@ def _admit_triangle_area_result(configuration: PointConfiguration) -> None:
                 "a derived triangle area exceeds the canonical rational "
                 f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit bound"
             ),
-        )
-    entry_bytes = 96 + 2 * derived_digits
-    class_bytes = 128 + 2 * derived_digits
-    estimated_bytes = source_bytes + 256 + triangle_count * (entry_bytes + class_bytes)
-    if estimated_bytes > CanonicalLimits().max_output_bytes:
-        raise OperationDomainValidationError(
-            location=("configuration",),
-            code="geometry.triangle_area_result_bytes",
-            message="triangle area profile exceeds the canonical output-byte limit",
         )
 
 

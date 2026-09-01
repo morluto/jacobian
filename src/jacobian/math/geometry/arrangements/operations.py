@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from jacobian.canonical import CanonicalLimits, format_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.arrangements._models import (
     MAX_GENERIC_FORMULA_INDEX,
@@ -13,7 +13,6 @@ from jacobian.math.geometry.arrangements._models import (
 )
 
 MAX_GENERIC_FORMULA_WORK = 100_000
-_FORMULA_RESULT_RESERVE_BYTES = 4_096
 
 
 def _reject(location: tuple[str | int, ...], code: str, message: str) -> None:
@@ -143,17 +142,6 @@ def characteristic_polynomial(
     coefficient_digits = _bit_bound_to_decimal_digits(
         _binomial_prefix_bit_bound(m - 1, min(n, m)) + 1
     )
-    predicted_bytes = (
-        nonzero_coefficients * (coefficient_digits + 3)
-        + zero_coefficients * 4
-        + _FORMULA_RESULT_RESERVE_BYTES
-    )
-    if predicted_bytes > CanonicalLimits().max_output_bytes:
-        _reject(
-            ("ambient_dimension", "hyperplane_count"),
-            "characteristic_result_bytes_exceeded",
-            "characteristic polynomial exceeds the canonical output-byte limit",
-        )
     conversion_work = (
         nonzero_coefficients * _canonical_integer_conversion_work(coefficient_digits)
         + zero_coefficients
@@ -186,15 +174,6 @@ def chamber_count(ambient_dimension: int, hyperplane_count: int) -> ChamberCount
     if n >= m:
         result_bit_bound = m + 1
         result_digits = _bit_bound_to_decimal_digits(result_bit_bound)
-        if (
-            result_digits + _FORMULA_RESULT_RESERVE_BYTES
-            > CanonicalLimits().max_output_bytes
-        ):
-            _reject(
-                ("hyperplane_count",),
-                "chamber_result_bytes_exceeded",
-                "chamber count exceeds the canonical output-byte limit",
-            )
         # Closed-form ``2^m`` construction is cheap, but canonical formatting
         # and the positivity parse are quadratic in the 9-digit chunk count.
         conversion_work = _canonical_integer_conversion_work(result_digits)
@@ -208,15 +187,6 @@ def chamber_count(ambient_dimension: int, hyperplane_count: int) -> ChamberCount
     elif n == m - 1:
         result_bit_bound = m + 1
         result_digits = _bit_bound_to_decimal_digits(result_bit_bound)
-        if (
-            result_digits + _FORMULA_RESULT_RESERVE_BYTES
-            > CanonicalLimits().max_output_bytes
-        ):
-            _reject(
-                ("hyperplane_count",),
-                "chamber_result_bytes_exceeded",
-                "chamber count exceeds the canonical output-byte limit",
-            )
         conversion_work = _canonical_integer_conversion_work(result_digits)
         if conversion_work > MAX_GENERIC_FORMULA_WORK:
             _reject(
@@ -236,15 +206,6 @@ def chamber_count(ambient_dimension: int, hyperplane_count: int) -> ChamberCount
                 ("ambient_dimension", "hyperplane_count"),
                 "chamber_summation_work_exceeded",
                 "chamber count exceeds the binomial-summation work budget",
-            )
-        if (
-            result_digits + _FORMULA_RESULT_RESERVE_BYTES
-            > CanonicalLimits().max_output_bytes
-        ):
-            _reject(
-                ("ambient_dimension", "hyperplane_count"),
-                "chamber_result_bytes_exceeded",
-                "chamber count exceeds the canonical output-byte limit",
             )
         count = _chamber_recurrence(m - 1, n)
     return ChamberCountResult(chamber_count=format_canonical_integer(count))

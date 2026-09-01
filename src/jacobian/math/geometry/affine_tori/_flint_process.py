@@ -272,7 +272,7 @@ def compute_fixed_locus_kernel(
                 environment=worker_environment(locale="C.UTF-8"),
                 # The projection drops the complete retained source; that
                 # omission dominates its small protocol and digest fields.
-                stdout_limit=plan.result_bytes_upper_bound,
+                stdout_limit=plan.worker_stdout_bytes_upper_bound,
                 stderr_limit=_WORKER_STDERR_LIMIT,
                 resource_limits=ProcessResourceLimits(
                     cpu_seconds=max(1, math.ceil(allowance)),

@@ -6,7 +6,6 @@ from fractions import Fraction
 from itertools import combinations
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
-from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.exact._models import PointConfiguration
 from jacobian.math.geometry.exact.spanned_line_profile._models import (
@@ -30,16 +29,11 @@ def _admit_line_key_growth(configuration: PointConfiguration) -> None:
         default=1,
     )
     derived_digits = dimension * (2 * maximum_coordinate_digits + 2)
-    pair_count = len(points) * (len(points) - 1) // 2
-    estimated_key_bytes = pair_count * max(1, dimension) * (2 * derived_digits + 64)
-    if (
-        derived_digits > MAX_CANONICAL_RATIONAL_DIGITS
-        or estimated_key_bytes > CanonicalLimits().max_output_bytes
-    ):
+    if derived_digits > MAX_CANONICAL_RATIONAL_DIGITS:
         raise OperationDomainValidationError(
             location=("configuration",),
             code="geometry.spanned_line_profile.result_bound",
-            message="spanned-line keys exceed the canonical rational or output bound",
+            message="spanned-line keys exceed the canonical rational digit bound",
         )
 
 

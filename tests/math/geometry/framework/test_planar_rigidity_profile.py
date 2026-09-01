@@ -9,7 +9,7 @@ from pydantic import ValidationError
 from tests.fixtures.accounting import assert_charged_work_parity
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.exact._models import (
     LabelledRationalPoint,
@@ -27,7 +27,6 @@ from jacobian.math.geometry.framework._models import (
 from jacobian.math.geometry.framework._tools import TOOLS
 from jacobian.math.geometry.framework.operations import (
     _admit_framework,
-    _reserve_profile_output_bytes,
     _rigidity_matrix,
     planar_rigidity_profile,
 )
@@ -300,18 +299,14 @@ def test_profile_round_trip_is_structural_and_source_bound() -> None:
         PlanarRigidityProfile.model_validate(forged)
 
 
-def test_output_reservation_covers_sources_axes_and_one_nested_matrix() -> None:
+def test_profile_contains_sources_axes_and_one_nested_matrix() -> None:
     source = configuration((("a", 0, 0), ("b", 1, 0), ("c", 0, 1)))
     source_graph = graph(("a", "b", "c"), (("b", "c"), ("a", "c"), ("a", "b")))
     admission = _admit_framework(source, source_graph)
     matrix = _rigidity_matrix(admission)
 
-    reserved_bytes = _reserve_profile_output_bytes(
-        source, source_graph, admission, matrix
-    )
     result = planar_rigidity_profile(source, source_graph)
     payload = result.model_dump(mode="json")
-    actual_bytes = len(encode_strict_json(payload))
 
     assert set(payload) == {
         "configuration",
@@ -323,10 +318,9 @@ def test_output_reservation_covers_sources_axes_and_one_nested_matrix() -> None:
         "is_infinitesimally_rigid",
     }
     assert payload["matrix_rank"]["matrix"] == matrix.model_dump(mode="json")
-    assert actual_bytes <= reserved_bytes <= CanonicalLimits().max_output_bytes
 
 
-def test_output_reservation_admits_the_maximal_framework_matrix_shape() -> None:
+def test_admission_derives_the_maximal_framework_matrix_shape() -> None:
     source = configuration(
         tuple((f"v{index:02d}", index, index * index) for index in range(64))
     )
@@ -340,15 +334,10 @@ def test_output_reservation_admits_the_maximal_framework_matrix_shape() -> None:
     admission = _admit_framework(source, source_graph)
     matrix = _rigidity_matrix(admission)
 
-    reserved_bytes = _reserve_profile_output_bytes(
-        source, source_graph, admission, matrix
-    )
-
     assert matrix.row_count == 2_016
     assert matrix.column_count == 128
     assert len(matrix.entries) == 8_064
     assert admission.edge_axis == edges
-    assert reserved_bytes <= CanonicalLimits().max_output_bytes
 
 
 def test_rigidity_rows_replay_the_squared_length_differentials() -> None:

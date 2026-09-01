@@ -16,7 +16,6 @@ from jacobian._execution import (
     request_cancelled,
 )
 from jacobian.canonical import (
-    CanonicalLimits,
     format_canonical_integer,
     parse_canonical_integer,
     strict_json_object_size,
@@ -90,7 +89,7 @@ class AffineTorusFixedLocusPlan:
     translation_common_denominator: int
     rank_bounds: tuple[AffineTorusRankBounds, ...]
     worker_input_bytes_upper_bound: int
-    result_bytes_upper_bound: int
+    worker_stdout_bytes_upper_bound: int
     backend_envelope: AffineTorusBackendEnvelope
 
     def bounds_for_rank(self, rank: int) -> AffineTorusRankBounds:
@@ -1061,14 +1060,6 @@ def build_affine_torus_plan(
         )
         for bounds in rank_bounds
     )
-    transport_limit = CanonicalLimits().max_output_bytes
-    if result_bytes > transport_limit:
-        _reject(
-            "canonical_output",
-            f"predicted exact result of {result_bytes} bytes exceeds the actual "
-            f"{transport_limit}-byte canonical transport limit",
-        )
-
     require_affine_torus_deadline(deadline, "after semantic admission")
     return AffineTorusFixedLocusPlan(
         dimension=dimension,
@@ -1077,7 +1068,7 @@ def build_affine_torus_plan(
         translation_common_denominator=common_denominator,
         rank_bounds=rank_bounds,
         worker_input_bytes_upper_bound=worker_input_bytes,
-        result_bytes_upper_bound=result_bytes,
+        worker_stdout_bytes_upper_bound=result_bytes,
         backend_envelope=_backend_envelope(
             dimension=dimension,
             displacement_height=displacement_height,

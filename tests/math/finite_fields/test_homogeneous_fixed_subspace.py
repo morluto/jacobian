@@ -8,7 +8,6 @@ from pydantic import ValidationError
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields import (
-    Axis,
     HomogeneousFixedSubspace,
     PrimeFieldLinearAction,
     homogeneous_fixed_subspace,
@@ -22,7 +21,9 @@ from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
 def _swap_action() -> PrimeFieldLinearAction:
     return PrimeFieldLinearAction(
-        variable_axis=Axis(name="polynomial_variables", labels=("x", "y")),
+        variable_axis=PrimeFieldActionAxis(
+            name="polynomial_variables", labels=("x", "y")
+        ),
         generator_matrices=(
             PrimeFieldMatrix(prime=3, entries=((0, 1), (1, 0)), columns=2),
         ),
@@ -86,7 +87,9 @@ def test_quadratic_swap_has_a_canonical_reduced_fixed_basis() -> None:
 
 def test_nonsymmetric_generator_uses_matrix_columns_as_variable_images() -> None:
     action = PrimeFieldLinearAction(
-        variable_axis=Axis(name="polynomial_variables", labels=("x", "y")),
+        variable_axis=PrimeFieldActionAxis(
+            name="polynomial_variables", labels=("x", "y")
+        ),
         # x -> x and y -> x+y, so the degree-one fixed space is <x>.
         generator_matrices=(
             PrimeFieldMatrix(prime=3, entries=((1, 1), (0, 1)), columns=2),
@@ -109,7 +112,7 @@ def test_degree_zero_is_the_constant_fixed_space() -> None:
 
 def test_zero_fixed_space_retains_the_ambient_monomial_axis() -> None:
     action = PrimeFieldLinearAction(
-        variable_axis=Axis(name="polynomial_variables", labels=("x",)),
+        variable_axis=PrimeFieldActionAxis(name="polynomial_variables", labels=("x",)),
         generator_matrices=(PrimeFieldMatrix(prime=3, entries=((2,),), columns=1),),
     )
 
@@ -123,7 +126,9 @@ def test_zero_fixed_space_retains_the_ambient_monomial_axis() -> None:
 
 def test_multiple_generators_compute_their_simultaneous_fixed_space() -> None:
     action = PrimeFieldLinearAction(
-        variable_axis=Axis(name="polynomial_variables", labels=("x", "y")),
+        variable_axis=PrimeFieldActionAxis(
+            name="polynomial_variables", labels=("x", "y")
+        ),
         generator_matrices=(
             PrimeFieldMatrix(prime=5, entries=((0, 1), (1, 0)), columns=2),
             PrimeFieldMatrix(prime=5, entries=((2, 0), (0, 3)), columns=2),
@@ -140,11 +145,15 @@ def test_repeated_generators_are_canonicalized_without_changing_the_fixed_space(
 ):
     generator = PrimeFieldMatrix(prime=5, entries=((0, 1), (1, 0)), columns=2)
     repeated = PrimeFieldLinearAction(
-        variable_axis=Axis(name="polynomial_variables", labels=("x", "y")),
+        variable_axis=PrimeFieldActionAxis(
+            name="polynomial_variables", labels=("x", "y")
+        ),
         generator_matrices=tuple(generator for _ in range(1_025)),
     )
     canonical = PrimeFieldLinearAction(
-        variable_axis=Axis(name="polynomial_variables", labels=("x", "y")),
+        variable_axis=PrimeFieldActionAxis(
+            name="polynomial_variables", labels=("x", "y")
+        ),
         generator_matrices=(generator,),
     )
 
@@ -210,7 +219,7 @@ def test_transport_admission_accounts_for_full_rank_canonical_basis(
         for row in range(variable_count)
     )
     action = PrimeFieldLinearAction(
-        variable_axis=Axis(
+        variable_axis=PrimeFieldActionAxis(
             name="polynomial_variables",
             labels=tuple(f"x{index}" for index in range(variable_count)),
         ),
@@ -231,7 +240,9 @@ def test_transport_admission_accounts_for_full_rank_canonical_basis(
 
 def test_singular_generator_is_rejected_by_operation_admission() -> None:
     action = PrimeFieldLinearAction(
-        variable_axis=Axis(name="polynomial_variables", labels=("x", "y")),
+        variable_axis=PrimeFieldActionAxis(
+            name="polynomial_variables", labels=("x", "y")
+        ),
         generator_matrices=(
             PrimeFieldMatrix(prime=3, entries=((1, 0), (0, 0)), columns=2),
         ),
@@ -246,7 +257,7 @@ def test_oversized_homogeneous_basis_is_rejected_by_derived_axis_bound() -> None
         tuple(int(row == column) for column in range(8)) for row in range(8)
     )
     action = PrimeFieldLinearAction(
-        variable_axis=Axis(
+        variable_axis=PrimeFieldActionAxis(
             name="polynomial_variables", labels=tuple(f"x{index}" for index in range(8))
         ),
         generator_matrices=(PrimeFieldMatrix(prime=3, entries=identity, columns=8),),
@@ -270,7 +281,9 @@ def test_stacked_equation_axis_is_rejected_before_polynomial_expansion() -> None
         for index in range(16)
     )
     action = PrimeFieldLinearAction(
-        variable_axis=Axis(name="polynomial_variables", labels=("x", "y", "z")),
+        variable_axis=PrimeFieldActionAxis(
+            name="polynomial_variables", labels=("x", "y", "z")
+        ),
         generator_matrices=generators,
     )
 
@@ -296,7 +309,7 @@ def test_native_api_rejects_nonnegative_integer_degree_domain_violations(
 
 def test_one_variable_degree_is_bounded_by_derived_work_not_fixed_cap() -> None:
     action = PrimeFieldLinearAction(
-        variable_axis=Axis(name="polynomial_variables", labels=("x",)),
+        variable_axis=PrimeFieldActionAxis(name="polynomial_variables", labels=("x",)),
         generator_matrices=(PrimeFieldMatrix(prime=3, entries=((1,),), columns=1),),
     )
 
@@ -308,7 +321,7 @@ def test_one_variable_degree_is_bounded_by_derived_work_not_fixed_cap() -> None:
 
 def test_one_variable_basis_does_not_materialize_degree_sized_separator_pool() -> None:
     action = PrimeFieldLinearAction(
-        variable_axis=Axis(name="polynomial_variables", labels=("x",)),
+        variable_axis=PrimeFieldActionAxis(name="polynomial_variables", labels=("x",)),
         generator_matrices=(PrimeFieldMatrix(prime=3, entries=((1,),), columns=1),),
     )
 
@@ -325,7 +338,7 @@ def test_nine_variable_degree_one_action_uses_derived_admission() -> None:
         for row in range(variable_count)
     )
     action = PrimeFieldLinearAction(
-        variable_axis=Axis(
+        variable_axis=PrimeFieldActionAxis(
             name="polynomial_variables",
             labels=tuple(f"x{index}" for index in range(variable_count)),
         ),
@@ -361,7 +374,7 @@ def test_action_axis_uses_the_shared_matrix_axis_bound() -> None:
 
 def test_seventeen_one_variable_generators_use_derived_admission() -> None:
     action = PrimeFieldLinearAction(
-        variable_axis=Axis(name="polynomial_variables", labels=("x",)),
+        variable_axis=PrimeFieldActionAxis(name="polynomial_variables", labels=("x",)),
         generator_matrices=tuple(
             PrimeFieldMatrix(prime=19, entries=((value,),), columns=1)
             for value in range(1, 18)
@@ -375,7 +388,7 @@ def test_seventeen_one_variable_generators_use_derived_admission() -> None:
 
 def test_huge_one_variable_degree_is_rejected_by_substitution_bound() -> None:
     action = PrimeFieldLinearAction(
-        variable_axis=Axis(name="polynomial_variables", labels=("x",)),
+        variable_axis=PrimeFieldActionAxis(name="polynomial_variables", labels=("x",)),
         generator_matrices=(PrimeFieldMatrix(prime=3, entries=((1,),), columns=1),),
     )
 
@@ -401,7 +414,7 @@ def test_native_action_preserves_the_exact_prime_fallback() -> None:
 def test_native_action_rejects_a_prime_the_worker_cannot_serialize() -> None:
     prime = 2**19_937 - 1
     action = PrimeFieldLinearAction(
-        variable_axis=Axis(name="polynomial_variables", labels=("x",)),
+        variable_axis=PrimeFieldActionAxis(name="polynomial_variables", labels=("x",)),
         generator_matrices=(PrimeFieldMatrix(prime=prime, entries=((1,),), columns=1),),
     )
 
@@ -431,7 +444,7 @@ def test_catalog_action_rejects_non_word_safe_prime_before_nested_work() -> None
 
 def test_catalog_action_rejects_non_word_safe_canonical_action() -> None:
     action = PrimeFieldLinearAction(
-        variable_axis=Axis(name="polynomial_variables", labels=("x",)),
+        variable_axis=PrimeFieldActionAxis(name="polynomial_variables", labels=("x",)),
         generator_matrices=(
             PrimeFieldMatrix(
                 prime=2_147_483_659,

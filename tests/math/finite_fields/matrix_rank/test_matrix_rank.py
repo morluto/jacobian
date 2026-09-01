@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import pytest
 from pydantic import ValidationError
 
@@ -33,9 +35,9 @@ def _f4() -> FiniteFieldPresentation:
 
 def _matrix(
     fp: FiniteFieldPresentation,
-    rows: list[list[tuple[int, ...]]],
-    row_labels: list[str],
-    col_labels: list[str],
+    rows: Sequence[Sequence[Sequence[int]]],
+    row_labels: Sequence[str],
+    col_labels: Sequence[str],
 ) -> AxisBoundMatrix:
     return AxisBoundMatrix(
         presentation=fp,

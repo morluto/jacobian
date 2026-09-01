@@ -4,58 +4,57 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import ConfigDict, Field, RootModel, StrictInt
+from pydantic import AfterValidator, ConfigDict, Field, RootModel, StrictInt
 
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
-    OperationBrowseCard,
     OperationDescriptor,
     OperationDiscoveryMatch,
     OperationId,
 )
 
 
-class OperationSearchRequest(StrictModel):
-    op: Literal["search"]
-    query: Annotated[str, Field(min_length=1)]
-    namespace: Annotated[
-        str | None,
-        Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,127}$"),
-    ] = None
-    limit: Annotated[StrictInt, Field(ge=1, le=20)] = 5
-    cursor: Annotated[
-        str | None,
-        Field(
-            max_length=128,
-            pattern=r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$",
+def _require_nonblank_need(value: str) -> str:
+    if not value.strip():
+        raise ValueError("need must contain a non-whitespace character")
+    return value
+
+
+OperationNeed = Annotated[
+    str,
+    Field(
+        min_length=1,
+        max_length=4_096,
+        description=(
+            "A concise description of the local mathematical result needed. Preserve "
+            "the supplied objects and constraints, the computation or decision, and "
+            "whether a value, witness, certificate, profile, or exhaustive result is "
+            "required. Ordinary mathematical language is preferred to catalog tags."
         ),
-    ] = None
-
-
-class OperationBrowseRequest(StrictModel):
-    op: Literal["browse"]
-    namespace: Annotated[
-        str | None,
-        Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,127}$"),
-    ] = None
-    limit: Annotated[StrictInt, Field(ge=1, le=20)] = 20
-    cursor: Annotated[
-        str | None,
-        Field(
-            max_length=128,
-            pattern=r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$",
+    ),
+    AfterValidator(_require_nonblank_need),
+]
+OperationNamespace = Annotated[
+    str | None,
+    Field(
+        pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,127}$",
+        description=(
+            "Optional exact primary operation-ID namespace. Omit it unless already "
+            "known with high confidence."
         ),
-    ] = None
-
-
-class OperationInspectRequest(StrictModel):
-    op: Literal["inspect"]
-    operation_id: OperationId
-
-
-OperationFindRequest = Annotated[
-    OperationSearchRequest | OperationBrowseRequest | OperationInspectRequest,
-    Field(discriminator="op"),
+    ),
+]
+OperationMatchLimit = Annotated[
+    StrictInt,
+    Field(ge=1, le=10, description="Maximum compact matches to return."),
+]
+OperationCursor = Annotated[
+    str | None,
+    Field(
+        max_length=128,
+        pattern=r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$",
+        description="Continuation cursor from a prior call with the same need.",
+    ),
 ]
 
 
@@ -66,21 +65,12 @@ class OperationDiscoveryErrorDetail(StrictModel):
     hint: str
 
 
-class OperationSearchResult(StrictModel):
-    kind: Literal["discovery"]
-    query: str
+class OperationFindResult(StrictModel):
+    kind: Literal["matches"]
+    need: str
     namespace: str | None = None
     matches: tuple[OperationDiscoveryMatch, ...]
     total_matches: StrictInt
-    next_cursor: str | None = None
-    catalog_resource: Literal["operation://catalog"] = "operation://catalog"
-
-
-class OperationBrowseResult(StrictModel):
-    kind: Literal["browse"]
-    namespace: str | None = None
-    operations: tuple[OperationBrowseCard, ...]
-    total_operations: StrictInt
     next_cursor: str | None = None
     catalog_resource: Literal["operation://catalog"] = "operation://catalog"
 
@@ -111,7 +101,7 @@ class OperationInvalidRequestData(StrictModel):
         max_length=64,
     )
     hint: str = (
-        "Inspect the operation with math.find and correct the fields at the "
+        "Inspect the operation with math.inspect and correct the fields at the "
         "reported locations before retrying."
     )
 
@@ -124,10 +114,7 @@ class OperationDiscoveryError(StrictModel):
 class OperationFindResponse(
     RootModel[
         Annotated[
-            OperationSearchResult
-            | OperationBrowseResult
-            | OperationInspectionResult
-            | OperationDiscoveryError,
+            OperationFindResult | OperationDiscoveryError,
             Field(discriminator="kind"),
         ]
     ]
@@ -137,17 +124,30 @@ class OperationFindResponse(
     model_config = ConfigDict(json_schema_extra={"type": "object"})
 
 
+class OperationInspectResponse(
+    RootModel[
+        Annotated[
+            OperationInspectionResult | OperationDiscoveryError,
+            Field(discriminator="kind"),
+        ]
+    ]
+):
+    """Closed result of resolving one exact operation ID."""
+
+    model_config = ConfigDict(json_schema_extra={"type": "object"})
+
+
 __all__ = [
-    "OperationBrowseRequest",
-    "OperationBrowseResult",
+    "OperationCursor",
     "OperationDiscoveryError",
     "OperationDiscoveryErrorDetail",
-    "OperationFindRequest",
     "OperationFindResponse",
-    "OperationInspectRequest",
+    "OperationFindResult",
+    "OperationInspectResponse",
     "OperationInspectionResult",
     "OperationInvalidRequestData",
-    "OperationSearchRequest",
-    "OperationSearchResult",
+    "OperationMatchLimit",
+    "OperationNamespace",
+    "OperationNeed",
     "OperationValidationIssue",
 ]

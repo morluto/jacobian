@@ -1,7 +1,7 @@
 """Catalog conformance for the tree independence-polynomial operation."""
 
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import OperationDiscoveryRequest
+from jacobian.catalog.models import OperationMatchRequest
 from jacobian.dispatch import invoke_operation
 
 
@@ -36,10 +36,10 @@ def test_catalog_example_executes_as_a_source_bound_polynomial_profile() -> None
     ]
 
 
-def test_catalog_search_discovers_independent_set_cardinality_distribution() -> None:
-    result = Catalog.open().search(
-        OperationDiscoveryRequest(
-            query="count independent vertex sets by cardinality in a tree",
+def test_catalog_match_discovers_independent_set_cardinality_distribution() -> None:
+    result = Catalog.open().match(
+        OperationMatchRequest(
+            need="count independent vertex sets by cardinality in a tree",
             namespace="graph",
             limit=10,
         )

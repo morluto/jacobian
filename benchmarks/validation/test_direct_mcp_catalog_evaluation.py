@@ -85,6 +85,7 @@ def test_agent_and_local_corpora_freeze_the_same_cases_and_operations() -> None:
 def test_surface_arms_are_disjoint_where_the_comparison_requires_it() -> None:
     all_names = {
         "math.find",
+        "math.inspect",
         "math.run",
         "matrix.determinant.compute",
         "sat.assignment.check",
@@ -92,21 +93,24 @@ def test_surface_arms_are_disjoint_where_the_comparison_requires_it() -> None:
 
     assert _visible_tool_names(all_names, SurfaceArm.LEGACY) == {
         "math.find",
+        "math.inspect",
         "math.run",
     }
     assert _visible_tool_names(all_names, SurfaceArm.DIRECT) == {
         "matrix.determinant.compute",
         "sat.assignment.check",
     }
-    assert _visible_tool_names(all_names, SurfaceArm.DIRECT_FIND) == all_names - {
-        "math.run"
+    assert _visible_tool_names(all_names, SurfaceArm.DIRECT_FIND) == {
+        "math.find",
+        "matrix.determinant.compute",
+        "sat.assignment.check",
     }
     assert _visible_tool_names(all_names, SurfaceArm.FIND_ONLY) == {"math.find"}
 
 
 def test_production_tool_surface_is_valid_for_the_legacy_arm() -> None:
     _validate_server_tool_surface(
-        {"math.find", "math.run"},
+        {"math.find", "math.inspect", "math.run"},
         {"matrix.determinant.compute", "sat.assignment.check"},
         SurfaceArm.LEGACY,
     )
@@ -114,7 +118,7 @@ def test_production_tool_surface_is_valid_for_the_legacy_arm() -> None:
 
 def test_production_tool_surface_is_valid_for_the_full_arm() -> None:
     _validate_server_tool_surface(
-        {"math.find", "math.run"},
+        {"math.find", "math.inspect", "math.run"},
         {"matrix.determinant.compute", "sat.assignment.check"},
         SurfaceArm.FULL,
     )
@@ -123,7 +127,7 @@ def test_production_tool_surface_is_valid_for_the_full_arm() -> None:
 def test_production_tool_surface_cannot_run_a_direct_arm() -> None:
     with pytest.raises(RuntimeError, match="direct MCP tools"):
         _validate_server_tool_surface(
-            {"math.find", "math.run"},
+            {"math.find", "math.inspect", "math.run"},
             {"matrix.determinant.compute", "sat.assignment.check"},
             SurfaceArm.DIRECT,
         )

@@ -5,8 +5,8 @@ from tests.integration.graphs._support import graph_validation_error
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
-    OperationDiscoveryRequest,
     OperationDomainValidationError,
+    OperationMatchRequest,
 )
 from jacobian.math.graphs.coloring._models import (
     KColorabilityRequest,
@@ -144,8 +144,8 @@ def test_catalog_retires_the_duplicate_and_discovers_independence_number() -> No
             namespace="graph", limit=20, cursor=None
         ).operations
     }
-    discovered = catalog.search(
-        OperationDiscoveryRequest(query="maximum independent set", limit=5)
+    discovered = catalog.match(
+        OperationMatchRequest(need="maximum independent set", limit=5)
     )
     discovered_ids = {match.operation_id for match in discovered.matches}
     assert retired_operation_id not in discovered_ids

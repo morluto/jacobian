@@ -13,11 +13,11 @@ from jacobian.catalog.models import (
     OperationBrowseResult,
     OperationCatalogSnapshot,
     OperationDescriptor,
-    OperationDiscoveryRequest,
-    OperationDiscoveryResult,
     OperationExample,
+    OperationMatchRequest,
+    OperationMatchResult,
 )
-from jacobian.catalog.search import browse_operations, discover_operations
+from jacobian.catalog.search import browse_operations, match_operations
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,8 +88,10 @@ class Catalog:
             return None
         return _descriptor(operation)
 
-    def search(self, request: OperationDiscoveryRequest) -> OperationDiscoveryResult:
-        return discover_operations(tuple(self._operations.values()), request)
+    def match(self, request: OperationMatchRequest) -> OperationMatchResult:
+        """Match one desired local outcome against installed operations."""
+
+        return match_operations(tuple(self._operations.values()), request)
 
     def browse(
         self,

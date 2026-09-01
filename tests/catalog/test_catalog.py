@@ -8,8 +8,8 @@ import pytest
 from jacobian._models import StrictModel
 from jacobian.catalog import catalog as catalog_module
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import MathTool, OperationDiscoveryRequest
-from jacobian.catalog.search import browse_operations, discover_operations
+from jacobian.catalog.models import MathTool, OperationMatchRequest
+from jacobian.catalog.search import browse_operations, match_operations
 from jacobian.dispatch import invoke_operation
 
 
@@ -183,15 +183,15 @@ def test_compact_discovery_matches_full_descriptor_discovery() -> None:
         for descriptor in descriptors
         if (operation := catalog.operation(descriptor.operation_id)) is not None
     )
-    request = OperationDiscoveryRequest(query="matrix determinant", limit=2)
+    request = OperationMatchRequest(need="matrix determinant", limit=2)
 
-    expected_search = discover_operations(descriptors, request)
-    assert discover_operations(operations, request) == expected_search
+    expected_search = match_operations(descriptors, request)
+    assert match_operations(operations, request) == expected_search
     if expected_search.next_cursor is not None:
         next_request = request.model_copy(
             update={"cursor": expected_search.next_cursor}
         )
-        assert discover_operations(operations, next_request) == discover_operations(
+        assert match_operations(operations, next_request) == match_operations(
             descriptors, next_request
         )
 
@@ -216,7 +216,7 @@ def test_compact_discovery_matches_full_descriptor_discovery() -> None:
         )
 
 
-def test_search_and_browse_do_not_materialize_descriptors(
+def test_match_and_browse_do_not_materialize_descriptors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     catalog = Catalog.open()
@@ -226,7 +226,7 @@ def test_search_and_browse_do_not_materialize_descriptors(
 
     monkeypatch.setattr(catalog_module, "_descriptor", fail_descriptor)
 
-    search = catalog.search(OperationDiscoveryRequest(query="matrix", limit=2))
+    search = catalog.match(OperationMatchRequest(need="matrix", limit=2))
     browse = catalog.browse(namespace="matrix", limit=2, cursor=None)
 
     assert search.matches
@@ -236,8 +236,8 @@ def test_search_and_browse_do_not_materialize_descriptors(
 def test_namespace_filters_only_the_primary_operation_id_segment() -> None:
     catalog = Catalog.open()
 
-    search = catalog.search(
-        OperationDiscoveryRequest(query="polynomial", namespace="polynomial", limit=20)
+    search = catalog.match(
+        OperationMatchRequest(need="polynomial", namespace="polynomial", limit=20)
     )
     browse = catalog.browse(namespace="polynomial", limit=20, cursor=None)
 
@@ -254,36 +254,24 @@ def test_natural_prime_power_query_ranks_factorization_before_prime_navigation()
 ):
     catalog = Catalog.open()
 
-    result = catalog.search(
-        OperationDiscoveryRequest(
-            query="factor an integer into prime powers",
+    result = catalog.match(
+        OperationMatchRequest(
+            need="factor an integer into prime powers",
             # Keep the complete navigation comparison within the public
             # discovery limit; new factor-related operations may occupy the
             # first ten slots without changing the relative ordering.
             limit=20,
         )
     )
-    positions = {
-        match.operation_id: index for index, match in enumerate(result.matches)
-    }
-
-    assert all(
-        positions["integer.compute.prime_factorization"]
-        < positions[prime_navigation_id]
-        for prime_navigation_id in (
-            "integer.compute.next_prime",
-            "integer.compute.nth_prime",
-            "integer.compute.previous_prime",
-        )
-    )
+    assert result.matches[0].operation_id == "integer.compute.prime_factorization"
 
 
 def test_natural_powerful_number_query_finds_bounded_decision() -> None:
     catalog = Catalog.open()
 
-    result = catalog.search(
-        OperationDiscoveryRequest(
-            query="decide whether an integer is 2-full or powerful",
+    result = catalog.match(
+        OperationMatchRequest(
+            need="decide whether an integer is 2-full or powerful",
             limit=5,
         )
     )
@@ -310,9 +298,9 @@ def test_catalog_runs_source_bound_powerful_decision() -> None:
 def test_global_search_finds_lattice_hnf() -> None:
     catalog = Catalog.open()
 
-    result = catalog.search(
-        OperationDiscoveryRequest(
-            query="row Hermite normal form",
+    result = catalog.match(
+        OperationMatchRequest(
+            need="row Hermite normal form",
             limit=10,
         )
     )
@@ -325,8 +313,8 @@ def test_global_search_finds_lattice_hnf() -> None:
 def test_search_finds_generalized_exact_cover() -> None:
     catalog = Catalog.open()
 
-    result = catalog.search(
-        OperationDiscoveryRequest(query="generalized exact cover", limit=5)
+    result = catalog.match(
+        OperationMatchRequest(need="generalized exact cover", limit=5)
     )
 
     assert result.matches[0].operation_id == (

@@ -2,8 +2,8 @@
 
 Every built-in operation is a direct typed mathematical function with one
 domain owner. Declaration modules export immutable tuples of
-`MathTool` values. `math.find` reads those entries and `math.run`
-validates then executes exactly one of them.
+`MathTool` values. `math.find` matches those entries, `math.inspect` returns one
+exact contract, and `math.run` validates then executes exactly one operation.
 
 The canonical operation path and ownership boundaries are defined in the
 [architecture](../explanation/architecture.md). A domain function may use a

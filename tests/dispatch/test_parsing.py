@@ -9,7 +9,7 @@ from pydantic import StrictInt, StringConstraints, ValidationError, model_valida
 from tests.dispatch._support import dispatch_validation_error
 
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.catalog.models import OperationDiscoveryRequest
+from jacobian.catalog.models import OperationMatchRequest
 from jacobian.dispatch import parse_operation_input
 from jacobian.math.logic._cnf import SatAssignmentCheckRequest
 
@@ -73,9 +73,7 @@ def test_parse_operation_input_preserves_tuples_through_before_validation() -> N
 
 def test_parse_operation_input_rejects_numeric_strings_for_integers() -> None:
     with dispatch_validation_error():
-        parse_operation_input(
-            OperationDiscoveryRequest, {"query": "graph", "limit": "3"}
-        )
+        parse_operation_input(OperationMatchRequest, {"need": "graph", "limit": "3"})
 
 
 def test_tuple_normalization_does_not_enable_scalar_coercion() -> None:

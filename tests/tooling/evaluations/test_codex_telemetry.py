@@ -95,14 +95,11 @@ def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
         _tool_event(
             "math.find",
             {
-                "request": {
-                    "op": "search",
-                    "query": "find a graph counterexample",
-                    "namespace": "graph",
-                }
+                "need": "find a graph counterexample",
+                "namespace": "graph",
             },
             {
-                "kind": "discovery",
+                "kind": "matches",
                 "matches": [
                     {"operation_id": "graph.search.atlas"},
                     {"operation_id": "graph.compute.properties"},
@@ -110,13 +107,8 @@ def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
             },
         ),
         _tool_event(
-            "math.find",
-            {
-                "request": {
-                    "op": "inspect",
-                    "operation_id": "graph.search.atlas",
-                }
-            },
+            "math.inspect",
+            {"operation_id": "graph.search.atlas"},
             {
                 "kind": "operation",
                 "operation": {"operation_id": "graph.search.atlas"},
@@ -147,8 +139,8 @@ def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
 
     assert telemetry["operation_descriptions"] == [
         {
-            "kind": "discovery",
-            "query": "find a graph counterexample",
+            "kind": "matches",
+            "need": "find a graph counterexample",
             "namespace": "graph",
             "operation_id": None,
             "match_ids": [
@@ -158,7 +150,7 @@ def test_agent_telemetry_preserves_discovery_to_invocation_dataflow(
         },
         {
             "kind": "operation",
-            "query": None,
+            "need": None,
             "namespace": None,
             "operation_id": "graph.search.atlas",
             "match_ids": [],
@@ -180,13 +172,8 @@ def test_agent_telemetry_does_not_count_unknown_exact_inspection(
 ) -> None:
     events = [
         _tool_event(
-            "math.find",
-            {
-                "request": {
-                    "op": "inspect",
-                    "operation_id": "missing.operation",
-                }
-            },
+            "math.inspect",
+            {"operation_id": "missing.operation"},
             {
                 "kind": "error",
                 "error": {"code": "UNKNOWN_OPERATION"},
@@ -559,22 +546,17 @@ def test_agent_telemetry_counts_response_bytes_and_repeated_calls(
     events = [
         _tool_event(
             "math.find",
-            {"request": {"op": "search", "query": "SAT materialization"}},
+            {"need": "SAT materialization"},
             {"matches": [{"operation_id": "sat.cnf.materialize"}]},
         ),
         _tool_event(
             "math.find",
-            {"request": {"op": "search", "query": "SAT materialization"}},
+            {"need": "SAT materialization"},
             {"matches": [{"operation_id": "sat.cnf.materialize"}]},
         ),
         _tool_event(
-            "math.find",
-            {
-                "request": {
-                    "op": "inspect",
-                    "operation_id": "sat.cnf.materialize",
-                }
-            },
+            "math.inspect",
+            {"operation_id": "sat.cnf.materialize"},
             {"operation": {"operation_id": "sat.cnf.materialize"}},
         ),
     ]
@@ -588,7 +570,7 @@ def test_agent_telemetry_counts_response_bytes_and_repeated_calls(
 
     assert telemetry["mcp_wire_bytes"] > 0
     assert (
-        telemetry["mcp_wire_bytes_by_tool"]["math.find"] == telemetry["mcp_wire_bytes"]
+        sum(telemetry["mcp_wire_bytes_by_tool"].values()) == telemetry["mcp_wire_bytes"]
     )
     assert telemetry["repeated_mcp_call_count"] == 1
     assert telemetry["repeated_mcp_calls"][0]["tool"] == "math.find"

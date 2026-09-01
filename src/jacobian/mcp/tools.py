@@ -24,20 +24,19 @@ from jacobian.dispatch import (
     execute_operation,
 )
 from jacobian.mcp.models import (
-    OperationBrowseRequest,
+    OperationCursor,
     OperationDiscoveryError,
     OperationDiscoveryErrorDetail,
-    OperationFindRequest,
     OperationFindResponse,
     OperationInspectionResult,
+    OperationInspectResponse,
     OperationInvalidRequestData,
-    OperationSearchRequest,
+    OperationMatchLimit,
+    OperationNamespace,
+    OperationNeed,
     OperationValidationIssue,
 )
-from jacobian.mcp.projections import (
-    _operation_browse_response,
-    _operation_discovery_response,
-)
+from jacobian.mcp.projections import _operation_match_response
 from jacobian.mcp.runtime import (
     AppState,
     _authorize,
@@ -50,35 +49,39 @@ _MAX_VALIDATION_LOCATION_LENGTH = 128
 
 
 def math_find(
-    request: OperationFindRequest,
+    need: OperationNeed,
+    namespace: OperationNamespace = None,
+    limit: OperationMatchLimit = 5,
+    cursor: OperationCursor = None,
     *,
     ctx: Context[AppState, Any],
 ) -> OperationFindResponse:
     active_catalog = _catalog(ctx)
-    if isinstance(request, OperationSearchRequest):
-        discovery_response = _operation_discovery_response(
-            active_catalog,
-            query=request.query,
-            namespace=request.namespace,
-            limit=request.limit,
-            cursor=request.cursor,
-        )
-        return OperationFindResponse(root=discovery_response)
-    if isinstance(request, OperationBrowseRequest):
-        browse_response = _operation_browse_response(
-            active_catalog,
-            namespace=request.namespace,
-            limit=request.limit,
-            cursor=request.cursor,
-        )
-        return OperationFindResponse(root=browse_response)
-    operation_id = request.operation_id
+    match_response = _operation_match_response(
+        active_catalog,
+        need=need,
+        namespace=namespace,
+        limit=limit,
+        cursor=cursor,
+    )
+    return OperationFindResponse(root=match_response)
+
+
+def math_inspect(
+    operation_id: OperationId,
+    *,
+    ctx: Context[AppState, Any],
+) -> OperationInspectResponse:
+    """Return the exact contract for one known operation ID."""
+
+    active_catalog = _catalog(ctx)
     descriptor = active_catalog.inspect(operation_id)
     if descriptor is None:
         hint = (
-            "Call math.find with a mathematical query to search installed operations."
+            "Call math.find with a local mathematical need to match installed "
+            "operations."
         )
-        return OperationFindResponse(
+        return OperationInspectResponse(
             root=OperationDiscoveryError(
                 kind="error",
                 error=OperationDiscoveryErrorDetail(
@@ -89,7 +92,7 @@ def math_find(
                 ),
             )
         )
-    return OperationFindResponse(
+    return OperationInspectResponse(
         OperationInspectionResult(kind="operation", operation=descriptor)
     )
 

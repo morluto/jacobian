@@ -17,7 +17,7 @@ def _ready_probe(*, mcp_url, expected_version, timeout_seconds):
         "reachable": True,
         "report": {
             "server": {"name": "jacobian", "version": "1.2.3"},
-            "tool_names": ["math.find", "math.run"],
+            "tool_names": ["math.find", "math.inspect", "math.run"],
             "catalog": {
                 "catalog_version": "1",
                 "operations": 1,
@@ -162,7 +162,7 @@ def test_treatment_readiness_preflight_misconfigured_on_digest_mismatch(
             "reachable": True,
             "report": {
                 "server": {"name": "jacobian", "version": "1.2.3"},
-                "tool_names": ["math.find", "math.run"],
+                "tool_names": ["math.find", "math.inspect", "math.run"],
                 "catalog": {
                     "catalog_version": "1",
                     "operations": 1,

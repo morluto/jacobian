@@ -4,8 +4,8 @@
 
 The immutable `operation://catalog` resource is the exact bulk inventory for a
 server: it contains every operation ID, request schema, result schema, and
-example. For the ordinary agent path, use `math.find` to search for an operation,
-browse compact sorted operation cards, or inspect one exact operation.
+example. For the ordinary agent path, use `math.find` to identify candidates and
+`math.inspect` to read one exact operation contract.
 
 Additional references document mathematical contracts or external boundaries
 that need more context than an operation card:

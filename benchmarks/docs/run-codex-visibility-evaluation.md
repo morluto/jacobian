@@ -9,7 +9,7 @@ Jacobian surfaces:
 
 | Arm | Visible MCP tools | Question |
 | --- | --- | --- |
-| `legacy` | `math.find`, `math.run` | Can the agent discover and execute through the generic pair? |
+| `legacy` | `math.find`, `math.inspect`, `math.run` | Can the agent discover, inspect, and execute through the generic tools? |
 | `direct` | catalog operation tools | Can the agent select, invoke, and compose typed tools directly? |
 | `direct_find` | direct tools plus `math.find` | Does semantic vocabulary search improve selection? |
 | `find_only` | `math.find` | Which mathematical vocabulary is discoverable independently of execution? |
@@ -33,7 +33,7 @@ make direct-mcp-catalog-eval \
 They construct an explicit in-memory experimental surface and record
 catalog/schema coverage, serialized definition bytes, `tools/list` latency,
 `math.find` ranking, direct and `math.run` execution parity, and exact typed
-composition. Production exposes only `math.find` and `math.run`.
+composition. Production exposes only `math.find`, `math.inspect`, and `math.run`.
 They intentionally report model selection, deferred client search, and exact
 per-task loaded-definition bytes as unmeasured.
 

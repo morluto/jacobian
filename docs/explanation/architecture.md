@@ -5,8 +5,8 @@ This page describes the package boundaries and ordinary execution path that
 implement it.
 
 The serving process compiles one immutable catalog directly from explicit
-`MathTool` entries and exposes `math.find` and `math.run` through the MCP Python
-SDK.
+`MathTool` entries and exposes `math.find`, `math.inspect`, and `math.run`
+through the MCP Python SDK.
 
 For most native functions, the ordinary call path is deliberately small:
 
@@ -115,8 +115,8 @@ computational engines behind Jacobian's public mathematical contracts.
 ## Transport and mathematical ownership
 
 The MCP Python SDK owns the transport boundary: registration of
-`math.find` and `math.run`, their outer argument and output schemas, protocol
-validation, and structured JSON delivery. Jacobian does not duplicate those
+`math.find`, `math.inspect`, and `math.run`, their outer argument and output
+schemas, protocol validation, and structured JSON delivery. Jacobian does not duplicate those
 checks. The SDK's Streamable HTTP request-body ceiling is an input constraint;
 it does not define a tool-result byte ceiling. No MCP response-size limit is
 therefore inferred from the canonical codec's defaults.

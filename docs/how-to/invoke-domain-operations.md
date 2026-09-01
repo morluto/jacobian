@@ -1,12 +1,13 @@
 # Discover and invoke domain operations
 
-Use `math.find` progressively, then call `math.run` once with the selected
-operation ID and a `payload` matching its request model. The ordinary path is:
+Use `math.find`, `math.inspect`, then `math.run` once with the selected operation
+ID and a `payload` matching its request model. The ordinary path is:
 
-1. Search globally for one atomic mathematical outcome when the operation is
-   unknown. Use a short phrase such as "integer nth root" or "real root
-   isolation", not a complete proof goal. Search ranking is deterministic
-   lexical retrieval, not a recommendation.
+1. Describe the local mathematical result you need when the operation is
+   unknown. Preserve the supplied objects and constraints, the computation or
+   decision, and whether the result must include a value, witness, certificate,
+   profile, or exhaustive enumeration. A short phrase is enough; do not reduce
+   it to catalog tags or submit the surrounding proof goal.
 2. Inspect the selected operation before forming an unfamiliar payload. Its
    schemas and examples are authoritative for that installed catalog.
 3. Run exactly that operation with one typed payload.
@@ -16,21 +17,18 @@ For example, search for a small number of matrix operations, then inspect an
 exact candidate:
 
 ```json
-{"request":{"op":"search","query":"matrix determinant","namespace":"matrix","limit":3}}
+{"need":"exact determinant of a rational matrix","namespace":"matrix","limit":3}
 ```
 
 ```json
-{"request":{"op":"inspect","operation_id":"matrix.determinant.compute"}}
+{"operation_id":"matrix.determinant.compute"}
 ```
 
-Use `browse` to map a known primary namespace in operation-ID order. A
-namespace matches only the first segment of an operation ID; tags do not filter
-the result set. Search and browse responses retain `catalog_resource` as the
-explicit fallback for a full catalog export:
-
-```json
-{"request":{"op":"browse","namespace":"matrix","limit":20}}
-```
+The optional `namespace` filter matches only the first segment of an operation
+ID. Use it only when that namespace is already known with high confidence;
+agents do not need to learn Jacobian's tags before searching. Read the
+`operation://catalog` resource when the complete bulk inventory is genuinely
+needed.
 
 After inspection, run the selected operation. For example:
 

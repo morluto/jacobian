@@ -6,22 +6,21 @@ from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDescriptor,
     OperationDiscoveryMatch,
-    OperationDiscoveryRequest,
+    OperationMatchRequest,
 )
 from jacobian.catalog.search import (
-    discover_operations,
-    discovery_relevance,
     discovery_terms,
+    match_operations,
 )
 
 
-def _positions(query: str) -> dict[str, int]:
+def _positions(need: str) -> dict[str, int]:
     catalog = Catalog.open()
     cursor: str | None = None
     matches: list[OperationDiscoveryMatch] = []
     while True:
-        result = catalog.search(
-            OperationDiscoveryRequest(query=query, limit=20, cursor=cursor)
+        result = catalog.match(
+            OperationMatchRequest(need=need, limit=20, cursor=cursor)
         )
         matches.extend(result.matches)
         if result.next_cursor is None:
@@ -30,32 +29,18 @@ def _positions(query: str) -> dict[str, int]:
     return {match.operation_id: index for index, match in enumerate(matches)}
 
 
-def test_discovery_phrase_matching_respects_token_boundaries() -> None:
-    descriptor = OperationDescriptor(
-        operation_id="fixture.text.inspect",
-        title="Inspect text",
-        description="Inspect some paragraph of structured text.",
-        input_schema={"type": "object"},
-        output_schema={"type": "object"},
-    )
-
-    graph_score = discovery_relevance(descriptor, "graph")
-    phrase_score = discovery_relevance(
-        descriptor,
-        "paragraph of structured text",
-    )
-
-    assert graph_score == 0
-    assert phrase_score >= 20
-
-
-def test_standard_det_abbreviation_ranks_determinants_before_charpolys() -> None:
+def test_determinant_need_ranks_determinants_before_charpolys() -> None:
     catalog = Catalog.open()
     cursor: str | None = None
     matches: list[OperationDiscoveryMatch] = []
     while True:
-        result = catalog.search(
-            OperationDiscoveryRequest(query="det", limit=20, cursor=cursor)
+        result = catalog.match(
+            OperationMatchRequest(
+                need="return the exact determinant of a rational matrix",
+                namespace="matrix",
+                limit=20,
+                cursor=cursor,
+            )
         )
         matches.extend(result.matches)
         if result.next_cursor is None:
@@ -125,41 +110,6 @@ def test_discovery_terms_use_a_conservative_inflection_table(
     assert discovery_terms(term) == frozenset({expected})
 
 
-@pytest.mark.parametrize(
-    ("field", "weight"),
-    [
-        ("operation_id", 12),
-        ("tags", 10),
-        ("title", 8),
-        ("description", 3),
-    ],
-)
-def test_discovery_inflection_is_symmetric_across_all_searchable_fields(
-    field: str,
-    weight: int,
-) -> None:
-    def descriptor(term: str) -> OperationDescriptor:
-        values: dict[str, object] = {
-            "operation_id": "fixture.object.inspect",
-            "title": "Inspect object",
-            "description": "Examine object.",
-            "tags": (),
-            "input_schema": {"type": "object"},
-            "output_schema": {"type": "object"},
-        }
-        values[field] = (
-            (term,)
-            if field == "tags"
-            else f"fixture.{term}.inspect"
-            if field == "operation_id"
-            else term
-        )
-        return OperationDescriptor.model_validate(values)
-
-    assert discovery_relevance(descriptor("points"), "point") == weight
-    assert discovery_relevance(descriptor("point"), "points") == weight
-
-
 def test_subset_sum_singular_and_plural_queries_rank_the_profile_ahead_of_sidon() -> (
     None
 ):
@@ -168,12 +118,12 @@ def test_subset_sum_singular_and_plural_queries_rank_the_profile_ahead_of_sidon(
         "all subset sum and repeated representation of a finite integer set",
         "all subset sums and repeated representations of a finite integer set",
     ):
-        result = catalog.search(OperationDiscoveryRequest(query=query, limit=20))
+        result = catalog.match(OperationMatchRequest(need=query, limit=20))
         positions = {
             match.operation_id: index for index, match in enumerate(result.matches)
         }
 
-        assert result.query == query
+        assert result.need == query
         assert (
             positions["additive.subset_sum.profile.compute"]
             < positions["combinatorics.integer_set.sidon.decide"]
@@ -185,8 +135,8 @@ def test_subset_sum_singular_and_plural_queries_rank_the_profile_ahead_of_sidon(
     [
         (
             (
-                "rational point distance profile",
-                "rational points distances profile",
+                "return the exact pairwise distance profile of rational points",
+                "return exact pairwise distances profiles of rational point sets",
             ),
             "geometry.points.distance_profile.compute",
         ),
@@ -198,7 +148,10 @@ def test_subset_sum_singular_and_plural_queries_rank_the_profile_ahead_of_sidon(
             "graph.polynomial.independence.compute",
         ),
         (
-            ("exact maximum cut of a graph", "exact maximum cuts of a graph"),
+            (
+                "return the exact maximum cut and a partition witness",
+                "return exact maximum cuts and partition witnesses",
+            ),
             "graph.cut.maximum.compute",
         ),
     ],
@@ -209,8 +162,7 @@ def test_inflected_catalog_queries_retain_the_same_top_result(
 ) -> None:
     catalog = Catalog.open()
     results = tuple(
-        catalog.search(OperationDiscoveryRequest(query=query, limit=10))
-        for query in queries
+        catalog.match(OperationMatchRequest(need=query, limit=10)) for query in queries
     )
 
     assert all(
@@ -218,39 +170,25 @@ def test_inflected_catalog_queries_retain_the_same_top_result(
     )
 
 
-def test_exact_identifier_phrase_keeps_priority_after_inflection_normalization() -> (
-    None
-):
-    operations = tuple(
-        OperationDescriptor(
-            operation_id=operation_id,
-            title="Inspect object",
-            description="Examine object.",
-            input_schema={"type": "object"},
-            output_schema={"type": "object"},
-        )
-        for operation_id in ("fixture.point.compute", "fixture.points.compute")
-    )
-
-    result = discover_operations(
-        operations,
-        OperationDiscoveryRequest(query="fixture.points.compute", limit=2),
-    )
-
-    assert result.matches[0].operation_id == "fixture.points.compute"
-
-
 def test_protected_mathematical_queries_retain_their_top_catalog_matches() -> None:
     catalog = Catalog.open()
     expected_top_matches = {
-        "basis": "lattice.canonical_basis.compute",
-        "class": "probability.markov_chain.communicating_classes.compute",
-        "series": "formal_series.rational.compose.compute",
-        "sos": "polynomial.sos.decomposition.check",
+        "compute a canonical basis of an integer lattice": (
+            "lattice.canonical_basis.compute"
+        ),
+        "return the communicating classes of a finite Markov chain": (
+            "probability.markov_chain.communicating_classes.compute"
+        ),
+        "compose two truncated rational formal power series": (
+            "formal_series.rational.compose.compute"
+        ),
+        "check a supplied rational sum-of-squares decomposition certificate": (
+            "polynomial.sos.decomposition.check"
+        ),
     }
 
     for query, expected_operation_id in expected_top_matches.items():
-        result = catalog.search(OperationDiscoveryRequest(query=query, limit=5))
+        result = catalog.match(OperationMatchRequest(need=query, limit=5))
 
         assert result.matches[0].operation_id == expected_operation_id
 
@@ -266,10 +204,10 @@ def test_inflected_discovery_ties_are_deterministic_and_operation_id_ordered() -
         )
         for operation_id in ("fixture.z.inspect", "fixture.a.inspect")
     )
-    request = OperationDiscoveryRequest(query="point", limit=2)
+    request = OperationMatchRequest(need="point", limit=2)
 
-    forward = discover_operations(operations, request)
-    reverse = discover_operations(tuple(reversed(operations)), request)
+    forward = match_operations(operations, request)
+    reverse = match_operations(tuple(reversed(operations)), request)
 
     assert forward == reverse
     assert [match.operation_id for match in forward.matches] == [
@@ -307,6 +245,61 @@ def test_plural_queries_preserve_their_semantic_catalog_routing() -> None:
     assert (
         tree_positions["graph.polynomial.independence.compute"]
         < tree_positions["graph.independent_set.maximal.decide"]
+    )
+
+
+@pytest.mark.parametrize(
+    ("need", "expected_operation_id"),
+    (
+        (
+            "decide whether an integer set is Sidon and return a repeated-difference collision witness",
+            "combinatorics.integer_set.sidon.decide",
+        ),
+        (
+            "from a supplied edge-coloured complete graph construct the hypergraph whose edges are monochromatic cliques",
+            "graph.edge_colored.monochromatic_clique_hypergraph.construct",
+        ),
+        (
+            "find a generalized exact cover of a finite incidence system",
+            "combinatorics.generalized_exact_cover.find",
+        ),
+        (
+            "decide whether a supplied graph arrows another graph under every two-edge-colouring and return an avoiding colouring when it does not",
+            "graph.edge_coloring_arrowing.decide",
+        ),
+    ),
+)
+def test_complete_local_needs_retain_problem_specific_intent(
+    need: str,
+    expected_operation_id: str,
+) -> None:
+    result = Catalog.open().match(OperationMatchRequest(need=need, limit=5))
+
+    assert result.matches[0].operation_id == expected_operation_id
+
+
+def test_requested_sidon_coverage_distinguishes_decision_from_extension_profile() -> (
+    None
+):
+    catalog = Catalog.open()
+    decision = catalog.match(
+        OperationMatchRequest(
+            need="decide whether this integer set is Sidon and return a collision",
+            limit=5,
+        )
+    )
+    extension = catalog.match(
+        OperationMatchRequest(
+            need="partition supplied candidate integers by whether each extends this Sidon set and return collision obstructions",
+            limit=5,
+        )
+    )
+
+    assert decision.matches[0].operation_id == (
+        "combinatorics.integer_set.sidon.decide"
+    )
+    assert extension.matches[0].operation_id == (
+        "combinatorics.integer_set.sidon.extension_profile.compute"
     )
 
 

@@ -13,12 +13,13 @@ defines how that per-call plan is computed and reused.
 - Status: Current catalog-maintenance contract
 - Owner-local manifests: `src/jacobian/math/**/_tools.py`
 
-The public `math.find` / `math.run` catalog is a curated basis of mathematical
-operations, not an inventory of every callable helper in `jacobian.math` or in
-an installed backend. A declaration in an owner's immutable `TOOLS` tuple is
-the publication decision. Useful native-only functions remain package exports
-without a `MathTool` declaration. Catalog construction discovers manifests
-directly and fails closed on malformed declarations or duplicate operation IDs.
+The public `math.find` / `math.inspect` / `math.run` catalog is a curated basis
+of mathematical operations, not an inventory of every callable helper in
+`jacobian.math` or in an installed backend. A declaration in an owner's
+immutable `TOOLS` tuple is the publication decision. Useful native-only
+functions remain package exports without a `MathTool` declaration. Catalog
+construction discovers manifests directly and fails closed on malformed
+declarations or duplicate operation IDs.
 
 Before applying these gates, identify the reusable gap. Show why the current
 public operations and shared mathematical values do not cleanly provide the

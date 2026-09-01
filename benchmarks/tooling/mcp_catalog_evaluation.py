@@ -32,7 +32,7 @@ from mcp import Client
 
 _ROOT = Path(__file__).resolve().parents[2]
 _DEFAULT_SUITE = _ROOT / "benchmarks/config/direct-mcp-catalog-evaluation-v1.json"
-_FIXED_TOOLS = frozenset({"math.find", "math.run"})
+_FIXED_TOOLS = frozenset({"math.find", "math.inspect", "math.run"})
 
 
 class TaskCategory(StrEnum):
@@ -251,11 +251,11 @@ async def _run_discovery(
     required_operation_ids: Sequence[str],
     maximum_rank: int,
 ) -> dict[str, Any]:
-    request: dict[str, Any] = {"op": "search", "query": query, "limit": limit}
+    request: dict[str, Any] = {"need": query, "limit": min(limit, 10)}
     if namespace is not None:
         request["namespace"] = namespace
     started = time.perf_counter()
-    result = await client.call_tool("math.find", {"request": request})
+    result = await client.call_tool("math.find", request)
     elapsed = time.perf_counter() - started
     payload = result.structured_content
     if not isinstance(payload, dict):

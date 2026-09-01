@@ -7,9 +7,13 @@ from mcp.server.mcpserver.resources import FunctionResource
 from mcp.types import ToolAnnotations
 
 from jacobian.catalog.models import OperationCatalogSnapshot
-from jacobian.mcp.guidance import MATH_FIND_DESCRIPTION, MATH_RUN_DESCRIPTION
+from jacobian.mcp.guidance import (
+    MATH_FIND_DESCRIPTION,
+    MATH_INSPECT_DESCRIPTION,
+    MATH_RUN_DESCRIPTION,
+)
 from jacobian.mcp.runtime import AppState
-from jacobian.mcp.tools import math_find, math_run
+from jacobian.mcp.tools import math_find, math_inspect, math_run
 
 
 def register_core_projection(
@@ -23,6 +27,19 @@ def register_core_projection(
         name="math.find",
         title="Search installed Jacobian math tools",
         description=MATH_FIND_DESCRIPTION,
+        annotations=ToolAnnotations(
+            read_only_hint=True,
+            destructive_hint=False,
+            idempotent_hint=True,
+            open_world_hint=False,
+        ),
+        structured_output=True,
+    )
+    server.add_tool(
+        math_inspect,
+        name="math.inspect",
+        title="Inspect one installed Jacobian math tool",
+        description=MATH_INSPECT_DESCRIPTION,
         annotations=ToolAnnotations(
             read_only_hint=True,
             destructive_hint=False,

@@ -75,10 +75,10 @@ class OperationExample(StrictModel):
         return self
 
 
-class OperationDiscoveryRequest(StrictModel):
-    """Compact installed-portfolio search, independent of any transport."""
+class OperationMatchRequest(StrictModel):
+    """Local mathematical need to match against the installed portfolio."""
 
-    query: str = Field(min_length=1)
+    need: str = Field(min_length=1, max_length=4_096)
     namespace: str | None = Field(
         default=None,
         pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,127}$",
@@ -88,9 +88,9 @@ class OperationDiscoveryRequest(StrictModel):
 
     @model_validator(mode="after")
     def reject_blank_filters(self) -> Self:
-        if not self.query.strip():
+        if not self.need.strip():
             raise _validation_error(
-                "blank_query", "query must contain a non-whitespace character"
+                "blank_need", "need must contain a non-whitespace character"
             )
         if self.namespace is not None and not self.namespace.strip():
             raise _validation_error(
@@ -108,10 +108,10 @@ class OperationDiscoveryMatch(StrictModel):
     tags: tuple[str, ...] = ()
 
 
-class OperationDiscoveryResult(StrictModel):
-    """Deterministically ranked compact installed outcomes."""
+class OperationMatchResult(StrictModel):
+    """Deterministically ranked operations for one local mathematical need."""
 
-    query: str
+    need: str
     namespace: str | None = None
     matches: tuple[OperationDiscoveryMatch, ...]
     total_matches: int = Field(ge=0, strict=True)
@@ -293,10 +293,10 @@ __all__ = [
     "OperationCatalogSnapshot",
     "OperationDescriptor",
     "OperationDiscoveryMatch",
-    "OperationDiscoveryRequest",
-    "OperationDiscoveryResult",
     "OperationDomainValidationError",
     "OperationExample",
     "OperationId",
+    "OperationMatchRequest",
+    "OperationMatchResult",
     "OperationResult",
 ]

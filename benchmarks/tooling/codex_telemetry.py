@@ -335,10 +335,9 @@ def _record_describe_and_attempt(
     response: Mapping[str, Any] | None,
     direct_operation_ids: Set[str],
 ) -> None:
-    if tool == "math.find":
-        request = arguments.get("request") if isinstance(arguments, Mapping) else None
-        if isinstance(request, Mapping) and request.get("op") == "inspect":
-            requested_operation_id = request.get("operation_id")
+    if tool == "math.inspect":
+        if isinstance(arguments, Mapping):
+            requested_operation_id = arguments.get("operation_id")
             inspected_operation = (
                 response.get("operation") if isinstance(response, Mapping) else None
             )
@@ -351,8 +350,8 @@ def _record_describe_and_attempt(
                 and inspected_operation.get("operation_id") == requested_operation_id
             ):
                 telemetry.operation_describe_exact_calls += 1
-        else:
-            telemetry.operation_describe_index_calls += 1
+    elif tool == "math.find":
+        telemetry.operation_describe_index_calls += 1
     direct_operation_id = tool if tool in direct_operation_ids else None
     if tool != "math.run" and direct_operation_id is None:
         return
@@ -550,25 +549,23 @@ def _build_operation_description(
     cards = None
     if isinstance(response, Mapping):
         cards = response.get("matches", response.get("operations"))
-    request = arguments.get("request")
-    request = request if isinstance(request, Mapping) else {}
     return {
         "kind": (
             response.get("kind")
             if isinstance(response, Mapping) and isinstance(response.get("kind"), str)
             else None
         ),
-        "query": (
-            request.get("query") if isinstance(request.get("query"), str) else None
+        "need": (
+            arguments.get("need") if isinstance(arguments.get("need"), str) else None
         ),
         "namespace": (
-            request.get("namespace")
-            if isinstance(request.get("namespace"), str)
+            arguments.get("namespace")
+            if isinstance(arguments.get("namespace"), str)
             else None
         ),
         "operation_id": (
-            request.get("operation_id")
-            if isinstance(request.get("operation_id"), str)
+            arguments.get("operation_id")
+            if isinstance(arguments.get("operation_id"), str)
             else None
         ),
         "match_ids": _operation_match_ids(cards),
@@ -637,7 +634,7 @@ def _record_successful_mcp_call(
     direct_operation_ids: Set[str],
 ) -> None:
     telemetry.successful_calls.append(tool)
-    if tool == "math.find" and isinstance(arguments, Mapping):
+    if tool in {"math.find", "math.inspect"} and isinstance(arguments, Mapping):
         telemetry.operation_descriptions.append(
             _build_operation_description(arguments, response)
         )

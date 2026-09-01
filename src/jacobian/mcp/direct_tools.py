@@ -30,7 +30,7 @@ from jacobian.mcp.tools import (
     _request_cancellation,
 )
 
-_FIXED_TOOL_NAMES = frozenset({"math.find", "math.run"})
+_FIXED_TOOL_NAMES = frozenset({"math.find", "math.inspect", "math.run"})
 
 
 @dataclass(frozen=True, slots=True)

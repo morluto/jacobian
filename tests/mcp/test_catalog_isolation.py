@@ -4,33 +4,21 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import OperationDiscoveryResult
-from jacobian.mcp.models import (
-    OperationBrowseRequest,
-    OperationSearchRequest,
-)
+from jacobian.catalog.models import OperationMatchResult
 from jacobian.mcp.runtime import AppState
-from jacobian.mcp.tools import math_find
+from jacobian.mcp.tools import math_find, math_inspect
 
 
 class _Catalog:
-    def search(self, request: Any) -> OperationDiscoveryResult:
-        return OperationDiscoveryResult(
-            query=request.query,
+    def match(self, request: Any) -> OperationMatchResult:
+        return OperationMatchResult(
+            need=request.need,
             matches=(),
             total_matches=0,
         )
 
     def inspect(self, operation_id: str) -> None:
         return None
-
-    def browse(self, **_: Any) -> Any:
-        from jacobian.catalog.models import OperationBrowseResult
-
-        return OperationBrowseResult(
-            operations=(),
-            total_operations=0,
-        )
 
 
 def test_math_find_does_not_acquire_an_execution_runtime() -> None:
@@ -40,28 +28,22 @@ def test_math_find_does_not_acquire_an_execution_runtime() -> None:
     context = SimpleNamespace(request_context=SimpleNamespace(lifespan_context=state))
 
     result = math_find(
-        OperationSearchRequest(op="search", query="gcd"),
+        "compute an exact greatest common divisor",
         ctx=cast(Any, context),
     )
 
-    assert result.root.kind == "discovery"
+    assert result.root.kind == "matches"
 
 
-def test_math_find_search_accepts_a_long_mathematical_query() -> None:
-    request = OperationSearchRequest(op="search", query="q" * 513)
-
-    assert len(request.query) == 513
-
-
-def test_math_find_browse_does_not_acquire_an_execution_runtime() -> None:
+def test_math_inspect_does_not_acquire_an_execution_runtime() -> None:
     state = AppState(
         operation_catalog=cast(Catalog, _Catalog()),
     )
     context = SimpleNamespace(request_context=SimpleNamespace(lifespan_context=state))
 
-    result = math_find(
-        OperationBrowseRequest(op="browse"),
+    result = math_inspect(
+        "integer.compute.unknown",
         ctx=cast(Any, context),
     )
 
-    assert result.root.kind == "browse"
+    assert result.root.kind == "error"

@@ -15,12 +15,12 @@ from mcp.types import Implementation, TextContent, TextResourceContents
 
 from jacobian import __version__
 from jacobian.canonical import canonicalize_json
-from jacobian.mcp.models import OperationFindResponse, OperationSearchResult
+from jacobian.mcp.models import OperationFindResponse, OperationFindResult
 from mcp import Client
 
 from .smoke import exit_for_smoke_failure, raise_for_http_error
 
-REQUIRED_TOOLS = {"math.find", "math.run"}
+REQUIRED_TOOLS = {"math.find", "math.inspect", "math.run"}
 
 
 def _require_server_info(server_info: Implementation | None) -> Implementation:
@@ -49,9 +49,9 @@ def _parser() -> argparse.ArgumentParser:
         help="operation ID that must be installed; repeatable",
     )
     parser.add_argument(
-        "--query",
+        "--need",
         default="exact finite graph invariant",
-        help="read-only operation discovery query",
+        help="read-only local mathematical need for operation discovery",
     )
     parser.add_argument("--timeout-seconds", type=float, default=120)
     return parser
@@ -112,8 +112,8 @@ def _validate_discovery_response(
     except ValueError as exc:
         failures.append(f"deployed operation discovery violates its schema: {exc}")
         return ()
-    if not isinstance(response.root, OperationSearchResult):
-        failures.append("deployed operation search returned a non-search response")
+    if not isinstance(response.root, OperationFindResult):
+        failures.append("deployed operation discovery returned a non-match response")
         return ()
     try:
         model_visible = json.loads(discovery_text)
@@ -133,7 +133,7 @@ async def inspect(
     expected_version: str,
     expected_revision: str | None = None,
     required_operations: set[str],
-    query: str,
+    need: str,
     timeout_seconds: float,
 ) -> dict[str, Any]:
     headers = _headers()
@@ -182,7 +182,7 @@ async def inspect(
             )
         discovery_result = await client.call_tool(
             "math.find",
-            {"request": {"op": "search", "query": query, "limit": 5}},
+            {"need": need, "limit": 5},
         )
         if discovery_result.is_error:
             failures.append("deployed operation discovery returned an MCP error")
@@ -234,7 +234,7 @@ async def _main() -> None:
         url=args.url,
         expected_version=args.expect_version,
         required_operations=set(args.require_operation),
-        query=args.query,
+        need=args.need,
         timeout_seconds=args.timeout_seconds,
     )
     print(json.dumps(report, indent=2, sort_keys=True))

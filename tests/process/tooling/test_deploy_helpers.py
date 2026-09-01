@@ -25,8 +25,8 @@ from deploy.smoke_remote import _validate_discovery_response, _validate_tool_sur
 
 def _current_discovery_payload() -> dict[str, object]:
     return {
-        "kind": "discovery",
-        "query": "exact determinant",
+        "kind": "matches",
+        "need": "exact determinant",
         "namespace": None,
         "matches": [
             {
@@ -60,6 +60,7 @@ def test_remote_smoke_rejects_eager_catalog_tool_exposure() -> None:
     listed = SimpleNamespace(
         tools=[
             SimpleNamespace(name="math.find"),
+            SimpleNamespace(name="math.inspect"),
             SimpleNamespace(name="math.run"),
             SimpleNamespace(name="matrix.determinant.compute"),
         ]
@@ -70,6 +71,7 @@ def test_remote_smoke_rejects_eager_catalog_tool_exposure() -> None:
 
     assert tool_names == {
         "math.find",
+        "math.inspect",
         "math.run",
         "matrix.determinant.compute",
     }

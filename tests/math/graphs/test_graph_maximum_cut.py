@@ -14,6 +14,7 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.optimization import _maximum_cut, _maximum_cut_process
 from jacobian.math.graphs.optimization._maximum_cut import (
     MAXIMUM_CUT_CANDIDATE_PARTITIONS,
+    MAXIMUM_CUT_RETAINED_LABEL_CHARACTERS,
     GraphMaximumCutRequest,
     GraphMaximumCutResult,
     compute_maximum_cut,
@@ -116,6 +117,13 @@ def test_empty_graph_retains_its_source_and_exact_zero_cut() -> None:
     assert result.right_vertices == ()
     assert result.crossing_edges == ()
     assert result.cut_value == 0
+
+
+def test_rejects_excessive_retained_label_allocation() -> None:
+    label = "x" * (MAXIMUM_CUT_RETAINED_LABEL_CHARACTERS // 2 + 1)
+
+    with pytest.raises(OperationDomainValidationError, match="retained label"):
+        compute_maximum_cut(GraphMaximumCutRequest(graph=_graph((label,), ())))
 
 
 def test_bipartite_graph_cuts_every_edge_and_preserves_source_axes() -> None:

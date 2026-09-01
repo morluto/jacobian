@@ -22,6 +22,9 @@ MAXIMUM_CUT_CANDIDATE_PARTITIONS = 1_048_576
 MAXIMUM_CUT_EDGE_UPDATES = 5_000_000
 """Maximum weighted adjacency updates in one complete exact search."""
 
+MAXIMUM_CUT_RETAINED_LABEL_CHARACTERS = 1_000_000
+"""Maximum label allocation retained by a complete exact result."""
+
 MAXIMUM_CUT_Z3_RLIMIT = 100_000
 """Per-component Z3 resource limit before the exact fallback takes over."""
 
@@ -218,6 +221,17 @@ def _analyze_graph(graph: SimpleUndirectedGraph) -> _MaximumCutAnalysis:
 
 
 def _require_graph_envelope(graph: SimpleUndirectedGraph) -> _MaximumCutAnalysis:
+    source_label_characters = sum(map(len, graph.vertices)) + sum(
+        len(left) + len(right) for left, right in graph.edges
+    )
+    # The result retains the source, repeats every vertex in one partition side,
+    # and may repeat every edge in the crossing-edge ledger.
+    if 2 * source_label_characters > MAXIMUM_CUT_RETAINED_LABEL_CHARACTERS:
+        raise OperationDomainValidationError(
+            location=("graph", "vertices"),
+            code="graph.maximum_cut.retained_labels_exceed_bound",
+            message="maximum-cut result exceeds the retained label-character bound",
+        )
     analysis = _analyze_graph(graph)
     if analysis.candidate_partitions > MAXIMUM_CUT_CANDIDATE_PARTITIONS:
         raise OperationDomainValidationError(
@@ -248,8 +262,9 @@ def _maximum_cut_graph_schema() -> JsonSchemaValue:
         "Canonical materialized SimpleUndirectedGraph for an exact-only maximum-cut "
         "request. Admission preflights a complete exact proof with at most "
         f"{MAXIMUM_CUT_CANDIDATE_PARTITIONS} internally derived candidate partitions, "
-        f"{MAXIMUM_CUT_EDGE_UPDATES} incremental weighted edge contributions. "
-        "Requests outside either work bound are rejected before search."
+        f"{MAXIMUM_CUT_EDGE_UPDATES} incremental weighted edge contributions, and "
+        f"{MAXIMUM_CUT_RETAINED_LABEL_CHARACTERS} retained label characters. "
+        "Requests outside these bounds are rejected before search."
     )
     return schema
 
@@ -618,6 +633,7 @@ __all__ = [
     "MAXIMUM_CUT_CANDIDATE_PARTITIONS",
     "MAXIMUM_CUT_EDGE_UPDATES",
     "MAXIMUM_CUT_OPERATION",
+    "MAXIMUM_CUT_RETAINED_LABEL_CHARACTERS",
     "GraphMaximumCutRequest",
     "GraphMaximumCutResult",
     "compute_maximum_cut",

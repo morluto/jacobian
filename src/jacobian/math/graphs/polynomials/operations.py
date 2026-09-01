@@ -18,6 +18,7 @@ from jacobian.math.graphs.polynomials._models import (
     MAX_MATCHING_VERTICES,
     MultivariatePolynomialTerm,
     PolynomialTerm,
+    TreeIndependencePolynomialAdmissionError,
     _admitted_tree_profile,
     _TreeProfile,
 )
@@ -30,6 +31,8 @@ from jacobian.math.polynomials.values import (
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
+
+MAX_TREE_POLYNOMIAL_RETAINED_LABEL_CHARACTERS = 1_000_000
 
 
 def _add_coefficients(left: tuple[int, ...], right: tuple[int, ...]) -> tuple[int, ...]:
@@ -76,6 +79,14 @@ def _compute_independence_coefficients(
 
 
 def _admit_tree(graph: SimpleUndirectedGraph) -> _TreeProfile:
+    retained_label_characters = sum(map(len, graph.vertices)) + sum(
+        len(left) + len(right) for left, right in graph.edges
+    )
+    if retained_label_characters > MAX_TREE_POLYNOMIAL_RETAINED_LABEL_CHARACTERS:
+        raise TreeIndependencePolynomialAdmissionError(
+            "tree independence polynomial exceeds the retained "
+            "label-character bound"
+        )
     return _admitted_tree_profile(graph)
 
 
@@ -253,6 +264,7 @@ def matching_polynomial(
 
 
 __all__ = [
+    "MAX_TREE_POLYNOMIAL_RETAINED_LABEL_CHARACTERS",
     "chromatic_polynomial",
     "flow_polynomial",
     "independence_polynomial",

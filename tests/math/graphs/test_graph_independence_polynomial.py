@@ -9,11 +9,7 @@ import networkx as nx
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import (
-    CanonicalLimits,
-    encode_strict_json,
-    format_canonical_integer,
-)
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.operations import explicit_graph
 from jacobian.math.graphs.polynomials import (
@@ -25,6 +21,9 @@ from jacobian.math.graphs.polynomials._models import (
     TreeIndependencePolynomialAdmissionError,
     TreeIndependencePolynomialRequest,
     TreeIndependencePolynomialResult,
+)
+from jacobian.math.graphs.polynomials.operations import (
+    MAX_TREE_POLYNOMIAL_RETAINED_LABEL_CHARACTERS,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.polynomials._elementary_kernel import (
@@ -246,17 +245,14 @@ def test_full_vertex_envelope_path_is_admitted_and_over_envelope_is_rejected() -
         TreeIndependencePolynomialRequest(graph=_path(257))
 
 
-def test_native_result_does_not_inherit_canonical_output_limit() -> None:
-    output_limit = CanonicalLimits().max_output_bytes
-    graph = explicit_graph(("v" * (output_limit - 300),), ())
-    encoded_request = encode_strict_json({"graph": graph.model_dump(mode="json")})
-
-    assert len(encoded_request) <= output_limit
+def test_rejects_excessive_retained_label_allocation() -> None:
+    graph = explicit_graph(
+        ("v" * (MAX_TREE_POLYNOMIAL_RETAINED_LABEL_CHARACTERS + 1),), ()
+    )
     request = TreeIndependencePolynomialRequest(graph=graph)
-    result = _run_independence(request)
 
-    assert result.graph == graph
-    assert result.coefficients == ("1", "1")
+    with pytest.raises(OperationDomainValidationError, match="retained label"):
+        _run_independence(request)
 
 
 def test_request_schema_exposes_tree_and_work_preconditions() -> None:

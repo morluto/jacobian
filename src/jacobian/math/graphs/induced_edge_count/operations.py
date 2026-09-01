@@ -14,6 +14,7 @@ from jacobian.math.graphs.induced_edge_count._models import (
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_SUBSET_ENUMERATION = 1_000_000
+MAX_RETAINED_LABEL_CHARACTERS = 1_000_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +64,21 @@ def _admit_induced_edge_count_profile(
         )
 
     max_rows = min(comb(cardinality, 2) + 1, edge_count + 1, subset_count)
+    source_label_characters = sum(map(len, graph.vertices)) + sum(
+        len(left) + len(right) for left, right in graph.edges
+    )
+    largest_witness_characters = sum(
+        sorted((len(vertex) for vertex in graph.vertices), reverse=True)[:cardinality]
+    )
+    if (
+        source_label_characters + max_rows * largest_witness_characters
+        > MAX_RETAINED_LABEL_CHARACTERS
+    ):
+        raise OperationDomainValidationError(
+            location=("graph", "vertices"),
+            code="graph.induced_edge_count.retained_labels_exceeded",
+            message="induced-edge profile exceeds the retained label-character bound",
+        )
     return InducedEdgeCountAdmission(
         subset_count=subset_count,
         edge_count=edge_count,
@@ -70,7 +86,7 @@ def _admit_induced_edge_count_profile(
     )
 
 
-__all__ = ["compute_induced_edge_count_profile"]
+__all__ = ["MAX_RETAINED_LABEL_CHARACTERS", "compute_induced_edge_count_profile"]
 
 
 def compute_induced_edge_count_profile(

@@ -1,11 +1,18 @@
 ## Problem
-<!-- What issue does this PR address? Link the relevant issue. -->
+<!-- What observable problem does this PR address? Link the relevant issue or
+explain why no issue exists. -->
 
-## Solution
-<!-- What change does this PR introduce? Summarize the approach. -->
+## Outcome
+<!-- What behavior or contract is different after this change? State what is
+intentionally unchanged. -->
 
-## Testing
-<!-- How was this change tested? List the exact commands and any manual verification. -->
+## Validation
+<!-- List exact commands, relevant CI checks or links, and any manual
+verification. Name the final head SHA that the evidence covers. -->
+
+- Commands run:
+- Final head SHA tested:
+- Relevant CI checks or links:
 
 Contributor quick path:
 
@@ -14,48 +21,73 @@ make setup
 make handoff LANE=math TESTS=tests/math/graphs/test_graph_distance_matrix.py
 ```
 
-If this change crosses a named boundary, add the explicitly relevant specialist
-lane(s) and list them below. Specialist lanes are troubleshooting/boundary
-work, not a routine gate; CI owns coverage, compatibility, packaging, and the
-ordinary Python surface. See
-[CONTRIBUTING.md](../CONTRIBUTING.md) and the
-[testing strategy](../docs/reference/testing-strategy.md) for lane ownership.
+If this change crosses a named boundary, list the explicitly relevant specialist
+lane(s) in the validation section. Specialist lanes are troubleshooting or
+boundary work, not a routine gate; CI owns coverage, compatibility, packaging,
+and the ordinary Python surface. See [CONTRIBUTING.md](../CONTRIBUTING.md) and
+the [testing strategy](../docs/reference/testing-strategy.md) for lane ownership.
 
-- Specialist validation run (if any): <!-- e.g. make test-mcp TESTS=..., make harbor-validate-task DATASET=... TASKS="..." -->
+## Contract impact
+<!-- State "none" when this PR changes no operation ID, request/result schema,
+native API, MCP contract, or mathematical semantics. Check only applicable
+items; write N/A with a reason for the rest. -->
 
-## Public contract impact
-<!-- Does this change alter an operation ID, request/result schema, native API,
-MCP contract, or mathematical semantics? State "none" when it does not. -->
+- Public contract impact:
+- [ ] Schema and runtime accept/reject the same requests
+- [ ] Cheap malformed or over-budget input is rejected before expensive work
+- [ ] Exact results fit the complete canonical output boundary
+- [ ] All mandatory phases share one request deadline
+- [ ] Native and MCP behavior agree, where both are public
+- [ ] Producer → serialization → consumer composition was tested
+- [ ] Defining invariant and adversarial regression are covered
 
-## Operation boundary ownership
+## Review closure
+<!-- Complete or update this section when responding to review. For a new PR,
+the review-thread item is not applicable until review begins. -->
+
+- [ ] Every substantive review thread has a root-cause fix, regression proof,
+      and reply
+- [ ] Merge conflicts were resolved against the intended base
+- [ ] Validation was rerun after the final commit or autofix
+- [ ] CI evidence matches the final head SHA
+- [ ] The appropriate repository validation target and any specialist lane are
+      listed above (normally `make handoff ...`; docs use `make docs-linkcheck`)
+- [ ] Repository conventions were checked: no compatibility or shadow paths
+      were added; if a shared abstraction was introduced, two existing paths
+      already share its mechanics and contract
+
+## Conditional detail
+<!-- Complete only the subsections relevant to this change. The compact
+sections above are the required summary; these fields preserve deeper evidence
+for operation, catalog, backend, and parent-issue changes. -->
+
+### Operation boundary
 <!-- Complete for any operation, request/result model, backend adapter,
 native API, dispatch, or MCP change. Use "not applicable" when this PR does
 not touch an operation boundary. -->
-- Changed stage: <!-- request parsing / request bounds / kernel adapter / result construction / transport projection / other -->
-- Request-bounds owner and controlling quantities:
-- Work, intermediate, memory, and exact-output bounds:
-- Wall deadline, calibration workload, safety margin, and caller-selectable range: <!-- applies to new or changed execution envelopes; wall time is a safety backstop -->
+- Changed stage and owner: <!-- request parsing / request bounds / kernel adapter / result construction / transport projection / other -->
+- Semantic admission and controlling quantities:
+- Execution envelope: <!-- work, intermediate, memory, exact output, deadline, cleanup/reaping grace, and caller-selectable range; state actual enforcing limits, not an unexplained safety reserve -->
 - Backend or kernel path:
 - Result construction: <!-- canonical conversion; malformed-backend handling belongs to the adapter -->
 - Independent-result verifier (only if the public contract accepts independently supplied result data): <!-- none, or state its explicit replay bound -->
 - Native/MCP parity: <!-- same semantic admission/results, with transport-only differences stated -->
 - Serialized-result and round-trip evidence:
 
-## Canonical value audit
+### Canonical value audit
 <!-- Complete when this change adds or changes a mathematical value, request,
 result, producer, or consumer. -->
-- [ ] Existing canonical values searched
-- [ ] Owner or intentional distinction documented
+- [ ] Existing canonical value searched; owner or intentional distinction recorded
 - [ ] Advertised codomain is closed under the result types, including required
       parent, embedding, branch, orientation, basis, or coordinate data
 - [ ] Producer→consumer serialization tested
-- Theorem-dependent preconditions and validated input subtype: <!-- or not applicable with a reason -->
+- [ ] Theorem-dependent preconditions and validated input subtype are covered, or marked not applicable with a reason
 - Structurally valid but mathematically invalid fixture and outcome: <!-- rejection or typed non-applicability -->
 - Serialized-subtype trust boundary: <!-- constructor validation / source-bound bounded verifier / consumer recognition, plus forged-payload evidence -->
 - Exact-success defining invariant: <!-- reconstruction equation, preservation law, optimum/certificate relation, or not applicable -->
 - Discriminated result schema and impossible combinations: <!-- public branch schema plus contradictory status/diagnostic/witness rejection -->
 
-## Catalog admission
+### Catalog admission (publication changes only)
 <!-- Complete only when adding, removing, or materially changing catalog
 membership. This is publication admission, not per-request runtime bounds. -->
 
@@ -71,24 +103,12 @@ membership. This is publication admission, not per-request runtime bounds. -->
 - Effect of private normalization or presolve on admission:
 - Admission decision:
 
-## Closure matrix
+### Residual scope (parent issue only)
 <!-- Complete when this PR closes a broad parent issue. List each operation the
 parent proposed and its outcome, so deferred or rejected candidates stay
-visible instead of disappearing with the parent. Leave "none" for a single
-admitted operation with no residual surface. -->
+visible instead of disappearing with the parent. Leave "none" when there is no
+residual surface. -->
 
 | Candidate | Outcome | Operation ID or follow-up issue |
 | --- | --- | --- |
 | <!-- e.g. graphicality with obstruction --> | <!-- delivered / deferred / rejected --> | <!-- operation ID or child issue --> |
-
-## Checklist
-- [ ] `make handoff LANE=... TESTS=...` passes
-- [ ] Explicitly relevant specialist validation is listed above (boundary, backend, Harbor/Oracle)
-- [ ] Harbor task or verifier changes ran `make harbor-prepare-task` then `make harbor-validate-task` (if applicable)
-- [ ] Catalog changes have an explicit owner-local `_tools.py` publication outcome (if applicable)
-- [ ] No compatibility aliases, forwarding modules, or generic `_operations.py` shadow paths were introduced
-- [ ] Runtime-bound changes name the request-bounds owner and execute the same semantic path for native and MCP callers (if applicable)
-- [ ] Result semantics distinguish exact, approximate, incomplete, unknown, and unavailable outcomes where applicable
-- [ ] Public operation changes include a behavioral regression copied from a motivating parent-gap request, or explain why no source request exists (if applicable)
-- [ ] New or changed bounds include boundary, algorithm-crossover, and realistic source-backed scale evidence (if applicable)
-- [ ] New shared abstractions replace duplication in at least two surviving production paths (if applicable)

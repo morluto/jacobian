@@ -60,6 +60,48 @@ backend, enumerate candidates, or check a defining relation. A wrapper or
 kernel must not recompute an admission quantity already established by
 admission or held by a plan.
 
+## Design and review principles
+
+These are defaults for keeping an operation small, trustworthy, and easy to
+change. They are ownership rules, not a framework that every owner must
+instantiate.
+
+- **Design by contract.** State the request representation, mathematical
+  postcondition, result states, defining invariant, and resource envelope
+  before choosing an implementation. A generated schema is part of the
+  contract: it must not advertise requests that runtime admission rejects.
+- **One owner and one source of truth.** Put each mathematical policy and
+  derived bound with the owner that can enforce it. A shared canonical value
+  should describe mathematical meaning, not one operation's incidental work
+  limit. Put operation-specific limits in operation admission; introduce a
+  subtype only when its mathematical meaning or invariants differ for its
+  consumers, not merely because one operation has a different ceiling.
+- **Functional core, imperative boundary.** Keep canonical values and pure
+  mathematical transformations separate from backend calls, process control,
+  deadlines, filesystem access, and MCP delivery. The imperative boundary
+  owns those effects and translates them into the domain's typed outcomes.
+  This is a ports-and-adapters boundary: native APIs, maintained backends,
+  child workers, and MCP delivery adapt to the owner-local contract rather
+  than defining that contract independently.
+- **Fail fast, then compute once.** Reject cheap malformed or over-budget
+  representations before expensive work. After canonicalization, compute
+  semantic admission once and reuse its facts; do not repeat a size probe or
+  admission calculation in a request model, wrapper, worker, and result
+  constructor.
+- **Make illegal states unrepresentable.** Use discriminated result states,
+  source-bound context, and schema-visible bounds when callers must distinguish
+  cases. Defense in depth belongs at trust boundaries; it is not a reason to
+  scatter conflicting copies of the same policy through every layer.
+- **Adversarial closure.** A change is not closed when only its happy path
+  works. Test accepted near-boundary inputs, malformed and deeply nested
+  boundary data, schema/runtime parity, native/MCP parity, downstream consumers,
+  and every mandatory deadline or serialization phase.
+- **Smallest useful abstraction.** Start with explicit owner-local code. Extract
+  a shared helper only after multiple owners have the same mechanics and
+  contract. A worker projection may be reused as an internal IPC protocol only
+  when its framing, version, bounds, source binding, and failure semantics are
+  explicit; it must not become an accidental public result format.
+
 Ordinary execution does not replay its own computation. Add a named bounded
 verifier only when a public operation or consumer accepts independently
 supplied theorem-bearing data and verification is itself a required trust

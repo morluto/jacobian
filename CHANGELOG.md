@@ -1,5 +1,83 @@
 # Changelog
 
+## [0.16.0](https://github.com/morluto/jacobian/compare/jacobian-v0.15.2...jacobian-v0.16.0) (2026-09-01)
+
+
+### ⚠ BREAKING CHANGES
+
+* **matrices:** `matrix.inertia.compute` now accepts one canonical exact-real
+  `matrix` value. Replace the former top-level `dimension` and sparse `entries`
+  fields with `{"matrix":{"domain":"QQ","entries":[...]}}` (or the equivalent
+  real simple-number-field matrix carrier).
+* **topology:** the six `chain_complex.*` operations now name the coefficient
+  carrier with `coefficient_ring`. Rename the former `coefficient_field` field;
+  its existing `QQ` and `GF_p` values are unchanged, and `ZZ` is now supported.
+
+
+### Features
+
+* **math:** construct finite-field Paley tournaments ([#3058](https://github.com/morluto/jacobian/issues/3058)) ([ae0bd4e](https://github.com/morluto/jacobian/commit/ae0bd4e6fdc891b82fbbd8e1ef98b477f8be771c))
+* **polynomials:** compute monomial ideal Betti profiles ([2021dcd](https://github.com/morluto/jacobian/commit/2021dcd65cd0081d1c6edf5244152b422efbb13e))
+
+
+### Published Operations
+
+* **additive combinatorics:** `additive.cyclic_sumset.representation_profile.compute`,
+  `additive.finite_abelian_subset.gowers_cube_profile.compute`, and
+  `multiplicative.product_representation_profile.compute` ([#3057](https://github.com/morluto/jacobian/issues/3057)) ([e0bb9e5](https://github.com/morluto/jacobian/commit/e0bb9e531))
+* **combinatorics and geometry:** `hypergraph.arithmetic_progression.construct`,
+  `poset.antichain.enumerate`, `geometry.points.spanned_line_profile.compute`, and
+  `geometry.points.triangle_area_profile.compute` ([#3057](https://github.com/morluto/jacobian/issues/3057)) ([e0bb9e5](https://github.com/morluto/jacobian/commit/e0bb9e531))
+* **graphs:** `graph.coloring.equitable_k_colorability.decide`,
+  `hypergraph.coloring.non_monochromatic.decide`, and `graph.tree.free.enumerate`
+  ([#3057](https://github.com/morluto/jacobian/issues/3057)) ([e0bb9e5](https://github.com/morluto/jacobian/commit/e0bb9e531))
+* **matrices and number theory:** `matrix.collatz_wielandt.quotient_profile.compute`,
+  `number_theory.divisibility_poset.compute`, `number_theory.friable.family.enumerate`,
+  `congruence.periodic_union.interval_count.compute`, and
+  `number_theory.r_full.enumerate` ([#3057](https://github.com/morluto/jacobian/issues/3057)) ([e0bb9e5](https://github.com/morluto/jacobian/commit/e0bb9e531))
+* **complex tori and lattices:** `complex_torus.neron_severi_lattice.compute`,
+  `complex_torus.riemann_form.profile.compute`, and
+  `lattice.invariant_bilinear_form_lattice.compute` ([#3081](https://github.com/morluto/jacobian/issues/3081)) ([8340bae](https://github.com/morluto/jacobian/commit/8340bae8c))
+* **real algebra:** `polynomial.real.common_interlacing_profile.compute`
+  ([#3061](https://github.com/morluto/jacobian/issues/3061)) ([b00af1c](https://github.com/morluto/jacobian/commit/b00af1c98))
+* **real algebra:** `real_algebraic.plane_semialgebraic.component_profile.compute`
+  ([#3095](https://github.com/morluto/jacobian/issues/3095)) ([e33af91](https://github.com/morluto/jacobian/commit/e33af91bd))
+* **finite fields:** `finite_field.prime_linear_action.homogeneous_fixed_subspace.compute`
+  ([#3098](https://github.com/morluto/jacobian/issues/3098)) ([6d0fdc0](https://github.com/morluto/jacobian/commit/6d0fdc0b4))
+* **matrices:** `matrix.cyclic.rational_rank_kernel_profile.compute`
+  ([#3088](https://github.com/morluto/jacobian/issues/3088)) ([78496e3](https://github.com/morluto/jacobian/commit/78496e39b))
+* **affine tori:** `affine_torus.fixed_locus.compute`
+  ([#3089](https://github.com/morluto/jacobian/issues/3089)) ([32b0277](https://github.com/morluto/jacobian/commit/32b0277a4))
+
+
+### Bug Fixes
+
+* annotate rational subset lattice arithmetic ([#3085](https://github.com/morluto/jacobian/issues/3085)) ([b9b03da](https://github.com/morluto/jacobian/commit/b9b03da5911d6e2828e3c69824ec768bdf757e09))
+* **architecture:** detect relative validator backend imports ([350d760](https://github.com/morluto/jacobian/commit/350d76007f1ad032ef64b5a409909bb5f1162799))
+* **ci:** bind dispatched PR lanes to exact ranges ([28d4a2a](https://github.com/morluto/jacobian/commit/28d4a2ab96c4e177a9d8b065e5a1fd8a81dc858a))
+* **coloring:** finish admission fixes after merged PR ([#3070](https://github.com/morluto/jacobian/issues/3070)) ([1ff069a](https://github.com/morluto/jacobian/commit/1ff069af07bd4c2322e8cd06bf8a56273ea63e5a))
+* **graphs:** bound induced profile witnesses ([#3080](https://github.com/morluto/jacobian/issues/3080)) ([21c759a](https://github.com/morluto/jacobian/commit/21c759a9cc5144de03d59f92d12cf239e312b826))
+* **ideals:** fix mypy type annotation for generators loop variable ([4aba827](https://github.com/morluto/jacobian/commit/4aba8275bdafa678009daa5d7cfc53de1eb5d18a))
+* **import-contracts:** allow real embedding order process to use jacobian.process ([015ca05](https://github.com/morluto/jacobian/commit/015ca052c683e6abd4e4a853757cbb5643ba78f3))
+* keep mathematical backends lazy at package boundaries ([6909c41](https://github.com/morluto/jacobian/commit/6909c41e09dfa8b4199ceb74125d051b315b50bf))
+* **mcp:** keep the production tool surface bounded ([#3087](https://github.com/morluto/jacobian/issues/3087)) ([1ec98d2](https://github.com/morluto/jacobian/commit/1ec98d2db2ae5e316b4a4c51a8fbeed5b87b83ae))
+* **monomial-betti:** resolve RUF015 and formatting ([90c07f4](https://github.com/morluto/jacobian/commit/90c07f4bae24fc64ed98e853ba44cde56dc2aad8))
+* **monomial-betti:** validate native inputs and sync documented exponent limit ([2d3e24f](https://github.com/morluto/jacobian/commit/2d3e24f7669506329b2b09bc406f7e4d9e111ffe))
+* **mypy:** correct type errors in hypergraph containment and real embedding worker ([7e78a19](https://github.com/morluto/jacobian/commit/7e78a191962a14bdd9f4adbf7c24b9e7f43830d1))
+* **posets:** delegate width to NetworkX and correct digit carry bound ([96a0442](https://github.com/morluto/jacobian/commit/96a0442cc7ddfa5791a1823e1765042464c02568))
+* **topology:** align Smith worker output bounds ([2e2ca8a](https://github.com/morluto/jacobian/commit/2e2ca8a782f13d536ed79d3f83275ee67a52f6ab))
+
+
+### Documentation
+
+* clarify contribution and review contracts ([326ad44](https://github.com/morluto/jacobian/commit/326ad442dddbc095265ad4fe8d06077b06a3fa7d))
+* clarify the executable operation graph ([da945ad](https://github.com/morluto/jacobian/commit/da945ade68dd9bf371b593a3215899696345291b))
+* connect formalization to executable moves ([8844088](https://github.com/morluto/jacobian/commit/88440888c0350ee040e177c533bd104a1af75ac0))
+* describe operations as reasoning landmarks ([228d3e8](https://github.com/morluto/jacobian/commit/228d3e81f57faec96f7d00534abdaf5558c1e4a3))
+* explain executable state transformations ([697f3a4](https://github.com/morluto/jacobian/commit/697f3a47b6f90ca26b7325e7dc0ad0c1d0876c52))
+* **math:** require codomain closure for operations ([c311d9a](https://github.com/morluto/jacobian/commit/c311d9acc8504cbb5fcb84ad0307c28e7a46401c))
+* prohibit runtime mathematical replay ([5f109c8](https://github.com/morluto/jacobian/commit/5f109c8e140fc5333dc4ca44328464800c73f843))
+
 ## [0.15.2](https://github.com/morluto/jacobian/compare/jacobian-v0.15.1...jacobian-v0.15.2) (2026-08-29)
 
 

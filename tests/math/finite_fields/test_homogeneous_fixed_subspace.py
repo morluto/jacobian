@@ -402,9 +402,7 @@ def test_native_action_rejects_a_prime_the_worker_cannot_serialize() -> None:
     prime = 2**19_937 - 1
     action = PrimeFieldLinearAction(
         variable_axis=Axis(name="polynomial_variables", labels=("x",)),
-        generator_matrices=(
-            PrimeFieldMatrix(prime=prime, entries=((1,),), columns=1),
-        ),
+        generator_matrices=(PrimeFieldMatrix(prime=prime, entries=((1,),), columns=1),),
     )
 
     with pytest.raises(

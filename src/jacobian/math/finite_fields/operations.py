@@ -136,9 +136,9 @@ def _homogeneous_fixed_subspace_output_bytes(
         # zeroes and ones. Every other cell can contain the largest residue.
         # This accounts for every feasible rank without materializing one
         # million-cell probes for all ranks.
-        row_value_size = fixed_dimension + (
-            monomial_count - fixed_dimension
-        ) * largest_residue_size
+        row_value_size = (
+            fixed_dimension + (monomial_count - fixed_dimension) * largest_residue_size
+        )
         row_size = 2 + max(monomial_count - 1, 0) + row_value_size
         entries_size = array_size([row_size] * fixed_dimension)
         basis_matrix_size = strict_json_object_size(

@@ -22,7 +22,6 @@ from pydantic import (
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.canonical import canonicalize_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic._cnf import (
     _MAX_VARIABLES,
@@ -53,7 +52,6 @@ _LPR_HEAP_MEBIBYTES = 64
 _LPR_STACK_MEBIBYTES = 16
 _LPR_ADDRESS_SPACE_BYTES = 128 * 1024 * 1024
 _LPR_PROCESS_OUTPUT_BYTES = 16_384
-_MAX_LPR_RESULT_BYTES = 9 * 1024 * 1024
 _SAT_WORKER = Path(__file__).with_name("_sat_worker.py")
 _SAT_WORKER_OUTPUT_BYTES = 64 * 1024
 _SAT_WORKER_ERROR_BYTES = 16_384
@@ -406,19 +404,6 @@ def _validate_lpr_refutation(cnf: CanonicalCnf, refutation: SatLprRefutation) ->
                 "LPR replay exceeds the declared literal-inspection work bound",
             )
         live_clause_widths[step.clause_id] = len(step.clause)
-    echoed_result = {
-        "outcome": "INVALID_REFUTATION",
-        "cnf": cnf.model_dump(mode="json"),
-        "refutation": refutation.model_dump(mode="json"),
-        "detail": "x" * 1_024,
-    }
-    if len(canonicalize_json(echoed_result)) > _MAX_LPR_RESULT_BYTES:
-        raise _validation_error(
-            "logic.lpr_result_budget",
-            "LPR refutation exceeds the source-bound result limit",
-        )
-
-
 def _admit_lpr_refutation(
     cnf: CanonicalCnf,
     refutation: SatLprRefutation,

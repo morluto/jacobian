@@ -14,9 +14,8 @@ from jacobian.canonical import format_canonical_integer
 
 # Admission: enumerate squarefree b with b^3 <= cutoff, then a with a^2*b^3 <= cutoff.
 # The total number of powerful integers up to X is at most 3*sqrt(X).
-# We cap the cutoff so the complete family fits the transport budget.
+# We cap the cutoff by the complete family cardinality.
 MAX_POWERFUL_ENUM_FAMILY_SIZE = 200_000
-MAX_POWERFUL_ENUM_RESULT_BYTES = 3_000_000
 MAX_POWERFUL_ENUM_CUTOFF = ((MAX_POWERFUL_ENUM_FAMILY_SIZE - 1) // 3) ** 2
 MAX_POWERFUL_ENUM_CUTOFF_DIGITS = len(str(MAX_POWERFUL_ENUM_CUTOFF))
 
@@ -41,11 +40,6 @@ class PowerfulEnumerateRequest(StrictModel):
             raise PydanticCustomError(
                 "powerful_enumerate_family_exceeds_result_budget",
                 "powerful family exceeds the result-size budget",
-            )
-        if estimate * (len(str(self.cutoff)) + 3) > MAX_POWERFUL_ENUM_RESULT_BYTES:
-            raise PydanticCustomError(
-                "powerful_enumerate_family_exceeds_transport_budget",
-                "powerful family exceeds the serialized-byte budget",
             )
         return self
 

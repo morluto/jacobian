@@ -441,18 +441,6 @@ def test_lpr_refutation_still_binds_sparse_labels_to_live_clauses() -> None:
         check_sat_refutation(non_live_deletion)
 
 
-def test_lpr_refutation_reserves_the_transport_result_budget(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(sat, "_MAX_LPR_RESULT_BYTES", 1)
-
-    request = _unit_refutation_request()
-    with pytest.raises(
-        OperationDomainValidationError, match="source-bound result limit"
-    ):
-        check_sat_refutation(request)
-
-
 def test_lpr_refutation_returns_unavailable_without_the_pinned_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

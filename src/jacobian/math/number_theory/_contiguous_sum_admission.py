@@ -11,7 +11,6 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._contiguous_sum_models import (
     MAX_FACTORING_INTERVAL_WIDTH,
     MAX_FACTORING_WORK_SECONDS,
-    MAX_INTERVAL_RESULT_BYTES,
     MAX_INTERVAL_WIDTH,
     MAX_INTERVAL_WORK,
     MAX_SEGMENTED_SIEVE_UPPER,
@@ -29,7 +28,6 @@ class ContiguousSumProfileAdmission:
     width: int
     regime: ContiguousSumRegime
     estimated_work: int
-    estimated_result_bytes: int
     factorization_budget_seconds: int | None
     execution_deadline: float | None
 
@@ -94,20 +92,12 @@ def require_contiguous_sum_profile_admission(
             code="number_theory.contiguous_sum_interval_work",
             message="interval work exceeds the maximum supported budget",
         )
-    estimated_result_bytes = width * (upper_digits + 32)
-    if estimated_result_bytes > MAX_INTERVAL_RESULT_BYTES:
-        raise OperationDomainValidationError(
-            location=("lower_bound", "upper_bound"),
-            code="number_theory.contiguous_sum_interval_result_size",
-            message="interval result exceeds the maximum supported size",
-        )
     return ContiguousSumProfileAdmission(
         lower_bound=lower,
         upper_bound=upper,
         width=width,
         regime=regime,
         estimated_work=estimated_work,
-        estimated_result_bytes=estimated_result_bytes,
         factorization_budget_seconds=factorization_budget_seconds,
         execution_deadline=execution_deadline,
     )

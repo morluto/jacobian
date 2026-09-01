@@ -29,9 +29,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "declared as (vertex, image) pairs covering every declared vertex "
             "once in the graph's declared vertex order; generator identifiers "
             "and declared colors must already be normalized to Unicode NFC. "
-            "The result retains its complete declared source action, so "
-            "request validation rejects any request whose complete canonical "
-            "result would exceed Jacobian's canonical output limit."
+            "The result retains its complete declared source action and returns "
+            "the bounded vertex and edge orbit partitions directly."
         ),
         request_type=GraphSymmetryOrbitRequest,
         result_type=GraphSymmetryOrbitResult,

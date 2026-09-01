@@ -274,22 +274,22 @@ def test_utf8_label_byte_bounds_apply_to_direct_request() -> None:
 
 
 @pytest.mark.parametrize("escaped_character", ('"', "\x00"), ids=("quote", "nul"))
-def test_escaped_result_over_budget_is_rejected_by_native_admission(
+def test_escaped_labels_do_not_change_structural_admission(
     escaped_character: str,
 ) -> None:
     payload = _escaped_thin_four_point_configuration(escaped_character)
     request = _request(payload)
 
-    with pytest.raises(ValueError, match="result exceeds the byte budget"):
-        compute_analyze(request)
+    result = compute_analyze(request)
+
+    assert result.status == "COHERENT_CONFIGURATION"
 
 
-def test_unicode_label_tensor_stays_inside_admitted_result_envelope() -> None:
+def test_unicode_label_tensor_respects_relation_cube_bound() -> None:
     result = compute_analyze(_request(_unicode_thin_four_point_configuration()))
 
     assert result.status == "COHERENT_CONFIGURATION"
     assert len(result.intersection_numbers) == 4_096
-    assert len(result.model_dump_json().encode("utf-8")) <= 1_048_576
 
 
 def test_maximum_relation_tensor_stays_inside_admitted_result_envelope() -> None:

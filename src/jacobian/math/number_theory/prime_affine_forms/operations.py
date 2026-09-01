@@ -9,7 +9,6 @@ from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.number_theory.affine_forms.values import (
     MAX_AFFINE_COMPONENT_DIGITS,
-    MAX_FORM_ID_LENGTH,
 )
 from jacobian.math.number_theory.prime_affine_forms._admissibility import (
     PrimeTupleAdmissibilityResult,
@@ -42,12 +41,9 @@ from jacobian.math.number_theory.prime_affine_forms._local_factors import (
 )
 from jacobian.math.number_theory.prime_affine_forms._models import (
     MAX_BATCH_PRIME,
-    MAX_RESULT_CHARACTER_BUDGET,
     _digits,
     _require_prime_set,
     _run_admission,
-    _source_character_upper_bound,
-    _summary_character_upper_bound,
     _validation_error,
 )
 from jacobian.math.number_theory.prime_affine_forms._residue_wheel import (
@@ -172,16 +168,6 @@ def _admit_residue_wheel(source: PrimeAffineTuple, primes: tuple[int, ...]) -> N
             "compact wheel modulus exceeds the conservative exact scalar "
             f"digit bound {MAX_COMPACT_WHEEL_SCALAR_DIGITS}"
         )
-    estimated_characters = (
-        _source_character_upper_bound(source)
-        + sum(_summary_character_upper_bound(source, prime) for prime in primes)
-        + 2 * modulus_digits
-        + 128
-    )
-    if estimated_characters > MAX_RESULT_CHARACTER_BUDGET:
-        raise _validation_error(
-            "compact wheel exceeds the conservative serialized bound"
-        )
 
 
 def _admit_verified_wheel(wheel: PrimeTupleResidueWheel) -> None:
@@ -226,18 +212,6 @@ def _admit_wheel_enumeration(wheel: PrimeTupleResidueWheel) -> None:
             f"wheel enumeration needs {enumeration_work} bounded steps, exceeding "
             f"{MAX_WHEEL_ENUMERATION_WORK}"
         )
-    modulus_digits = _digits(wheel.modulus)
-    component_digits = sum(_digits(prime) for prime in wheel.primes)
-    serialized_characters = (
-        len(wheel.model_dump_json())
-        + result_count
-        * (modulus_digits + component_digits + 4 * len(wheel.primes) + 64)
-        + 128
-    )
-    if serialized_characters > MAX_RESULT_CHARACTER_BUDGET:
-        raise _validation_error(
-            "wheel enumeration exceeds the conservative serialized bound"
-        )
 
 
 def _admit_wheel_membership(wheel: PrimeTupleResidueWheel, value: int) -> None:
@@ -245,18 +219,6 @@ def _admit_wheel_membership(wheel: PrimeTupleResidueWheel, value: int) -> None:
     if _digits(value) > MAX_AFFINE_COMPONENT_DIGITS:
         raise _validation_error(
             f"membership value must have at most {MAX_AFFINE_COMPONENT_DIGITS} digits"
-        )
-    result_characters = (
-        len(wheel.model_dump_json())
-        + len(str(value))
-        + _digits(wheel.modulus)
-        + sum(_digits(prime) for prime in wheel.primes)
-        + MAX_FORM_ID_LENGTH * wheel.source.form_count
-        + 256
-    )
-    if result_characters > MAX_RESULT_CHARACTER_BUDGET:
-        raise _validation_error(
-            "wheel membership result exceeds the conservative serialized bound"
         )
 
 
@@ -279,14 +241,6 @@ def _admit_interval_residue_profile(
         raise _validation_error(
             f"wheel interval profile needs {membership_checks} modular checks, "
             f"exceeding {MAX_INTERVAL_EVALUATIONS}"
-        )
-    endpoint_digits = max(_digits(lower), _digits(upper))
-    result_characters = (
-        len(wheel.model_dump_json()) + interval_size * (endpoint_digits + 4) + 192
-    )
-    if result_characters > MAX_RESULT_CHARACTER_BUDGET:
-        raise _validation_error(
-            "wheel interval profile exceeds the conservative serialized bound"
         )
     return lower, upper
 

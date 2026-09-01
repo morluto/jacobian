@@ -21,7 +21,7 @@ from jacobian._execution import (
     current_request_execution,
     request_execution,
 )
-from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry import affine_tori
 from jacobian.math.geometry.affine_tori import (
@@ -975,8 +975,7 @@ def test_max_dimension_adversary_is_deterministic_and_transport_bounded() -> Non
     encoded = encode_strict_json(first.model_dump(mode="json"))
 
     assert first == second
-    assert len(encoded) <= plan.result_bytes_upper_bound
-    assert plan.result_bytes_upper_bound <= CanonicalLimits().max_output_bytes
+    assert len(encoded) <= plan.worker_stdout_bytes_upper_bound
     assert (
         AffineTorusFixedLocusResult.model_validate_json(encoded, strict=True) == first
     )

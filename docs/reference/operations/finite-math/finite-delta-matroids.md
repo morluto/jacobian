@@ -16,10 +16,10 @@ their symmetric difference. It bounds the complete family before executing its
 axiom and explicit verification passes: 1,024 total row memberships, 2,048
 UTF-8 bytes of ground labels
 (each label must be UTF-8-representable), 250,000 symmetric-exchange candidate
-checks per complete axiom replay, and a 65,536-byte serialized result. There
+checks per complete axiom replay. There
 are deliberately no separate delta-matroid ground-size or row-count caps: the
-membership envelope bounds the row count, and the label-byte, candidate-work,
-and result bounds control the actual work, so a sparse family over hundreds of
+membership envelope bounds the row count, while label and candidate-work
+bounds control the actual work, so a sparse family over hundreds of
 short labels — or a dense short-row family such as every subset of size at most
 two over 16 elements (137 rows, 220,832 candidate checks) — is admitted when
 these bounds hold.

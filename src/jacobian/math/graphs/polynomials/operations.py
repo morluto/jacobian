@@ -9,7 +9,7 @@ import sympy
 from sympy import Poly, Symbol, expand
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import CanonicalLimits, format_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.polynomials._models import (
     MAX_GRAPH_POLYNOMIAL_EDGES,
@@ -20,7 +20,6 @@ from jacobian.math.graphs.polynomials._models import (
     PolynomialTerm,
     TreeIndependencePolynomialAdmissionError,
     _admitted_tree_profile,
-    _maximum_independence_result_bytes,
     _TreeProfile,
 )
 from jacobian.math.graphs.values import (
@@ -32,6 +31,8 @@ from jacobian.math.polynomials.values import (
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
+
+MAX_TREE_POLYNOMIAL_RETAINED_LABEL_CHARACTERS = 1_000_000
 
 
 def _add_coefficients(left: tuple[int, ...], right: tuple[int, ...]) -> tuple[int, ...]:
@@ -78,17 +79,14 @@ def _compute_independence_coefficients(
 
 
 def _admit_tree(graph: SimpleUndirectedGraph) -> _TreeProfile:
-    profile = _admitted_tree_profile(graph)
-    output_limit = CanonicalLimits().max_output_bytes
-    if (
-        _maximum_independence_result_bytes(graph, profile.independence_degree)
-        > output_limit
-    ):
+    retained_label_characters = sum(map(len, graph.vertices)) + sum(
+        len(left) + len(right) for left, right in graph.edges
+    )
+    if retained_label_characters > MAX_TREE_POLYNOMIAL_RETAINED_LABEL_CHARACTERS:
         raise TreeIndependencePolynomialAdmissionError(
-            "tree independence polynomial would exceed the canonical output "
-            "limit after retaining its source; shorten vertex labels"
+            "tree independence polynomial exceeds the retained label-character bound"
         )
-    return profile
+    return _admitted_tree_profile(graph)
 
 
 def independence_polynomial_coefficients(
@@ -265,6 +263,7 @@ def matching_polynomial(
 
 
 __all__ = [
+    "MAX_TREE_POLYNOMIAL_RETAINED_LABEL_CHARACTERS",
     "chromatic_polynomial",
     "flow_polynomial",
     "independence_polynomial",

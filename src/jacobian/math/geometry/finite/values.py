@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import Self
+from typing import Annotated, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 from sympy import isprime
 
@@ -13,6 +13,9 @@ from jacobian._models import StrictModel
 
 MAX_DIM = 32
 MAX_FIELD_ORDER = 10000
+MAX_AXIS_LABEL_LENGTH = 4_096
+MAX_AXIS_TOTAL_LABEL_CHARACTERS = 65_536
+AxisLabel = Annotated[str, StringConstraints(max_length=MAX_AXIS_LABEL_LENGTH)]
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -25,7 +28,7 @@ class PrimeFieldVectorSpace(StrictModel):
     """An ordered coordinate space over a named prime field."""
 
     field_order: int = Field(ge=2, le=MAX_FIELD_ORDER)
-    axis: tuple[str, ...] = Field(min_length=1, max_length=MAX_DIM)
+    axis: tuple[AxisLabel, ...] = Field(min_length=1, max_length=MAX_DIM)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
@@ -40,6 +43,11 @@ class PrimeFieldVectorSpace(StrictModel):
         if len(set(self.axis)) != len(self.axis):
             raise _validation_error(
                 "axis_labels_not_unique", "axis labels must be unique"
+            )
+        if sum(map(len, self.axis)) > MAX_AXIS_TOTAL_LABEL_CHARACTERS:
+            raise _validation_error(
+                "axis_labels_too_large",
+                "axis labels exceed the total character bound",
             )
         return self
 

@@ -13,11 +13,9 @@ import sympy
 from tests.math.polynomials._support import polynomial_validation_error
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials._conversions import rational_polynomial_from_sympy
 from jacobian.math.polynomials.differential_operators._bounds import (
-    MAX_APPLICATION_RESULT_BYTES,
     ApplicationEnvelope,
     _common_denominator_height,
     _decimal_digits_from_bits,
@@ -984,17 +982,14 @@ def test_degenerate_shortcuts_still_honor_the_retained_byte_budget() -> None:
     )
     assert admitted.is_zero is True
 
-    with pytest.raises(OperationDomainValidationError):
-        compute_differential_operator_application(
-            DifferentialOperatorApplyRequest(
-                polynomial=oversized_source(300),
-                operator=_operator(("x",), {}),
-                iterations=1,
-            )
+    larger = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=oversized_source(300),
+            operator=_operator(("x",), {}),
+            iterations=1,
         )
-    per_term_bytes = 32_768 + 1 + 3 + 2 + 96
-    assert 280 * per_term_bytes <= MAX_APPLICATION_RESULT_BYTES
-    assert 300 * per_term_bytes > MAX_APPLICATION_RESULT_BYTES
+    )
+    assert larger.is_zero is True
 
 
 def test_operator_and_polynomial_axes_must_match_exactly() -> None:
@@ -1036,7 +1031,7 @@ def test_expected_comparison_admits_values_beyond_the_kernel_regime() -> None:
 
 
 @pytest.mark.scale
-def test_expected_retention_still_honors_the_retained_byte_budget() -> None:
+def test_expected_retention_is_not_capped_by_serialized_size() -> None:
     coefficient = CanonicalRational(num="1" + "0" * 32_767, den="1")
     heavy_expected = RationalPolynomial(
         variables=("x",),
@@ -1051,15 +1046,15 @@ def test_expected_retention_still_honors_the_retained_byte_budget() -> None:
         ),
     )
 
-    with pytest.raises(OperationDomainValidationError):
-        compute_differential_operator_application(
-            DifferentialOperatorApplyRequest(
-                polynomial=_polynomial(("x",), {(1,): 1}),
-                operator=_operator(("x",), {(1,): 1}),
-                iterations=1,
-                expected=heavy_expected,
-            )
+    result = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=_polynomial(("x",), {(1,): 1}),
+            operator=_operator(("x",), {(1,): 1}),
+            iterations=1,
+            expected=heavy_expected,
         )
+    )
+    assert result.matches_expected is False
 
 
 @pytest.mark.parametrize(
@@ -2116,10 +2111,6 @@ def test_coefficient_growth_boundary_is_admitted_then_rejected() -> None:
     )
     result = compute_differential_operator_application(accepted)
     assert len(result.output.polynomial.terms[0].coefficient.num) == 32_641
-    assert (
-        len(encode_strict_json(result.model_dump(mode="json")))
-        <= MAX_APPLICATION_RESULT_BYTES
-    )
 
     with pytest.raises(OperationDomainValidationError):
         compute_differential_operator_application(

@@ -6,11 +6,6 @@ from dataclasses import dataclass
 from functools import cache
 from typing import NoReturn
 
-from jacobian.canonical import (
-    CanonicalLimits,
-    encode_strict_json,
-    strict_json_object_size,
-)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.path_decomposition._models import (
     MAX_VERTICES,
@@ -22,7 +17,6 @@ __all__ = ["compute_minimum_path_decomposition"]
 
 MAX_SEARCH_STATES = 1_000_000
 MAX_CANDIDATE_EDGE_INCIDENCES = 1_000_000
-MAX_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,35 +42,10 @@ def _admit_graph(graph: SimpleUndirectedGraph) -> _PathSearchPlan:
     vertex_count = len(graph.vertices)
     if vertex_count > MAX_VERTICES:
         _reject("too_many_vertices", f"at most {MAX_VERTICES} vertices are supported")
-    edge_count = len(graph.edges)
     adjacency: dict[str, set[str]] = {v: set() for v in graph.vertices}
     for left, right in graph.edges:
         adjacency[left].add(right)
         adjacency[right].add(left)
-
-    try:
-        source_bytes = len(encode_strict_json(graph.model_dump(mode="json")))
-        active_vertices = {vertex for edge in graph.edges for vertex in edge}
-        max_label_bytes = max(
-            (len(encode_strict_json(vertex)) for vertex in active_vertices), default=2
-        )
-    except ValueError as exc:
-        _reject("source_representation", str(exc))
-    paths_bytes = (
-        1 + 4 * edge_count + 2 * edge_count * max_label_bytes if edge_count else 2
-    )
-    result_bytes = strict_json_object_size(
-        (
-            ("graph", source_bytes),
-            ("path_count", len(str(edge_count))),
-            ("paths", paths_bytes),
-        )
-    )
-    if result_bytes > MAX_RESULT_BYTES:
-        _reject(
-            "result_size_bound",
-            f"the path decomposition result exceeds the {MAX_RESULT_BYTES}-byte output bound",
-        )
 
     candidate_sets, candidate_incidences = _find_all_simple_paths(
         adjacency, candidate_limit=MAX_SEARCH_STATES

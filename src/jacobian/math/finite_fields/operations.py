@@ -15,12 +15,6 @@ from jacobian._execution import (
     current_request_execution,
     request_cancelled,
 )
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-    strict_json_object_size,
-)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields._fixed_subspace_process import (
     run_fixed_subspace_generator_validation,
@@ -110,72 +104,10 @@ def _fixed_subspace_checkpoint(deadline: float | None, stage: str) -> None:
         )
 
 
-def _homogeneous_fixed_subspace_output_bytes(
-    action: PrimeFieldLinearAction, degree: int, monomial_count: int
-) -> int:
-    """Measure the largest feasible canonical RREF result before execution."""
-
-    monomial_basis = _homogeneous_monomial_basis(
-        len(action.variable_axis.labels), degree
-    )
-
-    def array_size(item_sizes: list[int]) -> int:
-        return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
-
-    action_size = len(encode_strict_json(action.model_dump(mode="json")))
-    monomial_basis_size = len(
-        encode_strict_json([list(exponents) for exponents in monomial_basis])
-    )
-    degree_size = len(encode_strict_json(degree))
-    columns_size = len(encode_strict_json(monomial_count))
-    prime_size = len(encode_strict_json(action.prime))
-    largest_residue_size = len(encode_strict_json(action.prime - 1))
-
-    def result_size(fixed_dimension: int) -> int:
-        # In canonical RREF, the fixed-dimension pivot columns contain only
-        # zeroes and ones. Every other cell can contain the largest residue.
-        # This accounts for every feasible rank without materializing one
-        # million-cell probes for all ranks.
-        row_value_size = (
-            fixed_dimension + (monomial_count - fixed_dimension) * largest_residue_size
-        )
-        row_size = 2 + max(monomial_count - 1, 0) + row_value_size
-        entries_size = array_size([row_size] * fixed_dimension)
-        basis_matrix_size = strict_json_object_size(
-            (
-                ("columns", columns_size),
-                ("entries", entries_size),
-                ("prime", prime_size),
-            )
-        )
-        return strict_json_object_size(
-            (
-                ("action", action_size),
-                ("basis_matrix", basis_matrix_size),
-                ("degree", degree_size),
-                ("fixed_dimension", len(encode_strict_json(fixed_dimension))),
-                ("monomial_basis", monomial_basis_size),
-            )
-        )
-
-    try:
-        return max(
-            result_size(fixed_dimension)
-            for fixed_dimension in range(monomial_count + 1)
-        )
-    except CanonicalizationError as error:
-        raise OperationDomainValidationError(
-            location=("action",),
-            code="finite_field.fixed_subspace_output_bound",
-            message="canonical fixed-subspace result is not transportable",
-        ) from error
-
-
 def _homogeneous_fixed_subspace_envelope(
     action: PrimeFieldLinearAction,
     degree: int,
     *,
-    enforce_transport_limit: bool,
     checkpoint: Callable[[str], None],
 ) -> int:
     checkpoint("before admission")
@@ -237,16 +169,6 @@ def _homogeneous_fixed_subspace_envelope(
             code="finite_field.fixed_subspace_work_bound",
             message="homogeneous fixed-subspace computation exceeds its work bound",
         )
-    if enforce_transport_limit:
-        result_bytes = _homogeneous_fixed_subspace_output_bytes(
-            action, degree, monomial_count
-        )
-        if result_bytes > CanonicalLimits().max_output_bytes:
-            raise OperationDomainValidationError(
-                location=("action",),
-                code="finite_field.fixed_subspace_output_bound",
-                message="canonical fixed-subspace result exceeds the output-size envelope",
-            )
     checkpoint("after result admission")
     return monomial_count
 
@@ -352,44 +274,6 @@ def _field_elements(
     )
 
 
-def _paley_result_wire_bytes(
-    presentation: FiniteFieldPresentation,
-    order: int,
-) -> int:
-    """Return the exact canonical result size before allocating its arc tuple."""
-
-    try:
-        empty_size = len(
-            encode_strict_json(
-                {
-                    "presentation": presentation.model_dump(mode="json"),
-                    "graph": {"vertex_count": order, "edges": []},
-                    "orientation": _PALEY_ORIENTATION,
-                },
-                # The request envelope is at most one canonical input document;
-                # the fixed graph and orientation fields add only a small amount
-                # before the result-size check below.  A relaxed measurement
-                # limit keeps an oversized result on the typed domain path.
-                limits=CanonicalLimits(
-                    max_output_bytes=2 * CanonicalLimits().max_output_bytes
-                ),
-            )
-        )
-    except CanonicalizationError as exc:
-        raise OperationDomainValidationError(
-            location=("presentation",),
-            code="finite_field.paley_tournament_exceeds_output_budget",
-            message="complete Paley tournament exceeds the canonical output budget",
-        ) from exc
-    edge_count = order * (order - 1) // 2
-    digit_lengths = tuple(len(str(vertex)) for vertex in range(order))
-    edge_bytes = 3 * edge_count + sum(
-        digits * ((order - 1 - vertex) + vertex)
-        for vertex, digits in enumerate(digit_lengths)
-    )
-    return empty_size + edge_bytes + max(0, edge_count - 1)
-
-
 def paley_tournament(
     presentation: FiniteFieldPresentation,
 ) -> PaleyTournamentResult:
@@ -404,13 +288,6 @@ def paley_tournament(
         )
 
     edge_count = order * (order - 1) // 2
-    output_bytes = _paley_result_wire_bytes(presentation, order)
-    if output_bytes > CanonicalLimits().max_output_bytes:
-        raise OperationDomainValidationError(
-            location=("presentation",),
-            code="finite_field.paley_tournament_exceeds_output_budget",
-            message="complete Paley tournament exceeds the canonical output budget",
-        )
     if edge_count > MAX_DIRECTED_GRAPH_PARSE_EDGES:
         raise OperationDomainValidationError(
             location=("presentation",),
@@ -649,8 +526,6 @@ def _induced_action_matrix(
 def homogeneous_fixed_subspace(
     action: PrimeFieldLinearAction,
     degree: int,
-    *,
-    enforce_transport_limit: bool = False,
 ) -> HomogeneousFixedSubspace:
     """Compute one exact homogeneous simultaneous fixed subspace over GF(p)."""
 
@@ -670,7 +545,6 @@ def homogeneous_fixed_subspace(
     monomial_count = _homogeneous_fixed_subspace_envelope(
         action,
         degree,
-        enforce_transport_limit=enforce_transport_limit,
         checkpoint=checkpoint,
     )
     variable_count = len(action.variable_axis.labels)

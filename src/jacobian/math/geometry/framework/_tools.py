@@ -13,9 +13,7 @@ from jacobian.math.geometry.framework.operations import planar_rigidity_profile
 def _run_planar_rigidity_profile(
     request: PlanarRigidityProfileRequest,
 ) -> PlanarRigidityProfile:
-    return planar_rigidity_profile(
-        request.configuration, request.graph, enforce_transport_limit=True
-    )
+    return planar_rigidity_profile(request.configuration, request.graph)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (

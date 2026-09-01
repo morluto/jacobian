@@ -24,11 +24,7 @@ from jacobian._execution import (
 )
 from jacobian._flint import flint_workprec
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import (
-    CanonicalLimits,
-    canonicalize_json,
-    format_canonical_integer,
-)
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -42,7 +38,6 @@ from jacobian.math.analysis._box_enclosure import (
 )
 from jacobian.math.analysis._models import (
     MAX_BOX_INTERMEDIATE_BITS,
-    MAX_DYADIC_MANTISSA_DIGITS,
     MAX_EXPRESSION_NODES,
     MAX_RATIONAL_BOX_ENDPOINT_DIGITS,
     DyadicClosedInterval,
@@ -75,7 +70,6 @@ MAX_DEFINITE_INTEGRAL_SUMMATION_UNITS = MAX_DEFINITE_INTEGRAL_LEAVES * (
     MAX_DEFINITE_INTEGRAL_LEAVES + 1
 )
 MAX_DEFINITE_INTEGRAL_WALL_SECONDS = 120
-MAX_DEFINITE_INTEGRAL_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 # A retained rational preflight bound has at most 8,192 component bits. A source
 # endpoint has at most the shared rational-box digit bound, a midpoint path adds
@@ -650,19 +644,6 @@ def _midpoint_component_digits(box: RationalIntervalBox, depth: int) -> int:
     return 2 * source_digits + depth + 2
 
 
-def _estimated_result_bytes(request: DefiniteIntegralEnclosureRequest) -> int:
-    source_bytes = len(canonicalize_json(request.model_dump(mode="json")))
-    dyadic_interval_bytes = 2 * (MAX_DYADIC_MANTISSA_DIGITS + 64) + 64
-    path_bytes = 2 * (request.max_leaves - 1) + 32
-    enclosed_leaf_bytes = path_bytes + 2 * dyadic_interval_bytes + 256
-    return (
-        source_bytes
-        + request.max_leaves * enclosed_leaf_bytes
-        + dyadic_interval_bytes
-        + 8_192
-    )
-
-
 def _require_deadline(deadline: float, stage: str) -> None:
     if request_cancelled():
         raise OperationExecutionCancelledError(
@@ -729,18 +710,6 @@ def _admit_definite_integral(
         > 2 * MAX_RATIONAL_BOX_ENDPOINT_DIGITS + MAX_DEFINITE_INTEGRAL_DEPTH + 2
     ):
         raise AssertionError("definite-integral midpoint accounting is inconsistent")
-    estimated_result_bytes = _estimated_result_bytes(request)
-    if estimated_result_bytes > MAX_DEFINITE_INTEGRAL_RESULT_BYTES:
-        raise OperationDomainValidationError(
-            location=("max_leaves",),
-            code="analysis.definite_integral.result_bytes",
-            message=(
-                f"definite-integral result estimate of {estimated_result_bytes} bytes "
-                f"exceeds the {MAX_DEFINITE_INTEGRAL_RESULT_BYTES}-byte canonical "
-                "output bound"
-            ),
-        )
-
     source = request.box.intervals[0]
     root_preflight: _BoxPreflight | None = None
     if _interval_width(source) > 0:
@@ -1170,7 +1139,6 @@ __all__ = [
     "MAX_DEFINITE_INTEGRAL_LEAVES",
     "MAX_DEFINITE_INTEGRAL_NODE_WORK",
     "MAX_DEFINITE_INTEGRAL_PRECISION_WORK",
-    "MAX_DEFINITE_INTEGRAL_RESULT_BYTES",
     "MAX_DEFINITE_INTEGRAL_SELECTION_COMPARISONS",
     "MAX_DEFINITE_INTEGRAL_SUBPROBLEMS",
     "MAX_DEFINITE_INTEGRAL_SUMMATION_UNITS",

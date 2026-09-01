@@ -241,7 +241,7 @@ def test_characteristic_rejects_oversized_coefficient_formatting() -> None:
     )
 
 
-def test_characteristic_rejects_aggregate_output_before_construction() -> None:
+def test_characteristic_rejects_excessive_integer_formatting_work() -> None:
     request = CharacteristicPolynomialRequest(
         ambient_dimension=MAX_GENERIC_FORMULA_WORK,
         hyperplane_count=MAX_GENERIC_FORMULA_WORK,
@@ -250,7 +250,7 @@ def test_characteristic_rejects_aggregate_output_before_construction() -> None:
         compute_characteristic_polynomial(request)
     assert (
         error.value.errors()[0]["type"]
-        == "hyperplane_arrangement.characteristic_result_bytes_exceeded"
+        == "hyperplane_arrangement.characteristic_formatting_work_exceeded"
     )
 
 
@@ -266,7 +266,7 @@ def test_characteristic_uses_the_requested_binomial_prefix() -> None:
     assert result.coefficients == ("-1", "1")
 
 
-def test_chamber_count_rejects_actual_output_bytes() -> None:
+def test_chamber_count_rejects_excessive_integer_formatting_work() -> None:
     request = ChamberCountRequest(
         ambient_dimension=40_000_000,
         hyperplane_count=40_000_000,
@@ -275,7 +275,7 @@ def test_chamber_count_rejects_actual_output_bytes() -> None:
         compute_chamber_count(request)
     assert (
         error.value.errors()[0]["type"]
-        == "hyperplane_arrangement.chamber_result_bytes_exceeded"
+        == "hyperplane_arrangement.chamber_formatting_work_exceeded"
     )
 
 

@@ -14,7 +14,6 @@ from jacobian.math.combinatorics.additive.values import (
 )
 
 MAX_SUBSET_SUM_DP_TRANSITIONS = 4_000_000
-MAX_SUBSET_SUM_PROFILE_RESULT_BYTES = 4 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -25,7 +24,6 @@ class SubsetSumProfileEnvelope:
     transition_bound: int
     maximum_sum_characters: int
     maximum_multiplicity_digits: int
-    result_byte_bound: int
 
 
 def subset_sum_profile_envelope(
@@ -57,9 +55,6 @@ def subset_sum_profile_envelope(
         len(format_canonical_integer(positive_sum)),
     )
     maximum_multiplicity_digits = len(format_canonical_integer(total_subsets))
-    source_wire_bound = 64 + sum(len(item) + 3 for item in source.items)
-    entry_wire_bound = 96 + maximum_sum_characters + maximum_multiplicity_digits
-    result_byte_bound = 1024 + source_wire_bound + support_bound * entry_wire_bound
     if support_bound > MAX_SUBSET_SUM_PROFILE_ENTRIES:
         raise ValueError(
             "predicted subset-sum support exceeds the "
@@ -70,17 +65,11 @@ def subset_sum_profile_envelope(
             "predicted subset-sum DP transitions exceed the "
             f"{MAX_SUBSET_SUM_DP_TRANSITIONS}-transition work bound"
         )
-    if result_byte_bound > MAX_SUBSET_SUM_PROFILE_RESULT_BYTES:
-        raise ValueError(
-            "predicted subset-sum result exceeds the "
-            f"{MAX_SUBSET_SUM_PROFILE_RESULT_BYTES}-byte result bound"
-        )
     return SubsetSumProfileEnvelope(
         support_bound=support_bound,
         transition_bound=transition_bound,
         maximum_sum_characters=maximum_sum_characters,
         maximum_multiplicity_digits=maximum_multiplicity_digits,
-        result_byte_bound=result_byte_bound,
     )
 
 

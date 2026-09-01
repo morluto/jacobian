@@ -42,9 +42,7 @@ from jacobian.math.geometry.differential._recognition_process import (
 )
 from jacobian.math.geometry.differential.values import (
     MAX_RATIONAL_TENSOR_COMPONENTS,
-    MAX_RATIONAL_TENSOR_EXPONENT,
     MAX_RATIONAL_TENSOR_LOCUS_GUARDS,
-    MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS,
     MAX_RATIONAL_TENSOR_RANK,
     canonical_locus_guards,
 )
@@ -1035,46 +1033,35 @@ def test_work_budget_rejection_precedes_coprimality_recognition(
     assert error.value.errors()[0]["type"].endswith("work_budget")
 
 
-def _result_byte_rejection_inputs() -> tuple[
-    RationalCoordinateTensor, RationalCoordinateTensor
-]:
-    variables = ("x", "y")
-    one = _function(variables, (1, (0, 0)))
-    vector = _tensor(variables, ("CONTRAVARIANT",), (one, one))
-    nonconstant_exponents = tuple(
-        exponent
-        for exponent in sorted(
-            product(range(MAX_RATIONAL_TENSOR_EXPONENT + 1), repeat=2),
-            reverse=True,
-        )
-        if exponent != (0, 0)
-    )[: MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS // 2 - 1]
-    guards = tuple(
-        SparseRationalPolynomial.model_validate(
-            _sparse(
-                *((1, exponent) for exponent in nonconstant_exponents),
-                (index + 1, (0, 0)),
-            )
-        )
-        for index in range(MAX_RATIONAL_TENSOR_LOCUS_GUARDS)
-    )
-    ordered_guards = canonical_locus_guards(guards, variable_count=2)
-    scalar = RationalCoordinateTensor(
-        coordinate_axis=variables,
-        variance=(),
-        components=(one,),
-        retained_nonzero_denominators=ordered_guards,
-    )
-    return vector, scalar
-
-
-def test_result_byte_rejection_precedes_coprimality_recognition(
+def test_locus_guard_rejection_precedes_coprimality_recognition(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    vector, scalar = _result_byte_rejection_inputs()
+    variables = ("x", "y")
+    one = _function(variables, (1, (0, 0)))
+    guards = canonical_locus_guards(
+        tuple(
+            SparseRationalPolynomial.model_validate(
+                _guard((1, (1, 0)), (index + 1, (0, 0)))
+            )
+            for index in range(MAX_RATIONAL_TENSOR_LOCUS_GUARDS + 1)
+        ),
+        variable_count=2,
+    )
+    vector = _tensor(
+        variables,
+        ("CONTRAVARIANT",),
+        (one, one),
+        guards=tuple(guard.model_dump(mode="json") for guard in guards[:385]),
+    )
+    scalar = _tensor(
+        variables,
+        (),
+        (one,),
+        guards=tuple(guard.model_dump(mode="json") for guard in guards[385:]),
+    )
 
     def forbidden_recognition(*args: Any, **kwargs: Any) -> Any:
-        raise AssertionError("doomed output request reached recognition")
+        raise AssertionError("doomed locus request reached recognition")
 
     monkeypatch.setattr(
         lie_bounds,
@@ -1082,12 +1069,8 @@ def test_result_byte_rejection_precedes_coprimality_recognition(
         forbidden_recognition,
     )
 
-    with pytest.raises(
-        OperationDomainValidationError, match="canonical output budget"
-    ) as error:
+    with pytest.raises(OperationDomainValidationError, match="guard representation"):
         lie_derivative(vector, scalar)
-
-    assert error.value.errors()[0]["type"].endswith("result_bytes")
 
 
 def test_dispatch_start_owns_one_deadline_through_result_construction(
@@ -1125,7 +1108,7 @@ def test_dispatch_start_owns_one_deadline_through_result_construction(
     assert {bound_deadline for _, _, bound_deadline in observed} == {
         started + LIE_DERIVATIVE_WALL_SECONDS
     }
-    assert observed[-1][0] == "after result-size serialization"
+    assert observed[-1][0] == "after profile construction"
 
 
 def test_expired_dispatch_deadline_stops_before_semantic_preflight() -> None:

@@ -4,18 +4,14 @@ from __future__ import annotations
 
 from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math._labels import MAX_OPAQUE_LABEL_LENGTH
 from jacobian.math.crossed_products.values import (
     MAX_EXPONENT_DIGITS,
-    MAX_PRESENTATION_INTEGER_DIGITS,
     FiniteCosetCrossedProductElement,
-    FiniteCosetCrossedProductPresentation,
 )
 
 MAX_CONVOLUTION_PAIRS = 1_024
 MAX_MULTIPLICATION_SCALAR_WORK = 80_000
 MAX_COEFFICIENT_INTERMEDIATE_DIGITS = 19
-MAX_SERIALIZED_RESULT_BYTES = 10 * 1024 * 1024
 
 
 def _reject(*, location: tuple[str, ...], code: str, message: str) -> None:
@@ -28,44 +24,6 @@ def _reject(*, location: tuple[str, ...], code: str, message: str) -> None:
 
 def _maximum_absolute(values: tuple[int, ...]) -> int:
     return max((abs(value) for value in values), default=0)
-
-
-def _presentation_serialized_upper_bound(
-    presentation: FiniteCosetCrossedProductPresentation,
-) -> int:
-    """Conservatively bound JSON bytes for one retained presentation."""
-
-    coset_count = len(presentation.cosets)
-    dimension = presentation.lattice_rank
-    label_bytes = 2 + 12 * MAX_OPAQUE_LABEL_LENGTH
-    presentation_integer_bytes = 3 + MAX_PRESENTATION_INTEGER_DIGITS
-    return (
-        4_096
-        + (coset_count + dimension + 1) * label_bytes
-        + coset_count**2 * label_bytes
-        + coset_count * dimension**2 * presentation_integer_bytes
-        + coset_count**2 * dimension * presentation_integer_bytes
-    )
-
-
-def _term_serialized_upper_bound(dimension: int) -> int:
-    label_bytes = 2 + 12 * MAX_OPAQUE_LABEL_LENGTH
-    exponent_bytes = 3 + MAX_EXPONENT_DIGITS
-    return 128 + label_bytes + 10 + dimension * exponent_bytes
-
-
-def _result_serialized_upper_bound(
-    left: FiniteCosetCrossedProductElement,
-    right: FiniteCosetCrossedProductElement,
-    predicted_product_terms: int,
-) -> int:
-    presentation_bytes = _presentation_serialized_upper_bound(left.presentation)
-    term_bytes = _term_serialized_upper_bound(left.presentation.lattice_rank)
-    return (
-        4_096
-        + 3 * presentation_bytes
-        + (len(left.terms) + len(right.terms) + predicted_product_terms) * term_bytes
-    )
 
 
 def require_multiplication_budget(
@@ -155,20 +113,6 @@ def require_multiplication_budget(
                     "carrier bound"
                 ),
             )
-
-    # Every input pair contributes to at most one support key, so pair_count is
-    # the exact a-priori product-support bound. This includes all three retained
-    # presentations and every source/product term.
-    serialized_bound = _result_serialized_upper_bound(left, right, pair_count)
-    if serialized_bound > MAX_SERIALIZED_RESULT_BYTES:
-        _reject(
-            location=("left", "right"),
-            code="result_size_bound",
-            message=(
-                "predicted source-bound result exceeds the "
-                f"{MAX_SERIALIZED_RESULT_BYTES}-byte output bound"
-            ),
-        )
 
 
 __all__ = ["MAX_CONVOLUTION_PAIRS", "require_multiplication_budget"]

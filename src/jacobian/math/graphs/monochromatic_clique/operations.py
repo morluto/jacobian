@@ -6,16 +6,10 @@ from dataclasses import dataclass
 from itertools import combinations
 from math import comb
 
-from pydantic_core import PydanticCustomError
-
-from jacobian.canonical import (
-    CanonicalLimits,
-    encode_strict_json,
-    strict_json_object_size,
-)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_EDGES,
+    MAX_LABEL_LENGTH,
     MAX_TOTAL_INCIDENCES,
     FiniteHypergraph,
 )
@@ -33,16 +27,7 @@ class MonochromaticCliqueAdmission:
 
     clique_count: int
     incidence_count: int
-    result_bytes: int
     cliques: tuple[tuple[str, ...], ...]
-
-
-def _array_size(value_sizes: tuple[int, ...]) -> int:
-    return 2 + max(len(value_sizes) - 1, 0) + sum(value_sizes)
-
-
-def _int_size(value: int) -> int:
-    return len(encode_strict_json(value))
 
 
 def _admit_monochromatic_clique_hypergraph(  # noqa: C901
@@ -72,6 +57,15 @@ def _admit_monochromatic_clique_hypergraph(  # noqa: C901
             location=("colored_graph", "graph", "vertices"),
             code="monochromatic_clique.too_many_vertices",
             message=f"at most {MAX_VERTICES} vertices are supported",
+        )
+    if any(len(vertex) > MAX_LABEL_LENGTH for vertex in vertices):
+        raise OperationDomainValidationError(
+            location=("colored_graph", "graph", "vertices"),
+            code="monochromatic_clique.vertex_label_too_long",
+            message=(
+                "monochromatic clique vertices must fit the hypergraph "
+                f"carrier's {MAX_LABEL_LENGTH}-character label bound"
+            ),
         )
     if graph.edges and not colored_graph.edge_colors:
         raise OperationDomainValidationError(
@@ -149,51 +143,7 @@ def _admit_monochromatic_clique_hypergraph(  # noqa: C901
                 f"{MAX_TOTAL_INCIDENCES}-incidence hypergraph bound"
             ),
         )
-    try:
-        colored_graph_bytes = len(
-            encode_strict_json(colored_graph.model_dump(mode="json"))
-        )
-        label_sizes = tuple(len(encode_strict_json(label)) for label in vertices)
-        vertex_bytes = _array_size(label_sizes)
-        edge_bytes = tuple(
-            _array_size(
-                (
-                    len(encode_strict_json(f"clique_{index}")),
-                    _array_size(
-                        tuple(len(encode_strict_json(vertex)) for vertex in clique)
-                    ),
-                )
-            )
-            for index, clique in enumerate(cliques)
-        )
-        hypergraph_bytes = strict_json_object_size(
-            (
-                ("vertices", vertex_bytes),
-                ("edges", _array_size(edge_bytes)),
-            )
-        )
-        result_bytes = strict_json_object_size(
-            (
-                ("colored_graph", colored_graph_bytes),
-                ("clique_order", _int_size(clique_order)),
-                ("hypergraph", hypergraph_bytes),
-            )
-        )
-    except (ValueError, TypeError, PydanticCustomError) as error:
-        raise OperationDomainValidationError(
-            location=("colored_graph",),
-            code="monochromatic_clique.source_not_canonical",
-            message="colored_graph cannot be represented in canonical JSON",
-        ) from error
-    if result_bytes > CanonicalLimits().max_output_bytes:
-        raise OperationDomainValidationError(
-            location=("colored_graph",),
-            code="monochromatic_clique.result_bytes_exceeded",
-            message="monochromatic clique hypergraph exceeds the canonical output-byte limit",
-        )
-    return MonochromaticCliqueAdmission(
-        clique_count, incidence_count, result_bytes, cliques
-    )
+    return MonochromaticCliqueAdmission(clique_count, incidence_count, cliques)
 
 
 __all__ = ["construct_monochromatic_clique_hypergraph"]

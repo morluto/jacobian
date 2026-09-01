@@ -37,9 +37,6 @@ from jacobian.math.number_theory.number_fields import (
     SimpleNumberFieldPresentation,
     embeddings,
 )
-from jacobian.math.number_theory.number_fields._embedding_limits import (
-    MAX_NUMBER_FIELD_EMBEDDING_RESULT_BYTES,
-)
 from jacobian.math.number_theory.number_fields._embedding_protocol import (
     NumberFieldEmbeddingWorkerComplete,
     NumberFieldEmbeddingWorkerRequest,
@@ -391,19 +388,15 @@ def test_profile_structural_validation_rejects_an_incomplete_result() -> None:
         NumberFieldEmbeddingProfile.model_validate(incomplete)
 
 
-def test_degree_coefficient_isolation_work_and_result_bounds_are_preflighted() -> None:
+def test_degree_coefficient_isolation_and_worker_bounds_are_preflighted() -> None:
     # The minimal polynomial of zeta_17 + zeta_17^-1 is irreducible of degree
     # eight and totally real, so it exercises the closed degree boundary
     # without making this unit test duplicate the complex-order stress case.
     degree_eight = _field("1", "1", "-7", "-5", "15", "6", "-10", "-1", "1")
     admission = _admit_number_field_embeddings(degree_eight)
 
-    assert admission.predicted_result_bytes <= MAX_NUMBER_FIELD_EMBEDDING_RESULT_BYTES
-    degree_eight_result = embeddings(degree_eight)
-    assert (
-        len(encode_strict_json(degree_eight_result.model_dump(mode="json")))
-        <= admission.predicted_result_bytes
-    )
+    assert admission.predicted_worker_output_bytes > 0
+    embeddings(degree_eight)
 
     degree_nine = _field("1", *("0",) * 8, "2")
     with pytest.raises(NumberFieldEmbeddingAdmissionError) as caught:
@@ -478,7 +471,6 @@ def test_kernel_isolators_and_result_satisfy_the_exact_contract(
         defining_polynomial_discriminant=result.defining_polynomial_discriminant,
     )
 
-    assert len(encoded) <= admission.predicted_result_bytes
     assert (
         len(worker_projection.model_dump_json().encode("utf-8"))
         <= admission.predicted_worker_output_bytes

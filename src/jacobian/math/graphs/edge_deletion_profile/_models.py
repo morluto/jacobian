@@ -24,8 +24,8 @@ def _edge_deletion_graph_schema() -> JsonSchemaValue:
     schema = SimpleUndirectedGraph.model_json_schema()
     schema["description"] = (
         "A finite simple graph on Jacobian's canonical graph axis. The profile "
-        "operation admits requests by deletion-row count, coloring work, and "
-        "complete-result size."
+        "operation admits requests by retained label characters, deletion-row "
+        "count, and coloring work."
     )
     return schema
 

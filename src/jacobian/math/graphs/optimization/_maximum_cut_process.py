@@ -9,8 +9,8 @@ import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from jacobian.canonical import CanonicalLimits
 from jacobian.math.graphs.optimization._maximum_cut import (
-    MAXIMUM_CUT_RESULT_BYTES,
     GraphMaximumCutRequest,
     GraphMaximumCutResult,
     _compute_maximum_cut_without_z3,
@@ -23,6 +23,7 @@ from jacobian.process import (
 
 _MAXIMUM_CUT_WORKER = Path(__file__).with_name("_maximum_cut_worker.py")
 _MAXIMUM_CUT_WORKER_WALL_SECONDS = 120
+_MAXIMUM_CUT_WORKER_STDOUT_BYTES = CanonicalLimits().max_output_bytes
 _WORKER_ERROR_BYTES = 16_384
 _WORKER_ADDRESS_SPACE_BYTES = 1_536 * 1024 * 1024
 _WORKER_FILE_SIZE_BYTES = 1_024 * 1_024
@@ -49,7 +50,7 @@ def compute_maximum_cut_isolated(
                 input_bytes=payload,
                 timeout_seconds=remaining_seconds,
                 environment=worker_environment(locale="C.UTF-8"),
-                stdout_limit=MAXIMUM_CUT_RESULT_BYTES,
+                stdout_limit=_MAXIMUM_CUT_WORKER_STDOUT_BYTES,
                 stderr_limit=_WORKER_ERROR_BYTES,
                 resource_limits=ProcessResourceLimits(
                     cpu_seconds=math.ceil(_MAXIMUM_CUT_WORKER_WALL_SECONDS),

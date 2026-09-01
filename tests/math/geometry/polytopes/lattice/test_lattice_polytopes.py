@@ -515,10 +515,7 @@ class TestLargeCoordinateBounds:
 
 class TestEnumerateRequestBoundary:
     @pytest.mark.scale
-    def test_oversize_artifact_rejected_during_native_admission(self) -> None:
-        # [0,599]^2 holds 360k lattice points; the serialized artifact
-        # exceeds the 10 MiB output limit, so the native operation rejects it
-        # after structural wire parsing.
+    def test_large_enumeration_is_governed_by_point_count(self) -> None:
         far = "599"
         request = EnumerateLatticePointsRequest(
             vertices=(
@@ -528,8 +525,9 @@ class TestEnumerateRequestBoundary:
                 _v(("0", "1"), (far, "1")),
             )
         )
-        with pytest.raises(ValueError, match="10 MiB"):
-            enumerate_lattice_points(request)
+        result = enumerate_lattice_points(request)
+
+        assert result.point_count == 360_000
 
     def test_result_count_must_match_points(self) -> None:
         from jacobian.math.geometry.polytopes.lattice._models import (

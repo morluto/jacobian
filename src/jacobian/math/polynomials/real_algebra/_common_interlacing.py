@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING
 from jacobian._exact import CanonicalInteger, CanonicalRational
 from jacobian.canonical import (
     CanonicalLimits,
-    canonicalize_json,
     format_canonical_integer,
 )
 from jacobian.catalog.models import OperationDomainValidationError
@@ -63,14 +62,6 @@ MAX_COMMON_INTERLACING_ISOLATION_WORK = 100_000_000
 MAX_COMMON_INTERLACING_TOTAL_FACTORS = 128
 MAX_COMMON_INTERLACING_FACTOR_ROOT_CHECKS = 2_048
 MAX_COMMON_INTERLACING_COMPARISONS = 512
-
-# The estimator reserves JSON structure and retained source data before checking
-# the concrete canonical delivery boundary.
-MAX_COMMON_INTERLACING_RESULT_BYTES = CanonicalLimits().max_output_bytes
-_RESULT_BASE_RESERVE_BYTES = 4_096
-_RESULT_SOURCE_RESERVE_BYTES = 512
-_RESULT_ROOT_ROW_RESERVE_BYTES = 384
-_RESULT_GAP_RESERVE_BYTES = 192
 
 
 @dataclass(frozen=True, slots=True)
@@ -192,42 +183,6 @@ def _isolation_endpoint_digit_bound(degree: int, height_digits: int) -> int:
 
     degree_digits = _integer_digits(max(degree, 1))
     return 2 * degree * (height_digits + degree_digits + 2) + height_digits + 8
-
-
-def _estimated_result_bytes(
-    family: tuple[LabelledRationalPolynomial, ...],
-    sources: tuple[_SourcePlan, ...],
-    common_degree: int,
-) -> int:
-    source_bytes = len(
-        canonicalize_json(
-            [source.model_dump(mode="json") for source in family],
-            limits=CanonicalLimits(max_output_bytes=CanonicalLimits().max_input_bytes),
-        )
-    )
-    root_bytes = 0
-    for source in sources:
-        largest_factor_bytes = max(
-            (
-                sum(len(coefficient) for coefficient in factor.canonical_coefficients)
-                + len(factor.canonical_coefficients) * 4
-                for factor in source.factors
-            ),
-            default=0,
-        )
-        distinct_roots = source.squarefree_product.degree()
-        root_bytes += distinct_roots * (
-            4 * source.isolation_endpoint_digits
-            + largest_factor_bytes
-            + _RESULT_ROOT_ROW_RESERVE_BYTES
-        )
-    return (
-        source_bytes
-        + len(family) * _RESULT_SOURCE_RESERVE_BYTES
-        + root_bytes
-        + max(common_degree - 1, 0) * _RESULT_GAP_RESERVE_BYTES
-        + _RESULT_BASE_RESERVE_BYTES
-    )
 
 
 def _preflight_source(
@@ -526,14 +481,6 @@ def _admit_common_interlacing(
             "comparison_count",
             "common interlacing requires more than the "
             f"{MAX_COMMON_INTERLACING_COMPARISONS} exact endpoint-comparison bound",
-        )
-    estimated_bytes = _estimated_result_bytes(family, sources, common_degree)
-    if estimated_bytes > MAX_COMMON_INTERLACING_RESULT_BYTES:
-        _reject(
-            ("family",),
-            "result_bytes",
-            "the complete exact profile exceeds the "
-            f"{MAX_COMMON_INTERLACING_RESULT_BYTES}-byte result bound",
         )
     return _CommonInterlacingPlan(
         family=family,

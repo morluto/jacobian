@@ -74,7 +74,7 @@ def test_dispatch_rejects_unfittable_inertia_request_as_typed_error() -> None:
             json.loads(_encoded_inertia_payload_near_limit(offset=512)),
             Catalog.open(),
         )
-    assert "canonical output limit" in str(excinfo.value)
+    assert "digit-work bound" in str(excinfo.value)
 
 
 def test_dispatch_admits_order_33_diagonal_inertia_request() -> None:

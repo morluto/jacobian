@@ -7,17 +7,12 @@ import math
 from pydantic import Field
 
 from jacobian._models import StrictModel
-from jacobian.canonical import (
-    CanonicalLimits,
-    encode_strict_json,
-    strict_json_object_size,
-)
 
-# Coverage rows use JSON integers, so this is a transport-derived source
-# boundary rather than a sieve boundary. Actual execution is admitted by the
-# square-root work estimate below.
+# Coverage rows are materialized as parallel residual/count arrays and typed
+# result rows. Bound that allocation-producing cardinality independently of
+# any JSON delivery mechanism.
 MAX_COVERAGE_UPPER: int = (1 << 53) - 1
-MAX_COVERAGE_RESULT_BYTES: int = CanonicalLimits().max_output_bytes
+MAX_COVERAGE_ROWS: int = 250_000
 MAX_COVERAGE_WORK: int = 50_000_000
 _MAX_DISTINCT_PRIME_COUNT = 14
 
@@ -37,40 +32,6 @@ def _coverage_work_upper_bound(lower_bound: int, upper_bound: int) -> int:
         return width
     digit_bound = root.bit_length()
     return root * (digit_bound + 1) + root + width * digit_bound
-
-
-def _json_array_size(item_size: int, count: int) -> int:
-    return 2 + max(count - 1, 0) + count * item_size
-
-
-def _coverage_result_upper_bound_bytes(lower_bound: int, upper_bound: int) -> int:
-    """Bound the exact canonical size of one complete coverage result.
-
-    Every emitted ``n`` is at most ``upper_bound`` and the kernel can produce
-    at most fourteen distinct prime factors for values up to ``MAX_COVERAGE_UPPER``.
-    The field and array sizes are calculated with the same canonical encoder
-    used by the final result boundary, so accepted requests cannot fail only
-    during dispatch serialization.
-    """
-
-    width = upper_bound - lower_bound + 1
-    row_size = strict_json_object_size(
-        (
-            ("n", len(encode_strict_json(upper_bound))),
-            (
-                "distinct_prime_count",
-                len(encode_strict_json(_MAX_DISTINCT_PRIME_COUNT)),
-            ),
-        )
-    )
-    rows_size = _json_array_size(row_size, width)
-    return strict_json_object_size(
-        (
-            ("lower_bound", len(encode_strict_json(lower_bound))),
-            ("upper_bound", len(encode_strict_json(upper_bound))),
-            ("rows", rows_size),
-        )
-    )
 
 
 class PrimeCoverageProfileRequest(StrictModel):
@@ -96,7 +57,7 @@ class PrimeCoverageProfileResult(StrictModel):
 
 
 __all__ = [
-    "MAX_COVERAGE_RESULT_BYTES",
+    "MAX_COVERAGE_ROWS",
     "MAX_COVERAGE_UPPER",
     "MAX_COVERAGE_WORK",
     "PrimeCoverageProfileRequest",

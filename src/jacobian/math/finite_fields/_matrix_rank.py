@@ -12,14 +12,8 @@ from jacobian._execution import (
     current_request_execution,
     request_cancelled,
 )
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-)
 from jacobian.catalog.models import (
     MathTool,
-    OperationDomainValidationError,
     OperationExample,
 )
 from jacobian.math.finite_fields._matrix_rank_models import (
@@ -78,54 +72,11 @@ _MATRIX: dict[str, object] = {
 
 def compute_matrix_rank(
     matrix: AxisBoundMatrix,
-    *,
-    enforce_transport_limit: bool = False,
 ) -> MatrixRankResult:
     """Return the exact rank of a labelled matrix over its presented finite field."""
     deadline = _execution_deadline()
     execution_checkpoint = partial(_require_deadline, deadline)
-    execution_checkpoint("before result admission")
-    if enforce_transport_limit:
-        # Reserve the complete result envelope before the backend call so
-        # that we do not waste CPU on a result known to be undeliverable.
-        # The worst case is full rank with all pivot labels present.
-        max_rank = min(len(matrix.row_axis.labels), len(matrix.column_axis.labels))
-        try:
-            pivot_row_labels = tuple(
-                sorted(
-                    matrix.row_axis.labels,
-                    key=lambda label: (len(encode_strict_json(label)), label),
-                    reverse=True,
-                )[:max_rank]
-            )
-            pivot_column_labels = tuple(
-                sorted(
-                    matrix.column_axis.labels,
-                    key=lambda label: (len(encode_strict_json(label)), label),
-                    reverse=True,
-                )[:max_rank]
-            )
-            result_probe = encode_strict_json(
-                {
-                    "matrix": matrix.model_dump(mode="json"),
-                    "rank": max_rank,
-                    "pivot_rows": list(pivot_row_labels),
-                    "pivot_columns": list(pivot_column_labels),
-                }
-            )
-        except CanonicalizationError as exc:
-            raise OperationDomainValidationError(
-                location=("matrix",),
-                code="finite_field.matrix_rank.result_bound",
-                message="matrix-rank result exceeds the canonical output bound",
-            ) from exc
-        if len(result_probe) > CanonicalLimits().max_output_bytes:
-            raise OperationDomainValidationError(
-                location=("matrix",),
-                code="finite_field.matrix_rank.result_bound",
-                message="matrix-rank result exceeds the canonical output bound",
-            )
-    execution_checkpoint("after result admission")
+    execution_checkpoint("after admission")
     # Compute the exact deterministic pivots using the maintained backend.
     from jacobian.math.finite_fields._matrix_rank_kernels import (
         compute_matrix_rank as _compute_matrix_rank_kernel,
@@ -142,21 +93,6 @@ def compute_matrix_rank(
         pivot_columns=data.pivot_columns,
     )
     execution_checkpoint("after result construction")
-    if enforce_transport_limit:
-        try:
-            result_bytes = encode_strict_json(result.model_dump(mode="json"))
-        except CanonicalizationError as exc:
-            raise OperationDomainValidationError(
-                location=("matrix",),
-                code="finite_field.matrix_rank.result_bound",
-                message="matrix-rank result exceeds the canonical output bound",
-            ) from exc
-        if len(result_bytes) > CanonicalLimits().max_output_bytes:
-            raise OperationDomainValidationError(
-                location=("matrix",),
-                code="finite_field.matrix_rank.result_bound",
-                message="matrix-rank result exceeds the canonical output bound",
-            )
     return result
 
 
@@ -169,7 +105,7 @@ def compute_rank(request: MatrixRankRequest) -> MatrixRankResult:
 def _run_matrix_rank(request: MatrixRankRequest) -> MatrixRankResult:
     """Run matrix rank through the canonical delivery boundary."""
 
-    return compute_matrix_rank(request.matrix, enforce_transport_limit=True)
+    return compute_matrix_rank(request.matrix)
 
 
 MATRIX_RANK_OPERATION = MathTool(

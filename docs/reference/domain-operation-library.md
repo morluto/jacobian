@@ -534,9 +534,11 @@ ceiling by default; pass `CanonicalLimits` only when the caller owns such a
 boundary. Shared dispatch is not such a boundary: it preserves strict JSON
 semantics without imposing an HTTP, stdio, or in-process payload size. An
 unexplained reserve added to the codec's default is not an output
-proof. The architecture check rejects `max_output_bytes` in reusable
-`values.py` carriers; express their safety envelope through cardinality,
-component digits, depth, or another intrinsic representation quantity.
+proof. The architecture check rejects canonical output defaults and result-byte
+policies in mathematical carriers and operation owners, while allowing limits
+whose names identify a concrete worker or process channel. Express mathematical
+safety through cardinality, component digits, depth, or another intrinsic
+representation quantity.
 
 For every non-trivially priced operation, owner tests must instrument the
 priced kernel primitives on a representative near-envelope request and assert
@@ -685,7 +687,7 @@ itself state any of those obligations.
 
 A decision or first-witness operation must admit the full negative-case work,
 but may have constant-size output. An all-witness operation or complete profile
-must additionally admit its worst-case witness count and serialized result.
+must additionally admit its worst-case witness count and retained exact data.
 Prefer retaining the source value once and referring to indexed components over
 repeating labels, parents, or other source context in every output entry.
 
@@ -700,14 +702,14 @@ partitioning is acceptable only when the partition is a stable mathematical
 subdomain and the result identifies exactly what was searched. The caller may
 compose disjoint partitions, but no partition may claim global absence or
 completeness. A timeout, node limit, or truncated witness list is not such a
-claim. Keep the transport envelope separate from the mathematical output bound,
-but make the relationship executable: the mathematical result bound must imply
-that the complete canonical serialized result—including envelope metadata,
-echoed fields, IPC framing, and JSON overhead—fits the transport limit. The
-operation's estimator or exact size calculation must be shared by request
-admission and the final projection, and boundary tests must exercise the
-serialize -> parse -> canonicalize round trip. An accepted request must not
-discover transport overflow only after the backend has run.
+claim. Keep the transport envelope separate from the mathematical output bound.
+A native or in-process operation proves cardinality, digit growth, depth, and
+allocation safety without assuming a delivery format. When a concrete adapter
+adds a byte ceiling, that adapter measures the complete encoded envelope,
+including metadata, echoed fields, framing, and escaping. Worker adapters do
+the same for their own stdin and stdout channels. Do not move either byte
+ceiling into the shared request model merely so every possible consumer shares
+the most restrictive transport.
 
 Compare the complete canonical encoding with the actual enforcing limit. Do not
 subtract an unexplained safety reserve or add a second, duplicate size probe:

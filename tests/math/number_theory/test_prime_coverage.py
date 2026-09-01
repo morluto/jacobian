@@ -62,10 +62,12 @@ def test_prime_coverage_admits_narrow_high_interval() -> None:
     ]
 
 
-def test_prime_coverage_rejects_result_over_canonical_output_budget() -> None:
+def test_prime_coverage_rejects_materialized_row_overflow() -> None:
     request = PrimeCoverageProfileRequest(lower_bound=1, upper_bound=1_000_000)
 
-    with pytest.raises(OperationDomainValidationError, match="canonical output budget"):
+    with pytest.raises(
+        OperationDomainValidationError, match=r"materialized.*row bound"
+    ):
         compute_prime_coverage_profile(request)
 
 

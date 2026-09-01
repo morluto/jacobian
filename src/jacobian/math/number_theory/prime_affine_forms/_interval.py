@@ -14,9 +14,7 @@ from jacobian.math.number_theory.prime_affine_forms._kernel import (
     MAX_DETERMINISTIC_PRIME_INPUT,
 )
 from jacobian.math.number_theory.prime_affine_forms._models import (
-    MAX_RESULT_CHARACTER_BUDGET,
     _digits,
-    _source_character_upper_bound,
     _validation_error,
 )
 from jacobian.math.number_theory.prime_affine_forms.values import (
@@ -122,7 +120,7 @@ def _admit_interval_enumerate(
     lower_text: str,
     upper_text: str,
 ) -> tuple[int, int, int]:
-    lower, upper, interval_size, value_digits = _admit_interval_count(
+    lower, upper, interval_size, _value_digits = _admit_interval_count(
         source, lower_text, upper_text
     )
     result_cells = interval_size * (source.form_count + 1)
@@ -130,17 +128,6 @@ def _admit_interval_enumerate(
         raise _validation_error(
             f"interval enumeration may need {result_cells} result cells, "
             f"exceeding {MAX_INTERVAL_ENUMERATION_CELLS}"
-        )
-    parameter_digits = max(_digits(lower), _digits(upper))
-    serialized_characters = (
-        _source_character_upper_bound(source)
-        + interval_size
-        * (40 + parameter_digits + source.form_count * (value_digits + 4))
-        + 256
-    )
-    if serialized_characters > MAX_RESULT_CHARACTER_BUDGET:
-        raise _validation_error(
-            "interval enumeration exceeds the conservative serialized bound"
         )
     return lower, upper, interval_size
 

@@ -5,14 +5,11 @@ from contextlib import contextmanager
 
 import pytest
 from pydantic import ValidationError
-from pydantic_core import PydanticCustomError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics._recurrence_models import (
-    MAX_COMBINATORICS_RESULT_ARTIFACT_BYTES,
     PolynomialCoefficientRecurrenceEvaluationRequest,
     PolynomialCoefficientRecurrenceEvaluationResult,
-    _validate_result_inline_size,
 )
 from jacobian.math.combinatorics.operations import (
     evaluate_polynomial_coefficient_recurrence,
@@ -81,15 +78,6 @@ def test_polynomial_recurrence_result_accepts_canonical_projection() -> None:
     result = PolynomialCoefficientRecurrenceEvaluationResult.model_validate(_result())
 
     assert tuple(item.index for item in result.values) == (0, 1, 2, 3)
-
-
-def test_result_size_translation_preserves_owner_local_reason() -> None:
-    with pytest.raises(PydanticCustomError) as caught:
-        _validate_result_inline_size(
-            {"payload": "x" * (MAX_COMBINATORICS_RESULT_ARTIFACT_BYTES + 1)}
-        )
-
-    assert caught.value.type == "combinatorics.result_bound"
 
 
 def test_polynomial_recurrence_aborts_when_an_intermediate_exceeds_digit_bound() -> (

@@ -4,15 +4,6 @@ from __future__ import annotations
 
 import unicodedata
 
-import rfc8785
-
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    canonicalize_json,
-    encode_strict_json,
-    strict_json_object_size,
-)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.edge_pattern_profile._models import (
     EdgePatternEntry,
@@ -30,31 +21,15 @@ __all__ = [
     "compute_edge_pattern_profile",
 ]
 
-MAX_EDGE_PATTERN_PROFILE_RESULT_BYTES = CanonicalLimits().max_output_bytes
-
-
-def _strict_json_array_size(item_sizes: tuple[int, ...]) -> int:
-    return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
-
-
-def _encoded_size(value: str, encoded: dict[str, int]) -> int:
-    size = encoded.get(value)
-    if size is None:
-        size = len(rfc8785.dumps(unicodedata.normalize("NFC", value)))
-        encoded[value] = size
-    return size
-
 
 def _compute_edge_admission(
     edge_id: str,
     members: tuple[str, ...],
     colors: tuple[str, ...],
-    encoded: dict[str, int],
-) -> tuple[int, tuple[int, ...], int, tuple[str, ...], bool, bool]:
+) -> tuple[tuple[int, ...], int, tuple[str, ...], bool, bool]:
     """Compute one edge's equality partition and classification for admission.
 
-    Returns ``(entry_size, equality_partition, num_blocks, color_labels,
-    is_monochromatic, is_rainbow)``.
+    Returns the equality partition, block count, labels, and classifications.
     """
     color_to_block: dict[str, int] = {}
     equality_partition: list[int] = []
@@ -69,36 +44,7 @@ def _compute_edge_admission(
     is_mono = num_blocks <= 1
     is_rainbow = num_blocks == len(members)
 
-    # Compute the entry size using the precomputed partition data
-    entry_size = strict_json_object_size(
-        (
-            ("edge_id", _encoded_size(edge_id, encoded)),
-            (
-                "members",
-                _strict_json_array_size(
-                    tuple(_encoded_size(member, encoded) for member in members)
-                ),
-            ),
-            (
-                "equality_partition",
-                _strict_json_array_size(
-                    tuple(
-                        len(encode_strict_json(index)) for index in equality_partition
-                    )
-                ),
-            ),
-            ("num_color_blocks", len(encode_strict_json(num_blocks))),
-            (
-                "color_labels",
-                _strict_json_array_size(
-                    tuple(_encoded_size(color, encoded) for color in color_labels)
-                ),
-            ),
-        )
-    )
-
     return (
-        entry_size,
         tuple(equality_partition),
         num_blocks,
         tuple(color_labels),
@@ -114,11 +60,10 @@ def _admit_edge_pattern_profile(
     list[
         tuple[str, tuple[str, ...], tuple[int, ...], int, tuple[str, ...], bool, bool]
     ],
-    int,
 ]:
     """Admit the request and return the precomputed admission plan.
 
-    Returns ``(normalized_colors, edge_plans, result_bytes)`` where
+    Returns ``(normalized_colors, edge_plans)`` where
     ``edge_plans`` is a list of per-edge tuples containing
     ``(edge_id, members, equality_partition, num_blocks, color_labels,
     is_monochromatic, is_rainbow)`` that the kernel reuses directly
@@ -158,15 +103,6 @@ def _admit_edge_pattern_profile(
             code="edge_pattern.invalid_color_encoding",
             message="vertex color labels must be valid UTF-8",
         ) from exc
-    total_color_bytes = sum(
-        len(value.encode("utf-8")) for value in vertex_colors.values()
-    )
-    if total_color_bytes > MAX_EDGE_PATTERN_PROFILE_RESULT_BYTES:
-        raise OperationDomainValidationError(
-            location=("vertex_colors",),
-            code="edge_pattern.result_too_large",
-            message="the complete edge-pattern profile exceeds the canonical output envelope",
-        )
     normalized_keys = [unicodedata.normalize("NFC", key) for key in vertex_colors]
     if len(set(normalized_keys)) != len(normalized_keys):
         raise OperationDomainValidationError(
@@ -181,98 +117,24 @@ def _admit_edge_pattern_profile(
     # Thread 1: Compute equality partitions during admission and return
     # them as part of the plan so the kernel reuses them without
     # recomputing the same semantic work.
-    try:
-        encoded: dict[str, int] = {}
-        # Thread 2: Use a list of vertex-color pairs for the result
-        # representation so the coloring cannot be confused with a
-        # rational-shaped object during canonicalization.
-        color_pairs = tuple(
-            VertexColorPair(vertex=v, color=c)
-            for v, c in sorted(normalized_colors.items())
+    edge_plans = []
+    for edge_id, members in hypergraph.edges:
+        colors = tuple(normalized_colors[member] for member in members)
+        equality_partition, num_blocks, color_labels, is_mono, is_rainbow = (
+            _compute_edge_admission(edge_id, members, colors)
         )
-        source_size = len(canonicalize_json(hypergraph.model_dump(mode="json")))
-        colors_size = len(
-            encode_strict_json([p.model_dump(mode="json") for p in color_pairs])
-        )
-        entries_bytes = monochromatic_bytes = rainbow_bytes = 2
-        entries_count = monochromatic_count = rainbow_count = 0
-        result_bytes = strict_json_object_size(
+        edge_plans.append(
             (
-                ("hypergraph", source_size),
-                ("vertex_colors", colors_size),
-                ("entries", entries_bytes),
-                ("monochromatic_edge_ids", monochromatic_bytes),
-                ("rainbow_edge_ids", rainbow_bytes),
-            )
-        )
-        edge_plans: list[
-            tuple[
-                str, tuple[str, ...], tuple[int, ...], int, tuple[str, ...], bool, bool
-            ]
-        ] = []
-        for entries_count, (edge_id, members) in enumerate(hypergraph.edges):
-            colors = tuple(normalized_colors[member] for member in members)
-            (
-                entry_size,
+                edge_id,
+                members,
                 equality_partition,
                 num_blocks,
                 color_labels,
                 is_mono,
                 is_rainbow,
-            ) = _compute_edge_admission(edge_id, members, colors, encoded)
-            edge_plans.append(
-                (
-                    edge_id,
-                    members,
-                    equality_partition,
-                    num_blocks,
-                    color_labels,
-                    is_mono,
-                    is_rainbow,
-                )
             )
-            entries_bytes += entry_size + (1 if entries_count else 0)
-            edge_id_size = _encoded_size(edge_id, encoded)
-            if is_mono:
-                monochromatic_bytes += edge_id_size + (1 if monochromatic_count else 0)
-                monochromatic_count += 1
-            if is_rainbow:
-                rainbow_bytes += edge_id_size + (1 if rainbow_count else 0)
-                rainbow_count += 1
-            result_bytes = strict_json_object_size(
-                (
-                    ("hypergraph", source_size),
-                    ("vertex_colors", colors_size),
-                    ("entries", entries_bytes),
-                    (
-                        "monochromatic_edge_ids",
-                        monochromatic_bytes,
-                    ),
-                    ("rainbow_edge_ids", rainbow_bytes),
-                ),
-            )
-            if result_bytes > MAX_EDGE_PATTERN_PROFILE_RESULT_BYTES:
-                raise OperationDomainValidationError(
-                    location=("hypergraph", "vertex_colors"),
-                    code="edge_pattern.result_too_large",
-                    message="the complete edge-pattern profile exceeds the canonical output envelope",
-                )
-    except (CanonicalizationError, TypeError, ValueError) as error:
-        raise OperationDomainValidationError(
-            location=("hypergraph", "vertex_colors"),
-            code="edge_pattern.result_too_large",
-            message="the complete edge-pattern profile exceeds the canonical output envelope",
-        ) from error
-    if result_bytes > MAX_EDGE_PATTERN_PROFILE_RESULT_BYTES:
-        raise OperationDomainValidationError(
-            location=("hypergraph", "vertex_colors"),
-            code="edge_pattern.result_too_large",
-            message=(
-                "the complete edge-pattern profile exceeds the "
-                f"{MAX_EDGE_PATTERN_PROFILE_RESULT_BYTES}-byte result envelope"
-            ),
         )
-    return normalized_colors, edge_plans, result_bytes
+    return normalized_colors, edge_plans
 
 
 def compute_edge_pattern_profile(
@@ -284,7 +146,7 @@ def compute_edge_pattern_profile(
     For each edge, compute the equality partition of its member colours,
     the number of colour blocks, and classify as monochromatic or rainbow.
     """
-    normalized_colors, edge_plans, _result_bytes = _admit_edge_pattern_profile(
+    normalized_colors, edge_plans = _admit_edge_pattern_profile(
         hypergraph, vertex_colors
     )
 

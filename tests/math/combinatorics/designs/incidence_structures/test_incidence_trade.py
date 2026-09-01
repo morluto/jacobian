@@ -16,7 +16,6 @@ from jacobian.math.combinatorics.designs.incidence_structures import (
     containment_profile,
 )
 from jacobian.math.combinatorics.designs.incidence_structures._models import (
-    MAX_RESULT_BYTES,
     MAX_TRADE_ORDER,
     ContainmentProfileRequest,
     IncidenceMultiplicityDifference,
@@ -213,12 +212,20 @@ def test_profile_admission_uses_the_complete_subset_count() -> None:
         _containment_profile(ContainmentProfileRequest(incidence=rejected, t=3))
 
 
-def test_profile_admission_reserves_output_for_repeated_labels() -> None:
+def test_profile_admission_charges_structure_not_serialized_label_repetition() -> None:
     points = tuple(f"p{index}-" + "x" * 1_000 for index in range(100))
     incidence = _family(((),), "b", points=points)
 
-    with pytest.raises(ValueError):
-        _containment_profile(ContainmentProfileRequest(incidence=incidence, t=2))
+    result = _containment_profile(ContainmentProfileRequest(incidence=incidence, t=2))
+    assert len(result.subset_profile) == 4_950
+
+
+def test_incidence_rejects_labels_above_intrinsic_byte_bound() -> None:
+    with pytest.raises(ValueError, match="1024 UTF-8 bytes"):
+        _family((("x" * 1_025,),), "b", points=("x" * 1_025,))
+
+    with pytest.raises(ValueError, match="1024 UTF-8 bytes"):
+        _family(((),), "b" * 1_025, points=("p",))
 
 
 def test_trade_admission_is_budget_derived_with_conservative_order_ceiling() -> None:
@@ -282,23 +289,24 @@ def _long_id_family(prefix: str, filler: str, id_length: int) -> IncidenceStruct
     )
 
 
-def test_trade_admission_reserves_output_for_every_source_echo() -> None:
-    left = _long_id_family("l", "x", 3_000)
-    right = _long_id_family("r", "y", 3_000)
+def test_trade_accepts_block_ids_at_the_carrier_byte_bound() -> None:
+    left = _long_id_family("l", "x", 1_024)
+    right = _long_id_family("r", "y", 1_024)
 
-    with pytest.raises(ValueError):
-        _incidence_trade(IncidenceTradeRequest(left=left, right=right, max_order=1))
+    result = _incidence_trade(
+        IncidenceTradeRequest(left=left, right=right, max_order=1)
+    )
+    assert result.positive_moments_equal
 
 
-def test_admitted_trade_returns_typed_result_within_output_budget() -> None:
-    left = _long_id_family("l", "x", 1_400)
-    right = _long_id_family("r", "y", 1_400)
+def test_admitted_trade_returns_typed_result() -> None:
+    left = _long_id_family("l", "x", 1_000)
+    right = _long_id_family("r", "y", 1_000)
 
     result = check_incidence_trade(left, right, 1)
 
     assert result.positive_moments_equal
     assert all(comparison.equal for comparison in result.comparisons)
-    assert len(result.model_dump_json()) <= MAX_RESULT_BYTES
 
 
 def test_exported_native_values_compare_equal_across_member_orders() -> None:

@@ -13,7 +13,6 @@ from jacobian.math.combinatorics.posets.formal_concepts.basis import (
     MAX_DG_ATTRIBUTES,
     MAX_DG_CANDIDATE_STATES,
     MAX_DG_LOGICAL_WORK,
-    MAX_DG_RESULT_BYTES,
 )
 from jacobian.math.combinatorics.posets.formal_concepts.values import (
     MAX_IMPLICATION_MEMBERSHIPS,
@@ -100,8 +99,7 @@ class DuquenneGuiguesBasisRequest(StrictModel):
                 f"{MAX_IMPLICATIONS}-implication canonical implication-system "
                 f"carrier ({MAX_IMPLICATION_MEMBERSHIPS:,} memberships), and "
                 "reserves one producer plan and closure-equivalence pass bounded by "
-                f"{MAX_DG_LOGICAL_WORK:,} logical steps plus a worst-case "
-                f"{MAX_DG_RESULT_BYTES:,}-byte serialized result."
+                f"{MAX_DG_LOGICAL_WORK:,} logical steps."
             )
         }
     )

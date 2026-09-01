@@ -137,16 +137,13 @@ class TestCircumradiusProfile:
 
 
 class TestAdmissionBounds:
-    def test_circumradius_rejects_profile_exceeding_output_budget(self) -> None:
-        """32 points with 64-digit coordinates pass n*d=2048 but the exact
-        rational growth of C(32,3) radii exceeds the output budget; the
-        request must be rejected before execution."""
+    def test_circumradius_accepts_large_coordinates_when_work_fits(self) -> None:
         points = tuple(
             _point(str(10**63 + 4 * i + 1), str(10**63 + 4 * i + 3)) for i in range(32)
         )
         request = CircumradiusProfileRequest(points=points)
-        with pytest.raises(OperationDomainValidationError, match="output budget"):
-            circumradius_profile(request)
+        result = circumradius_profile(request)
+        assert len(result.entries) == 4_960
 
     def test_circumradius_accepts_config_within_output_budget(self) -> None:
         """A moderate configuration still runs end to end."""

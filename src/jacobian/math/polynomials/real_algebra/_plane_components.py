@@ -19,8 +19,6 @@ from jacobian._execution import (
     request_cancelled,
 )
 from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
     encode_strict_json,
     format_canonical_integer,
     sha256_digest,
@@ -38,7 +36,6 @@ from jacobian.math.polynomials.real_algebra._plane_component_bounds import (
 from jacobian.math.polynomials.real_algebra._plane_component_models import (
     MAX_PLANE_COMPONENT_COEFFICIENT_DIGITS,
     MAX_PLANE_COMPONENT_POINT_ISOLATOR_DIGITS,
-    MAX_PLANE_COMPONENT_RESULT_BYTES,
     MAX_PLANE_COMPONENT_SAMPLE_COEFFICIENT_DIGITS,
     MAX_PLANE_COMPONENT_SAMPLE_DEGREE,
     MAX_PLANE_COMPONENT_TERMS_PER_POLYNOMIAL,
@@ -291,20 +288,6 @@ def _computed_result(
         samples=request.samples,
         outcome=outcome,
     )
-    try:
-        encode_strict_json(
-            result.model_dump(mode="json"),
-            limits=CanonicalLimits(max_output_bytes=MAX_PLANE_COMPONENT_RESULT_BYTES),
-        )
-    except CanonicalizationError:
-        return _noncompletion(
-            request,
-            QepcadPlaneProcessOutcome(
-                status="RESOURCE_LIMIT",
-                reason="RESULT_OUTPUT_LIMIT",
-            ),
-            budget_seconds=budget_seconds,
-        )
     return result
 
 

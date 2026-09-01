@@ -63,6 +63,5 @@ def test_denominator_degree_controls_the_recurrence_work_envelope() -> None:
         _expand(denominator, 8_000)
 
 
-def test_minimum_result_size_rejects_before_materializing_a_large_prefix() -> None:
-    with pytest.raises(OperationDomainValidationError, match="bounded result limit"):
-        _expand((ONE,), 250_000)
+def test_large_constant_prefix_is_admitted_by_recurrence_work() -> None:
+    assert len(_expand((ONE,), 250_000).coefficients) == 250_000

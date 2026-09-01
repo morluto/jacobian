@@ -3,9 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.graphs.morphisms import _models as morphism_models
 from jacobian.math.graphs.morphisms._models import (
     GraphHomomorphism,
     GraphHomomorphismObstruction,
@@ -19,6 +17,7 @@ from jacobian.math.graphs.morphisms._tools import (
     _compute_homomorphism_check,
 )
 from jacobian.math.graphs.morphisms.operations import (
+    MAX_MORPHISM_RETAINED_LABEL_CHARACTERS,
     fixed_length_cycle,
     homomorphism_check,
     subgraph_pattern_find,
@@ -204,16 +203,7 @@ def test_homomorphism_check_orders_edge_obstructions_canonically() -> None:
     )
 
 
-def test_homomorphism_check_preflights_retained_result_bytes(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    small_limit = CanonicalLimits(max_output_bytes=400)
-    monkeypatch.setattr(morphism_models, "CanonicalLimits", lambda: small_limit)
-    monkeypatch.setattr(
-        "jacobian.math.graphs.morphisms.operations.CanonicalLimits",
-        lambda: small_limit,
-    )
-
+def test_homomorphism_check_has_no_transport_derived_ceiling() -> None:
     vertex_map = _vertex_map(
         ("a" * 100,),
         (),
@@ -221,8 +211,19 @@ def test_homomorphism_check_preflights_retained_result_bytes(
         (),
         (("a" * 100, "b" * 100),),
     )
-    with pytest.raises(OperationDomainValidationError):
-        _compute_homomorphism_check(HomomorphismCheckRequest(vertex_map=vertex_map))
+    result = _compute_homomorphism_check(
+        HomomorphismCheckRequest(vertex_map=vertex_map)
+    )
+
+    assert result.status == "HOMOMORPHISM"
+
+
+def test_homomorphism_check_rejects_unbounded_retained_labels() -> None:
+    label = "a" * (MAX_MORPHISM_RETAINED_LABEL_CHARACTERS // 6 + 1)
+    vertex_map = _vertex_map((label,), (), ("b",), (), ((label, "b"),))
+
+    with pytest.raises(OperationDomainValidationError, match="label-character"):
+        homomorphism_check(vertex_map)
 
 
 def _canonical_graph(
@@ -313,8 +314,6 @@ class TestFixedLengthCycle:
         assert r4.decision == "EXISTS"
 
     def test_rejects_length_too_large(self) -> None:
-        import pytest
-
         from jacobian.math.graphs.morphisms._models import FixedLengthCycleRequest
         from jacobian.math.graphs.morphisms._tools import (
             _compute_fixed_length_cycle,
@@ -548,9 +547,7 @@ class TestSubgraphPatternFind:
         assert MAX_CYCLE_SEARCH_PATHS > 11 * 10 * 9 * 8 * 7 * 6 * 5 * 4
         assert SubgraphPatternFindRequest(pattern=pat, host=host).pattern == pat
 
-    def test_request_admission_reserves_output_headroom_for_source_echo(self) -> None:
-        import pytest
-
+    def test_cycle_result_rejects_unbounded_retained_labels(self) -> None:
         from jacobian.math.graphs.morphisms._models import FixedLengthCycleRequest
         from jacobian.math.graphs.morphisms._tools import (
             _compute_fixed_length_cycle,
@@ -563,7 +560,7 @@ class TestSubgraphPatternFind:
         labels = [huge] + [f"w{i}" for i in range(19)]
         g = self._g(labels, [])
         request = FixedLengthCycleRequest(graph=g, length=3)
-        with pytest.raises(OperationDomainValidationError):
+        with pytest.raises(OperationDomainValidationError, match="label-character"):
             _compute_fixed_length_cycle(request)
 
     def test_negative_decision_is_structural_inside_request_domain(self) -> None:

@@ -4,13 +4,9 @@ import unicodedata
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
-    MAX_EDGE_INTERSECTION_RESULT_BYTES,
     MAX_HYPERGRAPH_INDEPENDENCE_INCIDENCES,
     MAX_HYPERGRAPH_INDEPENDENCE_VERTICES,
-    MAX_INDUCED_PROFILE_RESULT_BYTES,
     MAX_MATCHING_EDGES,
-    MAX_MATCHING_RESULT_BYTES,
-    MAX_TRANSVERSAL_RESULT_BYTES,
     MAX_TRANSVERSAL_SEARCH_WORK,
     MAX_VERTICES,
     CliqueExpansionResult,
@@ -29,13 +25,9 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     ParametersResult,
     VertexDegreesResult,
     _admit_edge_intersection_profile,
-    _edge_intersection_graph_result_bytes,
     _induced_type_profile_admission_plan,
     _InducedTypeProfileAdmissionPlan,
-    _maximum_edge_matching_result_bytes,
-    _minimum_transversal_result_bytes,
     _minimum_transversal_search_plan,
-    _validation_error,
 )
 from jacobian.math.graphs.values import (
     MAX_GRAPH_LABEL_BYTES,
@@ -168,24 +160,10 @@ def _admit_edge_intersection_graph(
         for right in range(left + 1, len(edge_ids))
         if member_sets[left] & member_sets[right]
     )
-    if (
-        _edge_intersection_graph_result_bytes(hypergraph, graph_edges)
-        > MAX_EDGE_INTERSECTION_RESULT_BYTES
-    ):
-        raise OperationDomainValidationError(
-            location=("hypergraph",),
-            code="hypergraph.edge_intersection_graph.result_bytes",
-            message=(
-                "the edge-intersection graph result would exceed the "
-                f"{MAX_EDGE_INTERSECTION_RESULT_BYTES}-byte canonical output "
-                "limit; shorten labels or reduce the edge family"
-            ),
-        )
     return graph_edges
 
 
 def _admit_maximum_edge_matching(hypergraph: FiniteHypergraph) -> None:
-    edge_ids = tuple(edge_id for edge_id, _ in hypergraph.edges)
     nonempty_edge_count = sum(bool(members) for _, members in hypergraph.edges)
     if nonempty_edge_count > MAX_MATCHING_EDGES:
         raise OperationDomainValidationError(
@@ -194,19 +172,6 @@ def _admit_maximum_edge_matching(hypergraph: FiniteHypergraph) -> None:
             message=(
                 "maximum edge matching search exceeds the "
                 f"{MAX_MATCHING_EDGES}-edge exact search bound"
-            ),
-        )
-    if (
-        _maximum_edge_matching_result_bytes(hypergraph, edge_ids)
-        > MAX_MATCHING_RESULT_BYTES
-    ):
-        raise OperationDomainValidationError(
-            location=("hypergraph",),
-            code="hypergraph.maximum_edge_matching.result_bound",
-            message=(
-                "the maximum edge matching result retains its source hypergraph "
-                f"and would exceed the {MAX_MATCHING_RESULT_BYTES}-byte "
-                "canonical output limit; shorten labels or reduce the edge family"
             ),
         )
 
@@ -555,12 +520,6 @@ def induced_type_profile(
         hypergraph,
         subset_size,
     )
-    if plan.result_bytes > MAX_INDUCED_PROFILE_RESULT_BYTES:
-        raise _validation_error(
-            "the induced type profile would exceed the "
-            f"{MAX_INDUCED_PROFILE_RESULT_BYTES}-byte canonical output limit; "
-            "shorten vertex labels or reduce the profile"
-        )
     rows = _induced_type_profile_data(plan)
     entries = tuple(
         InducedTypeProfileEntry(vertex_subset=subset, induced_edge_count=count)
@@ -609,7 +568,7 @@ def _admit_minimum_transversal(
             message="minimum transversal search does not admit empty edges",
         )
     plan = _minimum_transversal_search_plan(hypergraph)
-    active_vertices, _, _, search_work = plan
+    _, _, _, search_work = plan
     if search_work > MAX_TRANSVERSAL_SEARCH_WORK:
         raise OperationDomainValidationError(
             location=("hypergraph",),
@@ -617,19 +576,6 @@ def _admit_minimum_transversal(
             message=(
                 "minimum transversal search exceeds the "
                 f"{MAX_TRANSVERSAL_SEARCH_WORK}-check exact search bound"
-            ),
-        )
-    if (
-        _minimum_transversal_result_bytes(hypergraph, active_vertices)
-        > MAX_TRANSVERSAL_RESULT_BYTES
-    ):
-        raise OperationDomainValidationError(
-            location=("hypergraph",),
-            code="hypergraph.minimum_transversal.result_bound",
-            message=(
-                "the minimum transversal result retains its source hypergraph "
-                f"and would exceed the {MAX_TRANSVERSAL_RESULT_BYTES}-byte "
-                "canonical output limit; shorten labels or reduce the edge family"
             ),
         )
     return plan

@@ -21,15 +21,9 @@ MAX_ARITY = (1 << 53) - 1
 # The operation enumerates each admitted candidate family once.
 MAX_ENUMERATION_WORK = 20_000_000
 
-# A row containing a signed sum of at most MAX_RESULT_DIGITS digits and an
-# eight-digit multiplicity (the work preflight caps candidates below 10^8)
-# stays under 128 canonical JSON bytes. Reserving 64 KiB for the maximum
-# source, the optional window, and scalar fields keeps every admitted exact
-# result below an 8 MiB owner-local budget and the transport's 10 MiB limit.
-RESULT_BUDGET_BYTES = 8 * 1024 * 1024
-_RESULT_RESERVE_BYTES = 64 * 1024
-_ENTRY_WIRE_BYTES = 128
-MAX_SUPPORT_SIZE = (RESULT_BUDGET_BYTES - _RESULT_RESERVE_BYTES) // _ENTRY_WIRE_BYTES
+# The result materializes one row per distinct sum. Bound that allocation
+# directly rather than deriving it from one JSON representation.
+MAX_SUPPORT_SIZE = 65_000
 MAX_RESULT_DIGITS = MAX_ELEMENT_DIGITS + MAX_ARITY_DIGITS
 MAX_INTEGER_LENGTH = MAX_RESULT_DIGITS + 1
 

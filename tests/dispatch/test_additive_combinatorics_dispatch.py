@@ -22,5 +22,5 @@ def test_direct_sum_rejects_an_oversized_complete_diagnostic_before_execution() 
         )
 
     assert exc_info.value.errors()[0]["type"] == (
-        "additive_combinatorics.direct_sum_result_transport_exceeded"
+        "additive_combinatorics.direct_sum.result_cardinality_exceeded"
     )

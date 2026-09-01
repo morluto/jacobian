@@ -86,12 +86,12 @@ def test_cartesian_work_is_rejected_before_enumeration() -> None:
         compute_product_representation_profile(left, right)
 
 
-def test_worst_case_output_is_rejected_before_product_construction() -> None:
+def test_worst_case_digit_work_is_rejected_before_product_construction() -> None:
     prefix = "9" * 32_765
     left = _set(f"{prefix}{index:03d}" for index in range(150))
     right = _set(f"{prefix}{index:03d}" for index in range(3))
 
-    with pytest.raises(OperationDomainValidationError, match="output bound"):
+    with pytest.raises(OperationDomainValidationError, match="digit work bound"):
         compute_product_representation_profile(left, right)
 
 

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from jacobian.canonical import encode_strict_json
 from jacobian.math.geometry.differential._bounds import (
     build_lie_derivative_plan,
 )
@@ -60,12 +59,6 @@ def lie_derivative(
         lie_derivative=result_tensor,
     )
     require_lie_derivative_deadline(deadline, "after profile construction")
-    actual_result_bytes = len(encode_strict_json(result.model_dump(mode="json")))
-    require_lie_derivative_deadline(deadline, "after result-size serialization")
-    if actual_result_bytes > plan.result_bytes_upper_bound:
-        raise AssertionError(
-            "Lie-derivative serialized result exceeded its admitted upper bound"
-        )
     return result
 
 

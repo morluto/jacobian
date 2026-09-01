@@ -2,12 +2,7 @@
 
 from __future__ import annotations
 
-from jacobian.canonical import (
-    CanonicalLimits,
-    encode_strict_json,
-    format_canonical_integer,
-    parse_canonical_integer,
-)
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.product_representation._models import (
     ProductRepresentationResult,
@@ -23,7 +18,6 @@ MAX_PRODUCT_REPRESENTATION_PAIRS = 100_000
 # a single pair must not turn a large-but-serializable value into an
 # effectively unbounded native call.
 MAX_PRODUCT_REPRESENTATION_DIGIT_WORK = 10_000_000_000
-_RESULT_ENTRY_OVERHEAD_BYTES = 64
 
 
 def _admit_product_representation(
@@ -48,28 +42,6 @@ def _admit_product_representation(
         (len(value.lstrip("-")) for value in right.elements),
         default=1,
     )
-    source_bytes = len(
-        encode_strict_json(
-            {
-                "left": left.model_dump(mode="json"),
-                "right": right.model_dump(mode="json"),
-                "entries": [],
-                "support_cardinality": 0,
-            },
-            limits=CanonicalLimits(
-                max_output_bytes=2 * CanonicalLimits().max_output_bytes
-            ),
-        )
-    )
-    worst_case_result_bytes = source_bytes + pair_count * (
-        maximum_product_digits + _RESULT_ENTRY_OVERHEAD_BYTES
-    )
-    if worst_case_result_bytes > CanonicalLimits().max_output_bytes:
-        raise OperationDomainValidationError(
-            location=("left", "right"),
-            code="additive.product_representation_output_exceeded",
-            message="complete product representation exceeds the canonical output bound",
-        )
     # Decimal multiplication is quadratic in operand width for the native
     # integers used here.  Apply this independent work bound before parsing
     # any caller-supplied value into a Python integer.

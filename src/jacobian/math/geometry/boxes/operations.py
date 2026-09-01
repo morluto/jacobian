@@ -5,22 +5,19 @@ from __future__ import annotations
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.boxes._kernel import (
     complete_intersection_ledger,
     wire_rational,
 )
 from jacobian.math.geometry.boxes._models import (
-    MAX_BOX_UNION_RESULT_BYTES,
     MAX_BOX_UNION_RESULT_RATIONAL_DIGITS,
     MAX_INTERSECTION_CANDIDATES,
+    MAX_INTERSECTION_LEDGER_COMPONENT_DIGITS,
     BoxIntersectionLedgerEntry,
     BoxUnionVolumeResult,
 )
 from jacobian.math.geometry.boxes.values import RationalAxisAlignedBox
-
-_BOX_UNION_RESULT_FIXED_BYTES = 4_096
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -74,43 +71,6 @@ def _digit_bounds(
     )
 
 
-def _maximum_result_bytes(
-    boxes: tuple[RationalAxisAlignedBox, ...],
-    *,
-    candidate_count: int,
-    endpoint_numerator_digits: int,
-    endpoint_denominator_digits: int,
-    volume_digits: int,
-    union_digits: int,
-) -> int:
-    endpoint = {
-        "num": "-" + "9" * endpoint_numerator_digits,
-        "den": "9" * endpoint_denominator_digits,
-    }
-    interval = {"lower": endpoint, "upper": endpoint}
-    maximum_entry = {
-        "box_indices": [len(boxes) - 1] * sum(not box.is_empty for box in boxes),
-        "intersection": {
-            "dimension": boxes[0].dimension,
-            "intervals": [interval] * boxes[0].dimension,
-        },
-        "volume": {"num": "-" + "9" * volume_digits, "den": "9" * volume_digits},
-    }
-    result_header = {
-        "source": [box.model_dump(mode="json") for box in boxes],
-        "union_volume": {
-            "num": "-" + "9" * union_digits,
-            "den": "9" * union_digits,
-        },
-        "intersections": [],
-    }
-    return (
-        len(encode_strict_json(result_header))
-        + candidate_count * (len(encode_strict_json(maximum_entry)) + 1)
-        + _BOX_UNION_RESULT_FIXED_BYTES
-    )
-
-
 def admit_box_union_volume(boxes: tuple[RationalAxisAlignedBox, ...]) -> None:
     if not boxes:
         raise _validation_error(
@@ -143,19 +103,15 @@ def admit_box_union_volume(boxes: tuple[RationalAxisAlignedBox, ...]) -> None:
             "box union can exceed the exact rational intermediate bound "
             f"({result_digits} digits > {MAX_BOX_UNION_RESULT_RATIONAL_DIGITS})",
         )
-    estimated_bytes = _maximum_result_bytes(
-        boxes,
-        candidate_count=candidate_count,
-        endpoint_numerator_digits=endpoint_num,
-        endpoint_denominator_digits=endpoint_den,
-        volume_digits=volume_digits,
-        union_digits=union_digits,
+    ledger_component_digits = candidate_count * (
+        dimension * 2 * (endpoint_num + endpoint_den)
+        + 2 * volume_digits
+        + active_box_count
     )
-    if estimated_bytes > MAX_BOX_UNION_RESULT_BYTES:
+    if ledger_component_digits > MAX_INTERSECTION_LEDGER_COMPONENT_DIGITS:
         raise _validation_error(
             "box_union_exceed_complete_intersection_ledger",
-            "box union can exceed the complete intersection-ledger result "
-            f"budget ({estimated_bytes} bytes > {MAX_BOX_UNION_RESULT_BYTES})",
+            "box union exceeds the complete intersection-ledger allocation bound",
         )
 
 

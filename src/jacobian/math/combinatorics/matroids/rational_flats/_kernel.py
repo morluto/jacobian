@@ -15,17 +15,10 @@ from jacobian._execution import (
     current_request_execution,
     request_cancelled,
 )
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-    strict_json_object_size,
-)
 from jacobian.math.combinatorics.matroids.rational_flats._models import (
     MAX_RATIONAL_FLAT_CLAUSE_MEMBERSHIPS,
     MAX_RATIONAL_FLAT_GROUP_ORDER,
     MAX_RATIONAL_FLAT_INPUT_COMPONENT_DIGITS,
-    MAX_RATIONAL_FLAT_RESULT_BYTES,
     MAX_RATIONAL_FLAT_RESULT_ORBITS,
     ClauseConstrainedRationalFlatClassification,
     ClauseConstrainedRationalFlatProblem,
@@ -46,7 +39,6 @@ MAX_RATIONAL_FLAT_ORBIT_CACHE_ENTRIES = 500_000
 # A generous killable safety ceiling; mathematical work and output ledgers are
 # the authoritative admission bounds.
 _RATIONAL_FLAT_WALL_SECONDS = 3600.0
-_RESULT_ENVELOPE_RESERVE_BYTES = 16_384
 _CANONICAL_PROJECTION_PASSES = 3
 _MAX_RATIONAL_FLAT_RETENTION_BYTES = 64 * 1024 * 1024
 
@@ -66,11 +58,9 @@ class _RationalFlatPlan:
     symmetry_group_order: int
     state_orbit_limit: int
     result_orbit_limit: int
-    result_output_byte_limit: int
     search_work_limit: int
     linear_algebra_chunk_cost: int
     clause_membership_count: int
-    source_bytes: int
     representative_encoding_work: int
     ledger: _WorkLedger
 
@@ -413,7 +403,10 @@ def _admission_work_charges(
     # Reserve model projection, canonical validation, and RFC encoding both for
     # the admission size check and for final delivery of the retained source.
     source_projection_work = (
-        2 * _CANONICAL_PROJECTION_PASSES * CanonicalLimits().max_output_bytes
+        2
+        * _CANONICAL_PROJECTION_PASSES
+        * compatibility_elements
+        * max(normalization_chunks, 1)
     )
     return (
         ("admission_normalization", normalization_work + 1),
@@ -439,40 +432,6 @@ def _representative_encoding_work(
         4_096
         + candidate_count * (len(str(max(candidate_count, 1))) + 3)
         + 2 * ambient_dimension * ambient_dimension * scalar_bytes
-    )
-
-
-def _complete_result_size(
-    *,
-    source_bytes: int,
-    symmetry_group_order: int,
-    representative_count: int,
-    representative_bytes: int,
-    solution_flat_count: int,
-) -> int:
-    """Return the exact canonical byte size from accumulated field-value sizes."""
-
-    representatives_size = 2 + max(representative_count - 1, 0) + representative_bytes
-    outcome_size = strict_json_object_size(
-        (
-            ("status", len(encode_strict_json("COMPLETE_EXACT"))),
-            ("representatives", representatives_size),
-            ("orbit_count", len(encode_strict_json(representative_count))),
-            (
-                "solution_flat_count",
-                len(encode_strict_json(solution_flat_count)),
-            ),
-        )
-    )
-    return strict_json_object_size(
-        (
-            ("problem", source_bytes),
-            (
-                "symmetry_group_order",
-                len(encode_strict_json(symmetry_group_order)),
-            ),
-            ("outcome", outcome_size),
-        )
     )
 
 
@@ -524,18 +483,6 @@ def _admit_problem(problem: ClauseConstrainedRationalFlatProblem) -> _RationalFl
     _require_execution_active(deadline, "before finite symmetry recognition")
     group_order = _paired_group_order(problem, deadline=deadline)
     _require_execution_active(deadline, "after finite symmetry recognition")
-    try:
-        source_bytes = len(encode_strict_json(problem.model_dump(mode="json")))
-    except CanonicalizationError:
-        raise _validation_error(
-            "result_size_bound",
-            "the retained rational-flat problem exceeds the canonical output envelope",
-        ) from None
-    if source_bytes + _RESULT_ENVELOPE_RESERVE_BYTES > (MAX_RATIONAL_FLAT_RESULT_BYTES):
-        raise _validation_error(
-            "result_size_bound",
-            "the retained rational-flat problem leaves no room for a result",
-        )
     clause_membership_count = sum(len(clause) for clause in problem.clauses)
     return _RationalFlatPlan(
         deadline=deadline,
@@ -549,11 +496,9 @@ def _admit_problem(problem: ClauseConstrainedRationalFlatProblem) -> _RationalFl
         # before it executes, so it does not rely on a coarse per-state proxy.
         state_orbit_limit=MAX_RATIONAL_FLAT_SEARCH_STATE_ORBITS,
         result_orbit_limit=MAX_RATIONAL_FLAT_RESULT_ORBITS,
-        result_output_byte_limit=MAX_RATIONAL_FLAT_RESULT_BYTES,
         search_work_limit=MAX_RATIONAL_FLAT_SEARCH_WORK,
         linear_algebra_chunk_cost=linear_algebra_chunk_cost,
         clause_membership_count=clause_membership_count,
-        source_bytes=source_bytes,
         representative_encoding_work=_representative_encoding_work(
             problem,
             minor_digits=minor_digits,
@@ -932,7 +877,7 @@ def _search_satisfying_states(
                     > _MAX_RATIONAL_FLAT_RETENTION_BYTES
                 ):
                     raise _SearchStoppedError(
-                        "RESULT_OUTPUT_LIMIT",
+                        "RESULT_RETENTION_LIMIT",
                         visited_count=ledger.state_orbit_count,
                         consumed_work=ledger.consumed,
                     )
@@ -1004,7 +949,6 @@ def _representatives_from_states(
     canonicalizer: _SubsetOrbitCanonicalizer,
 ) -> tuple[tuple[RationalFlatOrbitRepresentative, ...], int]:
     representatives: list[RationalFlatOrbitRepresentative] = []
-    representative_bytes = 0
     solution_flat_count = 0
     ledger.charge(
         "result_construction",
@@ -1045,44 +989,13 @@ def _representatives_from_states(
             orbit_size=orbit_size,
             stabilizer_order=plan.symmetry_group_order // orbit_size,
         )
-        # Reserve model projection, canonical validation, and RFC encoding both
-        # for this exact-size measurement and for final dispatch delivery.
+        # Charge projection work from the admitted representative shape.
         ledger.charge(
             "result_encoding",
             2 * _CANONICAL_PROJECTION_PASSES * plan.representative_encoding_work,
         )
-        try:
-            encoded_representative_size = len(
-                encode_strict_json(representative.model_dump(mode="json"))
-            )
-        except CanonicalizationError:
-            raise _SearchStoppedError(
-                "RESULT_OUTPUT_LIMIT",
-                visited_count=ledger.state_orbit_count,
-                consumed_work=ledger.consumed,
-            ) from None
-        projected_count = len(representatives) + 1
-        projected_representative_bytes = (
-            representative_bytes + encoded_representative_size
-        )
         projected_solution_count = solution_flat_count + orbit_size
-        if (
-            _complete_result_size(
-                source_bytes=plan.source_bytes,
-                symmetry_group_order=plan.symmetry_group_order,
-                representative_count=projected_count,
-                representative_bytes=projected_representative_bytes,
-                solution_flat_count=projected_solution_count,
-            )
-            > plan.result_output_byte_limit
-        ):
-            raise _SearchStoppedError(
-                "RESULT_OUTPUT_LIMIT",
-                visited_count=ledger.state_orbit_count,
-                consumed_work=ledger.consumed,
-            )
         representatives.append(representative)
-        representative_bytes = projected_representative_bytes
         solution_flat_count = projected_solution_count
     return tuple(representatives), solution_flat_count
 
@@ -1102,7 +1015,6 @@ def _incomplete_result(
         explored_state_orbit_count=visited_count,
         state_orbit_limit=plan.state_orbit_limit,
         result_orbit_limit=plan.result_orbit_limit,
-        result_output_byte_limit=plan.result_output_byte_limit,
         consumed_search_work=consumed_search_work,
         search_work_limit=plan.search_work_limit,
     )

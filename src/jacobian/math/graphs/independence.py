@@ -7,12 +7,8 @@ from typing import Literal, Self
 from pydantic import Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.graphs.values import (
-    SimpleUndirectedGraph,
-    simple_undirected_graph_wire_bytes,
-)
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 IndependenceSearchStatus = Literal["EXACT", "UNKNOWN"]
 IndependenceTermination = Literal[
@@ -36,31 +32,6 @@ class IndependenceNumberBudget(StrictModel):
 # the identical output limit.  Admission reserves this much for the fixed
 # scalar fields, the bounded detail string, and the result envelope beyond
 # the echoed graph and worst-case witness labels.
-_RESULT_ENVELOPE_RESERVE_BYTES = 2_048
-
-
-def _label_wire_bytes(graph: SimpleUndirectedGraph) -> int:
-    return sum(len(encode_strict_json(label) + b",") for label in graph.vertices)
-
-
-def _require_output_headroom(source_bytes: int, witness_label_bytes: int) -> None:
-    estimated_result_bytes = (
-        source_bytes + witness_label_bytes + _RESULT_ENVELOPE_RESERVE_BYTES
-    )
-    output_limit = CanonicalLimits().max_output_bytes
-    if estimated_result_bytes > output_limit:
-        raise OperationDomainValidationError(
-            location=("graph",),
-            code="graph.independence_number.output_budget",
-            message=(
-                "the independence-number result retains its source graph and "
-                "witness labels and would exceed the "
-                f"{output_limit}-byte canonical output limit; "
-                "shorten vertex labels or shrink the graph"
-            ),
-        )
-
-
 class IndependenceNumberRequest(StrictModel):
     """One finite simple graph and its operation-owned search budget."""
 
@@ -96,9 +67,6 @@ def _require_admitted_request(
     resource_budget: IndependenceNumberBudget,
 ) -> None:
     _require_supported_order(graph, resource_budget)
-    _require_output_headroom(
-        simple_undirected_graph_wire_bytes(graph), _label_wire_bytes(graph)
-    )
 
 
 class IndependenceNumberResult(StrictModel):

@@ -21,9 +21,7 @@ def _compute(
     request: CyclicRationalRankKernelProfileRequest,
 ) -> CyclicRationalRankKernelProfile:
     try:
-        return cyclic_rational_rank_kernel_profile(
-            request.symbol, enforce_transport_limit=True
-        )
+        return cyclic_rational_rank_kernel_profile(request.symbol)
     except CyclicRankKernelAdmissionError as error:
         raise OperationDomainValidationError(
             location=("symbol",),

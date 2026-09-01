@@ -2,24 +2,22 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from typing import Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.canonical import encode_strict_json, strict_json_object_size
 from jacobian.math._labels import OpaqueLabel
 
 MAX_CATEGORY_OBJECTS = 1_024
 MAX_CATEGORY_MORPHISMS = 4_096
 MAX_CATEGORY_COMPOSABLE_PAIRS = 50_000
 MAX_CATEGORY_COMPOSABLE_TRIPLES = 250_000
-MAX_CATEGORY_VALUE_BYTES = 4 * 1024 * 1024
+MAX_CATEGORY_IDENTIFIER_OCCURRENCES = 524_288
 MAX_CATEGORY_IDENTIFIER_DEPTH = 8
 MAX_CATEGORY_IDENTIFIER_LEAVES = 256
-MAX_CATEGORY_IDENTIFIER_BYTES = 4_096
+MAX_CATEGORY_IDENTIFIER_CHARACTERS = 4_096
 
 
 type CategoryIdentifier = OpaqueLabel | tuple[CategoryIdentifier, CategoryIdentifier]
@@ -41,11 +39,11 @@ def _identifier_sort_key(identifier: CategoryIdentifier) -> tuple[object, ...]:
     )
 
 
-def _identifier_wire_size(identifier: CategoryIdentifier) -> int:
+def _identifier_character_count(identifier: CategoryIdentifier) -> int:
     if isinstance(identifier, str):
-        return len(encode_strict_json(identifier))
-    return (
-        3 + _identifier_wire_size(identifier[0]) + _identifier_wire_size(identifier[1])
+        return len(identifier)
+    return _identifier_character_count(identifier[0]) + _identifier_character_count(
+        identifier[1]
     )
 
 
@@ -71,15 +69,11 @@ def _require_identifier_budget(identifier: CategoryIdentifier) -> None:
             "identifier_leaf_budget",
             "category identifier exceeds the bounded atomic-leaf budget",
         )
-    if _identifier_wire_size(identifier) > MAX_CATEGORY_IDENTIFIER_BYTES:
+    if _identifier_character_count(identifier) > MAX_CATEGORY_IDENTIFIER_CHARACTERS:
         raise _category_error(
-            "identifier_wire_size_budget",
-            "category identifier exceeds the bounded wire-size budget",
+            "identifier_character_budget",
+            "category identifier exceeds the bounded character budget",
         )
-
-
-def _json_array_size(item_sizes: tuple[int, ...]) -> int:
-    return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
 
 
 class MorphismSpec(StrictModel):
@@ -258,70 +252,6 @@ def _check_associativity(
                     raise _category_error("associativity", "associativity violated")
 
 
-def _morphism_wire_size(
-    morphism: MorphismSpec,
-    identifier_sizes: Mapping[CategoryIdentifier, int],
-) -> int:
-    return strict_json_object_size(
-        (
-            ("morphism_id", identifier_sizes[morphism.morphism_id]),
-            ("source", identifier_sizes[morphism.source]),
-            ("target", identifier_sizes[morphism.target]),
-        )
-    )
-
-
-def _category_wire_size(category: FiniteCategory) -> int:
-    identifiers = set(category.objects) | {
-        morphism.morphism_id for morphism in category.morphisms
-    }
-    identifier_sizes = {
-        identifier: _identifier_wire_size(identifier) for identifier in identifiers
-    }
-    return strict_json_object_size(
-        (
-            (
-                "objects",
-                _json_array_size(
-                    tuple(identifier_sizes[item] for item in category.objects)
-                ),
-            ),
-            (
-                "morphisms",
-                _json_array_size(
-                    tuple(
-                        _morphism_wire_size(item, identifier_sizes)
-                        for item in category.morphisms
-                    )
-                ),
-            ),
-            (
-                "identities",
-                _json_array_size(
-                    tuple(
-                        _json_array_size(
-                            (
-                                identifier_sizes[object_id],
-                                identifier_sizes[morphism_id],
-                            )
-                        )
-                        for object_id, morphism_id in category.identities
-                    )
-                ),
-            ),
-            (
-                "composition",
-                _json_array_size(
-                    tuple(
-                        _json_array_size(tuple(identifier_sizes[item] for item in row))
-                        for row in category.composition
-                    )
-                ),
-            ),
-        )
-    )
-
-
 class FiniteCategory(StrictModel):
     """A canonical finite category presented by complete extensional tables.
 
@@ -396,10 +326,11 @@ class FiniteCategory(StrictModel):
         composition_table = _composition_table(morphisms, by_id, composition)
         _check_unit_laws(morphisms, identity_map, composition_table)
         _check_associativity(morphisms, composition_table)
-        if _category_wire_size(self) > MAX_CATEGORY_VALUE_BYTES:
+        identifier_occurrences = sum(_identifier_shape(item)[1] for item in identifiers)
+        if identifier_occurrences > MAX_CATEGORY_IDENTIFIER_OCCURRENCES:
             raise _category_error(
-                "wire_size_budget",
-                "category exceeds the bounded canonical wire-size budget",
+                "identifier_occurrence_budget",
+                "category exceeds the bounded identifier-occurrence budget",
             )
         return self
 
@@ -461,12 +392,12 @@ class FiniteCategoryProduct(StrictModel):
 __all__ = [
     "MAX_CATEGORY_COMPOSABLE_PAIRS",
     "MAX_CATEGORY_COMPOSABLE_TRIPLES",
-    "MAX_CATEGORY_IDENTIFIER_BYTES",
+    "MAX_CATEGORY_IDENTIFIER_CHARACTERS",
     "MAX_CATEGORY_IDENTIFIER_DEPTH",
     "MAX_CATEGORY_IDENTIFIER_LEAVES",
+    "MAX_CATEGORY_IDENTIFIER_OCCURRENCES",
     "MAX_CATEGORY_MORPHISMS",
     "MAX_CATEGORY_OBJECTS",
-    "MAX_CATEGORY_VALUE_BYTES",
     "CategoryIdentifier",
     "FiniteCategory",
     "FiniteCategoryProduct",

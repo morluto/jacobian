@@ -143,8 +143,8 @@ def test_rejects_interval_that_exceeds_segmented_sieve_work_budget() -> None:
         compute_prime_shift_profile(request)
 
 
-def test_rejects_profile_that_exceeds_canonical_output_budget() -> None:
-    with pytest.raises(ValueError, match="canonical output budget"):
+def test_rejects_profile_that_exceeds_materialized_row_bound() -> None:
+    with pytest.raises(ValueError, match="interval width"):
         compute_prime_shift_profile(
-            PrimeShiftProfileRequest(lower_bound=9_000_001, upper_bound=10_000_000)
+            PrimeShiftProfileRequest(lower_bound=9_000_000, upper_bound=10_000_000)
         )

@@ -172,9 +172,8 @@ def test_rejects_large_source_exceeding_budget() -> None:
         enumerate_friable_family(10**30, 7)
 
 
-def test_generated_regime_rejects_oversized_serialized_family() -> None:
-    with pytest.raises(ValueError, match="serialized result budget"):
-        plan_friable_family(10**230, 3)
+def test_generated_regime_depends_on_work_not_serialization() -> None:
+    assert plan_friable_family(10**230, 3) == ("GENERATED", (2, 3))
 
 
 def test_request_rejects_negative_source() -> None:

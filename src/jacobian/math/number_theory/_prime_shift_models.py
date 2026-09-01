@@ -9,42 +9,10 @@ from typing import Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.canonical import (
-    CanonicalLimits,
-    encode_strict_json,
-    strict_json_object_size,
-)
 
 MAX_SHIFT_INTERVAL_WIDTH: int = 1_000_000
-MAX_SHIFT_RESULT_BYTES: int = CanonicalLimits().max_output_bytes
 MAX_SHIFT_WORK: int = 100_000_000
 _MAX_SHIFT_MARK_WORK_MULTIPLIER: int = 16
-
-
-def _profile_result_byte_bound(lower_bound: int, upper_bound: int) -> int:
-    """Bound the complete canonical JSON result before materializing rows.
-
-    Each row contains one interval value and one count. A count cannot exceed
-    the number of powers of two no larger than ``upper_bound - 2`` because a
-    prime summand is at least two. Charging every row at the widest possible
-    value and count is conservative while preserving the exact result shape.
-    """
-    width = upper_bound - lower_bound + 1
-    maximum_count = (upper_bound - 2).bit_length() if upper_bound >= 3 else 0
-    row_bytes = strict_json_object_size(
-        (
-            ("n", len(encode_strict_json(upper_bound))),
-            ("representation_count", len(encode_strict_json(maximum_count))),
-        )
-    )
-    rows_bytes = 2 + max(width - 1, 0) + width * row_bytes
-    return strict_json_object_size(
-        (
-            ("lower_bound", len(encode_strict_json(lower_bound))),
-            ("upper_bound", len(encode_strict_json(upper_bound))),
-            ("rows", rows_bytes),
-        )
-    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,7 +24,6 @@ class _PrimeShiftProfileExecutionPlan:
     base_limit: int
     candidate_intervals: tuple[tuple[int, int, int], ...]
     candidate_work: int
-    result_bytes: int
 
 
 def _validate_prime_shift_interval(lower_bound: int, upper_bound: int) -> None:
@@ -91,10 +58,6 @@ def require_prime_shift_profile_admission(
     _validate_prime_shift_interval(lower_bound, upper_bound)
     if upper_bound - lower_bound + 1 > MAX_SHIFT_INTERVAL_WIDTH:
         raise ValueError("interval width exceeds maximum supported width")
-    result_bytes = _profile_result_byte_bound(lower_bound, upper_bound)
-    if result_bytes > MAX_SHIFT_RESULT_BYTES:
-        raise ValueError("interval result exceeds the canonical output budget")
-
     maximum_power = upper_bound - 2
     power_count = maximum_power.bit_length() if maximum_power >= 1 else 0
     base_work_units = power_count + 1
@@ -127,7 +90,6 @@ def require_prime_shift_profile_admission(
         base_limit=base_limit,
         candidate_intervals=tuple(candidate_intervals),
         candidate_work=candidate_work,
-        result_bytes=result_bytes,
     )
 
 
@@ -189,7 +151,6 @@ class PrimeShiftProfileResult(StrictModel):
 
 __all__ = [
     "MAX_SHIFT_INTERVAL_WIDTH",
-    "MAX_SHIFT_RESULT_BYTES",
     "MAX_SHIFT_WORK",
     "PrimeShiftProfileRequest",
     "PrimeShiftProfileResult",

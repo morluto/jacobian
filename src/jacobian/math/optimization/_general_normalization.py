@@ -12,7 +12,6 @@ from jacobian.math.optimization._general_models import (
     GeneralFormRationalLinearProgram,
 )
 from jacobian.math.optimization._models import (
-    MAX_LINEAR_PROGRAM_RESULT_BYTES,
     MAX_RATIONAL_DIGITS,
     StandardFormRationalLinearProgram,
     _result_digit_bound,
@@ -252,46 +251,16 @@ def _mapped_certificate_digit_bound(normalization: GeneralLinearNormalization) -
     )
 
 
-def estimated_mapped_result_bytes(normalization: GeneralLinearNormalization) -> int:
-    """Upper-bound the wired bytes of any outcome this program can return."""
-
-    point_unit = 2 * _mapped_point_digit_bound(normalization) + 32
-    residual_unit = 2 * _mapped_residual_digit_bound(normalization) + 32
-    certificate_unit = 2 * _mapped_certificate_digit_bound(normalization) + 32
-    variables = len(normalization.offsets)
-    rows = len(normalization.source_rows)
-    # Each status carries its full replayable block: optimal adds the primal
-    # residual sums plus one certificate family, unbounded swaps duals for the
-    # recession ray, infeasible carries only Farkas coordinates, and unknown
-    # carries no values at all.  Primal evidence always wires within its own
-    # bound, so it anchors the guaranteed typed outcome.
-    optimal_bytes = (
-        (2 * rows + 1) * residual_unit
-        + 3 * variables * point_unit
-        + (3 * variables + rows + 1) * certificate_unit
-    )
-    unbounded_bytes = (2 * rows + 1) * residual_unit + 4 * variables * point_unit
-    infeasible_bytes = (2 * variables + rows) * certificate_unit
-    return 4096 + max(optimal_bytes, unbounded_bytes, infeasible_bytes)
-
-
 def admit_general_normalization(
     program: GeneralFormRationalLinearProgram,
 ) -> GeneralLinearNormalization:
     """Preflight the whole standard expansion and the mapped public result."""
 
-    normalization = normalize_general_program(program)
-    if estimated_mapped_result_bytes(normalization) > MAX_LINEAR_PROGRAM_RESULT_BYTES:
-        raise ValueError(
-            "general linear-program mapped result can exceed the "
-            f"{MAX_LINEAR_PROGRAM_RESULT_BYTES}-byte result bound"
-        )
-    return normalization
+    return normalize_general_program(program)
 
 
 __all__ = [
     "GeneralLinearNormalization",
     "admit_general_normalization",
-    "estimated_mapped_result_bytes",
     "normalize_general_program",
 ]

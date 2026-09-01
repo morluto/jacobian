@@ -10,7 +10,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._digest import Sha256Digest
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits, encode_strict_json, sha256_digest
+from jacobian.canonical import encode_strict_json, sha256_digest
 from jacobian.math.analysis.intervals import ClosedRationalInterval, RationalBox
 from jacobian.math.matrices.values import RationalMatrix
 from jacobian.math.polynomials.maps._models import VariablePoint
@@ -26,7 +26,6 @@ MAX_ROOT_BOX_ENCLOSURE_DIGITS = 2_048
 MAX_ROOT_BOX_INTERMEDIATE_DIGITS = 65_536
 MAX_ROOT_BOX_RESULT_COMPONENT_DIGITS = 32_768
 MAX_ROOT_BOX_SOURCE_BYTES = 512 * 1_024
-MAX_ROOT_BOX_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 ROOT_BOX_ADMISSION_SUMMARY = (
     f"Bounds: square systems through dimension {MAX_ROOT_BOX_DIMENSION}; "
@@ -36,8 +35,7 @@ ROOT_BOX_ADMISSION_SUMMARY = (
     f"endpoint components; {MAX_ROOT_BOX_POINT_VALUE_DIGITS}-digit admitted "
     f"point values; {MAX_ROOT_BOX_ENCLOSURE_DIGITS:,}-digit scalar interval "
     f"enclosures; {MAX_ROOT_BOX_INTERMEDIATE_DIGITS:,}-digit interval-matrix "
-    f"intermediates; {MAX_ROOT_BOX_SOURCE_BYTES:,}-byte retained source; and "
-    f"{MAX_ROOT_BOX_RESULT_BYTES:,}-byte canonical result."
+    f"intermediates; and a {MAX_ROOT_BOX_SOURCE_BYTES:,}-byte digest-bound source."
 )
 
 
@@ -354,7 +352,6 @@ __all__ = [
     "MAX_ROOT_BOX_ENDPOINT_DIGITS",
     "MAX_ROOT_BOX_INTERMEDIATE_DIGITS",
     "MAX_ROOT_BOX_POINT_VALUE_DIGITS",
-    "MAX_ROOT_BOX_RESULT_BYTES",
     "MAX_ROOT_BOX_RESULT_COMPONENT_DIGITS",
     "MAX_ROOT_BOX_SOURCE_BYTES",
     "MAX_ROOT_BOX_TOTAL_DEGREE",

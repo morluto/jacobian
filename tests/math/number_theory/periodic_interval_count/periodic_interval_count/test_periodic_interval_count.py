@@ -77,9 +77,9 @@ def test_large_period_complement_uses_scalar_rank() -> None:
     assert result.count == "4"
 
 
-def test_endpoint_pair_must_fit_the_result_envelope() -> None:
+def test_endpoint_pair_must_fit_the_digit_bound() -> None:
     source = _source(1, [0])
     endpoint = 10**3_600_000
 
-    with pytest.raises(OperationDomainValidationError, match="output budget"):
+    with pytest.raises(OperationDomainValidationError, match="digit bound"):
         compute_periodic_interval_count(source, -endpoint, endpoint)

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.transforms._path_profile_models import (
     MAX_PATH_PROFILE_SEARCH_WORK,
@@ -12,7 +11,6 @@ from jacobian.math.graphs.transforms._path_profile_models import (
     PathProfileRow,
     _canonical_max_degree,
     _path_prefix_work_bound,
-    _path_profile_result_bytes,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -106,16 +104,6 @@ def _admit_path_profile(graph: SimpleUndirectedGraph, path_length: int) -> None:
             message=(
                 "fixed-length simple path profile search exceeds the "
                 f"{MAX_PATH_PROFILE_SEARCH_WORK}-node work budget"
-            ),
-        )
-    output_limit = CanonicalLimits().max_output_bytes
-    if _path_profile_result_bytes(graph, path_length) > output_limit:
-        raise OperationDomainValidationError(
-            location=("graph", "path_length"),
-            code="graph.path_profile_result_exceeds_output_budget",
-            message=(
-                "fixed-length simple path profile result exceeds the canonical "
-                f"{output_limit}-byte output budget"
             ),
         )
 

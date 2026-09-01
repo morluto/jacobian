@@ -16,7 +16,6 @@ from jacobian.math.combinatorics.additive.values import (
 
 MAX_SEQUENCE_LENGTH = 10_000
 MAX_MODULUS_DIGITS = 100
-MAX_RESULT_BYTES = 10 * 1024 * 1024
 
 BoundedModulus = Annotated[
     CanonicalInteger,
@@ -64,7 +63,6 @@ class CyclicPrefixSumResidueProfileResult(StrictModel):
 
 __all__ = [
     "MAX_MODULUS_DIGITS",
-    "MAX_RESULT_BYTES",
     "MAX_SEQUENCE_LENGTH",
     "BoundedModulus",
     "CyclicPrefixSumResidueProfileRequest",

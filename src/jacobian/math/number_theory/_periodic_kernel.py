@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from typing import Literal
 
 from jacobian.canonical import (
-    encode_strict_json,
     format_canonical_integer,
     parse_canonical_integer,
 )
@@ -18,9 +17,7 @@ from jacobian.math.number_theory._periodic_models import (
     MAX_PERIOD_LIFT_WORK,
     MAX_PERIOD_SCAN,
     MAX_PERIODIC_INTEGER_DIGITS,
-    MAX_PERIODIC_RESULT_BYTES,
     MAX_SPARSE_LIFTED_ROWS,
-    PERIODIC_PROFILE_RESULT_ENVELOPE_BYTES,
     PeriodicCongruenceUnionSource,
 )
 
@@ -139,7 +136,6 @@ def require_materializable_periodic_source(
                 "materialized full union exceeds the conservative "
                 f"{MAX_MATERIALIZED_RESIDUES}-residue output bound"
             )
-        result_rows = 0 if source.complement else plan.common_period
     else:
         if source.complement:
             if plan.common_period > MAX_MATERIALIZED_RESIDUES:
@@ -148,7 +144,6 @@ def require_materializable_periodic_source(
                     f"{MAX_MATERIALIZED_RESIDUES}-residue output bound"
                 )
             materialization_work = plan.common_period + plan.lift_work
-            result_rows = plan.common_period
         else:
             if plan.lift_work > MAX_MATERIALIZED_RESIDUES:
                 raise ValueError(
@@ -156,23 +151,10 @@ def require_materializable_periodic_source(
                     f"{MAX_MATERIALIZED_RESIDUES}-residue output bound"
                 )
             materialization_work = plan.lift_work
-            result_rows = min(plan.common_period, plan.lift_work)
         if materialization_work > MAX_PERIOD_LIFT_WORK:
             raise ValueError(
                 "materialized profile exceeds the bounded one-period lift work"
             )
-    period_digits = len(format_canonical_integer(plan.common_period - 1))
-    source_bytes = len(encode_strict_json(source.model_dump(mode="json")))
-    estimated_result_bytes = (
-        source_bytes
-        + result_rows * (period_digits + 3)
-        + PERIODIC_PROFILE_RESULT_ENVELOPE_BYTES
-    )
-    if estimated_result_bytes > MAX_PERIODIC_RESULT_BYTES:
-        raise ValueError(
-            "materialized profile would exceed the canonical output budget of "
-            f"{MAX_PERIODIC_RESULT_BYTES} bytes"
-        )
     return plan
 
 
@@ -340,7 +322,6 @@ def materialize_periodic_union(
 __all__ = [
     "MAX_INTERSECTION_MERGES",
     "MAX_INTERSECTION_STATES",
-    "MAX_PERIODIC_RESULT_BYTES",
     "MAX_PERIOD_LIFT_WORK",
     "MAX_PERIOD_SCAN",
     "MAX_SPARSE_LIFTED_ROWS",

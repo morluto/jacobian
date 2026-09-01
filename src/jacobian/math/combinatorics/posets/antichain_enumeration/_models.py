@@ -14,8 +14,6 @@ from jacobian.math.combinatorics.posets.core._models import FinitePoset
 
 MAX_ELEMENTS = 24
 MAX_ANTICHAINS = 50_000
-_MAX_RESULT_BYTES = 10 * 1024 * 1024
-_MAX_LABEL_WIRE_BYTES = 35
 
 
 def require_antichain_enumeration_envelope(
@@ -38,9 +36,6 @@ def require_antichain_enumeration_envelope(
         raise ValueError(
             f"antichain enumeration exceeds the {MAX_ANTICHAINS}-candidate bound"
         )
-    worst_row_bytes = 3 + upper * _MAX_LABEL_WIRE_BYTES
-    if 256 + candidates * worst_row_bytes > _MAX_RESULT_BYTES:
-        raise ValueError("complete antichain family exceeds the canonical output bound")
     return candidates
 
 

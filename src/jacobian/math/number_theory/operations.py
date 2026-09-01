@@ -15,14 +15,12 @@ from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.number_theory._binomial_valuation_models import (
-    _MAX_BINOMIAL_ROWS_FROM_OUTPUT,
     _MAX_SAFE_JSON_INTEGER,
     MAX_BINOMIAL_DIGIT_WORK,
-    MAX_BINOMIAL_PROFILE_RESULT_BYTES,
+    MAX_BINOMIAL_PROFILE_ROWS,
     BinomialValuationProfileResult,
     BinomialValuationProfileRow,
     _base_digit_count,
-    _binomial_result_upper_bound_bytes,
 )
 from jacobian.math.number_theory._contiguous_sum_admission import (
     require_contiguous_sum_profile_admission,
@@ -102,12 +100,11 @@ from jacobian.math.number_theory._preimage_models import (
     PAdicIntervalProfileRow,
 )
 from jacobian.math.number_theory._prime_coverage_models import (
-    MAX_COVERAGE_RESULT_BYTES,
+    MAX_COVERAGE_ROWS,
     MAX_COVERAGE_UPPER,
     MAX_COVERAGE_WORK,
     PrimeCoverageProfileResult,
     PrimeCoverageProfileRow,
-    _coverage_result_upper_bound_bytes,
     _coverage_work_upper_bound,
 )
 from jacobian.math.number_theory._prime_models import PrimorialResult
@@ -765,13 +762,14 @@ def binomial_valuation_profile(n: int, prime: int) -> BinomialValuationProfileRe
             code="number_theory.binomial_profile_prime_invalid",
             message="prime must be an integer between 2 and the safe JSON bound",
         )
-    if n + 1 > _MAX_BINOMIAL_ROWS_FROM_OUTPUT or (
-        _binomial_result_upper_bound_bytes(n, prime) > MAX_BINOMIAL_PROFILE_RESULT_BYTES
-    ):
+    if n + 1 > MAX_BINOMIAL_PROFILE_ROWS:
         raise OperationDomainValidationError(
             location=("n",),
-            code="number_theory.binomial_profile_output_exceeded",
-            message="valuation profile exceeds the canonical output budget",
+            code="number_theory.binomial_profile_rows_exceeded",
+            message=(
+                "valuation profile exceeds the materialized row bound of "
+                f"{MAX_BINOMIAL_PROFILE_ROWS}"
+            ),
         )
     digit_work = (n + 1) * max(1, _base_digit_count(n, prime))
     if digit_work > MAX_BINOMIAL_DIGIT_WORK:
@@ -976,15 +974,15 @@ def prime_coverage_profile(
             code="number_theory.prime_coverage_interval_reversed",
             message="upper_bound must be >= lower_bound",
         )
-    if (
-        _coverage_result_upper_bound_bytes(lower_bound, upper_bound)
-        > MAX_COVERAGE_RESULT_BYTES
-    ):
+    width = upper_bound - lower_bound + 1
+    if width > MAX_COVERAGE_ROWS:
         raise OperationDomainValidationError(
             location=("lower_bound", "upper_bound"),
-            code="number_theory.prime_coverage_output_exceeded",
-            message="interval result exceeds the canonical output budget of "
-            f"{MAX_COVERAGE_RESULT_BYTES} bytes",
+            code="number_theory.prime_coverage_rows_exceeded",
+            message=(
+                "interval exceeds the materialized prime-coverage row bound of "
+                f"{MAX_COVERAGE_ROWS}"
+            ),
         )
     work = _coverage_work_upper_bound(lower_bound, upper_bound)
     if work > MAX_COVERAGE_WORK:

@@ -6,6 +6,7 @@ import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.cycle_length_profile.operations import (
+    MAX_CYCLE_PROFILE_RETAINED_LABEL_CHARACTERS,
     compute_cycle_length_profile,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -75,13 +76,23 @@ def test_large_single_cycle_remains_admitted() -> None:
     assert tuple(r.cycle_length for r in result.rows) == (20,)
 
 
-def test_wide_cycle_labels_are_rejected_before_search() -> None:
+def test_wide_cycle_labels_do_not_define_native_admission() -> None:
     labels = tuple(f"{prefix}{'x' * 1_000_000}" for prefix in ("a", "b", "c"))
     graph = _graph(
         labels, [[labels[0], labels[1]], [labels[1], labels[2]], [labels[0], labels[2]]]
     )
 
-    with pytest.raises(
-        OperationDomainValidationError, match="exceeds the canonical output bound"
-    ):
+    result = compute_cycle_length_profile(graph)
+    assert result.rows[0].cycle_length == 3
+
+
+def test_cycle_profile_rejects_unbounded_retained_labels() -> None:
+    label_width = MAX_CYCLE_PROFILE_RETAINED_LABEL_CHARACTERS // 12 + 1
+    labels = tuple(f"{prefix}{'x' * label_width}" for prefix in ("a", "b", "c"))
+    graph = _graph(
+        labels,
+        [[labels[0], labels[1]], [labels[1], labels[2]], [labels[0], labels[2]]],
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="label-character"):
         compute_cycle_length_profile(graph)

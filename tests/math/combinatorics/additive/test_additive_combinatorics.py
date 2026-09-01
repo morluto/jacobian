@@ -3,11 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import (
-    CanonicalLimits,
-    encode_strict_json,
-    parse_canonical_integer,
-)
+from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive._models import (
     AdditiveEnergyRequest,
@@ -19,7 +15,6 @@ from jacobian.math.combinatorics.additive._models import (
     RepresentationProfileResult,
     SumsetCardinalityRequest,
     SumsetCardinalityResult,
-    _direct_sum_predicate_result_upper_bound,
 )
 from jacobian.math.combinatorics.additive.operations import (
     additive_energy,
@@ -232,10 +227,7 @@ class TestSumsetCardinality:
         right = FiniteIntegerSet(elements=tuple(str(value) for value in range(256)))
 
         result = sumset_cardinality(left, right)
-        encoded = encode_strict_json(result.model_dump(mode="json"))
-
         assert result.cardinality == 256
-        assert len(encoded) <= CanonicalLimits().max_output_bytes
         assert result.support.elements[0] == "1" + "0" * 24_999
 
     def test_result_rejects_cardinality_that_disagrees_with_canonical_support(
@@ -295,9 +287,7 @@ class TestDirectSumPredicate:
         assert result.holds is False
         assert result.missing == tuple(str(value) for value in range(12))
 
-    def test_preflights_complete_missing_diagnostic_at_transport_boundary(self) -> None:
-        """The nearly 10 MiB empty-source result remains serializable."""
-
+    def test_admits_complete_missing_diagnostic_at_cardinality_boundary(self) -> None:
         modulus = 1_048_576
         request = DirectSumPredicateRequest(
             modulus=modulus,
@@ -305,19 +295,9 @@ class TestDirectSumPredicate:
             right=FiniteIntegerSet(elements=()),
         )
 
-        payload = {
-            "holds": False,
-            "modulus": modulus,
-            "representatives": [],
-            "collisions": [],
-            "missing": [str(value) for value in range(modulus)],
-        }
-        encoded = encode_strict_json(payload)
-        assert len(encoded) <= CanonicalLimits().max_output_bytes
-        assert _direct_sum_predicate_result_upper_bound(modulus, 0) >= len(encoded)
         assert request.modulus == modulus
 
-    def test_rejects_oversized_missing_diagnostic_before_kernel_execution(self) -> None:
+    def test_rejects_oversized_missing_diagnostic_by_cardinality(self) -> None:
         request = DirectSumPredicateRequest(
             modulus=1_200_000,
             left=FiniteIntegerSet(elements=()),
@@ -328,5 +308,5 @@ class TestDirectSumPredicate:
             _run_direct_sum(request)
 
         assert exc_info.value.errors()[0]["type"] == (
-            "additive_combinatorics.direct_sum_result_transport_exceeded"
+            "additive_combinatorics.direct_sum.result_cardinality_exceeded"
         )

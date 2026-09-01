@@ -10,12 +10,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.canonical import (
-    CanonicalLimits,
-    encode_strict_json,
-    format_canonical_integer,
-    parse_canonical_integer,
-)
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.graphs.values import (
     IndexedSimpleUndirectedGraph,
     SimpleUndirectedGraph,
@@ -170,49 +165,13 @@ class MatchingPolynomialRequest(StrictModel):
     graph: IndexedSimpleUndirectedGraph
 
 
-def _maximum_independence_result_bytes(
-    graph: SimpleUndirectedGraph,
-    degree: int,
-) -> int:
-    """Bound the complete source-bound result at one admitted degree."""
-
-    maximum_coefficient = "9" * MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS
-    payload = {
-        "graph": graph.model_dump(mode="json"),
-        "coefficients": [maximum_coefficient] * (degree + 1),
-        "polynomial": {
-            "domain": "QQ",
-            "variables": ["x"],
-            "polynomial": {
-                "terms": [
-                    {
-                        "coefficient": {
-                            "num": maximum_coefficient,
-                            "den": "1",
-                        },
-                        "exponents": [exponent],
-                    }
-                    for exponent in range(degree, -1, -1)
-                ]
-            },
-        },
-        "independence_number": degree,
-        "independent_set_count": maximum_coefficient,
-    }
-    output_limit = CanonicalLimits().max_output_bytes
-    measurement_limits = CanonicalLimits(max_output_bytes=2 * output_limit)
-    return len(encode_strict_json(payload, limits=measurement_limits))
-
-
 class TreeIndependencePolynomialRequest(StrictModel):
     """Request the exact independence polynomial of one admitted tree.
 
     The materialized canonical graph must be nonempty, connected, and acyclic.
     Admission derives every budget from this operation's own work and result
-    envelope: at most 256 vertices, a scalar preflight whose exact
-    coefficient-convolution count stays inside the kernel pass budget, and a
-    serialized-result reservation that keeps the echoed source plus dense
-    coefficients inside the canonical output limit.
+    envelope: at most 256 vertices and a scalar preflight whose exact
+    coefficient-convolution count stays inside the kernel pass budget.
     """
 
     model_config = ConfigDict(
@@ -221,8 +180,8 @@ class TreeIndependencePolynomialRequest(StrictModel):
                 "Compute the exact independence polynomial of one materialized "
                 "canonical tree. The graph must be nonempty, connected, and "
                 "acyclic. Admission bounds rooted convolution work by an exact "
-                "scalar preflight and reserves canonical-output space for the "
-                "echoed source and dense coefficients."
+                "scalar preflight; coefficient count and digit length are "
+                "bounded by the admitted graph order."
             )
         }
     )
@@ -232,7 +191,7 @@ class TreeIndependencePolynomialRequest(StrictModel):
             "Canonical finite simple undirected graph. It may contain at most "
             f"{MAX_INDEPENDENCE_POLYNOMIAL_VERTICES} vertices and must be a "
             "nonempty tree whose independence polynomial fits this "
-            "operation's convolution-work and serialized-output budgets."
+            "operation's convolution-work and coefficient-digit bounds."
         )
     )
 

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import unicodedata
 from dataclasses import dataclass
 from typing import Literal, Self
 
@@ -16,13 +15,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._digest import Sha256Digest
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import (
-    CanonicalLimits,
-    canonicalize_json,
-    encode_strict_json,
-    sha256_digest,
-    strict_json_object_size,
-)
+from jacobian.canonical import encode_strict_json, sha256_digest
 from jacobian.math.graphs.values import (
     MAX_GRAPH_LABEL_BYTES,
     MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
@@ -53,62 +46,6 @@ MAX_EDGE_INTERSECTION_CELLS = 65_536
 # per-label and vertex/edge-count limits, this is the complete aggregate label
 # envelope for a FiniteHypergraph source.
 MAX_HYPERGRAPH_LABEL_BYTES = (MAX_VERTICES + MAX_EDGES) * MAX_LABEL_LENGTH * 4
-MAX_EDGE_INTERSECTION_RESULT_BYTES = CanonicalLimits().max_output_bytes
-
-
-def _edge_intersection_graph_result_bytes(
-    hypergraph: FiniteHypergraph,
-    graph_edges: tuple[tuple[str, str], ...],
-) -> int:
-    """Return the exact canonical size of the edge-intersection graph result.
-
-    The result retains the source hypergraph and the produced graph.  The
-    graph has one vertex per hyperedge (the edge IDs), and ``graph_edges`` is
-    the already-admitted exact set of intersecting pairs.  The byte count must
-    follow that set rather than charging every input for a complete graph.
-    """
-    source_bytes = _hypergraph_wire_bytes(hypergraph)
-    edge_ids = tuple(edge_id for edge_id, _ in hypergraph.edges)
-    # Each graph vertex is a strict-JSON string (the edge ID).
-    vertex_bytes = _strict_json_array_size(
-        tuple(_strict_label_wire_bytes(edge_id) for edge_id in edge_ids)
-    )
-    edge_bytes = _strict_json_array_size(
-        tuple(
-            _strict_json_array_size(
-                (_strict_label_wire_bytes(left), _strict_label_wire_bytes(right))
-            )
-            for left, right in graph_edges
-        )
-    )
-    graph_bytes = strict_json_object_size(
-        (("vertices", vertex_bytes), ("edges", edge_bytes))
-    )
-    return strict_json_object_size(
-        (("hypergraph", source_bytes), ("graph", graph_bytes))
-    )
-
-
-def _hypergraph_wire_bytes(hypergraph: FiniteHypergraph) -> int:
-    """Return the exact source size without applying the final output cap."""
-
-    vertex_bytes = _strict_json_array_size(
-        tuple(_strict_label_wire_bytes(vertex) for vertex in hypergraph.vertices)
-    )
-    edge_bytes = _strict_json_array_size(
-        tuple(
-            _strict_json_array_size(
-                (
-                    _strict_label_wire_bytes(edge_id),
-                    _strict_json_array_size(
-                        tuple(_strict_label_wire_bytes(member) for member in members)
-                    ),
-                )
-            )
-            for edge_id, members in hypergraph.edges
-        )
-    )
-    return strict_json_object_size((("vertices", vertex_bytes), ("edges", edge_bytes)))
 
 
 # One pair entry's keys, punctuation, array brackets, commas, and bounded
@@ -116,7 +53,6 @@ def _hypergraph_wire_bytes(hypergraph: FiniteHypergraph) -> int:
 # reserve covers the pair-array wrapper, histogram (at most 101 small integer
 # pairs), scalar fields, and retained-source field name.
 _PAIR_ENTRY_OVERHEAD_BYTES = 128
-_RESULT_ENVELOPE_RESERVE_BYTES = 4_096
 
 
 def _validation_error(message: str) -> PydanticCustomError:
@@ -481,22 +417,10 @@ def _label_utf8_bytes(label: str) -> int:
     return len(_encoded_utf8_label(label))
 
 
-def _strict_label_wire_bytes(label: str) -> int:
-    """Return the exact encoded size used by the public result wrapper."""
-
-    return len(encode_strict_json(label))
-
-
 def _edge_intersection_preflight_data(
     hypergraph: FiniteHypergraph,
-) -> tuple[int, int, int, int]:
-    """Return pair, incidence, intersection-cell, and result-byte quantities.
-
-    The result estimate is computed without intersecting or materializing any
-    edge pair.  A vertex of degree ``d`` occurs in exactly ``C(d, 2)`` pair
-    intersections, so incidence degrees give both the exact returned-cell
-    count and the exact encoded contribution of all intersection labels.
-    """
+) -> tuple[int, int, int]:
+    """Return exact pair, incidence, and intersection-cell quantities."""
 
     edge_count = len(hypergraph.edges)
     pair_count = edge_count * (edge_count - 1) // 2
@@ -506,10 +430,9 @@ def _edge_intersection_preflight_data(
         total_incidences += len(members)
         for member in members:
             vertex_degrees[member] += 1
-    vertex_pair_multiplicities = {
-        vertex: degree * (degree - 1) // 2 for vertex, degree in vertex_degrees.items()
-    }
-    intersection_cells = sum(vertex_pair_multiplicities.values())
+    intersection_cells = sum(
+        degree * (degree - 1) // 2 for degree in vertex_degrees.values()
+    )
 
     labels = (*hypergraph.vertices, *(edge_id for edge_id, _ in hypergraph.edges))
     label_bytes = sum(_label_utf8_bytes(label) for label in labels)
@@ -519,38 +442,7 @@ def _edge_intersection_preflight_data(
             f"{MAX_HYPERGRAPH_LABEL_BYTES}-byte UTF-8 bound"
         )
 
-    vertex_wire_bytes = {
-        vertex: _strict_label_wire_bytes(vertex) for vertex in hypergraph.vertices
-    }
-    edge_id_wire_bytes = tuple(
-        _strict_label_wire_bytes(edge_id) for edge_id, _ in hypergraph.edges
-    )
-    # Add one byte per returned member for a comma.  This overcounts each
-    # nonempty JSON array by one byte and therefore remains a safe bound.
-    pair_intersection_bytes = sum(
-        multiplicity * (vertex_wire_bytes[vertex] + 1)
-        for vertex, multiplicity in vertex_pair_multiplicities.items()
-    )
-    pair_label_bytes = (edge_count - 1) * sum(edge_id_wire_bytes)
-    largest_edge_id_bytes = sum(sorted(edge_id_wire_bytes, reverse=True)[:2])
-    possible_violation_members = sum(
-        vertex_wire_bytes[vertex] + 1
-        for vertex, degree in vertex_degrees.items()
-        if degree >= 2
-    )
-    maximum_pair_payload_bytes = largest_edge_id_bytes + possible_violation_members
-
-    source_bytes = _hypergraph_wire_bytes(hypergraph)
-    estimated_result_bytes = (
-        source_bytes
-        + pair_count * _PAIR_ENTRY_OVERHEAD_BYTES
-        + pair_label_bytes
-        + pair_intersection_bytes
-        # A nonlinear result repeats the first complete violating entry.
-        + (_PAIR_ENTRY_OVERHEAD_BYTES + maximum_pair_payload_bytes if pair_count else 0)
-        + _RESULT_ENVELOPE_RESERVE_BYTES
-    )
-    return pair_count, total_incidences, intersection_cells, estimated_result_bytes
+    return pair_count, total_incidences, intersection_cells
 
 
 def _admit_edge_intersection_profile(hypergraph: FiniteHypergraph) -> None:
@@ -559,7 +451,6 @@ def _admit_edge_intersection_profile(hypergraph: FiniteHypergraph) -> None:
         pair_count,
         total_incidences,
         intersection_cells,
-        estimated_result_bytes,
     ) = _edge_intersection_preflight_data(hypergraph)
     if pair_count > MAX_EDGE_PAIR_COUNT:
         raise _validation_error(
@@ -575,12 +466,6 @@ def _admit_edge_intersection_profile(hypergraph: FiniteHypergraph) -> None:
             "edge-intersection profile exceeds the "
             f"{MAX_EDGE_INTERSECTION_CELLS}-intersection-cell bound"
         )
-    if estimated_result_bytes > MAX_EDGE_INTERSECTION_RESULT_BYTES:
-        raise _validation_error(
-            "the complete edge-intersection profile would exceed the "
-            f"{MAX_EDGE_INTERSECTION_RESULT_BYTES}-byte canonical output limit; "
-            "shorten labels or reduce the edge family"
-        )
 
 
 class EdgeIntersectionsRequest(StrictModel):
@@ -588,22 +473,20 @@ class EdgeIntersectionsRequest(StrictModel):
 
     Every unordered pair of distinct indexed edges is returned.  Admission
     bounds the pair family, aggregate source incidences, exact returned
-    intersection memberships, label bytes, and canonical serialized result
-    before any pair intersection is materialized.
+    intersection memberships and label bytes before any pair intersection is
+    materialized.
     """
 
     hypergraph: FiniteHypergraph = Field(
         description=(
             "Canonical finite hypergraph. The complete profile is admitted only when its "
-            "pair intersections contain at most 65,536 memberships "
-            "and its retained-source result fits the canonical output limit."
+            "pair intersections contain at most 65,536 memberships."
         ),
         json_schema_extra={
             "edge_pair_bound": MAX_EDGE_PAIR_COUNT,
             "aggregate_input_incidences_bound": MAX_TOTAL_INCIDENCES,
             "intersection_cells_bound": MAX_EDGE_INTERSECTION_CELLS,
             "aggregate_label_bytes_bound": MAX_HYPERGRAPH_LABEL_BYTES,
-            "canonical_result_bytes_bound": MAX_EDGE_INTERSECTION_RESULT_BYTES,
         },
     )
 
@@ -1008,7 +891,6 @@ class CliqueExpansionResult(StrictModel):
 
 MAX_INDUCED_SUBSETS = 4_096
 MAX_INDUCED_SUBSET_SIZE = MAX_VERTICES
-MAX_INDUCED_PROFILE_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 
 @dataclass(frozen=True, slots=True)
@@ -1017,7 +899,6 @@ class _InducedTypeProfileAdmissionPlan:
 
     expected_subsets: tuple[tuple[str, ...], ...]
     edge_sets: tuple[frozenset[str], ...]
-    result_bytes: int
 
 
 class InducedTypeProfileRequest(StrictModel):
@@ -1036,7 +917,6 @@ class InducedTypeProfileRequest(StrictModel):
         ),
         json_schema_extra={
             "subset_count_bound": MAX_INDUCED_SUBSETS,
-            "canonical_result_bytes_bound": MAX_INDUCED_PROFILE_RESULT_BYTES,
         },
     )
     subset_size: StrictInt = Field(
@@ -1047,55 +927,6 @@ class InducedTypeProfileRequest(StrictModel):
             f"complete profile admits at most {MAX_INDUCED_SUBSETS} "
             "k-subsets."
         ),
-    )
-
-
-def _strict_json_array_size(item_sizes: tuple[int, ...]) -> int:
-    """Return the exact canonical JSON size of an array from item sizes."""
-
-    return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
-
-
-def _induced_profile_result_bytes(
-    hypergraph: FiniteHypergraph,
-    expected_subsets: tuple[tuple[str, ...], ...],
-) -> int:
-    """Return a safe serialized-size bound for an induced-profile result.
-
-    The count for each entry is not known until the kernel computes it, so its
-    widest possible value is reserved. Subset labels and the retained source
-    are measured using the same canonical normalization as the transport
-    boundary, rather than a fixed per-entry estimate.
-    """
-
-    subset_size = len(expected_subsets[0])
-    vertex_wire_bytes = {
-        vertex: len(encode_strict_json(unicodedata.normalize("NFC", vertex)))
-        for vertex in hypergraph.vertices
-    }
-    maximum_count = min(len(hypergraph.edges), (1 << subset_size) - 1)
-    count_wire_bytes = len(encode_strict_json(maximum_count))
-    entry_sizes: list[int] = []
-    for subset in expected_subsets:
-        subset_wire_bytes = _strict_json_array_size(
-            tuple(vertex_wire_bytes[vertex] for vertex in subset)
-        )
-        entry_sizes.append(
-            strict_json_object_size(
-                (
-                    ("vertex_subset", subset_wire_bytes),
-                    ("induced_edge_count", count_wire_bytes),
-                )
-            )
-        )
-    entries_size = _strict_json_array_size(tuple(entry_sizes))
-    source_size = len(canonicalize_json(hypergraph.model_dump(mode="json")))
-    return strict_json_object_size(
-        (
-            ("hypergraph", source_size),
-            ("subset_size", len(encode_strict_json(subset_size))),
-            ("entries", entries_size),
-        )
     )
 
 
@@ -1123,7 +954,6 @@ def _induced_type_profile_admission_plan(
     return _InducedTypeProfileAdmissionPlan(
         expected_subsets=expected_subsets,
         edge_sets=tuple(frozenset(members) for _, members in hypergraph.edges),
-        result_bytes=_induced_profile_result_bytes(hypergraph, expected_subsets),
     )
 
 
@@ -1179,7 +1009,6 @@ class InducedTypeProfileResult(StrictModel):
 
 MAX_TRANSVERSAL_RESULT_VERTICES = MAX_VERTICES
 MAX_TRANSVERSAL_SEARCH_WORK = 50_000_000
-MAX_TRANSVERSAL_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 
 def _minimum_transversal_search_plan(
@@ -1220,29 +1049,6 @@ def _minimum_transversal_search_plan(
     )
 
 
-def _minimum_transversal_result_bytes(
-    hypergraph: FiniteHypergraph,
-    active_vertices: tuple[str, ...],
-) -> int:
-    """Return the exact worst-case canonical size of a transversal result."""
-
-    normalized_active_vertices = tuple(
-        unicodedata.normalize("NFC", vertex) for vertex in active_vertices
-    )
-    source_size = len(canonicalize_json(hypergraph.model_dump(mode="json")))
-    witness_size = _strict_json_array_size(
-        tuple(_strict_label_wire_bytes(vertex) for vertex in normalized_active_vertices)
-    )
-    cardinality_size = len(encode_strict_json(len(normalized_active_vertices)))
-    return strict_json_object_size(
-        (
-            ("hypergraph", source_size),
-            ("transversal", witness_size),
-            ("cardinality", cardinality_size),
-        )
-    )
-
-
 class MinimumTransversalRequest(StrictModel):
     """Request an exact minimum-cardinality transversal (hitting set).
 
@@ -1259,12 +1065,10 @@ class MinimumTransversalRequest(StrictModel):
             "Empty edge families are solved by the empty transversal; "
             "otherwise the exact active-vertex search must fit "
             f"{MAX_TRANSVERSAL_SEARCH_WORK} candidate-edge checks and the "
-            f"retained-source result must fit {MAX_TRANSVERSAL_RESULT_BYTES} "
-            "canonical bytes."
+            "result witness uses at most the declared vertex family."
         ),
         json_schema_extra={
             "search_work_bound": MAX_TRANSVERSAL_SEARCH_WORK,
-            "canonical_result_bytes_bound": MAX_TRANSVERSAL_RESULT_BYTES,
             "requires_nonempty_hyperedges": True,
         },
     )
@@ -1309,30 +1113,6 @@ class MinimumTransversalResult(StrictModel):
 # --------------------------------------------------------------------------
 
 MAX_MATCHING_EDGES = 20
-MAX_MATCHING_RESULT_BYTES = CanonicalLimits().max_output_bytes
-
-
-def _maximum_edge_matching_result_bytes(
-    hypergraph: FiniteHypergraph,
-    edge_ids: tuple[str, ...],
-) -> int:
-    """Return the exact canonical size of a worst-case matching result."""
-
-    normalized_edge_ids = tuple(
-        unicodedata.normalize("NFC", edge_id) for edge_id in edge_ids
-    )
-    source_size = len(canonicalize_json(hypergraph.model_dump(mode="json")))
-    matching_size = _strict_json_array_size(
-        tuple(_strict_label_wire_bytes(edge_id) for edge_id in normalized_edge_ids)
-    )
-    count_size = len(encode_strict_json(len(normalized_edge_ids)))
-    return strict_json_object_size(
-        (
-            ("hypergraph", source_size),
-            ("matching", matching_size),
-            ("count", count_size),
-        )
-    )
 
 
 class MaximumEdgeMatchingRequest(StrictModel):
@@ -1341,20 +1121,17 @@ class MaximumEdgeMatchingRequest(StrictModel):
     A matching is a set of pairwise-disjoint hyperedges.  The exact bounded
     search enumerates nonempty edge subsets by decreasing cardinality and
     admits at most ``MAX_MATCHING_EDGES`` search edges.  Empty edges form a
-    mandatory witness prefix because they are disjoint from every edge,
-    subject to the canonical result-byte bound.
+    mandatory witness prefix because they are disjoint from every edge.
     """
 
     hypergraph: FiniteHypergraph = Field(
         description=(
             "Canonical finite hypergraph. Exact matching search admits at most "
             f"{MAX_MATCHING_EDGES} nonempty edges; empty edge IDs are included "
-            "in every matching witness and the result is admitted when its "
-            f"retained-source result fits {MAX_MATCHING_RESULT_BYTES} canonical bytes."
+            "in every matching witness."
         ),
         json_schema_extra={
             "search_edge_bound": MAX_MATCHING_EDGES,
-            "canonical_result_bytes_bound": MAX_MATCHING_RESULT_BYTES,
             "empty_edge_witness_prefix": True,
         },
     )

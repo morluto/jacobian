@@ -9,22 +9,17 @@ from fractions import Fraction
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics._recurrence_models import (
     MAX_COMBINATORICS_INPUT_RATIONAL_DIGITS,
-    MAX_COMBINATORICS_RESULT_ARTIFACT_BYTES,
     MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
     MAX_P_RECURSIVE_POLYNOMIAL_DEGREE,
     MAX_RATIONAL_SERIES_WORK_UNITS,
     _require_bounded_rational,
     _require_canonical_polynomial,
-    _validate_result_inline_size,
 )
 
 _LOG10_2 = math.log10(2)
-_FRACTION_WIRE_FIXED_BYTES = 20
-_RESULT_WIRE_FIXED_BYTES = 1_024
 
 
 def _run_admission(
@@ -74,21 +69,6 @@ def _lower_decimal_digits(value: int) -> int:
     if value == 0:
         return 1
     return math.floor((abs(value).bit_length() - 1) * _LOG10_2) + 1
-
-
-def _fraction_wire(value: Fraction) -> dict[str, str]:
-    return {
-        "num": format_canonical_integer(value.numerator),
-        "den": format_canonical_integer(value.denominator),
-    }
-
-
-def _minimum_fraction_wire_bytes(value: Fraction) -> int:
-    return (
-        _lower_decimal_digits(value.numerator)
-        + _lower_decimal_digits(value.denominator)
-        + _FRACTION_WIRE_FIXED_BYTES
-    )
 
 
 def _require_bounded_fraction(
@@ -147,37 +127,12 @@ def _admit_linear_recurrence(
                 start=Fraction(),
             )
         )
-    minimum_size = sum(
-        _minimum_fraction_wire_bytes(prefix[index]) for index in requested_indices
-    )
-    if (
-        minimum_size + _RESULT_WIRE_FIXED_BYTES
-        > MAX_COMBINATORICS_RESULT_ARTIFACT_BYTES
-    ):
-        raise OperationDomainValidationError(
-            location=("values",),
-            code="combinatorics.result_bound",
-            message="the exact combinatorics result exceeds the bounded result limit",
-        )
     for index, fraction_value in enumerate(prefix):
         _require_bounded_fraction(
             fraction_value,
             label="recurrence result",
             location=("values", index),
         )
-    _run_admission(
-        lambda: _validate_result_inline_size(
-            {
-                "coefficient_convention": coefficient_convention,
-                "scope": scope,
-                "values": [
-                    {"index": index, "value": _fraction_wire(prefix[index])}
-                    for index in requested_indices
-                ],
-            }
-        ),
-        location=("values",),
-    )
     return tuple(prefix)
 
 
@@ -232,12 +187,6 @@ def _admit_p_recursive_recurrence(
 
     end = requested_indices[-1]
     prefix = [value.as_fraction() for value in initial_values[: end + 1]]
-    requested_index_set = set(requested_indices)
-    minimum_size = _RESULT_WIRE_FIXED_BYTES + sum(
-        _minimum_fraction_wire_bytes(value)
-        for index, value in enumerate(prefix)
-        if index in requested_index_set
-    )
     while len(prefix) <= end:
         index = len(prefix)
         coefficients = tuple(
@@ -264,30 +213,7 @@ def _admit_p_recursive_recurrence(
             label="polynomial-coefficient recurrence result",
             location=("values", index),
         )
-        if index in requested_index_set:
-            minimum_size += _minimum_fraction_wire_bytes(next_value)
-        if minimum_size > MAX_COMBINATORICS_RESULT_ARTIFACT_BYTES:
-            raise OperationDomainValidationError(
-                location=("values",),
-                code="combinatorics.result_bound",
-                message="the exact combinatorics result exceeds the bounded result limit",
-            )
         prefix.append(next_value)
-    _run_admission(
-        lambda: _validate_result_inline_size(
-            {
-                "coefficient_convention": coefficient_convention,
-                "polynomial_convention": polynomial_convention,
-                "recurrence_order": order,
-                "scope": scope,
-                "values": [
-                    {"index": index, "value": _fraction_wire(prefix[index])}
-                    for index in requested_indices
-                ],
-            }
-        ),
-        location=("values",),
-    )
     return tuple(prefix)
 
 
@@ -332,16 +258,6 @@ def _admit_series(
             code="combinatorics.work_bound",
             message="rational-series recurrence exceeds the exact work bound",
         )
-    minimum_result_size = (
-        2 * truncation_order * _minimum_fraction_wire_bytes(Fraction())
-        + _RESULT_WIRE_FIXED_BYTES
-    )
-    if minimum_result_size > MAX_COMBINATORICS_RESULT_ARTIFACT_BYTES:
-        raise OperationDomainValidationError(
-            location=("truncation_order",),
-            code="combinatorics.result_bound",
-            message="the exact combinatorics result exceeds the bounded result limit",
-        )
     coefficients: list[Fraction] = []
     for degree in range(truncation_order):
         numerator_coefficient = (
@@ -361,33 +277,6 @@ def _admit_series(
             location=("coefficients", degree),
         )
         coefficients.append(coefficient)
-    minimum_size = sum(_minimum_fraction_wire_bytes(value) for value in coefficients)
-    minimum_size += truncation_order * _minimum_fraction_wire_bytes(Fraction())
-    if (
-        minimum_size + _RESULT_WIRE_FIXED_BYTES
-        > MAX_COMBINATORICS_RESULT_ARTIFACT_BYTES
-    ):
-        raise OperationDomainValidationError(
-            location=("coefficients",),
-            code="combinatorics.result_bound",
-            message="the exact combinatorics result exceeds the bounded result limit",
-        )
-    _run_admission(
-        lambda: _validate_result_inline_size(
-            {
-                "coefficient_convention": coefficient_convention,
-                "coefficients": [_fraction_wire(value) for value in coefficients],
-                "expansion_point": expansion_point,
-                "residual_coefficients": [_fraction_wire(Fraction())]
-                * truncation_order,
-                "residual_congruence": (
-                    "DENOMINATOR_TIMES_SERIES_MINUS_NUMERATOR_IS_ZERO_MOD_X_TO_ORDER"
-                ),
-                "truncation_order": truncation_order,
-            }
-        ),
-        location=("coefficients",),
-    )
     return tuple(coefficients)
 
 

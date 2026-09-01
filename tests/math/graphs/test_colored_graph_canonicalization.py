@@ -14,7 +14,6 @@ import pytest
 from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
-import jacobian.math.graphs.isomorphism._canonicalization as isomorphism_canonicalization
 import jacobian.math.graphs.isomorphism._canonicalization_bounds as isomorphism_bounds
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs import ColoredUndirectedGraph, explicit_graph
@@ -382,20 +381,10 @@ def _dense_complete_colored_graph(label_bytes: int) -> ColoredUndirectedGraph:
     )
 
 
-def test_request_admits_transport_bounded_dense_results() -> None:
-    """A 64-vertex complete graph with 49-byte labels fits the derived budget.
-
-    Distinct vertex colors leave one candidate labeling, the execution work stays
-    below its bound, and the exact result sits far below the repository's
-    10 MiB canonical JSON output limit, so only the superseded 512 KiB ceiling
-    rejected it.
-    """
+def test_request_admits_dense_results_by_work() -> None:
+    """Distinct colors keep the dense graph to one candidate labeling."""
     dense_graph = _dense_complete_colored_graph(49)
 
-    assert (
-        isomorphism_canonicalization.canonicalization_result_wire_bytes(dense_graph)
-        > 512 * 1024
-    )
     result = compute_colored_graph_canonicalization(
         ColoredGraphCanonicalizationRequest(colored_graph=dense_graph)
     )
@@ -406,24 +395,12 @@ def test_request_admits_transport_bounded_dense_results() -> None:
     assert mapping == {label: f"v{index:02d}" for index, label in enumerate(labels)}
 
 
-def test_request_enforces_source_bound_result_byte_boundary(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_maximum_dense_shape_is_not_capped_by_serialized_result_size() -> None:
     max_shape = _dense_complete_colored_graph(64)
-    assert (
-        isomorphism_canonicalization.canonicalization_result_wire_bytes(max_shape)
-        <= isomorphism_canonicalization.MAX_CANONICALIZATION_RESULT_BYTES
+    result = compute_colored_graph_canonicalization(
+        ColoredGraphCanonicalizationRequest(colored_graph=max_shape)
     )
-
-    monkeypatch.setattr(
-        isomorphism_bounds,
-        "MAX_CANONICALIZATION_RESULT_BYTES",
-        512 * 1024,
-    )
-    with pytest.raises(OperationDomainValidationError):
-        compute_colored_graph_canonicalization(
-            ColoredGraphCanonicalizationRequest(colored_graph=max_shape)
-        )
+    assert len(result.canonical_graph.graph.vertices) == 64
 
 
 @pytest.mark.parametrize(
@@ -565,8 +542,8 @@ def test_catalog_execution_admits_the_parsed_request_once(
 ) -> None:
     """``math.run`` parses once; the adapter must not readmit the request.
 
-    The result-size preflight belongs to request admission; execution does
-    not repeat it while constructing the trusted result.
+    Request admission belongs to the owner; execution does not repeat it while
+    constructing the trusted result.
     """
     parsed = ColoredGraphCanonicalizationRequest(
         colored_graph=_graph(("a", "b"), (("a", "b"),))
@@ -574,7 +551,7 @@ def test_catalog_execution_admits_the_parsed_request_once(
     expected = canonicalize_colored_graph(parsed.colored_graph)
 
     admissions: list[ColoredUndirectedGraph] = []
-    real_preflight = isomorphism_bounds.canonicalization_result_wire_bytes
+    real_preflight = isomorphism_bounds.canonicalization_work
 
     def counted_preflight(graph: ColoredUndirectedGraph) -> int:
         admissions.append(graph)
@@ -582,7 +559,7 @@ def test_catalog_execution_admits_the_parsed_request_once(
 
     monkeypatch.setattr(
         isomorphism_bounds,
-        "canonicalization_result_wire_bytes",
+        "canonicalization_work",
         counted_preflight,
     )
 

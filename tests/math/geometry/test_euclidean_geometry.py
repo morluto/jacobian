@@ -5,10 +5,9 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import encode_strict_json, format_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry._models import (
-    MAX_TRIANGULATION_OUTPUT_CHARS,
     CircumcircleRequest,
     ConvexPolygonTriangulationRequest,
     ConvexPolygonTriangulationResult,
@@ -482,26 +481,6 @@ class TestRationalWeightTriangulation:
         )
 
     @pytest.mark.scale
-    def test_uniform_heavy_ring_aggregate_overflow_rejected_at_request_validation(
-        self,
-    ) -> None:
-        # Regression: every non-hull diagonal carries the same 22,000-digit
-        # integer 10^21999, so each derived ledger optimum stays far below
-        # the canonical component cap while the aggregate serialization of
-        # the full split table and echoed diagonals overflows the output
-        # envelope. Admission must reject the request typedly before
-        # execution instead of failing canonical output validation after
-        # computing the triangulation.
-        weights = self._uniform_ring_weights(format_canonical_integer(10**21999))
-
-        request = _triangulation_request(
-            polygon={"points": self._ring(*self._UNIFORM_RING)},
-            diagonal_weights=weights,
-        )
-        with pytest.raises(OperationDomainValidationError):
-            minimum_weight_triangulation(request)
-
-    @pytest.mark.scale
     def test_uniform_ring_with_fitting_aggregate_stays_certified(self) -> None:
         # The same uniform ring with materially lighter weights keeps the
         # per-entry bound times the entry count inside the published budget,
@@ -521,8 +500,6 @@ class TestRationalWeightTriangulation:
             result.model_dump(mode="json")
         )
         assert validated.optimum == result.optimum
-        encoded = encode_strict_json(result.model_dump(mode="json"))
-        assert len(encoded) <= MAX_TRIANGULATION_OUTPUT_CHARS
 
     @pytest.mark.scale
     def test_lone_heavy_weight_ring_aggregate_is_measured_exactly(self) -> None:
@@ -557,30 +534,6 @@ class TestRationalWeightTriangulation:
             result.model_dump(mode="json")
         )
         assert validated.optimum == result.optimum
-        encoded = encode_strict_json(result.model_dump(mode="json"))
-        assert len(encoded) <= MAX_TRIANGULATION_OUTPUT_CHARS
-
-    @pytest.mark.scale
-    def test_uniform_heavy_denominator_ring_aggregate_overflow_rejected(
-        self,
-    ) -> None:
-        # Every non-hull diagonal carries the same 16,001-digit denominator,
-        # so each shared-denominator ledger optimum stays far below the
-        # canonical component cap while their combined serialization
-        # genuinely overflows the output envelope. Exact size summation must
-        # still reject this request at request validation.
-        denominator = format_canonical_integer(10**16000 + 1)
-        weights = self._weights(
-            self._UNIFORM_RING_DIAGONALS,
-            dict.fromkeys(self._UNIFORM_RING_DIAGONALS, ("1", denominator)),
-        )
-
-        request = _triangulation_request(
-            polygon={"points": self._ring(*self._UNIFORM_RING)},
-            diagonal_weights=weights,
-        )
-        with pytest.raises(OperationDomainValidationError):
-            minimum_weight_triangulation(request)
 
 
 class TestAngleEquality:

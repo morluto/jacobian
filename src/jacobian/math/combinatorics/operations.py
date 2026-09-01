@@ -12,7 +12,6 @@ from typing import Literal, NoReturn
 from jacobian._exact import CanonicalRational
 from jacobian._execution import bind_request_deadline, current_request_execution
 from jacobian.canonical import (
-    CanonicalLimits,
     format_canonical_integer,
     parse_canonical_integer,
 )
@@ -56,10 +55,6 @@ def _pair(n: int, k: int) -> tuple[int, int]:
 MAX_COUNTING_INDEX = 10_000
 MAX_SPARSE_COUNTING_INDEX = 10**15
 MAX_COUNTING_MULTIPLICATIVE_STEPS = 100_000
-_COUNTING_RESULT_RESERVE_BYTES = 4_096
-MAX_COUNTING_RESULT_DIGITS = (
-    CanonicalLimits().max_output_bytes - _COUNTING_RESULT_RESERVE_BYTES
-)
 MAX_MULTINOMIAL_PARTS = 256
 MAX_MULTINOMIAL_TOTAL = MAX_COUNTING_INDEX
 
@@ -235,15 +230,6 @@ def _admit_multiplicative_count(
     formatting_steps = (digit_bound + 8) // 9
     if steps + formatting_steps > MAX_COUNTING_MULTIPLICATIVE_STEPS:
         _reject_counting_work()
-    if digit_bound > MAX_COUNTING_RESULT_DIGITS:
-        raise OperationDomainValidationError(
-            location=("n", "k"),
-            code="combinatorics.counting_result_digits_exceeded",
-            message=(
-                "predicted exact count exceeds the "
-                f"{MAX_COUNTING_RESULT_DIGITS}-digit result budget"
-            ),
-        )
 
 
 def _admit_cancelled_binomial_count(n: int, k: int) -> None:

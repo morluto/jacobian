@@ -6,7 +6,7 @@ from jacobian.catalog.models import (
     OperationExample,
 )
 from jacobian.math.number_theory._prime_shift_models import (
-    MAX_SHIFT_RESULT_BYTES,
+    MAX_SHIFT_INTERVAL_WIDTH,
     MAX_SHIFT_WORK,
     PrimeShiftProfileRequest,
     PrimeShiftProfileResult,
@@ -34,9 +34,9 @@ PRIME_SHIFT_OPERATION = MathTool(
     title="Compute translated-prime representation profile on a bounded interval",
     description=(
         "For each n in [L, U], count representations n = p + 2^k where p is "
-        "prime and k >= 0. Returns the complete ordered profile when its "
-        f"canonical JSON is within the {MAX_SHIFT_RESULT_BYTES}-byte output "
-        f"budget and its segmented-sieve work is within {MAX_SHIFT_WORK} "
+        "prime and k >= 0. Returns the complete ordered profile for at most "
+        f"{MAX_SHIFT_INTERVAL_WIDTH} materialized rows when its segmented-sieve "
+        f"work is within {MAX_SHIFT_WORK} "
         "units. Endpoint size is admitted by that derived work envelope rather "
         "than by a fixed scalar cap."
     ),

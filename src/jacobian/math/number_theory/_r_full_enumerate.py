@@ -25,25 +25,16 @@ def _enumerate_r_full_admitted(
     minimum_exponent: int,
     cutoff: int,
     *,
-    enforce_transport: bool,
     plan: RFullFamilyPlan | None = None,
 ) -> RFullEnumerateResult:
     canonical_cutoff = format_canonical_integer(cutoff)
-    plan = plan or plan_r_full_family(
-        minimum_exponent, cutoff, enforce_transport=enforce_transport
-    )
+    plan = plan or plan_r_full_family(minimum_exponent, cutoff)
     if plan.exceeded:
         if plan.reason == "planning":
             raise OperationDomainValidationError(
                 location=("cutoff",),
                 code="r_full_enumerate_planning_work_exceeds_budget",
                 message="r-full planning work exceeds the admitted budget",
-            )
-        if plan.reason == "bytes":
-            raise OperationDomainValidationError(
-                location=("cutoff",),
-                code="r_full_enumerate_family_exceeds_transport_budget",
-                message="r-full family exceeds the serialized-byte budget",
             )
         raise OperationDomainValidationError(
             location=("cutoff",),
@@ -63,7 +54,6 @@ def enumerate_r_full_numbers(
     return _enumerate_r_full_admitted(
         request.minimum_exponent,
         parse_canonical_integer(request.cutoff),
-        enforce_transport=True,
     )
 
 
@@ -90,11 +80,7 @@ def enumerate_r_full(minimum_exponent: int, cutoff: int) -> tuple[int, ...]:
             code="r_full_enumerate.cutoff_bound",
             message="cutoff must be a positive integer within the admitted bound",
         )
-    plan = plan_r_full_family(
-        minimum_exponent,
-        cutoff,
-        enforce_transport=False,
-    )
+    plan = plan_r_full_family(minimum_exponent, cutoff)
     if plan.exceeded:
         if plan.reason == "planning":
             raise OperationDomainValidationError(

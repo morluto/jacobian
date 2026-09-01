@@ -9,7 +9,6 @@ from pydantic import Field, StrictInt, WithJsonSchema, model_validator
 from pydantic.json_schema import JsonSchemaValue
 
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -23,8 +22,8 @@ MAXIMUM_CUT_CANDIDATE_PARTITIONS = 1_048_576
 MAXIMUM_CUT_EDGE_UPDATES = 5_000_000
 """Maximum weighted adjacency updates in one complete exact search."""
 
-MAXIMUM_CUT_RESULT_BYTES = CanonicalLimits().max_output_bytes
-"""Maximum projected canonical JSON bytes for one exact result."""
+MAXIMUM_CUT_RETAINED_LABEL_CHARACTERS = 1_000_000
+"""Maximum label allocation retained by a complete exact result."""
 
 MAXIMUM_CUT_Z3_RLIMIT = 100_000
 """Per-component Z3 resource limit before the exact fallback takes over."""
@@ -221,31 +220,18 @@ def _analyze_graph(graph: SimpleUndirectedGraph) -> _MaximumCutAnalysis:
     )
 
 
-def _projected_result_bytes(graph: SimpleUndirectedGraph) -> int:
-    """Return a conservative exact-result JSON size before search."""
-
-    graph_value = graph.model_dump(mode="json")
-    worst_case = {
-        "graph": graph_value,
-        # A valid partition contains every source vertex exactly once across
-        # both sides. Putting every vertex on one side maximizes list separators
-        # and is therefore a conservative exact bound for the partition fields.
-        "left_vertices": list(graph.vertices),
-        "right_vertices": [],
-        "crossing_edges": [list(edge) for edge in graph.edges],
-        "cut_value": len(graph.edges),
-        "lower_bound": len(graph.edges),
-        "upper_bound": len(graph.edges),
-    }
-    return len(
-        encode_strict_json(
-            worst_case,
-            limits=CanonicalLimits(max_output_bytes=4 * MAXIMUM_CUT_RESULT_BYTES),
-        )
-    )
-
-
 def _require_graph_envelope(graph: SimpleUndirectedGraph) -> _MaximumCutAnalysis:
+    source_label_characters = sum(map(len, graph.vertices)) + sum(
+        len(left) + len(right) for left, right in graph.edges
+    )
+    # The result retains the source, repeats every vertex in one partition side,
+    # and may repeat every edge in the crossing-edge ledger.
+    if 2 * source_label_characters > MAXIMUM_CUT_RETAINED_LABEL_CHARACTERS:
+        raise OperationDomainValidationError(
+            location=("graph", "vertices"),
+            code="graph.maximum_cut.retained_labels_exceed_bound",
+            message="maximum-cut result exceeds the retained label-character bound",
+        )
     analysis = _analyze_graph(graph)
     if analysis.candidate_partitions > MAXIMUM_CUT_CANDIDATE_PARTITIONS:
         raise OperationDomainValidationError(
@@ -267,17 +253,6 @@ def _require_graph_envelope(graph: SimpleUndirectedGraph) -> _MaximumCutAnalysis
                 f"{MAXIMUM_CUT_EDGE_UPDATES} are admitted"
             ),
         )
-    projected_bytes = _projected_result_bytes(graph)
-    if projected_bytes > MAXIMUM_CUT_RESULT_BYTES:
-        raise OperationDomainValidationError(
-            location=("graph",),
-            code="graph.maximum_cut.result_bytes_exceed_bound",
-            message=(
-                "maximum-cut projected exact result requires at most "
-                f"{projected_bytes} bytes; the admitted result bound is "
-                f"{MAXIMUM_CUT_RESULT_BYTES} bytes"
-            ),
-        )
     return analysis
 
 
@@ -287,9 +262,9 @@ def _maximum_cut_graph_schema() -> JsonSchemaValue:
         "Canonical materialized SimpleUndirectedGraph for an exact-only maximum-cut "
         "request. Admission preflights a complete exact proof with at most "
         f"{MAXIMUM_CUT_CANDIDATE_PARTITIONS} internally derived candidate partitions, "
-        f"{MAXIMUM_CUT_EDGE_UPDATES} incremental weighted edge contributions, and a "
-        f"projected exact result of at most {MAXIMUM_CUT_RESULT_BYTES} bytes. Requests "
-        "outside any bound are rejected before search."
+        f"{MAXIMUM_CUT_EDGE_UPDATES} incremental weighted edge contributions, and "
+        f"{MAXIMUM_CUT_RETAINED_LABEL_CHARACTERS} retained label characters. "
+        "Requests outside these bounds are rejected before search."
     )
     return schema
 
@@ -658,7 +633,7 @@ __all__ = [
     "MAXIMUM_CUT_CANDIDATE_PARTITIONS",
     "MAXIMUM_CUT_EDGE_UPDATES",
     "MAXIMUM_CUT_OPERATION",
-    "MAXIMUM_CUT_RESULT_BYTES",
+    "MAXIMUM_CUT_RETAINED_LABEL_CHARACTERS",
     "GraphMaximumCutRequest",
     "GraphMaximumCutResult",
     "compute_maximum_cut",

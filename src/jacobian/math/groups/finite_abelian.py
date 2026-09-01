@@ -35,7 +35,6 @@ MAX_SPECTRAL_REMAINDER_COEFFICIENT_BITS = 2_048
 MAX_SPECTRAL_REMAINDER_COEFFICIENT_DIGITS = (
     MAX_SPECTRAL_REMAINDER_COEFFICIENT_BITS * 30_103 + 99_999
 ) // 100_000 + 1
-MAX_SPECTRAL_RESULT_BYTES = 32_768
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -189,7 +188,7 @@ class FiniteAbelianSpectralPairSource(StrictModel):
     lexicographically. Distinctness is checked after reduction, so this value
     has one canonical residue-tuple representation. The per-set row cap is a
     defensive materialization fallback; operation admission is governed by
-    serialized result bytes and the derived reduction budgets.
+    cardinality, exact arithmetic growth, and derived reduction work.
     """
 
     group: FiniteAbelianProductGroup
@@ -241,11 +240,11 @@ class FiniteAbelianSpectralPairRequest(StrictModel):
 
     Equal-size sources with at least two frequencies are admitted through the
     derived reduction envelope: 60-degree cyclotomics, 258,048 point-character
-    terms, 4,032 exact reductions, bounded construction intermediates, and a
-    32,768-byte serialized result; those counts include the result model's
+    terms, 4,032 exact reductions, and bounded construction intermediates;
+    those counts include the result model's
     independent replay. Cardinality mismatches, singleton pairs, and the
     equal-empty pair need no cyclotomic reduction and are admitted by source
-    and result size alone.
+    cardinality alone.
     """
 
     source: FiniteAbelianSpectralPairSource
@@ -355,7 +354,6 @@ class _SpectralPairWork:
     cyclotomic_coefficient_bits: int
     cyclotomic_intermediate_bits: int
     remainder_coefficient_bits: int
-    predicted_result_bytes: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -380,42 +378,6 @@ def _euler_totient(value: int) -> int:
     if remaining > 1:
         result -= result // remaining
     return result
-
-
-def _decimal_digits_from_bits(bits: int) -> int:
-    """Conservatively convert a positive binary bit bound to decimal digits."""
-
-    return (bits * 30_103 + 99_999) // 100_000 + 1
-
-
-def _predicted_spectral_source_bytes(source: FiniteAbelianSpectralPairSource) -> int:
-    """Bound the serialized canonical source retained in any result."""
-
-    coordinate_digits = max(len(str(modulus - 1)) for modulus in source.group.moduli)
-    rank = len(source.group.moduli)
-    row_bytes = 4 + rank * (coordinate_digits + 3)
-    return (
-        2_048
-        + rank * (coordinate_digits + 3)
-        + (len(source.points) + len(source.frequencies)) * row_bytes
-    )
-
-
-def _predicted_spectral_witness_bytes(
-    *,
-    rank: int,
-    coordinate_digits: int,
-    cyclotomic_degree: int,
-    remainder_coefficient_bits: int,
-) -> int:
-    """Bound the largest canonical failure-witness serialization."""
-
-    return (
-        512
-        + 3 * rank * (coordinate_digits + 3)
-        + cyclotomic_degree
-        * (_decimal_digits_from_bits(remainder_coefficient_bits) + 4)
-    )
 
 
 def _spectral_pair_work(source: FiniteAbelianSpectralPairSource) -> _SpectralPairWork:
@@ -452,12 +414,6 @@ def _spectral_pair_work(source: FiniteAbelianSpectralPairSource) -> _SpectralPai
     itself trivially bounded.
     """
 
-    source_bytes = _predicted_spectral_source_bytes(source)
-    if source_bytes > MAX_SPECTRAL_RESULT_BYTES:
-        raise ValueError("spectral-pair result exceeds its serialized byte bound")
-    coordinate_digits = max(len(str(modulus - 1)) for modulus in source.group.moduli)
-    rank = len(source.group.moduli)
-
     exponent = source.group.exponent
     needs_reduction = (
         len(source.points) == len(source.frequencies) and len(source.frequencies) > 1
@@ -472,18 +428,7 @@ def _spectral_pair_work(source: FiniteAbelianSpectralPairSource) -> _SpectralPai
             cyclotomic_coefficient_bits=0,
             cyclotomic_intermediate_bits=0,
             remainder_coefficient_bits=0,
-            predicted_result_bytes=(
-                source_bytes
-                + _predicted_spectral_witness_bytes(
-                    rank=rank,
-                    coordinate_digits=coordinate_digits,
-                    cyclotomic_degree=0,
-                    remainder_coefficient_bits=0,
-                )
-            ),
         )
-        if work.predicted_result_bytes > MAX_SPECTRAL_RESULT_BYTES:
-            raise ValueError("spectral-pair result exceeds its serialized byte bound")
         return work
 
     cyclotomic_dense_ops = 10 * exponent.bit_length() * (exponent + 1) * (exponent + 1)
@@ -501,13 +446,6 @@ def _spectral_pair_work(source: FiniteAbelianSpectralPairSource) -> _SpectralPai
     remainder_coefficient_bits = len(source.points).bit_length() + (degree + 1) * (
         exponent - degree
     )
-    predicted_result_bytes = source_bytes + _predicted_spectral_witness_bytes(
-        rank=rank,
-        coordinate_digits=coordinate_digits,
-        cyclotomic_degree=degree,
-        remainder_coefficient_bits=remainder_coefficient_bits,
-    )
-
     if degree > MAX_SPECTRAL_CYCLOTOMIC_DEGREE:
         raise ValueError("cyclotomic degree exceeds the exact reduction bound")
     if character_terms > MAX_SPECTRAL_CHARACTER_TERMS:
@@ -518,8 +456,6 @@ def _spectral_pair_work(source: FiniteAbelianSpectralPairSource) -> _SpectralPai
         raise ValueError("cyclotomic coefficient exceeds its bit bound")
     if remainder_coefficient_bits > MAX_SPECTRAL_REMAINDER_COEFFICIENT_BITS:
         raise ValueError("cyclotomic remainder intermediate exceeds its bit bound")
-    if predicted_result_bytes > MAX_SPECTRAL_RESULT_BYTES:
-        raise ValueError("spectral-pair result exceeds its serialized byte bound")
     return _SpectralPairWork(
         group_exponent=exponent,
         cyclotomic_degree=degree,
@@ -529,7 +465,6 @@ def _spectral_pair_work(source: FiniteAbelianSpectralPairSource) -> _SpectralPai
         cyclotomic_coefficient_bits=cyclotomic_coefficient_bits,
         cyclotomic_intermediate_bits=cyclotomic_intermediate_bits,
         remainder_coefficient_bits=remainder_coefficient_bits,
-        predicted_result_bytes=predicted_result_bytes,
     )
 
 

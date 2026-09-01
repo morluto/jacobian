@@ -15,14 +15,12 @@ from jacobian.math.geometry.exact._line_arithmetic import (
     squared_point_line_distance,
 )
 from jacobian.math.geometry.exact._models import (
-    MAX_PINNED_PROFILE_RESULT_BYTES,
     DistanceMultiplicityEntry,
     DistanceProfileResult,
     LabelledRationalPoint,
     PinnedLineConfiguration,
     PinnedLineDistanceResult,
     PointConfiguration,
-    _maximum_pinned_profile_wire_bytes,
     _require_bounded_point_configuration,
     _validation_error,
 )
@@ -105,16 +103,6 @@ def pinned_line_distance_profile(
             raise _validation_error(
                 "pinned_line_distance_profile_requires_distinct",
                 "pinned line-distance profile requires distinct point coordinates",
-            )
-        if (
-            _maximum_pinned_profile_wire_bytes(configuration, anchor_value)
-            > MAX_PINNED_PROFILE_RESULT_BYTES
-        ):
-            raise _validation_error(
-                "complete_pinned_line_distance_profile_would",
-                "the complete pinned line-distance profile would exceed the "
-                f"{MAX_PINNED_PROFILE_RESULT_BYTES}-byte aggregate result "
-                "budget; reduce the point count or coordinate heights",
             )
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(

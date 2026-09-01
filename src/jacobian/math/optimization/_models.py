@@ -21,14 +21,9 @@ MAX_RATIONAL_DIGITS = 128
 MAX_LINEAR_PROGRAM_VARIABLES = 32
 MAX_LINEAR_PROGRAM_CONSTRAINTS = 64
 MAX_LINEAR_PROGRAM_VARIABLE_NAME_LENGTH = 64
-MAX_LINEAR_PROGRAM_RESULT_BYTES = 10 * 1024 * 1024
 MAX_LINEAR_PROGRAM_SIMPLEX_BASES = 1_000_000
 MAX_LINEAR_PROGRAM_SIMPLEX_SCALAR_UPDATES = 50_000_000
 _INTERMEDIATE_SCALAR_DIGITS = "standard_intermediate_scalar_digits"
-_RATIONAL_WIRE_OVERHEAD_BYTES = 32
-_VARIABLE_WIRE_OVERHEAD_BYTES = 4
-_PROGRAM_WIRE_OVERHEAD_BYTES = 2_048
-_RESULT_WIRE_OVERHEAD_BYTES = 4_096
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -340,25 +335,6 @@ def _simplex_candidate_and_update_bounds(
     )
 
 
-def _source_wire_bytes(program: StandardFormRationalLinearProgram) -> int:
-    rationals = (
-        *program.objective,
-        *program.rhs,
-        *(value for row in program.coefficients for value in row),
-    )
-    return (
-        _PROGRAM_WIRE_OVERHEAD_BYTES
-        + sum(
-            len(value.num) + len(value.den) + _RATIONAL_WIRE_OVERHEAD_BYTES
-            for value in rationals
-        )
-        + sum(
-            len(variable) + _VARIABLE_WIRE_OVERHEAD_BYTES
-            for variable in program.variables
-        )
-    )
-
-
 def _program_fractions(
     program: StandardFormRationalLinearProgram,
 ) -> tuple[
@@ -491,18 +467,6 @@ class StandardFormRationalLinearProgram(StrictModel):
                 "linear-program exact simplex pivot work exceeds the "
                 f"{MAX_LINEAR_PROGRAM_SIMPLEX_SCALAR_UPDATES}-scalar-update bound",
             )
-        derived_rationals = 2 * len(self.variables) + 2 * len(self.rhs) + 2
-        estimated_result_bytes = (
-            _source_wire_bytes(self)
-            + derived_rationals * (2 * result_digits + _RATIONAL_WIRE_OVERHEAD_BYTES)
-            + _RESULT_WIRE_OVERHEAD_BYTES
-        )
-        if estimated_result_bytes > MAX_LINEAR_PROGRAM_RESULT_BYTES:
-            raise _validation_error(
-                "result_size_bound",
-                "linear-program exact result can exceed the "
-                f"{MAX_LINEAR_PROGRAM_RESULT_BYTES}-byte result bound",
-            )
         return self
 
     @classmethod
@@ -512,7 +476,7 @@ class StandardFormRationalLinearProgram(StrictModel):
         Public requests keep the ``MAX_RATIONAL_DIGITS`` source-scalar cap.
         A normalization step that derives its intermediates from admitted
         inputs may pass the envelope its own derivation proves; every derived
-        result-height, simplex-work, and byte check above still runs unchanged.
+        result-height and simplex-work checks above still run unchanged.
         """
 
         return cls.model_validate(
@@ -669,7 +633,6 @@ def _require_result_shape(result: RationalLinearProgramResult) -> None:
 
 
 __all__ = [
-    "MAX_LINEAR_PROGRAM_RESULT_BYTES",
     "MAX_LINEAR_PROGRAM_SIMPLEX_BASES",
     "MAX_LINEAR_PROGRAM_SIMPLEX_SCALAR_UPDATES",
     "RationalLinearProgramRequest",

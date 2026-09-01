@@ -1314,69 +1314,8 @@ def _oversized_face_payload() -> dict[str, object]:
     }
 
 
-def test_oversized_aggregate_face_rejected_before_nested_parsing() -> None:
-    """A face whose coordinates alone exceed the transport envelope can
-    never compose across the supported serialization boundary, so the
-    aggregate bound must reject it as a typed validation error before any
-    coordinate is parsed."""
-    from jacobian.canonical import CanonicalLimits, encode_strict_json
-
+def test_large_aggregate_face_is_not_rejected_by_a_transport_policy() -> None:
     payload = _oversized_face_payload()
-    encoded = len(
-        encode_strict_json(payload, limits=CanonicalLimits(max_output_bytes=2**30))
-    )
-    assert encoded > CanonicalLimits().max_output_bytes
+    face = RationalExposedFace.model_validate(payload)
 
-    with pytest.raises(ValidationError):
-        RationalExposedFace.model_validate(payload)
-
-
-def test_built_component_shapes_are_measured_by_the_aggregate_bound() -> None:
-    """The aggregate gate measures authored reduced components the same way
-    whether they arrive as raw payloads or as built canonical values."""
-    from jacobian.math.geometry.polytopes._models import _estimate_face_wire_bytes
-
-    big = CanonicalRational(num="9" * 32_768, den="8")
-    space = RationalCoordinateSpace(axes=("x", "y"))
-    vertices = (
-        RationalPolytopeVertex(vertex_id="a", coordinates=(big, big)),
-        RationalPolytopeVertex(vertex_id="b", coordinates=(big, big)),
-    )
-
-    built_estimate = _estimate_face_wire_bytes({"space": space, "vertices": vertices})
-    raw_estimate = _estimate_face_wire_bytes(
-        {
-            "space": {"axes": ["x", "y"]},
-            "vertices": [
-                {
-                    "vertex_id": "a",
-                    "coordinates": [{"num": big.num, "den": big.den}] * 2,
-                },
-                {
-                    "vertex_id": "b",
-                    "coordinates": [{"num": big.num, "den": big.den}] * 2,
-                },
-            ],
-        }
-    )
-
-    assert built_estimate == raw_estimate
-    assert built_estimate > 2 * 2 * (len(big.num) + len(big.den))
-
-
-def test_single_vertex_face_with_maximal_components_still_composes() -> None:
-    """The aggregate bound admits faces under the transport limit: maximal
-    per-component heights alone do not trigger it, and the accepted value
-    encodes strictly."""
-    from jacobian.canonical import CanonicalLimits, encode_strict_json
-
-    big = _large_rational(32_768)
-    face = RationalExposedFace(
-        space=RationalCoordinateSpace(axes=("x", "y")),
-        vertices=(RationalPolytopeVertex(vertex_id="v00", coordinates=(big, big)),),
-    )
-
-    encoded = len(
-        encode_strict_json(face.model_dump(mode="json"), limits=CanonicalLimits())
-    )
-    assert encoded < CanonicalLimits().max_output_bytes
+    assert len(face.vertices) == 64

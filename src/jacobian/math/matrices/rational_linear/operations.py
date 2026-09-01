@@ -6,14 +6,13 @@ from math import gcd
 from typing import Any, Literal
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import CanonicalLimits, format_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.rational_linear._models import LinearRationalSystem
 
 __all__ = ["inconsistency_witness", "solve"]
 
 MAX_LINEAR_SCALAR_WORK = 100_000_000
-MAX_LINEAR_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 
 @dataclass(frozen=True)
@@ -90,7 +89,6 @@ def _admit_system(
                 grouped[row].append(bound)
         minor_rows = tuple(tuple(grouped[row]) for row in range(rows))
         minor_columns = columns + 1
-        output_count = columns
     else:
         work = (columns + 1) * (rows + 1) * min(columns + 1, rows + 1)
         grouped = {column: [] for column in range(columns)}
@@ -101,7 +99,6 @@ def _admit_system(
             tuple(bound for bound in bounds if bound),
         )
         minor_columns = rows + 1
-        output_count = rows + 1
     if work * scalar_digits > MAX_LINEAR_SCALAR_WORK:
         _reject(
             "sparse exact linear algebra exceeds the "
@@ -114,22 +111,6 @@ def _admit_system(
     if result_digits > MAX_CANONICAL_RATIONAL_DIGITS:
         _reject("sparse exact linear algebra exceeds the canonical result-height bound")
 
-    source_bytes = sum(len(name) + 3 for name in system.variables)
-    source_bytes += sum(
-        len(item.value.num)
-        + len(item.value.den)
-        + len(str(item.row))
-        + len(str(item.column))
-        + 64
-        for item in system.coefficients.entries
-    )
-    source_bytes += sum(len(value.num) + len(value.den) + 24 for value in system.rhs)
-    result_bytes = source_bytes + output_count * (2 * result_digits + 32) + 4_096
-    if result_bytes > MAX_LINEAR_RESULT_BYTES:
-        _reject(
-            "sparse exact linear algebra exceeds the "
-            f"{MAX_LINEAR_RESULT_BYTES:,}-byte transport result bound"
-        )
     return _LinearPlan(
         entries=entries,
         bounds=bounds,

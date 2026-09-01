@@ -7,7 +7,6 @@ from itertools import product
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import CanonicalLimits, canonicalize_json
 from jacobian.math.combinatorics.additive import (
     IndexedIntegerSequence,
     IndexSubset,
@@ -18,7 +17,6 @@ from jacobian.math.combinatorics.additive._subset_sum_residue import (
     MAX_RESIDUE_PROFILE_ITEMS,
     MAX_RESIDUE_PROFILE_MODULUS,
     MAX_RESIDUE_PROFILE_MULTIPLICITY_BITS,
-    MAX_RESIDUE_PROFILE_RESULT_BYTES,
     SubsetSumResidueProfileRequest,
     SubsetSumResidueProfileResult,
     subset_sum_residue_profile,
@@ -323,11 +321,6 @@ def test_exact_dp_cell_boundary_is_complete_and_serializable() -> None:
     result = _run_residue(request)
     assert result.residue_counts[0] == str(1 << item_count)
     assert set(result.residue_counts[1:]) == {"0"}
-    encoded = canonicalize_json(
-        result.model_dump(mode="json"),
-        limits=CanonicalLimits(max_output_bytes=MAX_RESIDUE_PROFILE_RESULT_BYTES),
-    )
-    assert len(encoded) <= MAX_RESIDUE_PROFILE_RESULT_BYTES
 
 
 def test_request_just_above_dp_cell_boundary_is_rejected() -> None:

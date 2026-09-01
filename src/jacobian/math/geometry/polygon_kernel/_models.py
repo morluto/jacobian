@@ -31,32 +31,6 @@ MAX_KERNEL_COORDINATE_DIGITS = 64
 MAX_HALF_PLANE_COEFFICIENT_DIGITS = 1_024
 MAX_INTERSECTION_COMPONENT_DIGITS = 2_056
 MAX_KERNEL_FEASIBILITY_WORK = 500_000_000
-MAX_KERNEL_RESULT_CHARS = 500_000
-
-
-def _estimate_visibility_kernel_result_characters(
-    vertex_count: int,
-    max_coordinate_digits: int,
-    coefficient_digits: int,
-    intersection_digits: int,
-) -> int:
-    """Conservatively reserve the complete canonical kernel result.
-
-    The result retains the source polygon, one half-plane and one turn per
-    source vertex, and no more than one kernel-boundary point per edge.  The
-    four rational components of every retained point dominate the variable
-    portion; the remaining term covers labels, indices, arrays, and the
-    scalar area profile.  Keeping this calculation pure makes the admission
-    proof directly testable against produced canonical JSON.
-    """
-
-    return vertex_count * (
-        16 * max_coordinate_digits
-        + 6 * coefficient_digits
-        + 8 * intersection_digits
-        + 4 * vertex_count
-        + 400
-    )
 
 
 class KernelPolygon(PolygonRequest):
@@ -116,12 +90,10 @@ class PolygonKernelRequest(StrictModel):
             "description": (
                 "Exact visibility-kernel reconstruction for a simple CCW "
                 "rational polygon. Admission bounds C(n,2)*n boundary-point "
-                "feasibility checks, coefficient/intersection digit growth, "
-                f"and a {MAX_KERNEL_RESULT_CHARS}-character result estimate "
+                "feasibility checks and coefficient/intersection digit growth "
                 "before pairwise boundary expansion."
             ),
             "feasibility_work_bound": MAX_KERNEL_FEASIBILITY_WORK,
-            "result_character_bound": MAX_KERNEL_RESULT_CHARS,
         }
     )
 
@@ -296,7 +268,6 @@ __all__ = [
     "MAX_INTERSECTION_COMPONENT_DIGITS",
     "MAX_KERNEL_COORDINATE_DIGITS",
     "MAX_KERNEL_FEASIBILITY_WORK",
-    "MAX_KERNEL_RESULT_CHARS",
     "MAX_KERNEL_SOURCE_VERTICES",
     "KernelBoundaryIntersection",
     "KernelPolygon",

@@ -12,10 +12,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import (
-    CanonicalLimits,
-    parse_canonical_integer,
-)
+from jacobian.canonical import parse_canonical_integer
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -37,8 +34,6 @@ MAX_SPARSE_LIFTED_ROWS = 65_536
 MAX_INTERSECTION_STATES = 65_535
 MAX_INTERSECTION_MERGES = 100_000
 PERIODIC_EXECUTION_PASSES_PER_CALL = 2
-MAX_PERIODIC_RESULT_BYTES = CanonicalLimits().max_output_bytes
-PERIODIC_PROFILE_RESULT_ENVELOPE_BYTES = 4_096
 
 _PERIODIC_REQUEST_EXAMPLE = {
     "subsets": [
@@ -113,8 +108,6 @@ def _periodic_request_schema_extra(*, profile: bool) -> JsonSchemaValue:
                     MAX_MATERIALIZED_RESIDUES
                 ),
                 "profile_materialization_work_limit": MAX_PERIOD_LIFT_WORK,
-                "profile_result_envelope_bytes": PERIODIC_PROFILE_RESULT_ENVELOPE_BYTES,
-                "profile_result_byte_limit": MAX_PERIODIC_RESULT_BYTES,
             }
         )
     return extra
@@ -432,13 +425,11 @@ __all__ = [
     "MAX_MATERIALIZED_RESIDUES",
     "MAX_PERIODIC_FAMILY_SIZE",
     "MAX_PERIODIC_INTEGER_DIGITS",
-    "MAX_PERIODIC_RESULT_BYTES",
     "MAX_PERIODIC_SOURCE_ROWS",
     "MAX_PERIOD_LIFT_WORK",
     "MAX_PERIOD_SCAN",
     "MAX_SPARSE_LIFTED_ROWS",
     "PERIODIC_EXECUTION_PASSES_PER_CALL",
-    "PERIODIC_PROFILE_RESULT_ENVELOPE_BYTES",
     "PeriodicCongruenceSubset",
     "PeriodicCongruenceSubsetInput",
     "PeriodicCongruenceUnionMeasureResult",

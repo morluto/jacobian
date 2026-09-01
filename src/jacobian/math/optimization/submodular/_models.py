@@ -12,12 +12,8 @@ from jacobian._models import StrictModel
 
 # The checks run the local characterizations: monotonicity scans n*2^n
 # covering relations and submodularity C(n,2)*2^n local pairs, both with
-# early exit.  The absolute ceiling is transport-derived: the request
-# carries a complete 2^n-entry table whose serialized size grows as
-# 2^n * (1.5n + 25) bytes, so 9 MiB of canonical input budget admits
-# n <= 17; 16 keeps the worst-case full-scan work (~8M exact pair checks)
-# comfortably inside the synchronous envelope.  The per-request byte
-# preflight below is the binding, result-sensitive guard.
+# early exit.  A ground set of size 16 keeps the complete table at 65,536
+# entries and the worst-case full scan at about 8M exact pair checks.
 #
 # Scan work also scales with coefficient height: every inequality subtracts
 # and compares exact Fractions.  The two check requests therefore bound each
@@ -27,8 +23,6 @@ from jacobian._models import StrictModel
 # the canonical ceiling so the single-lookup evaluator can return any exact
 # representable value.
 MAX_GROUND_SET = 16
-_MAX_TABLE_WIRE_BYTES = 9 * 1024 * 1024
-_ENTRY_OVERHEAD_BYTES = 25
 MAX_SUBMODULAR_SCAN_VALUE_DIGITS = 128
 
 
@@ -81,20 +75,6 @@ class SetFunction(StrictModel):
             raise _validation_error(
                 "table_missing_subset",
                 "set function table must contain every subset of the ground set",
-            )
-        estimated_bytes = sum(
-            _ENTRY_OVERHEAD_BYTES
-            + len(entry.value.num)
-            + len(entry.value.den)
-            + 2 * sum(len(str(element)) + 1 for element in entry.subset)
-            for entry in self.entries
-        )
-        if estimated_bytes > _MAX_TABLE_WIRE_BYTES:
-            raise _validation_error(
-                "table_transport_envelope_exceeded",
-                "set-function table exceeds the "
-                f"{_MAX_TABLE_WIRE_BYTES}-byte transport envelope; the complete "
-                "2^n table cannot fit at this ground-set size",
             )
         return self
 

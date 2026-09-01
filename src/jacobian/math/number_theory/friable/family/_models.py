@@ -35,7 +35,6 @@ _MAX_FRIABLE_FAMILY_SOURCE_ABS = 10**_MAX_FRIABLE_FAMILY_SOURCE_DIGITS
 # Bound the total number of retained integers and serialized bytes so an
 # accepted result always fits the complete envelope.
 MAX_FRIABLE_FAMILY_ROWS = 200_000
-_MAX_FRIABLE_FAMILY_SERIALIZED_BYTES = 10 * 1024 * 1024
 
 type _FriableFamilyRegime = Literal["DIRECT", "MATERIALIZED", "GENERATED"]
 
@@ -89,9 +88,7 @@ def _estimate_generated_candidates(x: int, primes: tuple[int, ...]) -> int:
     return visit(0, x)
 
 
-def plan_friable_family(  # noqa: C901
-    x: int, y: int
-) -> tuple[_FriableFamilyRegime, tuple[int, ...]]:
+def plan_friable_family(x: int, y: int) -> tuple[_FriableFamilyRegime, tuple[int, ...]]:
     """Validate and select one exact friable-family execution regime.
 
     Returns the regime label and, for the generated regime, the tuple of
@@ -113,18 +110,12 @@ def plan_friable_family(  # noqa: C901
             f"friable-family sources must have at most {_MAX_FRIABLE_FAMILY_SOURCE_DIGITS} decimal digits",
         )
     # When y >= x every positive integer through x is friable.  This shortcut
-    # still materializes the complete family, so admit its rows and wire size.
+    # still materializes the complete family, so admit its row count.
     if y >= x:
-        estimated_bytes = 128 + x * (len(str(x)) + 3)
         if x > MAX_FRIABLE_FAMILY_ROWS:
             raise _validation_error(
                 "friable_family_exceeds_the_row_budget",
                 "friable family exceeds the row budget",
-            )
-        if estimated_bytes > _MAX_FRIABLE_FAMILY_SERIALIZED_BYTES:
-            raise _validation_error(
-                "friable_family_exceeds_the_serialized_budget",
-                "friable family exceeds the serialized result budget",
             )
         return "DIRECT", ()
 
@@ -168,13 +159,6 @@ def plan_friable_family(  # noqa: C901
             "generated_friable_family_exceeds_the_row_budget",
             "generated friable family exceeds the row budget",
         )
-    estimated_bytes = 128 + candidate_count * (len(str(x)) + 3)
-    if estimated_bytes > _MAX_FRIABLE_FAMILY_SERIALIZED_BYTES:
-        raise _validation_error(
-            "generated_friable_family_exceeds_the_serialized_budget",
-            "generated friable family exceeds the serialized result budget",
-        )
-
     return "GENERATED", primes
 
 

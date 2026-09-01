@@ -4,11 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from jacobian.canonical import (
-    CanonicalLimits,
-    encode_strict_json,
-    strict_json_object_size,
-)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.codes.nonlinear._models import ToSetSystemResult
 from jacobian.math.combinatorics.extremal_sets._models import (
@@ -28,70 +23,11 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 __all__ = ["construct_binary_union_relation"]
 
 MAX_BINARY_UNION_MEMBERSHIP_WORK = 20_000_000
-MAX_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 
 @dataclass(frozen=True)
 class _UnionRelationPlan:
     rows: tuple[tuple[int, int, int], ...]
-
-
-def _array_size(item_sizes: list[int]) -> int:
-    return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
-
-
-def _source_size(source: IndexedFiniteSetFamily) -> int:
-    member_sizes: list[int] = []
-    for member in source.members:
-        member_size = 2 + max(len(member) - 1, 0)
-        for coordinate in member:
-            member_size += len(str(coordinate))
-            if member_size > MAX_RESULT_BYTES:
-                return MAX_RESULT_BYTES + 1
-        member_sizes.append(member_size)
-    return strict_json_object_size(
-        (
-            ("ground_set_size", len(str(source.ground_set_size))),
-            ("members", _array_size(member_sizes)),
-        )
-    )
-
-
-def _result_size(
-    source_size: int,
-    rows: list[tuple[int, int, int]],
-    vertices: tuple[str, ...],
-) -> int:
-    row_sizes: list[int] = []
-    edge_sizes: list[int] = []
-    for i, j, k in rows:
-        edge_id_size = len(encode_strict_json(_edge_id(i, j, k)))
-        row_sizes.append(
-            strict_json_object_size(
-                (
-                    ("edge_id", edge_id_size),
-                    ("operand_i", len(str(i))),
-                    ("operand_j", len(str(j))),
-                    ("result_k", len(str(k))),
-                )
-            )
-        )
-        incident_sizes = [len(encode_strict_json(str(value))) for value in (i, j, k)]
-        edge_sizes.append(_array_size([edge_id_size, _array_size(incident_sizes)]))
-    vertex_sizes = [len(encode_strict_json(vertex)) for vertex in vertices]
-    hypergraph_size = strict_json_object_size(
-        (
-            ("vertices", _array_size(vertex_sizes)),
-            ("edges", _array_size(edge_sizes)),
-        )
-    )
-    return strict_json_object_size(
-        (
-            ("source", source_size),
-            ("rows", _array_size(row_sizes)),
-            ("hypergraph", hypergraph_size),
-        )
-    )
 
 
 def construct_binary_union_relation(
@@ -190,13 +126,6 @@ def _admit_union_relation(source: IndexedFiniteSetFamily) -> _UnionRelationPlan:
                 f"{MAX_BINARY_UNION_MEMBERSHIP_WORK}-unit bound"
             ),
         )
-    source_size = _source_size(source)
-    if source_size > MAX_RESULT_BYTES:
-        raise OperationDomainValidationError(
-            location=("source",),
-            code="set_system.binary_union_relation.output_exceeded",
-            message="the complete retained-source relation exceeds the output budget",
-        )
     sets = tuple(frozenset(member) for member in source.members)
     source_index = {member: index for index, member in enumerate(sets)}
     rows: list[tuple[int, int, int]] = []
@@ -215,13 +144,6 @@ def _admit_union_relation(source: IndexedFiniteSetFamily) -> _UnionRelationPlan:
                 f"the exact relation has {row_count} rows, exceeding the "
                 f"{MAX_EDGES}-edge or {MAX_TOTAL_INCIDENCES}-incidence carrier limit"
             ),
-        )
-    vertices = tuple(str(index) for index in range(len(source.members)))
-    if _result_size(source_size, rows, vertices) > MAX_RESULT_BYTES:
-        raise OperationDomainValidationError(
-            location=("source",),
-            code="set_system.binary_union_relation.output_exceeded",
-            message="the complete retained-source relation exceeds the output budget",
         )
     return _UnionRelationPlan(rows=tuple(rows))
 

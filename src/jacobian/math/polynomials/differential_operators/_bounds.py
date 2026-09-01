@@ -25,7 +25,7 @@ MAX_APPLICATION_OUTPUT_TERMS = 4_096
 MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS = 32_768
 MAX_APPLICATION_WORK_UNITS = 2_000_000
 MAX_APPLICATION_ARITHMETIC_WORK_UNITS = 8_000_000
-MAX_APPLICATION_RESULT_BYTES = 9 * 1024 * 1024
+MAX_POWERED_OPERATOR_RETAINED_WEIGHT_BITS = 72 * 1024 * 1024
 
 
 @dataclass(frozen=True, slots=True)
@@ -320,7 +320,6 @@ _HEIGHT_CAP_BITS = 64 * MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS
 # its one FLINT application; per-pass admission scans share that deterministic
 # budget.  Result construction is structural and does not replay the kernel.
 _ADMISSION_SCAN_PASSES = 2
-_RETAINED_WEIGHT_BITS = MAX_APPLICATION_RESULT_BYTES * 8
 
 
 def _distinct_powered_orders(
@@ -526,7 +525,7 @@ def _shift_weights(
             + shifted_weight.denominator.bit_length()
             for shifted_weight in merged.values()
         )
-        if retained_bits > _RETAINED_WEIGHT_BITS:
+        if retained_bits > MAX_POWERED_OPERATOR_RETAINED_WEIGHT_BITS:
             return None
         weights = merged
     return weights
@@ -716,61 +715,6 @@ def _coefficient_digit_bound(
         _decimal_digits_from_bits(numerator_bits),
         _decimal_digits_from_bits(denominator_bits),
     )
-
-
-def _require_result_size(
-    polynomial: RationalPolynomial,
-    operator: ConstantCoefficientDifferentialOperator,
-    expected: RationalPolynomial | None,
-    *,
-    candidate_terms: int,
-    coefficient_digits: int,
-) -> None:
-    def polynomial_bytes(value: RationalPolynomial) -> int:
-        size = sum(len(variable) + 4 for variable in value.variables) + 256
-        return size + sum(
-            len(term.coefficient.num)
-            + len(term.coefficient.den)
-            + sum(len(str(exponent)) + 2 for exponent in term.exponents)
-            + 96
-            for term in value.polynomial.terms
-        )
-
-    def operator_bytes(value: ConstantCoefficientDifferentialOperator) -> int:
-        size = sum(len(variable) + 4 for variable in value.variables) + 256
-        return size + sum(
-            len(term.coefficient.num)
-            + len(term.coefficient.den)
-            + sum(len(str(order)) + 2 for order in term.orders)
-            + 96
-            for term in value.terms
-        )
-
-    retained_bytes = polynomial_bytes(polynomial) + operator_bytes(operator)
-    if expected is not None:
-        retained_bytes += polynomial_bytes(expected)
-
-    # Output monomials never exceed the source's exponents, so the source's
-    # widest exponent bounds every output term's serialized exponent digits.
-    exponent_digits = max(
-        (
-            max(len(str(exponent)) for exponent in term.exponents)
-            for term in polynomial.polynomial.terms
-        ),
-        default=1,
-    )
-    per_output_term = (
-        2 * coefficient_digits + len(polynomial.variables) * (exponent_digits + 2) + 96
-    )
-    output_axis_bytes = sum(len(variable) for variable in polynomial.variables) + 256
-    estimated_bytes = (
-        retained_bytes + candidate_terms * per_output_term + output_axis_bytes + 2_048
-    )
-    if estimated_bytes > MAX_APPLICATION_RESULT_BYTES:
-        raise ValueError(
-            "differential-operator result exceeds the aggregate serialized-output "
-            f"budget of {MAX_APPLICATION_RESULT_BYTES} bytes"
-        )
 
 
 def _require_application_shape(
@@ -1061,24 +1005,10 @@ def validate_application_envelope(
     # of the identity operator join the zero iterate: 1^k(f) = f for every k.
     guaranteed_zero = _guaranteed_zero(polynomial, operator, iterations)
     if guaranteed_zero:
-        _require_result_size(
-            polynomial,
-            operator,
-            expected,
-            candidate_terms=0,
-            coefficient_digits=1,
-        )
         return ApplicationEnvelope(True, 0, 0)
 
     if iterations == 0 or _is_identity_operator(operator):
         _require_nonexpanding_output(polynomial, expected)
-        _require_result_size(
-            polynomial,
-            operator,
-            expected,
-            candidate_terms=len(polynomial.polynomial.terms),
-            coefficient_digits=_max_coefficient_digits(polynomial),
-        )
         return ApplicationEnvelope(False, 1, len(polynomial.polynomial.terms))
 
     # A one-term zeroth-order operator only rescales existing coefficients:
@@ -1195,13 +1125,6 @@ def validate_application_envelope(
             "differential-operator application exceeds the coefficient-arithmetic "
             "work budget"
         )
-    _require_result_size(
-        polynomial,
-        operator,
-        expected,
-        candidate_terms=candidate_terms,
-        coefficient_digits=coefficient_digits,
-    )
     return ApplicationEnvelope(
         guaranteed_zero=False,
         expanded_operator_terms=expanded_terms,

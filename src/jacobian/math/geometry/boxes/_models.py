@@ -18,10 +18,10 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"geometry.{reason}", message)
 
 
-MAX_BOX_UNION_NONEMPTY_BOXES = 16
+MAX_BOX_UNION_NONEMPTY_BOXES = 15
 MAX_INTERSECTION_CANDIDATES = (1 << MAX_BOX_UNION_NONEMPTY_BOXES) - 1
-MAX_BOX_UNION_RESULT_BYTES = 8 * 1024 * 1024
 MAX_BOX_UNION_RESULT_RATIONAL_DIGITS = 16_384
+MAX_INTERSECTION_LEDGER_COMPONENT_DIGITS = 8_000_000
 
 
 class BoxUnionVolumeRequest(StrictModel):
@@ -31,12 +31,12 @@ class BoxUnionVolumeRequest(StrictModel):
         json_schema_extra={
             "description": (
                 "An ordered family of one or more rational boxes; the "
-                "admitted source count is bounded by the serialized-result "
-                "budget because every result echoes its full source family. "
+                "admitted source count is bounded by the complete intersection "
+                "ledger because every result echoes its full source family. "
                 "Every box must use the same dimension in [1,64]. Each "
                 "endpoint component obeys the canonical 32,768-digit "
                 "rational limit, and admission rests on the coupled exact "
-                "growth and serialized-byte budgets rather than a "
+                "growth and intersection-cardinality budgets rather than a "
                 "per-endpoint cap. intervals=null "
                 "denotes the canonical empty box; at most 16 boxes may be "
                 "nonempty, and equal interval endpoints are valid measure-zero "

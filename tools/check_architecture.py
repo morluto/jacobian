@@ -1162,25 +1162,72 @@ def _generic_operation_shadow_violations(
     return ()
 
 
-def _carrier_transport_limit_violations(
+def _mathematical_transport_limit_violations(
     relative: PurePosixPath, tree: ast.Module
 ) -> tuple[Violation, ...]:
-    """Keep JSON response-byte policy out of reusable mathematical values."""
+    """Keep transport byte policy out of mathematical contracts and admission."""
 
-    if not (
-        relative.is_relative_to(PurePosixPath("src/jacobian/math"))
-        and relative.name == "values.py"
-    ):
+    if not relative.is_relative_to(PurePosixPath("src/jacobian/math")):
         return ()
+    if relative.name.endswith(("_process.py", "_worker.py", "_protocol.py")):
+        return ()
+
+    channel_tokens = ("WORKER", "PROCESS", "STDIN", "STDOUT", "STDERR")
+
+    def assignment_targets(node: ast.AST) -> tuple[ast.expr, ...]:
+        if isinstance(node, ast.Assign):
+            return tuple(node.targets)
+        if isinstance(node, ast.AnnAssign):
+            return (node.target,)
+        return ()
+
+    def is_channel_assignment(node: ast.AST) -> bool:
+        return any(
+            isinstance(target, ast.Name)
+            and any(channel in target.id.upper() for channel in channel_tokens)
+            for target in assignment_targets(node)
+        )
+
+    allowed_channel_attributes = {
+        id(descendant)
+        for node in ast.walk(tree)
+        if is_channel_assignment(node)
+        for descendant in ast.walk(node)
+        if isinstance(descendant, ast.Attribute)
+    }
+
+    def owns_transport_policy(node: ast.AST) -> bool:
+        if isinstance(node, ast.Attribute):
+            return (
+                node.attr == "max_output_bytes"
+                and id(node) not in allowed_channel_attributes
+            )
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            name = node.name.upper()
+            return (
+                any(token in name for token in ("RESULT", "OUTPUT"))
+                and name.endswith(("BYTES", "CHARS", "CHARACTERS", "BYTE_BOUND"))
+                and not any(channel in name for channel in channel_tokens)
+            )
+        return any(
+            isinstance(target, ast.Name)
+            and any(
+                token in target.id.upper() for token in ("RESULT", "OUTPUT", "WIRE")
+            )
+            and target.id.upper().endswith(("BYTES", "CHARS", "CHARACTERS"))
+            and not any(channel in target.id.upper() for channel in channel_tokens)
+            for target in assignment_targets(node)
+        )
+
     return tuple(
         _violation(
             relative,
             node,
-            "carrier-transport-limit",
-            "mathematical values must use representation bounds, not canonical output-byte limits",
+            "mathematical-transport-limit",
+            "mathematical contracts and admission must use cardinality, digit, or allocation bounds, not transport bytes",
         )
         for node in ast.walk(tree)
-        if isinstance(node, ast.Attribute) and node.attr == "max_output_bytes"
+        if owns_transport_policy(node)
     )
 
 
@@ -1192,7 +1239,7 @@ def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
         return (Violation(str(relative), "parse-error", f"cannot parse file: {exc}"),)
     return (
         *_generic_operation_shadow_violations(relative),
-        *_carrier_transport_limit_violations(relative, tree),
+        *_mathematical_transport_limit_violations(relative, tree),
         *_process_violations(relative, tree),
         *_bounded_process_violations(relative, tree),
         *_resolver_violations(relative, tree),

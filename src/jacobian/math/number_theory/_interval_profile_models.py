@@ -10,7 +10,6 @@ from typing import ClassVar
 from pydantic import ConfigDict, Field, StrictInt
 
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits
 
 # ---------------------------------------------------------------------------
 # Admission envelope
@@ -37,8 +36,7 @@ MAX_INTERVAL_UPPER_BOUND: int = (1 << 53) - 1
 # profiles use their operation-specific work and result estimators instead.
 MAX_INTERVAL_WIDTH: int = 1_000_000
 MAX_SIEVE_WORK: int = 20_000_000
-MAX_PROFILE_RESULT_BYTES: int = CanonicalLimits().max_output_bytes
-_PROFILE_RESULT_OVERHEAD_BYTES: int = 1_024
+MAX_PROFILE_RESULT_ITEMS: int = 1_000_000
 _SUCCESSOR_PRIME_BOUND_THRESHOLD: int = 396_738
 
 
@@ -50,7 +48,7 @@ class IntervalAdmission:
     upper_bound: int
     width: int
     estimated_work: int
-    estimated_result_bytes: int
+    estimated_result_items: int
 
 
 def _interval_prime_count_upper_bound(width: int) -> int:
@@ -130,42 +128,13 @@ def _estimate_successor_prime_search_work(upper_bound: int) -> int:
     return span * (max(upper_bound.bit_length(), 1) + 1)
 
 
-def _integer_digits(value: int) -> int:
-    """Return the decimal digit count of a positive integer."""
-    return len(str(value))
+def _estimate_dense_result_items(lower_bound: int, upper_bound: int) -> int:
+    return upper_bound - lower_bound + 1
 
 
-def _estimate_squarefree_result_bytes(lower_bound: int, upper_bound: int) -> int:
+def _estimate_prime_gap_result_items(lower_bound: int, upper_bound: int) -> int:
     width = upper_bound - lower_bound + 1
-    # Every interval integer occurs exactly once across the two value arrays.
-    # One extra byte per value covers its array separator.
-    return _PROFILE_RESULT_OVERHEAD_BYTES + width * (_integer_digits(upper_bound) + 1)
-
-
-def _estimate_divisor_count_result_bytes(lower_bound: int, upper_bound: int) -> int:
-    width = upper_bound - lower_bound + 1
-    digits = _integer_digits(upper_bound)
-    # 24 bytes covers the two field names, punctuation, and an array separator
-    # in addition to the two decimal values.
-    return _PROFILE_RESULT_OVERHEAD_BYTES + width * (2 * digits + 24)
-
-
-def _estimate_greatest_prime_factor_result_bytes(
-    lower_bound: int, upper_bound: int
-) -> int:
-    width = upper_bound - lower_bound + 1
-    digits = _integer_digits(upper_bound)
-    # The longer greatest_prime_factor field needs 32 fixed bytes per row.
-    return _PROFILE_RESULT_OVERHEAD_BYTES + width * (2 * digits + 32)
-
-
-def _estimate_prime_gap_result_bytes(lower_bound: int, upper_bound: int) -> int:
-    width = upper_bound - lower_bound + 1
-    row_count = _interval_prime_count_upper_bound(width)
-    # Bertrand's postulate bounds the successor below 2*U.  39 fixed bytes
-    # cover the three field names, punctuation, and an array separator.
-    digits = _integer_digits(2 * upper_bound)
-    return _PROFILE_RESULT_OVERHEAD_BYTES + row_count * (3 * digits + 39)
+    return _interval_prime_count_upper_bound(width)
 
 
 _RESULT_ESTIMATOR = Callable[[int, int], int]
@@ -178,9 +147,7 @@ class IntervalProfileRequest(StrictModel):
     lower_bound: StrictInt = Field(ge=1, le=MAX_INTERVAL_UPPER_BOUND)
     upper_bound: StrictInt = Field(ge=1, le=MAX_INTERVAL_UPPER_BOUND)
 
-    _result_estimator: ClassVar[_RESULT_ESTIMATOR] = (
-        _estimate_divisor_count_result_bytes
-    )
+    _result_estimator: ClassVar[_RESULT_ESTIMATOR] = _estimate_dense_result_items
     _work_estimator: ClassVar[_WORK_ESTIMATOR] = _estimate_factor_profile_work
     _max_width: ClassVar[int | None] = MAX_INTERVAL_WIDTH
 
@@ -197,14 +164,14 @@ class SquarefreeProfileRequest(IntervalProfileRequest):
                 "Closed positive integer interval [lower_bound, upper_bound]. "
                 f"The transport-safe upper bound is at most {MAX_INTERVAL_UPPER_BOUND:,}, "
                 f"the segmented-sieve work estimate must fit within {MAX_SIEVE_WORK:,} "
-                "steps, and the operation-specific worst-case JSON result "
-                f"estimate must fit within {MAX_PROFILE_RESULT_BYTES:,} bytes. "
+                "steps, and the complete partition must contain at most "
+                f"{MAX_PROFILE_RESULT_ITEMS:,} materialized values. "
                 "Squarefree values occur once across the two returned arrays."
             )
         }
     )
     _max_width: ClassVar[int | None] = None
-    _result_estimator: ClassVar[_RESULT_ESTIMATOR] = _estimate_squarefree_result_bytes
+    _result_estimator: ClassVar[_RESULT_ESTIMATOR] = _estimate_dense_result_items
     _work_estimator: ClassVar[_WORK_ESTIMATOR] = _estimate_squarefree_work
 
 
@@ -218,8 +185,7 @@ class IntervalProfileRowsRequest(IntervalProfileRequest):
                 f"The transport-safe upper bound is at most {MAX_INTERVAL_UPPER_BOUND:,}, "
                 f"the width is at most {MAX_INTERVAL_WIDTH:,}, and the "
                 f"segmented-sieve work estimate must fit within {MAX_SIEVE_WORK:,} "
-                "steps. The operation-specific worst-case JSON row estimate must "
-                f"fit within {MAX_PROFILE_RESULT_BYTES:,} bytes."
+                f"steps, with at most {MAX_PROFILE_RESULT_ITEMS:,} materialized rows."
             )
         }
     )
@@ -235,8 +201,7 @@ class DivisorCountProfileRequest(IntervalProfileRowsRequest):
                 f"The transport-safe upper bound is at most {MAX_INTERVAL_UPPER_BOUND:,}, "
                 f"the width is at most {MAX_INTERVAL_WIDTH:,}, and the "
                 f"segmented-sieve work estimate must fit within {MAX_SIEVE_WORK:,} "
-                "steps. The operation-specific worst-case JSON row estimate must "
-                f"fit within {MAX_PROFILE_RESULT_BYTES:,} bytes. The result "
+                f"steps, with at most {MAX_PROFILE_RESULT_ITEMS:,} materialized rows. The result "
                 "contains one (n, divisor_count) row per interval value."
             )
         }
@@ -253,15 +218,12 @@ class GreatestPrimeFactorProfileRequest(IntervalProfileRowsRequest):
                 f"The transport-safe upper bound is at most {MAX_INTERVAL_UPPER_BOUND:,}, "
                 f"the width is at most {MAX_INTERVAL_WIDTH:,}, and the "
                 f"segmented-sieve work estimate must fit within {MAX_SIEVE_WORK:,} "
-                "steps. The operation-specific worst-case JSON row estimate must "
-                f"fit within {MAX_PROFILE_RESULT_BYTES:,} bytes. The result "
+                f"steps, with at most {MAX_PROFILE_RESULT_ITEMS:,} materialized rows. The result "
                 "contains one (n, greatest_prime_factor) row per interval value."
             )
         }
     )
-    _result_estimator: ClassVar[_RESULT_ESTIMATOR] = (
-        _estimate_greatest_prime_factor_result_bytes
-    )
+    _result_estimator: ClassVar[_RESULT_ESTIMATOR] = _estimate_dense_result_items
 
 
 class PrimeGapProfileRequest(IntervalProfileRequest):
@@ -274,14 +236,13 @@ class PrimeGapProfileRequest(IntervalProfileRequest):
                 f"The transport-safe upper bound is at most {MAX_INTERVAL_UPPER_BOUND:,}, "
                 f"the segmented-sieve and bounded successor-prime search work "
                 f"estimate must fit within {MAX_SIEVE_WORK:,} steps. The "
-                "operation-specific worst-case JSON estimate for the primes "
-                "in the requested interval must fit within "
-                f"{MAX_PROFILE_RESULT_BYTES:,} bytes."
+                "prime-pair profile for the requested interval must contain at "
+                f"most {MAX_PROFILE_RESULT_ITEMS:,} materialized rows."
             )
         }
     )
     _max_width: ClassVar[int | None] = None
-    _result_estimator: ClassVar[_RESULT_ESTIMATOR] = _estimate_prime_gap_result_bytes
+    _result_estimator: ClassVar[_RESULT_ESTIMATOR] = _estimate_prime_gap_result_items
     _work_estimator: ClassVar[_WORK_ESTIMATOR] = _estimate_prime_gap_work
 
 
@@ -377,7 +338,7 @@ class PrimeGapProfileResult(StrictModel):
 __all__ = [
     "MAX_INTERVAL_UPPER_BOUND",
     "MAX_INTERVAL_WIDTH",
-    "MAX_PROFILE_RESULT_BYTES",
+    "MAX_PROFILE_RESULT_ITEMS",
     "MAX_SIEVE_WORK",
     "DivisorCountProfileRequest",
     "DivisorCountProfileResult",

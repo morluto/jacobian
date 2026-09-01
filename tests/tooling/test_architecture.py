@@ -36,15 +36,40 @@ def test_generic_private_operation_shadows_are_rejected(tmp_path: Path) -> None:
     ]
 
 
-def test_mathematical_value_carriers_cannot_own_output_byte_limits(
+def test_mathematical_contracts_cannot_own_output_byte_limits(
     tmp_path: Path,
 ) -> None:
-    source = "from jacobian.canonical import CanonicalLimits\nlimit = CanonicalLimits().max_output_bytes\n"
-    _write(tmp_path, "src/jacobian/math/example/values.py", source)
-    _write(tmp_path, "src/jacobian/math/example/operations.py", source)
+    codec_source = "from jacobian.canonical import CanonicalLimits\nlimit = CanonicalLimits().max_output_bytes\n"
+    named_source = "MAX_PROFILE_RESULT_BYTES = 1024\n"
+    helper_source = "def estimate_result_bytes():\n    return 1024\n"
+    _write(tmp_path, "src/jacobian/math/example/values.py", codec_source)
+    _write(tmp_path, "src/jacobian/math/example/operations.py", named_source)
+    _write(tmp_path, "src/jacobian/math/example/_models.py", helper_source)
+    _write(
+        tmp_path, "src/jacobian/math/example/_worker.py", codec_source + named_source
+    )
+    _write(
+        tmp_path,
+        "src/jacobian/math/example/_worker_bounds.py",
+        "predicted_worker_output_bytes = 1024\n",
+    )
+    _write(
+        tmp_path,
+        "src/jacobian/math/example/_process_adapter.py",
+        "from jacobian.process import run_bounded_process\n" + named_source,
+    )
+    _write(
+        tmp_path,
+        "src/jacobian/math/example/_process_channel.py",
+        "from jacobian.process import run_bounded_process\n"
+        "worker_stdout_bytes = 1024\n",
+    )
 
-    assert _violations(tmp_path, "carrier-transport-limit") == [
-        "src/jacobian/math/example/values.py"
+    assert _violations(tmp_path, "mathematical-transport-limit") == [
+        "src/jacobian/math/example/_models.py",
+        "src/jacobian/math/example/_process_adapter.py",
+        "src/jacobian/math/example/operations.py",
+        "src/jacobian/math/example/values.py",
     ]
 
 

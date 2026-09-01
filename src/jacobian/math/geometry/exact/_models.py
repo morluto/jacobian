@@ -9,7 +9,6 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import encode_strict_json, format_canonical_integer
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -149,8 +148,8 @@ __all__ = [
 # Pinned line-distance profile
 # ---------------------------------------------------------------------------
 
-MAX_PINNED_PROFILE_RESULT_BYTES = 10 * 1024 * 1024
-"""Aggregate canonical-output budget for one complete pinned-line profile."""
+MAX_PINNED_PROFILE_AUTHORED_RATIONAL_CHARACTERS = 10 * 1024 * 1024
+"""Raw rational-character preflight for independently authored profiles."""
 
 
 PinnedBoundedInteger = Annotated[
@@ -234,178 +233,6 @@ class PinnedLineConfiguration(PointConfiguration):
     points: tuple[PinnedLinePoint, ...] = Field(min_length=2, max_length=MAX_POINTS)
 
 
-_PINNED_ENTRY_SLACK_BYTES = 16
-"""Per-entry slack over the exact skeleton, coefficient, and pair bounds."""
-
-_PINNED_RESULT_BOUND_PADDING_BYTES = 1_024
-
-
-def _component_heights(value: CanonicalRational) -> tuple[int, int]:
-    return len(value.num.lstrip("-")), len(value.den)
-
-
-def _difference_digit_heights(
-    left: LabelledRationalPoint,
-    right: LabelledRationalPoint,
-) -> tuple[int, int, int, int]:
-    """Return reduced planar difference component digit counts.
-
-    The four counts are ``(digits(|dx numerator|), digits(dx denominator),
-    digits(|dy numerator|), digits(dy denominator))`` for ``left - right``.
-    """
-
-    delta_x = left.coordinates[0].as_fraction() - right.coordinates[0].as_fraction()
-    delta_y = left.coordinates[1].as_fraction() - right.coordinates[1].as_fraction()
-    return (
-        len(format_canonical_integer(abs(delta_x.numerator))),
-        len(format_canonical_integer(delta_x.denominator)),
-        len(format_canonical_integer(abs(delta_y.numerator))),
-        len(format_canonical_integer(delta_y.denominator)),
-    )
-
-
-def _maximum_pinned_profile_wire_bytes(
-    configuration: PointConfiguration,
-    anchor: tuple[CanonicalRational, ...],
-) -> int:
-    """Upper-bound the canonical wire encoding of the complete profile.
-
-    Every bound below is taken on unreduced forms, so canonical reduction at
-    any step can only shrink the real encoding. A canonical line's first two
-    coefficients carry their reduced coordinate-difference heights; the
-    constant coefficient scales those differences by the first point's
-    coordinates and sums, gaining the coordinate heights plus a carry. The
-    squared anchor-to-line distance squares a cross of two differences over a
-    squared-norm sum, doubling the cross bounds. Each line entry is costed as
-    its encoding skeleton plus all four rational components (numerators and
-    denominators charged separately) and slack; the pair ledger, the
-    multiplicity ledger, and the configuration and anchor echoes are counted
-    exactly or by the same component bounds.
-    """
-
-    from itertools import combinations
-
-    points = configuration.points
-    n = len(points)
-    if n < 2:
-        return 0
-    point_heights = [
-        (
-            _component_heights(item.coordinates[0]),
-            _component_heights(item.coordinates[1]),
-        )
-        for item in points
-    ]
-    diffs = {
-        (first, second): _difference_digit_heights(points[first], points[second])
-        for first, second in combinations(range(n), 2)
-    }
-
-    def entry_digit_bounds(first: int, second: int) -> tuple[int, int]:
-        """Bound ``(coefficient digits, squared-distance digits)`` totals."""
-
-        nx, bx, ny, by = diffs[(first, second)]
-        (hxp_n, hxp_d), (hyp_n, hyp_d) = point_heights[first]
-        # c = -(a*x_p + b*y_p) over a common denominator: each term scales a
-        # reduced difference by a reduced coordinate of the same point.
-        c_numerator = max(ny + hxp_n, nx + hyp_n) + 1
-        c_denominator = by + hxp_d + bx + hyp_d
-        # Cross of (p - q) with (anchor - p) differences.
-        day = _component_heights_pair(anchor[1], points[first].coordinates[1])
-        dax = _component_heights_pair(anchor[0], points[first].coordinates[0])
-        first_term = (nx + day[0], bx + day[1])
-        second_term = (ny + dax[0], by + dax[1])
-        cross_numerator = (
-            max(first_term[0] + second_term[1], second_term[0] + first_term[1]) + 1
-        )
-        cross_denominator = first_term[1] + second_term[1]
-        squared_numerator = max(2 * nx + 2 * by, 2 * ny + 2 * bx) + 1
-        squared_denominator = 2 * bx + 2 * by
-        coefficient_digits = (ny + by) + (nx + bx) + (c_numerator + c_denominator)
-        distance_digits = (
-            2 * cross_denominator
-            + squared_numerator
-            + 2 * cross_numerator
-            + squared_denominator
-            + 2
-        )
-        return coefficient_digits, distance_digits
-
-    coefficient_digits_max = 0
-    distance_digits_max = 0
-    for first, second in combinations(range(n), 2):
-        coefficient, distance = entry_digit_bounds(first, second)
-        coefficient_digits_max = max(coefficient_digits_max, coefficient)
-        distance_digits_max = max(distance_digits_max, distance)
-
-    line_entry_skeleton = len(
-        encode_strict_json(
-            {
-                "line_coefficients": [
-                    {"num": "", "den": ""},
-                    {"num": "", "den": ""},
-                    {"num": "", "den": ""},
-                ],
-                "squared_distance": {"num": "", "den": ""},
-                "pairs": [[0, 1]],
-            }
-        )
-    )
-    multiplicity_entry_skeleton = len(
-        encode_strict_json(
-            {"pair_count": 0, "squared_distance": {"num": "", "den": ""}}
-        )
-    )
-    echo_exact = len(
-        encode_strict_json(
-            {
-                "configuration": configuration.model_dump(mode="json"),
-                "anchor": [item.model_dump(mode="json") for item in anchor],
-                "dimension": 2,
-                "point_count": n,
-                "exactness": "",
-            }
-        )
-    )
-    line_count_bound = n * (n - 1) // 2
-    pairs_total_bytes = sum(
-        len(str(first)) + len(str(second)) + 5
-        for first, second in combinations(range(n), 2)
-    )
-    total = (
-        echo_exact
-        + line_count_bound
-        * (
-            line_entry_skeleton
-            + coefficient_digits_max
-            + distance_digits_max
-            + _PINNED_ENTRY_SLACK_BYTES
-        )
-        + pairs_total_bytes
-        + line_count_bound
-        * (
-            multiplicity_entry_skeleton
-            + distance_digits_max
-            + len(str(line_count_bound))
-            + _PINNED_ENTRY_SLACK_BYTES
-        )
-        + _PINNED_RESULT_BOUND_PADDING_BYTES
-    )
-    return total
-
-
-def _component_heights_pair(
-    left: CanonicalRational,
-    right: CanonicalRational,
-) -> tuple[int, int]:
-
-    delta = left.as_fraction() - right.as_fraction()
-    return (
-        len(format_canonical_integer(abs(delta.numerator))),
-        len(format_canonical_integer(delta.denominator)),
-    )
-
-
 class PinnedLineDistanceRequest(StrictModel):
     """Compute distances from an anchor to all pair-spanned lines.
 
@@ -421,13 +248,10 @@ class PinnedLineDistanceRequest(StrictModel):
             "Planar point configuration (dimension 2) with distinct coordinates; "
             "all points must have distinct locations and at most 64 points, "
             "each coordinate at most 256 digits for pinned-line admission. "
-            "The point count is further coupled to the coordinate heights by "
-            f"an aggregate result budget ({MAX_PINNED_PROFILE_RESULT_BYTES} "
-            "bytes for the complete pair-spanned-line profile)."
+            "The complete pair ledger is bounded directly by its cardinality."
         ),
         json_schema_extra={
             "coordinate_digit_bound": COORDINATE_DIGITS,
-            "aggregate_result_budget_bytes": MAX_PINNED_PROFILE_RESULT_BYTES,
         },
     )
     anchor: tuple[PinnedBoundedRational, ...] = Field(
@@ -557,11 +381,11 @@ class PinnedLineDistanceResult(StrictModel):
         if not isinstance(lines, (list, tuple)):
             return data
         total = 0
-        authored_rational_bytes = 0
+        authored_rational_characters = 0
         for line in lines:
             pair_total, rational_bytes = _count_line_ledger(line)
             total += pair_total
-            authored_rational_bytes += rational_bytes
+            authored_rational_characters += rational_bytes
             if total > MAX_PAIRS:
                 raise _validation_error(
                     "aggregate_source_pair_ledger_exceeds_f",
@@ -574,18 +398,20 @@ class PinnedLineDistanceResult(StrictModel):
         if isinstance(multiplicities, (list, tuple)):
             for entry in multiplicities:
                 if isinstance(entry, (list, tuple)) and entry:
-                    authored_rational_bytes += _rational_component_bytes(entry[0])
+                    authored_rational_characters += _rational_component_bytes(entry[0])
         # Authored rational components are bounded by the same aggregate
         # result budget as the parsed profile: every valid entry needs at
         # least two characters per canonical rational, so any payload whose
         # raw numerator/denominator characters alone approach the budget is
         # forged padding that must be rejected BEFORE nested parsing.
-        if authored_rational_bytes > MAX_PINNED_PROFILE_RESULT_BYTES:
+        if (
+            authored_rational_characters
+            > MAX_PINNED_PROFILE_AUTHORED_RATIONAL_CHARACTERS
+        ):
             raise _validation_error(
                 "authored_rational_components_exceed_f_max",
                 "authored rational components exceed the "
-                f"{MAX_PINNED_PROFILE_RESULT_BYTES}-byte aggregate result "
-                "budget before parsing",
+                "raw rational-character preflight bound before parsing",
             )
         return data
 

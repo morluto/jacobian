@@ -171,7 +171,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 description=(
                     "Compute the exact independence polynomial of P4; the graph "
                     "must be a nonempty tree within this operation's bounded "
-                    "convolution-work and serialized-output envelope."
+                    "convolution-work and coefficient-digit bounds."
                 ),
                 input=_PATH_TREE_EXAMPLE,
             ),

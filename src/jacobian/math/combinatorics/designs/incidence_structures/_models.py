@@ -15,7 +15,6 @@ from pydantic import (
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.canonical import encode_strict_json
 
 MAX_POINTS = 100
 MAX_BLOCKS = 100
@@ -25,15 +24,11 @@ MAX_PAIRS = 5_000
 MAX_MATRIX_CELLS = 10_000
 MAX_GRAPH_EDGES = 5_000
 MAX_LABEL_BYTES = 1_024
-MAX_RESULT_BYTES = 1_000_000
 MAX_TRADE_ORDER = MAX_T
 MAX_TRADE_DIFFERENCES = MAX_POINTS + MAX_SUBSETS
 
 _MAX_CONTAINMENT_TOTAL_WORK_UNITS = 4_000_000
 _MAX_TRADE_TOTAL_WORK_UNITS = 5_000_000
-_RESULT_ENVELOPE_BYTES = 4_096
-_PROFILE_ENTRY_OVERHEAD_BYTES = 64
-_TRADE_DIFFERENCE_OVERHEAD_BYTES = 96
 
 
 def _validation_error(code: str, message: str) -> PydanticCustomError:
@@ -64,6 +59,23 @@ class IncidenceStructure(StrictModel):
 
     @model_validator(mode="after")
     def require_valid_incidence(self) -> Self:
+        for kind, labels in (
+            ("point label", self.points),
+            ("block ID", self.block_ids),
+        ):
+            for label in labels:
+                try:
+                    encoded = label.encode("utf-8")
+                except UnicodeEncodeError as exc:
+                    raise _validation_error(
+                        "label_not_unicode_scalar_text",
+                        f"{kind} must contain only valid Unicode scalar values",
+                    ) from exc
+                if len(encoded) > MAX_LABEL_BYTES:
+                    raise _validation_error(
+                        "label_exceeds_byte_bound",
+                        f"{kind} must use at most {MAX_LABEL_BYTES} UTF-8 bytes",
+                    )
         if len(set(self.points)) != len(self.points):
             raise _validation_error(
                 "point_labels_not_distinct", "point labels must be distinct"
@@ -111,22 +123,6 @@ def _profile_work_units(incidence: IncidenceStructure, order: int) -> int:
     return canonicalization_units + order * (subset_count + generated_block_subsets)
 
 
-def _label_wire_bytes(points: tuple[str, ...]) -> int:
-    return sum(len(encode_strict_json(point)) + 1 for point in points)
-
-
-def _subset_label_wire_bytes(points: tuple[str, ...], order: int) -> int:
-    point_count = len(points)
-    if order > point_count:
-        return 0
-    appearances_per_point = comb(point_count - 1, order - 1)
-    return appearances_per_point * _label_wire_bytes(points)
-
-
-def _incidence_wire_bytes(incidence: IncidenceStructure) -> int:
-    return len(encode_strict_json(incidence.model_dump(mode="json")))
-
-
 def _require_containment_profile_admitted(
     incidence: IncidenceStructure,
     order: int,
@@ -148,19 +144,6 @@ def _require_containment_profile_admitted(
         raise IncidenceStructureAdmissionError(
             "containment_work_budget_exceeded",
             "containment profile exceeds the execution work budget",
-        )
-
-    estimated_result_bytes = (
-        _incidence_wire_bytes(incidence)
-        + _subset_label_wire_bytes(incidence.points, order)
-        + subset_count * _PROFILE_ENTRY_OVERHEAD_BYTES
-        + (len(incidence.blocks) + 1) * 32
-        + _RESULT_ENVELOPE_BYTES
-    )
-    if estimated_result_bytes > MAX_RESULT_BYTES:
-        raise IncidenceStructureAdmissionError(
-            "containment_output_budget_exceeded",
-            "containment profile with its retained source exceeds the output budget",
         )
 
 
@@ -197,27 +180,6 @@ def _require_incidence_trade_admitted(
         raise IncidenceStructureAdmissionError(
             "trade_work_budget_exceeded",
             "trade comparison exceeds the execution work budget",
-        )
-
-    subset_label_bytes = sum(
-        _subset_label_wire_bytes(left.points, order)
-        for order in range(1, max_order + 1)
-    )
-    comparison_axis_bytes = max_order * (_label_wire_bytes(left.points) + 16)
-    source_pair_copies = max_order + 1
-    estimated_result_bytes = (
-        source_pair_copies
-        * (_incidence_wire_bytes(left) + _incidence_wire_bytes(right))
-        + subset_label_bytes
-        + sum(subset_counts) * _TRADE_DIFFERENCE_OVERHEAD_BYTES
-        + max_order * 128
-        + comparison_axis_bytes
-        + _RESULT_ENVELOPE_BYTES
-    )
-    if estimated_result_bytes > MAX_RESULT_BYTES:
-        raise IncidenceStructureAdmissionError(
-            "trade_output_budget_exceeded",
-            "trade comparison with its retained sources exceeds the output budget",
         )
 
 

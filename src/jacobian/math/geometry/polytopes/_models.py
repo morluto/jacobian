@@ -22,7 +22,6 @@ from sympy import Matrix, Rational
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.math.geometry.polytopes._rational_geometry import (
     recession_cone_is_trivial,
     vertices_from_halfspaces,
@@ -1326,13 +1325,6 @@ class FacetIncidenceResult(StrictModel):
                 "facet_source_indices",
                 "facet source vertex indices must refer to the retained vertices",
             )
-        try:
-            encode_strict_json(self.model_dump(mode="json"), limits=CanonicalLimits())
-        except ValueError as exc:
-            raise _validation_error(
-                "canonical_json_bound",
-                "facet profile exceeds the canonical JSON output bound",
-            ) from exc
         return self
 
     @classmethod
@@ -1572,109 +1564,14 @@ class RationalCovector(StrictModel):
         return self
 
 
-_FACE_WIRE_RESERVE_BYTES = 65_536
-"""Fixed encoded-size allowance for a face's labels and JSON structure.
-
-Axis labels and vertex IDs are short Unicode scalar strings whose RFC 8785
-escaping expands each code point to at most twelve characters, so the
-combined worst case across the declared container maxima — plus every
-structural token of the encoded face — stays inside this reserve.
-"""
-
-_FACE_VERTEX_WIRE_OVERHEAD_BYTES = 256
-"""Encoded-size allowance for one vertex's structural JSON tokens."""
-
-_FACE_COORDINATE_WIRE_OVERHEAD_BYTES = 48
-"""Encoded-size allowance beyond its two canonical integer strings for one
-serialized rational coordinate."""
-
-
-def _face_coordinate_wire_bytes(component: object) -> int | None:
-    """Return one authored coordinate's conservative serialized height.
-
-    The reduced numerator/denominator strings are measured exactly as the
-    strict JSON encoding writes them; unrecognized shapes return ``None``
-    so ordinary nested validation reports them with the published schema
-    errors.
-    """
-
-    if isinstance(component, CanonicalRational):
-        num, den = component.num, component.den
-    elif isinstance(component, dict):
-        raw_num = component.get("num")
-        raw_den = component.get("den")
-        if not isinstance(raw_num, str) or not isinstance(raw_den, str):
-            return None
-        num, den = raw_num, raw_den
-    else:
-        return None
-    return len(num) + len(den) + _FACE_COORDINATE_WIRE_OVERHEAD_BYTES
-
-
-def _estimate_face_wire_bytes(data: object) -> int:
-    """Conservatively upper-bound one authored exposed face's encoded size.
-
-    Every recognized coordinate contributes the length of both canonical
-    integer strings plus per-element overhead; unrecognized shapes
-    contribute nothing here and remain the business of ordinary nested
-    validation and the exact strict JSON replay. The estimate may only
-    over-count, so an accepted aggregate always encodes at or under it.
-    """
-
-    total = _FACE_WIRE_RESERVE_BYTES
-    for vertex in _iter_raw_entries(data, "vertices"):
-        total += _FACE_VERTEX_WIRE_OVERHEAD_BYTES
-        for component in _iter_raw_entries(vertex, "coordinates"):
-            coordinate_bytes = _face_coordinate_wire_bytes(component)
-            if coordinate_bytes is not None:
-                total += coordinate_bytes
-    return total
-
-
 class RationalExposedFace(StrictModel):
-    """The complete vertex family of one exposed face of a V-polytope.
-
-    The aggregate encoded payload must fit the domain's strict JSON
-    transport limit: an accepted face composes unchanged across the
-    supported serialization boundary, so a face whose coordinates alone
-    exceed ``CanonicalLimits().max_output_bytes`` is rejected here as a
-    typed validation error.
-    """
+    """The complete vertex family of one exposed face of a V-polytope."""
 
     space: RationalCoordinateSpace
     vertices: tuple[RationalPolytopeVertex, ...] = Field(
         min_length=1,
         max_length=MAX_VERTICES,
     )
-
-    @model_validator(mode="before")
-    @classmethod
-    def require_aggregate_wire_size_within_transport_bound(cls, data: object) -> object:
-        """Reject faces whose aggregate payload overflows the transport limit.
-
-        Declared container maxima admit faces whose canonical coordinates
-        alone encode far past ``CanonicalLimits().max_output_bytes``, yet a
-        value only composes through boundaries ``encode_strict_json``
-        supports. Nested canonical-rational parsing validates every authored
-        coordinate before parent after-validators run, so gating there would
-        pay the complete parse of a guaranteed-to-fail payload. This gate
-        conservatively estimates the encoded height from the authored
-        reduced-component strings — dict or built value alike — and rejects
-        an over-limit aggregate before any coordinate is parsed; the
-        residual gap between the estimate and the exact encoded size stays
-        covered by the strict JSON replay in
-        ``require_canonical_face_vertices``.
-        """
-
-        data = canonicalize_json_containers(data)
-
-        estimated = _estimate_face_wire_bytes(data)
-        if estimated > CanonicalLimits().max_output_bytes:
-            raise _validation_error(
-                "canonical_json_bound",
-                "exposed face exceeds the canonical JSON output bound",
-            )
-        return data
 
     @model_validator(mode="after")
     def require_canonical_face_vertices(self) -> Self:
@@ -1697,13 +1594,6 @@ class RationalExposedFace(StrictModel):
                 "exposed_face_coordinates_unique",
                 "exposed-face vertices must have distinct coordinates",
             )
-        try:
-            encode_strict_json(self.model_dump(mode="json"), limits=CanonicalLimits())
-        except ValueError as exc:
-            raise _validation_error(
-                "canonical_json_bound",
-                "exposed face exceeds the canonical JSON output bound",
-            ) from exc
         return self
 
 

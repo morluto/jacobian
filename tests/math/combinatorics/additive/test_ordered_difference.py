@@ -3,10 +3,8 @@
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import CanonicalLimits, canonicalize_json
 from jacobian.math.combinatorics.additive._models import (
     _MAX_DIMENSION,
-    _MAX_PROFILE_RESULT_BUDGET_BYTES,
     _MAX_VECTOR_SET_SIZE,
     IntegerVector,
     OrderedDifferenceProfileRequest,
@@ -297,7 +295,7 @@ class TestOrderedDifferenceProfile:
             )
 
     @pytest.mark.scale
-    def test_worst_case_profile_stays_within_result_budget(self) -> None:
+    def test_worst_case_profile_matches_the_cardinality_bound(self) -> None:
         """A maximal Sidon family has n*(n-1) distinct difference entries,
         which is the worst-case serialized shape for the bound."""
         side = _MAX_VECTOR_SET_SIZE
@@ -307,12 +305,6 @@ class TestOrderedDifferenceProfile:
         req = _request(*vectors)
         result = _run_ordered(req)
         assert result.support_size == side * (side - 1)
-        payload = result.model_dump(mode="json")
-        encoded = canonicalize_json(
-            payload,
-            limits=CanonicalLimits(max_output_bytes=_MAX_PROFILE_RESULT_BUDGET_BYTES),
-        )
-        assert len(encoded) <= _MAX_PROFILE_RESULT_BUDGET_BYTES
 
     def test_result_roundtrip(self) -> None:
         req = _request((0, 0), (1, 0), (0, 1), (1, 1))

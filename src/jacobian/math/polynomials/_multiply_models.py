@@ -6,7 +6,6 @@ from jacobian._exact import (
     canonical_rational_component_digits,
 )
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits, strict_json_object_size
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_TERMS,
     RationalPolynomial,
@@ -16,13 +15,6 @@ MAX_MULTIPLY_RESULT_TERMS = MAX_POLYNOMIAL_TERMS
 # Keep backend convolution work bounded independently from the exact result
 # term limit; sparse supports can produce many products that collect together.
 MAX_MULTIPLY_PRODUCT_WORK = 1_000_000
-MAX_MULTIPLY_RESULT_BYTES = CanonicalLimits().max_output_bytes
-
-
-def _json_array_size(item_sizes: tuple[int, ...]) -> int:
-    """Return the encoded size of a JSON array from encoded item sizes."""
-
-    return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
 
 
 def _is_multiplicative_identity(polynomial: RationalPolynomial) -> bool:
@@ -84,48 +76,6 @@ def _maximum_product_coefficient_digits(
     return product_count * (left_digits + right_digits) + len(str(product_count))
 
 
-def _result_wire_upper_bound(
-    variables: tuple[str, ...],
-    *,
-    term_count: int,
-    coefficient_digits: int,
-    maximum_exponents: tuple[int, ...],
-) -> int:
-    """Bound the canonical JSON size of the resulting rational polynomial."""
-
-    # A signed decimal component is at most one sign, ``coefficient_digits``
-    # digits, and two JSON quotes.  Every canonical rational is an object with
-    # both components, including integer-valued coefficients.
-    rational_component_size = coefficient_digits + 3
-    coefficient_size = strict_json_object_size(
-        (
-            ("den", rational_component_size),
-            ("num", rational_component_size),
-        )
-    )
-    exponent_size = _json_array_size(
-        tuple(len(str(exponent)) for exponent in maximum_exponents)
-    )
-    term_size = strict_json_object_size(
-        (
-            ("coefficient", coefficient_size),
-            ("exponents", exponent_size),
-        )
-    )
-    terms_size = _json_array_size((term_size,) * term_count)
-    polynomial_size = strict_json_object_size((("terms", terms_size),))
-    variables_size = _json_array_size(
-        tuple(len(variable.encode("utf-8")) + 2 for variable in variables)
-    )
-    return strict_json_object_size(
-        (
-            ("domain", 4),  # JSON string ``"QQ"``.
-            ("polynomial", polynomial_size),
-            ("variables", variables_size),
-        )
-    )
-
-
 class RationalPolynomialMultiplyRequest(StrictModel):
     """Two rational polynomials in the same variable ring for exact multiplication."""
 
@@ -135,7 +85,6 @@ class RationalPolynomialMultiplyRequest(StrictModel):
 
 __all__ = [
     "MAX_MULTIPLY_PRODUCT_WORK",
-    "MAX_MULTIPLY_RESULT_BYTES",
     "MAX_MULTIPLY_RESULT_TERMS",
     "RationalPolynomialMultiplyRequest",
 ]

@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-from pydantic_core import PydanticCustomError
-
-from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.morphisms._models import (
-    _RESULT_ENVELOPE_RESERVE_BYTES,
     MAX_CYCLE_SEARCH_PATHS,
     MORPHISM_MAX_VERTICES,
     FixedLengthCycleResult,
@@ -18,15 +14,26 @@ from jacobian.math.graphs.morphisms._models import (
     SubgraphPatternFindResult,
     _canonical_max_degree,
     _first_homomorphism_obstruction,
-    _label_wire_bytes,
-    _require_output_headroom,
 )
-from jacobian.math.graphs.values import (
-    SimpleUndirectedGraph,
-    simple_undirected_graph_wire_bytes,
-)
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 __all__ = ["fixed_length_cycle", "homomorphism_check", "subgraph_pattern_find"]
+
+MAX_MORPHISM_RETAINED_LABEL_CHARACTERS = 10_000_000
+
+
+def _graph_label_characters(graph: SimpleUndirectedGraph) -> int:
+    return sum(len(vertex) for vertex in graph.vertices) + sum(
+        len(left) + len(right) for left, right in graph.edges
+    )
+
+
+def _reject_retained_labels(location: tuple[str, ...]) -> None:
+    raise OperationDomainValidationError(
+        location=location,
+        code="graph.morphism.retained_labels_exceed_bound",
+        message="morphism result exceeds the retained label-character bound",
+    )
 
 
 def _admit_cycle_request(graph: SimpleUndirectedGraph, length: int) -> None:
@@ -60,43 +67,28 @@ def _admit_cycle_request(graph: SimpleUndirectedGraph, length: int) -> None:
                 f"{MAX_CYCLE_SEARCH_PATHS}-path work budget"
             ),
         )
-    try:
-        _require_output_headroom(
-            simple_undirected_graph_wire_bytes(graph),
-            _label_wire_bytes(graph.vertices),
-            "fixed-length cycle",
-        )
-    except PydanticCustomError as exc:
-        raise OperationDomainValidationError(
-            location=("graph",), code="graph.cycle.output_bound", message=str(exc)
-        ) from exc
+    largest_label = max((len(vertex) for vertex in graph.vertices), default=0)
+    if (
+        _graph_label_characters(graph) + length * largest_label
+        > MAX_MORPHISM_RETAINED_LABEL_CHARACTERS
+    ):
+        _reject_retained_labels(("graph",))
 
 
 def _admit_homomorphism_request(vertex_map: GraphVertexMap) -> None:
-    """Admit the source-bound result envelope for a map check."""
-    max_label_bytes = max(
-        (
-            len(encode_strict_json(label))
-            for label in vertex_map.source_graph.vertices
-            + vertex_map.target_graph.vertices
-        ),
-        default=0,
-    )
-    estimated_result_bytes = (
-        len(encode_strict_json(vertex_map.model_dump(mode="json")))
-        + 4 * max_label_bytes
-        + _RESULT_ENVELOPE_RESERVE_BYTES
-    )
-    output_limit = CanonicalLimits().max_output_bytes
-    if estimated_result_bytes > output_limit:
-        raise OperationDomainValidationError(
-            location=("vertex_map",),
-            code="graph.homomorphism.output_bound",
-            message=(
-                "the source-bound graph-homomorphism result would exceed the "
-                f"{output_limit}-byte canonical output limit"
-            ),
+    """Admit one source map and its largest possible retained obstruction."""
+
+    labels = vertex_map.source_graph.vertices + vertex_map.target_graph.vertices
+    retained = (
+        _graph_label_characters(vertex_map.source_graph)
+        + _graph_label_characters(vertex_map.target_graph)
+        + sum(
+            len(row.source_vertex) + len(row.target_vertex) for row in vertex_map.rows
         )
+        + 4 * max((len(label) for label in labels), default=0)
+    )
+    if retained > MAX_MORPHISM_RETAINED_LABEL_CHARACTERS:
+        _reject_retained_labels(("vertex_map",))
 
 
 def _admit_subgraph_request(
@@ -128,19 +120,14 @@ def _admit_subgraph_request(
                     f"{MAX_CYCLE_SEARCH_PATHS}-assignment work budget"
                 ),
             )
-    try:
-        _require_output_headroom(
-            simple_undirected_graph_wire_bytes(pattern)
-            + simple_undirected_graph_wire_bytes(host),
-            _label_wire_bytes(host.vertices),
-            "subgraph-pattern",
-        )
-    except PydanticCustomError as exc:
-        raise OperationDomainValidationError(
-            location=("pattern", "host"),
-            code="graph.subgraph.output_bound",
-            message=str(exc),
-        ) from exc
+    largest_host_label = max((len(vertex) for vertex in host.vertices), default=0)
+    retained = (
+        _graph_label_characters(pattern)
+        + _graph_label_characters(host)
+        + pattern_size * largest_host_label
+    )
+    if retained > MAX_MORPHISM_RETAINED_LABEL_CHARACTERS:
+        _reject_retained_labels(("pattern", "host"))
 
 
 def homomorphism_check(vertex_map: GraphVertexMap) -> HomomorphismCheckResult:

@@ -17,9 +17,7 @@ def compute_word_collision_profile_op(
     generators = tuple(
         (g.slope.as_fraction(), g.intercept.as_fraction()) for g in request.generators
     )
-    return compute_word_collision_profile(
-        generators, request.depth, enforce_transport=True
-    )
+    return compute_word_collision_profile(generators, request.depth)
 
 
 TOOLS: MathTools = (

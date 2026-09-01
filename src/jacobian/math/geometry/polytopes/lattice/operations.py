@@ -418,43 +418,6 @@ def _scan_box(
     return points, count
 
 
-_MAX_OUTPUT_BYTES = 10 * 1024 * 1024
-
-
-def _require_enumeration_output_budget(
-    *, lo: list[int], hi: list[int], d: int, count: int
-) -> None:
-    """Check the transport envelope after the one collecting scan.
-
-    Enumeration uses the same scan that constructs its result.  The point
-    cap is enforced while collecting; this final arithmetic check prices the
-    already-known count without running a second mathematical scan.
-    """
-    if count > MAX_LATTICE_POINTS:
-        raise LatticePointBudgetError(
-            "lattice-point enumeration exceeds the "
-            f"{MAX_LATTICE_POINTS}-point budget bound"
-        )
-    # Per-point JSON is roughly {"coordinates":["x",...]} with d strings.
-    # Max coordinate string length is bounded by the bounding box; the
-    # canonical formatter is digit-limit-safe for 32,768-digit coordinates.
-    max_coord_len = max(
-        max(
-            len(format_canonical_integer(lo[k])),
-            len(format_canonical_integer(hi[k])),
-        )
-        for k in range(d)
-    )
-    # Conservative: 20 bytes overhead + per-coordinate (digits+quotes+comma) + brackets
-    per_point = 20 + d * (max_coord_len + 4)
-    base_overhead = 80
-    estimated = base_overhead + count * per_point
-    if estimated > _MAX_OUTPUT_BYTES:
-        raise LatticePointBudgetError(
-            "lattice-point enumeration would exceed the 10 MiB canonical JSON output limit"
-        )
-
-
 def enumerate_lattice_points(
     vertices: tuple[Vertex, ...] | None,
     halfspaces: tuple[Halfspace, ...] | None,
@@ -470,8 +433,7 @@ def enumerate_lattice_points(
         "vertices" if vertices is not None else "halfspaces"
     )
     facets, lo, hi, d = _facets_and_box(vertices, halfspaces, dimension_bound)
-    points, count = _scan_box(facets, lo, hi, d, collect=True)
-    _require_enumeration_output_budget(lo=lo, hi=hi, d=d, count=count)
+    points, _count = _scan_box(facets, lo, hi, d, collect=True)
     return EnumerateLatticePointsResult._from_kernel(
         dimension=d,
         points=tuple(points),

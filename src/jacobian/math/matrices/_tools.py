@@ -70,7 +70,7 @@ def compute_kronecker_product(
 
 
 def compute_rank(request: MatrixRankRequest) -> MatrixRankResult:
-    return rank_result(request.matrix, enforce_transport_limit=True)
+    return rank_result(request.matrix)
 
 
 def compute_rational_linear_solve(

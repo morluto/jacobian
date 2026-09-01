@@ -7,7 +7,6 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import invoke_operation
 from jacobian.math.number_theory._interval_profile_models import (
     MAX_INTERVAL_WIDTH,
-    MAX_PROFILE_RESULT_BYTES,
 )
 
 _INTERVAL_PROFILE_OPERATION_IDS = (
@@ -102,12 +101,6 @@ def test_prime_gap_example_values() -> None:
 
 def test_interval_profile_schemas_publish_coupled_admission_limits() -> None:
     catalog = Catalog.open()
-    for operation_id in _INTERVAL_PROFILE_OPERATION_IDS:
-        operation = catalog.operation(operation_id)
-        assert operation is not None
-        description = operation.request_type.model_json_schema()["description"]
-        assert f"{MAX_PROFILE_RESULT_BYTES:,}" in description
-
     for operation_id in (
         "number_theory.integer_interval.divisor_count_profile.compute",
         "number_theory.integer_interval.greatest_prime_factor_profile.compute",
@@ -120,8 +113,8 @@ def test_interval_profile_schemas_publish_coupled_admission_limits() -> None:
         )
 
 
-def test_row_profile_rejection_is_domain_validation_at_execution() -> None:
-    with pytest.raises(OperationDomainValidationError, match="output budget"):
+def test_work_rejection_is_domain_validation_at_execution() -> None:
+    with pytest.raises(OperationDomainValidationError, match="work budget"):
         invoke_operation(
             "number_theory.integer_interval.divisor_count_profile.compute",
             {"lower_bound": 1, "upper_bound": MAX_INTERVAL_WIDTH},

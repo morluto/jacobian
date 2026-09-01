@@ -7,7 +7,6 @@ from dataclasses import dataclass
 
 import networkx as nx
 
-from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs._networkx import graph_from_value
 from jacobian.math.graphs.rooted_trees.values import (
@@ -19,9 +18,6 @@ from jacobian.math.graphs.rooted_trees.values import (
 from jacobian.math.graphs.values import MAX_GRAPH_LABEL_BYTES, SimpleUndirectedGraph
 
 type _Adjacency = dict[str, tuple[str, ...]]
-
-_SOURCE_MEASUREMENT_LIMIT_MULTIPLIER = 4
-_RESULT_STRUCTURE_RESERVE_PER_VERTEX = 1024
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,54 +87,6 @@ def _plan_request(
     connected = component_count == 1
     has_cycle = len(graph.edges) > len(graph.vertices) - component_count
 
-    output_limit = CanonicalLimits().max_output_bytes
-    # At the graph owner's maxima, there are at most 65,536 serialized label
-    # occurrences. A 64-byte label needs at most 386 JSON bytes when every byte
-    # is escaped, so four output envelopes safely measure every admitted source.
-    measurement_limits = CanonicalLimits(
-        max_output_bytes=_SOURCE_MEASUREMENT_LIMIT_MULTIPLIER * output_limit
-    )
-    source_bytes = len(
-        encode_strict_json(graph.model_dump(mode="json"), limits=measurement_limits)
-    )
-    if connected and not has_cycle:
-        max_label_wire_bytes = max(
-            len(encode_strict_json(vertex)) for vertex in graph.vertices
-        )
-        order = len(graph.vertices)
-        # Besides the retained graph, a constructed tree repeats at most 6n-4
-        # labels: the root, seed/shrub vertex partition, classified edges,
-        # boundary seeds, upper seeds, and shrub roots. One KiB per source
-        # vertex conservatively covers all remaining JSON structure.
-        predicted_result_bytes = (
-            source_bytes
-            + (6 * order - 4) * max_label_wire_bytes
-            + _RESULT_STRUCTURE_RESERVE_PER_VERTEX * (order + 1)
-        )
-    else:
-        diagnostic_payload = {
-            "graph": graph.model_dump(mode="json"),
-            "root": root,
-            "component_size_limit": component_size_limit,
-            "outcome": {
-                "status": "NOT_A_TREE",
-                "connected": connected,
-                "has_cycle": has_cycle,
-                "component_count": component_count,
-            },
-        }
-        predicted_result_bytes = len(
-            encode_strict_json(diagnostic_payload, limits=measurement_limits)
-        )
-    if predicted_result_bytes > output_limit:
-        raise OperationDomainValidationError(
-            location=("graph",),
-            code="graph.rooted_tree.fine_partition.output_budget",
-            message=(
-                "the retained source graph and complete fine-partition rows "
-                f"would exceed the {output_limit}-byte canonical output limit"
-            ),
-        )
     return _FinePartitionPlan(
         connected=connected,
         has_cycle=has_cycle,

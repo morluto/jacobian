@@ -4,17 +4,11 @@ from __future__ import annotations
 
 from types import MappingProxyType
 
-from jacobian.math.combinatorics._difference_set_models import (
-    _difference_set_validation_error,
-)
 from jacobian.math.combinatorics._sidon_extension_models import (
-    MAX_EXTENSION_RESULT_BYTES,
     SidonExtensionCandidateResult,
     SidonExtensionObstruction,
     SidonExtensionProfileResult,
     _candidate_obstruction,
-    _CandidateObstruction,
-    _maximum_result_bytes,
     _require_extension_work_budget,
     _require_source_profile_memory_budget,
     _SidonExtensionAdmissionPlan,
@@ -31,24 +25,8 @@ def _sidon_extension_admission_plan(
     _require_extension_work_budget(len(source_elements), len(candidate_elements))
     _require_source_profile_memory_budget(source_elements)
     source_differences = _validate_source_is_sidon(source_elements)
-    result_bytes = _maximum_result_bytes(source_elements, candidate_elements)
-    candidate_obstructions: tuple[_CandidateObstruction | None, ...] | None = None
-    if result_bytes > MAX_EXTENSION_RESULT_BYTES:
-        candidate_obstructions = tuple(
-            _candidate_obstruction(source_elements, source_differences, candidate)
-            for candidate in candidate_elements
-        )
-        result_bytes = _maximum_result_bytes(
-            source_elements, candidate_elements, candidate_obstructions
-        )
-    if result_bytes > MAX_EXTENSION_RESULT_BYTES:
-        raise _difference_set_validation_error(
-            "combinatorics.sidon_extension_result_budget",
-            "Sidon extension result exceeds the canonical output budget",
-        )
     return _SidonExtensionAdmissionPlan(
         source_differences=MappingProxyType(source_differences),
-        candidate_obstructions=candidate_obstructions,
     )
 
 
@@ -69,20 +47,16 @@ def compute_sidon_extension_profile(
         candidate_elements,
     )
     source_diffs = admission_plan.source_differences
-    candidate_obstructions = admission_plan.candidate_obstructions
 
     admissible: list[str] = []
     rejected: list[SidonExtensionCandidateResult] = []
 
-    for index, x in enumerate(candidates):
-        if candidate_obstructions is None:
-            obstruction_data = _candidate_obstruction(
-                source_elements,
-                source_diffs,
-                x,
-            )
-        else:
-            obstruction_data = candidate_obstructions[index]
+    for x in candidates:
+        obstruction_data = _candidate_obstruction(
+            source_elements,
+            source_diffs,
+            x,
+        )
         if obstruction_data is not None:
             difference, pair_a, pair_b = obstruction_data
             rejected.append(

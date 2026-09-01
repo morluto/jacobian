@@ -294,15 +294,14 @@ def test_power_rejects_work_and_height_envelopes_separately() -> None:
         convolution_power(_fair_bit(), 1_701)
 
 
-def test_complete_power_result_byte_envelope_has_useful_boundary() -> None:
+def test_complete_power_uses_the_structural_output_envelope() -> None:
     accepted = convolution_power(_three_point_lattice(100, 10_000), 100)
     assert len(accepted.distribution.atoms) > 256
 
-    with pytest.raises(
-        OperationDomainValidationError,
-        match=r"profile exceed.*result bound",
-    ):
-        convolution_power(_three_point_lattice(100, 100_000), 100)
+    wider = convolution_power(_three_point_lattice(100, 100_000), 100)
+
+    assert len(wider.distribution.atoms) == len(accepted.distribution.atoms)
+    assert wider.source != accepted.source
 
 
 def test_power_rejects_coprime_support_denominator_lcm_growth() -> None:

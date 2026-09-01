@@ -6,6 +6,7 @@ import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.edge_deletion_profile.operations import (
+    MAX_RETAINED_LABEL_CHARACTERS,
     compute_edge_deletion_profile,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -191,15 +192,18 @@ def test_native_negative_order_is_typed() -> None:
         compute_edge_deletion_profile(graph, -1)
 
 
-def test_native_non_utf8_label_is_typed() -> None:
-    graph = _graph(["\ud800"], [])
-    with pytest.raises(OperationDomainValidationError):
-        compute_edge_deletion_profile(graph, 0)
+def test_native_result_accepts_retained_labels_at_character_bound() -> None:
+    graph = _graph(["x" * MAX_RETAINED_LABEL_CHARACTERS], [])
+    result = compute_edge_deletion_profile(graph, 0)
+
+    assert result.graph == graph
+    assert len(result.rows) == 1
 
 
-def test_native_oversized_label_is_rejected_before_encoding() -> None:
-    graph = _graph(["x" * 11_000_000], [])
-    with pytest.raises(OperationDomainValidationError, match="input/output bound"):
+def test_native_result_rejects_labels_above_retained_character_bound() -> None:
+    graph = _graph(["x" * (MAX_RETAINED_LABEL_CHARACTERS + 1)], [])
+
+    with pytest.raises(OperationDomainValidationError, match="retained-character"):
         compute_edge_deletion_profile(graph, 0)
 
 

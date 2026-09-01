@@ -20,7 +20,6 @@ MAX_DIVISIBILITY_EDGE_QUOTIENT_DIGITS = 20
 MAX_DIVISIBILITY_EDGE_WORK = 1_000_000
 MAX_DIVISIBILITY_EDGE_PAIR_SCAN_WORK = 2_000_000
 _FACTORIZATION_STARTUP_WORK = 10_000
-MAX_DIVISIBILITY_EDGE_RESULT_BYTES = 10 * 1024 * 1024
 
 
 class DivisibilityEdgeProfileRequest(StrictModel):
@@ -116,12 +115,6 @@ def _validate_divisibility_edge_resources(
             "divisibility_edge.pair_scan_work",
             "divisibility pair scan exceeds the admitted work budget",
         )
-    max_digits = max(digits)
-    if len(elements) * (max_digits + 32) > MAX_DIVISIBILITY_EDGE_RESULT_BYTES:
-        raise PydanticCustomError(
-            "divisibility_edge.result_bytes",
-            "divisibility edge profile exceeds the serialized-byte budget",
-        )
     edge_plan: list[tuple[int, int, int]] = []
     distinct_quotients: set[int] = set()
     for left_index, left in enumerate(parsed):
@@ -146,11 +139,6 @@ def _validate_divisibility_edge_resources(
         raise PydanticCustomError(
             "divisibility_edge.factorization_work",
             "divisibility factorization exceeds the admitted work budget",
-        )
-    if len(edge_plan) * (2 * max_digits + 96) > MAX_DIVISIBILITY_EDGE_RESULT_BYTES:
-        raise PydanticCustomError(
-            "divisibility_edge.result_bytes",
-            "divisibility edge profile exceeds the serialized-byte budget",
         )
     return elements, tuple(edge_plan)
 

@@ -6,7 +6,6 @@ import pytest
 from sympy.ntheory.factor_ import factorint
 
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._r_full_enumerate import (
     enumerate_r_full,
     enumerate_r_full_numbers,
@@ -15,10 +14,9 @@ from jacobian.math.number_theory._r_full_enumerate_kernels import (
     enumerate_r_full as enumerate_r_full_kernel,
 )
 from jacobian.math.number_theory._r_full_enumerate_models import (
-    MAX_R_FULL_RESULT_BYTES,
+    MAX_R_FULL_FAMILY_SIZE,
     RFullEnumerateRequest,
     RFullEnumerateResult,
-    estimate_r_full_result_bytes,
     plan_r_full_family,
 )
 
@@ -139,29 +137,22 @@ def test_result_uses_canonical_output_limit() -> None:
     assert len(result) == 31_377
 
 
-def test_result_estimator_reserves_dispatch_envelope_space() -> None:
-    family = tuple(10**99 + index for index in range(102_000))
-    assert estimate_r_full_result_bytes(64, 10**109, family) > MAX_R_FULL_RESULT_BYTES
-
-
 def test_planner_admits_only_bounded_cumulative_merge_work() -> None:
     plan = plan_r_full_family(2, 10**9)
     assert plan.exceeded
     assert plan.reason == "planning"
 
 
-def test_high_exponent_family_is_rejected_before_materialization() -> None:
-    """Exponent-sensitive admission rejects a wide family before serialization."""
-    with pytest.raises(
-        OperationDomainValidationError,
-        match="serialized-byte budget",
-    ):
-        enumerate_r_full_numbers(
-            RFullEnumerateRequest(
-                minimum_exponent=64,
-                cutoff="1" + "0" * 128,
-            )
+def test_high_exponent_family_uses_mathematical_family_bound() -> None:
+    result = enumerate_r_full_numbers(
+        RFullEnumerateRequest(
+            minimum_exponent=64,
+            cutoff="1" + "0" * 128,
         )
+    )
+
+    assert result.count == len(result.family)
+    assert result.count <= MAX_R_FULL_FAMILY_SIZE
 
 
 def test_result_rejects_oversized_family_member_before_parsing() -> None:

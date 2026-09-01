@@ -4,11 +4,7 @@ from typing import Any
 
 from jacobian.catalog.models import (
     MathTool,
-    OperationDomainValidationError,
     OperationExample,
-)
-from jacobian.math.combinatorics.codes.nonlinear._budget import (
-    require_set_system_output_bound,
 )
 from jacobian.math.combinatorics.codes.nonlinear._models import (
     ConstantWeightProfileRequest,
@@ -50,14 +46,6 @@ def _constant_weight_profile(
 
 
 def _to_set_system(request: ToSetSystemRequest) -> ToSetSystemResult:
-    try:
-        require_set_system_output_bound(request.code)
-    except ValueError as exc:
-        raise OperationDomainValidationError(
-            location=("code",),
-            code="nonlinear_code.set_system_not_admitted",
-            message=str(exc),
-        ) from exc
     return to_set_system(request.code)
 
 

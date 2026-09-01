@@ -5,7 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import CanonicalLimits, format_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.collatz_wielandt._models import (
     CollatzWielandtResult,
@@ -18,11 +18,6 @@ def _admit_result_size(
     matrix: tuple[tuple[CanonicalRational, ...], ...],
     vector: tuple[CanonicalRational, ...],
 ) -> None:
-    source_bytes = (
-        128
-        + sum(len(value.num) + len(value.den) + 16 for row in matrix for value in row)
-        + sum(len(value.num) + len(value.den) + 16 for value in vector)
-    )
     quotient_widths: list[int] = []
     for row_index, row in enumerate(matrix):
         derived_digits = (
@@ -35,14 +30,6 @@ def _admit_result_size(
             + 2
         )
         quotient_widths.append(derived_digits)
-    quotient_bytes = sum(2 * width + 64 for width in quotient_widths)
-    quotient_bytes += 2 * max(quotient_widths, default=1) + 64
-    if source_bytes + quotient_bytes > CanonicalLimits().max_output_bytes:
-        raise OperationDomainValidationError(
-            location=("matrix", "vector"),
-            code="collatz_wielandt.result_bound",
-            message="the complete Collatz-Wielandt profile exceeds the canonical output bound",
-        )
     if any(width > MAX_CANONICAL_RATIONAL_DIGITS for width in quotient_widths):
         raise OperationDomainValidationError(
             location=("matrix", "vector"),

@@ -20,7 +20,7 @@ from collections.abc import Callable
 from jacobian.math.number_theory._interval_profile_models import (
     MAX_INTERVAL_UPPER_BOUND,
     MAX_INTERVAL_WIDTH,
-    MAX_PROFILE_RESULT_BYTES,
+    MAX_PROFILE_RESULT_ITEMS,
     MAX_SIEVE_WORK,
     DivisorCountProfileResult,
     DivisorCountProfileRow,
@@ -36,12 +36,10 @@ from jacobian.math.number_theory._interval_profile_models import (
     PrimeGapProfileResult,
     PrimeGapProfileRow,
     SquarefreeProfileResult,
-    _estimate_divisor_count_result_bytes,
+    _estimate_dense_result_items,
     _estimate_factor_profile_work,
-    _estimate_greatest_prime_factor_result_bytes,
-    _estimate_prime_gap_result_bytes,
+    _estimate_prime_gap_result_items,
     _estimate_prime_gap_work,
-    _estimate_squarefree_result_bytes,
     _estimate_squarefree_work,
 )
 
@@ -83,10 +81,10 @@ def _admit_interval(
         raise IntervalAdmissionError(
             "width_bound", "interval width exceeds maximum supported width"
         )
-    estimated_result_bytes = result_estimator(lower_bound, upper_bound)
-    if estimated_result_bytes > MAX_PROFILE_RESULT_BYTES:
+    estimated_result_items = result_estimator(lower_bound, upper_bound)
+    if estimated_result_items > MAX_PROFILE_RESULT_ITEMS:
         raise IntervalAdmissionError(
-            "output_bound", "interval result exceeds the canonical output budget"
+            "output_bound", "interval result exceeds the materialized item bound"
         )
     estimated_work = work_estimator(lower_bound, upper_bound)
     if estimated_work > MAX_SIEVE_WORK:
@@ -100,7 +98,7 @@ def _admit_interval(
         upper_bound=upper_bound,
         width=width,
         estimated_work=estimated_work,
-        estimated_result_bytes=estimated_result_bytes,
+        estimated_result_items=estimated_result_items,
     )
 
 
@@ -198,7 +196,7 @@ def squarefree_profile(lower_bound: int, upper_bound: int) -> SquarefreeProfileR
     admission = _admit_interval(
         lower_bound,
         upper_bound,
-        result_estimator=_estimate_squarefree_result_bytes,
+        result_estimator=_estimate_dense_result_items,
         work_estimator=_estimate_squarefree_work,
         max_width=None,
     )
@@ -250,7 +248,7 @@ def divisor_count_profile(
     admission = _admit_interval(
         lower_bound,
         upper_bound,
-        result_estimator=_estimate_divisor_count_result_bytes,
+        result_estimator=_estimate_dense_result_items,
         work_estimator=_estimate_factor_profile_work,
         max_width=MAX_INTERVAL_WIDTH,
     )
@@ -305,7 +303,7 @@ def greatest_prime_factor_profile(
     admission = _admit_interval(
         lower_bound,
         upper_bound,
-        result_estimator=_estimate_greatest_prime_factor_result_bytes,
+        result_estimator=_estimate_dense_result_items,
         work_estimator=_estimate_factor_profile_work,
         max_width=MAX_INTERVAL_WIDTH,
     )
@@ -356,7 +354,7 @@ def prime_gap_profile(lower_bound: int, upper_bound: int) -> PrimeGapProfileResu
     admission = _admit_interval(
         lower_bound,
         upper_bound,
-        result_estimator=_estimate_prime_gap_result_bytes,
+        result_estimator=_estimate_prime_gap_result_items,
         work_estimator=_estimate_prime_gap_work,
         max_width=None,
     )
@@ -400,7 +398,7 @@ def least_prime_factor_profile(
     admission = _admit_interval(
         lower_bound,
         upper_bound,
-        result_estimator=_estimate_divisor_count_result_bytes,
+        result_estimator=_estimate_dense_result_items,
         work_estimator=_estimate_factor_profile_work,
         max_width=MAX_INTERVAL_WIDTH,
     )
@@ -420,7 +418,7 @@ def euler_totient_profile(
     admission = _admit_interval(
         lower_bound,
         upper_bound,
-        result_estimator=_estimate_divisor_count_result_bytes,
+        result_estimator=_estimate_dense_result_items,
         work_estimator=_estimate_factor_profile_work,
         max_width=MAX_INTERVAL_WIDTH,
     )
@@ -438,7 +436,7 @@ def divisor_sum_profile(lower_bound: int, upper_bound: int) -> DivisorSumProfile
     admission = _admit_interval(
         lower_bound,
         upper_bound,
-        result_estimator=_estimate_divisor_count_result_bytes,
+        result_estimator=_estimate_dense_result_items,
         work_estimator=_estimate_factor_profile_work,
         max_width=MAX_INTERVAL_WIDTH,
     )

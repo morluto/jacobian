@@ -27,12 +27,12 @@ MAX_RESIDUE_PROFILE_MODULUS = 65_536
 MAX_RESIDUE_PROFILE_MULTIPLICITY_BITS = 4_096
 MAX_RESIDUE_PROFILE_ITEMS = MAX_RESIDUE_PROFILE_MULTIPLICITY_BITS - 1
 MAX_RESIDUE_PROFILE_INPUT_INTEGER_DIGITS = 32_768
+MAX_RESIDUE_PROFILE_TOTAL_INPUT_DIGITS = 4_000_000
 
 # A count-only result may use the broader DP envelope.  Canonical witnesses
 # retain at most n indices for each of m residues, so witness-bearing requests
 # have their own output-sensitive index-slot budget.
 MAX_RESIDUE_PROFILE_WITNESS_INDEX_SLOTS = 250_000
-MAX_RESIDUE_PROFILE_RESULT_BYTES = 4 * 1024 * 1024
 
 # 30103/100000 is a strict upper bound for log_10(2).  The derived character
 # ceiling covers every count through 2^(MAX_BITS-1) without constructing it.
@@ -55,31 +55,7 @@ def _maximum_count_digits(item_count: int) -> int:
     return item_count * 30_103 // 100_000 + 1
 
 
-def _estimated_result_bytes(
-    source: IndexedIntegerSequence,
-    modulus: int,
-    *,
-    include_witnesses: bool,
-) -> int:
-    """Conservatively bound the canonical result before running the DP."""
-    item_count = len(source.items)
-    source_bytes = sum(len(value) + 3 for value in source.items)
-    count_bytes = modulus * (_maximum_count_digits(item_count) + 3)
-
-    witness_bytes = 0
-    if include_witnesses:
-        index_digits = len(str(max(item_count - 1, 0)))
-        # This treats every residue as reachable and every witness as containing
-        # every source index.  Model keys, brackets, commas, and ``null`` rows
-        # fit within the 24-byte per-row structural allowance.
-        witness_bytes = modulus * (24 + item_count * (index_digits + 1))
-
-    # The fixed allowance covers result field names, the nested source object,
-    # booleans, modulus digits, brackets, and the outer operation envelope.
-    return 1_024 + source_bytes + count_bytes + witness_bytes
-
-
-def _raw_source_shape(source: object) -> tuple[int, int] | None:
+def _raw_source_shape(source: object) -> int | None:
     """Bound a raw indexed source before Pydantic parses its integer strings."""
 
     if isinstance(source, IndexedIntegerSequence):
@@ -99,7 +75,7 @@ def _raw_source_shape(source: object) -> tuple[int, int] | None:
             "subset multiplicities exceed the 4,096-bit intermediate bound",
         )
 
-    source_bytes = 1_024
+    total_digits = 0
     for index, value in enumerate(values):
         if not isinstance(value, str):
             continue
@@ -109,13 +85,13 @@ def _raw_source_shape(source: object) -> tuple[int, int] | None:
                 "_raw_source_shape",
                 f"source value at index {index} exceeds the 32,768-digit input bound",
             )
-        source_bytes += len(value) + 3
-        if source_bytes > MAX_RESIDUE_PROFILE_RESULT_BYTES:
+        total_digits += digit_count
+        if total_digits > MAX_RESIDUE_PROFILE_TOTAL_INPUT_DIGITS:
             raise _validation_error(
                 "_raw_source_shape",
-                "subset-sum residue profile exceeds the 4 MiB result bound",
+                "subset-sum residue source exceeds the total digit bound",
             )
-    return item_count, source_bytes
+    return item_count
 
 
 def _bound_raw_counts(
@@ -123,10 +99,9 @@ def _bound_raw_counts(
     *,
     expected_rows: int | None,
     item_count: int,
-    result_bytes: int,
-) -> int:
+) -> None:
     if not isinstance(counts, (list, tuple)):
-        return result_bytes
+        return
     if len(counts) > MAX_RESIDUE_PROFILE_MODULUS:
         raise _validation_error(
             "_bound_raw_counts", "residue_counts exceeds the bounded result cardinality"
@@ -145,13 +120,6 @@ def _bound_raw_counts(
                 "_bound_raw_counts",
                 "residue count exceeds the source-derived multiplicity bound",
             )
-        result_bytes += len(count) + 3
-        if result_bytes > MAX_RESIDUE_PROFILE_RESULT_BYTES:
-            raise _validation_error(
-                "_bound_raw_counts",
-                "subset-sum residue profile exceeds the 4 MiB result bound",
-            )
-    return result_bytes
 
 
 def _bound_raw_witnesses(
@@ -159,7 +127,6 @@ def _bound_raw_witnesses(
     *,
     expected_rows: int | None,
     item_count: int,
-    result_bytes: int,
 ) -> None:
     if not isinstance(witnesses, (list, tuple)):
         return
@@ -175,8 +142,6 @@ def _bound_raw_witnesses(
         )
 
     index_slots = 0
-    index_digits = len(str(max(item_count - 1, 0)))
-    result_bytes += len(witnesses) * 24
     for witness in witnesses:
         if isinstance(witness, IndexSubset):
             indices: list[object] | tuple[object, ...] = witness.indices
@@ -204,12 +169,6 @@ def _bound_raw_witnesses(
                 "_bound_raw_witnesses",
                 "residue witnesses exceed the 250,000 index-slot storage bound",
             )
-    result_bytes += index_slots * (index_digits + 1)
-    if result_bytes > MAX_RESIDUE_PROFILE_RESULT_BYTES:
-        raise _validation_error(
-            "_bound_raw_witnesses",
-            "subset-sum residue profile exceeds the 4 MiB result bound",
-        )
 
 
 class SubsetSumResidueProfileRequest(StrictModel):
@@ -341,11 +300,10 @@ class SubsetSumResidueProfileResult(StrictModel):
 
         source_shape = _raw_source_shape(prepared.get("source"))
         item_count = (
-            source_shape[0]
+            source_shape
             if source_shape is not None
             else MAX_RESIDUE_PROFILE_MULTIPLICITY_BITS - 1
         )
-        result_bytes = source_shape[1] if source_shape is not None else 1_024
         raw_modulus = prepared.get("modulus")
         expected_rows = (
             raw_modulus
@@ -354,17 +312,15 @@ class SubsetSumResidueProfileResult(StrictModel):
             else None
         )
 
-        result_bytes = _bound_raw_counts(
+        _bound_raw_counts(
             prepared.get("residue_counts"),
             expected_rows=expected_rows,
             item_count=item_count,
-            result_bytes=result_bytes,
         )
         _bound_raw_witnesses(
             prepared.get("residue_witnesses"),
             expected_rows=expected_rows,
             item_count=item_count,
-            result_bytes=result_bytes,
         )
         return prepared
 
@@ -555,6 +511,16 @@ def _admit_subset_sum_residue_profile(
             code="additive_combinatorics.subset_sum_residue.integer_bound",
             message=f"source value at index {oversized} exceeds the 32,768-digit input bound",
         )
+    total_input_digits = sum(len(value.lstrip("-")) for value in source.items)
+    if total_input_digits > MAX_RESIDUE_PROFILE_TOTAL_INPUT_DIGITS:
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="additive_combinatorics.subset_sum_residue.total_digit_bound",
+            message=(
+                "subset-sum residue source exceeds the "
+                f"{MAX_RESIDUE_PROFILE_TOTAL_INPUT_DIGITS:,}-digit allocation bound"
+            ),
+        )
     dp_cells = item_count * modulus
     if dp_cells > MAX_RESIDUE_PROFILE_DP_CELLS:
         raise OperationDomainValidationError(
@@ -568,17 +534,6 @@ def _admit_subset_sum_residue_profile(
             code="additive_combinatorics.subset_sum_residue.witness_bound",
             message="residue witnesses exceed the 250,000 index-slot storage bound",
         )
-    result_bytes = _estimated_result_bytes(
-        source,
-        modulus,
-        include_witnesses=include_witnesses,
-    )
-    if result_bytes > MAX_RESIDUE_PROFILE_RESULT_BYTES:
-        raise OperationDomainValidationError(
-            location=("source",),
-            code="additive_combinatorics.subset_sum_residue.result_bound",
-            message="subset-sum residue profile exceeds the 4 MiB result bound",
-        )
 
 
 __all__ = [
@@ -587,7 +542,7 @@ __all__ = [
     "MAX_RESIDUE_PROFILE_ITEMS",
     "MAX_RESIDUE_PROFILE_MODULUS",
     "MAX_RESIDUE_PROFILE_MULTIPLICITY_BITS",
-    "MAX_RESIDUE_PROFILE_RESULT_BYTES",
+    "MAX_RESIDUE_PROFILE_TOTAL_INPUT_DIGITS",
     "MAX_RESIDUE_PROFILE_WITNESS_INDEX_SLOTS",
     "SubsetSumResidueProfileRequest",
     "SubsetSumResidueProfileResult",

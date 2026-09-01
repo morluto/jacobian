@@ -340,24 +340,14 @@ def test_enumeration_wire_form_stays_compact_and_typed_natively() -> None:
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
-def test_enumerate_admission_rejects_results_beyond_the_transport_budget() -> None:
-    """A pathological axis label cannot smuggle an untransportable complete
-    result past admission: the serialized-result bound fires before any
-    enumeration runs."""
-    with pytest.raises(ValueError, match="serialized point list"):
+def test_enumerate_admission_rejects_oversized_axis_labels() -> None:
+    with pytest.raises(ValueError, match="4096"):
         projective_space_enumerate(_space(2, ("x", "y" * (9 * 1024 * 1024))))
 
 
-def test_enumerate_admission_estimates_normalized_label_encoding() -> None:
-    """The serialized-result bound measures NFC-normalized labels.
-
-    Canonical JSON normalizes string values, so combining-character
-    spellings can double in encoded length after normalization; a label
-    that fits the budget only before normalization must still be rejected
-    before any enumeration runs.
-    """
+def test_enumerate_admission_bounds_axis_label_characters() -> None:
     label = "x" + "\u0344" * (2_600_000)
-    with pytest.raises(ValueError, match="serialized point list"):
+    with pytest.raises(ValueError, match="4096"):
         projective_space_enumerate(_space(2, ("x", label)))
 
 

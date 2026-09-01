@@ -4,15 +4,9 @@ from __future__ import annotations
 
 from itertools import product as iproduct
 
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-)
 from jacobian.catalog.models import OperationDomainValidationError
 
 from ._models import (
-    _HOMOMORPHISM_RESULT_RESERVE_BYTES,
     MAX_ENUMERATION_WORK,
     CongruenceResult,
     EquationCounterexample,
@@ -21,7 +15,6 @@ from ._models import (
     HomomorphismProfileResult,
     SubalgebraResult,
     _congruence_work,
-    _require_homomorphism_output_headroom,
 )
 from .values import (
     ApplicationTerm,
@@ -125,14 +118,6 @@ def _admit_homomorphism(carrier_map: FiniteAlgebraCarrierMap) -> None:
             code="homomorphism_work_bound",
             message="homomorphism operation work exceeds the enumeration budget",
         )
-    try:
-        _require_homomorphism_output_headroom(carrier_map)
-    except ValueError as exc:
-        _reject(
-            location=("carrier_map",),
-            code="homomorphism_output_bound",
-            message=str(exc),
-        )
 
 
 def _admit_partition(
@@ -164,37 +149,6 @@ def _admit_partition(
             location=("partition",),
             code="quotient_work_bound",
             message="quotient construction exceeds the operation work budget",
-        )
-    try:
-        source_bytes = len(encode_strict_json(algebra.model_dump(mode="json")))
-        operation_bytes = len(
-            encode_strict_json(
-                [operation.model_dump(mode="json") for operation in algebra.operations]
-            )
-        )
-        quotient_carrier_bytes = sum(
-            len(encode_strict_json(f"B{index}")) + 1 for index in range(quotient_size)
-        )
-    except CanonicalizationError as exc:
-        raise OperationDomainValidationError(
-            location=("algebra",),
-            code="universal_algebra.quotient_output_bound",
-            message="quotient source exceeds the canonical output limit",
-        ) from exc
-    quotient_index_bytes = len(str(quotient_size - 1)) + 1
-    predicted_bytes = (
-        source_bytes
-        + operation_bytes
-        + quotient_carrier_bytes
-        + quotient_table_cells * quotient_index_bytes
-        + len(algebra.carrier) * quotient_index_bytes
-        + _HOMOMORPHISM_RESULT_RESERVE_BYTES
-    )
-    if predicted_bytes > CanonicalLimits().max_output_bytes:
-        _reject(
-            location=("partition",),
-            code="quotient_output_bound",
-            message="canonical quotient homomorphism would exceed the output limit",
         )
 
 

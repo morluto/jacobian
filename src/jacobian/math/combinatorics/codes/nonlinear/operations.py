@@ -10,7 +10,6 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.codes.nonlinear._budget import (
     require_constant_weight_admission,
     require_profile_admission,
-    require_word_distance_output_bound,
 )
 from jacobian.math.combinatorics.codes.nonlinear._models import (
     BinaryCodeDistanceWitness,
@@ -228,11 +227,6 @@ def constant_weight_code(length: int, weight: int) -> ConstantWeightResult:
 
 def word_distance(word1: BinaryWord, word2: BinaryWord) -> WordDistanceResult:
     """Compute the exact Hamming relation between two words."""
-    _admit(
-        lambda: require_word_distance_output_bound(word1, word2),
-        location=("word1", "word2"),
-        code="nonlinear_code.word_distance_not_admitted",
-    )
     distance, differing, weight1, weight2, intersection = _word_distance_data(
         word1, word2
     )

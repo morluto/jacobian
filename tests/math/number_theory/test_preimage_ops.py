@@ -6,7 +6,6 @@ from jacobian.canonical import CanonicalLimits, canonicalize_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._models import MAX_INTEGER_DIGITS
 from jacobian.math.number_theory._preimage_models import (
-    MAX_INTERVAL_PROFILE_RESULT_BYTES,
     MAX_INTERVAL_PROFILE_ROWS,
     MAX_INTERVAL_PROFILE_WORK,
     KSigmaPreimageRequest,
@@ -142,7 +141,6 @@ def test_p_adic_profile_schema_exposes_coupled_endpoint_admission() -> None:
         "max_profile_work_units": MAX_INTERVAL_PROFILE_WORK,
         "primality_work_units": "decimal_digits(prime)^3",
         "total_valuation_max_digits": MAX_INTEGER_DIGITS,
-        "canonical_result_max_bytes": MAX_INTERVAL_PROFILE_RESULT_BYTES,
     }
     assert "start + length" in schema["properties"]["length"]["description"]
 

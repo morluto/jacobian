@@ -808,7 +808,7 @@ def test_cell_budgets_admit_commodities_without_a_fixed_ceiling() -> None:
 
 
 @pytest.mark.scale
-def test_result_envelope_prices_rows_at_their_actual_sides() -> None:
+def test_profile_digit_budget_prices_rows_at_their_actual_sides() -> None:
     from itertools import combinations
 
     def comb_edge_tensor(
@@ -828,44 +828,10 @@ def test_result_envelope_prices_rows_at_their_actual_sides() -> None:
             ),
         )
 
-    def comb_amount_tensor(amount_digits: int) -> MulticommodityFlow:
-        pairs = list(combinations(range(32), 2))[:128]
-        amount = CanonicalRational(num="9" * amount_digits, den="1")
-        return MulticommodityFlow(
-            network=FlowGraph(
-                vertex_count=32,
-                edges=tuple(
-                    CapacitatedEdge(source=source, target=target, capacity=q(1))
-                    for source, target in pairs
-                ),
-            ),
-            commodities=(
-                CommodityDemand(commodity_id="a", source=0, sink=31, demand=q(1)),
-            ),
-            entries=tuple(
-                CommodityEdgeFlow(
-                    commodity_id="a", source=source, target=target, amount=amount
-                )
-                for source, target in pairs
-            ),
-        )
-
     # With no entries each load is exactly zero and each slack equals its
-    # capacity: 100 capacities with 32,000-digit numerators echo about
-    # 3.2 MB and repeat them once as slacks, about 6.4 MB total, so the
-    # request stays inside the aggregate envelope. Pricing the zero loads at
-    # the slack bound would have inflated this above 8 MiB and rejected it.
+    # capacity, so the digit budget follows the nonzero side directly.
     admitted = comb_edge_tensor(CanonicalRational(num="9" * 32_000, den="1"), 100)
     assert derived_profile_digit_budget(admitted) == 32_000
-
-    # Unit-capacity edges carrying 22,000-digit amounts make the echoed
-    # entries, divergence cells, loads, slacks, and congestion genuinely
-    # exceed 8 MiB together. Wire parsing remains structural; execution
-    # admission rejects the profile before result construction.
-    flow = comb_amount_tensor(22_000)
-    MulticommodityFlowProfileRequest(flow=flow)
-    with pytest.raises(ValueError, match="aggregate result bound"):
-        compute_multicommodity_flow_profile(flow)
 
 
 @pytest.mark.scale
@@ -1127,117 +1093,6 @@ def test_coprime_denominator_flood_fails_closed() -> None:
     MulticommodityFlowProfileRequest(flow=flood)
     with pytest.raises(ValueError, match="canonical cap"):
         compute_multicommodity_flow_profile(flood)
-
-
-def oversized_echo_flow() -> MulticommodityFlow:
-    # One commodity carries 270 lone 32,000-digit entries on distinct edges:
-    # every derived component is a single operand inside the canonical cap,
-    # so only the serialized echo -- about 8.7 MB of numerator digits --
-    # exhausts the 8 MiB aggregate result envelope.
-    vertex_count = 17
-    pairs = [
-        (source, target)
-        for source in range(vertex_count)
-        for target in range(vertex_count)
-        if source != target
-    ][:270]
-    big = CanonicalRational(num="9" * 32_000, den="1")
-    return MulticommodityFlow(
-        network=FlowGraph(
-            vertex_count=vertex_count,
-            edges=tuple(
-                CapacitatedEdge(source=source, target=target, capacity=q(1))
-                for source, target in pairs
-            ),
-        ),
-        commodities=(
-            CommodityDemand(commodity_id="a", source=0, sink=16, demand=q(1)),
-        ),
-        entries=tuple(
-            CommodityEdgeFlow(
-                commodity_id="a", source=source, target=target, amount=big
-            )
-            for source, target in pairs
-        ),
-    )
-
-
-@pytest.mark.scale
-def test_oversized_source_is_rejected_before_the_component_scan(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from jacobian.math.graphs.flows.multicommodity import _models
-
-    executed: list[MulticommodityFlow] = []
-    original_scan = _models._component_sums_with_folds
-
-    def scan_spy(flow: MulticommodityFlow) -> object:
-        executed.append(flow)
-        return original_scan(flow)
-
-    monkeypatch.setattr(_models, "_component_sums_with_folds", scan_spy)
-    # Request parsing remains structural. Execution measures the echoed source
-    # before its own component scan and therefore never starts the scan.
-    flow = oversized_echo_flow()
-    MulticommodityFlowProfileRequest(flow=flow)
-    assert executed == []
-    # A native call is rejected by the same preflight inside the kernel's
-    # own admission, likewise before any rational arithmetic.
-    with pytest.raises(ValueError, match="aggregate result bound"):
-        compute_multicommodity_flow_profile(flow)
-    assert executed == []
-
-
-@pytest.mark.scale
-def test_oversized_source_rejection_precedes_a_doomed_exact_scan() -> None:
-    # Same oversized echo, but two commodities fold coprime near-cap
-    # denominators into one shared edge bucket whose sum would abort the
-    # component scan with a canonical-cap error. The envelope preflight must
-    # win: the request fails for its result size before any exact arithmetic.
-    vertex_count = 17
-    bulk_pairs = [
-        (source, target)
-        for source in range(vertex_count)
-        for target in range(vertex_count)
-        if source != target and (source, target) != (0, 1)
-    ][:268]
-    big = CanonicalRational(num="9" * 32_000, den="1")
-    doomed_echo = MulticommodityFlow(
-        network=FlowGraph(
-            vertex_count=vertex_count,
-            edges=tuple(
-                CapacitatedEdge(source=source, target=target, capacity=q(1))
-                for source, target in [(0, 1), *bulk_pairs]
-            ),
-        ),
-        commodities=(
-            CommodityDemand(commodity_id="a", source=0, sink=16, demand=q(1)),
-            CommodityDemand(commodity_id="b", source=0, sink=1, demand=q(1)),
-        ),
-        entries=(
-            CommodityEdgeFlow(
-                commodity_id="a",
-                source=0,
-                target=1,
-                amount=CanonicalRational(num="1", den="3" + "0" * 19_999),
-            ),
-            *(
-                CommodityEdgeFlow(
-                    commodity_id="a", source=source, target=target, amount=big
-                )
-                for source, target in bulk_pairs
-            ),
-            CommodityEdgeFlow(
-                commodity_id="b",
-                source=0,
-                target=1,
-                amount=CanonicalRational(num="1", den="7" + "0" * 12_775 + "1"),
-            ),
-        ),
-    )
-    MulticommodityFlowProfileRequest(flow=doomed_echo)
-    with pytest.raises(ValueError, match="aggregate result bound"):
-        compute_multicommodity_flow_profile(doomed_echo)
 
 
 def test_ledger_charges_every_performed_bucket_fold_addition() -> None:

@@ -301,7 +301,7 @@ def test_sparse_rank_rejects_above_the_intermediate_height_bound() -> None:
 
 
 @pytest.mark.scale
-def test_sparse_rank_rejects_a_source_bound_result_above_the_output_limit() -> None:
+def test_sparse_rank_accepts_the_structurally_bounded_source() -> None:
     value = CanonicalRational(
         num="1" + "0" * (MAX_INPUT_SCALAR_DIGITS - 1),
         den="9" * MAX_INPUT_SCALAR_DIGITS,
@@ -316,8 +316,9 @@ def test_sparse_rank_rejects_a_source_bound_result_above_the_output_limit() -> N
         ),
     )
 
-    with pytest.raises(OperationDomainValidationError, match="canonical output limit"):
-        rank_result(matrix, enforce_transport_limit=True)
+    result = rank_result(matrix)
+
+    assert result.rank == 1
 
 
 def test_sparse_rank_result_rejects_rank_above_a_source_axis() -> None:

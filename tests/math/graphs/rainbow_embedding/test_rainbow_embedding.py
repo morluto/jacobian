@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.rainbow_embedding.operations import (
+    MAX_RAINBOW_RETAINED_LABEL_CHARACTERS,
     compute_rainbow_embedding_profile,
 )
 from jacobian.math.graphs.values import ColoredUndirectedGraph, SimpleUndirectedGraph
@@ -65,10 +67,19 @@ def test_rejects_uncolored_nonempty_host() -> None:
 
 
 def test_rejects_unencodable_pattern_label() -> None:
-    pattern = SimpleUndirectedGraph(vertices=("\ud800",), edges=())
+    with pytest.raises(ValidationError, match="Unicode scalar"):
+        SimpleUndirectedGraph(vertices=("\ud800",), edges=())
 
-    with pytest.raises(OperationDomainValidationError, match="canonical output"):
-        compute_rainbow_embedding_profile(pattern, _k3_all_distinct())
+
+def test_rejects_unbounded_retained_embedding_labels() -> None:
+    label = "x" * (MAX_RAINBOW_RETAINED_LABEL_CHARACTERS // 2 + 1)
+    pattern = SimpleUndirectedGraph(vertices=(label,), edges=())
+    host = ColoredUndirectedGraph(
+        graph=SimpleUndirectedGraph(vertices=("y",), edges=())
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="label-character"):
+        compute_rainbow_embedding_profile(pattern, host)
 
 
 def test_rejects_unbounded_embedding_family() -> None:

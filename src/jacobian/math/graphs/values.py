@@ -9,7 +9,6 @@ from pydantic import ConfigDict, Field, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.canonical import encode_strict_json
 
 GraphCompositionOperation = Literal[
     "DISJOINT_UNION",
@@ -45,11 +44,23 @@ def _require_canonical_text(value: str, *, kind: str, max_bytes: int) -> None:
         raise PydanticCustomError(
             "graph.kind_use_unicode_nfc_if_len_value", f"{kind} must use Unicode NFC"
         )
-    if len(value.encode("utf-8")) > max_bytes:
+    _require_unicode_scalar_text(value, kind=kind)
+    encoded = value.encode("utf-8")
+    if len(encoded) > max_bytes:
         raise PydanticCustomError(
             "graph.kind_use_at_most_max_bytes_utf",
             f"{kind} must use at most {max_bytes} UTF-8 bytes",
         )
+
+
+def _require_unicode_scalar_text(value: str, *, kind: str) -> None:
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise PydanticCustomError(
+            "graph.kind_must_be_valid_unicode_scalar_text",
+            f"{kind} must contain only valid Unicode scalar values",
+        ) from exc
 
 
 class SimpleUndirectedGraph(StrictModel):
@@ -62,6 +73,8 @@ class SimpleUndirectedGraph(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_simple_graph(self) -> Self:
+        for vertex in self.vertices:
+            _require_unicode_scalar_text(vertex, kind="graph vertex")
         if any(
             not unicodedata.is_normalized("NFC", vertex) for vertex in self.vertices
         ):
@@ -130,12 +143,6 @@ class IndexedSimpleUndirectedGraph(StrictModel):
                 )
             seen.add((left, right))
         return self
-
-
-def simple_undirected_graph_wire_bytes(graph: SimpleUndirectedGraph) -> int:
-    """Return the exact canonical JSON size of a simple graph value."""
-
-    return len(encode_strict_json(graph.model_dump(mode="json")))
 
 
 class ColoredUndirectedGraph(StrictModel):
@@ -223,5 +230,4 @@ __all__ = [
     "GraphVertexLabel",
     "IndexedSimpleUndirectedGraph",
     "SimpleUndirectedGraph",
-    "simple_undirected_graph_wire_bytes",
 ]

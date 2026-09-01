@@ -17,7 +17,6 @@ from jacobian._execution import (
     bind_request_deadline,
     request_execution,
 )
-from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.cyclic_linear import (
     CyclicRationalBlockSymbol,
     CyclicRationalBlockSymbolEntry,
@@ -576,7 +575,7 @@ def test_native_profile_is_not_rejected_by_the_transport_byte_cap() -> None:
     assert (result.global_rank, result.global_nullity) == (1, 127)
 
 
-def test_published_profile_adapter_retains_the_transport_byte_cap() -> None:
+def test_published_profile_adapter_uses_the_mathematical_admission() -> None:
     request = CyclicRationalRankKernelProfileRequest(
         symbol=_symbol(
             period=1,
@@ -586,8 +585,9 @@ def test_published_profile_adapter_retains_the_transport_byte_cap() -> None:
         )
     )
 
-    with pytest.raises(OperationDomainValidationError, match="result envelope"):
-        TOOLS[0].run(request)
+    result = TOOLS[0].run(request)
+
+    assert (result.global_rank, result.global_nullity) == (1, 127)
 
 
 def test_symbol_requires_canonical_support_and_bounded_rationals() -> None:

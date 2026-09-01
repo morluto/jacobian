@@ -8,13 +8,6 @@ from itertools import product
 from math import gcd, lcm
 from typing import Literal, NoReturn
 
-from jacobian._models import StrictModel
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-    strict_json_object_size,
-)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.differential._execution import (
     begin_lie_derivative_deadline,
@@ -39,7 +32,6 @@ from jacobian.math.polynomials.values import (
 )
 
 MAX_LIE_DERIVATIVE_WORK_UNITS = 25_000_000
-MAX_LIE_DERIVATIVE_RESULT_BYTES = CanonicalLimits().max_output_bytes
 MAX_LIE_DERIVATIVE_RAW_POLYNOMIAL_TERMS = 4_096
 MAX_LIE_DERIVATIVE_RAW_COEFFICIENT_DIGITS = 4_096
 
@@ -119,7 +111,6 @@ class LieDerivativePlan:
     components: tuple[LieComponentPlan, ...]
     recognition_candidates: tuple[RationalFunctionRecognitionCandidate, ...]
     inherited_locus_guards: tuple[SparseRationalPolynomial, ...]
-    result_bytes_upper_bound: int
     work_units_by_category: tuple[tuple[LieWorkCategory, int], ...]
 
     @property
@@ -698,172 +689,6 @@ def _replace_index(
     return (*index[:position], replacement, *index[position + 1 :])
 
 
-def _array_size(item_sizes: tuple[int, ...]) -> int:
-    return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
-
-
-def _bounded_string_size(content_digits: int, *, possibly_negative: bool) -> int:
-    return content_digits + 2 + int(possibly_negative)
-
-
-def _polynomial_result_size(bound: PolynomialBound, *, sparse: bool = False) -> int:
-    if bound.is_zero:
-        return strict_json_object_size((("terms", 2),))
-    term_count = bound.terms if sparse else _dense_term_bound(bound.degrees)
-    coefficient_size = strict_json_object_size(
-        (
-            (
-                "num",
-                _bounded_string_size(bound.coefficient_digits, possibly_negative=True),
-            ),
-            (
-                "den",
-                _bounded_string_size(bound.coefficient_digits, possibly_negative=False),
-            ),
-        )
-    )
-    exponent_sizes = tuple(len(str(max(degree, 0))) for degree in bound.degrees)
-    exponent_array_size = _array_size(exponent_sizes)
-    term_size = strict_json_object_size(
-        (("coefficient", coefficient_size), ("exponents", exponent_array_size))
-    )
-    return strict_json_object_size((("terms", _array_size((term_size,) * term_count)),))
-
-
-def _rational_function_result_size(
-    bound: FractionBound,
-    coefficient_digits: int,
-    *,
-    axis_size: int,
-) -> int:
-    denominator_is_unit = all(degree == 0 for degree in bound.denominator.degrees)
-    if bound.is_zero:
-        variable_count = len(bound.numerator.degrees)
-        numerator = _zero_polynomial(variable_count)
-        denominator = _one_polynomial(variable_count)
-    else:
-        numerator = PolynomialBound(
-            terms=(
-                bound.numerator.terms
-                if denominator_is_unit
-                else _dense_term_bound(bound.numerator.degrees)
-            ),
-            degrees=bound.numerator.degrees,
-            minimum_exponents=(0,) * len(bound.numerator.degrees),
-            coefficient_digits=coefficient_digits,
-            rational_content=Fraction(1),
-        )
-        denominator = PolynomialBound(
-            terms=(
-                1
-                if denominator_is_unit
-                else _dense_term_bound(bound.denominator.degrees)
-            ),
-            degrees=bound.denominator.degrees,
-            minimum_exponents=(0,) * len(bound.denominator.degrees),
-            coefficient_digits=coefficient_digits,
-            rational_content=Fraction(1),
-        )
-    return strict_json_object_size(
-        (
-            ("domain", 4),
-            ("variables", axis_size),
-            (
-                "numerator",
-                _polynomial_result_size(numerator, sparse=denominator_is_unit),
-            ),
-            ("denominator", _polynomial_result_size(denominator)),
-        )
-    )
-
-
-def _model_size(value: StrictModel) -> int:
-    try:
-        payload = value.model_dump(mode="json")
-        return len(encode_strict_json(payload))
-    except CanonicalizationError:
-        _reject(
-            "source_bytes",
-            "Lie-derivative retained sources exceed the canonical transport envelope",
-        )
-
-
-def _result_bytes_upper_bound(
-    vector_field: RationalCoordinateTensor,
-    tensor: RationalCoordinateTensor,
-    components: tuple[LieComponentPlan, ...],
-    inherited_guards: tuple[SparseRationalPolynomial, ...],
-) -> int:
-    axis_size = len(encode_strict_json(list(tensor.coordinate_axis)))
-    variance_size = len(encode_strict_json(list(tensor.variance)))
-    component_sizes = tuple(
-        _rational_function_result_size(
-            component.raw_result,
-            component.canonical_coefficient_digits,
-            axis_size=axis_size,
-        )
-        for component in components
-    )
-    inherited_guard_sizes = tuple(_model_size(guard) for guard in inherited_guards)
-    result_guard_sizes = tuple(
-        _polynomial_result_size(
-            PolynomialBound(
-                terms=_dense_term_bound(component.raw_result.denominator.degrees),
-                degrees=component.raw_result.denominator.degrees,
-                minimum_exponents=(0,) * len(component.raw_result.denominator.degrees),
-                coefficient_digits=component.canonical_coefficient_digits,
-                rational_content=Fraction(1),
-            )
-        )
-        for component in components
-        if not component.raw_result.is_zero
-        and any(component.raw_result.denominator.degrees)
-    )
-    # Deduplicate guards before counting: a result denominator that
-    # duplicates an inherited guard should not inflate the cap.
-    result_guard_polynomials = tuple(
-        component.raw_result.denominator
-        for component in components
-        if not component.raw_result.is_zero
-        and any(component.raw_result.denominator.degrees)
-    )
-    # Compare compatible canonical representations: the degrees
-    # tuple of each PolynomialBound against the degrees tuple
-    # computed from each SparseRationalPolynomial's terms.
-    # PolynomialBound deliberately retains only admission metadata, not the
-    # exact coefficients. Without the full canonical polynomial identity,
-    # treating matching degree tuples as duplicates can undercount distinct
-    # guards and let result construction exceed its guard budget. Count every
-    # possible result guard conservatively; canonical_locus_guards performs the
-    # exact deduplication once the backend has produced the polynomials.
-    distinct_guards = len(inherited_guards) + len(result_guard_polynomials)
-    guard_count_bound = distinct_guards
-    if guard_count_bound > MAX_RATIONAL_TENSOR_LOCUS_GUARDS:
-        _reject(
-            "result_locus_guards",
-            "Lie-derivative retained locus can exceed the "
-            f"{MAX_RATIONAL_TENSOR_LOCUS_GUARDS}-guard representation budget",
-        )
-    result_tensor_size = strict_json_object_size(
-        (
-            ("coordinate_axis", axis_size),
-            ("variance", variance_size),
-            ("components", _array_size(component_sizes)),
-            (
-                "retained_nonzero_denominators",
-                _array_size(inherited_guard_sizes + result_guard_sizes),
-            ),
-        )
-    )
-    return strict_json_object_size(
-        (
-            ("vector_field", _model_size(vector_field)),
-            ("source", _model_size(tensor)),
-            ("lie_derivative", result_tensor_size),
-        )
-    )
-
-
 def _recognition_work_units(bound: FractionBound) -> int:
     """Charge the dense exact coefficient work exposed to SymPy's GCD.
 
@@ -924,6 +749,17 @@ def build_lie_derivative_plan(
             location=("vector_field", "variance"),
         )
     dimension = len(tensor.coordinate_axis)
+    inherited_guards = canonical_locus_guards(
+        vector_field.retained_nonzero_denominators,
+        tensor.retained_nonzero_denominators,
+        variable_count=dimension,
+    )
+    if len(inherited_guards) > MAX_RATIONAL_TENSOR_LOCUS_GUARDS:
+        _reject(
+            "result_locus_guards",
+            "Lie-derivative retained locus exceeds the "
+            f"{MAX_RATIONAL_TENSOR_LOCUS_GUARDS}-guard representation budget",
+        )
     ledger = _Ledger(deadline=deadline)
     vector_bounds = tuple(
         _fraction_bound(value, ledger) for value in vector_field.components
@@ -1006,20 +842,20 @@ def build_lie_derivative_plan(
             )
         )
 
-    inherited_guards = canonical_locus_guards(
-        vector_field.retained_nonzero_denominators,
-        tensor.retained_nonzero_denominators,
-        variable_count=dimension,
-    )
     plans = tuple(component_plans)
-    result_bytes = _result_bytes_upper_bound(
-        vector_field, tensor, plans, inherited_guards
+    possible_result_guards = sum(
+        not component.raw_result.is_zero
+        and any(component.raw_result.denominator.degrees)
+        for component in plans
     )
-    if result_bytes > MAX_LIE_DERIVATIVE_RESULT_BYTES:
+    if (
+        len(inherited_guards) + possible_result_guards
+        > MAX_RATIONAL_TENSOR_LOCUS_GUARDS
+    ):
         _reject(
-            "result_bytes",
-            f"Lie-derivative result estimate of {result_bytes} bytes exceeds the "
-            f"{MAX_LIE_DERIVATIVE_RESULT_BYTES}-byte canonical output budget",
+            "result_locus_guards",
+            "Lie-derivative retained locus can exceed the "
+            f"{MAX_RATIONAL_TENSOR_LOCUS_GUARDS}-guard representation budget",
         )
     recognition_candidates = canonical_recognition_candidates(vector_field, tensor)
     for candidate in recognition_candidates:
@@ -1034,7 +870,6 @@ def build_lie_derivative_plan(
         components=plans,
         recognition_candidates=recognition_candidates,
         inherited_locus_guards=inherited_guards,
-        result_bytes_upper_bound=result_bytes,
         work_units_by_category=ledger.by_category,
     )
     recognition = recognize_canonical_rational_functions(
@@ -1053,7 +888,6 @@ def build_lie_derivative_plan(
 
 
 __all__ = [
-    "MAX_LIE_DERIVATIVE_RESULT_BYTES",
     "MAX_LIE_DERIVATIVE_WORK_UNITS",
     "FactorReference",
     "LieComponentPlan",

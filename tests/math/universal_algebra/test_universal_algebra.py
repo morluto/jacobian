@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import CanonicalLimits
 from jacobian.math.universal_algebra import (
     ApplicationTerm,
     FiniteAlgebra,
@@ -340,7 +339,7 @@ class TestHomomorphismProfile:
         assert result.obstruction is not None
         assert result.obstruction.source_arguments == (15, 15, 15, 15)
 
-    def test_retained_source_must_fit_the_canonical_output(self) -> None:
+    def test_retained_source_size_does_not_change_homomorphism_admission(self) -> None:
         oversized_label = "x" * (5 * 1024 * 1024)
         source = FiniteAlgebra(carrier=(oversized_label,), operations=(), tables=())
         target = FiniteAlgebra(
@@ -353,8 +352,9 @@ class TestHomomorphismProfile:
                 mapping=(0,),
             )
         )
-        with pytest.raises(ValueError, match="output"):
-            compute_homomorphism_profile(request)
+        result = compute_homomorphism_profile(request)
+
+        assert result.status == "HOMOMORPHISM"
 
 
 # ---------------------------------------------------------------------------
@@ -424,18 +424,19 @@ class TestQuotient:
         assert native_profile.homomorphism == quotient_map
         assert wire_profile == native_profile
 
-    def test_quotient_rejects_when_retained_source_has_no_output_headroom(
+    def test_quotient_preserves_a_large_structurally_bounded_source(
         self,
     ) -> None:
         source = FiniteAlgebra(
-            carrier=("x" * (CanonicalLimits().max_output_bytes - 1_024),),
+            carrier=("x" * (5 * 1024 * 1024),),
             operations=(),
             tables=(),
         )
 
         request = QuotientRequest(algebra=source, partition=((0,),))
-        with pytest.raises(ValueError, match="output"):
-            compute_quotient(request)
+        result = compute_quotient(request)
+
+        assert result.target.carrier == ("B0",)
 
     def test_quotient_charges_construction_work(self) -> None:
         def constant_ternary_algebra(size: int) -> FiniteAlgebra:

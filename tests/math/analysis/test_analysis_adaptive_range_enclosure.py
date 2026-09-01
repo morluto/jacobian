@@ -17,11 +17,9 @@ from tests.math.analysis._analysis_support import analysis_validation_error
 
 from jacobian._execution import OperationExecutionTimeoutError, request_execution
 from jacobian._flint import flint_workprec
-from jacobian.canonical import canonicalize_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis._adaptive_range_enclosure import (
     MAX_ADAPTIVE_RANGE_DYADIC_EXPONENT,
-    MAX_ADAPTIVE_RANGE_RESULT_BYTES,
     AdaptiveRangeBudgetExhausted,
     AdaptiveRangeDomainUnproven,
     AdaptiveRangeDomainUnprovenLeaf,
@@ -32,7 +30,6 @@ from jacobian.math.analysis._adaptive_range_enclosure import (
     _admit_adaptive_range,
     _compute_adaptive_range_enclosure,
     _enclosure_width,
-    _estimated_result_bytes,
     _problem_from_request,
     adaptive_range_enclosure,
 )
@@ -625,43 +622,6 @@ def test_nonpositive_target_is_semantic_request_rejection(target: Fraction) -> N
     assert caught.value.errors()[0]["type"] == "analysis.adaptive_range.target_width"
 
 
-def test_result_sensitive_output_bound_rejects_only_the_large_envelope() -> None:
-    variables = tuple(f"x{index}" for index in range(8))
-    expression = _balanced_sum(variables)
-    large = _request(
-        expression,
-        tuple((variable, Fraction(0), Fraction(10**127)) for variable in variables),
-        target_width=Fraction(1),
-        max_leaves=1024,
-        max_depth=32,
-        max_evaluations=2047,
-    )
-    assert (
-        _estimated_result_bytes(_problem_from_request(large))
-        > MAX_ADAPTIVE_RANGE_RESULT_BYTES
-    )
-    with pytest.raises(OperationDomainValidationError) as caught:
-        _compute_adaptive_range_enclosure(large)
-    assert caught.value.errors()[0]["type"] == "analysis.adaptive_range.result_bytes"
-
-    small = _request(
-        _var("x"),
-        (("x", Fraction(0), Fraction(1)),),
-        target_width=Fraction(2),
-        max_leaves=1024,
-        max_depth=32,
-        max_evaluations=1,
-    )
-    assert (
-        _estimated_result_bytes(_problem_from_request(small))
-        < MAX_ADAPTIVE_RANGE_RESULT_BYTES
-    )
-    assert isinstance(
-        _compute_adaptive_range_enclosure(small).disposition,
-        AdaptiveRangeTargetMet,
-    )
-
-
 def test_depth_zero_eight_variable_request_reserves_one_result_leaf() -> None:
     variables = tuple(f"x{index}" for index in range(8))
     request = _request(
@@ -682,7 +642,6 @@ def test_depth_zero_eight_variable_request_reserves_one_result_leaf() -> None:
     assert admission.planned_evaluations == 1
     assert admission.plan.planned_leaf_count == 1
     assert admission.planned_node_evaluations == 15
-    assert _estimated_result_bytes(problem) < MAX_ADAPTIVE_RANGE_RESULT_BYTES
     assert isinstance(result.disposition, AdaptiveRangeBudgetExhausted)
     assert result.disposition.reason == "MAX_DEPTH"
     assert result.evaluations_used == 1
@@ -1160,22 +1119,6 @@ def test_domain_failure_evidence_is_bound_to_the_source_expression_node() -> Non
 
     with pytest.raises(ValidationError, match="does not match the source expression"):
         AdaptiveRangeEnclosureResult.model_validate(payload)
-
-
-def test_result_reservation_dominates_actual_canonical_output() -> None:
-    request = _request(
-        _quadratic(),
-        (("x", Fraction(0), Fraction(1)),),
-        target_width=Fraction(7, 16),
-        max_leaves=4,
-        max_depth=2,
-        max_evaluations=7,
-    )
-    result = _compute_adaptive_range_enclosure(request)
-
-    assert len(canonicalize_json(result.model_dump(mode="json"))) <= (
-        _estimated_result_bytes(_problem_from_request(request))
-    )
 
 
 def test_result_schema_has_status_discriminated_conclusion_branches() -> None:

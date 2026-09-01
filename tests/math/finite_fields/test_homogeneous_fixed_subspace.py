@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields import (
     HomogeneousFixedSubspace,
@@ -13,7 +12,6 @@ from jacobian.math.finite_fields import (
     PrimeFieldLinearAction,
     homogeneous_fixed_subspace,
 )
-from jacobian.math.finite_fields import operations as operations_module
 from jacobian.math.finite_fields._models import HomogeneousFixedSubspaceRequest
 from jacobian.math.finite_fields._tools import TOOLS
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
@@ -208,34 +206,6 @@ def test_result_round_trips_and_its_action_composes_unchanged() -> None:
 
     assert decoded == produced
     assert consumed == produced
-
-
-def test_transport_admission_accounts_for_full_rank_canonical_basis(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    variable_count = 5
-    identity = tuple(
-        tuple(int(row == column) for column in range(variable_count))
-        for row in range(variable_count)
-    )
-    action = PrimeFieldLinearAction(
-        variable_axis=PrimeFieldActionAxis(
-            name="polynomial_variables",
-            labels=tuple(f"x{index}" for index in range(variable_count)),
-        ),
-        generator_matrices=(
-            PrimeFieldMatrix(prime=2, entries=identity, columns=variable_count),
-        ),
-    )
-    result = homogeneous_fixed_subspace(action, 9)
-    encoded_size = len(encode_strict_json(result.model_dump(mode="json")))
-
-    class _JustBelowResultLimit:
-        max_output_bytes = encoded_size - 1
-
-    monkeypatch.setattr(operations_module, "CanonicalLimits", _JustBelowResultLimit)
-    with pytest.raises(OperationDomainValidationError, match="output-size envelope"):
-        homogeneous_fixed_subspace(action, 9, enforce_transport_limit=True)
 
 
 def test_singular_generator_is_rejected_by_operation_admission() -> None:

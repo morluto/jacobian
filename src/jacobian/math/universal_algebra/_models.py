@@ -8,11 +8,6 @@ from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-)
 from jacobian.math.universal_algebra.values import (
     MAX_ARITY,
     MAX_CARRIER_SIZE,
@@ -28,7 +23,6 @@ MAX_ENUMERATION_WORK = 1_000_000
 # six flags/scalars, or one obstruction with two arity-at-most-four tuples and a
 # 64-byte operation ID.  Four KiB conservatively bounds that JSON wrapper over
 # the exactly measured retained carrier-map bytes.
-_HOMOMORPHISM_RESULT_RESERVE_BYTES = 4_096
 CarrierBlock = Annotated[
     tuple[int, ...],
     Field(min_length=1, max_length=MAX_CARRIER_SIZE),
@@ -121,27 +115,6 @@ class SubalgebraResult(StrictModel):
     generated_carrier: tuple[int, ...]
     rounds: int = Field(ge=1)
     is_closed: bool
-
-
-def _require_homomorphism_output_headroom(
-    carrier_map: FiniteAlgebraCarrierMap,
-) -> None:
-    try:
-        retained_source_bytes = len(
-            encode_strict_json(carrier_map.model_dump(mode="json"))
-        )
-    except CanonicalizationError as exc:
-        raise _validation_error(
-            "carrier_map_output_exceeded",
-            "finite algebra carrier map exceeds the canonical output limit",
-        ) from exc
-    output_limit = CanonicalLimits().max_output_bytes
-    if retained_source_bytes + _HOMOMORPHISM_RESULT_RESERVE_BYTES > output_limit:
-        raise _validation_error(
-            "homomorphism_work_exceeded",
-            "homomorphism profile retains the carrier map and would exceed the "
-            f"{output_limit}-byte canonical output limit",
-        )
 
 
 class HomomorphismProfileRequest(StrictModel):

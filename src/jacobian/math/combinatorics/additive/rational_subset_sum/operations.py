@@ -11,11 +11,6 @@ from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalRational,
 )
-from jacobian.canonical import (
-    CanonicalLimits,
-    encode_strict_json,
-    strict_json_object_size,
-)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.rational_subset_sum._models import (
     MAX_SEQUENCE_LENGTH,
@@ -24,8 +19,6 @@ from jacobian.math.combinatorics.additive.rational_subset_sum._models import (
 )
 
 __all__ = ["compute_rational_subset_sum_profile"]
-
-MAX_RESULT_BYTES = CanonicalLimits().max_output_bytes
 
 
 def _reject(code: str, message: str) -> NoReturn:
@@ -86,9 +79,6 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
         growth_digits = max(denominator_digits, numerator_digits)
     else:
         growth_digits = 1
-    source_bytes = len(
-        encode_strict_json({"values": [v.model_dump(mode="json") for v in values]})
-    )
     # Equal source values can collapse many subset vectors to one row. Group
     # them before estimating the support; the product of (multiplicity + 1)
     # bounds the number of distinct sums while retaining the actual
@@ -136,22 +126,6 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
         _reject(
             "rational_growth_bound",
             "subset-sum intermediates exceed the canonical rational digit bound",
-        )
-    # Values are canonical JSON strings: include both quotes and a possible
-    # minus sign in the numerator component before sizing the object.
-    rational_bytes = strict_json_object_size(
-        # Numerators may be negative; reserve quotes plus an optional sign.
-        (("num", growth_digits + 3), ("den", growth_digits + 2))
-    )
-    row_bytes = strict_json_object_size(
-        (("sum_value", rational_bytes), ("multiplicity", len(str(1 << n))))
-    )
-    predicted_rows = support_upper_bound
-    predicted_bytes = source_bytes + 128 + predicted_rows * (row_bytes + 1)
-    if predicted_bytes > MAX_RESULT_BYTES:
-        _reject(
-            "result_size_bound",
-            f"the complete subset-sum profile exceeds the {MAX_RESULT_BYTES}-byte output bound",
         )
 
 

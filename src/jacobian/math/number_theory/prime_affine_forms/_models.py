@@ -13,12 +13,8 @@ from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.affine_forms.values import AffineFormId
-from jacobian.math.number_theory.prime_affine_forms._kernel import (
-    local_bad_residues,
-)
 from jacobian.math.number_theory.prime_affine_forms.values import (
     MAX_AFFINE_FORMS,
-    PrimeAffineTuple,
 )
 
 MAX_LOCAL_PROFILE_PRIME = 8_191
@@ -28,7 +24,6 @@ MAX_PRIME_BATCH = 64
 MAX_BATCH_ROOT_WORK = 250_000
 MAX_FACTOR_COMPONENT_DIGITS = 4_096
 MAX_FACTOR_PRODUCT_DIGITS = 8_192
-MAX_RESULT_CHARACTER_BUDGET = 2_000_000
 
 
 def _run_admission[ResultT](admission: Callable[[], ResultT]) -> ResultT:
@@ -89,29 +84,6 @@ def _validation_error(message: str) -> PydanticCustomError:
 
 def _digits(value: int | str) -> int:
     return len(str(value).lstrip("-"))
-
-
-def _source_character_upper_bound(source: PrimeAffineTuple) -> int:
-    """Conservatively bound the source tuple's compact JSON representation."""
-
-    return 16 + sum(
-        64 + len(form.form_id) + len(form.coefficient) + len(form.constant)
-        for form in source.forms
-    )
-
-
-def _summary_character_upper_bound(source: PrimeAffineTuple, prime: int) -> int:
-    """Bound one compact local summary after its root-work preflight."""
-
-    bad = local_bad_residues(source, prime)
-    return (
-        72
-        + 4 * _digits(prime)
-        + sum(
-            32 + _digits(residue) + sum(len(form_id) + 4 for form_id in form_ids)
-            for residue, form_ids in bad
-        )
-    )
 
 
 def _require_prime(prime: int, *, maximum: int) -> None:

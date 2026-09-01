@@ -20,11 +20,7 @@ from jacobian._execution import (
     current_request_execution,
     request_cancelled,
 )
-from jacobian.canonical import (
-    CanonicalLimits,
-    encode_strict_json,
-    parse_canonical_integer,
-)
+from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.complex_tori._models import (
     HermitianDefiniteness,
@@ -223,14 +219,6 @@ def _complex_structure_scalar_work(
     )
 
 
-def _require_result_envelope(*, predicted_result_bytes: int) -> None:
-    if predicted_result_bytes > CanonicalLimits().max_output_bytes:
-        raise _validation_error(
-            "budget_exceeded",
-            "the exact complex-torus result exceeds the canonical output envelope",
-        )
-
-
 def _complex_structure_action(torus: LatticeComplexStructure) -> MatrixAction:
     matrix = torus.complex_structure
     if isinstance(matrix, EmbeddedRealSimpleNumberFieldMatrix):
@@ -324,33 +312,6 @@ def _admit_riemann_form_execution(
             "the associated symmetric form can exceed the canonical exact-real "
             "matrix component bound",
         )
-    presentation_bytes = (
-        len(
-            encode_strict_json(
-                torus.complex_structure.embedding.presentation.model_dump(mode="json")
-            )
-        )
-        if isinstance(torus.complex_structure, EmbeddedRealSimpleNumberFieldMatrix)
-        else 0
-    )
-    per_associated_entry = (
-        presentation_bytes + 256 + products.degree * (2 * associated_digits + 32)
-    )
-    predicted_result_bytes = (
-        len(
-            encode_strict_json(
-                {
-                    "torus": torus.model_dump(mode="json"),
-                    "form": form.model_dump(mode="json"),
-                }
-            )
-        )
-        + 8_192
-        + dimension**2 * (per_associated_entry + form_digits + 16)
-    )
-    _require_result_envelope(
-        predicted_result_bytes=predicted_result_bytes,
-    )
     try:
         associated_inertia = _admit_inertia_from_bounds(
             order=dimension,

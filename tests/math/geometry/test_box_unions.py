@@ -9,7 +9,6 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.boxes import (
     BoxUnionVolumeResult,
@@ -18,7 +17,6 @@ from jacobian.math.geometry.boxes import (
     compute_box_union_volume,
 )
 from jacobian.math.geometry.boxes._models import (
-    MAX_BOX_UNION_RESULT_BYTES,
     BoxUnionVolumeRequest,
 )
 from jacobian.math.geometry.boxes.values import MAX_CANONICAL_BOX_DIMENSION
@@ -178,14 +176,12 @@ def test_one_nonempty_box_with_empties_beyond_fixed_cap_is_admitted() -> None:
     assert result.intersections[0].volume.as_fraction() == 2
 
 
-def test_empty_heavy_result_serialization_stays_within_budget() -> None:
+def test_empty_heavy_result_remains_exact() -> None:
     boxes = tuple(_empty_box(1) for _ in range(65))
     result = compute_box_union_volume(boxes)
 
-    assert (
-        len(encode_strict_json(result.model_dump(mode="json")))
-        <= MAX_BOX_UNION_RESULT_BYTES
-    )
+    assert len(result.source) == 65
+    assert result.intersections == ()
 
 
 def test_touching_and_degenerate_boxes_remain_nonempty() -> None:

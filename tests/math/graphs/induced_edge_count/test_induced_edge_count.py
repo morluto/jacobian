@@ -10,6 +10,7 @@ from jacobian.math.graphs.induced_edge_count._models import (
     InducedEdgeCountProfileRequest,
 )
 from jacobian.math.graphs.induced_edge_count.operations import (
+    MAX_RETAINED_LABEL_CHARACTERS,
     compute_induced_edge_count_profile,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -109,14 +110,12 @@ def test_native_admission_rejects_excessive_subset_edge_work() -> None:
         compute_induced_edge_count_profile(g, 10)
 
 
-def test_native_admission_rejects_untransportable_retained_result() -> None:
-    labels = tuple("x" * 240_000 + str(index) for index in range(20))
-    g = _graph(
-        labels,
-        [(labels[0], labels[1]), (labels[1], labels[2]), (labels[2], labels[3])],
-    )
-    with pytest.raises(OperationDomainValidationError, match="output-byte limit"):
-        compute_induced_edge_count_profile(g, 10)
+def test_rejects_excessive_retained_label_allocation() -> None:
+    label = "x" * (MAX_RETAINED_LABEL_CHARACTERS // 2 + 1)
+    graph = _graph((label,), ())
+
+    with pytest.raises(OperationDomainValidationError, match="retained label"):
+        compute_induced_edge_count_profile(graph, 1)
 
 
 def test_result_preserves_source() -> None:

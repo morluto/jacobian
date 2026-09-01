@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import OperationRequestValidationError, invoke_operation
 
 
@@ -74,17 +73,12 @@ def test_dispatch_rejects_oversized_utf8_relation_label() -> None:
 
 
 @pytest.mark.parametrize("escaped_character", ('"', "\x00"), ids=("quote", "nul"))
-def test_dispatch_rejects_escaped_result_over_budget(
+def test_dispatch_returns_escaped_exact_results_without_a_transport_cap(
     escaped_character: str,
 ) -> None:
-    with pytest.raises(OperationDomainValidationError) as error:
-        invoke_operation(
-            "coherent_configuration.analyze.compute",
-            {
-                "configuration": _escaped_thin_four_point_configuration(
-                    escaped_character
-                )
-            },
-            Catalog.open(),
-        )
-    assert "result exceeds the byte budget" in str(error.value.errors())
+    result = invoke_operation(
+        "coherent_configuration.analyze.compute",
+        {"configuration": _escaped_thin_four_point_configuration(escaped_character)},
+        Catalog.open(),
+    )
+    assert result.output["configuration"]["points"]

@@ -22,7 +22,6 @@ MAX_INTERVAL_WIDTH: int = 100_000
 MAX_PROFILE_INTEGER_DIGITS: int = 20
 MAX_FACTORING_INTERVAL_WIDTH: int = 128
 MAX_INTERVAL_WORK: int = 6_000_000
-MAX_INTERVAL_RESULT_BYTES: int = 8_000_000
 MAX_SEGMENTED_SIEVE_UPPER: int = 10**12
 MAX_FACTORING_WORK_SECONDS: int = 60
 
@@ -95,7 +94,6 @@ class ContiguousSumProfileRequest(StrictModel):
                 "max_profile_integer_digits": MAX_PROFILE_INTEGER_DIGITS,
                 "max_factoring_interval_width": MAX_FACTORING_INTERVAL_WIDTH,
                 "max_interval_work": MAX_INTERVAL_WORK,
-                "max_interval_result_bytes": MAX_INTERVAL_RESULT_BYTES,
                 "segmented_sieve_upper": MAX_SEGMENTED_SIEVE_UPPER,
                 "max_factoring_work_seconds": MAX_FACTORING_WORK_SECONDS,
             },
@@ -209,7 +207,6 @@ class ContiguousSumProfileResult(StrictModel):
 __all__ = [
     "MAX_FACTORING_INTERVAL_WIDTH",
     "MAX_FACTORING_WORK_SECONDS",
-    "MAX_INTERVAL_RESULT_BYTES",
     "MAX_INTERVAL_WIDTH",
     "MAX_INTERVAL_WORK",
     "MAX_PROFILE_INTEGER_DIGITS",

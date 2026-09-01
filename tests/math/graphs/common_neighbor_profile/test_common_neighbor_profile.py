@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.common_neighbor_profile.operations import (
+    MAX_COMMON_NEIGHBOR_LABEL_CHARACTERS,
     compute_common_neighbor_profile,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -92,12 +92,28 @@ def test_result_preserves_source() -> None:
     assert result.graph == g
 
 
-def test_native_admission_rejects_complete_profile_over_output_bound() -> None:
-    """A dense large graph is rejected before retaining millions of labels."""
+def test_native_admission_rejects_unbounded_retained_labels() -> None:
+    label = "x" * (MAX_COMMON_NEIGHBOR_LABEL_CHARACTERS // 16 + 1)
+    vertices = [f"{label}{suffix}" for suffix in ("a", "b", "c")]
+    graph = _graph(
+        vertices,
+        [
+            (vertices[0], vertices[1]),
+            (vertices[0], vertices[2]),
+            (vertices[1], vertices[2]),
+        ],
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="label-character"):
+        compute_common_neighbor_profile(graph)
+
+
+def test_native_admission_rejects_complete_profile_over_cell_bound() -> None:
+    """A dense large graph is rejected before retaining millions of cells."""
     vertices = sorted(str(i) for i in range(256))
     edges = [(vertices[i], vertices[j]) for i in range(256) for j in range(i + 1, 256)]
     g = _graph(vertices, edges)
-    with pytest.raises(OperationDomainValidationError, match="output bound"):
+    with pytest.raises(OperationDomainValidationError, match="common-neighbor-cell"):
         compute_common_neighbor_profile(g)
 
 
@@ -111,7 +127,7 @@ def test_result_bound_uses_actual_common_neighbor_labels() -> None:
     assert len(result.rows) == len(vertices) * (len(vertices) - 1) // 2
 
 
-def test_result_bound_uses_actual_codegree_digit_width() -> None:
+def test_profile_with_large_codegrees_stays_within_the_cell_bound() -> None:
     left = ["a" * 60 + suffix for suffix in ("0", "1")]
     right = ["b" * 60 + f"{index:04x}" for index in range(254)]
     graph = _graph(
@@ -120,6 +136,4 @@ def test_result_bound_uses_actual_codegree_digit_width() -> None:
     )
 
     result = compute_common_neighbor_profile(graph)
-    assert len(encode_strict_json(result.model_dump(mode="json"))) <= (
-        CanonicalLimits().max_output_bytes
-    )
+    assert max(row.codegree for row in result.rows) == 254

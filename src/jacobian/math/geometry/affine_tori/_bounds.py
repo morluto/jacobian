@@ -16,7 +16,6 @@ from jacobian._execution import (
     request_cancelled,
 )
 from jacobian.canonical import (
-    CanonicalLimits,
     format_canonical_integer,
     parse_canonical_integer,
     strict_json_object_size,
@@ -90,7 +89,7 @@ class AffineTorusFixedLocusPlan:
     translation_common_denominator: int
     rank_bounds: tuple[AffineTorusRankBounds, ...]
     worker_input_bytes_upper_bound: int
-    result_bytes_upper_bound: int
+    worker_stdout_bytes_upper_bound: int
     backend_envelope: AffineTorusBackendEnvelope
 
     def bounds_for_rank(self, rank: int) -> AffineTorusRankBounds:
@@ -690,7 +689,7 @@ def _point_wire_bytes(*, dimension: int, height: int) -> int:
     )
 
 
-def _source_wire_bytes(source: RationalAffineTorusMap) -> int:
+def _worker_source_bytes(source: RationalAffineTorusMap) -> int:
     """Return the exact compact-JSON size of the retained canonical source."""
 
     dimension = source.torus.dimension
@@ -760,10 +759,10 @@ def _worker_input_wire_bytes(source: RationalAffineTorusMap) -> int:
     )
 
 
-def _result_bytes_for_rank(
+def _worker_projection_bytes_for_rank(
     *,
     dimension: int,
-    source_wire_bytes: int,
+    worker_source_bytes: int,
     bounds: AffineTorusRankBounds,
     include_nonempty: bool = True,
 ) -> int:
@@ -837,7 +836,7 @@ def _result_bytes_for_rank(
         branch_bytes.append(
             strict_json_object_size(
                 (
-                    ("source", source_wire_bytes),
+                    ("source", worker_source_bytes),
                     ("outcome", nonempty_outcome_bytes),
                 )
             )
@@ -865,7 +864,7 @@ def _result_bytes_for_rank(
         branch_bytes.append(
             strict_json_object_size(
                 (
-                    ("source", source_wire_bytes),
+                    ("source", worker_source_bytes),
                     ("outcome", empty_outcome_bytes),
                 )
             )
@@ -949,7 +948,7 @@ def build_affine_torus_plan(
         coordinate.as_integer_ratio()[0] == 0
         for coordinate in source.translation.coordinates
     )
-    source_wire_bytes = _source_wire_bytes(source)
+    worker_source_bytes = _worker_source_bytes(source)
     worker_input_bytes = _worker_input_wire_bytes(source)
     if worker_input_bytes > _AFFINE_TORUS_WORKER_STDIN_LIMIT:
         _reject(
@@ -1052,23 +1051,15 @@ def build_affine_torus_plan(
                 f"carrier's {MAX_AFFINE_TORUS_POINT_DIGITS}-digit envelope",
             )
 
-    result_bytes = max(
-        _result_bytes_for_rank(
+    worker_stdout_bytes = max(
+        _worker_projection_bytes_for_rank(
             dimension=dimension,
-            source_wire_bytes=source_wire_bytes,
+            worker_source_bytes=worker_source_bytes,
             bounds=bounds,
             include_nonempty=not inconsistent,
         )
         for bounds in rank_bounds
     )
-    transport_limit = CanonicalLimits().max_output_bytes
-    if result_bytes > transport_limit:
-        _reject(
-            "canonical_output",
-            f"predicted exact result of {result_bytes} bytes exceeds the actual "
-            f"{transport_limit}-byte canonical transport limit",
-        )
-
     require_affine_torus_deadline(deadline, "after semantic admission")
     return AffineTorusFixedLocusPlan(
         dimension=dimension,
@@ -1077,7 +1068,7 @@ def build_affine_torus_plan(
         translation_common_denominator=common_denominator,
         rank_bounds=rank_bounds,
         worker_input_bytes_upper_bound=worker_input_bytes,
-        result_bytes_upper_bound=result_bytes,
+        worker_stdout_bytes_upper_bound=worker_stdout_bytes,
         backend_envelope=_backend_envelope(
             dimension=dimension,
             displacement_height=displacement_height,

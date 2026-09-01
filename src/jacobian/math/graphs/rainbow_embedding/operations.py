@@ -6,12 +6,6 @@ from dataclasses import dataclass
 from itertools import permutations
 from math import perm
 
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-    strict_json_object_size,
-)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.rainbow_embedding._models import (
     MAX_HOST_VERTICES,
@@ -27,6 +21,7 @@ from jacobian.math.graphs.values import (
 __all__ = ["compute_rainbow_embedding_profile"]
 
 MAX_RAINBOW_EMBEDDING_WORK = 50_000_000
+MAX_RAINBOW_RETAINED_LABEL_CHARACTERS = 20_000_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,12 +30,10 @@ class _RainbowAdmissionPlan:
     rainbow_possible: bool
 
 
-def _json_array_size(item_sizes: list[int]) -> int:
-    return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
-
-
-def _repeated_array_size(item_size: int, count: int) -> int:
-    return 2 + max(count - 1, 0) + item_size * count
+def _graph_label_characters(graph: SimpleUndirectedGraph) -> int:
+    return sum(len(vertex) for vertex in graph.vertices) + sum(
+        len(left) + len(right) for left, right in graph.edges
+    )
 
 
 def _admit_rainbow_embedding_profile(
@@ -73,7 +66,6 @@ def _admit_rainbow_embedding_profile(
             code="graph.rainbow_embedding.edge_colors_must_cover_edges",
             message="edge_colors must be empty or align with every host edge",
         )
-
     candidate_count = 0
     if (
         pattern_order <= host_order
@@ -93,65 +85,29 @@ def _admit_rainbow_embedding_profile(
             message="rainbow embedding enumeration exceeds its exact work bound",
         )
     rainbow_possible = len(set(host.edge_colors)) >= len(pattern.edges)
-
-    try:
-        pattern_bytes = len(encode_strict_json(pattern.model_dump(mode="json")))
-        host_bytes = len(encode_strict_json(host.model_dump(mode="json")))
-    except (CanonicalizationError, UnicodeEncodeError) as exc:
+    witness_count = candidate_count if rainbow_possible else 0
+    largest_host_labels = sorted(
+        (len(vertex) for vertex in host.graph.vertices), reverse=True
+    )[:pattern_order]
+    largest_color = max((len(color) for color in host.edge_colors), default=0)
+    witness_label_characters = (
+        sum(len(vertex) for vertex in pattern.vertices)
+        + sum(largest_host_labels)
+        + len(pattern.edges) * largest_color
+    )
+    retained_label_characters = (
+        _graph_label_characters(pattern)
+        + _graph_label_characters(host.graph)
+        + sum(len(color) for color in host.edge_colors)
+        + witness_count * witness_label_characters
+    )
+    if retained_label_characters > MAX_RAINBOW_RETAINED_LABEL_CHARACTERS:
         raise OperationDomainValidationError(
             location=("pattern", "host"),
-            code="graph.rainbow_embedding.result_exceeds_output_bound",
-            message="rainbow embedding profile exceeds the canonical output bound",
-        ) from exc
-    map_item_sizes = [
-        _json_array_size(
-            [
-                len(encode_strict_json(pattern_vertex)),
-                len(encode_strict_json(host_vertex)),
-            ]
+            code="graph.rainbow_embedding.retained_labels_exceed_bound",
+            message="rainbow embedding result exceeds the retained label-character bound",
         )
-        for pattern_vertex in pattern.vertices
-        for host_vertex in host.graph.vertices[:1]
-    ]
-    # Every witness uses one host label per pattern label. The largest host
-    # label is the conservative bound for any assignment.
-    if host.graph.vertices:
-        max_host_label = max(
-            len(encode_strict_json(vertex)) for vertex in host.graph.vertices
-        )
-        map_item_sizes = [
-            _json_array_size([len(encode_strict_json(pattern_vertex)), max_host_label])
-            for pattern_vertex in pattern.vertices
-        ]
-    mapping_bytes = _json_array_size(map_item_sizes)
-    max_color = max(
-        (len(encode_strict_json(color)) for color in host.edge_colors),
-        default=0,
-    )
-    colors_bytes = _json_array_size([max_color] * len(pattern.edges))
-    witness_bytes = strict_json_object_size(
-        (
-            ("pattern_to_host", mapping_bytes),
-            ("edge_color_labels", colors_bytes),
-        )
-    )
-    witness_count = candidate_count if rainbow_possible else 0
-    embeddings_bytes = _repeated_array_size(witness_bytes, witness_count)
-    result_bytes = strict_json_object_size(
-        (
-            ("pattern", pattern_bytes),
-            ("host", host_bytes),
-            ("embeddings", embeddings_bytes),
-            ("total_embeddings", max(1, len(str(candidate_count)))),
-            ("rainbow_count", max(1, len(str(candidate_count)))),
-        )
-    )
-    if result_bytes > CanonicalLimits().max_output_bytes:
-        raise OperationDomainValidationError(
-            location=("pattern",),
-            code="graph.rainbow_embedding.result_exceeds_output_bound",
-            message="rainbow embedding profile exceeds the canonical output bound",
-        )
+
     return _RainbowAdmissionPlan(candidate_count, rainbow_possible)
 
 

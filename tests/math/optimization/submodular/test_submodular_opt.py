@@ -217,10 +217,7 @@ class TestKernelEquivalence:
         assert result.is_monotone is False
         assert result.violation == "f(()) > f((0,))"
 
-    def test_transport_preflight_rejects_unwritable_tables(self) -> None:
-        """A complete 2^16 table with wide values exceeds the byte envelope."""
-        from pydantic import ValidationError
-
+    def test_complete_table_admission_is_structural(self) -> None:
         n = 16
         entries = []
         for mask in range(1 << n):
@@ -231,12 +228,8 @@ class TestKernelEquivalence:
                     value=CanonicalRational(num="9" * 90, den="1"),
                 )
             )
-        with pytest.raises(ValidationError) as error:
-            SetFunction(ground_set_size=16, entries=tuple(entries))
-        assert (
-            error.value.errors()[0]["type"]
-            == "submodular_opt.table_transport_envelope_exceeded"
-        )
+        function = SetFunction(ground_set_size=16, entries=tuple(entries))
+        assert len(function.entries) == 1 << n
 
 
 def test_value_height_bound_keeps_scan_work_small() -> None:

@@ -15,11 +15,9 @@ from jacobian.math.geometry.polygon_kernel._models import (
     MAX_INTERSECTION_COMPONENT_DIGITS,
     MAX_KERNEL_COORDINATE_DIGITS,
     MAX_KERNEL_FEASIBILITY_WORK,
-    MAX_KERNEL_RESULT_CHARS,
     KernelPolygon,
     OrientedEdgeHalfPlane,
     PolygonKernelResult,
-    _estimate_visibility_kernel_result_characters,
 )
 
 
@@ -65,18 +63,6 @@ def _admit_visibility_kernel(
         )
 
     vertex_count = len(polygon.points)
-    estimated_result_chars = _estimate_visibility_kernel_result_characters(
-        vertex_count,
-        max_coordinate_digits,
-        coefficient_digits,
-        intersection_digits,
-    )
-    if estimated_result_chars > MAX_KERNEL_RESULT_CHARS:
-        _reject_visibility_kernel(
-            "visibility-kernel result can require "
-            f"{estimated_result_chars} characters, exceeding the "
-            f"{MAX_KERNEL_RESULT_CHARS}-character bound"
-        )
     feasibility_work = (
         comb(vertex_count, 2) * vertex_count * coefficient_digits * coefficient_digits
     )

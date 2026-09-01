@@ -7,7 +7,7 @@ from typing import Self
 from pydantic import ConfigDict, Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits, parse_canonical_integer
+from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory._models import (
     MAX_INTEGER_DIGITS,
     BoundedInteger,
@@ -19,7 +19,6 @@ MAX_KSIGMA_TARGET = 10_000_000
 MAX_KSIGMA_SEARCH = 100_000
 MAX_INTERVAL_PROFILE_ROWS = 1_024
 MAX_INTERVAL_PROFILE_WORK = 3 * MAX_INTERVAL_PROFILE_ROWS
-MAX_INTERVAL_PROFILE_RESULT_BYTES = CanonicalLimits().max_output_bytes
 PRIMALITY_WORK_DIGIT_EXPONENT: int = 3
 
 _P_ADIC_REQUEST_DESCRIPTION = (
@@ -113,7 +112,6 @@ class PAdicIntervalProfileRequest(StrictModel):
                 "max_profile_work_units": MAX_INTERVAL_PROFILE_WORK,
                 "primality_work_units": f"decimal_digits(prime)^{PRIMALITY_WORK_DIGIT_EXPONENT}",
                 "total_valuation_max_digits": MAX_INTEGER_DIGITS,
-                "canonical_result_max_bytes": MAX_INTERVAL_PROFILE_RESULT_BYTES,
             },
         }
     )
@@ -235,7 +233,6 @@ class PAdicIntervalProfileResult(StrictModel):
 
 
 __all__ = [
-    "MAX_INTERVAL_PROFILE_RESULT_BYTES",
     "MAX_INTERVAL_PROFILE_ROWS",
     "MAX_INTERVAL_PROFILE_WORK",
     "MAX_KSIGMA_MULTIPLIER",

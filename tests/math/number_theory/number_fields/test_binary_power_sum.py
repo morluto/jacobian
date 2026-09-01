@@ -18,7 +18,6 @@ from jacobian._execution import (
     current_request_execution,
     request_execution,
 )
-from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.number_fields import (
     BinaryPowerSumGap,
@@ -32,7 +31,6 @@ from jacobian.math.number_theory.number_fields import (
 from jacobian.math.number_theory.number_fields._binary_power_sum import (
     BINARY_POWER_SUM_WALL_SECONDS,
     MAX_BINARY_POWER_SUM_EXPONENT_COUNT,
-    MAX_BINARY_POWER_SUM_RESULT_BYTES,
     BinaryPowerSumAdmissionError,
     NumberFieldBinaryPowerSumGapProfileRequest,
     _execute_binary_power_sum_gap_profile,
@@ -455,7 +453,7 @@ def test_coordinate_growth_is_rejected_before_embedding_recognition(
     assert caught.value.reason == "element_coordinate_bound"
 
 
-def test_complete_result_byte_bound_is_independent_of_backend_recognition() -> None:
+def test_structurally_admitted_profile_is_independent_of_serialized_size() -> None:
     coefficients = ("9" * 256, *("8" * 256 for _ in range(7)), "1")
     field = _field(*coefficients)
     record = RealNumberFieldEmbeddingRecord.model_validate(
@@ -478,10 +476,8 @@ def test_complete_result_byte_bound_is_independent_of_backend_recognition() -> N
     )
     base = _binding(_element(field, Fraction(3, 2), *(0 for _ in range(7))), record)
 
-    with pytest.raises(BinaryPowerSumAdmissionError) as caught:
-        admit_binary_power_sum_gap_profile(base, 12)
-
-    assert caught.value.reason == "result_byte_bound"
+    admission = admit_binary_power_sum_gap_profile(base, 12)
+    assert admission.source_representation_count == 4_096
 
 
 def test_result_round_trip_preserves_source_partition_and_gap_reconstruction(
@@ -491,12 +487,13 @@ def test_result_round_trip_preserves_source_partition_and_gap_reconstruction(
     result = binary_power_sum_gap_profile(
         _binding(_element(field, 0, 1), golden_ratio_record), 3
     )
-    encoded = encode_strict_json(result.model_dump(mode="json"))
 
-    assert BinaryPowerSumGapProfile.model_validate_json(encoded, strict=True) == result
-    admission = admit_binary_power_sum_gap_profile(result.base, 3)
-    assert len(encoded) <= admission.predicted_result_bytes
-    assert len(encoded) <= MAX_BINARY_POWER_SUM_RESULT_BYTES
+    assert (
+        BinaryPowerSumGapProfile.model_validate_json(
+            result.model_dump_json(), strict=True
+        )
+        == result
+    )
     assert "evidence_basis" not in result.gaps[0].model_dump()
     assert "evidence_basis" not in BinaryPowerSumGap.model_json_schema()["properties"]
 

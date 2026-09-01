@@ -5,7 +5,6 @@ from itertools import combinations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import canonicalize_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.codes.nonlinear._models import ExplicitBinaryCode
 from jacobian.math.combinatorics.codes.nonlinear.operations import to_set_system
@@ -235,23 +234,6 @@ def test_single_member_normalization_is_charged(
     )
 
     with pytest.raises(OperationDomainValidationError, match="membership work"):
-        construct_binary_union_relation(source)
-
-
-def test_real_serializer_overflow_is_a_domain_rejection() -> None:
-    member_size = 154_200
-    base = 10**15
-    left = tuple(base + 2 * index for index in range(member_size))
-    right = tuple(base + 2 * index + 1 for index in range(member_size))
-    union = tuple(range(base, base + 2 * member_size))
-    source = IndexedFiniteSetFamily(
-        ground_set_size=base + 2 * member_size + 1,
-        members=(left, right, union),
-    )
-    source_bytes = len(canonicalize_json(source.model_dump(mode="json")))
-    assert source_bytes < 10 * 1024 * 1024
-
-    with pytest.raises(OperationDomainValidationError, match="retained-source"):
         construct_binary_union_relation(source)
 
 

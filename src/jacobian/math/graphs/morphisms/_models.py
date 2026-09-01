@@ -8,7 +8,6 @@ from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 # Exhaustive backtracking search over graph morphisms is exponential in the
@@ -16,32 +15,10 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 # operation inside a tested, provably bounded domain.
 MORPHISM_MAX_VERTICES = 64
 
+
 # Source-bound graph results retain their input graphs and may add witnesses.
 # This reserved envelope covers the result wrapper and field names after those
 # representation-dependent components.
-_RESULT_ENVELOPE_RESERVE_BYTES = 1_024
-
-
-def _label_wire_bytes(labels: tuple[str, ...]) -> int:
-    return sum(len(encode_strict_json(label) + b",") for label in labels)
-
-
-def _require_output_headroom(
-    source_bytes: int, witness_label_bytes: int, operation: str
-) -> None:
-    estimated_result_bytes = (
-        source_bytes + witness_label_bytes + _RESULT_ENVELOPE_RESERVE_BYTES
-    )
-    output_limit = CanonicalLimits().max_output_bytes
-    if estimated_result_bytes > output_limit:
-        raise PydanticCustomError(
-            "graph.operation_result_retains_its_sources_would_exceed",
-            f"the {operation} result retains its sources and would exceed the "
-            f"{output_limit}-byte canonical output limit; "
-            "shorten vertex labels or shrink the graphs",
-        )
-
-
 class GraphVertexMapRow(StrictModel):
     """One canonical source-vertex to target-vertex assignment."""
 
@@ -214,9 +191,9 @@ class FixedLengthCycleRequest(StrictModel):
                 "cycle of length `length` (3..64) in a graph with at most 64 "
                 "vertices. The request is rejected when "
                 "the worst-case exhaustive search would exceed the work budget, "
-                "or when the retained source graph plus witness labels would not "
-                "leave enough canonical-output headroom for the echoed-source "
-                "response. Accepts the domain-owned `SimpleUndirectedGraph` so "
+                "or when the retained source graph plus witness labels exceed "
+                "the owner-local representation bound. Accepts the domain-owned "
+                "`SimpleUndirectedGraph` so "
                 "callers can compose the output of `explicit_graph` or "
                 "`compose_graphs` directly."
             )
@@ -387,8 +364,8 @@ class SubgraphPatternFindRequest(StrictModel):
                 "must have at most 64 vertices; requests whose worst-case "
                 "assignment search exceeds the per-pass work budget are "
                 "rejected. Runtime candidate scans share that budget and may "
-                "return `BUDGET_EXCEEDED`; the retained sources and result "
-                "envelope must fit the canonical output limit."
+                "return `BUDGET_EXCEEDED`; returned maps remain bounded by "
+                "the admitted pattern cardinality."
             )
         },
     )

@@ -29,11 +29,9 @@ from jacobian.math.number_theory._periodic_models import (
     MAX_PERIOD_SCAN,
     MAX_PERIODIC_FAMILY_SIZE,
     MAX_PERIODIC_INTEGER_DIGITS,
-    MAX_PERIODIC_RESULT_BYTES,
     MAX_PERIODIC_SOURCE_ROWS,
     MAX_SPARSE_LIFTED_ROWS,
     PERIODIC_EXECUTION_PASSES_PER_CALL,
-    PERIODIC_PROFILE_RESULT_ENVELOPE_BYTES,
     PeriodicCongruenceSubsetInput,
     PeriodicCongruenceUnionMeasureResult,
     PeriodicCongruenceUnionProfileRequest,
@@ -504,10 +502,6 @@ def test_request_schemas_publish_aggregate_execution_and_profile_bounds() -> Non
     assert profile_schema["profile_materialization_work_limit"] == (
         MAX_PERIOD_LIFT_WORK
     )
-    assert profile_schema["profile_result_envelope_bytes"] == (
-        PERIODIC_PROFILE_RESULT_ENVELOPE_BYTES
-    )
-    assert profile_schema["profile_result_byte_limit"] == MAX_PERIODIC_RESULT_BYTES
 
 
 def test_measure_accepts_exact_integer_digit_boundary() -> None:
@@ -758,7 +752,7 @@ def test_materialized_union_row_bound_is_checked_before_lifting() -> None:
         _profile(rejected_payload)
 
 
-def test_profile_accounts_for_retained_source_and_wide_residue_output_bytes() -> None:
+def test_profile_accepts_wide_residues_within_materialized_row_bound() -> None:
     base_modulus = 10**250
     output_rows = 50_000
     payload = {
@@ -770,8 +764,9 @@ def test_profile_accounts_for_retained_source_and_wide_residue_output_bytes() ->
     }
 
     assert _measure(payload).occupied_count == str(output_rows)
-    with pytest.raises(OperationDomainValidationError, match="canonical output budget"):
-        _profile(payload)
+    result = _profile(payload)
+    assert result.occupied_count == str(output_rows)
+    assert len(result.occupied_residues) == output_rows
 
 
 def test_compressed_intersection_work_boundary_rejects_before_backend() -> None:

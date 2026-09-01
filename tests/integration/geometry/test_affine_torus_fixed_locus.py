@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from time import monotonic
 from typing import Any
 
-from jacobian.canonical import encode_strict_json
 from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import invoke_operation
@@ -14,7 +12,6 @@ from jacobian.math.geometry.affine_tori import (
     AffineTorusFixedLocusResult,
     RationalAffineTorusMap,
 )
-from jacobian.math.geometry.affine_tori._bounds import build_affine_torus_plan
 from jacobian.math.geometry.affine_tori._models import AffineTorusFixedLocusRequest
 
 
@@ -44,8 +41,6 @@ def _source(
 def test_empty_outcome_round_trips_through_public_dispatch() -> None:
     source = _source(((1,),), (Fraction(1, 3),))
     payload = {"affine_map": source.model_dump(mode="json")}
-    plan = build_affine_torus_plan(source, deadline=monotonic() + 30)
-
     dispatched = invoke_operation(
         "affine_torus.fixed_locus.compute",
         payload,
@@ -57,7 +52,6 @@ def test_empty_outcome_round_trips_through_public_dispatch() -> None:
     assert restored.outcome.obstruction.coefficients == ("1",)
     assert restored.outcome.obstruction_pairing.as_fraction() == Fraction(1, 3)
     assert restored.model_dump(mode="json") == dispatched.output
-    assert len(encode_strict_json(dispatched.output)) <= plan.result_bytes_upper_bound
 
 
 def test_public_tool_validates_and_executes_its_example() -> None:

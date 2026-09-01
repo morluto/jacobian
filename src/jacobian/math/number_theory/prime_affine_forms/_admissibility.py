@@ -11,11 +11,8 @@ from jacobian._models import StrictModel
 from jacobian.math.number_theory.prime_affine_forms._kernel import primes_through
 from jacobian.math.number_theory.prime_affine_forms._local_factors import local_summary
 from jacobian.math.number_theory.prime_affine_forms._models import (
-    MAX_RESULT_CHARACTER_BUDGET,
     PrimeTupleLocalSummary,
     _run_admission,
-    _source_character_upper_bound,
-    _summary_character_upper_bound,
     _validation_error,
 )
 from jacobian.math.number_theory.prime_affine_forms.values import (
@@ -48,19 +45,6 @@ def _admit_local_admissibility(source: PrimeAffineTuple) -> None:
         raise _validation_error(
             "admissibility computation may require "
             f"{total_root_cells} root cells, exceeding {MAX_ADMISSIBILITY_ROOT_CELLS}"
-        )
-    estimated_characters = (
-        _source_character_upper_bound(source)
-        + sum(
-            _summary_character_upper_bound(source, prime)
-            for prime in primes_through(cutoff)
-        )
-        + 16 * prime_rows
-        + 256
-    )
-    if estimated_characters > MAX_RESULT_CHARACTER_BUDGET:
-        raise _validation_error(
-            "admissibility profile exceeds the conservative serialized bound"
         )
 
 

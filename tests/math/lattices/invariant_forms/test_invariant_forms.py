@@ -475,7 +475,7 @@ def test_nine_axis_trivial_action_uses_exact_output_admission() -> None:
     assert InvariantBilinearFormLattice.model_validate_json(encoded) == result
 
 
-def test_oversized_trivial_action_is_rejected_by_exact_output_admission() -> None:
+def test_oversized_trivial_action_is_rejected_by_basis_cell_admission() -> None:
     action = _action([], axis=tuple(f"e{index}" for index in range(128)))
 
     with pytest.raises(OperationDomainValidationError) as exc_info:

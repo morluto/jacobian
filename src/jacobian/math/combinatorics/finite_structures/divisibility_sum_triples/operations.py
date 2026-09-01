@@ -8,7 +8,6 @@ from math import comb
 
 from pydantic_core import PydanticCustomError
 
-from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.divisibility_sum_triples._models import (
     MAX_INTERVAL_SIZE,
@@ -92,27 +91,6 @@ def _admit_divisibility_sum_triples(
                         message="the exact triple family exceeds the hypergraph envelope",
                     )
 
-    try:
-        payload = {
-            "lower_bound": lower_bound,
-            "upper_bound": upper_bound,
-            "hypergraph": {
-                "vertices": list(vertices),
-                "edges": [[edge_id, list(members)] for edge_id, members in edges],
-            },
-        }
-        if len(encode_strict_json(payload)) > CanonicalLimits().max_output_bytes:
-            raise OperationDomainValidationError(
-                location=(),
-                code="divisibility_sum.result_bytes_exceeded",
-                message="the exact result exceeds the canonical output-byte limit",
-            )
-    except ValueError as error:
-        raise OperationDomainValidationError(
-            location=(),
-            code="divisibility_sum.result_not_canonical",
-            message="the exact result cannot be represented in canonical JSON",
-        ) from error
     return DivisibilitySumTriplesAdmission(vertices=vertices, edges=tuple(edges))
 
 

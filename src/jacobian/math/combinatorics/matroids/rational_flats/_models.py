@@ -8,7 +8,7 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import CanonicalizationError, CanonicalLimits
+from jacobian.canonical import CanonicalizationError
 from jacobian.math._labels import OpaqueLabel
 from jacobian.math.matrices.values import (
     RationalVectorSpaceBasis,
@@ -23,7 +23,6 @@ MAX_RATIONAL_FLAT_CLAUSE_MEMBERSHIPS = 4_096
 MAX_RATIONAL_FLAT_SYMMETRY_GENERATORS = 16
 MAX_RATIONAL_FLAT_GROUP_ORDER = 10_000
 MAX_RATIONAL_FLAT_RESULT_ORBITS = 100_000
-MAX_RATIONAL_FLAT_RESULT_BYTES = CanonicalLimits().max_output_bytes
 MAX_RATIONAL_FLAT_INPUT_COMPONENT_DIGITS = 256
 MAX_RATIONAL_FLAT_MATRIX_NONZEROS = (
     MAX_RATIONAL_FLAT_CANDIDATES * MAX_RATIONAL_FLAT_AMBIENT_DIMENSION
@@ -847,7 +846,7 @@ RationalFlatIncompleteReason = Literal[
     "STATE_ORBIT_LIMIT",
     "SEARCH_WORK_LIMIT",
     "RESULT_ORBIT_LIMIT",
-    "RESULT_OUTPUT_LIMIT",
+    "RESULT_RETENTION_LIMIT",
 ]
 
 
@@ -862,10 +861,6 @@ class RationalFlatClassificationIncomplete(StrictModel):
         ge=0,
         le=MAX_RATIONAL_FLAT_RESULT_ORBITS,
         description="Structural maximum number of retained orbit representatives.",
-    )
-    result_output_byte_limit: StrictInt = Field(
-        ge=1,
-        description="Maximum canonical byte size of a complete exact result.",
     )
     consumed_search_work: StrictInt = Field(
         ge=0,
@@ -982,7 +977,6 @@ class ClauseConstrainedRationalFlatClassification(StrictModel):
         explored_state_orbit_count: int,
         state_orbit_limit: int,
         result_orbit_limit: int,
-        result_output_byte_limit: int,
         consumed_search_work: int,
         search_work_limit: int,
     ) -> Self:
@@ -995,7 +989,6 @@ class ClauseConstrainedRationalFlatClassification(StrictModel):
                 explored_state_orbit_count=explored_state_orbit_count,
                 state_orbit_limit=state_orbit_limit,
                 result_orbit_limit=result_orbit_limit,
-                result_output_byte_limit=result_output_byte_limit,
                 consumed_search_work=consumed_search_work,
                 search_work_limit=search_work_limit,
             ),
@@ -1017,7 +1010,6 @@ __all__ = [
     "MAX_RATIONAL_FLAT_GROUP_ORDER",
     "MAX_RATIONAL_FLAT_INPUT_COMPONENT_DIGITS",
     "MAX_RATIONAL_FLAT_MATRIX_NONZEROS",
-    "MAX_RATIONAL_FLAT_RESULT_BYTES",
     "MAX_RATIONAL_FLAT_RESULT_ORBITS",
     "MAX_RATIONAL_FLAT_SYMMETRY_GENERATORS",
     "ClauseConstrainedRationalFlatClassification",

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import NoReturn, TypedDict
 
-from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 
 from . import _concepts
@@ -175,22 +174,6 @@ def _closure_rows_from_plan(
     )
 
 
-def _result_payload_with_exact_wire_bytes(
-    payload: dict[str, object],
-) -> dict[str, object]:
-    work = payload["work"]
-    if not isinstance(work, dict):
-        raise TypeError("internal DG-basis work payload must be an object")
-    serialized_result_bytes = 1
-    for _ in range(4):
-        work["serialized_result_bytes"] = serialized_result_bytes
-        measured = len(encode_strict_json(payload))
-        if measured == serialized_result_bytes:
-            return payload
-        serialized_result_bytes = measured
-    raise RuntimeError("serialized DG-basis result size did not reach a fixed point")
-
-
 def duquenne_guigues_basis(
     context: FormalContext,
 ) -> CanonicalImplicationBasisResult:
@@ -285,13 +268,9 @@ def duquenne_guigues_basis(
             "implication_memberships": implication_memberships,
             "accounted_logical_work": accounted_logical_work,
             "reserved_logical_work": plan.reserved_logical_work,
-            "reserved_result_bytes": plan.reserved_result_bytes,
-            "serialized_result_bytes": 1,
         },
     }
-    return CanonicalImplicationBasisResult._from_payload(
-        _result_payload_with_exact_wire_bytes(payload)
-    )
+    return CanonicalImplicationBasisResult._from_payload(payload)
 
 
 def object_derivation(ctx: FormalContext, objects: frozenset[int]) -> frozenset[int]:

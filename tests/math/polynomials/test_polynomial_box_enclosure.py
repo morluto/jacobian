@@ -10,7 +10,6 @@ import pytest
 from tests.math.polynomials._support import polynomial_validation_error
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis.intervals import ClosedRationalInterval, RationalBox
 from jacobian.math.polynomials.intervals import polynomial_box_enclosure
@@ -19,7 +18,6 @@ from jacobian.math.polynomials.intervals._models import (
     MAX_BOX_ENCLOSURE_ENDPOINT_DIGITS,
     MAX_BOX_ENCLOSURE_INTERMEDIATE_DIGITS,
     MAX_BOX_ENCLOSURE_PER_VARIABLE_DEGREE,
-    MAX_BOX_ENCLOSURE_RESULT_BYTES,
     MAX_BOX_ENCLOSURE_RESULT_DIGITS,
     MAX_BOX_ENCLOSURE_TERM_AXIS_PAIRS,
     MAX_BOX_ENCLOSURE_TERMS,
@@ -646,12 +644,11 @@ def test_result_byte_estimate_covers_exact_retained_source_serialization() -> No
     request = PolynomialBoxEnclosureRequest(polynomial=polynomial, box=box)
     result = compute_polynomial_box_enclosure(request)
     estimate = _estimate_growth(polynomial, box)
-    serialized = encode_strict_json(result.model_dump(mode="json"))
 
     assert result.polynomial == polynomial
     assert result.box == box
-    assert len(serialized) <= estimate.estimated_result_bytes
-    assert estimate.estimated_result_bytes <= MAX_BOX_ENCLOSURE_RESULT_BYTES
+    assert estimate.result_numerator_digits <= MAX_BOX_ENCLOSURE_RESULT_DIGITS
+    assert estimate.result_denominator_digits <= MAX_BOX_ENCLOSURE_RESULT_DIGITS
 
 
 def test_numeric_admission_limits_are_discoverable() -> None:
@@ -666,7 +663,6 @@ def test_numeric_admission_limits_are_discoverable() -> None:
         f"{MAX_BOX_ENCLOSURE_TERM_AXIS_PAIRS:,} term-axis pairs",
         f"{MAX_BOX_ENCLOSURE_INTERMEDIATE_DIGITS:,}-digit intermediate",
         f"{MAX_BOX_ENCLOSURE_RESULT_DIGITS:,}-digit result",
-        f"{MAX_BOX_ENCLOSURE_RESULT_BYTES:,}-byte canonical retained-source",
     ):
         assert expected in schema_description
         assert expected in tool.description

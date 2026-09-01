@@ -15,11 +15,9 @@ from jacobian.math.polynomials._conversions import (
 from jacobian.math.polynomials._models import _validation_error
 from jacobian.math.polynomials._multiply_models import (
     MAX_MULTIPLY_PRODUCT_WORK,
-    MAX_MULTIPLY_RESULT_BYTES,
     MAX_MULTIPLY_RESULT_TERMS,
     _is_multiplicative_identity,
     _maximum_product_coefficient_digits,
-    _result_wire_upper_bound,
 )
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_EXPONENT,
@@ -57,18 +55,6 @@ def _admit(left: RationalPolynomial, right: RationalPolynomial) -> None:
     if any(exponent > MAX_POLYNOMIAL_EXPONENT for exponent in maximum_exponents):
         raise _validation_error(
             "the polynomial product may exceed the canonical exponent limit"
-        )
-    if (
-        _result_wire_upper_bound(
-            left.variables,
-            term_count=result_term_bound,
-            coefficient_digits=coefficient_digits,
-            maximum_exponents=maximum_exponents,
-        )
-        > MAX_MULTIPLY_RESULT_BYTES
-    ):
-        raise _validation_error(
-            "the polynomial product may exceed the canonical serialized result size"
         )
 
 

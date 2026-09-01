@@ -10,27 +10,18 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
-    format_canonical_integer,
-)
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.matrices.subsystems.values import (
     MAX_SUBSYSTEM_DIMENSION,
     MAX_SUBSYSTEM_FACTORS,
     FactorizedHermitianMatrix,
     partial_trace_measured_entries,
 )
-from jacobian.math.matrices.values import RationalMatrix
 
 MAX_KRONECKER_RESULT_COMPONENT_DIGITS = 256
 MAX_PARTIAL_TRACE_RESULT_COMPONENT_DIGITS = 4_098
 MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS = 4 * MAX_PARTIAL_TRACE_RESULT_COMPONENT_DIGITS
 MAX_PSD_DIFFERENCE_COMPONENT_DIGITS = 513
-_PSD_RESULT_ENVELOPE_RESERVE_BYTES = 4_096
-_PSD_WITNESS_COMPONENT_RESERVE_BYTES = 2 * MAX_CANONICAL_RATIONAL_DIGITS + 32
-_TRACE_RESULT_ENVELOPE_RESERVE_BYTES = 4_096
 
 
 def _fraction_component_digits(value: Fraction) -> tuple[int, int]:
@@ -113,51 +104,6 @@ def _require_trace_result_envelope(
             "budget_exceeded",
             "partial-trace coefficient growth exceeds the "
             f"{MAX_PARTIAL_TRACE_RESULT_COMPONENT_DIGITS}-digit result bound",
-        )
-
-
-def _require_trace_transport_envelope(
-    matrix: FactorizedHermitianMatrix,
-    traced_factor_labels: tuple[str, ...],
-    expected_entries: tuple[tuple[Fraction, ...], ...],
-) -> None:
-    """Reserve the serialized result's share of the canonical output budget.
-
-    The result retains its source matrix and adds the reduced matrix, so a
-    source near the transport limit can fit every coefficient envelope and
-    still overflow canonical output encoding outside the request-validation
-    handler.  Measuring the exact encoded result -- plus one envelope
-    reserve -- keeps every accepted call returning its typed result.
-    """
-
-    output_limit = CanonicalLimits().max_output_bytes
-    try:
-        reduced = FactorizedHermitianMatrix(
-            matrix=RationalMatrix(
-                entries=tuple(
-                    tuple(CanonicalRational.from_fraction(entry) for entry in row)
-                    for row in expected_entries
-                )
-            ),
-            factors=tuple(
-                factor
-                for factor in matrix.factors
-                if factor.label not in traced_factor_labels
-            ),
-        )
-        result_bytes = (
-            len(encode_strict_json(matrix.model_dump(mode="json")))
-            + len(encode_strict_json(reduced.model_dump(mode="json")))
-            + _TRACE_RESULT_ENVELOPE_RESERVE_BYTES
-        )
-    except CanonicalizationError:
-        result_bytes = output_limit + 1
-    if result_bytes > output_limit:
-        raise _validation_error(
-            "budget_exceeded",
-            "the partial-trace result retains its source matrix and would "
-            f"exceed the {output_limit}-byte canonical output limit; "
-            "use smaller or sparser operands",
         )
 
 
@@ -257,44 +203,6 @@ def _require_psd_pair_admission(
         raise _validation_error(
             "budget_exceeded",
             "PSD-order witness growth exceeds the canonical rational component bound",
-        )
-    output_limit = CanonicalLimits().max_output_bytes
-    witness_reserve = (
-        0
-        if all(entry == 0 for row in difference_rows for entry in row)
-        else (len(left.matrix.entries) + 1) * _PSD_WITNESS_COMPONENT_RESERVE_BYTES
-    )
-    try:
-        result_bytes = (
-            len(encode_strict_json(left.model_dump(mode="json")))
-            + len(encode_strict_json(right.model_dump(mode="json")))
-            + len(
-                encode_strict_json(
-                    FactorizedHermitianMatrix(
-                        matrix=RationalMatrix(
-                            entries=tuple(
-                                tuple(
-                                    CanonicalRational.from_fraction(entry)
-                                    for entry in row
-                                )
-                                for row in difference_rows
-                            )
-                        ),
-                        factors=left.factors,
-                    ).model_dump(mode="json")
-                )
-            )
-            + witness_reserve
-            + _PSD_RESULT_ENVELOPE_RESERVE_BYTES
-        )
-    except CanonicalizationError:
-        result_bytes = output_limit + 1
-    if result_bytes > output_limit:
-        raise _validation_error(
-            "budget_exceeded",
-            "the PSD-order result retains both operands and their exact "
-            f"difference and would exceed the {output_limit}-byte canonical "
-            "output limit; use smaller or sparser operands",
         )
 
 

@@ -680,15 +680,13 @@ def _dense_equal_operand(digits: int) -> FactorizedHermitianMatrix:
 
 
 @pytest.mark.scale
-def test_psd_order_rejects_results_beyond_the_canonical_output_limit() -> None:
-    from jacobian.canonical import CanonicalLimits, encode_strict_json
-
+def test_psd_order_accepts_structurally_bounded_dense_equal_operands() -> None:
     operand = _dense_equal_operand(digits=10224)
-    request_bytes = 2 * len(encode_strict_json(operand.model_dump(mode="json")))
-    assert request_bytes <= CanonicalLimits().max_input_bytes
 
-    with pytest.raises(OperationDomainValidationError):
-        decide_psd_order(PsdOrderRequest(left=operand, right=operand))
+    result = decide_psd_order(PsdOrderRequest(left=operand, right=operand))
+
+    assert result.is_less_or_equal is True
+    assert result.left == operand
 
 
 @pytest.mark.scale
@@ -732,22 +730,15 @@ def _trace_source_with_unused_large_block(
 
 
 @pytest.mark.scale
-def test_partial_trace_rejects_results_beyond_the_canonical_output_limit() -> None:
-    from jacobian.canonical import (
-        CanonicalizationError,
-        encode_strict_json,
-    )
-
+def test_partial_trace_accepts_structurally_bounded_large_components() -> None:
     source = _trace_source_with_unused_large_block(
         cross_digits=25000, diagonal_digits=16300
     )
-    with pytest.raises(CanonicalizationError):
-        encode_strict_json(source.model_dump(mode="json"))
+    result = compute_partial_trace(
+        SubsystemPartialTraceRequest(matrix=source, traced_factor_labels=("q",))
+    )
 
-    with pytest.raises(OperationDomainValidationError):
-        compute_partial_trace(
-            SubsystemPartialTraceRequest(matrix=source, traced_factor_labels=("q",))
-        )
+    assert result.source_matrix == source
 
 
 @pytest.mark.scale

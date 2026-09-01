@@ -21,7 +21,6 @@ from jacobian.math.matrices.subsystems._models import (
     _fraction_component_digits,
     _require_psd_pair_admission,
     _require_trace_result_envelope,
-    _require_trace_transport_envelope,
     _require_trace_work_envelope,
     _require_traceable_factors,
     _validation_error,
@@ -102,7 +101,6 @@ def _admit_partial_trace(
 ) -> None:
     expected_entries = _require_trace_work_envelope(matrix, traced_factor_labels)
     _require_trace_result_envelope(expected_entries)
-    _require_trace_transport_envelope(matrix, traced_factor_labels, expected_entries)
 
 
 def _admit_psd(

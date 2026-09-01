@@ -14,7 +14,6 @@ from jacobian._exact import (
     CanonicalRational,
 )
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.math.matrices.values import (
     MAX_MATRIX_DIMENSION,
     RationalMatrix,
@@ -53,8 +52,6 @@ _ADMISSION_REDUCTION_BIT_BUDGET = 64 * _MAX_ADMISSION_POWER_BITS
 # still safe) denominator bound.
 _MAX_PROVEN_DENOMINATOR_PEELS = 64
 
-_RESULT_ENTRY_OVERHEAD_BYTES: int = 32
-_RESULT_ENVELOPE_RESERVE_BYTES: int = 4_096
 _MAX_RESULT_COMPONENT: int = 10**MAX_CANONICAL_RATIONAL_DIGITS - 1
 
 
@@ -1266,22 +1263,6 @@ def _require_matrix_polynomial_output_budget(
             f"{MAX_CANONICAL_RATIONAL_DIGITS:,}-digit rational result bound",
         )
 
-    source_bytes = len(encode_strict_json(matrix.model_dump(mode="json")))
-    polynomial_bytes = len(encode_strict_json(polynomial.model_dump(mode="json")))
-    value_bytes = sum(
-        numerator_digits + denominator_digits + _RESULT_ENTRY_OVERHEAD_BYTES
-        for numerator_digits, denominator_digits in component_bounds
-    )
-    estimated_result_bytes = (
-        source_bytes + polynomial_bytes + value_bytes + _RESULT_ENVELOPE_RESERVE_BYTES
-    )
-    output_limit = CanonicalLimits().max_output_bytes
-    if estimated_result_bytes > output_limit:
-        raise _validation_error(
-            "budget_exceeded",
-            "the retained matrix, polynomial, and exact value can exceed the "
-            f"{output_limit}-byte canonical output limit",
-        )
     arithmetic_component_digits = [
         len(component.lstrip("-"))
         for row in matrix.entries

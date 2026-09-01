@@ -14,8 +14,6 @@ from sympy import nextprime
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import (
-    CanonicalLimits,
-    encode_strict_json,
     format_canonical_integer,
 )
 from jacobian.catalog.models import OperationDomainValidationError
@@ -27,8 +25,6 @@ from jacobian.math.matrices._operation_models import (
 from jacobian.math.matrices._tools import compute_characteristic_polynomial
 from jacobian.math.matrices.canonical_forms._models import (
     _MAX_WORK_BOUND,
-    _RESULT_ENTRY_OVERHEAD_BYTES,
-    _RESULT_ENVELOPE_RESERVE_BYTES,
     MATRIX_POLYNOMIAL_EVALUATION_PASSES,
     MAX_MATRIX_POLYNOMIAL_DIGIT_WORK,
     MAX_MATRIX_POLYNOMIAL_SCALAR_PRODUCTS,
@@ -226,19 +222,8 @@ def _assert_matrix_polynomial_envelope_conformance(
         <= MAX_MATRIX_POLYNOMIAL_DIGIT_WORK
     )
 
-    estimated_value_bytes = sum(
-        numerator_digits + denominator_digits + _RESULT_ENTRY_OVERHEAD_BYTES
-        for numerator_digits, denominator_digits in component_bounds
-    )
-    estimated_output_bytes = (
-        len(encode_strict_json(request.matrix.model_dump(mode="json")))
-        + len(encode_strict_json(request.polynomial.model_dump(mode="json")))
-        + estimated_value_bytes
-        + _RESULT_ENVELOPE_RESERVE_BYTES
-    )
-    actual_output_bytes = len(encode_strict_json(result.model_dump(mode="json")))
-    assert actual_output_bytes <= estimated_output_bytes
-    assert actual_output_bytes <= CanonicalLimits().max_output_bytes
+    assert result.source_matrix == request.matrix
+    assert result.polynomial == request.polynomial
 
 
 @pytest.mark.parametrize(
@@ -997,7 +982,7 @@ def test_zero_matrix_admission_does_not_combine_irrelevant_denominators() -> Non
     assert request.matrix.entries[0][0].num == "0"
 
 
-def test_request_rejects_predicted_scalar_and_aggregate_output_overflow() -> None:
+def test_request_rejects_predicted_scalar_but_not_encoded_size() -> None:
     denominator = "1" + "0" * 100
     overflowing_exponent = MAX_CANONICAL_RATIONAL_DIGITS // 100 + 1
     _assert_admission_rejected(
@@ -1007,17 +992,17 @@ def test_request_rejects_predicted_scalar_and_aggregate_output_overflow() -> Non
         )
     )
 
-    overflowing_entry_digits = CanonicalLimits().max_output_bytes // 32**2 + 1_000
+    overflowing_entry_digits = 12_000
     huge_coefficient = "1" * overflowing_entry_digits
     dense = RationalMatrix(
         entries=tuple(tuple(_rational(1) for _ in range(32)) for _ in range(32))
     )
-    _assert_admission_rejected(
-        MatrixPolynomialEvaluationRequest(
-            matrix=dense,
-            polynomial=_polynomial((huge_coefficient, 1)),
-        )
+    request = MatrixPolynomialEvaluationRequest(
+        matrix=dense,
+        polynomial=_polynomial((huge_coefficient, 1)),
     )
+
+    assert request.polynomial.polynomial.terms[0].coefficient.num == huge_coefficient
 
 
 def test_structurally_nilpotent_powers_are_admitted_and_evaluate_to_zero() -> None:

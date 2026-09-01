@@ -8,7 +8,7 @@ from dataclasses import dataclass, replace
 from fractions import Fraction
 from math import ceil, gcd, lcm, log10
 from time import monotonic
-from typing import Any, cast
+from typing import Any
 from unicodedata import normalize
 
 from jacobian._execution import (
@@ -19,8 +19,6 @@ from jacobian._execution import (
 )
 from jacobian.canonical import (
     CanonicalizationError,
-    CanonicalLimits,
-    encode_strict_json,
     format_canonical_integer,
     loads_strict_json,
     parse_canonical_integer,
@@ -52,7 +50,7 @@ from jacobian.math.number_theory.number_fields.values import (
 
 MAX_CONSTRAINT_COMPONENT_DIGITS = 65_536
 MAX_STORED_CONSTRAINT_DIGITS = 2_000_000
-MAX_INVARIANT_FORM_RESULT_BYTES = CanonicalLimits().max_output_bytes
+MAX_INVARIANT_FORM_BASIS_CELLS = 2_000_000
 
 _INVARIANT_FORM_WALL_SECONDS = 3600.0
 
@@ -334,59 +332,6 @@ def _normalize_retained_strings(value: object) -> object:
     return value
 
 
-def _retained_action_bytes(action: MatrixAction) -> int:
-    """Measure the exact retained source before expanding any constraints."""
-
-    # Preflight the expanded source-byte budget before model_dump and
-    # encode_strict_json materialize the full canonical representation.
-    # Accumulate a conservative size over every generator, not just the
-    # first, since later generators may carry much larger rationals.
-    dimension = len(action.coordinate_axis)
-    generator_count = len(action.generators)
-    if generator_count > 0:
-        max_row_bytes = 0
-        for generator in action.generators:
-            for row in generator.matrix.entries:
-                row_bytes = sum(len(str(value)) + 4 for value in row)
-                if row_bytes > max_row_bytes:
-                    max_row_bytes = row_bytes
-        axis_label_bytes = sum(
-            len(encode_strict_json(label)) + 1 for label in action.coordinate_axis
-        )
-        generator_label_bytes = sum(
-            len(encode_strict_json(generator.label)) + 1
-            for generator in action.generators
-        )
-        estimated_bytes = (
-            4_096
-            + axis_label_bytes
-            + generator_label_bytes
-            + generator_count * (dimension * max_row_bytes + 32)
-        )
-        if estimated_bytes + 4_096 > MAX_INVARIANT_FORM_RESULT_BYTES:
-            raise _validation_error(
-                "budget_exceeded",
-                "the retained exact matrix action leaves no room for the canonical result",
-            )
-    try:
-        retained_payload = cast(
-            dict[str, Any],
-            _normalize_retained_strings(action.model_dump(mode="json")),
-        )
-        source_bytes = len(encode_strict_json(retained_payload))
-    except CanonicalizationError:
-        raise _validation_error(
-            "budget_exceeded",
-            "the retained exact matrix action exceeds the canonical output limit",
-        ) from None
-    if source_bytes + 4_096 > MAX_INVARIANT_FORM_RESULT_BYTES:
-        raise _validation_error(
-            "budget_exceeded",
-            "the retained exact matrix action leaves no room for the canonical result",
-        )
-    return source_bytes
-
-
 def _minor_digit_bound(*, rank: int, component_digits: int) -> int:
     """Bound decimal digits in a rank minor by Hadamard's inequality."""
 
@@ -419,11 +364,10 @@ def _kernel_entry_digit_bound(
 
 
 def _require_result_envelope(
-    action: MatrixAction,
     *,
+    dimension: int,
     coefficient_count: int,
     constraints: tuple[IntegerConstraint, ...],
-    source_bytes: int,
 ) -> None:
     """Prove a conservative exact-output envelope before graph-HNF work."""
 
@@ -450,34 +394,12 @@ def _require_result_envelope(
             "the exact invariant-form basis can exceed the canonical integer "
             f"component bound of {MAX_MATRIX_SCALAR_DIGITS} decimal digits",
         )
-    axis_bytes = len(encode_strict_json(list(action.coordinate_axis)))
-    dimension = len(action.coordinate_axis)
-    maximum_basis_bytes = max(
-        (
-            (coefficient_count - rank)
-            * (
-                axis_bytes
-                + 1_024
-                + dimension
-                * dimension
-                * (
-                    _minor_digit_bound(
-                        rank=rank,
-                        component_digits=constraint_digits,
-                    )
-                    + 5
-                )
-            )
-            for rank in possible_nonfull_ranks
-        ),
-        default=0,
-    )
-    predicted_result_bytes = source_bytes + 4_096 + maximum_basis_bytes
-    if predicted_result_bytes > MAX_INVARIANT_FORM_RESULT_BYTES:
+    maximum_basis_count = coefficient_count - min(possible_nonfull_ranks, default=0)
+    if maximum_basis_count * dimension * dimension > MAX_INVARIANT_FORM_BASIS_CELLS:
         raise _validation_error(
             "budget_exceeded",
-            "the conservative exact invariant-form basis bound exceeds the "
-            f"{MAX_INVARIANT_FORM_RESULT_BYTES}-byte canonical output limit",
+            "the exact invariant-form basis exceeds the "
+            f"{MAX_INVARIANT_FORM_BASIS_CELLS:,}-cell result bound",
         )
 
 
@@ -561,13 +483,11 @@ def _build_constraint_plan(
             "the congruence expansion exceeds the structural bound of "
             f"{MAX_CONSTRAINT_CELLS} coefficients",
         )
-    source_bytes = _retained_action_bytes(action)
     if not positions:
         _require_result_envelope(
-            action,
+            dimension=dimension,
             coefficient_count=0,
             constraints=(),
-            source_bytes=source_bytes,
         )
         return _ConstraintPlan(
             positions=(),
@@ -667,10 +587,9 @@ def _build_constraint_plan(
     )
     ordered_constraints = tuple(sorted(constraints))
     _require_result_envelope(
-        action,
+        dimension=dimension,
         coefficient_count=len(positions),
         constraints=ordered_constraints,
-        source_bytes=source_bytes,
     )
     plan = _ConstraintPlan(
         positions=positions,

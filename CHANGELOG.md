@@ -40,6 +40,14 @@
   `lattice.invariant_bilinear_form_lattice.compute` ([#3081](https://github.com/morluto/jacobian/issues/3081)) ([8340bae](https://github.com/morluto/jacobian/commit/8340bae8c))
 * **real algebra:** `polynomial.real.common_interlacing_profile.compute`
   ([#3061](https://github.com/morluto/jacobian/issues/3061)) ([b00af1c](https://github.com/morluto/jacobian/commit/b00af1c98))
+* **real algebra:** `real_algebraic.plane_semialgebraic.component_profile.compute`
+  ([#3095](https://github.com/morluto/jacobian/issues/3095)) ([e33af91](https://github.com/morluto/jacobian/commit/e33af91bd))
+* **finite fields:** `finite_field.prime_linear_action.homogeneous_fixed_subspace.compute`
+  ([#3098](https://github.com/morluto/jacobian/issues/3098)) ([6d0fdc0](https://github.com/morluto/jacobian/commit/6d0fdc0b4))
+* **matrices:** `matrix.cyclic.rational_rank_kernel_profile.compute`
+  ([#3088](https://github.com/morluto/jacobian/issues/3088)) ([78496e3](https://github.com/morluto/jacobian/commit/78496e39b))
+* **affine tori:** `affine_torus.fixed_locus.compute`
+  ([#3089](https://github.com/morluto/jacobian/issues/3089)) ([32b0277](https://github.com/morluto/jacobian/commit/32b0277a4))
 
 
 ### Bug Fixes

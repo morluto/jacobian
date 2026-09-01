@@ -7,11 +7,6 @@ from math import factorial
 from typing import NoReturn
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import (
-    CanonicalLimits,
-    encode_strict_json,
-    strict_json_object_size,
-)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.probability.markov_chains.eventual_hitting._models import (
     EventualHittingProfileResult,
@@ -27,25 +22,15 @@ from jacobian.math.probability.markov_chains.values import (
 __all__ = ["compute_eventual_hitting_profile"]
 
 
-def _json_array_size(item_size: int, count: int) -> int:
-    return 2 + max(count - 1, 0) + item_size * count
-
-
-def _json_array_sizes(item_sizes: list[int]) -> int:
-    return 2 + max(len(item_sizes) - 1, 0) + sum(item_sizes)
-
-
 def _reject(location: tuple[str | int, ...], code: str, message: str) -> NoReturn:
     raise OperationDomainValidationError(
         location=location, code=f"markov_chain.eventual_hitting.{code}", message=message
     )
 
 
-def _admit_eventual_hitting(  # noqa: C901
+def _admit_eventual_hitting(
     matrix: TransitionMatrix,
     target_states: tuple[int, ...],
-    *,
-    enforce_transport_limit: bool,
 ) -> tuple[set[int], set[int], tuple[int, ...]]:
     try:
         require_transition_matrix(matrix)
@@ -144,77 +129,19 @@ def _admit_eventual_hitting(  # noqa: C901
             "eventual hitting probabilities exceed the exact rational result bound",
         )
 
-    matrix_row_bytes = [
-        _json_array_sizes(
-            [
-                len(
-                    encode_strict_json(
-                        CanonicalRational.from_fraction(value).model_dump(mode="json")
-                    )
-                )
-                for value in row
-            ]
-        )
-        for row in matrix
-    ]
-    matrix_bytes = _json_array_sizes(matrix_row_bytes)
-    index_bytes = max(1, len(str(max(n - 1, 0))))
-    target_bytes = _json_array_size(index_bytes, len(target_states))
-    transient_probability_bytes = strict_json_object_size(
-        (("num", result_height + 2), ("den", result_height + 2))
-    )
-    zero_probability_bytes = len(
-        encode_strict_json(
-            CanonicalRational.from_fraction(Fraction(0)).model_dump(mode="json")
-        )
-    )
-    one_probability_bytes = len(
-        encode_strict_json(
-            CanonicalRational.from_fraction(Fraction(1)).model_dump(mode="json")
-        )
-    )
-    probability_bytes = _json_array_sizes(
-        [
-            transient_probability_bytes
-            if state in transient
-            else one_probability_bytes
-            if state in target_set
-            else zero_probability_bytes
-            for state in range(n)
-        ]
-    )
-    classification_bytes = _json_array_size(index_bytes, n)
-    result_bytes = strict_json_object_size(
-        (
-            ("matrix", matrix_bytes),
-            ("target_states", target_bytes),
-            ("hitting_probabilities", probability_bytes),
-            ("zero_states", classification_bytes),
-            ("proper_states", classification_bytes),
-            ("almost_sure_states", classification_bytes),
-        )
-    )
-    if enforce_transport_limit and result_bytes > CanonicalLimits().max_output_bytes:
-        _reject(
-            ("matrix",),
-            "result_exceeds_output_bound",
-            "eventual hitting profile exceeds the canonical output bound",
-        )
     return target_set, can_reach_target, transient
 
 
 def compute_eventual_hitting_profile(
     matrix: TransitionMatrix,
     target_states: tuple[int, ...],
-    *,
-    enforce_transport_limit: bool = False,
 ) -> EventualHittingProfileResult:
     """Return the eventual hitting probability profile for a Markov chain.
 
     For each state i, compute h(i) = P_i(ever hit the target set A).
     """
     target_set, can_reach_target, transient = _admit_eventual_hitting(
-        matrix, target_states, enforce_transport_limit=enforce_transport_limit
+        matrix, target_states
     )
     n = len(matrix)
     h = [Fraction(0)] * n

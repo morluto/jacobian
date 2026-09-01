@@ -6,6 +6,10 @@ from typing import Any
 from jacobian._models import StrictModel
 from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
+    CommonInterlacingProfile,
+    CommonInterlacingRequest,
+)
 from jacobian.math.polynomials.real_algebra._models import (
     RootCountRequest,
     RootCountResult,
@@ -21,9 +25,8 @@ from jacobian.math.polynomials.real_algebra._strict_sublevel_models import (
     StrictSublevelMeasureResult,
 )
 from jacobian.math.polynomials.real_algebra.operations import (
+    common_interlacing_profile as _common_interlacing_profile_native,
     compute_plane_component_profile as _compute_plane_component_profile_native,
-)
-from jacobian.math.polynomials.real_algebra.operations import (
     compute_root_count as _compute_root_count_native,
 )
 from jacobian.math.polynomials.real_algebra.operations import (
@@ -62,6 +65,12 @@ def compute_plane_component_profile(
     )
 
 
+def compute_common_interlacing_profile(
+    request: CommonInterlacingRequest,
+) -> CommonInterlacingProfile:
+    return _common_interlacing_profile_native(request.family)
+
+
 def ra_operation[RequestT: StrictModel, ResultT: StrictModel](
     operation_id: str,
     title: str,
@@ -70,6 +79,7 @@ def ra_operation[RequestT: StrictModel, ResultT: StrictModel](
     result_model: type[ResultT],
     operation: Callable[[RequestT], ResultT],
     *tags: str,
+    discovery_terms: tuple[str, ...] = (),
     examples: tuple[OperationExample, ...] = (),
 ) -> MathTool[RequestT, ResultT]:
     return MathTool(
@@ -80,11 +90,83 @@ def ra_operation[RequestT: StrictModel, ResultT: StrictModel](
         result_type=result_model,
         run=operation,
         tags=tags,
+        discovery_terms=discovery_terms,
         examples=examples,
     )
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    ra_operation(
+        "polynomial.real.common_interlacing_profile.compute",
+        "Compute an exact common polynomial-interlacing profile",
+        "Decide common weak interlacing for a bounded labelled family of monic, "
+        "same-positive-degree univariate polynomials over QQ. Return every "
+        "distinct exact real root with source multiplicity and either all "
+        "attained closed gap endpoints or the first deterministic non-real-root "
+        "or empty-gap obstruction. The envelope admits 2-8 sources, source "
+        "degree at most 32, total degree at most 128, 64-digit rational "
+        "components, 256-digit primitive height, and real-rooted irreducible "
+        "factors of degree at most 8; higher-degree root-free factors are "
+        "retained only to report the exact non-real-root obstruction.",
+        CommonInterlacingRequest,
+        CommonInterlacingProfile,
+        compute_common_interlacing_profile,
+        "polynomial",
+        "real-algebra",
+        "common-interlacing",
+        "exact",
+        discovery_terms=(
+            "common interlacer",
+            "common interlacing",
+            "weak polynomial interlacing",
+        ),
+        examples=(
+            example(
+                "quadratic_family",
+                "Compute the common gap [-1, 1] for x^2 - 1 and x^2 - 4.",
+                {
+                    "family": [
+                        {
+                            "label": "inner",
+                            "polynomial": {
+                                "variables": ["x"],
+                                "polynomial": {
+                                    "terms": [
+                                        {
+                                            "coefficient": {"num": "1", "den": "1"},
+                                            "exponents": [2],
+                                        },
+                                        {
+                                            "coefficient": {"num": "-1", "den": "1"},
+                                            "exponents": [0],
+                                        },
+                                    ]
+                                },
+                            },
+                        },
+                        {
+                            "label": "outer",
+                            "polynomial": {
+                                "variables": ["x"],
+                                "polynomial": {
+                                    "terms": [
+                                        {
+                                            "coefficient": {"num": "1", "den": "1"},
+                                            "exponents": [2],
+                                        },
+                                        {
+                                            "coefficient": {"num": "-4", "den": "1"},
+                                            "exponents": [0],
+                                        },
+                                    ]
+                                },
+                            },
+                        },
+                    ]
+                },
+            ),
+        ),
+    ),
     ra_operation(
         "polynomial.sturm_chain.compute",
         "Compute an ordinary exact Sturm sequence",

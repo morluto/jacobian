@@ -9,6 +9,13 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.polynomials.real_algebra._common_interlacing import (
+    common_interlacing_profile as _common_interlacing_profile,
+)
+from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
+    CommonInterlacingProfile,
+    LabelledRationalPolynomial,
+)
 from jacobian.math.polynomials.real_algebra._models import (
     PolynomialTerm,
     RootCountResult,
@@ -43,12 +50,21 @@ from jacobian.math.polynomials.values import (
 
 __all__ = [
     "compute_plane_component_profile",
+    "common_interlacing_profile",
     "compute_root_count",
     "compute_strict_sublevel_measure",
     "compute_sturm_chain",
     "root_count",
     "sturm_chain",
 ]
+
+
+def common_interlacing_profile(
+    family: tuple[LabelledRationalPolynomial, ...],
+) -> CommonInterlacingProfile:
+    """Return the complete exact common weak-interlacing profile of ``family``."""
+
+    return _common_interlacing_profile(family)
 
 
 def _to_sympy_poly(terms: list[tuple[Fraction, int]]) -> Any:

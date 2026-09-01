@@ -211,6 +211,26 @@ solver or backend unless the requirement depends on it. Do not open umbrella
 issues that only restate the product model; open issues when the problem and
 success criteria are concrete.
 
+### Review and closeout
+
+Treat a concrete adversarial review finding as contract evidence, not as a
+request for a cosmetic patch. Reproduce the reported behavior, identify the
+cheapest boundary that can reject or represent it correctly, and add the
+smallest behavioral regression that would fail without the fix. Depending on
+the finding, that proof may need to cover an accepted near-limit request,
+malformed or deeply nested input, generated-schema/runtime parity, native/MCP
+parity, a producer-consumer round trip, a worker projection, or a deadline and
+serialization phase after backend execution.
+
+Before replying that a thread is resolved, inspect the complete final diff
+against the intended base, resolve merge conflicts, and freeze the behavioral
+tree. Run the affected owner and boundary lanes, then rerun checks invalidated
+by formatting, generated files, conflict resolution, or later commits. When
+automatic linting changes a pull request, use the CI run for the exact final
+head SHA; skipped, withheld, duplicate, or older event records are not evidence
+for a different revision. The handoff should name the final revision, tests
+actually run, optional-backend skips, and any remaining proof gap.
+
 ## Test ownership and selection
 
 Test directories mirror their semantic owners: `tests/math`, `tests/catalog`,

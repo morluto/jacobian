@@ -161,7 +161,9 @@ class TestSquarefreeProfile:
         )
         assert (
             _admit(
-                GreatestPrimeFactorProfileRequest(lower_bound=1, upper_bound=dense_width)
+                GreatestPrimeFactorProfileRequest(
+                    lower_bound=1, upper_bound=dense_width
+                )
             ).estimated_result_items
             == dense_width
         )

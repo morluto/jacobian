@@ -210,7 +210,9 @@ def test_homomorphism_check_has_no_transport_derived_ceiling() -> None:
         (),
         (("a" * 100, "b" * 100),),
     )
-    result = _compute_homomorphism_check(HomomorphismCheckRequest(vertex_map=vertex_map))
+    result = _compute_homomorphism_check(
+        HomomorphismCheckRequest(vertex_map=vertex_map)
+    )
 
     assert result.status == "HOMOMORPHISM"
 

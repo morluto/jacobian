@@ -163,6 +163,8 @@ def _admit_rational_spectrum_claim(
         raise _validation_error(
             "budget_exceeded", "exact shifted-rank minors exceed the digit budget"
         )
+
+
 def _is_diagonal(matrix: ExactRealMatrix) -> bool:
     order = len(matrix.entries)
     if isinstance(matrix, EmbeddedRealSimpleNumberFieldMatrix):

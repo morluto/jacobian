@@ -130,6 +130,8 @@ def _admit_projective_enumeration(space: PrimeFieldVectorSpace) -> None:
             "projective space exceeds the "
             f"{MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS}-vector enumeration envelope",
         )
+
+
 def projective_point_canonicalize(
     space: PrimeFieldVectorSpace,
     vector: tuple[int, ...],

@@ -521,9 +521,7 @@ class TestDerivedAdmissionBoundaries:
         assert require_profile_admission(request.code).pair_count == 1
 
     @pytest.mark.parametrize("length", [200_000, MAX_EXPLICIT_CODE_LENGTH])
-    def test_empty_profile_charges_no_pair_work(
-        self, length: int
-    ) -> None:
+    def test_empty_profile_charges_no_pair_work(self, length: int) -> None:
         source = ExplicitBinaryCode(length=length, codewords=())
         plan = require_profile_admission(source)
         assert plan.pair_count == 0

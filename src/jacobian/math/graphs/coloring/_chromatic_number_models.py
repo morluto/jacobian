@@ -229,6 +229,7 @@ def _require_bounded_sources(
             f"{MAX_CHROMATIC_CERTIFICATE_DIGIT_WORK} decimal-digit-operation bound",
         )
 
+
 def _scaled_weights(
     weights: tuple[CanonicalRational, ...],
 ) -> tuple[int, tuple[int, ...]]:

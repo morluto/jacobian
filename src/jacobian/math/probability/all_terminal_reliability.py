@@ -54,6 +54,7 @@ def _require_bounded_problem(
             f"{MAX_ALL_TERMINAL_RELIABILITY_INPUT_DIGITS}-digit bound"
         )
 
+
 def _indexed_graph(
     graph: SimpleUndirectedGraph,
 ) -> tuple[nx.Graph[int], tuple[tuple[int, int], ...]]:

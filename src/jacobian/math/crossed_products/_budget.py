@@ -114,4 +114,5 @@ def require_multiplication_budget(
                 ),
             )
 
+
 __all__ = ["MAX_CONVOLUTION_PAIRS", "require_multiplication_budget"]

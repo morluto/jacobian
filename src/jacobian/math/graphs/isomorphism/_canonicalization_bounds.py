@@ -30,6 +30,8 @@ def require_admitted_colored_graph_canonicalization(
             "colored-graph canonicalization exceeds the "
             f"{MAX_CANONICALIZATION_WORK}-unit execution work bound",
         )
+
+
 __all__ = [
     "require_admitted_colored_graph_canonicalization",
 ]

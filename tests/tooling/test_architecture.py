@@ -45,7 +45,9 @@ def test_mathematical_contracts_cannot_own_output_byte_limits(
     _write(tmp_path, "src/jacobian/math/example/values.py", codec_source)
     _write(tmp_path, "src/jacobian/math/example/operations.py", named_source)
     _write(tmp_path, "src/jacobian/math/example/_models.py", helper_source)
-    _write(tmp_path, "src/jacobian/math/example/_worker.py", codec_source + named_source)
+    _write(
+        tmp_path, "src/jacobian/math/example/_worker.py", codec_source + named_source
+    )
     _write(
         tmp_path,
         "src/jacobian/math/example/_worker_bounds.py",
@@ -54,7 +56,9 @@ def test_mathematical_contracts_cannot_own_output_byte_limits(
     _write(
         tmp_path,
         "src/jacobian/math/example/_process_adapter.py",
-        "from jacobian.process import run_bounded_process\n" + codec_source + named_source,
+        "from jacobian.process import run_bounded_process\n"
+        + codec_source
+        + named_source,
     )
 
     assert _violations(tmp_path, "mathematical-transport-limit") == [

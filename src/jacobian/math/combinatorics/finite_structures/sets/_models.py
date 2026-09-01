@@ -15,6 +15,7 @@ MAX_FINITE_SET_OPERAND_ELEMENTS = 50_000
 MAX_FINITE_INTEGER_SET_ELEMENTS = 2 * MAX_FINITE_SET_OPERAND_ELEMENTS
 MAX_FINITE_SET_COVERAGE_VALUES = MAX_FINITE_INTEGER_SET_ELEMENTS
 
+
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"finite_set.{reason}", message)
 

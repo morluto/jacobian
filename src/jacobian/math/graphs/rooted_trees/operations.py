@@ -19,6 +19,7 @@ from jacobian.math.graphs.values import MAX_GRAPH_LABEL_BYTES, SimpleUndirectedG
 
 type _Adjacency = dict[str, tuple[str, ...]]
 
+
 @dataclass(frozen=True, slots=True)
 class _FinePartitionPlan:
     connected: bool

@@ -31,6 +31,8 @@ MAX_KERNEL_COORDINATE_DIGITS = 64
 MAX_HALF_PLANE_COEFFICIENT_DIGITS = 1_024
 MAX_INTERSECTION_COMPONENT_DIGITS = 2_056
 MAX_KERNEL_FEASIBILITY_WORK = 500_000_000
+
+
 class KernelPolygon(PolygonRequest):
     """Operation-local bounded view of one simple CCW rational polygon.
 

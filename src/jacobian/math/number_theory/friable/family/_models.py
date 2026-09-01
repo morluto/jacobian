@@ -88,9 +88,7 @@ def _estimate_generated_candidates(x: int, primes: tuple[int, ...]) -> int:
     return visit(0, x)
 
 
-def plan_friable_family(
-    x: int, y: int
-) -> tuple[_FriableFamilyRegime, tuple[int, ...]]:
+def plan_friable_family(x: int, y: int) -> tuple[_FriableFamilyRegime, tuple[int, ...]]:
     """Validate and select one exact friable-family execution regime.
 
     Returns the regime label and, for the generated regime, the tuple of

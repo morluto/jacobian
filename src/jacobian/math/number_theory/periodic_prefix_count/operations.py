@@ -23,6 +23,7 @@ from jacobian.math.number_theory.periodic_prefix_count._models import (
 
 __all__ = ["compute_periodic_union_prefix_count"]
 
+
 def _reject(
     code: str, message: str, *, location: tuple[str | int, ...] = ("source",)
 ) -> NoReturn:

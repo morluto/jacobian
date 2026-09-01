@@ -64,7 +64,6 @@ MAX_COMMON_INTERLACING_FACTOR_ROOT_CHECKS = 2_048
 MAX_COMMON_INTERLACING_COMPARISONS = 512
 
 
-
 @dataclass(frozen=True, slots=True)
 class _FactorPlan:
     polynomial: Poly

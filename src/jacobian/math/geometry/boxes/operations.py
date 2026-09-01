@@ -113,6 +113,8 @@ def admit_box_union_volume(boxes: tuple[RationalAxisAlignedBox, ...]) -> None:
             "box_union_exceed_complete_intersection_ledger",
             "box union exceeds the complete intersection-ledger allocation bound",
         )
+
+
 def _admit(boxes: tuple[RationalAxisAlignedBox, ...]) -> None:
     try:
         admit_box_union_volume(boxes)

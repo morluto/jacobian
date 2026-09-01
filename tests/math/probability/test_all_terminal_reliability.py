@@ -372,10 +372,7 @@ def test_native_boundary_rejects_huge_probability_components_preflight() -> None
 def test_request_schema_exposes_the_retained_result_limit() -> None:
     schema = AllTerminalReliabilityRequest.model_json_schema()
 
-    assert (
-        "exact coefficient profile is bounded"
-        in str(schema["description"]).lower()
-    )
+    assert "exact coefficient profile is bounded" in str(schema["description"]).lower()
     assert (
         "complete coefficient profile has at most 21 entries"
         in str(schema["properties"]["graph"]["description"]).lower()

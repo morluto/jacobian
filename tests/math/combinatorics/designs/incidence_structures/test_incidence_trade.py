@@ -216,9 +216,7 @@ def test_profile_admission_charges_structure_not_serialized_label_repetition() -
     points = tuple(f"p{index}-" + "x" * 1_000 for index in range(100))
     incidence = _family(((),), "b", points=points)
 
-    result = _containment_profile(
-        ContainmentProfileRequest(incidence=incidence, t=2)
-    )
+    result = _containment_profile(ContainmentProfileRequest(incidence=incidence, t=2))
     assert len(result.subset_profile) == 4_950
 
 

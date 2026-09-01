@@ -75,7 +75,9 @@ class TriangleProfileResult(StrictModel):
     """Complete triangle profile of a finite simple undirected graph."""
 
     source: SimpleUndirectedGraph
-    triangles: tuple[TriangleProfileRow, ...] = Field(max_length=MAX_TRIANGLE_PROFILE_ROWS)
+    triangles: tuple[TriangleProfileRow, ...] = Field(
+        max_length=MAX_TRIANGLE_PROFILE_ROWS
+    )
     triangle_count: StrictInt = Field(ge=0)
 
     @model_validator(mode="after")

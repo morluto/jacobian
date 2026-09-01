@@ -129,6 +129,7 @@ def _require_containment_profile_admitted(
             "containment profile exceeds the execution work budget",
         )
 
+
 def _require_incidence_trade_admitted(
     left: IncidenceStructure,
     right: IncidenceStructure,
@@ -163,6 +164,7 @@ def _require_incidence_trade_admitted(
             "trade_work_budget_exceeded",
             "trade comparison exceeds the execution work budget",
         )
+
 
 class IncidenceMatrixRequest(StrictModel):
     incidence: IncidenceStructure

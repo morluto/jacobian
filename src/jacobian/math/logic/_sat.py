@@ -404,6 +404,8 @@ def _validate_lpr_refutation(cnf: CanonicalCnf, refutation: SatLprRefutation) ->
                 "LPR replay exceeds the declared literal-inspection work bound",
             )
         live_clause_widths[step.clause_id] = len(step.clause)
+
+
 def _admit_lpr_refutation(
     cnf: CanonicalCnf,
     refutation: SatLprRefutation,

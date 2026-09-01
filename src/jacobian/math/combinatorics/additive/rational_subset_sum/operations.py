@@ -21,7 +21,6 @@ from jacobian.math.combinatorics.additive.rational_subset_sum._models import (
 __all__ = ["compute_rational_subset_sum_profile"]
 
 
-
 def _reject(code: str, message: str) -> NoReturn:
     raise OperationDomainValidationError(
         location=("values",), code=f"rational_subset_sum.{code}", message=message

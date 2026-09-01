@@ -21,6 +21,7 @@ __all__ = [
     "compute_edge_pattern_profile",
 ]
 
+
 def _compute_edge_admission(
     edge_id: str,
     members: tuple[str, ...],

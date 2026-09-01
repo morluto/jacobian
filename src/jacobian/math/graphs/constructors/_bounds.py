@@ -14,6 +14,7 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 MAX_TRIANGLE_PROFILE_WORK_UNITS = 64_000_000
 MAX_TRIANGLE_PROFILE_ROWS = 1_000_000
 
+
 @dataclass(frozen=True, slots=True)
 class TriangleProfileAdmission:
     """The exact bounded scan and output plan for one triangle request."""

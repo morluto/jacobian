@@ -99,7 +99,7 @@ def _bound_raw_counts(
     *,
     expected_rows: int | None,
     item_count: int,
- ) -> None:
+) -> None:
     if not isinstance(counts, (list, tuple)):
         return
     if len(counts) > MAX_RESIDUE_PROFILE_MODULUS:

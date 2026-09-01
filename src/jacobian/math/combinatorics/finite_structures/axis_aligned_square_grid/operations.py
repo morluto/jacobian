@@ -15,6 +15,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 
 __all__ = ["construct_axis_aligned_square_grid"]
 
+
 def _admit_side_length(side_length: int) -> int:
     if isinstance(side_length, bool) or not isinstance(side_length, int):
         raise OperationDomainValidationError(

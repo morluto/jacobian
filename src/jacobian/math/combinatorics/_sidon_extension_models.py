@@ -91,7 +91,6 @@ def _extension_work_units(source_count: int, candidate_count: int) -> int:
     return source_pairs + candidate_count * per_candidate
 
 
-
 def _validate_source_and_candidates(
     source_elements: tuple[AdditiveInteger, ...],
     candidate_elements: tuple[AdditiveInteger, ...],

@@ -23,6 +23,7 @@ from jacobian.math.probability.hypergraph_containment._models import (
 
 __all__ = ["compute_hypergraph_vertex_containment"]
 
+
 @dataclass(frozen=True, slots=True)
 class _ContainmentAdmissionPlan:
     edge_masks: tuple[int, ...]

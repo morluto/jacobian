@@ -17,6 +17,7 @@ __all__ = ["compute_common_neighbor_profile"]
 
 MAX_COMMON_NEIGHBOR_CELLS = 5_000_000
 
+
 @dataclass(frozen=True, slots=True)
 class _ProfilePlan:
     rows: tuple[tuple[str, str, tuple[str, ...]], ...]

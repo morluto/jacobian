@@ -232,6 +232,7 @@ def _admit_product(left: FiniteCategory, right: FiniteCategory) -> None:
             f"{MAX_CATEGORY_PRODUCT_EXECUTION_STEPS} steps",
         )
 
+
 def _product_data(
     left: FiniteCategory, right: FiniteCategory
 ) -> tuple[

@@ -28,6 +28,7 @@ MAX_GROUND_LABEL_TOTAL_UTF8_BYTES = 65_536
 MAX_INTERMEDIATE_MEMBERSHIPS = 262_144
 """Maximum feasible-row membership storage inspected by a kernel."""
 
+
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     """Build a stable validation error owned by greedoid contracts."""
 
@@ -104,6 +105,8 @@ def require_bounded_carrier(system: FiniteFeasibleSetSystem) -> None:
             "exchange_work_exceeds_budget",
             "exhaustive exchange and accessibility membership work exceeds the bounded budget",
         )
+
+
 class RecognizeRequest(StrictModel):
     """Recognize a feasible-set family as a greedoid."""
 

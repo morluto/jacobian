@@ -833,6 +833,7 @@ def test_profile_digit_budget_prices_rows_at_their_actual_sides() -> None:
     admitted = comb_edge_tensor(CanonicalRational(num="9" * 32_000, den="1"), 100)
     assert derived_profile_digit_budget(admitted) == 32_000
 
+
 @pytest.mark.scale
 def test_congestion_bound_uses_the_capacity_denominator() -> None:
     # A unit load over capacity 1/D reduces to exactly D: cross-multiplication

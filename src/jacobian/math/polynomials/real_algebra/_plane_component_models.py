@@ -1066,7 +1066,10 @@ class PlaneComponentProfileRequest(StrictModel):
 class PlaneComponentProfileResult(StrictModel):
     """The retained source and either an exact profile or no conclusion."""
 
-    semialgebraic_set: PlaneSemialgebraicSet
+    semialgebraic_set: Annotated[
+        PlaneSemialgebraicSet,
+        WithJsonSchema(_plane_component_semialgebraic_set_schema()),
+    ]
     samples: tuple[IsolatedRealPlanePoint, ...] = Field(
         max_length=MAX_PLANE_COMPONENT_SAMPLES
     )

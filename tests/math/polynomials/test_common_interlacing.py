@@ -36,6 +36,7 @@ from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
     EmptyGapObstruction,
     LabelledRationalPolynomial,
     NonRealRootObstruction,
+    PolynomialRealRoot,
     PolynomialRootReference,
 )
 from jacobian.math.polynomials.real_algebra._common_interlacing_process import (
@@ -434,6 +435,27 @@ def test_worker_root_polynomial_length_is_capped_before_decoding() -> None:
             },
             [(factor, 1)],
             [1],
+        )
+
+
+def test_result_root_schema_and_runtime_keep_the_factor_degree_bound() -> None:
+    schema = PolynomialRealRoot.model_json_schema()
+    assert schema["properties"]["value"]["properties"]["polynomial"]["maxItems"] == 9
+
+    with pytest.raises(ValidationError, match="factor degree at most 8"):
+        PolynomialRealRoot.model_validate(
+            {
+                "value": {
+                    "polynomial": ["1", *("0" for _ in range(15)), "-2"],
+                    "real_root_index": 0,
+                },
+                "multiplicity": 1,
+                "isolating_interval": {
+                    "lower": {"num": "-1", "den": "1"},
+                    "upper": {"num": "1", "den": "1"},
+                    "interval_type": "OPEN",
+                },
+            }
         )
 
 

@@ -6,7 +6,6 @@ from typing import Literal
 
 from jacobian.math.logic.term_rewriting.values import (
     MAX_CRITICAL_PAIR_CANDIDATES,
-    MAX_CRITICAL_PAIR_RESULT_BYTES,
     MAX_CRITICAL_PAIR_RESULT_NODES,
     MAX_CRITICAL_PAIR_RULES,
     MAX_TERM_DEPTH,
@@ -32,11 +31,8 @@ __all__ = [
 ]
 
 _RESULT_NODES_EXCEEDED = "critical-pair result nodes exceed the supported bound"
-_RESULT_BYTES_EXCEEDED = "critical-pair result bytes exceed the supported bound"
-_RESULT_DEPTH_EXCEEDED = "critical-pair result depth exceeds the transport-safe bound"
+_RESULT_DEPTH_EXCEEDED = "critical-pair result depth exceeds the supported bound"
 _CRITICAL_PAIR_PROFILE_FIXED_NODES = 384
-_RESULT_BYTES_PER_NODE = 96
-_VARIABLE_LABEL_BASE_WIDTH = 6
 _RESULT_TERM_MAX_DEPTH = MAX_TERM_DEPTH - 1
 
 
@@ -333,35 +329,6 @@ class _MaterializationBudget:
         self.charge_nodes(_term_node_count(term))
 
 
-def _variable_label_bytes(rules: tuple[RewriteRule, ...]) -> int:
-    """Serialized-byte overhead for variable labels wider than the baseline.
-
-    Variable labels never change the mathematical work, so admission charges
-    their serialized width; the label maximum itself is the interoperable
-    JSON integer range, a transport boundary rather than a work bound. The
-    per-node byte cost already absorbs the baseline label width; labels
-    wider than ``_VARIABLE_LABEL_BASE_WIDTH`` digits appear in the echoed
-    source rules and in the original-ID renaming keys of every candidate row
-    and pair, so their count is upper-bounded by the source variable nodes
-    times one echo plus two full ledgers.
-    """
-    widest = 0
-    variable_nodes = 0
-    for rule in rules:
-        stack = [rule.lhs, rule.rhs]
-        while stack:
-            term = stack.pop()
-            if term.is_variable:
-                variable_nodes += 1
-                width = len(str(term.symbol))
-                if width > widest:
-                    widest = width
-            else:
-                stack.extend(term.children)
-    extra_width = max(0, widest - _VARIABLE_LABEL_BASE_WIDTH)
-    return extra_width * variable_nodes * (1 + 2 * MAX_CRITICAL_PAIR_CANDIDATES)
-
-
 def _expanded_node_count(term: Term, binding_sizes: dict[int, int]) -> int:
     """Node count of ``apply_substitution(term, ...)`` without materializing it."""
     count = 0
@@ -549,12 +516,7 @@ def _validate_critical_pair_source(
     ) - len(rules)
     if candidates > MAX_CRITICAL_PAIR_CANDIDATES:
         raise ValueError("critical-pair overlap candidates exceed the supported bound")
-    charged_nodes = _admit_critical_pair_result_envelope(rules)
-    label_bytes = _variable_label_bytes(rules)
-    if charged_nodes * _RESULT_BYTES_PER_NODE + label_bytes > (
-        MAX_CRITICAL_PAIR_RESULT_BYTES
-    ):
-        raise ValueError(_RESULT_BYTES_EXCEEDED)
+    _admit_critical_pair_result_envelope(rules)
 
 
 def _preorder_variables(term: Term) -> tuple[int, ...]:

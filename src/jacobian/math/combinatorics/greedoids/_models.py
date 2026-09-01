@@ -28,10 +28,6 @@ MAX_GROUND_LABEL_TOTAL_UTF8_BYTES = 65_536
 MAX_INTERMEDIATE_MEMBERSHIPS = 262_144
 """Maximum feasible-row membership storage inspected by a kernel."""
 
-MAX_RESULT_BYTES = 2_000_000
-"""Conservative bound for complete index-family results."""
-
-
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     """Build a stable validation error owned by greedoid contracts."""
 
@@ -108,17 +104,6 @@ def require_bounded_carrier(system: FiniteFeasibleSetSystem) -> None:
             "exchange_work_exceeds_budget",
             "exhaustive exchange and accessibility membership work exceeds the bounded budget",
         )
-    # Recognition and bases can retain every feasible row. Charge the exact
-    # index-family shape, including tuple delimiters and the source labels,
-    # before any kernel allocates its working index.
-    result_bytes = label_bytes + memberships * 3 + len(system.feasible) * 16
-    if result_bytes > MAX_RESULT_BYTES:
-        raise GreedoidAdmissionError(
-            "result_exceeds_budget",
-            "the complete greedoid result exceeds the bounded result budget",
-        )
-
-
 class RecognizeRequest(StrictModel):
     """Recognize a feasible-set family as a greedoid."""
 

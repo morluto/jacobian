@@ -19,12 +19,10 @@ from jacobian.math.finite_categories.values import (
     ProductMorphismProjection,
     ProductObjectProjection,
     _category_counts,
-    _category_wire_size,
     _identifier_shape,
     _identifier_wire_size,
 )
 
-MAX_CATEGORY_PRODUCT_RESULT_BYTES = 8 * 1024 * 1024
 MAX_CATEGORY_PRODUCT_EXECUTION_STEPS = 1_000_000
 
 
@@ -168,52 +166,7 @@ def _product_category_wire_size(
     )
 
 
-def _product_result_wire_size(
-    left: FiniteCategory,
-    right: FiniteCategory,
-    product_category_size: int,
-    identifier_sizes: dict[CategoryIdentifier, int],
-) -> int:
-    left_object_sizes = tuple(identifier_sizes[item] for item in left.objects)
-    right_object_sizes = tuple(identifier_sizes[item] for item in right.objects)
-    object_count = len(left.objects) * len(right.objects)
-    object_projection_item_bytes = (
-        object_count * _object_overhead("product", "left", "right")
-        + _cross_pair_bytes(left_object_sizes, right_object_sizes)
-        + len(right.objects) * sum(left_object_sizes)
-        + len(left.objects) * sum(right_object_sizes)
-    )
-    left_morphism_sizes = tuple(
-        identifier_sizes[item.morphism_id] for item in left.morphisms
-    )
-    right_morphism_sizes = tuple(
-        identifier_sizes[item.morphism_id] for item in right.morphisms
-    )
-    morphism_count = len(left.morphisms) * len(right.morphisms)
-    morphism_projection_item_bytes = (
-        morphism_count * _object_overhead("product", "left", "right")
-        + _cross_pair_bytes(left_morphism_sizes, right_morphism_sizes)
-        + len(right.morphisms) * sum(left_morphism_sizes)
-        + len(left.morphisms) * sum(right_morphism_sizes)
-    )
-    return strict_json_object_size(
-        (
-            ("left", _category_wire_size(left)),
-            ("right", _category_wire_size(right)),
-            ("product", product_category_size),
-            (
-                "object_projections",
-                _array_size(object_count, object_projection_item_bytes),
-            ),
-            (
-                "morphism_projections",
-                _array_size(morphism_count, morphism_projection_item_bytes),
-            ),
-        )
-    )
-
-
-def _admit_product(left: FiniteCategory, right: FiniteCategory) -> int:
+def _admit_product(left: FiniteCategory, right: FiniteCategory) -> None:
     """Admit one product and return its exact serialized result size."""
 
     object_count = len(left.objects) * len(right.objects)
@@ -284,15 +237,6 @@ def _admit_product(left: FiniteCategory, right: FiniteCategory) -> int:
             "product category exceeds the bounded canonical category wire size of "
             f"{MAX_CATEGORY_VALUE_BYTES} bytes",
         )
-    serialized_result_bytes = _product_result_wire_size(
-        left, right, product_category_size, identifier_sizes
-    )
-    if serialized_result_bytes > MAX_CATEGORY_PRODUCT_RESULT_BYTES:
-        raise ValueError(
-            "product construction exceeds the bounded canonical serialized result "
-            f"size of {MAX_CATEGORY_PRODUCT_RESULT_BYTES} bytes"
-        )
-    return serialized_result_bytes
 
 
 def _product_data(

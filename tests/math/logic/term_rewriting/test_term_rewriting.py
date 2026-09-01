@@ -54,7 +54,6 @@ from jacobian.math.logic.term_rewriting._tools import (
 )
 from jacobian.math.logic.term_rewriting.values import (
     MAX_CRITICAL_PAIR_CANDIDATES,
-    MAX_CRITICAL_PAIR_RESULT_BYTES,
     MAX_CRITICAL_PAIR_RESULT_NODES,
     MAX_TERM_DEPTH,
     MAX_VARIABLE_LABEL,
@@ -728,7 +727,6 @@ class TestCriticalPairs:
         )
         assert len(result.profile.candidates) == 32
         assert len(result.profile.pairs) == 32
-        assert len(result.model_dump_json()) <= MAX_CRITICAL_PAIR_RESULT_BYTES
 
     def test_long_rules_reach_the_result_sensitive_preflight(self) -> None:
         # f^16(x) -> x has a 17-node left side, yet its complete overlap
@@ -837,7 +835,6 @@ class TestCriticalPairs:
         )
         assert _term_depth(deepest.outer_reduct) == MAX_TERM_DEPTH - 1
         assert _term_depth(deepest.inner_reduct) == 1
-        assert len(result.model_dump_json()) <= MAX_CRITICAL_PAIR_RESULT_BYTES
         assert encode_strict_json(result.model_dump(mode="json"))
         assert (
             CriticalPairsResult.model_validate_json(result.model_dump_json()) == result
@@ -914,11 +911,9 @@ class TestCriticalPairs:
             result
         )
 
-    def test_label_serialization_width_is_charged_against_the_byte_bound(self) -> None:
-        # Six bush rules repeat their wide-label leaves across the echoed
-        # source. Labels stay inside the interoperable integer maximum, so
-        # sixteen-digit labels push the serialized result past the byte
-        # bound while a baseline-width family of the same shape still admits.
+    def test_wide_variable_labels_do_not_change_structural_admission(self) -> None:
+        # Six bush rules repeat their labels across the result. Admission is
+        # structural, so labels at the representation boundary remain valid.
         def wide_bush(label: int) -> tuple[RewriteRule, ...]:
             def bush() -> Term:
                 inner = _app(6, *([_var(label)] * 16))
@@ -941,10 +936,11 @@ class TestCriticalPairs:
             result
         )
         widest = MAX_VARIABLE_LABEL
-        with _validation_error("term_rewriting.critical_pair_source"):
+        widest_result = compute_critical_pairs(
             _run_critical_pairs(signature=signature, rules=wide_bush(widest))
-        with pytest.raises(ValueError, match="result bytes"):
-            critical_pairs(signature, wide_bush(widest))
+        )
+        assert len(widest_result.profile.candidates) == 30
+        assert critical_pairs(signature, wide_bush(widest)) == widest_result.profile
 
     @pytest.mark.parametrize("depth", [1, 2, 3, 4, 5])
     def test_chained_binding_family_admits_and_replays_within_envelope(
@@ -1271,14 +1267,8 @@ class TestCriticalPairs:
             rhs=_complete_tree(1, _var(0), 16, 4),
         )
         assert _term_node_count(rule.rhs) > MAX_CRITICAL_PAIR_RESULT_NODES
-        tracemalloc.start()
-        try:
-            with pytest.raises(ValueError, match="result nodes"):
-                critical_pairs(signature, (rule,))
-            _, peak = tracemalloc.get_traced_memory()
-        finally:
-            tracemalloc.stop()
-        assert peak < MAX_CRITICAL_PAIR_RESULT_BYTES // 8
+        with pytest.raises(ValueError, match="result nodes"):
+            critical_pairs(signature, (rule,))
 
 
 class TestDeepTermTraversal:

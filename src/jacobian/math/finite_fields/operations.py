@@ -23,6 +23,7 @@ from jacobian.canonical import (
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields._fixed_subspace_process import (
+    run_fixed_subspace_generator_validation,
     run_fixed_subspace_linear_algebra,
 )
 from jacobian.math.finite_fields._matrix_rank import compute_matrix_rank
@@ -66,7 +67,6 @@ from jacobian.math.matrices.finite_fields._bounds import (
 )
 from jacobian.math.matrices.finite_fields.linear_algebra import (
     PrimeFieldMatrix,
-    rank,
 )
 
 _MAX_FINITE_MAP_WORK = 1_000_000
@@ -675,14 +675,16 @@ def homogeneous_fixed_subspace(
     )
     variable_count = len(action.variable_axis.labels)
     checkpoint("before generator validation")
-    for matrix in action.generator_matrices:
-        checkpoint("during generator validation")
-        if rank(matrix) != variable_count:
-            raise OperationDomainValidationError(
-                location=("action", "generator_matrices"),
-                code="finite_field.linear_action_generator_invertible",
-                message="every linear-action generator matrix must be invertible",
-            )
+    checkpoint("during generator validation")
+    if not run_fixed_subspace_generator_validation(
+        action.generator_matrices,
+        deadline=deadline,
+    ):
+        raise OperationDomainValidationError(
+            location=("action", "generator_matrices"),
+            code="finite_field.linear_action_generator_invertible",
+            message="every linear-action generator matrix must be invertible",
+        )
     monomial_basis = _homogeneous_monomial_basis(variable_count, degree)
     assert len(monomial_basis) == monomial_count
     equations: list[tuple[int, ...]] = []

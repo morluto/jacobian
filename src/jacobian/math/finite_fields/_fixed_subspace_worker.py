@@ -8,12 +8,27 @@ import sys
 from jacobian.math.matrices.finite_fields.linear_algebra import (
     PrimeFieldMatrix,
     nullspace,
+    rank,
     rref,
 )
 
 
 def main() -> None:
     payload = json.load(sys.stdin)
+    if payload.get("operation") == "generator_ranks":
+        generator_ranks = []
+        for entries in payload["matrices"]:
+            generator_ranks.append(
+                rank(
+                    PrimeFieldMatrix(
+                        prime=payload["prime"],
+                        entries=tuple(tuple(row) for row in entries),
+                        columns=payload["columns"],
+                    )
+                )
+            )
+        json.dump({"ranks": generator_ranks}, sys.stdout, separators=(",", ":"))
+        return
     matrix = PrimeFieldMatrix(
         prime=payload["prime"],
         entries=tuple(tuple(row) for row in payload["entries"]),

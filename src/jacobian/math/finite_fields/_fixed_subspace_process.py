@@ -22,13 +22,12 @@ _FIXED_SUBSPACE_ADDRESS_SPACE_BYTES = 2 * 1024 * 1024 * 1024
 _FIXED_SUBSPACE_FILE_SIZE_BYTES = 1024 * 1024
 
 
-def run_fixed_subspace_linear_algebra(
-    equation_matrix: PrimeFieldMatrix,
+def _run_fixed_subspace_worker(
+    input_bytes: bytes,
     *,
     deadline: float,
-) -> tuple[tuple[int, ...], ...]:
-    """Run backend nullspace/RREF work behind a killable process boundary."""
-
+    stdout_limit: int,
+) -> bytes:
     from jacobian.process import (
         ProcessResourceLimits,
         run_bounded_process,
@@ -44,20 +43,6 @@ def run_fixed_subspace_linear_algebra(
         raise OperationExecutionTimeoutError(
             "finite-field fixed-subspace deadline expired before linear algebra"
         )
-    input_bytes = json.dumps(
-        {
-            "prime": equation_matrix.prime,
-            "entries": [list(row) for row in equation_matrix.entries],
-            "columns": equation_matrix.columns,
-        },
-        separators=(",", ":"),
-    ).encode("utf-8")
-    monomial_count = equation_matrix.columns
-    scalar_bytes = max(1, len(str(equation_matrix.prime - 1)))
-    stdout_limit = max(
-        4_096,
-        128 + monomial_count * monomial_count * (scalar_bytes + 4),
-    )
     try:
         with TemporaryDirectory(prefix="jacobian-fixed-subspace-") as directory:
             completed = run_bounded_process(
@@ -92,10 +77,44 @@ def run_fixed_subspace_linear_algebra(
         or completed.returncode != 0
     ):
         raise RuntimeError(
-            "bounded finite-field fixed-subspace worker did not establish a basis"
+            "bounded finite-field fixed-subspace worker did not establish a result"
         )
+    return completed.stdout
+
+
+def _matrix_worker_input(matrix: PrimeFieldMatrix, *, operation: str) -> bytes:
+    return json.dumps(
+        {
+            "operation": operation,
+            "prime": matrix.prime,
+            "entries": [list(row) for row in matrix.entries],
+            "columns": matrix.columns,
+        },
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def run_fixed_subspace_linear_algebra(
+    equation_matrix: PrimeFieldMatrix,
+    *,
+    deadline: float,
+) -> tuple[tuple[int, ...], ...]:
+    """Run backend nullspace/RREF work behind a killable process boundary."""
+
+    input_bytes = _matrix_worker_input(equation_matrix, operation="basis")
+    monomial_count = equation_matrix.columns
+    scalar_bytes = max(1, len(str(equation_matrix.prime - 1)))
+    stdout_limit = max(
+        4_096,
+        128 + monomial_count * monomial_count * (scalar_bytes + 4),
+    )
+    stdout = _run_fixed_subspace_worker(
+        input_bytes,
+        deadline=deadline,
+        stdout_limit=stdout_limit,
+    )
     try:
-        decoded = json.loads(completed.stdout.decode("utf-8"))
+        decoded = json.loads(stdout.decode("utf-8"))
         raw_basis = decoded["basis_rows"]
         if not isinstance(raw_basis, list) or len(raw_basis) > monomial_count:
             raise ValueError("malformed fixed-subspace basis row count")
@@ -115,4 +134,46 @@ def run_fixed_subspace_linear_algebra(
         ) from exc
 
 
-__all__ = ["run_fixed_subspace_linear_algebra"]
+def run_fixed_subspace_generator_validation(
+    generator_matrices: tuple[PrimeFieldMatrix, ...],
+    *,
+    deadline: float,
+) -> bool:
+    """Check generator invertibility behind the same killable worker boundary."""
+
+    variable_count = generator_matrices[0].columns
+    input_bytes = json.dumps(
+        {
+            "operation": "generator_ranks",
+            "prime": generator_matrices[0].prime,
+            "columns": variable_count,
+            "matrices": [
+                [list(row) for row in generator.entries]
+                for generator in generator_matrices
+            ],
+        },
+        separators=(",", ":"),
+    ).encode("utf-8")
+    stdout = _run_fixed_subspace_worker(
+        input_bytes,
+        deadline=deadline,
+        stdout_limit=4_096,
+    )
+    try:
+        decoded = json.loads(stdout.decode("utf-8"))
+        ranks = decoded["ranks"]
+        if not isinstance(ranks, list) or len(ranks) != len(generator_matrices):
+            raise ValueError("malformed generator ranks")
+        if any(type(generator_rank) is not int for generator_rank in ranks):
+            raise ValueError("malformed generator rank")
+        return all(generator_rank == variable_count for generator_rank in ranks)
+    except (KeyError, TypeError, ValueError, UnicodeDecodeError) as exc:
+        raise RuntimeError(
+            "bounded finite-field fixed-subspace worker returned malformed rank"
+        ) from exc
+
+
+__all__ = [
+    "run_fixed_subspace_generator_validation",
+    "run_fixed_subspace_linear_algebra",
+]

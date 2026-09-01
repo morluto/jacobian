@@ -81,10 +81,23 @@ coefficient `a`, maximal-order computation uses the integral generator
 
 ## Execution envelope
 
-The canonical field carrier admits degree at most 31, preserving the existing
-field-discriminant envelope, and at most 256 decimal digits per defining
-coefficient. This complete-profile operation separately admits degree at most
-8. Before enumerating roots, admission derives:
+The shared `SimpleNumberFieldPresentation` carrier admits degree at most 126
+and at most 256 decimal digits per defining coefficient. This is a carrier
+envelope: it is wide enough for cyclic operations whose admitted period can
+produce a cyclotomic field of degree 126. It does not mean that every consumer
+performs every computation across that range.
+
+This complete-profile embedding operation separately admits degree at most 8.
+The native `discriminant(field)` and `ring_of_integers(field)` consumers retain
+their prior degree-at-most-31 integral-basis envelope. Thus degrees 9--31 are
+valid for those native consumers but not for complete embedding enumeration;
+degrees 32--126 are valid carrier values for consumers whose own contract
+admits them, such as the cyclic profile, but are rejected by the native
+integral-basis consumers before their synchronous kernel runs. The published
+`number_field.discriminant.compute` operation uses its own bounded worker and
+request contract.
+
+Before embedding enumeration, admission derives:
 
 - a Mignotte separation bound for distinct roots;
 - the size and coefficient-height envelope of the exact real-coordinate

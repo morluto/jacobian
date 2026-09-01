@@ -82,6 +82,25 @@ def test_native_finite_fields_does_not_eagerly_import_flint() -> None:
     )
 
 
+def test_affine_torus_public_and_catalog_imports_keep_flint_worker_private() -> None:
+    forbidden = (
+        "flint",
+        "jacobian.math.geometry.affine_tori._flint",
+    )
+    _assert_not_imported(
+        _imported_modules("jacobian.math.geometry.affine_tori"),
+        forbidden,
+    )
+    _assert_not_imported(
+        _imported_modules("jacobian.math.geometry.affine_tori._tools"),
+        forbidden,
+    )
+    _assert_not_imported(
+        _imported_modules("jacobian.catalog.catalog"),
+        ("jacobian.math.geometry.affine_tori._flint",),
+    )
+
+
 def test_sympy_finite_field_construction_and_projective_line_do_not_need_flint() -> (
     None
 ):

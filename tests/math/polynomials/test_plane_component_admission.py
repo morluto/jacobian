@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from fractions import Fraction
 from itertools import product
 from math import gcd
@@ -260,6 +261,56 @@ def test_degree_and_coefficient_height_boundaries_are_inclusive() -> None:
     ):
         with pytest.raises(OperationDomainValidationError):
             _profile(_whole_plane_request((polynomial,)))
+
+
+def test_request_schema_exposes_the_runtime_polynomial_envelope() -> None:
+    schema = PlaneComponentProfileRequest.model_json_schema()
+    polynomial = schema["properties"]["semialgebraic_set"]["properties"]["polynomials"][
+        "items"
+    ]
+    terms = polynomial["properties"]["polynomial"]["properties"]["terms"]
+    term = terms["items"]
+    exponents = term["properties"]["exponents"]
+    coefficient = term["properties"]["coefficient"]["properties"]
+
+    assert terms["maxItems"] == MAX_PLANE_COMPONENT_TERMS_PER_POLYNOMIAL
+    assert {tuple(entry["const"]) for entry in exponents["oneOf"]} == {
+        (x_degree, y_degree)
+        for x_degree in range(MAX_PLANE_COMPONENT_TOTAL_DEGREE + 1)
+        for y_degree in range(MAX_PLANE_COMPONENT_TOTAL_DEGREE + 1 - x_degree)
+    }
+    assert coefficient["num"]["pattern"] == (
+        rf"^(?:0|-?[1-9][0-9]{{0,{MAX_PLANE_COMPONENT_COEFFICIENT_DIGITS - 1}}})$"
+    )
+    assert coefficient["den"]["pattern"] == (
+        rf"^[1-9][0-9]{{0,{MAX_PLANE_COMPONENT_COEFFICIENT_DIGITS - 1}}}$"
+    )
+
+    raw = _whole_plane_request((_polynomial(((1, (1, 0)),)),)).model_dump(mode="json")
+    candidates = []
+    over_terms = deepcopy(raw)
+    over_terms["semialgebraic_set"]["polynomials"][0]["polynomial"]["terms"].extend(
+        {
+            "coefficient": {"num": "1", "den": "1"},
+            "exponents": [0, 0],
+        }
+        for _ in range(MAX_PLANE_COMPONENT_TERMS_PER_POLYNOMIAL)
+    )
+    candidates.append(over_terms)
+    over_degree = deepcopy(raw)
+    over_degree["semialgebraic_set"]["polynomials"][0]["polynomial"]["terms"][0][
+        "exponents"
+    ] = [MAX_PLANE_COMPONENT_TOTAL_DEGREE + 1, 0]
+    candidates.append(over_degree)
+    over_height = deepcopy(raw)
+    over_height["semialgebraic_set"]["polynomials"][0]["polynomial"]["terms"][0][
+        "coefficient"
+    ]["num"] = "1" + "0" * MAX_PLANE_COMPONENT_COEFFICIENT_DIGITS
+    candidates.append(over_height)
+
+    for candidate in candidates:
+        with pytest.raises(ValidationError):
+            PlaneComponentProfileRequest.model_validate(candidate)
 
 
 def test_term_and_total_term_boundaries_reject_before_backend_execution() -> None:

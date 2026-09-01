@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from copy import deepcopy
 from enum import StrEnum
-from typing import Annotated, Any, Literal, Self
+from typing import Annotated, Any, Literal, Self, cast
 
 from pydantic import (
     Field,
@@ -183,6 +184,67 @@ class PlaneSemialgebraicSet(StrictModel):
         object.__setattr__(self, "polynomials", polynomials)
         object.__setattr__(self, "sign_conditions", conditions)
         return self
+
+
+def _plane_component_semialgebraic_set_schema() -> dict[str, Any]:
+    """Expose this operation's envelope without narrowing shared values."""
+
+    schema = deepcopy(PlaneSemialgebraicSet.model_json_schema())
+    definitions = schema["$defs"]
+    polynomial = definitions["RationalPolynomial"]
+    polynomial["description"] = (
+        "One sparse QQ[x,y] polynomial with at most 15 nonzero terms, "
+        "total degree at most four, and at most 32 decimal digits in each "
+        "rational coefficient numerator or denominator."
+    )
+    polynomial["properties"]["variables"]["minItems"] = 2
+    polynomial["properties"]["variables"]["maxItems"] = 2
+
+    sparse = definitions["SparseRationalPolynomial"]
+    sparse["properties"]["terms"]["maxItems"] = MAX_PLANE_COMPONENT_TERMS_PER_POLYNOMIAL
+    sparse["description"] = (
+        "At most 15 nonzero monomials in descending lexicographic order; "
+        "each exponent is between zero and four and the complete family "
+        "contains at most 48 terms."
+    )
+
+    term = definitions["RationalPolynomialTerm"]
+    exponents = term["properties"]["exponents"]
+    exponents["minItems"] = 2
+    exponents["maxItems"] = 2
+    exponents["items"]["minimum"] = 0
+    exponents["items"]["maximum"] = MAX_PLANE_COMPONENT_TOTAL_DEGREE
+    exponents["oneOf"] = [
+        {"const": [x_degree, y_degree]}
+        for x_degree in range(MAX_PLANE_COMPONENT_TOTAL_DEGREE + 1)
+        for y_degree in range(MAX_PLANE_COMPONENT_TOTAL_DEGREE + 1 - x_degree)
+    ]
+
+    rational = definitions["CanonicalRational"]
+    rational["properties"]["num"]["pattern"] = (
+        rf"^(?:0|-?[1-9][0-9]{{0,{MAX_PLANE_COMPONENT_COEFFICIENT_DIGITS - 1}}})$"
+    )
+    rational["properties"]["den"]["pattern"] = (
+        rf"^[1-9][0-9]{{0,{MAX_PLANE_COMPONENT_COEFFICIENT_DIGITS - 1}}}$"
+    )
+
+    def inline(value: Any) -> Any:
+        if isinstance(value, dict):
+            if set(value) == {"$ref"}:
+                reference = value["$ref"]
+                if isinstance(reference, str) and reference.startswith("#/$defs/"):
+                    return inline(
+                        deepcopy(definitions[reference.removeprefix("#/$defs/")])
+                    )
+            return {key: inline(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [inline(item) for item in value]
+        return value
+
+    return cast(
+        dict[str, Any],
+        inline({key: value for key, value in schema.items() if key != "$defs"}),
+    )
 
 
 class IsolatedRealPlanePoint(StrictModel):
@@ -949,12 +1011,16 @@ def _raw_sample_envelope(value: object) -> None:
 class PlaneComponentProfileRequest(StrictModel):
     """Compute a complete bounded profile and locate optional exact samples.
 
-    Supplied coordinate polynomials use the same degree-sixteen and 512-digit
-    carrier as returned representatives. Nondegenerate requests also bound the
-    complete CAD projection family before backend execution.
+    Sign polynomials use the operation's degree-four, 15-term, 32-digit input
+    envelope. Supplied coordinate polynomials use the same degree-sixteen and
+    512-digit carrier as returned representatives. Nondegenerate requests also
+    bound the complete CAD projection family before backend execution.
     """
 
-    semialgebraic_set: PlaneSemialgebraicSet
+    semialgebraic_set: Annotated[
+        PlaneSemialgebraicSet,
+        WithJsonSchema(_plane_component_semialgebraic_set_schema()),
+    ]
     samples: tuple[IsolatedRealPlanePoint, ...] = Field(
         default=(),
         max_length=MAX_PLANE_COMPONENT_SAMPLES,

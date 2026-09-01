@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from pydantic import ValidationError
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.polynomials.series._models import (
     InputTruncatedSeries,
     SeriesArithmeticResult,
@@ -94,10 +97,10 @@ TOOLS = (
         run=lambda request: add(request.left, request.right),
         tags=("formal-series", "arithmetic", "addition", "rational", "exact"),
         examples=(
-            example(
-                "add_one_plus_x_and_x",
-                "Add 1+x and x modulo x^3.",
-                {"left": _ONE_PLUS_X, "right": _X},
+            OperationExample(
+                name="add_one_plus_x_and_x",
+                description="Add 1+x and x modulo x^3.",
+                input={"left": _ONE_PLUS_X, "right": _X},
             ),
         ),
     ),
@@ -113,10 +116,10 @@ TOOLS = (
         run=lambda request: subtract(request.left, request.right),
         tags=("formal-series", "arithmetic", "subtraction", "rational", "exact"),
         examples=(
-            example(
-                "subtract_x",
-                "Subtract x from 1+x modulo x^3.",
-                {"left": _ONE_PLUS_X, "right": _X},
+            OperationExample(
+                name="subtract_x",
+                description="Subtract x from 1+x modulo x^3.",
+                input={"left": _ONE_PLUS_X, "right": _X},
             ),
         ),
     ),
@@ -141,10 +144,10 @@ TOOLS = (
             "exact",
         ),
         examples=(
-            example(
-                "multiply_1_plus_x",
-                "Multiply (1+x) * (1+x) = 1+2x+x^2 at order 3.",
-                {
+            OperationExample(
+                name="multiply_1_plus_x",
+                description="Multiply (1+x) * (1+x) = 1+2x+x^2 at order 3.",
+                input={
                     "left": {
                         "variable": "x",
                         "truncation_order": 3,
@@ -179,10 +182,10 @@ TOOLS = (
         run=lambda request: scalar_multiply(request.series, request.scalar),
         tags=("formal-series", "arithmetic", "scalar", "rational", "exact"),
         examples=(
-            example(
-                "double_one_plus_x",
-                "Multiply 1+x by two modulo x^3.",
-                {"series": _ONE_PLUS_X, "scalar": _TWO},
+            OperationExample(
+                name="double_one_plus_x",
+                description="Multiply 1+x by two modulo x^3.",
+                input={"series": _ONE_PLUS_X, "scalar": _TWO},
             ),
         ),
     ),
@@ -207,10 +210,10 @@ TOOLS = (
             "exact",
         ),
         examples=(
-            example(
-                "power_3_of_1_plus_x",
-                "Compute (1+x)^3 at order 4.",
-                {
+            OperationExample(
+                name="power_3_of_1_plus_x",
+                description="Compute (1+x)^3 at order 4.",
+                input={
                     "series": {
                         "variable": "x",
                         "truncation_order": 4,
@@ -246,10 +249,10 @@ TOOLS = (
             "exact",
         ),
         examples=(
-            example(
-                "inverse_1_plus_x",
-                "Invert (1+x) at order 4: 1-x+x^2-x^3.",
-                {
+            OperationExample(
+                name="inverse_1_plus_x",
+                description="Invert (1+x) at order 4: 1-x+x^2-x^3.",
+                input={
                     "variable": "x",
                     "truncation_order": 4,
                     "coefficients": [
@@ -281,10 +284,10 @@ TOOLS = (
             "exact",
         ),
         examples=(
-            example(
-                "divide_1_by_1_minus_x",
-                "Divide 1 by (1-x) at order 4: 1+x+x^2+x^3.",
-                {
+            OperationExample(
+                name="divide_1_by_1_minus_x",
+                description="Divide 1 by (1-x) at order 4: 1+x+x^2+x^3.",
+                input={
                     "left": {
                         "variable": "x",
                         "truncation_order": 4,
@@ -329,10 +332,10 @@ TOOLS = (
         ),
         discovery_terms=("series",),
         examples=(
-            example(
-                "compose_x_with_x_squared",
-                "Compose (1+x) with (x^2) at order 4: 1+x^2.",
-                {
+            OperationExample(
+                name="compose_x_with_x_squared",
+                description="Compose (1+x) with (x^2) at order 4: 1+x^2.",
+                input={
                     "outer": {
                         "variable": "x",
                         "truncation_order": 4,
@@ -378,10 +381,10 @@ TOOLS = (
             "exact",
         ),
         examples=(
-            example(
-                "reversion_of_2x",
-                "Reversion of (2x) at order 4: (1/2)x.",
-                {
+            OperationExample(
+                name="reversion_of_2x",
+                description="Reversion of (2x) at order 4: (1/2)x.",
+                input={
                     "variable": "x",
                     "truncation_order": 4,
                     "coefficients": [
@@ -406,10 +409,10 @@ TOOLS = (
         run=derivative,
         tags=("formal-series", "calculus", "derivative", "rational", "exact"),
         examples=(
-            example(
-                "differentiate_one_plus_x",
-                "Differentiate 1+x modulo x^3.",
-                _ONE_PLUS_X,
+            OperationExample(
+                name="differentiate_one_plus_x",
+                description="Differentiate 1+x modulo x^3.",
+                input=_ONE_PLUS_X,
             ),
         ),
     ),
@@ -427,10 +430,10 @@ TOOLS = (
         ),
         tags=("formal-series", "calculus", "integral", "rational", "exact"),
         examples=(
-            example(
-                "integrate_x",
-                "Integrate x with zero constant term through order three.",
-                {"series": _X, "output_order": 3},
+            OperationExample(
+                name="integrate_x",
+                description="Integrate x with zero constant term through order three.",
+                input={"series": _X, "output_order": 3},
             ),
         ),
     ),
@@ -446,10 +449,10 @@ TOOLS = (
         run=lambda request: truncate(request.series, request.target_order),
         tags=("formal-series", "truncation", "rational", "exact"),
         examples=(
-            example(
-                "truncate_one_plus_x",
-                "Truncate 1+x modulo x^3 to order two.",
-                {"series": _ONE_PLUS_X, "target_order": 2},
+            OperationExample(
+                name="truncate_one_plus_x",
+                description="Truncate 1+x modulo x^3 to order two.",
+                input={"series": _ONE_PLUS_X, "target_order": 2},
             ),
         ),
     ),
@@ -465,10 +468,10 @@ TOOLS = (
         run=lambda request: identity_check(request.left, request.right),
         tags=("formal-series", "identity", "rational", "exact"),
         examples=(
-            example(
-                "identity_of_one_plus_x",
-                "Check 1+x against itself modulo x^3.",
-                {"left": _ONE_PLUS_X, "right": _ONE_PLUS_X},
+            OperationExample(
+                name="identity_of_one_plus_x",
+                description="Check 1+x against itself modulo x^3.",
+                input={"left": _ONE_PLUS_X, "right": _ONE_PLUS_X},
             ),
         ),
     ),
@@ -486,10 +489,10 @@ TOOLS = (
         ),
         tags=("formal-series", "polynomial", "conversion", "rational", "exact"),
         examples=(
-            example(
-                "polynomial_one_plus_x",
-                "Convert the dense polynomial 1+x to a series modulo x^3.",
-                {
+            OperationExample(
+                name="polynomial_one_plus_x",
+                description="Convert the dense polynomial 1+x to a series modulo x^3.",
+                input={
                     "variable": "x",
                     "coefficients": [_ONE, _ONE, _ZERO],
                     "truncation_order": 3,
@@ -509,10 +512,10 @@ TOOLS = (
         run=to_polynomial,
         tags=("formal-series", "polynomial", "conversion", "rational", "exact"),
         examples=(
-            example(
-                "series_one_plus_x",
-                "Return the polynomial representative of 1+x modulo x^3.",
-                _ONE_PLUS_X,
+            OperationExample(
+                name="series_one_plus_x",
+                description="Return the polynomial representative of 1+x modulo x^3.",
+                input=_ONE_PLUS_X,
             ),
         ),
     ),

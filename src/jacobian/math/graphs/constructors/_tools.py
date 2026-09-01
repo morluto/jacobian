@@ -1,9 +1,5 @@
 """Graph constructor operation declarations."""
 
-from collections.abc import Callable
-
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.graphs.constructors._models import (
     HypercubeGraphRequest,
@@ -32,92 +28,64 @@ def _run_triangle_profile(request: TriangleProfileRequest) -> TriangleProfileRes
     return compute_triangle_profile(request.graph)
 
 
-def gt_operation[RequestT: StrictModel, ResultT: StrictModel](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: MathTools = (
-    gt_operation(
-        "graph.hypercube.construct",
-        "Construct hypercube graph",
-        (
+    MathTool(
+        operation_id="graph.hypercube.construct",
+        title="Construct hypercube graph",
+        description=(
             "Construct the d-dimensional hypercube graph Q_d whose vertices "
             "are binary strings of length d and whose edges connect vertices "
             "differing in exactly one bit."
         ),
-        HypercubeGraphRequest,
-        HypercubeGraphResult,
-        _run_hypercube_graph,
-        "graph",
-        "constructor",
-        "hypercube",
+        request_type=HypercubeGraphRequest,
+        result_type=HypercubeGraphResult,
+        run=_run_hypercube_graph,
+        tags=("graph", "constructor", "hypercube"),
         examples=(
-            example(
-                "hypercube_d3",
-                "Construct the 3-dimensional hypercube Q_3 with 8 vertices; the dimension must be at most 8.",
-                {"dimension": 3},
+            OperationExample(
+                name="hypercube_d3",
+                description="Construct the 3-dimensional hypercube Q_3 with 8 vertices; the dimension must be at most 8.",
+                input={"dimension": 3},
             ),
         ),
     ),
-    gt_operation(
-        "graph.keller.construct",
-        "Construct Keller graph",
-        (
+    MathTool(
+        operation_id="graph.keller.construct",
+        title="Construct Keller graph",
+        description=(
             "Construct the Keller graph K_d whose vertices are words in "
             "{0,1,2,3}^d, with two distinct words adjacent iff they differ "
             "by 2 (mod 4) in at least one coordinate and differ in at least "
             "two coordinates overall."
         ),
-        KellerGraphRequest,
-        KellerGraphResult,
-        _run_keller_graph,
-        "graph",
-        "constructor",
-        "keller",
+        request_type=KellerGraphRequest,
+        result_type=KellerGraphResult,
+        run=_run_keller_graph,
+        tags=("graph", "constructor", "keller"),
         examples=(
-            example(
-                "keller_d2",
-                "Construct the Keller graph K_2 with 16 vertices; the dimension must be at most 4.",
-                {"dimension": 2},
+            OperationExample(
+                name="keller_d2",
+                description="Construct the Keller graph K_2 with 16 vertices; the dimension must be at most 4.",
+                input={"dimension": 2},
             ),
         ),
     ),
-    gt_operation(
-        "graph.triangle_profile.compute",
-        "Compute triangle profile",
-        (
+    MathTool(
+        operation_id="graph.triangle_profile.compute",
+        title="Compute triangle profile",
+        description=(
             "Return the complete list of triangles in a finite simple "
             "undirected graph, each as an ordered triple of vertex labels."
         ),
-        TriangleProfileRequest,
-        TriangleProfileResult,
-        _run_triangle_profile,
-        "graph",
-        "triangle",
-        "profile",
+        request_type=TriangleProfileRequest,
+        result_type=TriangleProfileResult,
+        run=_run_triangle_profile,
+        tags=("graph", "triangle", "profile"),
         examples=(
-            example(
-                "triangle_profile_k4",
-                "Compute all four triangles of K_4; the source must be a canonical finite simple undirected graph.",
-                {
+            OperationExample(
+                name="triangle_profile_k4",
+                description="Compute all four triangles of K_4; the source must be a canonical finite simple undirected graph.",
+                input={
                     "graph": {
                         "vertices": ["a", "b", "c", "d"],
                         "edges": [

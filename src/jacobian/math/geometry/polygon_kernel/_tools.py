@@ -1,7 +1,6 @@
 """Public declaration for exact rational polygon visibility kernels."""
 
-from jacobian.catalog._examples import example
-from jacobian.math.geometry._support import geometry_operation
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.geometry.polygon_kernel._models import (
     PolygonKernelRequest,
     PolygonKernelResult,
@@ -24,10 +23,10 @@ _NAKANO_PENTAGON = [
 ]
 
 TOOLS = (
-    geometry_operation(
-        "geometry.polygon.visibility_kernel.compute",
-        "Reconstruct an exact polygon visibility kernel",
-        (
+    MathTool(
+        operation_id="geometry.polygon.visibility_kernel.compute",
+        title="Reconstruct an exact polygon visibility kernel",
+        description=(
             "Intersect the closed left half-plane of each edge of one bounded "
             "simple CCW rational polygon. Return source-bound oriented inequalities "
             "and vertex turns; the canonical empty, point, segment, or polygon "
@@ -37,21 +36,18 @@ TOOLS = (
             "work, coefficient/intersection growth, and output before expansion. "
             "No perimeter or theorem-level claim."
         ),
-        PolygonKernelRequest,
-        PolygonKernelResult,
-        _run_visibility_kernel,
-        "geometry",
-        "polygon",
-        "visibility-kernel",
-        "exact",
+        request_type=PolygonKernelRequest,
+        result_type=PolygonKernelResult,
+        run=_run_visibility_kernel,
+        tags=("geometry", "polygon", "visibility-kernel", "exact"),
         examples=(
-            example(
-                "published_pentagon_kernel",
-                (
+            OperationExample(
+                name="published_pentagon_kernel",
+                description=(
                     "Reconstruct the exact five-vertex kernel and rational area "
                     "profile of Nakano's counterclockwise pentagon."
                 ),
-                {"polygon": {"points": _NAKANO_PENTAGON}},
+                input={"polygon": {"points": _NAKANO_PENTAGON}},
             ),
         ),
     ),

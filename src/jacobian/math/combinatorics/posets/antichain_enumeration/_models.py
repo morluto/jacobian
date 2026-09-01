@@ -6,6 +6,7 @@ from math import comb
 from typing import Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._digest import Sha256Digest
 from jacobian._models import StrictModel
@@ -51,10 +52,12 @@ class AntichainEnumerationRequest(StrictModel):
     max_cardinality: int = Field(default=1, ge=0, le=MAX_ELEMENTS)
 
     @model_validator(mode="after")
-    def require_bounded_family(self) -> Self:
-        require_antichain_enumeration_envelope(
-            self.poset, self.min_cardinality, self.max_cardinality
-        )
+    def require_ordered_cardinality_range(self) -> Self:
+        if self.max_cardinality < self.min_cardinality:
+            raise PydanticCustomError(
+                "poset.antichain_cardinality_range",
+                "max_cardinality must be at least min_cardinality",
+            )
         return self
 
 

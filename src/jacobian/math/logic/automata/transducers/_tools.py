@@ -1,10 +1,7 @@
 """Finite-state transducer operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.logic.automata.transducers._models import (
     ComposeRequest,
@@ -58,31 +55,6 @@ def compute_relation_path_replay(
     )
 
 
-def _op[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 _IDENTITY = {
     "input_alphabet_size": 2,
     "output_alphabet_size": 2,
@@ -117,62 +89,58 @@ _RELATION = {
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "transducer.subsequential.run.compute",
-        "Run a subsequential transducer on a word",
-        "Execute one exact bounded run, distinguishing successful empty output, "
+    MathTool(
+        operation_id="transducer.subsequential.run.compute",
+        title="Run a subsequential transducer on a word",
+        description="Execute one exact bounded run, distinguishing successful empty output, "
         "an undefined transition, and termination in a nonfinal state.",
-        SubseqRunRequest,
-        SubseqRunResult,
-        compute_run,
-        "transducer",
-        "subsequential",
-        "exact",
+        request_type=SubseqRunRequest,
+        result_type=SubseqRunResult,
+        run=compute_run,
+        tags=("transducer", "subsequential", "exact"),
         examples=(
-            example(
-                "binary_identity_run",
-                "Run the binary identity transducer on a three-symbol word.",
-                {"transducer": _IDENTITY, "word": [0, 1, 0]},
+            OperationExample(
+                name="binary_identity_run",
+                description="Run the binary identity transducer on a three-symbol word.",
+                input={"transducer": _IDENTITY, "word": [0, 1, 0]},
             ),
         ),
     ),
-    _op(
-        "transducer.subsequential.compose.compute",
-        "Compose two subsequential transducers",
-        "Construct the exact bounded subsequential transducer for U after T, "
+    MathTool(
+        operation_id="transducer.subsequential.compose.compute",
+        title="Compose two subsequential transducers",
+        description="Construct the exact bounded subsequential transducer for U after T, "
         "including both transition and final-output domain restrictions.",
-        ComposeRequest,
-        ComposeResult,
-        compute_compose,
-        "transducer",
-        "subsequential",
-        "composition",
-        "exact",
+        request_type=ComposeRequest,
+        result_type=ComposeResult,
+        run=compute_compose,
+        tags=("transducer", "subsequential", "composition", "exact"),
         examples=(
-            example(
-                "identity_then_flip",
-                "Compose the binary identity with the binary symbol flip.",
-                {"first": _IDENTITY, "second": _FLIP},
+            OperationExample(
+                name="identity_then_flip",
+                description="Compose the binary identity with the binary symbol flip.",
+                input={"first": _IDENTITY, "second": _FLIP},
             ),
         ),
     ),
-    _op(
-        "transducer.relation.path.replay.compute",
-        "Replay a rational-relation path",
-        "Replay one candidate edge-index path from an explicitly selected "
+    MathTool(
+        operation_id="transducer.relation.path.replay.compute",
+        title="Replay a rational-relation path",
+        description="Replay one candidate edge-index path from an explicitly selected "
         "initial state and return its exact labels, trace, and acceptance status.",
-        RelationPathReplayRequest,
-        RelationPathReplayResult,
-        compute_relation_path_replay,
-        "transducer",
-        "rational-relation",
-        "path-replay",
-        "exact",
+        request_type=RelationPathReplayRequest,
+        result_type=RelationPathReplayResult,
+        run=compute_relation_path_replay,
+        tags=("transducer", "rational-relation", "path-replay", "exact"),
         examples=(
-            example(
-                "two_edge_bit_flip_path",
-                "Replay two edges from initial state zero.",
-                {"transducer": _RELATION, "initial_state": 0, "edge_path": [0, 1]},
+            OperationExample(
+                name="two_edge_bit_flip_path",
+                description="Replay two edges from initial state zero.",
+                input={
+                    "transducer": _RELATION,
+                    "initial_state": 0,
+                    "edge_path": [0, 1],
+                },
             ),
         ),
     ),

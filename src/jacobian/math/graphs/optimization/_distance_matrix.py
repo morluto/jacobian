@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.optimization._chromatic_kernel import build_simple_graph
 from jacobian.math.graphs.optimization._distance_models import (
     GraphDistanceMatrixRequest,
@@ -61,10 +60,10 @@ DISTANCE_MATRIX_OPERATION = MathTool(
     run=compute_distance_matrix,
     tags=("graph", "invariant", "distance", "matrix", "exact"),
     examples=(
-        example(
-            "path_three_distance_matrix",
-            "Compute all ordered-pair distances in a three-vertex path.",
-            {
+        OperationExample(
+            name="path_three_distance_matrix",
+            description="Compute all ordered-pair distances in a three-vertex path.",
+            input={
                 "graph": {
                     "vertices": ["c", "a", "b"],
                     "edges": [["a", "b"], ["b", "c"]],

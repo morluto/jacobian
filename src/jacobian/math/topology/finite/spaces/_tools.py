@@ -1,10 +1,7 @@
 """Finite topological space operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -65,31 +62,6 @@ def _kolmogorov_quotient(
     return kolmogorov_quotient(request.space)
 
 
-def _op[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 # A Sierpinski space: points {a, b}, preorder rows: a -> {a}, b -> {a, b}
 # (a <= b in specialization order, so open sets are {}, {a}, {a,b}).
 _SPACE = {
@@ -99,99 +71,89 @@ _SPACE = {
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "topology.finite.interior.compute",
-        "Compute the interior of a subset",
-        "Return the largest open set contained in the subset. In an "
+    MathTool(
+        operation_id="topology.finite.interior.compute",
+        title="Compute the interior of a subset",
+        description="Return the largest open set contained in the subset. In an "
         "Alexandrov space, the interior consists of all points whose minimal "
         "open neighbourhood is contained in the subset.",
-        SubsetRequest,
-        InteriorResult,
-        _interior,
-        "finite-topology",
-        "interior",
-        "exact",
+        request_type=SubsetRequest,
+        result_type=InteriorResult,
+        run=_interior,
+        tags=("finite-topology", "interior", "exact"),
         examples=(
-            example(
-                "sierpinski_interior",
-                "Interior of {b} in the Sierpinski space.",
-                {"space": _SPACE, "subset": [1]},
+            OperationExample(
+                name="sierpinski_interior",
+                description="Interior of {b} in the Sierpinski space.",
+                input={"space": _SPACE, "subset": [1]},
             ),
         ),
     ),
-    _op(
-        "topology.finite.closure.compute",
-        "Compute the closure of a subset",
-        "Return the smallest closed set containing the subset. The closure "
+    MathTool(
+        operation_id="topology.finite.closure.compute",
+        title="Compute the closure of a subset",
+        description="Return the smallest closed set containing the subset. The closure "
         "of x is the up-set of x in the specialization preorder.",
-        SubsetRequest,
-        ClosureResult,
-        _closure,
-        "finite-topology",
-        "closure",
-        "exact",
+        request_type=SubsetRequest,
+        result_type=ClosureResult,
+        run=_closure,
+        tags=("finite-topology", "closure", "exact"),
         examples=(
-            example(
-                "sierpinski_closure",
-                "Closure of {a} in the Sierpinski space.",
-                {"space": _SPACE, "subset": [0]},
+            OperationExample(
+                name="sierpinski_closure",
+                description="Closure of {a} in the Sierpinski space.",
+                input={"space": _SPACE, "subset": [0]},
             ),
         ),
     ),
-    _op(
-        "topology.finite.boundary.compute",
-        "Compute the boundary of a subset",
-        "Return the boundary of a subset: closure minus interior.",
-        SubsetRequest,
-        BoundaryResult,
-        _boundary,
-        "finite-topology",
-        "boundary",
-        "exact",
+    MathTool(
+        operation_id="topology.finite.boundary.compute",
+        title="Compute the boundary of a subset",
+        description="Return the boundary of a subset: closure minus interior.",
+        request_type=SubsetRequest,
+        result_type=BoundaryResult,
+        run=_boundary,
+        tags=("finite-topology", "boundary", "exact"),
         examples=(
-            example(
-                "sierpinski_boundary",
-                "Boundary of {a} in the Sierpinski space.",
-                {"space": _SPACE, "subset": [0]},
+            OperationExample(
+                name="sierpinski_boundary",
+                description="Boundary of {a} in the Sierpinski space.",
+                input={"space": _SPACE, "subset": [0]},
             ),
         ),
     ),
-    _op(
-        "topology.finite.kolmogorov_quotient.compute",
-        "Compute the T0 (Kolmogorov) quotient",
-        "Return the T0 quotient that identifies points with the same minimal "
+    MathTool(
+        operation_id="topology.finite.kolmogorov_quotient.compute",
+        title="Compute the T0 (Kolmogorov) quotient",
+        description="Return the T0 quotient that identifies points with the same minimal "
         "open neighbourhood, plus the class map.",
-        KolmogorovQuotientRequest,
-        KolmogorovQuotientResult,
-        _kolmogorov_quotient,
-        "finite-topology",
-        "kolmogorov-quotient",
-        "exact",
+        request_type=KolmogorovQuotientRequest,
+        result_type=KolmogorovQuotientResult,
+        run=_kolmogorov_quotient,
+        tags=("finite-topology", "kolmogorov-quotient", "exact"),
         examples=(
-            example(
-                "sierpinski_kolmogorov",
-                "T0 quotient of the Sierpinski space.",
-                {"space": _SPACE},
+            OperationExample(
+                name="sierpinski_kolmogorov",
+                description="T0 quotient of the Sierpinski space.",
+                input={"space": _SPACE},
             ),
         ),
     ),
-    _op(
-        "topology.finite.continuity_check.compute",
-        "Check whether a point map is continuous",
-        "Return whether a point map between finite topological spaces is "
+    MathTool(
+        operation_id="topology.finite.continuity_check.compute",
+        title="Check whether a point map is continuous",
+        description="Return whether a point map between finite topological spaces is "
         "continuous. A map f: X -> Y is continuous iff x' <= x implies "
         "f(x') <= f(x) in the specialization preorders.",
-        ContinuousCheckRequest,
-        ContinuousCheckResult,
-        _continuous_check,
-        "finite-topology",
-        "continuity",
-        "exact",
+        request_type=ContinuousCheckRequest,
+        result_type=ContinuousCheckResult,
+        run=_continuous_check,
+        tags=("finite-topology", "continuity", "exact"),
         examples=(
-            example(
-                "identity_continuous",
-                "The identity map is continuous.",
-                {
+            OperationExample(
+                name="identity_continuous",
+                description="The identity map is continuous.",
+                input={
                     "point_map": {
                         "source": _SPACE,
                         "target": _SPACE,

@@ -8,7 +8,7 @@ owned by the number-theory domain (p3) and are NOT included here.
 
 from typing import Literal, cast
 
-from jacobian.catalog._examples import example
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory.arithmetic import operations as native
 from jacobian.math.number_theory.arithmetic._models import (
     IntegerBaseDigitsRequest,
@@ -16,7 +16,6 @@ from jacobian.math.number_theory.arithmetic._models import (
     IntegerNthRootRequest,
     IntegerNthRootResult,
 )
-from jacobian.math.number_theory.arithmetic._support import arithmetic_operation
 from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
 
@@ -38,37 +37,35 @@ def nth_root(request: IntegerNthRootRequest) -> IntegerNthRootResult:
 
 
 INTEGER_OPERATIONS = (
-    arithmetic_operation(
-        "integer.compute.decimal_digit_count",
-        "Count decimal digits",
-        "Count decimal digits in one integer's absolute value.",
-        IntegerValue,
-        IntegerValue,
-        decimal_digit_count,
-        "integer",
-        "representation",
+    MathTool(
+        operation_id="integer.compute.decimal_digit_count",
+        title="Count decimal digits",
+        description="Count decimal digits in one integer's absolute value.",
+        request_type=IntegerValue,
+        result_type=IntegerValue,
+        run=decimal_digit_count,
+        tags=("integer", "representation"),
         examples=(
-            example(
-                "decimal_digit_count_12345",
-                "Count the decimal digits of 12345.",
-                {"value": "12345"},
+            OperationExample(
+                name="decimal_digit_count_12345",
+                description="Count the decimal digits of 12345.",
+                input={"value": "12345"},
             ),
         ),
     ),
-    arithmetic_operation(
-        "integer.compute.nth_root",
-        "Compute integer nth root",
-        "Compute floor nth root and whether it is exact.",
-        IntegerNthRootRequest,
-        IntegerNthRootResult,
-        nth_root,
-        "number-theory",
-        "root",
+    MathTool(
+        operation_id="integer.compute.nth_root",
+        title="Compute integer nth root",
+        description="Compute floor nth root and whether it is exact.",
+        request_type=IntegerNthRootRequest,
+        result_type=IntegerNthRootResult,
+        run=nth_root,
+        tags=("number-theory", "root"),
         examples=(
-            example(
-                "non_exact_cube_root",
-                "Floor cube root of 65.",
-                {"value": "65", "degree": 3},
+            OperationExample(
+                name="non_exact_cube_root",
+                description="Floor cube root of 65.",
+                input={"value": "65", "degree": 3},
             ),
         ),
     ),

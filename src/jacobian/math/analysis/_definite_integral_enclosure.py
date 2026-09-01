@@ -29,8 +29,11 @@ from jacobian.canonical import (
     canonicalize_json,
     format_canonical_integer,
 )
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.analysis._arb import arb_source_interval, dyadic_endpoints
 from jacobian.math.analysis._box_enclosure import (
     _BoxEvaluationFailure,
@@ -1131,13 +1134,13 @@ DEFINITE_INTEGRAL_ENCLOSURE_OPERATIONS = (
             "bounded",
         ),
         examples=(
-            example(
-                "linear_unit_interval",
-                (
+            OperationExample(
+                name="linear_unit_interval",
+                description=(
                     "Enclose the integral of t over 0 <= t <= 1 until width 1/4; "
                     "the expression and one-axis box must name the same variable."
                 ),
-                {
+                input={
                     "expression": {"op": "var", "variable": "t"},
                     "box": {
                         "variables": ["t"],

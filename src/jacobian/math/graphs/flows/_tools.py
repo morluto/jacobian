@@ -1,10 +1,7 @@
 """Exact graph flow operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.flows._models import (
     EdgeDisjointPathsRequest,
@@ -67,48 +64,20 @@ def compute_min_cost_flow(request: MinCostFlowRequest) -> MinCostFlowResult:
     )
 
 
-def graph_flow_operation[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    graph_flow_operation(
-        "graph.flow.maximum.compute",
-        "Compute the maximum flow in a capacitated graph",
-        "Compute the maximum flow value between source and sink in a directed capacitated graph using NetworkX. Returns the flow value and a per-edge flow decomposition so the caller can independently verify conservation and capacity constraints.",
-        MaxFlowRequest,
-        MaxFlowResult,
-        compute_max_flow,
-        "graph",
-        "flow",
-        "max-flow",
-        "exact",
+    MathTool(
+        operation_id="graph.flow.maximum.compute",
+        title="Compute the maximum flow in a capacitated graph",
+        description="Compute the maximum flow value between source and sink in a directed capacitated graph using NetworkX. Returns the flow value and a per-edge flow decomposition so the caller can independently verify conservation and capacity constraints.",
+        request_type=MaxFlowRequest,
+        result_type=MaxFlowResult,
+        run=compute_max_flow,
+        tags=("graph", "flow", "max-flow", "exact"),
         examples=(
-            example(
-                "simple_max_flow",
-                "Compute the maximum flow in a simple graph.",
-                {
+            OperationExample(
+                name="simple_max_flow",
+                description="Compute the maximum flow in a simple graph.",
+                input={
                     "graph": {
                         "vertex_count": 3,
                         "edges": [
@@ -128,10 +97,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "sink": 2,
                 },
             ),
-            example(
-                "four_vertex_max_flow",
-                "Compute a maximum flow; edge endpoints, source, and sink must be in 0..vertex_count-1 and source must differ from sink.",
-                {
+            OperationExample(
+                name="four_vertex_max_flow",
+                description="Compute a maximum flow; edge endpoints, source, and sink must be in 0..vertex_count-1 and source must differ from sink.",
+                input={
                     "graph": {
                         "vertex_count": 4,
                         "edges": [
@@ -158,22 +127,19 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    graph_flow_operation(
-        "graph.cut.minimum_st.compute",
-        "Compute the minimum s-t cut in a capacitated graph",
-        "Compute the minimum s-t cut value and partition in a directed capacitated graph using NetworkX.",
-        MinCutRequest,
-        MinCutResult,
-        compute_min_cut,
-        "graph",
-        "cut",
-        "min-cut",
-        "exact",
+    MathTool(
+        operation_id="graph.cut.minimum_st.compute",
+        title="Compute the minimum s-t cut in a capacitated graph",
+        description="Compute the minimum s-t cut value and partition in a directed capacitated graph using NetworkX.",
+        request_type=MinCutRequest,
+        result_type=MinCutResult,
+        run=compute_min_cut,
+        tags=("graph", "cut", "min-cut", "exact"),
         examples=(
-            example(
-                "simple_min_cut",
-                "Compute the minimum cut in a simple graph.",
-                {
+            OperationExample(
+                name="simple_min_cut",
+                description="Compute the minimum cut in a simple graph.",
+                input={
                     "graph": {
                         "vertex_count": 3,
                         "edges": [
@@ -193,10 +159,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "sink": 2,
                 },
             ),
-            example(
-                "four_vertex_min_cut",
-                "Compute a minimum s-t cut; edge endpoints, source, and sink must be in 0..vertex_count-1 and source must differ from sink.",
-                {
+            OperationExample(
+                name="four_vertex_min_cut",
+                description="Compute a minimum s-t cut; edge endpoints, source, and sink must be in 0..vertex_count-1 and source must differ from sink.",
+                input={
                     "graph": {
                         "vertex_count": 4,
                         "edges": [
@@ -223,22 +189,19 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    graph_flow_operation(
-        "graph.menger.edge_disjoint.compute",
-        "Compute the maximum number of edge-disjoint paths (Menger theorem)",
-        "Compute the maximum number of edge-disjoint directed paths between source and sink in a simple directed graph using NetworkX, along with the explicit paths.",
-        EdgeDisjointPathsRequest,
-        EdgeDisjointPathsResult,
-        compute_edge_disjoint_paths,
-        "graph",
-        "menger",
-        "edge-disjoint",
-        "exact",
+    MathTool(
+        operation_id="graph.menger.edge_disjoint.compute",
+        title="Compute the maximum number of edge-disjoint paths (Menger theorem)",
+        description="Compute the maximum number of edge-disjoint directed paths between source and sink in a simple directed graph using NetworkX, along with the explicit paths.",
+        request_type=EdgeDisjointPathsRequest,
+        result_type=EdgeDisjointPathsResult,
+        run=compute_edge_disjoint_paths,
+        tags=("graph", "menger", "edge-disjoint", "exact"),
         examples=(
-            example(
-                "two_edge_disjoint_paths",
-                "Compute the maximum number of edge-disjoint paths in a diamond graph.",
-                {
+            OperationExample(
+                name="two_edge_disjoint_paths",
+                description="Compute the maximum number of edge-disjoint paths in a diamond graph.",
+                input={
                     "graph": {
                         "vertex_count": 4,
                         "edges": [
@@ -254,23 +217,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    graph_flow_operation(
-        "network.min_cost_flow.compute",
-        "Compute minimum-cost flow with demands",
-        "Compute the minimum-cost flow satisfying vertex demands in a "
+    MathTool(
+        operation_id="network.min_cost_flow.compute",
+        title="Compute minimum-cost flow with demands",
+        description="Compute the minimum-cost flow satisfying vertex demands in a "
         "directed graph with capacities and per-unit costs, using "
         "NetworkX's network simplex algorithm.",
-        MinCostFlowRequest,
-        MinCostFlowResult,
-        compute_min_cost_flow,
-        "network",
-        "min-cost-flow",
-        "exact",
+        request_type=MinCostFlowRequest,
+        result_type=MinCostFlowResult,
+        run=compute_min_cost_flow,
+        tags=("network", "min-cost-flow", "exact"),
         examples=(
-            example(
-                "simple_min_cost_flow",
-                "Send 2 units from node 0 to node 2 via node 1.",
-                {
+            OperationExample(
+                name="simple_min_cost_flow",
+                description="Send 2 units from node 0 to node 2 via node 1.",
+                input={
                     "graph": {
                         "vertex_count": 3,
                         "edges": [

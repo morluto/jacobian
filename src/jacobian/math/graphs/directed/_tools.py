@@ -1,10 +1,7 @@
 """Exact directed graph operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.directed._models import (
     AcyclicOrderRequest,
@@ -49,50 +46,22 @@ def _dag_longest_path(request: DagLongestPathRequest) -> DagLongestPathResult:
     return dag_longest_path(request.graph)
 
 
-def directed_graph_operation[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    directed_graph_operation(
-        "graph.directed.reachability.compute",
-        "Compute reachable vertices from a source in a directed graph",
-        "Determine which vertices are reachable from a given source vertex in a "
+    MathTool(
+        operation_id="graph.directed.reachability.compute",
+        title="Compute reachable vertices from a source in a directed graph",
+        description="Determine which vertices are reachable from a given source vertex in a "
         "simple directed graph using NetworkX. Returns the reachable and "
         "unreachable vertex sets.",
-        ReachabilityRequest,
-        ReachabilityResult,
-        _reachability,
-        "graph",
-        "directed",
-        "reachability",
-        "exact",
+        request_type=ReachabilityRequest,
+        result_type=ReachabilityResult,
+        run=_reachability,
+        tags=("graph", "directed", "reachability", "exact"),
         examples=(
-            example(
-                "simple_reachability",
-                "Compute reachability from vertex 0 in a small graph.",
-                {
+            OperationExample(
+                name="simple_reachability",
+                description="Compute reachability from vertex 0 in a small graph.",
+                input={
                     "graph": {
                         "vertex_count": 4,
                         "edges": [[0, 1], [1, 2], [2, 3]],
@@ -102,22 +71,19 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    directed_graph_operation(
-        "graph.directed.scc.compute",
-        "Compute strongly connected components of a directed graph",
-        "Partition a simple directed graph into strongly connected components. Returns the number of components and each component's sorted vertex list.",
-        StronglyConnectedComponentsRequest,
-        StronglyConnectedComponentsResult,
-        _components,
-        "graph",
-        "directed",
-        "scc",
-        "exact",
+    MathTool(
+        operation_id="graph.directed.scc.compute",
+        title="Compute strongly connected components of a directed graph",
+        description="Partition a simple directed graph into strongly connected components. Returns the number of components and each component's sorted vertex list.",
+        request_type=StronglyConnectedComponentsRequest,
+        result_type=StronglyConnectedComponentsResult,
+        run=_components,
+        tags=("graph", "directed", "scc", "exact"),
         examples=(
-            example(
-                "simple_cycle_scc",
-                "Compute SCCs of a graph containing a simple cycle.",
-                {
+            OperationExample(
+                name="simple_cycle_scc",
+                description="Compute SCCs of a graph containing a simple cycle.",
+                input={
                     "graph": {
                         "vertex_count": 4,
                         "edges": [[0, 1], [1, 2], [2, 0], [2, 3]],
@@ -126,24 +92,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    directed_graph_operation(
-        "graph.directed.condensation.compute",
-        "Compute the condensation of a directed graph",
-        "Compute the condensation DAG of a simple directed graph using NetworkX. "
+    MathTool(
+        operation_id="graph.directed.condensation.compute",
+        title="Compute the condensation of a directed graph",
+        description="Compute the condensation DAG of a simple directed graph using NetworkX. "
         "The condensation's vertices are the strongly connected components of the "
         "original graph.",
-        CondensationRequest,
-        CondensationResult,
-        _condensation,
-        "graph",
-        "directed",
-        "condensation",
-        "exact",
+        request_type=CondensationRequest,
+        result_type=CondensationResult,
+        run=_condensation,
+        tags=("graph", "directed", "condensation", "exact"),
         examples=(
-            example(
-                "simple_condensation",
-                "Compute the condensation of a graph with one cycle.",
-                {
+            OperationExample(
+                name="simple_condensation",
+                description="Compute the condensation of a graph with one cycle.",
+                input={
                     "graph": {
                         "vertex_count": 4,
                         "edges": [[0, 1], [1, 2], [2, 0], [2, 3]],
@@ -152,24 +115,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    directed_graph_operation(
-        "graph.directed.acyclic_order.compute",
-        "Compute a topological order of a directed acyclic graph",
-        "Compute a topological ordering of a simple directed graph using "
+    MathTool(
+        operation_id="graph.directed.acyclic_order.compute",
+        title="Compute a topological order of a directed acyclic graph",
+        description="Compute a topological ordering of a simple directed graph using "
         "NetworkX. Reports acyclic=false and an empty order when the graph "
         "contains a cycle.",
-        AcyclicOrderRequest,
-        AcyclicOrderResult,
-        _acyclic_order,
-        "graph",
-        "directed",
-        "topological-sort",
-        "exact",
+        request_type=AcyclicOrderRequest,
+        result_type=AcyclicOrderResult,
+        run=_acyclic_order,
+        tags=("graph", "directed", "topological-sort", "exact"),
         examples=(
-            example(
-                "simple_dag_topological_order",
-                "Compute a topological order of a small DAG.",
-                {
+            OperationExample(
+                name="simple_dag_topological_order",
+                description="Compute a topological order of a small DAG.",
+                input={
                     "graph": {
                         "vertex_count": 4,
                         "edges": [[0, 1], [0, 2], [1, 3], [2, 3]],
@@ -178,25 +138,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    directed_graph_operation(
-        "graph.directed.dag_longest_path.compute",
-        "Compute the longest directed path in a DAG",
-        "Compute the exact maximum directed simple-path length (number of "
+    MathTool(
+        operation_id="graph.directed.dag_longest_path.compute",
+        title="Compute the longest directed path in a DAG",
+        description="Compute the exact maximum directed simple-path length (number of "
         "edges) and a canonical path witness in a simple directed acyclic "
         "graph. Reports NOT_APPLICABLE when the graph contains a cycle.",
-        DagLongestPathRequest,
-        DagLongestPathResult,
-        _dag_longest_path,
-        "graph",
-        "directed",
-        "dag",
-        "longest-path",
-        "exact",
+        request_type=DagLongestPathRequest,
+        result_type=DagLongestPathResult,
+        run=_dag_longest_path,
+        tags=("graph", "directed", "dag", "longest-path", "exact"),
         examples=(
-            example(
-                "simple_dag_longest_path",
-                "Compute the longest path in a small diamond DAG.",
-                {
+            OperationExample(
+                name="simple_dag_longest_path",
+                description="Compute the longest path in a small diamond DAG.",
+                input={
                     "graph": {
                         "vertex_count": 4,
                         "edges": [[0, 1], [0, 2], [1, 3], [2, 3]],

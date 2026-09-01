@@ -1,12 +1,9 @@
 """Electrical-network operation declarations."""
 
-from collections.abc import Callable
 from fractions import Fraction
 from typing import Any
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -256,45 +253,20 @@ def compute_laplacian(request: LaplacianRequest) -> LaplacianResult:
     )
 
 
-def en_operation[RequestT: StrictModel, ResultT: StrictModel](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    en_operation(
-        "electrical_network.effective_resistance.compute",
-        "Compute the exact effective resistance between two terminals",
-        "Compute the exact rational effective resistance between two terminals of an undirected conductance network by solving the reduced Laplacian system over QQ.",
-        EffectiveResistanceRequest,
-        EffectiveResistanceResult,
-        compute_effective_resistance,
-        "graph",
-        "electrical-network",
-        "effective-resistance",
-        "exact",
+    MathTool(
+        operation_id="electrical_network.effective_resistance.compute",
+        title="Compute the exact effective resistance between two terminals",
+        description="Compute the exact rational effective resistance between two terminals of an undirected conductance network by solving the reduced Laplacian system over QQ.",
+        request_type=EffectiveResistanceRequest,
+        result_type=EffectiveResistanceResult,
+        run=compute_effective_resistance,
+        tags=("graph", "electrical-network", "effective-resistance", "exact"),
         examples=(
-            example(
-                "triangle_equal_resistances",
-                "Effective resistance of two vertices in a triangle with unit resistances.",
-                {
+            OperationExample(
+                name="triangle_equal_resistances",
+                description="Effective resistance of two vertices in a triangle with unit resistances.",
+                input={
                     "network": {
                         "vertex_count": 3,
                         "edges": [
@@ -321,22 +293,19 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    en_operation(
-        "electrical_network.node_potentials.compute",
-        "Compute exact node potentials for unit current injection",
-        "Solve the Dirichlet problem: inject 1 ampere at source and extract 1 ampere at sink, returning exact rational node potentials with the sink gauge fixed at zero.",
-        NodePotentialRequest,
-        NodePotentialResult,
-        compute_node_potentials,
-        "graph",
-        "electrical-network",
-        "node-potential",
-        "exact",
+    MathTool(
+        operation_id="electrical_network.node_potentials.compute",
+        title="Compute exact node potentials for unit current injection",
+        description="Solve the Dirichlet problem: inject 1 ampere at source and extract 1 ampere at sink, returning exact rational node potentials with the sink gauge fixed at zero.",
+        request_type=NodePotentialRequest,
+        result_type=NodePotentialResult,
+        run=compute_node_potentials,
+        tags=("graph", "electrical-network", "node-potential", "exact"),
         examples=(
-            example(
-                "path_of_two_edges",
-                "Node potentials for a path graph of 3 vertices with unit conductances.",
-                {
+            OperationExample(
+                name="path_of_two_edges",
+                description="Node potentials for a path graph of 3 vertices with unit conductances.",
+                input={
                     "network": {
                         "vertex_count": 3,
                         "edges": [
@@ -358,22 +327,19 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    en_operation(
-        "electrical_network.laplacian.compute",
-        "Compute the exact conductance-weighted Laplacian matrix",
-        "Build the exact rational conductance-weighted graph Laplacian of an undirected network, returned as a flat list of (row, col, value) entries.",
-        LaplacianRequest,
-        LaplacianResult,
-        compute_laplacian,
-        "graph",
-        "electrical-network",
-        "laplacian",
-        "exact",
+    MathTool(
+        operation_id="electrical_network.laplacian.compute",
+        title="Compute the exact conductance-weighted Laplacian matrix",
+        description="Build the exact rational conductance-weighted graph Laplacian of an undirected network, returned as a flat list of (row, col, value) entries.",
+        request_type=LaplacianRequest,
+        result_type=LaplacianResult,
+        run=compute_laplacian,
+        tags=("graph", "electrical-network", "laplacian", "exact"),
         examples=(
-            example(
-                "single_edge",
-                "Laplacian of a two-vertex network with one unit-conductance edge.",
-                {
+            OperationExample(
+                name="single_edge",
+                description="Laplacian of a two-vertex network with one unit-conductance edge.",
+                input={
                     "network": {
                         "vertex_count": 2,
                         "edges": [

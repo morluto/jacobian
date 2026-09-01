@@ -2,8 +2,7 @@
 
 from typing import Any
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.combinatorics.matroids._models import (
     MatroidClosureRequest,
     MatroidClosureResult,
@@ -40,10 +39,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         run=_run_closure,
         tags=("matroid", "closure", "flat", "exact"),
         examples=(
-            example(
-                "closure_of_basis",
-                "Compute the closure of {0, 1} in a rank-2 matroid.",
-                _CLOSURE_EXAMPLE,
+            OperationExample(
+                name="closure_of_basis",
+                description="Compute the closure of {0, 1} in a rank-2 matroid.",
+                input=_CLOSURE_EXAMPLE,
             ),
         ),
     ),

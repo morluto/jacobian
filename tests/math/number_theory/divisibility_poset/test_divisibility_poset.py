@@ -128,15 +128,13 @@ def test_large_digit_integers_divisibility() -> None:
     assert (big2_label, big1_label) not in pairs
 
 
-def test_non_positive_rejected() -> None:
-    with pytest.raises(ValidationError):
-        DivisibilityPosetRequest.model_validate(
-            {"source_set": {"elements": ["0", "1", "2"]}}
-        )
-    with pytest.raises(ValidationError):
-        DivisibilityPosetRequest.model_validate(
-            {"source_set": {"elements": ["-1", "1", "2"]}}
-        )
+def test_non_positive_values_are_structurally_parseable() -> None:
+    assert DivisibilityPosetRequest.model_validate(
+        {"source_set": {"elements": ["0", "1", "2"]}}
+    )
+    assert DivisibilityPosetRequest.model_validate(
+        {"source_set": {"elements": ["-1", "1", "2"]}}
+    )
 
 
 def test_native_path_rejects_nonpositive_source_values() -> None:
@@ -152,10 +150,14 @@ def test_duplicate_rejected() -> None:
         )
 
 
-def test_too_many_elements_rejected() -> None:
+def test_operation_element_limit_is_not_request_structure() -> None:
     elements = [str(i) for i in range(1, MAX_DIVISIBILITY_POSET_ELEMENTS + 2)]
-    with pytest.raises(ValidationError):
-        DivisibilityPosetRequest.model_validate({"source_set": {"elements": elements}})
+    request = DivisibilityPosetRequest.model_validate(
+        {"source_set": {"elements": elements}}
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="at most"):
+        compute_divisibility_poset(request.source_set)
 
 
 def test_exactly_max_elements() -> None:

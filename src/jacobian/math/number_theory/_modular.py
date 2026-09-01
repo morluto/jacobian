@@ -1,6 +1,6 @@
 """Modular-owned exact number-theory operations."""
 
-from jacobian.catalog._examples import example
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory._discrete_logarithm import (
     DISCRETE_LOGARITHM_OPERATION,
 )
@@ -16,9 +16,6 @@ from jacobian.math.number_theory._modular_basic_models import (
 from jacobian.math.number_theory._modular_models import (
     ModularPolynomialResidueImageRequest,
     ModularPolynomialResidueImageResult,
-)
-from jacobian.math.number_theory._support import (
-    number_theory_operation,
 )
 from jacobian.math.number_theory.arithmetic.values import IntegerValue
 from jacobian.math.number_theory.operations import (
@@ -69,103 +66,99 @@ def _run_chinese_remainder(request: ChineseRemainderRequest) -> ChineseRemainder
 
 
 MODULAR_OPERATIONS = (
-    number_theory_operation(
-        "number_theory.compute.jacobi_symbol",
-        "Compute Jacobi symbol",
-        "Compute the Jacobi symbol (a / n) for an odd positive denominator.",
-        JacobiSymbolRequest,
-        JacobiSymbolResult,
-        _run_jacobi_symbol,
-        "number-theory",
-        "modular",
-        "jacobi-symbol",
+    MathTool(
+        operation_id="number_theory.compute.jacobi_symbol",
+        title="Compute Jacobi symbol",
+        description="Compute the Jacobi symbol (a / n) for an odd positive denominator.",
+        request_type=JacobiSymbolRequest,
+        result_type=JacobiSymbolResult,
+        run=_run_jacobi_symbol,
+        tags=("number-theory", "modular", "jacobi-symbol"),
         examples=(
-            example(
-                "jacobi_10_21",
-                "Compute the Jacobi symbol (10/21).",
-                {"a": "10", "n": 21},
+            OperationExample(
+                name="jacobi_10_21",
+                description="Compute the Jacobi symbol (10/21).",
+                input={"a": "10", "n": 21},
             ),
-            example(
-                "jacobi_7_15",
-                "Compute the Jacobi symbol (7/15); the denominator n must be odd.",
-                {"a": "7", "n": 15},
+            OperationExample(
+                name="jacobi_7_15",
+                description="Compute the Jacobi symbol (7/15); the denominator n must be odd.",
+                input={"a": "7", "n": 15},
             ),
         ),
     ),
-    number_theory_operation(
-        "modular.compute.inverse",
-        "Compute modular inverse",
-        "Compute the least nonnegative inverse of a unit modulo m.",
-        ModularUnitRequest,
-        IntegerValue,
-        _run_modular_inverse,
-        "number-theory",
-        "modular",
+    MathTool(
+        operation_id="modular.compute.inverse",
+        title="Compute modular inverse",
+        description="Compute the least nonnegative inverse of a unit modulo m.",
+        request_type=ModularUnitRequest,
+        result_type=IntegerValue,
+        run=_run_modular_inverse,
+        tags=("number-theory", "modular"),
         examples=(
-            example(
-                "inverse_3_mod_11",
-                "Compute the inverse of 3 modulo 11.",
-                {"value": "3", "modulus": 11},
+            OperationExample(
+                name="inverse_3_mod_11",
+                description="Compute the inverse of 3 modulo 11.",
+                input={"value": "3", "modulus": 11},
             ),
         ),
     ),
-    number_theory_operation(
-        "modular.compute.multiplicative_order",
-        "Compute multiplicative order",
-        "Compute the multiplicative order of a unit modulo m.",
-        ModularUnitRequest,
-        IntegerValue,
-        _run_multiplicative_order,
-        "number-theory",
-        "modular",
+    MathTool(
+        operation_id="modular.compute.multiplicative_order",
+        title="Compute multiplicative order",
+        description="Compute the multiplicative order of a unit modulo m.",
+        request_type=ModularUnitRequest,
+        result_type=IntegerValue,
+        run=_run_multiplicative_order,
+        tags=("number-theory", "modular"),
         examples=(
-            example(
-                "multiplicative_order_2_mod_7",
-                "Compute the multiplicative order of 2 modulo 7.",
-                {"value": "2", "modulus": 7},
+            OperationExample(
+                name="multiplicative_order_2_mod_7",
+                description="Compute the multiplicative order of 2 modulo 7.",
+                input={"value": "2", "modulus": 7},
             ),
         ),
     ),
-    number_theory_operation(
-        "modular.enumerate.quadratic_residues",
-        "Enumerate quadratic residues",
-        "Enumerate all quadratic residues modulo m.",
-        ModulusRequest,
-        QuadraticResiduesResult,
-        _run_quadratic_residues,
-        "number-theory",
-        "modular",
-        "enumeration",
+    MathTool(
+        operation_id="modular.enumerate.quadratic_residues",
+        title="Enumerate quadratic residues",
+        description="Enumerate all quadratic residues modulo m.",
+        request_type=ModulusRequest,
+        result_type=QuadraticResiduesResult,
+        run=_run_quadratic_residues,
+        tags=("number-theory", "modular", "enumeration"),
         examples=(
-            example(
-                "quadratic_residues_mod_10",
-                "Enumerate quadratic residues modulo 10.",
-                {"modulus": 10},
+            OperationExample(
+                name="quadratic_residues_mod_10",
+                description="Enumerate quadratic residues modulo 10.",
+                input={"modulus": 10},
             ),
         ),
     ),
-    number_theory_operation(
-        "modular.polynomial_residue_image.compute",
-        "Compute modular polynomial residue image",
-        (
+    MathTool(
+        operation_id="modular.polynomial_residue_image.compute",
+        title="Compute modular polynomial residue image",
+        description=(
             "Compute the bounded image of a sparse integer polynomial over declared "
             "finite residue domains modulo m, including multiplicities and first "
             "witness assignments."
         ),
-        ModularPolynomialResidueImageRequest,
-        ModularPolynomialResidueImageResult,
-        _run_modular_polynomial_residue_image,
-        "number-theory",
-        "modular",
-        "polynomial",
-        "residue",
-        "enumeration",
-        "obstruction",
+        request_type=ModularPolynomialResidueImageRequest,
+        result_type=ModularPolynomialResidueImageResult,
+        run=_run_modular_polynomial_residue_image,
+        tags=(
+            "number-theory",
+            "modular",
+            "polynomial",
+            "residue",
+            "enumeration",
+            "obstruction",
+        ),
         examples=(
-            example(
-                "cubic_residue_image_mod_7",
-                "Enumerate four times x cubed modulo 7; variable names and exponent vectors must be unique and ordered, with canonical residues.",
-                {
+            OperationExample(
+                name="cubic_residue_image_mod_7",
+                description="Enumerate four times x cubed modulo 7; variable names and exponent vectors must be unique and ordered, with canonical residues.",
+                input={
                     "modulus": 7,
                     "variables": [
                         {
@@ -178,26 +171,22 @@ MODULAR_OPERATIONS = (
             ),
         ),
     ),
-    number_theory_operation(
-        "modular.polynomial_residue_image.assignments.compute",
-        "Compute modular polynomial assignments",
-        (
+    MathTool(
+        operation_id="modular.polynomial_residue_image.assignments.compute",
+        title="Compute modular polynomial assignments",
+        description=(
             "Compute the complete bounded assignment-to-residue table for a sparse "
             "modular polynomial, including the image summary."
         ),
-        ModularPolynomialResidueImageRequest,
-        ModularPolynomialResidueImageResult,
-        _run_modular_polynomial_residue_assignments,
-        "number-theory",
-        "modular",
-        "polynomial",
-        "residue",
-        "assignments",
+        request_type=ModularPolynomialResidueImageRequest,
+        result_type=ModularPolynomialResidueImageResult,
+        run=_run_modular_polynomial_residue_assignments,
+        tags=("number-theory", "modular", "polynomial", "residue", "assignments"),
         examples=(
-            example(
-                "cubic_assignment_ledger_mod_7",
-                "Compute the assignment ledger for four times x cubed modulo 7; names and exponent vectors must be unique and ordered.",
-                {
+            OperationExample(
+                name="cubic_assignment_ledger_mod_7",
+                description="Compute the assignment ledger for four times x cubed modulo 7; names and exponent vectors must be unique and ordered.",
+                input={
                     "modulus": 7,
                     "variables": [
                         {
@@ -210,27 +199,26 @@ MODULAR_OPERATIONS = (
             ),
         ),
     ),
-    number_theory_operation(
-        "modular.solve.chinese_remainder",
-        "Solve congruence system",
-        "Solve a finite compatible system of integer congruences. Admission "
+    MathTool(
+        operation_id="modular.solve.chinese_remainder",
+        title="Solve congruence system",
+        description="Solve a finite compatible system of integer congruences. Admission "
         "bounds the system's combined modulus (its LCM) to the 256-digit "
         "exact result width rather than each modulus alone.",
-        ChineseRemainderRequest,
-        ChineseRemainderResult,
-        _run_chinese_remainder,
-        "number-theory",
-        "modular",
+        request_type=ChineseRemainderRequest,
+        result_type=ChineseRemainderResult,
+        run=_run_chinese_remainder,
+        tags=("number-theory", "modular"),
         examples=(
-            example(
-                "crt_2_mod_3_3_mod_5",
-                "Solve x=2 mod 3 and x=3 mod 5.",
-                {"residues": [2, 3], "moduli": [3, 5]},
+            OperationExample(
+                name="crt_2_mod_3_3_mod_5",
+                description="Solve x=2 mod 3 and x=3 mod 5.",
+                input={"residues": [2, 3], "moduli": [3, 5]},
             ),
-            example(
-                "crt_three_congruences",
-                "Solve three congruences; residues and moduli must have equal lengths and each residue must be canonical.",
-                {"residues": [1, 4, 0], "moduli": [2, 5, 7]},
+            OperationExample(
+                name="crt_three_congruences",
+                description="Solve three congruences; residues and moduli must have equal lengths and each residue must be canonical.",
+                input={"residues": [1, 4, 0], "moduli": [2, 5, 7]},
             ),
         ),
     ),

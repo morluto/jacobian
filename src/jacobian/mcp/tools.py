@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Mapping, Sequence
-from typing import Any, Protocol
+from typing import Any
 
 from mcp.server.mcpserver import Context
 from mcp.server.mcpserver.exceptions import ToolError
@@ -13,19 +13,20 @@ from mcp.types import INVALID_PARAMS
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
-    request_execution,
+    RequestCancellationSignal,
 )
 from jacobian.catalog.models import OperationId, OperationResult
 from jacobian.dispatch import (
     OperationDomainValidationError,
     OperationExecutionTimeoutError,
     OperationRequestValidationError,
-    _invoke_prepared_operation,
     _OperationResolutionError,
-    _prepare_operation,
+    execute_operation,
 )
 from jacobian.mcp.models import (
     OperationBrowseRequest,
+    OperationDiscoveryError,
+    OperationDiscoveryErrorDetail,
     OperationFindRequest,
     OperationFindResponse,
     OperationInspectionResult,
@@ -42,17 +43,10 @@ from jacobian.mcp.runtime import (
     _authorize,
     _catalog,
 )
-from jacobian.process import bounded_process_cancellation
 
 _MAX_VALIDATION_ERRORS = 64
 _MAX_VALIDATION_LOCATION_COMPONENTS = 32
 _MAX_VALIDATION_LOCATION_LENGTH = 128
-
-
-class _CancellationSignal(Protocol):
-    """Cooperative request cancellation observed by external process work."""
-
-    def is_set(self) -> bool: ...
 
 
 def math_find(
@@ -69,7 +63,7 @@ def math_find(
             limit=request.limit,
             cursor=request.cursor,
         )
-        return OperationFindResponse.model_validate(discovery_response)
+        return OperationFindResponse(root=discovery_response)
     if isinstance(request, OperationBrowseRequest):
         browse_response = _operation_browse_response(
             active_catalog,
@@ -77,23 +71,24 @@ def math_find(
             limit=request.limit,
             cursor=request.cursor,
         )
-        return OperationFindResponse.model_validate(browse_response)
+        return OperationFindResponse(root=browse_response)
     operation_id = request.operation_id
     descriptor = active_catalog.inspect(operation_id)
     if descriptor is None:
         hint = (
             "Call math.find with a mathematical query to search installed operations."
         )
-        error_response = {
-            "kind": "error",
-            "error": {
-                "code": "UNKNOWN_OPERATION",
-                "stage": "operation_resolution",
-                "message": f"Unknown operation: {operation_id}",
-                "hint": hint,
-            },
-        }
-        return OperationFindResponse.model_validate(error_response)
+        return OperationFindResponse(
+            root=OperationDiscoveryError(
+                kind="error",
+                error=OperationDiscoveryErrorDetail(
+                    code="UNKNOWN_OPERATION",
+                    stage="operation_resolution",
+                    message=f"Unknown operation: {operation_id}",
+                    hint=hint,
+                ),
+            )
+        )
     return OperationFindResponse(
         OperationInspectionResult(kind="operation", operation=descriptor)
     )
@@ -109,22 +104,21 @@ def math_run(
     _authorize(ctx)
     catalog = _catalog(ctx)
     cancellation = _request_cancellation(ctx)
-    if cancellation.is_set():
-        raise ToolError("operation cancelled before execution")
     try:
-        started = time.monotonic()
-        # MCP runs synchronous tools in a worker thread.  Its request event
-        # is polled by the shared external-process runner, which kills and
-        # reaps only an operation's owned child tree.  Bind it before
-        # preparation because owner admission may itself use a child worker.
-        with bounded_process_cancellation(cancellation), request_execution(started):
-            try:
-                prepared = _prepare_operation(operation_id, payload, catalog)
-            except _OperationResolutionError as exc:
-                raise ToolError(str(exc)) from exc
-            if cancellation.is_set():
-                raise ToolError("operation cancelled before execution")
-            return _invoke_prepared_operation(prepared, started=started)
+        try:
+            return execute_operation(
+                operation_id,
+                payload,
+                catalog,
+                projector=lambda selected_id, result, started: OperationResult(
+                    operation_id=selected_id,
+                    runtime_ms=max(0, round((time.monotonic() - started) * 1000)),
+                    output=result.model_dump(mode="json"),
+                ),
+                cancellation_signal=cancellation,
+            )
+        except _OperationResolutionError as exc:
+            raise ToolError(str(exc)) from exc
     except (OperationRequestValidationError, OperationDomainValidationError) as exc:
         raise _invalid_request_error(operation_id, exc) from exc
     except OperationExecutionTimeoutError as exc:
@@ -156,7 +150,7 @@ def _invalid_request_error(
     )
 
 
-def _request_cancellation(ctx: Context[AppState, Any]) -> _CancellationSignal:
+def _request_cancellation(ctx: Context[AppState, Any]) -> RequestCancellationSignal:
     """Return MCP 2.1's request signal through its only available SDK seam."""
 
     return ctx.request_context.session._request_outbound.cancel_requested

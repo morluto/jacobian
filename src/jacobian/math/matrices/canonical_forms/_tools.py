@@ -1,9 +1,5 @@
 """Exact canonical-form operation declarations."""
 
-from collections.abc import Callable
-
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.matrices.canonical_forms._models import (
     MatrixPolynomialEvaluationRequest,
@@ -21,31 +17,6 @@ from jacobian.math.matrices.canonical_forms.operations import (
 )
 from jacobian.math.matrices.values import RationalMatrix
 from jacobian.math.polynomials.values import RationalPolynomial
-
-
-def canonical_form_operation[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
 
 
 def compute_matrix_polynomial_evaluation(
@@ -114,26 +85,23 @@ def _run_primary_decomposition(
 
 
 TOOLS: MathTools = (
-    canonical_form_operation(
-        "matrix.polynomial.evaluate.compute",
-        "Evaluate an exact rational polynomial at a square matrix",
-        "Compute f(A) over QQ by bounded exact Horner evaluation. The result "
+    MathTool(
+        operation_id="matrix.polynomial.evaluate.compute",
+        title="Evaluate an exact rational polynomial at a square matrix",
+        description="Compute f(A) over QQ by bounded exact Horner evaluation. The result "
         "retains the source matrix and canonical one-variable rational polynomial "
         "alongside the exact evaluated matrix.",
-        MatrixPolynomialEvaluationRequest,
-        MatrixPolynomialEvaluationResult,
-        _run_matrix_polynomial_evaluation,
-        "matrix",
-        "polynomial",
-        "functional-calculus",
-        "exact",
+        request_type=MatrixPolynomialEvaluationRequest,
+        result_type=MatrixPolynomialEvaluationResult,
+        run=_run_matrix_polynomial_evaluation,
+        tags=("matrix", "polynomial", "functional-calculus", "exact"),
         examples=(
-            example(
-                "rotation_annihilator",
-                "Evaluate t^2 + 1 at the rational quarter-turn matrix, obtaining "
+            OperationExample(
+                name="rotation_annihilator",
+                description="Evaluate t^2 + 1 at the rational quarter-turn matrix, obtaining "
                 "the zero matrix; the matrix must be square and the polynomial "
                 "must declare exactly one variable over QQ.",
-                {
+                input={
                     "matrix": {
                         "domain": "QQ",
                         "entries": [
@@ -166,22 +134,20 @@ TOOLS: MathTools = (
             ),
         ),
     ),
-    canonical_form_operation(
-        "matrix.minimal_polynomial.compute",
-        "Compute the exact minimal polynomial of a square rational matrix",
-        "Compute the monic minimal polynomial over QQ by the Krylov/nullspace "
+    MathTool(
+        operation_id="matrix.minimal_polynomial.compute",
+        title="Compute the exact minimal polynomial of a square rational matrix",
+        description="Compute the monic minimal polynomial over QQ by the Krylov/nullspace "
         "method, returning the exact minimal and characteristic polynomials.",
-        SquareMatrixRequest,
-        MinimalPolynomialResult,
-        _run_minimal_polynomial,
-        "matrix",
-        "minimal-polynomial",
-        "exact",
+        request_type=SquareMatrixRequest,
+        result_type=MinimalPolynomialResult,
+        run=_run_minimal_polynomial,
+        tags=("matrix", "minimal-polynomial", "exact"),
         examples=(
-            example(
-                "nilpotent_block",
-                "Minimal polynomial of a 2x2 nilpotent Jordan block is t^2.",
-                {
+            OperationExample(
+                name="nilpotent_block",
+                description="Minimal polynomial of a 2x2 nilpotent Jordan block is t^2.",
+                input={
                     "matrix": {
                         "domain": "QQ",
                         "entries": [
@@ -193,23 +159,21 @@ TOOLS: MathTools = (
             ),
         ),
     ),
-    canonical_form_operation(
-        "matrix.rational_canonical_form.compute",
-        "Compute the exact rational (Frobenius) canonical form",
-        "Compute the invariant factors, characteristic polynomial, and minimal "
+    MathTool(
+        operation_id="matrix.rational_canonical_form.compute",
+        title="Compute the exact rational (Frobenius) canonical form",
+        description="Compute the invariant factors, characteristic polynomial, and minimal "
         "polynomial of a square rational matrix via Smith normal form of tI - A "
         "over QQ[t].",
-        SquareMatrixRequest,
-        RationalCanonicalFormResult,
-        _run_rational_canonical_form,
-        "matrix",
-        "rational-canonical-form",
-        "exact",
+        request_type=SquareMatrixRequest,
+        result_type=RationalCanonicalFormResult,
+        run=_run_rational_canonical_form,
+        tags=("matrix", "rational-canonical-form", "exact"),
         examples=(
-            example(
-                "diagonal_distinct",
-                "Rational canonical form of diag(2,3) has one invariant factor (t-2)(t-3).",
-                {
+            OperationExample(
+                name="diagonal_distinct",
+                description="Rational canonical form of diag(2,3) has one invariant factor (t-2)(t-3).",
+                input={
                     "matrix": {
                         "domain": "QQ",
                         "entries": [
@@ -221,22 +185,20 @@ TOOLS: MathTools = (
             ),
         ),
     ),
-    canonical_form_operation(
-        "matrix.primary_decomposition.compute",
-        "Decompose the minimal polynomial into irreducible-power components",
-        "Factor the minimal polynomial over QQ into its irreducible-power "
+    MathTool(
+        operation_id="matrix.primary_decomposition.compute",
+        title="Decompose the minimal polynomial into irreducible-power components",
+        description="Factor the minimal polynomial over QQ into its irreducible-power "
         "components and return each monic component polynomial.",
-        SquareMatrixRequest,
-        PrimaryDecompositionResult,
-        _run_primary_decomposition,
-        "matrix",
-        "primary-decomposition",
-        "exact",
+        request_type=SquareMatrixRequest,
+        result_type=PrimaryDecompositionResult,
+        run=_run_primary_decomposition,
+        tags=("matrix", "primary-decomposition", "exact"),
         examples=(
-            example(
-                "diagonal_distinct",
-                "Primary decomposition of diag(2,3) gives (t-2) and (t-3).",
-                {
+            OperationExample(
+                name="diagonal_distinct",
+                description="Primary decomposition of diag(2,3) gives (t-2) and (t-3).",
+                input={
                     "matrix": {
                         "domain": "QQ",
                         "entries": [

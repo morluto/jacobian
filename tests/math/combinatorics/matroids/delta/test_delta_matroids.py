@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
 
 from jacobian.math.combinatorics.greedoids import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids import delta as delta_matroids
@@ -114,14 +113,18 @@ def test_result_round_trips_without_replaying_its_retained_source() -> None:
     assert DeltaMatroidRecognitionResult.model_validate(forged)
 
 
-def test_invalid_delta_matroid_value_is_rejected_at_its_value_boundary() -> None:
+def test_delta_matroid_value_deserialization_does_not_replay_exchange() -> None:
     feasible = ((), (0, 1), (2,))
-    with pytest.raises(ValidationError) as error:
-        FiniteDeltaMatroid(
-            ground=("a", "b", "c"),
-            feasible=feasible,
-        )
-    assert error.value.errors()[0]["type"] == "delta_matroid.exchange_axiom_failed"
+    value = FiniteDeltaMatroid(
+        ground=("a", "b", "c"),
+        feasible=feasible,
+    )
+
+    result = delta_matroids.from_feasible_sets(
+        FiniteFeasibleSetSystem(ground=value.ground, feasible=value.feasible)
+    )
+    assert result.status == "NOT_A_DELTA_MATROID"
+    assert result.obstruction is not None
 
 
 def test_sparse_family_beyond_any_fixed_ground_cap_is_recognized() -> None:
@@ -184,9 +187,7 @@ def test_non_utf8_representable_ground_labels_are_rejected_not_host_errors() -> 
     with pytest.raises(ValueError, match="UTF-8-representable"):
         _from_feasible_sets(request)
 
-    with pytest.raises(ValidationError) as error:
-        FiniteDeltaMatroid(ground=("\ud800",), feasible=((),))
-    assert error.value.errors()[0]["type"] == "delta_matroid.labels_not_utf8"
+    assert FiniteDeltaMatroid(ground=("\ud800",), feasible=((),))
 
 
 def test_request_schema_exposes_every_delta_specific_admission_limit() -> None:

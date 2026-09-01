@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.combinatorics.posets.antichain_enumeration._models import (
+    AntichainEnumerationRequest,
+)
 from jacobian.math.combinatorics.posets.antichain_enumeration.operations import (
     enumerate_antichains,
 )
@@ -118,5 +122,16 @@ def test_v_poset() -> None:
 def test_exponential_candidate_family_is_rejected_before_enumeration() -> None:
     poset = _make_antichain_poset(24)
 
+    assert AntichainEnumerationRequest(
+        poset=poset, min_cardinality=0, max_cardinality=24
+    )
+
     with pytest.raises(OperationDomainValidationError, match="candidate bound"):
         enumerate_antichains(poset, 0, 24)
+
+
+def test_request_retains_intrinsic_cardinality_range_shape() -> None:
+    with pytest.raises(ValidationError, match="max_cardinality"):
+        AntichainEnumerationRequest(
+            poset=_make_chain(3), min_cardinality=2, max_cardinality=1
+        )

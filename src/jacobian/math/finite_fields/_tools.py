@@ -1,7 +1,6 @@
 """Finite-field catalog projections and immutable tool declarations."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.finite_fields import (
     CollisionResult,
     DirectionRankLedger,
@@ -211,10 +210,10 @@ def _build_tools() -> MathTools:
         description="Return every normalized direction in deterministic order.",
         tags=("finite-field", "projective"),
         examples=(
-            example(
-                "projective_line_over_gf_four",
-                "Enumerate the projective line on a two-coordinate GF(4) axis.",
-                {"presentation": _FIELD, "axis": _ROWS},
+            OperationExample(
+                name="projective_line_over_gf_four",
+                description="Enumerate the projective line on a two-coordinate GF(4) axis.",
+                input={"presentation": _FIELD, "axis": _ROWS},
             ),
         ),
     )
@@ -227,10 +226,10 @@ def _build_tools() -> MathTools:
         description="Construct the exact prime-field map B -> B^T b.",
         tags=("finite-field", "linear-map", "restriction-of-scalars"),
         examples=(
-            example(
-                "one_basis_vector",
-                "Restrict a one-vector GF(4) subspace along one projective direction.",
-                {"subspace": _SUBSPACE, "direction": _DIRECTIONS[0]},
+            OperationExample(
+                name="one_basis_vector",
+                description="Restrict a one-vector GF(4) subspace along one projective direction.",
+                input={"subspace": _SUBSPACE, "direction": _DIRECTIONS[0]},
             ),
         ),
     )
@@ -243,10 +242,10 @@ def _build_tools() -> MathTools:
         description="Return the exact rank bound to its direction and map.",
         tags=("finite-field", "linear-map", "rank", "exact"),
         examples=(
-            example(
-                "restricted_map_rank",
-                "Compute the rank of a restricted GF(4) map over GF(2).",
-                {"subspace": _SUBSPACE, "direction": _DIRECTIONS[0]},
+            OperationExample(
+                name="restricted_map_rank",
+                description="Compute the rank of a restricted GF(4) map over GF(2).",
+                input={"subspace": _SUBSPACE, "direction": _DIRECTIONS[0]},
             ),
         ),
     )
@@ -259,10 +258,10 @@ def _build_tools() -> MathTools:
         description="Return the exact domain-bound map table in canonical order.",
         tags=("finite-field", "polynomial", "map-table", "exact"),
         examples=(
-            example(
-                "cubic_map_over_gf_four",
-                "Evaluate x³ on every element of GF(4).",
-                {"polynomial_map": _POLYNOMIAL_MAP},
+            OperationExample(
+                name="cubic_map_over_gf_four",
+                description="Evaluate x³ on every element of GF(4).",
+                input={"polynomial_map": _POLYNOMIAL_MAP},
             ),
         ),
     )
@@ -275,10 +274,10 @@ def _build_tools() -> MathTools:
         description="Return every supplied direction with its restricted map and rank.",
         tags=("finite-field", "rank", "exact"),
         examples=(
-            example(
-                "complete_projective_line",
-                "Compute ranks for every direction on a GF(4) projective line.",
-                {"subspace": _SUBSPACE, "directions": _PROJECTIVE_LINE},
+            OperationExample(
+                name="complete_projective_line",
+                description="Compute ranks for every direction on a GF(4) projective line.",
+                input={"subspace": _SUBSPACE, "directions": _PROJECTIVE_LINE},
             ),
         ),
     )
@@ -291,10 +290,10 @@ def _build_tools() -> MathTools:
         description="Return exact orbit-size counts bound to the full ledger.",
         tags=("finite-field", "orbit", "exact"),
         examples=(
-            example(
-                "complete_rank_ledger",
-                "Aggregate a complete GF(4) direction-rank ledger.",
-                {"ledger": _LEDGER},
+            OperationExample(
+                name="complete_rank_ledger",
+                description="Aggregate a complete GF(4) direction-rank ledger.",
+                input={"ledger": _LEDGER},
             ),
         ),
     )
@@ -307,10 +306,10 @@ def _build_tools() -> MathTools:
         description="Return every nonempty fiber bound to the exact map table.",
         tags=("finite-field", "polynomial", "fibers", "exact"),
         examples=(
-            example(
-                "cubic_map_table",
-                "Partition the table of x^3 over GF(4) into nonempty fibers.",
-                {"table": _TABLE},
+            OperationExample(
+                name="cubic_map_table",
+                description="Partition the table of x^3 over GF(4) into nonempty fibers.",
+                input={"table": _TABLE},
             ),
         ),
     )
@@ -323,10 +322,10 @@ def _build_tools() -> MathTools:
         description="Return a collision or an exact injectivity result.",
         tags=("finite-field", "polynomial", "collision", "exact"),
         examples=(
-            example(
-                "cubic_map_table",
-                "Find a collision in the table of x^3 over GF(4).",
-                {"table": _TABLE},
+            OperationExample(
+                name="cubic_map_table",
+                description="Find a collision in the table of x^3 over GF(4).",
+                input={"table": _TABLE},
             ),
         ),
     )
@@ -339,10 +338,10 @@ def _build_tools() -> MathTools:
         description="Return an inverse table or an exact non-permutation result.",
         tags=("finite-field", "polynomial", "permutation", "exact"),
         examples=(
-            example(
-                "cubic_map_table",
-                "Determine whether x^3 permutes GF(4).",
-                {"table": _TABLE},
+            OperationExample(
+                name="cubic_map_table",
+                description="Determine whether x^3 permutes GF(4).",
+                input={"table": _TABLE},
             ),
         ),
     )
@@ -358,10 +357,10 @@ def _build_tools() -> MathTools:
         ),
         tags=("finite-field", "graph", "tournament", "quadratic-residue", "exact"),
         examples=(
-            example(
-                "paley_tournament_over_f3",
-                "Construct the directed three-cycle from the canonical F_3 presentation.",
-                {
+            OperationExample(
+                name="paley_tournament_over_f3",
+                description="Construct the directed three-cycle from the canonical F_3 presentation.",
+                input={
                     "presentation": {
                         "characteristic": 3,
                         "modulus_coefficients": [0, 1],
@@ -384,10 +383,10 @@ def _build_tools() -> MathTools:
         run=_compute_matrix_rank,
         tags=("finite-field", "matrix", "rank", "exact"),
         examples=(
-            example(
-                "rank_one_over_f2",
-                "Rank [[1,1],[1,1]] over F_2 is 1; the matrix must use one consistent field presentation.",
-                {
+            OperationExample(
+                name="rank_one_over_f2",
+                description="Rank [[1,1],[1,1]] over F_2 is 1; the matrix must use one consistent field presentation.",
+                input={
                     "matrix": {
                         "presentation": {
                             "characteristic": 2,
@@ -452,10 +451,10 @@ def _build_tools() -> MathTools:
         run=_homogeneous_fixed_subspace,
         tags=("finite-field", "linear-action", "fixed-subspace", "exact"),
         examples=(
-            example(
-                "quadratic_swap_fixed_subspace",
-                "Compute the quadratic fixed subspace for the coordinate-swap action over F_2.",
-                {"action": _FIXED_ACTION, "degree": 2},
+            OperationExample(
+                name="quadratic_swap_fixed_subspace",
+                description="Compute the quadratic fixed subspace for the coordinate-swap action over F_2.",
+                input={"action": _FIXED_ACTION, "degree": 2},
             ),
         ),
     )

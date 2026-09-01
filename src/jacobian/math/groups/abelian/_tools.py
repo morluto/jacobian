@@ -1,10 +1,7 @@
 """Finitely generated abelian group operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.groups.abelian._models import (
     ElementEqualRequest,
@@ -60,83 +57,55 @@ def _run_quotient(request: QuotientRequest) -> QuotientResult:
     return quotient_group(request.invariant_factors, request.subgroup_generators)
 
 
-def _op[RequestT: StrictModel, ResultT: StrictModel](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "abelian_group.presentation.normalize",
-        "Normalize a finitely generated abelian group presentation",
-        "Compute the Smith normal form of a finite cyclic-factor presentation, "
+    MathTool(
+        operation_id="abelian_group.presentation.normalize",
+        title="Normalize a finitely generated abelian group presentation",
+        description="Compute the Smith normal form of a finite cyclic-factor presentation, "
         "returning canonical invariant factors, group order, and rank. Input "
         "factors need not already be in invariant-factor order.",
-        PresentationNormalizeRequest,
-        PresentationNormalizeResult,
-        _run_presentation_normalize,
-        "abelian-group",
-        "smith-normal-form",
-        "exact",
+        request_type=PresentationNormalizeRequest,
+        result_type=PresentationNormalizeResult,
+        run=_run_presentation_normalize,
+        tags=("abelian-group", "smith-normal-form", "exact"),
         examples=(
-            example(
-                "z6_z4",
-                "Normalize Z/6 x Z/4.",
-                {"invariant_factors": [6, 4]},
+            OperationExample(
+                name="z6_z4",
+                description="Normalize Z/6 x Z/4.",
+                input={"invariant_factors": [6, 4]},
             ),
         ),
     ),
-    _op(
-        "abelian_group.element.reduce",
-        "Reduce an element to canonical form",
-        "Reduce group element coordinates modulo the invariant factors.",
-        ElementReduceRequest,
-        ElementReduceResult,
-        _run_element_reduce,
-        "abelian-group",
-        "element",
-        "exact",
+    MathTool(
+        operation_id="abelian_group.element.reduce",
+        title="Reduce an element to canonical form",
+        description="Reduce group element coordinates modulo the invariant factors.",
+        request_type=ElementReduceRequest,
+        result_type=ElementReduceResult,
+        run=_run_element_reduce,
+        tags=("abelian-group", "element", "exact"),
         examples=(
-            example(
-                "reduce_z6",
-                "Reduce 7 mod 6 in Z/6.",
-                {"invariant_factors": [6], "coordinates": [7]},
+            OperationExample(
+                name="reduce_z6",
+                description="Reduce 7 mod 6 in Z/6.",
+                input={"invariant_factors": [6], "coordinates": [7]},
             ),
         ),
     ),
-    _op(
-        "abelian_group.element.equal.decide",
-        "Decide equality of two group elements",
-        "Check whether two elements are equal by reducing both modulo the "
+    MathTool(
+        operation_id="abelian_group.element.equal.decide",
+        title="Decide equality of two group elements",
+        description="Check whether two elements are equal by reducing both modulo the "
         "invariant factors and comparing.",
-        ElementEqualRequest,
-        ElementEqualResult,
-        _run_element_equal,
-        "abelian-group",
-        "element",
-        "exact",
+        request_type=ElementEqualRequest,
+        result_type=ElementEqualResult,
+        run=_run_element_equal,
+        tags=("abelian-group", "element", "exact"),
         examples=(
-            example(
-                "equal_elements",
-                "Check 1 and 7 are equal in Z/6.",
-                {
+            OperationExample(
+                name="equal_elements",
+                description="Check 1 and 7 are equal in Z/6.",
+                input={
                     "invariant_factors": [6],
                     "coordinates_a": [1],
                     "coordinates_b": [7],
@@ -144,62 +113,56 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "abelian_group.element.order.compute",
-        "Compute the order of a group element",
-        "Compute the order of a group element as the lcm of component orders.",
-        ElementOrderRequest,
-        ElementOrderResult,
-        _run_element_order,
-        "abelian-group",
-        "element",
-        "exact",
+    MathTool(
+        operation_id="abelian_group.element.order.compute",
+        title="Compute the order of a group element",
+        description="Compute the order of a group element as the lcm of component orders.",
+        request_type=ElementOrderRequest,
+        result_type=ElementOrderResult,
+        run=_run_element_order,
+        tags=("abelian-group", "element", "exact"),
         examples=(
-            example(
-                "order_in_z6",
-                "Order of 2 in Z/6.",
-                {"invariant_factors": [6], "coordinates": [2]},
+            OperationExample(
+                name="order_in_z6",
+                description="Order of 2 in Z/6.",
+                input={"invariant_factors": [6], "coordinates": [2]},
             ),
         ),
     ),
-    _op(
-        "abelian_group.subgroup.generated.compute",
-        "Compute the index of a generated subgroup",
-        "Compute the index of the subgroup generated by the given elements "
+    MathTool(
+        operation_id="abelian_group.subgroup.generated.compute",
+        title="Compute the index of a generated subgroup",
+        description="Compute the index of the subgroup generated by the given elements "
         "via coset enumeration.",
-        SubgroupGeneratedRequest,
-        SubgroupGeneratedResult,
-        _run_subgroup_generated,
-        "abelian-group",
-        "subgroup",
-        "exact",
+        request_type=SubgroupGeneratedRequest,
+        result_type=SubgroupGeneratedResult,
+        run=_run_subgroup_generated,
+        tags=("abelian-group", "subgroup", "exact"),
         examples=(
-            example(
-                "subgroup_z6",
-                "Index of <2> in Z/6.",
-                {
+            OperationExample(
+                name="subgroup_z6",
+                description="Index of <2> in Z/6.",
+                input={
                     "invariant_factors": [6],
                     "generators": [[2]],
                 },
             ),
         ),
     ),
-    _op(
-        "abelian_group.quotient.compute",
-        "Compute the quotient group G/H",
-        "Compute the quotient group G/H via Smith normal form of the "
+    MathTool(
+        operation_id="abelian_group.quotient.compute",
+        title="Compute the quotient group G/H",
+        description="Compute the quotient group G/H via Smith normal form of the "
         "presentation matrix.",
-        QuotientRequest,
-        QuotientResult,
-        _run_quotient,
-        "abelian-group",
-        "quotient",
-        "exact",
+        request_type=QuotientRequest,
+        result_type=QuotientResult,
+        run=_run_quotient,
+        tags=("abelian-group", "quotient", "exact"),
         examples=(
-            example(
-                "quotient_z6_by_2z",
-                "Quotient Z/6 / <2>.",
-                {
+            OperationExample(
+                name="quotient_z6_by_2z",
+                description="Quotient Z/6 / <2>.",
+                input={
                     "invariant_factors": [6],
                     "subgroup_generators": [[2]],
                 },

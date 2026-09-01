@@ -1,10 +1,7 @@
 """Commutative algebra operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.polynomials.ideals._models import (
     EliminationIdealRequest,
@@ -148,50 +145,30 @@ def _ideal(
     }
 
 
-def _op[RequestT: StrictModel, ResultT: StrictModel](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "polynomial.monomial_ideal.graded_betti_table.compute",
-        "Compute a monomial ideal's graded Betti table",
-        "Compute every nonzero multigraded and standard-graded Betti number "
+    MathTool(
+        operation_id="polynomial.monomial_ideal.graded_betti_table.compute",
+        title="Compute a monomial ideal's graded Betti table",
+        description="Compute every nonzero multigraded and standard-graded Betti number "
         "of a bounded minimally generated monomial ideal over QQ. The exact "
         "result includes the complete lcm-lattice crosscut homology profile, "
         "Castelnuovo--Mumford regularity, and whether the ideal has a linear "
         "resolution.",
-        MonomialIdealBettiRequest,
-        MonomialIdealBettiResult,
-        _run_monomial_betti,
-        "commutative-algebra",
-        "monomial-ideal",
-        "graded-betti-numbers",
-        "free-resolution",
-        "exact",
+        request_type=MonomialIdealBettiRequest,
+        result_type=MonomialIdealBettiResult,
+        run=_run_monomial_betti,
+        tags=(
+            "commutative-algebra",
+            "monomial-ideal",
+            "graded-betti-numbers",
+            "free-resolution",
+            "exact",
+        ),
         examples=(
-            example(
-                "two_quadrics",
-                "Compute the Betti table of <x^2,y^2> in QQ[x,y].",
-                {
+            OperationExample(
+                name="two_quadrics",
+                description="Compute the Betti table of <x^2,y^2> in QQ[x,y].",
+                input={
                     "ideal": _ideal(
                         ("x", "y"),
                         ((1, 1, (2, 0)),),
@@ -201,25 +178,22 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "polynomial.ideal.containment.decide",
-        "Decide containment of rational polynomial ideals",
-        "Decide whether one bounded ideal is contained in another ideal in "
+    MathTool(
+        operation_id="polynomial.ideal.containment.decide",
+        title="Decide containment of rational polynomial ideals",
+        description="Decide whether one bounded ideal is contained in another ideal in "
         "the same ordered QQ polynomial ring. A positive result retains the "
         "exact normal form of every source generator; a negative result ends "
         "with the first nonzero normal-form obstruction.",
-        IdealContainmentRequest,
-        IdealContainmentResult,
-        _run_containment,
-        "commutative-algebra",
-        "ideal-containment",
-        "normal-form",
-        "exact",
+        request_type=IdealContainmentRequest,
+        result_type=IdealContainmentResult,
+        run=_run_containment,
+        tags=("commutative-algebra", "ideal-containment", "normal-form", "exact"),
         examples=(
-            example(
-                "contained_redundant_generators",
-                "Decide <x^2,xy> subseteq <x> in Q[x,y].",
-                {
+            OperationExample(
+                name="contained_redundant_generators",
+                description="Decide <x^2,xy> subseteq <x> in Q[x,y].",
+                input={
                     "source": _ideal(
                         ("x", "y"),
                         ((1, 1, (2, 0)),),
@@ -230,24 +204,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "polynomial.ideal.equality.decide",
-        "Decide equality of rational polynomial ideals",
-        "Decide equality of two bounded ideals in one ordered QQ polynomial "
+    MathTool(
+        operation_id="polynomial.ideal.equality.decide",
+        title="Decide equality of rational polynomial ideals",
+        description="Decide equality of two bounded ideals in one ordered QQ polynomial "
         "ring by mutual containment. Both source-ordered normal-form ledgers "
         "are computed under one request deadline.",
-        IdealEqualityRequest,
-        IdealEqualityResult,
-        _run_equality,
-        "commutative-algebra",
-        "ideal-equality",
-        "mutual-containment",
-        "exact",
+        request_type=IdealEqualityRequest,
+        result_type=IdealEqualityResult,
+        run=_run_equality,
+        tags=("commutative-algebra", "ideal-equality", "mutual-containment", "exact"),
         examples=(
-            example(
-                "equal_presentations",
-                "Compare <x,y> with the reordered, rescaled presentation <2y,3x>.",
-                {
+            OperationExample(
+                name="equal_presentations",
+                description="Compare <x,y> with the reordered, rescaled presentation <2y,3x>.",
+                input={
                     "left": _ideal(
                         ("x", "y"),
                         ((1, 1, (1, 0)),),
@@ -262,27 +233,29 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "polynomial.ideal.minimal_primes.compute",
-        "Compute minimal primes of a rational polynomial ideal",
-        "Compute the complete minimal-prime family of a bounded ideal in "
+    MathTool(
+        operation_id="polynomial.ideal.minimal_primes.compute",
+        title="Compute minimal primes of a rational polynomial ideal",
+        description="Compute the complete minimal-prime family of a bounded ideal in "
         "QQ[x_1, ..., x_n] using Singular's minAssGTZ kernel. Components "
         "are prime ideals over QQ, not after extension to an algebraic closure; "
         "the result is canonically ordered and verified against the retained "
         "source by independent radical-intersection, minimality, and "
         "characteristic-set checks.",
-        IdealMinimalPrimesRequest,
-        IdealMinimalPrimesResult,
-        _run_minimal_primes,
-        "commutative-algebra",
-        "minimal-primes",
-        "irreducible-components",
-        "exact",
+        request_type=IdealMinimalPrimesRequest,
+        result_type=IdealMinimalPrimesResult,
+        run=_run_minimal_primes,
+        tags=(
+            "commutative-algebra",
+            "minimal-primes",
+            "irreducible-components",
+            "exact",
+        ),
         examples=(
-            example(
-                "coordinate_axes",
-                "Compute the two QQ-minimal primes of <x*y> in Q[x,y].",
-                {
+            OperationExample(
+                name="coordinate_axes",
+                description="Compute the two QQ-minimal primes of <x*y> in Q[x,y].",
+                input={
                     "ideal": _ideal(
                         ("x", "y"),
                         ((1, 1, (1, 1)),),
@@ -291,23 +264,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "polynomial.ideal.radical.compute",
-        "Compute the radical of an ideal",
-        "Compute the exact radical sqrt(I) of a bounded polynomial ideal over "
+    MathTool(
+        operation_id="polynomial.ideal.radical.compute",
+        title="Compute the radical of an ideal",
+        description="Compute the exact radical sqrt(I) of a bounded polynomial ideal over "
         "QQ using the private Singular backend.",
-        IdealRadicalRequest,
-        IdealRadicalResult,
-        _run_radical,
-        "commutative-algebra",
-        "radical",
-        "exact",
+        request_type=IdealRadicalRequest,
+        result_type=IdealRadicalResult,
+        run=_run_radical,
+        tags=("commutative-algebra", "radical", "exact"),
         examples=(
-            example(
-                "ideal_xy",
-                "Compute the radical of <x^2, xy> in Q[x,y]; every generator "
+            OperationExample(
+                name="ideal_xy",
+                description="Compute the radical of <x^2, xy> in Q[x,y]; every generator "
                 "must use the same canonical ordered QQ polynomial ring.",
-                {
+                input={
                     "ideal": _ideal(
                         ("x", "y"),
                         ((1, 1, (2, 0)),),
@@ -317,47 +288,43 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "polynomial.ideal.radical_membership.decide",
-        "Check membership in the radical of an ideal",
-        "Check whether a polynomial f lies in the radical sqrt(I) of the "
+    MathTool(
+        operation_id="polynomial.ideal.radical_membership.decide",
+        title="Check membership in the radical of an ideal",
+        description="Check whether a polynomial f lies in the radical sqrt(I) of the "
         "ideal I = <generators> in Q[variables], using the Rabinowitsch "
         "trick.",
-        IdealRadicalMembershipRequest,
-        IdealRadicalMembershipResult,
-        _run_radical_membership,
-        "commutative-algebra",
-        "radical-membership",
-        "exact",
+        request_type=IdealRadicalMembershipRequest,
+        result_type=IdealRadicalMembershipResult,
+        run=_run_radical_membership,
+        tags=("commutative-algebra", "radical-membership", "exact"),
         examples=(
-            example(
-                "membership_xy",
-                "Check if x is in sqrt(<x^2>) in Q[x]; the ideal and "
+            OperationExample(
+                name="membership_xy",
+                description="Check if x is in sqrt(<x^2>) in Q[x]; the ideal and "
                 "polynomial must use the same canonical ordered QQ ring.",
-                {
+                input={
                     "ideal": _ideal(("x",), ((1, 1, (2,)),)),
                     "polynomial": _polynomial(("x",), ((1, 1, (1,)),)),
                 },
             ),
         ),
     ),
-    _op(
-        "polynomial.ideal.quotient.compute",
-        "Compute the ideal quotient (I : J)",
-        "Compute the exact colon ideal (I : J) = {f : f*J subseteq I} over QQ "
+    MathTool(
+        operation_id="polynomial.ideal.quotient.compute",
+        title="Compute the ideal quotient (I : J)",
+        description="Compute the exact colon ideal (I : J) = {f : f*J subseteq I} over QQ "
         "using the private Singular backend.",
-        IdealQuotientRequest,
-        IdealQuotientResult,
-        _run_quotient,
-        "commutative-algebra",
-        "ideal-quotient",
-        "exact",
+        request_type=IdealQuotientRequest,
+        result_type=IdealQuotientResult,
+        run=_run_quotient,
+        tags=("commutative-algebra", "ideal-quotient", "exact"),
         examples=(
-            example(
-                "quotient_xy",
-                "Compute (<x^2, xy> : <x>) in Q[x,y]; both ideals must use "
+            OperationExample(
+                name="quotient_xy",
+                description="Compute (<x^2, xy> : <x>) in Q[x,y]; both ideals must use "
                 "the same canonical ordered QQ polynomial ring.",
-                {
+                input={
                     "dividend": _ideal(
                         ("x", "y"),
                         ((1, 1, (2, 0)),),
@@ -371,26 +338,24 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "polynomial.ideal.saturation.compute",
-        "Compute ideal saturation I : <d>^infinity",
-        "Compute the exact saturation I : <d>^infinity of a bounded "
+    MathTool(
+        operation_id="polynomial.ideal.saturation.compute",
+        title="Compute ideal saturation I : <d>^infinity",
+        description="Compute the exact saturation I : <d>^infinity of a bounded "
         "polynomial ideal I by a single nonzero polynomial d over QQ using "
         "the private Singular backend. The result is the saturated ideal "
         "with all components supported on the zero locus of d removed.",
-        IdealSaturationRequest,
-        IdealSaturationResult,
-        _run_saturation,
-        "commutative-algebra",
-        "saturation",
-        "exact",
+        request_type=IdealSaturationRequest,
+        result_type=IdealSaturationResult,
+        run=_run_saturation,
+        tags=("commutative-algebra", "saturation", "exact"),
         examples=(
-            example(
-                "saturation_xy",
-                "Compute <xy> : <x>^infinity in Q[x,y]; this equals <y>. The "
+            OperationExample(
+                name="saturation_xy",
+                description="Compute <xy> : <x>^infinity in Q[x,y]; this equals <y>. The "
                 "denominator is one nonzero polynomial in the same canonical "
                 "ordered QQ polynomial ring as the ideal.",
-                {
+                input={
                     "ideal": _ideal(
                         ("x", "y"),
                         ((1, 1, (1, 1)),),
@@ -403,23 +368,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "polynomial.ideal.groebner_basis.compute",
-        "Compute a reduced Groebner basis over QQ",
-        "Compute a reduced Groewski basis for a bounded ideal in QQ[x_1, "
+    MathTool(
+        operation_id="polynomial.ideal.groebner_basis.compute",
+        title="Compute a reduced Groebner basis over QQ",
+        description="Compute a reduced Groewski basis for a bounded ideal in QQ[x_1, "
         "x_2, ..., x_n] using SymPy's exact groebner function. Returns the "
         "basis as a RationalPolynomialIdeal with the declared monomial order.",
-        GroebnerBasisRequest,
-        GroebnerBasisResult,
-        _run_groebner,
-        "commutative-algebra",
-        "groebner-basis",
-        "exact",
+        request_type=GroebnerBasisRequest,
+        result_type=GroebnerBasisResult,
+        run=_run_groebner,
+        tags=("commutative-algebra", "groebner-basis", "exact"),
         examples=(
-            example(
-                "groebner_basis_xy",
-                "Compute the Groebner basis of <x^2 - y, x*y - 1> in Q[x,y].",
-                {
+            OperationExample(
+                name="groebner_basis_xy",
+                description="Compute the Groebner basis of <x^2 - y, x*y - 1> in Q[x,y].",
+                input={
                     "ideal": _ideal(
                         ("x", "y"),
                         ((1, 1, (2, 0)), (-1, 1, (0, 1))),
@@ -430,26 +393,23 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "polynomial.ideal.normal_form.compute",
-        "Reduce a polynomial modulo an ideal",
-        "Reduce one bounded polynomial modulo a bounded ideal in QQ[x_1, "
+    MathTool(
+        operation_id="polynomial.ideal.normal_form.compute",
+        title="Reduce a polynomial modulo an ideal",
+        description="Reduce one bounded polynomial modulo a bounded ideal in QQ[x_1, "
         "x_2, ..., x_n] using a Groebner basis remainder. Returns the exact "
         "remainder and whether the polynomial is in the ideal; a computation "
         "that exceeds the enforced wall-time bound returns a typed TIMEOUT "
         "outcome instead of a remainder.",
-        IdealNormalFormRequest,
-        IdealNormalFormResult,
-        _run_normal_form,
-        "commutative-algebra",
-        "normal-form",
-        "ideal-membership",
-        "exact",
+        request_type=IdealNormalFormRequest,
+        result_type=IdealNormalFormResult,
+        run=_run_normal_form,
+        tags=("commutative-algebra", "normal-form", "ideal-membership", "exact"),
         examples=(
-            example(
-                "normal_form_xy",
-                "Reduce x^2 modulo <x^2 - y^2> in Q[x,y]; the remainder is y^2, so x^2 is not in the ideal.",
-                {
+            OperationExample(
+                name="normal_form_xy",
+                description="Reduce x^2 modulo <x^2 - y^2> in Q[x,y]; the remainder is y^2, so x^2 is not in the ideal.",
+                input={
                     "ideal": _ideal(
                         ("x", "y"),
                         ((1, 1, (2, 0)), (-1, 1, (0, 2))),
@@ -462,25 +422,23 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "polynomial.ideal.elimination.compute",
-        "Compute an elimination ideal",
-        "Compute the elimination ideal I ∩ QQ[remaining variables] by "
+    MathTool(
+        operation_id="polynomial.ideal.elimination.compute",
+        title="Compute an elimination ideal",
+        description="Compute the elimination ideal I ∩ QQ[remaining variables] by "
         "computing a lex Groebner basis and extracting the generators that "
         "involve only the remaining variables. A computation that exceeds the "
         "enforced wall-time budget returns a typed TIMEOUT outcome instead of "
         "an ideal.",
-        EliminationIdealRequest,
-        EliminationIdealResult,
-        _run_elimination,
-        "commutative-algebra",
-        "elimination-ideal",
-        "exact",
+        request_type=EliminationIdealRequest,
+        result_type=EliminationIdealResult,
+        run=_run_elimination,
+        tags=("commutative-algebra", "elimination-ideal", "exact"),
         examples=(
-            example(
-                "elimination_xy",
-                "Compute <x^2 - y^2, x + y> ∩ Q[y] in Q[x,y]; eliminates x.",
-                {
+            OperationExample(
+                name="elimination_xy",
+                description="Compute <x^2 - y^2, x + y> ∩ Q[y] in Q[x,y]; eliminates x.",
+                input={
                     "ideal": _ideal(
                         ("x", "y"),
                         ((1, 1, (2, 0)), (-1, 1, (0, 2))),

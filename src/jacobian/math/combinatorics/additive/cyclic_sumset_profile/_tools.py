@@ -1,7 +1,6 @@
 """Typed declarations for the cyclic sumset representation profile operation."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.combinatorics.additive.cyclic_sumset_profile._models import (
     CyclicSumsetRequest,
     CyclicSumsetResult,
@@ -29,10 +28,10 @@ TOOLS: MathTools = (
         run=_compute,
         tags=("additive", "combinatorics", "cyclic", "exact"),
         examples=(
-            example(
-                "z5",
-                "Cyclic sumset of {0,1} + {0,2} in Z/5Z.",
-                {"modulus": 5, "left": [0, 1], "right": [0, 2]},
+            OperationExample(
+                name="z5",
+                description="Cyclic sumset of {0,1} + {0,2} in Z/5Z.",
+                input={"modulus": 5, "left": [0, 1], "right": [0, 2]},
             ),
         ),
     ),

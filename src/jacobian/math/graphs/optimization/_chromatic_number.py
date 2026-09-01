@@ -9,8 +9,7 @@ import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.optimization._chromatic_kernel import (
     build_simple_graph,
     solve_chromatic_number,
@@ -176,10 +175,10 @@ CHROMATIC_NUMBER_OPERATION = MathTool(
         "z3",
     ),
     examples=(
-        example(
-            "triangle_chromatic_number",
-            "Compute a triangle's chromatic number (3); vertices must be unique and edges must not self-loop.",
-            {
+        OperationExample(
+            name="triangle_chromatic_number",
+            description="Compute a triangle's chromatic number (3); vertices must be unique and edges must not self-loop.",
+            input={
                 "graph": {
                     "vertices": ["a", "b", "c"],
                     "edges": [["a", "b"], ["b", "c"], ["a", "c"]],

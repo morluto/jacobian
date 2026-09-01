@@ -10,7 +10,11 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian.canonical import canonicalize_json, format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError, OperationExample
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.number_theory.arithmetic import primitive_integer_vector
 from jacobian.math.polynomials._conversions import (
     rational_from_sympy,
@@ -18,7 +22,6 @@ from jacobian.math.polynomials._conversions import (
     rational_polynomial_to_sympy,
     symbols_for_variables,
 )
-from jacobian.math.polynomials._support import polynomial_operation
 from jacobian.math.polynomials._syzygy_models import (
     MAX_LINEAR_FACTOR_COEFFICIENT_DIGITS,
     MAX_SOURCE_COEFFICIENT_DIGITS,
@@ -377,10 +380,10 @@ def _compute_graded_jacobian_syzygy(
     )
 
 
-GRADED_JACOBIAN_SYZYGY_OPERATION = polynomial_operation(
-    "polynomial.jacobian_syzygy.minimum_degree.compute",
-    "Compute the first graded Jacobian syzygy degree",
-    (
+GRADED_JACOBIAN_SYZYGY_OPERATION = MathTool(
+    operation_id="polynomial.jacobian_syzygy.minimum_degree.compute",
+    title="Compute the first graded Jacobian syzygy degree",
+    description=(
         "For bounded homogeneous h in QQ[x_1,...,x_n], supplied sparsely or, "
         "for n=3, as labelled linear forms, construct every graded map "
         "(QQ[x_1,...,x_n]_q)^n -> QQ[x_1,...,x_n]_(q+deg(h)-1) from q=0 and "
@@ -388,17 +391,19 @@ GRADED_JACOBIAN_SYZYGY_OPERATION = polynomial_operation(
         "operation returns rank certificates only; use the coefficient ledger "
         "for sparse map entries."
     ),
-    GradedJacobianSyzygyRequest,
-    GradedJacobianSyzygyResult,
-    compute_graded_jacobian_syzygy,
-    "polynomial",
-    "jacobian",
-    "syzygy",
-    "homogeneous",
-    "graded",
-    "rank",
-    "kernel",
-    "exact",
+    request_type=GradedJacobianSyzygyRequest,
+    result_type=GradedJacobianSyzygyResult,
+    run=compute_graded_jacobian_syzygy,
+    tags=(
+        "polynomial",
+        "jacobian",
+        "syzygy",
+        "homogeneous",
+        "graded",
+        "rank",
+        "kernel",
+        "exact",
+    ),
     examples=(
         OperationExample(
             name="sparse-homogeneous-polynomial",
@@ -469,21 +474,17 @@ GRADED_JACOBIAN_SYZYGY_OPERATION = polynomial_operation(
     ),
 )
 
-JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_OPERATION = polynomial_operation(
-    "polynomial.jacobian_syzygy.coefficients.compute",
-    "Compute graded Jacobian syzygy coefficient ledger",
-    (
+JACOBIAN_SYZYGY_COEFFICIENT_LEDGER_OPERATION = MathTool(
+    operation_id="polynomial.jacobian_syzygy.coefficients.compute",
+    title="Compute graded Jacobian syzygy coefficient ledger",
+    description=(
         "Compute every sparse entry in the bounded graded Jacobian coefficient "
         "maps, together with the syzygy summary and rank certificates."
     ),
-    GradedJacobianSyzygyCoefficientRequest,
-    GradedJacobianSyzygyResult,
-    compute_graded_jacobian_syzygy_coefficients,
-    "polynomial",
-    "jacobian",
-    "syzygy",
-    "coefficient-ledger",
-    "evidence",
+    request_type=GradedJacobianSyzygyCoefficientRequest,
+    result_type=GradedJacobianSyzygyResult,
+    run=compute_graded_jacobian_syzygy_coefficients,
+    tags=("polynomial", "jacobian", "syzygy", "coefficient-ledger", "evidence"),
     examples=(
         OperationExample(
             name="sparse-homogeneous-polynomial",

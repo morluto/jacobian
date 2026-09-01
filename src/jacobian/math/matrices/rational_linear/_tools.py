@@ -1,9 +1,5 @@
 """Exact rational-linear operation declarations."""
 
-from collections.abc import Callable
-
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.matrices.rational_linear._models import (
     LinearRationalInconsistencyFindRequest,
@@ -47,48 +43,20 @@ def compute_rational_inconsistency(
     )
 
 
-def _op[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: MathTools = (
-    _op(
-        "linear.rational_solution.compute",
-        "Compute an exact rational solution",
-        "Return an exact rational solution or an inconsistent outcome for one canonical coordinate-sparse system, subject to nonzero, scalar-work, and result-height bounds.",
-        LinearRationalSolutionFindRequest,
-        LinearRationalSolutionResult,
-        compute_rational_solution,
-        "linear-algebra",
-        "rational",
-        "solution",
-        "exact",
+    MathTool(
+        operation_id="linear.rational_solution.compute",
+        title="Compute an exact rational solution",
+        description="Return an exact rational solution or an inconsistent outcome for one canonical coordinate-sparse system, subject to nonzero, scalar-work, and result-height bounds.",
+        request_type=LinearRationalSolutionFindRequest,
+        result_type=LinearRationalSolutionResult,
+        run=compute_rational_solution,
+        tags=("linear-algebra", "rational", "solution", "exact"),
         examples=(
-            example(
-                "identity_solution",
-                "Solve a one-variable identity system.",
-                {
+            OperationExample(
+                name="identity_solution",
+                description="Solve a one-variable identity system.",
+                input={
                     "system": {
                         "variables": ["x"],
                         "coefficients": {
@@ -108,22 +76,19 @@ TOOLS: MathTools = (
             ),
         ),
     ),
-    _op(
-        "linear.rational_inconsistency.compute",
-        "Compute an exact rational inconsistency witness",
-        "Return an exact left inconsistency witness or a consistent outcome for one canonical coordinate-sparse system, subject to nonzero, scalar-work, and result-height bounds.",
-        LinearRationalInconsistencyFindRequest,
-        LinearRationalInconsistencyResult,
-        compute_rational_inconsistency,
-        "linear-algebra",
-        "rational",
-        "inconsistency",
-        "exact",
+    MathTool(
+        operation_id="linear.rational_inconsistency.compute",
+        title="Compute an exact rational inconsistency witness",
+        description="Return an exact left inconsistency witness or a consistent outcome for one canonical coordinate-sparse system, subject to nonzero, scalar-work, and result-height bounds.",
+        request_type=LinearRationalInconsistencyFindRequest,
+        result_type=LinearRationalInconsistencyResult,
+        run=compute_rational_inconsistency,
+        tags=("linear-algebra", "rational", "inconsistency", "exact"),
         examples=(
-            example(
-                "contradictory_one_variable_system",
-                "Find a witness for x=0 together with x=1.",
-                {
+            OperationExample(
+                name="contradictory_one_variable_system",
+                description="Find a witness for x=0 together with x=1.",
+                input={
                     "system": {
                         "variables": ["x"],
                         "coefficients": {

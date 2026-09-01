@@ -1,7 +1,6 @@
 """Typed declarations for the r-full enumeration operation."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.number_theory.r_full_enumeration._models import (
     RFullEnumerationRequest,
     RFullEnumerationResult,
@@ -30,10 +29,10 @@ TOOLS: MathTools = (
         run=_enumerate,
         tags=("number_theory", "r_full", "powerful", "exact"),
         examples=(
-            example(
-                "powerful_100",
-                "Powerful (2-full) integers up to 100.",
-                {"bound": 100, "minimum_exponent": 2},
+            OperationExample(
+                name="powerful_100",
+                description="Powerful (2-full) integers up to 100.",
+                input={"bound": 100, "minimum_exponent": 2},
             ),
         ),
     ),

@@ -1,8 +1,12 @@
 """Typed declarations for the periodic congruence interval count operation."""
 
 from jacobian.canonical import parse_canonical_integer
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    MathTools,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.number_theory.periodic_interval_count._models import (
     PeriodicIntervalCountRequest,
     PeriodicIntervalCountResult,
@@ -40,10 +44,10 @@ TOOLS: MathTools = (
         run=_compute,
         tags=("number-theory", "congruence", "exact"),
         examples=(
-            example(
-                "simple",
-                "Count multiples of 3 in [1, 20].",
-                {
+            OperationExample(
+                name="simple",
+                description="Count multiples of 3 in [1, 20].",
+                input={
                     "source": {
                         "subsets": [{"modulus": "3", "residues": ["0"]}],
                         "complement": False,

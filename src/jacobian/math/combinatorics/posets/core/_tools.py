@@ -2,8 +2,7 @@
 
 from typing import Any
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.combinatorics.posets.core._closure_tools import CLOSURE_OPERATIONS
 from jacobian.math.combinatorics.posets.core._models import (
     AntichainProfileRequest,
@@ -144,15 +143,15 @@ FINITE_POSET_OPERATIONS: MathTools = (
             "exact",
         ),
         examples=(
-            example(
-                "diamond",
-                "Materialize the four-element diamond from its cover relation.",
-                _DIAMOND,
+            OperationExample(
+                name="diamond",
+                description="Materialize the four-element diamond from its cover relation.",
+                input=_DIAMOND,
             ),
-            example(
-                "three_element_chain",
-                "Materialize the chain 0<1<2; the relation must be antisymmetric and acyclic.",
-                {
+            OperationExample(
+                name="three_element_chain",
+                description="Materialize the chain 0<1<2; the relation must be antisymmetric and acyclic.",
+                input={
                     "elements": ["0", "1", "2"],
                     "relation": [
                         {"lower": "0", "upper": "1"},
@@ -186,10 +185,10 @@ FINITE_POSET_OPERATIONS: MathTools = (
             "exact",
         ),
         examples=(
-            example(
-                "materialized_diamond",
-                "Compute the width of the canonical four-element diamond.",
-                {"poset": _MATERIALIZED_DIAMOND},
+            OperationExample(
+                name="materialized_diamond",
+                description="Compute the width of the canonical four-element diamond.",
+                input={"poset": _MATERIALIZED_DIAMOND},
             ),
         ),
     ),
@@ -208,15 +207,15 @@ FINITE_POSET_OPERATIONS: MathTools = (
             "dynamic-programming",
         ),
         examples=(
-            example(
-                "materialized_diamond",
-                "Count the linear extensions of the canonical diamond.",
-                {"poset": _MATERIALIZED_DIAMOND},
+            OperationExample(
+                name="materialized_diamond",
+                description="Count the linear extensions of the canonical diamond.",
+                input={"poset": _MATERIALIZED_DIAMOND},
             ),
-            example(
-                "diamond_complete_mobius_scope",
-                "Count the diamond's linear extensions; the poset must have at most 14 elements.",
-                {"poset": _MATERIALIZED_DIAMOND},
+            OperationExample(
+                name="diamond_complete_mobius_scope",
+                description="Count the diamond's linear extensions; the poset must have at most 14 elements.",
+                input={"poset": _MATERIALIZED_DIAMOND},
             ),
         ),
     ),
@@ -238,15 +237,15 @@ FINITE_POSET_OPERATIONS: MathTools = (
             "exact",
         ),
         examples=(
-            example(
-                "materialized_diamond",
-                "Compute every Möbius value of the canonical diamond.",
-                {"poset": _MATERIALIZED_DIAMOND},
+            OperationExample(
+                name="materialized_diamond",
+                description="Compute every Möbius value of the canonical diamond.",
+                input={"poset": _MATERIALIZED_DIAMOND},
             ),
-            example(
-                "diamond_selected_interval",
-                "Compute the selected Möbius interval [0,1]; selected endpoints must satisfy lower <= upper in the poset.",
-                {
+            OperationExample(
+                name="diamond_selected_interval",
+                description="Compute the selected Möbius interval [0,1]; selected endpoints must satisfy lower <= upper in the poset.",
+                input={
                     "poset": _MATERIALIZED_DIAMOND,
                     "scope": "SELECTED_INTERVALS",
                     "intervals": [
@@ -274,10 +273,10 @@ FINITE_POSET_OPERATIONS: MathTools = (
             "exact",
         ),
         examples=(
-            example(
-                "diamond_lower_closure",
-                "Compute the lower closure of {1} in the diamond poset.",
-                {
+            OperationExample(
+                name="diamond_lower_closure",
+                description="Compute the lower closure of {1} in the diamond poset.",
+                input={
                     "poset": _MATERIALIZED_DIAMOND,
                     "subset": {"elements": ["1"]},
                     "closure_type": "LOWER",
@@ -302,10 +301,10 @@ FINITE_POSET_OPERATIONS: MathTools = (
             "exact",
         ),
         examples=(
-            example(
-                "diamond_zeta",
-                "Compute the zeta transform of a constant function on the diamond.",
-                {
+            OperationExample(
+                name="diamond_zeta",
+                description="Compute the zeta transform of a constant function on the diamond.",
+                input={
                     "poset": _MATERIALIZED_DIAMOND,
                     "function_values": [
                         {"lower": "0", "upper": "0", "value": 1},
@@ -334,10 +333,10 @@ FINITE_POSET_OPERATIONS: MathTools = (
             "exact",
         ),
         examples=(
-            example(
-                "diamond_convolution",
-                "Convolve the zeta function with itself on the diamond.",
-                {
+            OperationExample(
+                name="diamond_convolution",
+                description="Convolve the zeta function with itself on the diamond.",
+                input={
                     "poset": _MATERIALIZED_DIAMOND,
                     "first": [
                         {"lower": "0", "upper": "0", "value": 1},
@@ -383,10 +382,10 @@ FINITE_POSET_OPERATIONS: MathTools = (
             "exact",
         ),
         examples=(
-            example(
-                "materialized_diamond",
-                "Compute the antichain profile of the canonical diamond.",
-                {"poset": _MATERIALIZED_DIAMOND},
+            OperationExample(
+                name="materialized_diamond",
+                description="Compute the antichain profile of the canonical diamond.",
+                input={"poset": _MATERIALIZED_DIAMOND},
             ),
         ),
     ),

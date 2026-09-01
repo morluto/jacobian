@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unicodedata
 from collections.abc import Iterable, Mapping
-from typing import Any, Literal, Self, cast
+from typing import Annotated, Any, Literal, Self, cast
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -522,7 +522,10 @@ class EmbeddedRealNumberFieldMatrixAction(StrictModel):
         return self
 
 
-MatrixAction = RationalMatrixAction | EmbeddedRealNumberFieldMatrixAction
+MatrixAction = Annotated[
+    RationalMatrixAction | EmbeddedRealNumberFieldMatrixAction,
+    Field(discriminator="action_type"),
+]
 
 
 class IntegralBilinearForm(StrictModel):

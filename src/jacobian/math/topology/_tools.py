@@ -1,7 +1,6 @@
 """Finite simplicial topology domain."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.topology._homology import (
     IntegralSimplicialHomologyRequest,
     IntegralSimplicialHomologyResult,
@@ -137,10 +136,10 @@ TOPOLOGY_OPERATIONS: MathTools = (
             "exact",
         ),
         examples=(
-            example(
-                "triangle_boundary",
-                "Canonicalize the three-edge simplicial model of a circle.",
-                {
+            OperationExample(
+                name="triangle_boundary",
+                description="Canonicalize the three-edge simplicial model of a circle.",
+                input={
                     "vertices": ["a", "b", "c"],
                     "facets": [["a", "b"], ["b", "c"], ["a", "c"]],
                 },
@@ -165,10 +164,10 @@ TOPOLOGY_OPERATIONS: MathTools = (
             "exact",
         ),
         examples=(
-            example(
-                "circle_integer_chain_complex",
-                "Construct the oriented integer boundary matrices of a circle.",
-                {
+            OperationExample(
+                name="circle_integer_chain_complex",
+                description="Construct the oriented integer boundary matrices of a circle.",
+                input={
                     "complex": {
                         "vertices": ["a", "b", "c"],
                         "maximal_simplices": [["a", "b"], ["a", "c"], ["b", "c"]],
@@ -209,10 +208,10 @@ TOPOLOGY_OPERATIONS: MathTools = (
             "exact",
         ),
         examples=(
-            example(
-                "circle_homology_mod_two",
-                "Compute H_0 and H_1 over F_2 for a triangle boundary.",
-                {
+            OperationExample(
+                name="circle_homology_mod_two",
+                description="Compute H_0 and H_1 over F_2 for a triangle boundary.",
+                input={
                     "complex": {
                         "vertices": ["a", "b", "c"],
                         "maximal_simplices": [["a", "b"], ["a", "c"], ["b", "c"]],
@@ -259,10 +258,10 @@ TOPOLOGY_OPERATIONS: MathTools = (
             "exact",
         ),
         examples=(
-            example(
-                "integral_circle_homology",
-                "Compute H_0 and H_1 over the integers for a triangle boundary.",
-                {
+            OperationExample(
+                name="integral_circle_homology",
+                description="Compute H_0 and H_1 over the integers for a triangle boundary.",
+                input={
                     "complex": {
                         "vertices": ["a", "b", "c"],
                         "maximal_simplices": [["a", "b"], ["a", "c"], ["b", "c"]],
@@ -316,11 +315,11 @@ _f_vector_tool = MathTool(
     run=compute_f_vector,
     tags=("topology", "simplicial", "exact"),
     examples=(
-        example(
-            "triangle_f_vector",
-            "Compute f-vector of a triangle (3 vertices, 3 edges, 1 face); "
+        OperationExample(
+            name="triangle_f_vector",
+            description="Compute f-vector of a triangle (3 vertices, 3 edges, 1 face); "
             "facets must be a list of simplices.",
-            {
+            input={
                 "complex": {
                     "vertices": ["v0", "v1", "v2"],
                     "facets": [["v0", "v1", "v2"]],
@@ -342,10 +341,10 @@ _link_tool = MathTool(
     run=compute_link,
     tags=("topology", "simplicial", "exact"),
     examples=(
-        example(
-            "link_of_vertex_in_triangle",
-            "Compute the link of one vertex in a triangle.",
-            {
+        OperationExample(
+            name="link_of_vertex_in_triangle",
+            description="Compute the link of one vertex in a triangle.",
+            input={
                 "complex": {
                     "vertices": ["v0", "v1", "v2"],
                     "facets": [["v0", "v1", "v2"]],
@@ -368,10 +367,10 @@ _star_tool = MathTool(
     run=compute_star,
     tags=("topology", "simplicial", "exact"),
     examples=(
-        example(
-            "star_of_vertex_in_triangle",
-            "Compute the star of one vertex in a triangle.",
-            {
+        OperationExample(
+            name="star_of_vertex_in_triangle",
+            description="Compute the star of one vertex in a triangle.",
+            input={
                 "complex": {
                     "vertices": ["v0", "v1", "v2"],
                     "facets": [["v0", "v1", "v2"]],
@@ -397,11 +396,11 @@ _vertex_deletion_tool = MathTool(
     run=compute_vertex_deletion,
     tags=("topology", "simplicial", "exact"),
     examples=(
-        example(
-            "delete_vertex_from_triangle",
-            "Delete one vertex from a triangle, leaving the opposite edge; "
+        OperationExample(
+            name="delete_vertex_from_triangle",
+            description="Delete one vertex from a triangle, leaving the opposite edge; "
             "the deletion must leave at least one simplex.",
-            {
+            input={
                 "complex": {
                     "vertices": ["v0", "v1", "v2"],
                     "facets": [["v0", "v1", "v2"]],
@@ -424,10 +423,10 @@ _skeleton_tool = MathTool(
     run=compute_skeleton,
     tags=("topology", "simplicial", "exact"),
     examples=(
-        example(
-            "one_skeleton_of_triangle",
-            "Compute the 1-skeleton of a triangle (all edges).",
-            {
+        OperationExample(
+            name="one_skeleton_of_triangle",
+            description="Compute the 1-skeleton of a triangle (all edges).",
+            input={
                 "complex": {
                     "vertices": ["v0", "v1", "v2"],
                     "facets": [["v0", "v1", "v2"]],
@@ -450,10 +449,10 @@ _join_tool = MathTool(
     run=compute_join,
     tags=("topology", "simplicial", "exact"),
     examples=(
-        example(
-            "join_of_two_points",
-            "Join two single-vertex complexes (a point join a point is an edge).",
-            {
+        OperationExample(
+            name="join_of_two_points",
+            description="Join two single-vertex complexes (a point join a point is an edge).",
+            input={
                 "complex_a": {
                     "vertices": ["a"],
                     "facets": [["a"]],
@@ -480,10 +479,10 @@ _barycentric_subdivision_tool = MathTool(
     run=compute_barycentric_subdivision,
     tags=("topology", "simplicial", "exact"),
     examples=(
-        example(
-            "barycentric_subdivision_of_edge",
-            "Subdivide an edge into two edges.",
-            {
+        OperationExample(
+            name="barycentric_subdivision_of_edge",
+            description="Subdivide an edge into two edges.",
+            input={
                 "complex": {
                     "vertices": ["a", "b"],
                     "facets": [["a", "b"]],
@@ -506,10 +505,10 @@ _pseudomanifold_tool = MathTool(
     run=compute_pseudomanifold_decision,
     tags=("topology", "simplicial", "exact"),
     examples=(
-        example(
-            "circle_is_pseudomanifold",
-            "Check that a triangle boundary is a closed pseudomanifold.",
-            {"complex": _CIRCLE},
+        OperationExample(
+            name="circle_is_pseudomanifold",
+            description="Check that a triangle boundary is a closed pseudomanifold.",
+            input={"complex": _CIRCLE},
         ),
     ),
 )
@@ -526,10 +525,10 @@ _shelling_check_tool = MathTool(
     run=compute_shelling_check,
     tags=("topology", "simplicial", "exact"),
     examples=(
-        example(
-            "valid_shelling_of_edge",
-            "Check a valid shelling of a single edge.",
-            {
+        OperationExample(
+            name="valid_shelling_of_edge",
+            description="Check a valid shelling of a single edge.",
+            input={
                 "complex": {
                     "vertices": ["a", "b"],
                     "facets": [["a", "b"]],
@@ -552,10 +551,10 @@ _elementary_collapse_tool = MathTool(
     run=compute_elementary_collapse,
     tags=("topology", "simplicial", "exact"),
     examples=(
-        example(
-            "collapse_edge_endpoint",
-            "Collapse a free vertex from an edge (the vertex is free, the edge is the coface).",
-            {
+        OperationExample(
+            name="collapse_edge_endpoint",
+            description="Collapse a free vertex from an edge (the vertex is free, the edge is the coface).",
+            input={
                 "complex": {
                     "vertices": ["a", "b"],
                     "facets": [["a", "b"]],

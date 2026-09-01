@@ -1,7 +1,6 @@
 """Typed formal modular-polynomial identity operation."""
 
-from jacobian.catalog._examples import example
-from jacobian.math.number_theory._support import number_theory_operation
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory.modular_polynomials import (
     ModularPolynomialIdentityRequest,
     ModularPolynomialIdentityValue,
@@ -18,27 +17,23 @@ def _run_modular_polynomial_identity(
 
 
 MODULAR_IDENTITY_OPERATIONS = (
-    number_theory_operation(
-        "modular.polynomial_identity.compute",
-        "Compare modular polynomial coefficients",
-        (
+    MathTool(
+        operation_id="modular.polynomial_identity.compute",
+        title="Compare modular polynomial coefficients",
+        description=(
             "Canonicalize two sparse integer polynomials and compare their formal "
             "coefficients modulo m. This is polynomial-ring identity, not equality "
             "of induced functions on residue assignments."
         ),
-        ModularPolynomialIdentityRequest,
-        ModularPolynomialIdentityValue,
-        _run_modular_polynomial_identity,
-        "number-theory",
-        "modular",
-        "polynomial",
-        "identity",
-        "coefficientwise",
+        request_type=ModularPolynomialIdentityRequest,
+        result_type=ModularPolynomialIdentityValue,
+        run=_run_modular_polynomial_identity,
+        tags=("number-theory", "modular", "polynomial", "identity", "coefficientwise"),
         examples=(
-            example(
-                "coefficientwise_identity_mod_4",
-                "Compare two formal polynomial coefficients modulo 4.",
-                {
+            OperationExample(
+                name="coefficientwise_identity_mod_4",
+                description="Compare two formal polynomial coefficients modulo 4.",
+                input={
                     "modulus": 4,
                     "variables": ["z"],
                     "left": [{"coefficient": "9", "exponents": [6]}],

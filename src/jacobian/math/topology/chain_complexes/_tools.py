@@ -2,8 +2,12 @@
 
 from pydantic import ValidationError
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    MathTools,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.topology.chain_complexes._models import (
     ComputeHomologyRequest,
     ConstructChainComplexRequest,
@@ -111,14 +115,14 @@ TOOLS: MathTools = (
         run=_construct,
         tags=("chain-complex", "exact"),
         examples=(
-            example(
-                "circle_chain_complex",
-                "Construct the chain complex of a circle (3 edges, 3 "
+            OperationExample(
+                name="circle_chain_complex",
+                description="Construct the chain complex of a circle (3 edges, 3 "
                 "vertices). Supply exactly one fewer differential matrix "
                 "than basis sizes; matrix i must have shape basis_sizes[i] "
                 "x basis_sizes[i+1], and adjacent matrices must compose to "
                 "zero (d^2 = 0).",
-                {
+                input={
                     "coefficient_ring": "QQ",
                     "basis_sizes": [3, 3],
                     "differential_matrices": [
@@ -137,10 +141,10 @@ TOOLS: MathTools = (
         run=_verify_differential,
         tags=("chain-complex", "exact"),
         examples=(
-            example(
-                "verify_circle_d2",
-                "Verify d^2 = 0 for the circle chain complex.",
-                {"complex": _CIRCLE_COMPLEX},
+            OperationExample(
+                name="verify_circle_d2",
+                description="Verify d^2 = 0 for the circle chain complex.",
+                input={"complex": _CIRCLE_COMPLEX},
             ),
         ),
     ),
@@ -153,10 +157,10 @@ TOOLS: MathTools = (
         run=_verify_chain_map,
         tags=("chain-complex", "exact"),
         examples=(
-            example(
-                "verify_identity_map",
-                "Verify the identity map commutes.",
-                {
+            OperationExample(
+                name="verify_identity_map",
+                description="Verify the identity map commutes.",
+                input={
                     "source": _CIRCLE_COMPLEX,
                     "target": _CIRCLE_COMPLEX,
                     "map_matrices": [
@@ -189,15 +193,15 @@ TOOLS: MathTools = (
             "exact",
         ),
         examples=(
-            example(
-                "circle_homology",
-                "Compute homology of the circle (Betti numbers 1, 1).",
-                {"complex": _CIRCLE_COMPLEX},
+            OperationExample(
+                name="circle_homology",
+                description="Compute homology of the circle (Betti numbers 1, 1).",
+                input={"complex": _CIRCLE_COMPLEX},
             ),
-            example(
-                "multiplication_by_six_homology",
-                "Compute H_0 = Z/6 and its torsion cycle and bounding chain.",
-                {"complex": _MULTIPLICATION_BY_SIX_COMPLEX},
+            OperationExample(
+                name="multiplication_by_six_homology",
+                description="Compute H_0 = Z/6 and its torsion cycle and bounding chain.",
+                input={"complex": _MULTIPLICATION_BY_SIX_COMPLEX},
             ),
         ),
     ),
@@ -210,10 +214,10 @@ TOOLS: MathTools = (
         run=_mapping_cone,
         tags=("chain-complex", "exact"),
         examples=(
-            example(
-                "identity_mapping_cone",
-                "Mapping cone of the identity on a circle.",
-                {
+            OperationExample(
+                name="identity_mapping_cone",
+                description="Mapping cone of the identity on a circle.",
+                input={
                     "source": _CIRCLE_COMPLEX,
                     "target": _CIRCLE_COMPLEX,
                     "map_matrices": [
@@ -233,10 +237,10 @@ TOOLS: MathTools = (
         run=_tensor_product,
         tags=("chain-complex", "exact"),
         examples=(
-            example(
-                "tensor_two_circles",
-                "Tensor product of two circle chain complexes.",
-                {"left": _CIRCLE_COMPLEX, "right": _CIRCLE_COMPLEX},
+            OperationExample(
+                name="tensor_two_circles",
+                description="Tensor product of two circle chain complexes.",
+                input={"left": _CIRCLE_COMPLEX, "right": _CIRCLE_COMPLEX},
             ),
         ),
     ),

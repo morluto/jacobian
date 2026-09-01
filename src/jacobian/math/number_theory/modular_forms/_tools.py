@@ -1,7 +1,6 @@
 """Public declarations for reviewed level-one modular q-expansions."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.number_theory.modular_forms import operations as native
 from jacobian.math.number_theory.modular_forms._models import (
     LevelOneNamedQExpansionRequest,
@@ -37,10 +36,10 @@ TOOLS: MathTools = (
             "exact",
         ),
         examples=(
-            example(
-                "delta_through_q5",
-                "Compute Delta through q^5; the form must be one of the closed normalized level-one family.",
-                {"form": "DELTA", "truncation_order": 6},
+            OperationExample(
+                name="delta_through_q5",
+                description="Compute Delta through q^5; the form must be one of the closed normalized level-one family.",
+                input={"form": "DELTA", "truncation_order": 6},
             ),
         ),
     ),

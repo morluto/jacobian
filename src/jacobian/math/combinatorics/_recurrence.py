@@ -1,6 +1,6 @@
 """Recurrence-owned exact combinatorics operations."""
 
-from jacobian.catalog._examples import example
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.combinatorics._recurrence_models import (
     LinearRecurrenceEvaluationRequest,
     LinearRecurrenceEvaluationResult,
@@ -8,9 +8,6 @@ from jacobian.math.combinatorics._recurrence_models import (
     PolynomialCoefficientRecurrenceEvaluationResult,
     RationalGeneratingFunctionCoefficientsRequest,
     RationalGeneratingFunctionCoefficientsResult,
-)
-from jacobian.math.combinatorics._support import (
-    combinatorics_operation,
 )
 from jacobian.math.combinatorics.operations import (
     evaluate_linear_recurrence,
@@ -64,25 +61,22 @@ def _run_rational_generating_function_coefficients(
 
 
 RECURRENCE_OPERATIONS = (
-    combinatorics_operation(
-        "combinatorics.recurrence.linear.evaluate",
-        "Evaluate an exact linear recurrence",
-        (
+    MathTool(
+        operation_id="combinatorics.recurrence.linear.evaluate",
+        title="Evaluate an exact linear recurrence",
+        description=(
             "Evaluate requested terms of one bounded constant-coefficient rational "
             "recurrence."
         ),
-        LinearRecurrenceEvaluationRequest,
-        LinearRecurrenceEvaluationResult,
-        _run_linear_recurrence,
-        "combinatorics",
-        "recurrence",
-        "linear-recurrence",
-        "exact-rational",
+        request_type=LinearRecurrenceEvaluationRequest,
+        result_type=LinearRecurrenceEvaluationResult,
+        run=_run_linear_recurrence,
+        tags=("combinatorics", "recurrence", "linear-recurrence", "exact-rational"),
         examples=(
-            example(
-                "generic_fibonacci_prefix",
-                "Evaluate the first eight terms of the Fibonacci recurrence.",
-                {
+            OperationExample(
+                name="generic_fibonacci_prefix",
+                description="Evaluate the first eight terms of the Fibonacci recurrence.",
+                input={
                     "coefficients": [
                         {"num": "1", "den": "1"},
                         {"num": "1", "den": "1"},
@@ -101,28 +95,30 @@ RECURRENCE_OPERATIONS = (
             ),
         ),
     ),
-    combinatorics_operation(
-        "combinatorics.recurrence.p_recursive.evaluate",
-        "Evaluate an exact polynomial-coefficient recurrence",
-        (
+    MathTool(
+        operation_id="combinatorics.recurrence.p_recursive.evaluate",
+        title="Evaluate an exact polynomial-coefficient recurrence",
+        description=(
             "Evaluate requested terms of a bounded rational recurrence "
             "sum p_j(n)a_(n-j)=0."
         ),
-        PolynomialCoefficientRecurrenceEvaluationRequest,
-        PolynomialCoefficientRecurrenceEvaluationResult,
-        _run_polynomial_coefficient_recurrence,
-        "combinatorics",
-        "recurrence",
-        "sequence",
-        "polynomial",
-        "p-recursive",
-        "polynomial-coefficients",
-        "exact-rational",
+        request_type=PolynomialCoefficientRecurrenceEvaluationRequest,
+        result_type=PolynomialCoefficientRecurrenceEvaluationResult,
+        run=_run_polynomial_coefficient_recurrence,
+        tags=(
+            "combinatorics",
+            "recurrence",
+            "sequence",
+            "polynomial",
+            "p-recursive",
+            "polynomial-coefficients",
+            "exact-rational",
+        ),
         examples=(
-            example(
-                "factorial_prefix",
-                "Evaluate the first seven terms of a_n=n*a_(n-1).",
-                {
+            OperationExample(
+                name="factorial_prefix",
+                description="Evaluate the first seven terms of a_n=n*a_(n-1).",
+                input={
                     "coefficient_polynomials": [
                         [{"num": "1", "den": "1"}],
                         [
@@ -142,26 +138,28 @@ RECURRENCE_OPERATIONS = (
             ),
         ),
     ),
-    combinatorics_operation(
-        "combinatorics.recurrence.p_recursive.table_residuals.compute",
-        "Compute residuals for a submitted P-recursive table",
-        (
+    MathTool(
+        operation_id="combinatorics.recurrence.p_recursive.table_residuals.compute",
+        title="Compute residuals for a submitted P-recursive table",
+        description=(
             "Compute every exact residual of a bounded caller-supplied rational "
             "table against sum p_j(n)a_(n-j)=0 without generating or repairing terms."
         ),
-        PolynomialCoefficientRecurrenceTableRequest,
-        PolynomialCoefficientRecurrenceTableResult,
-        _compute_recurrence_table_residuals,
-        "combinatorics",
-        "recurrence",
-        "p-recursive",
-        "submitted-table",
-        "exact-rational",
+        request_type=PolynomialCoefficientRecurrenceTableRequest,
+        result_type=PolynomialCoefficientRecurrenceTableResult,
+        run=_compute_recurrence_table_residuals,
+        tags=(
+            "combinatorics",
+            "recurrence",
+            "p-recursive",
+            "submitted-table",
+            "exact-rational",
+        ),
         examples=(
-            example(
-                "factorial_table_residuals",
-                "Check a supplied factorial prefix against a_n=n*a_(n-1).",
-                {
+            OperationExample(
+                name="factorial_table_residuals",
+                description="Check a supplied factorial prefix against a_n=n*a_(n-1).",
+                input={
                     "coefficient_polynomials": [
                         [{"num": "1", "den": "1"}],
                         [
@@ -182,25 +180,27 @@ RECURRENCE_OPERATIONS = (
             ),
         ),
     ),
-    combinatorics_operation(
-        "combinatorics.generating_function.coefficients.compute",
-        "Compute a rational generating-function coefficient prefix",
-        (
+    MathTool(
+        operation_id="combinatorics.generating_function.coefficients.compute",
+        title="Compute a rational generating-function coefficient prefix",
+        description=(
             "Expand one exact rational function N(x)/D(x) at zero through a "
             "bounded finite truncation and expose the residual congruence."
         ),
-        RationalGeneratingFunctionCoefficientsRequest,
-        RationalGeneratingFunctionCoefficientsResult,
-        _run_rational_generating_function_coefficients,
-        "combinatorics",
-        "generating-function",
-        "rational-series",
-        "exact-rational",
+        request_type=RationalGeneratingFunctionCoefficientsRequest,
+        result_type=RationalGeneratingFunctionCoefficientsResult,
+        run=_run_rational_generating_function_coefficients,
+        tags=(
+            "combinatorics",
+            "generating-function",
+            "rational-series",
+            "exact-rational",
+        ),
         examples=(
-            example(
-                "geometric_series_prefix",
-                "Expand 1/(1-x) through six coefficients.",
-                {
+            OperationExample(
+                name="geometric_series_prefix",
+                description="Expand 1/(1-x) through six coefficients.",
+                input={
                     "numerator": [{"num": "1", "den": "1"}],
                     "denominator": [
                         {"num": "1", "den": "1"},

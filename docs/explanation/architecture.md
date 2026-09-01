@@ -123,8 +123,17 @@ checks.
 its `payload` has an operation-specific schema that is known only after its
 immutable `operation_id` is resolved. Dispatch therefore does only this:
 resolve the declaration, parse the payload once with that owner's request model,
-invoke that owner once, and project the typed result once. It does not contain
+invoke that owner once, and project the typed result once. The internal
+`execute_operation` seam owns this complete envelope for `math.run`, direct
+operation tools, and native dispatch; only the final projector differs. The
+request context remains bound through canonical projection. It does not contain
 domain admission, backend logic, result-specific replay, or workflow state.
+
+Owners call `request_checkpoint(stage)` immediately after an external or
+backend return and at documented bounded intervals in long native loops. The
+same primitive observes both the bound cancellation signal and the current
+request deadline, so owners do not maintain local variants of deadline and
+cancellation policy.
 
 Rejections retain the phase that owns them:
 

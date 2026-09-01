@@ -1,6 +1,6 @@
 """Prime-owned exact number-theory operations."""
 
-from jacobian.catalog._examples import example
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory._integer_models import (
     BooleanResult,
     NonnegativeIntegerRequest,
@@ -11,9 +11,6 @@ from jacobian.math.number_theory._prime_models import (
     PrimalityRequest,
     PrimorialRequest,
     PrimorialResult,
-)
-from jacobian.math.number_theory._support import (
-    number_theory_operation,
 )
 from jacobian.math.number_theory.arithmetic.values import IntegerValue
 from jacobian.math.number_theory.operations import (
@@ -61,102 +58,132 @@ def compute_mobius(request: PositiveIntegerRequest) -> IntegerValue:
 
 
 PRIME_OPERATIONS = (
-    number_theory_operation(
-        "integer.decide.prime",
-        "Decide integer primality",
-        "Decide whether one integer is prime.",
-        PrimalityRequest,
-        BooleanResult,
-        decide_prime,
-        "number-theory",
-        "predicate",
-        examples=(example("prime_17", "Check whether 17 is prime.", {"value": "17"}),),
-    ),
-    number_theory_operation(
-        "integer.compute.next_prime",
-        "Compute next prime",
-        "Compute the least prime strictly greater than n.",
-        NonnegativeIntegerRequest,
-        IntegerValue,
-        compute_next_prime,
-        "number-theory",
-        "prime",
+    MathTool(
+        operation_id="integer.decide.prime",
+        title="Decide integer primality",
+        description="Decide whether one integer is prime.",
+        request_type=PrimalityRequest,
+        result_type=BooleanResult,
+        run=decide_prime,
+        tags=("number-theory", "predicate"),
         examples=(
-            example("next_prime_14", "Find the next prime after 14.", {"n": 14}),
-        ),
-    ),
-    number_theory_operation(
-        "integer.compute.previous_prime",
-        "Compute previous prime",
-        "Compute the greatest prime strictly below n.",
-        PreviousPrimeRequest,
-        IntegerValue,
-        compute_previous_prime,
-        "number-theory",
-        "prime",
-        examples=(
-            example(
-                "previous_prime_14", "Find the previous prime before 14.", {"n": 14}
+            OperationExample(
+                name="prime_17",
+                description="Check whether 17 is prime.",
+                input={"value": "17"},
             ),
         ),
     ),
-    number_theory_operation(
-        "integer.compute.prime_count",
-        "Count primes through n",
-        "Count primes not exceeding one nonnegative integer.",
-        NonnegativeIntegerRequest,
-        IntegerValue,
-        compute_prime_count,
-        "number-theory",
-        "prime",
-        examples=(example("prime_count_20", "Count primes through 20.", {"n": 20}),),
-    ),
-    number_theory_operation(
-        "integer.compute.nth_prime",
-        "Compute nth prime",
-        "Compute the nth prime using one-based indexing.",
-        PositiveIntegerRequest,
-        IntegerValue,
-        compute_nth_prime,
-        "number-theory",
-        "prime",
-        examples=(example("nth_prime_6", "Compute the sixth prime.", {"n": 6}),),
-    ),
-    number_theory_operation(
-        "integer.compute.primorial",
-        "Compute primorial",
-        "Compute the product of the first n primes.",
-        PrimorialRequest,
-        PrimorialResult,
-        compute_primorial,
-        "number-theory",
-        "prime",
+    MathTool(
+        operation_id="integer.compute.next_prime",
+        title="Compute next prime",
+        description="Compute the least prime strictly greater than n.",
+        request_type=NonnegativeIntegerRequest,
+        result_type=IntegerValue,
+        run=compute_next_prime,
+        tags=("number-theory", "prime"),
         examples=(
-            example(
-                "primorial_5", "Compute the product of the first five primes.", {"n": 5}
+            OperationExample(
+                name="next_prime_14",
+                description="Find the next prime after 14.",
+                input={"n": 14},
             ),
         ),
     ),
-    number_theory_operation(
-        "integer.compute.euler_totient",
-        "Compute Euler totient",
-        "Count residues coprime to one positive integer.",
-        PositiveIntegerRequest,
-        IntegerValue,
-        compute_euler_totient,
-        "number-theory",
-        "arithmetic-function",
-        examples=(example("totient_12", "Count residues coprime to 12.", {"n": 12}),),
+    MathTool(
+        operation_id="integer.compute.previous_prime",
+        title="Compute previous prime",
+        description="Compute the greatest prime strictly below n.",
+        request_type=PreviousPrimeRequest,
+        result_type=IntegerValue,
+        run=compute_previous_prime,
+        tags=("number-theory", "prime"),
+        examples=(
+            OperationExample(
+                name="previous_prime_14",
+                description="Find the previous prime before 14.",
+                input={"n": 14},
+            ),
+        ),
     ),
-    number_theory_operation(
-        "integer.compute.mobius",
-        "Compute Mobius value",
-        "Compute the Mobius arithmetic function of one positive integer.",
-        PositiveIntegerRequest,
-        IntegerValue,
-        compute_mobius,
-        "number-theory",
-        "arithmetic-function",
-        examples=(example("mobius_30", "Compute the Mobius value of 30.", {"n": 30}),),
+    MathTool(
+        operation_id="integer.compute.prime_count",
+        title="Count primes through n",
+        description="Count primes not exceeding one nonnegative integer.",
+        request_type=NonnegativeIntegerRequest,
+        result_type=IntegerValue,
+        run=compute_prime_count,
+        tags=("number-theory", "prime"),
+        examples=(
+            OperationExample(
+                name="prime_count_20",
+                description="Count primes through 20.",
+                input={"n": 20},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="integer.compute.nth_prime",
+        title="Compute nth prime",
+        description="Compute the nth prime using one-based indexing.",
+        request_type=PositiveIntegerRequest,
+        result_type=IntegerValue,
+        run=compute_nth_prime,
+        tags=("number-theory", "prime"),
+        examples=(
+            OperationExample(
+                name="nth_prime_6",
+                description="Compute the sixth prime.",
+                input={"n": 6},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="integer.compute.primorial",
+        title="Compute primorial",
+        description="Compute the product of the first n primes.",
+        request_type=PrimorialRequest,
+        result_type=PrimorialResult,
+        run=compute_primorial,
+        tags=("number-theory", "prime"),
+        examples=(
+            OperationExample(
+                name="primorial_5",
+                description="Compute the product of the first five primes.",
+                input={"n": 5},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="integer.compute.euler_totient",
+        title="Compute Euler totient",
+        description="Count residues coprime to one positive integer.",
+        request_type=PositiveIntegerRequest,
+        result_type=IntegerValue,
+        run=compute_euler_totient,
+        tags=("number-theory", "arithmetic-function"),
+        examples=(
+            OperationExample(
+                name="totient_12",
+                description="Count residues coprime to 12.",
+                input={"n": 12},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="integer.compute.mobius",
+        title="Compute Mobius value",
+        description="Compute the Mobius arithmetic function of one positive integer.",
+        request_type=PositiveIntegerRequest,
+        result_type=IntegerValue,
+        run=compute_mobius,
+        tags=("number-theory", "arithmetic-function"),
+        examples=(
+            OperationExample(
+                name="mobius_30",
+                description="Compute the Mobius value of 30.",
+                input={"n": 30},
+            ),
+        ),
     ),
 )

@@ -3,8 +3,6 @@
 from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -72,46 +70,22 @@ def compute_prime_field_find_recurrence(
     )
 
 
-def rs_operation[RequestT: StrictModel, ResultT: StrictModel](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 FIBONACCI_MOD_7 = {"prime": 7, "sequence": [0, 1, 1, 2, 3, 5, 1, 6, 0]}
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    rs_operation(
-        "sequence.recurrence.find",
-        "Find the minimal linear recurrence of a sequence",
-        "Find the lowest-order non-vacuous homogeneous recurrence that exactly fits the supplied finite rational sequence, or report NO_FITTING_RECURRENCE.",
-        RecurrenceFindRequest,
-        RecurrenceFindResult,
-        compute_find_recurrence,
-        "sequence",
-        "recurrence",
-        "exact",
+    MathTool(
+        operation_id="sequence.recurrence.find",
+        title="Find the minimal linear recurrence of a sequence",
+        description="Find the lowest-order non-vacuous homogeneous recurrence that exactly fits the supplied finite rational sequence, or report NO_FITTING_RECURRENCE.",
+        request_type=RecurrenceFindRequest,
+        result_type=RecurrenceFindResult,
+        run=compute_find_recurrence,
+        tags=("sequence", "recurrence", "exact"),
         examples=(
-            example(
-                "fib_find",
-                "Find the recurrence of the Fibonacci sequence.",
-                {
+            OperationExample(
+                name="fib_find",
+                description="Find the recurrence of the Fibonacci sequence.",
+                input={
                     "sequence": [
                         {"num": value, "den": "1"}
                         for value in (
@@ -131,22 +105,19 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    rs_operation(
-        "sequence.recurrence.closed_form.compute",
-        "Compute the closed-form of a linear recurrence",
-        "Compute a SymPy-expression closed form for a characteristic polynomial of degree at most four and exactly one initial value per degree, including repeated roots.",
-        ClosedFormRequest,
-        ClosedFormResult,
-        compute_closed_form,
-        "sequence",
-        "recurrence",
-        "closed-form",
-        "exact",
+    MathTool(
+        operation_id="sequence.recurrence.closed_form.compute",
+        title="Compute the closed-form of a linear recurrence",
+        description="Compute a SymPy-expression closed form for a characteristic polynomial of degree at most four and exactly one initial value per degree, including repeated roots.",
+        request_type=ClosedFormRequest,
+        result_type=ClosedFormResult,
+        run=compute_closed_form,
+        tags=("sequence", "recurrence", "closed-form", "exact"),
         examples=(
-            example(
-                "repeated_root",
-                "Solve the recurrence with characteristic polynomial (x-1)^2.",
-                {
+            OperationExample(
+                name="repeated_root",
+                description="Solve the recurrence with characteristic polynomial (x-1)^2.",
+                input={
                     "characteristic_coefficients": [
                         {"num": "1", "den": "1"},
                         {"num": "-2", "den": "1"},
@@ -160,10 +131,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    rs_operation(
-        "sequence.recurrence.prime_field.find",
-        "Find the minimal linear recurrence over a prime field",
-        "Given a finite sequence over an explicitly supplied prime field "
+    MathTool(
+        operation_id="sequence.recurrence.prime_field.find",
+        title="Find the minimal linear recurrence over a prime field",
+        description="Given a finite sequence over an explicitly supplied prime field "
         "GF(p), find the minimal linear recurrence (LFSR connection) it "
         "satisfies on the supplied prefix using the Berlekamp-Massey "
         "algorithm, returning the canonical PrimeFieldRecurrence value with "
@@ -171,24 +142,20 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "recurrence of order at most len(sequence), so the result is always "
         "a fitted recurrence. Established for indices L <= n < "
         "len(sequence) only; no claim about unobserved terms.",
-        PrimeFieldRecurrenceFindRequest,
-        PrimeFieldRecurrenceFindResult,
-        compute_prime_field_find_recurrence,
-        "sequence",
-        "recurrence",
-        "berlekamp-massey",
-        "prime-field",
-        "exact",
+        request_type=PrimeFieldRecurrenceFindRequest,
+        result_type=PrimeFieldRecurrenceFindResult,
+        run=compute_prime_field_find_recurrence,
+        tags=("sequence", "recurrence", "berlekamp-massey", "prime-field", "exact"),
         examples=(
-            example(
-                "fibonacci_mod_7",
-                (
+            OperationExample(
+                name="fibonacci_mod_7",
+                description=(
                     "Find the minimal recurrence of Fibonacci mod 7 "
                     "[0,1,1,2,3,5,1,6,0]; the result is s_n = s_{n-1} + "
                     "s_{n-2}, i.e. coefficients (1, 1). Values must be "
                     "residues modulo the prime."
                 ),
-                FIBONACCI_MOD_7,
+                input=FIBONACCI_MOD_7,
             ),
         ),
     ),

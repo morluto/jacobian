@@ -1,9 +1,5 @@
 """Rainbow embedding profile operation declarations."""
 
-from collections.abc import Callable
-
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.graphs.rainbow_embedding._models import (
     RainbowEmbeddingRequest,
@@ -20,49 +16,25 @@ def compute_rainbow_embedding_op(
     return compute_rainbow_embedding_profile(request.pattern, request.host)
 
 
-def reb_action[RequestT: StrictModel, ResultT: StrictModel](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: MathTools = (
-    reb_action(
-        "graph.edge_colored.rainbow_subgraph_embedding_profile.compute",
-        "Compute the rainbow subgraph embedding profile",
-        (
+    MathTool(
+        operation_id="graph.edge_colored.rainbow_subgraph_embedding_profile.compute",
+        title="Compute the rainbow subgraph embedding profile",
+        description=(
             "Given an uncoloured finite pattern graph and an edge-coloured "
             "finite host, return the complete ordered family of injective "
             "non-induced pattern embeddings whose images use pairwise "
             "distinct host-edge colours."
         ),
-        RainbowEmbeddingRequest,
-        RainbowEmbeddingResult,
-        compute_rainbow_embedding_op,
-        "graph",
-        "ramsey",
-        "exact",
+        request_type=RainbowEmbeddingRequest,
+        result_type=RainbowEmbeddingResult,
+        run=compute_rainbow_embedding_op,
+        tags=("graph", "ramsey", "exact"),
         examples=(
-            example(
-                "p2_in_k3",
-                "A path P2 embedded in a 3-vertex coloured complete graph.",
-                {
+            OperationExample(
+                name="p2_in_k3",
+                description="A path P2 embedded in a 3-vertex coloured complete graph.",
+                input={
                     "pattern": {
                         "vertices": ["a", "b"],
                         "edges": [["a", "b"]],

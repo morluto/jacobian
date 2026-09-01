@@ -1,10 +1,7 @@
 """Nonlinear binary code operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -64,80 +61,52 @@ def _to_set_system(request: ToSetSystemRequest) -> ToSetSystemResult:
     return to_set_system(request.code)
 
 
-def _op[RequestT: StrictModel, ResultT: StrictModel](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "code.nonlinear.constant_weight.compute",
-        "Generate all constant-weight binary words",
-        "Generate all binary words of given length and Hamming weight; the exact work and result are bounded by length times binomial(length, weight).",
-        ConstantWeightRequest,
-        ConstantWeightResult,
-        _constant_weight,
-        "code",
-        "constant-weight",
-        "exact",
+    MathTool(
+        operation_id="code.nonlinear.constant_weight.compute",
+        title="Generate all constant-weight binary words",
+        description="Generate all binary words of given length and Hamming weight; the exact work and result are bounded by length times binomial(length, weight).",
+        request_type=ConstantWeightRequest,
+        result_type=ConstantWeightResult,
+        run=_constant_weight,
+        tags=("code", "constant-weight", "exact"),
         examples=(
-            example(
-                "weight_two_length_four",
-                "Generate every weight-2 binary word of length 4; weight must not exceed length.",
-                {"length": 4, "weight": 2},
+            OperationExample(
+                name="weight_two_length_four",
+                description="Generate every weight-2 binary word of length 4; weight must not exceed length.",
+                input={"length": 4, "weight": 2},
             ),
         ),
     ),
-    _op(
-        "code.binary.word_distance.compute",
-        "Compute Hamming distance between two binary words",
-        "Compute the exact Hamming distance, differing coordinates, weights, and support intersection of two equal-length binary words; the exact result is bounded by the retained words plus their actual differing coordinates.",
-        WordDistanceRequest,
-        WordDistanceResult,
-        _word_distance,
-        "code",
-        "distance",
-        "exact",
+    MathTool(
+        operation_id="code.binary.word_distance.compute",
+        title="Compute Hamming distance between two binary words",
+        description="Compute the exact Hamming distance, differing coordinates, weights, and support intersection of two equal-length binary words; the exact result is bounded by the retained words plus their actual differing coordinates.",
+        request_type=WordDistanceRequest,
+        result_type=WordDistanceResult,
+        run=_word_distance,
+        tags=("code", "distance", "exact"),
         examples=(
-            example(
-                "word_distance_01",
-                "Compute the Hamming relation between [1,0,1] and [1,1,0]; both words must be nonempty and have equal length.",
-                {"word1": [1, 0, 1], "word2": [1, 1, 0]},
+            OperationExample(
+                name="word_distance_01",
+                description="Compute the Hamming relation between [1,0,1] and [1,1,0]; both words must be nonempty and have equal length.",
+                input={"word1": [1, 0, 1], "word2": [1, 1, 0]},
             ),
         ),
     ),
-    _op(
-        "code.binary.explicit.profile.compute",
-        "Compute the complete profile of an explicit binary code",
-        "Compute retained source metadata, complete weight and distance histograms, pair accounting, and compact extremal word-pair witnesses without materializing a distance graph.",
-        ExplicitProfileRequest,
-        ExplicitProfileResult,
-        _explicit_profile,
-        "code",
-        "distance",
-        "exact",
+    MathTool(
+        operation_id="code.binary.explicit.profile.compute",
+        title="Compute the complete profile of an explicit binary code",
+        description="Compute retained source metadata, complete weight and distance histograms, pair accounting, and compact extremal word-pair witnesses without materializing a distance graph.",
+        request_type=ExplicitProfileRequest,
+        result_type=ExplicitProfileResult,
+        run=_explicit_profile,
+        tags=("code", "distance", "exact"),
         examples=(
-            example(
-                "explicit_profile_three",
-                "Compute the complete compact profile of a three-word code; the canonical source declares its ambient length and contains distinct binary words.",
-                {
+            OperationExample(
+                name="explicit_profile_three",
+                description="Compute the complete compact profile of a three-word code; the canonical source declares its ambient length and contains distinct binary words.",
+                input={
                     "code": {
                         "length": 3,
                         "codewords": [[0, 0, 0], [1, 1, 0], [0, 1, 1]],
@@ -146,21 +115,19 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "code.binary.constant_weight.profile.compute",
-        "Profile of a constant-weight binary code",
-        "Compute complete distance and support-intersection histograms with source-bound extremal witnesses for a nonempty constant-weight explicit code.",
-        ConstantWeightProfileRequest,
-        ConstantWeightProfileResult,
-        _constant_weight_profile,
-        "code",
-        "constant-weight",
-        "exact",
+    MathTool(
+        operation_id="code.binary.constant_weight.profile.compute",
+        title="Profile of a constant-weight binary code",
+        description="Compute complete distance and support-intersection histograms with source-bound extremal witnesses for a nonempty constant-weight explicit code.",
+        request_type=ConstantWeightProfileRequest,
+        result_type=ConstantWeightProfileResult,
+        run=_constant_weight_profile,
+        tags=("code", "constant-weight", "exact"),
         examples=(
-            example(
-                "const_weight_profile",
-                "Compute the distance/intersection profile of two weight-2 words; the canonical source must be nonempty and every word must have the same weight.",
-                {
+            OperationExample(
+                name="const_weight_profile",
+                description="Compute the distance/intersection profile of two weight-2 words; the canonical source must be nonempty and every word must have the same weight.",
+                input={
                     "code": {
                         "length": 4,
                         "codewords": [[1, 1, 0, 0], [1, 0, 1, 0]],
@@ -169,21 +136,19 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "code.binary.explicit.to_set_system.compute",
-        "Map codewords to support subsets",
-        "Map each canonical source codeword to its exact support block on the retained coordinate axis.",
-        ToSetSystemRequest,
-        ToSetSystemResult,
-        _to_set_system,
-        "code",
-        "set-system",
-        "exact",
+    MathTool(
+        operation_id="code.binary.explicit.to_set_system.compute",
+        title="Map codewords to support subsets",
+        description="Map each canonical source codeword to its exact support block on the retained coordinate axis.",
+        request_type=ToSetSystemRequest,
+        result_type=ToSetSystemResult,
+        run=_to_set_system,
+        tags=("code", "set-system", "exact"),
         examples=(
-            example(
-                "to_set_system_two",
-                "Convert two length-four codewords to support blocks.",
-                {
+            OperationExample(
+                name="to_set_system_two",
+                description="Convert two length-four codewords to support blocks.",
+                input={
                     "code": {
                         "length": 4,
                         "codewords": [[1, 0, 1, 0], [0, 1, 0, 1]],

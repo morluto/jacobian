@@ -1,10 +1,7 @@
 """Typed declarations for cohomology operations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.topology.cohomology.operations._models import (
     BocksteinRequest,
@@ -40,31 +37,6 @@ def _run_bockstein(request: BocksteinRequest) -> BocksteinResult:
     )
 
 
-def cohomology_operation[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 _SQ_EXAMPLE: dict[str, Any] = {
     "cochain_degree": 1,
     "simplex_values": [[0, 1], [0, 2]],
@@ -82,10 +54,10 @@ _BOCKSTEIN_EXAMPLE: dict[str, Any] = {
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    cohomology_operation(
-        "cohomology.steenrod_square.compute",
-        "Compute Sq^0, Sq^n (cup) and Sq^k=0 for k>n over GF(2) for cocycles",
-        "Given a cochain x of degree n over GF(2) compute Sq^k(x). "
+    MathTool(
+        operation_id="cohomology.steenrod_square.compute",
+        title="Compute Sq^0, Sq^n (cup) and Sq^k=0 for k>n over GF(2) for cocycles",
+        description="Given a cochain x of degree n over GF(2) compute Sq^k(x). "
         "Supported: Sq^0(x)=x (identity), Sq^n(x)=x cup x (top, targets "
         "2n-simplices), Sq^k=0 for k>n (instability; constant work, admitted "
         "whenever the returned degree n+k stays within the declared "
@@ -94,36 +66,32 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "ambient_simplices or ambient_complex for cocycle verification; only "
         "the zero cochain is admissible without ambient. Top squares require "
         "ambient to locate targets.",
-        SteenrodSquareRequest,
-        SteenrodSquareResult,
-        _run_steenrod_square,
-        "cohomology",
-        "steenrod",
-        "exact",
+        request_type=SteenrodSquareRequest,
+        result_type=SteenrodSquareResult,
+        run=_run_steenrod_square,
+        tags=("cohomology", "steenrod", "exact"),
         examples=(
-            example(
-                "sq0_identity",
-                "Compute Sq^0(x)=x for the 1-cocycle d(vertex 0) on the triangle; nonzero cochains require ambient for cocycle verification.",
-                _SQ_EXAMPLE,
+            OperationExample(
+                name="sq0_identity",
+                description="Compute Sq^0(x)=x for the 1-cocycle d(vertex 0) on the triangle; nonzero cochains require ambient for cocycle verification.",
+                input=_SQ_EXAMPLE,
             ),
         ),
     ),
-    cohomology_operation(
-        "cohomology.bockstein.compute",
-        "Compute the bounded Bockstein homomorphism",
-        "Compute the supported exact zero Bockstein branch for a bounded cochain "
+    MathTool(
+        operation_id="cohomology.bockstein.compute",
+        title="Compute the bounded Bockstein homomorphism",
+        description="Compute the supported exact zero Bockstein branch for a bounded cochain "
         "over Z/p. Nonzero cocycles are rejected as unsupported by this operation.",
-        BocksteinRequest,
-        BocksteinResult,
-        _run_bockstein,
-        "cohomology",
-        "bockstein",
-        "exact",
+        request_type=BocksteinRequest,
+        result_type=BocksteinResult,
+        run=_run_bockstein,
+        tags=("cohomology", "bockstein", "exact"),
         examples=(
-            example(
-                "bockstein_gf2",
-                "Compute the Bockstein of the trivial cocycle over GF(2).",
-                _BOCKSTEIN_EXAMPLE,
+            OperationExample(
+                name="bockstein_gf2",
+                description="Compute the Bockstein of the trivial cocycle over GF(2).",
+                input=_BOCKSTEIN_EXAMPLE,
             ),
         ),
     ),

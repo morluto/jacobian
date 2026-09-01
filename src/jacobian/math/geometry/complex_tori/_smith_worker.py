@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import sys
 
 from jacobian.canonical import (
+    encode_strict_json,
     format_canonical_integer,
     loads_strict_json,
     parse_canonical_integer,
@@ -29,16 +29,16 @@ def main() -> None:
     entries = payload["entries"]
     matrix = tuple(tuple(_decode_integer(value) for value in row) for row in entries)
     normal_form = integer_smith_normal_form(matrix)
-    json.dump(
-        {
-            "request_digest": hashlib.sha256(input_bytes).hexdigest(),
-            "normal_form": [
-                [format_canonical_integer(value) for value in row]
-                for row in normal_form
-            ],
-        },
-        sys.stdout,
-        separators=(",", ":"),
+    sys.stdout.buffer.write(
+        encode_strict_json(
+            {
+                "request_digest": hashlib.sha256(input_bytes).hexdigest(),
+                "normal_form": [
+                    [format_canonical_integer(value) for value in row]
+                    for row in normal_form
+                ],
+            }
+        )
     )
 
 

@@ -9,8 +9,11 @@ from typing import cast
 from pydantic_core import PydanticCustomError
 
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.geometry.projective._models import (
     NormalizedProjectiveLine,
     ProjectiveArrangementFlat,
@@ -188,10 +191,10 @@ PROJECTIVE_LINE_ARRANGEMENT_OPERATION: MathTool[
         "exact",
     ),
     examples=(
-        example(
-            "two_coordinate_lines",
-            "Compute flats for two coordinate lines.",
-            {
+        OperationExample(
+            name="two_coordinate_lines",
+            description="Compute flats for two coordinate lines.",
+            input={
                 "lines": [
                     {
                         "label": "x",
@@ -212,10 +215,10 @@ PROJECTIVE_LINE_ARRANGEMENT_OPERATION: MathTool[
                 ]
             },
         ),
-        example(
-            "three_coordinate_lines",
-            "Compute the flat lattice of three coordinate lines; labels must be unique and lines projectively distinct.",
-            {
+        OperationExample(
+            name="three_coordinate_lines",
+            description="Compute the flat lattice of three coordinate lines; labels must be unique and lines projectively distinct.",
+            input={
                 "lines": [
                     {
                         "label": "x",

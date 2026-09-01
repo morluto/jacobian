@@ -1,7 +1,6 @@
 """Quadratic-form operation declarations."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory.quadratic_forms.general._models import (
     EvaluationRequest,
     EvaluationResult,
@@ -49,9 +48,9 @@ TOOLS = (
         run=evaluate_form,
         tags=("algebra", "quadratic-form", "exact-rational"),
         examples=(
-            example(
-                "binary_cross_term",
-                "Evaluate 2*x^2+3*x*y+5*y^2 at (1/2, 2); unique labels "
+            OperationExample(
+                name="binary_cross_term",
+                description="Evaluate 2*x^2+3*x*y+5*y^2 at (1/2, 2); unique labels "
                 "with exactly one entry each, cross indices on that axis, "
                 "matching form/vector axes, "
                 f"{MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS}/"
@@ -60,7 +59,7 @@ TOOLS = (
                 f"{MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS} terms, and d + "
                 f"{MAX_QUADRATIC_EVALUATION_TERM_DIGITS} + digits(t) within "
                 f"{MAX_QUADRATIC_EVALUATION_DIGITS} on active denominators.",
-                {
+                input={
                     "form": {
                         "axis": ["x", "y"],
                         "diagonal_coefficients": [

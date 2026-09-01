@@ -3,8 +3,11 @@
 from collections.abc import Callable
 from typing import Any
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.logic.languages.words._models import (
     FactorsLengthRequest,
     FactorsLengthResult,
@@ -134,10 +137,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         run=compute_factors_length,
         tags=("combinatorics", "words", "factors", "exact", "complete"),
         examples=(
-            example(
-                "abaab_factors_2",
-                "Enumerate all length-two factors of abaab.",
-                {
+            OperationExample(
+                name="abaab_factors_2",
+                description="Enumerate all length-two factors of abaab.",
+                input={
                     "word": {
                         "alphabet": ["a", "b"],
                         "letters": ["a", "b", "a", "a", "b"],
@@ -160,10 +163,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         run=compute_periods,
         tags=("combinatorics", "words", "periods", "exact", "complete"),
         examples=(
-            example(
-                "ababab_periods",
-                "Compute the complete period profile of ababab.",
-                {
+            OperationExample(
+                name="ababab_periods",
+                description="Compute the complete period profile of ababab.",
+                input={
                     "word": {
                         "alphabet": ["a", "b"],
                         "letters": ["a", "b", "a", "b", "a", "b"],
@@ -184,10 +187,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         run=compute_incidence_matrix,
         tags=("combinatorics", "words", "morphism", "matrix", "exact"),
         examples=(
-            example(
-                "fibonacci_matrix",
-                "Compute the incidence matrix of a->ab and b->a.",
-                {
+            OperationExample(
+                name="fibonacci_matrix",
+                description="Compute the incidence matrix of a->ab and b->a.",
+                input={
                     "morphism": {
                         "source_alphabet": ["a", "b"],
                         "target_alphabet": ["a", "b"],
@@ -209,10 +212,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         run=compute_substitution_dependency_graph,
         tags=("combinatorics", "words", "substitution", "graph", "exact"),
         examples=(
-            example(
-                "fibonacci_dependencies",
-                "Compute the dependency graph of the Fibonacci substitution.",
-                {
+            OperationExample(
+                name="fibonacci_dependencies",
+                description="Compute the dependency graph of the Fibonacci substitution.",
+                input={
                     "substitution": {
                         "morphism": {
                             "source_alphabet": ["0", "1"],
@@ -243,10 +246,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "exact",
         ),
         examples=(
-            example(
-                "fibonacci_primitivity",
-                "Prove the Fibonacci substitution primitive from its dependency graph.",
-                {
+            OperationExample(
+                name="fibonacci_primitivity",
+                description="Prove the Fibonacci substitution primitive from its dependency graph.",
+                input={
                     "dependency_graph": {
                         "substitution": {
                             "morphism": {
@@ -299,10 +302,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "exact",
         ),
         examples=(
-            example(
-                "fibonacci_prefix",
-                "Compute eight letters of the Fibonacci fixed point.",
-                {
+            OperationExample(
+                name="fibonacci_prefix",
+                description="Compute eight letters of the Fibonacci fixed point.",
+                input={
                     "source": {
                         "substitution": {
                             "morphism": {

@@ -1,7 +1,6 @@
 """Typed declarations for the hypergraph colouring decision operation."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.graphs.coloring.hypergraph_coloring._models import (
     HypergraphColoringRequest,
     HypergraphColoringResult,
@@ -29,10 +28,10 @@ TOOLS: MathTools = (
         run=_decide,
         tags=("hypergraph", "coloring", "exact"),
         examples=(
-            example(
-                "simple",
-                "A 3-vertex 2-edge hypergraph with 2 colours.",
-                {
+            OperationExample(
+                name="simple",
+                description="A 3-vertex 2-edge hypergraph with 2 colours.",
+                input={
                     "hypergraph": {
                         "vertices": ["a", "b", "c"],
                         "edges": [

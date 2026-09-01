@@ -1,7 +1,6 @@
 """Typed declarations for the free-tree enumeration operation."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.graphs.tree_enumeration.free_tree_enumeration._models import (
     FreeTreeEnumerationRequest,
     FreeTreeEnumerationResult,
@@ -30,10 +29,10 @@ TOOLS: MathTools = (
         run=_enumerate,
         tags=("graph", "tree", "enumeration", "exact"),
         examples=(
-            example(
-                "order_4",
-                "Enumerate the two non-isomorphic trees on 4 vertices.",
-                {"order": 4},
+            OperationExample(
+                name="order_4",
+                description="Enumerate the two non-isomorphic trees on 4 vertices.",
+                input={"order": 4},
             ),
         ),
     ),

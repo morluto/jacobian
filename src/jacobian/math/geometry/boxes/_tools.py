@@ -1,8 +1,6 @@
 """Public declarations for exact rational box unions."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTools
-from jacobian.math.geometry._support import geometry_operation
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.geometry.boxes._models import (
     BoxUnionVolumeRequest,
     BoxUnionVolumeResult,
@@ -15,10 +13,10 @@ def _box_union_volume(request: BoxUnionVolumeRequest) -> BoxUnionVolumeResult:
 
 
 TOOLS: MathTools = (
-    geometry_operation(
-        "geometry.box_union.volume.compute",
-        "Compute exact volume of a finite rational box union",
-        "Compute exact Lebesgue volume for closed rational axis-aligned boxes. "
+    MathTool(
+        operation_id="geometry.box_union.volume.compute",
+        title="Compute exact volume of a finite rational box union",
+        description="Compute exact Lebesgue volume for closed rational axis-aligned boxes. "
         "Return every nonempty indexed subset intersection and its volume, plus "
         "the complete source-bound inclusion-exclusion sum. Inputs contain one "
         "or more same-dimensional boxes in dimensions 1..64 whose echoed source "
@@ -28,21 +26,18 @@ TOOLS: MathTools = (
         "admission. intervals=null is the "
         "canonical empty box; equal endpoints are valid. Preflight bounds "
         "replay work, rational growth, and worst-case ledger bytes.",
-        BoxUnionVolumeRequest,
-        BoxUnionVolumeResult,
-        _box_union_volume,
-        "geometry",
-        "measure",
-        "box-union",
-        "inclusion-exclusion",
+        request_type=BoxUnionVolumeRequest,
+        result_type=BoxUnionVolumeResult,
+        run=_box_union_volume,
+        tags=("geometry", "measure", "box-union", "inclusion-exclusion"),
         examples=(
-            example(
-                "three_overlapping_boxes",
-                "Compute the exact volume 9/2 of three overlapping rational "
+            OperationExample(
+                name="three_overlapping_boxes",
+                description="Compute the exact volume 9/2 of three overlapping rational "
                 "boxes and return all seven nonempty intersections; every box "
                 "uses the same three standard coordinate axes and satisfies "
                 "the complete-ledger budgets.",
-                {
+                input={
                     "boxes": [
                         {
                             "dimension": 3,
@@ -98,12 +93,12 @@ TOOLS: MathTools = (
                     ]
                 },
             ),
-            example(
-                "empty_and_degenerate_boxes",
-                "Compute a zero-volume union containing the canonical empty "
+            OperationExample(
+                name="empty_and_degenerate_boxes",
+                description="Compute a zero-volume union containing the canonical empty "
                 "box and a singleton interval; boxes share dimension one and "
                 "the singleton remains a nonempty zero-volume ledger entry.",
-                {
+                input={
                     "boxes": [
                         {"dimension": 1, "intervals": None},
                         {

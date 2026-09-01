@@ -15,8 +15,11 @@ from jacobian._exact import (
 )
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.probability.mutual_information import (
     FiniteJointTable,
     MutualInformationResult,
@@ -446,10 +449,10 @@ MUTUAL_INFORMATION_OPERATION = MathTool(
         "exact-value",
     ),
     examples=(
-        example(
-            "perfectly_correlated_fair_bits",
-            "Compute exact base-two mutual information for two identical fair bits.",
-            {
+        OperationExample(
+            name="perfectly_correlated_fair_bits",
+            description="Compute exact base-two mutual information for two identical fair bits.",
+            input={
                 "row_labels": ["0", "1"],
                 "column_labels": ["0", "1"],
                 "probabilities": [

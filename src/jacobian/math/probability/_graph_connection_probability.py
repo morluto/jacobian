@@ -13,8 +13,11 @@ from jacobian.canonical import (
     canonicalize_json,
     format_canonical_integer,
 )
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.probability._models import MAX_INPUT_RATIONAL_DIGITS
 
@@ -322,10 +325,10 @@ GRAPH_CONNECTION_PROBABILITY_OPERATION = MathTool(
         "python-flint",
     ),
     examples=(
-        example(
-            "triangle_terminal_reliability",
-            "Compute the exact terminal connection probability in a fair-edge triangle.",
-            {
+        OperationExample(
+            name="triangle_terminal_reliability",
+            description="Compute the exact terminal connection probability in a fair-edge triangle.",
+            input={
                 "graph": {
                     "vertices": ["a", "b", "c"],
                     "edges": [["a", "b"], ["a", "c"], ["b", "c"]],
@@ -347,10 +350,10 @@ GRAPH_CONNECTION_PROBABILITY_OPERATION = MathTool(
                 "terminals": ["a", "c"],
             },
         ),
-        example(
-            "square_terminal_reliability",
-            "Compute square-graph terminal reliability; edge probabilities cover edges canonically and terminals are distinct declared vertices.",
-            _SQUARE_GRAPH,
+        OperationExample(
+            name="square_terminal_reliability",
+            description="Compute square-graph terminal reliability; edge probabilities cover edges canonically and terminals are distinct declared vertices.",
+            input=_SQUARE_GRAPH,
         ),
     ),
 )

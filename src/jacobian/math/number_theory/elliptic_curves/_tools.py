@@ -1,10 +1,7 @@
 """Typed declarations for elliptic curve operations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory.elliptic_curves._models import (
     CurveDiscriminantResult,
@@ -46,31 +43,6 @@ def compute_scalar_multiply(
 ) -> ScalarMultiplicationResult:
     """Unpack a wire request for the native scalar-multiplication operation."""
     return scalar_multiply(request.curve, request.point, request.scalar)
-
-
-def elliptic_curve_operation[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
 
 
 _DISCRIMINANT_EXAMPLE: dict[str, Any] = {
@@ -141,84 +113,74 @@ _SCALAR_MULT_EXAMPLE: dict[str, Any] = {
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    elliptic_curve_operation(
-        "number_theory.elliptic_curve.short_weierstrass.discriminant.compute",
-        "Compute the discriminant of a short Weierstrass elliptic curve",
-        "Compute the exact discriminant Δ = -16(4A³ + 27B²) of a short "
+    MathTool(
+        operation_id="number_theory.elliptic_curve.short_weierstrass.discriminant.compute",
+        title="Compute the discriminant of a short Weierstrass elliptic curve",
+        description="Compute the exact discriminant Δ = -16(4A³ + 27B²) of a short "
         "Weierstrass curve y² = x³ + Ax + B over QQ, together with the "
         "nonsingularity predicate (Δ ≠ 0).",
-        EllipticCurveRequest,
-        CurveDiscriminantResult,
-        compute_discriminant,
-        "elliptic-curve",
-        "discriminant",
-        "exact",
+        request_type=EllipticCurveRequest,
+        result_type=CurveDiscriminantResult,
+        run=compute_discriminant,
+        tags=("elliptic-curve", "discriminant", "exact"),
         examples=(
-            example(
-                "y_squared_equals_x_cubed_plus_x",
-                "Compute the discriminant of y² = x³ + x (A=1, B=0).",
-                _DISCRIMINANT_EXAMPLE,
+            OperationExample(
+                name="y_squared_equals_x_cubed_plus_x",
+                description="Compute the discriminant of y² = x³ + x (A=1, B=0).",
+                input=_DISCRIMINANT_EXAMPLE,
             ),
         ),
     ),
-    elliptic_curve_operation(
-        "number_theory.elliptic_curve.short_weierstrass.point_on_curve.decide",
-        "Check whether a point lies on a short Weierstrass elliptic curve",
-        "Check whether a rational affine point (x, y) lies on the curve "
+    MathTool(
+        operation_id="number_theory.elliptic_curve.short_weierstrass.point_on_curve.decide",
+        title="Check whether a point lies on a short Weierstrass elliptic curve",
+        description="Check whether a rational affine point (x, y) lies on the curve "
         "y² = x³ + Ax + B by verifying y² = x³ + Ax + B exactly over QQ.",
-        CurvePointRequest,
-        PointOnCurveResult,
-        check_point_on_curve,
-        "elliptic-curve",
-        "point-on-curve",
-        "exact",
+        request_type=CurvePointRequest,
+        result_type=PointOnCurveResult,
+        run=check_point_on_curve,
+        tags=("elliptic-curve", "point-on-curve", "exact"),
         examples=(
-            example(
-                "origin_on_x_cubed_plus_x",
-                "Check whether (0, 0) lies on y² = x³ + x.",
-                _POINT_ON_CURVE_EXAMPLE,
+            OperationExample(
+                name="origin_on_x_cubed_plus_x",
+                description="Check whether (0, 0) lies on y² = x³ + x.",
+                input=_POINT_ON_CURVE_EXAMPLE,
             ),
         ),
     ),
-    elliptic_curve_operation(
-        "number_theory.elliptic_curve.short_weierstrass.point_addition.compute",
-        "Add two points on a short Weierstrass elliptic curve",
-        "Add two rational affine points P₁ + P₂ on y² = x³ + Ax + B using "
+    MathTool(
+        operation_id="number_theory.elliptic_curve.short_weierstrass.point_addition.compute",
+        title="Add two points on a short Weierstrass elliptic curve",
+        description="Add two rational affine points P₁ + P₂ on y² = x³ + Ax + B using "
         "the exact chord-and-tangent group law over QQ. Returns the point "
         "at infinity when P₁ + P₂ = O.",
-        EllipticCurvePointAdditionRequest,
-        EllipticCurvePointResult,
-        compute_add_points,
-        "elliptic-curve",
-        "point-addition",
-        "group-law",
-        "exact",
+        request_type=EllipticCurvePointAdditionRequest,
+        result_type=EllipticCurvePointResult,
+        run=compute_add_points,
+        tags=("elliptic-curve", "point-addition", "group-law", "exact"),
         examples=(
-            example(
-                "double_origin_on_x_cubed_plus_x",
-                "Compute (0,0) + (0,0) on y² = x³ + x; the result is at infinity.",
-                _POINT_ADDITION_EXAMPLE,
+            OperationExample(
+                name="double_origin_on_x_cubed_plus_x",
+                description="Compute (0,0) + (0,0) on y² = x³ + x; the result is at infinity.",
+                input=_POINT_ADDITION_EXAMPLE,
             ),
         ),
     ),
-    elliptic_curve_operation(
-        "number_theory.elliptic_curve.short_weierstrass.scalar_multiply.compute",
-        "Compute n*P on a short Weierstrass elliptic curve",
-        "Compute the scalar multiple n*P on y² = x³ + Ax + B using the "
+    MathTool(
+        operation_id="number_theory.elliptic_curve.short_weierstrass.scalar_multiply.compute",
+        title="Compute n*P on a short Weierstrass elliptic curve",
+        description="Compute the scalar multiple n*P on y² = x³ + Ax + B using the "
         "double-and-add method over QQ. Returns the point at infinity "
         "when n*P = O.",
-        ScalarMultiplicationRequest,
-        ScalarMultiplicationResult,
-        compute_scalar_multiply,
-        "elliptic-curve",
-        "scalar-multiplication",
-        "group-law",
-        "exact",
+        request_type=ScalarMultiplicationRequest,
+        result_type=ScalarMultiplicationResult,
+        run=compute_scalar_multiply,
+        tags=("elliptic-curve", "scalar-multiplication", "group-law", "exact"),
         examples=(
-            example(
-                "double_point_on_x_cubed_minus_x",
-                "Compute 2*(1,0) on y² = x³ - x; the result is at infinity.",
-                _SCALAR_MULT_EXAMPLE,
+            OperationExample(
+                name="double_point_on_x_cubed_minus_x",
+                description="Compute 2*(1,0) on y² = x³ - x; the result is at infinity.",
+                input=_SCALAR_MULT_EXAMPLE,
             ),
         ),
     ),

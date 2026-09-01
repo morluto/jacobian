@@ -13,7 +13,6 @@ from tempfile import TemporaryDirectory
 from typing import Any, cast
 
 from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -463,10 +462,10 @@ CLIQUE_NUMBER_OPERATION = MathTool(
     run=_clique_execute,
     tags=("graph", "invariant", "clique", "maximum", "bounded", "z3"),
     examples=(
-        example(
-            "path_graph_3",
-            "Clique number of the path graph P3.",
-            {
+        OperationExample(
+            name="path_graph_3",
+            description="Clique number of the path graph P3.",
+            input={
                 "graph": {
                     "vertices": ["a", "b", "c"],
                     "edges": [["a", "b"], ["b", "c"]],
@@ -486,10 +485,10 @@ EXACT_GRAPH_INVARIANT_OPERATIONS = (
         "triangle",
         "exact",
         examples=(
-            example(
-                "triangle_graph",
-                "Count triangles in a three-cycle.",
-                {
+            OperationExample(
+                name="triangle_graph",
+                description="Count triangles in a three-cycle.",
+                input={
                     "graph": {
                         "vertices": ["a", "b", "c"],
                         "edges": [["a", "b"], ["b", "c"], ["a", "c"]],
@@ -507,10 +506,10 @@ EXACT_GRAPH_INVARIANT_OPERATIONS = (
         "radius",
         "exact",
         examples=(
-            example(
-                "path_three_radius",
-                "Compute the radius of a three-vertex path.",
-                {
+            OperationExample(
+                name="path_three_radius",
+                description="Compute the radius of a three-vertex path.",
+                input={
                     "graph": {
                         "vertices": ["a", "b", "c"],
                         "edges": [["a", "b"], ["b", "c"]],
@@ -528,10 +527,10 @@ EXACT_GRAPH_INVARIANT_OPERATIONS = (
         "diameter",
         "exact",
         examples=(
-            example(
-                "path_three_diameter",
-                "Compute the diameter of a three-vertex path.",
-                {
+            OperationExample(
+                name="path_three_diameter",
+                description="Compute the diameter of a three-vertex path.",
+                input={
                     "graph": {
                         "vertices": ["a", "b", "c"],
                         "edges": [["a", "b"], ["b", "c"]],
@@ -549,10 +548,10 @@ EXACT_GRAPH_INVARIANT_OPERATIONS = (
         "eulerian",
         "exact",
         examples=(
-            example(
-                "triangle_eulerian",
-                "Decide whether a triangle has an Eulerian circuit.",
-                {
+            OperationExample(
+                name="triangle_eulerian",
+                description="Decide whether a triangle has an Eulerian circuit.",
+                input={
                     "graph": {
                         "vertices": ["a", "b", "c"],
                         "edges": [["a", "b"], ["b", "c"], ["a", "c"]],
@@ -570,10 +569,10 @@ EXACT_GRAPH_INVARIANT_OPERATIONS = (
         run=_k_core_execute,
         tags=("graph", "invariant", "k-core", "exact"),
         examples=(
-            example(
-                "triangle_two_core",
-                "Compute the 2-core of a triangle.",
-                {
+            OperationExample(
+                name="triangle_two_core",
+                description="Compute the 2-core of a triangle.",
+                input={
                     "graph": {
                         "vertices": ["a", "b", "c"],
                         "edges": [["a", "b"], ["b", "c"], ["a", "c"]],
@@ -592,10 +591,10 @@ EXACT_GRAPH_INVARIANT_OPERATIONS = (
         "girth",
         "exact",
         examples=(
-            example(
-                "triangle_girth",
-                "Compute the girth of a triangle.",
-                {
+            OperationExample(
+                name="triangle_girth",
+                description="Compute the girth of a triangle.",
+                input={
                     "graph": {
                         "vertices": ["a", "b", "c"],
                         "edges": [["a", "b"], ["b", "c"], ["a", "c"]],
@@ -613,10 +612,10 @@ EXACT_GRAPH_INVARIANT_OPERATIONS = (
         "edge-connectivity",
         "exact",
         examples=(
-            example(
-                "triangle_edge_connectivity",
-                "Compute edge connectivity of a triangle.",
-                {
+            OperationExample(
+                name="triangle_edge_connectivity",
+                description="Compute edge connectivity of a triangle.",
+                input={
                     "graph": {
                         "vertices": ["a", "b", "c"],
                         "edges": [["a", "b"], ["b", "c"], ["a", "c"]],
@@ -634,10 +633,10 @@ EXACT_GRAPH_INVARIANT_OPERATIONS = (
         "vertex-connectivity",
         "exact",
         examples=(
-            example(
-                "triangle_vertex_connectivity",
-                "Compute vertex connectivity of a triangle.",
-                {
+            OperationExample(
+                name="triangle_vertex_connectivity",
+                description="Compute vertex connectivity of a triangle.",
+                input={
                     "graph": {
                         "vertices": ["a", "b", "c"],
                         "edges": [["a", "b"], ["b", "c"], ["a", "c"]],
@@ -655,10 +654,10 @@ EXACT_GRAPH_INVARIANT_OPERATIONS = (
         "spanning-tree",
         "exact",
         examples=(
-            example(
-                "triangle_spanning_trees",
-                "Count spanning trees of a triangle.",
-                {
+            OperationExample(
+                name="triangle_spanning_trees",
+                description="Count spanning trees of a triangle.",
+                input={
                     "graph": {
                         "vertices": ["a", "b", "c"],
                         "edges": [["a", "b"], ["b", "c"], ["a", "c"]],
@@ -679,10 +678,10 @@ EXACT_GRAPH_INVARIANT_OPERATIONS = (
         run=_maximum_matching_execute,
         tags=("graph", "invariant", "matching", "maximum", "exact"),
         examples=(
-            example(
-                "triangle_with_tail",
-                "Compute and certify a maximum matching of a triangle with one tail.",
-                {
+            OperationExample(
+                name="triangle_with_tail",
+                description="Compute and certify a maximum matching of a triangle with one tail.",
+                input={
                     "graph": {
                         "vertices": ["a", "b", "c", "d"],
                         "edges": [

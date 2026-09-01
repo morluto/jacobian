@@ -1,10 +1,7 @@
 """Formal concept analysis operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.combinatorics.posets.formal_concepts._models import (
     AttributeSubsetRequest,
@@ -101,31 +98,6 @@ def compute_concept_lattice(
     return concept_lattice(request.context)
 
 
-def _op[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 # A simple 2x2 context: objects {o0, o1}, attributes {a0, a1}
 # o0 has a0; o1 has a1.
 _CONTEXT = {
@@ -136,162 +108,150 @@ _CONTEXT = {
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "formal_context.objects.derivation.compute",
-        "Compute A' = {m : every g in A has m}",
-        "Return the exact derived attribute set for an object subset. Under "
+    MathTool(
+        operation_id="formal_context.objects.derivation.compute",
+        title="Compute A' = {m : every g in A has m}",
+        description="Return the exact derived attribute set for an object subset. Under "
         "standard FCA semantics, the derivation of the empty object set is "
         "every attribute.",
-        ObjectSubsetRequest,
-        DerivationResult,
-        compute_object_derivation,
-        "formal-concept-analysis",
-        "derivation",
-        "exact",
+        request_type=ObjectSubsetRequest,
+        result_type=DerivationResult,
+        run=compute_object_derivation,
+        tags=("formal-concept-analysis", "derivation", "exact"),
         examples=(
-            example(
-                "empty_object_set",
-                "Derivation of the empty object set is every attribute.",
-                {"context": _CONTEXT, "subset": []},
+            OperationExample(
+                name="empty_object_set",
+                description="Derivation of the empty object set is every attribute.",
+                input={"context": _CONTEXT, "subset": []},
             ),
         ),
     ),
-    _op(
-        "formal_context.attributes.derivation.compute",
-        "Compute B' = {g : every m in B is possessed by g}",
-        "Return the exact derived object set for an attribute subset. Under "
+    MathTool(
+        operation_id="formal_context.attributes.derivation.compute",
+        title="Compute B' = {g : every m in B is possessed by g}",
+        description="Return the exact derived object set for an attribute subset. Under "
         "standard FCA semantics, the derivation of the empty attribute set is "
         "every object.",
-        AttributeSubsetRequest,
-        DerivationResult,
-        compute_attribute_derivation,
-        "formal-concept-analysis",
-        "derivation",
-        "exact",
+        request_type=AttributeSubsetRequest,
+        result_type=DerivationResult,
+        run=compute_attribute_derivation,
+        tags=("formal-concept-analysis", "derivation", "exact"),
         examples=(
-            example(
-                "empty_attribute_set",
-                "Derivation of the empty attribute set is every object.",
-                {"context": _CONTEXT, "subset": []},
+            OperationExample(
+                name="empty_attribute_set",
+                description="Derivation of the empty attribute set is every object.",
+                input={"context": _CONTEXT, "subset": []},
             ),
         ),
     ),
-    _op(
-        "formal_context.objects.closure.compute",
-        "Compute A'' = (A')' with added objects and closed status",
-        "Return the object closure A'' with the derived attributes A', added "
+    MathTool(
+        operation_id="formal_context.objects.closure.compute",
+        title="Compute A'' = (A')' with added objects and closed status",
+        description="Return the object closure A'' with the derived attributes A', added "
         "objects A''\\A, and whether A is already closed.",
-        ObjectSubsetRequest,
-        ClosureResult,
-        compute_object_closure,
-        "formal-concept-analysis",
-        "closure",
-        "exact",
+        request_type=ObjectSubsetRequest,
+        result_type=ClosureResult,
+        run=compute_object_closure,
+        tags=("formal-concept-analysis", "closure", "exact"),
         examples=(
-            example(
-                "empty_object_closure",
-                "Closure of the empty object set.",
-                {"context": _CONTEXT, "subset": []},
+            OperationExample(
+                name="empty_object_closure",
+                description="Closure of the empty object set.",
+                input={"context": _CONTEXT, "subset": []},
             ),
         ),
     ),
-    _op(
-        "formal_context.concept.from_objects.compute",
-        "Construct the concept (A'', A') from an object subset",
-        "Return the unique concept generated by an object subset: (A'', A').",
-        ObjectSubsetRequest,
-        ConceptResult,
-        compute_concept_from_objects,
-        "formal-concept-analysis",
-        "concept",
-        "exact",
+    MathTool(
+        operation_id="formal_context.concept.from_objects.compute",
+        title="Construct the concept (A'', A') from an object subset",
+        description="Return the unique concept generated by an object subset: (A'', A').",
+        request_type=ObjectSubsetRequest,
+        result_type=ConceptResult,
+        run=compute_concept_from_objects,
+        tags=("formal-concept-analysis", "concept", "exact"),
         examples=(
-            example(
-                "concept_from_o0",
-                "Concept from object o0.",
-                {"context": _CONTEXT, "subset": [0]},
+            OperationExample(
+                name="concept_from_o0",
+                description="Concept from object o0.",
+                input={"context": _CONTEXT, "subset": [0]},
             ),
         ),
     ),
-    _op(
-        "formal_context.concept.from_attributes.compute",
-        "Construct the concept (B', B'') from an attribute subset",
-        "Return the unique concept generated by an attribute subset: (B', B'').",
-        AttributeSubsetRequest,
-        ConceptResult,
-        compute_concept_from_attributes,
-        "formal-concept-analysis",
-        "concept",
-        "exact",
+    MathTool(
+        operation_id="formal_context.concept.from_attributes.compute",
+        title="Construct the concept (B', B'') from an attribute subset",
+        description="Return the unique concept generated by an attribute subset: (B', B'').",
+        request_type=AttributeSubsetRequest,
+        result_type=ConceptResult,
+        run=compute_concept_from_attributes,
+        tags=("formal-concept-analysis", "concept", "exact"),
         examples=(
-            example(
-                "concept_from_a0",
-                "Concept from attribute a0.",
-                {"context": _CONTEXT, "subset": [0]},
+            OperationExample(
+                name="concept_from_a0",
+                description="Concept from attribute a0.",
+                input={"context": _CONTEXT, "subset": [0]},
             ),
         ),
     ),
-    _op(
-        "formal_context.concepts.enumerate.compute",
-        "Enumerate every formal concept exactly once",
-        "Return the complete concept family of closed attribute intents "
+    MathTool(
+        operation_id="formal_context.concepts.enumerate.compute",
+        title="Enumerate every formal concept exactly once",
+        description="Return the complete concept family of closed attribute intents "
         "using Ganter's NextClosure algorithm over the declared attribute "
         "order. The family, not the enumeration order, is mathematical. "
         "Admission proves the complete family fits the declared concept "
         "budget before enumeration.",
-        EnumerateConceptsRequest,
-        EnumerateConceptsResult,
-        compute_enumerate_concepts,
-        "formal-concept-analysis",
-        "enumeration",
-        "exact",
+        request_type=EnumerateConceptsRequest,
+        result_type=EnumerateConceptsResult,
+        run=compute_enumerate_concepts,
+        tags=("formal-concept-analysis", "enumeration", "exact"),
         examples=(
-            example(
-                "enumerate_concepts",
-                "Enumerate all concepts of a 2x2 context.",
-                {"context": _CONTEXT},
+            OperationExample(
+                name="enumerate_concepts",
+                description="Enumerate all concepts of a 2x2 context.",
+                input={"context": _CONTEXT},
             ),
         ),
     ),
-    _op(
-        "formal_context.concept_lattice.compute",
-        "Compute the concept lattice",
-        "Return the complete concepts, partial order by extent inclusion, "
+    MathTool(
+        operation_id="formal_context.concept_lattice.compute",
+        title="Compute the concept lattice",
+        description="Return the complete concepts, partial order by extent inclusion, "
         "cover relation/Hasse diagram, and top and bottom concepts.",
-        EnumerateConceptsRequest,
-        ConceptLatticeResult,
-        compute_concept_lattice,
-        "formal-concept-analysis",
-        "lattice",
-        "exact",
+        request_type=EnumerateConceptsRequest,
+        result_type=ConceptLatticeResult,
+        run=compute_concept_lattice,
+        tags=("formal-concept-analysis", "lattice", "exact"),
         examples=(
-            example(
-                "concept_lattice",
-                "Concept lattice of a 2x2 context.",
-                {"context": _CONTEXT},
+            OperationExample(
+                name="concept_lattice",
+                description="Concept lattice of a 2x2 context.",
+                input={"context": _CONTEXT},
             ),
         ),
     ),
-    _op(
-        "formal_context.duquenne_guigues_basis.compute",
-        "Compute the exact Duquenne-Guigues implication basis",
-        "Return every pseudo-intent and its context closure, the complete "
+    MathTool(
+        operation_id="formal_context.duquenne_guigues_basis.compute",
+        title="Compute the exact Duquenne-Guigues implication basis",
+        description="Return every pseudo-intent and its context closure, the complete "
         "canonical implication system, an exhaustive subset-closure matrix, "
         "explicit source-coordinate binding, and exact work/output accounting. "
         "One complete producer plan is admitted before enumeration; there is "
         "no partial-result branch.",
-        DuquenneGuiguesBasisRequest,
-        CanonicalImplicationBasisResult,
-        compute_duquenne_guigues_basis,
-        "formal-concept-analysis",
-        "implication-system",
-        "canonical-basis",
-        "exact",
+        request_type=DuquenneGuiguesBasisRequest,
+        result_type=CanonicalImplicationBasisResult,
+        run=compute_duquenne_guigues_basis,
+        tags=(
+            "formal-concept-analysis",
+            "implication-system",
+            "canonical-basis",
+            "exact",
+        ),
         examples=(
-            example(
-                "empty_premise_canonical_basis",
-                "Compute the basis of a context whose empty-set closure is nonempty.",
-                {
+            OperationExample(
+                name="empty_premise_canonical_basis",
+                description="Compute the basis of a context whose empty-set closure is nonempty.",
+                input={
                     "context": {
                         "objects": ["g0", "g1"],
                         "attributes": ["always", "sometimes"],
@@ -301,25 +261,22 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "implication_system.closure.compute",
-        "Compute closure under a finite attribute implication system",
-        "Return the unique least superset of a seed that satisfies every finite "
+    MathTool(
+        operation_id="implication_system.closure.compute",
+        title="Compute closure under a finite attribute implication system",
+        description="Return the unique least superset of a seed that satisfies every finite "
         "attribute implication, together with the first canonical derivation of "
         "each added attribute and exact canonical closure work.",
-        ImplicationClosureRequest,
-        ImplicationClosureResult,
-        compute_implication_closure,
-        "formal-concept-analysis",
-        "implication-system",
-        "closure",
-        "exact",
+        request_type=ImplicationClosureRequest,
+        result_type=ImplicationClosureResult,
+        run=compute_implication_closure,
+        tags=("formal-concept-analysis", "implication-system", "closure", "exact"),
         examples=(
-            example(
-                "two_round_implication_closure",
-                "Close {has_wings} through has_wings -> flies -> is_mobile; "
+            OperationExample(
+                name="two_round_implication_closure",
+                description="Close {has_wings} through has_wings -> flies -> is_mobile; "
                 "all rule and seed indices must refer to the declared attribute axis.",
-                {
+                input={
                     "system": {
                         "attributes": ["has_wings", "flies", "is_mobile"],
                         "implications": [

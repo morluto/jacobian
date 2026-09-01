@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import sys
 from itertools import pairwise
 from typing import Any
 
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import (
+    encode_strict_json,
+    format_canonical_integer,
+    loads_strict_json,
+    parse_canonical_integer,
+)
 
 
 def _matrix_entries(matrix: Any, *, rows: int, columns: int) -> list[list[int]]:
@@ -31,16 +35,8 @@ def _decode_integer(value: Any) -> int:
         raise ValueError("worker matrix entry is not an integer") from exc
 
 
-def _encode_integers(value: Any) -> Any:
-    """Encode every worker integer as an unbounded canonical decimal string."""
-
-    if isinstance(value, int) and not isinstance(value, bool):
-        return format_canonical_integer(value)
-    if isinstance(value, list):
-        return [_encode_integers(item) for item in value]
-    if isinstance(value, dict):
-        return {key: _encode_integers(item) for key, item in value.items()}
-    return value
+def _encode_matrix(matrix: list[list[int]]) -> list[list[str]]:
+    return [[format_canonical_integer(value) for value in row] for row in matrix]
 
 
 def _inverse_unimodular(matrix: list[list[int]]) -> list[list[int]]:
@@ -118,19 +114,27 @@ def _smith_projection(
 
 def main() -> int:
     input_bytes = sys.stdin.buffer.read()
-    payload: dict[str, Any] = json.loads(input_bytes)
+    payload: dict[str, Any] = loads_strict_json(input_bytes)
     source = payload["matrix"]
     rows = payload["row_count"]
     columns = payload["column_count"]
 
     projection = _smith_projection(source, rows=rows, columns=columns)
-    response = _encode_integers(
-        {
-            "request_digest": hashlib.sha256(input_bytes).hexdigest(),
-            **projection,
-        }
-    )
-    json.dump(response, sys.stdout, separators=(",", ":"))
+    response = {
+        "request_digest": hashlib.sha256(input_bytes).hexdigest(),
+        "diagonal": _encode_matrix(projection["diagonal"]),
+        "left": _encode_matrix(projection["left"]),
+        "right": _encode_matrix(projection["right"]),
+        "rank": projection["rank"],
+        "invariant_factors": [
+            format_canonical_integer(value) for value in projection["invariant_factors"]
+        ],
+        "left_determinant": projection["left_determinant"],
+        "right_determinant": projection["right_determinant"],
+        "left_inverse": _encode_matrix(projection["left_inverse"]),
+        "right_inverse": _encode_matrix(projection["right_inverse"]),
+    }
+    sys.stdout.buffer.write(encode_strict_json(response))
     return 0
 
 

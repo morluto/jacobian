@@ -2,8 +2,7 @@
 
 from typing import Any
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.crossed_products._models import (
     CrossedProductMultiplyRequest,
     CrossedProductMultiplyResult,
@@ -59,11 +58,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "exact",
         ),
         examples=(
-            example(
-                "infinite_dihedral_basis_product",
-                "In F_5[Z semidirect C_2], multiply 2*t*a by 3*t^2*a. "
+            OperationExample(
+                name="infinite_dihedral_basis_product",
+                description="In F_5[Z semidirect C_2], multiply 2*t*a by 3*t^2*a. "
                 "The action a(t)=t^-1 gives t^-1 in the identity coset.",
-                {
+                input={
                     "left": {
                         "presentation": _INFINITE_DIHEDRAL_PRESENTATION,
                         "terms": [{"coefficient": 2, "coset": "a", "exponents": ["1"]}],

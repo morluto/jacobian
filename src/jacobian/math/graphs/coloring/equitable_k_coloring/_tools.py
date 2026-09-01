@@ -1,7 +1,6 @@
 """Typed declarations for the equitable k-colouring decision."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.graphs.coloring.equitable_k_coloring._models import (
     EquitableColoringRequest,
     EquitableColoringResult,
@@ -29,10 +28,10 @@ TOOLS: MathTools = (
         run=_decide,
         tags=("graph", "coloring", "equitable", "exact"),
         examples=(
-            example(
-                "k4_complete",
-                "Equitable 4-colouring of K4.",
-                {
+            OperationExample(
+                name="k4_complete",
+                description="Equitable 4-colouring of K4.",
+                input={
                     "graph": {
                         "vertices": ["a", "b", "c", "d"],
                         "edges": [

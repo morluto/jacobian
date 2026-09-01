@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from pydantic_core import PydanticCustomError
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.polynomials.rational_functions import operations as native
 from jacobian.math.polynomials.rational_functions._models import (
     HermiteReductionRequest,
@@ -52,14 +55,14 @@ TOOLS = (
         run=compute_hermite_reduction,
         tags=("rational-function", "Hermite-reduction", "exact", "primitive"),
         examples=(
-            example(
-                "simple_and_repeated_poles",
-                "Separate the derivative of a repeated pole from a simple-pole "
+            OperationExample(
+                name="simple_and_repeated_poles",
+                description="Separate the derivative of a repeated pole from a simple-pole "
                 "remainder; the function must be canonical univariate QQ(x) in "
                 "one variable x, with numerator degree at most 6, denominator "
                 "degree at most 3, and two-digit rational coefficient "
                 "components.",
-                {
+                input={
                     "function": {
                         "variables": ["x"],
                         "numerator": {

@@ -1,7 +1,6 @@
 """Polygon-owned exact geometry operations."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.geometry._euclidean_triangulation import (
     minimum_euclidean_weight_triangulation,
 )
@@ -16,7 +15,6 @@ from jacobian.math.geometry._models import (
     SimplePolygonDecisionResult,
     SimplePolygonPointRequest,
 )
-from jacobian.math.geometry._support import geometry_operation
 from jacobian.math.geometry._tools import (
     classify_polygon_point,
     simple_polygon,
@@ -31,10 +29,10 @@ _UNIT_SQUARE = [
 ]
 
 POLYGON_OPERATIONS: MathTools = (
-    geometry_operation(
-        "geometry.polygon.triangulation.minimum_euclidean_weight.compute",
-        "Compute a certified minimum Euclidean convex-polygon triangulation",
-        (
+    MathTool(
+        operation_id="geometry.polygon.triangulation.minimum_euclidean_weight.compute",
+        title="Compute a certified minimum Euclidean convex-polygon triangulation",
+        description=(
             "Compute one deterministic minimum triangulation of a strict CCW convex "
             f"simple rational polygon of 4 to {MAX_EUCLIDEAN_TRIANGULATION_VERTICES} "
             "vertices, charging each selected "
@@ -50,49 +48,48 @@ POLYGON_OPERATIONS: MathTools = (
             "interval; otherwise returns the first unresolved exact comparison "
             "without claiming an optimum."
         ),
-        EuclideanConvexPolygonTriangulationRequest,
-        EuclideanConvexPolygonTriangulationResult,
-        minimum_euclidean_weight_triangulation,
-        "geometry",
-        "polygon",
-        "triangulation",
-        "optimization",
-        "euclidean",
-        "square-root-sum",
+        request_type=EuclideanConvexPolygonTriangulationRequest,
+        result_type=EuclideanConvexPolygonTriangulationResult,
+        run=minimum_euclidean_weight_triangulation,
+        tags=(
+            "geometry",
+            "polygon",
+            "triangulation",
+            "optimization",
+            "euclidean",
+            "square-root-sum",
+        ),
         examples=(
-            example(
-                "unit_square_euclidean",
-                (
+            OperationExample(
+                name="unit_square_euclidean",
+                description=(
                     "Triangulate a unit square under the non-hull Euclidean "
                     "diagonal-length objective; the polygon must be simple and "
                     f"strictly CCW convex with 4 to {MAX_EUCLIDEAN_TRIANGULATION_VERTICES} "
                     "vertices whose complete serialized result, including the "
                     "echoed source ring, stays inside its output bound."
                 ),
-                {"polygon": {"points": _UNIT_SQUARE}},
+                input={"polygon": {"points": _UNIT_SQUARE}},
             ),
         ),
     ),
-    geometry_operation(
-        "geometry.polygon.triangulation.minimum_weight.compute",
-        "Compute an exact minimum-weight convex-polygon triangulation",
-        (
+    MathTool(
+        operation_id="geometry.polygon.triangulation.minimum_weight.compute",
+        title="Compute an exact minimum-weight convex-polygon triangulation",
+        description=(
             "Compute the deterministic minimum triangulation of a strict CCW "
             "convex rational polygon under a complete exact rational weight for "
             "each non-hull diagonal, charging every selected diagonal once."
         ),
-        ConvexPolygonTriangulationRequest,
-        ConvexPolygonTriangulationResult,
-        minimum_weight_triangulation,
-        "geometry",
-        "polygon",
-        "triangulation",
-        "optimization",
+        request_type=ConvexPolygonTriangulationRequest,
+        result_type=ConvexPolygonTriangulationResult,
+        run=minimum_weight_triangulation,
+        tags=("geometry", "polygon", "triangulation", "optimization"),
         examples=(
-            example(
-                "unit_square_complete_diagonals",
-                "Triangulate a unit square; use a strict CCW convex polygon and ordered weights for every non-hull diagonal.",
-                {
+            OperationExample(
+                name="unit_square_complete_diagonals",
+                description="Triangulate a unit square; use a strict CCW convex polygon and ordered weights for every non-hull diagonal.",
+                input={
                     "polygon": {"points": _UNIT_SQUARE},
                     "diagonal_weights": [
                         {"first": 0, "second": 2, "weight": {"num": "1", "den": "1"}},
@@ -102,45 +99,41 @@ POLYGON_OPERATIONS: MathTools = (
             ),
         ),
     ),
-    geometry_operation(
-        "geometry.polygon.simple.decide",
-        "Decide exact simple-polygon validity",
-        (
+    MathTool(
+        operation_id="geometry.polygon.simple.decide",
+        title="Decide exact simple-polygon validity",
+        description=(
             "Decide whether a bounded rational polygon ring is simple and "
             "preserve the first exact violating edge pair when it is not."
         ),
-        PolygonRequest,
-        SimplePolygonDecisionResult,
-        simple_polygon,
-        "geometry",
-        "polygon",
-        "decision",
+        request_type=PolygonRequest,
+        result_type=SimplePolygonDecisionResult,
+        run=simple_polygon,
+        tags=("geometry", "polygon", "decision"),
         examples=(
-            example(
-                "unit_square_is_simple",
-                "Check every edge pair of a unit-square ring; a simple polygon's adjacent edges meet only at endpoints.",
-                {"points": _UNIT_SQUARE},
+            OperationExample(
+                name="unit_square_is_simple",
+                description="Check every edge pair of a unit-square ring; a simple polygon's adjacent edges meet only at endpoints.",
+                input={"points": _UNIT_SQUARE},
             ),
         ),
     ),
-    geometry_operation(
-        "geometry.polygon.point.classify",
-        "Classify a point against a simple polygon",
-        (
+    MathTool(
+        operation_id="geometry.polygon.point.classify",
+        title="Classify a point against a simple polygon",
+        description=(
             "Classify one rational point as inside, on the boundary of, or "
             "outside one structurally validated simple rational polygon."
         ),
-        SimplePolygonPointRequest,
-        PolygonPointClassificationResult,
-        classify_polygon_point,
-        "geometry",
-        "polygon",
-        "classification",
+        request_type=SimplePolygonPointRequest,
+        result_type=PolygonPointClassificationResult,
+        run=classify_polygon_point,
+        tags=("geometry", "polygon", "classification"),
         examples=(
-            example(
-                "unit_square_center",
-                "Classify the center of a unit square; the polygon must be simple.",
-                {
+            OperationExample(
+                name="unit_square_center",
+                description="Classify the center of a unit square; the polygon must be simple.",
+                input={
                     "polygon": {"points": _UNIT_SQUARE},
                     "point": {
                         "x": {"num": "1", "den": "2"},

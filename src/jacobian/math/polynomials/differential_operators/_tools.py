@@ -2,8 +2,7 @@
 
 from typing import Any
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.polynomials.differential_operators import operations as native
 from jacobian.math.polynomials.differential_operators._flint import apply_with_flint
 from jacobian.math.polynomials.differential_operators._models import (
@@ -76,12 +75,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "exact",
         ),
         examples=(
-            example(
-                "second_iterate_of_dx_minus_dy",
-                "Apply (partial_x - partial_y)^2 to x^2*y + 3*y^2 and compare "
+            OperationExample(
+                name="second_iterate_of_dx_minus_dy",
+                description="Apply (partial_x - partial_y)^2 to x^2*y + 3*y^2 and compare "
                 "with -4*x + 2*y + 6; polynomial and operator must carry the "
                 "same complete ordered axis and canonical term order.",
-                {
+                input={
                     "polynomial": _polynomial(
                         VARIABLES,
                         ((1, 1), (2, 1)),

@@ -1,14 +1,16 @@
 """Declarations for translated-prime representation profiles."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.number_theory._prime_shift_models import (
     MAX_SHIFT_RESULT_BYTES,
     MAX_SHIFT_WORK,
     PrimeShiftProfileRequest,
     PrimeShiftProfileResult,
 )
-from jacobian.math.number_theory._support import number_theory_operation
 from jacobian.math.number_theory.operations import prime_shift_profile
 
 
@@ -27,10 +29,10 @@ def compute_prime_shift_profile(
         ) from exc
 
 
-PRIME_SHIFT_OPERATION = number_theory_operation(
-    "number_theory.translated_prime.representation_profile.compute",
-    "Compute translated-prime representation profile on a bounded interval",
-    (
+PRIME_SHIFT_OPERATION = MathTool(
+    operation_id="number_theory.translated_prime.representation_profile.compute",
+    title="Compute translated-prime representation profile on a bounded interval",
+    description=(
         "For each n in [L, U], count representations n = p + 2^k where p is "
         "prime and k >= 0. Returns the complete ordered profile when its "
         f"canonical JSON is within the {MAX_SHIFT_RESULT_BYTES}-byte output "
@@ -38,17 +40,15 @@ PRIME_SHIFT_OPERATION = number_theory_operation(
         "units. Endpoint size is admitted by that derived work envelope rather "
         "than by a fixed scalar cap."
     ),
-    PrimeShiftProfileRequest,
-    PrimeShiftProfileResult,
-    compute_prime_shift_profile,
-    "number-theory",
-    "prime",
-    "interval-profile",
+    request_type=PrimeShiftProfileRequest,
+    result_type=PrimeShiftProfileResult,
+    run=compute_prime_shift_profile,
+    tags=("number-theory", "prime", "interval-profile"),
     examples=(
-        example(
-            "prime_shift_1_20",
-            "Compute translated-prime representations for n from 1 to 20.",
-            {"lower_bound": 1, "upper_bound": 20},
+        OperationExample(
+            name="prime_shift_1_20",
+            description="Compute translated-prime representations for n from 1 to 20.",
+            input={"lower_bound": 1, "upper_bound": 20},
         ),
     ),
 )

@@ -1,10 +1,7 @@
 """Convex analysis operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.analysis.convex._models import (
     MaxAffineEvalRequest,
@@ -28,48 +25,21 @@ def _run_subdifferential(
     return max_affine_subdifferential(request.function, request.point)
 
 
-def _op[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "convex.max_affine.evaluate",
-        "Evaluate a max-affine function",
-        "Evaluate f(x) = max_i { <a_i, x> + b_i } at a rational point "
+    MathTool(
+        operation_id="convex.max_affine.evaluate",
+        title="Evaluate a max-affine function",
+        description="Evaluate f(x) = max_i { <a_i, x> + b_i } at a rational point "
         "and identify all active pieces.",
-        MaxAffineEvalRequest,
-        MaxAffineEvalResult,
-        _run_max_affine_evaluation,
-        "convex",
-        "max-affine",
-        "exact",
+        request_type=MaxAffineEvalRequest,
+        result_type=MaxAffineEvalResult,
+        run=_run_max_affine_evaluation,
+        tags=("convex", "max-affine", "exact"),
         examples=(
-            example(
-                "simple_max",
-                "max(x, -x) at x=2.",
-                {
+            OperationExample(
+                name="simple_max",
+                description="max(x, -x) at x=2.",
+                input={
                     "function": {
                         "pieces": [
                             {
@@ -89,22 +59,20 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "convex.max_affine.subdifferential",
-        "Compute subdifferential of a max-affine function",
-        "Compute the subdifferential (set of active gradients) of a "
+    MathTool(
+        operation_id="convex.max_affine.subdifferential",
+        title="Compute subdifferential of a max-affine function",
+        description="Compute the subdifferential (set of active gradients) of a "
         "max-affine function at a rational point.",
-        MaxAffineSubdifferentialRequest,
-        MaxAffineSubdifferentialResult,
-        _run_subdifferential,
-        "convex",
-        "subdifferential",
-        "exact",
+        request_type=MaxAffineSubdifferentialRequest,
+        result_type=MaxAffineSubdifferentialResult,
+        run=_run_subdifferential,
+        tags=("convex", "subdifferential", "exact"),
         examples=(
-            example(
-                "simple_subdiff",
-                "Subdifferential of max(x, -x) at x=2.",
-                {
+            OperationExample(
+                name="simple_subdiff",
+                description="Subdifferential of max(x, -x) at x=2.",
+                input={
                     "function": {
                         "pieces": [
                             {

@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, cast
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.number_theory.characters import operations as native
 from jacobian.math.number_theory.characters._models import (
     PrincipalDirichletCharacterRequest,
@@ -55,10 +54,10 @@ TOOLS: MathTools = (
         run=compute_principal_dirichlet_character,
         tags=("number-theory", "dirichlet-character", "principal", "exact"),
         examples=(
-            example(
-                "principal_character_mod_12",
-                "Compute the complete principal character modulo 12; the modulus must be positive and its full residue table must fit the 2,048-entry bound.",
-                {"modulus": 12},
+            OperationExample(
+                name="principal_character_mod_12",
+                description="Compute the complete principal character modulo 12; the modulus must be positive and its full residue table must fit the 2,048-entry bound.",
+                input={"modulus": 12},
             ),
         ),
     ),
@@ -74,10 +73,10 @@ TOOLS: MathTools = (
         run=compute_principal_dirichlet_character_value,
         tags=("number-theory", "dirichlet-character", "principal", "exact"),
         examples=(
-            example(
-                "principal_character_value_mod_12",
-                "Evaluate the principal character modulo 12 at 5.",
-                {
+            OperationExample(
+                name="principal_character_value_mod_12",
+                description="Evaluate the principal character modulo 12 at 5.",
+                input={
                     "character": {
                         "modulus": 12,
                         "unit_residues": [1, 5, 7, 11],

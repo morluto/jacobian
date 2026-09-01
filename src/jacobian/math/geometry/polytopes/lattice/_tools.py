@@ -1,10 +1,7 @@
 """Lattice-polytope operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.geometry.polytopes.lattice._models import (
     CountLatticePointsResult,
@@ -40,55 +37,28 @@ def count_lattice_points(request: LatticePolytopeRequest) -> CountLatticePointsR
     )
 
 
-def _op[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "polytope.lattice_points.enumerate",
-        "Enumerate lattice points inside a bounded rational polytope",
-        "Enumerate every lattice (integer) point of a bounded rational "
+    MathTool(
+        operation_id="polytope.lattice_points.enumerate",
+        title="Enumerate lattice points inside a bounded rational polytope",
+        description="Enumerate every lattice (integer) point of a bounded rational "
         "polytope in V- or H-representation for d <= 4, exactly. "
         "A V-representation must be full-dimensional (vertices must affinely "
         "span the ambient dimension); the supported exception is a "
         "one-dimensional input, accepted for every vertex family including "
         "a single point. A bounded empty H-system yields no points; every "
         "half-space needs a nonzero normal.",
-        EnumerateLatticePointsRequest,
-        EnumerateLatticePointsResult,
-        enumerate_lattice_points,
-        "polytope",
-        "lattice",
-        "exact",
+        request_type=EnumerateLatticePointsRequest,
+        result_type=EnumerateLatticePointsResult,
+        run=enumerate_lattice_points,
+        tags=("polytope", "lattice", "exact"),
         examples=(
-            example(
-                "unit_square_vertices",
-                "Unit square [0,1]^2 has four lattice points. Requires "
+            OperationExample(
+                name="unit_square_vertices",
+                description="Unit square [0,1]^2 has four lattice points. Requires "
                 "vertices spanning the full ambient dimension: a "
                 "lower-dimensional hull is rejected at validation.",
-                {
+                input={
                     "vertices": [
                         {
                             "coordinates": [
@@ -119,30 +89,28 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "polytope.lattice_points.count",
-        "Count lattice points inside a bounded rational polytope",
-        "Count, exactly, the lattice (integer) points of a bounded "
+    MathTool(
+        operation_id="polytope.lattice_points.count",
+        title="Count lattice points inside a bounded rational polytope",
+        description="Count, exactly, the lattice (integer) points of a bounded "
         "rational polytope in V- or H-representation for d <= 4 without "
         "listing them. A V-representation must be full-dimensional "
         "(vertices must affinely span the ambient dimension); the supported "
         "exception is a one-dimensional input, accepted for every vertex "
         "family including a single point. A bounded empty H-system counts "
         "zero; every half-space needs a nonzero normal.",
-        LatticePolytopeRequest,
-        CountLatticePointsResult,
-        count_lattice_points,
-        "polytope",
-        "lattice",
-        "exact",
+        request_type=LatticePolytopeRequest,
+        result_type=CountLatticePointsResult,
+        run=count_lattice_points,
+        tags=("polytope", "lattice", "exact"),
         examples=(
-            example(
-                "unit_square_halfspaces",
-                "Unit square [0,1]^2 via half-spaces has four lattice "
+            OperationExample(
+                name="unit_square_halfspaces",
+                description="Unit square [0,1]^2 via half-spaces has four lattice "
                 "points. Requires the H-representation to define a bounded "
                 "polytope (normals positively spanning R^d); unbounded "
                 "systems are rejected at validation.",
-                {
+                input={
                     "halfspaces": [
                         {
                             "coefficients": [

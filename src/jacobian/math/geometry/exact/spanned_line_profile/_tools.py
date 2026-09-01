@@ -1,7 +1,6 @@
 """Typed declarations for the spanned-line profile operation."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.geometry.exact.spanned_line_profile._models import (
     SpannedLineProfileRequest,
     SpannedLineProfileResult,
@@ -29,10 +28,10 @@ TOOLS: MathTools = (
         run=_compute,
         tags=("geometry", "line", "affine", "exact"),
         examples=(
-            example(
-                "three_collinear",
-                "Three collinear points span one line.",
-                {
+            OperationExample(
+                name="three_collinear",
+                description="Three collinear points span one line.",
+                input={
                     "configuration": {
                         "points": [
                             {

@@ -1,6 +1,6 @@
 """Exact polynomial invariant operations."""
 
-from jacobian.catalog._examples import example
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.polynomials._models import (
     PolynomialDiscriminantRequest,
     PolynomialDiscriminantResult,
@@ -13,7 +13,6 @@ from jacobian.math.polynomials._models import (
     PolynomialSquareFreeDecompositionResult,
     PolynomialSquareFreeRequest,
 )
-from jacobian.math.polynomials._support import polynomial_operation
 from jacobian.math.polynomials.operations import (
     polynomial_discriminant,
     polynomial_factorization,
@@ -52,21 +51,19 @@ def _run_factorization(
 
 
 POLYNOMIAL_INVARIANT_OPERATIONS = (
-    polynomial_operation(
-        "polynomial.compute.gcd",
-        "Compute a polynomial GCD and Bézout identity",
-        "Compute the monic GCD of two bounded univariate polynomials over QQ.",
-        PolynomialGcdRequest,
-        PolynomialGcdResult,
-        _run_gcd,
-        "polynomial",
-        "gcd",
-        "bezout",
+    MathTool(
+        operation_id="polynomial.compute.gcd",
+        title="Compute a polynomial GCD and Bézout identity",
+        description="Compute the monic GCD of two bounded univariate polynomials over QQ.",
+        request_type=PolynomialGcdRequest,
+        result_type=PolynomialGcdResult,
+        run=_run_gcd,
+        tags=("polynomial", "gcd", "bezout"),
         examples=(
-            example(
-                "gcd_x2_minus_one_x_minus_one",
-                "Compute the GCD of x²-1 and x-1.",
-                {
+            OperationExample(
+                name="gcd_x2_minus_one_x_minus_one",
+                description="Compute the GCD of x²-1 and x-1.",
+                input={
                     "left": {
                         "domain": "QQ",
                         "variables": ["x"],
@@ -103,23 +100,19 @@ POLYNOMIAL_INVARIANT_OPERATIONS = (
             ),
         ),
     ),
-    polynomial_operation(
-        "polynomial.compute.resultant",
-        "Compute a polynomial resultant",
-        "Compute the exact resultant in one named elimination variable over QQ.",
-        PolynomialResultantRequest,
-        PolynomialResultantResult,
-        _run_resultant,
-        "polynomial",
-        "resultant",
-        "elimination",
-        "univariate",
-        "rational",
+    MathTool(
+        operation_id="polynomial.compute.resultant",
+        title="Compute a polynomial resultant",
+        description="Compute the exact resultant in one named elimination variable over QQ.",
+        request_type=PolynomialResultantRequest,
+        result_type=PolynomialResultantResult,
+        run=_run_resultant,
+        tags=("polynomial", "resultant", "elimination", "univariate", "rational"),
         examples=(
-            example(
-                "resultant_x2_minus_one_x_minus_two",
-                "Compute the resultant of x²-1 and x-2.",
-                {
+            OperationExample(
+                name="resultant_x2_minus_one_x_minus_two",
+                description="Compute the resultant of x²-1 and x-2.",
+                input={
                     "left": {
                         "domain": "QQ",
                         "variables": ["x"],
@@ -157,20 +150,19 @@ POLYNOMIAL_INVARIANT_OPERATIONS = (
             ),
         ),
     ),
-    polynomial_operation(
-        "polynomial.compute.discriminant",
-        "Compute a polynomial discriminant",
-        "Compute the standard exact discriminant in one named variable over QQ.",
-        PolynomialDiscriminantRequest,
-        PolynomialDiscriminantResult,
-        _run_discriminant,
-        "polynomial",
-        "discriminant",
+    MathTool(
+        operation_id="polynomial.compute.discriminant",
+        title="Compute a polynomial discriminant",
+        description="Compute the standard exact discriminant in one named variable over QQ.",
+        request_type=PolynomialDiscriminantRequest,
+        result_type=PolynomialDiscriminantResult,
+        run=_run_discriminant,
+        tags=("polynomial", "discriminant"),
         examples=(
-            example(
-                "discriminant_x2_minus_one",
-                "Compute the discriminant of x²-1.",
-                {
+            OperationExample(
+                name="discriminant_x2_minus_one",
+                description="Compute the discriminant of x²-1.",
+                input={
                     "polynomial": {
                         "domain": "QQ",
                         "variables": ["x"],
@@ -192,21 +184,19 @@ POLYNOMIAL_INVARIANT_OPERATIONS = (
             ),
         ),
     ),
-    polynomial_operation(
-        "polynomial.compute.square_free_decomposition",
-        "Compute a square-free decomposition",
-        "Decompose a bounded polynomial over QQ into monic square-free factors.",
-        PolynomialSquareFreeRequest,
-        PolynomialSquareFreeDecompositionResult,
-        _run_square_free,
-        "polynomial",
-        "square-free",
-        "multiplicity",
+    MathTool(
+        operation_id="polynomial.compute.square_free_decomposition",
+        title="Compute a square-free decomposition",
+        description="Decompose a bounded polynomial over QQ into monic square-free factors.",
+        request_type=PolynomialSquareFreeRequest,
+        result_type=PolynomialSquareFreeDecompositionResult,
+        run=_run_square_free,
+        tags=("polynomial", "square-free", "multiplicity"),
         examples=(
-            example(
-                "square_free_x2_minus_one",
-                "Compute the square-free decomposition of x²-1.",
-                {
+            OperationExample(
+                name="square_free_x2_minus_one",
+                description="Compute the square-free decomposition of x²-1.",
+                input={
                     "polynomial": {
                         "domain": "QQ",
                         "variables": ["x"],
@@ -227,25 +217,23 @@ POLYNOMIAL_INVARIANT_OPERATIONS = (
             ),
         ),
     ),
-    polynomial_operation(
-        "polynomial.factor.compute",
-        "Factor a univariate rational polynomial",
-        (
+    MathTool(
+        operation_id="polynomial.factor.compute",
+        title="Factor a univariate rational polynomial",
+        description=(
             "Compute a rational content and multiplicity-bearing monic irreducible "
             "factors over QQ, together with an exact reconstructed product. Factor "
             "irreducibility is not independently certified by this producer."
         ),
-        PolynomialFactorRequest,
-        PolynomialFactorizationResult,
-        _run_factorization,
-        "polynomial",
-        "factorization",
-        "exact-computation",
+        request_type=PolynomialFactorRequest,
+        result_type=PolynomialFactorizationResult,
+        run=_run_factorization,
+        tags=("polynomial", "factorization", "exact-computation"),
         examples=(
-            example(
-                "factor_x_squared_minus_one",
-                "Factor x²-1 over QQ.",
-                {
+            OperationExample(
+                name="factor_x_squared_minus_one",
+                description="Factor x²-1 over QQ.",
+                input={
                     "polynomial": {
                         "domain": "QQ",
                         "variables": ["x"],

@@ -1,10 +1,7 @@
 """Finite game theory operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.logic.games.finite._models import (
     MAX_EXACT_EQUILIBRIUM_WORK,
@@ -34,31 +31,6 @@ def _run_deterministic_terminal_game(
     request: DeterministicTerminalGameRequest,
 ) -> DeterministicTerminalGameSolution:
     return solve_terminal_game(request.game)
-
-
-def _op[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
 
 
 GAME_EXAMPLE = {
@@ -104,71 +76,67 @@ DETERMINISTIC_TERMINAL_GAME_EXAMPLE = {
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "game_theory.best_response.compute",
-        "Compute a pure best response for the row player",
-        "Return the row with the greatest worst-case payoff and its exact value "
+    MathTool(
+        operation_id="game_theory.best_response.compute",
+        title="Compute a pure best response for the row player",
+        description="Return the row with the greatest worst-case payoff and its exact value "
         "for a finite zero-sum payoff matrix.",
-        ZeroSumGameRequest,
-        BestResponseResult,
-        _run_best_response,
-        "game-theory",
-        "best-response",
-        "zero-sum",
-        "exact",
+        request_type=ZeroSumGameRequest,
+        result_type=BestResponseResult,
+        run=_run_best_response,
+        tags=("game-theory", "best-response", "zero-sum", "exact"),
         examples=(
-            example(
-                "simple_2x2_best_response",
-                "The first row has worst-case payoff 0 and the second row has worst-case payoff 2.",
-                GAME_EXAMPLE,
+            OperationExample(
+                name="simple_2x2_best_response",
+                description="The first row has worst-case payoff 0 and the second row has worst-case payoff 2.",
+                input=GAME_EXAMPLE,
             ),
         ),
     ),
-    _op(
-        "game_theory.nash_equilibrium.compute",
-        "Compute Nash equilibrium of a zero-sum game",
-        "Find the Nash equilibrium of a 2-player zero-sum game using "
+    MathTool(
+        operation_id="game_theory.nash_equilibrium.compute",
+        title="Compute Nash equilibrium of a zero-sum game",
+        description="Find the Nash equilibrium of a 2-player zero-sum game using "
         "exact rational primal and dual linear programs. Payoff entries are "
         "row-major with n_rows * n_cols entries; exact-equilibrium admission "
         "requires its published coupled work measure to be at most "
         f"{MAX_EXACT_EQUILIBRIUM_WORK}.",
-        NashEquilibriumRequest,
-        NashEquilibriumResult,
-        _run_nash_equilibrium,
-        "game-theory",
-        "nash-equilibrium",
-        "zero-sum",
-        "exact",
+        request_type=NashEquilibriumRequest,
+        result_type=NashEquilibriumResult,
+        run=_run_nash_equilibrium,
+        tags=("game-theory", "nash-equilibrium", "zero-sum", "exact"),
         examples=(
-            example(
-                "simple_2x2_nash",
-                "Nash equilibrium of a 2x2 zero-sum game.",
-                GAME_EXAMPLE,
+            OperationExample(
+                name="simple_2x2_nash",
+                description="Nash equilibrium of a 2x2 zero-sum game.",
+                input=GAME_EXAMPLE,
             ),
         ),
     ),
-    _op(
-        "game.deterministic_terminal.solve",
-        "Solve a finite deterministic terminal-payoff game",
-        "Compute every position's exact minimax payoff and one canonical "
+    MathTool(
+        operation_id="game.deterministic_terminal.solve",
+        title="Solve a finite deterministic terminal-payoff game",
+        description="Compute every position's exact minimax payoff and one canonical "
         "optimal stationary strategy for each player in a materialized finite "
         "turn-based arena. Terminal positions carry exact rational payoffs to "
         "MAX, and every infinite play has the declared draw payoff.",
-        DeterministicTerminalGameRequest,
-        DeterministicTerminalGameSolution,
-        _run_deterministic_terminal_game,
-        "game-theory",
-        "deterministic-game",
-        "terminal-payoff",
-        "stationary-strategy",
-        "exact",
+        request_type=DeterministicTerminalGameRequest,
+        result_type=DeterministicTerminalGameSolution,
+        run=_run_deterministic_terminal_game,
+        tags=(
+            "game-theory",
+            "deterministic-game",
+            "terminal-payoff",
+            "stationary-strategy",
+            "exact",
+        ),
         examples=(
-            example(
-                "owned_cycle_and_two_terminals",
-                "Solve every position of an owned cyclic arena; positions must "
+            OperationExample(
+                name="owned_cycle_and_two_terminals",
+                description="Solve every position of an owned cyclic arena; positions must "
                 "partition into MAX, MIN, and terminal owners, every nonterminal "
                 "must have a move, and moves must use declared-position order.",
-                DETERMINISTIC_TERMINAL_GAME_EXAMPLE,
+                input=DETERMINISTIC_TERMINAL_GAME_EXAMPLE,
             ),
         ),
     ),

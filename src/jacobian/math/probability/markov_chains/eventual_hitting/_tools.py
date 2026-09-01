@@ -1,9 +1,5 @@
 """Eventual hitting profile operation declarations."""
 
-from collections.abc import Callable
-
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.probability.markov_chains.eventual_hitting._models import (
     EventualHittingProfileRequest,
@@ -25,47 +21,24 @@ def compute_ehp_op(
     )
 
 
-def ehp_action[RequestT: StrictModel, ResultT: StrictModel](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: MathTools = (
-    ehp_action(
-        "probability.markov_chain.eventual_hitting_profile.compute",
-        "Compute the eventual hitting probability profile of a Markov chain",
-        (
+    MathTool(
+        operation_id="probability.markov_chain.eventual_hitting_profile.compute",
+        title="Compute the eventual hitting probability profile of a Markov chain",
+        description=(
             "For one bounded exact finite Markov chain and one nonempty target "
             "state set, return the complete exact vector of probabilities that "
             "the target is ever hit from each source state."
         ),
-        EventualHittingProfileRequest,
-        EventualHittingProfileResult,
-        compute_ehp_op,
-        "probability",
-        "exact",
+        request_type=EventualHittingProfileRequest,
+        result_type=EventualHittingProfileResult,
+        run=compute_ehp_op,
+        tags=("probability", "exact"),
         examples=(
-            example(
-                "two_state",
-                "Two-state chain with target = absorbing state 1.",
-                {
+            OperationExample(
+                name="two_state",
+                description="Two-state chain with target = absorbing state 1.",
+                input={
                     "matrix": [
                         [{"num": "1", "den": "2"}, {"num": "1", "den": "2"}],
                         [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],

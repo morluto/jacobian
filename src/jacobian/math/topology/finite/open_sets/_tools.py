@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.topology.finite.open_sets._models import (
     MAX_TOPOLOGY_OPERATION_OPENS,
     MAX_TOPOLOGY_OPERATION_POINTS,
@@ -121,10 +124,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         run=compute_specialization_preorder,
         tags=("topology", "finite-topology", "specialization", "exact"),
         examples=(
-            example(
-                "sierpinski_specialization",
-                "Compute the specialization preorder of the Sierpinski space.",
-                {"topology": _SIERPINSKI},
+            OperationExample(
+                name="sierpinski_specialization",
+                description="Compute the specialization preorder of the Sierpinski space.",
+                input={"topology": _SIERPINSKI},
             ),
         ),
     ),
@@ -140,10 +143,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         run=compute_connected_components,
         tags=("topology", "finite-topology", "connected-components", "exact"),
         examples=(
-            example(
-                "sierpinski_components",
-                "Compute the components of the connected Sierpinski space.",
-                {"topology": _SIERPINSKI},
+            OperationExample(
+                name="sierpinski_components",
+                description="Compute the components of the connected Sierpinski space.",
+                input={"topology": _SIERPINSKI},
             ),
         ),
     ),
@@ -159,10 +162,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         run=compute_continuity,
         tags=("topology", "finite-topology", "continuity", "exact"),
         examples=(
-            example(
-                "sierpinski_identity",
-                "Check the identity map of the Sierpinski space.",
-                {
+            OperationExample(
+                name="sierpinski_identity",
+                description="Check the identity map of the Sierpinski space.",
+                input={
                     "domain": _SIERPINSKI,
                     "codomain": _SIERPINSKI,
                     "point_map": {
@@ -186,10 +189,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         run=compute_beat_points,
         tags=("topology", "finite-topology", "beat-points", "exact", "t0"),
         examples=(
-            example(
-                "sierpinski_beat_points",
-                "Compute beat points and witnesses in the Sierpinski space.",
-                {"topology": _SIERPINSKI},
+            OperationExample(
+                name="sierpinski_beat_points",
+                description="Compute beat points and witnesses in the Sierpinski space.",
+                input={"topology": _SIERPINSKI},
             ),
         ),
     ),

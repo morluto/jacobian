@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from jacobian.canonical import parse_canonical_integer
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.combinatorics.finite_structures.sets._models import FiniteIntegerSet
 from jacobian.math.combinatorics.posets.core._models import (
     MAX_ELEMENT_LABEL_LENGTH,
@@ -23,7 +26,6 @@ from jacobian.math.number_theory._divisibility_poset_models import (
     MAX_DIVISIBILITY_SET_SIZE,
     DivisibilityPosetRequest,
 )
-from jacobian.math.number_theory._support import number_theory_operation
 
 
 def _admit_values(values: FiniteIntegerSet) -> tuple[str, ...]:
@@ -130,25 +132,22 @@ def compute_divisibility_poset(request: DivisibilityPosetRequest) -> FinitePoset
     return divisibility_poset(request.values)
 
 
-DIVISIBILITY_POSET_OPERATION = number_theory_operation(
-    "integer.divisibility_poset.compute",
-    "Construct finite divisibility poset",
-    "Given a finite set of positive integers, return the canonical "
+DIVISIBILITY_POSET_OPERATION = MathTool(
+    operation_id="integer.divisibility_poset.compute",
+    title="Construct finite divisibility poset",
+    description="Given a finite set of positive integers, return the canonical "
     "proper-divisibility poset where a < b exactly when a divides b "
     "and a != b. The result is a source-labelled directed relation.",
-    DivisibilityPosetRequest,
-    FinitePoset,
-    compute_divisibility_poset,
-    "number-theory",
-    "divisibility",
-    "poset",
-    "exact",
+    request_type=DivisibilityPosetRequest,
+    result_type=FinitePoset,
+    run=compute_divisibility_poset,
+    tags=("number-theory", "divisibility", "poset", "exact"),
     examples=(
-        example(
-            "divisibility_236",
-            "For {2,3,6}, the proper-divisibility poset has 2<6 and 3<6; "
+        OperationExample(
+            name="divisibility_236",
+            description="For {2,3,6}, the proper-divisibility poset has 2<6 and 3<6; "
             "values must be positive canonical decimal integers.",
-            {"values": {"elements": ["2", "3", "6"]}},
+            input={"values": {"elements": ["2", "3", "6"]}},
         ),
     ),
 )

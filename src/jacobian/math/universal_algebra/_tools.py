@@ -1,10 +1,7 @@
 """Universal-algebra operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.universal_algebra import operations as native
 from jacobian.math.universal_algebra._models import (
@@ -57,31 +54,6 @@ def compute_quotient(request: QuotientRequest) -> FiniteAlgebraHomomorphism:
     return native.quotient(request.algebra, request.partition)
 
 
-def _op[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 # A 2-element Boolean algebra: carrier {0, 1}, operations AND (binary), OR (binary).
 # Table for AND: 0∧0=0, 0∧1=0, 1∧0=0, 1∧1=1. Table for OR: 0OR0=0, 0OR1=1, 1OR0=1, 1OR1=1.
 _ALGEBRA = {
@@ -111,44 +83,40 @@ _TERM = {
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "universal_algebra.term.evaluate.compute",
-        "Evaluate a source-bound term under a complete assignment",
-        "Return the exact carrier value t^A(alpha) for a finite algebra A and "
+    MathTool(
+        operation_id="universal_algebra.term.evaluate.compute",
+        title="Evaluate a source-bound term under a complete assignment",
+        description="Return the exact carrier value t^A(alpha) for a finite algebra A and "
         "a complete assignment alpha. Every accepted call is deterministic "
         "and complete.",
-        EvaluateRequest,
-        EvaluateResult,
-        compute_evaluate,
-        "universal-algebra",
-        "term-evaluation",
-        "exact",
+        request_type=EvaluateRequest,
+        result_type=EvaluateResult,
+        run=compute_evaluate,
+        tags=("universal-algebra", "term-evaluation", "exact"),
         examples=(
-            example(
-                "and_01",
-                "Evaluate AND(x0, x1) with x0=0, x1=1 in a 2-element Boolean algebra.",
-                {"algebra": _ALGEBRA, "term": _TERM, "assignment": [0, 1]},
+            OperationExample(
+                name="and_01",
+                description="Evaluate AND(x0, x1) with x0=0, x1=1 in a 2-element Boolean algebra.",
+                input={"algebra": _ALGEBRA, "term": _TERM, "assignment": [0, 1]},
             ),
         ),
     ),
-    _op(
-        "universal_algebra.equation.profile.compute",
-        "Evaluate s = t over all assignments",
-        "Return HOLDS with the satisfying assignment count, or FAILS with "
+    MathTool(
+        operation_id="universal_algebra.equation.profile.compute",
+        title="Evaluate s = t over all assignments",
+        description="Return HOLDS with the satisfying assignment count, or FAILS with "
         "the first counterassignment and exact left/right values. This "
         "generalizes magma identity calculation to an arbitrary finite "
         "signature.",
-        EquationProfileRequest,
-        EquationProfileResult,
-        compute_equation_profile,
-        "universal-algebra",
-        "equation-profile",
-        "exact",
+        request_type=EquationProfileRequest,
+        result_type=EquationProfileResult,
+        run=compute_equation_profile,
+        tags=("universal-algebra", "equation-profile", "exact"),
         examples=(
-            example(
-                "idempotence_and",
-                "Check AND(x,x) = x in the 2-element Boolean algebra.",
-                {
+            OperationExample(
+                name="idempotence_and",
+                description="Check AND(x,x) = x in the 2-element Boolean algebra.",
+                input={
                     "algebra": _ALGEBRA,
                     "left": {
                         "nodes": [
@@ -170,48 +138,43 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "universal_algebra.subalgebra.generated.compute",
-        "Compute the least subalgebra containing the generating set",
-        "Return the least subalgebra containing the supplied carrier subset by "
+    MathTool(
+        operation_id="universal_algebra.subalgebra.generated.compute",
+        title="Compute the least subalgebra containing the generating set",
+        description="Return the least subalgebra containing the supplied carrier subset by "
         "finite closure under all basic operations and nullary constants. "
         "Output includes the canonical closed carrier subset and closure rounds.",
-        SubalgebraRequest,
-        SubalgebraResult,
-        compute_generated_subalgebra,
-        "universal-algebra",
-        "subalgebra",
-        "exact",
+        request_type=SubalgebraRequest,
+        result_type=SubalgebraResult,
+        run=compute_generated_subalgebra,
+        tags=("universal-algebra", "subalgebra", "exact"),
         examples=(
-            example(
-                "generated_by_0",
-                "Generated subalgebra of {0} in the 2-element Boolean algebra.",
-                {"algebra": _ALGEBRA, "generators": [0]},
+            OperationExample(
+                name="generated_by_0",
+                description="Generated subalgebra of {0} in the 2-element Boolean algebra.",
+                input={"algebra": _ALGEBRA, "generators": [0]},
             ),
         ),
     ),
-    _op(
-        "universal_algebra.map.homomorphism_profile.compute",
-        "Profile a supplied finite-algebra carrier map",
-        "Check every basic-operation table cell under one total carrier map. "
+    MathTool(
+        operation_id="universal_algebra.map.homomorphism_profile.compute",
+        title="Profile a supplied finite-algebra carrier map",
+        description="Check every basic-operation table cell under one total carrier map. "
         "Return a reusable checked homomorphism with canonical kernel and image, "
         "or the first exact preservation obstruction in deterministic signature "
         "and source-tuple order.",
-        HomomorphismProfileRequest,
-        HomomorphismProfileResult,
-        compute_homomorphism_profile,
-        "universal-algebra",
-        "homomorphism",
-        "carrier-map",
-        "exact",
+        request_type=HomomorphismProfileRequest,
+        result_type=HomomorphismProfileResult,
+        run=compute_homomorphism_profile,
+        tags=("universal-algebra", "homomorphism", "carrier-map", "exact"),
         examples=(
-            example(
-                "boolean_identity_map",
-                "Check the identity carrier map between two copies of the "
+            OperationExample(
+                name="boolean_identity_map",
+                description="Check the identity carrier map between two copies of the "
                 "2-element Boolean algebra; source and target operation "
                 "identifiers and arities must match exactly and the map must "
                 "cover every source carrier position.",
-                {
+                input={
                     "carrier_map": {
                         "source": _ALGEBRA,
                         "target": _ALGEBRA,
@@ -221,45 +184,41 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "universal_algebra.congruence.check.compute",
-        "Check whether a carrier partition is a congruence",
-        "Return whether a carrier partition is a compatible equivalence "
+    MathTool(
+        operation_id="universal_algebra.congruence.check.compute",
+        title="Check whether a carrier partition is a congruence",
+        description="Return whether a carrier partition is a compatible equivalence "
         "relation (congruence). A congruence theta satisfies: if x_j theta "
         "y_j for every argument j, then f(x_1,...,x_r) theta f(y_1,...,y_r) "
         "for every basic operation.",
-        CongruenceRequest,
-        CongruenceResult,
-        compute_congruence,
-        "universal-algebra",
-        "congruence",
-        "exact",
+        request_type=CongruenceRequest,
+        result_type=CongruenceResult,
+        run=compute_congruence,
+        tags=("universal-algebra", "congruence", "exact"),
         examples=(
-            example(
-                "trivial_congruence",
-                "The universal partition {{0, 1}} is a congruence.",
-                {"algebra": _ALGEBRA, "partition": [[0, 1]]},
+            OperationExample(
+                name="trivial_congruence",
+                description="The universal partition {{0, 1}} is a congruence.",
+                input={"algebra": _ALGEBRA, "partition": [[0, 1]]},
             ),
         ),
     ),
-    _op(
-        "universal_algebra.quotient.compute",
-        "Compute the quotient algebra A/theta",
-        "Return the canonical checked homomorphism from a finite algebra onto "
+    MathTool(
+        operation_id="universal_algebra.quotient.compute",
+        title="Compute the quotient algebra A/theta",
+        description="Return the canonical checked homomorphism from a finite algebra onto "
         "the quotient induced by a congruence. The target carrier is the set "
         "of blocks, and the retained source, target, and mapping pass directly "
         "to homomorphism-profile consumers.",
-        QuotientRequest,
-        FiniteAlgebraHomomorphism,
-        compute_quotient,
-        "universal-algebra",
-        "quotient",
-        "exact",
+        request_type=QuotientRequest,
+        result_type=FiniteAlgebraHomomorphism,
+        run=compute_quotient,
+        tags=("universal-algebra", "quotient", "exact"),
         examples=(
-            example(
-                "trivial_quotient",
-                "The quotient by the universal congruence is a one-element algebra.",
-                {"algebra": _ALGEBRA, "partition": [[0, 1]]},
+            OperationExample(
+                name="trivial_quotient",
+                description="The quotient by the universal congruence is a one-element algebra.",
+                input={"algebra": _ALGEBRA, "partition": [[0, 1]]},
             ),
         ),
     ),

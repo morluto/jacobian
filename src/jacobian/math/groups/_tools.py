@@ -1,13 +1,10 @@
 """Exact finite group operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
 from pydantic import ValidationError
 
-from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -117,31 +114,6 @@ def compute_subgroup_lattice(
     return GroupSubgroupLatticeResult._computed_from_kernel(request, tuple(subgroups))
 
 
-def group_operation[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 S3_GENERATORS = {"degree": 3, "generators": [[1, 2, 0], [1, 0, 2]]}
 S3_STABILIZER_POINT_0 = {
     "group": {"degree": 3, "generators": [[1, 2, 0], [1, 0, 2]]},
@@ -149,25 +121,27 @@ S3_STABILIZER_POINT_0 = {
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    group_operation(
-        "finite_abelian_group.exact_factorization.compute",
-        "Exact finite abelian group factorization",
-        "Normalize two bounded integer-vector factors in a declared product "
+    MathTool(
+        operation_id="finite_abelian_group.exact_factorization.compute",
+        title="Exact finite abelian group factorization",
+        description="Normalize two bounded integer-vector factors in a declared product "
         "of cyclic groups, exhaustively count every sum representation, and "
         "decide whether every group element has exactly one representation.",
-        FiniteAbelianGroupFactorizationRequest,
-        FiniteAbelianGroupFactorizationResult,
-        compute_finite_abelian_group_factorization,
-        "group",
-        "finite-abelian-group",
-        "cyclic-product",
-        "factorization",
-        "exact",
+        request_type=FiniteAbelianGroupFactorizationRequest,
+        result_type=FiniteAbelianGroupFactorizationResult,
+        run=compute_finite_abelian_group_factorization,
+        tags=(
+            "group",
+            "finite-abelian-group",
+            "cyclic-product",
+            "factorization",
+            "exact",
+        ),
         examples=(
-            example(
-                "z2_times_z4_transversal",
-                "Verify eight representatives form a complete transversal.",
-                {
+            OperationExample(
+                name="z2_times_z4_transversal",
+                description="Verify eight representatives form a complete transversal.",
+                input={
                     "moduli": [2, 4],
                     "left": [
                         [0, 0],
@@ -184,24 +158,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    group_operation(
-        "finite_abelian_group.spectral_pair.decide",
-        "Decide an exact finite-Abelian spectral pair",
-        "Decide whether a canonical residue-tuple frequency set is a spectrum "
+    MathTool(
+        operation_id="finite_abelian_group.spectral_pair.decide",
+        title="Decide an exact finite-Abelian spectral pair",
+        description="Decide whether a canonical residue-tuple frequency set is a spectrum "
         "of a point set in an explicit product of cyclic groups under the "
         "positive product dual pairing.",
-        FiniteAbelianSpectralPairRequest,
-        FiniteAbelianSpectralPairResult,
-        compute_finite_abelian_spectral_pair,
-        "harmonic-analysis",
-        "finite-abelian-group",
-        "spectral-pair",
-        "exact",
+        request_type=FiniteAbelianSpectralPairRequest,
+        result_type=FiniteAbelianSpectralPairResult,
+        run=compute_finite_abelian_spectral_pair,
+        tags=("harmonic-analysis", "finite-abelian-group", "spectral-pair", "exact"),
         examples=(
-            example(
-                "z4_even_pair",
-                "Decide the two-point spectral pair A={0,2}, Lambda={0,1} in Z/4.",
-                {
+            OperationExample(
+                name="z4_even_pair",
+                description="Decide the two-point spectral pair A={0,2}, Lambda={0,1} in Z/4.",
+                input={
                     "source": {
                         "group": {"moduli": [4]},
                         "points": [[0], [2]],
@@ -211,69 +182,60 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    group_operation(
-        "group.order.compute",
-        "Compute the exact order of a finite permutation group",
-        "Compute the exact order of a permutation group given by generators via SymPy's Schreier-Sims algorithm.",
-        PermutationGroup,
-        GroupOrderResult,
-        compute_group_order,
-        "group",
-        "order",
-        "permutation",
-        "exact",
+    MathTool(
+        operation_id="group.order.compute",
+        title="Compute the exact order of a finite permutation group",
+        description="Compute the exact order of a permutation group given by generators via SymPy's Schreier-Sims algorithm.",
+        request_type=PermutationGroup,
+        result_type=GroupOrderResult,
+        run=compute_group_order,
+        tags=("group", "order", "permutation", "exact"),
         examples=(
-            example(
-                "cyclic_group_order_4",
-                "Compute C4's order; each generator must be a bijection of 0..degree-1.",
-                {
+            OperationExample(
+                name="cyclic_group_order_4",
+                description="Compute C4's order; each generator must be a bijection of 0..degree-1.",
+                input={
                     "degree": 4,
                     "generators": [[1, 2, 3, 0]],
                 },
             ),
         ),
     ),
-    group_operation(
-        "group.element_order.compute",
-        "Compute the exact order of one permutation",
-        "Compute the order of one permutation element via SymPy's Permutation.order().",
-        GroupElementOrderRequest,
-        GroupElementOrderResult,
-        compute_element_order,
-        "group",
-        "element-order",
-        "permutation",
-        "exact",
+    MathTool(
+        operation_id="group.element_order.compute",
+        title="Compute the exact order of one permutation",
+        description="Compute the order of one permutation element via SymPy's Permutation.order().",
+        request_type=GroupElementOrderRequest,
+        result_type=GroupElementOrderResult,
+        run=compute_element_order,
+        tags=("group", "element-order", "permutation", "exact"),
         examples=(
-            example(
-                "four_cycle_order",
-                "Compute the 4-cycle's order; its generator must be a bijection of 0..degree-1.",
-                {
+            OperationExample(
+                name="four_cycle_order",
+                description="Compute the 4-cycle's order; its generator must be a bijection of 0..degree-1.",
+                input={
                     "degree": 4,
                     "generator": [1, 2, 3, 0],
                 },
             ),
         ),
     ),
-    group_operation(
-        "group.orbit.compute",
-        "Compute the orbit of a point under a permutation group",
-        "Compute the orbit of a point under a permutation group via SymPy's "
+    MathTool(
+        operation_id="group.orbit.compute",
+        title="Compute the orbit of a point under a permutation group",
+        description="Compute the orbit of a point under a permutation group via SymPy's "
         "PermutationGroup.orbit(). The request takes the canonical "
         "permutation-group value, so a previous result's stabilizer or order "
         "group feeds this operation unchanged.",
-        GroupOrbitRequest,
-        GroupOrbitResult,
-        compute_group_orbit,
-        "group",
-        "orbit",
-        "permutation",
-        "exact",
+        request_type=GroupOrbitRequest,
+        result_type=GroupOrbitResult,
+        run=compute_group_orbit,
+        tags=("group", "orbit", "permutation", "exact"),
         examples=(
-            example(
-                "cyclic_orbit",
-                "Compute point 0's orbit of the group generated by (1,2,3,0); the group is the canonical value and points lie in 0..degree-1.",
-                {
+            OperationExample(
+                name="cyclic_orbit",
+                description="Compute point 0's orbit of the group generated by (1,2,3,0); the group is the canonical value and points lie in 0..degree-1.",
+                input={
                     "group": {
                         "degree": 4,
                         "generators": [[1, 2, 3, 0]],
@@ -283,10 +245,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    group_operation(
-        "group.conjugacy_classes.compute",
-        "Compute conjugacy classes of a permutation group",
-        "Given a permutation group by generators, return its conjugacy classes "
+    MathTool(
+        operation_id="group.conjugacy_classes.compute",
+        title="Compute conjugacy classes of a permutation group",
+        description="Given a permutation group by generators, return its conjugacy classes "
         "(the partition into conjugacy classes) as permutation array forms, "
         "using SymPy. Each class lists the elements conjugate to a "
         "representative; class sizes are orbit sizes under conjugation. "
@@ -295,29 +257,26 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "result. The generated group must have order at most "
         f"{MAX_CONJUGACY_CLASSES_GROUP_ORDER}; larger "
         "groups are rejected before enumeration.",
-        GroupConjugacyClassesRequest,
-        GroupConjugacyClassesResult,
-        compute_group_conjugacy_classes,
-        "group",
-        "permutation",
-        "conjugacy",
-        "exact",
+        request_type=GroupConjugacyClassesRequest,
+        result_type=GroupConjugacyClassesResult,
+        run=compute_group_conjugacy_classes,
+        tags=("group", "permutation", "conjugacy", "exact"),
         examples=(
-            example(
-                "s3_conjugacy_classes",
-                (
+            OperationExample(
+                name="s3_conjugacy_classes",
+                description=(
                     "Conjugacy classes of S3 (generators (1,2,0) and (1,0,2)); "
                     "S3 has three classes of sizes 1, 2, 3 (identity, 3-cycles, "
                     "transpositions). Generators must be permutations of 0..n-1."
                 ),
-                S3_GENERATORS,
+                input=S3_GENERATORS,
             ),
         ),
     ),
-    group_operation(
-        "group.stabilizer.compute",
-        "Compute the stabilizer of a point in a permutation group",
-        "Given a permutation group as the canonical group value and a point, "
+    MathTool(
+        operation_id="group.stabilizer.compute",
+        title="Compute the stabilizer of a point in a permutation group",
+        description="Given a permutation group as the canonical group value and a point, "
         "return the point stabilizer subgroup as a canonical permutation-group "
         "value (elements fixing the point) using SymPy's stabilizer "
         "computation. The request accepts that canonical value directly, so a "
@@ -325,46 +284,39 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "unchanged. By the orbit-stabilizer theorem, "
         "|G| = |orbit(point)| * |stabilizer(point)|, composable with "
         "group.order.compute and group.orbit.compute.",
-        GroupStabilizerRequest,
-        GroupStabilizerResult,
-        compute_group_stabilizer,
-        "group",
-        "permutation",
-        "stabilizer",
-        "orbit-stabilizer",
-        "exact",
+        request_type=GroupStabilizerRequest,
+        result_type=GroupStabilizerResult,
+        run=compute_group_stabilizer,
+        tags=("group", "permutation", "stabilizer", "orbit-stabilizer", "exact"),
         examples=(
-            example(
-                "s3_stabilizer_of_0",
-                (
+            OperationExample(
+                name="s3_stabilizer_of_0",
+                description=(
                     "Stabilizer of point 0 in S3 (generators (1,2,0) and "
                     "(1,0,2)); order 2 and orbit-stabilizer gives 6 = 3 * 2. "
                     "Pass a previous result's `stabilizer` as `group` to chain."
                 ),
-                S3_STABILIZER_POINT_0,
+                input=S3_STABILIZER_POINT_0,
             ),
         ),
     ),
-    group_operation(
-        "group.subgroup_lattice.compute",
-        "Enumerate all subgroups of a bounded permutation group",
-        "Enumerate all subgroups of a bounded permutation group via SymPy. "
+    MathTool(
+        operation_id="group.subgroup_lattice.compute",
+        title="Enumerate all subgroups of a bounded permutation group",
+        description="Enumerate all subgroups of a bounded permutation group via SymPy. "
         "Each subgroup is returned with its generators and order. Bounded "
         "to groups of order at most 64; the traversal carries an explicit "
         "closure-construction budget and reports exhaustion as a typed "
         "LIMIT_EXCEEDED outcome.",
-        GroupSubgroupLatticeRequest,
-        GroupSubgroupLatticeResult,
-        compute_subgroup_lattice,
-        "group",
-        "subgroup",
-        "permutation",
-        "exact",
+        request_type=GroupSubgroupLatticeRequest,
+        result_type=GroupSubgroupLatticeResult,
+        run=compute_subgroup_lattice,
+        tags=("group", "subgroup", "permutation", "exact"),
         examples=(
-            example(
-                "c4_subgroups",
-                "Enumerate all subgroups of C4; generators must be bijections.",
-                {
+            OperationExample(
+                name="c4_subgroups",
+                description="Enumerate all subgroups of C4; generators must be bijections.",
+                input={
                     "degree": 4,
                     "generators": [[1, 2, 3, 0]],
                 },

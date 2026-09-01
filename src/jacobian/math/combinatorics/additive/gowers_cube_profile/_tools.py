@@ -1,7 +1,6 @@
 """Typed declarations for the Gowers cube profile operation."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.combinatorics.additive.gowers_cube_profile._models import (
     GowersCubeRequest,
     GowersCubeResult,
@@ -29,10 +28,10 @@ TOOLS: MathTools = (
         run=_compute,
         tags=("additive", "gowers", "cube", "exact"),
         examples=(
-            example(
-                "z5_full",
-                "Gowers U^2 cubes for full subset of Z/5Z.",
-                {"modulus": 5, "subset": [0, 1, 2, 3, 4], "order": 2},
+            OperationExample(
+                name="z5_full",
+                description="Gowers U^2 cubes for full subset of Z/5Z.",
+                input={"modulus": 5, "subset": [0, 1, 2, 3, 4], "order": 2},
             ),
         ),
     ),

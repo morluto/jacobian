@@ -1,7 +1,6 @@
 """Polynomial support geometry operation declarations."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.polynomials.support_geometry._models import (
     InitialFormRequest,
     NewtonPolytopeRequest,
@@ -66,14 +65,14 @@ TOOLS: MathTools = (
         run=_run_support,
         tags=("polynomial", "support", "exact"),
         examples=(
-            example(
-                "xy_squared_support",
-                (
+            OperationExample(
+                name="xy_squared_support",
+                description=(
                     "Compute support of x^2 + xy + y^2; the polynomial must be a "
                     "canonical RationalPolynomial with ordered variables and unique "
                     "nonnegative exponents (the zero polynomial is allowed and yields an empty support)."
                 ),
-                {"polynomial": dict(_TOY_POLYNOMIAL)},
+                input={"polynomial": dict(_TOY_POLYNOMIAL)},
             ),
         ),
     ),
@@ -90,14 +89,14 @@ TOOLS: MathTools = (
         run=_run_newton_polytope,
         tags=("polynomial", "newton-polytope", "exact"),
         examples=(
-            example(
-                "xy_squared_newton",
-                (
+            OperationExample(
+                name="xy_squared_newton",
+                description=(
                     "Compute Newton polytope of x^2 + xy + y^2; the polynomial must be a "
                     "canonical RationalPolynomial with at most 96 terms so the per-point "
                     "exact extremality test stays bounded."
                 ),
-                {"polynomial": dict(_TOY_POLYNOMIAL)},
+                input={"polynomial": dict(_TOY_POLYNOMIAL)},
             ),
         ),
     ),
@@ -113,15 +112,15 @@ TOOLS: MathTools = (
         run=_run_weight_profile,
         tags=("polynomial", "weight-profile", "exact"),
         examples=(
-            example(
-                "weight_profile_xy",
-                (
+            OperationExample(
+                name="weight_profile_xy",
+                description=(
                     "Weight profile of x^2 + xy + y^2 under w=(1,1); the polynomial must be "
                     "nonzero with at most 1024 terms and coefficient components at most "
                     "512 digits, and the weight length must match the variable count with "
                     "each component bounded by 2^31."
                 ),
-                {
+                input={
                     "polynomial": dict(_TOY_POLYNOMIAL),
                     "weight": [1, 1],
                 },
@@ -140,15 +139,15 @@ TOOLS: MathTools = (
         run=_run_initial_form,
         tags=("polynomial", "initial-form", "exact"),
         examples=(
-            example(
-                "initial_form_xy",
-                (
+            OperationExample(
+                name="initial_form_xy",
+                description=(
                     "Initial form of x^2 + xy + y^2 under w=(1,2): weights are "
                     "2,3,4 so initial form is x^2; source must be nonzero with "
                     "at most 1024 terms and 512-digit coefficients, weight length "
                     "must match variable count (each bounded by 2^31)."
                 ),
-                {
+                input={
                     "polynomial": dict(_TOY_POLYNOMIAL),
                     "weight": [1, 2],
                 },

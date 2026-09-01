@@ -1,12 +1,9 @@
 """Exact symbolic matrix operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
 from sympy.matrices.exceptions import MatrixError
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.matrices.symbolic._models import (
     SymbolicCharacteristicPolynomialRequest,
@@ -109,31 +106,6 @@ def _run_linear_system(
     )
 
 
-def symbolic_matrix_operation[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 def _rational_function(
     variables: tuple[str, ...],
     *numerator_terms: tuple[int, tuple[int, ...]],
@@ -179,10 +151,10 @@ def _generic_two_by_two() -> dict[str, Any]:
     }
 
 
-_LINEAR_SYSTEM_EXAMPLE = example(
-    "symbolic_linear_system_unique",
-    "Solve [[1, t], [0, 1]] x = [t, 1] over QQ(t); solution is x = [0, 1].",
-    {
+_LINEAR_SYSTEM_EXAMPLE = OperationExample(
+    name="symbolic_linear_system_unique",
+    description="Solve [[1, t], [0, 1]] x = [t, 1] over QQ(t); solution is x = [0, 1].",
+    input={
         "matrix": {
             "variables": ["t"],
             "entries": [
@@ -204,10 +176,10 @@ _LINEAR_SYSTEM_EXAMPLE = example(
 )
 
 
-_SYMBOLIC_PRODUCT_EXAMPLE = example(
-    "symbolic_matrix_product",
-    "Multiply [[a, b]] by the column [[1], [1]] over QQ(a, b); both matrices must use the same ordered field and compatible inner dimension.",
-    {
+_SYMBOLIC_PRODUCT_EXAMPLE = OperationExample(
+    name="symbolic_matrix_product",
+    description="Multiply [[a, b]] by the column [[1], [1]] over QQ(a, b); both matrices must use the same ordered field and compatible inner dimension.",
+    input={
         "left": {
             "variables": ["a", "b"],
             "entries": [
@@ -229,54 +201,46 @@ _SYMBOLIC_PRODUCT_EXAMPLE = example(
 
 
 TOOLS = (
-    symbolic_matrix_operation(
-        "matrix.symbolic.determinant.compute",
-        "Compute an exact symbolic matrix determinant (det) over QQ(t_1, ..., t_n)",
-        "Compute the determinant of a square matrix whose entries are rational functions in declared algebraically independent variables, using SymPy's exact fraction-free Bareiss algorithm.",
-        SymbolicDeterminantRequest,
-        SymbolicDeterminantResult,
-        _run_determinant,
-        "matrix",
-        "symbolic",
-        "determinant",
-        "rational-function-field",
-        "exact",
+    MathTool(
+        operation_id="matrix.symbolic.determinant.compute",
+        title="Compute an exact symbolic matrix determinant (det) over QQ(t_1, ..., t_n)",
+        description="Compute the determinant of a square matrix whose entries are rational functions in declared algebraically independent variables, using SymPy's exact fraction-free Bareiss algorithm.",
+        request_type=SymbolicDeterminantRequest,
+        result_type=SymbolicDeterminantResult,
+        run=_run_determinant,
+        tags=("matrix", "symbolic", "determinant", "rational-function-field", "exact"),
         examples=(
-            example(
-                "symbolic_determinant_two_by_two",
-                "Compute the determinant of [[a, c], [b, d]]; the matrix must be square and rectangular over declared variables.",
-                {
+            OperationExample(
+                name="symbolic_determinant_two_by_two",
+                description="Compute the determinant of [[a, c], [b, d]]; the matrix must be square and rectangular over declared variables.",
+                input={
                     "matrix": _generic_two_by_two(),
                 },
             ),
         ),
     ),
-    symbolic_matrix_operation(
-        "matrix.symbolic.rank.compute",
-        "Compute exact symbolic matrix rank over QQ(t_1, ..., t_n)",
-        "Compute the rank and RREF pivot columns of a rectangular matrix whose entries are rational functions in declared algebraically independent variables, using SymPy's exact row reduction.",
-        SymbolicMatrixRequest,
-        SymbolicRankResult,
-        _run_rank,
-        "matrix",
-        "symbolic",
-        "rank",
-        "rational-function-field",
-        "exact",
+    MathTool(
+        operation_id="matrix.symbolic.rank.compute",
+        title="Compute exact symbolic matrix rank over QQ(t_1, ..., t_n)",
+        description="Compute the rank and RREF pivot columns of a rectangular matrix whose entries are rational functions in declared algebraically independent variables, using SymPy's exact row reduction.",
+        request_type=SymbolicMatrixRequest,
+        result_type=SymbolicRankResult,
+        run=_run_rank,
+        tags=("matrix", "symbolic", "rank", "rational-function-field", "exact"),
         examples=(
-            example(
-                "symbolic_rank_full",
-                "Compute the rank of a 2x2 symbolic matrix; rows must be nonempty and equal length over declared variables.",
-                {
+            OperationExample(
+                name="symbolic_rank_full",
+                description="Compute the rank of a 2x2 symbolic matrix; rows must be nonempty and equal length over declared variables.",
+                input={
                     "matrix": _generic_two_by_two(),
                 },
             ),
         ),
     ),
-    symbolic_matrix_operation(
-        "matrix.symbolic.multiply.compute",
-        "Multiply exact symbolic matrices over QQ(t_1, ..., t_n)",
-        (
+    MathTool(
+        operation_id="matrix.symbolic.multiply.compute",
+        title="Multiply exact symbolic matrices over QQ(t_1, ..., t_n)",
+        description=(
             "Compute the row-by-column product of two compatible symbolic matrices "
             "over one explicitly ordered rational-function field. Every product "
             "entry is returned as a canonical reduced rational function; admission "
@@ -284,56 +248,56 @@ TOOLS = (
             "aggregate support, exponents, coefficients, and result before SymPy "
             "multiplication."
         ),
-        SymbolicMatrixProductRequest,
-        SymbolicMatrix,
-        _run_product,
-        "matrix",
-        "symbolic",
-        "matrix-multiplication",
-        "product",
-        "rational-function-field",
-        "exact",
+        request_type=SymbolicMatrixProductRequest,
+        result_type=SymbolicMatrix,
+        run=_run_product,
+        tags=(
+            "matrix",
+            "symbolic",
+            "matrix-multiplication",
+            "product",
+            "rational-function-field",
+            "exact",
+        ),
         examples=(_SYMBOLIC_PRODUCT_EXAMPLE,),
     ),
-    symbolic_matrix_operation(
-        "matrix.symbolic.characteristic_polynomial.compute",
-        "Compute an exact symbolic characteristic polynomial",
-        "Compute the dense monic coefficients of det(lambda I - A) for a square symbolic matrix whose entries are rational functions in declared algebraically independent variables.",
-        SymbolicCharacteristicPolynomialRequest,
-        SymbolicCharacteristicPolynomialResult,
-        _run_characteristic,
-        "matrix",
-        "symbolic",
-        "characteristic-polynomial",
-        "rational-function-field",
-        "exact",
+    MathTool(
+        operation_id="matrix.symbolic.characteristic_polynomial.compute",
+        title="Compute an exact symbolic characteristic polynomial",
+        description="Compute the dense monic coefficients of det(lambda I - A) for a square symbolic matrix whose entries are rational functions in declared algebraically independent variables.",
+        request_type=SymbolicCharacteristicPolynomialRequest,
+        result_type=SymbolicCharacteristicPolynomialResult,
+        run=_run_characteristic,
+        tags=(
+            "matrix",
+            "symbolic",
+            "characteristic-polynomial",
+            "rational-function-field",
+            "exact",
+        ),
         examples=(
-            example(
-                "symbolic_charpoly_two_by_two",
-                "Compute the characteristic polynomial of [[a, c], [b, d]]; the matrix must be square and rectangular.",
-                {
+            OperationExample(
+                name="symbolic_charpoly_two_by_two",
+                description="Compute the characteristic polynomial of [[a, c], [b, d]]; the matrix must be square and rectangular.",
+                input={
                     "matrix": _generic_two_by_two(),
                 },
             ),
         ),
     ),
-    symbolic_matrix_operation(
-        "matrix.symbolic.eigenvalues.compute",
-        "Compute exact symbolic eigenvalues",
-        "Compute the exact eigenvalues with algebraic multiplicities of a square symbolic matrix using SymPy's eigenvals. Entries may be rational functions in declared algebraically independent variables; eigenvalues are returned as canonical SymPy expression strings.",
-        SymbolicCharacteristicPolynomialRequest,
-        SymbolicEigenvaluesResult,
-        _run_eigenvalues,
-        "matrix",
-        "symbolic",
-        "eigenvalues",
-        "rational-function-field",
-        "exact",
+    MathTool(
+        operation_id="matrix.symbolic.eigenvalues.compute",
+        title="Compute exact symbolic eigenvalues",
+        description="Compute the exact eigenvalues with algebraic multiplicities of a square symbolic matrix using SymPy's eigenvals. Entries may be rational functions in declared algebraically independent variables; eigenvalues are returned as canonical SymPy expression strings.",
+        request_type=SymbolicCharacteristicPolynomialRequest,
+        result_type=SymbolicEigenvaluesResult,
+        run=_run_eigenvalues,
+        tags=("matrix", "symbolic", "eigenvalues", "rational-function-field", "exact"),
         examples=(
-            example(
-                "symbolic_eigenvalues_two_by_two",
-                "Compute the exact eigenvalues of [[1, 2], [3, 4]]; the matrix must be square and rectangular.",
-                {
+            OperationExample(
+                name="symbolic_eigenvalues_two_by_two",
+                description="Compute the exact eigenvalues of [[1, 2], [3, 4]]; the matrix must be square and rectangular.",
+                input={
                     "matrix": {
                         "variables": [],
                         "entries": [
@@ -351,10 +315,10 @@ TOOLS = (
             ),
         ),
     ),
-    symbolic_matrix_operation(
-        "matrix.symbolic.linear_system.solve",
-        "Classify and solve a symbolic linear system over QQ(t_1, ..., t_n)",
-        (
+    MathTool(
+        operation_id="matrix.symbolic.linear_system.solve",
+        title="Classify and solve a symbolic linear system over QQ(t_1, ..., t_n)",
+        description=(
             "Classify one bounded system A x = b over the rational-function "
             "field QQ(t_1, ..., t_n) as UNIQUE, NON_UNIQUE, or INCONSISTENT. "
             "For a unique system, return the exact solution vector. For a "
@@ -363,14 +327,16 @@ TOOLS = (
             "result is the generic solution, not a case split over parameter "
             "specializations. Backed by SymPy symbolic linear algebra."
         ),
-        SymbolicLinearSystemRequest,
-        SymbolicLinearSystemResult,
-        _run_linear_system,
-        "matrix",
-        "symbolic",
-        "linear-system",
-        "rational-function-field",
-        "exact",
+        request_type=SymbolicLinearSystemRequest,
+        result_type=SymbolicLinearSystemResult,
+        run=_run_linear_system,
+        tags=(
+            "matrix",
+            "symbolic",
+            "linear-system",
+            "rational-function-field",
+            "exact",
+        ),
         examples=(_LINEAR_SYSTEM_EXAMPLE,),
     ),
 )

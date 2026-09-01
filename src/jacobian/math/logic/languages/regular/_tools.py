@@ -1,11 +1,8 @@
 """Regular language operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -82,28 +79,6 @@ def compute_transition_parikh_profile(
         ) from exc
 
 
-def rl_operation[RequestT: StrictModel, ResultT: StrictModel](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 _DFA_EXAMPLE = {
     "dfa": {
         "state_count": 2,
@@ -135,85 +110,74 @@ _TRANSITION_PROFILE_EXAMPLE = {
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    rl_operation(
-        "regular_language.complement.compute",
-        "Complement a deterministic finite automaton",
-        "Return the complete DFA over the same alphabet with accepting and "
+    MathTool(
+        operation_id="regular_language.complement.compute",
+        title="Complement a deterministic finite automaton",
+        description="Return the complete DFA over the same alphabet with accepting and "
         "non-accepting states exchanged.",
-        ComplementRequest,
-        ComplementResult,
-        compute_complement,
-        "automata",
-        "dfa",
-        "complement",
-        "exact",
+        request_type=ComplementRequest,
+        result_type=ComplementResult,
+        run=compute_complement,
+        tags=("automata", "dfa", "complement", "exact"),
         examples=(
-            example(
-                "binary_ends_in_1_complement",
-                "Complement the DFA accepting binary strings ending in one.",
-                {"dfa": _DFA_EXAMPLE["dfa"]},
+            OperationExample(
+                name="binary_ends_in_1_complement",
+                description="Complement the DFA accepting binary strings ending in one.",
+                input={"dfa": _DFA_EXAMPLE["dfa"]},
             ),
         ),
     ),
-    rl_operation(
-        "automaton.path.transition_parikh_profile.compute",
-        "Compute a transition-Parikh profile for fixed-length automaton paths",
-        "Return the complete exact histogram from transition-use vectors to path "
+    MathTool(
+        operation_id="automaton.path.transition_parikh_profile.compute",
+        title="Compute a transition-Parikh profile for fixed-length automaton paths",
+        description="Return the complete exact histogram from transition-use vectors to path "
         "multiplicities for one source, target, and exact length. Coordinates use "
         "the automaton's stable transition-ID axis; requests above the derived "
         "work or result envelope are rejected before the sparse recurrence runs.",
-        TransitionParikhProfileRequest,
-        TransitionParikhProfile,
-        compute_transition_parikh_profile,
-        "automata",
-        "paths",
-        "parikh",
-        "exact",
-        "complete",
+        request_type=TransitionParikhProfileRequest,
+        result_type=TransitionParikhProfile,
+        run=compute_transition_parikh_profile,
+        tags=("automata", "paths", "parikh", "exact", "complete"),
         examples=(
-            example(
-                "two_loop_transition_histogram",
-                "Compute all length-two loop paths and group them by transition "
+            OperationExample(
+                name="two_loop_transition_histogram",
+                description="Compute all length-two loop paths and group them by transition "
                 "counts; transition IDs must be the contiguous ordered axis.",
-                _TRANSITION_PROFILE_EXAMPLE,
+                input=_TRANSITION_PROFILE_EXAMPLE,
             ),
         ),
     ),
-    rl_operation(
-        "regular_language.run.check",
-        "Check if a word is accepted by a DFA",
-        "Simulate a deterministic finite automaton on a word and return "
+    MathTool(
+        operation_id="regular_language.run.check",
+        title="Check if a word is accepted by a DFA",
+        description="Simulate a deterministic finite automaton on a word and return "
         "whether it is accepted and the final state reached.",
-        RunRequest,
-        RunResult,
-        compute_run,
-        "automata",
-        "dfa",
-        "exact",
+        request_type=RunRequest,
+        result_type=RunResult,
+        run=compute_run,
+        tags=("automata", "dfa", "exact"),
         examples=(
-            example(
-                "binary_ends_in_1",
-                "DFA accepting binary strings ending in 1, word [1,0,1] accepted.",
-                {"dfa": _DFA_EXAMPLE["dfa"], "word": [1, 0, 1]},
+            OperationExample(
+                name="binary_ends_in_1",
+                description="DFA accepting binary strings ending in 1, word [1,0,1] accepted.",
+                input={"dfa": _DFA_EXAMPLE["dfa"], "word": [1, 0, 1]},
             ),
         ),
     ),
-    rl_operation(
-        "regular_language.count_words.compute",
-        "Count accepted words of a given length",
-        "Count the number of words of exact length accepted by a DFA "
+    MathTool(
+        operation_id="regular_language.count_words.compute",
+        title="Count accepted words of a given length",
+        description="Count the number of words of exact length accepted by a DFA "
         "using exact integer matrix powering of the transition matrix.",
-        CountRequest,
-        CountResult,
-        compute_count,
-        "automata",
-        "counting",
-        "exact",
+        request_type=CountRequest,
+        result_type=CountResult,
+        run=compute_count,
+        tags=("automata", "counting", "exact"),
         examples=(
-            example(
-                "binary_ends_in_1",
-                "Count binary strings of length 3 ending in 1: 4 words.",
-                {"dfa": _DFA_EXAMPLE["dfa"], "word_length": 3},
+            OperationExample(
+                name="binary_ends_in_1",
+                description="Count binary strings of length 3 ending in 1: 4 words.",
+                input={"dfa": _DFA_EXAMPLE["dfa"], "word_length": 3},
             ),
         ),
     ),

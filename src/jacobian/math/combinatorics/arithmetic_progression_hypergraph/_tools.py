@@ -1,7 +1,6 @@
 """Operation declarations for k-term arithmetic-progression hypergraph construction."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.combinatorics.arithmetic_progression_hypergraph._models import (
     ArithmeticProgressionHypergraphRequest,
     ArithmeticProgressionHypergraphResult,
@@ -47,20 +46,20 @@ TOOLS: MathTools = (
             "Erdos",
         ),
         examples=(
-            example(
-                "small_interval_k3",
-                "Construct the 3-uniform AP hypergraph of [1,5]: 3 edges.",
-                {"lower": 1, "upper": 5, "k": 3},
+            OperationExample(
+                name="small_interval_k3",
+                description="Construct the 3-uniform AP hypergraph of [1,5]: 3 edges.",
+                input={"lower": 1, "upper": 5, "k": 3},
             ),
-            example(
-                "empty_interval_k3",
-                "Construct the 3-uniform AP hypergraph of [1,2]: 0 edges.",
-                {"lower": 1, "upper": 2, "k": 3},
+            OperationExample(
+                name="empty_interval_k3",
+                description="Construct the 3-uniform AP hypergraph of [1,2]: 0 edges.",
+                input={"lower": 1, "upper": 2, "k": 3},
             ),
-            example(
-                "singleton_k4",
-                "Construct the 4-uniform AP hypergraph of [0,3]: 1 edge.",
-                {"lower": 0, "upper": 3, "k": 4},
+            OperationExample(
+                name="singleton_k4",
+                description="Construct the 4-uniform AP hypergraph of [0,3]: 1 edge.",
+                input={"lower": 0, "upper": 3, "k": 4},
             ),
         ),
     ),

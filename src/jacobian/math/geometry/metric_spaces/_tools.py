@@ -1,10 +1,7 @@
 """Finite metric space operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.geometry.metric_spaces._models import (
     BallRequest,
@@ -35,28 +32,6 @@ def _gromov_hyperbolicity(
     return gromov_hyperbolicity(request.metric_space)
 
 
-def fms_operation[RequestT: StrictModel, ResultT: StrictModel](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 _METRIC_SPACE = {
     "metric_space": {
         "point_count": 3,
@@ -66,42 +41,38 @@ _METRIC_SPACE = {
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    fms_operation(
-        "metric_space.profile.compute",
-        "Compute diameter, radius, eccentricities, centers, and periphery",
-        "Compute the exact metric profile of a finite metric space: "
+    MathTool(
+        operation_id="metric_space.profile.compute",
+        title="Compute diameter, radius, eccentricities, centers, and periphery",
+        description="Compute the exact metric profile of a finite metric space: "
         "diameter (max eccentricity), radius (min eccentricity), "
         "eccentricities for all points, centers, and periphery.",
-        MetricProfileRequest,
-        MetricProfileResult,
-        _metric_profile,
-        "metric",
-        "profile",
-        "exact",
+        request_type=MetricProfileRequest,
+        result_type=MetricProfileResult,
+        run=_metric_profile,
+        tags=("metric", "profile", "exact"),
         examples=(
-            example(
-                "path_graph",
-                "Profile of a path metric space with 3 points.",
-                _METRIC_SPACE,
+            OperationExample(
+                name="path_graph",
+                description="Profile of a path metric space with 3 points.",
+                input=_METRIC_SPACE,
             ),
         ),
     ),
-    fms_operation(
-        "metric_space.ball.compute",
-        "Compute the ball of a given radius centered at a point",
-        "Return the set of all points within the given radius of a specified "
+    MathTool(
+        operation_id="metric_space.ball.compute",
+        title="Compute the ball of a given radius centered at a point",
+        description="Return the set of all points within the given radius of a specified "
         "center point in a finite metric space.",
-        BallRequest,
-        BallResult,
-        _ball,
-        "metric",
-        "ball",
-        "exact",
+        request_type=BallRequest,
+        result_type=BallResult,
+        run=_ball,
+        tags=("metric", "ball", "exact"),
         examples=(
-            example(
-                "ball_1",
-                "Ball of radius 1 centered at point 0 in a 3-point space.",
-                {
+            OperationExample(
+                name="ball_1",
+                description="Ball of radius 1 centered at point 0 in a 3-point space.",
+                input={
                     "metric_space": _METRIC_SPACE["metric_space"],
                     "center": 0,
                     "radius": 1,
@@ -109,22 +80,20 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    fms_operation(
-        "metric_space.gromov_hyperbolicity.compute",
-        "Compute the four-point Gromov hyperbolicity",
-        "Compute the exact four-point Gromov hyperbolicity of a finite "
+    MathTool(
+        operation_id="metric_space.gromov_hyperbolicity.compute",
+        title="Compute the four-point Gromov hyperbolicity",
+        description="Compute the exact four-point Gromov hyperbolicity of a finite "
         "metric space by brute-force enumeration over all quadruples.",
-        GromovHyperbolicityRequest,
-        GromovHyperbolicityResult,
-        _gromov_hyperbolicity,
-        "metric",
-        "hyperbolicity",
-        "exact",
+        request_type=GromovHyperbolicityRequest,
+        result_type=GromovHyperbolicityResult,
+        run=_gromov_hyperbolicity,
+        tags=("metric", "hyperbolicity", "exact"),
         examples=(
-            example(
-                "path_graph",
-                "Gromov hyperbolicity of a 3-point path metric.",
-                _METRIC_SPACE,
+            OperationExample(
+                name="path_graph",
+                description="Gromov hyperbolicity of a 3-point path metric.",
+                input=_METRIC_SPACE,
             ),
         ),
     ),

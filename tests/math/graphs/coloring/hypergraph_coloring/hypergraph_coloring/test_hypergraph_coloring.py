@@ -78,8 +78,7 @@ def test_dense_graph_coloring_search_is_rejected_before_backtracking() -> None:
 
     with pytest.raises(OperationDomainValidationError, match="backtracking-state"):
         decide_hypergraph_coloring(hypergraph, 19)
-    with pytest.raises(ValidationError, match="backtracking-state"):
-        HypergraphColoringRequest(hypergraph=hypergraph, palette_size=19)
+    assert HypergraphColoringRequest(hypergraph=hypergraph, palette_size=19)
 
 
 def test_distinct_color_fast_path_handles_large_palette() -> None:
@@ -108,3 +107,8 @@ def test_nonpositive_palette_is_rejected() -> None:
 
     with pytest.raises(OperationDomainValidationError, match="positive"):
         decide_hypergraph_coloring(hypergraph, 0)
+    with pytest.raises(ValidationError, match="greater than or equal to 1"):
+        HypergraphColoringRequest(hypergraph=hypergraph, palette_size=0)
+
+    schema = HypergraphColoringRequest.model_json_schema()
+    assert schema["properties"]["palette_size"]["minimum"] == 1

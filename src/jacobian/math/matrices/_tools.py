@@ -1,9 +1,5 @@
 """Exact matrix operation declarations."""
 
-from collections.abc import Callable
-
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.matrices._operation_models import (
     CharacteristicPolynomialRequest,
@@ -119,46 +115,19 @@ def compute_partial_trace(
     )
 
 
-def matrix_operation[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
-MATRIX_DETERMINANT_COMPUTE = matrix_operation(
-    "matrix.determinant.compute",
-    "Compute an exact rational matrix determinant (det)",
-    "Compute the determinant of one square matrix over QQ through order 128 with FLINT's exact dense rational kernel, subject to scalar-work and result-height bounds.",
-    MatrixDeterminantRequest,
-    MatrixDeterminantResult,
-    compute_determinant,
-    "matrix",
-    "determinant",
-    "exact-rational",
+MATRIX_DETERMINANT_COMPUTE = MathTool(
+    operation_id="matrix.determinant.compute",
+    title="Compute an exact rational matrix determinant (det)",
+    description="Compute the determinant of one square matrix over QQ through order 128 with FLINT's exact dense rational kernel, subject to scalar-work and result-height bounds.",
+    request_type=MatrixDeterminantRequest,
+    result_type=MatrixDeterminantResult,
+    run=compute_determinant,
+    tags=("matrix", "determinant", "exact-rational"),
     examples=(
-        example(
-            "determinant_minus_six",
-            "Compute the determinant of [[0, 2], [3, 4]].",
-            {
+        OperationExample(
+            name="determinant_minus_six",
+            description="Compute the determinant of [[0, 2], [3, 4]].",
+            input={
                 "matrix": {
                     "domain": "QQ",
                     "entries": [
@@ -174,10 +143,10 @@ MATRIX_DETERMINANT_COMPUTE = matrix_operation(
                 }
             },
         ),
-        example(
-            "determinant_3x3_identity",
-            "Compute the determinant of a 3x3 identity (1); the matrix must be square (rows == columns).",
-            {
+        OperationExample(
+            name="determinant_3x3_identity",
+            description="Compute the determinant of a 3x3 identity (1); the matrix must be square (rows == columns).",
+            input={
                 "matrix": {
                     "domain": "QQ",
                     "entries": [
@@ -205,58 +174,51 @@ MATRIX_DETERMINANT_COMPUTE = matrix_operation(
 
 TOOLS = (
     MATRIX_DETERMINANT_COMPUTE,
-    matrix_operation(
-        "matrix.adjugate.compute",
-        "Compute an exact matrix adjugate",
-        "Compute the classical adjugate of a square integer matrix.",
-        SquareIntegerMatrixRequest,
-        MatrixAdjugateResult,
-        compute_adjugate,
-        "matrix",
-        "adjugate",
-        "exact-integer",
+    MathTool(
+        operation_id="matrix.adjugate.compute",
+        title="Compute an exact matrix adjugate",
+        description="Compute the classical adjugate of a square integer matrix.",
+        request_type=SquareIntegerMatrixRequest,
+        result_type=MatrixAdjugateResult,
+        run=compute_adjugate,
+        tags=("matrix", "adjugate", "exact-integer"),
         examples=(
-            example(
-                "adjugate_two_by_two",
-                "Compute the adjugate of [[1, 2], [3, 4]].",
-                {"matrix": {"entries": [["1", "2"], ["3", "4"]]}},
+            OperationExample(
+                name="adjugate_two_by_two",
+                description="Compute the adjugate of [[1, 2], [3, 4]].",
+                input={"matrix": {"entries": [["1", "2"], ["3", "4"]]}},
             ),
         ),
     ),
-    matrix_operation(
-        "matrix.trace.compute",
-        "Compute the exact trace of an integer matrix",
-        "Compute the sum of the diagonal entries of a square integer matrix.",
-        SquareIntegerMatrixRequest,
-        MatrixTraceResult,
-        compute_trace,
-        "matrix",
-        "trace",
-        "exact-integer",
+    MathTool(
+        operation_id="matrix.trace.compute",
+        title="Compute the exact trace of an integer matrix",
+        description="Compute the sum of the diagonal entries of a square integer matrix.",
+        request_type=SquareIntegerMatrixRequest,
+        result_type=MatrixTraceResult,
+        run=compute_trace,
+        tags=("matrix", "trace", "exact-integer"),
         examples=(
-            example(
-                "trace_two_by_two",
-                "Compute the trace of [[1, 2], [3, 4]].",
-                {"matrix": {"entries": [["1", "2"], ["3", "4"]]}},
+            OperationExample(
+                name="trace_two_by_two",
+                description="Compute the trace of [[1, 2], [3, 4]].",
+                input={"matrix": {"entries": [["1", "2"], ["3", "4"]]}},
             ),
         ),
     ),
-    matrix_operation(
-        "matrix.multiply.compute",
-        "Multiply two exact rational matrices",
-        "Compute the standard row-by-column product of two compatible bounded matrices over QQ.",
-        RationalMatrixProductRequest,
-        MatrixProductResult,
-        compute_product,
-        "matrix",
-        "matrix-multiplication",
-        "product",
-        "exact-rational",
+    MathTool(
+        operation_id="matrix.multiply.compute",
+        title="Multiply two exact rational matrices",
+        description="Compute the standard row-by-column product of two compatible bounded matrices over QQ.",
+        request_type=RationalMatrixProductRequest,
+        result_type=MatrixProductResult,
+        run=compute_product,
+        tags=("matrix", "matrix-multiplication", "product", "exact-rational"),
         examples=(
-            example(
-                "multiply_square_matrices",
-                "Multiply two 2x2 matrices over QQ.",
-                {
+            OperationExample(
+                name="multiply_square_matrices",
+                description="Multiply two 2x2 matrices over QQ.",
+                input={
                     "left": {
                         "domain": "QQ",
                         "entries": [
@@ -275,22 +237,19 @@ TOOLS = (
             ),
         ),
     ),
-    matrix_operation(
-        "matrix.kronecker_product.compute",
-        "Compute an exact Kronecker product",
-        "Compute the Kronecker product of two bounded rational matrices over QQ.",
-        MatrixKroneckerProductRequest,
-        MatrixKroneckerProductResult,
-        compute_kronecker_product,
-        "matrix",
-        "kronecker-product",
-        "tensor",
-        "exact-rational",
+    MathTool(
+        operation_id="matrix.kronecker_product.compute",
+        title="Compute an exact Kronecker product",
+        description="Compute the Kronecker product of two bounded rational matrices over QQ.",
+        request_type=MatrixKroneckerProductRequest,
+        result_type=MatrixKroneckerProductResult,
+        run=compute_kronecker_product,
+        tags=("matrix", "kronecker-product", "tensor", "exact-rational"),
         examples=(
-            example(
-                "kronecker_identity",
-                "Compute the Kronecker product of two 2x2 identity matrices.",
-                {
+            OperationExample(
+                name="kronecker_identity",
+                description="Compute the Kronecker product of two 2x2 identity matrices.",
+                input={
                     "left": {
                         "domain": "QQ",
                         "entries": [
@@ -309,21 +268,19 @@ TOOLS = (
             ),
         ),
     ),
-    matrix_operation(
-        "matrix.rank.compute",
-        "Compute exact rational matrix rank",
-        "Compute the rank and RREF pivot columns of one dense or coordinate-sparse rectangular matrix over QQ. Dense matrices are admitted through 64 axes; sparse matrices retain declared axes through 8192 and are admitted by connected support components, scalar work, intermediate height, and exact output size.",
-        MatrixRankRequest,
-        MatrixRankResult,
-        compute_rank,
-        "matrix",
-        "rank",
-        "exact-rational",
+    MathTool(
+        operation_id="matrix.rank.compute",
+        title="Compute exact rational matrix rank",
+        description="Compute the rank and RREF pivot columns of one dense or coordinate-sparse rectangular matrix over QQ. Dense matrices are admitted through 64 axes; sparse matrices retain declared axes through 8192 and are admitted by connected support components, scalar work, intermediate height, and exact output size.",
+        request_type=MatrixRankRequest,
+        result_type=MatrixRankResult,
+        run=compute_rank,
+        tags=("matrix", "rank", "exact-rational"),
         examples=(
-            example(
-                "rank_three_by_four",
-                "Compute rank and pivots of a rectangular rational matrix.",
-                {
+            OperationExample(
+                name="rank_three_by_four",
+                description="Compute rank and pivots of a rectangular rational matrix.",
+                input={
                     "matrix": {
                         "domain": "QQ",
                         "entries": [
@@ -349,10 +306,10 @@ TOOLS = (
                     }
                 },
             ),
-            example(
-                "rank_sparse_last_column",
-                "Compute rank while retaining a sparse matrix's declared column axis.",
-                {
+            OperationExample(
+                name="rank_sparse_last_column",
+                description="Compute rank while retaining a sparse matrix's declared column axis.",
+                input={
                     "matrix": {
                         "row_count": 1,
                         "column_count": 128,
@@ -368,22 +325,20 @@ TOOLS = (
             ),
         ),
     ),
-    matrix_operation(
-        "matrix.rational_linear_system.solve",
-        "Solve an exact rational linear system",
-        "Classify and solve a bounded square system Ax=b over QQ, returning a "
+    MathTool(
+        operation_id="matrix.rational_linear_system.solve",
+        title="Solve an exact rational linear system",
+        description="Classify and solve a bounded square system Ax=b over QQ, returning a "
         "unique solution only when one exists.",
-        RationalLinearSolveRequest,
-        RationalLinearSolveResult,
-        compute_rational_linear_solve,
-        "matrix",
-        "linear-system",
-        "exact-rational",
+        request_type=RationalLinearSolveRequest,
+        result_type=RationalLinearSolveResult,
+        run=compute_rational_linear_solve,
+        tags=("matrix", "linear-system", "exact-rational"),
         examples=(
-            example(
-                "solve_identity_system",
-                "Solve a 2x2 identity linear system.",
-                {
+            OperationExample(
+                name="solve_identity_system",
+                description="Solve a 2x2 identity linear system.",
+                input={
                     "matrix": {
                         "domain": "QQ",
                         "entries": [
@@ -394,10 +349,10 @@ TOOLS = (
                     "rhs": [{"num": "3", "den": "1"}, {"num": "4", "den": "1"}],
                 },
             ),
-            example(
-                "solve_3x3_diagonal",
-                "Solve a 3x3 diagonal system; the matrix must be square and rhs length must match its order.",
-                {
+            OperationExample(
+                name="solve_3x3_diagonal",
+                description="Solve a 3x3 diagonal system; the matrix must be square and rhs length must match its order.",
+                input={
                     "matrix": {
                         "domain": "QQ",
                         "entries": [
@@ -427,26 +382,24 @@ TOOLS = (
             ),
         ),
     ),
-    matrix_operation(
-        "matrix.inverse.compute",
-        "Compute the exact inverse of an integer matrix",
-        "Compute the rational two-sided inverse of a nonsingular square matrix.",
-        NonsingularIntegerMatrixRequest,
-        MatrixInverseResult,
-        compute_inverse,
-        "matrix",
-        "inverse",
-        "exact-rational",
+    MathTool(
+        operation_id="matrix.inverse.compute",
+        title="Compute the exact inverse of an integer matrix",
+        description="Compute the rational two-sided inverse of a nonsingular square matrix.",
+        request_type=NonsingularIntegerMatrixRequest,
+        result_type=MatrixInverseResult,
+        run=compute_inverse,
+        tags=("matrix", "inverse", "exact-rational"),
         examples=(
-            example(
-                "inverse_two_by_two",
-                "Compute the inverse of a nonsingular 2x2 integer matrix.",
-                {"matrix": {"entries": [["1", "2"], ["3", "4"]]}},
+            OperationExample(
+                name="inverse_two_by_two",
+                description="Compute the inverse of a nonsingular 2x2 integer matrix.",
+                input={"matrix": {"entries": [["1", "2"], ["3", "4"]]}},
             ),
-            example(
-                "inverse_diagonal_3x3",
-                "Compute the inverse of a 3x3 diagonal matrix; the matrix must be square and nonsingular.",
-                {
+            OperationExample(
+                name="inverse_diagonal_3x3",
+                description="Compute the inverse of a 3x3 diagonal matrix; the matrix must be square and nonsingular.",
+                input={
                     "matrix": {
                         "entries": [["2", "0", "0"], ["0", "3", "0"], ["0", "0", "4"]]
                     }
@@ -454,21 +407,19 @@ TOOLS = (
             ),
         ),
     ),
-    matrix_operation(
-        "matrix.normal_form.rref.compute",
-        "Compute exact reduced row echelon form",
-        "Compute the unique reduced row echelon form over QQ through 64 rows and columns, subject to scalar-work and result-height bounds.",
-        RationalMatrixRequest,
-        RrefResult,
-        compute_rref,
-        "matrix",
-        "rref",
-        "exact-rational",
+    MathTool(
+        operation_id="matrix.normal_form.rref.compute",
+        title="Compute exact reduced row echelon form",
+        description="Compute the unique reduced row echelon form over QQ through 64 rows and columns, subject to scalar-work and result-height bounds.",
+        request_type=RationalMatrixRequest,
+        result_type=RrefResult,
+        run=compute_rref,
+        tags=("matrix", "rref", "exact-rational"),
         examples=(
-            example(
-                "rref_two_by_two",
-                "Compute RREF of a rational matrix.",
-                {
+            OperationExample(
+                name="rref_two_by_two",
+                description="Compute RREF of a rational matrix.",
+                input={
                     "matrix": {
                         "domain": "QQ",
                         "entries": [
@@ -480,28 +431,32 @@ TOOLS = (
             ),
         ),
     ),
-    matrix_operation(
-        "matrix.nullspace.compute",
-        "Compute a canonical exact nullspace or relation basis",
-        (
+    MathTool(
+        operation_id="matrix.nullspace.compute",
+        title="Compute a canonical exact nullspace or relation basis",
+        description=(
             "Compute the RREF fundamental basis of the right nullspace over QQ through 64 rows and columns, subject to scalar-work and result-height bounds. "
             "When columns are ordered vectors, the result gives their rank and "
             "every exact rational linear dependency coefficient."
         ),
-        RationalMatrixRequest,
-        NullspaceResult,
-        compute_nullspace,
-        "matrix",
-        "nullspace",
-        "kernel",
-        "linear-dependence",
-        "rational-relations",
-        "exact-rational",
+        request_type=RationalMatrixRequest,
+        result_type=NullspaceResult,
+        run=compute_nullspace,
+        tags=(
+            "matrix",
+            "nullspace",
+            "kernel",
+            "linear-dependence",
+            "rational-relations",
+            "exact-rational",
+        ),
         examples=(
-            example(
-                "rational_relation_among_columns",
-                ("Compute every rational relation among three ordered column vectors."),
-                {
+            OperationExample(
+                name="rational_relation_among_columns",
+                description=(
+                    "Compute every rational relation among three ordered column vectors."
+                ),
+                input={
                     "matrix": {
                         "domain": "QQ",
                         "entries": [
@@ -521,21 +476,19 @@ TOOLS = (
             ),
         ),
     ),
-    matrix_operation(
-        "matrix.characteristic_polynomial.compute",
-        "Compute an exact characteristic polynomial",
-        "Compute dense coefficients of det(lambda I - A) over QQ.",
-        CharacteristicPolynomialRequest,
-        CharacteristicPolynomialResult,
-        compute_characteristic_polynomial,
-        "matrix",
-        "characteristic-polynomial",
-        "exact-rational",
+    MathTool(
+        operation_id="matrix.characteristic_polynomial.compute",
+        title="Compute an exact characteristic polynomial",
+        description="Compute dense coefficients of det(lambda I - A) over QQ.",
+        request_type=CharacteristicPolynomialRequest,
+        result_type=CharacteristicPolynomialResult,
+        run=compute_characteristic_polynomial,
+        tags=("matrix", "characteristic-polynomial", "exact-rational"),
         examples=(
-            example(
-                "characteristic_two_by_two",
-                "Compute the characteristic polynomial of a 2x2 matrix.",
-                {
+            OperationExample(
+                name="characteristic_two_by_two",
+                description="Compute the characteristic polynomial of a 2x2 matrix.",
+                input={
                     "matrix": {
                         "domain": "QQ",
                         "entries": [
@@ -545,10 +498,10 @@ TOOLS = (
                     }
                 },
             ),
-            example(
-                "characteristic_diagonal_3x3",
-                "Compute the characteristic polynomial of a diagonal 3x3; the matrix must be square.",
-                {
+            OperationExample(
+                name="characteristic_diagonal_3x3",
+                description="Compute the characteristic polynomial of a diagonal 3x3; the matrix must be square.",
+                input={
                     "matrix": {
                         "domain": "QQ",
                         "entries": [
@@ -573,41 +526,37 @@ TOOLS = (
             ),
         ),
     ),
-    matrix_operation(
-        "matrix.normal_form.smith.compute",
-        "Compute an exact Smith normal form",
-        (
+    MathTool(
+        operation_id="matrix.normal_form.smith.compute",
+        title="Compute an exact Smith normal form",
+        description=(
             "Compute the canonical diagonal Smith form over ZZ through 64 rows and columns, subject to scalar-work and result-height bounds, without claiming unavailable left or right transformations."
         ),
-        IntegerMatrixRequest,
-        SmithNormalForm,
-        compute_smith_normal_form,
-        "matrix",
-        "smith-normal-form",
-        "exact-integer",
+        request_type=IntegerMatrixRequest,
+        result_type=SmithNormalForm,
+        run=compute_smith_normal_form,
+        tags=("matrix", "smith-normal-form", "exact-integer"),
         examples=(
-            example(
-                "smith_two_by_two",
-                "Compute the Smith normal form of a 2x2 integer matrix.",
-                {"matrix": {"entries": [["2", "4"], ["6", "8"]]}},
+            OperationExample(
+                name="smith_two_by_two",
+                description="Compute the Smith normal form of a 2x2 integer matrix.",
+                input={"matrix": {"entries": [["2", "4"], ["6", "8"]]}},
             ),
         ),
     ),
-    matrix_operation(
-        "matrix.permanent.compute",
-        "Compute an exact matrix permanent",
-        "Compute the permanent (sign-free determinant analogue) of a square rational matrix over QQ through order 12. The owner charges SymPy's Ryser algorithm against its 4,096-subset budget.",
-        MatrixPermanentRequest,
-        MatrixPermanentResult,
-        compute_permanent,
-        "matrix",
-        "permanent",
-        "exact-rational",
+    MathTool(
+        operation_id="matrix.permanent.compute",
+        title="Compute an exact matrix permanent",
+        description="Compute the permanent (sign-free determinant analogue) of a square rational matrix over QQ through order 12. The owner charges SymPy's Ryser algorithm against its 4,096-subset budget.",
+        request_type=MatrixPermanentRequest,
+        result_type=MatrixPermanentResult,
+        run=compute_permanent,
+        tags=("matrix", "permanent", "exact-rational"),
         examples=(
-            example(
-                "permanent_two_by_two",
-                "Compute the permanent of [[1, 2], [3, 4]].",
-                {
+            OperationExample(
+                name="permanent_two_by_two",
+                description="Compute the permanent of [[1, 2], [3, 4]].",
+                input={
                     "matrix": {
                         "domain": "QQ",
                         "entries": [
@@ -623,10 +572,10 @@ TOOLS = (
                     }
                 },
             ),
-            example(
-                "permanent_identity_3x3",
-                "Compute the permanent (1) of a 3x3 identity; the matrix must be square.",
-                {
+            OperationExample(
+                name="permanent_identity_3x3",
+                description="Compute the permanent (1) of a 3x3 identity; the matrix must be square.",
+                input={
                     "matrix": {
                         "domain": "QQ",
                         "entries": [
@@ -651,22 +600,19 @@ TOOLS = (
             ),
         ),
     ),
-    matrix_operation(
-        "matrix.partial_trace.compute",
-        "Compute an exact partial trace over a Kronecker factor",
-        "Compute the partial trace over the first (traced) subsystem of a composite matrix A (x) B stored in row-major block order over QQ.",
-        MatrixPartialTraceRequest,
-        MatrixPartialTraceResult,
-        compute_partial_trace,
-        "matrix",
-        "partial-trace",
-        "tensor",
-        "exact-rational",
+    MathTool(
+        operation_id="matrix.partial_trace.compute",
+        title="Compute an exact partial trace over a Kronecker factor",
+        description="Compute the partial trace over the first (traced) subsystem of a composite matrix A (x) B stored in row-major block order over QQ.",
+        request_type=MatrixPartialTraceRequest,
+        result_type=MatrixPartialTraceResult,
+        run=compute_partial_trace,
+        tags=("matrix", "partial-trace", "tensor", "exact-rational"),
         examples=(
-            example(
-                "partial_trace_diagonal",
-                "Trace out a 2x2 diagonal factor from a 4x4 Kronecker product.",
-                {
+            OperationExample(
+                name="partial_trace_diagonal",
+                description="Trace out a 2x2 diagonal factor from a 4x4 Kronecker product.",
+                input={
                     "matrix": {
                         "domain": "QQ",
                         "entries": [

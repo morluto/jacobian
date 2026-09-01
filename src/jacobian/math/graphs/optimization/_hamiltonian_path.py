@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.graphs.optimization._chromatic_kernel import build_simple_graph
 from jacobian.math.graphs.optimization._models import (
     GraphHamiltonianPathRequest,
@@ -102,10 +105,10 @@ HAMILTONIAN_PATH_OPERATION: MathTool[
         "bounded",
     ),
     examples=(
-        example(
-            "path_graph_3",
-            "Hamiltonian path of the path graph P3.",
-            {
+        OperationExample(
+            name="path_graph_3",
+            description="Hamiltonian path of the path graph P3.",
+            input={
                 "graph": {
                     "vertices": ["a", "b", "c"],
                     "edges": [["a", "b"], ["b", "c"]],

@@ -1,10 +1,7 @@
 """Graphical model operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.probability.graphical_models._models import (
     DSeparationRequest,
@@ -50,31 +47,6 @@ def _d_separation(request: DSeparationRequest) -> DSeparationResult:
     )
 
 
-def _op[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 _FACTOR1 = {
     "variables": [0, 1],
     "domain_sizes": [2, 2, 2],
@@ -93,22 +65,20 @@ _FACTOR_SINGLE = {
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "graphical_model.factor.multiply",
-        "Multiply two factors",
-        "Compute the product of two factors over the union of their variables "
+    MathTool(
+        operation_id="graphical_model.factor.multiply",
+        title="Multiply two factors",
+        description="Compute the product of two factors over the union of their variables "
         "using bounded exact rational arithmetic. Scalar factors use an empty scope.",
-        FactorMultiplyRequest,
-        FactorMultiplyResult,
-        _factor_multiply,
-        "graphical-model",
-        "factor",
-        "exact",
+        request_type=FactorMultiplyRequest,
+        result_type=FactorMultiplyResult,
+        run=_factor_multiply,
+        tags=("graphical-model", "factor", "exact"),
         examples=(
-            example(
-                "multiply_two_factors",
-                "Multiply a 2-var factor by another 2-var factor.",
-                {
+            OperationExample(
+                name="multiply_two_factors",
+                description="Multiply a 2-var factor by another 2-var factor.",
+                input={
                     "left": _FACTOR1,
                     "right": {
                         "variables": [1],
@@ -122,46 +92,41 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "graphical_model.factor.marginalize",
-        "Marginalize out a variable from a factor",
-        "Sum out a variable from a factor, producing a factor over the "
+    MathTool(
+        operation_id="graphical_model.factor.marginalize",
+        title="Marginalize out a variable from a factor",
+        description="Sum out a variable from a factor, producing a factor over the "
         "remaining variables using exact rational arithmetic.",
-        FactorMarginalizeRequest,
-        FactorMarginalizeResult,
-        _factor_marginalize,
-        "graphical-model",
-        "factor",
-        "marginalization",
-        "exact",
+        request_type=FactorMarginalizeRequest,
+        result_type=FactorMarginalizeResult,
+        run=_factor_marginalize,
+        tags=("graphical-model", "factor", "marginalization", "exact"),
         examples=(
-            example(
-                "marginalize_var_0",
-                "Marginalize out variable 0 from a single-variable factor.",
-                {
+            OperationExample(
+                name="marginalize_var_0",
+                description="Marginalize out variable 0 from a single-variable factor.",
+                input={
                     "factor": _FACTOR_SINGLE,
                     "variable": 0,
                 },
             ),
         ),
     ),
-    _op(
-        "graphical_model.d_separation.compute",
-        "Check d-separation in a Bayesian network",
-        "Check whether two sets of variables are d-separated given a "
+    MathTool(
+        operation_id="graphical_model.d_separation.compute",
+        title="Check d-separation in a Bayesian network",
+        description="Check whether two sets of variables are d-separated given a "
         "conditioning set in a bounded directed acyclic graph, using ancestral "
         "restriction and moralization.",
-        DSeparationRequest,
-        DSeparationResult,
-        _d_separation,
-        "graphical-model",
-        "d-separation",
-        "exact",
+        request_type=DSeparationRequest,
+        result_type=DSeparationResult,
+        run=_d_separation,
+        tags=("graphical-model", "d-separation", "exact"),
         examples=(
-            example(
-                "conditioned_chain",
-                "Decide whether endpoints of a three-node chain are separated by its middle node.",
-                {
+            OperationExample(
+                name="conditioned_chain",
+                description="Decide whether endpoints of a three-node chain are separated by its middle node.",
+                input={
                     "variable_count": 3,
                     "edges": [[0, 1], [1, 2]],
                     "set_a": [0],

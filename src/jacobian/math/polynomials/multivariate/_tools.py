@@ -1,10 +1,7 @@
 """Exact multivariate polynomial operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.polynomials.multivariate._division import (
     MultivariateDivisionRequest,
@@ -65,35 +62,10 @@ def _compute_factor(request: MultivariateFactorRequest) -> MultivariateFactorRes
     return multivariate_factor(request.polynomial)
 
 
-def multivariate_polynomial_operation[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
-_GCD_EXAMPLE = example(
-    "gcd_xy_minus_one_coprime",
-    "Compute the GCD of two coprime multivariate polynomials.",
-    {
+_GCD_EXAMPLE = OperationExample(
+    name="gcd_xy_minus_one_coprime",
+    description="Compute the GCD of two coprime multivariate polynomials.",
+    input={
         "left": {
             "domain": "QQ",
             "variables": ["x", "y"],
@@ -129,10 +101,10 @@ _GCD_EXAMPLE = example(
     },
 )
 
-_DIVISION_EXAMPLE = example(
-    "division_xy_minus_one",
-    "Divide x^2*y + x by x*y - 1 under lex order.",
-    {
+_DIVISION_EXAMPLE = OperationExample(
+    name="division_xy_minus_one",
+    description="Divide x^2*y + x by x*y - 1 under lex order.",
+    input={
         "left": {
             "domain": "QQ",
             "variables": ["x", "y"],
@@ -169,10 +141,10 @@ _DIVISION_EXAMPLE = example(
     },
 )
 
-_RESULTANT_EXAMPLE = example(
-    "resultant_xy_minus_one_x_squared_minus_one",
-    "Compute the resultant of x*y-1 and x^2-1 w.r.t. x.",
-    {
+_RESULTANT_EXAMPLE = OperationExample(
+    name="resultant_xy_minus_one_x_squared_minus_one",
+    description="Compute the resultant of x*y-1 and x^2-1 w.r.t. x.",
+    input={
         "left": {
             "domain": "QQ",
             "variables": ["x", "y"],
@@ -209,14 +181,14 @@ _RESULTANT_EXAMPLE = example(
     },
 )
 
-_SUBRESULTANT_EXAMPLE = example(
-    "subresultants_x_squared_minus_y_x_minus_y",
-    (
+_SUBRESULTANT_EXAMPLE = OperationExample(
+    name="subresultants_x_squared_minus_y_x_minus_y",
+    description=(
         "Compute the exact nonzero subresultant PRS of x^2-y and x-y in x; "
         "both polynomials must share one ordered multivariate QQ ring and "
         "have positive degree in the declared main variable."
     ),
-    {
+    input={
         "left": {
             "domain": "QQ",
             "variables": ["x", "y"],
@@ -255,43 +227,37 @@ _SUBRESULTANT_EXAMPLE = example(
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    multivariate_polynomial_operation(
-        "polynomial.multivariate.gcd.compute",
-        "Compute a multivariate polynomial GCD over QQ",
-        (
+    MathTool(
+        operation_id="polynomial.multivariate.gcd.compute",
+        title="Compute a multivariate polynomial GCD over QQ",
+        description=(
             "Compute the monic GCD of two bounded multivariate polynomials over "
             "QQ[x_1, ..., x_n].  Backed by SymPy's multivariate polynomial GCD."
         ),
-        MultivariateGcdRequest,
-        MultivariateGcdResult,
-        _compute_gcd,
-        "polynomial",
-        "gcd",
-        "multivariate",
-        "rational",
+        request_type=MultivariateGcdRequest,
+        result_type=MultivariateGcdResult,
+        run=_compute_gcd,
+        tags=("polynomial", "gcd", "multivariate", "rational"),
         examples=(_GCD_EXAMPLE,),
     ),
-    multivariate_polynomial_operation(
-        "polynomial.multivariate.divide.compute",
-        "Divide multivariate polynomials with remainder",
-        (
+    MathTool(
+        operation_id="polynomial.multivariate.divide.compute",
+        title="Divide multivariate polynomials with remainder",
+        description=(
             "Compute the quotient and remainder of one multivariate polynomial "
             "divided by another over QQ[x_1, ..., x_n] under a declared monomial "
             "order.  Backed by SymPy's multivariate polynomial division."
         ),
-        MultivariateDivisionRequest,
-        MultivariateDivisionResult,
-        _compute_division,
-        "polynomial",
-        "division",
-        "multivariate",
-        "rational",
+        request_type=MultivariateDivisionRequest,
+        result_type=MultivariateDivisionResult,
+        run=_compute_division,
+        tags=("polynomial", "division", "multivariate", "rational"),
         examples=(_DIVISION_EXAMPLE,),
     ),
-    multivariate_polynomial_operation(
-        "polynomial.multivariate.resultant.compute",
-        "Compute a multivariate polynomial resultant over QQ",
-        (
+    MathTool(
+        operation_id="polynomial.multivariate.resultant.compute",
+        title="Compute a multivariate polynomial resultant over QQ",
+        description=(
             "Compute the exact resultant of two multivariate polynomials with "
             "respect to one declared variable over QQ[x_1, ..., x_n].  The "
             "resultant lives in the ring over the remaining variables.  "
@@ -301,20 +267,16 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "the empty-determinant value 1, and a zero input gives 0.  Backed "
             "by SymPy's resultant."
         ),
-        MultivariateResultantRequest,
-        MultivariateResultantResult,
-        _compute_resultant,
-        "polynomial",
-        "resultant",
-        "multivariate",
-        "rational",
-        "elimination",
+        request_type=MultivariateResultantRequest,
+        result_type=MultivariateResultantResult,
+        run=_compute_resultant,
+        tags=("polynomial", "resultant", "multivariate", "rational", "elimination"),
         examples=(_RESULTANT_EXAMPLE,),
     ),
-    multivariate_polynomial_operation(
-        "polynomial.multivariate.subresultant_sequence.compute",
-        "Compute an exact multivariate-coefficient subresultant sequence",
-        (
+    MathTool(
+        operation_id="polynomial.multivariate.subresultant_sequence.compute",
+        title="Compute an exact multivariate-coefficient subresultant sequence",
+        description=(
             "Compute the complete nonzero Brown subresultant PRS of two "
             "bounded polynomials in one declared main variable over the exact "
             "QQ polynomial ring in all remaining variables. Return every "
@@ -324,22 +286,24 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "A pinned SymPy Brown PRS kernel stays private; Jacobian fixes "
             "ordering, signs, bounds, and exact replay."
         ),
-        MultivariateSubresultantSequenceRequest,
-        MultivariateSubresultantSequenceResult,
-        _compute_subresultants,
-        "polynomial",
-        "subresultant",
-        "polynomial remainder sequence",
-        "multivariate",
-        "rational",
-        "projection",
-        "lifting",
+        request_type=MultivariateSubresultantSequenceRequest,
+        result_type=MultivariateSubresultantSequenceResult,
+        run=_compute_subresultants,
+        tags=(
+            "polynomial",
+            "subresultant",
+            "polynomial remainder sequence",
+            "multivariate",
+            "rational",
+            "projection",
+            "lifting",
+        ),
         examples=(_SUBRESULTANT_EXAMPLE,),
     ),
-    multivariate_polynomial_operation(
-        "polynomial.multivariate.factor.compute",
-        "Factor a multivariate polynomial over QQ",
-        (
+    MathTool(
+        operation_id="polynomial.multivariate.factor.compute",
+        title="Factor a multivariate polynomial over QQ",
+        description=(
             "Exact content and complete irreducible factorization with "
             "multiplicities for one bounded nonzero multivariate polynomial over "
             "QQ in >=2 variables (univariate inputs use polynomial.factor.compute). "
@@ -348,20 +312,17 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "kill, crash, or resource-cap stops return retryable non-mathematical "
             "EXECUTION_FAILED. Backed by SymPy factor_list."
         ),
-        MultivariateFactorRequest,
-        MultivariateFactorResult,
-        _compute_factor,
-        "polynomial",
-        "factorization",
-        "multivariate",
-        "rational",
+        request_type=MultivariateFactorRequest,
+        result_type=MultivariateFactorResult,
+        run=_compute_factor,
+        tags=("polynomial", "factorization", "multivariate", "rational"),
         examples=(
-            example(
-                "factor_xy_squared_minus_x",
-                "Factor the nonzero multivariate polynomial x^2*y - x in Q[x,y]; "
+            OperationExample(
+                name="factor_xy_squared_minus_x",
+                description="Factor the nonzero multivariate polynomial x^2*y - x in Q[x,y]; "
                 "the polynomial must use the same canonical ordered QQ ring and "
                 "contain at least two variables.",
-                {
+                input={
                     "polynomial": {
                         "domain": "QQ",
                         "variables": ["x", "y"],

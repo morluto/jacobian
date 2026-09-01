@@ -4,8 +4,11 @@ from fractions import Fraction
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.number_theory.arithmetic import operations as native
 from jacobian.math.number_theory.arithmetic._rational_models import (
     MAX_RATIONAL_CONTINUED_FRACTION_TERMS,
@@ -18,7 +21,6 @@ from jacobian.math.number_theory.arithmetic._rational_models import (
     RationalValueRequest,
     RationalValueResult,
 )
-from jacobian.math.number_theory.arithmetic._support import arithmetic_operation
 
 
 def _fraction(value: CanonicalRational) -> Fraction:
@@ -156,229 +158,227 @@ _ONE_HALF = {"num": "1", "den": "2"}
 _TWO_THIRDS = {"num": "2", "den": "3"}
 
 RATIONAL_OPERATIONS = (
-    arithmetic_operation(
-        "rational.compute.reciprocal",
-        "Compute rational reciprocal",
-        "Compute the reduced reciprocal of one nonzero rational.",
-        NonzeroRationalValueRequest,
-        RationalValueResult,
-        reciprocal,
-        "rational",
-        "exact",
-        examples=(example("two_thirds", "Invert two thirds.", {"value": _TWO_THIRDS}),),
-    ),
-    arithmetic_operation(
-        "rational.compute.negation",
-        "Negate rational",
-        "Compute the exact additive inverse of one rational.",
-        RationalValueRequest,
-        RationalValueResult,
-        negation,
-        "rational",
-        "exact",
-        examples=(example("two_thirds", "Negate two thirds.", {"value": _TWO_THIRDS}),),
-    ),
-    arithmetic_operation(
-        "rational.compute.absolute_value",
-        "Compute rational absolute value",
-        "Compute the exact absolute value of one rational.",
-        RationalValueRequest,
-        RationalValueResult,
-        rational_absolute_value,
-        "rational",
-        "exact",
+    MathTool(
+        operation_id="rational.compute.reciprocal",
+        title="Compute rational reciprocal",
+        description="Compute the reduced reciprocal of one nonzero rational.",
+        request_type=NonzeroRationalValueRequest,
+        result_type=RationalValueResult,
+        run=reciprocal,
+        tags=("rational", "exact"),
         examples=(
-            example(
-                "negative_three_halves",
-                "Take the absolute value of negative three halves.",
-                {"value": {"num": "-3", "den": "2"}},
+            OperationExample(
+                name="two_thirds",
+                description="Invert two thirds.",
+                input={"value": _TWO_THIRDS},
             ),
         ),
     ),
-    arithmetic_operation(
-        "rational.compute.sum",
-        "Add rationals",
-        "Compute the reduced sum of two rationals.",
-        RationalPairRequest,
-        RationalValueResult,
-        sum_rationals,
-        "rational",
-        "exact",
+    MathTool(
+        operation_id="rational.compute.negation",
+        title="Negate rational",
+        description="Compute the exact additive inverse of one rational.",
+        request_type=RationalValueRequest,
+        result_type=RationalValueResult,
+        run=negation,
+        tags=("rational", "exact"),
         examples=(
-            example(
-                "half_plus_two_thirds",
-                "Add one half and two thirds.",
-                {"left": _ONE_HALF, "right": _TWO_THIRDS},
+            OperationExample(
+                name="two_thirds",
+                description="Negate two thirds.",
+                input={"value": _TWO_THIRDS},
             ),
         ),
     ),
-    arithmetic_operation(
-        "rational.compute.difference",
-        "Subtract rationals",
-        "Compute the reduced difference of two rationals.",
-        RationalPairRequest,
-        RationalValueResult,
-        difference,
-        "rational",
-        "exact",
+    MathTool(
+        operation_id="rational.compute.absolute_value",
+        title="Compute rational absolute value",
+        description="Compute the exact absolute value of one rational.",
+        request_type=RationalValueRequest,
+        result_type=RationalValueResult,
+        run=rational_absolute_value,
+        tags=("rational", "exact"),
         examples=(
-            example(
-                "two_thirds_minus_half",
-                "Subtract one half from two thirds.",
-                {"left": _TWO_THIRDS, "right": _ONE_HALF},
+            OperationExample(
+                name="negative_three_halves",
+                description="Take the absolute value of negative three halves.",
+                input={"value": {"num": "-3", "den": "2"}},
             ),
         ),
     ),
-    arithmetic_operation(
-        "rational.compute.product",
-        "Multiply rationals",
-        "Compute the reduced product of two rationals.",
-        RationalPairRequest,
-        RationalValueResult,
-        product,
-        "rational",
-        "exact",
+    MathTool(
+        operation_id="rational.compute.sum",
+        title="Add rationals",
+        description="Compute the reduced sum of two rationals.",
+        request_type=RationalPairRequest,
+        result_type=RationalValueResult,
+        run=sum_rationals,
+        tags=("rational", "exact"),
         examples=(
-            example(
-                "half_times_two_thirds",
-                "Multiply one half by two thirds.",
-                {"left": _ONE_HALF, "right": _TWO_THIRDS},
+            OperationExample(
+                name="half_plus_two_thirds",
+                description="Add one half and two thirds.",
+                input={"left": _ONE_HALF, "right": _TWO_THIRDS},
             ),
         ),
     ),
-    arithmetic_operation(
-        "rational.compute.quotient",
-        "Divide rationals",
-        "Compute the reduced quotient of two rationals with nonzero divisor.",
-        RationalDivisionRequest,
-        RationalValueResult,
-        quotient,
-        "rational",
-        "exact",
+    MathTool(
+        operation_id="rational.compute.difference",
+        title="Subtract rationals",
+        description="Compute the reduced difference of two rationals.",
+        request_type=RationalPairRequest,
+        result_type=RationalValueResult,
+        run=difference,
+        tags=("rational", "exact"),
         examples=(
-            example(
-                "two_thirds_divided_by_half",
-                "Divide two thirds by one half.",
-                {"left": _TWO_THIRDS, "right": _ONE_HALF},
+            OperationExample(
+                name="two_thirds_minus_half",
+                description="Subtract one half from two thirds.",
+                input={"left": _TWO_THIRDS, "right": _ONE_HALF},
             ),
         ),
     ),
-    arithmetic_operation(
-        "rational.compute.minimum",
-        "Compute rational minimum",
-        "Return the lesser of two exact rationals.",
-        RationalPairRequest,
-        RationalValueResult,
-        minimum,
-        "rational",
-        "order",
+    MathTool(
+        operation_id="rational.compute.product",
+        title="Multiply rationals",
+        description="Compute the reduced product of two rationals.",
+        request_type=RationalPairRequest,
+        result_type=RationalValueResult,
+        run=product,
+        tags=("rational", "exact"),
         examples=(
-            example(
-                "half_and_two_thirds",
-                "Find the lesser rational.",
-                {"left": _ONE_HALF, "right": _TWO_THIRDS},
+            OperationExample(
+                name="half_times_two_thirds",
+                description="Multiply one half by two thirds.",
+                input={"left": _ONE_HALF, "right": _TWO_THIRDS},
             ),
         ),
     ),
-    arithmetic_operation(
-        "rational.compute.maximum",
-        "Compute rational maximum",
-        "Return the greater of two exact rationals.",
-        RationalPairRequest,
-        RationalValueResult,
-        maximum,
-        "rational",
-        "order",
+    MathTool(
+        operation_id="rational.compute.quotient",
+        title="Divide rationals",
+        description="Compute the reduced quotient of two rationals with nonzero divisor.",
+        request_type=RationalDivisionRequest,
+        result_type=RationalValueResult,
+        run=quotient,
+        tags=("rational", "exact"),
         examples=(
-            example(
-                "half_and_two_thirds",
-                "Find the greater rational.",
-                {"left": _ONE_HALF, "right": _TWO_THIRDS},
+            OperationExample(
+                name="two_thirds_divided_by_half",
+                description="Divide two thirds by one half.",
+                input={"left": _TWO_THIRDS, "right": _ONE_HALF},
             ),
         ),
     ),
-    arithmetic_operation(
-        "rational.compute.floor",
-        "Floor rational",
-        "Compute the greatest integer not exceeding one rational.",
-        RationalValueRequest,
-        RationalIntegerResult,
-        floor,
-        "rational",
-        "rounding",
+    MathTool(
+        operation_id="rational.compute.minimum",
+        title="Compute rational minimum",
+        description="Return the lesser of two exact rationals.",
+        request_type=RationalPairRequest,
+        result_type=RationalValueResult,
+        run=minimum,
+        tags=("rational", "order"),
         examples=(
-            example(
-                "seven_thirds",
-                "Floor seven thirds.",
-                {"value": {"num": "7", "den": "3"}},
+            OperationExample(
+                name="half_and_two_thirds",
+                description="Find the lesser rational.",
+                input={"left": _ONE_HALF, "right": _TWO_THIRDS},
             ),
         ),
     ),
-    arithmetic_operation(
-        "rational.compute.ceiling",
-        "Ceil rational",
-        "Compute the least integer not below one rational.",
-        RationalValueRequest,
-        RationalIntegerResult,
-        ceiling,
-        "rational",
-        "rounding",
+    MathTool(
+        operation_id="rational.compute.maximum",
+        title="Compute rational maximum",
+        description="Return the greater of two exact rationals.",
+        request_type=RationalPairRequest,
+        result_type=RationalValueResult,
+        run=maximum,
+        tags=("rational", "order"),
         examples=(
-            example(
-                "seven_thirds",
-                "Ceil seven thirds.",
-                {"value": {"num": "7", "den": "3"}},
+            OperationExample(
+                name="half_and_two_thirds",
+                description="Find the greater rational.",
+                input={"left": _ONE_HALF, "right": _TWO_THIRDS},
             ),
         ),
     ),
-    arithmetic_operation(
-        "rational.compute.continued_fraction",
-        "Expand rational continued fraction",
-        "Compute the canonical finite simple continued fraction of one rational.",
-        RationalValueRequest,
-        RationalContinuedFractionResult,
-        continued_fraction,
-        "rational",
-        "representation",
+    MathTool(
+        operation_id="rational.compute.floor",
+        title="Floor rational",
+        description="Compute the greatest integer not exceeding one rational.",
+        request_type=RationalValueRequest,
+        result_type=RationalIntegerResult,
+        run=floor,
+        tags=("rational", "rounding"),
         examples=(
-            example(
-                "negative_seven_fifths",
-                "Expand negative seven fifths.",
-                {"value": {"num": "-7", "den": "5"}},
+            OperationExample(
+                name="seven_thirds",
+                description="Floor seven thirds.",
+                input={"value": {"num": "7", "den": "3"}},
             ),
         ),
     ),
-    arithmetic_operation(
-        "rational.decide.equal",
-        "Decide rational equality",
-        "Decide exact equality of two reduced rationals.",
-        RationalPairRequest,
-        RationalComparisonResult,
-        equal,
-        "rational",
-        "predicate",
+    MathTool(
+        operation_id="rational.compute.ceiling",
+        title="Ceil rational",
+        description="Compute the least integer not below one rational.",
+        request_type=RationalValueRequest,
+        result_type=RationalIntegerResult,
+        run=ceiling,
+        tags=("rational", "rounding"),
         examples=(
-            example(
-                "equal_halves",
-                "Compare one half with itself.",
-                {"left": _ONE_HALF, "right": _ONE_HALF},
+            OperationExample(
+                name="seven_thirds",
+                description="Ceil seven thirds.",
+                input={"value": {"num": "7", "den": "3"}},
             ),
         ),
     ),
-    arithmetic_operation(
-        "rational.decide.less_than",
-        "Compare rationals",
-        "Decide whether the first rational is strictly less than the second.",
-        RationalPairRequest,
-        RationalComparisonResult,
-        less_than,
-        "rational",
-        "predicate",
+    MathTool(
+        operation_id="rational.compute.continued_fraction",
+        title="Expand rational continued fraction",
+        description="Compute the canonical finite simple continued fraction of one rational.",
+        request_type=RationalValueRequest,
+        result_type=RationalContinuedFractionResult,
+        run=continued_fraction,
+        tags=("rational", "representation"),
         examples=(
-            example(
-                "half_less_than_two_thirds",
-                "Compare one half and two thirds.",
-                {"left": _ONE_HALF, "right": _TWO_THIRDS},
+            OperationExample(
+                name="negative_seven_fifths",
+                description="Expand negative seven fifths.",
+                input={"value": {"num": "-7", "den": "5"}},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="rational.decide.equal",
+        title="Decide rational equality",
+        description="Decide exact equality of two reduced rationals.",
+        request_type=RationalPairRequest,
+        result_type=RationalComparisonResult,
+        run=equal,
+        tags=("rational", "predicate"),
+        examples=(
+            OperationExample(
+                name="equal_halves",
+                description="Compare one half with itself.",
+                input={"left": _ONE_HALF, "right": _ONE_HALF},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="rational.decide.less_than",
+        title="Compare rationals",
+        description="Decide whether the first rational is strictly less than the second.",
+        request_type=RationalPairRequest,
+        result_type=RationalComparisonResult,
+        run=less_than,
+        tags=("rational", "predicate"),
+        examples=(
+            OperationExample(
+                name="half_less_than_two_thirds",
+                description="Compare one half and two thirds.",
+                input={"left": _ONE_HALF, "right": _TWO_THIRDS},
             ),
         ),
     ),

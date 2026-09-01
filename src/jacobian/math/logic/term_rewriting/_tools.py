@@ -1,10 +1,7 @@
 """First-order term rewriting operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.logic.term_rewriting._models import (
     CriticalPairsRequest,
@@ -74,31 +71,6 @@ def compute_critical_pairs(request: CriticalPairsRequest) -> CriticalPairsResult
     return critical_pairs_result(request.signature, request.rules)
 
 
-def _op[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 _MATCH_EXAMPLE = {
     "signature": {"arities": [2, 0, 0]},
     "pattern": {
@@ -140,23 +112,21 @@ _UNIFY_EXAMPLE = {
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "term_rewriting.critical_pairs.compute",
-        "Compute first-order critical pairs",
-        "Enumerate every unifiable nonvariable overlap of a bounded finite "
+    MathTool(
+        operation_id="term_rewriting.critical_pairs.compute",
+        title="Compute first-order critical pairs",
+        description="Enumerate every unifiable nonvariable overlap of a bounded finite "
         "term-rewrite system. Each source-indexed pair records its overlap "
         "position, deterministic rename-apart MGU, and both peak reducts.",
-        CriticalPairsRequest,
-        CriticalPairsResult,
-        compute_critical_pairs,
-        "term-rewriting",
-        "critical-pairs",
-        "exact",
+        request_type=CriticalPairsRequest,
+        result_type=CriticalPairsResult,
+        run=compute_critical_pairs,
+        tags=("term-rewriting", "critical-pairs", "exact"),
         examples=(
-            example(
-                "overlap_at_nested_function",
-                "Overlap g(y) -> y into f(g(x)) -> x.",
-                {
+            OperationExample(
+                name="overlap_at_nested_function",
+                description="Overlap g(y) -> y into f(g(x)) -> x.",
+                input={
                     "signature": {"arities": [1, 1, 0]},
                     "rules": [
                         {
@@ -185,60 +155,54 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "term_rewriting.matching.compute",
-        "Match a pattern against a subject term",
-        "One-way matching: find a substitution that makes a pattern "
+    MathTool(
+        operation_id="term_rewriting.matching.compute",
+        title="Match a pattern against a subject term",
+        description="One-way matching: find a substitution that makes a pattern "
         "(with variables) structurally equal to a ground subject term.",
-        MatchingRequest,
-        MatchingResult,
-        compute_matching,
-        "term-rewriting",
-        "matching",
-        "exact",
+        request_type=MatchingRequest,
+        result_type=MatchingResult,
+        run=compute_matching,
+        tags=("term-rewriting", "matching", "exact"),
         examples=(
-            example(
-                "match_pattern",
-                "Match f(x, y) against f(g, h).",
-                _MATCH_EXAMPLE,
+            OperationExample(
+                name="match_pattern",
+                description="Match f(x, y) against f(g, h).",
+                input=_MATCH_EXAMPLE,
             ),
         ),
     ),
-    _op(
-        "term_rewriting.unification.compute",
-        "Unify two terms",
-        "Compute the most general unifier (MGU) of two first-order terms.",
-        UnificationRequest,
-        UnificationResult,
-        compute_unification,
-        "term-rewriting",
-        "unification",
-        "exact",
+    MathTool(
+        operation_id="term_rewriting.unification.compute",
+        title="Unify two terms",
+        description="Compute the most general unifier (MGU) of two first-order terms.",
+        request_type=UnificationRequest,
+        result_type=UnificationResult,
+        run=compute_unification,
+        tags=("term-rewriting", "unification", "exact"),
         examples=(
-            example(
-                "unify_two_terms",
-                "Unify f(x, c) with f(d, c).",
-                _UNIFY_EXAMPLE,
+            OperationExample(
+                name="unify_two_terms",
+                description="Unify f(x, c) with f(d, c).",
+                input=_UNIFY_EXAMPLE,
             ),
         ),
     ),
-    _op(
-        "term_rewriting.rewrite_step.compute",
-        "Enumerate or select one-step term rewrites",
-        "Return every applicable one-step derivation, or apply one agent-selected "
+    MathTool(
+        operation_id="term_rewriting.rewrite_step.compute",
+        title="Enumerate or select one-step term rewrites",
+        description="Return every applicable one-step derivation, or apply one agent-selected "
         "rule at one agent-selected position. Each result includes its position, "
         "rule index, matching substitution, and rewritten term.",
-        RewriteStepRequest,
-        RewriteStepResult,
-        compute_rewrite_step,
-        "term-rewriting",
-        "rewrite-step",
-        "exact",
+        request_type=RewriteStepRequest,
+        result_type=RewriteStepResult,
+        run=compute_rewrite_step,
+        tags=("term-rewriting", "rewrite-step", "exact"),
         examples=(
-            example(
-                "rewrite_f_to_g",
-                "Rewrite f(x) to g(x) in a simple term.",
-                {
+            OperationExample(
+                name="rewrite_f_to_g",
+                description="Rewrite f(x) to g(x) in a simple term.",
+                input={
                     "signature": {"arities": [1, 1, 0]},
                     "term": {
                         "is_variable": False,

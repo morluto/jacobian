@@ -9,10 +9,12 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.number_theory._models import MAX_INTEGER_DIGITS
-from jacobian.math.number_theory._support import number_theory_operation
 from jacobian.math.number_theory.ramanujan_sums import (
     _MAX_MODULUS_DIGITS,
     ramanujan_sum,
@@ -105,30 +107,27 @@ def compute_ramanujan_sum(request: RamanujanSumRequest) -> RamanujanSumResult:
     return RamanujanSumResult._from_kernel(request, value=value)
 
 
-RAMANUJAN_SUM_OPERATION = number_theory_operation(
-    "number_theory.ramanujan_sum.compute",
-    "Compute an exact Ramanujan sum",
-    (
+RAMANUJAN_SUM_OPERATION = MathTool(
+    operation_id="number_theory.ramanujan_sum.compute",
+    title="Compute an exact Ramanujan sum",
+    description=(
         "Compute c_q(n) exactly for one bounded nonnegative modulus and signed "
         "frequency using the divisor-Mobius identity through a prime-power "
         "factorization, with the convention c_0(n)=0."
     ),
-    RamanujanSumRequest,
-    RamanujanSumResult,
-    compute_ramanujan_sum,
-    "number-theory",
-    "ramanujan-sum",
-    "mobius",
-    "exact",
+    request_type=RamanujanSumRequest,
+    result_type=RamanujanSumResult,
+    run=compute_ramanujan_sum,
+    tags=("number-theory", "ramanujan-sum", "mobius", "exact"),
     examples=(
-        example(
-            "ramanujan_sum_4_at_2",
-            (
+        OperationExample(
+            name="ramanujan_sum_4_at_2",
+            description=(
                 "Compute c_4(2)=-2 exactly; the modulus must be a canonical "
                 "nonnegative integer of at most 12 digits and the frequency "
                 "must be a canonical signed integer."
             ),
-            {"modulus": "4", "frequency": "2"},
+            input={"modulus": "4", "frequency": "2"},
         ),
     ),
 )

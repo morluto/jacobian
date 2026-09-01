@@ -1,10 +1,7 @@
 """Real algebra operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
     CommonInterlacingProfile,
@@ -75,35 +72,11 @@ def compute_common_interlacing_profile(
     return _common_interlacing_profile_native(request.family)
 
 
-def ra_operation[RequestT: StrictModel, ResultT: StrictModel](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    discovery_terms: tuple[str, ...] = (),
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        discovery_terms=discovery_terms,
-        examples=examples,
-    )
-
-
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    ra_operation(
-        "polynomial.real.common_interlacing_profile.compute",
-        "Compute an exact common polynomial-interlacing profile",
-        "Decide common weak interlacing for a bounded labelled family of monic, "
+    MathTool(
+        operation_id="polynomial.real.common_interlacing_profile.compute",
+        title="Compute an exact common polynomial-interlacing profile",
+        description="Decide common weak interlacing for a bounded labelled family of monic, "
         "same-positive-degree univariate polynomials over QQ. Return every "
         "distinct exact real root with source multiplicity and either all "
         "attained closed gap endpoints or the first deterministic non-real-root "
@@ -112,23 +85,20 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "components, 256-digit primitive height, and real-rooted irreducible "
         "factors of degree at most 8; higher-degree root-free factors are "
         "retained only to report the exact non-real-root obstruction.",
-        CommonInterlacingRequest,
-        CommonInterlacingProfile,
-        compute_common_interlacing_profile,
-        "polynomial",
-        "real-algebra",
-        "common-interlacing",
-        "exact",
+        request_type=CommonInterlacingRequest,
+        result_type=CommonInterlacingProfile,
+        run=compute_common_interlacing_profile,
+        tags=("polynomial", "real-algebra", "common-interlacing", "exact"),
         discovery_terms=(
             "common interlacer",
             "common interlacing",
             "weak polynomial interlacing",
         ),
         examples=(
-            example(
-                "quadratic_family",
-                "Compute the common gap [-1, 1] for x^2 - 1 and x^2 - 4.",
-                {
+            OperationExample(
+                name="quadratic_family",
+                description="Compute the common gap [-1, 1] for x^2 - 1 and x^2 - 4.",
+                input={
                     "family": [
                         {
                             "label": "inner",
@@ -171,24 +141,22 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    ra_operation(
-        "polynomial.sturm_chain.compute",
-        "Compute an ordinary exact Sturm sequence",
-        "Compute SymPy's ordinary Euclidean-remainder Sturm sequence for a "
+    MathTool(
+        operation_id="polynomial.sturm_chain.compute",
+        title="Compute an ordinary exact Sturm sequence",
+        description="Compute SymPy's ordinary Euclidean-remainder Sturm sequence for a "
         "non-constant univariate polynomial with integer coefficients encoded "
         "as canonical rationals with denominator one. The current envelope is "
         "degree at most 32 and coefficients of at most 16 decimal digits.",
-        SturmChainRequest,
-        SturmChainResult,
-        compute_sturm_chain,
-        "polynomial",
-        "sturm-chain",
-        "exact",
+        request_type=SturmChainRequest,
+        result_type=SturmChainResult,
+        run=compute_sturm_chain,
+        tags=("polynomial", "sturm-chain", "exact"),
         examples=(
-            example(
-                "cubic",
-                "Sturm chain of x^3 - 2x^2 + x - 3.",
-                {
+            OperationExample(
+                name="cubic",
+                description="Sturm chain of x^3 - 2x^2 + x - 3.",
+                input={
                     "polynomial": {
                         "terms": [
                             {"coefficient": {"num": "1", "den": "1"}, "exponent": 3},
@@ -201,25 +169,23 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    ra_operation(
-        "polynomial.root_count.compute",
-        "Count real roots in an interval via Sturm's theorem",
-        "Count distinct real roots of a bounded univariate polynomial with "
+    MathTool(
+        operation_id="polynomial.root_count.compute",
+        title="Count real roots in an interval via Sturm's theorem",
+        description="Count distinct real roots of a bounded univariate polynomial with "
         "integer coefficients in the closed interval [lower, upper] using SymPy's "
         "ordinary exact Sturm sequence. The current envelope is degree at most "
         "32 and coefficients of at most 16 decimal digits, encoded as canonical "
         "rationals with denominator one.",
-        RootCountRequest,
-        RootCountResult,
-        compute_root_count,
-        "polynomial",
-        "root-count",
-        "exact",
+        request_type=RootCountRequest,
+        result_type=RootCountResult,
+        run=compute_root_count,
+        tags=("polynomial", "root-count", "exact"),
         examples=(
-            example(
-                "cubic",
-                "Count roots of x^3 - 2x^2 + x - 3 in [-10, 10].",
-                {
+            OperationExample(
+                name="cubic",
+                description="Count roots of x^3 - 2x^2 + x - 3 in [-10, 10].",
+                input={
                     "polynomial": {
                         "terms": [
                             {"coefficient": {"num": "1", "den": "1"}, "exponent": 3},
@@ -234,25 +200,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    ra_operation(
-        "polynomial.real.strict_sublevel_measure.compute",
-        "Compute an exact strict polynomial sublevel measure",
-        "Return the complete component decomposition and source-bound exact "
+    MathTool(
+        operation_id="polynomial.real.strict_sublevel_measure.compute",
+        title="Compute an exact strict polynomial sublevel measure",
+        description="Return the complete component decomposition and source-bound exact "
         "real-algebraic measure of {x in [lower, upper] : |f(x)| < threshold} "
         "for a canonical univariate polynomial over QQ.",
-        StrictSublevelMeasureRequest,
-        StrictSublevelMeasureResult,
-        compute_strict_sublevel_measure,
-        "polynomial",
-        "real-algebra",
-        "sublevel-set",
-        "measure",
-        "exact",
+        request_type=StrictSublevelMeasureRequest,
+        result_type=StrictSublevelMeasureResult,
+        run=compute_strict_sublevel_measure,
+        tags=("polynomial", "real-algebra", "sublevel-set", "measure", "exact"),
         examples=(
-            example(
-                "quadratic_irrational_length",
-                "Measure |x^2| < 2 on [-2, 2], with endpoints at ±sqrt(2).",
-                {
+            OperationExample(
+                name="quadratic_irrational_length",
+                description="Measure |x^2| < 2 on [-2, 2], with endpoints at ±sqrt(2).",
+                input={
                     "polynomial": {
                         "variables": ["x"],
                         "polynomial": {
@@ -271,10 +233,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    ra_operation(
-        "real_algebraic.plane_semialgebraic.component_profile.compute",
-        "Compute exact components of a plane semialgebraic set",
-        "Return the complete connected-component partition of a bounded-size "
+    MathTool(
+        operation_id="real_algebraic.plane_semialgebraic.component_profile.compute",
+        title="Compute exact components of a plane semialgebraic set",
+        description="Return the complete connected-component partition of a bounded-size "
         "normalized sign table in R^2, one exact algebraic representative per "
         "component, and component IDs for supplied exact points. The maintained "
         "QEPCAD 1.74 backend computes sign-invariant CAD cell closures. Inputs "
@@ -283,20 +245,22 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "algebraic samples; projection work is preflighted. Timeout, cell, and "
         "output limits return an explicit operational non-completion rather than "
         "a topological conclusion.",
-        PlaneComponentProfileRequest,
-        PlaneComponentProfileResult,
-        compute_plane_component_profile,
-        "real-algebraic-geometry",
-        "semialgebraic-set",
-        "connected-components",
-        "exact",
+        request_type=PlaneComponentProfileRequest,
+        result_type=PlaneComponentProfileResult,
+        run=compute_plane_component_profile,
+        tags=(
+            "real-algebraic-geometry",
+            "semialgebraic-set",
+            "connected-components",
+            "exact",
+        ),
         examples=(
-            example(
-                "annulus_complement",
-                "Compute the open unit disk and radius-two exterior components; "
+            OperationExample(
+                name="annulus_complement",
+                description="Compute the open unit disk and radius-two exterior components; "
                 "each canonical sign row assigns one sign to both QQ[x,y] "
                 "polynomials.",
-                {
+                input={
                     "semialgebraic_set": {
                         "axis": ["x", "y"],
                         "polynomials": [

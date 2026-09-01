@@ -1,7 +1,6 @@
 """Typed declarations for the product representation profile operation."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.combinatorics.additive.product_representation._models import (
     ProductRepresentationRequest,
     ProductRepresentationResult,
@@ -29,10 +28,10 @@ TOOLS: MathTools = (
         run=_compute,
         tags=("multiplicative", "combinatorics", "exact"),
         examples=(
-            example(
-                "small_sets",
-                "Product representation of {1,2} x {3,4}.",
-                {
+            OperationExample(
+                name="small_sets",
+                description="Product representation of {1,2} x {3,4}.",
+                input={
                     "left": {"elements": ["1", "2"]},
                     "right": {"elements": ["3", "4"]},
                 },

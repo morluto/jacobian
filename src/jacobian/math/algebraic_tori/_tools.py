@@ -1,7 +1,6 @@
 """Algebraic-torus operation declarations."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.algebraic_tori._models import HomogeneousMonomialSolutionRequest
 from jacobian.math.algebraic_tori.operations import (
     homogeneous_monomial_solution_subgroup,
@@ -35,10 +34,10 @@ TOOLS: MathTools = (
             "exact",
         ),
         examples=(
-            example(
-                "two_component_curve",
-                "Solve x^2 y^6 = 1 on the two-dimensional complex torus.",
-                {
+            OperationExample(
+                name="two_component_curve",
+                description="Solve x^2 y^6 = 1 on the two-dimensional complex torus.",
+                input={
                     "system": {
                         "exponent_matrix": {
                             "row_count": 1,

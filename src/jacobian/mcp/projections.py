@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDiscoveryRequest
 from jacobian.catalog.search import OperationDiscoveryCursorError
+from jacobian.mcp.models import (
+    OperationBrowseResult,
+    OperationDiscoveryError,
+    OperationDiscoveryErrorDetail,
+    OperationSearchResult,
+)
 
 
 def _operation_discovery_response(
@@ -16,7 +20,7 @@ def _operation_discovery_response(
     namespace: str | None,
     limit: int | None,
     cursor: str | None,
-) -> dict[str, Any]:
+) -> OperationSearchResult | OperationDiscoveryError:
     discovery_request = OperationDiscoveryRequest(
         query=query,
         namespace=namespace,
@@ -26,24 +30,27 @@ def _operation_discovery_response(
     try:
         discovered = catalog.search(discovery_request)
     except OperationDiscoveryCursorError:
-        return {
-            "kind": "error",
-            "error": {
-                "code": "INVALID_CURSOR",
-                "stage": "operation_discovery",
-                "message": "The operation discovery cursor is not in this result set.",
-                "hint": (
+        return OperationDiscoveryError(
+            kind="error",
+            error=OperationDiscoveryErrorDetail(
+                code="INVALID_CURSOR",
+                stage="operation_discovery",
+                message="The operation discovery cursor is not in this result set.",
+                hint=(
                     "Restart discovery without a cursor, or reuse the same query, "
                     "namespace and limit that produced "
                     "next_cursor."
                 ),
-            },
-        }
-    return {
-        "kind": "discovery",
-        **discovered.model_dump(mode="json"),
-        "catalog_resource": "operation://catalog",
-    }
+            ),
+        )
+    return OperationSearchResult(
+        kind="discovery",
+        query=discovered.query,
+        namespace=discovered.namespace,
+        matches=discovered.matches,
+        total_matches=discovered.total_matches,
+        next_cursor=discovered.next_cursor,
+    )
 
 
 def _operation_browse_response(
@@ -52,7 +59,7 @@ def _operation_browse_response(
     namespace: str | None,
     limit: int | None,
     cursor: str | None,
-) -> dict[str, Any]:
+) -> OperationBrowseResult | OperationDiscoveryError:
     try:
         browsed = catalog.browse(
             namespace=namespace,
@@ -60,20 +67,22 @@ def _operation_browse_response(
             cursor=cursor,
         )
     except OperationDiscoveryCursorError:
-        return {
-            "kind": "error",
-            "error": {
-                "code": "INVALID_CURSOR",
-                "stage": "operation_discovery",
-                "message": "The operation browse cursor is not in this result set.",
-                "hint": (
+        return OperationDiscoveryError(
+            kind="error",
+            error=OperationDiscoveryErrorDetail(
+                code="INVALID_CURSOR",
+                stage="operation_discovery",
+                message="The operation browse cursor is not in this result set.",
+                hint=(
                     "Restart browsing without a cursor, or reuse the same namespace "
                     "and limit that produced next_cursor."
                 ),
-            },
-        }
-    return {
-        "kind": "browse",
-        **browsed.model_dump(mode="json"),
-        "catalog_resource": "operation://catalog",
-    }
+            ),
+        )
+    return OperationBrowseResult(
+        kind="browse",
+        namespace=browsed.namespace,
+        operations=browsed.operations,
+        total_operations=browsed.total_operations,
+        next_cursor=browsed.next_cursor,
+    )

@@ -1,10 +1,7 @@
 """Polynomial map operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.polynomials.maps._models import (
     CompositionRequest,
@@ -76,52 +73,24 @@ def _bivariate_polynomial(*terms: tuple[int, tuple[int, int]]) -> dict[str, Any]
     }
 
 
-def _op[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "polynomial.map.generic_degree.compute",
-        "Compute the exact generic degree of a polynomial map",
-        "Classify the generic scheme-theoretic fiber of a bounded polynomial "
+    MathTool(
+        operation_id="polynomial.map.generic_degree.compute",
+        title="Compute the exact generic degree of a polynomial map",
+        description="Classify the generic scheme-theoretic fiber of a bounded polynomial "
         "map over QQ and, when it is finite, return its exact quotient dimension "
         "with source-bound Groebner evidence. This computes over the generic "
         "target function field and never infers degree from a sampled fiber.",
-        GenericDegreeRequest,
-        GenericDegreeResult,
-        _generic_degree,
-        "polynomial",
-        "algebraic-geometry",
-        "generic-fiber",
-        "exact",
+        request_type=GenericDegreeRequest,
+        result_type=GenericDegreeResult,
+        run=_generic_degree,
+        tags=("polynomial", "algebraic-geometry", "generic-fiber", "exact"),
         examples=(
-            example(
-                "quadratic_generic_degree",
-                "Compute generic degree 2 for (x, y) -> (x^2, y); every map "
+            OperationExample(
+                name="quadratic_generic_degree",
+                description="Compute generic degree 2 for (x, y) -> (x^2, y); every map "
                 "component must use the complete ordered source axis.",
-                {
+                input={
                     "polynomial_map": {
                         "input_variables": ["x", "y"],
                         "output_polynomials": [
@@ -133,22 +102,20 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "polynomial.map.evaluate",
-        "Evaluate a polynomial at a rational point",
-        "Evaluate a canonical rational polynomial at a complete ordered "
+    MathTool(
+        operation_id="polynomial.map.evaluate",
+        title="Evaluate a polynomial at a rational point",
+        description="Evaluate a canonical rational polynomial at a complete ordered "
         "rational point.",
-        EvalRequest,
-        EvalResult,
-        _evaluate,
-        "polynomial",
-        "evaluation",
-        "exact",
+        request_type=EvalRequest,
+        result_type=EvalResult,
+        run=_evaluate,
+        tags=("polynomial", "evaluation", "exact"),
         examples=(
-            example(
-                "simple_eval",
-                "Evaluate x^2 + 2y at x=3, y=1.",
-                {
+            OperationExample(
+                name="simple_eval",
+                description="Evaluate x^2 + 2y at x=3, y=1.",
+                input={
                     "polynomial": _bivariate_polynomial(
                         (1, (2, 0)),
                         (2, (0, 1)),
@@ -164,22 +131,20 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "polynomial.map.jacobian",
-        "Compute the Jacobian matrix of a polynomial map",
-        "Compute the row-major Jacobian matrix of a canonical polynomial map.",
-        RationalPolynomialMap,
-        JacobianResult,
-        jacobian_matrix,
-        "polynomial",
-        "jacobian",
-        "exact",
+    MathTool(
+        operation_id="polynomial.map.jacobian",
+        title="Compute the Jacobian matrix of a polynomial map",
+        description="Compute the row-major Jacobian matrix of a canonical polynomial map.",
+        request_type=RationalPolynomialMap,
+        result_type=JacobianResult,
+        run=jacobian_matrix,
+        tags=("polynomial", "jacobian", "exact"),
         examples=(
-            example(
-                "simple_jacobian",
-                "Compute the Jacobian of [x^2, y^2] with respect to (x, y); "
+            OperationExample(
+                name="simple_jacobian",
+                description="Compute the Jacobian of [x^2, y^2] with respect to (x, y); "
                 "every output must use that complete ordered axis.",
-                {
+                input={
                     "input_variables": ["x", "y"],
                     "output_polynomials": [
                         _bivariate_polynomial((1, (2, 0))),
@@ -189,22 +154,20 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "polynomial.map.compose",
-        "Compose two univariate polynomials",
-        "Compute the exact composition of two bounded univariate canonical "
+    MathTool(
+        operation_id="polynomial.map.compose",
+        title="Compose two univariate polynomials",
+        description="Compute the exact composition of two bounded univariate canonical "
         "rational polynomials.",
-        CompositionRequest,
-        CompositionResult,
-        _compose,
-        "polynomial",
-        "composition",
-        "exact",
+        request_type=CompositionRequest,
+        result_type=CompositionResult,
+        run=_compose,
+        tags=("polynomial", "composition", "exact"),
         examples=(
-            example(
-                "simple_compose",
-                "Compose x^2 with x+1.",
-                {
+            OperationExample(
+                name="simple_compose",
+                description="Compose x^2 with x+1.",
+                input={
                     "outer": _polynomial("x", (1, 2)),
                     "inner": _polynomial("x", (1, 1), (1, 0)),
                     "inner_variable": "x",

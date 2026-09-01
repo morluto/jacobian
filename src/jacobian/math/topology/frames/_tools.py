@@ -1,7 +1,6 @@
 """Immutable declarations for finite-frame operations."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.topology.frames._models import (
     CoherenceRequest,
     CoherenceResult,
@@ -52,10 +51,10 @@ TOOLS: MathTools = (
         run=_gram,
         tags=("topology", "frame", "gram", "exact"),
         examples=(
-            example(
-                "orthonormal_frame",
-                "Gram matrix of an orthonormal frame.",
-                _ORTHONORMAL,
+            OperationExample(
+                name="orthonormal_frame",
+                description="Gram matrix of an orthonormal frame.",
+                input=_ORTHONORMAL,
             ),
         ),
     ),
@@ -69,10 +68,10 @@ TOOLS: MathTools = (
         run=_coherence,
         tags=("topology", "frame", "coherence", "exact"),
         examples=(
-            example(
-                "orthonormal_frame",
-                "Coherence of an orthonormal frame.",
-                _ORTHONORMAL,
+            OperationExample(
+                name="orthonormal_frame",
+                description="Coherence of an orthonormal frame.",
+                input=_ORTHONORMAL,
             ),
         ),
     ),
@@ -86,10 +85,10 @@ TOOLS: MathTools = (
         run=_frame_potential,
         tags=("topology", "frame", "potential", "exact"),
         examples=(
-            example(
-                "orthonormal_frame",
-                "Frame potential of an orthonormal frame.",
-                _ORTHONORMAL,
+            OperationExample(
+                name="orthonormal_frame",
+                description="Frame potential of an orthonormal frame.",
+                input=_ORTHONORMAL,
             ),
         ),
     ),

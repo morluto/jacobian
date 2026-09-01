@@ -1,10 +1,7 @@
 """Finite category operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.finite_categories import operations as native
 from jacobian.math.finite_categories._models import (
@@ -24,28 +21,6 @@ def compute_opposite_category(request: FiniteCategory) -> FiniteCategory:
 
 def compute_category_product(request: CategoryProductRequest) -> FiniteCategoryProduct:
     return native.product(request.left, request.right)
-
-
-def _op[RequestT: StrictModel, ResultT: StrictModel](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
 
 
 _CATEGORY = {
@@ -74,26 +49,24 @@ _TERMINAL_CATEGORY = {
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "finite_category.profile.compute",
-        "Compute the profile of a finite category",
-        "Compute hom-set cardinalities, endomorphism counts, and the "
+    MathTool(
+        operation_id="finite_category.profile.compute",
+        title="Compute the profile of a finite category",
+        description="Compute hom-set cardinalities, endomorphism counts, and the "
         "designated identity morphism for each object of a finite category "
         "presented extensionally with identities and a total composition "
         "table.",
-        FiniteCategory,
-        CategoryProfileResult,
-        compute_category_profile,
-        "algebra",
-        "category",
-        "exact",
+        request_type=FiniteCategory,
+        result_type=CategoryProfileResult,
+        run=compute_category_profile,
+        tags=("algebra", "category", "exact"),
         examples=(
-            example(
-                "two_object_category",
-                "Profile a 2-object, 3-morphism category; every morphism "
+            OperationExample(
+                name="two_object_category",
+                description="Profile a 2-object, 3-morphism category; every morphism "
                 "source/target must be a declared object and the category "
                 "laws must hold.",
-                {
+                input={
                     "objects": _CATEGORY["objects"],
                     "morphisms": _CATEGORY["morphisms"],
                     "identities": _CATEGORY["identities"],
@@ -102,24 +75,22 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "finite_category.opposite.compute",
-        "Compute the opposite category",
-        "Compute the opposite category with all morphism directions reversed "
+    MathTool(
+        operation_id="finite_category.opposite.compute",
+        title="Compute the opposite category",
+        description="Compute the opposite category with all morphism directions reversed "
         "(source and target swapped) and composition order reversed.",
-        FiniteCategory,
-        FiniteCategory,
-        compute_opposite_category,
-        "algebra",
-        "category",
-        "exact",
+        request_type=FiniteCategory,
+        result_type=FiniteCategory,
+        run=compute_opposite_category,
+        tags=("algebra", "category", "exact"),
         examples=(
-            example(
-                "opposite_of_two_object",
-                "Compute the opposite of a 2-object category; every morphism "
+            OperationExample(
+                name="opposite_of_two_object",
+                description="Compute the opposite of a 2-object category; every morphism "
                 "source/target must be a declared object and the category "
                 "laws must hold.",
-                {
+                input={
                     "objects": _CATEGORY["objects"],
                     "morphisms": _CATEGORY["morphisms"],
                     "identities": _CATEGORY["identities"],
@@ -128,27 +99,24 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "finite_category.product.compute",
-        "Compute the product of two finite categories",
-        "Construct the exact Cartesian product category with structural pair "
+    MathTool(
+        operation_id="finite_category.product.compute",
+        title="Compute the product of two finite categories",
+        description="Construct the exact Cartesian product category with structural pair "
         "identifiers, componentwise identities and composition, and explicit "
         "left/right projections for every product object and morphism. Object, "
         "morphism, composable-pair, composable-triple, execution-work, identifier, "
         "and canonical-result sizes are all preflight-bounded.",
-        CategoryProductRequest,
-        FiniteCategoryProduct,
-        compute_category_product,
-        "algebra",
-        "category",
-        "product",
-        "exact",
+        request_type=CategoryProductRequest,
+        result_type=FiniteCategoryProduct,
+        run=compute_category_product,
+        tags=("algebra", "category", "product", "exact"),
         examples=(
-            example(
-                "two_object_by_terminal",
-                "Construct a two-object category times the terminal category; "
+            OperationExample(
+                name="two_object_by_terminal",
+                description="Construct a two-object category times the terminal category; "
                 "product identifiers are nested JSON pairs, not joined labels.",
-                {
+                input={
                     "left": _CATEGORY,
                     "right": _TERMINAL_CATEGORY,
                 },

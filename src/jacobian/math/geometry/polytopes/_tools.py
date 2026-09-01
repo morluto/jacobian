@@ -1,10 +1,7 @@
 """Polytope operation ownership and declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.geometry.polytopes._models import (
     FacetIncidenceRequest,
@@ -52,55 +49,27 @@ def compute_polytope_volume(request: PolytopeVolumeRequest) -> PolytopeVolumeRes
     )
 
 
-def _op[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "polytope.rational.support.compute",
-        "Compute an exact rational polytope support value",
-        "For a full-dimensional rational polytope with one labelled coordinate "
+    MathTool(
+        operation_id="polytope.rational.support.compute",
+        title="Compute an exact rational polytope support value",
+        description="For a full-dimensional rational polytope with one labelled coordinate "
         "axis and a complete irredundant V-representation, compute the exact "
         "support value h_P(u)=max_{x in P}<u,x> and return every maximizing "
         "vertex as the complete exposed face. The exact support kernel is one "
         "bounded vertex-by-covector pass; the V-value separately proves that "
         "each supplied generator is an extreme vertex before evaluation.",
-        PolytopeSupportRequest,
-        PolytopeSupportResult,
-        compute_polytope_support,
-        "polytope",
-        "support-function",
-        "exposed-face",
-        "exact-rational",
+        request_type=PolytopeSupportRequest,
+        result_type=PolytopeSupportResult,
+        run=compute_polytope_support,
+        tags=("polytope", "support-function", "exposed-face", "exact-rational"),
         examples=(
-            example(
-                "unit_square_top_edge",
-                "Unit square on axes [x, y]; the covector (0,1) exposes the "
+            OperationExample(
+                name="unit_square_top_edge",
+                description="Unit square on axes [x, y]; the covector (0,1) exposes the "
                 "complete top edge. The covector's serialized space must be "
                 "identical to the polytope's: same axis labels, same order.",
-                {
+                input={
                     "polytope": {
                         "space": {"axes": ["x", "y"]},
                         "vertices": [
@@ -145,10 +114,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "polytope.facets.compute",
-        "Compute the complete exact facet-incidence profile of a rational polytope",
-        "Compute every maximal supporting facet of the convex hull of an ordered "
+    MathTool(
+        operation_id="polytope.facets.compute",
+        title="Compute the complete exact facet-incidence profile of a rational polytope",
+        description="Compute every maximal supporting facet of the convex hull of an ordered "
         "rational V-representation — bare vertices or an unchanged labelled "
         "``RationalVPolytope`` value such as a support result's ``polytope`` "
         "(d <= 7); lower-dimensional hulls are "
@@ -160,19 +129,16 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "bounded enumeration, enforcing the published facet and incidence "
         "result limits before a request is accepted; the exact bounded "
         "SymPy kernel then computes that source-bound profile.",
-        FacetIncidenceRequest,
-        FacetIncidenceResult,
-        compute_facet_incidence,
-        "polytope",
-        "facets",
-        "incidence",
-        "exact-rational",
+        request_type=FacetIncidenceRequest,
+        result_type=FacetIncidenceResult,
+        run=compute_facet_incidence,
+        tags=("polytope", "facets", "incidence", "exact-rational"),
         examples=(
-            example(
-                "unit_square",
-                "Compute the four supporting facets of the unit square and their "
+            OperationExample(
+                name="unit_square",
+                description="Compute the four supporting facets of the unit square and their "
                 "source-row incidences; the four supplied points affinely span R^2.",
-                {
+                input={
                     "vertices": [
                         {
                             "coordinates": [
@@ -203,27 +169,25 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "polytope.volume.compute",
-        "Compute the exact rational volume of a bounded polytope",
-        "Compute the exact rational volume of a bounded rational polytope "
+    MathTool(
+        operation_id="polytope.volume.compute",
+        title="Compute the exact rational volume of a bounded polytope",
+        description="Compute the exact rational volume of a bounded rational polytope "
         "from its V-representation — bare vertices or an unchanged "
         "labelled ``RationalVPolytope`` value such as a support result's "
         "``polytope`` — or H-representation (half-spaces) for ambient "
         "dimension d <= 6, via triangulation and SymPy exact "
         "determinant-based simplex volume. Every half-space must carry a "
         "nonzero normal: rows whose coefficients are all zero are rejected.",
-        PolytopeVolumeRequest,
-        PolytopeVolumeResult,
-        compute_polytope_volume,
-        "polytope",
-        "volume",
-        "exact-rational",
+        request_type=PolytopeVolumeRequest,
+        result_type=PolytopeVolumeResult,
+        run=compute_polytope_volume,
+        tags=("polytope", "volume", "exact-rational"),
         examples=(
-            example(
-                "unit_cube_vertices",
-                "Unit cube [0,1]^2 split into two triangles (volume = 1).",
-                {
+            OperationExample(
+                name="unit_cube_vertices",
+                description="Unit cube [0,1]^2 split into two triangles (volume = 1).",
+                input={
                     "vertices": [
                         {
                             "coordinates": [
@@ -252,11 +216,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     ],
                 },
             ),
-            example(
-                "unit_square_halfspaces",
-                "Unit square [0,1]^2 as four half-spaces, each with a "
+            OperationExample(
+                name="unit_square_halfspaces",
+                description="Unit square [0,1]^2 as four half-spaces, each with a "
                 "nonzero normal (volume = 1).",
-                {
+                input={
                     "halfspaces": [
                         {
                             "coefficients": [

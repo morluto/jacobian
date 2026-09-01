@@ -2,8 +2,11 @@
 
 from typing import NoReturn
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.number_theory._interval_profile_models import (
     DivisorCountProfileRequest,
     DivisorCountProfileResult,
@@ -20,7 +23,6 @@ from jacobian.math.number_theory._interval_profile_models import (
     SquarefreeProfileRequest,
     SquarefreeProfileResult,
 )
-from jacobian.math.number_theory._support import number_theory_operation
 from jacobian.math.number_theory.interval_profiles.operations import (
     IntervalAdmissionError,
     divisor_count_profile,
@@ -111,160 +113,146 @@ def compute_divisor_sum_profile(
 
 
 INTERVAL_PROFILE_OPERATIONS = (
-    number_theory_operation(
-        "number_theory.integer_interval.squarefree_profile.compute",
-        "Compute squarefree profile on a bounded interval",
-        (
+    MathTool(
+        operation_id="number_theory.integer_interval.squarefree_profile.compute",
+        title="Compute squarefree profile on a bounded interval",
+        description=(
             "Partition a closed positive integer interval [L, U] into its "
             "exact squarefree and non-squarefree members, retaining ordered "
             "lists and counts for both classes."
         ),
-        SquarefreeProfileRequest,
-        SquarefreeProfileResult,
-        compute_squarefree_profile,
-        "number-theory",
-        "arithmetic-function",
-        "interval-profile",
+        request_type=SquarefreeProfileRequest,
+        result_type=SquarefreeProfileResult,
+        run=compute_squarefree_profile,
+        tags=("number-theory", "arithmetic-function", "interval-profile"),
         examples=(
-            example(
-                "squarefree_interval_1_to_12",
-                (
+            OperationExample(
+                name="squarefree_interval_1_to_12",
+                description=(
                     "Partition [1, 12] into squarefree and non-squarefree "
                     "integers; coupled width and result-size limits are "
                     "published in the request schema."
                 ),
-                {"lower_bound": 1, "upper_bound": 12},
+                input={"lower_bound": 1, "upper_bound": 12},
             ),
         ),
     ),
-    number_theory_operation(
-        "number_theory.integer_interval.divisor_count_profile.compute",
-        "Compute divisor-count profile on a bounded interval",
-        (
+    MathTool(
+        operation_id="number_theory.integer_interval.divisor_count_profile.compute",
+        title="Compute divisor-count profile on a bounded interval",
+        description=(
             "Return the complete ordered table (n, tau(n)) for every integer "
             "n in a closed positive interval [L, U], where tau(n) is the "
             "number of positive divisors of n."
         ),
-        DivisorCountProfileRequest,
-        DivisorCountProfileResult,
-        compute_divisor_count_profile,
-        "number-theory",
-        "arithmetic-function",
-        "interval-profile",
+        request_type=DivisorCountProfileRequest,
+        result_type=DivisorCountProfileResult,
+        run=compute_divisor_count_profile,
+        tags=("number-theory", "arithmetic-function", "interval-profile"),
         examples=(
-            example(
-                "divisor_count_interval_1_to_12",
-                (
+            OperationExample(
+                name="divisor_count_interval_1_to_12",
+                description=(
                     "Compute tau(n) for each n from 1 to 12; coupled width and "
                     "result-size limits are published in the request schema."
                 ),
-                {"lower_bound": 1, "upper_bound": 12},
+                input={"lower_bound": 1, "upper_bound": 12},
             ),
         ),
     ),
-    number_theory_operation(
-        "number_theory.integer_interval.greatest_prime_factor_profile.compute",
-        "Compute greatest-prime-factor profile on a bounded interval",
-        (
+    MathTool(
+        operation_id="number_theory.integer_interval.greatest_prime_factor_profile.compute",
+        title="Compute greatest-prime-factor profile on a bounded interval",
+        description=(
             "Return the complete ordered table (n, P+(n)) for every integer "
             "n in a closed positive interval [L, U], where P+(1) = 1 and "
             "P+(n) is the largest prime divisor of n for n >= 2."
         ),
-        GreatestPrimeFactorProfileRequest,
-        GreatestPrimeFactorProfileResult,
-        compute_greatest_prime_factor_profile,
-        "number-theory",
-        "arithmetic-function",
-        "interval-profile",
+        request_type=GreatestPrimeFactorProfileRequest,
+        result_type=GreatestPrimeFactorProfileResult,
+        run=compute_greatest_prime_factor_profile,
+        tags=("number-theory", "arithmetic-function", "interval-profile"),
         examples=(
-            example(
-                "gpf_interval_1_to_10",
-                (
+            OperationExample(
+                name="gpf_interval_1_to_10",
+                description=(
                     "Compute P+(n) for each n from 1 to 10; coupled width and "
                     "result-size limits are published in the request schema."
                 ),
-                {"lower_bound": 1, "upper_bound": 10},
+                input={"lower_bound": 1, "upper_bound": 10},
             ),
         ),
     ),
-    number_theory_operation(
-        "number_theory.prime_gap_profile.compute",
-        "Compute consecutive-prime gap profile on a bounded interval",
-        (
+    MathTool(
+        operation_id="number_theory.prime_gap_profile.compute",
+        title="Compute consecutive-prime gap profile on a bounded interval",
+        description=(
             "Return every consecutive-prime pair (p, q, q - p) for which the "
             "lower endpoint p lies in a closed positive interval [L, U], "
             "including the successor prime beyond U when needed to complete "
             "the last gap."
         ),
-        PrimeGapProfileRequest,
-        PrimeGapProfileResult,
-        compute_prime_gap_profile,
-        "number-theory",
-        "prime",
-        "interval-profile",
+        request_type=PrimeGapProfileRequest,
+        result_type=PrimeGapProfileResult,
+        run=compute_prime_gap_profile,
+        tags=("number-theory", "prime", "interval-profile"),
         examples=(
-            example(
-                "prime_gap_interval_3_to_5",
-                (
+            OperationExample(
+                name="prime_gap_interval_3_to_5",
+                description=(
                     "Compute consecutive-prime gaps for primes with lower "
                     "endpoint between 3 and 5; coupled width and result-size "
                     "limits are published in the request schema."
                 ),
-                {"lower_bound": 3, "upper_bound": 5},
+                input={"lower_bound": 3, "upper_bound": 5},
             ),
         ),
     ),
-    number_theory_operation(
-        "number_theory.integer_interval.least_prime_factor_profile.compute",
-        "Compute least-prime-factor profile on a bounded interval",
-        "Return the complete ordered table (n, p(n)) for every n in [L, U], with p(1)=1.",
-        LeastPrimeFactorProfileRequest,
-        LeastPrimeFactorProfileResult,
-        compute_least_prime_factor_profile,
-        "number-theory",
-        "arithmetic-function",
-        "interval-profile",
+    MathTool(
+        operation_id="number_theory.integer_interval.least_prime_factor_profile.compute",
+        title="Compute least-prime-factor profile on a bounded interval",
+        description="Return the complete ordered table (n, p(n)) for every n in [L, U], with p(1)=1.",
+        request_type=LeastPrimeFactorProfileRequest,
+        result_type=LeastPrimeFactorProfileResult,
+        run=compute_least_prime_factor_profile,
+        tags=("number-theory", "arithmetic-function", "interval-profile"),
         examples=(
-            example(
-                "lpf_1_10",
-                "Compute p(n) for each n from 1 to 10.",
-                {"lower_bound": 1, "upper_bound": 10},
+            OperationExample(
+                name="lpf_1_10",
+                description="Compute p(n) for each n from 1 to 10.",
+                input={"lower_bound": 1, "upper_bound": 10},
             ),
         ),
     ),
-    number_theory_operation(
-        "number_theory.integer_interval.euler_totient_profile.compute",
-        "Compute Euler-totient profile on a bounded interval",
-        "Return the complete ordered table (n, phi(n)) for every n in [L, U], with phi(1)=1.",
-        EulerTotientProfileRequest,
-        EulerTotientProfileResult,
-        compute_euler_totient_profile,
-        "number-theory",
-        "arithmetic-function",
-        "interval-profile",
+    MathTool(
+        operation_id="number_theory.integer_interval.euler_totient_profile.compute",
+        title="Compute Euler-totient profile on a bounded interval",
+        description="Return the complete ordered table (n, phi(n)) for every n in [L, U], with phi(1)=1.",
+        request_type=EulerTotientProfileRequest,
+        result_type=EulerTotientProfileResult,
+        run=compute_euler_totient_profile,
+        tags=("number-theory", "arithmetic-function", "interval-profile"),
         examples=(
-            example(
-                "totient_1_10",
-                "Compute phi(n) for each n from 1 to 10.",
-                {"lower_bound": 1, "upper_bound": 10},
+            OperationExample(
+                name="totient_1_10",
+                description="Compute phi(n) for each n from 1 to 10.",
+                input={"lower_bound": 1, "upper_bound": 10},
             ),
         ),
     ),
-    number_theory_operation(
-        "number_theory.integer_interval.divisor_sum_profile.compute",
-        "Compute divisor-sum profile on a bounded interval",
-        "Return the complete ordered table (n, sigma(n)) for every n in [L, U], with sigma(1)=1.",
-        DivisorSumProfileRequest,
-        DivisorSumProfileResult,
-        compute_divisor_sum_profile,
-        "number-theory",
-        "arithmetic-function",
-        "interval-profile",
+    MathTool(
+        operation_id="number_theory.integer_interval.divisor_sum_profile.compute",
+        title="Compute divisor-sum profile on a bounded interval",
+        description="Return the complete ordered table (n, sigma(n)) for every n in [L, U], with sigma(1)=1.",
+        request_type=DivisorSumProfileRequest,
+        result_type=DivisorSumProfileResult,
+        run=compute_divisor_sum_profile,
+        tags=("number-theory", "arithmetic-function", "interval-profile"),
         examples=(
-            example(
-                "divisor_sum_1_6",
-                "Compute sigma(n) for each n from 1 to 6.",
-                {"lower_bound": 1, "upper_bound": 6},
+            OperationExample(
+                name="divisor_sum_1_6",
+                description="Compute sigma(n) for each n from 1 to 6.",
+                input={"lower_bound": 1, "upper_bound": 6},
             ),
         ),
     ),

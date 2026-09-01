@@ -1,10 +1,7 @@
 """Polynomial vector calculus operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.polynomials.vector_calculus._models import (
     CurlRequest,
@@ -62,46 +59,22 @@ def _polynomial(
     }
 
 
-def _op[RequestT: StrictModel, ResultT: StrictModel](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "polynomial_field.scalar.gradient.compute",
-        "Compute the gradient of a scalar field",
-        "Compute the gradient vector of a multivariate polynomial scalar "
+    MathTool(
+        operation_id="polynomial_field.scalar.gradient.compute",
+        title="Compute the gradient of a scalar field",
+        description="Compute the gradient vector of a multivariate polynomial scalar "
         "field using exact symbolic differentiation.",
-        ScalarFieldRequest,
-        VectorResult,
-        _gradient,
-        "polynomial",
-        "vector-calculus",
-        "exact",
+        request_type=ScalarFieldRequest,
+        result_type=VectorResult,
+        run=_gradient,
+        tags=("polynomial", "vector-calculus", "exact"),
         examples=(
-            example(
-                "gradient_x2_y2",
-                "Compute the gradient of x^2 + y^2; the canonical polynomial "
+            OperationExample(
+                name="gradient_x2_y2",
+                description="Compute the gradient of x^2 + y^2; the canonical polynomial "
                 "carries the complete ordered axis (x, y).",
-                {
+                input={
                     "polynomial": _polynomial(
                         ("x", "y"),
                         (1, (2, 0)),
@@ -111,23 +84,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "polynomial_field.scalar.laplacian.compute",
-        "Compute the Laplacian of a scalar field",
-        "Compute the Laplacian (sum of second partial derivatives) of a "
+    MathTool(
+        operation_id="polynomial_field.scalar.laplacian.compute",
+        title="Compute the Laplacian of a scalar field",
+        description="Compute the Laplacian (sum of second partial derivatives) of a "
         "multivariate polynomial scalar field.",
-        ScalarFieldRequest,
-        ScalarResult,
-        _laplacian,
-        "polynomial",
-        "vector-calculus",
-        "exact",
+        request_type=ScalarFieldRequest,
+        result_type=ScalarResult,
+        run=_laplacian,
+        tags=("polynomial", "vector-calculus", "exact"),
         examples=(
-            example(
-                "laplacian_x2_y2",
-                "Compute the Laplacian of x^2 + y^2; the canonical polynomial "
+            OperationExample(
+                name="laplacian_x2_y2",
+                description="Compute the Laplacian of x^2 + y^2; the canonical polynomial "
                 "carries the complete ordered axis (x, y).",
-                {
+                input={
                     "polynomial": _polynomial(
                         ("x", "y"),
                         (1, (2, 0)),
@@ -137,23 +108,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "polynomial_field.scalar.directional_derivative.compute",
-        "Compute the directional derivative",
-        "Compute the directional derivative of a scalar field along a "
+    MathTool(
+        operation_id="polynomial_field.scalar.directional_derivative.compute",
+        title="Compute the directional derivative",
+        description="Compute the directional derivative of a scalar field along a "
         "direction vector using exact symbolic differentiation.",
-        DirectionalDerivativeRequest,
-        ScalarResult,
-        _directional_derivative,
-        "polynomial",
-        "vector-calculus",
-        "exact",
+        request_type=DirectionalDerivativeRequest,
+        result_type=ScalarResult,
+        run=_directional_derivative,
+        tags=("polynomial", "vector-calculus", "exact"),
         examples=(
-            example(
-                "directional_deriv_x2_y2",
-                "Compute the directional derivative of x^2 + y^2 along the "
+            OperationExample(
+                name="directional_deriv_x2_y2",
+                description="Compute the directional derivative of x^2 + y^2 along the "
                 "exact constant vector (1, 1); its length must match the axis.",
-                {
+                input={
                     "polynomial": _polynomial(
                         ("x", "y"),
                         (1, (2, 0)),
@@ -167,23 +136,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "polynomial_field.vector.divergence.compute",
-        "Compute the divergence of a vector field",
-        "Compute the divergence of a multivariate polynomial vector field "
+    MathTool(
+        operation_id="polynomial_field.vector.divergence.compute",
+        title="Compute the divergence of a vector field",
+        description="Compute the divergence of a multivariate polynomial vector field "
         "using exact symbolic differentiation.",
-        VectorFieldRequest,
-        ScalarResult,
-        _divergence,
-        "polynomial",
-        "vector-calculus",
-        "exact",
+        request_type=VectorFieldRequest,
+        result_type=ScalarResult,
+        run=_divergence,
+        tags=("polynomial", "vector-calculus", "exact"),
         examples=(
-            example(
-                "divergence_xy",
-                "Compute the divergence of [x^2, y^2]; each component must "
+            OperationExample(
+                name="divergence_xy",
+                description="Compute the divergence of [x^2, y^2]; each component must "
                 "use the same complete ordered axis (x, y).",
-                {
+                input={
                     "components": [
                         _polynomial(("x", "y"), (1, (2, 0))),
                         _polynomial(("x", "y"), (1, (0, 2))),
@@ -192,23 +159,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "polynomial_field.vector.curl.compute",
-        "Compute the curl of a 3D vector field",
-        "Compute the curl of a 3D multivariate polynomial vector field "
+    MathTool(
+        operation_id="polynomial_field.vector.curl.compute",
+        title="Compute the curl of a 3D vector field",
+        description="Compute the curl of a 3D multivariate polynomial vector field "
         "using exact symbolic differentiation.",
-        CurlRequest,
-        VectorResult,
-        _curl,
-        "polynomial",
-        "vector-calculus",
-        "exact",
+        request_type=CurlRequest,
+        result_type=VectorResult,
+        run=_curl,
+        tags=("polynomial", "vector-calculus", "exact"),
         examples=(
-            example(
-                "curl_constant_field",
-                "Compute the curl of [y, 0, 0]; curl requires exactly three "
+            OperationExample(
+                name="curl_constant_field",
+                description="Compute the curl of [y, 0, 0]; curl requires exactly three "
                 "components on the ordered axis (x, y, z).",
-                {
+                input={
                     "components": [
                         _polynomial(("x", "y", "z"), (1, (0, 1, 0))),
                         _polynomial(("x", "y", "z")),

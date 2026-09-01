@@ -183,23 +183,13 @@ class FiniteDeltaMatroid(StrictModel):
     feasible: tuple[tuple[int, ...], ...] = Field(min_length=1)
 
     @model_validator(mode="after")
-    def require_complete_canonical_delta_matroid(self) -> Self:
+    def require_canonical_structure(self) -> Self:
         system = FiniteFeasibleSetSystem(ground=self.ground, feasible=self.feasible)
-        try:
-            require_delta_matroid_admission(system)
-        except DeltaMatroidAdmissionError as exc:
-            raise _validation_error(exc.reason, str(exc)) from None
         expected_rows = canonical_feasible_rows(system)
         if self.feasible != expected_rows:
             raise _validation_error(
                 "rows_not_canonical",
                 "delta-matroid feasible rows must be lexicographically ordered",
-            )
-        obstruction = first_symmetric_exchange_obstruction(system)
-        if obstruction is not None:
-            raise _validation_error(
-                "exchange_axiom_failed",
-                "delta-matroid feasible rows violate symmetric exchange",
             )
         return self
 

@@ -5,8 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.lattices import hermite_normal_form
 from jacobian.math.lattices._models import (
     HermiteNormalFormRequest,
@@ -66,10 +65,10 @@ HERMITE_NORMAL_FORM_OPERATION: MathTool[
         "hermite-normal-form",
     ),
     examples=(
-        example(
-            "unit_matrix",
-            "Compute the row HNF of the one-by-one unit matrix.",
-            {"matrix": {"entries": [["1"]]}},
+        OperationExample(
+            name="unit_matrix",
+            description="Compute the row HNF of the one-by-one unit matrix.",
+            input={"matrix": {"entries": [["1"]]}},
         ),
     ),
 )

@@ -1,7 +1,6 @@
 """k-regular subgraph operation declarations."""
 
-from jacobian.catalog._examples import example
-from jacobian.catalog.models import MathTool, MathTools
+from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.graphs.regular_subgraph._models import (
     RegularSubgraphRequest,
     RegularSubgraphResult,
@@ -36,10 +35,10 @@ TOOLS: MathTools = (
             "bounded",
         ),
         examples=(
-            example(
-                "c4_is_2_regular",
-                "C4 contains a 2-regular subgraph (itself).",
-                {
+            OperationExample(
+                name="c4_is_2_regular",
+                description="C4 contains a 2-regular subgraph (itself).",
+                input={
                     "graph": {
                         "vertices": ["a", "b", "c", "d"],
                         "edges": [

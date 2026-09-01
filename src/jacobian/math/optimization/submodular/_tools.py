@@ -1,10 +1,7 @@
 """Submodular optimization operation declarations."""
 
-from collections.abc import Callable
 from typing import Any
 
-from jacobian._models import StrictModel
-from jacobian.catalog._examples import example
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.optimization.submodular._models import (
     MonotonicityCheckRequest,
@@ -33,49 +30,21 @@ def _submodularity(request: SubmodularityCheckRequest) -> SubmodularityCheckResu
     return check_submodularity(request.function)
 
 
-def _op[
-    RequestT: StrictModel,
-    ResultT: StrictModel,
-](
-    operation_id: str,
-    title: str,
-    description: str,
-    request_model: type[RequestT],
-    result_model: type[ResultT],
-    operation: Callable[[RequestT], ResultT],
-    *tags: str,
-    examples: tuple[OperationExample, ...] = (),
-) -> MathTool[RequestT, ResultT]:
-    return MathTool(
-        operation_id=operation_id,
-        title=title,
-        description=description,
-        request_type=request_model,
-        result_type=result_model,
-        run=operation,
-        tags=tags,
-        examples=examples,
-    )
-
-
 TOOLS: tuple[MathTool[Any, Any], ...] = (
-    _op(
-        "combinatorics.set_function.evaluate",
-        "Evaluate a finite set function",
-        "Look up the exact canonical rational value of a finite set function "
+    MathTool(
+        operation_id="combinatorics.set_function.evaluate",
+        title="Evaluate a finite set function",
+        description="Look up the exact canonical rational value of a finite set function "
         "at a specified subset of its complete table.",
-        SetFunctionEvalRequest,
-        SetFunctionEvalResult,
-        _evaluate,
-        "combinatorics",
-        "set-function",
-        "evaluation",
-        "exact",
+        request_type=SetFunctionEvalRequest,
+        result_type=SetFunctionEvalResult,
+        run=_evaluate,
+        tags=("combinatorics", "set-function", "evaluation", "exact"),
         examples=(
-            example(
-                "evaluate_singleton",
-                "Evaluate a two-element set function at the singleton {0}.",
-                {
+            OperationExample(
+                name="evaluate_singleton",
+                description="Evaluate a two-element set function at the singleton {0}.",
+                input={
                     "function": {
                         "ground_set_size": 1,
                         "entries": [
@@ -88,25 +57,22 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "combinatorics.set_function.monotonicity",
-        "Check monotonicity of a set function",
-        "Check if a set function is monotone non-decreasing by scanning every "
+    MathTool(
+        operation_id="combinatorics.set_function.monotonicity",
+        title="Check monotonicity of a set function",
+        description="Check if a set function is monotone non-decreasing by scanning every "
         "covering relation. Scan admission bounds each table value to 128 "
         "numerator/denominator digits and the complete 2^n table to the 9 MiB "
         "transport envelope; ground sets up to 16 elements.",
-        MonotonicityCheckRequest,
-        MonotonicityCheckResult,
-        _monotonicity,
-        "combinatorics",
-        "set-function",
-        "monotonicity",
-        "exact",
+        request_type=MonotonicityCheckRequest,
+        result_type=MonotonicityCheckResult,
+        run=_monotonicity,
+        tags=("combinatorics", "set-function", "monotonicity", "exact"),
         examples=(
-            example(
-                "monotone_check",
-                "Check if a set function is monotone.",
-                {
+            OperationExample(
+                name="monotone_check",
+                description="Check if a set function is monotone.",
+                input={
                     "function": {
                         "ground_set_size": 2,
                         "entries": [
@@ -120,26 +86,23 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-    _op(
-        "combinatorics.set_function.submodularity",
-        "Check submodularity of a set function",
-        "Check if a set function is submodular via the exact local "
+    MathTool(
+        operation_id="combinatorics.set_function.submodularity",
+        title="Check submodularity of a set function",
+        description="Check if a set function is submodular via the exact local "
         "characterization f(S+i)+f(S+j) >= f(S)+f(S+{i,j}) over all pairs. Scan "
         "admission bounds each table value to 128 numerator/denominator digits "
         "and the complete 2^n table to the 9 MiB transport envelope; ground "
         "sets up to 16 elements.",
-        SubmodularityCheckRequest,
-        SubmodularityCheckResult,
-        _submodularity,
-        "combinatorics",
-        "set-function",
-        "submodularity",
-        "exact",
+        request_type=SubmodularityCheckRequest,
+        result_type=SubmodularityCheckResult,
+        run=_submodularity,
+        tags=("combinatorics", "set-function", "submodularity", "exact"),
         examples=(
-            example(
-                "submodular_check",
-                "Check if a set function is submodular.",
-                {
+            OperationExample(
+                name="submodular_check",
+                description="Check if a set function is submodular.",
+                input={
                     "function": {
                         "ground_set_size": 2,
                         "entries": [

@@ -42,13 +42,6 @@ from jacobian.math.polynomials.values import (
 
 
 @contextmanager
-def _raises_code(code: str) -> Iterator[None]:
-    with pytest.raises(ValidationError) as caught:
-        yield
-    assert caught.value.errors()[0]["type"] == f"plane_algebraic_curve.{code}"
-
-
-@contextmanager
 def _raises_operation_code(code: str) -> Iterator[None]:
     with pytest.raises(OperationDomainValidationError) as caught:
         yield

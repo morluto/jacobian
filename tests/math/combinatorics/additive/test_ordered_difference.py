@@ -16,10 +16,6 @@ from jacobian.math.combinatorics.additive.operations import (
 )
 
 
-def _vec(*coords: int) -> IntegerVector:
-    return IntegerVector.model_validate({"coordinates": [str(c) for c in coords]})
-
-
 def _request(*vectors: tuple[int, ...]) -> OrderedDifferenceProfileRequest:
     return OrderedDifferenceProfileRequest.model_validate(
         {

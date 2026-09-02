@@ -9,16 +9,11 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
-from pre_commit.clientlib import load_config
-from pre_commit.lang_base import hook_cmd
-from pre_commit.parse_shebang import normalize_cmd
+from pre_commit.clientlib import load_config  # type: ignore[import-untyped]
+from pre_commit.lang_base import hook_cmd  # type: ignore[import-untyped]
+from pre_commit.parse_shebang import normalize_cmd  # type: ignore[import-untyped]
 
 ROOT = Path(__file__).parents[2]
-
-
-def _pull_request_trigger(workflow_path: str) -> str:
-    workflow = (ROOT / workflow_path).read_text(encoding="utf-8")
-    return workflow.split("  pull_request:", 1)[1].split("  merge_group:", 1)[0]
 
 
 def test_local_hook_commands_have_parseable_entrypoints_and_arguments(

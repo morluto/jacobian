@@ -15,7 +15,6 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.probability._all_terminal_reliability import (
     ALL_TERMINAL_RELIABILITY_OPERATION,
     AllTerminalReliabilityRequest,
-    AllTerminalReliabilityWireResult,
     compute_all_terminal_reliability,
 )
 from jacobian.math.probability._graph_connection_probability import (
@@ -63,18 +62,6 @@ def _independent_counts(graph: SimpleUndirectedGraph) -> tuple[int, ...]:
         if _is_connected(graph.vertices, open_edges):
             counts[len(open_edges)] += 1
     return tuple(counts)
-
-
-def _triangle_result() -> AllTerminalReliabilityWireResult:
-    return compute_all_terminal_reliability(
-        AllTerminalReliabilityRequest(
-            graph=_graph(
-                ("a", "b", "c"),
-                (("a", "b"), ("a", "c"), ("b", "c")),
-            ),
-            open_probability=CanonicalRational(num="1", den="2"),
-        )
-    )
 
 
 def test_triangle_returns_exact_coefficient_vector_and_probability() -> None:

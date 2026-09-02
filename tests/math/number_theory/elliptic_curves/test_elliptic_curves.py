@@ -5,7 +5,6 @@ from __future__ import annotations
 from fractions import Fraction
 
 import pytest
-from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
@@ -37,12 +36,6 @@ from jacobian.math.number_theory.elliptic_curves.operations import (
 
 def _pt(num: str, den: str = "1") -> CanonicalRational:
     return CanonicalRational(num=num, den=den)
-
-
-def _assert_error_code(
-    exc_info: pytest.ExceptionInfo[ValidationError], code: str
-) -> None:
-    assert exc_info.value.errors()[0]["type"] == code
 
 
 class TestDiscriminant:

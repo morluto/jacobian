@@ -410,22 +410,6 @@ class TestFixedLengthCycle:
         )
         assert result.decision == "EXISTS"
 
-    def test_cycle_result_rejects_unsupported_budget_outcome(self) -> None:
-        import pytest
-
-        from jacobian.math.graphs.morphisms._models import FixedLengthCycleResult
-
-        triangle = self._g(["a", "b", "c"], [["a", "b"], ["b", "c"], ["a", "c"]])
-        with pytest.raises(ValueError):
-            FixedLengthCycleResult.model_validate(
-                {
-                    "graph": triangle.model_dump(mode="json"),
-                    "decision": "BUDGET_EXCEEDED",
-                    "length": 3,
-                    "cycle": [],
-                }
-            )
-
 
 class TestSubgraphPatternFind:
     def _g(

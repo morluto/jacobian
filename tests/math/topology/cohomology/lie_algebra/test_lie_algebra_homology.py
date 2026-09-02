@@ -554,8 +554,7 @@ class TestDimensionEnvelope:
         )
 
     def test_ten_dimensional_nonabelian_algebra_executes(self) -> None:
-        """The envelope boundary admits non-abelian brackets at dimension 10;
-        d^2 = 0 is replayed by the result validator."""
+        """The envelope boundary admits non-abelian brackets at dimension 10."""
         g = _ut5_gf2()
         complex_result = compute_chevalley_eilenberg_complex(
             ChevalleyEilenbergComplexRequest(lie_algebra=g)

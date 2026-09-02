@@ -37,17 +37,6 @@ def _element(a: int, b: int, d: int) -> RealQuadraticValue:
     )
 
 
-def _req(
-    left: tuple[int, int, int],
-    right: tuple[int, int, int],
-    request_type: type[AlgebraicArithmeticRequest],
-) -> AlgebraicArithmeticRequest:
-    return request_type(
-        left=_element(*left),
-        right=_element(*right),
-    )
-
-
 def _add_req(
     left: tuple[int, int, int], right: tuple[int, int, int]
 ) -> AlgebraicAdditionRequest:

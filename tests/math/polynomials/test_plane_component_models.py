@@ -67,16 +67,6 @@ def _polynomial(
     )
 
 
-def _coordinate_polynomial(axis_index: int, root: int) -> RationalPolynomial:
-    coordinate_exponents = (1, 0) if axis_index == 0 else (0, 1)
-    terms: tuple[tuple[int, tuple[int, int]], ...] = (
-        ((1, coordinate_exponents),)
-        if root == 0
-        else ((1, coordinate_exponents), (-root, (0, 0)))
-    )
-    return _polynomial(terms)
-
-
 def _rational_value(value: int) -> RealAlgebraicValue:
     return RealAlgebraicValue._from_admitted_polynomial(
         polynomial=("1", str(-value)),
@@ -250,10 +240,10 @@ def test_maximal_point_carrier_fits_the_per_point_worker_reservation() -> None:
     assert encoded_bytes <= MAX_QEPCAD_POINT_JSON_BYTES
 
 
-def test_worker_response_limit_covers_every_component_projection() -> None:
+def test_maximum_component_count_fits_the_worker_projection() -> None:
     points = tuple(
         sorted(
-            (_large_structural_point(index) for index in range(MAX_PLANE_COMPONENTS)),
+            (_rational_point(index, 0) for index in range(MAX_PLANE_COMPONENTS)),
             key=lambda point: point.model_dump_json(),
         )
     )

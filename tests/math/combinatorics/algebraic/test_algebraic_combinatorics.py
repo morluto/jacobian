@@ -191,14 +191,6 @@ def test_partition_operations_return_typed_results_at_the_size_boundary() -> Non
     assert count_result.n == 500
 
 
-def test_conjugate_operation_publishes_its_changed_wire_shape_as_version_two() -> None:
-    from jacobian.math.combinatorics.algebraic._tools import TOOLS
-
-    {tool.operation_id: tool for tool in TOOLS}
-    # The conjugate result changed from a bare integer array to the canonical
-    # IntegerPartition value, which is a versioned contract change.
-
-
 def test_contract_rejects_non_decreasing() -> None:
     with pytest.raises(ValidationError) as error:
         IntegerPartition(parts=(1, 2, 3))

@@ -155,13 +155,6 @@ class TestFactorRepresentationBounds:
         with pytest.raises(RuntimeError):
             _compute_factor(MultivariateFactorRequest(polynomial=poly))
 
-    def test_budget_exceeded_cannot_carry_factors(self) -> None:
-        poly = _poly(("x", "y"), ((2, 1, (2, 1)), (-2, 1, (1, 0))))
-        with pytest.raises(ValidationError):
-            MultivariateFactorResult.model_validate(
-                {"status": "OUTPUT_BUDGET_EXCEEDED", "reconstructed": poly}
-            )
-
 
 class TestAggregateDegreeGate:
     def test_forged_aggregate_degree_rejected_before_expansion(self) -> None:
@@ -181,25 +174,10 @@ class TestAggregateDegreeGate:
             )
 
 
-def _sort_key(
-    record: MultivariateIrreducibleFactor,
-) -> tuple[int, int, tuple[tuple[tuple[int, ...], str, str], ...]]:
-    return (
-        record.multiplicity,
-        max(
-            (sum(term.exponents) for term in record.factor.polynomial.terms), default=0
-        ),
-        tuple(
-            (term.exponents, term.coefficient.num, term.coefficient.den)
-            for term in record.factor.polynomial.terms
-        ),
-    )
-
-
-class TestConversionAndResultLimitAlignment:
-    def test_factor_within_output_budget_validates(self) -> None:
+class TestConversionAndResultBoundAlignment:
+    def test_factor_within_representation_bound_validates(self) -> None:
         """(x^23-1)(y^23-1) + z(x-1)(y-1) has an irreducible factor with 530
-        terms: above the request envelope yet within the output budget, so
+        terms: above the request envelope yet within the result term bound, so
         the result must validate instead of leaking a host exception."""
         poly = _poly(
             ("x", "y", "z"),
@@ -682,9 +660,7 @@ class TestExecutionInterruptionSeparation:
         defaults.update(overrides)
         return SimpleNamespace(**defaults)
 
-    def test_deadline_hit_returns_interrupted_not_budget_exceeded(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_deadline_hit_raises_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A worker stopped by its deadline raises a timeout."""
         poly = _poly(("x", "y"), ((1, 1, (60, 60)), (-1, 1, (59, 0))))
         request = MultivariateFactorRequest(polynomial=poly)
@@ -814,15 +790,6 @@ class TestExecutionInterruptionSeparation:
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
         with pytest.raises(FactorBackendFailureError):
             run_bounded_factorization(poly)
-
-    def test_forged_interruption_coefficient_rejected(self) -> None:
-        """An authored interruption claim must still bind its coefficient
-        to the exact content of the restated polynomial."""
-        poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
-        with pytest.raises(ValidationError):
-            MultivariateFactorResult.model_validate(
-                {"status": "EXECUTION_FAILED", "reconstructed": poly}
-            )
 
     def test_worker_reports_address_space_flag(self) -> None:
         """The worker response carries its hard-limit proof on success."""

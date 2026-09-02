@@ -1,6 +1,6 @@
 """Tests for network optimization operations."""
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from fractions import Fraction
 from typing import Any, cast
 
@@ -26,21 +26,6 @@ def test_catalog_contains_only_audited_operations() -> None:
         "graph.menger.edge_disjoint.compute",
         "network.min_cost_flow.compute",
     }
-
-
-def _make_graph(edges_data: Sequence[tuple[int, int, int, int]]) -> CostedFlowGraph:
-    edges = tuple(
-        CostedFlowEdge(
-            source=s,
-            target=t,
-            capacity=CanonicalRational(num=str(c), den="1"),
-            cost=CanonicalRational(num=str(co), den="1"),
-        )
-        for s, t, c, co in edges_data
-    )
-    return CostedFlowGraph(
-        vertex_count=max(max(s, t) for s, t, _, _ in edges_data) + 1, edges=edges
-    )
 
 
 def test_min_cost_flow_basic() -> None:

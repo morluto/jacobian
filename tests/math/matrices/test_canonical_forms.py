@@ -586,11 +586,3 @@ def test_serialization_round_trip_preserves_source_and_axis() -> None:
         restored = type(result).model_validate(result.model_dump())
         assert restored == result
         assert restored.matrix == req
-
-
-def test_source_bound_result_contracts_are_versioned_as_version_two() -> None:
-    from jacobian.math.matrices.canonical_forms._tools import TOOLS
-
-    {tool.operation_id: tool for tool in TOOLS}
-    # Each result gained a required source matrix, which old strict consumers
-    # reject; the breaking output change must be distinguishable by version.

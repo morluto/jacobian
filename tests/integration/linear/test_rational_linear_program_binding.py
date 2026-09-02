@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import copy
 from fractions import Fraction
-from typing import cast
 
 import pytest
 from tests.integration.linear._support import linear_validation_error
@@ -192,17 +191,6 @@ def test_fully_authored_optimal_payload_requires_structural_shape() -> None:
                 "primal_candidate": [q(1), q(1)],
             }
         )
-
-
-def _bound_result() -> tuple[RationalLinearProgramResult, dict[str, object]]:
-    result = _solve(BOUND_PROGRAM)
-    return result, result.model_dump(mode="json")
-
-
-def _program_dump(dumped: dict[str, object]) -> dict[str, object]:
-    program = dumped.get("program")
-    assert isinstance(program, dict)
-    return cast(dict[str, object], program)
 
 
 def test_feasible_point_without_dual_remains_only_primal_feasible() -> None:

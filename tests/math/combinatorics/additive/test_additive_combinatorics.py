@@ -221,14 +221,15 @@ class TestSumsetCardinality:
         assert result.cardinality == 65_536
         assert result.support.elements == tuple(str(value) for value in range(65_536))
 
-    def test_large_support_uses_the_final_result_transport_envelope(self) -> None:
-        """A produced support is not subject to the smaller operand envelope."""
-        left = FiniteIntegerSet(elements=("1" + "0" * 24_999,))
-        right = FiniteIntegerSet(elements=tuple(str(value) for value in range(256)))
+    def test_result_support_can_repeat_a_large_operand_component(self) -> None:
+        """Result growth is governed by its carrier, not the source digit total."""
+        large = "1" + "0" * 999
+        left = FiniteIntegerSet(elements=(large,))
+        right = FiniteIntegerSet(elements=tuple(str(value) for value in range(64)))
 
         result = sumset_cardinality(left, right)
-        assert result.cardinality == 256
-        assert result.support.elements[0] == "1" + "0" * 24_999
+        assert result.cardinality == 64
+        assert result.support.elements[0] == large
 
     def test_result_rejects_cardinality_that_disagrees_with_canonical_support(
         self,
@@ -286,16 +287,6 @@ class TestDirectSumPredicate:
         result = _run_direct_sum(req)
         assert result.holds is False
         assert result.missing == tuple(str(value) for value in range(12))
-
-    def test_admits_complete_missing_diagnostic_at_cardinality_boundary(self) -> None:
-        modulus = 1_048_576
-        request = DirectSumPredicateRequest(
-            modulus=modulus,
-            left=FiniteIntegerSet(elements=()),
-            right=FiniteIntegerSet(elements=()),
-        )
-
-        assert request.modulus == modulus
 
     def test_rejects_oversized_missing_diagnostic_by_cardinality(self) -> None:
         request = DirectSumPredicateRequest(

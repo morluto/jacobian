@@ -2,7 +2,6 @@
 
 import json
 from fractions import Fraction
-from itertools import combinations
 from typing import Any, NoReturn, cast
 from unittest.mock import patch
 
@@ -264,32 +263,6 @@ class TestIntegralHomology:
                 for column, value in enumerate(row)
             )
             for row in matrix
-        )
-
-    @classmethod
-    def _simplex_complex(cls, vertex_count: int) -> ChainComplexValue:
-        """Canonical oriented chain complex of one full simplex."""
-
-        bases = tuple(
-            tuple(combinations(range(vertex_count), size))
-            for size in range(1, vertex_count + 1)
-        )
-        differentials: list[tuple[tuple[str, ...], ...]] = []
-        for dimension in range(1, vertex_count):
-            target_index = {
-                face: index for index, face in enumerate(bases[dimension - 1])
-            }
-            rows = [[0] * len(bases[dimension]) for _ in bases[dimension - 1]]
-            for column, simplex in enumerate(bases[dimension]):
-                for removed in range(len(simplex)):
-                    face = simplex[:removed] + simplex[removed + 1 :]
-                    rows[target_index[face]][column] = 1 if removed % 2 == 0 else -1
-            differentials.append(
-                tuple(tuple(str(value) for value in row) for row in rows)
-            )
-        return cls._complex(
-            tuple(len(basis) for basis in bases),
-            tuple(differentials),
         )
 
     def test_zz_contract_rejects_fractional_entries(self) -> None:

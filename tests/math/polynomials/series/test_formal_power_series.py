@@ -371,12 +371,6 @@ def test_identity_check_admits_bounded_inputs_whose_product_would_overflow() -> 
     )
 
 
-def test_relaxed_identity_check_request_is_versioned_as_version_two() -> None:
-    from jacobian.math.polynomials.series._tools import TOOLS
-
-    {tool.operation_id: tool for tool in TOOLS}
-
-
 def test_truncate_accepts_widened_carrier_orders_and_replays_the_prefix() -> None:
     source = _ascending(1477)
     request = SeriesTruncateRequest.model_validate(
@@ -445,12 +439,6 @@ def test_level_one_q_expansion_results_are_consumable_through_truncate() -> None
     prefix = truncate(e4, MAX_TRUNCATION_ORDER)
     assert prefix.result.truncation_order == MAX_TRUNCATION_ORDER
     assert prefix.result.coefficients == e4.coefficients[:MAX_TRUNCATION_ORDER]
-
-
-def test_widened_truncate_request_is_versioned_as_version_three() -> None:
-    from jacobian.math.polynomials.series._tools import TOOLS
-
-    {tool.operation_id: tool for tool in TOOLS}
 
 
 def test_truncate_accepts_a_large_canonical_modular_series() -> None:

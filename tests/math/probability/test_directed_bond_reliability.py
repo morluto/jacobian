@@ -30,10 +30,6 @@ from jacobian.math.probability._directed_bond_reliability import (
 )
 
 
-def _rational(value: Fraction) -> dict[str, str]:
-    return {"num": str(value.numerator), "den": str(value.denominator)}
-
-
 def _request(
     *,
     vertex_count: int,

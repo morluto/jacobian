@@ -7,11 +7,6 @@ from pathlib import Path
 ROOT = Path(__file__).parents[2]
 
 
-def _pull_request_trigger(workflow_path: str) -> str:
-    workflow = (ROOT / workflow_path).read_text(encoding="utf-8")
-    return workflow.split("  pull_request:", 1)[1].split("  merge_group:", 1)[0]
-
-
 def test_exhaustive_local_reproduction_includes_exhaustive_marker_lane() -> None:
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
     all_ci = makefile.split(

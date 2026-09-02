@@ -213,5 +213,10 @@ def test_dyadic_enclosure_order_avoids_expanding_huge_binary_exponents(
     assert result.lower is not None and result.upper is not None
 
 
-def test_non_interoperable_dyadic_exponents_have_a_typed_outcome() -> None:
+def test_non_interoperable_dyadic_exponents_are_not_materialized() -> None:
     assert dyadic_endpoints(1, MAX_DYADIC_EXPONENT + 1, 3, 0) is None
+
+
+def test_unrepresentable_expression_enclosure_is_an_execution_failure() -> None:
+    with pytest.raises(RuntimeError, match="outside the interoperable dyadic"):
+        _run({"op": "exp", "children": [{"op": "var"}]}, str(10**17))

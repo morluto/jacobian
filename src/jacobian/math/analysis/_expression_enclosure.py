@@ -41,7 +41,6 @@ class IntervalExpressionEnclosureResult(StrictModel):
         "DOMAIN_ERROR",
         "PRECISION_INSUFFICIENT",
         "NONFINITE",
-        "OUTPUT_MAGNITUDE_EXCEEDED",
     ]
     precision_bits: StrictInt = Field(ge=32, le=4096)
     lower: ExactDyadic | None = None

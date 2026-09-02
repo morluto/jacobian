@@ -240,9 +240,7 @@ class ArbPointEnclosureResult(ArbPointEnclosureRequest):
     ``status`` is ``ENCLOSED``, and must restate that retained source.
     """
 
-    status: Literal[
-        "ENCLOSED", "NONFINITE", "TIMEOUT", "BACKEND_ERROR", "OUTPUT_MAGNITUDE_EXCEEDED"
-    ]
+    status: Literal["ENCLOSED", "NONFINITE"]
     enclosure: ClaimedPointEnclosure | None = None
     relative_accuracy_bits: StrictInt | None = None
     exact: bool = False
@@ -319,12 +317,8 @@ def _point_enclosure(request: ArbPointEnclosureRequest) -> ArbPointEnclosureResu
             lower_mantissa, lower_exponent, upper_mantissa, upper_exponent
         )
     if endpoints is None:
-        return ArbPointEnclosureResult(
-            function=request.function,
-            argument=request.argument,
-            precision_bits=request.precision_bits,
-            status="OUTPUT_MAGNITUDE_EXCEEDED",
-            detail="Arb produced finite endpoints outside the interoperable dyadic exponent range.",
+        raise RuntimeError(
+            "Arb produced finite endpoints outside the interoperable dyadic exponent range"
         )
     return ArbPointEnclosureResult(
         function=request.function,

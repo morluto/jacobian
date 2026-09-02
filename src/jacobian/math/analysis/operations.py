@@ -168,10 +168,8 @@ def expression_enclosure(
             lower_mantissa, lower_exponent, upper_mantissa, upper_exponent
         )
     if endpoints is None:
-        return IntervalExpressionEnclosureResult(
-            status="OUTPUT_MAGNITUDE_EXCEEDED",
-            precision_bits=precision_bits,
-            detail="Arb produced finite endpoints outside the interoperable dyadic exponent range.",
+        raise RuntimeError(
+            "Arb produced finite endpoints outside the interoperable dyadic exponent range"
         )
     return IntervalExpressionEnclosureResult(
         status="ENCLOSED",

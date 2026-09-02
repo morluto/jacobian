@@ -160,7 +160,7 @@ def test_producer_enclosure_crosses_the_checker_boundary_unchanged() -> None:
     )
 
 
-def test_nonenclosure_outcomes_retain_the_request_source() -> None:
+def test_nonfinite_outcome_retains_the_request_source() -> None:
     nonfinite = _point_enclosure(
         ArbPointEnclosureRequest.model_validate(
             {
@@ -170,37 +170,46 @@ def test_nonenclosure_outcomes_retain_the_request_source() -> None:
             }
         )
     )
-    exceeded = _point_enclosure(
-        ArbPointEnclosureRequest.model_validate(
-            {
-                "function": "EXP",
-                "argument": {"num": "1" + "0" * 17, "den": "1"},
-                "precision_bits": 32,
-            }
-        )
-    )
-
     assert nonfinite.status == "NONFINITE"
-    assert exceeded.status == "OUTPUT_MAGNITUDE_EXCEEDED"
-    for result in (nonfinite, exceeded):
-        assert result.enclosure is None
-        assert result.relative_accuracy_bits is None
-        assert not result.exact
-
+    assert nonfinite.enclosure is None
+    assert nonfinite.relative_accuracy_bits is None
+    assert not nonfinite.exact
     assert nonfinite.function == "LOG"
     assert nonfinite.argument.as_fraction() == Fraction(-1, 1)
     assert nonfinite.precision_bits == 128
-    assert exceeded.function == "EXP"
-    assert exceeded.argument.as_fraction() == Fraction(10**17, 1)
-    assert exceeded.precision_bits == 32
+    assert (
+        ArbPointEnclosureResult.model_validate_json(nonfinite.model_dump_json())
+        == nonfinite
+    )
 
-    serialized = [result.model_dump(mode="json") for result in (nonfinite, exceeded)]
-    assert len({repr(payload) for payload in serialized}) == 2
-    replayed = [
-        ArbPointEnclosureResult.model_validate_json(result.model_dump_json())
-        for result in (nonfinite, exceeded)
-    ]
-    assert [payload.model_dump(mode="json") for payload in replayed] == serialized
+
+def test_unrepresentable_point_enclosure_is_an_execution_failure() -> None:
+    request = ArbPointEnclosureRequest.model_validate(
+        {
+            "function": "EXP",
+            "argument": {"num": "1" + "0" * 17, "den": "1"},
+            "precision_bits": 32,
+        }
+    )
+
+    with pytest.raises(RuntimeError, match="outside the interoperable dyadic"):
+        _point_enclosure(request)
+
+
+@pytest.mark.parametrize(
+    "status", ("TIMEOUT", "BACKEND_ERROR", "OUTPUT_MAGNITUDE_EXCEEDED")
+)
+def test_operational_statuses_are_not_point_enclosure_results(status: str) -> None:
+    with pytest.raises(ValidationError):
+        ArbPointEnclosureResult.model_validate(
+            {
+                "function": "LOG",
+                "argument": {"num": "-1", "den": "1"},
+                "precision_bits": 128,
+                "status": status,
+                "detail": "no mathematical result",
+            }
+        )
 
 
 def test_enclosed_result_must_restate_the_retained_request_source() -> None:

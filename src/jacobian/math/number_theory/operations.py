@@ -174,7 +174,7 @@ def contiguous_sum_profile(
         _integer(upper_bound),
         started_at=started_at,
     )
-    return run_contiguous_sum_profile(admission, profile_started=started_at)
+    return run_contiguous_sum_profile(admission)
 
 
 def is_prime(value: SupportsIndex | CanonicalInteger | IntegerValue) -> BooleanResult:

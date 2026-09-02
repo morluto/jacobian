@@ -127,23 +127,15 @@ def test_unknown_profile_rejects_rows() -> None:
         )
 
 
-def test_complete_profile_cannot_carry_worker_diagnostics() -> None:
-    with pytest.raises(ValidationError, match="cannot include diagnostics"):
+def test_complete_profile_cannot_carry_failure_detail() -> None:
+    with pytest.raises(ValidationError, match="cannot include failure detail"):
         ContiguousSumProfileResult.model_validate(
             {
                 "status": "COMPLETE",
                 "lower_bound": "1",
                 "upper_bound": "1",
                 "rows": [{"n": "1", "representation_count": 1}],
-                "diagnostic": {
-                    "failure": "WORKER_TIMEOUT",
-                    "timeout_layer": "WORKER_WALL",
-                    "elapsed_ms": 1,
-                    "worker_timeout_ms": 60_000,
-                    "budget_seconds": 60,
-                    "operation_version": "1",
-                    "repository_revision": "unknown",
-                },
+                "detail": "worker did not finish",
             }
         )
 

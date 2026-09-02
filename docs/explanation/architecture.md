@@ -153,13 +153,19 @@ Rejections retain the phase that owns them:
 | Phase | Python boundary | MCP projection |
 | --- | --- | --- |
 | JSON canonicalization or structural Pydantic parsing | `OperationRequestValidationError` | `INVALID_PARAMS` |
-| Native mathematical or resource admission | `OperationDomainValidationError` | `INVALID_PARAMS` |
-| Unexpected backend or execution failure | Operational exception | Tool error |
+| Native mathematical admission | `OperationDomainValidationError` | `INVALID_PARAMS` |
+| Timeout or cancellation | Typed execution exception | Tool error (`is_error=true`) |
+| Configured capacity exhaustion | Typed resource-exhaustion exception | Tool error (`is_error=true`) |
+| Unexpected backend or execution failure | Operational exception | Tool error (`is_error=true`) |
 
 Dispatch does not turn native admission into structural request validation.
 MCP deliberately projects both validation classes through
 `INVALID_PARAMS` because both mean that the selected operation cannot accept
-the supplied payload; operational failures remain distinct and establish no
+the supplied payload. Capacity is different from validity: an admitted request
+may exceed the resources of this worker, host, or delivery boundary. MCP returns
+that non-completion as an agent-visible tool error so the caller can change the
+request, representation, backend, or deployment. Timeout, cancellation,
+resource exhaustion, and unexpected execution failure establish no
 mathematical conclusion.
 
 Jacobian is a typed, bounded tool layer over maintained mathematical libraries.
@@ -203,9 +209,7 @@ while converting it, but that is integration safety rather than a separate
 mathematical result stage.
 After owner admission succeeds, dispatch and MCP project the typed result for
 delivery. A configured delivery limit may still fail operationally, but it
-does not retroactively make the mathematical request invalid. Independently
-supplied result data uses an
-explicit, bounded replay verifier rather than ordinary result construction.
+does not retroactively make the mathematical request invalid.
 
 ## Bounded worker adapters
 

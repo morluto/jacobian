@@ -46,6 +46,22 @@ and canonical serialization. Cancellation and deadline checks also run between
 those phases; expiry after mathematical computation but before delivery is an
 operational failure, not a mathematical conclusion.
 
+## Execution non-completion and recovery
+
+MCP distinguishes an invalid request from a valid call that could not complete.
+Structural or mathematical admission failures use `INVALID_PARAMS`. Timeout,
+cancellation, configured worker or host capacity exhaustion, backend failure,
+and delivery failure return an agent-visible tool error (`is_error=true`). The
+error is not a mathematical result and must not be interpreted as `False`,
+`UNSAT`, absence of a witness, or completeness of a partial search.
+This follows MCP's tool-execution error channel: the call returns an error
+result that the model can inspect and respond to, rather than a protocol-level
+claim that its parameters were invalid.
+
+An agent can retry with a smaller request, a more compact representation,
+another backend, or a deployment with more capacity. Diagnostics may name the
+exhausted boundary, but exact results are never truncated.
+
 Use `math.find` with `request.op="match"` and a short description of the local
 result needed. Its compact matches retain `catalog_resource` as an explicit
 pointer to the bulk catalog export. Then call `math.find` with
@@ -60,11 +76,12 @@ Otherwise form the payload from the input schema and field descriptions. They
 state the required representation, including units, bounds, and canonical
 encodings or ordering where they matter. An `INVALID_PARAMS` response from
 `math.run` means either that the payload was structurally malformed or that the
-operation's mathematical or resource admission rejected an otherwise
-well-formed request. Use its structured diagnostic to make the smallest
-correction before drawing a mathematical conclusion. A timeout or backend
-failure is an operational error instead; it does not show that the request is
-mathematically inadmissible and establishes no mathematical conclusion.
+operation's mathematical admission rejected an otherwise well-formed request.
+Use its structured diagnostic to make the smallest correction before drawing a
+mathematical conclusion. A timeout, cancellation, resource exhaustion, or
+backend failure is an operational error instead; it does not show that the
+request is mathematically inadmissible and establishes no mathematical
+conclusion.
 
 The built-in MCP resource `operation://catalog` provides an exact bulk export;
 ordinary discovery should prefer `math.find`.

@@ -363,9 +363,10 @@ Before declaring the operation, provide tests for:
 - a public-operation assertion that the returned value satisfies its defining
   mathematical invariant or witness, rather than merely parsing or reaching a
   backend; and
-- owner-admission evidence proving a schema-valid input either returns a typed
-  result or is rejected before backend execution—never through a backend or
-  host exception.
+- owner-boundary evidence distinguishing a schema-valid mathematical rejection
+  from typed operational non-completion. Raw backend or host exceptions must
+  never escape, and operational non-completion must never become a mathematical
+  result.
 
 Apply these adapter and request-boundary rules:
 
@@ -376,10 +377,11 @@ Apply these adapter and request-boundary rules:
   the authoritative contract; a textual convenience parser, if one exists,
   must construct the same value from an explicit allowlist.
 - For every backend routine, record the coefficient domain, dimensional or
-  degree limits, structural preconditions, degenerate cases, and resource
-  limits it accepts. Encode those constraints in the concrete request model so
-  an accepted request does not discover the backend domain through an
-  exception.
+  degree limits, structural preconditions, and degenerate cases it accepts.
+  Encode those mathematical constraints in the concrete request model so an
+  admitted request does not discover the backend domain through an exception.
+  Keep configured worker and host capacity limits in the adapter or deployment;
+  exhaustion there is typed operational non-completion, not invalid input.
 - Every exact decomposition, certificate, or authoritative derived value must
   state its defining reconstruction or preservation equation and test it. Do
   not infer a mathematical property from the shape of lossy backend output or
@@ -539,6 +541,13 @@ policies in mathematical carriers and operation owners, while allowing limits
 whose names identify a concrete worker or process channel. Express mathematical
 safety through cardinality, component digits, depth, or another intrinsic
 representation quantity.
+
+A concrete channel or host may reject work that exceeds its configured
+capacity before allocating, launching, or delivering it. That guard protects
+the running service; it does not redefine the operation's mathematical domain.
+Surface it as typed resource exhaustion so MCP returns an agent-visible tool
+error. Do not project it as `INVALID_PARAMS`, and do not require every operation
+to predict every deployment's available memory during mathematical admission.
 
 For every non-trivially priced operation, owner tests must instrument the
 priced kernel primitives on a representative near-envelope request and assert
@@ -728,13 +737,14 @@ rather than trimming a page after projection.
 When an operation has a genuine incomplete or unknown outcome, expose that
 state in its domain result with the evidence and bounds needed to interpret it.
 Do not turn an inability to finish or represent the exact answer into a
-mathematical conclusion. When no such result is defined, narrow the request
-domain until every accepted request returns the declared typed value.
+mathematical conclusion. Runtime timeout, cancellation, or capacity exhaustion
+is an execution error rather than an `UNKNOWN` mathematical result.
 
 CI executes every advertised invocation example and a bounded deterministic
 mutation set derived from those examples. For every mutation accepted by the
-concrete request model, the operation must return its declared result type and
-must not leak a host or backend exception. The adversarial semantic case and
+concrete request model, the operation must return its declared result type or a
+typed operational non-completion; it must not leak a raw host or backend
+exception. The adversarial semantic case and
 the schema-valid request-boundary case still belong in the owning domain tests;
 generic mutations can expose admission gaps but cannot prove domain-specific
 mathematical correctness.

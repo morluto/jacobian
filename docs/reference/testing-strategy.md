@@ -212,13 +212,16 @@ aborted the request.
 
 Dispatch rejection tests must name the boundary they exercise. A malformed or
 structurally invalid payload raises `OperationRequestValidationError`. A
-structurally valid payload rejected by the native mathematical or resource
-admission raises `OperationDomainValidationError`; where practical, assert that
+structurally valid payload rejected by native mathematical admission raises
+`OperationDomainValidationError`; where practical, assert that
 native and dispatch calls preserve the same structured owner error code. MCP
-projects both validation classes as `INVALID_PARAMS`, while unexpected backend
-failures and timeouts remain operational errors. Do not update a semantic
-admission test to expect request-model validation merely because both failures
-appear as an invalid-parameter response over MCP.
+projects both validation classes as `INVALID_PARAMS`. Timeout, cancellation,
+configured capacity exhaustion, and unexpected backend failures remain
+operational errors and project as agent-visible tool failures. Test that these
+paths establish no mathematical result and do not become invalid-parameter
+responses. Do not update a semantic admission test to expect request-model
+validation merely because both validation failures appear as an
+invalid-parameter response over MCP.
 
 For an operation that uses a nontrivial backend, enumeration, solver, or
 certificate check, add the smallest owner-local regression that proves a

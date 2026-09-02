@@ -213,13 +213,16 @@ partitioning must not introduce kernel-owned durable state.
   under `jacobian.math`. Compose operations through typed mathematical values.
   Follow the [native Python API](docs/reference/python-api.md) when changing
   exported Python functions or values.
-- Validate the complete request envelope before invoking a backend. Request
-  admission must account for mathematical work, intermediate growth, exact
-  output cardinality or representation growth, and any *actual, explicitly
-  configured* final transport limit. The canonical codec's default is not a
-  mathematical or MCP response-byte limit. Every accepted
-  request must return a typed result rather than expose a backend, transport,
-  or host exception. Follow the
+- Validate the mathematical request envelope before invoking a backend.
+  Admission accounts for mathematical work, intermediate growth, and exact
+  output cardinality or representation growth. Actual worker, host, and final
+  transport capacity belongs to the concrete adapter or deployment and may
+  fail operationally; the canonical codec's default is not a mathematical or
+  MCP response-byte limit. An admitted request returns either
+  its typed mathematical result or a bounded typed operational non-completion
+  such as timeout, cancellation, or resource exhaustion; raw backend,
+  transport, and host exceptions must not escape. Operational non-completion
+  never establishes a mathematical conclusion. Follow the
   [operation library](docs/reference/domain-operation-library.md) when changing
   an operation contract or implementation.
 - Do not add aggregate response-byte caps or post-execution truncation without

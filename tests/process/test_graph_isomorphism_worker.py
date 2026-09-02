@@ -123,7 +123,7 @@ def test_vf2_worker_has_private_cwd_and_os_resource_limits(
     assert str(recorded["cwd"]).split("/")[-1].startswith("jacobian-vf2-")
 
 
-def test_timed_out_certified_factorization_is_an_unknown_non_conclusion(
+def test_timed_out_certified_factorization_raises_timeout(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -139,13 +139,11 @@ def test_timed_out_certified_factorization_is_an_unknown_non_conclusion(
         ),
     )
 
-    result = factorize_certified(CertifiedFactorizationRequest(value="10403"))
-
-    assert result.status == "UNKNOWN"
-    assert result.factors == ()
+    with pytest.raises(TimeoutError):
+        factorize_certified(CertifiedFactorizationRequest(value="10403"))
 
 
-def test_timed_out_direct_factorization_worker_is_an_unknown_non_conclusion(
+def test_timed_out_direct_factorization_worker_raises_timeout(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -162,13 +160,10 @@ def test_timed_out_direct_factorization_worker_is_an_unknown_non_conclusion(
     )
 
     request = FactorizationRequest(value="12")
-    divisors = enumerate_divisors(request)
-    factors = factorize_primes(request)
-
-    assert divisors.status == "UNKNOWN"
-    assert divisors.divisors == ()
-    assert factors.status == "UNKNOWN"
-    assert factors.factors == ()
+    with pytest.raises(TimeoutError):
+        enumerate_divisors(request)
+    with pytest.raises(TimeoutError):
+        factorize_primes(request)
 
 
 def test_factorization_workers_have_private_cwds_and_os_resource_limits(
@@ -189,11 +184,10 @@ def test_factorization_workers_have_private_cwds_and_os_resource_limits(
 
     monkeypatch.setattr(process, "run_bounded_process", timed_out_worker)
 
-    certified = factorize_certified(CertifiedFactorizationRequest(value="10403"))
-    direct = factorize_primes(FactorizationRequest(value="12"))
-
-    assert certified.status == "UNKNOWN"
-    assert direct.status == "UNKNOWN"
+    with pytest.raises(TimeoutError):
+        factorize_certified(CertifiedFactorizationRequest(value="10403"))
+    with pytest.raises(TimeoutError):
+        factorize_primes(FactorizationRequest(value="12"))
     assert len(recorded) == 2
     for invocation, prefix in zip(
         recorded,

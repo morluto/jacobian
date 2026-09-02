@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import math
 import sys
 from dataclasses import dataclass
@@ -12,6 +11,10 @@ from tempfile import TemporaryDirectory
 from time import monotonic
 from typing import Literal
 
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+)
 from jacobian.canonical import (
     CanonicalizationError,
     CanonicalLimits,
@@ -226,22 +229,18 @@ def factorize_certified(
                 ),
                 cwd=worker_directory,
             )
-    except OSError:
-        return CertifiedFactorizationResult._unknown(
-            value=request.value,
-            detail="the bounded factorization worker could not be started",
-        )
+    except OSError as exc:
+        raise RuntimeError("bounded factorization worker could not be started") from exc
+    if completed.cancelled:
+        raise OperationExecutionCancelledError("factorization worker was cancelled")
+    if completed.timed_out:
+        raise OperationExecutionTimeoutError("factorization worker timed out")
     if (
-        completed.timed_out
-        or completed.cancelled
-        or completed.stdout_exceeded
+        completed.stdout_exceeded
         or completed.stderr_exceeded
         or completed.returncode != 0
     ):
-        return CertifiedFactorizationResult._unknown(
-            value=request.value,
-            detail="the bounded factorization worker did not establish a complete result",
-        )
+        raise RuntimeError("bounded factorization worker failed")
     try:
         response = loads_strict_json(
             completed.stdout,
@@ -256,11 +255,10 @@ def factorize_certified(
         if response["request_digest"] != hashlib.sha256(input_bytes).hexdigest():
             raise ValueError("worker response is not bound to its request")
         return CertifiedFactorizationResult.model_validate(response["result"])
-    except (KeyError, TypeError, ValueError, CanonicalizationError):
-        return CertifiedFactorizationResult._unknown(
-            value=request.value,
-            detail="the bounded factorization worker returned malformed output",
-        )
+    except (KeyError, TypeError, ValueError, CanonicalizationError) as exc:
+        raise RuntimeError(
+            "bounded factorization worker returned malformed output"
+        ) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -317,9 +315,9 @@ def _bounded_direct_factorization(  # noqa: C901
         with TemporaryDirectory(prefix="jacobian-direct-factor-") as worker_directory:
             completed = run_bounded_process(
                 [sys.executable, str(_DIRECT_FACTORIZATION_WORKER)],
-                input_bytes=json.dumps(
-                    {"value": str(value)}, separators=(",", ":")
-                ).encode(),
+                input_bytes=encode_strict_json(
+                    {"value": format_canonical_integer(value)}
+                ),
                 timeout_seconds=timeout_seconds,
                 environment=worker_environment(locale="C.UTF-8"),
                 stdout_limit=64 * 1024,
@@ -331,29 +329,46 @@ def _bounded_direct_factorization(  # noqa: C901
                 ),
                 cwd=worker_directory,
             )
-    except OSError:
+    except OSError as exc:
         failed("WORKER_START_FAILED", "WORKER_START")
+        if failure is None:
+            raise RuntimeError(
+                "bounded factorization worker could not be started"
+            ) from exc
         return None
     if completed.cancelled:
         failed("WORKER_CANCELLED", "REQUEST_CANCELLATION", completed.returncode)
+        if failure is None:
+            raise OperationExecutionCancelledError("factorization worker was cancelled")
         return None
     if completed.timed_out:
         failed("WORKER_TIMEOUT", "WORKER_WALL", completed.returncode)
+        if failure is None:
+            raise OperationExecutionTimeoutError("factorization worker timed out")
         return None
     if completed.stdout_exceeded:
         failed("STDOUT_LIMIT_EXCEEDED", "OUTPUT_LIMIT", completed.returncode)
+        if failure is None:
+            raise RuntimeError("factorization worker exceeded its output channel")
         return None
     if completed.stderr_exceeded:
         failed("STDERR_LIMIT_EXCEEDED", "OUTPUT_LIMIT", completed.returncode)
+        if failure is None:
+            raise RuntimeError("factorization worker exceeded its error channel")
         return None
     if completed.returncode != 0:
         if completed.returncode is not None and completed.returncode < 0:
             failed("WORKER_RESOURCE_LIMIT", "PROCESS_RESOURCE", completed.returncode)
         else:
             failed("WORKER_EXITED", "WORKER_EXIT", completed.returncode)
+        if failure is None:
+            raise RuntimeError("bounded factorization worker failed")
         return None
     try:
-        response = json.loads(completed.stdout.decode("utf-8"))
+        response = loads_strict_json(
+            completed.stdout,
+            limits=CanonicalLimits(max_input_bytes=64 * 1024),
+        )
         raw_factors = response["factors"]
         if not isinstance(raw_factors, list):
             raise ValueError("factors must be a list")
@@ -386,10 +401,13 @@ def _bounded_direct_factorization(  # noqa: C901
         KeyError,
         TypeError,
         ValueError,
-        UnicodeDecodeError,
-        json.JSONDecodeError,
-    ):
+        CanonicalizationError,
+    ) as exc:
         failed("MALFORMED_OUTPUT", "RESULT_VALIDATION", completed.returncode)
+        if failure is None:
+            raise RuntimeError(
+                "bounded factorization worker returned malformed output"
+            ) from exc
         return None
 
 
@@ -440,19 +458,10 @@ def enumerate_divisors(request: FactorizationRequest) -> DivisorListResult:
     value = int(request.value)
     factors = _bounded_direct_factorization(value)
     if factors is None:
-        return DivisorListResult._unknown(
-            value=request.value,
-            convention="ALL_POSITIVE_DIVISORS",
-            detail="the bounded factorization worker did not establish every divisor",
+        raise RuntimeError(
+            "bounded factorization worker did not establish every divisor"
         )
-    try:
-        divisors = _divisors_from_factors(factors, proper=False)
-    except ValueError:
-        return DivisorListResult._unknown(
-            value=request.value,
-            convention="ALL_POSITIVE_DIVISORS",
-            detail="the complete divisor family exceeds the admitted output bound",
-        )
+    divisors = _divisors_from_factors(factors, proper=False)
     return DivisorListResult._from_kernel(
         value=request.value,
         divisors=divisors,
@@ -465,19 +474,10 @@ def enumerate_proper_divisors(request: FactorizationRequest) -> DivisorListResul
     value = int(request.value)
     factors = _bounded_direct_factorization(value)
     if factors is None:
-        return DivisorListResult._unknown(
-            value=request.value,
-            convention="PROPER_DIVISORS",
-            detail="the bounded factorization worker did not establish every proper divisor",
+        raise RuntimeError(
+            "bounded factorization worker did not establish every proper divisor"
         )
-    try:
-        divisors = _divisors_from_factors(factors, proper=True)
-    except ValueError:
-        return DivisorListResult._unknown(
-            value=request.value,
-            convention="PROPER_DIVISORS",
-            detail="the complete divisor family exceeds the admitted output bound",
-        )
+    divisors = _divisors_from_factors(factors, proper=True)
     return DivisorListResult._from_kernel(
         value=request.value,
         divisors=divisors,
@@ -490,9 +490,8 @@ def factorize_primes(request: FactorizationRequest) -> PrimeFactorizationResult:
     value = int(request.value)
     factors = _bounded_direct_factorization(value)
     if factors is None:
-        return PrimeFactorizationResult._unknown(
-            value=request.value,
-            detail="the bounded factorization worker did not establish a complete result",
+        raise RuntimeError(
+            "bounded factorization worker did not establish a complete result"
         )
     return PrimeFactorizationResult._from_kernel(value=request.value, factors=factors)
 
@@ -502,9 +501,8 @@ def decide_squarefree(request: ArithmeticFunctionRequest) -> SquarefreeResult:
         return SquarefreeResult(status="NOT_SQUAREFREE", n=request.n)
     factors = _bounded_direct_factorization(request.n)
     if factors is None:
-        return SquarefreeResult._unknown(
-            n=request.n,
-            detail="the bounded factorization worker did not establish squarefreeness",
+        raise RuntimeError(
+            "bounded factorization worker did not establish squarefreeness"
         )
     return SquarefreeResult(
         status="SQUAREFREE"
@@ -519,10 +517,7 @@ def compute_radical(request: ArithmeticFunctionRequest) -> RadicalResult:
         return RadicalResult(n=0, value="0")
     factors = _bounded_direct_factorization(request.n)
     if factors is None:
-        return RadicalResult._unknown(
-            n=request.n,
-            detail="the bounded factorization worker did not establish the radical",
-        )
+        raise RuntimeError("bounded factorization worker did not establish the radical")
     radical = 1
     for factor in factors:
         radical *= int(factor.prime)

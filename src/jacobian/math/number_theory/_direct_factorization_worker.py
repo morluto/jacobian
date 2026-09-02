@@ -2,27 +2,37 @@
 
 from __future__ import annotations
 
-import json
 import sys
+
+from jacobian.canonical import (
+    encode_strict_json,
+    format_canonical_integer,
+    loads_strict_json,
+    parse_canonical_integer,
+)
 
 
 def main() -> int:
     try:
-        payload = json.loads(sys.stdin.buffer.read())
-        value = int(payload["value"])
+        payload = loads_strict_json(sys.stdin.buffer.read())
+        value = parse_canonical_integer(payload["value"])
         if value == 0:
             raise ValueError("zero has no finite direct factorization")
         from sympy import factorint
 
         factors = sorted(factorint(abs(value)).items())
-        sys.stdout.write(
-            json.dumps(
-                {"factors": [[str(prime), int(power)] for prime, power in factors]},
-                separators=(",", ":"),
+        sys.stdout.buffer.write(
+            encode_strict_json(
+                {
+                    "factors": [
+                        [format_canonical_integer(int(prime)), int(power)]
+                        for prime, power in factors
+                    ]
+                }
             )
         )
         return 0
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+    except (KeyError, TypeError, ValueError):
         return 2
 
 

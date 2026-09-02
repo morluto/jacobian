@@ -53,7 +53,7 @@ class DivisorListResult(StrictModel):
     divisors. Zero is not applicable to the producing operations.
     """
 
-    status: Literal["COMPLETE", "UNKNOWN"] = "COMPLETE"
+    status: Literal["COMPLETE"] = "COMPLETE"
     value: FactorizationInteger
     divisors: tuple[BoundedInteger, ...] = Field(
         min_length=0,
@@ -62,23 +62,6 @@ class DivisorListResult(StrictModel):
     convention: Literal["ALL_POSITIVE_DIVISORS", "PROPER_DIVISORS"] = (
         "ALL_POSITIVE_DIVISORS"
     )
-    detail: str | None = None
-
-    @classmethod
-    def _unknown(
-        cls,
-        *,
-        value: str,
-        convention: Literal["ALL_POSITIVE_DIVISORS", "PROPER_DIVISORS"],
-        detail: str,
-    ) -> Self:
-        return cls(
-            status="UNKNOWN",
-            value=value,
-            divisors=(),
-            convention=convention,
-            detail=detail,
-        )
 
     @classmethod
     def _from_kernel(
@@ -98,13 +81,6 @@ class DivisorListResult(StrictModel):
 
     @model_validator(mode="after")
     def require_source_enumeration(self) -> Self:
-        if self.status == "UNKNOWN":
-            if self.divisors or not self.detail:
-                raise _validation_error(
-                    "unknown_divisor_enumeration_shape",
-                    "an unknown divisor enumeration has no divisors and includes a detail",
-                )
-            return self
         values = [int(divisor) for divisor in self.divisors]
         if any(value < 1 for value in values):
             raise _validation_error(
@@ -131,17 +107,12 @@ class PrimeFactorizationResult(StrictModel):
     not-applicable (handled at the operation layer).
     """
 
-    status: Literal["COMPLETE", "UNKNOWN"] = "COMPLETE"
+    status: Literal["COMPLETE"] = "COMPLETE"
     value: FactorizationInteger
     factors: tuple[PrimePower, ...] = Field(
         min_length=0,
         max_length=MAX_DIRECT_FACTOR_ENTRIES,
     )
-    detail: str | None = None
-
-    @classmethod
-    def _unknown(cls, *, value: str, detail: str) -> Self:
-        return cls(status="UNKNOWN", value=value, factors=(), detail=detail)
 
     @classmethod
     def _from_kernel(
@@ -156,13 +127,6 @@ class PrimeFactorizationResult(StrictModel):
 
     @model_validator(mode="after")
     def require_source_factorization(self) -> Self:
-        if self.status == "UNKNOWN":
-            if self.factors or not self.detail:
-                raise _validation_error(
-                    "unknown_prime_factorization_shape",
-                    "an unknown prime factorization has no factors and includes a detail",
-                )
-            return self
         primes = [factor.prime for factor in self.factors]
         if len(set(primes)) != len(primes):
             raise _validation_error(
@@ -185,48 +149,19 @@ class PrimeFactorizationResult(StrictModel):
 
 
 class SquarefreeResult(StrictModel):
-    """A squarefreeness decision, or an explicit non-conclusion."""
+    """An exact squarefreeness decision."""
 
-    status: Literal["SQUAREFREE", "NOT_SQUAREFREE", "UNKNOWN"]
+    status: Literal["SQUAREFREE", "NOT_SQUAREFREE"]
     n: int = Field(ge=0, le=MAX_SAFE_INTEGER)
-    detail: str | None = None
-
-    @classmethod
-    def _unknown(cls, *, n: int, detail: str) -> Self:
-        return cls(status="UNKNOWN", n=n, detail=detail)
-
-    @model_validator(mode="after")
-    def require_unknown_detail(self) -> Self:
-        if self.status == "UNKNOWN" and not self.detail:
-            raise _validation_error(
-                "unknown_squarefree_shape",
-                "an unknown squarefreeness result includes a detail",
-            )
-        return self
 
 
 class RadicalResult(StrictModel):
-    """The exact radical of one admitted integer, or an explicit non-conclusion."""
+    """The exact radical of one admitted integer."""
 
-    status: Literal["COMPLETE", "UNKNOWN"] = "COMPLETE"
+    status: Literal["COMPLETE"] = "COMPLETE"
     n: int = Field(ge=0, le=MAX_SAFE_INTEGER)
-    value: BoundedInteger | None = None
-    detail: str | None = None
-
-    @classmethod
-    def _unknown(cls, *, n: int, detail: str) -> Self:
-        return cls(status="UNKNOWN", n=n, detail=detail)
+    value: BoundedInteger
 
     @model_validator(mode="after")
     def require_complete_value(self) -> Self:
-        if self.status == "COMPLETE" and self.value is None:
-            raise _validation_error(
-                "complete_radical_requires_value",
-                "a complete radical result includes its exact value",
-            )
-        if self.status == "UNKNOWN" and (self.value is not None or not self.detail):
-            raise _validation_error(
-                "unknown_radical_shape",
-                "an unknown radical has no value and includes a detail",
-            )
         return self

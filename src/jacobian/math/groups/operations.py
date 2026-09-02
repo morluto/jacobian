@@ -158,7 +158,7 @@ def group_stabilizer(group: PermutationGroup, point: int) -> PermutationGroup:
     return PermutationGroup(degree=group.degree, generators=generators)
 
 
-class SubgroupLatticeBudgetExceededError(ValueError):
+class SubgroupLatticeBudgetExceededError(RuntimeError):
     """The lattice traversal exhausted its declared closure-construction budget."""
 
 
@@ -251,8 +251,8 @@ def subgroup_lattice(group: PermutationGroup) -> list[SubgroupEntry]:
     of order at most 64 and counts its closure constructions against
     ``MAX_SUBGROUP_LATTICE_CLOSURES``, so the search work is derived from the
     subgroup/search-node count instead of only the admitted group order;
-    exhausting the budget raises :class:`SubgroupLatticeBudgetExceededError`,
-    which the wire operation reports as a typed ``LIMIT_EXCEEDED`` outcome.
+    exhausting the budget raises :class:`SubgroupLatticeBudgetExceededError`
+    without constructing a subgroup-lattice result.
     """
     degree = group.degree
     backend_group = _require_admitted_lattice_source(group)

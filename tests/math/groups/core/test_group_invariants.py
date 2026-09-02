@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -199,8 +198,6 @@ class TestLatticeWorkBound:
     def test_extremal_abelian_lattice_completes(self) -> None:
         """C2^6 has exactly 2825 subgroups (subspaces of F_2^6)."""
         result = compute_subgroup_lattice(self._c2_power_six())
-        assert result.subgroups is not None
-        assert result.outcome == "COMPUTED"
         assert result.subgroup_count == 2825
         orders = sorted(entry.order for entry in result.subgroups)
         assert orders[0] == 1 and orders[-1] == 64
@@ -211,41 +208,16 @@ class TestLatticeWorkBound:
         first = result.subgroups[0].group
         assert first.degree == 12 and len(first.generators) >= 1
 
-    def test_budget_exhaustion_returns_typed_outcome(
+    def test_budget_exhaustion_raises_without_a_lattice(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """An exhausted closure budget yields LIMIT_EXCEEDED, not an error."""
+        """An exhausted traversal establishes no subgroup lattice."""
         import jacobian.math.groups.operations as operations
 
         monkeypatch.setattr(operations, "MAX_SUBGROUP_LATTICE_CLOSURES", 3)
-        result = compute_subgroup_lattice(
-            GroupSubgroupLatticeRequest(degree=4, generators=((1, 2, 3, 0),))
-        )
-        assert result.outcome == "LIMIT_EXCEEDED"
-        assert result.subgroups is None
-        assert result.detail is not None and "closure constructions" in result.detail
-
-    def test_exceeded_outcome_rejects_entries_and_missing_detail(self) -> None:
-        from jacobian.math.groups._models import GroupSubgroupLatticeResult
-
-        with _group_error("group.outcome_shape"):
-            GroupSubgroupLatticeResult.model_validate(
-                {
-                    "outcome": "LIMIT_EXCEEDED",
-                    "degree": 4,
-                    "generators": ((1, 2, 3, 0),),
-                    "detail": None,
-                }
-            )
-        with _group_error("group.outcome_shape"):
-            GroupSubgroupLatticeResult.model_validate(
-                {
-                    "outcome": "LIMIT_EXCEEDED",
-                    "degree": 4,
-                    "generators": ((1, 2, 3, 0),),
-                    "subgroups": (),
-                    "detail": "exceeded",
-                }
+        with pytest.raises(RuntimeError, match="closure constructions"):
+            compute_subgroup_lattice(
+                GroupSubgroupLatticeRequest(degree=4, generators=((1, 2, 3, 0),))
             )
 
 
@@ -284,35 +256,7 @@ class TestRelayedPayloadBounds:
             )
 
 
-class TestExceededOutcomeSourceBinding:
-    """Relayed limit-exceeded payloads keep the source-binding invariants."""
-
-    @staticmethod
-    def _exceeded(
-        degree: int = 4,
-        generators: tuple[tuple[int, ...], ...] = ((1, 2, 3, 0),),
-        **overrides: Any,
-    ) -> GroupSubgroupLatticeResult:
-        from jacobian.math.groups._models import GroupSubgroupLatticeResult
-
-        payload = {
-            "outcome": "LIMIT_EXCEEDED",
-            "degree": degree,
-            "generators": [list(g) for g in generators],
-            "detail": "traversal exceeded budget",
-            **overrides,
-        }
-        return GroupSubgroupLatticeResult.model_validate(payload)
-
-    def test_fabricated_subgroup_count_rejected(self) -> None:
-        with _group_error("group.outcome_shape"):
-            self._exceeded(subgroup_count=5)
-
-    def test_exceeded_payload_still_admits_only_real_sources(self) -> None:
-        """A non-permutation generator cannot ride on an exceeded outcome."""
-        with pytest.raises(ValidationError):
-            self._exceeded(degree=2, generators=((999,),))
-
+class TestResultComposition:
     def test_entries_chain_into_permutation_group_consumers(self) -> None:
         from jacobian.math.groups._models import PermutationGroup
         from jacobian.math.groups._tools import compute_group_order

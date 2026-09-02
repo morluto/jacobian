@@ -35,7 +35,6 @@ from jacobian.math.groups.finite_abelian import (
     decide_finite_abelian_spectral_pair,
     finite_abelian_group_factorization,
 )
-from jacobian.math.groups.operations import SubgroupLatticeBudgetExceededError
 
 
 def compute_finite_abelian_group_factorization(
@@ -105,12 +104,7 @@ def compute_subgroup_lattice(
             code=str(detail["type"]),
             message=str(detail["msg"]),
         ) from error
-    try:
-        subgroups = native.subgroup_lattice(source)
-    except SubgroupLatticeBudgetExceededError as error:
-        return GroupSubgroupLatticeResult._limit_exceeded_from_kernel(
-            request, str(error)
-        )
+    subgroups = native.subgroup_lattice(source)
     return GroupSubgroupLatticeResult._computed_from_kernel(request, tuple(subgroups))
 
 
@@ -305,9 +299,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         title="Enumerate all subgroups of a bounded permutation group",
         description="Enumerate all subgroups of a bounded permutation group via SymPy. "
         "Each subgroup is returned with its generators and order. Bounded "
-        "to groups of order at most 64; the traversal carries an explicit "
-        "closure-construction budget and reports exhaustion as a typed "
-        "LIMIT_EXCEEDED outcome.",
+        "to groups of order at most 64; traversal exhaustion is an execution "
+        "failure and establishes no subgroup lattice.",
         request_type=GroupSubgroupLatticeRequest,
         result_type=GroupSubgroupLatticeResult,
         run=compute_subgroup_lattice,

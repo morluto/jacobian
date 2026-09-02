@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal, Self
+from typing import Annotated, Any, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -319,20 +319,15 @@ class SubgroupEntry(StrictModel):
     order: int = Field(ge=1, le=MAX_SUBGROUP_LATTICE_GROUP_ORDER)
 
 
-GroupSubgroupLatticeOutcome = Literal["COMPUTED", "LIMIT_EXCEEDED"]
-
-
 class GroupSubgroupLatticeResult(StrictModel):
     """All subgroups of a bounded permutation group, bound to its source."""
 
-    outcome: GroupSubgroupLatticeOutcome = "COMPUTED"
     degree: int = Field(ge=1, le=MAX_GROUP_DEGREE)
     generators: tuple[tuple[int, ...], ...] = Field(
         min_length=1, max_length=MAX_GROUP_DEGREE
     )
-    subgroups: tuple[SubgroupEntry, ...] | None = None
-    subgroup_count: int = Field(default=0, ge=0)
-    detail: str | None = None
+    subgroups: tuple[SubgroupEntry, ...]
+    subgroup_count: int = Field(ge=1)
 
     @model_validator(mode="before")
     @classmethod
@@ -354,30 +349,13 @@ class GroupSubgroupLatticeResult(StrictModel):
         return data
 
     @model_validator(mode="after")
-    def require_outcome_shape(self) -> Self:
+    def require_complete_lattice(self) -> Self:
         for generator in self.generators:
             _require_permutation(generator, self.degree, "source generator")
-        if self.outcome == "COMPUTED":
-            if self.subgroups is None or self.detail is not None:
-                raise _validation_error(
-                    "group.outcome_shape",
-                    "computed lattice requires subgroup entries and no detail",
-                )
-            if self.subgroup_count != len(self.subgroups) or self.subgroup_count < 1:
-                raise _validation_error(
-                    "group.outcome_shape",
-                    "subgroup_count must match the number of subgroups",
-                )
-        elif self.subgroups is not None or self.detail is None:
+        if self.subgroup_count != len(self.subgroups):
             raise _validation_error(
                 "group.outcome_shape",
-                "an exceeded traversal carries only a safe detail",
-            )
-        elif self.subgroup_count != 0:
-            # No entries are retained on exhaustion, so any positive count
-            # would fabricate an exact conclusion.
-            raise _validation_error(
-                "group.outcome_shape", "an exceeded traversal reports no subgroup count"
+                "subgroup_count must match the number of subgroups",
             )
         return self
 
@@ -394,19 +372,4 @@ class GroupSubgroupLatticeResult(StrictModel):
             generators=request.generators,
             subgroups=subgroups,
             subgroup_count=len(subgroups),
-        )
-
-    @classmethod
-    def _limit_exceeded_from_kernel(
-        cls,
-        request: GroupSubgroupLatticeRequest,
-        detail: str,
-    ) -> Self:
-        """Construct the admitted traversal-exhaustion outcome."""
-
-        return cls(
-            outcome="LIMIT_EXCEEDED",
-            degree=request.degree,
-            generators=request.generators,
-            detail=detail,
         )

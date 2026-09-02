@@ -119,11 +119,11 @@ test-singular: ## Pinned Singular exact-algebra backend (serial, 120s, kill-safe
 	$(PYTEST_RUNNER) --name singular --timeout-seconds 1200 -- \
 		-n 0 --timeout=120 --timeout-method=signal \
 		tests/math/polynomials/ideals \
-	tests/math/polynomials/test_polynomial_map_generic_degree.py \
-	tests/process/polynomials/ideals \
-	tests/process/polynomial_maps \
-	tests/integration/catalog/test_builtin_examples.py \
-	tests/integration/catalog/test_mcp_builtin_examples.py \
+		tests/math/polynomials/test_polynomial_map_generic_degree.py \
+		tests/process/polynomials/ideals \
+		tests/process/polynomial_maps \
+		tests/integration/catalog/test_builtin_examples.py \
+		tests/integration/catalog/test_mcp_builtin_examples.py \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 test-qepcad: ## Pinned QEPCAD plane-topology backend (serial, kill-safe).

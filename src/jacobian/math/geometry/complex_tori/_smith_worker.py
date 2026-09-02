@@ -6,6 +6,7 @@ import hashlib
 import sys
 
 from jacobian.canonical import (
+    CanonicalLimits,
     encode_strict_json,
     format_canonical_integer,
     loads_strict_json,
@@ -25,7 +26,10 @@ def _decode_integer(value: object) -> int:
 
 def main() -> None:
     input_bytes = sys.stdin.buffer.read()
-    payload = loads_strict_json(input_bytes)
+    payload = loads_strict_json(
+        input_bytes,
+        limits=CanonicalLimits(max_input_bytes=len(input_bytes)),
+    )
     entries = payload["entries"]
     matrix = tuple(tuple(_decode_integer(value) for value in row) for row in entries)
     normal_form = integer_smith_normal_form(matrix)

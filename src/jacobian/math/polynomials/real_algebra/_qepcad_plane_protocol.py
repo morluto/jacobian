@@ -7,7 +7,6 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, StrictInt, TypeAdapter, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits
 from jacobian.math.polynomials.real_algebra._plane_component_models import (
     MAX_PLANE_COMPONENT_SAMPLES,
     MAX_PLANE_COMPONENTS,
@@ -21,10 +20,29 @@ MAX_QEPCAD_CLOSURE_CELLS = 2_048
 MAX_QEPCAD_SAMPLE_CHARACTERS = 96 * 1024
 # Every structurally admitted plane point fits this reservation, including two
 # degree-sixteen coordinate polynomials and four 8,192-digit rational endpoint
-# components. The aggregate worker response remains subject to the canonical
-# transport limit and may therefore stop before all 128 component slots fill.
+# components.
 MAX_QEPCAD_POINT_JSON_BYTES = 96 * 1024
-MAX_QEPCAD_WORKER_RESPONSE_BYTES = CanonicalLimits().max_output_bytes
+# A complete projection can contain every component representative plus every
+# sample-to-component reference. This private pipe bound follows that protocol
+# shape rather than a canonical transport default.
+_QEPCAD_COMPLETE_EMPTY_BYTES = len(
+    b'{"kind":"complete","version":"1.74","representatives":[],'
+    b'"sample_component_ids":[]}'
+)
+_QEPCAD_REPRESENTATIVES_BYTES = (
+    2
+    + max(MAX_PLANE_COMPONENTS - 1, 0)
+    + MAX_PLANE_COMPONENTS * MAX_QEPCAD_POINT_JSON_BYTES
+)
+_QEPCAD_SAMPLE_IDS_BYTES = (
+    2 + max(MAX_PLANE_COMPONENT_SAMPLES - 1, 0) + 4 * MAX_PLANE_COMPONENT_SAMPLES
+)
+MAX_QEPCAD_WORKER_RESPONSE_BYTES = (
+    _QEPCAD_COMPLETE_EMPTY_BYTES
+    - 4
+    + _QEPCAD_REPRESENTATIVES_BYTES
+    + _QEPCAD_SAMPLE_IDS_BYTES
+)
 
 
 class QepcadPlaneWorkerRequest(StrictModel):

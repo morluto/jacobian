@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import sys
 
 from flint import fmpz_mat
 
 from jacobian.canonical import (
+    CanonicalLimits,
+    encode_strict_json,
     format_canonical_integer,
     loads_strict_json,
     parse_canonical_integer,
@@ -26,7 +27,10 @@ def _decode_integer(value: object) -> int:
 
 def main() -> None:
     input_bytes = sys.stdin.buffer.read()
-    payload = loads_strict_json(input_bytes)
+    payload = loads_strict_json(
+        input_bytes,
+        limits=CanonicalLimits(max_input_bytes=len(input_bytes)),
+    )
     coefficient_count = payload["coefficient_count"]
     constraints = payload["constraints"]
     constraint_count = len(constraints)
@@ -53,14 +57,14 @@ def main() -> None:
             graph_hnf[row, constraint] == 0 for constraint in range(constraint_count)
         )
     ]
-    json.dump(
-        {
-            "request_digest": hashlib.sha256(input_bytes).hexdigest(),
-            "primitive_kernel": primitive_kernel,
-            "constraint_rank": coefficient_count - len(primitive_kernel),
-        },
-        sys.stdout,
-        separators=(",", ":"),
+    sys.stdout.buffer.write(
+        encode_strict_json(
+            {
+                "request_digest": hashlib.sha256(input_bytes).hexdigest(),
+                "primitive_kernel": primitive_kernel,
+                "constraint_rank": coefficient_count - len(primitive_kernel),
+            }
+        )
     )
 
 

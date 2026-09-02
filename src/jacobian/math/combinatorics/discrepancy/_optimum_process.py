@@ -9,7 +9,6 @@ import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from jacobian.canonical import CanonicalLimits
 from jacobian.math.combinatorics.discrepancy._models import (
     MAX_OPTIMUM_PROOF_MILLISECONDS,
     MAX_OPTIMUM_SOLVER_MILLISECONDS,
@@ -31,10 +30,39 @@ _OPTIMUM_WORKER_WALL_SECONDS = (
     )
     + 5
 )
-_WORKER_OUTPUT_BYTES = CanonicalLimits().max_output_bytes
 _WORKER_ERROR_BYTES = 16_384
 _WORKER_ADDRESS_SPACE_BYTES = 1_536 * 1024 * 1024
 _WORKER_FILE_SIZE_BYTES = 1_024 * 1_024
+
+
+def _optimum_worker_stdout_limit(set_system: FiniteSetSystem) -> int:
+    """Measure the largest result variant for this retained source."""
+
+    source = set_system.model_dump(mode="json")
+    variants: tuple[dict[str, object], ...] = (
+        {
+            "set_system": source,
+            "status": "OPTIMAL",
+            "optimal_coloring": [-1] * set_system.ground_set_size,
+            "optimal_discrepancy": set_system.ground_set_size,
+        },
+        {
+            "set_system": source,
+            "status": "BUDGET_EXCEEDED",
+            "optimal_coloring": [],
+            "optimal_discrepancy": None,
+        },
+        {
+            "set_system": source,
+            "status": "EXECUTION_FAILED",
+            "optimal_coloring": [],
+            "optimal_discrepancy": None,
+        },
+    )
+    return max(
+        len(json.dumps(value, separators=(",", ":")).encode("utf-8"))
+        for value in variants
+    )
 
 
 def compute_optimal_discrepancy_isolated(
@@ -57,7 +85,7 @@ def compute_optimal_discrepancy_isolated(
                 input_bytes=payload,
                 timeout_seconds=remaining_seconds,
                 environment=worker_environment(locale="C.UTF-8"),
-                stdout_limit=_WORKER_OUTPUT_BYTES,
+                stdout_limit=_optimum_worker_stdout_limit(set_system),
                 stderr_limit=_WORKER_ERROR_BYTES,
                 resource_limits=ProcessResourceLimits(
                     cpu_seconds=math.ceil(_OPTIMUM_WORKER_WALL_SECONDS),

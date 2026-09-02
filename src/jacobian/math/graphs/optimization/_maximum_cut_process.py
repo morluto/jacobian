@@ -9,7 +9,6 @@ import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from jacobian.canonical import CanonicalLimits
 from jacobian.math.graphs.optimization._maximum_cut import (
     GraphMaximumCutRequest,
     GraphMaximumCutResult,
@@ -23,10 +22,29 @@ from jacobian.process import (
 
 _MAXIMUM_CUT_WORKER = Path(__file__).with_name("_maximum_cut_worker.py")
 _MAXIMUM_CUT_WORKER_WALL_SECONDS = 120
-_MAXIMUM_CUT_WORKER_STDOUT_BYTES = CanonicalLimits().max_output_bytes
 _WORKER_ERROR_BYTES = 16_384
 _WORKER_ADDRESS_SPACE_BYTES = 1_536 * 1024 * 1024
 _WORKER_FILE_SIZE_BYTES = 1_024 * 1_024
+
+
+def _maximum_cut_worker_stdout_limit(request: GraphMaximumCutRequest) -> int:
+    """Measure the largest source-bound projection for this admitted graph."""
+
+    graph = request.graph
+    projection = {
+        "graph": graph.model_dump(mode="json"),
+        "left_vertices": list(graph.vertices),
+        "right_vertices": [],
+        "crossing_edges": [list(edge) for edge in graph.edges],
+        "cut_value": 32_640,
+        "lower_bound": 32_640,
+        "upper_bound": 32_640,
+    }
+    return len(
+        json.dumps(projection, separators=(",", ":"), ensure_ascii=False).encode(
+            "utf-8"
+        )
+    )
 
 
 def compute_maximum_cut_isolated(
@@ -50,7 +68,7 @@ def compute_maximum_cut_isolated(
                 input_bytes=payload,
                 timeout_seconds=remaining_seconds,
                 environment=worker_environment(locale="C.UTF-8"),
-                stdout_limit=_MAXIMUM_CUT_WORKER_STDOUT_BYTES,
+                stdout_limit=_maximum_cut_worker_stdout_limit(request),
                 stderr_limit=_WORKER_ERROR_BYTES,
                 resource_limits=ProcessResourceLimits(
                     cpu_seconds=math.ceil(_MAXIMUM_CUT_WORKER_WALL_SECONDS),

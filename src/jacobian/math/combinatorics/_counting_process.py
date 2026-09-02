@@ -10,7 +10,6 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from jacobian._execution import bind_request_deadline, current_request_execution
-from jacobian.canonical import CanonicalLimits
 from jacobian.process import (
     ProcessResourceLimits,
     run_bounded_process,
@@ -22,6 +21,14 @@ _COUNTING_WALL_SECONDS = 120.0
 _COUNTING_STDERR_LIMIT = 16_384
 _COUNTING_ADDRESS_SPACE_BYTES = 1024 * 1024 * 1024
 _COUNTING_FILE_SIZE_BYTES = 1024 * 1024
+
+
+def _counting_stdout_limit(n: int, k: int) -> int:
+    """Bound one decimal count from its admitted operands."""
+
+    # Both nCk and nPk are at most n**k. The extra byte covers the inclusive
+    # power-of-ten boundary; zero and empty products still need one digit.
+    return max(1, k * len(str(n)) + 1)
 
 
 def evaluate_count(operation: str, n: int, k: int) -> str:
@@ -49,7 +56,7 @@ def evaluate_count(operation: str, n: int, k: int) -> str:
                 ).encode("utf-8"),
                 timeout_seconds=remaining,
                 environment=worker_environment(locale="C.UTF-8"),
-                stdout_limit=CanonicalLimits().max_output_bytes,
+                stdout_limit=_counting_stdout_limit(n, k),
                 stderr_limit=_COUNTING_STDERR_LIMIT,
                 resource_limits=ProcessResourceLimits(
                     cpu_seconds=max(1, math.ceil(_COUNTING_WALL_SECONDS)),

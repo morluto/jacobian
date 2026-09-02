@@ -41,7 +41,6 @@ _ADDRESS_SPACE_BYTES = 1536 * 1024 * 1024
 _FILE_SIZE_BYTES = 1024 * 1024
 _STDOUT_BYTES = MAX_QEPCAD_WORKER_RESPONSE_BYTES
 _STDERR_BYTES = 64 * 1024
-_SAMPLE_STDOUT_BYTES = 64 * 1024
 
 QepcadPlaneProcessStatus = Literal[
     "COMPUTED",
@@ -179,7 +178,7 @@ def run_plane_sample_recognition(
         completed = _run_worker(
             worker_request,
             deadline=deadline,
-            stdout_limit=_SAMPLE_STDOUT_BYTES,
+            stdout_limit=_STDOUT_BYTES,
         )
     except OSError:
         return QepcadPlaneProcessOutcome(

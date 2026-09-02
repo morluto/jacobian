@@ -10,7 +10,6 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, Literal
 
-from jacobian.canonical import CanonicalLimits
 from jacobian.math.graphs.independence import (
     IndependenceNumberBudget,
     IndependenceNumberResult,
@@ -23,10 +22,31 @@ from jacobian.process import (
 )
 
 _INDEPENDENCE_WORKER = Path(__file__).with_name("_independence_z3_worker.py")
-_WORKER_OUTPUT_BYTES = CanonicalLimits().max_output_bytes
 _WORKER_ERROR_BYTES = 16_384
 _WORKER_ADDRESS_SPACE_BYTES = 1_536 * 1024 * 1024
 _WORKER_FILE_SIZE_BYTES = 1_024 * 1_024
+
+
+def _independence_worker_stdout_limit(graph: SimpleUndirectedGraph) -> int:
+    """Measure a complete feasible upper envelope for the private projection."""
+
+    projection = {
+        "status": "UNKNOWN",
+        "order": 128,
+        "optimum_value": None,
+        "incumbent_value": 128,
+        "lower_bound": 128,
+        "upper_bound": 128,
+        "witness_vertices": list(graph.vertices),
+        "termination_reason": "OPTIMUM_ESTABLISHED",
+        "detail": "x" * 1_024,
+        "convention": "MAXIMUM_EDGE_FREE_VERTEX_SUBSET",
+    }
+    return len(
+        json.dumps(projection, separators=(",", ":"), ensure_ascii=False).encode(
+            "utf-8"
+        )
+    )
 
 
 def _integer_bound(value: Any, fallback: int) -> int:
@@ -181,7 +201,7 @@ def solve_independence_number_values(
                 ).encode("utf-8"),
                 timeout_seconds=remaining_seconds,
                 environment=worker_environment(locale="C.UTF-8"),
-                stdout_limit=_WORKER_OUTPUT_BYTES,
+                stdout_limit=_independence_worker_stdout_limit(graph),
                 stderr_limit=_WORKER_ERROR_BYTES,
                 resource_limits=ProcessResourceLimits(
                     cpu_seconds=max(1, math.ceil(resource_budget.wall_seconds)),

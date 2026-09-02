@@ -19,6 +19,7 @@ from jacobian._execution import (
 )
 from jacobian.canonical import (
     CanonicalizationError,
+    CanonicalLimits,
     format_canonical_integer,
     loads_strict_json,
     parse_canonical_integer,
@@ -642,7 +643,39 @@ def _integer_kernel_basis(
         },
         separators=(",", ":"),
     ).encode("utf-8")
-    completed = run_hnf_worker(payload, deadline=deadline)
+    constraint_digits = max(
+        _integer_digit_count(value)
+        for constraint in plan.constraints
+        for value in constraint
+    )
+    entry_digits = _kernel_entry_digit_bound(
+        coefficient_count=coefficient_count,
+        constraint_count=len(plan.constraints),
+        constraint_digits=constraint_digits,
+    )
+    scalar_characters = entry_digits + 1  # optional sign
+    matrix_bytes = 2 + max(coefficient_count - 1, 0)
+    matrix_bytes += coefficient_count * (
+        2
+        + max(coefficient_count - 1, 0)
+        + coefficient_count * (scalar_characters + 2)
+    )
+    empty_response_bytes = len(
+        json.dumps(
+            {
+                "request_digest": "0" * 64,
+                "primitive_kernel": [],
+                "constraint_rank": coefficient_count,
+            },
+            separators=(",", ":"),
+        ).encode("utf-8")
+    )
+    stdout_limit = empty_response_bytes - 2 + matrix_bytes
+    completed = run_hnf_worker(
+        payload,
+        deadline=deadline,
+        stdout_limit=stdout_limit,
+    )
     if completed.cancelled:
         raise OperationExecutionCancelledError(
             "invariant-form lattice cancelled during graph-lattice HNF"
@@ -658,7 +691,10 @@ def _integer_kernel_basis(
     ):
         raise RuntimeError("bounded invariant-form HNF worker did not return a basis")
     try:
-        response = loads_strict_json(completed.stdout)
+        response = loads_strict_json(
+            completed.stdout,
+            limits=CanonicalLimits(max_input_bytes=stdout_limit),
+        )
         primitive_kernel = []
         for row in response["primitive_kernel"]:
             decoded_row = []

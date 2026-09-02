@@ -13,7 +13,6 @@ from jacobian._execution import (
     OperationExecutionTimeoutError,
     request_cancelled,
 )
-from jacobian.canonical import CanonicalLimits
 from jacobian.process import (
     BoundedProcessResult,
     ProcessResourceLimits,
@@ -26,7 +25,9 @@ _HNF_WORKER = Path(__file__).with_name("_hnf_worker.py")
 _HNF_STDERR_LIMIT = 64 * 1024
 
 
-def run_hnf_worker(payload: bytes, *, deadline: float) -> BoundedProcessResult:
+def run_hnf_worker(
+    payload: bytes, *, deadline: float, stdout_limit: int
+) -> BoundedProcessResult:
     """Run one invariant-form HNF worker inside the caller's deadline."""
 
     if request_cancelled():
@@ -44,7 +45,7 @@ def run_hnf_worker(payload: bytes, *, deadline: float) -> BoundedProcessResult:
             input_bytes=payload,
             timeout_seconds=remaining,
             environment=worker_environment(locale="C.UTF-8"),
-            stdout_limit=CanonicalLimits().max_output_bytes,
+            stdout_limit=stdout_limit,
             stderr_limit=_HNF_STDERR_LIMIT,
             resource_limits=ProcessResourceLimits(
                 cpu_seconds=max(1, ceil(_INVARIANT_FORM_WALL_SECONDS)),

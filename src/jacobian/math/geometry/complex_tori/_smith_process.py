@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import sys
-from math import ceil
+from math import ceil, factorial
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import monotonic
@@ -28,6 +28,27 @@ _SMITH_WORKER = Path(__file__).with_name("_smith_worker.py")
 _SMITH_STDERR_LIMIT = 64 * 1024
 
 
+def _smith_stdout_limit(matrix: IntegerMatrix) -> int:
+    """Bound the digest-bound Smith projection from matrix shape and height."""
+
+    rows = len(matrix.entries)
+    columns = len(matrix.entries[0]) if matrix.entries else 0
+    rank = min(rows, columns)
+    source_digits = max(
+        (len(value.lstrip("-")) for row in matrix.entries for value in row),
+        default=1,
+    )
+    # Every nonzero Smith factor divides a rank minor. Leibniz gives the safe
+    # bound rank! * B**rank for entries of magnitude below 10**source_digits.
+    factor_digits = rank * source_digits + len(str(factorial(rank))) + 1
+    scalar_characters = factor_digits + 1  # optional sign
+    matrix_bytes = 2 + max(rows - 1, 0)
+    matrix_bytes += rows * (
+        2 + max(columns - 1, 0) + columns * (scalar_characters + 2)
+    )
+    return len(b'{"normal_form":,"request_digest":""}') + matrix_bytes + 64
+
+
 def _require_active(deadline: float, phase: str) -> None:
     if request_cancelled():
         raise OperationExecutionCancelledError(f"request cancelled {phase}")
@@ -49,6 +70,7 @@ def smith_normal_form_killable(
     )
 
     _require_active(deadline, "before alternating Smith kernel")
+    stdout_limit = _smith_stdout_limit(matrix)
     payload = encode_strict_json(
         {
             "entries": [
@@ -71,7 +93,7 @@ def smith_normal_form_killable(
             input_bytes=payload,
             timeout_seconds=remaining,
             environment=worker_environment(locale="C.UTF-8"),
-            stdout_limit=CanonicalLimits().max_output_bytes,
+            stdout_limit=stdout_limit,
             stderr_limit=_SMITH_STDERR_LIMIT,
             resource_limits=ProcessResourceLimits(
                 cpu_seconds=max(1, ceil(remaining)),
@@ -95,7 +117,10 @@ def smith_normal_form_killable(
     ):
         raise RuntimeError("bounded alternating Smith worker did not return a form")
     try:
-        response = loads_strict_json(completed.stdout)
+        response = loads_strict_json(
+            completed.stdout,
+            limits=CanonicalLimits(max_input_bytes=stdout_limit),
+        )
         if response["request_digest"] != hashlib.sha256(payload).hexdigest():
             raise ValueError("worker request digest mismatch")
         raw_normal_form = response["normal_form"]

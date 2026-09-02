@@ -253,7 +253,7 @@ def test_maximal_point_carrier_fits_the_per_point_worker_reservation() -> None:
     assert encoded_bytes <= MAX_QEPCAD_POINT_JSON_BYTES
 
 
-def test_public_result_does_not_inherit_the_worker_response_limit() -> None:
+def test_worker_response_limit_covers_every_component_projection() -> None:
     points = tuple(
         sorted(
             (_large_structural_point(index) for index in range(MAX_PLANE_COMPONENTS)),
@@ -283,7 +283,7 @@ def test_public_result_does_not_inherit_the_worker_response_limit() -> None:
         sample_dispositions=(),
     )
 
-    assert len(projection.model_dump_json().encode()) > MAX_QEPCAD_WORKER_RESPONSE_BYTES
+    assert len(projection.model_dump_json().encode()) <= MAX_QEPCAD_WORKER_RESPONSE_BYTES
     result = _computed_result(request, outcome)
     assert result.outcome.status == "COMPUTED"
     assert len(result.outcome.components) == len(points)

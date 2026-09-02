@@ -7,11 +7,7 @@ import sys
 from collections.abc import Iterable
 from math import gcd, lcm
 
-from jacobian.canonical import (
-    CanonicalLimits,
-    encode_strict_json,
-    parse_canonical_integer,
-)
+from jacobian.canonical import encode_strict_json, parse_canonical_integer
 from jacobian.math.polynomials.real_algebra._plane_component_bounds import (
     MAX_PLANE_COMPONENT_PREDICTED_CELLS,
     MAX_PLANE_COMPONENT_PROJECTED_COEFFICIENT_DIGITS,
@@ -68,8 +64,8 @@ _MAX_TRANSCRIPT_BYTES = 64 * 1024 * 1024
 # The structural maximum is below 9.7 million ASCII characters: at most 81
 # four-atom source rows with 15-term, 480-digit cleared polynomials, plus 272
 # coordinate-marker tautologies with 17-term, 512-digit polynomials. Use the
-# canonical input boundary as one request-scoped formula ledger.
-_MAX_FORMULA_CHARACTERS = CanonicalLimits().max_input_bytes
+# a direct structural ceiling rather than borrowing a transport setting.
+_MAX_FORMULA_CHARACTERS = 10_000_000
 _TRUE_CELL_FRAME_PREFIX = "\nd-true-cells\n"
 _TRUE_CELL_FRAME_SUFFIX = "\nBefore Solution >"
 _CELL_HEADER = re.compile(

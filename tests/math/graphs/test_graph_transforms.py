@@ -96,27 +96,6 @@ def test_induced_subgraph_triangle() -> None:
     assert len(result.edges) == 1
 
 
-def test_contract_rejects_self_loop() -> None:
-    with pytest.raises(ValidationError):
-        _graph(1, [(0, 0)])
-
-
-def test_contract_rejects_duplicate_edges() -> None:
-    with pytest.raises(ValidationError):
-        IndexedSimpleUndirectedGraph(
-            vertex_count=3,
-            edges=((0, 1), (1, 0)),
-        )
-
-
-def test_contract_rejects_out_of_range_vertices() -> None:
-    with pytest.raises(ValidationError):
-        IndexedSimpleUndirectedGraph(
-            vertex_count=2,
-            edges=((0, 5),),
-        )
-
-
 def test_complement_of_edgeless_graph_within_output_bounds() -> None:
     """Complement of a 64-vertex edgeless graph produces 2016 edges."""
     g = _graph(64, [])

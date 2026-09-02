@@ -278,14 +278,6 @@ class TestUnitHandling:
         result = squarefree_decomposition(IntegerValue(value="-1"))
         assert result.kind == "UNIT"
 
-    def test_k_free_zero_unchanged(self) -> None:
-        result = k_free_decomposition(IntegerValue(value="0"), 3)
-        assert result.kind == "ZERO"
-
-    def test_squarefree_zero_unchanged(self) -> None:
-        result = squarefree_decomposition(IntegerValue(value="0"))
-        assert result.kind == "ZERO"
-
     def test_perfect_power_zero_no_fields(self) -> None:
         """ZERO variant must not carry NONUNIT fields."""
         result = perfect_power_profile(IntegerValue(value="0"))

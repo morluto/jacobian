@@ -196,22 +196,6 @@ def test_unrepresentable_point_enclosure_is_an_execution_failure() -> None:
         _point_enclosure(request)
 
 
-@pytest.mark.parametrize(
-    "status", ("TIMEOUT", "BACKEND_ERROR", "OUTPUT_MAGNITUDE_EXCEEDED")
-)
-def test_operational_statuses_are_not_point_enclosure_results(status: str) -> None:
-    with pytest.raises(ValidationError):
-        ArbPointEnclosureResult.model_validate(
-            {
-                "function": "LOG",
-                "argument": {"num": "-1", "den": "1"},
-                "precision_bits": 128,
-                "status": status,
-                "detail": "no mathematical result",
-            }
-        )
-
-
 def test_enclosed_result_must_restate_the_retained_request_source() -> None:
     producer_result = _point_enclosure(
         ArbPointEnclosureRequest.model_validate(

@@ -849,7 +849,6 @@ def test_result_preflights_built_foreign_exposed_face_space_before_nested_parsin
 
 def test_result_preflight_binding_defers_unparsed_structural_faults(
     square_result: PolytopeSupportResult,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A serialized source whose vertex rows are structurally malformed in
     ways the binding assembly does not model still reaches ordinary nested

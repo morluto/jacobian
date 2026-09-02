@@ -123,9 +123,24 @@ def test_symbolic_dynamics_enumeration_admission_is_typed() -> None:
             ("point",),
             "group.point_out_of_range",
         ),
+        (
+            "rational.compute.reciprocal",
+            {"value": {"num": "0", "den": "1"}},
+            ("value",),
+            "arithmetic.reciprocal_requires_nonzero",
+        ),
+        (
+            "rational.compute.quotient",
+            {
+                "left": {"num": "1", "den": "2"},
+                "right": {"num": "0", "den": "1"},
+            },
+            ("right",),
+            "arithmetic.division_requires_nonzero_divisor",
+        ),
     ),
 )
-def test_group_semantic_admission_is_owned_by_native_operations(
+def test_semantic_admission_is_owned_by_native_operations(
     operation_id: str,
     payload: dict[str, object],
     location: tuple[str, ...],
@@ -193,39 +208,6 @@ def test_modular_form_work_admission_is_typed() -> None:
             {"form": "DELTA", "truncation_order": 999_999},
             Catalog.open(),
         )
-
-
-@pytest.mark.parametrize(
-    ("operation_id", "payload", "location", "code"),
-    (
-        (
-            "rational.compute.reciprocal",
-            {"value": {"num": "0", "den": "1"}},
-            ("value",),
-            "arithmetic.reciprocal_requires_nonzero",
-        ),
-        (
-            "rational.compute.quotient",
-            {
-                "left": {"num": "1", "den": "2"},
-                "right": {"num": "0", "den": "1"},
-            },
-            ("right",),
-            "arithmetic.division_requires_nonzero_divisor",
-        ),
-    ),
-)
-def test_rational_arithmetic_admission_is_typed(
-    operation_id: str,
-    payload: dict[str, object],
-    location: tuple[str, ...],
-    code: str,
-) -> None:
-    with pytest.raises(OperationDomainValidationError) as caught:
-        invoke_operation(operation_id, payload, Catalog.open())
-
-    assert caught.value.errors()[0]["loc"] == location
-    assert caught.value.errors()[0]["type"] == code
 
 
 def test_orthogonal_recurrence_admission_is_typed() -> None:

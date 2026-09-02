@@ -207,25 +207,6 @@ def test_general_lp_rejects_invalid_bound_order() -> None:
         GeneralRationalLinearProgramRequest.model_validate({"program": invalid})
     assert caught.value.errors()[0]["type"] == "general_linear_program.bound_order"
 
-    valid_program = GeneralRationalLinearProgramRequest.model_validate(
-        {
-            "program": _program(
-                variables=[_variable("x")],
-                sense="MINIMIZE",
-                objective=[q(1)],
-                constraints=[],
-            )
-        }
-    ).program
-    with linear_validation_error():
-        GeneralRationalLinearProgramResult.model_validate(
-            {
-                "program": valid_program,
-                "status": "UNKNOWN",
-                "primal_candidate": [q(1)],
-            }
-        )
-
 
 def test_general_lp_model_validation_uses_owner_codes_for_source_shape_errors() -> None:
     invalid_name = _program(

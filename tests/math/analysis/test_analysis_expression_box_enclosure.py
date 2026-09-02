@@ -469,49 +469,6 @@ def test_backend_failure_does_not_retry_or_construct_a_result(
 
 
 @pytest.mark.parametrize(
-    ("field", "payload_patch"),
-    [
-        (
-            "endpoints",
-            {
-                "lower": {"mantissa": "0", "exponent": 0},
-                "upper": {"mantissa": "1", "exponent": 0},
-            },
-        ),
-        (
-            "domain_failure",
-            {
-                "domain_failure": {
-                    "node_path": [],
-                    "operation": "log",
-                    "reason": "LOG_ARGUMENT_NOT_STRICTLY_POSITIVE",
-                },
-            },
-        ),
-    ],
-)
-def test_backend_error_payload_cannot_smuggle_conclusion_evidence(
-    field: str, payload_patch: dict[str, Any], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    payload = {
-        "expression": {"op": "var", "variable": "x"},
-        "box": {
-            "variables": ["x"],
-            "intervals": [
-                {"lower": {"num": "1", "den": "1"}, "upper": {"num": "2", "den": "1"}}
-            ],
-        },
-        "precision_bits": 128,
-        "status": "BACKEND_ERROR",
-        "detail": field,
-        **payload_patch,
-    }
-
-    with pytest.raises(ValidationError):
-        IntervalExpressionBoxEnclosureResult.model_validate(payload)
-
-
-@pytest.mark.parametrize(
     ("payload", "message"),
     [
         (

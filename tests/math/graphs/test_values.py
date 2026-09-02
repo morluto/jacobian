@@ -57,6 +57,13 @@ def test_indexed_null_graph_is_a_canonical_value() -> None:
     )
 
 
+def test_indexed_nonempty_graph_is_a_canonical_value() -> None:
+    graph = IndexedSimpleUndirectedGraph(vertex_count=4, edges=((0, 1), (1, 2)))
+
+    assert graph.edges == ((0, 1), (1, 2))
+    assert IndexedSimpleUndirectedGraph.model_validate(graph.model_dump()) == graph
+
+
 def test_indexed_null_graph_admits_no_edge() -> None:
     """With zero vertices every edge endpoint lies outside 0..n-1."""
 
@@ -67,6 +74,18 @@ def test_indexed_null_graph_admits_no_edge() -> None:
 def test_indexed_graph_rejects_negative_vertex_counts() -> None:
     with pytest.raises(ValidationError):
         IndexedSimpleUndirectedGraph(vertex_count=-1, edges=())
+
+
+def test_indexed_graph_rejects_loops_and_out_of_range_vertices() -> None:
+    with pytest.raises(ValidationError):
+        IndexedSimpleUndirectedGraph(vertex_count=2, edges=((0, 0),))
+    with pytest.raises(ValidationError):
+        IndexedSimpleUndirectedGraph(vertex_count=2, edges=((0, 2),))
+
+
+def test_indexed_graph_rejects_duplicate_edges() -> None:
+    with pytest.raises(ValidationError):
+        IndexedSimpleUndirectedGraph(vertex_count=3, edges=((0, 1), (0, 1)))
 
 
 def test_indexed_graph_requires_canonical_edge_orientation() -> None:

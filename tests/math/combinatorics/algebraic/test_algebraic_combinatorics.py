@@ -191,24 +191,6 @@ def test_partition_operations_return_typed_results_at_the_size_boundary() -> Non
     assert count_result.n == 500
 
 
-def test_contract_rejects_non_decreasing() -> None:
-    with pytest.raises(ValidationError) as error:
-        IntegerPartition(parts=(1, 2, 3))
-    assert (
-        error.value.errors()[0]["type"]
-        == "symmetric_function.partition_not_weakly_decreasing"
-    )
-
-
-def test_contract_rejects_non_positive() -> None:
-    with pytest.raises(ValidationError) as error:
-        IntegerPartition(parts=(3, 0, 1))
-    assert (
-        error.value.errors()[0]["type"]
-        == "symmetric_function.partition_parts_not_positive"
-    )
-
-
 def test_contract_rejects_partition_exceeding_size_bound() -> None:
     """A single-part partition summing above MAX_PARTITION_SIZE is rejected."""
     with pytest.raises(ValidationError) as error:

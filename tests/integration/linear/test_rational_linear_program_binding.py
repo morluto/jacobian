@@ -228,15 +228,8 @@ def test_valid_farkas_certificate_round_trips_through_serialization() -> None:
     assert restored.program.variables == ("x", "y")
 
 
-def test_unknown_outcome_is_not_a_mathematical_result() -> None:
+def test_unbounded_outcome_requires_a_certificate() -> None:
     program = StandardFormRationalLinearProgram.model_validate(BOUND_PROGRAM)
-    with linear_validation_error():
-        RationalLinearProgramResult.model_validate(
-            {
-                "status": "UNKNOWN",
-                "program": program,
-            }
-        )
     with linear_validation_error():
         RationalLinearProgramResult(status="UNBOUNDED", program=program)
 

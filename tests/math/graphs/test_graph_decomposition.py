@@ -69,31 +69,7 @@ def _edges_as_sets(
 # ---------------------------------------------------------------------------
 
 
-class TestIndexedSimpleUndirectedGraph:
-    def test_valid_graph(self) -> None:
-        g = IndexedSimpleUndirectedGraph(vertex_count=4, edges=((0, 1), (1, 2)))
-        assert g.vertex_count == 4
-        assert g.edges == ((0, 1), (1, 2))
-
-    def test_self_loop_rejected(self) -> None:
-        with pytest.raises(ValidationError):
-            IndexedSimpleUndirectedGraph(vertex_count=2, edges=((0, 0),))
-
-    def test_vertex_out_of_range_rejected(self) -> None:
-        with pytest.raises(ValidationError):
-            IndexedSimpleUndirectedGraph(vertex_count=2, edges=((0, 2),))
-
-    def test_duplicate_undirected_edge_rejected(self) -> None:
-        # The same edge supplied in the same orientation is a duplicate.
-        with pytest.raises(ValidationError):
-            IndexedSimpleUndirectedGraph(vertex_count=3, edges=((0, 1), (0, 1)))
-
-    def test_duplicate_edge_opposite_orientation_rejected(self) -> None:
-        # The same edge supplied in the opposite orientation is still a
-        # duplicate for an undirected graph.
-        with pytest.raises(ValidationError):
-            IndexedSimpleUndirectedGraph(vertex_count=3, edges=((0, 1), (1, 0)))
-
+class TestBlockCutTreeRequest:
     def test_vertex_count_too_large(self) -> None:
         with pytest.raises(ValidationError):
             BlockCutTreeRequest(

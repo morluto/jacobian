@@ -344,29 +344,11 @@ _OVERBUDGET_DIGITS = MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS + 1
     [
         ("coefficients", ["9" * _OVERBUDGET_DIGITS, "1", "3"]),
         ("independent_set_count", "9" * _OVERBUDGET_DIGITS),
-    ],
-)
-def test_result_rejects_overbudget_derived_values(
-    field: str,
-    replacement: object,
-) -> None:
-    valid = _run_independence(
-        TreeIndependencePolynomialRequest(graph=_path(4))
-    ).model_dump(mode="json")
-    valid[field] = replacement
-
-    with pytest.raises(ValidationError):
-        TreeIndependencePolynomialResult.model_validate(valid)
-
-
-@pytest.mark.parametrize(
-    ("field", "replacement"),
-    [
         ("coefficients", ["1", "-4", "3"]),
         ("independent_set_count", "-8"),
     ],
 )
-def test_result_rejects_negative_derived_values(
+def test_result_rejects_invalid_derived_values(
     field: str,
     replacement: object,
 ) -> None:

@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import json
 import threading
-from pathlib import Path
 
 import pytest
 from mcp.shared.exceptions import MCPError
@@ -94,7 +93,7 @@ def test_mcp_runs_independent_sync_operations_concurrently() -> None:
     asyncio.run(scenario())
 
 
-def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
+def test_mcp_describes_and_invokes_operations() -> None:
     async def scenario() -> None:
         from mcp import Client
 
@@ -338,9 +337,7 @@ def test_mcp_describes_and_invokes_operations(tmp_path: Path) -> None:
 
 
 @pytest.mark.requires_backend("flint")
-def test_mcp_composes_public_finite_field_values_with_native_projections(
-    tmp_path: Path,
-) -> None:
+def test_mcp_composes_public_finite_field_values_with_native_projections() -> None:
     async def scenario() -> None:
         from jacobian.math.finite_fields import (
             Axis,

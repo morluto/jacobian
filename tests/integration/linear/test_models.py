@@ -213,7 +213,7 @@ def test_linear_program_raw_rational_bounds_precede_canonical_parsing(
         RationalLinearProgramResult.model_validate(
             {
                 "program": program,
-                "status": "UNKNOWN",
+                "status": "INFEASIBLE",
                 "farkas_candidate": [{"num": "9" * 32_769, "den": "1"}],
             }
         )

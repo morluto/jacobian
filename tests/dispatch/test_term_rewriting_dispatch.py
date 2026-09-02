@@ -24,11 +24,9 @@ def _app(symbol: int, *children: Term) -> Term:
     return Term(is_variable=False, symbol=symbol, children=tuple(children))
 
 
-def test_transport_depth_boundary_admits_the_deepest_unary_chain() -> None:
-    # f^30(x) -> x is the deepest rule strict JSON transport carries:
-    # each unary node costs one object level plus one children array
-    # level inside the request. It must parse end-to-end through math.run
-    # input parsing and replay as a complete profile.
+def test_term_depth_boundary_admits_the_deepest_unary_chain() -> None:
+    # f^30(x) -> x reaches the public 31-node structural depth bound and
+    # must parse end-to-end through math.run as a complete profile.
     def unary_chain(function_nodes: int) -> Term:
         term = _var(0)
         for _ in range(function_nodes):
@@ -113,12 +111,12 @@ def test_composed_mgu_depth_rejects_at_operation_admission() -> None:
     }
     with pytest.raises(OperationDomainValidationError) as error:
         invoke_operation("term_rewriting.unification.compute", payload, Catalog.open())
-    assert "transport-safe" in str(error.value)
+    assert "structural bound" in str(error.value)
 
 
 def test_boundary_composed_mgu_returns_a_typed_result() -> None:
     # With u^15 chains every composed binding stays exactly at the 31-node
-    # transport bound, so math.run returns the typed idempotent MGU.
+    # structural bound, so math.run returns the typed idempotent MGU.
     def unary_chain(length: int, leaf: Term) -> Term:
         term = leaf
         for _ in range(length):

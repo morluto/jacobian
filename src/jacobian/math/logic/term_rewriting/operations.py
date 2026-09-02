@@ -30,7 +30,7 @@ from jacobian.math.logic.term_rewriting.values import (
     RewriteRule,
     Substitution,
     Term,
-    _require_transport_safe_depth,
+    _require_term_depth,
 )
 
 __all__ = [
@@ -73,7 +73,7 @@ def _admit_terms(
     try:
         for term in terms:
             signature.validate_term(term)
-        _require_transport_safe_depth(*terms)
+        _require_term_depth(*terms)
     except ValueError as error:
         raise _domain_error(
             error, fallback_code="signature", location=location
@@ -95,10 +95,10 @@ def substitution_result(
     _admit_terms(signature, (term, *replacements), location=("term",))
     result = apply_substitution(term, substitution.mapping)
     try:
-        _require_transport_safe_depth(result)
+        _require_term_depth(result)
     except ValueError as error:
         raise _domain_error(
-            error, fallback_code="transport_depth", location=("substitution",)
+            error, fallback_code="term_depth", location=("substitution",)
         ) from error
     return SubstitutionResult._from_kernel(
         signature=signature,
@@ -145,7 +145,7 @@ def unification_result(
     try:
         result = _bounded_unify(left, right)
         if result is not None:
-            _require_transport_safe_depth(*result.values())
+            _require_term_depth(*result.values())
     except ValueError as error:
         raise _domain_error(
             error, fallback_code="unification_bound", location=("left", "right")
@@ -197,9 +197,7 @@ def rewrite_step_result(
             )
             applications = () if application is None else (application,)
             scope = "SELECTED_STEP"
-        _require_transport_safe_depth(
-            *(application.term for application in applications)
-        )
+        _require_term_depth(*(application.term for application in applications))
     except ValueError as error:
         code = (
             "selection_rule_index"
@@ -237,7 +235,7 @@ def normal_form_result(
     try:
         term, status, steps, next_step = normal_form(term, rules, max_steps)
         observed = (term,) if next_step is None else (term, next_step.term)
-        _require_transport_safe_depth(*observed)
+        _require_term_depth(*observed)
     except ValueError as error:
         raise _domain_error(
             error, fallback_code="normal_form_bound", location=("term", "rules")
@@ -263,7 +261,7 @@ def critical_pairs_result(
 
     try:
         _validate_critical_pair_source(signature, rules)
-        _require_transport_safe_depth(*_rule_terms(rules))
+        _require_term_depth(*_rule_terms(rules))
     except ValueError as error:
         raise _domain_error(
             error, fallback_code="critical_pair_source", location=("rules",)

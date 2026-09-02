@@ -224,8 +224,8 @@ def _require_bounded_sources(
     digit_work = _estimated_digit_work(graph, intermediate_digits)
     if digit_work > MAX_CHROMATIC_CERTIFICATE_DIGIT_WORK:
         raise PydanticCustomError(
-            "graph.chromatic_number_certificate_exact_replay_work_exceeds",
-            "chromatic-number certificate exact replay work exceeds the "
+            "graph.chromatic_number_certificate_exact_work_exceeds",
+            "chromatic-number certificate exact work exceeds the "
             f"{MAX_CHROMATIC_CERTIFICATE_DIGIT_WORK} decimal-digit-operation bound",
         )
 

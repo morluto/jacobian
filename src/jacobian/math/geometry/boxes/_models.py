@@ -66,7 +66,7 @@ class BoxUnionVolumeRequest(StrictModel):
             "Ordered, indexed boxes with a common dimension in [1,64]. Empty "
             "boxes use intervals=null and are pruned before subset expansion. "
             "The echoed source, the complete 2^nonempty_box_count-1 subset "
-            "expansion, exact rational growth, and worst-case ledger bytes "
+            "expansion, exact rational growth, and aggregate ledger components "
             "must fit the published operation budgets; at most 16 boxes may "
             "be nonempty."
         ),

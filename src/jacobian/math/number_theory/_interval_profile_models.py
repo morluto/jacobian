@@ -162,7 +162,7 @@ class SquarefreeProfileRequest(IntervalProfileRequest):
         json_schema_extra={
             "description": (
                 "Closed positive integer interval [lower_bound, upper_bound]. "
-                f"The transport-safe upper bound is at most {MAX_INTERVAL_UPPER_BOUND:,}, "
+                f"The interoperable integer upper bound is at most {MAX_INTERVAL_UPPER_BOUND:,}, "
                 f"the segmented-sieve work estimate must fit within {MAX_SIEVE_WORK:,} "
                 "steps, and the complete partition must contain at most "
                 f"{MAX_PROFILE_RESULT_ITEMS:,} materialized values. "
@@ -182,7 +182,7 @@ class IntervalProfileRowsRequest(IntervalProfileRequest):
         json_schema_extra={
             "description": (
                 "Closed positive integer interval [lower_bound, upper_bound]. "
-                f"The transport-safe upper bound is at most {MAX_INTERVAL_UPPER_BOUND:,}, "
+                f"The interoperable integer upper bound is at most {MAX_INTERVAL_UPPER_BOUND:,}, "
                 f"the width is at most {MAX_INTERVAL_WIDTH:,}, and the "
                 f"segmented-sieve work estimate must fit within {MAX_SIEVE_WORK:,} "
                 f"steps, with at most {MAX_PROFILE_RESULT_ITEMS:,} materialized rows."
@@ -198,7 +198,7 @@ class DivisorCountProfileRequest(IntervalProfileRowsRequest):
         json_schema_extra={
             "description": (
                 "Closed positive integer interval [lower_bound, upper_bound]. "
-                f"The transport-safe upper bound is at most {MAX_INTERVAL_UPPER_BOUND:,}, "
+                f"The interoperable integer upper bound is at most {MAX_INTERVAL_UPPER_BOUND:,}, "
                 f"the width is at most {MAX_INTERVAL_WIDTH:,}, and the "
                 f"segmented-sieve work estimate must fit within {MAX_SIEVE_WORK:,} "
                 f"steps, with at most {MAX_PROFILE_RESULT_ITEMS:,} materialized rows. The result "
@@ -215,7 +215,7 @@ class GreatestPrimeFactorProfileRequest(IntervalProfileRowsRequest):
         json_schema_extra={
             "description": (
                 "Closed positive integer interval [lower_bound, upper_bound]. "
-                f"The transport-safe upper bound is at most {MAX_INTERVAL_UPPER_BOUND:,}, "
+                f"The interoperable integer upper bound is at most {MAX_INTERVAL_UPPER_BOUND:,}, "
                 f"the width is at most {MAX_INTERVAL_WIDTH:,}, and the "
                 f"segmented-sieve work estimate must fit within {MAX_SIEVE_WORK:,} "
                 f"steps, with at most {MAX_PROFILE_RESULT_ITEMS:,} materialized rows. The result "
@@ -233,7 +233,7 @@ class PrimeGapProfileRequest(IntervalProfileRequest):
         json_schema_extra={
             "description": (
                 "Closed positive integer interval [lower_bound, upper_bound]. "
-                f"The transport-safe upper bound is at most {MAX_INTERVAL_UPPER_BOUND:,}, "
+                f"The interoperable integer upper bound is at most {MAX_INTERVAL_UPPER_BOUND:,}, "
                 f"the segmented-sieve and bounded successor-prime search work "
                 f"estimate must fit within {MAX_SIEVE_WORK:,} steps. The "
                 "prime-pair profile for the requested interval must contain at "

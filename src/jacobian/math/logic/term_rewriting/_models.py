@@ -278,13 +278,11 @@ class CriticalPairsRequest(StrictModel):
         description=(
             "Duplicate-free ordered rules, possibly empty. Variable labels "
             "are non-negative integers up to the interoperable JSON integer "
-            "maximum published as the term symbol maximum; their serialized "
-            "width is charged against the byte bound. Terms carry at most "
-            "31 nodes on any root-to-leaf path, the deepest chain strict "
-            "JSON transport accepts. The complete ordered nonvariable "
+            "maximum published as the term symbol maximum. Terms carry at most "
+            "31 nodes on any root-to-leaf path. The complete ordered nonvariable "
             "overlap ledger has at most 32 candidates. The materialized "
-            "replay work, the retained result, and its exact replay are "
-            "bounded by 42752 structural nodes and 4MiB. Composed reducts "
+            "unification and reduct work plus the retained result are bounded "
+            "by 42,752 structural nodes. Composed reducts "
             "and pair substitution bindings carry at most 30 nodes on any "
             "root-to-leaf path; deeper compositions reject at admission."
         ),

@@ -132,7 +132,7 @@ def test_disjoint_intersections_are_omitted() -> None:
     assert tuple(entry.box_indices for entry in result.intersections) == ((0,), (1,))
 
 
-def test_duplicate_boxes_replay_by_source_index() -> None:
+def test_duplicate_boxes_remain_distinct_by_source_index() -> None:
     box = _box((0, 2), (0, 1))
     result = compute_box_union_volume((box, box))
 
@@ -257,10 +257,10 @@ def test_returned_intersections_compose_unchanged_as_box_inputs() -> None:
         if len(entry.box_indices) == 2
     )
 
-    replay = compute_box_union_volume(pair_intersections)
+    composed = compute_box_union_volume(pair_intersections)
 
-    assert replay.source == pair_intersections
-    assert replay.union_volume.as_fraction() == 2
+    assert composed.source == pair_intersections
+    assert composed.union_volume.as_fraction() == 2
 
 
 def test_rejects_malformed_interval_and_dimension_mismatch() -> None:
@@ -307,7 +307,7 @@ def test_rejects_next_small_coordinate_result_boundary() -> None:
         compute_box_union_volume(request.boxes)
 
 
-def test_rejects_worst_case_ledger_bytes_before_expansion() -> None:
+def test_rejects_aggregate_ledger_components_before_expansion() -> None:
     endpoint = Fraction(10**255, 10**255 + 1)
     box = _box((0, endpoint))
     request = BoxUnionVolumeRequest(boxes=(box,) * 14)

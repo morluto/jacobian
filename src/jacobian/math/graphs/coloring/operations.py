@@ -37,7 +37,7 @@ def _admit_chromatic_number_certificate(
     coloring: tuple[int, ...],
     weights: tuple[CanonicalRational, ...],
 ) -> None:
-    """Admit the exact replay and retained-result envelope."""
+    """Admit exact certificate work and retained-result bounds."""
     try:
         _require_bounded_sources(
             graph,

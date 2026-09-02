@@ -783,8 +783,8 @@ def _require_nonexpanding_output(
 
     With ``iterations == 0``, the identity operator, or a one-term zeroth-order
     operator, the exact result is the source up to rational scaling and no
-    expansion runs, so admission follows the copied result (output support,
-    digit, and aggregate-byte budgets) rather than the kernel input regime.
+    expansion runs, so admission follows the copied result's support and
+    coefficient-digit bounds rather than the kernel input regime.
     """
 
     require_polynomial_budget(
@@ -802,8 +802,8 @@ def _require_expected_output(expected: RationalPolynomial | None) -> None:
     """Bound the retained comparison value, which never enters the expansion.
 
     ``expected`` is only retained in the result and compared for exact
-    equality, so admission follows the shared canonical representation plus
-    the aggregate retained-byte budget rather than the kernel's input regime.
+    equality, so admission follows its canonical term and coefficient bounds
+    rather than the kernel's input regime.
     """
 
     if expected is None:

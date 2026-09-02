@@ -74,11 +74,10 @@ class Term(StrictModel):
 
     A term is either a variable (``is_variable=True``) or a function
     application (``symbol`` applied to ``children``, which are themselves
-    terms). Variable labels share ``symbol`` and are bounded by the
-    interoperable JSON integer range, so every admitted term carries through
-    strict JSON transport; wire contracts additionally bound every
-    root-to-leaf path to ``MAX_TERM_DEPTH`` nodes, the deepest serialized
-    chain that transport accepts.
+    terms). Variable labels share ``symbol`` and use the interoperable JSON
+    integer range. Public operations additionally bound every root-to-leaf
+    path to ``MAX_TERM_DEPTH`` nodes so traversal and composed results remain
+    structurally bounded.
     """
 
     is_variable: bool = False
@@ -170,16 +169,16 @@ class CriticalPairProfile(StrictModel):
 Term.model_rebuild()
 
 
-def _require_transport_safe_depth(*terms: Term) -> None:
-    """Reject terms deeper than strict JSON transport can carry."""
+def _require_term_depth(*terms: Term) -> None:
+    """Reject terms outside the public structural depth bound."""
 
     stack = [(term, 1) for term in terms]
     while stack:
         current, depth = stack.pop()
         if depth > MAX_TERM_DEPTH:
             raise _validation_error(
-                "transport_depth",
-                "term depth exceeds the transport-safe bound; any "
+                "term_depth",
+                "term depth exceeds the structural bound; any "
                 f"root-to-leaf path carries at most {MAX_TERM_DEPTH} nodes",
             )
         stack.extend((child, depth + 1) for child in current.children)

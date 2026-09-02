@@ -284,7 +284,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "subresultant coefficient including zeros, the original-orientation "
             "Sylvester resultant, and the final fraction-field GCD relation. "
             "A pinned SymPy Brown PRS kernel stays private; Jacobian fixes "
-            "ordering, signs, bounds, and exact replay."
+            "ordering, signs, bounds, and defining identities."
         ),
         request_type=MultivariateSubresultantSequenceRequest,
         result_type=MultivariateSubresultantSequenceResult,

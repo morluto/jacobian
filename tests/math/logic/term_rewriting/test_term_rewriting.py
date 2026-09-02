@@ -363,7 +363,7 @@ class TestUnification:
         result = unify(_var(0), _app(1, _var(0)))
         assert result is None
 
-    def test_unifier_is_idempotent_and_independently_replays(self) -> None:
+    def test_unifier_is_idempotent_and_satisfies_defining_equality(self) -> None:
         left = _app(0, _var(0), _var(0))
         right = _app(0, _var(1), _app(2))
         result = unify(left, right)
@@ -787,7 +787,7 @@ class TestCriticalPairs:
             _run_critical_pairs(signature=signature, rules=(rule,))
 
     def test_root_overlap_composed_reduct_depth_is_admission_bounded(self) -> None:
-        # Two individually transport-safe rules overlap at the root: the
+        # Two individually depth-bounded rules overlap at the root: the
         # unifier splices g^14(y) into h^30(x), so the outer reduct is a
         # 45-node chain even though every source path carries at most 31
         # nodes. Admission must predict that composition from the unifier
@@ -808,12 +808,9 @@ class TestCriticalPairs:
         with pytest.raises(ValueError, match="result depth"):
             critical_pairs(signature, rules)
 
-    def test_boundary_composed_reduct_admits_and_transports(self) -> None:
+    def test_boundary_composed_reduct_admits_and_round_trips(self) -> None:
         # h^16 after g^13 composes exactly MAX_TERM_DEPTH - 1 nodes on its
-        # only path, the deepest reduct a root overlap can serialize under
-        # profile.pairs once each node's children array is counted, so this
-        # family admits, replays exactly, and encodes within strict JSON
-        # transport.
+        # only path, so this family remains within the structural result bound.
         def unary(symbol: int, leaf: Term, length: int) -> Term:
             term = leaf
             for _ in range(length):
@@ -942,7 +939,7 @@ class TestCriticalPairs:
         assert critical_pairs(signature, wide_bush(widest)) == widest_result.profile
 
     @pytest.mark.parametrize("depth", [1, 2, 3, 4, 5])
-    def test_chained_binding_family_admits_and_replays_within_envelope(
+    def test_chained_binding_family_admits_within_materialization_bound(
         self, depth: int
     ) -> None:
         signature, outer_rule, inner_rule = _chained_overlap_witness(depth)
@@ -1064,7 +1061,7 @@ class TestCriticalPairs:
         # the pair work afterwards exceeds what remains and the family must
         # reject typedly. A cache left at the stale 17-node size predicts
         # only 6 * 273 there, admits the system, and then materializes the
-        # uncharged expansions during replay.
+        # uncharged expansions during result materialization.
         signature = RankedSignature(arities=(8, 16))
         inner_rule = RewriteRule(
             lhs=_app(
@@ -1133,7 +1130,7 @@ class TestCriticalPairs:
         self,
     ) -> None:
         # Three rules whose six root overlaps all unify carry near-envelope
-        # right sides; replaying them materializes renamed rules, splices,
+        # right sides; producing them materializes renamed rules, splices,
         # and both right sides per pair, so the shared envelope must reject
         # once those copy charges accumulate even though every reduct fits
         # alone.
@@ -1271,13 +1268,12 @@ class TestCriticalPairs:
 
 
 class TestDeepTermTraversal:
-    def test_deep_rule_source_returns_a_profile_not_a_recursion_error(self) -> None:
+    def test_deep_native_rule_returns_a_profile_not_a_recursion_error(self) -> None:
         # A schema-valid 1200-deep unary right side stays far below the node
         # envelope and its single rule excludes its tautological root
         # overlap, so kernel traversal must stay iterative and return the
-        # empty profile instead of raising RecursionError. The wire contract
-        # separately rejects the same source with a typed depth error,
-        # because strict JSON transport cannot carry a chain that deep.
+        # empty profile instead of raising RecursionError. The public request
+        # separately rejects the same source at its structural depth bound.
         def deep_rule() -> RewriteRule:
             rhs = _var(0)
             for _ in range(1200):
@@ -1289,13 +1285,12 @@ class TestDeepTermTraversal:
         profile = critical_pairs(RankedSignature(arities=(1,)), (rule,))
         assert profile.candidates == ()
         assert profile.pairs == ()
-        with _validation_error("term_rewriting.transport_depth"):
+        with _validation_error("term_rewriting.term_depth"):
             _run_critical_pairs(signature=_signature(1), rules=(rule,))
 
-    def test_transport_depth_boundary_rejects_one_deeper_node_typed(self) -> None:
+    def test_term_depth_boundary_rejects_one_deeper_node_typed(self) -> None:
         # One more unary node exceeds MAX_TERM_DEPTH; direct model
-        # construction fails with the typed depth error instead of relying
-        # on the shared JSON transport limit to reject the payload later.
+        # construction fails with the typed structural depth error.
         def unary_chain(function_nodes: int) -> Term:
             term = _var(0)
             for _ in range(function_nodes):
@@ -1343,7 +1338,7 @@ class TestDeepTermTraversal:
                 substitution_payload(MAX_VARIABLE_LABEL + 1)
             )
 
-    def test_composed_substitution_depth_is_transport_bounded(self) -> None:
+    def test_composed_substitution_depth_is_structurally_bounded(self) -> None:
         # Each side of a substitution passes the 31-node checks separately,
         # but composing f^30(x) with x -> f^30(c) yields a 61-node chain, so
         # admission must preflight the composed result and reject typedly
@@ -1355,7 +1350,7 @@ class TestDeepTermTraversal:
             return term
 
         signature = _signature(1, 0)
-        with _validation_error("term_rewriting.transport_depth"):
+        with _validation_error("term_rewriting.term_depth"):
             compute_substitution(
                 SubstitutionRequest(
                     signature=signature,
@@ -1374,14 +1369,14 @@ class TestDeepTermTraversal:
             result
         )
 
-    def test_spliced_rewrite_step_depth_is_transport_bounded(self) -> None:
+    def test_spliced_rewrite_step_depth_is_structurally_bounded(self) -> None:
         # f(g^15(x)) with rule g(y) -> f^30(y): every input path stays within
         # 31 nodes, but the rewritten term splices the expanded right side
         # under the f-prefix and reaches 46 nodes, so both enumeration modes
         # must reject typedly at admission.
         rules = (RewriteRule(lhs=_app(1, _var(3)), rhs=_chain_unary(0, 30, _var(3))),)
         term = _app(0, _chain_unary(1, 15, _var(0)))
-        with _validation_error("term_rewriting.transport_depth"):
+        with _validation_error("term_rewriting.term_depth"):
             compute_rewrite_step(
                 RewriteStepRequest(
                     signature=_signature(1, 1),
@@ -1390,15 +1385,14 @@ class TestDeepTermTraversal:
                     selection=_selection((0,), 0),
                 )
             )
-        with _validation_error("term_rewriting.transport_depth"):
+        with _validation_error("term_rewriting.term_depth"):
             compute_rewrite_step(
                 RewriteStepRequest(signature=_signature(1, 1), term=term, rules=rules)
             )
 
-    def test_boundary_spliced_rewrite_step_admits_and_transports(self) -> None:
+    def test_boundary_spliced_rewrite_step_admits_and_round_trips(self) -> None:
         # The same shape with f^14 instead of f^30 composes a 30-node term,
-        # one node inside the transport bound, so the step admits and its
-        # exact application replays.
+        # one node inside the structural bound, so the step admits.
         rules = (RewriteRule(lhs=_app(1, _var(3)), rhs=_chain_unary(0, 14, _var(3))),)
         result = compute_rewrite_step(
             RewriteStepRequest(
@@ -1414,12 +1408,12 @@ class TestDeepTermTraversal:
             result
         )
 
-    def test_normal_form_run_depth_is_transport_bounded(self) -> None:
+    def test_normal_form_run_depth_is_structurally_bounded(self) -> None:
         # One step of g(y) -> f^30(y) under f(g^15(x)) pushes the run's term
         # to 46 nodes, so admission must simulate the declared strategy and
         # reject typedly before the operation runs.
         rules = (RewriteRule(lhs=_app(1, _var(3)), rhs=_chain_unary(0, 30, _var(3))),)
-        with _validation_error("term_rewriting.transport_depth"):
+        with _validation_error("term_rewriting.term_depth"):
             compute_normal_form(
                 NormalFormRequest(
                     signature=_signature(1, 1),
@@ -1430,7 +1424,7 @@ class TestDeepTermTraversal:
                 )
             )
 
-    def test_normal_form_step_limit_within_depth_admits_and_transports(self) -> None:
+    def test_normal_form_step_limit_within_depth_admits_and_round_trips(self) -> None:
         # A self-looping rule keeps every intermediate term at the source
         # depth, so the bounded prefix admits with its open next step even
         # though the strategy exhausts its step budget.
@@ -1452,12 +1446,11 @@ class TestDeepTermTraversal:
             result
         )
 
-    def test_composed_mgu_binding_depth_is_transport_bounded(self) -> None:
+    def test_composed_mgu_binding_depth_is_structurally_bounded(self) -> None:
         # Unifying f(x, y) with f(u^16(y), u^16(c)) keeps every input path
         # inside 31 nodes, but the idempotent MGU composes x -> u^32(c),
-        # whose 33-node path strict JSON transport cannot carry, so
-        # admission must reject the request before execution instead of
-        # letting result canonicalization fail afterwards.
+        # whose 33-node path exceeds the structural result bound, so
+        # admission must reject the request before execution.
         left = _app(0, _var(0), _var(1))
         right = _app(0, _chain_unary(1, 16, _var(1)), _chain_unary(1, 16, _app(2)))
         assert _term_depth(left) <= MAX_TERM_DEPTH
@@ -1466,7 +1459,7 @@ class TestDeepTermTraversal:
         assert mgu is not None
         assert _term_depth(mgu[1]) == MAX_TERM_DEPTH - 14
         assert _term_depth(mgu[0]) == 2 * MAX_TERM_DEPTH - 29
-        with _validation_error("term_rewriting.transport_depth"):
+        with _validation_error("term_rewriting.term_depth"):
             compute_unification(
                 UnificationRequest(
                     signature=_signature(2, 1, 0), left=left, right=right
@@ -1478,14 +1471,14 @@ class TestDeepTermTraversal:
             "right": right.model_dump(mode="json"),
         }
         encoded = encode_strict_json(payload)
-        with _validation_error("term_rewriting.transport_depth"):
+        with _validation_error("term_rewriting.term_depth"):
             compute_unification(UnificationRequest.model_validate_json(encoded))
 
-    def test_boundary_composed_mgu_admits_and_transports(self) -> None:
+    def test_boundary_composed_mgu_admits_and_round_trips(self) -> None:
         # With u^15 chains every composed binding stays exactly within the
         # envelope: x binds to u^30(c), whose 31-node path equals
         # MAX_TERM_DEPTH, so the request computes a typed idempotent MGU
-        # that replays and round-trips.
+        # that satisfies its defining equality and round-trips.
         left = _app(0, _var(0), _var(1))
         right = _app(0, _chain_unary(1, 15, _var(1)), _chain_unary(1, 15, _app(2)))
         result = compute_unification(

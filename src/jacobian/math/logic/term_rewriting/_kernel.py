@@ -406,14 +406,9 @@ def _admit_critical_pair_result_envelope(rules: tuple[RewriteRule, ...]) -> int:
     expansions execution will materialize as reducts. Failed unifications
     keep their committed charges against the shared allowance.
 
-    Transport adds one further result obligation: reducts serialize under
-    ``profile.pairs`` four strict-JSON wrappers deep and pair substitution
-    bindings five, and every serialized node costs an object level plus a
-    ``children`` array level including the leaf's empty array, so any
-    transported reduct or binding carries at most
-    ``_RESULT_TERM_MAX_DEPTH`` nodes on a root-to-leaf path. Both depths
-    are predicted from the unifier without materializing the reducts and
-    reject typedly.
+    Retained reducts and substitution bindings must also stay within
+    ``_RESULT_TERM_MAX_DEPTH`` on every root-to-leaf path. Both depths are
+    predicted from the unifier without materializing the reducts.
     Returns the total charged nodes and raises when the envelope is exceeded.
     """
     remaining = (
@@ -497,7 +492,7 @@ def _admit_critical_pair_result_envelope(rules: tuple[RewriteRule, ...]) -> int:
 def _validate_critical_pair_source(
     signature: RankedSignature, rules: tuple[RewriteRule, ...]
 ) -> None:
-    """Admit the complete overlap/replay envelope before enumerating it."""
+    """Admit complete overlap and materialization work before enumerating it."""
     if len(rules) > MAX_CRITICAL_PAIR_RULES:
         raise ValueError("critical-pair rule count exceeds the supported bound")
     for rule in rules:

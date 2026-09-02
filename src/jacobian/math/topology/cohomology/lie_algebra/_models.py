@@ -25,7 +25,7 @@ Derived from the execution envelope rather than hard-coded: every CE
 differential d_p has shape C(n, p - 1) x C(n, p), so the widest chain group
 C(n, floor(n / 2)) must fit one prime-field matrix row/column axis. The
 complete dense complex then carries sum_p C(n, p - 1) * C(n, p) field entries
-(167,960 at the admitted maximum), inside the kernel and transport budgets.
+(167,960 at the admitted maximum), inside the kernel's materialization bound.
 """
 
 MAX_LIE_ALGEBRA_PRIME = 2_147_483_647

@@ -8,11 +8,9 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 
-# Structural safety limit: the matrix dimension must be representable as a
-# single JSON array and the linear solve must be feasible.  The actual
-# work-based admission (matrix-digit height, transient-system growth, and
-# transport-byte budget) lives in ``operations.py`` and is the authority for
-# whether a given profile is admissible.
+# Structural safety limit for matrix materialization. The sharper work-based
+# admission for matrix-digit height and transient-system growth lives in
+# ``operations.py``.
 MAX_STATES = 4096
 
 

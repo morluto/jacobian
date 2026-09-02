@@ -18,25 +18,33 @@ from jacobian.math.combinatorics.finite_structures.sets._models import (
     FiniteSetCoverageResult,
 )
 
+MAX_FINITE_SET_TOTAL_DIGITS = 10_000_000
 
-def _integers(value: FiniteIntegerSet) -> set[int]:
+
+def _parse_integers(
+    elements: tuple[CanonicalInteger, ...], *, location: tuple[str, ...]
+) -> tuple[int, ...]:
     if any(
         len(element.lstrip("-")) > CanonicalLimits().max_integer_digits
-        for element in value.elements
+        for element in elements
     ):
         raise OperationDomainValidationError(
-            location=("value",),
+            location=location,
             code="finite_set.integer_digit_bound",
             message="finite-set elements exceed the canonical integer digit bound",
         )
-    total_digits = sum(len(element.lstrip("-")) for element in value.elements)
+    total_digits = sum(len(element.lstrip("-")) for element in elements)
     if total_digits > MAX_FINITE_SET_TOTAL_DIGITS:
         raise OperationDomainValidationError(
-            location=("value",),
+            location=location,
             code="finite_set.aggregate_digit_bound",
             message="finite-set aggregate digits exceed the admitted parsing budget",
         )
-    return {parse_canonical_integer(element) for element in value.elements}
+    return tuple(parse_canonical_integer(element) for element in elements)
+
+
+def _integers(value: FiniteIntegerSet) -> set[int]:
+    return set(_parse_integers(value.elements, location=("value",)))
 
 
 def _canonical(values: set[int]) -> tuple[CanonicalInteger, ...]:
@@ -76,7 +84,7 @@ def exact_cover(
             ),
         )
     scope_values = _integers(scope)
-    counts = Counter(parse_canonical_integer(element) for element in values)
+    counts = Counter(_parse_integers(values, location=("values",)))
     missing = scope_values - counts.keys()
     duplicates = {value for value, count in counts.items() if count > 1}
     outside = counts.keys() - scope_values
@@ -172,4 +180,3 @@ __all__ = [
     "set_union",
     "union_cardinality",
 ]
-MAX_FINITE_SET_TOTAL_DIGITS = 10_000_000

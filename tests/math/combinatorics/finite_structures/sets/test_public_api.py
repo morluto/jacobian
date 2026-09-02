@@ -1,5 +1,9 @@
 """Public API and publication contract for finite integer sets."""
 
+import pytest
+
+from jacobian.canonical import CanonicalLimits
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures import sets
 from jacobian.math.combinatorics.finite_structures.sets._tools import TOOLS
 
@@ -56,3 +60,13 @@ def test_native_exact_cover_retains_complete_diagnostics() -> None:
     assert result.missing == ("2",)
     assert result.duplicates == ("1",)
     assert result.outside == ("3",)
+
+
+def test_native_exact_cover_bounds_values_before_integer_parsing() -> None:
+    oversized = "9" * (CanonicalLimits().max_integer_digits + 1)
+
+    with pytest.raises(OperationDomainValidationError) as caught:
+        sets.exact_cover(sets.FiniteIntegerSet(elements=()), (oversized, oversized))
+
+    assert caught.value.errors()[0]["loc"] == ("values",)
+    assert caught.value.errors()[0]["type"] == "finite_set.integer_digit_bound"

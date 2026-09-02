@@ -356,34 +356,6 @@ def test_seventeen_one_variable_generators_use_derived_admission() -> None:
     assert result.fixed_dimension == 0
 
 
-def test_dense_generator_payload_is_bounded_before_marshalling() -> None:
-    variable_count = 100
-    prime = 2**521 - 1
-    residue = prime - 1
-    matrices = []
-    for generator_index in range(6):
-        entries = tuple(
-            tuple(
-                residue - generator_index if row == 0 and column == 0 else residue
-                for column in range(variable_count)
-            )
-            for row in range(variable_count)
-        )
-        matrices.append(
-            PrimeFieldMatrix(prime=prime, entries=entries, columns=variable_count)
-        )
-    action = PrimeFieldLinearAction(
-        variable_axis=PrimeFieldActionAxis(
-            name="polynomial_variables",
-            labels=tuple(f"x{index}" for index in range(variable_count)),
-        ),
-        generator_matrices=tuple(matrices),
-    )
-
-    with pytest.raises(OperationDomainValidationError, match="worker input channel"):
-        homogeneous_fixed_subspace(action, 0)
-
-
 def test_huge_one_variable_degree_is_rejected_by_substitution_bound() -> None:
     action = PrimeFieldLinearAction(
         variable_axis=PrimeFieldActionAxis(name="polynomial_variables", labels=("x",)),

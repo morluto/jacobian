@@ -226,13 +226,11 @@ semantics.
 
 Serialization does not preserve trusted provenance. Every value reconstructed
 from a public payload is caller-authored, even when its bytes are identical to
-the output of a recognizer. A theorem-dependent consumer must therefore rely on
-one of three enforceable boundaries: ordinary construction of the canonical
-subtype validates the theorem property, the value carries source-bound evidence
-checked by an explicit bounded verifier, or the consumer performs recognition
-itself. A subtype name, `validated` boolean, digest, or claim that a producer ran
-earlier is not evidence. Test native composition and serialized public
-composition separately when they cross different trust boundaries.
+an earlier output. A consumer that depends on a mathematical property must
+establish that property as part of its own admitted operation contract. A
+subtype name, `validated` boolean, digest, or claim that a producer ran earlier
+is not evidence. Test native composition and serialized public composition
+separately when they cross different trust boundaries.
 
 Likewise, an exact-success result must make failure of its defining invariant
 unrepresentable. When result branches change the presence or mathematical
@@ -250,9 +248,9 @@ the operation's advertised postcondition.
 Ordinary result construction must not replay the computation that produced it.
 The trusted kernel establishes the defining invariant before calling its
 private construction path, while owning tests replay the invariant on
-known-answer, adversarial, and property-based fixtures. Independently supplied
-claims need an explicit bounded verifier only when a public consumer accepts
-those claims as theorem-bearing input.
+known-answer, adversarial, and property-based fixtures. Caller-supplied claims
+are handled by the specific operation that consumes or checks them; they do not
+require a general result-replay layer.
 
 Validation and verification are separate responsibilities:
 
@@ -263,7 +261,7 @@ Validation and verification are separate responsibilities:
 | Result structural validation | Axis alignment, references, coverage, and discriminated-state consistency |
 | Trusted result construction | Owner-local `_from_kernel` construction after the kernel established the skipped invariants |
 | Ordinary result deserialization | Canonical structural parsing only; it does not authenticate mathematical truth |
-| Explicit verifier or tests | Declared bounded replay when a theorem-bearing input contract requires it |
+| Claim-checking operation or tests | Owner-specific mathematical work under that operation's admission |
 
 No ordinary boundary may factor, isolate roots, enumerate candidates, invoke a
 solver or backend, recompute a defining relation, or trigger a nested public
@@ -314,19 +312,15 @@ call a backend, enumerate a search space, invoke a solver, or recompute the
 operation's defining relation.
 
 Do not use ordinary result construction to validate independently supplied
-results. Do not add a companion verifier by default, either. A compute-only
-operation normally needs defining-invariant tests, not production replay. When
-a public request or consumer accepts caller-authored result data as a
-theorem-bearing claim, use an explicit verifier or perform bounded recognition
-inside that consumer. Any verifier needs a declared replay-work ceiling and a
-soundness statement for the claim being checked. Transport limits are not a
-substitute for that replay bound, and a cheap identity must not authenticate a
-stronger claim such as canonicity, irreducibility, or non-existence.
-When that verifier is a public ``-> bool`` predicate, structurally valid but
-out-of-envelope or admission-rejected claims return ``False`` rather than
-leaking a validation exception. This fail-closed result is about the supplied
-claim; unexpected owner or backend faults remain operational failures and must
-not be converted into a mathematical negative.
+results, and do not add a companion checker by default. A compute-only
+operation normally needs defining-invariant tests, not production replay. If
+checking a caller-authored claim is independently useful, expose a semantically
+specific operation whose accepted domain, work bound, and postcondition state
+exactly what it checks. Transport limits are not a substitute for mathematical
+admission, and a cheap identity must not authenticate a stronger claim such as
+canonicity, irreducibility, or non-existence. Unexpected owner or backend faults
+remain operational failures and must not be converted into a mathematical
+negative.
 
 Public numeric values are canonical exact rationals. IEEE doubles may exist
 only inside a private kernel; any double crossing the boundary is carried as
@@ -381,7 +375,7 @@ Apply these adapter and request-boundary rules:
   Encode those mathematical constraints in the concrete request model so an
   admitted request does not discover the backend domain through an exception.
   Keep configured worker and host capacity limits in the adapter or deployment;
-  exhaustion there is typed operational non-completion, not invalid input.
+  exhaustion there is an operational failure, not invalid input.
 - Every exact decomposition, certificate, or authoritative derived value must
   state its defining reconstruction or preservation equation and test it. Do
   not infer a mathematical property from the shape of lossy backend output or
@@ -460,16 +454,16 @@ in the producer/consumer closure field of the review artifact:
 - What mathematical context remains present for empty, zero, identity, or
   otherwise degenerate values?
 - Is each decision or certificate bound to the source value it concerns?
-- If independently supplied result data is accepted, can its explicit verifier
-  replay the defining relation within a declared work bound?
+- If caller-supplied data is interpreted as a mathematical claim, which
+  consumer operation establishes the property it needs?
 
 Decision and profile results are relations, not detached booleans or numbers.
-Retain the source values needed to state the relation. When the public contract
-accepts an authored conclusion or certificate, replay its defining equation in
-an explicit bounded verifier. A compact result may omit a large derivation
-ledger when bounded replay from the retained source is deterministic, but it
-must not accept an authored conclusion merely because its scalar fields have
-the right shape.
+Retain the source values needed to state the relation. When a public contract
+accepts an authored conclusion or certificate, its consumer must establish the
+specific property it relies on. A compact result may omit a large derivation
+ledger when the retained source and claimed postcondition remain sufficient for
+that consumer, but scalar shape alone must not authenticate a mathematical
+conclusion.
 
 Backend integration follows the reusable
 [mathematical backend contract](mathematical-backends.md).
@@ -543,11 +537,10 @@ safety through cardinality, component digits, depth, or another intrinsic
 representation quantity.
 
 A concrete channel or host may reject work that exceeds its configured
-capacity before allocating, launching, or delivering it. That guard protects
-the running service; it does not redefine the operation's mathematical domain.
-Surface it as typed resource exhaustion so MCP returns an agent-visible tool
-error. Do not project it as `INVALID_PARAMS`, and do not require every operation
-to predict every deployment's available memory during mathematical admission.
+capacity. That failure does not redefine the operation's mathematical domain.
+MCP surfaces it through the ordinary tool-error path, not as `INVALID_PARAMS`;
+operations do not need a shared capacity exception or admission-time prediction
+of every deployment's available memory.
 
 For every non-trivially priced operation, owner tests must instrument the
 priced kernel primitives on a representative near-envelope request and assert
@@ -577,7 +570,7 @@ operation-owned range whose upper bound remains compatible with the admitted
 work, memory, and cleanup envelope.
 
 One accepted request has one owner-local execution envelope. Parsing,
-normalization, presolve, backend calls, exact replay, result validation,
+normalization, presolve, backend calls, result construction,
 serialization, and cancellation cleanup consume its shared deadline and
 charged work quantities; no phase receives a fresh hidden budget. This is an
 owner-level contract, not a generic production ledger. A caller or MCP read
@@ -589,9 +582,8 @@ When admission derives work, intermediate, memory, or exact-output reservations,
 compute them once after canonicalization and pass or otherwise reuse them in an
 owner-local plan. Do not make a request model, operation wrapper, and trusted
 result constructor independently repeat the same admission probe. Operations
-without reusable derived facts need no plan object. A separately supplied
-result is a different trust boundary and may incur an explicit bounded verifier
-replay.
+without reusable derived facts need no plan object. Caller-supplied claims are
+handled by the admission and kernel of the operation that consumes them.
 
 For a killable subprocess or interactive backend, that envelope begins before
 input spooling, launch, resource setup, and reader/writer startup. It also

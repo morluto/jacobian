@@ -149,20 +149,19 @@ unchanged through the consumer's typed payload. The test should fail if a caller
 would have to reconstruct mathematical context or translate between parallel
 representations.
 
-When a consumer relies on a theorem-bearing subtype, add an adversarial type-
-boundary fixture: construct a value that is structurally valid but violates the
-required theorem property, and prove that the consumer rejects it or returns
-the declared typed non-applicability outcome. Pair that fixture with a positive
-recognizer → serialization → consumer test using the canonical validated
-subtype unchanged. Shape validation and a separate recognizer test do not by
-themselves establish safe composition.
+When a consumer relies on a stronger mathematical property than its input's
+structural type establishes, add an adversarial boundary fixture: construct a
+structurally valid value that violates the required property, and prove that
+the consumer rejects it or returns the declared typed non-applicability outcome.
+Pair that fixture with a positive producer → serialization → consumer test using
+the canonical value unchanged. Shape validation and a separate producer test do
+not by themselves establish safe composition.
 
 Also submit a forged serialized subtype directly to the public consumer without
-calling its recognizer first. The test must prove that public reconstruction
-revalidates the theorem property, checks source-bound evidence through the
-declared bounded verifier, or routes through consumer-owned recognition. A
-nominal subtype tag, `validated` field, or producer-shaped payload must not
-cross the stateless boundary as proof.
+calling its producer first. The test must prove that the consumer establishes
+the mathematical property it relies on. A nominal subtype tag, `validated`
+field, or producer-shaped payload must not cross the stateless boundary as
+proof.
 
 When an operation is added or changed because of a source-backed gap, preserve
 at least one minimally reduced motivating request as a behavioral regression.
@@ -173,7 +172,7 @@ Include the degenerate producer case most likely to erase ambient information,
 such as an empty basis, zero-row matrix, empty trace, or zero count. For
 source-bound decisions whose public contract accepts independently supplied
 conclusions or certificates, mutate the source and conclusion independently
-and require the bounded result-verification path to reject both forgeries. For
+and require the consuming operation to reject both forgeries. For
 ordinary computed results, test the defining invariant of the returned value;
 do not introduce a replay path solely for that test.
 
@@ -216,7 +215,7 @@ structurally valid payload rejected by native mathematical admission raises
 `OperationDomainValidationError`; where practical, assert that
 native and dispatch calls preserve the same structured owner error code. MCP
 projects both validation classes as `INVALID_PARAMS`. Timeout, cancellation,
-configured capacity exhaustion, and unexpected backend failures remain
+host or worker failure, and unexpected backend failures remain
 operational errors and project as agent-visible tool failures. Test that these
 paths establish no mathematical result and do not become invalid-parameter
 responses. Do not update a semantic admission test to expect request-model

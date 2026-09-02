@@ -102,11 +102,11 @@ instantiate.
   when its framing, version, bounds, source binding, and failure semantics are
   explicit; it must not become an accidental public result format.
 
-Ordinary execution does not replay its own computation. Add a named bounded
-verifier only when a public operation or consumer accepts independently
-supplied theorem-bearing data and verification is itself a required trust
-boundary. Do not create a companion ``verify_*`` function merely because a
-compute function exists; defining-invariant replay normally belongs in tests.
+Ordinary execution does not replay its own computation. Defining-invariant
+checks normally belong in the owning tests. When checking caller-supplied data
+is itself useful mathematics, model that check as a normal domain operation
+with a specific postcondition and admission rule—not as a companion lifecycle
+or generic verification service for computed results.
 
 The domain function may compose a maintained backend such as SymPy, FLINT,
 NetworkX, or Z3 where that algorithm is relevant. Those backends remain private
@@ -155,22 +155,21 @@ Rejections retain the phase that owns them:
 | JSON canonicalization or structural Pydantic parsing | `OperationRequestValidationError` | `INVALID_PARAMS` |
 | Native mathematical admission | `OperationDomainValidationError` | `INVALID_PARAMS` |
 | Timeout or cancellation | Typed execution exception | Tool error (`is_error=true`) |
-| Configured capacity exhaustion | Typed resource-exhaustion exception | Tool error (`is_error=true`) |
-| Unexpected backend or execution failure | Operational exception | Tool error (`is_error=true`) |
+| Worker, host, transport, or backend failure | Operational exception | Tool error (`is_error=true`) |
 
 Dispatch does not turn native admission into structural request validation.
 MCP deliberately projects both validation classes through
 `INVALID_PARAMS` because both mean that the selected operation cannot accept
 the supplied payload. Capacity is different from validity: an admitted request
-may exceed the resources of this worker, host, or delivery boundary. MCP returns
-that non-completion as an agent-visible tool error so the caller can change the
-request, representation, backend, or deployment. Timeout, cancellation,
+may still fail on a particular worker, host, or delivery boundary. MCP returns
+that non-completion as an agent-visible tool error. Timeout, cancellation,
 resource exhaustion, and unexpected execution failure establish no
-mathematical conclusion.
+mathematical conclusion; Jacobian does not need a universal capacity exception
+hierarchy to state that rule.
 
 Jacobian is a typed, bounded tool layer over maintained mathematical libraries.
-The runtime ownership rule above keeps replay out of ordinary execution and
-deserialization; it remains an explicit trust-boundary operation.
+The runtime ownership rule above keeps repeated mathematical work out of
+ordinary execution and deserialization.
 
 Domain values live beside the functions that own their semantics under
 `jacobian.math.<domain>`. HNF, LLL, and Smith-related direct computations call

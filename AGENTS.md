@@ -94,10 +94,10 @@ admission means per-call mathematical and resource bounds. Result construction
 means conversion to Jacobian's canonical typed result; defining-invariant
 evidence belongs in tests. Never replay computed mathematical work during
 request validation, result construction, deserialization, transport projection,
-or worker-output decoding. An explicit bounded verifier is permitted only when
-a public operation or consumer intentionally accepts an independently supplied
-theorem-bearing claim. Transport projection is the final MCP/JSON delivery
-step.
+or worker-output decoding. A public operation that checks a caller-supplied
+mathematical claim is an ordinary domain operation with its own admitted work;
+it does not create a generic result-verification layer. Transport projection is
+the final MCP/JSON delivery step.
 
 - Raw preflight may enforce cheap representation limits before canonicalization.
   After canonicalization, semantic admission is computed once per invocation
@@ -218,11 +218,9 @@ partitioning must not introduce kernel-owned durable state.
   output cardinality or representation growth. Actual worker, host, and final
   transport capacity belongs to the concrete adapter or deployment and may
   fail operationally; the canonical codec's default is not a mathematical or
-  MCP response-byte limit. An admitted request returns either
-  its typed mathematical result or a bounded typed operational non-completion
-  such as timeout, cancellation, or resource exhaustion; raw backend,
-  transport, and host exceptions must not escape. Operational non-completion
-  never establishes a mathematical conclusion. Follow the
+  MCP response-byte limit. MCP projects execution failures as tool errors;
+  native callers receive the owning operational exception. Operational
+  non-completion never establishes a mathematical conclusion. Follow the
   [operation library](docs/reference/domain-operation-library.md) when changing
   an operation contract or implementation.
 - Do not add aggregate response-byte caps or post-execution truncation without

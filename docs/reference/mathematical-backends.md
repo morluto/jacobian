@@ -31,9 +31,9 @@ Automatic generator inference, ambient contexts, and implicit coercion are not
 public semantics. A result converter retains every unit, multiplicity, basis,
 axis, generator, quotient map, or witness needed by the declared result and
 may reject malformed backend representation. Defining-invariant evidence
-belongs in the owning tests or in an explicit bounded verifier when the public
-contract accepts independently supplied result data; it is not a universal
-converter obligation.
+belongs in the owning tests. If checking caller-supplied mathematical data is a
+public capability, its domain operation owns that check; it is not a universal
+converter obligation or backend replay stage.
 
 ## In-process adapters
 

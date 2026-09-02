@@ -6,7 +6,6 @@ import json
 import math
 import sys
 import time
-from collections.abc import Callable
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -21,8 +20,6 @@ _FIXED_SUBSPACE_WORKER = Path(__file__).with_name("_fixed_subspace_worker.py")
 _FIXED_SUBSPACE_STDERR_BYTES = 64 * 1024
 _FIXED_SUBSPACE_ADDRESS_SPACE_BYTES = 2 * 1024 * 1024 * 1024
 _FIXED_SUBSPACE_FILE_SIZE_BYTES = 1024 * 1024
-MAX_FIXED_SUBSPACE_GENERATOR_INPUT_BYTES = 8 * 1024 * 1024
-"""Maximum compact-JSON input allocated for one generator-rank worker call."""
 
 
 def _require_active(deadline: float, stage: str) -> None:
@@ -99,33 +96,6 @@ def _matrix_worker_input(matrix: PrimeFieldMatrix, *, operation: str) -> bytes:
         },
         separators=(",", ":"),
     ).encode("utf-8")
-
-
-def fixed_subspace_generator_input_bytes(
-    generator_matrices: tuple[PrimeFieldMatrix, ...],
-    *,
-    checkpoint: Callable[[str], None],
-) -> int:
-    """Measure compact worker input without allocating the encoded document."""
-
-    first = generator_matrices[0]
-    size = (
-        len('{"operation":"generator_ranks","prime":')
-        + len(str(first.prime))
-        + len(',"columns":')
-        + len(str(first.columns))
-        + len(',"matrices":[')
-        + 2
-    )
-    for matrix_index, matrix in enumerate(generator_matrices):
-        if matrix_index:
-            size += 1
-        size += 2 + max(len(matrix.entries) - 1, 0)
-        for row in matrix.entries:
-            size += 2 + max(len(row) - 1, 0)
-            size += sum(len(str(entry)) for entry in row)
-        checkpoint("during generator payload admission")
-    return size
 
 
 def run_fixed_subspace_linear_algebra(
@@ -231,8 +201,6 @@ def _generator_ranks_stdout_limit(generator_count: int, variable_count: int) -> 
 
 
 __all__ = [
-    "MAX_FIXED_SUBSPACE_GENERATOR_INPUT_BYTES",
-    "fixed_subspace_generator_input_bytes",
     "run_fixed_subspace_generator_validation",
     "run_fixed_subspace_linear_algebra",
 ]

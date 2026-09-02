@@ -21,7 +21,6 @@ from jacobian.math.polynomials.maps._models import (
     MAX_GENERIC_DEGREE_BEZOUT_BOUND,
     MAX_GENERIC_DEGREE_COEFFICIENT_DIGITS,
     MAX_GENERIC_DEGREE_COMPONENT_TERMS,
-    MAX_GENERIC_DEGREE_ENCODED_MAP_BYTES,
     MAX_GENERIC_DEGREE_SOURCE_VARIABLES,
     MAX_GENERIC_DEGREE_TARGET_VARIABLES,
     MAX_GENERIC_DEGREE_TOTAL_DEGREE,
@@ -126,14 +125,6 @@ def _admit_generic_degree(polynomial_map: RationalPolynomialMap) -> None:
         raise _validation_error(
             "generic-degree map exceeds the "
             f"{MAX_GENERIC_DEGREE_AGGREGATE_TERMS}-term aggregate input budget"
-        )
-    if (
-        len(polynomial_map.model_dump_json().encode("utf-8"))
-        > MAX_GENERIC_DEGREE_ENCODED_MAP_BYTES
-    ):
-        raise _validation_error(
-            "generic-degree map exceeds the "
-            f"{MAX_GENERIC_DEGREE_ENCODED_MAP_BYTES}-byte input budget"
         )
     degrees: list[int] = []
     for polynomial in polynomial_map.output_polynomials:

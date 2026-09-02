@@ -30,7 +30,6 @@ MAX_GENERIC_DEGREE_COMPONENT_TERMS = 48
 MAX_GENERIC_DEGREE_AGGREGATE_TERMS = 96
 MAX_GENERIC_DEGREE_TOTAL_DEGREE = 8
 MAX_GENERIC_DEGREE_COEFFICIENT_DIGITS = 64
-MAX_GENERIC_DEGREE_ENCODED_MAP_BYTES = 64 * 1024
 MAX_GENERIC_DEGREE_BEZOUT_BOUND = 512
 MAX_GENERIC_FIBER_BASIS_POLYNOMIALS = 32
 MAX_GENERIC_FIBER_POLYNOMIAL_TERMS = 4_096
@@ -145,7 +144,7 @@ class GenericDegreeRequest(StrictModel):
     The source is materialized sparse data. The operation envelope has
     at most three source variables, three ordered target components, 96 input
     terms, component total degree at most 8, 64-digit coefficient components,
-    64 KiB encoded map, and finite-fiber Bezout bound at most 512. The backend
+    and finite-fiber Bezout bound at most 512. The backend
     runs once under the declared wall/CPU, 1 GiB address-space, 512 KiB
     protocol, and fixed exact certificate limits.
     """
@@ -155,7 +154,7 @@ class GenericDegreeRequest(StrictModel):
             "A materialized sparse QQ polynomial map with at most 3 source "
             "variables, 3 ordered components, 48 terms per component, 96 "
             "aggregate terms, total degree at most 8, 64-digit coefficient "
-            "components, and 65536 encoded bytes. Maps with at least as many "
+            "components. Maps with at least as many "
             "target as source coordinates also require a finite-fiber Bezout "
             "bound at most 512."
         )

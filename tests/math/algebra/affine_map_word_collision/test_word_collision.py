@@ -23,8 +23,8 @@ def test_two_identity_maps() -> None:
     )
     assert len(result.rows) == 1
     assert result.rows[0].multiplicity == 2
-    assert result.rows[0].slope.as_fraction() == Fraction(1)
-    assert result.rows[0].intercept.as_fraction() == Fraction(1)
+    assert result.rows[0].map.slope.as_fraction() == Fraction(1)
+    assert result.rows[0].map.intercept.as_fraction() == Fraction(1)
 
 
 def test_distinct_maps_no_collision() -> None:
@@ -53,8 +53,8 @@ def test_word_replay() -> None:
             for idx in word:
                 ga, gb = gens[idx]
                 a, b = ga * a, ga * b + gb
-            assert a == row.slope.as_fraction()
-            assert b == row.intercept.as_fraction()
+            assert a == row.map.slope.as_fraction()
+            assert b == row.map.intercept.as_fraction()
 
 
 def test_multiplicity_sum() -> None:
@@ -82,8 +82,8 @@ def test_rational_coefficients() -> None:
     """Test with non-integer rational coefficients."""
     result = compute_word_collision_profile([(Fraction(1, 2), Fraction(1, 3))], 1)
     assert len(result.rows) == 1
-    assert result.rows[0].slope.as_fraction() == Fraction(1, 2)
-    assert result.rows[0].intercept.as_fraction() == Fraction(1, 3)
+    assert result.rows[0].map.slope.as_fraction() == Fraction(1, 2)
+    assert result.rows[0].map.intercept.as_fraction() == Fraction(1, 3)
 
 
 def test_rejects_depth_zero() -> None:
@@ -114,7 +114,7 @@ def test_word_order_matches_documented_composition() -> None:
     g = (Fraction(3), Fraction(5))
     result = compute_word_collision_profile((f, g), 2)
     row = next(row for row in result.rows if (0, 1) in row.words)
-    assert (row.slope.as_fraction(), row.intercept.as_fraction()) == (
+    assert (row.map.slope.as_fraction(), row.map.intercept.as_fraction()) == (
         Fraction(6),
         Fraction(8),
     )
@@ -162,7 +162,7 @@ def test_native_admission_rejects_rational_growth_before_enumeration() -> None:
 def test_zero_slope_at_canonical_intercept_boundary_is_admitted() -> None:
     intercept = Fraction(10**32767)
     result = compute_word_collision_profile(((Fraction(0), intercept),), 1)
-    assert result.rows[0].intercept.as_fraction() == intercept
+    assert result.rows[0].map.intercept.as_fraction() == intercept
 
 
 def test_single_generator_depth_above_legacy_cap_is_admitted() -> None:

@@ -11,8 +11,6 @@ from jacobian._exact import CanonicalRational, format_canonical_rational
 from jacobian._models import StrictModel
 
 MAX_COMPOSITION_WORK = 5_000_000
-# Kept as a compatibility name for callers that imported the former bound.
-MAX_WORDS = MAX_COMPOSITION_WORK
 MAX_GENERATORS = MAX_COMPOSITION_WORK
 MAX_DEPTH = MAX_COMPOSITION_WORK
 
@@ -69,16 +67,6 @@ class CollisionRow(StrictModel):
             words=words,
         )
 
-    @property
-    def slope(self) -> CanonicalRational:
-        """Compatibility accessor for the composed map's slope."""
-        return self.map.slope
-
-    @property
-    def intercept(self) -> CanonicalRational:
-        """Compatibility accessor for the composed map's intercept."""
-        return self.map.intercept
-
 
 class WordCollisionProfileResult(StrictModel):
     """The complete word collision profile of an affine-map family."""
@@ -101,7 +89,6 @@ __all__ = [
     "MAX_COMPOSITION_WORK",
     "MAX_DEPTH",
     "MAX_GENERATORS",
-    "MAX_WORDS",
     "AffineMapSpec",
     "CollisionRow",
     "WordCollisionProfileRequest",

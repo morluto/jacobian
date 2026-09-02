@@ -19,10 +19,6 @@ from jacobian.math.universal_algebra.values import (
 )
 
 MAX_ENUMERATION_WORK = 1_000_000
-# The result adds at most 32 source indices in kernel blocks, 32 image indices,
-# six flags/scalars, or one obstruction with two arity-at-most-four tuples and a
-# 64-byte operation ID.  Four KiB conservatively bounds that JSON wrapper over
-# the exactly measured retained carrier-map bytes.
 CarrierBlock = Annotated[
     tuple[int, ...],
     Field(min_length=1, max_length=MAX_CARRIER_SIZE),

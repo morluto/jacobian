@@ -3,7 +3,6 @@
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.dispatch import parse_operation_input
 from jacobian.math.finite_dim_algebras._models import (
     MAX_DIM,
@@ -26,8 +25,6 @@ def test_published_dimension_matches_structural_request_bound() -> None:
             "multiplication": [row] * n,
         }
     }
-    encoded = encode_strict_json(payload)
-    assert len(encoded) <= CanonicalLimits().max_input_bytes
     parsed = parse_operation_input(CenterRequest, payload)
     assert parsed.algebra.dimension == n
     schema = StructureConstants.model_json_schema()

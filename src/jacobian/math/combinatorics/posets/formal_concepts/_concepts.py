@@ -88,38 +88,3 @@ def concept_family_size_capped(ctx: FormalContext, limit: int) -> int:
             return count
         current = _next_closure(ctx, current, len(ctx.attributes))
     return count
-
-
-def concept_lattice_from_pairs(
-    concepts: tuple[tuple[tuple[int, ...], tuple[int, ...]], ...],
-) -> dict[str, object]:
-    extents = [frozenset(extent) for extent, _ in concepts]
-    order = tuple(
-        (left, right)
-        for left, extent in enumerate(extents)
-        for right, other in enumerate(extents)
-        if left != right and extent.issubset(other)
-    )
-    order_set = set(order)
-    covers = tuple(
-        (left, right)
-        for left, right in order
-        if not any(
-            middle != left
-            and middle != right
-            and (left, middle) in order_set
-            and (middle, right) in order_set
-            for middle in range(len(concepts))
-        )
-    )
-    if not concepts:
-        return {"concepts": (), "order": (), "covers": (), "top": None, "bottom": None}
-    bottom = min(range(len(concepts)), key=lambda index: len(extents[index]))
-    top = max(range(len(concepts)), key=lambda index: len(extents[index]))
-    return {
-        "concepts": concepts,
-        "order": order,
-        "covers": covers,
-        "top": top,
-        "bottom": bottom,
-    }

@@ -4,7 +4,6 @@ from collections.abc import Sequence
 
 import pytest
 
-from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.neighborhood._models import (
     NeighborhoodRequest,
@@ -186,15 +185,10 @@ def test_every_neighborhood_vertex_replays_against_an_incident_edge() -> None:
     )
 
 
-def test_native_result_does_not_inherit_canonical_output_budget() -> None:
+def test_native_result_accepts_large_retained_label() -> None:
     long_label = "z" * 4_000_000
     g = _graph(["a", long_label], [("a", long_label)])
     request = NeighborhoodRequest(graph=g, selected_vertices=("a",))
-    assert (
-        len(encode_strict_json(request.model_dump(mode="json")))
-        <= CanonicalLimits().max_input_bytes
-    )
-
     native_result = open_neighborhood(g, ("a",))
     assert native_result.neighborhood == (long_label,)
 

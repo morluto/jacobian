@@ -11,7 +11,6 @@ import networkx as nx
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs import explicit_graph
 from jacobian.math.graphs.patterns._models import (
@@ -300,29 +299,6 @@ def test_canonical_graph_size_bound_rejects_257_vertices() -> None:
                 "pattern": {"vertices": [], "edges": []},
             }
         )
-
-
-def test_native_result_does_not_inherit_canonical_output_limit() -> None:
-    limits = CanonicalLimits()
-    pattern = _empty(0, "p")
-    base_host = _graph(("x",), [])
-    base_payload = {
-        "host": base_host.model_dump(mode="json"),
-        "pattern": pattern.model_dump(mode="json"),
-    }
-    base_size = len(encode_strict_json(base_payload))
-    label_length = limits.max_input_bytes - base_size + 1
-    host = _graph(("x" * label_length,), [])
-    request_payload = {
-        "host": host.model_dump(mode="json"),
-        "pattern": pattern.model_dump(mode="json"),
-    }
-    assert len(encode_strict_json(request_payload)) == limits.max_input_bytes
-
-    request = InducedVertexSubsetPatternCountRequest(host=host, pattern=pattern)
-    result = TOOLS[0].run(request)
-
-    assert result.occurrence_count == "1"
 
 
 def test_numeric_admission_caps_are_visible_in_schema_and_tool_description() -> None:

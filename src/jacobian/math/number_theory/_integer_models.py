@@ -23,12 +23,6 @@ class IntegerValueRequest(StrictModel):
     value: BoundedInteger
 
 
-class ArithmeticFunctionRequest(StrictModel):
-    """A safely encoded nonnegative integer for a killable exact operation."""
-
-    n: StrictInt = Field(ge=0, le=MAX_SAFE_INTEGER)
-
-
 class NonnegativeIntegerRequest(StrictModel):
     """One bounded non-negative integer."""
 
@@ -57,7 +51,6 @@ class PrimePower(StrictModel):
 __all__ = [
     "MAX_SAFE_INTEGER",
     "MAX_SMALL_INTEGER",
-    "ArithmeticFunctionRequest",
     "BooleanResult",
     "IntegerValueRequest",
     "NonnegativeIntegerRequest",

@@ -26,7 +26,6 @@ from jacobian.math.number_theory._direct_factorization_models import (
 )
 from jacobian.math.number_theory._integer_models import (
     MAX_SAFE_INTEGER,
-    ArithmeticFunctionRequest,
     NonnegativeIntegerRequest,
     PositiveIntegerRequest,
 )
@@ -95,10 +94,6 @@ def test_constant_work_integer_operations_admit_safe_integer_scale() -> None:
     assert square_root.root**2 <= MAX_SAFE_INTEGER < (square_root.root + 1) ** 2
     assert int(previous.value) < MAX_SAFE_INTEGER
     assert legendre.symbol == 1
-
-
-def test_killable_arithmetic_function_request_admits_safe_integer_scale() -> None:
-    assert ArithmeticFunctionRequest(n=MAX_SAFE_INTEGER).n == MAX_SAFE_INTEGER
 
 
 def test_factorial_valuation_accepts_large_canonical_argument() -> None:

@@ -164,7 +164,7 @@ def _canonical_label_adjacency(
     return index, adj
 
 
-def find_cycle_of_length(
+def _find_cycle_of_length(
     vertices: tuple[str, ...],
     edges: tuple[tuple[str, str], ...],
     length: int,
@@ -216,7 +216,7 @@ def fixed_length_cycle(
     """
     _admit_cycle_request(graph, length)
     k = length
-    found = find_cycle_of_length(graph.vertices, graph.edges, k)
+    found = _find_cycle_of_length(graph.vertices, graph.edges, k)
     if found is not None:
         return FixedLengthCycleResult._from_kernel(
             graph=graph,
@@ -302,7 +302,7 @@ def _backtrack_subgraph_embedding(
     return False
 
 
-def find_subgraph_embedding(
+def _find_subgraph_embedding(
     pattern_vertices: tuple[str, ...],
     pattern_edges: tuple[tuple[str, str], ...],
     host_vertices: tuple[str, ...],
@@ -378,7 +378,7 @@ def subgraph_pattern_find(
     order) or ``DOES_NOT_EXIST`` after exhaustive bounded search.
     """
     _admit_subgraph_request(pattern, host)
-    found = find_subgraph_embedding(
+    found = _find_subgraph_embedding(
         pattern.vertices,
         pattern.edges,
         host.vertices,

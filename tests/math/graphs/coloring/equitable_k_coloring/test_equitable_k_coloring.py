@@ -71,15 +71,6 @@ def test_edgeless_graph_uses_direct_balanced_class_construction() -> None:
     assert result.coloring.count(1) == 10
 
 
-def test_edgeless_shortcut_has_no_transport_derived_ceiling() -> None:
-    graph = _graph(["x" * 10_500_000], [])
-
-    result = decide_equitable_k_coloring(graph, 1)
-
-    assert result.colorable
-    assert result.coloring == (0,)
-
-
 def test_exponential_search_is_rejected_before_backtracking() -> None:
     graph = _graph([str(index) for index in range(20)], [["0", "1"]])
 

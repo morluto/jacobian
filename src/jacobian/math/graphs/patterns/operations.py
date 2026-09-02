@@ -40,7 +40,7 @@ def _explicit_induced_candidate(
     return candidate
 
 
-def count_induced_vertex_subset_patterns(
+def _count_induced_vertex_subset_patterns(
     host: SimpleUndirectedGraph,
     pattern: SimpleUndirectedGraph,
 ) -> int:
@@ -83,7 +83,7 @@ def induced_vertex_subset_pattern_count(
             code=exc.type,
             message=exc.message(),
         ) from None
-    return count_induced_vertex_subset_patterns(host, pattern)
+    return _count_induced_vertex_subset_patterns(host, pattern)
 
 
 __all__ = ["induced_vertex_subset_pattern_count"]

@@ -32,7 +32,7 @@ TOOLS: MathTools = (
         description=(
             "Count host vertex subsets whose induced simple graph is isomorphic "
             "to a pattern, once per subset, not per embedding. Admission preflights "
-            "C(|V(host)|, |V(pattern)|), exact source/result bytes, "
+            "C(|V(host)|, |V(pattern)|), "
             "C(|V(pattern)|, 2) direct host-edge probes, explicit local-graph "
             "construction, and a worst-case NetworkX VF2++ partial-map bound. "
             f"Limits are {MAX_INDUCED_PATTERN_CANDIDATES:,} subsets and {MAX_INDUCED_PATTERN_TOTAL_WORK_UNITS:,} work units; this is a conservative backend envelope."

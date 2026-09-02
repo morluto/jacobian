@@ -55,11 +55,6 @@ def _extract_elements(values: object) -> tuple[str, ...]:
     raise TypeError("values must be a FiniteIntegerSet or tuple of canonical integers")
 
 
-def _validate_divisibility_edge_values(values: tuple[str, ...]) -> None:
-    _validate_divisibility_edge_shape(values)
-    _validate_divisibility_edge_resources(values)
-
-
 def _validate_divisibility_edge_shape(values: object) -> tuple[str, ...]:
     elements = _extract_elements(values)
     if not elements:
@@ -208,5 +203,4 @@ __all__ = [
     "DivisibilityEdgeProfileRequest",
     "DivisibilityEdgeProfileResult",
     "_validate_divisibility_edge_resources",
-    "_validate_divisibility_edge_values",
 ]

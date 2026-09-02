@@ -432,7 +432,6 @@ class PlaneComponentProfileComputed(StrictModel):
         return self
 
 
-PlaneComponentProfileOutcome = PlaneComponentProfileComputed
 
 
 def _raw_collection_limit(
@@ -954,7 +953,7 @@ class PlaneComponentProfileResult(StrictModel):
     samples: tuple[IsolatedRealPlanePoint, ...] = Field(
         max_length=MAX_PLANE_COMPONENT_SAMPLES
     )
-    outcome: PlaneComponentProfileOutcome
+    outcome: PlaneComponentProfileComputed
 
     @model_validator(mode="before")
     @classmethod
@@ -1005,7 +1004,6 @@ __all__ = [
     "PLANE_COMPONENT_WALL_SECONDS",
     "IsolatedRealPlanePoint",
     "PlaneComponentProfileComputed",
-    "PlaneComponentProfileOutcome",
     "PlaneComponentProfileRequest",
     "PlaneComponentProfileResult",
     "PlaneSampleDisposition",

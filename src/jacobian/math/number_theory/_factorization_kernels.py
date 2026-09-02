@@ -38,13 +38,8 @@ from jacobian.math.number_theory._direct_factorization_models import (
     DivisorListResult,
     FactorizationRequest,
     PrimeFactorizationResult,
-    RadicalResult,
-    SquarefreeResult,
 )
-from jacobian.math.number_theory._integer_models import (
-    ArithmeticFunctionRequest,
-    PrimePower,
-)
+from jacobian.math.number_theory._integer_models import PrimePower
 
 # ---------------------------------------------------------------------------
 # Pratt certificate construction and verification
@@ -494,31 +489,3 @@ def factorize_primes(request: FactorizationRequest) -> PrimeFactorizationResult:
             "bounded factorization worker did not establish a complete result"
         )
     return PrimeFactorizationResult._from_kernel(value=request.value, factors=factors)
-
-
-def decide_squarefree(request: ArithmeticFunctionRequest) -> SquarefreeResult:
-    if request.n == 0:
-        return SquarefreeResult(status="NOT_SQUAREFREE", n=request.n)
-    factors = _bounded_direct_factorization(request.n)
-    if factors is None:
-        raise RuntimeError(
-            "bounded factorization worker did not establish squarefreeness"
-        )
-    return SquarefreeResult(
-        status="SQUAREFREE"
-        if all(factor.power == 1 for factor in factors)
-        else "NOT_SQUAREFREE",
-        n=request.n,
-    )
-
-
-def compute_radical(request: ArithmeticFunctionRequest) -> RadicalResult:
-    if request.n == 0:
-        return RadicalResult(n=0, value="0")
-    factors = _bounded_direct_factorization(request.n)
-    if factors is None:
-        raise RuntimeError("bounded factorization worker did not establish the radical")
-    radical = 1
-    for factor in factors:
-        radical *= int(factor.prime)
-    return RadicalResult(n=request.n, value=str(radical))

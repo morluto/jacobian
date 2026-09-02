@@ -12,7 +12,7 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, StringConstraints, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.math.number_theory._integer_models import MAX_SAFE_INTEGER, PrimePower
+from jacobian.math.number_theory._integer_models import PrimePower
 from jacobian.math.number_theory._models import (
     BoundedInteger,
     _validation_error,
@@ -145,23 +145,4 @@ class PrimeFactorizationResult(StrictModel):
                     "factor_prime_domain", "factor primes must be at least 2"
                 )
             previous_prime = prime
-        return self
-
-
-class SquarefreeResult(StrictModel):
-    """An exact squarefreeness decision."""
-
-    status: Literal["SQUAREFREE", "NOT_SQUAREFREE"]
-    n: int = Field(ge=0, le=MAX_SAFE_INTEGER)
-
-
-class RadicalResult(StrictModel):
-    """The exact radical of one admitted integer."""
-
-    status: Literal["COMPLETE"] = "COMPLETE"
-    n: int = Field(ge=0, le=MAX_SAFE_INTEGER)
-    value: BoundedInteger
-
-    @model_validator(mode="after")
-    def require_complete_value(self) -> Self:
         return self

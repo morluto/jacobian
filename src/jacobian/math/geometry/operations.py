@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from fractions import Fraction
 from typing import Any, cast
 
@@ -51,7 +50,6 @@ __all__ = [
     "convex_hull_points",
     "general_position_search",
     "line_intersection",
-    "line_predicate",
     "midpoint",
     "orientation",
     "projection",
@@ -378,19 +376,6 @@ def concyclic(
             _point(fourth_point),
         )
     )
-
-
-def line_predicate(
-    predicate: Callable[[Any, Any], bool],
-) -> Callable[[RationalLine2D, RationalLine2D], GeometryBooleanResult]:
-    def compute(
-        first_line: RationalLine2D, second_line: RationalLine2D
-    ) -> GeometryBooleanResult:
-        return GeometryBooleanResult(
-            holds=predicate(_line(first_line), _line(second_line))
-        )
-
-    return compute
 
 
 def line_intersection(

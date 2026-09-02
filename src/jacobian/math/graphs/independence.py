@@ -27,11 +27,6 @@ class IndependenceNumberBudget(StrictModel):
     max_order: StrictInt = Field(default=128, ge=0, le=128)
 
 
-# The result retains its source graph and echoes every witness identifier,
-# so a request near the canonical input limit can serialize a response past
-# the identical output limit.  Admission reserves this much for the fixed
-# scalar fields, the bounded detail string, and the result envelope beyond
-# the echoed graph and worst-case witness labels.
 class IndependenceNumberRequest(StrictModel):
     """One finite simple graph and its operation-owned search budget."""
 

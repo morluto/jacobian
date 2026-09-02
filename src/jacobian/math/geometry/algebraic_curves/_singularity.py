@@ -217,11 +217,7 @@ def _variable_polynomial(
 def _ideal_budget(
     request: ProjectivePlaneCurveSingularityRequest,
 ) -> IdealComputationBudget:
-    return IdealComputationBudget(
-        wall_seconds=request.resource_budget.wall_seconds,
-        maximum_output_generators=_MAX_BACKEND_GENERATORS,
-        maximum_output_terms=_MAX_BACKEND_TERMS,
-    )
+    return IdealComputationBudget(wall_seconds=request.resource_budget.wall_seconds)
 
 
 def _is_unit_ideal(ideal: RationalPolynomialIdeal) -> bool:

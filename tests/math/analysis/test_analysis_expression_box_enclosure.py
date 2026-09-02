@@ -562,7 +562,7 @@ def test_backend_error_payload_cannot_smuggle_conclusion_evidence(
 def test_expression_and_box_must_share_one_complete_named_axis(
     payload: dict[str, Any], message: str
 ) -> None:
-    with analysis_validation_error():
+    with pytest.raises(ValidationError, match=message):
         IntervalExpressionBoxEnclosureRequest.model_validate(payload)
 
 

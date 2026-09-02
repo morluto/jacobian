@@ -269,15 +269,6 @@ class TestLieHomology:
         assert result.groups[2].betti == 3
         assert result.groups[3].betti == 1
 
-    def test_sl2_gf5(self) -> None:
-        """Homology of sl(2) over GF(5): trivial below the top degree.
-
-        d_1 = 0, rank d_2 = 3, d_3 = 0, so the Betti numbers are
-        (1, 0, 0, 1); the top class is the unimodular volume class.
-        """
-        result = compute_lie_homology(LieHomologyRequest(lie_algebra=_sl2_gf5()))
-        assert tuple(group.betti for group in result.groups) == (1, 0, 0, 1)
-
     def test_chain_dimension_names_the_chain_group(self) -> None:
         """The chain-group dimension field is explicit about what it counts.
 

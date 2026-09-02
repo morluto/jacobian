@@ -248,7 +248,7 @@ def test_result_rejects_forged_ledger_values_and_bounds(
     payload = _validated_result(_cycle(5)).model_dump(mode="json")
     mutate(payload)
 
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match=message):
         GraphMaximumCutResult.model_validate(payload)
 
 

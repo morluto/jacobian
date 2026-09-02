@@ -224,7 +224,7 @@ def test_probability_and_witness_domains_are_admitted_before_multiplication(
     witness: Fraction,
     message: str,
 ) -> None:
-    with pytest.raises(OperationDomainValidationError):
+    with pytest.raises(OperationDomainValidationError, match=message):
         _compute(_payload(("A",), (probability,), (witness,), ((),)))
 
 
@@ -366,7 +366,7 @@ def test_raw_result_digit_bound_precedes_source_replay() -> None:
 
 
 def test_event_count_is_rejected_in_raw_preflight() -> None:
-    payload = {
+    payload: dict[str, object] = {
         "event_labels": [f"E{index}" for index in range(MAX_LOCAL_LEMMA_EVENTS + 1)],
         "probability_upper_bounds": [],
         "witness_parameters": [],

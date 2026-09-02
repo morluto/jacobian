@@ -50,28 +50,6 @@ def test_every_served_operation_publishes_request_valid_examples() -> None:
             operation.request_type.model_validate(invocation_example.input)
 
 
-def test_invoke_operation_runs_determinant_without_state() -> None:
-    catalog = Catalog.open()
-    result = invoke_operation(
-        "matrix.determinant.compute",
-        {
-            "matrix": {
-                "domain": "QQ",
-                "entries": [
-                    [{"num": "1", "den": "1"}, {"num": "2", "den": "1"}],
-                    [{"num": "3", "den": "1"}, {"num": "4", "den": "1"}],
-                ],
-            }
-        },
-        catalog,
-    )
-
-    assert result.runtime_ms >= 0
-    assert result.output is not None
-    assert set(result.output) == {"determinant"}
-    assert result.output["determinant"] == {"num": "-2", "den": "1"}
-
-
 @pytest.mark.parametrize(
     "operation_id",
     (

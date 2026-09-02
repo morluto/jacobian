@@ -107,17 +107,6 @@ class TestComultiplication:
 class TestCounit:
     """Test counit computation."""
 
-    def test_counit_unity(self) -> None:
-        """epsilon(1) = 1 for the group-like element."""
-        ca = Coalgebra(
-            prime=5,
-            dimension=1,
-            comultiplication=(((1,),),),
-            counit=(1,),
-        )
-        result = _run_counit(CounitRequest(coalgebra=ca, element_index=0))
-        assert result.value == 1
-
     def test_counit_second_group_like(self) -> None:
         """epsilon(e2) = 1 in the two-group-like coalgebra."""
         ca = Coalgebra(

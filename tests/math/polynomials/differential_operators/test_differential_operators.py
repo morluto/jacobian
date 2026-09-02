@@ -10,6 +10,7 @@ from fractions import Fraction
 
 import pytest
 import sympy
+from pydantic import ValidationError
 from tests.math.polynomials._support import polynomial_validation_error
 
 from jacobian._exact import CanonicalRational
@@ -1080,7 +1081,7 @@ def test_operator_terms_must_be_canonical(
     terms: tuple[DifferentialOperatorTerm, ...],
     message: str,
 ) -> None:
-    with polynomial_validation_error():
+    with pytest.raises(ValidationError, match=message):
         ConstantCoefficientDifferentialOperator(
             variables=("x", "y"),
             terms=terms,

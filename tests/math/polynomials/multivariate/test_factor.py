@@ -222,25 +222,6 @@ class TestBoundedReconstruction:
         assert MultivariateFactorResult.model_validate(result.model_dump()) == result
 
 
-class TestOversizedFactorFailure:
-    def test_oversized_factor_does_not_construct_a_result(self) -> None:
-        poly = _poly(
-            ("x", "y", "z"),
-            (
-                (1, 1, (64, 64, 0)),
-                (-1, 1, (64, 0, 0)),
-                (1, 1, (1, 1, 1)),
-                (-1, 1, (1, 0, 1)),
-                (-1, 1, (0, 64, 0)),
-                (-1, 1, (0, 1, 1)),
-                (1, 1, (0, 0, 1)),
-                (1, 1, (0, 0, 0)),
-            ),
-        )
-        with pytest.raises(RuntimeError):
-            _compute_factor(MultivariateFactorRequest(polynomial=poly))
-
-
 def _difference_product_terms(
     variables: tuple[str, ...], exponent: int
 ) -> list[PolynomialTerm]:

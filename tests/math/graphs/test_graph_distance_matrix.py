@@ -8,6 +8,8 @@ axis and relabelled.
 
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 from pydantic import ValidationError
 
@@ -89,7 +91,9 @@ def test_known_answer_path_with_unsorted_string_labels() -> None:
         _row("c", [2, 1, 0]),
     )
     assert result.connected is True
-    matrix = tuple(row.distances for row in result.rows)
+    matrix = tuple(
+        tuple(cast(int, distance) for distance in row.distances) for row in result.rows
+    )
     assert all(
         matrix[source][target]
         <= matrix[source][intermediate] + matrix[intermediate][target]
@@ -191,7 +195,7 @@ def test_result_rejects_unsorted_or_duplicate_vertices(
     vertices: tuple[str, ...],
     message: str,
 ) -> None:
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match=message):
         GraphDistanceMatrixResult(
             vertex_ordering="LEXICOGRAPHIC_ASCENDING",
             pair_coverage="ALL_ORDERED_VERTEX_PAIRS",
@@ -261,7 +265,7 @@ def test_result_rejects_broken_metric_invariants(
     rows: tuple[GraphDistanceRow, ...],
     message: str,
 ) -> None:
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match=message):
         GraphDistanceMatrixResult(
             vertex_ordering="LEXICOGRAPHIC_ASCENDING",
             pair_coverage="ALL_ORDERED_VERTEX_PAIRS",

@@ -294,9 +294,9 @@ def test_result_rejects_a_polynomial_inconsistent_with_dense_coefficients() -> N
 @pytest.mark.parametrize(
     ("field", "replacement", "message"),
     [
-        ("coefficients", ["1", "4", "2"], "coefficients do not match"),
-        ("independence_number", 1, "independence number does not match"),
-        ("independent_set_count", "7", "independent-set count does not match"),
+        ("coefficients", ["1", "4", "2"], "count must equal the dense coefficient sum"),
+        ("independence_number", 1, "must equal the dense coefficient degree"),
+        ("independent_set_count", "7", "count must equal the dense coefficient sum"),
     ],
 )
 def test_result_rejects_mutated_derived_values(
@@ -309,7 +309,7 @@ def test_result_rejects_mutated_derived_values(
     ).model_dump(mode="json")
     valid[field] = replacement
 
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match=message):
         TreeIndependencePolynomialResult.model_validate(valid)
 
 

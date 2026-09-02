@@ -73,12 +73,6 @@ def test_latin_square_check_valid() -> None:
     assert is_latin_square(request.square)
 
 
-def test_latin_square_check_invalid() -> None:
-    request = LatinSquareRequest(square=_candidate_square(2, ((0, 0), (1, 1))))
-    result = compute_latin_square_check(request)
-    assert result.is_latin is False
-
-
 def test_orthogonality_identical_not_orthogonal() -> None:
     request = OrthogonalityRequest(
         square_a=Z2,

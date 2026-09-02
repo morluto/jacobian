@@ -125,7 +125,7 @@ def test_candidate_set_is_canonical_and_in_range(
     candidate_set: list[int],
     message: str,
 ) -> None:
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match=message):
         _request(vertex_count=3, edges=[], candidate_set=candidate_set)
 
 

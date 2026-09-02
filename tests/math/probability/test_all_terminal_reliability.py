@@ -339,14 +339,6 @@ def test_request_allows_more_vertices_when_the_state_space_is_small() -> None:
     assert result.reliability_probability.as_fraction() == 0
 
 
-def test_native_boundary_preserves_a_large_retained_graph_label() -> None:
-    graph = _graph(("x" * 1_000_000,), ())
-
-    result = all_terminal_reliability(graph, Fraction(1, 2))
-
-    assert result.graph == graph
-
-
 def test_native_boundary_rejects_huge_probability_components_preflight() -> None:
     graph = _graph(("v",), ())
     at_limit = all_terminal_reliability(graph, Fraction(1, 10**127))

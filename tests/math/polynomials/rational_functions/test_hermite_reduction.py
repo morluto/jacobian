@@ -103,7 +103,7 @@ def test_request_rejects_above_conservative_work_envelope(
     message: str,
 ) -> None:
     request = _request(expression)
-    with pytest.raises(OperationDomainValidationError):
+    with pytest.raises(OperationDomainValidationError, match=message):
         compute_hermite_reduction(request)
 
 

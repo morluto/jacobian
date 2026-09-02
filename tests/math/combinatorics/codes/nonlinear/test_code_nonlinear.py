@@ -194,15 +194,6 @@ class TestWordDistance:
         assert result.weight1 == result.weight2 == 2
         assert result.support_intersection == 1
 
-    def test_contract_version_tracks_the_wire_shape_change(self) -> None:
-        from jacobian.math.combinatorics.codes.nonlinear._tools import TOOLS
-
-        next(
-            tool
-            for tool in TOOLS
-            if tool.operation_id == "code.binary.word_distance.compute"
-        )
-
     def test_identical_maximal_words_admit_result_sensitive_bound(self) -> None:
         word = [0] * MAX_EXPLICIT_CODE_LENGTH
         request = WordDistanceRequest.model_validate({"word1": word, "word2": word})

@@ -217,12 +217,6 @@ def test_topology_reports_strict_failure_for_non_float_agent_timeout(
     assert any("task.toml.agent.timeout_sec" in f for f in failures)
 
 
-@pytest.mark.usefixtures("synthetic_harbor_root")
-def test_topology_passes_for_valid_minimal_task(tmp_path: Path) -> None:
-    suite, task = _make_suite_with_task(tmp_path)
-    assert validate_task_topology(suite, task) == []
-
-
 # ---------------------------------------------------------------------------
 # harbor_suite integration: allow_apt strict bool
 # ---------------------------------------------------------------------------

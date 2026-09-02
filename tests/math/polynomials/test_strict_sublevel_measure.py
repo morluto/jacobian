@@ -145,7 +145,6 @@ def test_producer_isolates_once_and_result_parsing_stays_structural(
         return original(polynomial, threshold, lower, upper)
 
     monkeypatch.setattr(operations, "compute_strict_sublevel_payload", counting)
-    monkeypatch.setattr(kernel, "compute_strict_sublevel_payload", counting)
     request = _request(_polynomial((1, 2)), threshold=2)
     result = operations.compute_strict_sublevel_measure(
         request.polynomial,

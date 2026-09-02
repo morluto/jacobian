@@ -132,15 +132,6 @@ class TestFactorValuesAndOperations:
 
 
 class TestBoundResultContracts:
-    def test_factor_multiply_contract_version_tracks_wire_shape(self) -> None:
-        from jacobian.math.probability.graphical_models._tools import TOOLS
-
-        next(
-            tool
-            for tool in TOOLS
-            if tool.operation_id == "graphical_model.factor.multiply"
-        )
-
     def test_multiply_adapter_binds_operands(self) -> None:
         request = FactorMultiplyRequest(
             left=_factor((0,), ("1", "2")),

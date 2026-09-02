@@ -75,7 +75,7 @@ def test_order_within_one_degree_sixteen_polynomial_uses_root_indices() -> None:
 def test_noncanonical_minimal_polynomials_are_rejected(
     polynomial: tuple[str, ...], message: str
 ) -> None:
-    with real_algebraic_validation_error():
+    with pytest.raises(ValidationError, match=message):
         _value(polynomial, 0)
 
 

@@ -456,7 +456,7 @@ def test_maximum_dense_shape_is_not_capped_by_serialized_result_size() -> None:
 def test_colored_graph_rejects_noncanonical_presentations(
     payload: dict[str, object], message: str
 ) -> None:
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match=message):
         ColoredUndirectedGraph.model_validate(payload)
 
 
@@ -551,7 +551,7 @@ def test_catalog_execution_admits_the_parsed_request_once(
     expected = canonicalize_colored_graph(parsed.colored_graph)
 
     admissions: list[ColoredUndirectedGraph] = []
-    real_preflight = isomorphism_bounds.canonicalization_work
+    real_preflight = isomorphism_bounds.canonicalization_work  # type: ignore[attr-defined]
 
     def counted_preflight(graph: ColoredUndirectedGraph) -> int:
         admissions.append(graph)

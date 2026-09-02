@@ -5,6 +5,7 @@ from __future__ import annotations
 from itertools import combinations, product
 
 import pytest
+from pydantic import ValidationError
 from sympy import Poly, Symbol, cyclotomic_poly
 from sympy.polys.domains import ZZ
 from tests.math.groups.finite_abelian._support import finite_abelian_validation_error
@@ -171,7 +172,7 @@ def test_source_rejects_noncanonical_set_degeneracies(
     frequencies: tuple[tuple[int, ...], ...],
     message: str,
 ) -> None:
-    with finite_abelian_validation_error():
+    with pytest.raises(ValidationError, match=message):
         _source((4,), points, frequencies)
 
 

@@ -168,7 +168,7 @@ class TestEdgeIntersectionBinding:
                 1,
                 "must be derived from pair_intersections",
             ),
-            ("is_linear", True, "must match the exact pair intersections"),
+            ("is_linear", True, "must match the pair intersections"),
             (
                 "first_linearity_violation",
                 None,
@@ -182,7 +182,7 @@ class TestEdgeIntersectionBinding:
         payload = _profile(NONLINEAR).model_dump(mode="json")
         payload[field] = value
 
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError, match=message):
             EdgeIntersectionsResult.model_validate(payload)
 
     def test_rejects_aggregate_authored_intersections_before_replay(self) -> None:
@@ -211,7 +211,7 @@ class TestEdgeIntersectionPreflight:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         calls = 0
-        admit = operations._admit_edge_intersection_profile
+        admit = operations._admit_edge_intersection_profile  # type: ignore[attr-defined]
 
         def counted_admission(hypergraph: FiniteHypergraph) -> None:
             nonlocal calls

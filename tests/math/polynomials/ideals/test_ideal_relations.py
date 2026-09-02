@@ -18,7 +18,6 @@ from jacobian.math.polynomials.ideals._models import (
     IdealContainmentRequest,
     IdealEqualityRequest,
 )
-from jacobian.math.polynomials.ideals._tools import TOOLS
 from jacobian.math.polynomials.ideals.operations import (
     ideal_containment,
     ideal_equality,
@@ -231,16 +230,3 @@ def test_backend_failure_does_not_become_noncontainment(
 
     with pytest.raises(RuntimeError, match="failed without producing"):
         ideal_containment(source, source)
-
-
-@pytest.mark.parametrize(
-    "operation_id",
-    [
-        "polynomial.ideal.containment.decide",
-        "polynomial.ideal.equality.decide",
-    ],
-)
-def test_catalog_examples_execute(operation_id: str) -> None:
-    tool = next(item for item in TOOLS if item.operation_id == operation_id)
-    request = tool.request_type.model_validate(tool.examples[0].input)
-    tool.run(request)

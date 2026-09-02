@@ -163,14 +163,12 @@ def test_coloring_worker_failure_is_typed_inconclusive_without_a_math_claim(
     from jacobian.math.graphs.coloring._models import KColorabilityRequest
     from jacobian.math.graphs.coloring._tools import compute_k_colorability
 
-    result = compute_k_colorability(
-        KColorabilityRequest.model_validate(
-            {"graph": {"vertex_count": 2, "edges": [[0, 1]]}, "colors": 1}
+    with pytest.raises(TimeoutError):
+        compute_k_colorability(
+            KColorabilityRequest.model_validate(
+                {"graph": {"vertex_count": 2, "edges": [[0, 1]]}, "colors": 1}
+            )
         )
-    )
-
-    assert result.status == "EXECUTION_FAILED"
-    assert result.colorable is None
 
 
 def test_edgeless_vertex_coloring_bypasses_the_worker(
@@ -550,13 +548,11 @@ def _triangle_graph() -> SimpleUndirectedGraph:
 
 
 class TestSolverConflictBudget:
-    def test_budget_exceeded_returns_typed_unknown_outcome(self) -> None:
-        """A conflict budget of 1 cannot decide the Petersen graph; the
-        operation must report SOLVER_BUDGET_EXCEEDED with no colorability
-        claim instead of an unbounded wait or a false negative."""
+    def test_budget_exceeded_raises_timeout(self) -> None:
+        """A conflict budget of 1 cannot decide the Petersen graph, so the
+        operation raises an execution timeout without a colorability claim."""
         from jacobian.math.graphs.coloring._models import (
             EdgeKColorabilityRequest,
-            EdgeKColorabilityResult,
         )
         from jacobian.math.graphs.coloring._tools import (
             compute_edge_k_colorability,
@@ -565,23 +561,14 @@ class TestSolverConflictBudget:
         request = EdgeKColorabilityRequest(
             graph=_petersen_graph(), colors=3, solver_conflicts=1
         )
-        result = compute_edge_k_colorability(request)
-        assert result.status == "SOLVER_BUDGET_EXCEEDED"
-        assert result.colorable is None
-        assert result.coloring is None
-        assert EdgeKColorabilityResult.model_validate(result.model_dump()) == result
+        with pytest.raises(TimeoutError):
+            compute_edge_k_colorability(request)
 
     def test_budget_exceeded_cannot_claim_colorable(self) -> None:
         petersen = _petersen_graph()
         with pytest.raises(ValidationError):
-            EdgeKColorabilityResult(
-                graph=petersen,
-                colors=3,
-                solver_conflicts=100000,
-                status="SOLVER_BUDGET_EXCEEDED",
-                colorable=False,
-                coloring=None,
-                edge_count=len(petersen.edges),
+            EdgeKColorabilityResult.model_validate(
+                {"graph": petersen, "status": "SOLVER_BUDGET_EXCEEDED"}
             )
 
     def test_default_budget_still_decides_petersen_negative(self) -> None:
@@ -609,12 +596,10 @@ class TestSolverConflictBudget:
             EdgeKColorabilityRequest(graph=petersen, colors=3)
         )
         assert EdgeKColorabilityResult.model_validate(negative.model_dump()) == negative
-        undecided = compute_edge_k_colorability(
-            EdgeKColorabilityRequest(graph=petersen, colors=3, solver_conflicts=1)
-        )
-        assert (
-            EdgeKColorabilityResult.model_validate(undecided.model_dump()) == undecided
-        )
+        with pytest.raises(TimeoutError):
+            compute_edge_k_colorability(
+                EdgeKColorabilityRequest(graph=petersen, colors=3, solver_conflicts=1)
+            )
 
 
 class TestVertexKColorability:
@@ -683,37 +668,26 @@ class TestVertexKColorability:
         assert result.coloring is not None
         assert len(result.coloring) == 3
 
-    def test_budget_exceeded_returns_typed_unknown_outcome(self) -> None:
+    def test_budget_exceeded_raises_timeout(self) -> None:
         """A conflict budget of 1 cannot decide the complete graph K4 under
-        three colors; the operation must report SOLVER_BUDGET_EXCEEDED with
-        no colorability claim instead of an unbounded wait or a false
-        negative."""
+        three colors, so the operation raises an execution timeout without a
+        colorability claim."""
         from jacobian.math.graphs.coloring._models import (
             KColorabilityRequest,
-            KColorabilityResult,
         )
         from jacobian.math.graphs.coloring._tools import compute_k_colorability
 
         request = KColorabilityRequest(graph=self._k4(), colors=3, solver_conflicts=1)
-        result = compute_k_colorability(request)
-        assert result.status == "SOLVER_BUDGET_EXCEEDED"
-        assert result.colorable is None
-        assert result.coloring is None
-        assert KColorabilityResult.model_validate(result.model_dump()) == result
+        with pytest.raises(TimeoutError):
+            compute_k_colorability(request)
 
     def test_budget_exceeded_cannot_claim_colorable(self) -> None:
         from jacobian.math.graphs.coloring._models import KColorabilityResult
 
         k4 = self._k4()
         with pytest.raises(ValidationError):
-            KColorabilityResult(
-                graph=k4,
-                colors=3,
-                solver_conflicts=100000,
-                status="SOLVER_BUDGET_EXCEEDED",
-                colorable=False,
-                coloring=None,
-                vertex_count=4,
+            KColorabilityResult.model_validate(
+                {"graph": k4, "status": "SOLVER_BUDGET_EXCEEDED"}
             )
 
     def test_default_budget_still_decides_k4_negative(self) -> None:

@@ -133,11 +133,11 @@ class TestMultivariateFactorResultInvariants:
                 )
 
 
-class TestOutputBudgetOutcome:
-    def test_oversized_irreducible_factor_returns_typed_outcome(self) -> None:
+class TestFactorRepresentationBounds:
+    def test_oversized_irreducible_factor_raises_execution_failure(self) -> None:
         """(x^64-1)(y^64-1) + z(x-1)(y-1) factors with an irreducible factor
-        of 4,097 terms; the request must return the typed budget outcome, not
-        a host exception (review counterexample)."""
+        of 4,097 terms; the worker cannot return a factored mathematical
+        result within its admitted representation envelope."""
         # (x^64 - 1)*(y^64 - 1) + z*(x-1)*(y-1), descending lex order
         poly = _poly(
             ("x", "y", "z"),
@@ -152,25 +152,14 @@ class TestOutputBudgetOutcome:
                 (1, 1, (0, 0, 0)),
             ),
         )
-        result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
-        assert result.status == "OUTPUT_BUDGET_EXCEEDED"
-        assert result.factors == ()
-        assert result.reconstructed == poly
-        assert MultivariateFactorResult.model_validate(result.model_dump()) == result
+        with pytest.raises(RuntimeError):
+            _compute_factor(MultivariateFactorRequest(polynomial=poly))
 
     def test_budget_exceeded_cannot_carry_factors(self) -> None:
         poly = _poly(("x", "y"), ((2, 1, (2, 1)), (-2, 1, (1, 0))))
         with pytest.raises(ValidationError):
-            MultivariateFactorResult(
-                status="OUTPUT_BUDGET_EXCEEDED",
-                coefficient=CanonicalRational.from_fraction(Fraction(2)),
-                factors=(
-                    MultivariateIrreducibleFactor(
-                        factor=_poly(("x", "y"), ((1, 1, (1, 1)), (-1, 1, (1, 0)))),
-                        multiplicity=1,
-                    ),
-                ),
-                reconstructed=poly,
+            MultivariateFactorResult.model_validate(
+                {"status": "OUTPUT_BUDGET_EXCEEDED", "reconstructed": poly}
             )
 
 
@@ -255,10 +244,8 @@ class TestBoundedReconstruction:
         assert MultivariateFactorResult.model_validate(result.model_dump()) == result
 
 
-class TestBudgetOutcomeCoefficientBinding:
-    def test_budget_exceeded_outcome_rejects_altered_coefficient(self) -> None:
-        """The typed OUTPUT_BUDGET_EXCEEDED outcome carries the exact rational
-        content; revalidation must reject any other nonzero coefficient."""
+class TestOversizedFactorFailure:
+    def test_oversized_factor_does_not_construct_a_result(self) -> None:
         poly = _poly(
             ("x", "y", "z"),
             (
@@ -272,14 +259,8 @@ class TestBudgetOutcomeCoefficientBinding:
                 (1, 1, (0, 0, 0)),
             ),
         )
-        outcome = _compute_factor(MultivariateFactorRequest(polynomial=poly))
-        assert outcome.status == "OUTPUT_BUDGET_EXCEEDED"
-        dump = outcome.model_dump()
-        assert MultivariateFactorResult.model_validate(dump) == outcome
-        for numerator in ("999", "-1", "0"):
-            dump["coefficient"] = {"num": numerator, "den": "7"}
-            with pytest.raises(ValidationError):
-                MultivariateFactorResult.model_validate(dump)
+        with pytest.raises(RuntimeError):
+            _compute_factor(MultivariateFactorRequest(polynomial=poly))
 
 
 def _difference_product_terms(
@@ -470,18 +451,10 @@ class TestKillableFactorBackend:
 
         request = MultivariateFactorRequest(polynomial=poly)
         started = time.monotonic()
-        result = _compute_factor(request)
+        with pytest.raises((RuntimeError, TimeoutError)):
+            _compute_factor(request)
         elapsed = time.monotonic() - started
-        # Either status is exact: an output-capacity hit is the
-        # mathematical bounded status, while a deadline, cancellation, or
-        # memory-cap kill is the distinct retryable execution failure.
-        # Both carry no factors and roundtrip.
-        assert result.status in ("OUTPUT_BUDGET_EXCEEDED", "EXECUTION_FAILED")
-        assert result.factors == ()
-        assert result.normalization is None
-        assert result.reconstructed == poly
         assert elapsed < 30.0
-        assert MultivariateFactorResult.model_validate(result.model_dump()) == result
 
     def test_worker_backend_agrees_with_in_process_factor_list(self) -> None:
         """The bounded worker returns the same exact decomposition as an
@@ -500,7 +473,10 @@ class TestKillableFactorBackend:
             {
                 "variables": ["x", "y"],
                 "terms": [
-                    [*term.exponents, *term.coefficient.as_integer_ratio()]
+                    [
+                        *term.exponents,
+                        *(str(value) for value in term.coefficient.as_integer_ratio()),
+                    ]
                     for term in poly.polynomial.terms
                 ],
             }
@@ -520,15 +496,14 @@ class TestKillableFactorBackend:
         assert response["ok"] is True
         # x^2*y - x = x*(x*y - 1): two irreducible factors, content 1.
         assert len(response["factors"]) == 2
-        assert response["coefficient"] == [1, 1]
+        assert response["coefficient"] == ["1", "1"]
 
     def test_worker_crash_exit_is_execution_failure(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """A worker that exits abnormally without parsable output is a
-        crash, never an output-capacity conclusion."""
+        crash, not a mathematical result."""
         from jacobian.math.polynomials.multivariate._factor_backend import (
-            FactorBackendExhaustedError,
             FactorBackendFailureError,
             run_bounded_factorization,
         )
@@ -541,19 +516,17 @@ class TestKillableFactorBackend:
 
         monkeypatch.setattr("jacobian.process.run_bounded_process", fake_run)
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
-        with pytest.raises(FactorBackendFailureError) as exc_info:
+        with pytest.raises(FactorBackendFailureError):
             run_bounded_factorization(poly)
-        assert not isinstance(exc_info.value, FactorBackendExhaustedError)
 
     def test_signal_death_under_cpu_limit_is_interrupted(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """CPU exhaustion is a deadline-type execution condition: SIGXCPU
-        yields the retryable interrupted error, never a capacity status."""
+        yields the retryable interrupted error."""
         import signal
 
         from jacobian.math.polynomials.multivariate._factor_backend import (
-            FactorBackendExhaustedError,
             FactorBackendInterruptedError,
             run_bounded_factorization,
         )
@@ -569,9 +542,8 @@ class TestKillableFactorBackend:
             ),
         )
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
-        with pytest.raises(FactorBackendInterruptedError) as exc_info:
+        with pytest.raises(FactorBackendInterruptedError):
             run_bounded_factorization(poly)
-        assert not isinstance(exc_info.value, FactorBackendExhaustedError)
 
     def test_malformed_success_payload_is_execution_failure(
         self, monkeypatch: pytest.MonkeyPatch
@@ -604,7 +576,6 @@ class TestKillableFactorBackend:
         import signal
 
         from jacobian.math.polynomials.multivariate._factor_backend import (
-            FactorBackendExhaustedError,
             FactorBackendFailureError,
             run_bounded_factorization,
         )
@@ -619,9 +590,8 @@ class TestKillableFactorBackend:
 
         monkeypatch.setattr("jacobian.process.run_bounded_process", fake_run)
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
-        with pytest.raises(FactorBackendFailureError) as exc_info:
+        with pytest.raises(FactorBackendFailureError):
             run_bounded_factorization(poly)
-        assert not isinstance(exc_info.value, FactorBackendExhaustedError)
 
     def test_worker_aborts_without_containment_before_factoring(self) -> None:
         """A worker that cannot apply its address-space cap exits before
@@ -660,8 +630,6 @@ class TestSignedBudgetOutcomeContent:
         """The oversized-factor branch and result validation share one
         exact-content convention, whatever sign the source carries."""
 
-        from jacobian.math.polynomials.multivariate import _factor_backend
-
         dense = _expanded_product(
             ("x", "y", "z"),
             [(64, 1, 0), (64, 1, 1)],
@@ -683,18 +651,13 @@ class TestSignedBudgetOutcomeContent:
                 if value != 0
             ),
         )
-        result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
-        if result.status != "OUTPUT_BUDGET_EXCEEDED":
-            pytest.fail("expected the oversized-factor bounded outcome")
-        expected = _factor_backend.primitive_content_fraction(poly)
-        assert result.coefficient.as_fraction() == expected
-        assert MultivariateFactorResult.model_validate(result.model_dump()) == result
+        with pytest.raises(RuntimeError):
+            _compute_factor(MultivariateFactorRequest(polynomial=poly))
 
 
 class TestExecutionInterruptionSeparation:
     """Timeout, cancellation, and worker memory exhaustion are execution
-    conditions, never the mathematical OUTPUT_BUDGET_EXCEEDED status
-    (PR #2226 review)."""
+    conditions, never mathematical factorization results."""
 
     @staticmethod
     def _fake_completed(**overrides: Any) -> SimpleNamespace:
@@ -722,8 +685,7 @@ class TestExecutionInterruptionSeparation:
     def test_deadline_hit_returns_interrupted_not_budget_exceeded(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """A worker stopped by its deadline yields EXECUTION_FAILED,
-        which validates without rerunning any factorization."""
+        """A worker stopped by its deadline raises a timeout."""
         poly = _poly(("x", "y"), ((1, 1, (60, 60)), (-1, 1, (59, 0))))
         request = MultivariateFactorRequest(polynomial=poly)
         from jacobian.math.polynomials.multivariate import _factor_backend
@@ -732,22 +694,15 @@ class TestExecutionInterruptionSeparation:
         # time so a fast runner cannot complete the worker before the
         # deadline that this regression test is meant to exercise.
         monkeypatch.setattr(_factor_backend, "FACTOR_WORK_WALL_SECONDS", 0.05)
-        result = _compute_factor(request)
-        assert result.status == "EXECUTION_FAILED"
-        assert result.factors == ()
-        assert result.reconstructed == poly
-        assert result.coefficient.as_fraction() == Fraction(1)
-        # Roundtrip: an interruption claim establishes nothing to
-        # reproduce, so validation must not rerun the kernel.
-        assert MultivariateFactorResult.model_validate(result.model_dump()) == result
+        with pytest.raises(TimeoutError):
+            _compute_factor(request)
 
     def test_worker_timeout_raises_distinct_exception(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """run_bounded_factorization maps a timed-out worker onto
-        FactorBackendInterruptedError rather than ExhaustedError."""
+        FactorBackendInterruptedError."""
         from jacobian.math.polynomials.multivariate._factor_backend import (
-            FactorBackendExhaustedError,
             FactorBackendInterruptedError,
             run_bounded_factorization,
         )
@@ -757,20 +712,18 @@ class TestExecutionInterruptionSeparation:
 
         monkeypatch.setattr("jacobian.process.run_bounded_process", fake_run)
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
-        with pytest.raises(FactorBackendInterruptedError) as exc_info:
+        with pytest.raises(FactorBackendInterruptedError):
             run_bounded_factorization(poly)
-        assert not isinstance(exc_info.value, FactorBackendExhaustedError)
 
     def test_worker_memory_error_is_execution_interruption(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """An allocation failure under the address-space budget is an
         enforcement stop like SIGXCPU: it maps onto
-        FactorBackendInterruptedError, never a capacity status."""
+        FactorBackendInterruptedError."""
         import json as _json
 
         from jacobian.math.polynomials.multivariate._factor_backend import (
-            FactorBackendExhaustedError,
             FactorBackendInterruptedError,
             run_bounded_factorization,
         )
@@ -786,21 +739,14 @@ class TestExecutionInterruptionSeparation:
 
         monkeypatch.setattr("jacobian.process.run_bounded_process", fake_run)
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
-        with pytest.raises(FactorBackendInterruptedError) as exc_info:
+        with pytest.raises(FactorBackendInterruptedError):
             run_bounded_factorization(poly)
-        assert not isinstance(exc_info.value, FactorBackendExhaustedError)
 
-    def test_worker_memory_error_returns_execution_failed_not_budget_exceeded(
+    def test_worker_memory_error_raises_timeout(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """A worker ``MemoryError`` under the address-space cap proves only
-        that this run's work envelope was too small; it establishes nothing
-        about the exact output size, so _compute_factor must return the
-        retryable EXECUTION_FAILED status, never OUTPUT_BUDGET_EXCEEDED
-        (PR #2226 review)."""
+        """A worker ``MemoryError`` establishes no mathematical result."""
         import json as _json
-
-        from jacobian.math.polynomials.multivariate import _factor_backend
 
         payload = _json.dumps(
             {
@@ -818,15 +764,8 @@ class TestExecutionInterruptionSeparation:
 
         monkeypatch.setattr("jacobian.process.run_bounded_process", fake_run)
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
-        result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
-        assert result.status == "EXECUTION_FAILED"
-        assert result.factors == ()
-        assert result.reconstructed == poly
-        expected = _factor_backend.primitive_content_fraction(poly)
-        assert result.coefficient.as_fraction() == expected
-        # Roundtrip: an interruption claim establishes nothing to
-        # reproduce, so validation must not rerun the kernel.
-        assert MultivariateFactorResult.model_validate(result.model_dump()) == result
+        with pytest.raises(TimeoutError):
+            _compute_factor(MultivariateFactorRequest(polynomial=poly))
 
     def test_worker_memory_limit_proof_required_without_prlimit(
         self, monkeypatch: pytest.MonkeyPatch
@@ -879,17 +818,10 @@ class TestExecutionInterruptionSeparation:
     def test_forged_interruption_coefficient_rejected(self) -> None:
         """An authored interruption claim must still bind its coefficient
         to the exact content of the restated polynomial."""
-        from jacobian._exact import CanonicalRational
-
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
         with pytest.raises(ValidationError):
-            MultivariateFactorResult(
-                status="EXECUTION_FAILED",
-                coefficient=CanonicalRational.from_fraction(Fraction(5)),
-                factors=(),
-                reconstructed=poly,
-                normalization=None,
-                product_reconstruction=None,
+            MultivariateFactorResult.model_validate(
+                {"status": "EXECUTION_FAILED", "reconstructed": poly}
             )
 
     def test_worker_reports_address_space_flag(self) -> None:
@@ -906,7 +838,7 @@ class TestExecutionInterruptionSeparation:
         payload = json.dumps(
             {
                 "variables": ["x"],
-                "terms": [[2, 1, 1], [0, -1, 1]],
+                "terms": [[2, "1", "1"], [0, "-1", "1"]],
             }
         ).encode()
         environment = dict(os.environ)

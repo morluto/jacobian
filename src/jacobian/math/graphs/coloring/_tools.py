@@ -142,9 +142,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "k-coloring and return one proper coloring when it exists, using a "
         "Z3 SAT encoding bounded by the request-visible solver_conflicts "
         "budget. Colorability is claimed only on an explicit satisfying or "
-        "unsatisfiable outcome; an exhausted conflict budget yields "
-        "SOLVER_BUDGET_EXCEEDED, while worker failure yields EXECUTION_FAILED; "
-        "neither carries a colorability claim.",
+        "unsatisfiable outcome. Conflict-budget exhaustion and worker failure "
+        "are operational errors and establish no colorability claim.",
         request_type=KColorabilityRequest,
         result_type=KColorabilityResult,
         run=compute_k_colorability,
@@ -191,9 +190,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description="Given a bounded simple graph and an integer k, decide whether the "
         "graph admits a proper k-edge-coloring. The exact solver runs under "
         "the request-visible solver_conflicts budget: non-colorability "
-        "requires an explicit unsatisfiable outcome. An exhausted conflict budget "
-        "yields SOLVER_BUDGET_EXCEEDED and worker failure yields EXECUTION_FAILED; "
-        "neither carries a colorability claim. A "
+        "requires an explicit unsatisfiable outcome. Conflict-budget exhaustion "
+        "and worker failure are operational errors. A "
         "colorable decision returns one proper edge coloring as a canonical "
         "source-bound assignment value accepted by graph.edge_coloring.check.",
         request_type=EdgeKColorabilityRequest,

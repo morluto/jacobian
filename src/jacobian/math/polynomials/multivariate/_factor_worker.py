@@ -9,9 +9,16 @@ engine state.
 
 from __future__ import annotations
 
-import json
+import hashlib
 import sys
 from typing import Any
+
+from jacobian.canonical import (
+    encode_strict_json,
+    format_canonical_integer,
+    loads_strict_json,
+    parse_canonical_integer,
+)
 
 
 def _run(payload: dict[str, Any]) -> dict[str, Any]:
@@ -22,7 +29,10 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
     symbols = tuple(__import__("sympy").Symbol(name) for name in variables)
     source = Poly.from_dict(
         {
-            tuple(entry[:-2]): Rational(int(entry[-2]), int(entry[-1]))
+            tuple(entry[:-2]): Rational(
+                parse_canonical_integer(entry[-2]),
+                parse_canonical_integer(entry[-1]),
+            )
             for entry in terms
         },
         *symbols,
@@ -31,12 +41,19 @@ def _run(payload: dict[str, Any]) -> dict[str, Any]:
     coefficient, raw_factors = source.factor_list()
     return {
         "ok": True,
-        "coefficient": [int(coefficient.p), int(coefficient.q)],
+        "coefficient": [
+            format_canonical_integer(int(coefficient.p)),
+            format_canonical_integer(int(coefficient.q)),
+        ],
         "factors": [
             {
                 "multiplicity": int(multiplicity),
                 "terms": [
-                    [*monomial, int(coeff.p), int(coeff.q)]
+                    [
+                        *monomial,
+                        format_canonical_integer(int(coeff.p)),
+                        format_canonical_integer(int(coeff.q)),
+                    ]
                     for monomial, coeff in factor.terms()
                 ],
             }
@@ -72,7 +89,7 @@ def _apply_address_space_limit() -> bool:
 
 
 def _emit(payload: dict[str, object]) -> None:
-    sys.stdout.buffer.write(json.dumps(payload).encode("utf-8"))
+    sys.stdout.buffer.write(encode_strict_json(payload))
 
 
 def _fail(payload_message: str, *, exhausted: bool) -> int:
@@ -100,7 +117,8 @@ def main() -> int:
             exhausted=False,
         )
     try:
-        payload = json.loads(sys.stdin.buffer.read().decode("utf-8"))
+        input_bytes = sys.stdin.buffer.read()
+        payload = loads_strict_json(input_bytes)
         response = dict(_run(payload))
     except MemoryError as exc:
         # Allocation failure under the address-space budget is resource
@@ -128,7 +146,8 @@ def main() -> int:
         return 1
     response["ok"] = True
     response["as_limit_applied"] = as_limit_applied
-    sys.stdout.buffer.write(json.dumps(response).encode("utf-8"))
+    response["request_digest"] = hashlib.sha256(input_bytes).hexdigest()
+    sys.stdout.buffer.write(encode_strict_json(response))
     return 0
 
 

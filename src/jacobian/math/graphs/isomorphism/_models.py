@@ -71,13 +71,11 @@ class GraphIsomorphismResult(StrictModel):
     """The result of a graph isomorphism decision.
 
     When ``status`` is ``ISOMORPHIC`` the ``vertex_mapping`` field carries an
-    explicit bijection as a list of ``(from_vertex, to_vertex)`` pairs that
-    the caller can independently verify.  ``NOT_ISOMORPHIC`` and ``UNKNOWN``
-    carry no mapping.  ``UNKNOWN`` means the bounded VF2 worker did not
-    complete, so it establishes neither conclusion.
+    explicit bijection as a list of ``(from_vertex, to_vertex)`` pairs.
+    ``NOT_ISOMORPHIC`` carries no mapping.
     """
 
-    status: Literal["ISOMORPHIC", "NOT_ISOMORPHIC", "UNKNOWN"]
+    status: Literal["ISOMORPHIC", "NOT_ISOMORPHIC"]
     vertex_mapping: tuple[VertexMappingPair, ...] = Field(default=())
 
     @model_validator(mode="after")

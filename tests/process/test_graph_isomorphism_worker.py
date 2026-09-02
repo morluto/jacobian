@@ -52,7 +52,7 @@ def test_vf2_worker_obtains_a_positive_witness_in_one_search_traversal() -> None
     assert matcher.traversals == 1
 
 
-def test_timed_out_vf2_worker_is_an_unknown_non_conclusion(
+def test_timed_out_vf2_worker_is_an_operational_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -68,17 +68,23 @@ def test_timed_out_vf2_worker_is_an_unknown_non_conclusion(
         ),
     )
 
-    result = decide_graph_isomorphism(
-        GraphIsomorphismRequest.model_validate(
-            {
-                "graph_a": {"vertex_count": 2, "directed": False, "edges": [(0, 1)]},
-                "graph_b": {"vertex_count": 2, "directed": False, "edges": [(0, 1)]},
-            }
+    with pytest.raises(RuntimeError):
+        decide_graph_isomorphism(
+            GraphIsomorphismRequest.model_validate(
+                {
+                    "graph_a": {
+                        "vertex_count": 2,
+                        "directed": False,
+                        "edges": [(0, 1)],
+                    },
+                    "graph_b": {
+                        "vertex_count": 2,
+                        "directed": False,
+                        "edges": [(0, 1)],
+                    },
+                }
+            )
         )
-    )
-
-    assert result.status == "UNKNOWN"
-    assert result.vertex_mapping == ()
 
 
 def test_vf2_worker_has_private_cwd_and_os_resource_limits(
@@ -202,7 +208,7 @@ def test_factorization_workers_have_private_cwds_and_os_resource_limits(
         assert str(invocation["cwd"]).split("/")[-1].startswith(prefix)
 
 
-def test_timed_out_number_field_worker_is_an_unknown_non_conclusion(
+def test_timed_out_number_field_worker_is_an_operational_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -218,12 +224,8 @@ def test_timed_out_number_field_worker_is_an_unknown_non_conclusion(
         ),
     )
 
-    result = compute_nf_discriminant(
-        NumberFieldRequest(field=_number_field("1", "0", "-2"))
-    )
-
-    assert result.status == "UNKNOWN"
-    assert result.discriminant is None
+    with pytest.raises(TimeoutError):
+        compute_nf_discriminant(NumberFieldRequest(field=_number_field("1", "0", "-2")))
 
 
 def test_number_field_worker_has_private_cwd_and_os_resource_limits(
@@ -265,7 +267,7 @@ def test_number_field_worker_has_private_cwd_and_os_resource_limits(
     assert str(recorded["cwd"]).split("/")[-1].startswith("jacobian-number-field-")
 
 
-def test_number_field_worker_start_failure_is_an_unknown_non_conclusion(
+def test_number_field_worker_start_failure_is_operational(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def unavailable(*_args: object, **_kwargs: object) -> BoundedProcessResult:
@@ -273,9 +275,5 @@ def test_number_field_worker_start_failure_is_an_unknown_non_conclusion(
 
     monkeypatch.setattr(process, "run_bounded_process", unavailable)
 
-    result = compute_nf_discriminant(
-        NumberFieldRequest(field=_number_field("1", "0", "-2"))
-    )
-
-    assert result.status == "UNKNOWN"
-    assert result.detail == "the bounded number-field worker could not be started"
+    with pytest.raises(RuntimeError):
+        compute_nf_discriminant(NumberFieldRequest(field=_number_field("1", "0", "-2")))

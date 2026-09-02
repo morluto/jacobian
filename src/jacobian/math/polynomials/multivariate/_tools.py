@@ -307,10 +307,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "Exact content and complete irreducible factorization with "
             "multiplicities for one bounded nonzero multivariate polynomial over "
             "QQ in >=2 variables (univariate inputs use polynomial.factor.compute). "
-            "Returns OUTPUT_BUDGET_EXCEEDED carrying the polynomial and its "
-            "positive content when any factor exceeds the output budget; deadline, "
-            "kill, crash, or resource-cap stops return retryable non-mathematical "
-            "EXECUTION_FAILED. Backed by SymPy factor_list."
+            "Worker interruption, failure, or a decomposition outside the admitted "
+            "factor representation is reported as an operational error. Backed by "
+            "SymPy factor_list."
         ),
         request_type=MultivariateFactorRequest,
         result_type=MultivariateFactorResult,

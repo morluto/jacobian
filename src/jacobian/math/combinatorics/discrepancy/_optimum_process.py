@@ -33,7 +33,6 @@ _OPTIMUM_WORKER_WALL_SECONDS = (
     + 5
 )
 _WORKER_ERROR_BYTES = 16_384
-_WORKER_ADDRESS_SPACE_BYTES = 1_536 * 1024 * 1024
 _WORKER_FILE_SIZE_BYTES = 1_024 * 1_024
 
 
@@ -43,6 +42,7 @@ def _optimum_worker_stdout_limit(set_system: FiniteSetSystem) -> int:
     source = set_system.model_dump(mode="json")
     projection = {
         "set_system": source,
+        "status": "OPTIMAL",
         "optimal_coloring": [-1] * set_system.ground_set_size,
         "optimal_discrepancy": set_system.ground_set_size,
     }
@@ -75,7 +75,6 @@ def compute_optimal_discrepancy_isolated(
                 stderr_limit=_WORKER_ERROR_BYTES,
                 resource_limits=ProcessResourceLimits(
                     cpu_seconds=math.ceil(_OPTIMUM_WORKER_WALL_SECONDS),
-                    address_space_bytes=_WORKER_ADDRESS_SPACE_BYTES,
                     file_size_bytes=_WORKER_FILE_SIZE_BYTES,
                 ),
                 cwd=directory,
@@ -104,4 +103,6 @@ def compute_optimal_discrepancy_isolated(
             raise ValueError("worker result is not bound to the submitted set system")
         return result
     except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
-        raise RuntimeError("bounded discrepancy worker returned malformed output") from exc
+        raise RuntimeError(
+            "bounded discrepancy worker returned malformed output"
+        ) from exc

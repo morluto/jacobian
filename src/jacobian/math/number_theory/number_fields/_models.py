@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
-
-from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -25,25 +22,7 @@ class NumberFieldRequest(StrictModel):
 
 
 class NumberFieldDiscriminantResult(StrictModel):
-    status: Literal["COMPLETE", "UNKNOWN"] = "COMPLETE"
-    discriminant: str | None = None
-    detail: str | None = Field(default=None, max_length=1_024)
-
-    @model_validator(mode="after")
-    def bind_outcome(self) -> Self:
-        if self.status == "COMPLETE" and self.discriminant is None:
-            raise _validation_error(
-                "complete_discriminant_requires_value",
-                "a complete number-field discriminant requires its exact value",
-            )
-        if self.status == "UNKNOWN" and (
-            self.discriminant is not None or self.detail is None
-        ):
-            raise _validation_error(
-                "unknown_discriminant_shape",
-                "an unknown number-field computation requires detail and no value",
-            )
-        return self
+    discriminant: str
 
 
 class NumberFieldEmbeddingsRequest(StrictModel):

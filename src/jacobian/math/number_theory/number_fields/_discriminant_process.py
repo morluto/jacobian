@@ -8,6 +8,10 @@ import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+)
 from jacobian.canonical import (
     CanonicalizationError,
     encode_strict_json,
@@ -71,21 +75,23 @@ def compute_nf_discriminant(
                 ),
                 cwd=worker_directory,
             )
-    except OSError:
-        return NumberFieldDiscriminantResult(
-            status="UNKNOWN",
-            detail="the bounded number-field worker could not be started",
+    except OSError as exc:
+        raise RuntimeError("bounded number-field worker could not be started") from exc
+    if completed.cancelled:
+        raise OperationExecutionCancelledError(
+            "number-field discriminant computation cancelled"
+        )
+    if completed.timed_out:
+        raise OperationExecutionTimeoutError(
+            "number-field discriminant computation timed out"
         )
     if (
-        completed.timed_out
-        or completed.cancelled
-        or completed.stdout_exceeded
+        completed.stdout_exceeded
         or completed.stderr_exceeded
         or completed.returncode != 0
     ):
-        return NumberFieldDiscriminantResult(
-            status="UNKNOWN",
-            detail="the bounded number-field worker did not establish a discriminant",
+        raise RuntimeError(
+            "bounded number-field worker did not establish a discriminant"
         )
     try:
         response = loads_strict_json(completed.stdout)
@@ -113,7 +119,4 @@ def compute_nf_discriminant(
             code="number_field.not_irreducible",
             message="number-field polynomial must be irreducible over QQ",
         )
-    return NumberFieldDiscriminantResult(
-        status="UNKNOWN",
-        detail="the bounded number-field worker returned malformed output",
-    )
+    raise RuntimeError("bounded number-field worker returned malformed output")

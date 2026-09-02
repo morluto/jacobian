@@ -146,10 +146,7 @@ def decide_graph_isomorphism(
 ) -> GraphIsomorphismResult:
     """Decide whether two simple graphs are isomorphic."""
     _admit_graph_isomorphism(request)
-    try:
-        mapping = _vertex_mapping(request.graph_a, request.graph_b)
-    except RuntimeError:
-        return GraphIsomorphismResult(status="UNKNOWN", vertex_mapping=())
+    mapping = _vertex_mapping(request.graph_a, request.graph_b)
     if mapping is None:
         return GraphIsomorphismResult(status="NOT_ISOMORPHIC", vertex_mapping=())
     return GraphIsomorphismResult(

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import OperationExecutionTimeoutError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.coloring._chromatic_number_models import (
     ChromaticNumberCertificateCheckResult,
@@ -143,8 +144,7 @@ def k_colorability(
     Uses a Z3 SAT search bounded by the caller-visible ``solver_conflicts``
     budget and returns one proper coloring as the witness of a colorable
     decision.  Non-colorability is claimed only on an explicit
-    unsatisfiable outcome; an exhausted budget yields the typed
-    ``SOLVER_BUDGET_EXCEEDED`` outcome instead of an unbounded wait.  The
+    unsatisfiable outcome; an exhausted budget raises an operational timeout. The
     conflict budget bounds the SAT search after owner-local formula admission.
     """
     _admit_k_colorability(graph)
@@ -181,18 +181,11 @@ def k_colorability(
             colorable=False,
             coloring=None,
         )
-    return KColorabilityResult._from_kernel(
-        graph=graph,
-        colors=colors,
-        solver_conflicts=solver_conflicts,
-        status=(
-            "SOLVER_BUDGET_EXCEEDED"
-            if outcome == "budget_exceeded"
-            else "EXECUTION_FAILED"
-        ),
-        colorable=None,
-        coloring=None,
-    )
+    if outcome == "budget_exceeded":
+        raise OperationExecutionTimeoutError(
+            "vertex-coloring solver exhausted its conflict budget"
+        )
+    raise RuntimeError("vertex-coloring solver failed")
 
 
 def maximal_independent_set(
@@ -233,8 +226,8 @@ def edge_k_colorability(
     the caller-visible ``solver_conflicts`` budget and returns one proper
     coloring as a canonical source-bound value accepted directly by
     ``graph.edge_coloring.check``.  Non-colorability is claimed only on an
-    explicit unsatisfiable outcome; an exhausted budget yields the typed
-    ``SOLVER_BUDGET_EXCEEDED`` outcome instead of an unbounded wait.  The
+    explicit unsatisfiable outcome; an exhausted budget raises an operational
+    timeout. The
     conflict budget bounds the SAT search after owner-local formula admission.
     """
     _admit_edge_coloring_graph(graph)
@@ -273,18 +266,11 @@ def edge_k_colorability(
             colorable=False,
             coloring=None,
         )
-    return EdgeKColorabilityResult._from_kernel(
-        graph=graph,
-        colors=colors,
-        solver_conflicts=solver_conflicts,
-        status=(
-            "SOLVER_BUDGET_EXCEEDED"
-            if outcome == "budget_exceeded"
-            else "EXECUTION_FAILED"
-        ),
-        colorable=None,
-        coloring=None,
-    )
+    if outcome == "budget_exceeded":
+        raise OperationExecutionTimeoutError(
+            "edge-coloring solver exhausted its conflict budget"
+        )
+    raise RuntimeError("edge-coloring solver failed")
 
 
 def edge_coloring_check(

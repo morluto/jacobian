@@ -165,9 +165,8 @@ class KColorabilityRequest(StrictModel):
         le=MAX_SOLVER_CONFLICT_BUDGET,
         description=(
             "Request-visible SAT work budget: the exact solver is cut off "
-            "after this many conflict clauses; that exhaustion yields "
-            "SOLVER_BUDGET_EXCEEDED, while execution failures are reported "
-            "separately without a mathematical conclusion."
+            "after this many conflict clauses; exhaustion is an operational "
+            "timeout and establishes no coloring decision."
         ),
     )
 
@@ -182,8 +181,8 @@ class KColorabilityResult(StrictModel):
         ge=1,
         le=MAX_SOLVER_CONFLICT_BUDGET,
     )
-    status: Literal["DECIDED", "SOLVER_BUDGET_EXCEEDED", "EXECUTION_FAILED"] = "DECIDED"
-    colorable: bool | None = None
+    status: Literal["DECIDED"] = "DECIDED"
+    colorable: bool
     coloring: tuple[int, ...] | None = None
     vertex_count: int = Field(ge=0, le=MAX_COLORING_VERTICES)
 
@@ -194,8 +193,8 @@ class KColorabilityResult(StrictModel):
         graph: IndexedSimpleUndirectedGraph,
         colors: int,
         solver_conflicts: int,
-        status: Literal["DECIDED", "SOLVER_BUDGET_EXCEEDED", "EXECUTION_FAILED"],
-        colorable: bool | None,
+        status: Literal["DECIDED"],
+        colorable: bool,
         coloring: tuple[int, ...] | None,
     ) -> Self:
         """Construct a result already established by the owner-local kernel."""
@@ -217,36 +216,11 @@ class KColorabilityResult(StrictModel):
                 "graph.vertex_count_must_equal_the_graph_s_vertex_count",
                 "vertex_count must equal the graph's vertex count",
             )
-        if self.status in {"SOLVER_BUDGET_EXCEEDED", "EXECUTION_FAILED"}:
-            _require_k_colorability_budget_exceeded_shape(self)
-            return self
-        if self.colorable is None:
-            raise PydanticCustomError(
-                "graph.a_decided_result_must_claim_colorable_true_or_fa",
-                "a decided result must claim colorable true or false",
-            )
         if self.colorable:
             _require_k_colorability_positive_witness(self)
         else:
             _require_k_colorability_negative_shape(self)
         return self
-
-
-def _require_k_colorability_budget_exceeded_shape(
-    result: KColorabilityResult,
-) -> None:
-    """A budget-exceeded outcome carries no mathematical claim."""
-
-    if result.colorable is not None or result.coloring is not None:
-        raise PydanticCustomError(
-            "graph.a_budget_exceeded_outcome_carries_no_colorabilit",
-            "a budget-exceeded outcome carries no colorability claim",
-        )
-    if not result.graph.edges:
-        raise PydanticCustomError(
-            "graph.empty_graph_is_decided_colorable_without_any_sea",
-            "empty graph is decided colorable without any search",
-        )
 
 
 def _require_k_colorability_positive_witness(result: KColorabilityResult) -> None:
@@ -387,21 +361,6 @@ class EdgeColoringAssignment(StrictModel):
         return self
 
 
-def _require_budget_exceeded_shape(result: EdgeKColorabilityResult) -> None:
-    """A budget-exceeded outcome carries no mathematical claim."""
-
-    if result.colorable is not None or result.coloring is not None:
-        raise PydanticCustomError(
-            "graph.a_budget_exceeded_outcome_carries_no_colorabilit",
-            "a budget-exceeded outcome carries no colorability claim",
-        )
-    if not result.graph.edges:
-        raise PydanticCustomError(
-            "graph.empty_graph_is_decided_colorable_without_any_sea",
-            "empty graph is decided colorable without any search",
-        )
-
-
 def _require_negative_shape(result: EdgeKColorabilityResult) -> None:
     """A non-colorability claim carries no positive witness."""
 
@@ -443,9 +402,8 @@ class EdgeKColorabilityRequest(StrictModel):
         le=MAX_SOLVER_CONFLICT_BUDGET,
         description=(
             "Request-visible SAT work budget: the exact solver is cut off "
-            "after this many conflict clauses; that exhaustion yields "
-            "SOLVER_BUDGET_EXCEEDED, while execution failures are reported "
-            "separately without a mathematical conclusion."
+            "after this many conflict clauses; exhaustion is an operational "
+            "timeout and establishes no coloring decision."
         ),
     )
 
@@ -460,8 +418,8 @@ class EdgeKColorabilityResult(StrictModel):
         ge=1,
         le=MAX_SOLVER_CONFLICT_BUDGET,
     )
-    status: Literal["DECIDED", "SOLVER_BUDGET_EXCEEDED", "EXECUTION_FAILED"] = "DECIDED"
-    colorable: bool | None = None
+    status: Literal["DECIDED"] = "DECIDED"
+    colorable: bool
     coloring: EdgeColoringAssignment | None = None
     edge_count: StrictInt = Field(ge=0, le=MAX_EDGE_COLORING_EDGES)
 
@@ -472,8 +430,8 @@ class EdgeKColorabilityResult(StrictModel):
         graph: SimpleUndirectedGraph,
         colors: int,
         solver_conflicts: int,
-        status: Literal["DECIDED", "SOLVER_BUDGET_EXCEEDED", "EXECUTION_FAILED"],
-        colorable: bool | None,
+        status: Literal["DECIDED"],
+        colorable: bool,
         coloring: EdgeColoringAssignment | None,
     ) -> Self:
         """Construct a result already established by the owner-local kernel."""
@@ -494,14 +452,6 @@ class EdgeKColorabilityResult(StrictModel):
             raise PydanticCustomError(
                 "graph.edge_count_must_equal_the_number_of_graph_edges",
                 "edge_count must equal the number of graph edges",
-            )
-        if self.status in {"SOLVER_BUDGET_EXCEEDED", "EXECUTION_FAILED"}:
-            _require_budget_exceeded_shape(self)
-            return self
-        if self.colorable is None:
-            raise PydanticCustomError(
-                "graph.a_decided_result_must_claim_colorable_true_or_fa",
-                "a decided result must claim colorable true or false",
             )
         if self.colorable:
             _require_positive_witness(self)

@@ -13,19 +13,26 @@ conditions instead of host exceptions.
 
 from __future__ import annotations
 
-import json
+import hashlib
 import os
 import shutil
 import sys
-from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from jacobian.canonical import (
+    CanonicalizationError,
+    CanonicalLimits,
+    encode_strict_json,
+    format_canonical_integer,
+    loads_strict_json,
+    parse_canonical_integer,
+)
 from jacobian.math.polynomials.values import RationalPolynomial
 
 __all__ = [
     "FACTOR_WORK_WALL_SECONDS",
-    "FactorBackendExhaustedError",
+    "FactorBackendCancelledError",
     "FactorBackendFailureError",
     "FactorBackendInterruptedError",
     "run_bounded_factorization",
@@ -36,16 +43,15 @@ _WORKER_PATH = Path(__file__).resolve().with_name("_factor_worker.py")
 # Declared work budget for one exact factorization attempt.  The admitted
 # request envelope does not statically separate inputs whose irreducible
 # factors have exponentially many terms from ordinary ones, so the boundary
-# is enforced by killing the worker; exhaustion is reported through the
-# operation's typed outcome rather than a host exception.
+# is enforced by killing the worker; exhaustion is an operational failure.
 FACTOR_WORK_WALL_SECONDS = 20.0
 _FACTOR_ADDRESS_SPACE_BYTES = 4 * 1024 * 1024 * 1024
 _FACTOR_STDOUT_LIMIT = 64 * 1024 * 1024
 _FACTOR_STDERR_LIMIT = 1024 * 1024
 
 
-class FactorBackendExhaustedError(Exception):
-    """The exact factorization exceeded a declared output bound."""
+class FactorBackendCancelledError(Exception):
+    """The caller cancelled the factorization worker."""
 
 
 class FactorBackendFailureError(Exception):
@@ -63,15 +69,21 @@ class FactorBackendInterruptedError(Exception):
 
 
 def _serialized_request(polynomial: RationalPolynomial) -> bytes:
-    return json.dumps(
+    return encode_strict_json(
         {
             "variables": list(polynomial.variables),
             "terms": [
-                [*term.exponents, *term.coefficient.as_integer_ratio()]
+                [
+                    *term.exponents,
+                    *(
+                        format_canonical_integer(value)
+                        for value in term.coefficient.as_integer_ratio()
+                    ),
+                ]
                 for term in polynomial.polynomial.terms
             ],
         }
-    ).encode("utf-8")
+    )
 
 
 def _sympy_decomposition(
@@ -83,12 +95,17 @@ def _sympy_decomposition(
 
     from jacobian.math.polynomials._conversions import symbols_for_variables
 
-    coefficient = Rational(*payload["coefficient"])
+    coefficient = Rational(
+        *(parse_canonical_integer(value) for value in payload["coefficient"])
+    )
     raw_factors = []
     for record in payload["factors"]:
         poly = Poly.from_dict(
             {
-                tuple(entry[:-2]): Rational(int(entry[-2]), int(entry[-1]))
+                tuple(entry[:-2]): Rational(
+                    parse_canonical_integer(entry[-2]),
+                    parse_canonical_integer(entry[-1]),
+                )
                 for entry in record["terms"]
             },
             *symbols_for_variables(variables),
@@ -109,10 +126,8 @@ def run_bounded_factorization(
     stopped by its deadline, cancellation, or an enforced resource cap
     such as the CPU or address-space budget (a retryable execution
     condition establishing nothing about output size),
-    :class:`FactorBackendExhaustedError` when the serialized exact
-    factorization exceeded the declared transport output bound, and
     :class:`FactorBackendFailureError` when the worker reports a genuine
-    computation failure.  The returned decomposition has the same shape as
+    computation or worker-channel failure.  The returned decomposition has the same shape as
     ``Poly.factor_list()`` so callers can reuse the monic-decomposition
     kernel unchanged.
     """
@@ -141,9 +156,10 @@ def run_bounded_factorization(
             "factorization worker on this platform"
         )
     try:
+        input_bytes = _serialized_request(polynomial)
         completed = run_bounded_process(
             [sys.executable, str(_WORKER_PATH)],
-            input_bytes=_serialized_request(polynomial),
+            input_bytes=input_bytes,
             timeout_seconds=resolved_wall,
             environment=worker_environment(
                 locale="C.UTF-8",
@@ -172,18 +188,33 @@ def run_bounded_factorization(
         raise FactorBackendFailureError(
             "the bounded factorization worker could not be started"
         ) from exc
-    if completed.timed_out or completed.cancelled:
+    if completed.cancelled:
+        raise FactorBackendCancelledError(
+            "the bounded factorization worker was cancelled"
+        )
+    if completed.timed_out:
         raise FactorBackendInterruptedError(
-            "the bounded factorization worker was stopped by its deadline "
-            "or cancellation before producing a factorization"
+            "the bounded factorization worker timed out before producing a factorization"
         )
     if completed.stdout_exceeded:
-        raise FactorBackendExhaustedError(
-            "the exact factorization output exceeds the declared transport bound"
+        raise FactorBackendFailureError(
+            "the bounded factorization worker exceeded its output channel"
         )
     try:
-        payload = json.loads(completed.stdout.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
+        payload = loads_strict_json(
+            completed.stdout,
+            limits=CanonicalLimits(max_input_bytes=_FACTOR_STDOUT_LIMIT),
+        )
+        if not isinstance(payload, dict):
+            raise CanonicalizationError("worker response is not an object")
+        if (
+            payload.get("ok") is True
+            and payload.get("request_digest") != hashlib.sha256(input_bytes).hexdigest()
+        ):
+            raise FactorBackendFailureError(
+                "the bounded factorization worker produced a malformed result payload"
+            )
+    except CanonicalizationError:
         payload = None
     return _worker_outcome(
         payload, completed, polynomial, wrapped_with_prlimit=prlimit is not None
@@ -229,7 +260,7 @@ def _worker_outcome(
         # exhaustion is a deadline-type execution condition: it
         # establishes nothing about output size and the verification
         # deadline differs from the producing one, so it must never
-        # become OUTPUT_BUDGET_EXCEEDED.
+        # become a mathematical result.
         import signal
 
         sigxcpu = getattr(signal, "SIGXCPU", None)
@@ -263,12 +294,3 @@ def _require_worker_memory_limit(
             "the bounded factorization worker could not activate a hard "
             "memory limit on this platform"
         )
-
-
-def primitive_content_fraction(polynomial: RationalPolynomial) -> Fraction:
-    """Exact rational content of the source polynomial, without factoring."""
-
-    from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
-
-    content = rational_polynomial_to_sympy(polynomial).primitive()[0]
-    return Fraction(int(content.p), int(content.q))

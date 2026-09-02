@@ -6,6 +6,10 @@ from typing import Any, Literal
 
 from pydantic_core import PydanticCustomError
 
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials._conversions import (
     rational_polynomial_from_sympy,
@@ -17,7 +21,7 @@ from jacobian.math.polynomials.multivariate._division import (
     MultivariateDivisionResult,
 )
 from jacobian.math.polynomials.multivariate._factor_backend import (
-    FactorBackendExhaustedError,
+    FactorBackendCancelledError,
     FactorBackendFailureError,
     FactorBackendInterruptedError,
 )
@@ -419,44 +423,22 @@ def multivariate_factor(polynomial: RationalPolynomial) -> MultivariateFactorRes
     """Exact factorization over ``QQ[variables]`` via SymPy's ``factor_list``.
 
     The factorization kernel runs in a bounded, killable worker process.
-    When the exact factorization contains an irreducible factor beyond the
-    public output-term budget, or its serialized form exceeds the declared
-    transport output bound, returns the typed ``OUTPUT_BUDGET_EXCEEDED``
-    outcome instead of a host exception; ``coefficient`` then carries the
-    exact positive rational content of the restated source polynomial.  A
-    worker stopped by its deadline or cancellation, killed by an enforced
-    resource cap such as its CPU or address-space budget, crashed, or
-    running without containment establishes nothing about output size, so
-    it returns the distinct non-mathematical ``EXECUTION_FAILED`` outcome
-    instead.
+    Worker interruption, failure, and a decomposition outside the admitted
+    factor representation are operational failures, not mathematical results.
     """
 
     _run_admission(lambda: _admit_factor(polynomial))
 
     from jacobian._exact import CanonicalRational
 
-    def _bounded_outcome(
-        status: Literal["OUTPUT_BUDGET_EXCEEDED", "EXECUTION_FAILED"],
-    ) -> MultivariateFactorResult:
-        # Non-FACTORIZED outcomes restate the source and carry its exact
-        # positive primitive content, matching result validation.
-        return MultivariateFactorResult._from_kernel(
-            status=status,
-            coefficient=CanonicalRational.from_fraction(
-                _factor_backend.primitive_content_fraction(polynomial)
-            ),
-            factors=(),
-            reconstructed=polynomial,
-        )
-
     try:
         coefficient, raw_factors, reconstructed = _sympy_factorization(polynomial)
-    except FactorBackendInterruptedError:
-        return _bounded_outcome("EXECUTION_FAILED")
-    except FactorBackendExhaustedError:
-        return _bounded_outcome("OUTPUT_BUDGET_EXCEEDED")
-    except FactorBackendFailureError:
-        return _bounded_outcome("EXECUTION_FAILED")
+    except FactorBackendCancelledError as exc:
+        raise OperationExecutionCancelledError(str(exc)) from exc
+    except FactorBackendInterruptedError as exc:
+        raise OperationExecutionTimeoutError(str(exc)) from exc
+    except FactorBackendFailureError as exc:
+        raise RuntimeError(str(exc)) from exc
     coefficient_value = CanonicalRational.from_fraction(
         _monic_content_fraction(coefficient)
     )
@@ -478,7 +460,9 @@ def multivariate_factor(polynomial: RationalPolynomial) -> MultivariateFactorRes
         # The oversized-factor branch reports the same exact positive
         # content as every other bounded outcome; the signed monic leading
         # coefficient is a FACTORIZED-only convention tied to its factors.
-        return _bounded_outcome("OUTPUT_BUDGET_EXCEEDED")
+        raise RuntimeError(
+            "exact factorization exceeds the admitted factor representation"
+        ) from None
     factors_list.sort(
         key=lambda record: (
             record.multiplicity,
@@ -501,7 +485,6 @@ def multivariate_factor(polynomial: RationalPolynomial) -> MultivariateFactorRes
     )
 
     return MultivariateFactorResult._from_kernel(
-        status="FACTORIZED",
         coefficient=coefficient_value,
         factors=factors,
         reconstructed=reconstructed_poly,

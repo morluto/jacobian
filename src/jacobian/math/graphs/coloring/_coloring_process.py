@@ -8,6 +8,10 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Literal
 
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+)
 from jacobian.math.graphs.coloring._models import (
     _incident_edge_index_pairs_for_canonical_graph,
 )
@@ -128,16 +132,18 @@ def run_coloring_worker(
                 ),
                 cwd=directory,
             )
-    except OSError:
-        return "execution_failed", None
+    except OSError as exc:
+        raise RuntimeError("bounded coloring worker could not be started") from exc
+    if completed.cancelled:
+        raise OperationExecutionCancelledError("coloring solver execution cancelled")
+    if completed.timed_out:
+        raise OperationExecutionTimeoutError("coloring solver execution timed out")
     if (
-        completed.timed_out
-        or completed.cancelled
-        or completed.stdout_exceeded
+        completed.stdout_exceeded
         or completed.stderr_exceeded
         or completed.returncode != 0
     ):
-        return "execution_failed", None
+        raise RuntimeError("bounded coloring worker did not establish an outcome")
     try:
         payload = json.loads(completed.stdout.decode("utf-8"))
         outcome = payload["outcome"]
@@ -151,8 +157,14 @@ def run_coloring_worker(
         ):
             raise ValueError("worker returned an invalid coloring")
         return outcome, tuple(coloring)
-    except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError, ValueError):
-        return "execution_failed", None
+    except (
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+        KeyError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise RuntimeError("bounded coloring worker returned malformed output") from exc
 
 
 __all__ = [

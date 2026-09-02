@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from fractions import Fraction
 from functools import reduce
 from math import gcd, lcm
 from typing import Literal, Self
@@ -75,26 +74,11 @@ class MultivariateIrreducibleFactor(StrictModel):
 class MultivariateFactorResult(StrictModel):
     """Exact factorization outcome over ``QQ[variables]``.
 
-    ``FACTORIZED`` carries the full content-and-monic-irreducibles
-    decomposition.  ``OUTPUT_BUDGET_EXCEEDED`` reports, as a typed bounded
-    outcome, that the exact factorization is beyond this operation's
-    public output bounds: either an irreducible factor exceeds the public
-    output-term budget or the serialized exact decomposition exceeded the
-    declared transport bound.  ``EXECUTION_FAILED`` is not a mathematical
-    conclusion: the worker was stopped by its deadline or cancellation,
-    killed by an enforced resource cap such as its CPU or address-space
-    budget, crashed, or could not be contained, so no factorization was
-    obtained and callers may retry.
-    For both non-FACTORIZED statuses ``reconstructed`` restates the
-    requested polynomial unchanged, ``coefficient`` carries the exact
-    positive rational content of that polynomial, and ``factors`` is empty.
+    The result carries the full content-and-monic-irreducibles decomposition.
+    Operational non-completion is reported through the execution-error path.
     """
 
-    status: Literal[
-        "FACTORIZED",
-        "OUTPUT_BUDGET_EXCEEDED",
-        "EXECUTION_FAILED",
-    ] = "FACTORIZED"
+    status: Literal["FACTORIZED"] = "FACTORIZED"
     coefficient: CanonicalRational
     factors: tuple[MultivariateIrreducibleFactor, ...] = Field(max_length=128)
     reconstructed: RationalPolynomial
@@ -115,27 +99,6 @@ class MultivariateFactorResult(StrictModel):
         )
         if not self.reconstructed.polynomial.terms:
             raise _validation_error("reconstructed polynomial must be nonzero")
-        if self.status != "FACTORIZED":
-            if self.factors:
-                raise _validation_error(
-                    "non-FACTORIZED outcomes carry no irreducible factors"
-                )
-            if (
-                self.normalization is not None
-                or self.product_reconstruction is not None
-            ):
-                raise _validation_error(
-                    "non-FACTORIZED outcomes declare no normalization or "
-                    "product reconstruction"
-                )
-            if _primitive_content_fraction(self.reconstructed) != (
-                self.coefficient.as_fraction()
-            ):
-                raise _validation_error(
-                    "outcome coefficient does not match the exact content "
-                    "of the restated polynomial"
-                )
-            return self
         if (
             self.normalization != "CONTENT_AND_MONIC_IRREDUCIBLES"
             or self.product_reconstruction != "EXACT"
@@ -153,7 +116,6 @@ class MultivariateFactorResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        status: Literal["FACTORIZED", "OUTPUT_BUDGET_EXCEEDED", "EXECUTION_FAILED"],
         coefficient: CanonicalRational,
         factors: tuple[MultivariateIrreducibleFactor, ...],
         reconstructed: RationalPolynomial,
@@ -166,14 +128,12 @@ class MultivariateFactorResult(StrictModel):
         """
 
         return cls.model_construct(
-            status=status,
+            status="FACTORIZED",
             coefficient=coefficient,
             factors=factors,
             reconstructed=reconstructed,
-            normalization=(
-                "CONTENT_AND_MONIC_IRREDUCIBLES" if status == "FACTORIZED" else None
-            ),
-            product_reconstruction="EXACT" if status == "FACTORIZED" else None,
+            normalization="CONTENT_AND_MONIC_IRREDUCIBLES",
+            product_reconstruction="EXACT",
         )
 
 
@@ -216,18 +176,6 @@ def _require_aggregate_degree_consistent(
                 "aggregate irreducible degree exceeds the reconstructed "
                 "total degree; the factorization product cannot match"
             )
-
-
-def _primitive_content_fraction(polynomial: RationalPolynomial) -> Fraction:
-    """Return exact positive rational content without entering a backend."""
-
-    fractions = [term.coefficient.as_fraction() for term in polynomial.polynomial.terms]
-    common_denominator = reduce(lcm, (value.denominator for value in fractions), 1)
-    scaled = [
-        value.numerator * (common_denominator // value.denominator)
-        for value in fractions
-    ]
-    return Fraction(gcd(*scaled), common_denominator)
 
 
 def _check_factor_records(

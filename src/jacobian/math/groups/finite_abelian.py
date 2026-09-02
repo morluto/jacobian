@@ -72,8 +72,8 @@ class FiniteAbelianProductGroup(StrictModel):
     results, so this reusable value is bounded by the interoperable
     safe-integer range rather than any operation's work envelope. The axis
     count carries no ceiling of its own: consuming operations derive their
-    execution envelope from the supplied rows, the group exponent, and the
-    serialized-result size that already scales with the rank.
+    execution envelope from the supplied rows, group exponent, and retained
+    coordinate cardinality.
     """
 
     moduli: tuple[FiniteGroupModulus, ...] = Field(min_length=1)
@@ -384,19 +384,16 @@ def _spectral_pair_work(source: FiniteAbelianSpectralPairSource) -> _SpectralPai
     """Preflight exact work, intermediate growth, and output obligations.
 
     A cardinality mismatch, an equal singleton pair, and the equal empty pair
-    are decided without a cyclotomic backend call; their admission is the
-    serialized source-plus-decision byte bound. Otherwise, the operation checks
+    are decided without a cyclotomic backend call. Otherwise, the operation checks
     both supplied difference families: at most ``C(|Lambda|, 2)`` frequency
     pairs against ``|A|`` point characters and ``C(|A|, 2)`` point pairs
     against ``|Lambda|`` frequency characters. No check depends on the ambient
     group order or modulus size, only on the supplied rows, the rank, and the
     group exponent.
 
-    The serialized-source bound is enforced before any exponent arithmetic.
-    It depends only on the declared moduli and supplied rows, so an oversized
-    request never runs superlinear preflight work: once it holds, the axis
-    count fits the result budget and every intermediate least common multiple
-    stays below the product of the admitted moduli.
+    Row and coordinate cardinality are checked before exponent arithmetic, and
+    every intermediate least common multiple stays below the product of the
+    admitted moduli.
 
     Every coefficient of ``Phi_N`` is at most ``2**phi(N)`` in absolute value:
     it is an elementary symmetric sum of ``phi(N)`` unit-modulus roots. SymPy's

@@ -18,9 +18,8 @@ PROFILE_PAIR_PASSES = 1
 MAX_PROFILE_BITSET_CHUNK_WORK = 10_000_000
 BITSET_CHUNK_BITS = 30
 
-# Retained sources, dense histograms, and the two compact witnesses must fit
-# below the canonical transport's 10 MiB ceiling.  Four MiB leaves room for
-# the operation envelope and is checked from the source before the pair scan.
+# Retained sources, dense histograms, and the two compact witnesses are bounded
+# directly by codeword, histogram-cell, and witness cardinality.
 # Enumerating every ``length``-bit word of weight ``w`` visits exactly
 # ``binomial(length, w)`` candidates and materializes exactly
 # ``length * binomial(length, w)`` binary entries, so that one quantity

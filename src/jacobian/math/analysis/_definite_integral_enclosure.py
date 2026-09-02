@@ -1080,8 +1080,7 @@ DEFINITE_INTEGRAL_ENCLOSURE_OPERATIONS = (
             f"{MAX_DEFINITE_INTEGRAL_SELECTION_COMPARISONS:,} deterministic "
             "leaf-selection comparisons, "
             f"{MAX_DEFINITE_INTEGRAL_SUMMATION_UNITS:,} exact dyadic endpoint-add "
-            "units, 4,096 Arb precision bits, and one complete result within the "
-            "10 MiB canonical output bound."
+            "units and 4,096 Arb precision bits."
         ),
         request_type=DefiniteIntegralEnclosureRequest,
         result_type=DefiniteIntegralEnclosureResult,

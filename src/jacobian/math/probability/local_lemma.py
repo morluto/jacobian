@@ -17,9 +17,8 @@ MAX_LOCAL_LEMMA_EVENTS = 1_024
 MAX_LOCAL_LEMMA_INCIDENCES = 32_768
 MAX_LOCAL_LEMMA_LABEL_LENGTH = 128
 MAX_LOCAL_LEMMA_INPUT_RATIONAL_DIGITS = 256
-# Per-component growth is derived before any product.  The aggregate ceiling
-# leaves room in the 10 MiB canonical transport envelope for the retained
-# source, labels, incidence indices, row metadata, and JSON punctuation.
+# Per-component growth is derived before any product. The aggregate digit
+# ceiling bounds the retained exact rational components.
 MAX_LOCAL_LEMMA_RESULT_RATIONAL_DIGITS = 32_768
 MAX_LOCAL_LEMMA_TOTAL_RESULT_DIGITS = 2_000_000
 

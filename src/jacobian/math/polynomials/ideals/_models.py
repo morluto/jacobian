@@ -876,8 +876,7 @@ class IdealMinimalPrimesRequest(StrictModel):
             "every component's forced generator count — is rejected here "
             "before the backend launches; otherwise a family exceeding the "
             "aggregate 64-generator or 1024-term envelope returns a typed "
-            "LIMIT_EXCEEDED outcome. The complete serialized result must also "
-            "fit the repository's canonical 10 MiB output limit."
+            "LIMIT_EXCEEDED outcome."
         )
     )
     resource_budget: IdealComputationBudget = Field(

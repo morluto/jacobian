@@ -1294,8 +1294,7 @@ ADAPTIVE_RANGE_ENCLOSURE_OPERATIONS = (
             f"{MAX_ADAPTIVE_RANGE_DEPTH}, {MAX_ADAPTIVE_RANGE_EVALUATIONS:,} "
             "evaluations and 4,096 precision bits, "
             f"{MAX_ADAPTIVE_RANGE_NODE_EVALUATIONS:,} expression-node evaluations, "
-            f"{MAX_ADAPTIVE_RANGE_PRECISION_WORK:,} precision-weighted node-bit "
-            "units, and one complete result within the 10 MiB canonical output bound."
+            f"{MAX_ADAPTIVE_RANGE_PRECISION_WORK:,} precision-weighted node-bit units."
         ),
         request_type=AdaptiveRangeEnclosureRequest,
         result_type=AdaptiveRangeEnclosureResult,

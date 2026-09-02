@@ -5,9 +5,8 @@ from pydantic import Field
 from jacobian._models import StrictModel
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
-# A000055 gives 19,320 free trees at order 16.  Even when every label and edge
-# endpoint is charged at the maximum width for that order, the complete
-# canonical family is below 10 MiB.  Order 17 has 48,629 rows and exceeds it.
+# A000055 gives 19,320 free trees at order 16. Order 17 has 48,629 retained
+# graph rows and exceeds the owner-local family-cardinality envelope.
 MAX_ORDER = 16
 MAX_FREE_TREE_COUNT = 19_320
 

@@ -9,9 +9,9 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 
-# Worst-case structure tensors (field_order=251, every coefficient 250) must fit
-# the 10 MiB CanonicalLimits request envelope before Pydantic validation.
-# Dimension 137 encodes to about 9.84 MiB; 138 exceeds 10 MiB.
+# Bound dense structure-tensor materialization before Pydantic validation.
+# Dimension 137 retains 2,571,353 scalar cells; the next dimension crosses the
+# owner-local retained-cell envelope.
 MAX_REQUEST_ENCODING_DIM = 137
 
 # Dense commutator matrix is n^2-by-n. Gaussian elimination / nullspace work is

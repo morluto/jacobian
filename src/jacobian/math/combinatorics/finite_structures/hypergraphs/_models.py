@@ -96,7 +96,7 @@ def _validation_error(message: str) -> PydanticCustomError:
         ("pair bound", "preflight_pairs"),
         ("incidence bound", "preflight_incidences"),
         ("intersection-cell bound", "preflight_cells"),
-        ("canonical output limit", "preflight_output"),
+        ("retained result bound", "preflight_output"),
         ("source exceeds", "source_representation"),
         ("solver bound", "solver_envelope"),
         ("dual exceeds", "dual_envelope"),

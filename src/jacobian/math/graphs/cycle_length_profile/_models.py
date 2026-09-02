@@ -22,7 +22,7 @@ class CycleLengthProfileRequest(StrictModel):
         description=(
             "Canonical simple graph. Admission also requires the complete first-"
             "witness search to fit the 10,000,000-unit work bound and the complete "
-            "profile to fit the canonical output envelope."
+            "profile to fit its retained row and witness bounds."
         )
     )
 

@@ -365,8 +365,7 @@ class PsdOrderRequest(StrictModel):
         description=(
             "First operand; admission couples both operands through the "
             "measured right-minus-left component bound (513 digits), the "
-            "dimension-scaled witness bound, and the serialized result's "
-            "canonical output budget, not a fixed per-operand ceiling. "
+            "dimension-scaled retained witness bound, not a fixed per-operand ceiling. "
             "Identical operands measure the zero matrix and admit trivially."
         ),
     )
@@ -374,8 +373,7 @@ class PsdOrderRequest(StrictModel):
         description=(
             "Second operand; admission couples both operands through the "
             "measured right-minus-left component bound (513 digits), the "
-            "dimension-scaled witness bound, and the serialized result's "
-            "canonical output budget, not a fixed per-operand ceiling. "
+            "dimension-scaled retained witness bound, not a fixed per-operand ceiling. "
             "Identical operands measure the zero matrix and admit trivially."
         ),
     )

@@ -22,6 +22,7 @@ from jacobian._execution import (
     OperationExecutionTimeoutError,
     bind_request_deadline,
     current_request_execution,
+    request_checkpoint,
 )
 from jacobian.canonical import (
     CanonicalizationError,
@@ -587,6 +588,7 @@ def run_common_interlacing_profile(
         raise RuntimeError(
             "bounded common-interlacing worker returned a malformed profile"
         ) from exc
+    request_checkpoint("after common-interlacing result construction")
     if time.monotonic() >= deadline:
         raise OperationExecutionTimeoutError(
             "request deadline expired during common-interlacing result construction"

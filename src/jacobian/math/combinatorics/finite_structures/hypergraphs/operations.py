@@ -149,7 +149,7 @@ def _admit_edge_intersection_graph(
             )
     # Build the exact graph edge set once for admission and reuse it for the
     # result.  Charging every admitted input as a complete graph rejects sparse
-    # graphs that are well within the canonical output boundary.
+    # graphs that are well within the retained edge-cardinality boundary.
     edge_ids = tuple(edge_id for edge_id, _ in hypergraph.edges)
     member_sets = tuple(frozenset(members) for _, members in hypergraph.edges)
     graph_edges = tuple(

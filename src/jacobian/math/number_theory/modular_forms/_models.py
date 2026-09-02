@@ -17,9 +17,8 @@ class LevelOneNamedQExpansionRequest(StrictModel):
     truncation_order: StrictInt = Field(
         ge=1,
         description=(
-            "Return coefficients q^0 through q^(P-1); the exact work and "
-            "serialized-result budgets bound P before any scan or "
-            "finite-series arithmetic."
+            "Return coefficients q^0 through q^(P-1); exact work and retained "
+            "coefficient cardinality bound P before finite-series arithmetic."
         ),
     )
 

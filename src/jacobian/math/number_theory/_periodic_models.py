@@ -95,9 +95,7 @@ def _periodic_request_schema_extra(*, profile: bool) -> JsonSchemaValue:
                     "A full-subset shortcut returns L union rows (so L <= 65,536) "
                     "or an empty complement. Otherwise, non-complements require "
                     "W <= 65,536; complements require L <= 65,536 and "
-                    "L + W <= 2,000,000. The retained source, residue list, and "
-                    "4,096-byte result envelope must fit the 10,485,760-byte "
-                    "canonical output limit."
+                    "L + W <= 2,000,000 retained rows."
                 ),
                 "profile_materialized_residue_limit": MAX_MATERIALIZED_RESIDUES,
                 "profile_full_union_period_limit": MAX_MATERIALIZED_RESIDUES,

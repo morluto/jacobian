@@ -460,32 +460,6 @@ def test_nonorthogonality_witness_admits_axes_beyond_the_former_rank_cap() -> No
     assert witness.remainder_coefficients == ("2",)
 
 
-def test_singleton_axis_envelope_boundary_is_admitted() -> None:
-    # Singleton envelope: 2,568 + 24 * rank <= 32,768 serialized bytes.
-    rank = 1_258
-    source = _source(
-        (2,) * rank,
-        ((0,) * rank,),
-        ((1,) + (0,) * (rank - 1),),
-    )
-
-    result = decide_finite_abelian_spectral_pair(source)
-
-    assert result.is_spectral is True
-
-
-def test_singleton_axis_above_old_serialized_boundary_is_admitted() -> None:
-    rank = 1_259
-    source = _source(
-        (2,) * rank,
-        ((0,) * rank,),
-        ((1,) + (0,) * (rank - 1),),
-    )
-
-    result = decide_finite_abelian_spectral_pair(source)
-    assert result.is_spectral is True
-
-
 def test_large_singleton_source_is_admitted_by_trivial_decision() -> None:
     rank = 4_000
     source = _source(

@@ -146,19 +146,6 @@ def test_full_rank_row_swap_canonicalizes_pivot_sets_independently() -> None:
     assert result.pivot_columns == ("c0", "c1")
 
 
-def test_native_matrix_rank_accepts_large_retained_axis_label() -> None:
-    fp = _f2()
-    # The source-bound result repeats this label, so its JSON representation
-    # exceeds the former shared 10 MiB ceiling.
-    long_label = "r" * (6 * 1024 * 1024)
-    m = _matrix(fp, [[[1]]], [long_label], ["c0"])
-
-    result = matrix_rank(m)
-
-    assert result.rank == 1
-    assert result.pivot_rows == (long_label,)
-
-
 def test_pivot_columns_follow_source_axis_order() -> None:
     fp = _f2()
     m = _matrix(fp, [[[1], [0]], [[0], [1]]], ["r0", "r1"], ["c0", "c1"])

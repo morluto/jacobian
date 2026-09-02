@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import json
+import hashlib
 import sys
 
+from jacobian.canonical import encode_strict_json
 from jacobian.math.number_theory._certification_models import (
     CertifiedFactorizationRequest,
 )
@@ -14,12 +15,16 @@ from jacobian.math.number_theory._factorization_kernels import (
 
 
 def main() -> int:
-    request = CertifiedFactorizationRequest.model_validate(json.load(sys.stdin))
+    input_bytes = sys.stdin.buffer.read()
+    request = CertifiedFactorizationRequest.model_validate_json(
+        input_bytes, strict=True
+    )
     response: dict[str, object] = {
         "ok": True,
         "result": _factorize_certified_in_process(request).model_dump(mode="json"),
+        "request_digest": hashlib.sha256(input_bytes).hexdigest(),
     }
-    json.dump(response, sys.stdout, separators=(",", ":"))
+    sys.stdout.buffer.write(encode_strict_json(response))
     return 0
 
 

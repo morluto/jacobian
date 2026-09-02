@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import sys
@@ -11,7 +12,14 @@ from tempfile import TemporaryDirectory
 from time import monotonic
 from typing import Literal
 
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import (
+    CanonicalizationError,
+    CanonicalLimits,
+    encode_strict_json,
+    format_canonical_integer,
+    loads_strict_json,
+    parse_canonical_integer,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._certification_models import (
     CertifiedFactor,
@@ -203,11 +211,10 @@ def factorize_certified(
         with TemporaryDirectory(
             prefix="jacobian-certified-factor-"
         ) as worker_directory:
+            input_bytes = encode_strict_json({"value": request.value})
             completed = run_bounded_process(
                 [sys.executable, str(_CERTIFIED_FACTORIZATION_WORKER)],
-                input_bytes=json.dumps(
-                    {"value": request.value}, separators=(",", ":")
-                ).encode(),
+                input_bytes=input_bytes,
                 timeout_seconds=_FACTORIZATION_WORKER_TIMEOUT_SECONDS,
                 environment=worker_environment(locale="C.UTF-8"),
                 stdout_limit=1024 * 1024,
@@ -236,11 +243,20 @@ def factorize_certified(
             detail="the bounded factorization worker did not establish a complete result",
         )
     try:
-        response = json.loads(completed.stdout.decode("utf-8"))
-        if response.get("ok") is not True:
+        response = loads_strict_json(
+            completed.stdout,
+            limits=CanonicalLimits(max_input_bytes=1024 * 1024),
+        )
+        if (
+            not isinstance(response, dict)
+            or set(response) != {"ok", "result", "request_digest"}
+            or response.get("ok") is not True
+        ):
             raise ValueError("worker failure")
+        if response["request_digest"] != hashlib.sha256(input_bytes).hexdigest():
+            raise ValueError("worker response is not bound to its request")
         return CertifiedFactorizationResult.model_validate(response["result"])
-    except (KeyError, TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError):
+    except (KeyError, TypeError, ValueError, CanonicalizationError):
         return CertifiedFactorizationResult._unknown(
             value=request.value,
             detail="the bounded factorization worker returned malformed output",

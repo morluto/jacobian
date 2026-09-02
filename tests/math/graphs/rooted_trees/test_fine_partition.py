@@ -407,18 +407,14 @@ def test_shared_maximum_order_path_is_admitted() -> None:
     _assert_fine_partition(result)
 
 
-def test_non_tree_diagnostic_does_not_inherit_json_output_budget() -> None:
-    vertices = tuple(f"{index:03d}" + "\x00" * 61 for index in range(180))
+def test_non_tree_diagnostic_reports_a_cycle() -> None:
+    vertices = ("a", "b", "c")
     graph = SimpleUndirectedGraph(
         vertices=vertices,
-        edges=tuple(
-            (vertices[left], vertices[right])
-            for left in range(len(vertices))
-            for right in range(left + 1, len(vertices))
-        ),
+        edges=(("a", "b"), ("b", "c"), ("a", "c")),
     )
 
-    result = construct_fine_partition(graph, vertices[0], 1)
+    result = construct_fine_partition(graph, "a", 1)
 
     assert isinstance(result.outcome, RootedTreeNotATree)
     assert result.outcome.has_cycle

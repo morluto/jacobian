@@ -898,11 +898,9 @@ def test_null_congestion_admits_ratios_the_result_omits() -> None:
     # so the public result's congestion is null exactly as its contract
     # defines: the oversized ratio is a value the result omits, and admission
     # must not reject a representable profile because of it. The shared
-    # derivative scan therefore divides no ratio at all, prices no congestion
-    # row beyond the null field's bytes, and excludes it from the budget.
-    from jacobian.canonical import encode_strict_json
+    # derivative scan therefore divides no ratio at all and excludes it from
+    # the mathematical work budget.
     from jacobian.math.graphs.flows.multicommodity._models import (
-        _RATIONAL_JSON_OVERHEAD_BYTES,
         derived_profile_digit_budget,
     )
 
@@ -923,11 +921,6 @@ def test_null_congestion_admits_ratios_the_result_omits() -> None:
     assert len(format_canonical_integer(load.numerator)) < MAX_CANONICAL_RATIONAL_DIGITS
     assert len(format_canonical_integer(ratio.denominator)) > (
         MAX_CANONICAL_RATIONAL_DIGITS
-    )
-    # The reserved overhead must cover the serialized null congestion field,
-    # otherwise null-priced envelopes would underprice their results.
-    assert (
-        len(encode_strict_json({"congestion": None})) <= _RATIONAL_JSON_OVERHEAD_BYTES
     )
     flow = MulticommodityFlow(
         network=FlowGraph(

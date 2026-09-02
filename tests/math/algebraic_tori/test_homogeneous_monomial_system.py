@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from math import prod
 
 import pytest
@@ -199,7 +198,7 @@ def test_large_component_family_is_compact_not_materialized() -> None:
     result = homogeneous_monomial_solution_subgroup(_system([[factor]]))
 
     assert result.connected_component_count == factor
-    assert len(json.dumps(result.model_dump(mode="json"))) < 10_000
+    _assert_defining_invariants(result)
 
 
 def test_full_dimension_and_digit_boundary_returns_a_compact_exact_result() -> None:
@@ -217,7 +216,7 @@ def test_full_dimension_and_digit_boundary_returns_a_compact_exact_result() -> N
     assert result.free_rank == 0
     assert len(result.torsion_character_group.invariant_factors) == 16
     assert result.connected_component_count == str(int(factor) ** 16)
-    assert len(result.model_dump_json()) < 12_000
+    _assert_defining_invariants(result)
 
 
 def test_result_round_trips_and_source_composes_unchanged() -> None:

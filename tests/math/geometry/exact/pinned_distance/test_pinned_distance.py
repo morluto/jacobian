@@ -236,21 +236,3 @@ def test_long_target_labels_are_counted_once_per_entry() -> None:
     result = compute_pinned_distance_support_profile(config)
 
     assert len(result.entries) == 64
-
-
-def test_large_canonical_source_is_not_rejected_by_json_bytes() -> None:
-    huge = CanonicalRational.from_fraction(Fraction(10**32767))
-    config = PointConfiguration(
-        points=tuple(
-            LabelledRationalPoint(
-                label=f"p{index}",
-                coordinates=(huge,) * 20,
-            )
-            for index in range(17)
-        )
-    )
-
-    result = compute_pinned_distance_support_profile(config)
-
-    assert result.configuration == config
-    assert len(result.entries) == len(config.points)

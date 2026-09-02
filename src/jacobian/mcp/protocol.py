@@ -54,7 +54,10 @@ def register_core_projection(
             uri="operation://catalog",
             name="operation-catalog",
             description=(
-                "Installed model-facing operations and their compact schemas."
+                "Large exact bulk export of every installed operation, schema, and "
+                "example. Use math.find for ordinary operation discovery and "
+                "inspection. If matching fails, refine or paginate math.find; read "
+                "this resource only when the task requires the complete inventory."
             ),
             mime_type="application/json",
         )

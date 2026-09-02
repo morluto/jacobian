@@ -248,6 +248,19 @@ def test_mcp_v2_uses_sdk_typed_tools_lifespan_and_structured_resources() -> None
             )
             assert serialized_tools["tools"][0]["outputSchema"]["type"] == "object"
 
+            listed_resources = await client.list_resources()
+            catalog_resource = next(
+                resource
+                for resource in listed_resources.resources
+                if str(resource.uri) == "operation://catalog"
+            )
+            assert catalog_resource.description == (
+                "Large exact bulk export of every installed operation, schema, and "
+                "example. Use math.find for ordinary operation discovery and "
+                "inspection. If matching fails, refine or paginate math.find; read "
+                "this resource only when the task requires the complete inventory."
+            )
+
             invalid_request = await client.call_tool(
                 "math.find", {"unknown_key": "rejected"}
             )

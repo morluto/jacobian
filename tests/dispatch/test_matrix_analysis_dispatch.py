@@ -2,76 +2,30 @@
 
 from __future__ import annotations
 
-import json
-
 import pytest
 
-from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
-from jacobian.canonical import canonicalize_json, encode_strict_json
+from jacobian.canonical import canonicalize_json
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import invoke_operation
 from jacobian.math.matrices.values import MAX_MATRIX_DIMENSION
 
 
-def _encoded_inertia_payload_near_limit(offset: int) -> bytes:
-    """Encode an inertia request whose normalized dense source echo lands
-    exactly ``offset`` bytes below the canonical output limit, so the echo
-    plus the reserved envelope may exceed the identical output limit while
-    the payload still fits the input limit."""
-
-    import functools
-
-    from jacobian.canonical import CanonicalLimits
-
-    @functools.cache
-    def build(offset: int) -> bytes:
-        limits = CanonicalLimits()
-        dimension = MAX_MATRIX_DIMENSION
-        cells = [(r, c) for r in range(dimension) for c in range(r, dimension)]
-
-        def dense_echo(digits: dict[tuple[int, int], int]) -> bytes:
-            rows = [
-                [
-                    {
-                        "num": "9" * digits[(min(r, c), max(r, c))],
-                        "den": "1",
-                    }
-                    for c in range(dimension)
-                ]
-                for r in range(dimension)
-            ]
-            return encode_strict_json({"domain": "QQ", "entries": rows})
-
-        target = limits.max_output_bytes - offset
-        low = len(dense_echo(dict.fromkeys(cells, 1)))
-        uniform = max(1, (target - low) // (dimension * dimension))
-        digits = dict.fromkeys(cells, uniform)
-        gap = target - len(dense_echo(digits))
-        first, second = cells[0], cells[1]
-        adjusted = digits[first] + gap
-        if adjusted < 1:
-            digits[second] += adjusted - 1
-            adjusted = 1
-        elif adjusted > MAX_CANONICAL_RATIONAL_DIGITS:
-            digits[second] += adjusted - MAX_CANONICAL_RATIONAL_DIGITS
-            adjusted = MAX_CANONICAL_RATIONAL_DIGITS
-        assert 1 <= digits[second] <= MAX_CANONICAL_RATIONAL_DIGITS
-        digits[first] = adjusted
-        assert len(dense_echo(digits)) == target
-        encoded = encode_strict_json({"matrix": json.loads(dense_echo(digits))})
-        assert len(encoded) <= limits.max_input_bytes
-        return encoded
-
-    return build(offset)
+def _high_digit_dense_inertia_payload() -> dict[str, object]:
+    value = {"num": "9" * 4096, "den": "1"}
+    return {
+        "matrix": {
+            "domain": "QQ",
+            "entries": [[value for _ in range(16)] for _ in range(16)],
+        }
+    }
 
 
-@pytest.mark.scale
-def test_dispatch_rejects_unfittable_inertia_request_as_typed_error() -> None:
+def test_dispatch_rejects_inertia_above_digit_work_bound() -> None:
     with pytest.raises(OperationDomainValidationError) as excinfo:
         invoke_operation(
             "matrix.inertia.compute",
-            json.loads(_encoded_inertia_payload_near_limit(offset=512)),
+            _high_digit_dense_inertia_payload(),
             Catalog.open(),
         )
     assert "digit-work bound" in str(excinfo.value)

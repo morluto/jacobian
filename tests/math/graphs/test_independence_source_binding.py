@@ -10,7 +10,6 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.math.graphs import _independence_z3 as z3_backend
 from jacobian.math.graphs.independence import (
     IndependenceNumberBudget,
@@ -429,26 +428,6 @@ def test_native_result_does_not_inherit_canonical_output_limit() -> None:
 
     assert result.graph == request.graph
     assert result.optimum_value == 1
-
-
-def test_large_labels_near_boundary_stay_admitted_and_transportable() -> None:
-    """Admission tracks the predicted serialized result, not a coarse cap.
-
-    One hundred twenty-eight 30k-character identifiers predict a doubled
-    echo of roughly 7.7 MB, which stays inside the canonical output limit:
-    the solve runs, the exact payload serializes under the limit, and the
-    round trip revalidates.
-    """
-
-    labels = tuple(f"n{index:03d}" + "x" * 30_000 for index in range(128))
-    request = IndependenceNumberRequest(graph=_graph(labels, ()))
-    result = solve_independence_number(request)
-    assert result.status == "EXACT"
-    assert result.optimum_value == 128
-    assert result.witness_vertices == tuple(sorted(labels))
-    encoded = len(encode_strict_json(result.model_dump(mode="json")))
-    assert encoded <= CanonicalLimits().max_output_bytes
-    assert IndependenceNumberResult.model_validate(result.model_dump()) == result
 
 
 def test_incomplete_tight_upper_bound_is_rejected() -> None:

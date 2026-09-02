@@ -131,8 +131,8 @@ def test_native_path_admits_trivial_high_exponents() -> None:
     assert enumerate_r_full(3, 1) == (1,)
 
 
-def test_result_uses_canonical_output_limit() -> None:
-    """A complete family between the old 3 MiB cap and 10 MiB is admitted."""
+def test_large_complete_family_is_admitted_by_family_size() -> None:
+    """A large complete family remains inside the mathematical cardinality bound."""
     result = enumerate_r_full(64, 10**109)
     assert len(result) == 31_377
 

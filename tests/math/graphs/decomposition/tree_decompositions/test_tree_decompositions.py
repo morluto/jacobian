@@ -5,8 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import CanonicalLimits, canonicalize_json
-from jacobian.catalog.models import OperationDomainValidationError, OperationResult
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.decomposition.tree_decompositions import TreeDecomposition
 from jacobian.math.graphs.decomposition.tree_decompositions._models import (
     AdhesionsRequest,
@@ -168,25 +167,6 @@ class TestReroot:
         result = compute_reroot(RerootRequest(decomposition=td, root="t0"))
         assert result.parent["t0"] is None
         assert result.children["t0"] == ("t1",)
-
-    def test_admits_decomposed_labels_whose_canonical_projection_fits(self) -> None:
-        # Each raw label encodes to 337 bytes, so measuring the unnormalized
-        # spelling exceeds the 10 MiB transport limit; NFC composes each
-        # e + U+0301 pair into a 2-byte character and the canonical
-        # projection of the same request fits.
-        td = _labeled_path_decomposition(node_count=256, label_body="e\u0301" * 110)
-        request = RerootRequest(decomposition=td, root=td.tree_nodes[0])
-        projected = compute_reroot(request).model_dump(mode="json")
-        assert len(canonicalize_json(projected)) <= CanonicalLimits().max_output_bytes
-        public_result = OperationResult(
-            operation_id="graph.tree_decomposition.reroot.compute",
-            runtime_ms=0,
-            output=projected,
-        )
-        assert (
-            OperationResult.model_validate_json(public_result.model_dump_json())
-            == public_result
-        )
 
     def test_reroot_has_no_transport_derived_output_ceiling(self) -> None:
         td = _labeled_path_decomposition(node_count=256, label_body="x" * 394)

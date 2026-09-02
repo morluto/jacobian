@@ -92,10 +92,10 @@ def test_variable_label_bound_is_the_interoperable_integer_maximum() -> None:
 
 def test_composed_mgu_depth_rejects_at_operation_admission() -> None:
     # Unification composes binding depth: f(x, y) against f(u^16(y), u^16(c))
-    # keeps every input path within the 31-node transport envelope, but its
+    # keeps every input path within the 31-node request bound, but its
     # idempotent MGU binds x to a 33-node chain. The rejection must surface
     # as a typed domain error during operation admission instead of a
-    # canonicalization failure after the kernel ran.
+    # result-construction failure after the kernel ran.
     def unary_chain(length: int, leaf: Term) -> Term:
         term = leaf
         for _ in range(length):

@@ -357,7 +357,7 @@ def test_group_rank_and_order_boundaries() -> None:
     assert FiniteAbelianProductGroup(moduli=(2,) * 7).order == 128
 
     # The reusable group value carries no axis ceiling; consuming operations
-    # derive their rank envelope from serialized output size and work.
+    # derive their rank envelope from the computation and retained cardinality.
     wide_group = FiniteAbelianProductGroup(moduli=(2,) * 65)
     assert wide_group.order == 2**65
     assert wide_group.exponent == 2

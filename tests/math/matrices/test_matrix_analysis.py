@@ -26,7 +26,6 @@ from jacobian.math.matrices.analysis.operations import (
     compute_inertia as compute_inertia_native,
 )
 from jacobian.math.matrices.values import (
-    MAX_MATRIX_DIMENSION,
     MAX_RATIONAL_MATRIX_ORDER,
     RationalMatrix,
 )
@@ -398,73 +397,15 @@ def test_inertia_accepts_diagonal_carrier_boundary() -> None:
     )
 
 
-def _encoded_inertia_payload_near_limit(offset: int) -> bytes:
-    """Encode an inertia request whose normalized dense source echo lands
-    exactly ``offset`` bytes below the canonical output limit, so the echo
-    plus the reserved envelope may exceed the identical output limit while
-    the payload still fits the input limit."""
-
-    import functools
-
-    from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
-    from jacobian.canonical import CanonicalLimits, encode_strict_json
-
-    @functools.cache
-    def build(offset: int) -> bytes:
-        limits = CanonicalLimits()
-        dimension = MAX_MATRIX_DIMENSION
-        cells = [(r, c) for r in range(dimension) for c in range(r, dimension)]
-
-        def dense_echo(digits: dict[tuple[int, int], int]) -> bytes:
-            rows = [
-                [
-                    {
-                        "num": "9" * digits[(min(r, c), max(r, c))],
-                        "den": "1",
-                    }
-                    for c in range(dimension)
-                ]
-                for r in range(dimension)
-            ]
-            return encode_strict_json({"domain": "QQ", "entries": rows})
-
-        target = limits.max_output_bytes - offset
-        low = len(dense_echo(dict.fromkeys(cells, 1)))
-        uniform = max(1, (target - low) // (dimension * dimension))
-        digits = dict.fromkeys(cells, uniform)
-        gap = target - len(dense_echo(digits))
-        first, second = cells[0], cells[1]
-        adjusted = digits[first] + gap
-        if adjusted < 1:
-            digits[second] += adjusted - 1
-            adjusted = 1
-        elif adjusted > MAX_CANONICAL_RATIONAL_DIGITS:
-            digits[second] += adjusted - MAX_CANONICAL_RATIONAL_DIGITS
-            adjusted = MAX_CANONICAL_RATIONAL_DIGITS
-        assert 1 <= digits[second] <= MAX_CANONICAL_RATIONAL_DIGITS
-        digits[first] = adjusted
-        assert len(dense_echo(digits)) == target
-        dense = dense_echo(digits)
-        encoded = encode_strict_json({"matrix": __import__("json").loads(dense)})
-        assert len(encoded) <= limits.max_input_bytes
-        return encoded
-
-    return build(offset)
-
-
-@pytest.mark.scale
-def test_inertia_request_admission_reserves_output_headroom_for_source_echo() -> None:
-    from jacobian.canonical import CanonicalLimits
-
-    encoded = _encoded_inertia_payload_near_limit(offset=512)
-    assert len(encoded) <= CanonicalLimits().max_output_bytes
-    request = SymmetricMatrixRequest.model_validate_json(encoded)
-    with pytest.raises(OperationDomainValidationError):
+def test_inertia_rejects_request_above_digit_work_bound() -> None:
+    value = {"num": "9" * 4096, "den": "1"}
+    request = SymmetricMatrixRequest.model_validate(
+        {
+            "matrix": {
+                "domain": "QQ",
+                "entries": [[value for _ in range(16)] for _ in range(16)],
+            }
+        }
+    )
+    with pytest.raises(OperationDomainValidationError, match="digit-work bound"):
         compute_inertia(request)
-
-
-@pytest.mark.scale
-def test_inertia_request_admission_accepts_payload_inside_reserved_budget() -> None:
-    encoded = _encoded_inertia_payload_near_limit(offset=2048)
-    request = SymmetricMatrixRequest.model_validate_json(encoded)
-    assert len(request.matrix.entries) == MAX_MATRIX_DIMENSION

@@ -9,9 +9,8 @@ from tempfile import TemporaryDirectory
 from time import monotonic
 
 from jacobian._execution import (
-    OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
-    request_cancelled,
+    request_checkpoint,
 )
 from jacobian.process import (
     BoundedProcessResult,
@@ -30,10 +29,7 @@ def run_hnf_worker(
 ) -> BoundedProcessResult:
     """Run one invariant-form HNF worker inside the caller's deadline."""
 
-    if request_cancelled():
-        raise OperationExecutionCancelledError(
-            "invariant-form lattice cancelled before graph-lattice HNF"
-        )
+    request_checkpoint("before graph-lattice HNF")
     remaining = deadline - monotonic()
     if remaining <= 0:
         raise OperationExecutionTimeoutError(

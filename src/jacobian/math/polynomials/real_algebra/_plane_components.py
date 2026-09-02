@@ -12,11 +12,10 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._execution import (
-    OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     bind_request_deadline,
     current_request_execution,
-    request_cancelled,
+    request_checkpoint,
 )
 from jacobian.canonical import (
     encode_strict_json,
@@ -70,10 +69,7 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 
 def _require_active(deadline: float, phase: str) -> None:
-    if request_cancelled():
-        raise OperationExecutionCancelledError(
-            f"plane-component request cancelled {phase}"
-        )
+    request_checkpoint(phase)
     if deadline <= time.monotonic():
         raise OperationExecutionTimeoutError(
             f"plane-component request deadline expired {phase}"

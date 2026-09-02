@@ -8,11 +8,10 @@ from time import monotonic
 from pydantic_core import PydanticCustomError
 
 from jacobian._execution import (
-    OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     bind_request_deadline,
     current_request_execution,
-    request_cancelled,
+    request_checkpoint,
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lattices.invariant_forms._kernel import (
@@ -44,8 +43,7 @@ def _execution_deadline() -> float:
 
 
 def _require_deadline(deadline: float, phase: str) -> None:
-    if request_cancelled():
-        raise OperationExecutionCancelledError(f"request cancelled {phase}")
+    request_checkpoint(phase)
     if monotonic() >= deadline:
         raise OperationExecutionTimeoutError(f"invariant-form deadline expired {phase}")
 

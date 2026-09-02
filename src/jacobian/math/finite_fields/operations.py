@@ -9,11 +9,10 @@ from itertools import combinations
 from typing import Literal
 
 from jacobian._execution import (
-    OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     bind_request_deadline,
     current_request_execution,
-    request_cancelled,
+    request_checkpoint,
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields._fixed_subspace_process import (
@@ -94,10 +93,7 @@ def _prime_exceeds_worker_json_limit(prime: int) -> bool:
 
 
 def _fixed_subspace_checkpoint(deadline: float | None, stage: str) -> None:
-    if request_cancelled():
-        raise OperationExecutionCancelledError(
-            f"finite-field fixed-subspace computation cancelled {stage}"
-        )
+    request_checkpoint(stage)
     if deadline is not None and time.monotonic() >= deadline:
         raise OperationExecutionTimeoutError(
             f"finite-field fixed-subspace deadline expired {stage}"

@@ -13,7 +13,7 @@ from typing import Any
 from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
-    request_cancelled,
+    request_checkpoint,
 )
 from jacobian.canonical import (
     CanonicalizationError,
@@ -35,8 +35,7 @@ _SIGN_STDERR_LIMIT = 64 * 1024
 
 
 def _require_active(deadline: float, phase: str) -> None:
-    if request_cancelled():
-        raise OperationExecutionCancelledError(f"request cancelled {phase}")
+    request_checkpoint(phase)
     if monotonic() >= deadline:
         raise OperationExecutionTimeoutError(f"request deadline expired {phase}")
 

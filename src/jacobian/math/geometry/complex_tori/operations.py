@@ -14,11 +14,10 @@ from sympy import QQ
 from sympy.polys.matrices import DomainMatrix
 
 from jacobian._execution import (
-    OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     bind_request_deadline,
     current_request_execution,
-    request_cancelled,
+    request_checkpoint,
 )
 from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
@@ -126,8 +125,7 @@ def _execution_deadline() -> float:
 
 
 def _require_execution_active(deadline: float, phase: str) -> None:
-    if request_cancelled():
-        raise OperationExecutionCancelledError(f"request cancelled {phase}")
+    request_checkpoint(phase)
     if monotonic() >= deadline:
         raise OperationExecutionTimeoutError(f"complex-torus deadline expired {phase}")
 

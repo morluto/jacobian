@@ -15,11 +15,10 @@ from itertools import pairwise
 from time import monotonic
 
 from jacobian._execution import (
-    OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     bind_request_deadline,
     current_request_execution,
-    request_cancelled,
+    request_checkpoint,
 )
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
@@ -1084,10 +1083,7 @@ def _deadline() -> float:
 
 
 def _require_deadline(deadline: float, stage: str) -> None:
-    if request_cancelled():
-        raise OperationExecutionCancelledError(
-            f"integral homology request cancelled {stage}"
-        )
+    request_checkpoint(stage)
     if monotonic() >= deadline:
         raise OperationExecutionTimeoutError(
             f"integral homology deadline expired {stage}"

@@ -19,11 +19,10 @@ from jacobian._exact import (
     require_bounded_rational,
 )
 from jacobian._execution import (
-    OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     bind_request_deadline,
     current_request_execution,
-    request_cancelled,
+    request_checkpoint,
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices._number_field import (
@@ -85,8 +84,7 @@ def _require_inertia_execution_active(
     *,
     deadline: float | None = None,
 ) -> None:
-    if request_cancelled():
-        raise OperationExecutionCancelledError(f"request cancelled {phase}")
+    request_checkpoint(phase)
     execution = current_request_execution()
     effective_deadline = deadline
     if effective_deadline is None and execution is not None:

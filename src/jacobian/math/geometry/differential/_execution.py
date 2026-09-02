@@ -5,11 +5,10 @@ from __future__ import annotations
 from time import monotonic
 
 from jacobian._execution import (
-    OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     bind_request_deadline,
     current_request_execution,
-    request_cancelled,
+    request_checkpoint,
 )
 
 # The maximum dense tensor fixture takes about twelve seconds on the ordinary
@@ -37,10 +36,7 @@ def begin_lie_derivative_deadline() -> float:
 def require_lie_derivative_deadline(deadline: float, stage: str) -> None:
     """Fail without a mathematical conclusion when cancellation or time wins."""
 
-    if request_cancelled():
-        raise OperationExecutionCancelledError(
-            f"rational Lie derivative cancelled {stage}"
-        )
+    request_checkpoint(stage)
     if monotonic() >= deadline:
         raise OperationExecutionTimeoutError(
             f"rational Lie derivative deadline expired {stage}"

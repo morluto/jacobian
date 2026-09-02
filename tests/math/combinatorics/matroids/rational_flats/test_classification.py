@@ -1020,9 +1020,7 @@ def test_timeout_and_cancellation_are_observed_after_admission() -> None:
     with (
         request_execution(100.0),
         patch.object(time, "monotonic", side_effect=clock_values),
-        pytest.raises(
-            OperationExecutionTimeoutError, match="during rational-flat search"
-        ),
+        pytest.raises(OperationExecutionTimeoutError, match="request deadline expired"),
     ):
         bind_request_deadline(105.0)
         classify_clause_constrained_rational_flats(problem)

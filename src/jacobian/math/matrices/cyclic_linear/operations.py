@@ -12,11 +12,10 @@ from typing import Any
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import (
-    OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     bind_request_deadline,
     current_request_execution,
-    request_cancelled,
+    request_checkpoint,
     request_execution,
 )
 from jacobian.math.matrices.cyclic_linear._models import (
@@ -76,15 +75,7 @@ class _ComputedComponent:
 
 
 def _require_execution_active(phase: str) -> None:
-    if request_cancelled():
-        raise OperationExecutionCancelledError(f"request cancelled {phase}")
-    execution = current_request_execution()
-    if (
-        execution is not None
-        and execution.deadline is not None
-        and time.monotonic() >= execution.deadline
-    ):
-        raise OperationExecutionTimeoutError(f"request deadline expired {phase}")
+    request_checkpoint(phase)
 
 
 def _bind_cyclic_profile_deadline() -> None:
@@ -807,10 +798,7 @@ def _compute_component(admission: _ComponentAdmission) -> _ComputedComponent:
     execution = current_request_execution()
     deadline = execution.deadline if execution is not None else None
 
-    if request_cancelled():
-        raise OperationExecutionCancelledError(
-            f"request cancelled before order-{order} kernel"
-        )
+    request_checkpoint(f"before order-{order} kernel")
 
     try:
         rank, source_dimension, nonzero_minor_data, kernel_coords = (

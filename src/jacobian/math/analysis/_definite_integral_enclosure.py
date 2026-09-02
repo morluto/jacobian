@@ -16,11 +16,10 @@ from jacobian._exact import (
     canonical_rational_component_digits,
 )
 from jacobian._execution import (
-    OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     bind_request_deadline,
     current_request_execution,
-    request_cancelled,
+    request_checkpoint,
 )
 from jacobian._flint import flint_workprec
 from jacobian._models import StrictModel, canonicalize_json_containers
@@ -645,10 +644,7 @@ def _midpoint_component_digits(box: RationalIntervalBox, depth: int) -> int:
 
 
 def _require_deadline(deadline: float, stage: str) -> None:
-    if request_cancelled():
-        raise OperationExecutionCancelledError(
-            f"definite-integral enclosure cancelled {stage}"
-        )
+    request_checkpoint(stage)
     if monotonic() >= deadline:
         raise OperationExecutionTimeoutError(
             f"definite-integral enclosure deadline expired {stage}"

@@ -92,15 +92,19 @@ def test_complex_torus_axis_iterables_are_bounded_before_materialization() -> No
     structure = _elliptic_torus().complex_structure
 
     with pytest.raises(ValidationError, match="at most 128 axes"):
-        LatticeComplexStructure(
-            coordinate_axis=repeat("e1"),
-            complex_structure=structure,
+        LatticeComplexStructure.model_validate(
+            {
+                "coordinate_axis": repeat("e1"),
+                "complex_structure": structure,
+            }
         )
 
     with pytest.raises(ValidationError, match="NFC Unicode"):
-        LatticeComplexStructure(
-            coordinate_axis=deque(("e\u0301", "x")),
-            complex_structure=structure,
+        LatticeComplexStructure.model_validate(
+            {
+                "coordinate_axis": deque(("e\u0301", "x")),
+                "complex_structure": structure,
+            }
         )
 
 
@@ -236,7 +240,7 @@ def test_riemann_profile_preserves_a_stricter_deadline_through_inertia(
         bind_request_deadline(550.0)
         with pytest.raises(
             OperationExecutionTimeoutError,
-            match="during exact rational congruence elimination",
+            match="request deadline expired",
         ):
             compute_riemann_form_profile(torus, form)
         execution = current_request_execution()

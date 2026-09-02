@@ -9,11 +9,10 @@ from time import monotonic
 from typing import Literal, NoReturn
 
 from jacobian._execution import (
-    OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     bind_request_deadline,
     current_request_execution,
-    request_cancelled,
+    request_checkpoint,
 )
 from jacobian.canonical import (
     format_canonical_integer,
@@ -128,10 +127,7 @@ def begin_affine_torus_deadline() -> float:
 def require_affine_torus_deadline(deadline: float, stage: str) -> None:
     """Stop without a mathematical conclusion when the request envelope expires."""
 
-    if request_cancelled():
-        raise OperationExecutionCancelledError(
-            f"affine-torus fixed-locus computation cancelled {stage}"
-        )
+    request_checkpoint(stage)
     if monotonic() >= deadline:
         raise OperationExecutionTimeoutError(
             f"affine-torus fixed-locus deadline expired {stage}"

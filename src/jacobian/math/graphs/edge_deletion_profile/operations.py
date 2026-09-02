@@ -7,11 +7,10 @@ from itertools import combinations
 from math import comb
 
 from jacobian._execution import (
-    OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     bind_request_deadline,
     current_request_execution,
-    request_cancelled,
+    request_checkpoint,
     request_execution,
 )
 from jacobian.catalog.models import OperationDomainValidationError
@@ -28,8 +27,7 @@ _OWNER_DEADLINE_SECONDS = 3600.0
 
 
 def _require_execution_active(stage: str) -> None:
-    if request_cancelled():
-        raise OperationExecutionCancelledError(f"request cancelled {stage}")
+    request_checkpoint(stage)
     execution = current_request_execution()
     if (
         execution is not None

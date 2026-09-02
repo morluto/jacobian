@@ -9,11 +9,10 @@ from fractions import Fraction
 from math import factorial, gcd, lcm
 
 from jacobian._execution import (
-    OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     bind_request_deadline,
     current_request_execution,
-    request_cancelled,
+    request_checkpoint,
 )
 from jacobian.math.combinatorics.matroids.rational_flats._models import (
     MAX_RATIONAL_FLAT_CLAUSE_MEMBERSHIPS,
@@ -115,8 +114,7 @@ class _WorkLedger:
 
 
 def _require_execution_active(deadline: float | None, phase: str) -> None:
-    if request_cancelled():
-        raise OperationExecutionCancelledError(f"request cancelled {phase}")
+    request_checkpoint(phase)
     if deadline is not None and deadline <= time.monotonic():
         raise OperationExecutionTimeoutError(f"request deadline expired {phase}")
 

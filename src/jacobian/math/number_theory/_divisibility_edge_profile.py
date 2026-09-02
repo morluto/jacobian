@@ -13,7 +13,7 @@ from jacobian._execution import (
     OperationExecutionTimeoutError,
     bind_request_deadline,
     current_request_execution,
-    request_cancelled,
+    request_checkpoint,
     request_execution,
 )
 from jacobian.canonical import CanonicalizationError, format_canonical_integer
@@ -52,10 +52,7 @@ def _bind_execution_deadline() -> None:
 
 
 def _require_execution_active(phase: str) -> None:
-    if request_cancelled():
-        raise OperationExecutionCancelledError(
-            f"divisibility edge profile request cancelled {phase}"
-        )
+    request_checkpoint(phase)
     execution = current_request_execution()
     if (
         execution is not None

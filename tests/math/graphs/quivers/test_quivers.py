@@ -50,7 +50,7 @@ def test_fixed_length_paths_triangle() -> None:
         length=2,
     )
     result = fixed_length_paths(request.quiver, request.length)
-    assert result.total_paths == 3
+    assert result.total_paths == "3"
 
 
 def test_fixed_length_paths_zero() -> None:
@@ -59,40 +59,35 @@ def test_fixed_length_paths_zero() -> None:
         length=0,
     )
     result = fixed_length_paths(request.quiver, request.length)
-    assert result.total_paths == 2
+    assert result.total_paths == "2"
 
 
-def test_fixed_length_paths_admits_transportable_count_boundary() -> None:
-    """Eight parallel loops have exactly 8**17 length-17 paths."""
+def test_fixed_length_paths_returns_counts_beyond_json_number_range() -> None:
+    """Exact counts use canonical integers rather than JSON number limits."""
     request = FixedLengthPathsRequest(
-        quiver=FiniteQuiver(vertex_count=1, arrows=((0, 0),) * 8), length=17
+        quiver=FiniteQuiver(vertex_count=1, arrows=((0, 0),) * 8), length=18
     )
 
     result = fixed_length_paths(request.quiver, request.length)
 
-    assert result.path_matrix == ((8**17,),)
-    assert result.total_paths == 8**17
-    # This is the actual final delivery primitive, not merely model parsing.
+    assert result.path_matrix == ((str(8**18),),)
+    assert result.total_paths == str(8**18)
     assert encode_strict_json(result.model_dump(mode="json"))
 
 
-def test_fixed_length_paths_rejects_untransportable_count_before_kernel() -> None:
-    """The next power would produce raw JSON integers above 2**53 - 1."""
+def test_fixed_length_paths_handles_large_exact_count_with_small_work() -> None:
     request = FixedLengthPathsRequest(
-        quiver=FiniteQuiver(vertex_count=1, arrows=((0, 0),) * 8), length=18
+        quiver=FiniteQuiver(vertex_count=1, arrows=((0, 0),) * 32), length=32
     )
+    result = fixed_length_paths(request.quiver, request.length)
+    assert result.total_paths == str(32**32)
+
+
+def test_fixed_length_paths_rejects_excessive_matrix_work() -> None:
+    request = FixedLengthPathsRequest(quiver=FiniteQuiver(vertex_count=128), length=32)
     with pytest.raises(OperationDomainValidationError) as exc_info:
         fixed_length_paths(request.quiver, request.length)
 
     assert exc_info.value.errors()[0]["type"] == (
         "quiver.fixed_length_paths_exceeds_envelope"
     )
-
-
-def test_fixed_length_paths_rejects_parallel_loop_explosion_before_kernel() -> None:
-    """The reported 32-loop, length-32 request is rejected at admission."""
-    request = FixedLengthPathsRequest(
-        quiver=FiniteQuiver(vertex_count=1, arrows=((0, 0),) * 32), length=32
-    )
-    with pytest.raises(OperationDomainValidationError):
-        fixed_length_paths(request.quiver, request.length)

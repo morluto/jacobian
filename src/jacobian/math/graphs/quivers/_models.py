@@ -7,6 +7,7 @@ from typing import Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 
 MAX_VERTICES = 128
@@ -71,5 +72,5 @@ class VertexProfilesResult(StrictModel):
 
 
 class FixedLengthPathsResult(StrictModel):
-    path_matrix: tuple[tuple[int, ...], ...]
-    total_paths: int = Field(ge=0)
+    path_matrix: tuple[tuple[CanonicalInteger, ...], ...]
+    total_paths: CanonicalInteger

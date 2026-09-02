@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.quivers._models import (
     AdjacencyMatricesResult,
@@ -70,8 +71,10 @@ def fixed_length_paths(quiver: FiniteQuiver, length: int) -> FixedLengthPathsRes
 
     total = sum(sum(row) for row in result)
     return FixedLengthPathsResult(
-        path_matrix=tuple(tuple(row) for row in result),
-        total_paths=total,
+        path_matrix=tuple(
+            tuple(format_canonical_integer(value) for value in row) for row in result
+        ),
+        total_paths=format_canonical_integer(total),
     )
 
 

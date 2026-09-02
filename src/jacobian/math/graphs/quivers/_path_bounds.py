@@ -4,11 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-# Strict JSON transports integer scalars only through IEEE-754's interoperable
-# integer range.  ``FixedLengthPathsResult`` deliberately exposes its counts
-# as integer scalars (rather than an operation-specific decimal wrapper), so
-# every materialized matrix entry and the aggregate count must fit this range.
-MAX_TRANSPORTABLE_PATH_COUNT = (1 << 53) - 1
+MAX_PATH_MATRIX_SCALAR_PRODUCTS = 10_000_000
 
 
 @dataclass(frozen=True)
@@ -34,22 +30,22 @@ def fixed_length_paths_envelope(
     """
 
     path_count_bound = vertex_count if length == 0 else pow(arrow_count, length)
-    if path_count_bound > MAX_TRANSPORTABLE_PATH_COUNT:
-        raise ValueError(
-            "fixed-length path count can exceed the interoperable JSON integer "
-            f"bound of {MAX_TRANSPORTABLE_PATH_COUNT}"
-        )
-
     entry_digits = len(str(path_count_bound))
+    matrix_scalar_products = max(length - 1, 0) * vertex_count**3
+    if matrix_scalar_products > MAX_PATH_MATRIX_SCALAR_PRODUCTS:
+        raise ValueError(
+            "fixed-length matrix powers exceed the "
+            f"{MAX_PATH_MATRIX_SCALAR_PRODUCTS}-product work bound"
+        )
     return FixedLengthPathsEnvelope(
         path_count_bound=path_count_bound,
         maximum_entry_digits=entry_digits,
-        matrix_scalar_products=max(length - 1, 0) * vertex_count**3,
+        matrix_scalar_products=matrix_scalar_products,
     )
 
 
 __all__ = [
-    "MAX_TRANSPORTABLE_PATH_COUNT",
+    "MAX_PATH_MATRIX_SCALAR_PRODUCTS",
     "FixedLengthPathsEnvelope",
     "fixed_length_paths_envelope",
 ]

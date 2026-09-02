@@ -3,7 +3,7 @@
 import pytest
 
 import jacobian.math.number_theory._factorization_kernels as factorization_kernels
-import jacobian.process as process
+from jacobian import process as process_runtime
 from jacobian.math.number_theory._contiguous_sum import compute_contiguous_sum_profile
 from jacobian.math.number_theory._contiguous_sum_models import (
     ContiguousSumProfileRequest,
@@ -32,7 +32,7 @@ def test_timed_out_high_magnitude_profile_is_unknown(
             timed_out=True,
         )
 
-    monkeypatch.setattr(process, "run_bounded_process", timed_out_worker)
+    monkeypatch.setattr(process_runtime, "run_bounded_process", timed_out_worker)
 
     result = compute_contiguous_sum_profile(
         ContiguousSumProfileRequest(
@@ -64,7 +64,7 @@ def test_worker_overshoot_retains_full_elapsed_diagnostic(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        process,
+        process_runtime,
         "run_bounded_process",
         lambda *_args, **_kwargs: BoundedProcessResult(
             returncode=None,
@@ -163,7 +163,7 @@ def test_worker_stop_reason_is_retained(
     timeout_layer: str,
 ) -> None:
     monkeypatch.setattr(
-        process, "run_bounded_process", lambda *_args, **_kwargs: completed
+        process_runtime, "run_bounded_process", lambda *_args, **_kwargs: completed
     )
 
     result = compute_contiguous_sum_profile(

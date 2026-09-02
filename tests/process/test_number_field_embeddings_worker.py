@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-import jacobian.process as process
+from jacobian import process as process_runtime
 from jacobian._execution import OperationExecutionTimeoutError, request_execution
 from jacobian.math.number_theory.number_fields import (
     SimpleNumberFieldPresentation,
@@ -23,7 +23,7 @@ def test_embedding_worker_timeout_is_an_operational_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        process,
+        process_runtime,
         "run_bounded_process",
         lambda *_args, **_kwargs: BoundedProcessResult(
             returncode=None,
@@ -58,7 +58,7 @@ def test_embedding_worker_start_failure_does_not_escape_as_os_error(
     def unavailable(*_args: object, **_kwargs: object) -> BoundedProcessResult:
         raise OSError("worker unavailable")
 
-    monkeypatch.setattr(process, "run_bounded_process", unavailable)
+    monkeypatch.setattr(process_runtime, "run_bounded_process", unavailable)
 
     with pytest.raises(RuntimeError, match="could not be started"):
         embeddings(_gaussian_field())
@@ -68,7 +68,7 @@ def test_embedding_worker_rejects_malformed_protocol_output(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        process,
+        process_runtime,
         "run_bounded_process",
         lambda *_args, **_kwargs: BoundedProcessResult(
             returncode=0,

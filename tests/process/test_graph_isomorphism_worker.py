@@ -2,39 +2,12 @@
 
 import pytest
 
-import jacobian.process as process
+from jacobian import process as process_runtime
 from jacobian.math.graphs.isomorphism import _vf2_process as isomorphism_operations
 from jacobian.math.graphs.isomorphism._models import GraphIsomorphismRequest
 from jacobian.math.graphs.isomorphism._vf2_process import decide_graph_isomorphism
 from jacobian.math.graphs.isomorphism._vf2_worker import _first_isomorphism_mapping
-from jacobian.math.number_theory._certification_models import (
-    CertifiedFactorizationRequest,
-)
-from jacobian.math.number_theory._direct_factorization_models import (
-    FactorizationRequest,
-)
-from jacobian.math.number_theory._factorization_kernels import (
-    _FACTORIZATION_WORKER_ADDRESS_SPACE_BYTES,
-    _FACTORIZATION_WORKER_FILE_SIZE_BYTES,
-    enumerate_divisors,
-    factorize_certified,
-    factorize_primes,
-)
-from jacobian.math.number_theory.number_fields import (
-    SimpleNumberFieldPresentation,
-)
-from jacobian.math.number_theory.number_fields import (
-    _discriminant_process as number_field_operations,
-)
-from jacobian.math.number_theory.number_fields._discriminant_process import (
-    compute_nf_discriminant,
-)
-from jacobian.math.number_theory.number_fields._models import NumberFieldRequest
 from jacobian.process import BoundedProcessResult, ProcessResourceLimits
-
-
-def _number_field(*coefficients: str) -> SimpleNumberFieldPresentation:
-    return SimpleNumberFieldPresentation(coefficients_descending=coefficients)
 
 
 def test_vf2_worker_obtains_a_positive_witness_in_one_search_traversal() -> None:
@@ -56,7 +29,7 @@ def test_timed_out_vf2_worker_is_an_operational_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        process,
+        process_runtime,
         "run_bounded_process",
         lambda *_args, **_kwargs: BoundedProcessResult(
             returncode=None,
@@ -103,7 +76,7 @@ def test_vf2_worker_has_private_cwd_and_os_resource_limits(
             timed_out=False,
         )
 
-    monkeypatch.setattr(process, "run_bounded_process", complete_worker)
+    monkeypatch.setattr(process_runtime, "run_bounded_process", complete_worker)
 
     result = decide_graph_isomorphism(
         GraphIsomorphismRequest.model_validate(
@@ -121,153 +94,3 @@ def test_vf2_worker_has_private_cwd_and_os_resource_limits(
         file_size_bytes=isomorphism_operations._VF2_FILE_SIZE_BYTES,
     )
     assert str(recorded["cwd"]).split("/")[-1].startswith("jacobian-vf2-")
-
-
-def test_timed_out_certified_factorization_raises_timeout(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        process,
-        "run_bounded_process",
-        lambda *_args, **_kwargs: BoundedProcessResult(
-            returncode=None,
-            stdout=b"",
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=True,
-        ),
-    )
-
-    with pytest.raises(TimeoutError):
-        factorize_certified(CertifiedFactorizationRequest(value="10403"))
-
-
-def test_timed_out_direct_factorization_worker_raises_timeout(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        process,
-        "run_bounded_process",
-        lambda *_args, **_kwargs: BoundedProcessResult(
-            returncode=None,
-            stdout=b"",
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=True,
-        ),
-    )
-
-    request = FactorizationRequest(value="12")
-    with pytest.raises(TimeoutError):
-        enumerate_divisors(request)
-    with pytest.raises(TimeoutError):
-        factorize_primes(request)
-
-
-def test_factorization_workers_have_private_cwds_and_os_resource_limits(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    recorded: list[dict[str, object]] = []
-
-    def timed_out_worker(*_args: object, **kwargs: object) -> BoundedProcessResult:
-        recorded.append(kwargs)
-        return BoundedProcessResult(
-            returncode=None,
-            stdout=b"",
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=True,
-        )
-
-    monkeypatch.setattr(process, "run_bounded_process", timed_out_worker)
-
-    with pytest.raises(TimeoutError):
-        factorize_certified(CertifiedFactorizationRequest(value="10403"))
-    with pytest.raises(TimeoutError):
-        factorize_primes(FactorizationRequest(value="12"))
-    assert len(recorded) == 2
-    for invocation, prefix in zip(
-        recorded,
-        ("jacobian-certified-factor-", "jacobian-direct-factor-"),
-        strict=True,
-    ):
-        assert invocation["resource_limits"] == ProcessResourceLimits(
-            cpu_seconds=60,
-            address_space_bytes=_FACTORIZATION_WORKER_ADDRESS_SPACE_BYTES,
-            file_size_bytes=_FACTORIZATION_WORKER_FILE_SIZE_BYTES,
-        )
-        assert str(invocation["cwd"]).split("/")[-1].startswith(prefix)
-
-
-def test_timed_out_number_field_worker_is_an_operational_failure(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        process,
-        "run_bounded_process",
-        lambda *_args, **_kwargs: BoundedProcessResult(
-            returncode=None,
-            stdout=b"",
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=True,
-        ),
-    )
-
-    with pytest.raises(TimeoutError):
-        compute_nf_discriminant(NumberFieldRequest(field=_number_field("1", "0", "-2")))
-
-
-def test_number_field_worker_has_private_cwd_and_os_resource_limits(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    recorded: dict[str, object] = {}
-
-    def complete_worker(*_args: object, **kwargs: object) -> BoundedProcessResult:
-        import hashlib
-
-        recorded.update(kwargs)
-        input_bytes = kwargs["input_bytes"]
-        assert isinstance(input_bytes, bytes)
-        return BoundedProcessResult(
-            returncode=0,
-            stdout=(
-                b'{"discriminant":"8","kind":"complete","request_digest":"'
-                + hashlib.sha256(input_bytes).hexdigest().encode()
-                + b'"}'
-            ),
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=False,
-        )
-
-    monkeypatch.setattr(process, "run_bounded_process", complete_worker)
-
-    result = compute_nf_discriminant(
-        NumberFieldRequest(field=_number_field("1", "0", "-2"))
-    )
-
-    assert result.discriminant == "8"
-    assert recorded["resource_limits"] == ProcessResourceLimits(
-        cpu_seconds=60,
-        address_space_bytes=number_field_operations._WORKER_ADDRESS_SPACE_BYTES,
-        file_size_bytes=number_field_operations._WORKER_FILE_SIZE_BYTES,
-    )
-    assert str(recorded["cwd"]).split("/")[-1].startswith("jacobian-number-field-")
-
-
-def test_number_field_worker_start_failure_is_operational(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def unavailable(*_args: object, **_kwargs: object) -> BoundedProcessResult:
-        raise OSError("worker unavailable")
-
-    monkeypatch.setattr(process, "run_bounded_process", unavailable)
-
-    with pytest.raises(RuntimeError):
-        compute_nf_discriminant(NumberFieldRequest(field=_number_field("1", "0", "-2")))

@@ -127,7 +127,15 @@ def _execution_deadline() -> float:
 def _require_execution_active(deadline: float, phase: str) -> None:
     request_checkpoint(phase)
     if monotonic() >= deadline:
-        raise OperationExecutionTimeoutError(f"complex-torus deadline expired {phase}")
+        execution = current_request_execution()
+        owner = (
+            "request"
+            if execution is not None
+            and execution.deadline is not None
+            and execution.deadline <= deadline
+            else "complex-torus"
+        )
+        raise OperationExecutionTimeoutError(f"{owner} deadline expired {phase}")
 
 
 def _scalar_height_ledger(

@@ -235,6 +235,25 @@ def _is_unit_ideal(ideal: RationalPolynomialIdeal) -> bool:
     )
 
 
+def _unit_ideal(axis: tuple[str, str, str]) -> RationalPolynomialIdeal:
+    return RationalPolynomialIdeal(
+        variables=axis,
+        generators=(
+            RationalPolynomial(
+                variables=axis,
+                polynomial=SparseRationalPolynomial(
+                    terms=(
+                        RationalPolynomialTerm(
+                            coefficient=CanonicalRational.from_integer_ratio(1, 1),
+                            exponents=(0, 0, 0),
+                        ),
+                    )
+                ),
+            ),
+        ),
+    )
+
+
 def _ideal_projection_limit_failure(
     stage: FailureStage,
     ideals: tuple[RationalPolynomialIdeal, ...],
@@ -592,6 +611,14 @@ def _singularity_profile_request(
         _to_public_polynomial(partials_backend[1], axis),
         _to_public_polynomial(partials_backend[2], axis),
     )
+    if admission.degree == 1:
+        return _bounded_result_profile(
+            source=source,
+            partials=partials,
+            outcome=SmoothProjectivePlaneCurve._from_kernel(_unit_ideal(axis)),
+            admission=admission,
+            deadline=deadline,
+        )
     if _remaining(deadline) <= 0:
         return _profile(
             source=source,

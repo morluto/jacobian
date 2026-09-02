@@ -105,15 +105,15 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         tags=("algebraic-geometry", "projective-curve", "singular-locus", "exact"),
         examples=(
             OperationExample(
-                name="conjugate_singularities",
-                description="Find both non-rational singular points [1:i:0] and [1:-i:0] "
-                "of Z*(X^2+Y^2+Z^2), retaining their distinct exact embeddings.",
+                name="smooth_line",
+                description="Establish that the projective line X+Y+Z=0 is smooth "
+                "over the algebraic closure.",
                 input={
                     "polynomial": _polynomial(
                         ("X", "Y", "Z"),
-                        (1, (2, 0, 1)),
-                        (1, (0, 2, 1)),
-                        (1, (0, 0, 3)),
+                        (1, (1, 0, 0)),
+                        (1, (0, 1, 0)),
+                        (1, (0, 0, 1)),
                     )
                 },
             ),

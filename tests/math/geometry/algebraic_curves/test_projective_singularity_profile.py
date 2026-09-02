@@ -588,7 +588,7 @@ def test_catalog_contract_and_example_round_trip() -> None:
 
     request = tool.request_type.model_validate(tool.examples[0].input)
     result = tool.run(request)
-    assert result.outcome.status == "SINGULAR_ZERO_DIMENSIONAL"
+    assert result.outcome.status == "SMOOTH_OVER_ALGEBRAIC_CLOSURE"
     assert tool.result_type.model_validate(result.model_dump(mode="json")) == result
 
 

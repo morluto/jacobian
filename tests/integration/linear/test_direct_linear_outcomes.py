@@ -342,7 +342,7 @@ def test_missing_dual_evidence_remains_primal_feasible(
     assert result.dual_candidate is None
 
 
-def test_missing_negative_certificate_returns_unknown(
+def test_missing_negative_certificate_is_an_execution_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from sympy.solvers import simplex
@@ -351,18 +351,15 @@ def test_missing_negative_certificate_returns_unknown(
         raise simplex.InfeasibleLPError("certificate unavailable")
 
     monkeypatch.setattr(simplex, "lpmin", unavailable_simplex)
-    result = _run_linear_program(
-        {
-            "variables": ["x"],
-            "objective": [q(0)],
-            "coefficients": [[q(1)], [q(1)]],
-            "rhs": [q(0), q(1)],
-        }
-    )
-
-    assert result.status == "UNKNOWN"
-    assert result.farkas_candidate is None
-    assert result.recession_direction is None
+    with pytest.raises(RuntimeError, match="produced no mathematical result"):
+        _run_linear_program(
+            {
+                "variables": ["x"],
+                "objective": [q(0)],
+                "coefficients": [[q(1)], [q(1)]],
+                "rhs": [q(0), q(1)],
+            }
+        )
 
 
 @st.composite

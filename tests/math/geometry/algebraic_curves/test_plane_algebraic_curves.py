@@ -9,12 +9,13 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.geometry.algebraic_curves import _conic, operations
+from jacobian.math.geometry.algebraic_curves import _conic, _singularity, operations
 from jacobian.math.geometry.algebraic_curves._conic import MAX_CONIC_INPUT_DIGITS
 from jacobian.math.geometry.algebraic_curves._models import (
     AffineChartRequest,
     AffineCurveRequest,
     ProjectiveClosureRequest,
+    ProjectivePlaneCurveSingularityRequest,
     RationalConicParametrizationRequest,
     RationalConicParametrizationResult,
 )
@@ -23,6 +24,7 @@ from jacobian.math.geometry.algebraic_curves._tools import (
     compute_affine_chart,
     compute_affine_curve_check,
     compute_projective_closure,
+    compute_projective_plane_curve_singularity_profile,
     compute_rational_conic_parametrization,
 )
 from jacobian.math.polynomials._conversions import (
@@ -122,6 +124,29 @@ def test_catalog_contains_only_audited_operations() -> None:
         "algebraic_geometry.projective_plane_curve.singularity_profile.compute",
         "algebraic_geometry.projective_curve.affine_chart.compute",
     }
+
+
+def test_linear_projective_curve_is_smooth_without_backend(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def unexpected_backend(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("a linear curve does not require ideal saturation")
+
+    monkeypatch.setattr(
+        _singularity, "run_singular_ideal_operation", unexpected_backend
+    )
+    source = _polynomial(
+        ("X", "Y", "Z"),
+        (1, (1, 0, 0)),
+        (1, (0, 1, 0)),
+        (1, (0, 0, 1)),
+    )
+
+    result = compute_projective_plane_curve_singularity_profile(
+        ProjectivePlaneCurveSingularityRequest(polynomial=source)
+    )
+
+    assert result.outcome.status == "SMOOTH_OVER_ALGEBRAIC_CLOSURE"
 
 
 def test_rational_conic_parametrization_has_canonical_known_answer() -> None:

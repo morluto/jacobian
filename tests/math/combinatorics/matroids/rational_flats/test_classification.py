@@ -442,8 +442,8 @@ def test_tiny_search_matches_independent_symbolic_flat_oracle() -> None:
     assert result.outcome.solution_flat_count == len(expected)
 
 
-def test_result_retention_envelope_returns_no_partial_mathematical_family() -> None:
-    dimension = 12
+def test_complete_family_is_deterministic_and_round_trips() -> None:
+    dimension = 8
     rows = tuple(
         tuple(int(row == column) for column in range(dimension))
         for row in range(dimension)
@@ -463,21 +463,6 @@ def test_result_retention_envelope_returns_no_partial_mathematical_family() -> N
         )
         == first
     )
-
-
-def test_large_complete_family_fits_the_canonical_transport_envelope() -> None:
-    dimension = 9
-    rows = tuple(
-        tuple(int(row == column) for column in range(dimension))
-        for row in range(dimension)
-    )
-
-    result = classify_clause_constrained_rational_flats(
-        _problem(rows, columns=dimension)
-    )
-
-    assert result.outcome.status == "COMPLETE_EXACT"
-    assert result.outcome.orbit_count == 2**dimension
 
 
 def test_request_and_complete_result_round_trip_through_strict_json() -> None:

@@ -9,14 +9,7 @@ from jacobian.math.logic._cnf import (
     canonicalize_cnf,
     check_sat_assignment,
 )
-from jacobian.math.logic._sat import (
-    SatRefutationCheckRequest,
-    SatRefutationCheckResult,
-    SatSolveRequest,
-    SatSolveResult,
-    check_sat_refutation,
-    solve_sat,
-)
+from jacobian.math.logic._sat import SatSolveRequest, SatSolveResult, solve_sat
 from jacobian.math.logic._smt import SmtSolveRequest, SmtSolveResult, solve_smt
 from jacobian.math.logic._unsat_core import SMT_UNSAT_CORE_OPERATION
 
@@ -71,40 +64,6 @@ TOOLS: MathTools = (
                 name="two_variable_cnf",
                 description="Solve a small canonical CNF.",
                 input={"cnf": {"variables": ["a", "b"], "clauses": [[-1, 2], [1]]}},
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="sat.refutation.check",
-        title="Check a bounded LPR SAT refutation",
-        description=(
-            "Replay one typed LPR/ASCII-v1 refutation against its exact canonical "
-            "CNF through the source-pinned CakeML checker. Only VALID_REFUTATION "
-            "establishes UNSAT; unavailable or failed replay is a non-conclusion."
-        ),
-        request_type=SatRefutationCheckRequest,
-        result_type=SatRefutationCheckResult,
-        run=check_sat_refutation,
-        tags=("sat", "cnf", "lpr", "refutation", "certificate"),
-        examples=(
-            OperationExample(
-                name="unit_contradiction",
-                description="Check an LPR empty-clause derivation from two contradictory units.",
-                input={
-                    "cnf": {"variables": ["x"], "clauses": [[-1], [1]]},
-                    "refutation": {
-                        "profile": "LPR_ASCII_V1",
-                        "steps": [
-                            {
-                                "kind": "addition",
-                                "clause_id": 3,
-                                "clause": [],
-                                "at_hint_clause_ids": [1, 2],
-                                "propagation_hints": [],
-                            }
-                        ],
-                    },
-                },
             ),
         ),
     ),

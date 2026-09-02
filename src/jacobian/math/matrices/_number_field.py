@@ -14,7 +14,6 @@ from jacobian._exact import CanonicalRational
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math._root_isolation import strict_root_count
 from jacobian.math.matrices.values import EmbeddedRealSimpleNumberFieldMatrix
-from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
 from jacobian.math.number_theory.number_fields.values import (
     RealNumberFieldEmbedding,
     SimpleNumberFieldElement,
@@ -46,14 +45,6 @@ def recognize_real_simple_number_field(
 ) -> RecognizedRealSimpleNumberField:
     """Recognize irreducibility and the indexed real root exactly once."""
 
-    try:
-        root = RealAlgebraicValue.model_validate(embedding.root.model_dump(mode="json"))
-    except ValueError as exc:
-        raise EmbeddedNumberFieldRecognitionError(
-            "invalid_embedding",
-            "the selected number-field embedding is not a recognized real root",
-        ) from exc
-
     x = Symbol("x")
     polynomial = Poly.from_list(
         [
@@ -63,9 +54,14 @@ def recognize_real_simple_number_field(
         gens=x,
         domain=QQ,
     )
-    # RealAlgebraicValue recognition proves this same primitive polynomial is
-    # irreducible and that the selected real-root index exists.
-    embedded_root = CRootOf(polynomial, root.real_root_index)
+    if polynomial.is_irreducible is not True or (
+        embedding.root.real_root_index >= len(polynomial.intervals())
+    ):
+        raise EmbeddedNumberFieldRecognitionError(
+            "invalid_embedding",
+            "the selected number-field embedding is not a recognized real root",
+        )
+    embedded_root = CRootOf(polynomial, embedding.root.real_root_index)
     field = QQ.algebraic_field(embedded_root, alias="alpha")
     return RecognizedRealSimpleNumberField(
         embedding=embedding,

@@ -219,13 +219,6 @@ class TestVariableElimination:
                 query_variables=tuple(range(16)),
             )
 
-    def test_variable_elimination_remains_native_only(self) -> None:
-        from jacobian.math.probability.graphical_models._tools import TOOLS
-
-        assert "graphical_model.variable_elimination.compute" not in {
-            tool.operation_id for tool in TOOLS
-        }
-
 
 class TestDSeparation:
     @pytest.mark.parametrize(

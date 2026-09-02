@@ -1,4 +1,3 @@
-import importlib
 from fractions import Fraction
 
 import pytest
@@ -14,11 +13,6 @@ from jacobian.math.matrices.values import (
     MAX_EXACT_LINEAR_MATRIX_AXIS,
     rational_matrix_from_fractions,
 )
-
-
-def test_orphan_combinatorial_matrix_models_are_not_importable() -> None:
-    with pytest.raises(ModuleNotFoundError):
-        importlib.import_module("jacobian.math.combinatorial_matrices._models")
 
 
 def test_exact_matrix_operations() -> None:

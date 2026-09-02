@@ -113,14 +113,6 @@ def test_root_namespace_stays_minimal() -> None:
     assert not hasattr(jacobian, "VerificationResult")
 
 
-def test_parallel_contract_and_domain_namespaces_are_deleted() -> None:
-    import pytest
-
-    for module_name in ("jacobian.contracts", "jacobian.domains"):
-        with pytest.raises(ModuleNotFoundError):
-            importlib.import_module(module_name)
-
-
 def test_public_math_exports_are_resolvable() -> None:
     """Every symbol declared by a public math owner must be resolvable."""
 

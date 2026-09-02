@@ -40,7 +40,6 @@ from jacobian.math.polynomials.real_algebra._plane_component_models import (
     MAX_PLANE_COMPONENTS,
     IsolatedRealPlanePoint,
     PlaneComponentProfileComputed,
-    PlaneComponentProfileNoncompletion,
     PlaneComponentProfileRequest,
     PlaneComponentProfileResult,
     PlaneSemialgebraicComponent,
@@ -329,10 +328,7 @@ def test_result_schema_exposes_the_runtime_polynomial_envelope() -> None:
             sign_conditions=(),
         ),
         samples=(),
-        outcome=PlaneComponentProfileNoncompletion(
-            status="BACKEND_UNAVAILABLE",
-            reason="SUPPORTED_QEPCAD_NOT_INSTALLED",
-        ),
+        outcome=PlaneComponentProfileComputed(components=(), sample_dispositions=()),
     ).model_dump(mode="json")
     result["semialgebraic_set"]["polynomials"][0]["polynomial"]["terms"].extend(
         {

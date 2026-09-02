@@ -143,9 +143,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         title="Find a subgraph-pattern embedding",
         description="Given bounded canonical simple graphs pattern H and host G, find an "
         "injective non-induced embedding. Returns one vertex map in pattern order "
-        "when found. Assignment search is admission-bounded; runtime candidate-"
-        "check exhaustion returns BUDGET_EXCEEDED, a typed non-conclusion. Both "
-        "returned maps are bounded by the admitted pattern cardinality.",
+        "when found. Assignment search is admission-bounded and every admitted "
+        "request returns a complete decision. Returned maps are bounded by the "
+        "admitted pattern cardinality.",
         request_type=SubgraphPatternFindRequest,
         result_type=SubgraphPatternFindResult,
         run=_compute_subgraph_pattern_find,

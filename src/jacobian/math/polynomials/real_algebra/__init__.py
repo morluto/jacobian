@@ -17,7 +17,6 @@ from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
 from jacobian.math.polynomials.real_algebra._plane_component_models import (
     IsolatedRealPlanePoint,
     PlaneComponentProfileComputed,
-    PlaneComponentProfileNoncompletion,
     PlaneComponentProfileResult,
     PlaneSampleDisposition,
     PlaneSemialgebraicComponent,
@@ -44,7 +43,6 @@ __all__ = [
     "LabelledRationalPolynomial",
     "NonRealRootObstruction",
     "PlaneComponentProfileComputed",
-    "PlaneComponentProfileNoncompletion",
     "PlaneComponentProfileResult",
     "PlaneSampleDisposition",
     "PlaneSemialgebraicComponent",

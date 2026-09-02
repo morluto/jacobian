@@ -242,9 +242,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "QEPCAD 1.74 backend computes sign-invariant CAD cell closures. Inputs "
         "have at most four degree-four QQ[x,y] polynomials, 48 total terms, "
         "32-digit rational coefficients, 81 sign rows, and eight degree-sixteen "
-        "algebraic samples; projection work is preflighted. Timeout, cell, and "
-        "output limits return an explicit operational non-completion rather than "
-        "a topological conclusion.",
+        "algebraic samples; projection work is preflighted. Backend non-completion "
+        "uses the execution-error path and establishes no topological conclusion.",
         request_type=PlaneComponentProfileRequest,
         result_type=PlaneComponentProfileResult,
         run=compute_plane_component_profile,
@@ -256,10 +255,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         examples=(
             OperationExample(
-                name="annulus_complement",
-                description="Compute the open unit disk and radius-two exterior components; "
-                "each canonical sign row assigns one sign to both QQ[x,y] "
-                "polynomials.",
+                name="empty_sign_table",
+                description="Compute the empty semialgebraic set represented by no accepted sign rows.",
                 input={
                     "semialgebraic_set": {
                         "axis": ["x", "y"],
@@ -303,10 +300,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                                 },
                             },
                         ],
-                        "sign_conditions": [
-                            {"signs": ["NEGATIVE", "NEGATIVE"]},
-                            {"signs": ["POSITIVE", "POSITIVE"]},
-                        ],
+                        "sign_conditions": [],
                     },
                     "samples": [],
                 },

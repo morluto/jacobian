@@ -48,9 +48,7 @@ def _second_jet_node_arithmetic_units(dimension: int) -> int:
 # admits small full-axis jets such as an eight-variable affine form.
 MAX_SECOND_JET_WORK_UNITS = 16_384
 
-type IntervalExpressionSecondJetEnclosureStatus = Literal[
-    "ENCLOSED", "DOMAIN_UNPROVEN", "BACKEND_ERROR"
-]
+type IntervalExpressionSecondJetEnclosureStatus = Literal["ENCLOSED", "DOMAIN_UNPROVEN"]
 
 
 def _preflight_second_jet_expression(
@@ -196,9 +194,6 @@ class IntervalExpressionSecondJetEnclosureResult(
                 raise _validation_error(
                     "domain-failure evidence must agree with DOMAIN_UNPROVEN status"
                 )
-            if self.status == "BACKEND_ERROR":
-                return self
-
         return self
 
     @classmethod

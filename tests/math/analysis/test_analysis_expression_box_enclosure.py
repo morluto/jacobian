@@ -426,7 +426,7 @@ def test_producer_does_not_pay_a_second_backend_replay(
     assert work_precisions == [128]
 
 
-def test_backend_value_error_has_a_typed_nonconclusion(
+def test_backend_value_error_is_an_execution_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import jacobian.math.analysis._box_enclosure as box_enclosure
@@ -435,16 +435,14 @@ def test_backend_value_error_has_a_typed_nonconclusion(
         raise ValueError("synthetic backend rejection")
 
     monkeypatch.setattr(box_enclosure, "_evaluate_box_expression", fail)
-    result = _run(
-        {"op": "exp", "children": [_var("x")]},
-        (("x", Fraction(0), Fraction(1)),),
-    )
-    assert result.status == "BACKEND_ERROR"
-    assert result.lower is None and result.upper is None
-    assert result.domain_failure is None
+    with pytest.raises(RuntimeError, match="Pinned Arb rejected"):
+        _run(
+            {"op": "exp", "children": [_var("x")]},
+            (("x", Fraction(0), Fraction(1)),),
+        )
 
 
-def test_backend_error_result_round_trips_when_the_failure_does_not_recur(
+def test_backend_failure_does_not_retry_or_construct_a_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import jacobian.math.analysis._box_enclosure as box_enclosure
@@ -462,19 +460,11 @@ def test_backend_error_result_round_trips_when_the_failure_does_not_recur(
     monkeypatch.setattr(
         box_enclosure, "_evaluate_box_expression", transient_then_original
     )
-    result = _run(
-        {"op": "exp", "children": [_var("x")]},
-        (("x", Fraction(0), Fraction(1)),),
-    )
-    assert result.status == "BACKEND_ERROR"
-
-    assert (
-        IntervalExpressionBoxEnclosureResult.model_validate(result.model_dump())
-        == result
-    )
-    assert IntervalExpressionBoxEnclosureResult.model_validate_json(
-        result.model_dump_json()
-    )
+    with pytest.raises(RuntimeError):
+        _run(
+            {"op": "exp", "children": [_var("x")]},
+            (("x", Fraction(0), Fraction(1)),),
+        )
     assert calls == 1
 
 
@@ -503,18 +493,19 @@ def test_backend_error_result_round_trips_when_the_failure_does_not_recur(
 def test_backend_error_payload_cannot_smuggle_conclusion_evidence(
     field: str, payload_patch: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import jacobian.math.analysis._box_enclosure as box_enclosure
-
-    def fail(*args: Any, **kwargs: Any) -> Any:
-        raise ValueError("synthetic backend rejection")
-
-    monkeypatch.setattr(box_enclosure, "_evaluate_box_expression", fail)
-    result = _run(
-        {"op": "exp", "children": [_var("x")]},
-        (("x", Fraction(1), Fraction(2)),),
-    )
-    assert result.status == "BACKEND_ERROR"
-    payload = {**deepcopy(result.model_dump()), **payload_patch}
+    payload = {
+        "expression": {"op": "var", "variable": "x"},
+        "box": {
+            "variables": ["x"],
+            "intervals": [
+                {"lower": {"num": "1", "den": "1"}, "upper": {"num": "2", "den": "1"}}
+            ],
+        },
+        "precision_bits": 128,
+        "status": "BACKEND_ERROR",
+        "detail": field,
+        **payload_patch,
+    }
 
     with pytest.raises(ValidationError):
         IntervalExpressionBoxEnclosureResult.model_validate(payload)

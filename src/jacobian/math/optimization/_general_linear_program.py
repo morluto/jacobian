@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from typing import NoReturn
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
@@ -200,12 +201,10 @@ def _effective_farkas_bounds(
     return tuple(lower), tuple(upper)
 
 
-def _unknown(
+def _execution_failure(
     program: GeneralFormRationalLinearProgram,
-) -> GeneralRationalLinearProgramResult:
-    return GeneralRationalLinearProgramResult._from_kernel(
-        program=program, status="UNKNOWN"
-    )
+) -> NoReturn:
+    raise RuntimeError("exact linear-program execution produced no mathematical result")
 
 
 def _primal_feasible(
@@ -461,8 +460,6 @@ def _map_standard_result(
     residual_max_digits: int,
     certificate_max_digits: int,
 ) -> GeneralRationalLinearProgramResult:
-    if standard_result.status == "UNKNOWN":
-        return _unknown(program)
     if standard_result.status == "INFEASIBLE":
         assert standard_result.farkas_candidate is not None
         constraints = _effective_constraint_values(
@@ -479,7 +476,7 @@ def _map_standard_result(
             for values in (constraints, lower, upper)
         )
         if any(value is None for value in wires):
-            return _unknown(program)
+            return _execution_failure(program)
         constraint_wire, lower_wire, upper_wire = wires
         assert (
             constraint_wire is not None
@@ -503,7 +500,7 @@ def _map_standard_result(
         residual_max_digits=residual_max_digits,
     )
     if primal is None:
-        return _unknown(program)
+        return _execution_failure(program)
     point, objective, residuals, constraint_slacks, lower_slacks, upper_slacks = primal
     if standard_result.status == "UNBOUNDED":
         assert standard_result.recession_direction is not None
@@ -512,7 +509,7 @@ def _map_standard_result(
         )
         wire_direction = _wire_vector(direction, max_digits=point_max_digits)
         if wire_direction is None:
-            return _unknown(program)
+            return _execution_failure(program)
         return GeneralRationalLinearProgramResult._from_kernel(
             program=program,
             status="UNBOUNDED",

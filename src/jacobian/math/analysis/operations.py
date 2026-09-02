@@ -476,15 +476,9 @@ def second_jet_enclosure(
             }
             jet = _evaluate_second_jet(expression, variables, len(box.variables))
             if isinstance(jet, _SecondJetEvaluationFailure):
-                return _second_jet_result(
-                    expression,
-                    box,
-                    precision_bits,
-                    status="BACKEND_ERROR",
-                    detail=(
-                        "Pinned Arb returned no finite second-order enclosure within "
-                        "the admitted fixed-precision envelope."
-                    ),
+                raise RuntimeError(
+                    "Pinned Arb returned no finite second-order enclosure within "
+                    "the admitted fixed-precision envelope"
                 )
             value = _dyadic_closed_interval(jet.value)
             gradient_intervals = tuple(
@@ -494,32 +488,18 @@ def second_jet_enclosure(
                 tuple(_dyadic_closed_interval(entry) for entry in row)
                 for row in jet.hessian
             )
-    except (OverflowError, ValueError, ZeroDivisionError):
-        return _second_jet_result(
-            expression,
-            box,
-            precision_bits,
-            status="BACKEND_ERROR",
-            detail=(
-                "Pinned Arb rejected an admitted bounded second-order computation; "
-                "no enclosure conclusion is available."
-            ),
-        )
+    except (OverflowError, ValueError, ZeroDivisionError) as exc:
+        raise RuntimeError(
+            "Pinned Arb rejected an admitted bounded second-order computation"
+        ) from exc
 
     if (
         value is None
         or any(entry is None for entry in gradient_intervals)
         or any(entry is None for row in hessian_intervals for entry in row)
     ):
-        return _second_jet_result(
-            expression,
-            box,
-            precision_bits,
-            status="BACKEND_ERROR",
-            detail=(
-                "Pinned Arb produced endpoints outside the admitted dyadic wire "
-                "envelope; no enclosure conclusion is available."
-            ),
+        raise RuntimeError(
+            "Pinned Arb produced endpoints outside the admitted dyadic wire envelope"
         )
 
     gradient = tuple(

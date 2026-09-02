@@ -10,7 +10,6 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.math.geometry.algebraic_curves._singularity_models import (
-    IncompleteProjectivePlaneCurveSingularityComputation,
     PositiveDimensionalProjectivePlaneCurveSingularLocus,
     ProjectivePlaneCurveFirstJet,
     ProjectivePlaneCurveSingularityBudget,
@@ -299,7 +298,6 @@ __all__ = [
     "AffineChartResult",
     "AffineCurveRequest",
     "AffineCurveResult",
-    "IncompleteProjectivePlaneCurveSingularityComputation",
     "PositiveDimensionalProjectivePlaneCurveSingularLocus",
     "ProjectiveClosureRequest",
     "ProjectiveClosureResult",

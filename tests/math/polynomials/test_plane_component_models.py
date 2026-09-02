@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from time import monotonic
 from typing import Any
 
 import pytest
@@ -22,7 +21,6 @@ from jacobian.math.polynomials.real_algebra._plane_component_models import (
     PLANE_COMPONENT_WALL_SECONDS,
     IsolatedRealPlanePoint,
     PlaneComponentProfileComputed,
-    PlaneComponentProfileNoncompletion,
     PlaneComponentProfileRequest,
     PlaneComponentProfileResult,
     PlaneSampleDisposition,
@@ -283,7 +281,9 @@ def test_worker_response_limit_covers_every_component_projection() -> None:
         sample_dispositions=(),
     )
 
-    assert len(projection.model_dump_json().encode()) <= MAX_QEPCAD_WORKER_RESPONSE_BYTES
+    assert (
+        len(projection.model_dump_json().encode()) <= MAX_QEPCAD_WORKER_RESPONSE_BYTES
+    )
     result = _computed_result(request, outcome)
     assert result.outcome.status == "COMPUTED"
     assert len(result.outcome.components) == len(points)
@@ -304,15 +304,6 @@ def test_result_outcome_is_discriminated_and_source_bound() -> None:
             ),
         ),
     )
-    unavailable = PlaneComponentProfileResult(
-        semialgebraic_set=semialgebraic_set,
-        samples=(point,),
-        outcome=PlaneComponentProfileNoncompletion(
-            status="BACKEND_UNAVAILABLE",
-            reason="SUPPORTED_QEPCAD_NOT_INSTALLED",
-        ),
-    )
-
     schema = PlaneComponentProfileResult.model_json_schema()
     assert (
         schema["$defs"]["PlaneComponentProfileComputed"]["properties"]["status"][
@@ -321,83 +312,38 @@ def test_result_outcome_is_discriminated_and_source_bound() -> None:
         == "COMPUTED"
     )
     assert computed.outcome.status == "COMPUTED"
-    assert unavailable.outcome.status == "BACKEND_UNAVAILABLE"
-
-    with pytest.raises(ValidationError, match="does not match"):
-        PlaneComponentProfileNoncompletion(
-            status="TIMEOUT",
-            reason="QEPCAD_INVALID_OUTPUT",
+    with pytest.raises(ValidationError):
+        PlaneComponentProfileResult.model_validate(
+            {
+                "semialgebraic_set": semialgebraic_set,
+                "samples": [point],
+                "outcome": {"status": "BACKEND_UNAVAILABLE"},
+            }
         )
 
 
-def test_noncompletion_replay_metadata_matches_producer_envelope() -> None:
+def test_noncompletion_uses_the_execution_error_path() -> None:
     semialgebraic_set = PlaneSemialgebraicSet(
         axis=("x", "y"), polynomials=(), sign_conditions=()
     )
     request = PlaneComponentProfileRequest(semialgebraic_set=semialgebraic_set)
 
-    resource_limit = _noncompletion(
-        request,
-        QepcadPlaneProcessOutcome(
-            status="RESOURCE_LIMIT",
-            reason="QEPCAD_OUTPUT_LIMIT",
-        ),
-        budget_seconds=PLANE_COMPONENT_WALL_SECONDS + 100,
-    )
-    assert resource_limit.outcome.status == "RESOURCE_LIMIT"
-    assert resource_limit.outcome.budget_seconds == PLANE_COMPONENT_WALL_SECONDS
-    assert resource_limit.outcome.timeout_layer is None
-
-    timeout = _noncompletion(
-        request,
-        QepcadPlaneProcessOutcome(
-            status="TIMEOUT",
-            reason="QEPCAD_DEADLINE_EXPIRED",
-        ),
-        started_at=monotonic(),
-        budget_seconds=PLANE_COMPONENT_WALL_SECONDS,
-    )
-    assert timeout.outcome.timeout_layer == "QEPCAD"
-
-    with pytest.raises(ValidationError):
-        PlaneComponentProfileNoncompletion(
-            status="RESOURCE_LIMIT",
-            reason="QEPCAD_OUTPUT_LIMIT",
-            budget_seconds=PLANE_COMPONENT_WALL_SECONDS + 1,
+    with pytest.raises(RuntimeError):
+        _noncompletion(
+            request,
+            QepcadPlaneProcessOutcome(
+                status="RESOURCE_LIMIT", reason="QEPCAD_OUTPUT_LIMIT"
+            ),
+            budget_seconds=PLANE_COMPONENT_WALL_SECONDS,
         )
-    with pytest.raises(ValidationError):
-        PlaneComponentProfileNoncompletion(
-            status="RESOURCE_LIMIT",
-            reason="QEPCAD_OUTPUT_LIMIT",
-            timeout_layer="QEPCAD",
+    with pytest.raises(TimeoutError):
+        _noncompletion(
+            request,
+            QepcadPlaneProcessOutcome(
+                status="TIMEOUT", reason="QEPCAD_DEADLINE_EXPIRED"
+            ),
+            budget_seconds=PLANE_COMPONENT_WALL_SECONDS,
         )
-
-
-@pytest.mark.parametrize("revision", ("A" * 40, "a" * 39, "a" * 41))
-def test_noncompletion_revision_accepts_only_generated_forms(revision: str) -> None:
-    with pytest.raises(ValidationError):
-        PlaneComponentProfileNoncompletion(
-            status="BACKEND_UNAVAILABLE",
-            reason="SUPPORTED_QEPCAD_NOT_INSTALLED",
-            repository_revision=revision,
-        )
-
-    assert (
-        PlaneComponentProfileNoncompletion(
-            status="BACKEND_UNAVAILABLE",
-            reason="SUPPORTED_QEPCAD_NOT_INSTALLED",
-            repository_revision="unknown",
-        ).repository_revision
-        == "unknown"
-    )
-    assert (
-        PlaneComponentProfileNoncompletion(
-            status="BACKEND_UNAVAILABLE",
-            reason="SUPPORTED_QEPCAD_NOT_INSTALLED",
-            repository_revision="a" * 40,
-        ).repository_revision
-        == "a" * 40
-    )
 
 
 def test_computed_components_require_unique_canonical_representative_order() -> None:

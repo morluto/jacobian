@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import os
-import re
 import time
 from fractions import Fraction
-from typing import Literal, NoReturn
+from typing import NoReturn
 
 from pydantic_core import PydanticCustomError
 
@@ -20,7 +18,6 @@ from jacobian._execution import (
 from jacobian.canonical import (
     encode_strict_json,
     format_canonical_integer,
-    sha256_digest,
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis.intervals import ClosedRationalInterval, RationalBox
@@ -42,9 +39,7 @@ from jacobian.math.polynomials.real_algebra._plane_component_models import (
     MAX_PLANE_COMPONENT_TOTAL_TERMS,
     PLANE_COMPONENT_WALL_SECONDS,
     IsolatedRealPlanePoint,
-    PlaneComponentNoncompletionStatus,
     PlaneComponentProfileComputed,
-    PlaneComponentProfileNoncompletion,
     PlaneComponentProfileRequest,
     PlaneComponentProfileResult,
     PlaneSampleDisposition,
@@ -60,8 +55,6 @@ from jacobian.math.polynomials.real_algebra._qepcad_plane_process import (
 from jacobian.math.polynomials.values import require_polynomial_budget
 
 _PLANE_COMPONENT_FINALIZATION_SECONDS = 5.0
-_PLANE_COMPONENT_OPERATION_VERSION: Literal["1"] = "1"
-_GIT_SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -233,42 +226,12 @@ def _noncompletion(
     *,
     started_at: float | None = None,
     budget_seconds: int,
-) -> PlaneComponentProfileResult:
+) -> NoReturn:
     if outcome.status == "COMPUTED" or outcome.reason is None:
         raise RuntimeError("computed QEPCAD result cannot become a noncompletion")
-    status: PlaneComponentNoncompletionStatus = outcome.status
-    request_digest = sha256_digest(encode_strict_json(request.model_dump(mode="json")))
-    revision = os.environ.get("JACOBIAN_REVISION", "unknown")
-    if not _GIT_SHA_PATTERN.fullmatch(revision):
-        revision = "unknown"
-    timeout_layer: Literal["QEPCAD", "SAMPLE_RECOGNITION"] | None = None
-    if status == "TIMEOUT":
-        timeout_layer = (
-            "SAMPLE_RECOGNITION"
-            if outcome.reason is not None and outcome.reason.startswith("SAMPLE_")
-            else "QEPCAD"
-            if outcome.reason is not None and outcome.reason.startswith("QEPCAD_")
-            else None
-        )
-    elapsed_ms = (
-        round(max(0.0, time.monotonic() - started_at) * 1_000)
-        if started_at is not None
-        else None
-    )
-    return PlaneComponentProfileResult(
-        semialgebraic_set=request.semialgebraic_set,
-        samples=request.samples,
-        outcome=PlaneComponentProfileNoncompletion(
-            status=status,
-            reason=outcome.reason,
-            request_digest=request_digest,
-            budget_seconds=min(budget_seconds, PLANE_COMPONENT_WALL_SECONDS),
-            elapsed_ms=elapsed_ms,
-            timeout_layer=timeout_layer,
-            operation_version=_PLANE_COMPONENT_OPERATION_VERSION,
-            repository_revision=revision,
-        ),
-    )
+    if outcome.status == "TIMEOUT":
+        raise OperationExecutionTimeoutError("plane-component backend timed out")
+    raise RuntimeError(f"plane-component backend failed: {outcome.reason}")
 
 
 def _computed_result(

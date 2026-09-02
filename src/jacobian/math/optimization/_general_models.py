@@ -434,9 +434,7 @@ def _require_general_result_shape(result: GeneralRationalLinearProgramResult) ->
             "general LP primal outcomes require exactly one replayable point"
         )
     if not has_primal and any(value is not None for value in primal):
-        raise ValueError(
-            "infeasible and unknown general LP results cannot carry primal data"
-        )
+        raise ValueError("infeasible general LP results cannot carry primal data")
     if (result.status == "OPTIMAL") != all(value is not None for value in dual):
         raise ValueError("an optimal general LP result requires source dual data")
     if result.status != "OPTIMAL" and any(value is not None for value in dual):

@@ -30,9 +30,7 @@ from jacobian.math.analysis._models import (
     _validation_error,
 )
 
-type IntervalExpressionBoxEnclosureStatus = Literal[
-    "ENCLOSED", "DOMAIN_UNPROVEN", "BACKEND_ERROR"
-]
+type IntervalExpressionBoxEnclosureStatus = Literal["ENCLOSED", "DOMAIN_UNPROVEN"]
 
 
 class IntervalExpressionBoxEnclosureRequest(_IntervalExpressionBoxRequest):
@@ -215,9 +213,6 @@ class IntervalExpressionBoxEnclosureResult(IntervalExpressionBoxEnclosureRequest
                 raise _validation_error(
                     "domain-failure evidence must agree with DOMAIN_UNPROVEN status"
                 )
-            if self.status == "BACKEND_ERROR":
-                return self
-
         return self
 
     @classmethod
@@ -289,37 +284,23 @@ def _box_expression_enclosure(
                     ),
                 )
             if isinstance(result, _BoxEvaluationFailure) or not result.is_finite():
-                return IntervalExpressionBoxEnclosureResult._from_kernel(
-                    request,
-                    status="BACKEND_ERROR",
-                    detail=(
-                        "Pinned Arb returned no finite enclosure within the admitted "
-                        "fixed-precision envelope."
-                    ),
+                raise RuntimeError(
+                    "Pinned Arb returned no finite enclosure within the admitted "
+                    "fixed-precision envelope"
                 )
             lower_mantissa, lower_exponent = result.lower().man_exp()
             upper_mantissa, upper_exponent = result.upper().man_exp()
             endpoints = dyadic_endpoints(
                 lower_mantissa, lower_exponent, upper_mantissa, upper_exponent
             )
-    except (OverflowError, ValueError):
-        return IntervalExpressionBoxEnclosureResult._from_kernel(
-            request,
-            status="BACKEND_ERROR",
-            detail=(
-                "Pinned Arb rejected an admitted bounded computation; no enclosure "
-                "conclusion is available."
-            ),
-        )
+    except (OverflowError, ValueError) as exc:
+        raise RuntimeError(
+            "Pinned Arb rejected an admitted bounded computation"
+        ) from exc
 
     if endpoints is None:
-        return IntervalExpressionBoxEnclosureResult._from_kernel(
-            request,
-            status="BACKEND_ERROR",
-            detail=(
-                "Pinned Arb produced endpoints outside the admitted dyadic wire "
-                "envelope; no enclosure conclusion is available."
-            ),
+        raise RuntimeError(
+            "Pinned Arb produced endpoints outside the admitted dyadic wire envelope"
         )
     return IntervalExpressionBoxEnclosureResult._from_kernel(
         request,

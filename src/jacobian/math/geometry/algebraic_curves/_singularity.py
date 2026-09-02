@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from math import comb
 from time import monotonic
-from typing import Literal
+from typing import Literal, NoReturn
 
 import sympy
 
@@ -22,7 +22,6 @@ from jacobian.math.geometry.algebraic_curves._singularity_models import (
     MAX_PROJECTIVE_SINGULAR_COMPONENTS,
     MAX_PROJECTIVE_SINGULAR_FIELD_DEGREE,
     MAX_PROJECTIVE_SINGULAR_POINTS,
-    IncompleteProjectivePlaneCurveSingularityComputation,
     PositiveDimensionalProjectivePlaneCurveSingularLocus,
     ProjectivePlaneCurveFirstJet,
     ProjectivePlaneCurveSingularityBudget,
@@ -79,13 +78,6 @@ FailureStage = Literal[
     "CHART_ONE_COMPONENTS",
     "POINT_CONSTRUCTION",
     "RESULT_CONSTRUCTION",
-]
-FailureStatus = Literal[
-    "BACKEND_UNAVAILABLE",
-    "TIMEOUT",
-    "CANCELLED",
-    "LIMIT_EXCEEDED",
-    "BACKEND_ERROR",
 ]
 
 
@@ -249,11 +241,11 @@ def _ideal_projection_limit_failure(
     admission: _SingularityAdmission,
     *,
     maximum_ideals: int,
-) -> IncompleteProjectivePlaneCurveSingularityComputation | None:
+) -> None:
     """Reject a decoded ideal family that contradicts the admitted plan."""
 
     if len(ideals) > maximum_ideals:
-        return _limit_failure(
+        _limit_failure(
             stage,
             "the exact ideal family exceeds the admitted component bound",
         )
@@ -264,12 +256,12 @@ def _ideal_projection_limit_failure(
         for generator in ideal.generators
     )
     if generator_count > _MAX_BACKEND_GENERATORS:
-        return _limit_failure(
+        _limit_failure(
             stage,
             "the exact ideal family exceeds the admitted generator bound",
         )
     if term_count > _MAX_BACKEND_TERMS:
-        return _limit_failure(
+        _limit_failure(
             stage,
             "the exact ideal family exceeds the admitted term bound",
         )
@@ -277,7 +269,7 @@ def _ideal_projection_limit_failure(
         for generator in ideal.generators:
             for term in generator.polynomial.terms:
                 if sum(term.exponents) > admission.ideal_generator_degree_bound:
-                    return _limit_failure(
+                    _limit_failure(
                         stage,
                         "an exact ideal generator exceeds the admitted degree bound",
                     )
@@ -287,73 +279,52 @@ def _ideal_projection_limit_failure(
                     or len(term.coefficient.den)
                     > admission.macaulay_minor_component_digits
                 ):
-                    return _limit_failure(
+                    _limit_failure(
                         stage,
                         "an exact ideal coefficient exceeds the admitted Macaulay bound",
                     )
-    return None
 
 
 def _failure(
     stage: FailureStage,
     backend: SingularIdealResult | SingularMinimalPrimesResult,
-) -> IncompleteProjectivePlaneCurveSingularityComputation:
-    status: FailureStatus
-    if backend.outcome == "UNAVAILABLE":
-        status = "BACKEND_UNAVAILABLE"
-    elif backend.outcome == "TIMEOUT":
-        status = "TIMEOUT"
-    elif backend.outcome == "CANCELLED":
-        status = "CANCELLED"
-    elif backend.outcome == "LIMIT_EXCEEDED":
-        status = "LIMIT_EXCEEDED"
-    else:
-        status = "BACKEND_ERROR"
-    return IncompleteProjectivePlaneCurveSingularityComputation(
-        status=status,
-        stage=stage,
-        detail=backend.detail or "the exact backend did not produce a complete result",
-    )
+) -> NoReturn:
+    detail = backend.detail or "the exact backend did not produce a complete result"
+    if backend.outcome == "TIMEOUT":
+        raise OperationExecutionTimeoutError(detail)
+    if backend.outcome == "CANCELLED":
+        raise OperationExecutionCancelledError(detail)
+    raise RuntimeError(f"projective singularity backend failed at {stage}: {detail}")
 
 
 def _local_failure(
     detail: str,
-) -> IncompleteProjectivePlaneCurveSingularityComputation:
-    return IncompleteProjectivePlaneCurveSingularityComputation(
-        status="BACKEND_ERROR",
-        stage="POINT_CONSTRUCTION",
-        detail=detail[:256],
-    )
+) -> NoReturn:
+    raise RuntimeError(detail[:256])
 
 
 def _limit_failure(
     stage: FailureStage,
     detail: str,
-) -> IncompleteProjectivePlaneCurveSingularityComputation:
-    return IncompleteProjectivePlaneCurveSingularityComputation(
-        status="LIMIT_EXCEEDED",
-        stage=stage,
-        detail=detail[:256],
+) -> NoReturn:
+    raise RuntimeError(
+        f"projective singularity limit exceeded at {stage}: {detail[:256]}"
     )
 
 
 def _timeout_failure(
     stage: FailureStage,
-) -> IncompleteProjectivePlaneCurveSingularityComputation:
-    return IncompleteProjectivePlaneCurveSingularityComputation(
-        status="TIMEOUT",
-        stage=stage,
-        detail="the shared projective singularity deadline expired",
+) -> NoReturn:
+    raise OperationExecutionTimeoutError(
+        f"projective singularity deadline expired during {stage}"
     )
 
 
 def _cancelled_failure(
     stage: FailureStage,
-) -> IncompleteProjectivePlaneCurveSingularityComputation:
-    return IncompleteProjectivePlaneCurveSingularityComputation(
-        status="CANCELLED",
-        stage=stage,
-        detail="the projective singularity request was cancelled",
+) -> NoReturn:
+    raise OperationExecutionCancelledError(
+        f"projective singularity request was cancelled during {stage}"
     )
 
 
@@ -462,10 +433,7 @@ def _complete_zero_dimensional_points(
     budget: IdealComputationBudget,
     deadline: float,
     maximum_points: int,
-) -> (
-    tuple[ProjectivePlaneCurveSingularPointRecord, ...]
-    | IncompleteProjectivePlaneCurveSingularityComputation
-):
+) -> tuple[ProjectivePlaneCurveSingularPointRecord, ...]:
     chart_zero = _specialize_ideal(
         saturation,
         substitutions={0: 1},
@@ -477,16 +445,14 @@ def _complete_zero_dimensional_points(
         wall_seconds=_remaining(deadline),
     )
     if chart_zero_primes.outcome != "COMPUTED":
-        return _failure("CHART_ZERO_COMPONENTS", chart_zero_primes)
+        _failure("CHART_ZERO_COMPONENTS", chart_zero_primes)
     chart_zero_components = chart_zero_primes.components or ()
-    projection_failure = _ideal_projection_limit_failure(
+    _ideal_projection_limit_failure(
         "CHART_ZERO_COMPONENTS",
         chart_zero_components,
         admission,
         maximum_ideals=MAX_PROJECTIVE_SINGULAR_POINTS,
     )
-    if projection_failure is not None:
-        return projection_failure
 
     chart_one = _specialize_ideal(
         saturation,
@@ -499,16 +465,14 @@ def _complete_zero_dimensional_points(
         wall_seconds=_remaining(deadline),
     )
     if chart_one_primes.outcome != "COMPUTED":
-        return _failure("CHART_ONE_COMPONENTS", chart_one_primes)
+        _failure("CHART_ONE_COMPONENTS", chart_one_primes)
     chart_one_components = chart_one_primes.components or ()
-    projection_failure = _ideal_projection_limit_failure(
+    _ideal_projection_limit_failure(
         "CHART_ONE_COMPONENTS",
         chart_one_components,
         admission,
         maximum_ideals=MAX_PROJECTIVE_SINGULAR_POINTS,
     )
-    if projection_failure is not None:
-        return projection_failure
 
     worker_request = ProjectiveSingularityPointWorkerRequest(
         variables=axis,
@@ -554,20 +518,16 @@ def _positive_dimensional_outcome(
         wall_seconds=_remaining(deadline),
     )
     if components_backend.outcome != "COMPUTED":
-        return _failure("PROJECTIVE_COMPONENTS", components_backend)
+        _failure("PROJECTIVE_COMPONENTS", components_backend)
     components = components_backend.components or ()
-    projection_failure = _ideal_projection_limit_failure(
+    _ideal_projection_limit_failure(
         "PROJECTIVE_COMPONENTS",
         components,
         admission,
         maximum_ideals=MAX_PROJECTIVE_SINGULAR_COMPONENTS,
     )
-    if projection_failure is not None:
-        return projection_failure
     if not components:
-        return _local_failure(
-            "a repeated component produced no rational minimal component"
-        )
+        _local_failure("a repeated component produced no rational minimal component")
     return PositiveDimensionalProjectivePlaneCurveSingularLocus._from_kernel(
         ideal=saturation,
         components=components,
@@ -655,24 +615,14 @@ def _singularity_profile_request(
         wall_seconds=_remaining(deadline),
     )
     if saturation_backend.outcome != "COMPUTED" or saturation_backend.ideal is None:
-        return _profile(
-            source=source,
-            partials=partials,
-            outcome=_failure("SATURATION", saturation_backend),
-        )
+        _failure("SATURATION", saturation_backend)
     saturation = saturation_backend.ideal
-    projection_failure = _ideal_projection_limit_failure(
+    _ideal_projection_limit_failure(
         "SATURATION",
         (saturation,),
         admission,
         maximum_ideals=1,
     )
-    if projection_failure is not None:
-        return _profile(
-            source=source,
-            partials=partials,
-            outcome=projection_failure,
-        )
 
     if admission.has_repeated_component:
         outcome: ProjectivePlaneCurveSingularityOutcome = _positive_dimensional_outcome(
@@ -704,13 +654,10 @@ def _singularity_profile_request(
                 "exact point construction rejected malformed backend algebra"
             )
         else:
-            if isinstance(points, IncompleteProjectivePlaneCurveSingularityComputation):
-                outcome = points
-            else:
-                outcome = ZeroDimensionalProjectivePlaneCurveSingularLocus._from_kernel(
-                    ideal=saturation,
-                    points=points,
-                )
+            outcome = ZeroDimensionalProjectivePlaneCurveSingularLocus._from_kernel(
+                ideal=saturation,
+                points=points,
+            )
 
     return _bounded_result_profile(
         source=source,

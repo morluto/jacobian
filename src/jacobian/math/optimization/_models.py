@@ -46,7 +46,6 @@ type RationalLinearProgramStatus = Literal[
     "PRIMAL_FEASIBLE",
     "INFEASIBLE",
     "UNBOUNDED",
-    "UNKNOWN",
 ]
 
 
@@ -493,7 +492,7 @@ class RationalLinearProgramResult(StrictModel):
 
     ``INFEASIBLE`` uses the Farkas convention ``Aᵀy>=0, bᵀy<0``.
     ``UNBOUNDED`` carries feasible ``x0`` and nonnegative ``d`` satisfying
-    ``Ad=0, cᵀd<0``. ``UNKNOWN`` makes no mathematical claim.
+    ``Ad=0, cᵀd<0``.
     """
 
     program: StandardFormRationalLinearProgram
@@ -616,7 +615,7 @@ def _require_result_shape(result: RationalLinearProgramResult) -> None:
             "one feasible primal point with its source-derived diagnostics"
         )
     if not has_primal and any(value is not None for value in primal_fields):
-        raise ValueError("infeasible and unknown results cannot carry primal data")
+        raise ValueError("infeasible results cannot carry primal data")
     if result.status == "OPTIMAL" and not all(
         value is not None for value in dual_fields
     ):

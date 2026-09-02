@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import Field, StrictInt, StringConstraints, model_validator
+from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
@@ -266,36 +266,10 @@ class PositiveDimensionalProjectivePlaneCurveSingularLocus(StrictModel):
         )
 
 
-SafeExecutionDetail = Annotated[
-    str,
-    StringConstraints(min_length=1, max_length=256, strict=True),
-]
-
-
-class IncompleteProjectivePlaneCurveSingularityComputation(StrictModel):
-    status: Literal[
-        "BACKEND_UNAVAILABLE",
-        "TIMEOUT",
-        "CANCELLED",
-        "LIMIT_EXCEEDED",
-        "BACKEND_ERROR",
-    ]
-    stage: Literal[
-        "SATURATION",
-        "PROJECTIVE_COMPONENTS",
-        "CHART_ZERO_COMPONENTS",
-        "CHART_ONE_COMPONENTS",
-        "POINT_CONSTRUCTION",
-        "RESULT_CONSTRUCTION",
-    ]
-    detail: SafeExecutionDetail
-
-
 ProjectivePlaneCurveSingularityOutcome = Annotated[
     SmoothProjectivePlaneCurve
     | ZeroDimensionalProjectivePlaneCurveSingularLocus
-    | PositiveDimensionalProjectivePlaneCurveSingularLocus
-    | IncompleteProjectivePlaneCurveSingularityComputation,
+    | PositiveDimensionalProjectivePlaneCurveSingularLocus,
     Field(discriminator="status"),
 ]
 
@@ -387,7 +361,6 @@ __all__ = [
     "MAX_PROJECTIVE_SINGULAR_COMPONENTS",
     "MAX_PROJECTIVE_SINGULAR_FIELD_DEGREE",
     "MAX_PROJECTIVE_SINGULAR_POINTS",
-    "IncompleteProjectivePlaneCurveSingularityComputation",
     "PositiveDimensionalProjectivePlaneCurveSingularLocus",
     "ProjectivePlaneCurveFirstJet",
     "ProjectivePlaneCurveSingularPointRecord",

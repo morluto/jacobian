@@ -97,8 +97,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description="Compute the complete saturated projective Jacobian locus over the "
         "algebraic closure of QQ for one bounded homogeneous ternary polynomial. "
         "The result distinguishes the unit-ideal smooth case, a complete finite "
-        "family of exact embedded number-field points, a positive-dimensional "
-        "locus, and operational noncompletion.",
+        "family of exact embedded number-field points, or a positive-dimensional "
+        "locus. Operational failure uses the execution-error path.",
         request_type=ProjectivePlaneCurveSingularityRequest,
         result_type=ProjectivePlaneCurveSingularityProfile,
         run=compute_projective_plane_curve_singularity_profile,

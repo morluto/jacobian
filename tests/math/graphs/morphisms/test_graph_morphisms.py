@@ -502,8 +502,6 @@ class TestSubgraphPatternFind:
         assert result.decision == "EXISTS"
 
     def test_rejects_pattern_larger_than_host(self) -> None:
-        import pytest
-
         from jacobian.math.graphs.morphisms._models import (
             SubgraphPatternFindRequest,
         )
@@ -681,9 +679,8 @@ class TestBacktrackingNodeBudget:
 
         A failed search visits 1,863,219 partial mappings and scans all ten
         host candidates at each one (~18.6M candidate checks in one pass).
-        The kernel charges those candidate checks to the work budget and
-        reports the typed non-conclusion instead of a
-        negative decision established by a partially searched space.
+        Admission bounds the complete assignment family, so execution must
+        finish the search and return the negative decision.
         """
         from jacobian.math.graphs.morphisms._models import (
             SubgraphPatternFindRequest,
@@ -701,7 +698,4 @@ class TestBacktrackingNodeBudget:
         )
         request = SubgraphPatternFindRequest(pattern=self._complete(10), host=host)
         result = _compute_subgraph_pattern_find(request)
-        assert result.decision == "BUDGET_EXCEEDED"
-        assert result.vertex_map == ()
-        # The typed non-conclusion round-trips without a backend replay.
-        type(result).model_validate(result.model_dump())
+        assert result.decision == "DOES_NOT_EXIST"

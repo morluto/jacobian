@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import Any
+from typing import Any, NoReturn
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.optimization._models import (
@@ -305,10 +305,10 @@ def _dual_data(
     return wire_objective, tuple(value for value in wire_slacks if value is not None)
 
 
-def _unknown(
+def _execution_failure(
     program: StandardFormRationalLinearProgram,
-) -> RationalLinearProgramResult:
-    return RationalLinearProgramResult._from_kernel(program=program, status="UNKNOWN")
+) -> NoReturn:
+    raise RuntimeError("exact linear-program execution produced no mathematical result")
 
 
 def _trivial_infeasibility(
@@ -353,7 +353,7 @@ def _certify_infeasible(
         ValueError,
         ZeroDivisionError,
     ):
-        return _unknown(program)
+        return _execution_failure(program)
     active_farkas = _wire_difference_solution(
         farkas_solution,
         positive_symbols,
@@ -361,7 +361,7 @@ def _certify_infeasible(
         max_digits=result_digits,
     )
     if active_farkas is None:
-        return _unknown(program)
+        return _execution_failure(program)
     farkas = _expand_active_row_values(
         active_farkas,
         active_rows,
@@ -372,7 +372,7 @@ def _certify_infeasible(
             program=program, status="INFEASIBLE", farkas_candidate=farkas
         )
     except ValueError:
-        return _unknown(program)
+        return _execution_failure(program)
 
 
 def _certify_unbounded(
@@ -400,7 +400,7 @@ def _certify_unbounded(
         ValueError,
         ZeroDivisionError,
     ):
-        return _unknown(program)
+        return _execution_failure(program)
     feasible = _wire_solution(
         feasible_solution,
         feasible_symbols,
@@ -412,14 +412,14 @@ def _certify_unbounded(
         max_digits=result_digits,
     )
     if feasible is None or ray is None:
-        return _unknown(program)
+        return _execution_failure(program)
     primal_data = _primal_data(
         program,
         feasible,
         max_digits=result_digits,
     )
     if primal_data is None:
-        return _unknown(program)
+        return _execution_failure(program)
     primal_objective, primal_residuals = primal_data
     try:
         return RationalLinearProgramResult._from_kernel(
@@ -431,7 +431,7 @@ def _certify_unbounded(
             recession_direction=ray,
         )
     except ValueError:
-        return _unknown(program)
+        return _execution_failure(program)
 
 
 def _positive_result(
@@ -532,7 +532,7 @@ def linear_program(
     except UnboundedLPError:
         return _certify_unbounded(program, result_digits=result_digits)
     except (AttributeError, IndexError, TypeError, ValueError, ZeroDivisionError):
-        return _unknown(program)
+        return _execution_failure(program)
     return _positive_result(
         program,
         primal_symbols,

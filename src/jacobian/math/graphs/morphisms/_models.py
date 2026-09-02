@@ -363,9 +363,8 @@ class SubgraphPatternFindRequest(StrictModel):
                 "callers can pass `explicit_graph` output directly. `pattern` "
                 "must have at most 64 vertices; requests whose worst-case "
                 "assignment search exceeds the per-pass work budget are "
-                "rejected. Runtime candidate scans share that budget and may "
-                "return `BUDGET_EXCEEDED`; returned maps remain bounded by "
-                "the admitted pattern cardinality."
+                "rejected. Admitted searches return a complete decision; returned "
+                "maps remain bounded by the admitted pattern cardinality."
             )
         },
     )
@@ -460,21 +459,13 @@ class SubgraphPatternFindResult(StrictModel):
 
     pattern: SimpleUndirectedGraph
     host: SimpleUndirectedGraph
-    decision: Literal["EXISTS", "DOES_NOT_EXIST", "BUDGET_EXCEEDED"]
+    decision: Literal["EXISTS", "DOES_NOT_EXIST"]
     vertex_map: tuple[str, ...] = Field(default=())
 
     @model_validator(mode="after")
     def require_consistent_pattern_witness(self) -> Self:
         if self.decision == "EXISTS":
             _validate_embedding_witness(self.pattern, self.host, self.vertex_map)
-        elif self.decision == "BUDGET_EXCEEDED":
-            # A budget-exhausted attempt makes no mathematical claim: it
-            # must carry neither a witness nor an implicit negative.
-            if self.vertex_map:
-                raise PydanticCustomError(
-                    "graph.a_budget_exceeded_result_must_not_carry_a_vertex",
-                    "a BUDGET_EXCEEDED result must not carry a vertex map",
-                )
         else:
             if self.vertex_map:
                 raise PydanticCustomError(
@@ -490,7 +481,7 @@ class SubgraphPatternFindResult(StrictModel):
         *,
         pattern: SimpleUndirectedGraph,
         host: SimpleUndirectedGraph,
-        decision: Literal["EXISTS", "DOES_NOT_EXIST", "BUDGET_EXCEEDED"],
+        decision: Literal["EXISTS", "DOES_NOT_EXIST"],
         vertex_map: tuple[str, ...],
     ) -> Self:
         """Construct a result from the trusted bounded search kernel."""

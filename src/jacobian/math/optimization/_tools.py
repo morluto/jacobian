@@ -33,7 +33,8 @@ RATIONAL_LINEAR_OPERATIONS: MathTools = (
             "Use exact SymPy simplex calls to return a source-bound standard-form "
             "rational LP outcome. Optimal and feasible outcomes retain replayed "
             "points; infeasible outcomes carry a Farkas witness; unbounded outcomes "
-            "carry a feasible point and recession direction; UNKNOWN makes no claim."
+            "carry a feasible point and recession direction. Operational failure "
+            "uses the execution-error path."
         ),
         request_type=RationalLinearProgramRequest,
         result_type=RationalLinearProgramResult,

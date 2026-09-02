@@ -10,7 +10,6 @@ from typing import Annotated, Any, Literal, Self, cast
 from pydantic import (
     Field,
     StrictInt,
-    StringConstraints,
     WithJsonSchema,
     model_validator,
 )
@@ -21,7 +20,6 @@ from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import (
     encode_strict_json,
     parse_canonical_integer,
-    sha256_digest,
 )
 from jacobian.math.analysis.intervals import ClosedRationalInterval, RationalBox
 from jacobian.math.number_theory.algebraic_numbers.real import (
@@ -52,10 +50,8 @@ MAX_PLANE_COMPONENT_SAMPLE_DEGREE = MAX_PLANE_COMPONENT_POINT_DEGREE
 MAX_PLANE_COMPONENT_SAMPLE_COEFFICIENT_DIGITS = (
     MAX_PLANE_COMPONENT_POINT_COEFFICIENT_DIGITS
 )
-# The operation's owner deadline is also the largest replay budget that a
-# non-completion may report.
+# Generous killable safety deadline for the external backend.
 PLANE_COMPONENT_WALL_SECONDS = 600
-# Conservative owner headroom below the canonical structured-value boundary.
 
 
 def _plane_coordinate_schema() -> dict[str, object]:
@@ -436,120 +432,7 @@ class PlaneComponentProfileComputed(StrictModel):
         return self
 
 
-PlaneComponentNoncompletionStatus = Literal[
-    "BACKEND_UNAVAILABLE",
-    "TIMEOUT",
-    "RESOURCE_LIMIT",
-    "BACKEND_ERROR",
-]
-PlaneComponentNoncompletionReason = Literal[
-    "SUPPORTED_QEPCAD_NOT_INSTALLED",
-    "UNSUPPORTED_QEPCAD_VERSION",
-    "QEPCAD_DEADLINE_EXPIRED",
-    "QEPCAD_OUTPUT_LIMIT",
-    "QEPCAD_CELL_LIMIT",
-    "QEPCAD_INVALID_OUTPUT",
-    "QEPCAD_EXECUTION_FAILED",
-    "SAMPLE_RECOGNITION_DEADLINE_EXPIRED",
-    "SAMPLE_RECOGNITION_OUTPUT_LIMIT",
-    "RESULT_OUTPUT_LIMIT",
-    "SAMPLE_RECOGNITION_INVALID_OUTPUT",
-    "SAMPLE_RECOGNITION_EXECUTION_FAILED",
-]
-
-
-class PlaneComponentProfileNoncompletion(StrictModel):
-    """An operational non-completion carrying no topological conclusion."""
-
-    status: PlaneComponentNoncompletionStatus
-    reason: PlaneComponentNoncompletionReason
-    request_digest: str | None = None
-    budget_seconds: StrictInt | None = Field(
-        default=None, ge=1, le=PLANE_COMPONENT_WALL_SECONDS
-    )
-    elapsed_ms: StrictInt | None = Field(default=None, ge=0)
-    timeout_layer: Literal["QEPCAD", "SAMPLE_RECOGNITION"] | None = None
-    operation_version: Literal["1"] = "1"
-    repository_revision: Annotated[
-        str,
-        StringConstraints(
-            pattern=r"^(?:unknown|[0-9a-f]{40})$", max_length=40, strict=True
-        ),
-    ] = "unknown"
-
-    @model_validator(mode="after")
-    def bind_reason_to_status(self) -> Self:
-        reasons_by_status: dict[
-            PlaneComponentNoncompletionStatus,
-            frozenset[PlaneComponentNoncompletionReason],
-        ] = {
-            "BACKEND_UNAVAILABLE": frozenset(
-                {
-                    "SUPPORTED_QEPCAD_NOT_INSTALLED",
-                    "UNSUPPORTED_QEPCAD_VERSION",
-                }
-            ),
-            "TIMEOUT": frozenset(
-                {
-                    "QEPCAD_DEADLINE_EXPIRED",
-                    "SAMPLE_RECOGNITION_DEADLINE_EXPIRED",
-                }
-            ),
-            "RESOURCE_LIMIT": frozenset(
-                {
-                    "QEPCAD_OUTPUT_LIMIT",
-                    "QEPCAD_CELL_LIMIT",
-                    "SAMPLE_RECOGNITION_OUTPUT_LIMIT",
-                    "RESULT_OUTPUT_LIMIT",
-                }
-            ),
-            "BACKEND_ERROR": frozenset(
-                {
-                    "QEPCAD_INVALID_OUTPUT",
-                    "QEPCAD_EXECUTION_FAILED",
-                    "SAMPLE_RECOGNITION_INVALID_OUTPUT",
-                    "SAMPLE_RECOGNITION_EXECUTION_FAILED",
-                }
-            ),
-        }
-        if self.reason not in reasons_by_status[self.status]:
-            raise _validation_error(
-                "noncompletion_reason",
-                "plane-component non-completion reason does not match its status",
-            )
-        if self.status == "TIMEOUT" and (
-            self.request_digest is None
-            or self.budget_seconds is None
-            or self.elapsed_ms is None
-            or self.timeout_layer is None
-        ):
-            raise _validation_error(
-                "timeout_metadata",
-                "timeout outcomes must retain replay metadata",
-            )
-        if self.status == "TIMEOUT":
-            expected_layer = (
-                "QEPCAD"
-                if self.reason == "QEPCAD_DEADLINE_EXPIRED"
-                else "SAMPLE_RECOGNITION"
-            )
-            if self.timeout_layer != expected_layer:
-                raise _validation_error(
-                    "timeout_metadata",
-                    "timeout_layer must match the timeout reason",
-                )
-        if self.status != "TIMEOUT" and self.timeout_layer is not None:
-            raise _validation_error(
-                "timeout_metadata",
-                "timeout_layer is only valid for timeout outcomes",
-            )
-        return self
-
-
-PlaneComponentProfileOutcome = Annotated[
-    PlaneComponentProfileComputed | PlaneComponentProfileNoncompletion,
-    Field(discriminator="status"),
-]
+PlaneComponentProfileOutcome = PlaneComponentProfileComputed
 
 
 def _raw_collection_limit(
@@ -1062,7 +945,7 @@ class PlaneComponentProfileRequest(StrictModel):
 
 
 class PlaneComponentProfileResult(StrictModel):
-    """The retained source and either an exact profile or no conclusion."""
+    """The retained source and its exact component profile."""
 
     semialgebraic_set: Annotated[
         PlaneSemialgebraicSet,
@@ -1089,14 +972,12 @@ class PlaneComponentProfileResult(StrictModel):
             raise _validation_error(
                 "sample_axis", "every retained sample must use the source axis"
             )
-        if isinstance(self.outcome, PlaneComponentProfileComputed) and len(
-            self.outcome.sample_dispositions
-        ) != len(self.samples):
+        if len(self.outcome.sample_dispositions) != len(self.samples):
             raise _validation_error(
                 "sample_result_count",
                 "a computed profile needs one disposition per supplied sample",
             )
-        if isinstance(self.outcome, PlaneComponentProfileComputed) and any(
+        if any(
             component.representative.axis != self.semialgebraic_set.axis
             for component in self.outcome.components
         ):
@@ -1104,20 +985,6 @@ class PlaneComponentProfileResult(StrictModel):
                 "component_axis",
                 "every component representative must use the source axis",
             )
-        if (
-            isinstance(self.outcome, PlaneComponentProfileNoncompletion)
-            and self.outcome.status == "TIMEOUT"
-        ):
-            retained_request = {
-                "semialgebraic_set": self.semialgebraic_set.model_dump(mode="json"),
-                "samples": [sample.model_dump(mode="json") for sample in self.samples],
-            }
-            expected_digest = sha256_digest(encode_strict_json(retained_request))
-            if self.outcome.request_digest != expected_digest:
-                raise _validation_error(
-                    "timeout_request_digest",
-                    "timeout metadata must bind to the retained source and samples",
-                )
         return self
 
 
@@ -1138,7 +1005,6 @@ __all__ = [
     "PLANE_COMPONENT_WALL_SECONDS",
     "IsolatedRealPlanePoint",
     "PlaneComponentProfileComputed",
-    "PlaneComponentProfileNoncompletion",
     "PlaneComponentProfileOutcome",
     "PlaneComponentProfileRequest",
     "PlaneComponentProfileResult",

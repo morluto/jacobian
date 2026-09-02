@@ -378,22 +378,13 @@ def subgraph_pattern_find(
     order) or ``DOES_NOT_EXIST`` after exhaustive bounded search.
     """
     _admit_subgraph_request(pattern, host)
-    try:
-        found = find_subgraph_embedding(
-            pattern.vertices,
-            pattern.edges,
-            host.vertices,
-            host.edges,
-            max_candidate_checks=MAX_CYCLE_SEARCH_PATHS,
-        )
-    except SearchBudgetExceededError:
-        # A search stopped at its budget establishes nothing either way.
-        return SubgraphPatternFindResult._from_kernel(
-            pattern=pattern,
-            host=host,
-            decision="BUDGET_EXCEEDED",
-            vertex_map=(),
-        )
+    found = find_subgraph_embedding(
+        pattern.vertices,
+        pattern.edges,
+        host.vertices,
+        host.edges,
+        max_candidate_checks=None,
+    )
     if found is not None:
         return SubgraphPatternFindResult._from_kernel(
             pattern=pattern,

@@ -13,6 +13,7 @@ import sympy
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import OperationExecutionCancelledError
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.algebraic_curves._singularity import (
@@ -473,16 +474,10 @@ def test_decoded_ideal_cannot_exceed_the_admitted_coefficient_bound() -> None:
         terms_per_generator=1,
     )
 
-    failure = _ideal_projection_limit_failure(
-        "SATURATION",
-        (ideal,),
-        admission,
-        maximum_ideals=1,
-    )
-
-    assert failure is not None
-    assert failure.status == "LIMIT_EXCEEDED"
-    assert failure.stage == "SATURATION"
+    with pytest.raises(RuntimeError, match="Macaulay bound"):
+        _ideal_projection_limit_failure(
+            "SATURATION", (ideal,), admission, maximum_ideals=1
+        )
 
 
 def test_derived_result_bound_covers_the_maximal_admitted_ideal_shape() -> None:
@@ -536,23 +531,17 @@ def test_derived_result_bound_covers_the_maximal_admitted_ideal_shape() -> None:
     )
     components = tuple(sorted(components, key=lambda ideal: ideal.model_dump_json()))
 
-    assert (
-        _ideal_projection_limit_failure(
-            "SATURATION",
-            (saturation,),
-            admission,
-            maximum_ideals=1,
-        )
-        is None
+    _ideal_projection_limit_failure(
+        "SATURATION",
+        (saturation,),
+        admission,
+        maximum_ideals=1,
     )
-    assert (
-        _ideal_projection_limit_failure(
-            "PROJECTIVE_COMPONENTS",
-            components,
-            admission,
-            maximum_ideals=MAX_PROJECTIVE_SINGULAR_COMPONENTS,
-        )
-        is None
+    _ideal_projection_limit_failure(
+        "PROJECTIVE_COMPONENTS",
+        components,
+        admission,
+        maximum_ideals=MAX_PROJECTIVE_SINGULAR_COMPONENTS,
     )
 
     axis = cast(
@@ -585,7 +574,6 @@ def test_every_outcome_discriminator_is_required_by_schema_and_runtime() -> None
         "SmoothProjectivePlaneCurve",
         "ZeroDimensionalProjectivePlaneCurveSingularLocus",
         "PositiveDimensionalProjectivePlaneCurveSingularLocus",
-        "IncompleteProjectivePlaneCurveSingularityComputation",
     ):
         assert "status" in schema["$defs"][definition]["required"]
 
@@ -609,11 +597,11 @@ def test_cancelled_saturation_is_not_a_mathematical_outcome() -> None:
     cancellation.set()
     source = _polynomial((1, (2, 0, 0)), (1, (0, 2, 0)), (1, (0, 0, 2)))
 
-    with bounded_process_cancellation(cancellation):
-        result = _compute(source)
-
-    assert result.outcome.status == "CANCELLED"
-    assert result.outcome.stage == "SATURATION"
+    with (
+        bounded_process_cancellation(cancellation),
+        pytest.raises(OperationExecutionCancelledError),
+    ):
+        _compute(source)
 
 
 def test_native_operation_accepts_the_canonical_polynomial_value() -> None:

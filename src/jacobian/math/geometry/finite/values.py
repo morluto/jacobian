@@ -106,10 +106,8 @@ class ProjectivePointSequence(StrictModel):
     Native iteration yields typed :class:`ProjectivePoint` items bound to the
     declared parent space, so producers compose directly into consumers such
     as ``embed_projective_point_in_finite_field`` without reconstruction.
-    Serialization stores the parent space once and each point as a bare
-    canonical coordinate tuple, so complete enumerations stay compact enough
-    for the transport envelope instead of repeating parent metadata per
-    point.
+    The representation stores the parent space once and each point as a bare
+    canonical coordinate tuple instead of repeating parent metadata per point.
     """
 
     space: PrimeFieldVectorSpace

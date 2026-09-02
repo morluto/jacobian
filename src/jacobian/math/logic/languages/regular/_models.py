@@ -50,7 +50,7 @@ class TransitionParikhProfileRequest(StrictModel):
 
     The automaton's ordered ``transition_id`` axis is authoritative. Admission
     derives path-extension, sparse-DP-cell, vector-coordinate, multiplicity,
-    profile-cell, and serialized-result bounds before running the recurrence.
+    profile-cell, and retained-result bounds before running the recurrence.
     """
 
     automaton: FiniteLabeledAutomaton = Field(

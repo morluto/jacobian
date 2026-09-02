@@ -338,8 +338,8 @@ class GroupSubgroupLatticeResult(StrictModel):
     @classmethod
     def require_bounded_subgroup_entries(cls, data: Any) -> Any:
         data = canonicalize_json_containers(data)
-        # Cap entries before nested model construction so a forged relayed
-        # payload remains inside the operation-derived transport envelope.
+        # Cap entries before allocating nested subgroup models from untrusted
+        # input.
         if isinstance(data, dict):
             entries = data.get("subgroups")
             if isinstance(entries, (list, tuple)) and len(entries) > (

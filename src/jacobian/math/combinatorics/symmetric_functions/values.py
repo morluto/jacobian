@@ -15,8 +15,8 @@ MAX_PARTITION_SIZE = 500
 # transpose (conjugation) and under tableau shape construction.
 MAX_PARTITION_PARTS = MAX_PARTITION_SIZE
 # Positive-integer tableau labels are mathematical values, not cell indices.
-# Keep them exactly interoperable as JSON numbers while bounding comparison and
-# serialized-output work independently of the tableau cell-count envelope.
+# Keep them exactly interoperable as JSON numbers while bounding comparison
+# work independently of the tableau cell-count envelope.
 MAX_TABLEAU_ENTRY = 2**53 - 1
 
 TableauEntry = Annotated[

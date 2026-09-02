@@ -208,7 +208,7 @@ def test_qepcad_process_returns_the_compact_exact_projection() -> None:
     shutil.which("qepcad") is None,
     reason="the exact plane-component backend is unavailable",
 )
-def test_qepcad_deadline_is_an_explicit_noncompletion() -> None:
+def test_qepcad_process_reports_deadline_expiry() -> None:
     outcome = run_qepcad_plane_components(
         _open_unit_disk_request(),
         wall_seconds=0.000_001,

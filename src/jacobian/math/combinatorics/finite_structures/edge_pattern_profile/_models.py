@@ -21,8 +21,8 @@ class EdgePatternProfileRequest(StrictModel):
     vertex_colors: dict[str, str] = Field(
         description=(
             "A total map on the hypergraph vertex labels. The complete result "
-            "is admitted against the canonical output-size envelope; each color "
-            f"label has at most {MAX_LABEL_LENGTH} characters."
+            "retains one bounded color pattern per source edge; each color label "
+            f"has at most {MAX_LABEL_LENGTH} characters."
         )
     )
 

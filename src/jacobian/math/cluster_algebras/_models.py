@@ -29,7 +29,7 @@ MAX_MUTATED_ENTRY_DIGITS = 2 * MAX_EXCHANGE_ENTRY_DIGITS + 1
 # MAX_MUTATED_ENTRY_DIGITS digits, validation performs n**2 symmetrized
 # products, and the exact result is an n x n matrix with cells of at most
 # MAX_MUTATED_ENTRY_DIGITS digits. The cell budget below therefore bounds all
-# admitted kernel work and serialized output; it is a conservative envelope,
+# admitted kernel work and retained matrix cells; it is a conservative envelope,
 # not a mathematical restriction on exchange-matrix dimension.
 MAX_EXCHANGE_CELLS = 4096
 _MAX_EXCHANGE_SIDE = isqrt(MAX_EXCHANGE_CELLS)

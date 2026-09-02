@@ -225,9 +225,8 @@ def require_evaluation_budget(
     is therefore capped at ``MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS`` before
     the active accounting runs.  The coupled length validators keep the
     coordinate count equal to the diagonal-coefficient count, so this single
-    bound also limits every linear traversal and the request echoed inside
-    the serialized result, independently of the arithmetic-digit budgets
-    above.
+    bound also limits every linear traversal and the source retained by the
+    result, independently of the arithmetic-digit budgets above.
     """
 
     support_terms = len(form.diagonal_coefficients) + len(form.cross_terms)

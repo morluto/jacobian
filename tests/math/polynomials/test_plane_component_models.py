@@ -18,7 +18,6 @@ from jacobian.math.polynomials.real_algebra._plane_component_models import (
     MAX_PLANE_COMPONENT_POLYNOMIALS,
     MAX_PLANE_COMPONENT_SIGN_CONDITIONS,
     MAX_PLANE_COMPONENTS,
-    PLANE_COMPONENT_WALL_SECONDS,
     IsolatedRealPlanePoint,
     PlaneComponentProfileComputed,
     PlaneComponentProfileRequest,
@@ -31,7 +30,7 @@ from jacobian.math.polynomials.real_algebra._plane_component_models import (
 )
 from jacobian.math.polynomials.real_algebra._plane_components import (
     _computed_result,
-    _noncompletion,
+    _raise_backend_failure,
 )
 from jacobian.math.polynomials.real_algebra._qepcad_plane_process import (
     QepcadPlaneProcessOutcome,
@@ -322,27 +321,18 @@ def test_result_outcome_is_discriminated_and_source_bound() -> None:
         )
 
 
-def test_noncompletion_uses_the_execution_error_path() -> None:
-    semialgebraic_set = PlaneSemialgebraicSet(
-        axis=("x", "y"), polynomials=(), sign_conditions=()
-    )
-    request = PlaneComponentProfileRequest(semialgebraic_set=semialgebraic_set)
-
+def test_backend_failure_uses_the_execution_error_path() -> None:
     with pytest.raises(RuntimeError):
-        _noncompletion(
-            request,
+        _raise_backend_failure(
             QepcadPlaneProcessOutcome(
                 status="RESOURCE_LIMIT", reason="QEPCAD_OUTPUT_LIMIT"
-            ),
-            budget_seconds=PLANE_COMPONENT_WALL_SECONDS,
+            )
         )
     with pytest.raises(TimeoutError):
-        _noncompletion(
-            request,
+        _raise_backend_failure(
             QepcadPlaneProcessOutcome(
                 status="TIMEOUT", reason="QEPCAD_DEADLINE_EXPIRED"
-            ),
-            budget_seconds=PLANE_COMPONENT_WALL_SECONDS,
+            )
         )
 
 

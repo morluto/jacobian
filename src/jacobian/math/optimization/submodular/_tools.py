@@ -62,8 +62,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         title="Check monotonicity of a set function",
         description="Check if a set function is monotone non-decreasing by scanning every "
         "covering relation. Scan admission bounds each table value to 128 "
-        "numerator/denominator digits and the complete 2^n table to the 9 MiB "
-        "transport envelope; ground sets up to 16 elements.",
+        "numerator/denominator digits and the complete table to 2^n entries; "
+        "ground sets have at most 16 elements.",
         request_type=MonotonicityCheckRequest,
         result_type=MonotonicityCheckResult,
         run=_monotonicity,
@@ -92,8 +92,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description="Check if a set function is submodular via the exact local "
         "characterization f(S+i)+f(S+j) >= f(S)+f(S+{i,j}) over all pairs. Scan "
         "admission bounds each table value to 128 numerator/denominator digits "
-        "and the complete 2^n table to the 9 MiB transport envelope; ground "
-        "sets up to 16 elements.",
+        "and the complete table to 2^n entries; ground sets have at most 16 "
+        "elements.",
         request_type=SubmodularityCheckRequest,
         result_type=SubmodularityCheckResult,
         run=_submodularity,

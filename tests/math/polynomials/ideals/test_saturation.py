@@ -8,7 +8,10 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.polynomials.ideals._models import IdealSaturationRequest
+from jacobian.math.polynomials.ideals._models import (
+    IdealSaturationRequest,
+    IdealSaturationResult,
+)
 from jacobian.math.polynomials.ideals.operations import ideal_saturation
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
@@ -18,7 +21,7 @@ from jacobian.math.polynomials.values import (
 )
 
 
-def _run_saturation(request: IdealSaturationRequest):
+def _run_saturation(request: IdealSaturationRequest) -> IdealSaturationResult:
     return ideal_saturation(
         request.ideal, request.denominator, resource_budget=request.resource_budget
     )
@@ -93,9 +96,7 @@ class TestIdealSaturation:
         denominator = _polynomial(("x", "y"), {(1, 0): 1})
         request = IdealSaturationRequest(ideal=ideal, denominator=denominator)
         result = _run_saturation(request)
-        assert result.outcome == "COMPUTED"
         assert result.saturation is not None
-        assert result.backend_version is not None
         expected = _ideal(("x", "y"), {(0, 1): 1})
         assert _ideals_equal(result.saturation, expected), (
             "saturation <xy>:<x>^inf should be <y>"
@@ -109,7 +110,6 @@ class TestIdealSaturation:
         denominator = _polynomial(("x", "y"), {(0, 1): 1})
         request = IdealSaturationRequest(ideal=ideal, denominator=denominator)
         result = _run_saturation(request)
-        assert result.outcome == "COMPUTED"
         assert result.saturation is not None
         # <x> : <y>^inf = <x> (check ideal equality, not just non-null)
         assert _ideals_equal(result.saturation, ideal)
@@ -122,7 +122,6 @@ class TestIdealSaturation:
         denominator = _polynomial(("x", "y"), {(0, 0): 1})
         request = IdealSaturationRequest(ideal=ideal, denominator=denominator)
         result = _run_saturation(request)
-        assert result.outcome == "COMPUTED"
         assert result.saturation is not None
         assert _ideals_equal(result.saturation, ideal)
 
@@ -135,7 +134,6 @@ class TestIdealSaturation:
         denominator = _polynomial(("x", "y"), {(1, 1): 1})
         request = IdealSaturationRequest(ideal=ideal, denominator=denominator)
         result = _run_saturation(request)
-        assert result.outcome == "COMPUTED"
         assert result.saturation is not None
         assert _ideals_equal(result.saturation, _ideal(("x", "y"), {(0, 0): 1})), (
             "saturation <xy>:<xy>^inf should be the unit ideal"
@@ -175,15 +173,3 @@ class TestIdealSaturation:
         request = IdealSaturationRequest(ideal=ideal, denominator=denominator)
         with pytest.raises(OperationDomainValidationError):
             _run_saturation(request)
-
-    @requires_singular
-    @pytest.mark.requires_backend("singular")
-    def test_saturation_result_has_backend_version(self) -> None:
-        """Computed saturation should include a backend version."""
-        ideal = _ideal(("x", "y"), {(1, 1): 1})
-        denominator = _polynomial(("x", "y"), {(1, 0): 1})
-        request = IdealSaturationRequest(ideal=ideal, denominator=denominator)
-        result = _run_saturation(request)
-        assert result.outcome == "COMPUTED"
-        assert result.backend_version is not None
-        assert result.backend_version != ""

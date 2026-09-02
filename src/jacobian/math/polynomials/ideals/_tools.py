@@ -398,9 +398,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         title="Reduce a polynomial modulo an ideal",
         description="Reduce one bounded polynomial modulo a bounded ideal in QQ[x_1, "
         "x_2, ..., x_n] using a Groebner basis remainder. Returns the exact "
-        "remainder and whether the polynomial is in the ideal; a computation "
-        "that exceeds the enforced wall-time bound returns a typed TIMEOUT "
-        "outcome instead of a remainder.",
+        "remainder and whether the polynomial is in the ideal. Timeout or "
+        "backend failure establishes no normal-form result.",
         request_type=IdealNormalFormRequest,
         result_type=IdealNormalFormResult,
         run=_run_normal_form,
@@ -427,9 +426,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         title="Compute an elimination ideal",
         description="Compute the elimination ideal I ∩ QQ[remaining variables] by "
         "computing a lex Groebner basis and extracting the generators that "
-        "involve only the remaining variables. A computation that exceeds the "
-        "enforced wall-time budget returns a typed TIMEOUT outcome instead of "
-        "an ideal.",
+        "involve only the remaining variables. Timeout or backend failure "
+        "establishes no elimination ideal.",
         request_type=EliminationIdealRequest,
         result_type=EliminationIdealResult,
         run=_run_elimination,

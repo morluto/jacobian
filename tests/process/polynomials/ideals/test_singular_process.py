@@ -13,10 +13,7 @@ import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
-from jacobian.math.polynomials.ideals._models import (
-    MAX_OUTPUT_TERMS,
-    IdealComputationBudget,
-)
+from jacobian.math.polynomials.ideals._models import IdealComputationBudget
 from jacobian.math.polynomials.ideals._singular import (
     _minimal_primes_stdout_limit,
     run_singular_ideal_operation,
@@ -430,13 +427,6 @@ def test_exhausted_replay_allowance_times_out_without_launching_singular(
 
     assert result.outcome == "TIMEOUT"
     assert result.components is None
-
-
-def test_caller_cannot_narrow_the_exact_result_contract() -> None:
-    with pytest.raises(
-        ValueError, match=rf"greater than or equal to {MAX_OUTPUT_TERMS}"
-    ):
-        IdealComputationBudget(maximum_output_terms=1)
 
 
 def test_temporary_directory_failure_is_a_typed_unavailable_outcome(

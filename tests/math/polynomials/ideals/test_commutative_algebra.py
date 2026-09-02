@@ -165,14 +165,12 @@ def test_ideal_contract_rejects_mixed_polynomial_rings() -> None:
         )
 
 
-def test_backend_unavailability_is_a_typed_execution_outcome(
+def test_backend_unavailability_is_an_execution_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(shutil, "which", lambda _name: None)
-    result = _run_radical(IdealRadicalRequest(ideal=_ideal(("x",), {(2,): 1})))
-    assert result.outcome == "UNAVAILABLE"
-    assert result.radical is None
-    assert result.detail == "The supported Singular 4.4 backend is not installed."
+    with pytest.raises(RuntimeError, match="not installed"):
+        _run_radical(IdealRadicalRequest(ideal=_ideal(("x",), {(2,): 1})))
 
 
 def test_singular_protocol_parser_rejects_trailing_output() -> None:
@@ -380,7 +378,6 @@ def test_ideal_radical_counterexample_is_exact() -> None:
         {(0, 2): 1},
     )
     result = _run_radical(IdealRadicalRequest(ideal=source))
-    assert result.outcome == "COMPUTED"
     assert result.radical is not None
     assert _equal(
         result.radical,
@@ -393,10 +390,8 @@ def test_ideal_radical_counterexample_is_exact() -> None:
 @pytest.mark.requires_backend("singular")
 def test_ideal_radical_is_idempotent() -> None:
     first = _run_radical(IdealRadicalRequest(ideal=_ideal(("x",), {(4,): 1})))
-    assert first.outcome == "COMPUTED"
     assert first.radical is not None
     second = _run_radical(IdealRadicalRequest(ideal=first.radical))
-    assert second.outcome == "COMPUTED"
     assert second.radical is not None
     assert _equal(first.radical, second.radical)
 
@@ -446,7 +441,6 @@ def test_ideal_radical_agrees_with_independent_monomial_oracle(
     source = _ideal(("x", "y"), *monomial_generators)
     result = _run_radical(IdealRadicalRequest(ideal=source))
 
-    assert result.outcome == "COMPUTED"
     assert result.radical is not None
     assert _equal(
         result.radical,
@@ -463,7 +457,6 @@ def test_ideal_quotient_counterexample_is_exact() -> None:
             divisor=_ideal(("x", "y"), {(2, 0): 1, (0, 1): 1}),
         )
     )
-    assert result.outcome == "COMPUTED"
     assert result.quotient is not None
     assert _equal(result.quotient, _ideal(("x", "y"), {(1, 0): 1}))
     dividend = _ideal(("x", "y"), {(1, 0): 1})
@@ -506,7 +499,6 @@ def test_ideal_quotient_by_zero_is_the_unit_ideal() -> None:
             divisor=_ideal(("x",), {}),
         )
     )
-    assert result.outcome == "COMPUTED"
     assert result.quotient is not None
     assert _equal(result.quotient, _ideal(("x",), {(0,): 1}))
 
@@ -553,7 +545,6 @@ def test_ideal_quotient_by_unit_is_the_dividend() -> None:
         )
     )
 
-    assert result.outcome == "COMPUTED"
     assert result.quotient is not None
     assert _equal(result.quotient, dividend)
 
@@ -574,7 +565,6 @@ def test_singular_codec_round_trips_a_fractional_multivariate_ideal() -> None:
         )
     )
 
-    assert result.outcome == "COMPUTED"
     assert result.quotient == _ideal(
         ("x", "y"),
         {(0, 2): 3, (0, 0): -2},
@@ -609,7 +599,6 @@ def test_ideal_quotient_by_generator_sum_is_intersection_of_colons() -> None:
         )
     )
 
-    assert result.outcome == "COMPUTED"
     assert result.quotient is not None
     assert by_x.quotient is not None
     assert by_y.quotient is not None

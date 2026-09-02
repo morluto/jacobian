@@ -246,19 +246,9 @@ class MonomialIdealBettiResult(StrictModel):
 
 
 class IdealComputationBudget(StrictModel):
-    """Enforced wall-time and exact-result limits for one Singular call."""
+    """Caller-selected wall-time limit for one ideal computation."""
 
     wall_seconds: StrictInt = Field(default=10, ge=1, le=60)
-    maximum_output_generators: StrictInt = Field(
-        default=MAX_OUTPUT_GENERATORS,
-        ge=MAX_OUTPUT_GENERATORS,
-        le=MAX_OUTPUT_GENERATORS,
-    )
-    maximum_output_terms: StrictInt = Field(
-        default=MAX_OUTPUT_TERMS,
-        ge=MAX_OUTPUT_TERMS,
-        le=MAX_OUTPUT_TERMS,
-    )
 
 
 def _require_ideal_budget(ideal: RationalPolynomialIdeal, *, label: str) -> None:
@@ -397,8 +387,7 @@ def _require_provable_family_fit(ideal: RationalPolynomialIdeal) -> None:
     then combine constraints into a unit and falsely count dead choices.
     The complete family thus carries at least ``feasible * (k + e)``
     aggregate generators: when that exceeds the exact-result envelope,
-    every admitted execution ends in typed LIMIT_EXCEEDED and the source
-    is rejected here before any backend launch. A source containing a
+    the source is rejected here before any backend launch. A source containing a
     nonzero constant is the unit ideal with an empty family and always
     stays admitted, and a source with no feasible choice certifies nothing
     and stays admitted.
@@ -621,38 +610,8 @@ class IdealEqualityRequest(StrictModel):
         return self
 
 
-IdealExecutionOutcome = Literal[
-    "COMPUTED",
-    "UNAVAILABLE",
-    "TIMEOUT",
-    "CANCELLED",
-    "LIMIT_EXCEEDED",
-    "ERROR",
-]
-
-
 class IdealRadicalResult(StrictModel):
-    outcome: IdealExecutionOutcome
-    radical: RationalPolynomialIdeal | None = None
-    backend_version: str | None = None
-    detail: str | None = None
-
-    @model_validator(mode="after")
-    def require_outcome_shape(self) -> Self:
-        if self.outcome == "COMPUTED":
-            if self.radical is None or self.backend_version is None or self.detail:
-                raise _validation_error(
-                    "computed radical requires a value and backend version"
-                )
-        elif (
-            self.radical is not None
-            or self.backend_version is not None
-            or not self.detail
-        ):
-            raise _validation_error(
-                "failed radical computation requires only a safe detail"
-            )
-        return self
+    radical: RationalPolynomialIdeal
 
 
 class IdealRadicalMembershipResult(StrictModel):
@@ -660,51 +619,11 @@ class IdealRadicalMembershipResult(StrictModel):
 
 
 class IdealQuotientResult(StrictModel):
-    outcome: IdealExecutionOutcome
-    quotient: RationalPolynomialIdeal | None = None
-    backend_version: str | None = None
-    detail: str | None = None
-
-    @model_validator(mode="after")
-    def require_outcome_shape(self) -> Self:
-        if self.outcome == "COMPUTED":
-            if self.quotient is None or self.backend_version is None or self.detail:
-                raise _validation_error(
-                    "computed quotient requires a value and backend version"
-                )
-        elif (
-            self.quotient is not None
-            or self.backend_version is not None
-            or not self.detail
-        ):
-            raise _validation_error(
-                "failed quotient computation requires only a safe detail"
-            )
-        return self
+    quotient: RationalPolynomialIdeal
 
 
 class IdealSaturationResult(StrictModel):
-    outcome: IdealExecutionOutcome
-    saturation: RationalPolynomialIdeal | None = None
-    backend_version: str | None = None
-    detail: str | None = None
-
-    @model_validator(mode="after")
-    def require_outcome_shape(self) -> Self:
-        if self.outcome == "COMPUTED":
-            if self.saturation is None or self.backend_version is None or self.detail:
-                raise _validation_error(
-                    "computed saturation requires a value and backend version"
-                )
-        elif (
-            self.saturation is not None
-            or self.backend_version is not None
-            or not self.detail
-        ):
-            raise _validation_error(
-                "failed saturation computation requires only a safe detail"
-            )
-        return self
+    saturation: RationalPolynomialIdeal
 
 
 class IdealContainmentLedger(StrictModel):
@@ -743,25 +662,14 @@ class IdealContainmentResult(StrictModel):
 
     source: RationalPolynomialIdeal
     target: RationalPolynomialIdeal
-    outcome: IdealExecutionOutcome
-    ledger: IdealContainmentLedger | None = None
+    ledger: IdealContainmentLedger
     monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex"
-    detail: str | None = None
 
     @model_validator(mode="after")
-    def require_outcome_shape(self) -> Self:
+    def require_ledger_binding(self) -> Self:
         if self.source.variables != self.target.variables:
             raise _validation_error("retained ideals must use the same ordered ring")
-        if self.outcome == "COMPUTED":
-            if self.ledger is None or self.detail is not None:
-                raise _validation_error(
-                    "computed containment requires a ledger and no failure detail"
-                )
-            _require_ledger_binding(self.ledger, self.source)
-        elif self.ledger is not None or self.detail is None:
-            raise _validation_error(
-                "incomplete containment carries only a safe failure detail"
-            )
+        _require_ledger_binding(self.ledger, self.source)
         return self
 
     @classmethod
@@ -776,10 +684,8 @@ class IdealContainmentResult(StrictModel):
         return cls.model_construct(
             source=source,
             target=target,
-            outcome="COMPUTED",
             ledger=ledger,
             monomial_order=monomial_order,
-            detail=None,
         )
 
 
@@ -788,41 +694,20 @@ class IdealEqualityResult(StrictModel):
 
     left: RationalPolynomialIdeal
     right: RationalPolynomialIdeal
-    outcome: IdealExecutionOutcome
-    equal: bool | None = None
-    left_in_right: IdealContainmentLedger | None = None
-    right_in_left: IdealContainmentLedger | None = None
+    equal: bool
+    left_in_right: IdealContainmentLedger
+    right_in_left: IdealContainmentLedger
     monomial_order: Literal["lex", "grlex", "grevlex"] = "grevlex"
-    detail: str | None = None
 
     @model_validator(mode="after")
-    def require_outcome_shape(self) -> Self:
+    def require_mutual_containment(self) -> Self:
         if self.left.variables != self.right.variables:
             raise _validation_error("retained ideals must use the same ordered ring")
-        if self.outcome == "COMPUTED":
-            if (
-                self.equal is None
-                or self.left_in_right is None
-                or self.right_in_left is None
-                or self.detail is not None
-            ):
-                raise _validation_error(
-                    "computed equality requires both directed ledgers"
-                )
-            expected = self.left_in_right.contained and self.right_in_left.contained
-            if self.equal != expected:
-                raise _validation_error("ideal equality must be mutual containment")
-            _require_ledger_binding(self.left_in_right, self.left)
-            _require_ledger_binding(self.right_in_left, self.right)
-        elif (
-            self.equal is not None
-            or self.left_in_right is not None
-            or self.right_in_left is not None
-            or self.detail is None
-        ):
-            raise _validation_error(
-                "incomplete equality carries only a safe failure detail"
-            )
+        expected = self.left_in_right.contained and self.right_in_left.contained
+        if self.equal != expected:
+            raise _validation_error("ideal equality must be mutual containment")
+        _require_ledger_binding(self.left_in_right, self.left)
+        _require_ledger_binding(self.right_in_left, self.right)
         return self
 
     @classmethod
@@ -839,12 +724,10 @@ class IdealEqualityResult(StrictModel):
         return cls.model_construct(
             left=left,
             right=right,
-            outcome="COMPUTED",
             equal=left_in_right.contained and right_in_left.contained,
             left_in_right=left_in_right,
             right_in_left=right_in_left,
             monomial_order=monomial_order,
-            detail=None,
         )
 
 
@@ -874,9 +757,8 @@ class IdealMinimalPrimesRequest(StrictModel):
             "single-variable generators force at least 2^k minimal primes, "
             "and each further independent single-variable constraint raises "
             "every component's forced generator count — is rejected here "
-            "before the backend launches; otherwise a family exceeding the "
-            "aggregate 64-generator or 1024-term envelope returns a typed "
-            "LIMIT_EXCEEDED outcome."
+            "before the backend launches; later backend exhaustion is an "
+            "execution failure rather than a minimal-prime family."
         )
     )
     resource_budget: IdealComputationBudget = Field(
@@ -894,31 +776,10 @@ class IdealMinimalPrimesResult(StrictModel):
     """
 
     ideal: RationalPolynomialIdeal
-    outcome: IdealExecutionOutcome
-    components: tuple[RationalPolynomialIdeal, ...] | None = None
-    backend_version: str | None = None
-    detail: str | None = None
+    components: tuple[RationalPolynomialIdeal, ...]
 
     @model_validator(mode="after")
-    def require_outcome_shape(self) -> Self:
-        if self.outcome != "COMPUTED":
-            if (
-                self.components is not None
-                or self.backend_version is not None
-                or not self.detail
-            ):
-                raise _validation_error(
-                    "incomplete minimal-prime computation requires only a safe detail"
-                )
-            return self
-        if (
-            self.components is None
-            or self.backend_version is None
-            or self.detail is not None
-        ):
-            raise _validation_error(
-                "computed minimal-prime family requires components and backend version"
-            )
+    def require_component_family(self) -> Self:
         _require_computed_minimal_prime_family(self.ideal, self.components)
         return self
 
@@ -926,16 +787,13 @@ class IdealMinimalPrimesResult(StrictModel):
     def _from_kernel(
         cls,
         ideal: RationalPolynomialIdeal,
-        components: tuple[RationalPolynomialIdeal, ...] | None,
-        backend_version: str | None,
+        components: tuple[RationalPolynomialIdeal, ...],
     ) -> Self:
         """Build a computed result from the trusted Singular adapter."""
 
         return cls.model_construct(
             ideal=ideal,
-            outcome="COMPUTED",
             components=components,
-            backend_version=backend_version,
         )
 
 
@@ -976,7 +834,6 @@ def _require_computed_minimal_prime_family(
 __all__ = [
     "MAX_OUTPUT_GENERATORS",
     "MAX_OUTPUT_TERMS",
-    "EliminationExecutionOutcome",
     "EliminationIdealRequest",
     "EliminationIdealResult",
     "GroebnerBasisRequest",
@@ -987,7 +844,6 @@ __all__ = [
     "IdealContainmentResult",
     "IdealEqualityRequest",
     "IdealEqualityResult",
-    "IdealExecutionOutcome",
     "IdealMinimalPrimesRequest",
     "IdealMinimalPrimesResult",
     "IdealNormalFormRequest",
@@ -1000,7 +856,6 @@ __all__ = [
     "IdealRadicalResult",
     "IdealSaturationRequest",
     "IdealSaturationResult",
-    "NormalFormExecutionOutcome",
 ]
 
 
@@ -1019,38 +874,24 @@ class GroebnerBasisRequest(StrictModel):
     )
 
 
-GroebnerExecutionOutcome = Literal[
-    "COMPUTED", "ERROR", "LIMIT_EXCEEDED", "TIMEOUT", "CANCELLED"
-]
-
-
 class GroebnerBasisResult(StrictModel):
-    """A reduced Gröbner basis, or a typed timeout under the enforced budget."""
+    """A reduced Gröbner basis for the retained ideal."""
 
     ideal: RationalPolynomialIdeal
-    outcome: GroebnerExecutionOutcome = "COMPUTED"
-    basis: RationalPolynomialIdeal | None = None
+    basis: RationalPolynomialIdeal
     generator_count: StrictInt = Field(default=0, ge=0, le=MAX_OUTPUT_GENERATORS)
     monomial_order: Literal["lex", "grlex", "grevlex"]
-    detail: str | None = None
 
     @model_validator(mode="after")
-    def require_outcome_shape(self) -> Self:
-        if self.outcome == "COMPUTED":
-            if self.basis is None or self.detail is not None:
-                raise _validation_error(
-                    "computed basis requires a value and no failure detail"
-                )
-            if (
-                self.generator_count != len(self.basis.generators)
-                or self.generator_count < 1
-            ):
-                raise _validation_error(
-                    "generator_count must match the basis generator count"
-                )
-            _require_basis_shape(self.basis, self.ideal)
-        elif self.basis is not None or self.detail is None:
-            raise _validation_error("timed-out computation carries only a safe detail")
+    def require_basis_binding(self) -> Self:
+        if (
+            self.generator_count != len(self.basis.generators)
+            or self.generator_count < 1
+        ):
+            raise _validation_error(
+                "generator_count must match the basis generator count"
+            )
+        _require_basis_shape(self.basis, self.ideal)
         return self
 
     @classmethod
@@ -1112,55 +953,29 @@ class IdealNormalFormRequest(StrictModel):
     monomial_order: NormalFormMonomialOrder = "grevlex"
 
 
-NormalFormExecutionOutcome = Literal[
-    "COMPUTED", "ERROR", "LIMIT_EXCEEDED", "TIMEOUT", "CANCELLED"
-]
-
-
 class IdealNormalFormResult(StrictModel):
-    """The exact remainder modulo an ideal, or a typed incomplete outcome."""
+    """The exact remainder modulo an ideal."""
 
     ideal: RationalPolynomialIdeal
     polynomial: RationalPolynomial
-    outcome: NormalFormExecutionOutcome = "COMPUTED"
-    remainder: RationalPolynomial | None = None
-    in_ideal: bool | None = None
+    remainder: RationalPolynomial
+    in_ideal: bool
     monomial_order: NormalFormMonomialOrder = "grevlex"
-    detail: str | None = None
 
     @model_validator(mode="after")
     def require_consistent_membership(self) -> Self:
-        if self.outcome != "COMPUTED" and self.in_ideal is not None:
+        if self.in_ideal and len(self.remainder.polynomial.terms) > 0:
             raise _validation_error(
-                "an incomplete normal-form outcome states no membership conclusion"
+                "a polynomial in the ideal must have a zero remainder"
             )
-        if self.outcome == "COMPUTED":
-            if self.remainder is None or self.detail is not None:
-                raise _validation_error(
-                    "computed normal form requires a remainder and no failure detail"
-                )
-            # A computed outcome claims its authoritative membership
-            # decision; omitting it would let the result claim success
-            # while withholding the conclusion.
-            if self.in_ideal is None:
-                raise _validation_error(
-                    "a computed normal form must state its membership "
-                    "conclusion in in_ideal"
-                )
-            if self.in_ideal and len(self.remainder.polynomial.terms) > 0:
-                raise _validation_error(
-                    "a polynomial in the ideal must have a zero remainder"
-                )
-            if not self.in_ideal and len(self.remainder.polynomial.terms) == 0:
-                raise _validation_error(
-                    "a polynomial not in the ideal must have a nonzero remainder"
-                )
-            if self.remainder.variables != self.ideal.variables:
-                raise _validation_error(
-                    "remainder must use the retained ideal's ordered ring"
-                )
-        elif self.remainder is not None or self.detail is None:
-            raise _validation_error("timed-out computation carries only a safe detail")
+        if not self.in_ideal and len(self.remainder.polynomial.terms) == 0:
+            raise _validation_error(
+                "a polynomial not in the ideal must have a nonzero remainder"
+            )
+        if self.remainder.variables != self.ideal.variables:
+            raise _validation_error(
+                "remainder must use the retained ideal's ordered ring"
+            )
         return self
 
     @classmethod
@@ -1212,43 +1027,29 @@ class EliminationIdealRequest(StrictModel):
         return self
 
 
-EliminationExecutionOutcome = Literal[
-    "COMPUTED", "ERROR", "LIMIT_EXCEEDED", "TIMEOUT", "CANCELLED"
-]
-
-
 class EliminationIdealResult(StrictModel):
-    """The elimination ideal I ∩ QQ[remaining variables], or a typed timeout under the enforced budget."""
+    """The elimination ideal I ∩ QQ[remaining variables]."""
 
     ideal: RationalPolynomialIdeal
-    outcome: EliminationExecutionOutcome = "COMPUTED"
-    elimination_ideal: RationalPolynomialIdeal | None = None
+    elimination_ideal: RationalPolynomialIdeal
     eliminated_variables: tuple[str, ...] = Field(min_length=1, max_length=MAX_VARS)
-    detail: str | None = None
 
     @model_validator(mode="after")
     def require_consistent_result(self) -> Self:
-        if self.outcome == "COMPUTED":
-            if self.elimination_ideal is None or self.detail is not None:
+        for var in self.eliminated_variables:
+            if var in self.elimination_ideal.variables:
                 raise _validation_error(
-                    "computed elimination requires an ideal and no failure detail"
+                    "eliminated variables must not appear in the elimination ideal"
                 )
-            for var in self.eliminated_variables:
-                if var in self.elimination_ideal.variables:
-                    raise _validation_error(
-                        "eliminated variables must not appear in the elimination ideal"
-                    )
-            remaining = tuple(
-                variable
-                for variable in self.ideal.variables
-                if variable not in set(self.eliminated_variables)
+        remaining = tuple(
+            variable
+            for variable in self.ideal.variables
+            if variable not in set(self.eliminated_variables)
+        )
+        if self.elimination_ideal.variables != remaining:
+            raise _validation_error(
+                "elimination ideal must use exactly the remaining ordered ring"
             )
-            if self.elimination_ideal.variables != remaining:
-                raise _validation_error(
-                    "elimination ideal must use exactly the remaining ordered ring"
-                )
-        elif self.elimination_ideal is not None or self.detail is None:
-            raise _validation_error("timed-out computation carries only a safe detail")
         return self
 
     @classmethod

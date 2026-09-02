@@ -64,7 +64,6 @@ def test_containment_returns_complete_positive_ledger() -> None:
 
     result = ideal_containment(source, target)
 
-    assert result.outcome == "COMPUTED"
     assert result.ledger is not None
     assert result.ledger.contained
     assert len(result.ledger.normal_forms) == 2
@@ -100,7 +99,6 @@ def test_equality_is_invariant_under_order_redundancy_and_rescaling() -> None:
 
     result = ideal_equality(left, right)
 
-    assert result.outcome == "COMPUTED"
     assert result.equal is True
     assert result.left_in_right is not None and result.left_in_right.contained
     assert result.right_in_left is not None and result.right_in_left.contained
@@ -200,7 +198,7 @@ def test_native_relation_admission_rejects_oversized_source() -> None:
         ideal_containment(source, target)
 
 
-def test_relation_kernel_deadline_reserves_typed_result_delivery_time() -> None:
+def test_relation_kernel_uses_the_bound_request_deadline() -> None:
     started = time.monotonic()
 
     with request_execution(started):
@@ -211,8 +209,7 @@ def test_relation_kernel_deadline_reserves_typed_result_delivery_time() -> None:
 
     assert execution is not None
     assert execution.deadline is not None
-    assert execution.deadline > kernel_deadline
-    assert execution.deadline - kernel_deadline == pytest.approx(0.25)
+    assert execution.deadline == kernel_deadline
 
 
 def test_ledger_rejects_a_false_positive_shape() -> None:
@@ -226,19 +223,14 @@ def test_ledger_rejects_a_false_positive_shape() -> None:
 def test_backend_failure_does_not_become_noncontainment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fail(_payload: object, _wall_seconds: float) -> dict[str, object]:
+    def fail(*args: object, **kwargs: object) -> dict[str, object]:
         raise operations._SympyKernelError("backend failure")
 
     monkeypatch.setattr(operations, "_run_sympy_kernel", fail)
     source = _ideal(("x",), {(1,): 1})
 
-    result = ideal_containment(source, source)
-
-    assert result.outcome == "ERROR"
-    assert result.ledger is None
-    assert result.detail == (
-        "the bounded kernel failed without producing an exact containment"
-    )
+    with pytest.raises(RuntimeError, match="failed without producing"):
+        ideal_containment(source, source)
 
 
 @pytest.mark.parametrize(
@@ -251,6 +243,4 @@ def test_backend_failure_does_not_become_noncontainment(
 def test_catalog_examples_execute(operation_id: str) -> None:
     tool = next(item for item in TOOLS if item.operation_id == operation_id)
     request = tool.request_type.model_validate(tool.examples[0].input)
-    result = tool.run(request)
-
-    assert result.outcome == "COMPUTED"
+    tool.run(request)

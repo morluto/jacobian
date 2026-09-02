@@ -23,7 +23,11 @@ from jacobian.math._singular import (
     run_bounded_singular,
     singular_version_preamble,
 )
-from jacobian.math.polynomials.ideals._models import IdealComputationBudget
+from jacobian.math.polynomials.ideals._models import (
+    MAX_OUTPUT_GENERATORS,
+    MAX_OUTPUT_TERMS,
+    IdealComputationBudget,
+)
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_EXPONENT,
     MAX_POLYNOMIAL_TERMS,
@@ -267,7 +271,7 @@ def _parse_output(
         generator_count = int(reader.pop())
     except ValueError as exc:
         raise ValueError("Singular output has invalid numeric metadata") from exc
-    if not 0 <= generator_count <= budget.maximum_output_generators:
+    if not 0 <= generator_count <= MAX_OUTPUT_GENERATORS:
         raise _ResultLimitExceededError(
             "Singular generator count exceeds the exact-result limit"
         )
@@ -278,7 +282,7 @@ def _parse_output(
         generator, term_count = _parse_generator(reader, variables)
         generators.append(generator)
         total_terms += term_count
-        if total_terms > budget.maximum_output_terms:
+        if total_terms > MAX_OUTPUT_TERMS:
             raise _ResultLimitExceededError(
                 "Singular terms exceed the exact-result limit"
             )
@@ -370,11 +374,11 @@ def _minimal_primes_stdout_limit(
     """Size the capture ceiling from the admitted exact-result envelope.
 
     Every family the decoder can admit fits inside these protocol bytes: at
-    most ``budget.maximum_output_terms`` term records, each carrying a
+    most ``MAX_OUTPUT_TERMS`` term records, each carrying a
     canonical rational with a signed numerator and denominator of up to
     ``MAX_CANONICAL_RATIONAL_DIGITS`` digits apiece plus one exponent field
     of up to ``len(str(MAX_POLYNOMIAL_EXPONENT))`` digits per ring variable;
-    at most ``budget.maximum_output_generators`` generator marker pairs
+    at most ``MAX_OUTPUT_GENERATORS`` generator marker pairs
     across at most that many components with their count lines; and the
     fixed version, top-level count, and end scaffolding. A capture limit
     derived from this admitted envelope lets every admissible worker projection
@@ -395,9 +399,8 @@ def _minimal_primes_stdout_limit(
     component_scaffolding = len("COMPONENT\n") + 3 + len("END_COMPONENT\n")
     scaffolding = len(_PROTOCOL_HEADER) + 1 + 8 + 3 + len("END\n")
     return (
-        budget.maximum_output_terms * term_record
-        + budget.maximum_output_generators
-        * (generator_scaffolding + component_scaffolding)
+        MAX_OUTPUT_TERMS * term_record
+        + MAX_OUTPUT_GENERATORS * (generator_scaffolding + component_scaffolding)
         + scaffolding
     )
 
@@ -430,7 +433,7 @@ def _parse_minimal_primes_output(
         component_count = int(reader.pop())
     except ValueError as exc:
         raise ValueError("Singular output has invalid numeric metadata") from exc
-    if not 0 <= component_count <= budget.maximum_output_generators:
+    if not 0 <= component_count <= MAX_OUTPUT_GENERATORS:
         raise _ResultLimitExceededError(
             "Singular component count exceeds the exact-result limit"
         )
@@ -444,12 +447,12 @@ def _parse_minimal_primes_output(
             generator_count = int(reader.pop())
         except ValueError as exc:
             raise ValueError("Singular output has invalid component metadata") from exc
-        if not 0 <= generator_count <= budget.maximum_output_generators:
+        if not 0 <= generator_count <= MAX_OUTPUT_GENERATORS:
             raise _ResultLimitExceededError(
                 "Singular component generator count exceeds the exact-result limit"
             )
         total_generators += generator_count
-        if total_generators > budget.maximum_output_generators:
+        if total_generators > MAX_OUTPUT_GENERATORS:
             raise _ResultLimitExceededError(
                 "Singular component generators exceed the exact-result limit"
             )
@@ -458,14 +461,14 @@ def _parse_minimal_primes_output(
             generator, term_count = _parse_generator(reader, variables)
             generators.append(generator)
             total_terms += term_count
-            if total_terms > budget.maximum_output_terms:
+            if total_terms > MAX_OUTPUT_TERMS:
                 raise _ResultLimitExceededError(
                     "Singular component terms exceed the exact-result limit"
                 )
         reader.expect("END_COMPONENT")
         if not generators:
             total_generators += 1
-            if total_generators > budget.maximum_output_generators:
+            if total_generators > MAX_OUTPUT_GENERATORS:
                 raise _ResultLimitExceededError(
                     "Singular component generators exceed the exact-result limit"
                 )

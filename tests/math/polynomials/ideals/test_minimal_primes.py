@@ -7,6 +7,7 @@ import shutil
 import pytest
 from pydantic import ValidationError
 
+from jacobian._execution import OperationExecutionCancelledError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.ideals._models import (
     MAX_OUTPUT_GENERATORS,
@@ -24,7 +25,9 @@ from jacobian.math.polynomials.values import (
 )
 
 
-def _run_minimal_primes(request: IdealMinimalPrimesRequest):
+def _run_minimal_primes(
+    request: IdealMinimalPrimesRequest,
+) -> IdealMinimalPrimesResult:
     return ideal_minimal_primes(request.ideal, resource_budget=request.resource_budget)
 
 
@@ -105,15 +108,13 @@ def test_result_construction_is_structural_and_does_not_rerun_the_kernel(
 
     result = IdealMinimalPrimesResult(
         ideal=request.ideal,
-        outcome="COMPUTED",
         components=components,
-        backend_version="4.4.0",
     )
 
     assert result.components == components
 
 
-def test_missing_backend_is_typed_and_makes_no_component_claim(
+def test_missing_backend_is_an_execution_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -122,10 +123,8 @@ def test_missing_backend_is_typed_and_makes_no_component_claim(
             outcome="UNAVAILABLE", detail="backend is unavailable"
         ),
     )
-    result = _run_minimal_primes(_axes_request())
-
-    assert result.outcome == "UNAVAILABLE"
-    assert result.components is None
+    with pytest.raises(RuntimeError, match="backend is unavailable"):
+        _run_minimal_primes(_axes_request())
 
 
 def test_producer_runs_once_without_a_replay_backend_call(
@@ -152,7 +151,6 @@ def test_producer_runs_once_without_a_replay_backend_call(
 
     result = _run_minimal_primes(request)
 
-    assert result.outcome == "COMPUTED"
     assert result.components == components
     assert calls == 1
 
@@ -179,27 +177,20 @@ def test_duplicate_producer_family_is_a_typed_error_without_a_third_pass(
         return SingularMinimalPrimesResult(
             outcome="COMPUTED",
             components=duplicated,
-            backend_version="4.4.0",
         )
 
     monkeypatch.setattr(_PRODUCER_TARGET, backend)
 
-    result = _run_minimal_primes(request)
-
+    with pytest.raises(RuntimeError, match="violated its public invariant"):
+        _run_minimal_primes(request)
     assert calls == 1
-    assert result.outcome == "ERROR"
-    assert result.components is None
-    assert result.detail is not None
 
 
 def test_trusted_factory_preserves_valid_backend_output() -> None:
     request = _axes_request()
     components = _axes_components()
-    computed = IdealMinimalPrimesResult._from_kernel(request.ideal, components, "4.4.0")
-    assert computed.outcome == "COMPUTED"
+    computed = IdealMinimalPrimesResult._from_kernel(request.ideal, components)
     assert computed.components == components
-    assert computed.backend_version == "4.4.0"
-    assert computed.detail is None
 
 
 def test_external_family_must_respect_the_generator_and_term_envelopes() -> None:
@@ -216,8 +207,7 @@ def test_external_family_must_respect_the_generator_and_term_envelopes() -> None
             ),
         ),
     )
-    computed = IdealMinimalPrimesResult._from_kernel(request.ideal, wide, "4.4.0")
-    assert computed.outcome == "COMPUTED"
+    computed = IdealMinimalPrimesResult._from_kernel(request.ideal, wide)
     assert computed.components == wide
 
     first_component_generators = MAX_OUTPUT_GENERATORS // 2
@@ -243,11 +233,9 @@ def test_external_family_must_respect_the_generator_and_term_envelopes() -> None
         IdealMinimalPrimesResult.model_validate(
             {
                 "ideal": request.ideal.model_dump(mode="json"),
-                "outcome": "COMPUTED",
                 "components": [
                     component.model_dump(mode="json") for component in over_generators
                 ],
-                "backend_version": "4.4.0",
             }
         )
 
@@ -267,9 +255,7 @@ def test_external_family_must_respect_the_generator_and_term_envelopes() -> None
     ):
         IdealMinimalPrimesResult(
             ideal=request.ideal,
-            outcome="COMPUTED",
             components=oversized,
-            backend_version="4.4.0",
         )
 
 
@@ -280,16 +266,14 @@ def test_validator_rejects_duplicate_components() -> None:
     with pytest.raises(ValidationError):
         IdealMinimalPrimesResult(
             ideal=request.ideal,
-            outcome="COMPUTED",
             components=duplicated,
-            backend_version="4.4.0",
         )
 
 
-def test_producer_cancellation_is_a_typed_outcome(
+def test_producer_cancellation_is_an_execution_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A cancelled producing pass keeps its CANCELLED verdict end to end."""
+    """Cancellation establishes no minimal-prime family."""
 
     monkeypatch.setattr(
         _PRODUCER_TARGET,
@@ -298,12 +282,8 @@ def test_producer_cancellation_is_a_typed_outcome(
             detail="Singular execution was cancelled before producing a result.",
         ),
     )
-    result = _run_minimal_primes(_axes_request())
-
-    assert result.outcome == "CANCELLED"
-    assert result.components is None
-    assert result.backend_version is None
-    assert result.detail is not None
+    with pytest.raises(OperationExecutionCancelledError):
+        _run_minimal_primes(_axes_request())
 
 
 def test_certified_families_above_the_envelope_are_rejected_before_launch(
@@ -315,8 +295,7 @@ def test_certified_families_above_the_envelope_are_rejected_before_launch(
     vanishes at two distinct certified rationals (0 and 1), so the source
     provably has at least 2^k minimal primes with at least k generators
     apiece. At k = 5 that is 160 aggregate generators against a fixed
-    64-generator exact-result envelope: every execution could only end in
-    typed LIMIT_EXCEEDED, so admission rejects the source before Singular
+    64-generator exact-result envelope, so admission rejects the source before Singular
     launches instead of spending backend work on a guaranteed overflow.
     """
 
@@ -601,7 +580,7 @@ def test_request_description_advertises_the_enforced_budgets() -> None:
     assert "at most 8 variables" in description
     assert "at most 32 generators" in description
     assert "total degree is at most 20" in description
-    assert "LIMIT_EXCEEDED" in description
+    assert "execution failure" in description
 
 
 @pytest.mark.skipif(
@@ -611,7 +590,6 @@ def test_request_description_advertises_the_enforced_budgets() -> None:
 def test_coordinate_axes_are_the_two_qq_minimal_primes() -> None:
     result = _run_minimal_primes(_axes_request())
 
-    assert result.outcome == "COMPUTED"
     assert result.components == _axes_components()
 
 
@@ -637,7 +615,6 @@ def test_high_degree_pure_power_source_has_the_single_axis_component() -> None:
 
     result = _run_minimal_primes(request)
 
-    assert result.outcome == "COMPUTED"
     assert result.components is not None
     assert len(result.components) == 1
     assert {
@@ -669,7 +646,6 @@ def test_unit_zero_and_embedded_sources_have_their_exact_family_shapes() -> None
         )
     )
 
-    assert zero.outcome == unit.outcome == embedded.outcome == "COMPUTED"
     assert zero.components == (_ideal(variables, _poly(variables)),)
     assert unit.components == ()
     assert embedded.components == (_ideal(variables, _poly(variables, (1, 1, (1, 0)))),)
@@ -703,7 +679,6 @@ def test_prime_wider_than_the_ring_dimension_is_computed() -> None:
 
     result = _run_minimal_primes(request)
 
-    assert result.outcome == "COMPUTED"
     assert result.components is not None
     assert len(result.components) == 1
     assert all(
@@ -800,7 +775,6 @@ def test_coupled_source_computes_its_two_diagonal_components() -> None:
         ),
     )
 
-    assert result.outcome == "COMPUTED"
     assert result.components is not None
     assert {
         frozenset(generator.model_dump_json() for generator in component.generators)

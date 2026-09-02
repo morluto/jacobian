@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any, Literal
+from typing import Any, Literal, NoReturn
 
 import sympy
 from pydantic_core import PydanticCustomError
 
 from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
     bind_request_deadline,
     current_request_execution,
     request_cancelled,
@@ -24,6 +26,7 @@ from jacobian.math.polynomials.ideals._models import (
     MAX_GENERATORS,
     MAX_INPUT_EXPONENT,
     MAX_INPUT_TERMS,
+    MAX_OUTPUT_TERMS,
     MAX_VARS,
     EliminationIdealResult,
     GradedBettiNumber,
@@ -32,7 +35,6 @@ from jacobian.math.polynomials.ideals._models import (
     IdealContainmentLedger,
     IdealContainmentResult,
     IdealEqualityResult,
-    IdealExecutionOutcome,
     IdealMinimalPrimesResult,
     IdealNormalFormResult,
     IdealQuotientResult,
@@ -660,7 +662,6 @@ main()
 
 _STDOUT_LIMIT = 8 * 1024 * 1024
 _STDERR_LIMIT = 64 * 1024
-_RELATION_RESULT_RESERVE_SECONDS = 0.25
 
 
 def _run_sympy_kernel(
@@ -669,8 +670,8 @@ def _run_sympy_kernel(
     """Run one exact Groebner-kernel computation in a killable worker.
 
     The killable-process launch and executable discovery live in the
-    domain's external-tool owner (``_singular``); this wrapper maps the
-    bounded outcome onto the typed kernel exceptions.
+    domain's external-tool owner (``_singular``); this wrapper maps process
+    non-completion onto owner-local exceptions.
     """
     try:
         if deadline is None:
@@ -697,11 +698,10 @@ def _run_sympy_kernel(
     if timed_out:
         raise _SympyKernelTimeoutError()
     if limit_exceeded:
-        # A killed worker leaves truncated output: the exact result exceeded
-        # the transport cap, which is the declared LIMIT_EXCEEDED outcome,
-        # not an ordinary JSON failure to be misclassified as ERROR.
+        # A killed worker leaves truncated output, so it did not produce a
+        # mathematical value for the owner to construct.
         raise _ResultLimitExceededError(
-            "the exact kernel result exceeded the declared transport bound"
+            "the exact kernel result exceeded the worker channel bound"
         )
     try:
         result = json.loads(stdout)
@@ -713,6 +713,17 @@ def _run_sympy_kernel(
         raise _SympyKernelError(str(result.get("detail", "kernel failed")))
     typed: dict[str, Any] = result
     return typed
+
+
+def _raise_ideal_backend_failure(
+    operation: str, outcome: str, detail: str | None
+) -> NoReturn:
+    message = detail or f"ideal {operation} backend did not produce an exact result"
+    if outcome == "TIMEOUT":
+        raise OperationExecutionTimeoutError(message)
+    if outcome == "CANCELLED":
+        raise OperationExecutionCancelledError(message)
+    raise RuntimeError(message)
 
 
 def ideal_radical(
@@ -731,12 +742,9 @@ def ideal_radical(
         None,
         resource_budget,
     )
-    return IdealRadicalResult(
-        outcome=backend.outcome,
-        radical=backend.ideal,
-        backend_version=backend.backend_version,
-        detail=backend.detail,
-    )
+    if backend.outcome != "COMPUTED" or backend.ideal is None:
+        _raise_ideal_backend_failure("radical", backend.outcome, backend.detail)
+    return IdealRadicalResult(radical=backend.ideal)
 
 
 def ideal_minimal_primes(
@@ -752,41 +760,17 @@ def ideal_minimal_primes(
     backend = run_singular_minimal_primes(ideal, resource_budget)
     components = backend.components
     if backend.outcome != "COMPUTED" or components is None:
-        return IdealMinimalPrimesResult(
-            ideal=ideal,
-            outcome=backend.outcome,
-            components=None,
-            backend_version=None,
-            detail=backend.detail,
-        )
+        _raise_ideal_backend_failure("minimal-prime", backend.outcome, backend.detail)
 
     try:
         _require_computed_minimal_prime_family(ideal, components)
-        result = IdealMinimalPrimesResult._from_kernel(
-            ideal=ideal,
-            components=components,
-            backend_version=backend.backend_version,
-        )
-        return result
+        return IdealMinimalPrimesResult._from_kernel(ideal=ideal, components=components)
     except _ResultLimitExceededError as error:
-        return IdealMinimalPrimesResult(
-            ideal=ideal,
-            outcome="LIMIT_EXCEEDED",
-            components=None,
-            backend_version=None,
-            detail=str(error),
-        )
-    except ValueError:
-        return IdealMinimalPrimesResult(
-            ideal=ideal,
-            outcome="ERROR",
-            components=None,
-            backend_version=None,
-            detail=(
-                "The computed minimal-prime family violated its shape, ring, "
-                "exact-result envelope, ordering, or uniqueness invariant."
-            ),
-        )
+        raise RuntimeError(str(error)) from error
+    except ValueError as error:
+        raise RuntimeError(
+            "the computed minimal-prime family violated its public invariant"
+        ) from error
 
 
 def ideal_radical_membership(
@@ -830,12 +814,9 @@ def ideal_quotient(
         divisor,
         resource_budget,
     )
-    return IdealQuotientResult(
-        outcome=backend.outcome,
-        quotient=backend.ideal,
-        backend_version=backend.backend_version,
-        detail=backend.detail,
-    )
+    if backend.outcome != "COMPUTED" or backend.ideal is None:
+        _raise_ideal_backend_failure("quotient", backend.outcome, backend.detail)
+    return IdealQuotientResult(quotient=backend.ideal)
 
 
 def ideal_saturation(
@@ -859,12 +840,9 @@ def ideal_saturation(
         denominator_ideal,
         resource_budget,
     )
-    return IdealSaturationResult(
-        outcome=backend.outcome,
-        saturation=backend.ideal,
-        backend_version=backend.backend_version,
-        detail=backend.detail,
-    )
+    if backend.outcome != "COMPUTED" or backend.ideal is None:
+        _raise_ideal_backend_failure("saturation", backend.outcome, backend.detail)
+    return IdealSaturationResult(saturation=backend.ideal)
 
 
 def _raise_if_relation_deadline_exceeded(deadline: float) -> None:
@@ -875,18 +853,14 @@ def _raise_if_relation_deadline_exceeded(deadline: float) -> None:
 
 
 def _bind_relation_deadline(resource_budget: IdealComputationBudget) -> float:
-    """Reserve delivery time after the relation kernel's private deadline."""
+    """Bind the relation kernel to the request's complete deadline."""
     execution = current_request_execution()
     started_at = execution.started_at if execution is not None else time.monotonic()
     request_deadline = started_at + resource_budget.wall_seconds
     if execution is not None and execution.deadline is not None:
         request_deadline = min(request_deadline, execution.deadline)
-    # The direct MCP adapter must still be able to build and serialize the
-    # typed TIMEOUT result after the worker allowance expires. Keep the full
-    # request deadline in the shared execution context and give the relation
-    # kernel a slightly earlier private cutoff.
     bind_request_deadline(request_deadline)
-    return max(started_at, request_deadline - _RELATION_RESULT_RESERVE_SECONDS)
+    return request_deadline
 
 
 def _run_relation_kernel_before_deadline(
@@ -920,7 +894,6 @@ def ideal_containment(
 
     resource_budget = resource_budget or IdealComputationBudget()
     deadline = _bind_relation_deadline(resource_budget)
-    outcome: IdealExecutionOutcome
     try:
         _raise_if_relation_deadline_exceeded(deadline)
         _run_admission(lambda: _admit_relation(source, target))
@@ -933,7 +906,7 @@ def ideal_containment(
                 item.model_dump(mode="json") for item in target.generators
             ],
             "order": monomial_order,
-            "maximum_terms": resource_budget.maximum_output_terms,
+            "maximum_terms": MAX_OUTPUT_TERMS,
             "mutual": False,
         }
         result = _run_relation_kernel_before_deadline(payload, deadline)
@@ -945,26 +918,23 @@ def ideal_containment(
         _raise_if_relation_deadline_exceeded(deadline)
         return computed
     except _SympyKernelCancelledError:
-        outcome = "CANCELLED"
-        detail = "ideal containment was cancelled before producing a result"
+        raise OperationExecutionCancelledError(
+            "ideal containment was cancelled before producing a result"
+        ) from None
     except _SympyKernelTimeoutError:
-        outcome = "TIMEOUT"
-        detail = "ideal containment exceeded the enforced wall-time budget"
+        raise OperationExecutionTimeoutError(
+            "ideal containment exceeded the enforced wall-time budget"
+        ) from None
     except _ResultLimitExceededError:
-        outcome = "LIMIT_EXCEEDED"
-        detail = "the exact containment ledger exceeds the declared result bound"
+        raise RuntimeError(
+            "the exact containment ledger exceeds the declared result bound"
+        ) from None
     except OperationDomainValidationError:
         raise
-    except (KeyError, TypeError, ValueError, _SympyKernelError):
-        outcome = "ERROR"
-        detail = "the bounded kernel failed without producing an exact containment"
-    return IdealContainmentResult(
-        source=source,
-        target=target,
-        outcome=outcome,
-        monomial_order=monomial_order,
-        detail=detail,
-    )
+    except (KeyError, TypeError, ValueError, _SympyKernelError) as error:
+        raise RuntimeError(
+            "the bounded kernel failed without producing an exact containment"
+        ) from error
 
 
 def ideal_equality(
@@ -978,7 +948,6 @@ def ideal_equality(
 
     resource_budget = resource_budget or IdealComputationBudget()
     deadline = _bind_relation_deadline(resource_budget)
-    outcome: IdealExecutionOutcome
     try:
         _raise_if_relation_deadline_exceeded(deadline)
         _run_admission(lambda: _admit_relation(left, right))
@@ -991,7 +960,7 @@ def ideal_equality(
                 item.model_dump(mode="json") for item in right.generators
             ],
             "order": monomial_order,
-            "maximum_terms": resource_budget.maximum_output_terms,
+            "maximum_terms": MAX_OUTPUT_TERMS,
             "mutual": True,
         }
         result = _run_relation_kernel_before_deadline(payload, deadline)
@@ -1004,26 +973,23 @@ def ideal_equality(
         _raise_if_relation_deadline_exceeded(deadline)
         return computed
     except _SympyKernelCancelledError:
-        outcome = "CANCELLED"
-        detail = "ideal equality was cancelled before producing a result"
+        raise OperationExecutionCancelledError(
+            "ideal equality was cancelled before producing a result"
+        ) from None
     except _SympyKernelTimeoutError:
-        outcome = "TIMEOUT"
-        detail = "ideal equality exceeded the enforced wall-time budget"
+        raise OperationExecutionTimeoutError(
+            "ideal equality exceeded the enforced wall-time budget"
+        ) from None
     except _ResultLimitExceededError:
-        outcome = "LIMIT_EXCEEDED"
-        detail = "the exact equality ledgers exceed the declared result bound"
+        raise RuntimeError(
+            "the exact equality ledgers exceed the declared result bound"
+        ) from None
     except OperationDomainValidationError:
         raise
-    except (KeyError, TypeError, ValueError, _SympyKernelError):
-        outcome = "ERROR"
-        detail = "the bounded kernel failed without producing an exact equality result"
-    return IdealEqualityResult(
-        left=left,
-        right=right,
-        outcome=outcome,
-        monomial_order=monomial_order,
-        detail=detail,
-    )
+    except (KeyError, TypeError, ValueError, _SympyKernelError) as error:
+        raise RuntimeError(
+            "the bounded kernel failed without producing an exact equality result"
+        ) from error
 
 
 __all__ = [
@@ -1058,7 +1024,7 @@ def groebner_basis(
         "mode": "groebner",
         "variables": list(variables),
         "order": order,
-        "maximum_terms": resource_budget.maximum_output_terms,
+        "maximum_terms": MAX_OUTPUT_TERMS,
         "generators": [
             generator.model_dump(mode="json") for generator in source_ideal.generators
         ],
@@ -1070,42 +1036,24 @@ def groebner_basis(
     try:
         result_payload = _run_sympy_kernel(payload, resource_budget.wall_seconds)
     except _SympyKernelCancelledError:
-        return GroebnerBasisResult(
-            ideal=ideal,
-            outcome="CANCELLED",
-            monomial_order=monomial_order,
-            detail="the groebner computation was cancelled before producing a result",
-        )
+        raise OperationExecutionCancelledError(
+            "the Groebner computation was cancelled before producing a result"
+        ) from None
     except _SympyKernelTimeoutError:
-        return GroebnerBasisResult(
-            ideal=ideal,
-            outcome="TIMEOUT",
-            monomial_order=monomial_order,
-            detail=(
-                "groebner computation exceeded the enforced "
-                f"{resource_budget.wall_seconds}s budget"
-            ),
-        )
+        raise OperationExecutionTimeoutError(
+            "Groebner computation exceeded the enforced "
+            f"{resource_budget.wall_seconds}s budget"
+        ) from None
     except _ResultLimitExceededError as error:
-        return GroebnerBasisResult(
-            ideal=ideal,
-            outcome="LIMIT_EXCEEDED",
-            monomial_order=monomial_order,
-            detail=(
-                "the exact reduced Gröbner basis exceeds the declared "
-                f"exact-result limit: {error}"
-            ),
-        )
+        raise RuntimeError(
+            "the exact reduced Gröbner basis exceeds the declared "
+            f"exact-result limit: {error}"
+        ) from error
     except _SympyKernelError as error:
-        return GroebnerBasisResult(
-            ideal=ideal,
-            outcome="ERROR",
-            monomial_order=monomial_order,
-            detail=(
-                "the bounded Groebner kernel failed without producing an "
-                f"exact basis: {error}"
-            ),
-        )
+        raise RuntimeError(
+            "the bounded Groebner kernel failed without producing an "
+            f"exact basis: {error}"
+        ) from error
 
     basis_generators = [
         RationalPolynomial.model_validate(item) for item in result_payload["generators"]
@@ -1152,43 +1100,22 @@ def ideal_normal_form(
     try:
         result_payload = _run_sympy_kernel(payload, 10)
     except _SympyKernelCancelledError:
-        return IdealNormalFormResult(
-            ideal=ideal,
-            polynomial=polynomial,
-            monomial_order=monomial_order,
-            outcome="CANCELLED",
-            detail="the Gröbner reduction was cancelled before producing a result",
-        )
+        raise OperationExecutionCancelledError(
+            "the Gröbner reduction was cancelled before producing a result"
+        ) from None
     except _SympyKernelTimeoutError:
-        return IdealNormalFormResult(
-            ideal=ideal,
-            polynomial=polynomial,
-            monomial_order=monomial_order,
-            outcome="TIMEOUT",
-            detail=("the Gröbner reduction exceeded the enforced 10s wall-time bound"),
-        )
+        raise OperationExecutionTimeoutError(
+            "the Gröbner reduction exceeded the enforced 10s wall-time bound"
+        ) from None
     except _ResultLimitExceededError as error:
-        return IdealNormalFormResult(
-            ideal=ideal,
-            polynomial=polynomial,
-            monomial_order=monomial_order,
-            outcome="LIMIT_EXCEEDED",
-            detail=(
-                "the exact normal form exceeds the declared exact-result "
-                f"limit: {error}"
-            ),
-        )
+        raise RuntimeError(
+            f"the exact normal form exceeds the declared exact-result limit: {error}"
+        ) from error
     except _SympyKernelError as error:
-        return IdealNormalFormResult(
-            ideal=ideal,
-            polynomial=polynomial,
-            monomial_order=monomial_order,
-            outcome="ERROR",
-            detail=(
-                "the bounded reduction kernel failed without producing an "
-                f"exact remainder: {error}"
-            ),
-        )
+        raise RuntimeError(
+            "the bounded reduction kernel failed without producing an "
+            f"exact remainder: {error}"
+        ) from error
 
     remainder_poly = RationalPolynomial.model_validate(result_payload["remainder"])
     return IdealNormalFormResult._from_kernel(
@@ -1268,42 +1195,24 @@ def elimination_ideal(
     try:
         result_payload = _run_sympy_kernel(payload, resource_budget.wall_seconds)
     except _SympyKernelCancelledError:
-        return EliminationIdealResult(
-            ideal=ideal,
-            outcome="CANCELLED",
-            eliminated_variables=tuple(eliminated_variables),
-            detail="the lex Gröbner elimination was cancelled before producing a result",
-        )
+        raise OperationExecutionCancelledError(
+            "the lex Gröbner elimination was cancelled before producing a result"
+        ) from None
     except _SympyKernelTimeoutError:
-        return EliminationIdealResult(
-            ideal=ideal,
-            outcome="TIMEOUT",
-            eliminated_variables=tuple(eliminated_variables),
-            detail=(
-                "the lex Gröbner elimination exceeded the enforced "
-                f"{resource_budget.wall_seconds}s wall-time budget"
-            ),
-        )
+        raise OperationExecutionTimeoutError(
+            "the lex Gröbner elimination exceeded the enforced "
+            f"{resource_budget.wall_seconds}s wall-time budget"
+        ) from None
     except _ResultLimitExceededError as error:
-        return EliminationIdealResult(
-            ideal=ideal,
-            outcome="LIMIT_EXCEEDED",
-            eliminated_variables=tuple(eliminated_variables),
-            detail=(
-                "the exact elimination ideal exceeds the declared "
-                f"exact-result limit: {error}"
-            ),
-        )
+        raise RuntimeError(
+            "the exact elimination ideal exceeds the declared "
+            f"exact-result limit: {error}"
+        ) from error
     except _SympyKernelError as error:
-        return EliminationIdealResult(
-            ideal=ideal,
-            outcome="ERROR",
-            eliminated_variables=tuple(eliminated_variables),
-            detail=(
-                "the bounded elimination kernel failed without producing "
-                f"an exact ideal: {error}"
-            ),
-        )
+        raise RuntimeError(
+            "the bounded elimination kernel failed without producing "
+            f"an exact ideal: {error}"
+        ) from error
 
     return EliminationIdealResult._from_kernel(
         ideal,

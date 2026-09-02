@@ -10,6 +10,7 @@ from jacobian.math.graphs.cycle_length_profile import (
     CycleLengthRow,
 )
 from jacobian.math.graphs.cycle_length_profile.operations import (
+    MAX_CYCLE_PROFILE_RETAINED_LABEL_CHARACTERS,
     compute_cycle_length_profile,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -218,4 +219,16 @@ def test_perfect_matching_depth_two_scans_are_charged() -> None:
     )
 
     with pytest.raises(OperationDomainValidationError, match="work bound"):
+        compute_cycle_length_profile(graph)
+
+
+def test_cycle_profile_rejects_unbounded_retained_labels() -> None:
+    label_width = MAX_CYCLE_PROFILE_RETAINED_LABEL_CHARACTERS // 12 + 1
+    labels = tuple(f"{prefix}{'x' * label_width}" for prefix in ("a", "b", "c"))
+    graph = _graph(
+        labels,
+        [(labels[0], labels[1]), (labels[1], labels[2]), (labels[0], labels[2])],
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="label-character"):
         compute_cycle_length_profile(graph)

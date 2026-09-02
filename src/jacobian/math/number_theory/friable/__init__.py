@@ -1,1 +1,0 @@
-"""Friable integer family operations."""

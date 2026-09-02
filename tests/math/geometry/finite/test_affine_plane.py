@@ -172,7 +172,7 @@ def test_rejects_composite_and_one(bad_q: int) -> None:
 
 def test_rejects_q_too_large() -> None:
     """q > MAX_AFFINE_PLANE_FIELD_ORDER is rejected."""
-    # 11 is prime but exceeds the transport budget
+    # 11 is prime but exceeds the reused incidence-structure cardinality bound
     with pytest.raises(OperationDomainValidationError):
         prime_field_affine_plane(11)
 

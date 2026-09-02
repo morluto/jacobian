@@ -89,3 +89,24 @@ def test_square_cube_representation() -> None:
                 found = True
                 break
         assert found, f"No square-cube representation for {n}"
+
+
+def test_operation_is_discoverable_with_one_executable_example() -> None:
+    from jacobian.catalog.builtins import BUILTIN_TOOLS
+
+    operation = next(
+        tool
+        for tool in BUILTIN_TOOLS
+        if tool.operation_id == "integer.powerful.enumerate"
+    )
+    assert len(operation.examples) == 1
+    example = operation.examples[0]
+    request = operation.request_type.model_validate(example.input)
+    result = operation.run(request)
+    assert result.cutoff == 100
+    assert "1" in result.family
+    assert "4" in result.family
+    assert "8" in result.family
+    assert "9" in result.family
+    assert "12" not in result.family
+    assert result.count == len(result.family)

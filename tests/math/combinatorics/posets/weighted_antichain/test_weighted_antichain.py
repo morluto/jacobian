@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+import pytest
+
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.posets.core._models import (
     PresentationPair,
     ReflexivePairPolicy,
@@ -171,3 +174,17 @@ def test_polynomial_mixed_poset_25_elements() -> None:
     result = compute_maximum_weight_antichain(poset, weights)
     assert result.maximum_weight.as_fraction() == Fraction(2)
     assert len(result.antichain) == 2
+
+
+def test_equal_maxima_choose_lexicographically_least_antichain() -> None:
+    result = compute_maximum_weight_antichain(
+        _chain_poset(["a", "b"]), (_cr(1), _cr(1))
+    )
+    assert result.antichain == ("a",)
+
+
+def test_weight_axis_must_match_the_poset() -> None:
+    with pytest.raises(
+        OperationDomainValidationError, match="one entry per poset element"
+    ):
+        compute_maximum_weight_antichain(_chain_poset(["a", "b"]), (_cr(1),))

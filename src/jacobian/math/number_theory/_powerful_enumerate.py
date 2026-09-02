@@ -48,3 +48,6 @@ POWERFUL_ENUMERATE_OPERATION = MathTool(
         ),
     ),
 )
+
+
+__all__ = ["POWERFUL_ENUMERATE_OPERATION", "enumerate_powerful_numbers"]

@@ -52,6 +52,26 @@ _TRUE_CELL_PREFIX = "\nd-true-cells\n"
 _TRUE_CELL_SUFFIX = "\nBefore Solution >"
 
 
+def _process_has_terminated(process_id: int) -> bool:
+    try:
+        os.kill(process_id, 0)
+    except ProcessLookupError:
+        return True
+
+    # A killed descendant can remain as a zombie until the container's init
+    # process reaps it.  It is terminated even though kill(pid, 0) still finds
+    # the process-table entry.
+    proc_root = Path("/proc")
+    if not proc_root.is_dir():
+        return False
+    stat_path = proc_root / str(process_id) / "stat"
+    try:
+        state = stat_path.read_text().rpartition(") ")[2].partition(" ")[0]
+    except FileNotFoundError:
+        return True
+    return state == "Z"
+
+
 def _true_cell_block(index: tuple[int, int] = (3, 3)) -> str:
     return (
         f"---------- Information about the cell ({index[0]},{index[1]}) "
@@ -271,9 +291,7 @@ def test_live_nested_dialogue_child_is_killed_when_the_request_is_cancelled(
 
         cleanup_deadline = time.monotonic() + 5
         while time.monotonic() < cleanup_deadline:
-            try:
-                os.kill(nested_pid, 0)
-            except ProcessLookupError:
+            if _process_has_terminated(nested_pid):
                 break
             time.sleep(0.01)
         else:

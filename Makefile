@@ -66,7 +66,7 @@ test-tooling: ## Repository tooling and static contracts (2 workers, 30s).
 
 test-integration: ## Ordinary cross-owner mathematical seams (2 workers, 120s).
 	$(UV_RUN) pytest -n 1 --dist worksteal --timeout=120 -m "$(ORDINARY_MARKER_EXPRESSION)" \
-		$(if $(TESTS),$(TESTS),tests/integration) \
+		$(if $(TESTS),$(TESTS),tests/integration --ignore=tests/integration/catalog) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 test-focused: ## Run TESTS through its explicit semantic LANE (for example, LANE=math).
@@ -119,9 +119,11 @@ test-singular: ## Pinned Singular exact-algebra backend (serial, 120s, kill-safe
 	$(PYTEST_RUNNER) --name singular --timeout-seconds 1200 -- \
 		-n 0 --timeout=120 --timeout-method=signal \
 		tests/math/polynomials/ideals \
-		tests/math/polynomials/test_polynomial_map_generic_degree.py \
-		tests/process/polynomials/ideals \
-		tests/process/polynomial_maps \
+	tests/math/polynomials/test_polynomial_map_generic_degree.py \
+	tests/process/polynomials/ideals \
+	tests/process/polynomial_maps \
+	tests/integration/catalog/test_builtin_examples.py \
+	tests/integration/catalog/test_mcp_builtin_examples.py \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 test-qepcad: ## Pinned QEPCAD plane-topology backend (serial, kill-safe).

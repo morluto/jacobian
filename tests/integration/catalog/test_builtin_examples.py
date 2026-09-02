@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from typing import Any
 
 import pytest
@@ -13,6 +14,15 @@ from jacobian.catalog.models import MathTool
 from jacobian.dispatch import OperationRequestValidationError, invoke_operation
 
 _CATALOG = Catalog.open()
+_SINGULAR_OPERATION_IDS = frozenset(
+    {
+        "polynomial.ideal.minimal_primes.compute",
+        "polynomial.ideal.quotient.compute",
+        "polynomial.ideal.radical.compute",
+        "polynomial.ideal.saturation.compute",
+        "polynomial.map.generic_degree.compute",
+    }
+)
 
 
 def _builtin_operations() -> tuple[MathTool[Any, Any], ...]:
@@ -28,10 +38,12 @@ def _builtin_operations() -> tuple[MathTool[Any, Any], ...]:
     _builtin_operations(),
     ids=lambda operation: operation.operation_id,
 )
-def test_advertised_invocation_example_executes_successfully(
+def test_advertised_invocation_example_executes_when_backend_is_available(
     operation: MathTool[Any, Any],
 ) -> None:
     operation_id = operation.operation_id
+    if operation_id in _SINGULAR_OPERATION_IDS and shutil.which("Singular") is None:
+        pytest.skip("the published example is owned by the Singular runtime lane")
     examples = operation.examples
     assert examples, f"{operation_id} must advertise one executable example"
     for invocation_example in examples:

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shutil
 
 from mcp.types import TextContent
 
@@ -18,14 +19,28 @@ from jacobian.mcp.server import create_server
 from mcp import Client
 
 _CATALOG = Catalog.open()
+_SINGULAR_OPERATION_IDS = frozenset(
+    {
+        "polynomial.ideal.minimal_primes.compute",
+        "polynomial.ideal.quotient.compute",
+        "polynomial.ideal.radical.compute",
+        "polynomial.ideal.saturation.compute",
+        "polynomial.map.generic_degree.compute",
+    }
+)
 
 
-def test_mcp_advertised_examples_execute_as_typed_results() -> None:
+def test_mcp_available_advertised_examples_execute_as_typed_results() -> None:
     async def scenario() -> None:
         catalog = Catalog.open()
         failures: list[str] = []
         async with Client(create_server(), raise_exceptions=False) as client:
             for descriptor in catalog.snapshot().operations:
+                if (
+                    descriptor.operation_id in _SINGULAR_OPERATION_IDS
+                    and shutil.which("Singular") is None
+                ):
+                    continue
                 operation = catalog.operation(descriptor.operation_id)
                 assert operation is not None
                 assert operation.examples, (

@@ -653,9 +653,7 @@ def _integer_kernel_basis(
     scalar_characters = entry_digits + 1  # optional sign
     matrix_bytes = 2 + max(coefficient_count - 1, 0)
     matrix_bytes += coefficient_count * (
-        2
-        + max(coefficient_count - 1, 0)
-        + coefficient_count * (scalar_characters + 2)
+        2 + max(coefficient_count - 1, 0) + coefficient_count * (scalar_characters + 2)
     )
     empty_response_bytes = len(
         json.dumps(

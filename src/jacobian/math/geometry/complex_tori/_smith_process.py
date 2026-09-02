@@ -43,9 +43,7 @@ def _smith_stdout_limit(matrix: IntegerMatrix) -> int:
     factor_digits = rank * source_digits + len(str(factorial(rank))) + 1
     scalar_characters = factor_digits + 1  # optional sign
     matrix_bytes = 2 + max(rows - 1, 0)
-    matrix_bytes += rows * (
-        2 + max(columns - 1, 0) + columns * (scalar_characters + 2)
-    )
+    matrix_bytes += rows * (2 + max(columns - 1, 0) + columns * (scalar_characters + 2))
     return len(b'{"normal_form":,"request_digest":""}') + matrix_bytes + 64
 
 

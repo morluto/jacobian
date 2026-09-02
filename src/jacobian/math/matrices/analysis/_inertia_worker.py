@@ -60,12 +60,14 @@ def main() -> None:
             break
         if sign is None:
             raise ValueError("selected real embedding was not isolated")
-    sys.stdout.buffer.write(encode_strict_json(
-        {
-            "request_digest": hashlib.sha256(input_bytes).hexdigest(),
-            "sign": sign,
-        }
-    ))
+    sys.stdout.buffer.write(
+        encode_strict_json(
+            {
+                "request_digest": hashlib.sha256(input_bytes).hexdigest(),
+                "sign": sign,
+            }
+        )
+    )
 
 
 if __name__ == "__main__":

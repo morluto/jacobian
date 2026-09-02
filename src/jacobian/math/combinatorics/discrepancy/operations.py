@@ -370,7 +370,9 @@ def _incumbent_outcome(
         # A status-zero result is only an incumbent candidate.  If its vector
         # cannot be inspected in the advertised finite floating-point domain,
         # no canonical coloring or mathematical conclusion may escape.
-        raise RuntimeError("discrepancy optimizer returned a malformed incumbent") from None
+        raise RuntimeError(
+            "discrepancy optimizer returned a malformed incumbent"
+        ) from None
     if abs(solved_bound - recomputed) > 1e-6:
         raise RuntimeError("discrepancy optimizer objective does not match its witness")
     if recomputed == 0:

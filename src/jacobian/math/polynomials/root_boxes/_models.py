@@ -25,7 +25,6 @@ MAX_ROOT_BOX_POINT_VALUE_DIGITS = 512
 MAX_ROOT_BOX_ENCLOSURE_DIGITS = 2_048
 MAX_ROOT_BOX_INTERMEDIATE_DIGITS = 65_536
 MAX_ROOT_BOX_RESULT_COMPONENT_DIGITS = 32_768
-MAX_ROOT_BOX_SOURCE_BYTES = 512 * 1_024
 
 ROOT_BOX_ADMISSION_SUMMARY = (
     f"Bounds: square systems through dimension {MAX_ROOT_BOX_DIMENSION}; "
@@ -35,7 +34,7 @@ ROOT_BOX_ADMISSION_SUMMARY = (
     f"endpoint components; {MAX_ROOT_BOX_POINT_VALUE_DIGITS}-digit admitted "
     f"point values; {MAX_ROOT_BOX_ENCLOSURE_DIGITS:,}-digit scalar interval "
     f"enclosures; {MAX_ROOT_BOX_INTERMEDIATE_DIGITS:,}-digit interval-matrix "
-    f"intermediates; and a {MAX_ROOT_BOX_SOURCE_BYTES:,}-byte digest-bound source."
+    "intermediates."
 )
 
 
@@ -353,7 +352,6 @@ __all__ = [
     "MAX_ROOT_BOX_INTERMEDIATE_DIGITS",
     "MAX_ROOT_BOX_POINT_VALUE_DIGITS",
     "MAX_ROOT_BOX_RESULT_COMPONENT_DIGITS",
-    "MAX_ROOT_BOX_SOURCE_BYTES",
     "MAX_ROOT_BOX_TOTAL_DEGREE",
     "ROOT_BOX_ADMISSION_SUMMARY",
     "PolynomialSystemRootBoxRequest",

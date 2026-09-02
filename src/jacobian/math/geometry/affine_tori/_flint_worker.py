@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import sys
 from fractions import Fraction
 from typing import Any
 
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import (
+    CanonicalLimits,
+    encode_strict_json,
+    format_canonical_integer,
+    loads_strict_json,
+    parse_canonical_integer,
+)
 from jacobian.math.geometry.affine_tori._flint import compute_fixed_locus_kernel
 from jacobian.math.geometry.affine_tori._kernel_types import (
     AffineTorusKernelSource,
@@ -154,13 +159,18 @@ def main() -> int:
     input_bytes = sys.stdin.buffer.read(_MAX_WORKER_STDIN_BYTES + 1)
     if len(input_bytes) > _MAX_WORKER_STDIN_BYTES:
         raise ValueError("worker request exceeds its input envelope")
-    source = _decode_source(json.loads(input_bytes))
+    source = _decode_source(
+        loads_strict_json(
+            input_bytes,
+            limits=CanonicalLimits(max_input_bytes=_MAX_WORKER_STDIN_BYTES),
+        )
+    )
     response = {
         "protocol_version": _PROTOCOL_VERSION,
         "request_digest": hashlib.sha256(input_bytes).hexdigest(),
         **_kernel_payload(compute_fixed_locus_kernel(source)),
     }
-    json.dump(response, sys.stdout, separators=(",", ":"))
+    sys.stdout.buffer.write(encode_strict_json(response))
     return 0
 
 

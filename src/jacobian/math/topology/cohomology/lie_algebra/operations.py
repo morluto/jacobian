@@ -114,7 +114,7 @@ def chevalley_eilenberg_complex(
 def lie_homology_groups(lie_algebra: LieAlgebra) -> tuple[LieHomologyGroup, ...]:
     """Pure Lie-homology core returning the exact groups for one algebra.
 
-    Kept free of result-model construction for the owner-private verifier.
+    Kept free of result-model construction so the kernel remains reusable.
     """
     n = lie_algebra.dimension
 

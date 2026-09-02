@@ -40,7 +40,6 @@ MAX_RATIONAL_FLAT_ORBIT_CACHE_ENTRIES = 500_000
 # the authoritative admission bounds.
 _RATIONAL_FLAT_WALL_SECONDS = 3600.0
 _CANONICAL_PROJECTION_PASSES = 3
-_MAX_RATIONAL_FLAT_RETENTION_BYTES = 64 * 1024 * 1024
 
 type RationalRow = tuple[Fraction, ...]
 type IntegerRow = tuple[int, ...]
@@ -799,7 +798,6 @@ def _search_satisfying_states(
     canonicalizer = _SubsetOrbitCanonicalizer(plan.candidate_permutations)
     visited: set[ClosedCandidateSet] = set()
     satisfying: dict[ClosedCandidateSet, _FlatState] = {}
-    satisfying_retention_bytes = 0
     satisfying_elements = 0
     initial = _canonical_closure(
         (),
@@ -854,37 +852,9 @@ def _search_satisfying_states(
             retained_work = _subset_container_work(len(closed))
             ledger.charge("search_frontier", retained_work)
             if closed not in satisfying:
-                # Charge the retained basis using the actual Fraction objects,
-                # their separately allocated integers, and tuple containers.
-                # Double the shallow object sum to reserve allocator and state
-                # bookkeeping overhead that is not visible to getsizeof.
-                import sys
-
-                object_bytes = sys.getsizeof(state.row_space_basis) + sys.getsizeof(
-                    closed
-                )
-                for row in state.row_space_basis:
-                    object_bytes += sys.getsizeof(row)
-                    for value in row:
-                        object_bytes += (
-                            sys.getsizeof(value)
-                            + sys.getsizeof(value.numerator)
-                            + sys.getsizeof(value.denominator)
-                        )
-                _state_bytes = 2 * object_bytes
-                if (
-                    satisfying_retention_bytes + _state_bytes
-                    > _MAX_RATIONAL_FLAT_RETENTION_BYTES
-                ):
-                    raise _SearchStoppedError(
-                        "RESULT_RETENTION_LIMIT",
-                        visited_count=ledger.state_orbit_count,
-                        consumed_work=ledger.consumed,
-                    )
                 ledger.charge("search_frontier", retained_work)
                 satisfying[closed] = state
                 satisfying_elements += max(len(closed), 1)
-                satisfying_retention_bytes += _state_bytes
         if state.rank == problem.maximum_rank:
             continue
         child_keys: set[ClosedCandidateSet] = set()

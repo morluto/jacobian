@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import sys
 from math import ceil
 from pathlib import Path
@@ -16,14 +15,22 @@ from jacobian._execution import (
     OperationExecutionTimeoutError,
     request_cancelled,
 )
-from jacobian.canonical import CanonicalizationError, loads_strict_json
+from jacobian.canonical import (
+    CanonicalizationError,
+    encode_strict_json,
+    loads_strict_json,
+)
 from jacobian.math.matrices._number_field import (
     RecognizedRealSimpleNumberField,
     field_element_coordinates,
 )
 
 _SIGN_WORKER = Path(__file__).with_name("_inertia_worker.py")
-_SIGN_STDOUT_LIMIT = 64 * 1024
+_SIGN_STDOUT_LIMIT = len(
+    encode_strict_json(
+        {"request_digest": "0" * 64, "sign": -1},
+    )
+)
 _SIGN_STDERR_LIMIT = 64 * 1024
 
 
@@ -50,7 +57,7 @@ def field_element_sign_killable(
 
     _require_active(deadline, "before exact algebraic sign isolation")
     coordinates = field_element_coordinates(value, recognized)
-    payload = json.dumps(
+    payload = encode_strict_json(
         {
             "presentation": recognized.embedding.presentation.model_dump(mode="json"),
             "real_root_index": recognized.embedding.root.real_root_index,
@@ -58,9 +65,8 @@ def field_element_sign_killable(
                 f"{coordinate.numerator}/{coordinate.denominator}"
                 for coordinate in reversed(coordinates)
             ],
-        },
-        separators=(",", ":"),
-    ).encode("utf-8")
+        }
+    )
     remaining = deadline - monotonic()
     if remaining <= 0:
         raise OperationExecutionTimeoutError(

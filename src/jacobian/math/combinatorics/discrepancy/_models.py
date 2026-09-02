@@ -18,7 +18,7 @@ MAX_SETS = 1_000
 # scipy.optimize.milp (HiGHS) search produces the incumbent coloring, and the
 # minimality of any positive claimed optimum is re-established exactly by one
 # Z3 pseudo-boolean feasibility check at D-1 before OPTIMAL may carry it.
-# Exhausted budgets return BUDGET_EXCEEDED without any mathematical claim.
+# Exhausted solver budgets are operational non-completion, not a result value.
 MAX_OPTIMUM_SOLVER_MILLISECONDS = 30_000
 # The node limit bounds HiGHS' branch-and-bound tree retention independently
 # of wall clock: an admitted hard 64-variable instance can otherwise expand
@@ -28,7 +28,7 @@ MAX_OPTIMUM_SOLVER_MILLISECONDS = 30_000
 MAX_OPTIMUM_SOLVER_NODES = 1_000_000
 # The exact proof check runs under its own explicit budget so one request's
 # total solver work stays bounded; exhaustion reports unknown, which the
-# producing path maps to BUDGET_EXCEEDED.
+# producing path reports as an operational timeout.
 MAX_OPTIMUM_PROOF_MILLISECONDS = 10_000
 
 MAX_ROUNDING_COORDINATES = 512
@@ -485,52 +485,31 @@ def _feasibility_outcome(
 
 
 class DiscrepancyOptimumResult(StrictModel):
-    """A proven-minimum coloring or an exhausted solver budget.
-
-    Source-bound on its set system: ``OPTIMAL`` carries the exact minimum
-    discrepancy and one witnessing coloring. The producing operation
-    establishes those mathematical claims; deserialization checks only the
-    retained source binding and witness shape. ``BUDGET_EXCEEDED`` makes no
-    mathematical claim: it carries neither a coloring nor a discrepancy value.
-    """
+    """A proven minimum discrepancy and one source-bound coloring."""
 
     set_system: FiniteSetSystem
-    status: Literal["OPTIMAL", "BUDGET_EXCEEDED", "EXECUTION_FAILED"]
-    optimal_coloring: tuple[int, ...] = Field(default=())
-    optimal_discrepancy: int | None = Field(default=None, ge=0, strict=True)
+    status: Literal["OPTIMAL"] = "OPTIMAL"
+    optimal_coloring: tuple[int, ...]
+    optimal_discrepancy: int = Field(ge=0, strict=True)
 
     @classmethod
     def _from_kernel(
         cls,
         *,
         set_system: FiniteSetSystem,
-        status: Literal["OPTIMAL", "BUDGET_EXCEEDED", "EXECUTION_FAILED"],
-        optimal_coloring: tuple[int, ...] = (),
-        optimal_discrepancy: int | None = None,
+        optimal_coloring: tuple[int, ...],
+        optimal_discrepancy: int,
     ) -> Self:
         """Build a result bound to the canonical source set system."""
 
         return cls.model_construct(
             set_system=set_system,
-            status=status,
             optimal_coloring=optimal_coloring,
             optimal_discrepancy=optimal_discrepancy,
         )
 
     @model_validator(mode="after")
     def require_structural_shape(self) -> Self:
-        if self.status in ("BUDGET_EXCEEDED", "EXECUTION_FAILED"):
-            if self.optimal_coloring or self.optimal_discrepancy is not None:
-                raise _validation_error(
-                    "incomplete_result_carries_claim",
-                    f"a {self.status} result must not carry a coloring or optimum",
-                )
-            return self
-        if self.optimal_discrepancy is None:
-            raise _validation_error(
-                "optimal_discrepancy_missing",
-                "an OPTIMAL result requires its discrepancy value",
-            )
         if len(self.optimal_coloring) != self.set_system.ground_set_size:
             raise _validation_error(
                 "optimal_coloring_length_mismatch",
@@ -556,38 +535,8 @@ def _proven_optimal_result(
 
     return DiscrepancyOptimumResult._from_kernel(
         set_system=set_system,
-        status="OPTIMAL",
         optimal_coloring=optimal_coloring,
         optimal_discrepancy=optimal_discrepancy,
-    )
-
-
-def _budget_exceeded_result(set_system: FiniteSetSystem) -> DiscrepancyOptimumResult:
-    """Build the typed incomplete outcome from one exhausted producing solve.
-
-    The producing solve's claim-free outcome is built directly after its
-    bounded execution envelope is exhausted.
-    """
-
-    return DiscrepancyOptimumResult._from_kernel(
-        set_system=set_system,
-        status="BUDGET_EXCEEDED",
-        optimal_coloring=(),
-        optimal_discrepancy=None,
-    )
-
-
-def _execution_failed_result(set_system: FiniteSetSystem) -> DiscrepancyOptimumResult:
-    """Build the typed non-mathematical outcome from a backend failure.
-
-    Same claim-free shape as ``_budget_exceeded_result`` for a backend failure.
-    """
-
-    return DiscrepancyOptimumResult._from_kernel(
-        set_system=set_system,
-        status="EXECUTION_FAILED",
-        optimal_coloring=(),
-        optimal_discrepancy=None,
     )
 
 

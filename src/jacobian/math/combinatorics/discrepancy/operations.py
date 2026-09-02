@@ -10,6 +10,7 @@ from sympy import ZZ
 from sympy.polys.matrices import DomainMatrix
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import OperationExecutionTimeoutError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.discrepancy import _models as discrepancy_models
 from jacobian.math.combinatorics.discrepancy._models import (
@@ -23,8 +24,6 @@ from jacobian.math.combinatorics.discrepancy._models import (
     HardConstraintRoundingSource,
     HardConstraintRowLedger,
     MonitoredColumnLedger,
-    _budget_exceeded_result,
-    _execution_failed_result,
     _proven_optimal_result,
 )
 
@@ -254,15 +253,10 @@ def compute_optimal_discrepancy(
     checked against its binary domain before rounding, and its discrepancy is
     recomputed exactly with Python integers, so floating-point solver
     internals can never surface as a mathematical value. A positive optimum
-    is carried by OPTIMAL only after the exact Z3 pseudo-boolean feasibility
-    check proves no coloring attains one less; a witness for that smaller
-    bound yields EXECUTION_FAILED and an exhausted or unavailable proof
-    yields BUDGET_EXCEEDED. Zero is definitional. A solver limit produces
-    BUDGET_EXCEEDED; any other nonzero status, a non-integral or out-of-domain
-    assignment, an objective mismatch, or a failing backend call
-    (failed NumPy/SciPy initialization included) produces the distinct
-    non-mathematical EXECUTION_FAILED outcome. Neither carries a coloring or
-    any claim. The empty ground set has the single empty coloring with
+    is returned only after the exact Z3 pseudo-boolean feasibility check proves
+    no coloring attains one less. Solver exhaustion and backend failure remain
+    operational failures rather than mathematical result variants. Zero is
+    definitional. The empty ground set has the single empty coloring with
     discrepancy zero.
     """
     n = set_system.ground_set_size
@@ -330,11 +324,13 @@ def compute_optimal_discrepancy(
         # bounded external call: an ABI/loader, native, or raised failure
         # there is transport, not mathematics, so report the typed claim-free
         # outcome instead of escaping the kernel.
-        return _execution_failed_result(set_system)
+        raise RuntimeError("discrepancy optimization backend failed") from None
     if result.status == 1:
-        return _budget_exceeded_result(set_system)
+        raise OperationExecutionTimeoutError(
+            "discrepancy optimization exhausted its solver budget"
+        )
     if result.status != 0 or result.x is None:
-        return _execution_failed_result(set_system)
+        raise RuntimeError("discrepancy optimization did not produce an incumbent")
     return _incumbent_outcome(set_system, result, variable_count)
 
 
@@ -354,13 +350,13 @@ def _incumbent_outcome(
         if raw_result.shape != (variable_count,) or not bool(
             np.all(np.isfinite(raw_result))
         ):
-            return _execution_failed_result(set_system)
+            raise RuntimeError("discrepancy optimizer returned a malformed incumbent")
 
         raw_assignment = raw_result[:n]
         if float(np.max(np.abs(raw_assignment - np.round(raw_assignment)))) > 1e-6:
-            return _execution_failed_result(set_system)
+            raise RuntimeError("discrepancy optimizer returned a nonintegral incumbent")
         if bool(np.any(raw_assignment < -1e-6) or np.any(raw_assignment > 1 + 1e-6)):
-            return _execution_failed_result(set_system)
+            raise RuntimeError("discrepancy optimizer returned an invalid assignment")
         coloring = tuple(1 if value > 0.5 else -1 for value in raw_assignment)
 
         # Bind the claimed optimum to an exact integer recomputation so no
@@ -374,9 +370,9 @@ def _incumbent_outcome(
         # A status-zero result is only an incumbent candidate.  If its vector
         # cannot be inspected in the advertised finite floating-point domain,
         # no canonical coloring or mathematical conclusion may escape.
-        return _execution_failed_result(set_system)
+        raise RuntimeError("discrepancy optimizer returned a malformed incumbent") from None
     if abs(solved_bound - recomputed) > 1e-6:
-        return _execution_failed_result(set_system)
+        raise RuntimeError("discrepancy optimizer objective does not match its witness")
     if recomputed == 0:
         return _proven_optimal_result(set_system, coloring, recomputed)
     try:
@@ -384,9 +380,11 @@ def _incumbent_outcome(
     except (ImportError, OSError, RuntimeError, TypeError, ValueError):
         # An unavailable exact proof cannot back the OPTIMAL claim; report
         # the claim-free outcome instead of escaping the kernel.
-        return _budget_exceeded_result(set_system)
+        raise RuntimeError("exact discrepancy proof backend failed") from None
     if outcome == "unsat":
         return _proven_optimal_result(set_system, coloring, recomputed)
     if outcome == "sat":
-        return _execution_failed_result(set_system)
-    return _budget_exceeded_result(set_system)
+        raise RuntimeError("exact discrepancy proof contradicted the incumbent")
+    raise OperationExecutionTimeoutError(
+        "exact discrepancy proof exhausted its solver budget"
+    )

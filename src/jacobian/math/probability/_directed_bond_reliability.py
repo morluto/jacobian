@@ -10,10 +10,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
-from jacobian.canonical import (
-    encode_strict_json,
-    format_canonical_integer,
-)
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -29,7 +26,6 @@ def _validation_error(message: str) -> PydanticCustomError:
 
 MAX_DIRECTED_BOND_RELIABILITY_ARCS = 12
 MAX_DIRECTED_BOND_RELIABILITY_STATES = 1 << MAX_DIRECTED_BOND_RELIABILITY_ARCS
-MAX_DIRECTED_BOND_RELIABILITY_LEDGER_BYTES = 9 * 1024 * 1024
 # One state mass has at most one numerator and denominator factor per arc.
 # Summing at most 2**arcs masses can add at most ``arcs`` decimal digits.
 MAX_DIRECTED_BOND_RELIABILITY_RATIONAL_DIGITS = (
@@ -205,76 +201,6 @@ class DirectedBondConnectionProbabilitySource(StrictModel):
             raise _validation_error(
                 "declared vertex labels exceed the interoperable JSON integer "
                 f"range of {MAX_DIRECTED_BOND_RELIABILITY_DECLARED_VERTICES}"
-            )
-        repeated_arc_bytes = (state_count // 2) * sum(
-            len(encode_strict_json(list(arc))) + 1 for arc in canonical_arcs
-        )
-        # Every state mass multiplies one open or one closed factor per arc,
-        # so a state's numerator and denominator digit counts are bounded by
-        # the corresponding sums over its selected factors, and each factor's
-        # digits occur in exactly half of the powerset states.
-        per_arc_numerator_bytes = sum(
-            len(format_canonical_integer(item.open_probability.as_fraction().numerator))
-            + len(
-                format_canonical_integer(
-                    (1 - item.open_probability.as_fraction()).numerator
-                )
-            )
-            for item in self.arc_probabilities
-        )
-        per_arc_denominator_bytes = sum(
-            len(
-                format_canonical_integer(
-                    item.open_probability.as_fraction().denominator
-                )
-            )
-            + len(
-                format_canonical_integer(
-                    (1 - item.open_probability.as_fraction()).denominator
-                )
-            )
-            for item in self.arc_probabilities
-        )
-        maximum_state_template = {
-            "state_index": 0,
-            "open_arcs": [],
-            "source_reaches_target": False,
-            "state_probability": {"num": "", "den": ""},
-        }
-        fixed_state_bytes = len(encode_strict_json(maximum_state_template))
-        source_bytes = len(
-            encode_strict_json(
-                {
-                    "graph": {
-                        "vertex_count": self.graph.vertex_count,
-                        "edges": [list(arc) for arc in canonical_arcs],
-                    },
-                    "arc_probabilities": [
-                        {
-                            "arc": list(item.arc),
-                            "open_probability": item.open_probability.model_dump(),
-                        }
-                        for item in self.arc_probabilities
-                    ],
-                    "source": self.source,
-                    "target": self.target,
-                }
-            )
-        )
-        estimated_ledger_bytes = (
-            source_bytes
-            + repeated_arc_bytes
-            # Each record adds its index digits and at least one numerator
-            # and denominator character beyond the empty template, plus one
-            # ledger separator byte.
-            + state_count * (fixed_state_bytes + len(str(state_count - 1)) + 2 + 1)
-            + (state_count // 2) * (per_arc_numerator_bytes + per_arc_denominator_bytes)
-            + 16 * 1024
-        )
-        if estimated_ledger_bytes > MAX_DIRECTED_BOND_RELIABILITY_LEDGER_BYTES:
-            raise _validation_error(
-                "directed bond reliability request can exceed the complete ledger "
-                f"budget of {MAX_DIRECTED_BOND_RELIABILITY_LEDGER_BYTES} bytes"
             )
         return self
 

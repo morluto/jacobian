@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 from bisect import bisect_right
 from heapq import merge
 from typing import Literal, NamedTuple, Self
@@ -19,7 +18,6 @@ MAX_R_FULL_CUTOFF = 10**MAX_R_FULL_CUTOFF_DIGITS
 MIN_R_FULL_EXPONENT = 2
 MAX_R_FULL_FAMILY_SIZE = 200_000
 MAX_R_FULL_MERGE_WORK = 20_000_000
-MAX_R_FULL_WORKING_MEMORY_BYTES = 256 * 1024 * 1024
 _MAX_PRIME_SEARCH_BOUND = 3_000_000
 
 
@@ -73,17 +71,11 @@ def plan_r_full_family(
     family_set: set[int] = {1}
     sorted_family = [1]
     merge_work = 0
-    working_memory_bytes = (
-        sys.getsizeof(family_set) + sys.getsizeof(sorted_family) + 1_024
-    )
     for prime in primerange(2, int(prime_bound) + 1):
         powers: list[int] = []
         current = int(prime) ** minimum_exponent
         while current <= cutoff:
             powers.append(current)
-            working_memory_bytes += sys.getsizeof(current) + 32
-            if working_memory_bytes > MAX_R_FULL_WORKING_MEMORY_BYTES:
-                return RFullFamilyPlan((), True, "planning")
             current *= int(prime)
         new_values: set[int] = set()
         for power in powers:
@@ -94,9 +86,6 @@ def plan_r_full_family(
                     continue
                 if len(family_set) + len(new_values) >= MAX_R_FULL_FAMILY_SIZE:
                     return RFullFamilyPlan((), True, "family")
-                working_memory_bytes += sys.getsizeof(value) + 64
-                if working_memory_bytes > MAX_R_FULL_WORKING_MEMORY_BYTES:
-                    return RFullFamilyPlan((), True, "planning")
                 new_values.add(value)
         fresh_values = sorted(value for value in new_values if value not in family_set)
         if fresh_values:

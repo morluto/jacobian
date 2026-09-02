@@ -442,8 +442,8 @@ class StrictSublevelMeasureResult(StrictModel):
         """Build a result after the admitted exact kernel established it.
 
         Public parsing checks the bounded structural representation only.
-        Re-running root isolation to authenticate an independently supplied
-        claim belongs to the owner-private verifier, not result validation.
+        Tests establish the defining invariant; result validation does not
+        re-run root isolation.
         """
 
         return cls.model_construct(

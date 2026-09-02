@@ -846,7 +846,6 @@ RationalFlatIncompleteReason = Literal[
     "STATE_ORBIT_LIMIT",
     "SEARCH_WORK_LIMIT",
     "RESULT_ORBIT_LIMIT",
-    "RESULT_RETENTION_LIMIT",
 ]
 
 

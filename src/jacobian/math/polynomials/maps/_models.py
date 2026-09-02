@@ -441,9 +441,8 @@ class GenericDegreeResult(StrictModel):
     """An exact source-bound generic-fiber conclusion or operational failure.
 
     The declared outcome must agree with the retained evidence shape.  The
-    producer establishes the mathematical conclusion once; an independently
-    supplied claim may be checked with the owner-private verifier without
-    re-entering a process-bound replay during deserialization.
+    The producing kernel establishes the mathematical conclusion once; tests
+    cover its defining invariant without replay during deserialization.
     """
 
     outcome: GenericDegreeOutcome

@@ -232,10 +232,18 @@ def test_number_field_worker_has_private_cwd_and_os_resource_limits(
     recorded: dict[str, object] = {}
 
     def complete_worker(*_args: object, **kwargs: object) -> BoundedProcessResult:
+        import hashlib
+
         recorded.update(kwargs)
+        input_bytes = kwargs["input_bytes"]
+        assert isinstance(input_bytes, bytes)
         return BoundedProcessResult(
             returncode=0,
-            stdout=b'{"kind":"complete","discriminant":"8"}',
+            stdout=(
+                b'{"discriminant":"8","kind":"complete","request_digest":"'
+                + hashlib.sha256(input_bytes).hexdigest().encode()
+                + b'"}'
+            ),
             stderr=b"",
             stdout_exceeded=False,
             stderr_exceeded=False,

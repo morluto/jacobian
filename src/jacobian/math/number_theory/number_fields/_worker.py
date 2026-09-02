@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import json
+import hashlib
 import sys
 
+from jacobian.canonical import encode_strict_json, format_canonical_integer
 from jacobian.math.number_theory.number_fields._integral_basis import (
     recognized_integral_basis,
 )
@@ -12,8 +13,9 @@ from jacobian.math.number_theory.number_fields._models import NumberFieldRequest
 
 
 def main() -> int:
+    input_bytes = sys.stdin.buffer.read()
     request = NumberFieldRequest.model_validate_json(
-        sys.stdin.buffer.read(),
+        input_bytes,
         strict=True,
     )
     integral_basis = recognized_integral_basis(request.field)
@@ -23,9 +25,10 @@ def main() -> int:
         _ring, field_discriminant, _alpha, _leading = integral_basis
         response = {
             "kind": "complete",
-            "discriminant": str(field_discriminant),
+            "discriminant": format_canonical_integer(int(field_discriminant)),
         }
-    json.dump(response, sys.stdout, separators=(",", ":"))
+    response["request_digest"] = hashlib.sha256(input_bytes).hexdigest()
+    sys.stdout.buffer.write(encode_strict_json(response))
     return 0
 
 

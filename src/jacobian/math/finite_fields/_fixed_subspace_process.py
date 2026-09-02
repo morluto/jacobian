@@ -12,7 +12,7 @@ from tempfile import TemporaryDirectory
 from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
-    request_cancelled,
+    request_checkpoint,
 )
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
@@ -23,10 +23,7 @@ _FIXED_SUBSPACE_FILE_SIZE_BYTES = 1024 * 1024
 
 
 def _require_active(deadline: float, stage: str) -> None:
-    if request_cancelled():
-        raise OperationExecutionCancelledError(
-            f"finite-field fixed-subspace computation cancelled {stage}"
-        )
+    request_checkpoint(stage)
     if time.monotonic() >= deadline:
         raise OperationExecutionTimeoutError(
             f"finite-field fixed-subspace deadline expired {stage}"

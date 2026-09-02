@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
-import json
+import hashlib
 import sys
 from typing import Any
+
+from jacobian.canonical import (
+    encode_strict_json,
+    format_canonical_integer,
+    loads_strict_json,
+    parse_canonical_integer,
+)
 
 
 def _diagonal_snf(matrix: list[list[int]]) -> list[int]:
@@ -23,10 +30,20 @@ def _diagonal_snf(matrix: list[list[int]]) -> list[int]:
 
 
 def main() -> int:
-    payload: dict[str, Any] = json.load(sys.stdin)
-    matrix = payload["matrix"]
-    response = {"ok": True, "diagonal": _diagonal_snf(matrix)}
-    json.dump(response, sys.stdout, separators=(",", ":"))
+    input_bytes = sys.stdin.buffer.read()
+    payload: dict[str, Any] = loads_strict_json(input_bytes)
+    if set(payload) != {"matrix"} or not isinstance(payload["matrix"], list):
+        raise ValueError("worker request has invalid fields")
+    matrix = [
+        [parse_canonical_integer(value) for value in row] for row in payload["matrix"]
+    ]
+    response = {
+        "request_digest": hashlib.sha256(input_bytes).hexdigest(),
+        "diagonal": [
+            format_canonical_integer(value) for value in _diagonal_snf(matrix)
+        ],
+    }
+    sys.stdout.buffer.write(encode_strict_json(response, limits=None))
     return 0
 
 

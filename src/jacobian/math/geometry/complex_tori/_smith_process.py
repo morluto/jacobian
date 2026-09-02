@@ -12,7 +12,7 @@ from time import monotonic
 from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
-    request_cancelled,
+    request_checkpoint,
 )
 from jacobian.canonical import (
     CanonicalizationError,
@@ -50,8 +50,7 @@ def _smith_stdout_limit(matrix: IntegerMatrix) -> int:
 
 
 def _require_active(deadline: float, phase: str) -> None:
-    if request_cancelled():
-        raise OperationExecutionCancelledError(f"request cancelled {phase}")
+    request_checkpoint(phase)
     if monotonic() >= deadline:
         raise OperationExecutionTimeoutError(f"complex-torus deadline expired {phase}")
 

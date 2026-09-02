@@ -9,10 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
-from jacobian.canonical import (
-    canonicalize_json,
-    format_canonical_integer,
-)
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -24,8 +21,6 @@ from jacobian.math.probability._models import MAX_INPUT_RATIONAL_DIGITS
 MAX_GRAPH_RELIABILITY_VERTICES = 16
 MAX_GRAPH_RELIABILITY_EDGES = 12
 MAX_GRAPH_RELIABILITY_STATES = 1 << MAX_GRAPH_RELIABILITY_EDGES
-MAX_GRAPH_RELIABILITY_LEDGER_BYTES = 9 * 1024 * 1024
-GRAPH_RELIABILITY_LEDGER_FIXED_BYTES = 16 * 1024
 
 
 def _validation_error(message: str) -> PydanticCustomError:
@@ -172,52 +167,6 @@ def _admit_graph_connection_request(
 
     edge_count = len(request.graph.edges)
     state_count = 1 << edge_count
-    repeated_edge_bytes = (
-        (1 << (edge_count - 1))
-        * sum(len(canonicalize_json(list(edge))) + 1 for edge in request.graph.edges)
-        if edge_count
-        else 0
-    )
-    probability_numerator_digits = sum(
-        max(
-            len(
-                format_canonical_integer(item.open_probability.as_fraction().numerator)
-            ),
-            len(
-                format_canonical_integer(
-                    (1 - item.open_probability.as_fraction()).numerator
-                )
-            ),
-        )
-        for item in request.edge_probabilities
-    )
-    probability_denominator_digits = sum(
-        len(format_canonical_integer(item.open_probability.as_fraction().denominator))
-        for item in request.edge_probabilities
-    )
-    maximum_state = {
-        "state_index": state_count - 1,
-        "open_edges": [],
-        "terminals_connected": False,
-        "state_probability": {
-            "num": "9" * max(1, probability_numerator_digits),
-            "den": "9" * max(1, probability_denominator_digits),
-        },
-    }
-    estimated_ledger_bytes = (
-        repeated_edge_bytes
-        + state_count * len(canonicalize_json(maximum_state))
-        + GRAPH_RELIABILITY_LEDGER_FIXED_BYTES
-    )
-    if estimated_ledger_bytes > MAX_GRAPH_RELIABILITY_LEDGER_BYTES:
-        raise OperationDomainValidationError(
-            location=("edge_probabilities",),
-            code="probability.graph_reliability.ledger_budget",
-            message=(
-                "graph reliability request can exceed the complete ledger "
-                f"budget of {MAX_GRAPH_RELIABILITY_LEDGER_BYTES} bytes"
-            ),
-        )
     return tuple(probabilities), state_count
 
 

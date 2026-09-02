@@ -99,8 +99,7 @@ class TestSidonExtensionProfile:
         assert result.admissible == ()
         assert result.rejected == ()
 
-    def test_large_source_profile_is_rejected_before_materialization(self) -> None:
-        """The source-profile dictionary has its own bounded storage budget."""
+    def test_large_source_profile_is_not_tied_to_python_object_sizes(self) -> None:
         # For i > j, the positive difference is
         # (i-j) * (BASE + i+j).  BASE is larger than every possible cross-term,
         # so these differences are distinct; adding the common 120-digit
@@ -110,15 +109,14 @@ class TestSidonExtensionProfile:
             str(10**120 + index * base + index * index) for index in range(2_000)
         )
 
-        with pytest.raises(ValueError) as error:
-            compute_sidon_extension_profile(
-                SidonExtensionProfileRequest(
-                    source_elements=source,
-                    candidate_elements=(),
-                )
+        result = compute_sidon_extension_profile(
+            SidonExtensionProfileRequest(
+                source_elements=source,
+                candidate_elements=(),
             )
-
-        assert "Sidon source-difference profiling" in str(error.value)
+        )
+        assert result.admissible == ()
+        assert result.rejected == ()
 
     def test_large_all_admissible_profile_fits_work_bound(self) -> None:
         candidates = tuple(str(value) for value in range(250_000))

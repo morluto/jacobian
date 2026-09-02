@@ -316,9 +316,7 @@ def test_successful_compute_enumerates_each_arc_subset_once(
     assert call_count == 1 << len(request.graph.edges)
 
 
-def test_ledger_bound_rejects_large_exact_probability_products_before_enumeration() -> (
-    None
-):
+def test_large_exact_probability_products_are_not_rejected_by_json_size() -> None:
     arcs = tuple((index, index + 1) for index in range(12))
     large_denominator = int("9" * 128)
     large_probability = Fraction(large_denominator - 1, large_denominator)
@@ -329,8 +327,8 @@ def test_ledger_bound_rejects_large_exact_probability_products_before_enumeratio
         source=0,
         target=12,
     )
-    with pytest.raises(OperationDomainValidationError):
-        _directed_bond_connection_probability(request)
+    result = _directed_bond_connection_probability(request)
+    assert result.connection_probability.as_fraction() == large_probability ** len(arcs)
 
 
 def test_zero_and_one_probabilities_keep_complete_state_convention() -> None:

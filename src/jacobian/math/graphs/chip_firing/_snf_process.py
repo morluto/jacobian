@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json
+import hashlib
 import math
 import sys
 import time
@@ -15,13 +15,19 @@ from jacobian._execution import (
     bind_request_deadline,
     current_request_execution,
 )
+from jacobian.canonical import (
+    CanonicalizationError,
+    encode_strict_json,
+    format_canonical_integer,
+    loads_strict_json,
+    parse_canonical_integer,
+)
 
 _SNF_WORKER = Path(__file__).resolve().with_name("_snf_worker.py")
 # Admitted reduced Laplacians satisfy dimension**3 <= 1_500_000. FLINT's
 # exact integer SNF on that envelope finishes well under a minute; keep a
 # generous killable ceiling so one stalled backend cannot outlive the request.
 _SNF_WALL_SECONDS = 120.0
-_SNF_STDOUT_LIMIT = 256 * 1024
 _SNF_STDERR_LIMIT = 64 * 1024
 _SNF_ADDRESS_SPACE_BYTES = 1024 * 1024 * 1024
 _SNF_FILE_SIZE_BYTES = 1024 * 1024
@@ -51,16 +57,40 @@ def smith_normal_form_diagonal(matrix: list[list[int]]) -> tuple[int, ...]:
             "request deadline expired before reduced-Laplacian SNF"
         )
 
+    payload = encode_strict_json(
+        {
+            "matrix": [
+                [format_canonical_integer(value) for value in row] for row in matrix
+            ]
+        }
+    )
+    maximum_entry_digits = max(
+        (
+            len(format_canonical_integer(value).lstrip("-"))
+            for row in matrix
+            for value in row
+        ),
+        default=1,
+    )
+    maximum_diagonal_digits = max(
+        1, min(rows, cols) * (maximum_entry_digits + len(str(max(rows, cols))))
+    )
+    stdout_limit = len(
+        encode_strict_json(
+            {
+                "diagonal": ["-" + "9" * maximum_diagonal_digits] * min(rows, cols),
+                "request_digest": "0" * 64,
+            },
+        )
+    )
     try:
         with TemporaryDirectory(prefix="jacobian-chip-firing-snf-") as worker_directory:
             completed = run_bounded_process(
                 [sys.executable, str(_SNF_WORKER)],
-                input_bytes=json.dumps(
-                    {"matrix": matrix}, separators=(",", ":")
-                ).encode("utf-8"),
+                input_bytes=payload,
                 timeout_seconds=remaining,
                 environment=worker_environment(locale="C.UTF-8"),
-                stdout_limit=_SNF_STDOUT_LIMIT,
+                stdout_limit=stdout_limit,
                 stderr_limit=_SNF_STDERR_LIMIT,
                 resource_limits=ProcessResourceLimits(
                     cpu_seconds=max(1, math.ceil(_SNF_WALL_SECONDS)),
@@ -92,22 +122,19 @@ def smith_normal_form_diagonal(matrix: list[list[int]]) -> tuple[int, ...]:
         )
 
     try:
-        response = json.loads(completed.stdout.decode("utf-8"))
-        if response.get("ok") is not True:
-            raise ValueError("worker reported failure")
+        response = loads_strict_json(completed.stdout)
+        if not isinstance(response, dict) or set(response) != {
+            "diagonal",
+            "request_digest",
+        }:
+            raise ValueError("worker response has invalid fields")
+        if response["request_digest"] != hashlib.sha256(payload).hexdigest():
+            raise ValueError("worker response is not bound to its request")
         diagonal = response["diagonal"]
-        if not isinstance(diagonal, list) or any(
-            not isinstance(value, int) for value in diagonal
-        ):
+        if not isinstance(diagonal, list) or len(diagonal) != min(rows, cols):
             raise ValueError("worker diagonal is malformed")
-        return tuple(int(value) for value in diagonal)
-    except (
-        KeyError,
-        TypeError,
-        ValueError,
-        UnicodeDecodeError,
-        json.JSONDecodeError,
-    ) as exc:
+        return tuple(parse_canonical_integer(value) for value in diagonal)
+    except (KeyError, TypeError, ValueError, CanonicalizationError) as exc:
         raise RuntimeError(
             "bounded chip-firing SNF worker returned malformed output"
         ) from exc

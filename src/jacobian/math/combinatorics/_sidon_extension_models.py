@@ -16,9 +16,6 @@ from jacobian.math.combinatorics._difference_set_models import (
 )
 
 MAX_EXTENSION_WORK = 4_000_000
-MAX_EXTENSION_INTERMEDIATE_BYTES = 256 * 1024 * 1024
-_PYTHON_DICT_SLOT_BYTES = 64
-_PYTHON_TUPLE_BYTES = 56
 
 _DifferencePair = tuple[int, int]
 _CandidateObstruction = tuple[int, _DifferencePair, _DifferencePair]
@@ -29,47 +26,6 @@ class _SidonExtensionAdmissionPlan:
     """Request-scoped admission data reused by the owner-local kernel."""
 
     source_differences: Mapping[int, _DifferencePair]
-
-
-def _python_int_storage_bytes(decimal_digits: int) -> int:
-    """Conservatively bound one CPython integer's storage."""
-
-    # A Python integer uses 30-bit limbs and has a 28-byte object header. Four
-    # bits per decimal digit overstates the limb count for every accepted
-    # integer, including the 130-character ordered differences.
-    limbs = (decimal_digits * 4 + 29) // 30
-    return 28 + 4 * limbs
-
-
-def _source_profile_storage_bytes(
-    source_elements: tuple[AdditiveInteger, ...],
-) -> int:
-    """Bound one materialized source-difference profile's peak storage."""
-
-    pair_count = len(source_elements) * (len(source_elements) - 1)
-    if pair_count == 0:
-        return 0
-    widest_element_length = max(len(value) for value in source_elements)
-    element_bytes = _python_int_storage_bytes(widest_element_length)
-    difference_bytes = _python_int_storage_bytes(widest_element_length + 2)
-    entry_bytes = (
-        _PYTHON_DICT_SLOT_BYTES
-        + _PYTHON_TUPLE_BYTES
-        + difference_bytes
-        + 2 * element_bytes
-    )
-    return pair_count * entry_bytes
-
-
-def _require_source_profile_memory_budget(
-    source_elements: tuple[AdditiveInteger, ...],
-) -> None:
-    estimated_bytes = _source_profile_storage_bytes(source_elements)
-    if estimated_bytes > MAX_EXTENSION_INTERMEDIATE_BYTES:
-        raise _difference_set_validation_error(
-            "combinatorics.sidon_extension_intermediate_budget",
-            "Sidon source-difference profiling exceeds the bounded intermediate-storage budget",
-        )
 
 
 def _ordered_difference_pairs(
@@ -342,7 +298,6 @@ def _candidate_obstruction(
 
 
 __all__ = [
-    "MAX_EXTENSION_INTERMEDIATE_BYTES",
     "MAX_EXTENSION_WORK",
     "SidonExtensionCandidateResult",
     "SidonExtensionObstruction",

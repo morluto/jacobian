@@ -8,7 +8,7 @@ from math import factorial
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
-from jacobian.canonical import encode_strict_json, format_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis.intervals import ClosedRationalInterval, RationalBox
 from jacobian.math.matrices.values import rational_matrix_from_fractions
@@ -39,7 +39,6 @@ from ._models import (
     MAX_ROOT_BOX_INTERMEDIATE_DIGITS,
     MAX_ROOT_BOX_POINT_VALUE_DIGITS,
     MAX_ROOT_BOX_RESULT_COMPONENT_DIGITS,
-    MAX_ROOT_BOX_SOURCE_BYTES,
     MAX_ROOT_BOX_TOTAL_DEGREE,
     PolynomialSystemRootBoxResult,
     RootBoxCertifiedUniqueNonsingular,
@@ -71,15 +70,6 @@ def _total_degree(polynomial: RationalPolynomial) -> int:
         (sum(term.exponents) for term in polynomial.polynomial.terms),
         default=0,
     )
-
-
-def _source_payload(
-    polynomial_map: RationalPolynomialMap, box: RationalBox
-) -> dict[str, object]:
-    return {
-        "polynomial_map": polynomial_map.model_dump(mode="json"),
-        "box": box.model_dump(mode="json"),
-    }
 
 
 def _center_values(box: RationalBox) -> tuple[Fraction, ...]:
@@ -143,12 +133,6 @@ def _admit_source_shape(
                 max_digits=MAX_ROOT_BOX_ENDPOINT_DIGITS,
                 label=f"root-box {variable} endpoint",
             )
-    source_bytes = len(encode_strict_json(_source_payload(polynomial_map, box)))
-    if source_bytes > MAX_ROOT_BOX_SOURCE_BYTES:
-        raise _domain_error(
-            "root-box retained source exceeds the "
-            f"{MAX_ROOT_BOX_SOURCE_BYTES:,}-byte budget"
-        )
 
 
 def _admitted_enclosure(

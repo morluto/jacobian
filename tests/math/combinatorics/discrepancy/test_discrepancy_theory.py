@@ -13,6 +13,7 @@ from pydantic import ValidationError
 
 import jacobian.math.combinatorics.discrepancy._models as discrepancy_models
 import jacobian.math.combinatorics.discrepancy._optimum_process as optimum_process
+from jacobian._execution import OperationExecutionTimeoutError
 from jacobian.math.combinatorics.discrepancy._models import (
     MAX_COLUMN_INCIDENCES,
     MAX_MONITORED_COLUMNS,
@@ -612,18 +613,18 @@ class TestDiscrepancyOptimum:
         assert elapsed < 60
 
     @pytest.mark.parametrize(
-        ("milp_status", "expected_status"),
+        ("milp_status", "expected_exception"),
         [
-            (1, "BUDGET_EXCEEDED"),
-            (2, "EXECUTION_FAILED"),
-            (3, "EXECUTION_FAILED"),
-            (4, "EXECUTION_FAILED"),
+            (1, OperationExecutionTimeoutError),
+            (2, RuntimeError),
+            (3, RuntimeError),
+            (4, RuntimeError),
         ],
     )
     def test_milp_statuses_map_to_distinct_typed_outcomes(
         self,
         milp_status: int,
-        expected_status: str,
+        expected_exception: type[Exception],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         from types import SimpleNamespace
@@ -636,13 +637,8 @@ class TestDiscrepancyOptimum:
             set_system=FiniteSetSystem(ground_set_size=2, sets=((0, 1),)),
         )
 
-        result = compute_optimal_discrepancy(req)
-
-        assert result.status == expected_status
-        assert result.optimal_coloring == ()
-        assert result.optimal_discrepancy is None
-        assert result.set_system == req.set_system
-        assert DiscrepancyOptimumResult.model_validate(result.model_dump()) == result
+        with pytest.raises(expected_exception):
+            compute_optimal_discrepancy(req)
 
     @pytest.mark.parametrize(
         "malformed_x",
@@ -697,17 +693,12 @@ class TestDiscrepancyOptimum:
             set_system=FiniteSetSystem(ground_set_size=n, sets=((0, 1),)),
         )
 
-        result = compute_optimal_discrepancy(req)
-
-        assert result.status == "EXECUTION_FAILED"
-        assert result.optimal_coloring == ()
-        assert result.optimal_discrepancy is None
-        assert result.set_system == req.set_system
-        assert DiscrepancyOptimumResult.model_validate(result.model_dump()) == result
+        with pytest.raises(RuntimeError):
+            compute_optimal_discrepancy(req)
 
     def test_execution_failed_result_carries_no_claim(self) -> None:
         system = FiniteSetSystem(ground_set_size=2, sets=((0, 1),))
-        with _validation_code("discrepancy_theory.incomplete_result_carries_claim"):
+        with pytest.raises(ValidationError):
             DiscrepancyOptimumResult(
                 set_system=system,
                 status="EXECUTION_FAILED",
@@ -717,7 +708,7 @@ class TestDiscrepancyOptimum:
 
     def test_budget_exceeded_result_carries_no_claim(self) -> None:
         system = FiniteSetSystem(ground_set_size=2, sets=((0, 1),))
-        with _validation_code("discrepancy_theory.incomplete_result_carries_claim"):
+        with pytest.raises(ValidationError):
             DiscrepancyOptimumResult(
                 set_system=system,
                 status="BUDGET_EXCEEDED",
@@ -726,15 +717,13 @@ class TestDiscrepancyOptimum:
             )
 
     def test_budget_exceeded_serialization_carries_no_completeness_claim(self) -> None:
-        result = DiscrepancyOptimumResult.model_validate(
-            {
-                "set_system": {"ground_set_size": 2, "sets": [[0, 1]]},
-                "status": "BUDGET_EXCEEDED",
-            }
-        )
-        assert "exhaustive" not in result.model_dump()
-        assert result.optimal_coloring == ()
-        assert result.optimal_discrepancy is None
+        with pytest.raises(ValidationError):
+            DiscrepancyOptimumResult.model_validate(
+                {
+                    "set_system": {"ground_set_size": 2, "sets": [[0, 1]]},
+                    "status": "BUDGET_EXCEEDED",
+                }
+            )
 
     def test_optimum_result_deserialization_does_not_run_the_solver(
         self, monkeypatch: pytest.MonkeyPatch
@@ -803,17 +792,19 @@ class TestDiscrepancyOptimum:
             ),
         )
 
-        result = compute_optimal_discrepancy(req)
-
-        assert result.status == expected_status
         if expected_status == "OPTIMAL":
+            result = compute_optimal_discrepancy(req)
+            assert result.status == expected_status
             assert result.optimal_discrepancy == 2
             assert DiscrepancyOptimumResult.model_validate(result.model_dump()) == (
                 result
             )
+        elif expected_status == "BUDGET_EXCEEDED":
+            with pytest.raises(OperationExecutionTimeoutError):
+                compute_optimal_discrepancy(req)
         else:
-            assert result.optimal_coloring == ()
-            assert result.optimal_discrepancy is None
+            with pytest.raises(RuntimeError):
+                compute_optimal_discrepancy(req)
 
     def test_proving_checker_failure_stays_typed(
         self, monkeypatch: pytest.MonkeyPatch
@@ -832,11 +823,8 @@ class TestDiscrepancyOptimum:
             ),
         )
 
-        result = compute_optimal_discrepancy(req)
-
-        assert result.status == "BUDGET_EXCEEDED"
-        assert result.optimal_coloring == ()
-        assert result.optimal_discrepancy is None
+        with pytest.raises(RuntimeError):
+            compute_optimal_discrepancy(req)
 
     def test_milp_exception_becomes_execution_failed(
         self, monkeypatch: pytest.MonkeyPatch
@@ -852,12 +840,8 @@ class TestDiscrepancyOptimum:
             set_system=FiniteSetSystem(ground_set_size=2, sets=((0, 1),)),
         )
 
-        result = compute_optimal_discrepancy(req)
-
-        assert result.status == "EXECUTION_FAILED"
-        assert result.optimal_coloring == ()
-        assert result.optimal_discrepancy is None
-        assert DiscrepancyOptimumResult.model_validate(result.model_dump()) == result
+        with pytest.raises(RuntimeError):
+            compute_optimal_discrepancy(req)
 
     @pytest.mark.parametrize(
         "blocked_module",
@@ -877,13 +861,8 @@ class TestDiscrepancyOptimum:
             set_system=FiniteSetSystem(ground_set_size=2, sets=((0, 1),)),
         )
 
-        result = compute_optimal_discrepancy(req)
-
-        assert result.status == "EXECUTION_FAILED"
-        assert result.optimal_coloring == ()
-        assert result.optimal_discrepancy is None
-        assert result.set_system == req.set_system
-        assert DiscrepancyOptimumResult.model_validate(result.model_dump()) == result
+        with pytest.raises(RuntimeError):
+            compute_optimal_discrepancy(req)
 
     def test_solver_options_carry_node_and_time_budgets(
         self, monkeypatch: pytest.MonkeyPatch
@@ -966,12 +945,11 @@ class TestDiscrepancyOptimum:
             )
         )
 
-        result = compute_optimal_discrepancy_isolated(request)
-
-        assert result.status == expected_status
-        assert result.set_system == request.set_system
-        assert result.optimal_coloring == ()
-        assert result.optimal_discrepancy is None
+        expected_exception = (
+            OperationExecutionTimeoutError if timed_out else RuntimeError
+        )
+        with pytest.raises(expected_exception):
+            compute_optimal_discrepancy_isolated(request)
 
     @pytest.mark.scale
     def test_hard_instance_outcome_is_honest(self) -> None:

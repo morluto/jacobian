@@ -9,13 +9,15 @@ import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+)
 from jacobian.math.combinatorics.discrepancy._models import (
     MAX_OPTIMUM_PROOF_MILLISECONDS,
     MAX_OPTIMUM_SOLVER_MILLISECONDS,
     DiscrepancyOptimumResult,
     FiniteSetSystem,
-    _budget_exceeded_result,
-    _execution_failed_result,
 )
 from jacobian.process import (
     ProcessResourceLimits,
@@ -39,30 +41,12 @@ def _optimum_worker_stdout_limit(set_system: FiniteSetSystem) -> int:
     """Measure the largest result variant for this retained source."""
 
     source = set_system.model_dump(mode="json")
-    variants: tuple[dict[str, object], ...] = (
-        {
-            "set_system": source,
-            "status": "OPTIMAL",
-            "optimal_coloring": [-1] * set_system.ground_set_size,
-            "optimal_discrepancy": set_system.ground_set_size,
-        },
-        {
-            "set_system": source,
-            "status": "BUDGET_EXCEEDED",
-            "optimal_coloring": [],
-            "optimal_discrepancy": None,
-        },
-        {
-            "set_system": source,
-            "status": "EXECUTION_FAILED",
-            "optimal_coloring": [],
-            "optimal_discrepancy": None,
-        },
-    )
-    return max(
-        len(json.dumps(value, separators=(",", ":")).encode("utf-8"))
-        for value in variants
-    )
+    projection = {
+        "set_system": source,
+        "optimal_coloring": [-1] * set_system.ground_set_size,
+        "optimal_discrepancy": set_system.ground_set_size,
+    }
+    return len(json.dumps(projection, separators=(",", ":")).encode("utf-8"))
 
 
 def compute_optimal_discrepancy_isolated(
@@ -79,7 +63,9 @@ def compute_optimal_discrepancy_isolated(
             ).encode("utf-8")
             remaining_seconds = deadline - time.monotonic()
             if remaining_seconds <= 0:
-                return _budget_exceeded_result(set_system)
+                raise OperationExecutionTimeoutError(
+                    "discrepancy optimization deadline expired before worker startup"
+                )
             completed = run_bounded_process(
                 [sys.executable, str(_OPTIMUM_WORKER)],
                 input_bytes=payload,
@@ -94,17 +80,22 @@ def compute_optimal_discrepancy_isolated(
                 ),
                 cwd=directory,
             )
-    except OSError:
-        return _execution_failed_result(set_system)
+    except OSError as exc:
+        raise RuntimeError("bounded discrepancy worker could not be started") from exc
     if completed.timed_out or time.monotonic() >= deadline:
-        return _budget_exceeded_result(set_system)
+        raise OperationExecutionTimeoutError(
+            "discrepancy optimization deadline expired during worker execution"
+        )
+    if completed.cancelled:
+        raise OperationExecutionCancelledError(
+            "discrepancy optimization cancelled during worker execution"
+        )
     if (
-        completed.cancelled
-        or completed.stdout_exceeded
+        completed.stdout_exceeded
         or completed.stderr_exceeded
         or completed.returncode != 0
     ):
-        return _execution_failed_result(set_system)
+        raise RuntimeError("bounded discrepancy worker did not establish an optimum")
     try:
         result = DiscrepancyOptimumResult.model_validate(
             json.loads(completed.stdout.decode("utf-8"))
@@ -112,5 +103,5 @@ def compute_optimal_discrepancy_isolated(
         if result.set_system != set_system:
             raise ValueError("worker result is not bound to the submitted set system")
         return result
-    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
-        return _execution_failed_result(set_system)
+    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        raise RuntimeError("bounded discrepancy worker returned malformed output") from exc

@@ -15,7 +15,7 @@ from typing import Any
 from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
-    request_cancelled,
+    request_checkpoint,
 )
 from jacobian.canonical import (
     CanonicalizationError,
@@ -44,10 +44,7 @@ class SmithProcessResult:
 
 
 def _require_active_deadline(deadline: float, *, stage: str) -> None:
-    if request_cancelled():
-        raise OperationExecutionCancelledError(
-            f"request cancelled {stage} integral-homology Smith reduction"
-        )
+    request_checkpoint(stage)
     if time.monotonic() >= deadline:
         raise OperationExecutionTimeoutError(
             f"integral homology deadline expired {stage} Smith worker"
@@ -57,10 +54,7 @@ def _require_active_deadline(deadline: float, *, stage: str) -> None:
 def _positive_remaining_allowance(deadline: float, *, stage: str) -> float:
     """Return one positive launch allowance or a typed execution outcome."""
 
-    if request_cancelled():
-        raise OperationExecutionCancelledError(
-            f"request cancelled {stage} integral-homology Smith reduction"
-        )
+    request_checkpoint(stage)
     remaining = deadline - time.monotonic()
     if remaining <= 0:
         raise OperationExecutionTimeoutError(

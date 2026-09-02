@@ -15,7 +15,7 @@ from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     current_request_execution,
-    request_cancelled,
+    request_checkpoint,
 )
 from jacobian.canonical import (
     CanonicalizationError,
@@ -59,10 +59,7 @@ _INVARIANT_FORM_WALL_SECONDS = 3600.0
 def _require_active_request(stage: str, *, deadline: float | None = None) -> None:
     """Raise if the request deadline expired or was cancelled during *stage*."""
 
-    if request_cancelled():
-        raise OperationExecutionCancelledError(
-            f"invariant-form lattice cancelled {stage}"
-        )
+    request_checkpoint(stage)
     execution = current_request_execution()
     active_deadline = deadline
     if active_deadline is None and execution is not None:

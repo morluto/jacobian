@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import math
 import sys
 from fractions import Fraction
@@ -17,8 +16,11 @@ from jacobian._execution import (
     OperationExecutionTimeoutError,
 )
 from jacobian.canonical import (
+    CanonicalizationError,
+    CanonicalLimits,
     encode_strict_json,
     format_canonical_integer,
+    loads_strict_json,
     parse_canonical_integer,
 )
 from jacobian.math.geometry.affine_tori._bounds import (
@@ -303,14 +305,19 @@ def compute_fixed_locus_kernel(
             "bounded affine-torus FLINT worker did not establish a fixed locus"
         )
     try:
-        decoded = json.loads(completed.stdout.decode("utf-8"))
+        decoded = loads_strict_json(
+            completed.stdout,
+            limits=CanonicalLimits(
+                max_input_bytes=plan.worker_stdout_bytes_upper_bound
+            ),
+        )
         result = _decode_worker_projection(
             decoded,
             request_digest=request_digest,
             source=source,
             plan=plan,
         )
-    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+    except (CanonicalizationError, TypeError, ValueError) as exc:
         raise RuntimeError(
             "bounded affine-torus FLINT worker returned malformed output"
         ) from exc

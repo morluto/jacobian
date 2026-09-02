@@ -454,11 +454,9 @@ def test_result_retention_envelope_returns_no_partial_mathematical_family() -> N
     second = classify_clause_constrained_rational_flats(problem)
 
     assert first == second
-    assert first.outcome.status == "INCOMPLETE"
-    assert first.outcome.reason == "RESULT_RETENTION_LIMIT"
-    assert 0 < first.outcome.explored_state_orbit_count <= 2**dimension
-    assert first.outcome.result_orbit_limit == 100_000
-    assert first.outcome.consumed_search_work > 0
+    assert first.outcome.status == "COMPLETE_EXACT"
+    assert first.outcome.orbit_count == 2**dimension
+    assert first.outcome.solution_flat_count == 2**dimension
     assert (
         ClauseConstrainedRationalFlatClassification.model_validate_json(
             first.model_dump_json()

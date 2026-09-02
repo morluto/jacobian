@@ -10,7 +10,6 @@ from jacobian.math.combinatorics._sidon_extension_models import (
     SidonExtensionProfileResult,
     _candidate_obstruction,
     _require_extension_work_budget,
-    _require_source_profile_memory_budget,
     _SidonExtensionAdmissionPlan,
     _validate_source_is_sidon,
 )
@@ -23,7 +22,6 @@ def _sidon_extension_admission_plan(
     """Admit one profile request and prepare reusable kernel data."""
 
     _require_extension_work_budget(len(source_elements), len(candidate_elements))
-    _require_source_profile_memory_budget(source_elements)
     source_differences = _validate_source_is_sidon(source_elements)
     return _SidonExtensionAdmissionPlan(
         source_differences=MappingProxyType(source_differences),

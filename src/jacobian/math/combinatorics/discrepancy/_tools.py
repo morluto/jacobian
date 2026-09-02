@@ -124,9 +124,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description="Minimize the maximum absolute set imbalance over all +1/-1 "
         "colorings of a finite set system: a bounded HiGHS MILP search "
         "produces the incumbent coloring and an exact pseudo-boolean "
-        "feasibility proof re-establishes minimality before OPTIMAL carries "
-        "it; BUDGET_EXCEEDED and EXECUTION_FAILED make no mathematical "
-        "claim.",
+        "feasibility proof re-establishes minimality before returning it. "
+        "Solver exhaustion and backend failure are operational tool errors.",
         request_type=DiscrepancyOptimumRequest,
         result_type=DiscrepancyOptimumResult,
         run=compute_optimal_discrepancy_isolated,

@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import sys
 
 from sympy import QQ, Poly, Symbol
 
-from jacobian.canonical import loads_strict_json, parse_canonical_integer
+from jacobian.canonical import (
+    encode_strict_json,
+    loads_strict_json,
+    parse_canonical_integer,
+)
 from jacobian.math._root_isolation import strict_root_count
 
 
@@ -57,14 +60,12 @@ def main() -> None:
             break
         if sign is None:
             raise ValueError("selected real embedding was not isolated")
-    json.dump(
+    sys.stdout.buffer.write(encode_strict_json(
         {
             "request_digest": hashlib.sha256(input_bytes).hexdigest(),
             "sign": sign,
-        },
-        sys.stdout,
-        separators=(",", ":"),
-    )
+        }
+    ))
 
 
 if __name__ == "__main__":

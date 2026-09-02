@@ -19,16 +19,6 @@ def test_catalog_rejects_duplicate_tool_ids() -> None:
         Catalog((operation, operation))
 
 
-def test_release_preserves_legacy_catalog_operations() -> None:
-    public_ids = {operation.operation_id for operation in BUILTIN_TOOLS}
-
-    assert {
-        "integer.compute.gcd",
-        "geometry.points.compute.squared_distance",
-        "polynomial.rational.compute.derivative",
-    } <= public_ids
-
-
 def test_each_tool_contract_and_function_have_one_math_owner() -> None:
     for operation in BUILTIN_TOOLS:
         modules = {

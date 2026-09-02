@@ -95,7 +95,7 @@ def _sparse_polynomial(
     )
 
 
-LEGACY_THREE_VARIABLE_CERTIFICATE_PAYLOAD = {
+THREE_VARIABLE_CERTIFICATE_PAYLOAD = {
     "polynomial": {
         "variables": ["x", "y", "z"],
         "polynomial": {
@@ -136,7 +136,7 @@ def test_four_variable_rank_fixture_has_the_published_first_kernel() -> None:
     ]
 
 
-def test_three_variable_sparse_and_labelled_inputs_remain_compatible() -> None:
+def test_three_variable_sparse_and_labelled_inputs_agree() -> None:
     sparse_result = compute_graded_jacobian_syzygy(
         GradedJacobianSyzygyRequest(
             polynomial=_sparse_polynomial(
@@ -188,11 +188,9 @@ def test_three_variable_sparse_and_labelled_inputs_remain_compatible() -> None:
     assert [item.column_count for item in sparse_result.degree_maps] == [3, 9]
 
 
-def test_frozen_legacy_three_variable_certificate_payload_remains_version_one() -> None:
+def test_three_variable_certificate_payload_needs_no_schema_version() -> None:
     result = compute_graded_jacobian_syzygy(
-        GradedJacobianSyzygyRequest.model_validate(
-            LEGACY_THREE_VARIABLE_CERTIFICATE_PAYLOAD
-        )
+        GradedJacobianSyzygyRequest.model_validate(THREE_VARIABLE_CERTIFICATE_PAYLOAD)
     )
 
     assert "result_schema_version" not in result.model_dump(mode="json")
@@ -206,7 +204,7 @@ def test_frozen_legacy_three_variable_certificate_payload_remains_version_one() 
 
 def test_detail_mode_is_part_of_each_operation_request_contract() -> None:
     sparse_payload = {
-        **LEGACY_THREE_VARIABLE_CERTIFICATE_PAYLOAD,
+        **THREE_VARIABLE_CERTIFICATE_PAYLOAD,
         "coefficient_map_detail": "SPARSE_ENTRIES",
     }
     with polynomial_validation_error():
@@ -214,7 +212,7 @@ def test_detail_mode_is_part_of_each_operation_request_contract() -> None:
 
     with polynomial_validation_error():
         GradedJacobianSyzygyCoefficientRequest.model_validate(
-            LEGACY_THREE_VARIABLE_CERTIFICATE_PAYLOAD
+            THREE_VARIABLE_CERTIFICATE_PAYLOAD
         )
 
 

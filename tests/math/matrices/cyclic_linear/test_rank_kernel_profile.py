@@ -448,11 +448,11 @@ def test_cyclotomic_parent_is_bound_to_exact_component_order() -> None:
     with pytest.raises(ValueError, match=r"Phi_order|declared field"):
         CyclicRationalRankKernelProfile.model_validate(payload, strict=True)
 
-    legacy_polynomial_payload = result.components[1].field.model_dump(mode="json")
-    legacy_polynomial_payload["coefficients_descending"] = ["1", "0", "1"]
+    extra_polynomial_payload = result.components[1].field.model_dump(mode="json")
+    extra_polynomial_payload["coefficients_descending"] = ["1", "0", "1"]
     with pytest.raises(ValueError, match="Extra inputs"):
         RationalCyclotomicField.model_validate(
-            legacy_polynomial_payload,
+            extra_polynomial_payload,
             strict=True,
         )
 

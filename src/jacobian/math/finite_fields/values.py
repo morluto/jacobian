@@ -618,7 +618,7 @@ class AxisBoundMatrix(StrictModel):
 
     @model_validator(mode="before")
     @classmethod
-    def require_legacy_axis_bound(cls, data: Any) -> Any:
+    def require_raw_axis_bound(cls, data: Any) -> Any:
         data = canonicalize_json_containers(data)
         if not isinstance(data, dict):
             return data

@@ -13,6 +13,7 @@ from jacobian.math.combinatorics.posets.formal_concepts._models import (
 )
 from jacobian.math.combinatorics.posets.formal_concepts._tools import (
     TOOLS,
+    compute_attribute_closure,
     compute_attribute_derivation,
     compute_concept_from_attributes,
     compute_concept_from_objects,
@@ -55,6 +56,7 @@ def test_catalog_contains_only_audited_agent_outcomes() -> None:
         "formal_context.objects.derivation.compute",
         "formal_context.attributes.derivation.compute",
         "formal_context.objects.closure.compute",
+        "formal_context.attributes.closure.compute",
         "formal_context.concept.from_objects.compute",
         "formal_context.concept.from_attributes.compute",
         "formal_context.concepts.enumerate.compute",
@@ -112,6 +114,26 @@ class TestClosure:
         # A = {o0}, A' = {a0}, A'' = {g : has a0} = {o0}. So A'' = {o0}, closed.
         assert result.is_closed is True
         assert result.closure == (0,)
+
+    def test_empty_attribute_set_closure(self) -> None:
+        result = compute_attribute_closure(
+            AttributeSubsetRequest(context=_cross_context(), subset=())
+        )
+        # B = {}, B' = {o0, o1}, B'' = {} because the objects share no attribute.
+        assert result.is_closed is True
+        assert result.derived == (0, 1)
+        assert result.closure == ()
+
+    def test_attribute_closure_round_trips(self) -> None:
+        tool = next(
+            tool
+            for tool in TOOLS
+            if tool.operation_id == "formal_context.attributes.closure.compute"
+        )
+        request = tool.request_type.model_validate(tool.examples[0].input)
+        result = tool.run(request)
+
+        assert tool.result_type.model_validate_json(result.model_dump_json()) == result
 
 
 # ---------------------------------------------------------------------------

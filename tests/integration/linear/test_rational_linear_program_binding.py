@@ -78,10 +78,10 @@ def test_optimal_outcome_retains_source_and_replays_strong_duality() -> None:
     b = [Fraction(3), Fraction(1)]
     assert all(value >= 0 for value in x)
     assert [_dot(row, x) for row in rows] == b
-    assert [
+    assert all(
         _dot(list(column), y) <= cj
         for column, cj in zip(zip(*rows, strict=True), c, strict=True)
-    ]
+    )
     assert _dot(c, x) == _dot(b, y) == Fraction(2)
     assert _fractions(result.primal_residuals) == [Fraction(0), Fraction(0)]
     assert _fractions(result.dual_slacks) == [Fraction(0), Fraction(0)]
@@ -117,7 +117,7 @@ def test_unbounded_outcome_carries_a_point_and_an_improving_ray() -> None:
 
 
 @pytest.mark.parametrize(
-    ("program", "candidate"),
+    ("program", "objective"),
     [
         (
             {  # redundant rows: x=1 and 2x=2
@@ -126,7 +126,7 @@ def test_unbounded_outcome_carries_a_point_and_an_improving_ray() -> None:
                 "coefficients": [[q(1)], [q(2)]],
                 "rhs": [q(1), q(2)],
             },
-            None,
+            Fraction(1),
         ),
         (
             {  # degenerate zero objective with many optima
@@ -135,7 +135,7 @@ def test_unbounded_outcome_carries_a_point_and_an_improving_ray() -> None:
                 "coefficients": [[q(1), q(1)]],
                 "rhs": [q(1)],
             },
-            None,
+            Fraction(0),
         ),
         (
             {  # exact fractional optimum at a rational boundary
@@ -144,21 +144,30 @@ def test_unbounded_outcome_carries_a_point_and_an_improving_ray() -> None:
                 "coefficients": [[q(1), q(1)]],
                 "rhs": [q(3, 2)],
             },
-            None,
+            Fraction(-3, 2),
         ),
     ],
 )
 def test_admitted_edge_programs_stay_exact_and_bound_to_source(
     program: dict[str, object],
-    candidate: list[Fraction] | None,
+    objective: Fraction,
 ) -> None:
     request = RationalLinearProgramRequest.model_validate({"program": program})
     result = linear_program(request.program)
 
     assert result.status == "OPTIMAL"
     assert result.program == request.program
-    if candidate is not None:
-        assert _fractions(result.primal_candidate) == candidate
+    candidate = _fractions(result.primal_candidate)
+    rows = [
+        [value.as_fraction() for value in row] for row in request.program.coefficients
+    ]
+    rhs = [value.as_fraction() for value in request.program.rhs]
+    coefficients = [value.as_fraction() for value in request.program.objective]
+    assert all(value >= 0 for value in candidate)
+    assert [_dot(row, candidate) for row in rows] == rhs
+    assert _dot(coefficients, candidate) == objective
+    assert result.primal_objective is not None
+    assert result.primal_objective.as_fraction() == objective
 
 
 def test_empty_row_program_is_the_admitted_unconstrained_orthant() -> None:

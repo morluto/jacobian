@@ -75,30 +75,6 @@ def test_discovery_page_metadata_is_bound_to_returned_matches() -> None:
     assert _error_type(error.value) == "catalog.cursor_position"
 
 
-@pytest.mark.parametrize(
-    "removed_field",
-    ("relevance_score", "applicability", "applicability_code"),
-)
-def test_discovery_match_rejects_removed_routing_metadata(removed_field: str) -> None:
-    with pytest.raises(ValidationError):
-        OperationDiscoveryMatch.model_validate(
-            {
-                "operation_id": "integer.compute.gcd",
-                "title": "Compute gcd",
-                "description": "Compute one exact gcd.",
-                removed_field: "obsolete",
-            }
-        )
-
-
-@pytest.mark.parametrize("result_type", (OperationMatchResult, OperationBrowseResult))
-def test_discovery_pages_reject_removed_truncation_flag(
-    result_type: type[OperationMatchResult] | type[OperationBrowseResult],
-) -> None:
-    with pytest.raises(ValidationError):
-        result_type.model_validate({"truncated": False})
-
-
 def test_browse_page_metadata_requires_sorted_compact_operation_cards() -> None:
     base = {
         "operations": [

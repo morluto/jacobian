@@ -645,21 +645,24 @@ class TestVertexKColorability:
         from jacobian.math.graphs.coloring._models import KColorabilityRequest
         from jacobian.math.graphs.coloring._tools import compute_k_colorability
 
-        result = compute_k_colorability(
-            KColorabilityRequest.model_validate(
-                {
-                    "graph": {
-                        "vertex_count": 3,
-                        "edges": [[0, 1], [1, 2], [0, 2]],
-                    },
-                    "colors": 3,
-                }
-            )
+        request = KColorabilityRequest.model_validate(
+            {
+                "graph": {
+                    "vertex_count": 3,
+                    "edges": [[0, 1], [1, 2], [0, 2]],
+                },
+                "colors": 3,
+            }
         )
+        result = compute_k_colorability(request)
         assert result.status == "DECIDED"
         assert result.colorable is True
         assert result.coloring is not None
         assert len(result.coloring) == 3
+        assert all(
+            result.coloring[left] != result.coloring[right]
+            for left, right in request.graph.edges
+        )
 
     def test_budget_exceeded_raises_timeout(self) -> None:
         """A conflict budget of 1 cannot decide the complete graph K4 under

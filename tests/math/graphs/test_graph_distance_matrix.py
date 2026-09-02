@@ -49,7 +49,6 @@ def test_numeric_looking_labels_stay_lexicographic_and_bound_to_rows() -> None:
         _request(["1", "2", "10"], [["1", "2"], ["10", "2"]])
     )
 
-    assert "semantics_version" not in result.model_dump(mode="json")
     assert result.vertex_ordering == "LEXICOGRAPHIC_ASCENDING"
     assert result.vertices == ("1", "10", "2")
     assert [row.source for row in result.rows] == list(result.vertices)

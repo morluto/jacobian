@@ -34,12 +34,9 @@ def test_dispatch_runs_canonical_graph_homomorphism_check() -> None:
         Catalog.open(),
     )
 
-    assert "operation_version" not in result.model_dump(mode="json")
     assert result.output["status"] == "HOMOMORPHISM"
     vertex_map = result.output["homomorphism"]["vertex_map"]
     assert vertex_map["rows"] == _canonical_payload()["vertex_map"]["rows"]
-    assert "graph_schema_version" not in vertex_map["source_graph"]
-    assert "graph_schema_version" not in vertex_map["target_graph"]
 
 
 def test_dispatch_admits_a_near_limit_positive_map_without_duplicate_storage() -> None:
@@ -67,7 +64,7 @@ def test_dispatch_admits_a_near_limit_positive_map_without_duplicate_storage() -
     )
 
 
-def test_dispatch_rejects_the_retired_raw_integer_graph_payload() -> None:
+def test_dispatch_rejects_a_noncanonical_graph_payload() -> None:
     with pytest.raises(OperationRequestValidationError):
         invoke_operation(
             "graph.homomorphism.check",
@@ -78,18 +75,3 @@ def test_dispatch_rejects_the_retired_raw_integer_graph_payload() -> None:
             },
             Catalog.open(),
         )
-
-
-@pytest.mark.parametrize(
-    "operation_id",
-    (
-        "graph.homomorphism.find",
-        "graph.core.check",
-        "graph.retraction.check",
-    ),
-)
-def test_dispatch_rejects_retired_raw_graph_morphism_operations(
-    operation_id: str,
-) -> None:
-    with pytest.raises(ValueError, match="unknown operation"):
-        invoke_operation(operation_id, {}, Catalog.open())

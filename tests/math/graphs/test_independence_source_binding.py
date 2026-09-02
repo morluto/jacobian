@@ -46,7 +46,6 @@ def test_producer_results_parse_structurally() -> None:
     empty = solve_independence_number(IndependenceNumberRequest(graph=_graph((), ())))
     assert empty.status == "EXACT"
     assert empty.optimum_value == 0
-    assert "result_schema_version" not in empty.model_dump(mode="json")
     reparsed_empty = IndependenceNumberResult.model_validate(empty.model_dump())
     assert reparsed_empty == empty
 

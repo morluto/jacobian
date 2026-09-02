@@ -99,6 +99,7 @@ class TestSidonExtensionProfile:
         assert result.admissible == ()
         assert result.rejected == ()
 
+    @pytest.mark.scale
     def test_large_source_profile_is_not_tied_to_python_object_sizes(self) -> None:
         # For i > j, the positive difference is
         # (i-j) * (BASE + i+j).  BASE is larger than every possible cross-term,

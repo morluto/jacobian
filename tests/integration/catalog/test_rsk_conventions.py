@@ -1,9 +1,9 @@
-"""Public catalog coverage for versioned RSK contracts."""
+"""Public catalog coverage for canonical RSK conventions."""
 
 from jacobian.catalog.catalog import Catalog
 
 
-def test_permutation_rsk_descriptor_publishes_version_two() -> None:
+def test_permutation_rsk_descriptor_publishes_row_insertion_convention() -> None:
     descriptor = Catalog.open().inspect("combinatorics.rsk.permutation.compute")
 
     assert descriptor is not None
@@ -24,7 +24,7 @@ def test_inverse_word_rsk_descriptor_publishes_canonical_word_result() -> None:
     assert set(descriptor.output_schema["properties"]) == {"alphabet", "letters"}
 
 
-def test_word_rsk_descriptor_publishes_version_two() -> None:
+def test_word_rsk_descriptor_publishes_row_insertion_convention() -> None:
     descriptor = Catalog.open().inspect("tableau.rsk.word.compute")
 
     assert descriptor is not None

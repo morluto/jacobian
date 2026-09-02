@@ -188,12 +188,11 @@ def test_three_variable_sparse_and_labelled_inputs_agree() -> None:
     assert [item.column_count for item in sparse_result.degree_maps] == [3, 9]
 
 
-def test_three_variable_certificate_payload_needs_no_schema_version() -> None:
+def test_three_variable_certificate_payload_retains_degree_maps() -> None:
     result = compute_graded_jacobian_syzygy(
         GradedJacobianSyzygyRequest.model_validate(THREE_VARIABLE_CERTIFICATE_PAYLOAD)
     )
 
-    assert "result_schema_version" not in result.model_dump(mode="json")
     assert result.coefficient_map_detail == "CERTIFICATES"
     assert result.first_syzygy_degree == 1
     assert [

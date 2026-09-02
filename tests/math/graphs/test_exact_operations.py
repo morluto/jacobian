@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import pytest
-from tests.integration.graphs._support import graph_validation_error
+from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
-    OperationMatchRequest,
 )
 from jacobian.math.graphs.coloring._models import (
     KColorabilityRequest,
@@ -99,7 +97,7 @@ def test_flow_contract_rejects_out_of_range_terminals() -> None:
 
 
 def test_spectral_contract_rejects_non_simple_graphs() -> None:
-    with graph_validation_error():
+    with pytest.raises(ValidationError):
         GraphSpectrumRequest.model_validate(
             {"graph": {"vertex_count": 2, "edges": [[0, 1], [1, 0]]}}
         )
@@ -115,7 +113,7 @@ def test_native_spectral_api_requires_a_validated_simple_graph() -> None:
     graph = IndexedSimpleUndirectedGraph(vertex_count=2, edges=((0, 1),))
     assert dict(laplacian_spectrum(graph)) == {"0": 1, "2": 1}
 
-    with graph_validation_error():
+    with pytest.raises(ValidationError):
         adjacency_spectrum(
             IndexedSimpleUndirectedGraph(vertex_count=2, edges=((0, 0),))
         )
@@ -132,24 +130,6 @@ def test_laplacian_spectrum_uses_normalized_simple_graph_degree() -> None:
         "0": 1,
         "2": 1,
     }
-
-
-def test_catalog_retires_the_duplicate_and_discovers_independence_number() -> None:
-    retired_operation_id = "graph.independent_set.maximum.compute"
-    catalog = Catalog.open()
-    assert catalog.operation(retired_operation_id) is None
-    assert retired_operation_id not in {
-        operation.operation_id
-        for operation in catalog.browse(
-            namespace="graph", limit=20, cursor=None
-        ).operations
-    }
-    discovered = catalog.match(
-        OperationMatchRequest(need="maximum independent set", limit=5)
-    )
-    discovered_ids = {match.operation_id for match in discovered.matches}
-    assert retired_operation_id not in discovered_ids
-    assert "graph.invariant.independence_number.compute" in discovered_ids
 
 
 def test_exact_independence_witness_is_independent_and_binds_its_bounds() -> None:

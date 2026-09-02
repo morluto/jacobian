@@ -93,10 +93,10 @@ def test_remote_smoke_rejects_divergent_model_visible_discovery() -> None:
     ]
 
 
-def test_remote_smoke_reports_the_removed_discovery_limit_as_schema_drift() -> None:
+def test_remote_smoke_reports_unknown_discovery_fields_as_schema_drift() -> None:
     discovery = {
         **_current_discovery_payload(),
-        "response_byte_limit": 16_384,
+        "unexpected_field": True,
     }
     failures: list[str] = []
 

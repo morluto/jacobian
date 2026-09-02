@@ -76,9 +76,10 @@ def test_dispatch_rejects_oversized_utf8_relation_label() -> None:
 def test_dispatch_returns_escaped_exact_results_without_a_transport_cap(
     escaped_character: str,
 ) -> None:
+    configuration = _escaped_thin_four_point_configuration(escaped_character)
     result = invoke_operation(
         "coherent_configuration.analyze.compute",
-        {"configuration": _escaped_thin_four_point_configuration(escaped_character)},
+        {"configuration": configuration},
         Catalog.open(),
     )
-    assert result.output["configuration"]["points"]
+    assert result.output["configuration"] == configuration

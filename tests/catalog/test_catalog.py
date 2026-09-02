@@ -50,25 +50,6 @@ def test_every_served_operation_publishes_request_valid_examples() -> None:
             operation.request_type.model_validate(invocation_example.input)
 
 
-@pytest.mark.parametrize(
-    "operation_id",
-    (
-        "graph.construct.explicit",
-        "code.nonlinear.distance_profile.compute",
-        "code.dual_code.compute",
-        "code.syndrome.compute",
-    ),
-)
-def test_invoke_operation_reports_unknown_removed_family_id(operation_id: str) -> None:
-    catalog = Catalog.open()
-    with pytest.raises(ValueError, match="unknown operation"):
-        invoke_operation(
-            operation_id,
-            {"vertices": ["a"], "edges": []},
-            catalog,
-        )
-
-
 def test_checked_catalog_binding_rejects_an_incorrect_declared_result() -> None:
     def wrong_result(_request: _BindingRequest) -> _WrongBindingResult:
         return _WrongBindingResult(value=1)

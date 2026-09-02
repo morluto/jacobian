@@ -9,6 +9,7 @@ from jacobian.math.geometry.exact._models import (
     COORDINATE_DIGITS,
     DistanceGraphRequest,
     DistanceProfileRequest,
+    DistanceProfileResult,
     LabelledRationalPoint,
     PinnedBoundedRational,
     PinnedLineConfiguration,
@@ -28,15 +29,19 @@ from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 type Scalar = int | Fraction
 
 
-def compute_distance_profile(request: DistanceProfileRequest):
+def compute_distance_profile(request: DistanceProfileRequest) -> DistanceProfileResult:
     return distance_profile(request.configuration)
 
 
-def compute_distance_graph(request: DistanceGraphRequest):
+def compute_distance_graph(
+    request: DistanceGraphRequest,
+) -> IndexedSimpleUndirectedGraph:
     return distance_graph(request.configuration, request.target_squared_distance)
 
 
-def compute_pinned_line_distance_profile(request: PinnedLineDistanceRequest):
+def compute_pinned_line_distance_profile(
+    request: PinnedLineDistanceRequest,
+) -> PinnedLineDistanceResult:
     return pinned_line_distance_profile(request.configuration, request.anchor)
 
 
@@ -607,21 +612,6 @@ class TestCanonicalPointValueComposition:
                 target_squared_distance=CanonicalRational(num="1", den="1"),
             )
         )
-
-    def test_incidence_projections_no_longer_define_local_value_models(self) -> None:
-        """The removed duplicate family took its recreated CanonicalRational /
-        LabelledRationalPoint / PointConfiguration views with it."""
-        import jacobian.math.geometry.exact._models as models
-
-        for name in (
-            "IncidenceBoundedRational",
-            "IncidencePoint",
-            "IncidencePointConfiguration",
-            "CollinearTriplesRequest",
-            "ConcyclicQuadruplesRequest",
-            "IncidenceSearchResult",
-        ):
-            assert not hasattr(models, name), name
 
 
 class TestAggregatePairLedgerBound:

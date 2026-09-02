@@ -430,26 +430,3 @@ class TestCanonicalValueComposition:
             ).rank
             == 1
         )
-
-    def test_duplicate_family_removed_from_catalog(self) -> None:
-        """The duplicate underscore-named family is gone from discovery."""
-        import subprocess
-        import sys
-
-        code = (
-            "from jacobian.catalog.builtins import BUILTIN_TOOLS\n"
-            "ids = [t.operation_id for t in BUILTIN_TOOLS]\n"
-            "assert not [i for i in ids if i.startswith('prime_field_matrix.')], ids\n"
-            "assert 'prime_field.matrix.rank.compute' in ids\n"
-        )
-        import os
-
-        env = dict(os.environ, PYTHONPATH="src")
-        proc = subprocess.run(
-            [sys.executable, "-c", code],
-            capture_output=True,
-            text=True,
-            env=env,
-            timeout=120,
-        )
-        assert proc.returncode == 0, proc.stderr

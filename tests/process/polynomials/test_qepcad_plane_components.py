@@ -5,7 +5,6 @@ from __future__ import annotations
 import contextlib
 import os
 import shutil
-import signal
 import sys
 import time
 from pathlib import Path
@@ -270,12 +269,15 @@ def test_live_nested_dialogue_child_is_killed_when_the_request_is_cancelled(
         assert completed[0].cancelled
         assert not completed[0].timed_out
 
-        # Verify the nested dialogue child was killed by the process group
-        # cleanup. Give it a short window, then explicitly clean up if
-        # needed (CI can be slow).
-        time.sleep(1)
-        with contextlib.suppress(ProcessLookupError):
-            os.kill(nested_pid, signal.SIGKILL)
+        cleanup_deadline = time.monotonic() + 5
+        while time.monotonic() < cleanup_deadline:
+            try:
+                os.kill(nested_pid, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.01)
+        else:
+            raise AssertionError("nested dialogue child survived process-group cleanup")
     finally:
         cancellation.set()
         outer_worker.join(timeout=30)

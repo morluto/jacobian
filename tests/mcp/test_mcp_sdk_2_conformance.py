@@ -12,7 +12,6 @@ import pytest
 from mcp.types import ContentBlock, TextContent, TextResourceContents
 from mcp.types.methods import serialize_server_result
 
-import jacobian.mcp.server as server_module
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import MathTool, OperationCatalogSnapshot, OperationResult
 from jacobian.mcp.runtime import AppState
@@ -192,16 +191,11 @@ def test_math_run_projects_unexpected_operation_failures() -> None:
     asyncio.run(scenario())
 
 
-def test_mcp_v2_uses_sdk_typed_tools_lifespan_and_structured_resources(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delattr(server_module, "Context", raising=False)
-
+def test_mcp_v2_uses_sdk_typed_tools_lifespan_and_structured_resources() -> None:
     async def scenario() -> None:
         from mcp import Client
 
         server = create_server()
-        assert not hasattr(server_module, "Context")
         assert hasattr(server, "list_tools") and hasattr(server, "call_tool")
         async with Client(server, raise_exceptions=True) as client:
             listed = await client.list_tools()

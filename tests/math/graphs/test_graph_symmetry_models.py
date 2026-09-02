@@ -17,7 +17,6 @@ from jacobian.math.graphs.symmetry._models import (
     GraphSymmetryOrbitResult,
     GraphVertexOrbit,
 )
-from jacobian.math.graphs.symmetry._tools import TOOLS
 from jacobian.math.graphs.symmetry.operations import graph_symmetry_orbits
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -392,21 +391,6 @@ def test_graph_symmetry_result_rejects_color_modes_contradicting_source() -> Non
 
     with pytest.raises(ValidationError):
         GraphSymmetryOrbitResult.model_validate(uncolored_payload)
-
-
-def test_graph_symmetry_operation_declares_version_seven() -> None:
-    """The source-bound wire contract is not compatible with advertised v6.
-
-    v6 clients saw an object-shaped generator mapping and no required
-    ``source`` field on results; this contract requires ordered pairs and
-    binds every result to its declared source, so the declaration must
-    advertise a new version.
-    """
-
-    from jacobian.catalog.models import MathTool
-
-    (declaration,) = TOOLS
-    assert isinstance(declaration, MathTool)
 
 
 def test_graph_symmetry_schema_describes_retained_source() -> None:

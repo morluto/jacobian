@@ -11,6 +11,7 @@ from jacobian.math.combinatorics.symmetric_functions._models import (
     PartitionConjugateResult,
     PartitionRequest,
     SchurExpansionRequest,
+    SchurExpansionResult,
 )
 from jacobian.math.combinatorics.symmetric_functions._tools import TOOLS
 from jacobian.math.combinatorics.symmetric_functions.operations import (
@@ -26,7 +27,7 @@ def compute_partition_conjugate(request: PartitionRequest) -> PartitionConjugate
     return PartitionConjugateResult(conjugate=partition_conjugate(request.partition))
 
 
-def compute_schur_evaluation(request: SchurExpansionRequest):
+def compute_schur_evaluation(request: SchurExpansionRequest) -> SchurExpansionResult:
     return schur_evaluation(request.partition, request.point)
 
 
@@ -167,8 +168,9 @@ def test_request_schema_publishes_schur_invariants() -> None:
     schema = SchurExpansionRequest.model_json_schema()
     variables = schema["properties"]["variables"]
     point = schema["properties"]["point"]
-    assert "istinct" in variables["description"]
-    assert "equal" in variables["description"]
+    variables_description = variables["description"].lower()
+    assert "distinct variable names" in variables_description
+    assert "length must equal the length of point" in variables_description
     assert variables.get("uniqueItems") is True
     assert variables["minItems"] == 1 and variables["maxItems"] == 20
     assert point["items"]["minimum"] == -999_999

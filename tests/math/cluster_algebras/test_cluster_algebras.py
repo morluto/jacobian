@@ -369,13 +369,11 @@ class TestGVector:
         assert result.g_matrix == ((1, 0, 0), (0, 1, 0), (0, 0, 1))
 
 
-class TestCanonicalTransport:
-    def test_mutated_coefficients_survive_canonical_output(self) -> None:
+class TestCanonicalIntegers:
+    def test_mutated_coefficients_round_trip_as_canonical_integers(self) -> None:
         """N=10**8 path mutation squares an entry to 10**16 > 2**53-1.
 
-        Coefficients are canonical integer strings, so the serialized result
-        projects through canonical output validation instead of failing after
-        request validation.
+        Coefficients remain canonical integer strings across typed round trips.
         """
         n = 10**8
         b = em(

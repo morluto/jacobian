@@ -16,8 +16,7 @@ from jacobian.math.graphs.flows._models import FlowGraph
 # This operation scans a sparse commodity-by-edge tensor and materializes one
 # divergence value for every commodity/vertex pair.  Vertex count and edge
 # count are owned by FlowGraph; admission controls the dense divergence table
-# through the commodity-vertex cell budget and the whole returned value
-# through the aggregate result envelope below.  Commodity, edge, and entry
+# through the commodity-vertex cell budget. Commodity, edge, and entry
 # counts are never capped independently: entries are distinct commodity-by-
 # edge cells and the kernel consumes sparse entries and per-edge sums rather
 # than a dense tensor.
@@ -404,7 +403,7 @@ def _measured_component_digit_bounds(
 class AdmittedProfileScan(NamedTuple):
     """The once-computed components of one measured profile scan.
 
-    Request parsing performs this scan, admits work and result envelope
+    Request parsing performs this scan, admits work and component bounds
     from it, and hands it directly to the producer. Native calls perform the
     same scan at their execution boundary.
 
@@ -546,8 +545,8 @@ class MulticommodityFlowProfileRequest(StrictModel):
             "commodities), at most the 512 network edges FlowGraph itself "
             "admits, nonzero entries bounded by the distinct commodity-by-edge "
             "cells they occupy, a per-component exact digit budget derived "
-            "from each component's own operands, and an admitted aggregate "
-            "result envelope below 8 MiB."
+            "from each component's own operands, with fold work bounded before "
+            "cross-denominator arithmetic."
         )
     )
 

@@ -16,7 +16,6 @@ from jacobian._execution import (
     OperationExecutionTimeoutError,
     request_execution,
 )
-from jacobian.canonical import CanonicalLimits, canonicalize_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.algebraic_numbers.real import (
     RealAlgebraicValue,
@@ -892,30 +891,6 @@ def test_primitive_height_boundary_is_computed_after_clearing_denominators() -> 
             )
         )
     assert _error_code(exception) == "polynomial.common_interlacing_primitive_height"
-
-
-def test_maximal_family_and_root_axes_serialize_within_the_canonical_limit() -> None:
-    # Eight degree-16 split sources attain the family and total-degree ceilings
-    # while producing all 128 distinct source-root rows.
-    family = tuple(
-        _split_source(f"source-{index}", tuple(range(-8, 8))) for index in range(8)
-    )
-    result = common_interlacing_profile(family)
-
-    assert tuple(profile.source_index for profile in result.root_profiles) == tuple(
-        range(8)
-    )
-    assert sum(len(profile.roots) for profile in result.root_profiles) == 128
-    assert all(
-        root.multiplicity == 1
-        for profile in result.root_profiles
-        for root in profile.roots
-    )
-    encoded = canonicalize_json(
-        result.model_dump(mode="json"),
-        limits=CanonicalLimits(),
-    )
-    assert len(encoded) <= CanonicalLimits().max_output_bytes
 
 
 def test_schema_uses_canonical_polynomials_and_discriminated_outcomes() -> None:

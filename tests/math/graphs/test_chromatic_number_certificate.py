@@ -9,7 +9,6 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.coloring import operations as _operations
 from jacobian.math.graphs.coloring._chromatic_number_models import (
@@ -459,32 +458,16 @@ def test_rational_digit_and_total_work_boundaries() -> None:
     assert len(request.graph.vertices) == full_order
 
 
-def test_retained_source_has_no_transport_derived_output_ceiling() -> None:
-    limit = CanonicalLimits().max_output_bytes
-    admitted_label = "a" * (limit // 2 - 8192)
-    admitted = _check(
-        _graph((admitted_label,), ()),
+def test_native_result_accepts_large_retained_source() -> None:
+    label = "a" * (6 * 1024 * 1024)
+    result = _check(
+        _graph((label,), ()),
         1,
         (0,),
         (_rational(2),),
     )
-    assert admitted.reason == "INDEPENDENT_SET_OVERWEIGHT"
-    assert len(encode_strict_json(admitted.model_dump(mode="json"))) <= limit
-
-    rejected_label = "b" * (limit // 2)
-    request = ChromaticNumberCertificateCheckRequest(
-        graph=_graph((rejected_label,), ()),
-        claimed_chromatic_number=1,
-        coloring=(0,),
-        weights=(_rational(2),),
-    )
-    rejected = chromatic_number_certificate(
-        request.graph,
-        request.claimed_chromatic_number,
-        request.coloring,
-        request.weights,
-    )
-    assert rejected.reason == "INDEPENDENT_SET_OVERWEIGHT"
+    assert result.reason == "INDEPENDENT_SET_OVERWEIGHT"
+    assert result.graph.vertices == (label,)
 
 
 def test_schema_and_tool_expose_bounds_axis_and_example() -> None:

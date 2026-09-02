@@ -2,7 +2,6 @@
 
 import pytest
 
-from jacobian.canonical import CanonicalLimits, canonicalize_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._models import MAX_INTEGER_DIGITS
 from jacobian.math.number_theory._preimage_models import (
@@ -112,9 +111,6 @@ def test_p_adic_profile_admits_large_endpoint_when_exact_result_is_small() -> No
     )
     assert [(row.valuation, row.count) for row in result.rows] == [(256, "1")]
     assert result.total_valuation == "256"
-    assert len(canonicalize_json(result.model_dump(mode="json"))) <= (
-        CanonicalLimits().max_output_bytes
-    )
 
 
 def test_p_adic_profile_admits_large_length_from_exact_valuation_sum() -> None:

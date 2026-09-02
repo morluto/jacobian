@@ -38,9 +38,8 @@ def profile_components(
     """Return the complete deterministic profile components for ``flow``.
 
     One pass initializes and updates dense commodity/vertex divergence cells
-    and aggregate edge loads.  The aggregate result envelope is admitted from
-    the same measured components -- the echoed source before the scan, every
-    priced row afterwards -- so admission adds no arithmetic pass of its own.
+    and aggregate edge loads. Component digit bounds are admitted from the
+    same measured values, so admission adds no arithmetic pass of its own.
     The caller supplies the admitted scan, which serves as the producer pass
     verbatim. Request and result parsing perform structural checks only and
     never re-enter this kernel.

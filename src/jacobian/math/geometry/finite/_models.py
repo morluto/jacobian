@@ -367,7 +367,7 @@ class ProjectiveSpaceEnumerateResult(StrictModel):
 # ---------------------------------------------------------------------------
 
 #: Maximum prime-field order for which the complete affine plane fits the
-#: reused :class:`IncidenceStructure` transport budget.  ``q = 7`` yields
+#: reused :class:`IncidenceStructure` cardinality bounds. ``q = 7`` yields
 #: 49 points and 56 lines, both within the ``IncidenceStructure`` caps of
 #: 100 points and 100 blocks; q = 11 would exceed both.
 MAX_AFFINE_PLANE_FIELD_ORDER = 7

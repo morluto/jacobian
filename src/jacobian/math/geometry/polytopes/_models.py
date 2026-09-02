@@ -71,9 +71,8 @@ MAX_FACET_COORDINATE_DIGITS = 32
 """Per-component input-height bound for exact facet enumeration.
 
 Candidate supporting hyperplanes are determinants of rational coordinate
-differences. This conservative height keeps those private intermediates and
-the primitive integer facet rows comfortably inside the canonical transport
-limit for the complete returned profile.
+differences. This conservative height bounds those private intermediates and
+the digits in the primitive integer facet rows.
 """
 
 MAX_FACET_SIGN_TESTS = 5_000_000

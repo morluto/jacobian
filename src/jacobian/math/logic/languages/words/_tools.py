@@ -289,7 +289,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description=(
             "Return the requested finite prefix of a certified prolongable growing "
             "substitution fixed point from the least sufficient iterate, after "
-            "bounding source size, generation work, and serialized output."
+            "bounding source occurrences, prefix length, and generation work."
         ),
         request_type=SubstitutionFixedPointPrefixRequest,
         result_type=SubstitutionFixedPointPrefixResult,

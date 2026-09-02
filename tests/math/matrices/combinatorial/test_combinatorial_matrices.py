@@ -6,7 +6,6 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.canonical import (
-    CanonicalLimits,
     encode_strict_json,
     loads_strict_json,
     parse_canonical_integer,
@@ -126,13 +125,6 @@ class TestGramProfile:
         assert result.gram[0] == (order,) + (0,) * (order - 1)
         assert result.gram[-1][-1] == order
         assert result.nonzero_off_diagonal == ()
-
-    def test_worst_shape_result_stays_inside_canonical_output_boundary(self) -> None:
-        order = MAX_GRAM_PROFILE_AXIS
-        result = gram_profile(SignMatrix(rows=((1,) * order,) * order))
-        actual = len(encode_strict_json(result.model_dump(mode="json")))
-
-        assert actual <= CanonicalLimits().max_output_bytes
 
     def test_tall_thin_gram_is_admitted_by_predicted_work(self) -> None:
         row_count = MAX_GRAM_PROFILE_AXIS + 1

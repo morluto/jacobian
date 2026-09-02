@@ -19,7 +19,7 @@ from jacobian._execution import (
     request_cancellation,
     request_execution,
 )
-from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lattices._lattice_ops import saturate_lattice
 from jacobian.math.lattices.invariant_forms import (
@@ -461,7 +461,7 @@ def test_one_dimensional_hundred_digit_action_uses_derived_height_admission() ->
     assert result.basis_forms == ()
 
 
-def test_nine_axis_trivial_action_uses_exact_output_admission() -> None:
+def test_nine_axis_trivial_action_materializes_complete_basis() -> None:
     action = _action([], axis=tuple(f"e{index}" for index in range(9)))
 
     result = compute_invariant_bilinear_form_lattice(action, "BILINEAR")
@@ -470,9 +470,7 @@ def test_nine_axis_trivial_action_uses_exact_output_admission() -> None:
     assert result.constraint_rank == 0
     assert result.rank == 81
     assert len(result.basis_forms) == 81
-    encoded = encode_strict_json(result.model_dump(mode="json"))
-    assert len(encoded) < CanonicalLimits().max_output_bytes
-    assert InvariantBilinearFormLattice.model_validate_json(encoded) == result
+    assert InvariantBilinearFormLattice.model_validate(result.model_dump()) == result
 
 
 def test_oversized_trivial_action_is_rejected_by_basis_cell_admission() -> None:

@@ -145,25 +145,6 @@ def test_profile_work_above_bound_is_rejected_by_owner_execution() -> None:
         _run_subset_profile(_request(*items))
 
 
-@pytest.mark.scale
-def test_large_digits_do_not_change_support_admission() -> None:
-    offset = 10 ** (MAX_SUBSET_SUM_ITEM_DIGITS - 1)
-    items = tuple(offset + (1 << exponent) for exponent in range(15))
-
-    result = _run_subset_profile(_request(*items))
-
-    assert result.support_size == 1 << 15
-
-
-@pytest.mark.scale
-def test_large_accepted_profile_respects_support_bound() -> None:
-    offset = 10 ** (MAX_SUBSET_SUM_ITEM_DIGITS - 1)
-    source = tuple(offset + (1 << exponent) for exponent in range(6))
-    result = _run_subset_profile(_request(*source))
-
-    assert result.support_size == 1 << 6
-
-
 def test_source_digit_bound_is_enforced_before_integer_conversion() -> None:
     with pytest.raises(ValidationError):
         SubsetSumProfileRequest(

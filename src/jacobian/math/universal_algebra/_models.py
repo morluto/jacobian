@@ -126,8 +126,7 @@ class HomomorphismProfileRequest(StrictModel):
                 "Check a complete carrier map between finite algebras with exactly "
                 "matching ordered operation identifiers and arities. Every source "
                 "operation-table cell is checked; the retained-map result is "
-                "rejected before execution when that work or canonical output "
-                "would exceed its bound."
+                "admitted by the complete table-cell work bound."
             )
         }
     )

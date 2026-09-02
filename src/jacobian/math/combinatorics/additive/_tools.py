@@ -267,8 +267,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "at most once, equal values remain distinct positions, and the empty "
         "subset is included. Before execution, result-sensitive admission bounds "
         f"support by {MAX_SUBSET_SUM_PROFILE_ENTRIES:,} rows, two complete sparse-DP "
-        f"passes by {MAX_SUBSET_SUM_DP_TRANSITIONS:,} dictionary transitions, and "
-        "the conservative serialized result by 4 MiB; "
+        f"passes by {MAX_SUBSET_SUM_DP_TRANSITIONS:,} dictionary transitions; "
         "every accepted result is complete.",
         request_type=SubsetSumProfileRequest,
         result_type=SubsetSumProfile,

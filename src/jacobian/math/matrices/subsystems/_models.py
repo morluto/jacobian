@@ -157,11 +157,8 @@ def _require_psd_pair_admission(
     the zero matrix and admits no negative witness -- and nearly equal
     operands whose reduced difference stays tiny admit trivially, while no
     unreduced cross-term estimate can reject a pair whose actual difference
-    fits.  Because the source-bound result echoes both operands and their
-    difference, admission also reserves the serialized transport budget --
-    measured exactly, plus a component-capped witness allowance and one
-    result envelope -- so every accepted request returns its typed result
-    instead of overflowing canonical output encoding.
+    fits. The result is bounded by the retained operands, reduced difference
+    components, and witness dimension rather than by its JSON encoding.
     """
 
     if left.factors != right.factors:
@@ -242,8 +239,7 @@ class SubsystemPartialTraceRequest(StrictModel):
             "Admission measures contraction intermediates, cancelling "
             f"equal-denominator terms first, against the {MAX_PARTIAL_TRACE_WORK_COMPONENT_DIGITS}-digit work "
             f"envelope, admits reduced coefficients within the {MAX_PARTIAL_TRACE_RESULT_COMPONENT_DIGITS}-digit "
-            "result envelope, and reserves the serialized result's canonical "
-            "output budget."
+            "result-component envelope."
         ),
     )
     traced_factor_labels: tuple[str, ...] = Field(

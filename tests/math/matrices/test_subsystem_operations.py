@@ -689,26 +689,6 @@ def test_psd_order_accepts_structurally_bounded_dense_equal_operands() -> None:
     assert result.left == operand
 
 
-@pytest.mark.scale
-def test_psd_order_admits_dense_equal_operands_inside_the_output_budget() -> None:
-    from jacobian.canonical import CanonicalLimits, encode_strict_json
-
-    operand = _dense_equal_operand(digits=10150)
-    request_bytes = 2 * len(encode_strict_json(operand.model_dump(mode="json")))
-    assert request_bytes <= CanonicalLimits().max_input_bytes
-
-    ordered = decide_psd_order(PsdOrderRequest(left=operand, right=operand))
-    assert ordered.is_less_or_equal is True
-    encoded = encode_strict_json(
-        {
-            "operation_id": "matrix.subsystem.psd_order.decide",
-            "runtime_ms": 1,
-            "output": ordered.model_dump(mode="json"),
-        }
-    )
-    assert len(encoded) <= CanonicalLimits().max_output_bytes
-
-
 def _trace_source_with_unused_large_block(
     cross_digits: int, diagonal_digits: int
 ) -> FactorizedHermitianMatrix:
@@ -739,27 +719,6 @@ def test_partial_trace_accepts_structurally_bounded_large_components() -> None:
     )
 
     assert result.source_matrix == source
-
-
-@pytest.mark.scale
-def test_partial_trace_admits_sources_inside_the_output_budget() -> None:
-    from jacobian.canonical import CanonicalLimits, encode_strict_json
-
-    source = _trace_source_with_unused_large_block(
-        cross_digits=20000, diagonal_digits=10000
-    )
-
-    wire = compute_partial_trace(
-        SubsystemPartialTraceRequest(matrix=source, traced_factor_labels=("q",))
-    )
-    encoded = encode_strict_json(
-        {
-            "operation_id": "matrix.subsystem.partial_trace.compute",
-            "runtime_ms": 1,
-            "output": wire.model_dump(mode="json"),
-        }
-    )
-    assert len(encoded) <= CanonicalLimits().max_output_bytes
 
 
 def test_kronecker_product_schema_describes_the_exact_product_component_envelope() -> (

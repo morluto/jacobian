@@ -17,6 +17,8 @@ from jacobian._execution import (
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields._fixed_subspace_process import (
+    MAX_FIXED_SUBSPACE_GENERATOR_INPUT_BYTES,
+    fixed_subspace_generator_input_bytes,
     run_fixed_subspace_generator_validation,
     run_fixed_subspace_linear_algebra,
 )
@@ -125,6 +127,19 @@ def _homogeneous_fixed_subspace_envelope(
         )
     variable_count = len(action.variable_axis.labels)
     generator_count = len(action.generator_matrices)
+    generator_payload_bytes = fixed_subspace_generator_input_bytes(
+        action.generator_matrices, checkpoint=checkpoint
+    )
+    if generator_payload_bytes > MAX_FIXED_SUBSPACE_GENERATOR_INPUT_BYTES:
+        raise OperationDomainValidationError(
+            location=("action", "generator_matrices"),
+            code="finite_field.fixed_subspace_generator_marshal_bound",
+            message=(
+                "fixed-subspace generator payload exceeds the "
+                f"{MAX_FIXED_SUBSPACE_GENERATOR_INPUT_BYTES}-byte worker input "
+                "channel bound"
+            ),
+        )
     monomial_count = _homogeneous_monomial_count(variable_count, degree)
     checkpoint("after shape admission")
     equation_rows = generator_count * monomial_count

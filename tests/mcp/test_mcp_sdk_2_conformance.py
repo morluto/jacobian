@@ -227,6 +227,17 @@ def test_mcp_v2_uses_sdk_typed_tools_lifespan_and_structured_resources() -> None
                 "propertyName": "op",
             }
             assert find.input_schema["required"] == ["request"]
+            need_description = find.input_schema["$defs"]["OperationMatchRequest"][
+                "properties"
+            ]["need"]["description"]
+            assert "established mathematical names" in need_description
+            assert "full scalar, batch, or exhaustive scope" in need_description
+            assert "requested result" in need_description
+            limit_schema = find.input_schema["$defs"]["OperationMatchRequest"][
+                "properties"
+            ]["limit"]
+            assert limit_schema["default"] == 10
+            assert limit_schema["maximum"] == 20
             assert find.output_schema is not None
             assert find.output_schema["type"] == "object"
 

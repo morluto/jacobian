@@ -26,10 +26,13 @@ OperationNeed = Annotated[
         min_length=1,
         max_length=4_096,
         description=(
-            "A concise description of the local mathematical result needed. Preserve "
-            "the supplied objects and constraints, the computation or decision, and "
-            "whether a value, witness, certificate, profile, or exhaustive result is "
-            "required. Ordinary mathematical language is preferred to catalog tags."
+            "A concise description of the complete local mathematical result needed. "
+            "Preserve established mathematical names from the task, the supplied "
+            "objects and constraints, the requested computation or decision, the full "
+            "scalar, batch, or exhaustive scope, and whether the requested result is a "
+            "value, witness, certificate, obstruction, profile, or complete "
+            "enumeration. Prefer ordinary mathematical language to catalog tags; do "
+            "not replace a supplied named property only with its expanded definition."
         ),
     ),
     AfterValidator(_require_nonblank_need),
@@ -46,7 +49,7 @@ OperationNamespace = Annotated[
 ]
 OperationMatchLimit = Annotated[
     StrictInt,
-    Field(ge=1, le=10, description="Maximum compact matches to return."),
+    Field(ge=1, le=20, description="Maximum compact matches to return."),
 ]
 OperationCursor = Annotated[
     str | None,
@@ -62,7 +65,7 @@ class OperationMatchRequest(StrictModel):
     op: Literal["match"]
     need: OperationNeed
     namespace: OperationNamespace = None
-    limit: OperationMatchLimit = 5
+    limit: OperationMatchLimit = 10
     cursor: OperationCursor = None
 
 

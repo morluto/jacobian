@@ -33,6 +33,10 @@ SIDON_EXTENSION_OPERATION = (
         result_type=SidonExtensionProfileResult,
         run=compute_sidon_extension_profile,
         tags=("combinatorics", "additive-combinatorics", "sidon"),
+        discovery_terms=(
+            "one-element extensions",
+            "distinct positive differences",
+        ),
         examples=(
             OperationExample(
                 name="sidon_extension_basic",

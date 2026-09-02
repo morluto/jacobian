@@ -21,17 +21,21 @@ Find or inspect public Jacobian MCP operations.
 
 Forms:
 - `request.op="match"`: describe one local mathematical need in ordinary language.
-  Preserve the supplied objects and constraints, the computation or decision, and
-  whether you need a value, witness, certificate, profile, or exhaustive result. Do
-  not translate the need into catalog tags or submit the surrounding proof goal.
+  Preserve established mathematical names from the task, the supplied objects and
+  constraints, the requested computation or decision, the full scalar, batch, or
+  exhaustive scope, and whether the requested result is a value, witness,
+  certificate, obstruction, profile, or complete enumeration. Do not replace a
+  supplied named property only with its expanded definition, translate the need into
+  catalog tags, or submit the surrounding proof goal.
 - `request.op="inspect"`: pass one exact `operation_id` to receive its authoritative
   input and output schemas plus operator-authored examples.
 
 For matching, use `namespace` only when the primary operation-ID namespace is already
-known with high confidence. Follow `next_cursor` with the same need and namespace to
-continue. Ordered matches are deterministic retrieval candidates, not applicability
-claims; inspect a promising operation before math.run. Read `operation://catalog` only
-when the complete bulk catalog is genuinely needed.
+known with high confidence. Matching returns 10 candidates by default; request up to
+20 when a wider first page is useful. Follow `next_cursor` with the same need and
+namespace to continue. Ordered matches are deterministic retrieval candidates, not
+applicability claims; inspect a promising operation before math.run. Read
+`operation://catalog` only when the complete bulk catalog is genuinely needed.
 
 Examples:
 - `{"request":{"op":"match","need":"exact determinant of a rational matrix","namespace":"matrix","limit":3}}`

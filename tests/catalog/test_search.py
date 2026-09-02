@@ -303,6 +303,59 @@ def test_requested_sidon_coverage_distinguishes_decision_from_extension_profile(
     )
 
 
+@pytest.mark.parametrize(
+    "need",
+    (
+        (
+            "For A={0,1,4,10} and each integer x from 11 through 40, "
+            "exhaustively decide whether all positive differences in A union {x} "
+            "are distinct; for every invalid x return two distinct unordered pairs "
+            "with the same positive difference."
+        ),
+        (
+            "Exhaustively test, for A={0,1,4,10} and each integer x from 11 "
+            "through 40, whether A union {x} has all positive pairwise differences "
+            "distinct; return every rejected x with two distinct unordered "
+            "element-pairs witnessing one repeated positive difference, and the "
+            "full admissible/rejected partition."
+        ),
+    ),
+)
+def test_observed_exhaustive_sidon_needs_surface_the_aggregate_profile(
+    need: str,
+) -> None:
+    result = Catalog.open().match(OperationMatchRequest(need=need, limit=5))
+
+    assert "combinatorics.integer_set.sidon.extension_profile.compute" in {
+        match.operation_id for match in result.matches
+    }
+
+
+def test_observed_ramsey_need_retains_arrowing_over_proper_edge_coloring() -> None:
+    result = Catalog.open().match(
+        OperationMatchRequest(
+            need=(
+                "Exhaustively decide whether every red/blue edge-coloring of the "
+                "complete graph K5 has a monochromatic triangle; if not, return a "
+                "complete coloring witness avoiding monochromatic triangles."
+            ),
+            limit=10,
+        )
+    )
+    positions = {
+        match.operation_id: index for index, match in enumerate(result.matches)
+    }
+
+    assert (
+        positions["graph.edge_coloring_arrowing.decide"]
+        < positions["graph.edge_coloring.k_decide"]
+    )
+    assert (
+        positions["graph.edge_coloring_arrowing.decide"]
+        < positions["graph.edge_coloring.check"]
+    )
+
+
 def test_euler_phi_discovery_terms_outrank_generic_inverse_and_solver_operations() -> (
     None
 ):

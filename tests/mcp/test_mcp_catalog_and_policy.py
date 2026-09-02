@@ -64,7 +64,6 @@ def test_mcp_compact_operation_matches_are_paginated() -> None:
                     "request": {
                         "op": "match",
                         "need": "exact mathematical computation",
-                        "limit": 10,
                     }
                 },
             )
@@ -136,6 +135,19 @@ def test_mcp_compact_operation_matches_are_paginated() -> None:
             assert {
                 descriptor["operation_id"] for descriptor in first["matches"]
             }.isdisjoint(descriptor["operation_id"] for descriptor in second["matches"])
+
+            wider_page = await client.call_tool(
+                "math.find",
+                {
+                    "request": {
+                        "op": "match",
+                        "need": "exact mathematical computation",
+                        "limit": 20,
+                    }
+                },
+            )
+            assert isinstance(wider_page.structured_content, dict)
+            assert len(wider_page.structured_content["matches"]) == 20
 
             invalid_cursor = await client.call_tool(
                 "math.find",

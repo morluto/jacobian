@@ -5,10 +5,12 @@ the selected operation ID and a `payload` matching its request model. The
 ordinary path is:
 
 1. Describe the local mathematical result you need when the operation is
-   unknown. Preserve the supplied objects and constraints, the computation or
-   decision, and whether the result must include a value, witness, certificate,
-   profile, or exhaustive enumeration. A short phrase is enough; do not reduce
-   it to catalog tags or submit the surrounding proof goal.
+   unknown. Preserve established mathematical names from the task, the supplied
+   objects and constraints, the requested computation or decision, the full
+   scalar, batch, or exhaustive scope, and whether the requested result is a
+   value, witness, certificate, obstruction, profile, or complete enumeration.
+   Do not replace a supplied named property only with its expanded definition,
+   reduce the need to catalog tags, or submit the surrounding proof goal.
 2. Inspect the selected operation before forming an unfamiliar payload. Its
    schemas and examples are authoritative for that installed catalog.
 3. Run exactly that operation with one typed payload.
@@ -27,7 +29,8 @@ exact candidate:
 
 The optional `namespace` filter matches only the first segment of an operation
 ID. Use it only when that namespace is already known with high confidence;
-agents do not need to learn Jacobian's tags before searching. Read the
+agents do not need to learn Jacobian's tags before searching. Matching returns
+10 candidates by default and accepts an explicit limit of up to 20. Read the
 `operation://catalog` resource when the complete bulk inventory is genuinely
 needed.
 

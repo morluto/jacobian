@@ -39,15 +39,6 @@ MAX_GENERIC_FIBER_PARAMETER_TERMS = 256
 MAX_GENERIC_FIBER_STANDARD_MONOMIALS = 512
 MAX_GENERIC_FIBER_CERTIFICATE_SOURCE_EXPONENT = MAX_POLYNOMIAL_EXPONENT
 MAX_GENERIC_FIBER_STANDARD_MONOMIAL_EXPONENT = MAX_GENERIC_FIBER_STANDARD_MONOMIALS - 1
-MAX_GENERIC_FIBER_REPLAY_PRODUCTS = 262_144
-MAX_GENERIC_FIBER_REPLAY_SOURCE_PRODUCTS = 262_144
-MAX_GENERIC_FIBER_REPLAY_COEFFICIENT_OPERATIONS = 1_048_576
-MAX_GENERIC_FIBER_REPLAY_COEFFICIENT_PRODUCTS = 1_048_576
-MAX_GENERIC_FIBER_REPLAY_REDUCTION_STEPS = 65_536
-MAX_GENERIC_FIBER_REPLAY_SOURCE_TERMS = 8_192
-MAX_GENERIC_FIBER_REPLAY_COEFFICIENT_TERMS = 4_096
-MAX_GENERIC_FIBER_REPLAY_COEFFICIENT_BITS = 16_384
-MAX_GENERIC_FIBER_REPLAY_SOURCE_EXPONENT = 2 * MAX_POLYNOMIAL_EXPONENT
 
 
 def _validation_error(message: str) -> PydanticCustomError:
@@ -407,11 +398,6 @@ GenericDegreeOutcome = Literal[
     "GENERICALLY_FINITE",
     "NOT_DOMINANT",
     "DOMINANT_NOT_GENERICALLY_FINITE",
-    "UNAVAILABLE",
-    "TIMEOUT",
-    "CANCELLED",
-    "BOUND_EXCEEDED",
-    "ERROR",
 ]
 
 
@@ -437,36 +423,22 @@ def _is_unit_generic_fiber_basis(certificate: GenericFiberCertificate) -> bool:
 
 
 class GenericDegreeResult(StrictModel):
-    """An exact source-bound generic-fiber conclusion or operational failure.
+    """An exact source-bound generic-fiber conclusion.
 
     The declared outcome must agree with the retained evidence shape.  The
-    The producing kernel establishes the mathematical conclusion once; tests
-    cover its defining invariant without replay during deserialization.
+    producing kernel establishes the mathematical conclusion once; ordinary
+    deserialization checks only the retained result structure.
     """
 
     outcome: GenericDegreeOutcome
     source: RationalPolynomialMap
     degree: int | None = Field(default=None, ge=1, le=MAX_GENERIC_DEGREE_BEZOUT_BOUND)
     evidence: GenericFiberCertificate | None = None
-    detail: str | None = None
 
     @model_validator(mode="after")
     def require_source_bound_outcome(self) -> Self:
-        mathematical = {
-            "GENERICALLY_FINITE",
-            "NOT_DOMINANT",
-            "DOMINANT_NOT_GENERICALLY_FINITE",
-        }
-        if self.outcome not in mathematical:
-            if self.degree is not None or self.evidence is not None or not self.detail:
-                raise _validation_error(
-                    "operational generic-degree outcomes require only source and detail"
-                )
-            return self
-        if self.evidence is None or self.detail:
-            raise _validation_error(
-                "mathematical generic-degree outcomes require exact evidence"
-            )
+        if self.evidence is None:
+            raise _validation_error("generic-degree outcomes require exact evidence")
         unit_basis = _is_unit_generic_fiber_basis(self.evidence)
         if self.outcome == "GENERICALLY_FINITE":
             if (
@@ -501,8 +473,7 @@ class GenericDegreeResult(StrictModel):
         outcome: GenericDegreeOutcome,
         source: RationalPolynomialMap,
         degree: int | None,
-        evidence: GenericFiberCertificate | None,
-        detail: str | None,
+        evidence: GenericFiberCertificate,
     ) -> Self:
         """Construct a result after the owner kernel established the claim."""
 
@@ -511,7 +482,6 @@ class GenericDegreeResult(StrictModel):
             source=source,
             degree=degree,
             evidence=evidence,
-            detail=detail,
         )
 
 

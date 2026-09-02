@@ -23,7 +23,7 @@ from jacobian.math.polynomials._conversions import (
     sparse_rational_polynomial_to_sympy,
 )
 from jacobian.math.polynomials.maps._generic_degree import (
-    GenericFiberReplayLimitError,
+    StandardMonomialLimitError,
     enumerate_standard_monomials,
 )
 from jacobian.math.polynomials.maps._models import (
@@ -433,7 +433,7 @@ def _derive_standard_monomials(
         raise ValueError("Singular basis does not match the declared source ring")
     try:
         return enumerate_standard_monomials(leading_exponents)
-    except GenericFiberReplayLimitError as exc:
+    except StandardMonomialLimitError as exc:
         raise _ResultLimitExceededError(
             "Singular quotient exceeds the exact-result limit"
         ) from exc

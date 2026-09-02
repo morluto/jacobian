@@ -12,6 +12,10 @@ import pytest
 
 import jacobian.math.polynomials.maps.operations as operations
 from jacobian._exact import CanonicalRational
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+)
 from jacobian.math.polynomials.maps import (
     RationalPolynomialMap,
     _singular,
@@ -19,6 +23,7 @@ from jacobian.math.polynomials.maps import (
 from jacobian.math.polynomials.maps._models import (
     GenericDegreeComputationBudget,
     GenericDegreeRequest,
+    GenericDegreeResult,
     GenericFiberCertificate,
     GenericFiberPolynomial,
     GenericFiberTerm,
@@ -34,7 +39,7 @@ from jacobian.math.polynomials.values import (
 from jacobian.process import bounded_process_cancellation
 
 
-def _run_generic_degree(request: GenericDegreeRequest):
+def _run_generic_degree(request: GenericDegreeRequest) -> GenericDegreeResult:
     return generic_degree(request.polynomial_map, request.resource_budget)
 
 
@@ -178,16 +183,13 @@ def test_timeout_is_not_a_dominance_conclusion(
     executable = _executable(tmp_path, "import time; time.sleep(30)")
     _select_executable(monkeypatch, executable)
 
-    result = _run_generic_degree(
-        GenericDegreeRequest(
-            polynomial_map=_map(),
-            resource_budget=GenericDegreeComputationBudget(wall_seconds=1),
+    with pytest.raises(OperationExecutionTimeoutError, match="wall-time limit"):
+        _run_generic_degree(
+            GenericDegreeRequest(
+                polynomial_map=_map(),
+                resource_budget=GenericDegreeComputationBudget(wall_seconds=1),
+            )
         )
-    )
-
-    assert result.outcome == "TIMEOUT"
-    assert result.degree is None
-    assert result.evidence is None
 
 
 def test_cancellation_is_preserved_as_its_own_public_outcome(
@@ -199,12 +201,11 @@ def test_cancellation_is_preserved_as_its_own_public_outcome(
     cancellation = threading.Event()
     cancellation.set()
 
-    with bounded_process_cancellation(cancellation):
-        result = _run_generic_degree(GenericDegreeRequest(polynomial_map=_map()))
-
-    assert result.outcome == "CANCELLED"
-    assert result.degree is None
-    assert result.evidence is None
+    with (
+        bounded_process_cancellation(cancellation),
+        pytest.raises(OperationExecutionCancelledError, match="cancelled"),
+    ):
+        _run_generic_degree(GenericDegreeRequest(polynomial_map=_map()))
 
 
 def test_malformed_success_output_fails_closed(
@@ -214,10 +215,8 @@ def test_malformed_success_output_fails_closed(
     executable = _executable(tmp_path, 'print("not the protocol")')
     _select_executable(monkeypatch, executable)
 
-    result = _run_generic_degree(GenericDegreeRequest(polynomial_map=_map()))
-
-    assert result.outcome == "ERROR"
-    assert result.degree is None
+    with pytest.raises(RuntimeError, match="invalid or unsupported"):
+        _run_generic_degree(GenericDegreeRequest(polynomial_map=_map()))
 
 
 def test_oversized_certificate_is_a_typed_bound_outcome(
@@ -227,10 +226,8 @@ def test_oversized_certificate_is_a_typed_bound_outcome(
     executable = _executable(tmp_path, 'print("x" * 600_000)')
     _select_executable(monkeypatch, executable)
 
-    result = _run_generic_degree(GenericDegreeRequest(polynomial_map=_map()))
-
-    assert result.outcome == "BOUND_EXCEEDED"
-    assert result.degree is None
+    with pytest.raises(RuntimeError, match="exceeds the declared result bound"):
+        _run_generic_degree(GenericDegreeRequest(polynomial_map=_map()))
 
 
 def test_standard_monomial_candidates_are_distinct_from_returned_monomials(
@@ -338,12 +335,11 @@ def test_heavy_certificate_returns_the_owner_kernel_conclusion(
     )
 
     assert result.outcome == "DOMINANT_NOT_GENERICALLY_FINITE"
-    assert result.detail is None
     assert result.degree is None
     assert result.evidence == _stripe_certificate()
 
 
-def test_one_second_budget_still_replays_a_light_certificate(
+def test_one_second_budget_still_returns_a_light_certificate(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

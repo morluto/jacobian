@@ -8,6 +8,10 @@ import sympy
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials._conversions import (
     rational_from_sympy,
@@ -173,30 +177,22 @@ def generic_degree(
         resource_budget,
     )
     if backend.outcome != "COMPUTED":
-        operational_outcome = (
-            "BOUND_EXCEEDED" if backend.outcome == "LIMIT_EXCEEDED" else backend.outcome
-        )
-        return GenericDegreeResult(
-            outcome=operational_outcome,
-            source=polynomial_map,
-            detail=backend.detail,
-        )
+        detail = backend.detail or "generic-degree backend did not produce a result"
+        if backend.outcome == "TIMEOUT":
+            raise OperationExecutionTimeoutError(detail)
+        if backend.outcome == "CANCELLED":
+            raise OperationExecutionCancelledError(detail)
+        raise RuntimeError(detail)
     if backend.certificate is None or backend.dimension is None:
-        return GenericDegreeResult(
-            outcome="ERROR",
-            source=polynomial_map,
-            detail="Singular returned incomplete generic-fiber evidence.",
-        )
+        raise RuntimeError("Singular returned incomplete generic-fiber evidence")
     mathematical_outcome: GenericDegreeOutcome
     if backend.dimension == -1:
         mathematical_outcome = "NOT_DOMINANT"
         degree = None
     elif backend.dimension == 0:
         if backend.vector_dimension is None:
-            return GenericDegreeResult(
-                outcome="ERROR",
-                source=polynomial_map,
-                detail="Singular returned a finite fiber without its exact degree.",
+            raise RuntimeError(
+                "Singular returned a finite fiber without its exact degree"
             )
         mathematical_outcome = "GENERICALLY_FINITE"
         degree = backend.vector_dimension
@@ -208,7 +204,6 @@ def generic_degree(
         source=polynomial_map,
         degree=degree,
         evidence=backend.certificate,
-        detail=None,
     )
 
 

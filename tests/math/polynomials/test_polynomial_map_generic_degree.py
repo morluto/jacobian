@@ -13,16 +13,15 @@ from tests.math.polynomials._support import polynomial_validation_error
 
 import jacobian.math.polynomials.maps.operations as operations
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.polynomials.maps import (
-    RationalPolynomialMap,
-    _generic_degree,
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
 )
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.polynomials.maps import RationalPolynomialMap
 from jacobian.math.polynomials.maps._generic_degree import (
-    GenericFiberReplayLimitError,
+    StandardMonomialLimitError,
     enumerate_standard_monomials,
-    require_certificate_reconstructs_from_source,
-    validate_generic_fiber_certificate,
 )
 from jacobian.math.polynomials.maps._models import (
     GenericDegreeRequest,
@@ -118,34 +117,6 @@ def _fiber_polynomial(
     )
 
 
-def _identity_certificate() -> GenericFiberCertificate:
-    empty = _fiber_polynomial(())
-    unit = _fiber_polynomial((((0, 0), _generic_fiber_coefficient((0, 0))),))
-    y_minus_t2 = _fiber_polynomial(
-        (
-            ((0, 1), _generic_fiber_coefficient((0, 0))),
-            ((0, 0), _generic_fiber_coefficient((0, 1), -1)),
-        )
-    )
-    x_minus_t1 = _fiber_polynomial(
-        (
-            ((1, 0), _generic_fiber_coefficient((0, 0))),
-            ((0, 0), _generic_fiber_coefficient((1, 0), -1)),
-        )
-    )
-    return GenericFiberCertificate(
-        target_parameters=("t1", "t2"),
-        source_variable_order=("x", "y"),
-        basis=(y_minus_t2, x_minus_t1),
-        basis_from_source=((empty, unit), (unit, empty)),
-        standard_monomials=((0, 0),),
-    )
-
-
-def _identity_source() -> RationalPolynomialMap:
-    return _map(("x", "y"), {(1, 0): 1}, {(0, 1): 1})
-
-
 requires_singular = pytest.mark.skipif(
     shutil.which("Singular") is None,
     reason="Singular 4.4 backend is not installed",
@@ -187,12 +158,34 @@ def test_missing_backend_is_operational_unavailability(
 ) -> None:
     monkeypatch.setattr(shutil, "which", lambda _name: None)
 
-    result = _compute(_map(("x",), {(1,): 1}))
+    with pytest.raises(RuntimeError, match="not installed"):
+        _compute(_map(("x",), {(1,): 1}))
 
-    assert result.outcome == "UNAVAILABLE"
-    assert result.degree is None
-    assert result.evidence is None
-    assert result.source == _map(("x",), {(1,): 1})
+
+@pytest.mark.parametrize(
+    ("outcome", "error_type"),
+    (
+        ("TIMEOUT", OperationExecutionTimeoutError),
+        ("CANCELLED", OperationExecutionCancelledError),
+        ("LIMIT_EXCEEDED", RuntimeError),
+        ("ERROR", RuntimeError),
+    ),
+)
+def test_backend_noncompletion_raises_operationally(
+    outcome: str,
+    error_type: type[Exception],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        operations,
+        "run_singular_generic_fiber",
+        lambda *_args: SingularGenericFiberResult(
+            outcome=cast(Any, outcome), detail="backend did not complete"
+        ),
+    )
+
+    with pytest.raises(error_type, match="backend did not complete"):
+        _compute(_map(("x",), {(1,): 1}))
 
 
 def test_request_rejects_unproved_dimension_degree_and_height() -> None:
@@ -303,7 +296,7 @@ def test_known_generic_degrees(
 @requires_singular
 @pytest.mark.requires_backend("singular")
 @pytest.mark.scale
-def test_accepted_triangular_map_returns_replayable_degree_128() -> None:
+def test_accepted_triangular_map_returns_exact_degree_128() -> None:
     result = _compute(
         _map(
             ("x", "y", "z"),
@@ -461,22 +454,19 @@ def test_malformed_computed_backend_state_is_a_typed_error(
         lambda *_args: backend,
     )
 
-    result = _compute(_map(("x",), {(1,): 1}))
-
-    assert result.outcome == "ERROR"
-    assert result.evidence is None
-    assert result.degree is None
+    with pytest.raises(RuntimeError, match=r"incomplete|without its exact degree"):
+        _compute(_map(("x",), {(1,): 1}))
 
 
 def test_result_round_trip_preserves_axes_and_evidence(
     quadratic_result: GenericDegreeResult,
 ) -> None:
-    replayed = GenericDegreeResult.model_validate_json(
+    round_tripped = GenericDegreeResult.model_validate_json(
         quadratic_result.model_dump_json()
     )
 
-    assert replayed == quadratic_result
-    assert replayed.source.input_variables == ("x", "y")
+    assert round_tripped == quadratic_result
+    assert round_tripped.source.input_variables == ("x", "y")
 
 
 def test_standard_monomial_enumeration_admits_the_sparse_leading_ideal() -> None:
@@ -508,44 +498,11 @@ def test_standard_monomial_enumeration_admits_the_sparse_leading_ideal() -> None
 
 
 def test_standard_monomial_enumeration_rejects_unbounded_quotients() -> None:
-    with pytest.raises(GenericFiberReplayLimitError, match="standard-monomial bound"):
+    with pytest.raises(StandardMonomialLimitError, match="standard-monomial bound"):
         enumerate_standard_monomials(((23, 0), (0, 23)))
-    with pytest.raises(GenericFiberReplayLimitError, match="standard-monomial bound"):
+    with pytest.raises(StandardMonomialLimitError, match="standard-monomial bound"):
         enumerate_standard_monomials(((512, 0), (0, 512)))
     assert enumerate_standard_monomials(((1, 1), (2, 1))) is None
-
-
-def test_certificate_verification_known_answer() -> None:
-    outcome, degree = validate_generic_fiber_certificate(
-        _identity_source(),
-        _identity_certificate(),
-    )
-
-    assert outcome == "GENERICALLY_FINITE"
-    assert degree == 1
-
-
-@pytest.mark.parametrize(
-    ("constant", "message"),
-    (
-        ("MAX_GENERIC_FIBER_REPLAY_REDUCTION_STEPS", "reduction-step"),
-        ("MAX_GENERIC_FIBER_REPLAY_COEFFICIENT_OPERATIONS", "coefficient-operation"),
-        ("MAX_GENERIC_FIBER_REPLAY_COEFFICIENT_PRODUCTS", "coefficient-product"),
-    ),
-    ids=("reduction-steps", "coefficient-operations", "coefficient-products"),
-)
-def test_declared_replay_limits_are_consulted_during_replay(
-    constant: str,
-    message: str,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(_generic_degree, constant, 0)
-
-    with pytest.raises(GenericFiberReplayLimitError, match=message):
-        validate_generic_fiber_certificate(
-            _identity_source(),
-            _identity_certificate(),
-        )
 
 
 @requires_singular
@@ -592,56 +549,15 @@ def _power_map_result(power: int) -> GenericDegreeResult:
     )
 
 
-def test_consistent_results_round_trip_without_replaying_at_deserialization() -> None:
+def test_consistent_results_round_trip_without_recomputation() -> None:
     for power in (2, 3):
         result = _power_map_result(power)
-        assert result.evidence is not None
-        require_certificate_reconstructs_from_source(result.source, result.evidence)
-        replayed = GenericDegreeResult.model_validate(result.model_dump(mode="json"))
-
-        assert replayed == result
-        assert replayed.evidence is not None
-        require_certificate_reconstructs_from_source(replayed.source, replayed.evidence)
-
-
-@pytest.mark.parametrize(
-    "replay",
-    (require_certificate_reconstructs_from_source, validate_generic_fiber_certificate),
-)
-def test_nonreduced_certificate_coefficient_parses_then_replay_rejects_it(
-    replay: Any,
-) -> None:
-    payload = _identity_certificate().model_dump(mode="json")
-    coefficient = payload["basis"][0]["terms"][0]["coefficient"]
-    common = {
-        "terms": [
-            {
-                "coefficient": {"num": "1", "den": "1"},
-                "exponents": [1, 0],
-            }
-        ]
-    }
-    coefficient["numerator"] = common
-    coefficient["denominator"] = common
-    certificate = GenericFiberCertificate.model_validate(payload)
-
-    with pytest.raises(ValueError, match="must be coprime"):
-        replay(_identity_source(), certificate)
-
-
-def test_serialized_evidence_cannot_be_presented_against_a_different_source() -> None:
-    result = _power_map_result(3)
-    forged = result.model_dump(mode="json")
-    forged["source"] = _power_map_result(2).source.model_dump(mode="json")
-
-    replayed = GenericDegreeResult.model_validate(forged)
-    assert result.evidence is not None
-    assert replayed.source != result.source
-    with pytest.raises(ValueError, match="reconstruct"):
-        require_certificate_reconstructs_from_source(
-            _power_map_result(2).source,
-            result.evidence,
+        round_tripped = GenericDegreeResult.model_validate(
+            result.model_dump(mode="json")
         )
+
+        assert round_tripped == result
+        assert round_tripped.evidence is not None
 
 
 def test_serialized_coefficient_support_is_counted_before_nested_construction() -> None:

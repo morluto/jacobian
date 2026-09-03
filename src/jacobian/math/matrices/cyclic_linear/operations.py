@@ -1,4 +1,3 @@
-# ruff: noqa: B904
 """Exact cyclotomic decomposition of bounded rational cyclic linear maps."""
 
 from __future__ import annotations
@@ -12,7 +11,6 @@ from typing import Any
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import (
-    OperationExecutionTimeoutError,
     bind_request_deadline,
     current_request_execution,
     request_checkpoint,
@@ -780,37 +778,15 @@ def _cyclotomic_kernel_child(
     return result
 
 
-def _compute_component(admission: _ComponentAdmission) -> _ComputedComponent:
+def _compute_component(
+    admission: _ComponentAdmission, kernel_result: tuple[Any, ...]
+) -> _ComputedComponent:
     from sympy import QQ
 
     order = admission.order
     _require_execution_active(f"before order-{order} kernel")
 
-    # Run the SymPy kernel (rref, det, rref_den) in a bounded worker so the
-    # parent can kill it on deadline or cancellation.
-    from jacobian.math.matrices.cyclic_linear._kernel_process import (
-        run_cyclotomic_kernel,
-    )
-
-    execution = current_request_execution()
-    deadline = execution.deadline if execution is not None else None
-
-    request_checkpoint(f"before order-{order} kernel")
-
-    try:
-        rank, source_dimension, nonzero_minor_data, kernel_coords = (
-            run_cyclotomic_kernel(
-                order,
-                admission.degree,
-                admission.matrix_coordinates,
-                admission.common_denominator,
-                deadline,
-            )
-        )
-    except OperationExecutionTimeoutError:
-        raise OperationExecutionTimeoutError(
-            f"request deadline expired during order-{order} kernel"
-        )
+    rank, source_dimension, nonzero_minor_data, kernel_coords = kernel_result
 
     _require_execution_active(f"after order-{order} kernel")
 
@@ -962,7 +938,30 @@ def _cyclic_rational_rank_kernel_profile_in_request(
     _bind_cyclic_profile_deadline()
     admission = _admit_cyclic_symbol(symbol)
     _require_execution_active("after cyclic-profile admission")
-    components = tuple(_compute_component(item) for item in admission)
+    from jacobian.math.matrices.cyclic_linear._kernel_process import (
+        run_cyclotomic_kernels,
+    )
+
+    execution = current_request_execution()
+    deadline = execution.deadline if execution is not None else None
+    for item in admission:
+        request_checkpoint(f"before order-{item.order} kernel")
+    kernel_results = run_cyclotomic_kernels(
+        tuple(
+            (
+                item.order,
+                item.degree,
+                item.matrix_coordinates,
+                item.common_denominator,
+            )
+            for item in admission
+        ),
+        deadline,
+    )
+    components = tuple(
+        _compute_component(item, result)
+        for item, result in zip(admission, kernel_results, strict=True)
+    )
     global_kernel = _reconstruct_global_kernel(symbol, components)
     global_rank = sum(
         component.admission.degree * component.public.rank for component in components

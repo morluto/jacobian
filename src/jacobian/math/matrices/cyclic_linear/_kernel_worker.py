@@ -4,18 +4,21 @@ from __future__ import annotations
 
 import pickle
 import sys
+from hashlib import sha256
 
 from jacobian.math.matrices.cyclic_linear.operations import _cyclotomic_kernel_child
 
 
 def main() -> None:
-    order, degree, matrix_coordinates, common_denominator = pickle.load(
-        sys.stdin.buffer
+    input_data = sys.stdin.buffer.read()
+    requests = pickle.loads(input_data)
+    results = tuple(
+        _cyclotomic_kernel_child(
+            order, degree, matrix_coordinates, common_denominator
+        )
+        for order, degree, matrix_coordinates, common_denominator in requests
     )
-    result = _cyclotomic_kernel_child(
-        order, degree, matrix_coordinates, common_denominator
-    )
-    pickle.dump(result, sys.stdout.buffer)
+    pickle.dump((sha256(input_data).digest(), results), sys.stdout.buffer)
 
 
 if __name__ == "__main__":

@@ -195,7 +195,20 @@ def _public_cyclotomic_element_polynomial(
     )
 
 
-def test_composite_period_distinguishes_galois_components() -> None:
+def test_composite_period_distinguishes_galois_components(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.process as process
+
+    worker_calls = 0
+    run_bounded_process = process.run_bounded_process
+
+    def count_worker(*args: Any, **kwargs: Any) -> process.BoundedProcessResult:
+        nonlocal worker_calls
+        worker_calls += 1
+        return run_bounded_process(*args, **kwargs)
+
+    monkeypatch.setattr(process, "run_bounded_process", count_worker)
     # Phi_3(x) = x^2 + x + 1 vanishes only on the order-three component of C_6.
     result = cyclic_rational_rank_kernel_profile(
         _symbol(
@@ -210,6 +223,7 @@ def test_composite_period_distinguishes_galois_components() -> None:
     ) == ((1, 1, 1, 0), (2, 1, 1, 0), (3, 2, 0, 1), (6, 2, 1, 0))
     assert result.exceptional_component_orders == (3,)
     assert (result.global_rank, result.global_nullity) == (4, 2)
+    assert worker_calls == 1
     vectors = tuple(
         tuple(value.as_fraction() for value in vector)
         for vector in result.global_kernel_basis.vectors

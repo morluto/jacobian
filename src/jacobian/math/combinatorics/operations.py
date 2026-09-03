@@ -705,17 +705,25 @@ def rational_generating_function_coefficients(
         expansion_point=expansion_point,
         truncation_order=truncation_order,
     )
+    wire_cache: dict[Fraction, CanonicalRational] = {}
+
+    def wire_coefficient(value: Fraction) -> CanonicalRational:
+        cached = wire_cache.get(value)
+        if cached is None:
+            cached = _wire(value)
+            wire_cache[value] = cached
+        return cached
+
+    zero = wire_coefficient(Fraction())
     return RationalGeneratingFunctionCoefficientsResult._from_kernel(
         coefficient_convention=coefficient_convention,
         expansion_point=expansion_point,
         truncation_order=truncation_order,
-        coefficients=tuple(_wire(item) for item in coefficients),
+        coefficients=tuple(wire_coefficient(item) for item in coefficients),
         residual_congruence=(
             "DENOMINATOR_TIMES_SERIES_MINUS_NUMERATOR_IS_ZERO_MOD_X_TO_ORDER"
         ),
-        residual_coefficients=tuple(
-            CanonicalRational(num="0", den="1") for _ in coefficients
-        ),
+        residual_coefficients=(zero,) * len(coefficients),
     )
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import sys
 import unicodedata
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -12,10 +13,11 @@ from fractions import Fraction
 from typing import Any, NoReturn, SupportsInt
 
 import rfc8785
-from flint import fmpz
 
 _INTEGER = re.compile(r"^(?:0|-?[1-9][0-9]*)$")
 _MAX_SAFE_JSON_INTEGER = (1 << 53) - 1
+_BUILTIN_DECIMAL_DIGITS = sys.int_info.str_digits_check_threshold
+_BUILTIN_DECIMAL_BOUND = 10**_BUILTIN_DECIMAL_DIGITS
 
 
 def sha256_digest(data: bytes) -> str:
@@ -35,13 +37,22 @@ def parse_canonical_integer(value: str) -> int:
         raise CanonicalizationError(
             "rational components must be canonical decimal integers"
         )
+    if len(value.lstrip("-")) <= _BUILTIN_DECIMAL_DIGITS:
+        return int(value)
+    from flint import fmpz
+
     return int(fmpz(value))
 
 
 def format_canonical_integer(value: SupportsInt) -> str:
     """Format an integer without Python's string-digit limit."""
 
-    return fmpz(int(value)).str()
+    integer = int(value)
+    if abs(integer) < _BUILTIN_DECIMAL_BOUND:
+        return str(integer)
+    from flint import fmpz
+
+    return fmpz(integer).str()
 
 
 @dataclass(frozen=True, slots=True)

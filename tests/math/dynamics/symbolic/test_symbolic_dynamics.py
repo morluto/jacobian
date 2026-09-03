@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import random
+from collections.abc import Iterator
 from fractions import Fraction
 
 import pytest
@@ -421,18 +422,31 @@ def test_random_block_languages_match_bounded_extension_oracle() -> None:
         )
     )
 
-    def avoids_forbidden_blocks(
-        word: tuple[str, ...], forbidden_words: tuple[str, ...]
-    ) -> bool:
-        encoded = "".join(word)
-        return all(block not in encoded for block in forbidden_words)
+    def admissible_words(
+        length: int, forbidden_blocks: tuple[tuple[str, ...], ...]
+    ) -> Iterator[tuple[str, ...]]:
+        # Complete depth-first enumeration remains independent of the
+        # production finite-state construction. A prefix already known to be
+        # admissible only needs its newly completed suffix checked.
+        stack: list[tuple[str, ...]] = [()]
+        while stack:
+            word = stack.pop()
+            if len(word) == length:
+                yield word
+                continue
+            for symbol in reversed(alphabet):
+                extended = (*word, symbol)
+                if all(
+                    len(block) > len(extended) or extended[-len(block) :] != block
+                    for block in forbidden_blocks
+                ):
+                    stack.append(extended)
 
     for _ in range(120):
         forbidden = tuple(
             block for block in candidate_forbidden if random_source.random() < 0.18
         )
         shift = ForbiddenBlockShift(alphabet=alphabet, forbidden_blocks=forbidden)
-        forbidden_words = tuple("".join(block) for block in forbidden)
         memory = max((len(block) - 1 for block in forbidden), default=0)
         state_count = len(alphabet) ** memory
         padding = state_count + memory
@@ -446,9 +460,7 @@ def test_random_block_languages_match_bounded_extension_oracle() -> None:
         # that cycle to the maximum tested length. Enumerating the longest
         # extension once gives the same occurrence oracle for every prefix
         # length without repeating the exponential product search.
-        for word in itertools.product(alphabet, repeat=maximum_length + 2 * padding):
-            if not avoids_forbidden_blocks(word, forbidden_words):
-                continue
+        for word in admissible_words(maximum_length + 2 * padding, forbidden):
             for length, expected in enumerate(expected_by_length):
                 expected.add(word[padding : padding + length])
 

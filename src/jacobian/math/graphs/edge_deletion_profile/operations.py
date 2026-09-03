@@ -225,19 +225,39 @@ def compute_edge_deletion_profile(
     source_is_bipartite = _admit_edge_deletion_profile(graph, deletion_order)
     edges = list(graph.edges)
     vertices = list(graph.vertices)
+    edge_keys = {frozenset(edge) for edge in edges}
+    source_missing_edges = [
+        edge
+        for edge in combinations(vertices, 2)
+        if frozenset(edge) not in edge_keys
+    ]
+    complement_profile = (
+        source_missing_edges
+        if len(source_missing_edges) + deletion_order <= len(vertices)
+        else None
+    )
 
     rows: list[DeletionRow] = []
     for order in range(deletion_order + 1):
         _require_execution_active("during profile enumeration")
         for edge_indices in combinations(range(len(edges)), order):
             _require_execution_active("during profile enumeration")
-            deleted = set(edge_indices)
-            remaining_edges = [edges[i] for i in range(len(edges)) if i not in deleted]
-            chromatic = _chromatic_number(
-                vertices,
-                remaining_edges,
-                source_is_bipartite=source_is_bipartite,
-            )
+            if complement_profile is not None:
+                missing_edges = [
+                    *complement_profile,
+                    *(edges[index] for index in edge_indices),
+                ]
+                chromatic = _min_clique_cover(vertices, missing_edges)
+            else:
+                deleted = set(edge_indices)
+                remaining_edges = [
+                    edge for index, edge in enumerate(edges) if index not in deleted
+                ]
+                chromatic = _chromatic_number(
+                    vertices,
+                    remaining_edges,
+                    source_is_bipartite=source_is_bipartite,
+                )
             rows.append(
                 DeletionRow(
                     deleted_edge_indices=tuple(edge_indices),

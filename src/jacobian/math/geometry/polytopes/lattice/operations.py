@@ -388,7 +388,7 @@ def _scan_box(
     d: int,
     *,
     collect: bool,
-) -> tuple[list[LatticePoint], int]:
+) -> tuple[list[tuple[int, ...]], int]:
     """Scan the integer bounding box, returning collected points and a count.
 
     When ``collect`` is ``True`` every lattice point is materialised as a
@@ -398,7 +398,7 @@ def _scan_box(
     would be listed, while counting continues to the admitted scan limit
     so its small exact integer answer can still be returned.
     """
-    points: list[LatticePoint] = []
+    points: list[tuple[int, ...]] = []
     count = 0
     for coord in product(*(range(lo[k], hi[k] + 1) for k in range(d))):
         if not _is_inside_int(coord, facets):
@@ -410,11 +410,7 @@ def _scan_box(
                 f"{MAX_LATTICE_POINTS}-point budget bound"
             )
         if collect:
-            points.append(
-                LatticePoint._from_kernel(
-                    tuple(format_canonical_integer(c) for c in coord)
-                )
-            )
+            points.append(coord)
     return points, count
 
 
@@ -436,7 +432,12 @@ def enumerate_lattice_points(
     points, _count = _scan_box(facets, lo, hi, d, collect=True)
     return EnumerateLatticePointsResult._from_kernel(
         dimension=d,
-        points=tuple(points),
+        points=tuple(
+            LatticePoint._from_kernel(
+                tuple(format_canonical_integer(component) for component in point)
+            )
+            for point in points
+        ),
         representation=representation,
     )
 

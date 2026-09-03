@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -83,6 +84,28 @@ def test_quadratic_swap_has_a_canonical_reduced_fixed_basis() -> None:
     # Rows encode x²+y² and xy in canonical RREF coefficient form.
     assert result.basis_matrix.entries == ((1, 0, 1), (0, 1, 0))
     assert result.fixed_dimension == 2
+
+
+def test_generator_validation_and_fixed_basis_share_one_real_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.process as process
+
+    worker_calls = 0
+    run_bounded_process = process.run_bounded_process
+
+    def count_worker(*args: Any, **kwargs: Any) -> process.BoundedProcessResult:
+        nonlocal worker_calls
+        worker_calls += 1
+        return run_bounded_process(*args, **kwargs)
+
+    monkeypatch.setattr(process, "run_bounded_process", count_worker)
+
+    result = homogeneous_fixed_subspace(_swap_action(), 2)
+
+    assert result.monomial_basis == ((2, 0), (1, 1), (0, 2))
+    assert result.basis_matrix.entries == ((1, 0, 1), (0, 1, 0))
+    assert worker_calls == 1
 
 
 def test_nonsymmetric_generator_uses_matrix_columns_as_variable_images() -> None:

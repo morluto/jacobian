@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+from hashlib import sha256
 
 from jacobian.math.matrices.finite_fields.linear_algebra import (
     PrimeFieldMatrix,
@@ -14,25 +15,35 @@ from jacobian.math.matrices.finite_fields.linear_algebra import (
 
 
 def main() -> None:
-    payload = json.load(sys.stdin)
-    if payload.get("operation") == "generator_ranks":
-        generator_ranks = []
-        for entries in payload["matrices"]:
-            generator_ranks.append(
-                rank(
-                    PrimeFieldMatrix(
-                        prime=payload["prime"],
-                        entries=tuple(tuple(row) for row in entries),
-                        columns=payload["columns"],
-                    )
+    input_bytes = sys.stdin.buffer.read()
+    source_digest = sha256(input_bytes).hexdigest()
+    payload = json.loads(input_bytes)
+    generator_ranks = []
+    for entries in payload["matrices"]:
+        generator_ranks.append(
+            rank(
+                PrimeFieldMatrix(
+                    prime=payload["prime"],
+                    entries=tuple(tuple(row) for row in entries),
+                    columns=payload["generator_columns"],
                 )
             )
-        json.dump({"ranks": generator_ranks}, sys.stdout, separators=(",", ":"))
+        )
+    if any(value != payload["generator_columns"] for value in generator_ranks):
+        json.dump(
+            {
+                "source_digest": source_digest,
+                "generators_invertible": False,
+                "basis_rows": [],
+            },
+            sys.stdout,
+            separators=(",", ":"),
+        )
         return
     matrix = PrimeFieldMatrix(
         prime=payload["prime"],
-        entries=tuple(tuple(row) for row in payload["entries"]),
-        columns=payload["columns"],
+        entries=tuple(tuple(row) for row in payload["equation_entries"]),
+        columns=payload["equation_columns"],
     )
     nullspace_rows = nullspace(matrix)
     if nullspace_rows:
@@ -46,7 +57,15 @@ def main() -> None:
         basis_rows = reduced[: len(pivots)]
     else:
         basis_rows = ()
-    json.dump({"basis_rows": basis_rows}, sys.stdout, separators=(",", ":"))
+    json.dump(
+        {
+            "source_digest": source_digest,
+            "generators_invertible": True,
+            "basis_rows": basis_rows,
+        },
+        sys.stdout,
+        separators=(",", ":"),
+    )
 
 
 if __name__ == "__main__":

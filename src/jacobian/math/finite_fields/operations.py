@@ -16,8 +16,7 @@ from jacobian._execution import (
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields._fixed_subspace_process import (
-    run_fixed_subspace_generator_validation,
-    run_fixed_subspace_linear_algebra,
+    run_fixed_subspace_computation,
 )
 from jacobian.math.finite_fields._matrix_rank import compute_matrix_rank
 from jacobian.math.finite_fields._matrix_rank_models import MatrixRankResult
@@ -582,17 +581,6 @@ def homogeneous_fixed_subspace(
         )
         checkpoint("after result construction")
         return result
-    checkpoint("before generator validation")
-    checkpoint("during generator validation")
-    if not run_fixed_subspace_generator_validation(
-        action.generator_matrices,
-        deadline=deadline,
-    ):
-        raise OperationDomainValidationError(
-            location=("action", "generator_matrices"),
-            code="finite_field.linear_action_generator_invertible",
-            message="every linear-action generator matrix must be invertible",
-        )
     monomial_basis = _homogeneous_monomial_basis(variable_count, degree)
     assert len(monomial_basis) == monomial_count
     equations: list[tuple[int, ...]] = []
@@ -611,10 +599,17 @@ def homogeneous_fixed_subspace(
         columns=len(monomial_basis),
     )
     checkpoint("before nullspace")
-    basis_rows = run_fixed_subspace_linear_algebra(
+    generators_invertible, basis_rows = run_fixed_subspace_computation(
+        action.generator_matrices,
         equation_matrix,
         deadline=deadline,
     )
+    if not generators_invertible:
+        raise OperationDomainValidationError(
+            location=("action", "generator_matrices"),
+            code="finite_field.linear_action_generator_invertible",
+            message="every linear-action generator matrix must be invertible",
+        )
     checkpoint("after basis reduction")
     basis_matrix = PrimeFieldMatrix(
         prime=action.prime,

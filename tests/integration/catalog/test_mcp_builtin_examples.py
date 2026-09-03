@@ -1,100 +1,19 @@
-"""MCP-level executable contracts for every advertised catalog example.
+"""MCP projection of unexpected faults from catalog operations.
 
-Covers the transport projection (`src/jacobian/mcp/tools.py:91 math_run`)
-in addition to the dispatch path (`tests/integration/catalog/test_builtin_examples.py:27`).
-The catalog sweep is sequential so a failure identifies one advertised
-invocation; the MCP journey separately proves independent requests can overlap.
+Advertised examples are exhaustively executed at their dispatch boundary in
+``test_builtin_examples.py``. The generic successful MCP projection is owned by
+``tests/mcp/test_mcp_invocation_journey.py``; repeating every mathematical
+kernel through that same projection here would duplicate both contracts.
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
-import shutil
 
 from mcp.types import TextContent
 
 from jacobian.catalog.catalog import Catalog
-from jacobian.mcp.server import create_server
 from mcp import Client
-
-_CATALOG = Catalog.open()
-_SINGULAR_OPERATION_IDS = frozenset(
-    {
-        "polynomial.ideal.minimal_primes.compute",
-        "polynomial.ideal.quotient.compute",
-        "polynomial.ideal.radical.compute",
-        "polynomial.ideal.saturation.compute",
-        "polynomial.map.generic_degree.compute",
-    }
-)
-
-
-def test_mcp_available_advertised_examples_execute_as_typed_results() -> None:
-    async def scenario() -> None:
-        catalog = Catalog.open()
-        failures: list[str] = []
-        async with Client(create_server(), raise_exceptions=False) as client:
-            for descriptor in catalog.snapshot().operations:
-                if (
-                    descriptor.operation_id in _SINGULAR_OPERATION_IDS
-                    and shutil.which("Singular") is None
-                ):
-                    continue
-                operation = catalog.operation(descriptor.operation_id)
-                assert operation is not None
-                assert operation.examples, (
-                    f"{descriptor.operation_id} must advertise an example"
-                )
-                for example in operation.examples:
-                    payload = dict(example.input)
-                    result = await client.call_tool(
-                        "math.run",
-                        {"operation_id": descriptor.operation_id, "payload": payload},
-                    )
-                    if result.is_error:
-                        first = result.content[0] if result.content else None
-                        text = (
-                            first.text
-                            if isinstance(first, TextContent)
-                            else "<no content>"
-                        )
-                        failures.append(
-                            f"{descriptor.operation_id} {example.name}: is_error {text[:500]}"
-                        )
-                        continue
-                    structured = result.structured_content
-                    if not isinstance(structured, dict) or "output" not in structured:
-                        failures.append(
-                            f"{descriptor.operation_id} {example.name}: missing output {structured}"
-                        )
-                        continue
-                    output = structured["output"]
-                    try:
-                        validated = operation.result_type.model_validate(output)
-                    except Exception as exc:
-                        failures.append(
-                            f"{descriptor.operation_id} {example.name}: result validation {exc} output={json.dumps(output)[:500]}"
-                        )
-                        continue
-                    if validated.model_dump(mode="json") != output:
-                        failures.append(
-                            f"{descriptor.operation_id} {example.name}: round-trip mismatch"
-                        )
-                    if structured.get("operation_id") != descriptor.operation_id:
-                        failures.append(
-                            f"{descriptor.operation_id}: operation_id mismatch in MCP output"
-                        )
-                    if (
-                        not isinstance(structured.get("runtime_ms"), int)
-                        or structured["runtime_ms"] < 0
-                    ):
-                        failures.append(
-                            f"{descriptor.operation_id}: missing/invalid runtime_ms"
-                        )
-        assert not failures, "MCP example replay failures:\n" + "\n".join(failures)
-
-    asyncio.run(scenario())
 
 
 def test_mcp_unexpected_operation_fault_uses_the_sdk_failure_path() -> None:

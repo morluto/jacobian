@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics import _sidon_extension_kernel as sidon_kernel
 from jacobian.math.combinatorics import (
     _sidon_extension_models as sidon_models,
@@ -31,6 +32,28 @@ def _extension(source: list[str], candidates: list[str]) -> SidonExtensionProfil
 
 
 class TestSidonExtensionProfile:
+    def test_non_sidon_source_is_a_typed_domain_rejection(self) -> None:
+        with pytest.raises(OperationDomainValidationError) as caught:
+            _extension(["0", "1", "2"], [])
+
+        assert caught.value.errors() == (
+            {
+                "loc": ("source_elements",),
+                "type": "combinatorics.sidon_invariant",
+                "msg": "source elements must form a Sidon set",
+            },
+        )
+
+    def test_excessive_profile_work_is_a_typed_domain_rejection(self) -> None:
+        source = [str(value) for value in range(2_001)]
+
+        with pytest.raises(OperationDomainValidationError) as caught:
+            _extension(source, [])
+
+        assert caught.value.errors()[0]["type"] == (
+            "combinatorics.sidon_extension_work_budget"
+        )
+
     def test_basic_fixture(self) -> None:
         """With A={1,2}: candidate 3 fails (diff 1 repeats), candidate 4 succeeds."""
         result = _extension(["1", "2"], ["3", "4"])

@@ -9,6 +9,7 @@ from typing import Self
 from pydantic import Field, StrictBool, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics._difference_set_models import (
     AdditiveDifferenceInteger,
     AdditiveInteger,
@@ -76,9 +77,10 @@ def _require_extension_work_budget(
     candidate_count: int,
 ) -> None:
     if _extension_work_units(source_count, candidate_count) > MAX_EXTENSION_WORK:
-        raise _difference_set_validation_error(
-            "combinatorics.sidon_extension_work_budget",
-            "Sidon extension search exceeds the bounded work budget",
+        raise OperationDomainValidationError(
+            location=(),
+            code="combinatorics.sidon_extension_work_budget",
+            message="Sidon extension search exceeds the bounded work budget",
         )
 
 
@@ -87,9 +89,10 @@ def _validate_source_is_sidon(
 ) -> dict[int, _DifferencePair]:
     source_pairs = _positive_difference_pairs(source_elements)
     if len(source_pairs) != len(source_elements) * (len(source_elements) - 1) // 2:
-        raise _difference_set_validation_error(
-            "combinatorics.sidon_invariant",
-            "source elements must form a Sidon set",
+        raise OperationDomainValidationError(
+            location=("source_elements",),
+            code="combinatorics.sidon_invariant",
+            message="source elements must form a Sidon set",
         )
     return source_pairs
 

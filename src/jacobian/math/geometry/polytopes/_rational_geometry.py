@@ -6,8 +6,10 @@ combination, intermediate-height, scan, and result-envelope admission.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from fractions import Fraction
 from itertools import combinations
+from math import lcm
 
 from sympy import Matrix, Rational
 from sympy.matrices.exceptions import NonInvertibleMatrixError
@@ -19,28 +21,64 @@ class RecessionConeComputationError(RuntimeError):
     """Raised when exact recession-cone boundedness cannot be established."""
 
 
+def determinant_sign(rows: Sequence[Sequence[Rational | Fraction | int]]) -> int:
+    """Return the sign of one exact rational orientation determinant."""
+
+    from flint import fmpq, fmpq_mat
+
+    determinant = fmpq_mat(
+        [
+            [
+                fmpq(value)
+                if isinstance(value, int)
+                else (
+                    fmpq(value.numerator, value.denominator)
+                    if isinstance(value, Fraction)
+                    else fmpq(int(value.p), int(value.q))
+                )
+                for value in row
+            ]
+            for row in rows
+        ]
+    ).det()
+    return int(determinant > 0) - int(determinant < 0)
+
+
 def hyperplane_normal(points: Sequence[Sequence[Rational]]) -> Matrix | None:
     """Return the unique normal through ``dim`` affine points, if one exists."""
 
     dimension = len(points)
     if dimension == 1:
         return Matrix([Rational(1)])
-    differences = Matrix(
-        [
-            [points[index][axis] - points[0][axis] for axis in range(dimension)]
-            for index in range(1, dimension)
+    from flint import fmpz_mat
+
+    integer_rows = []
+    for index in range(1, dimension):
+        differences = [
+            points[index][axis] - points[0][axis] for axis in range(dimension)
         ]
-    )
-    basis = differences.nullspace()
-    return basis[0] if len(basis) == 1 else None
+        ratios = [
+            (value.numerator, value.denominator)
+            if isinstance(value, Fraction)
+            else (int(value.p), int(value.q))
+            for value in differences
+        ]
+        denominator = lcm(*(ratio[1] for ratio in ratios))
+        integer_rows.append(
+            [numerator * (denominator // divisor) for numerator, divisor in ratios]
+        )
+    basis, nullity = fmpz_mat(integer_rows).nullspace()
+    if int(nullity) != 1:
+        return None
+    return Matrix([int(basis[row, 0]) for row in range(dimension)])
 
 
-def facets_from_points(
+def iter_facets_from_points(
     vertices: Sequence[Sequence[Rational]], dimension: int
-) -> list[tuple[Matrix, Rational]]:
+) -> Iterator[tuple[Matrix, Rational]]:
     """Enumerate distinct oriented supporting rows of ``conv(vertices)``."""
 
-    candidates: list[tuple[Matrix, Rational]] = []
+    seen: set[tuple[tuple[Rational, ...], Rational]] = set()
     for indices in combinations(range(len(vertices)), dimension):
         points = [vertices[index] for index in indices]
         normal = hyperplane_normal(points)
@@ -52,18 +90,24 @@ def facets_from_points(
             for vertex in vertices
         ]
         if all(value <= 0 for value in residuals):
-            candidates.append((normal, offset))
+            oriented = normal, offset
         elif all(value >= 0 for value in residuals):
-            candidates.append((Matrix([-value for value in normal]), -offset))
-
-    seen: set[tuple[tuple[Rational, ...], Rational]] = set()
-    facets: list[tuple[Matrix, Rational]] = []
-    for normal, offset in candidates:
+            oriented = Matrix([-value for value in normal]), -offset
+        else:
+            continue
+        normal, offset = oriented
         key = tuple(Rational(value) for value in normal), offset
         if key not in seen:
             seen.add(key)
-            facets.append((normal, offset))
-    return facets
+            yield normal, offset
+
+
+def facets_from_points(
+    vertices: Sequence[Sequence[Rational]], dimension: int
+) -> list[tuple[Matrix, Rational]]:
+    """Return distinct oriented supporting rows of ``conv(vertices)``."""
+
+    return list(iter_facets_from_points(vertices, dimension))
 
 
 def recession_cone_is_trivial(
@@ -127,8 +171,10 @@ def vertices_from_halfspaces(
 __all__ = [
     "RationalRow",
     "RecessionConeComputationError",
+    "determinant_sign",
     "facets_from_points",
     "hyperplane_normal",
+    "iter_facets_from_points",
     "recession_cone_is_trivial",
     "vertices_from_halfspaces",
 ]

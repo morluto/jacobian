@@ -62,9 +62,8 @@ from jacobian.math.geometry.polytopes._models import (
     _validate_vertices,
 )
 from jacobian.math.geometry.polytopes._rational_geometry import (
-    facets_from_points as _facets_from_points,
-)
-from jacobian.math.geometry.polytopes._rational_geometry import (
+    determinant_sign,
+    iter_facets_from_points,
     recession_cone_is_trivial,
     vertices_from_halfspaces,
 )
@@ -120,7 +119,7 @@ def _require_facet_preflight(vertices: tuple[Vertex, ...], dim: int) -> None:
                 "require intrinsic affine coordinates"
             )
     # Repeated source rows create neither candidate hyperplanes nor
-    # candidate side tests: ``_facets_from_points`` receives exactly the
+    # candidate side tests: ``iter_facets_from_points`` receives exactly the
     # distinct rows below, so each of the ``C(m, d)`` candidates is
     # side-tested against those ``m`` distinct rows and the sign-test
     # budget is charged per distinct row actually tested. The final-facet
@@ -189,9 +188,10 @@ def _computed_facets_from_vertices(
         [Rational(*coordinate.as_integer_ratio()) for coordinate in vertex.coordinates]
         for vertex in vertices
     ]
-    candidates = _facets_from_points(_deduplicate_source_rows(points), dim)
     canonical: dict[tuple[tuple[int, ...], int], PrimitiveFacet] = {}
-    for normal, offset in candidates:
+    for normal, offset in iter_facets_from_points(
+        _deduplicate_source_rows(points), dim
+    ):
         coefficients, rhs = _primitive_facet_key(normal, offset, dim)
         incidence = tuple(
             index
@@ -207,11 +207,11 @@ def _computed_facets_from_vertices(
             halfspace=_primitive_halfspace(coefficients, rhs),
             source_vertex_indices=incidence,
         )
+        if len(canonical) > MAX_COMPUTED_FACETS:
+            raise ValueError(
+                f"facet profile exceeds the {MAX_COMPUTED_FACETS}-facet result bound"
+            )
     facets = tuple(canonical[key] for key in sorted(canonical))
-    if len(facets) > MAX_COMPUTED_FACETS:
-        raise ValueError(
-            f"facet profile exceeds the {MAX_COMPUTED_FACETS}-facet result bound"
-        )
     incidence_count = sum(len(facet.source_vertex_indices) for facet in facets)
     if incidence_count > MAX_FACET_INCIDENCES:
         raise ValueError(
@@ -387,14 +387,13 @@ def _hull_subfacets(points: list[list[Rational]], dim: int) -> list[tuple[int, .
         for p in range(n):
             if p in subset:
                 continue
-            mat = Matrix(
+            sign = determinant_sign(
                 [[points[i][k] for k in range(dim)] + [1] for i in subset]
                 + [[points[p][k] for k in range(dim)] + [1]]
             )
-            det = mat.det()
-            if det > 0:
+            if sign > 0:
                 signs.add(1)
-            elif det < 0:
+            elif sign < 0:
                 signs.add(-1)
             if len(signs) > 1:
                 ok = False

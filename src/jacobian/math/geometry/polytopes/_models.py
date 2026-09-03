@@ -23,6 +23,7 @@ from sympy import Matrix, Rational
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.geometry.polytopes._rational_geometry import (
+    determinant_sign,
     recession_cone_is_trivial,
     vertices_from_halfspaces,
 )
@@ -817,14 +818,13 @@ def _hull_subfacets(points: list[list[Rational]], dim: int) -> list[tuple[int, .
         for p in range(n):
             if p in subset:
                 continue
-            mat = Matrix(
+            sign = determinant_sign(
                 [[points[i][k] for k in range(dim)] + [1] for i in subset]
                 + [[points[p][k] for k in range(dim)] + [1]]
             )
-            det = mat.det()
-            if det > 0:
+            if sign > 0:
                 signs.add(1)
-            elif det < 0:
+            elif sign < 0:
                 signs.add(-1)
             if len(signs) > 1:
                 ok = False

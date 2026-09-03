@@ -186,19 +186,14 @@ def _capped_matrix_product(
     right: tuple[tuple[int, ...], ...],
     cap: int,
 ) -> tuple[tuple[int, ...], ...]:
+    from flint import fmpz_mat
+
     size = len(left)
-    result = [[0] * size for _ in range(size)]
-    for source, row in enumerate(left):
-        for middle, left_entry in enumerate(row):
-            if left_entry == 0:
-                continue
-            for target, right_entry in enumerate(right[middle]):
-                if right_entry:
-                    result[source][target] = min(
-                        result[source][target] + left_entry * right_entry,
-                        cap,
-                    )
-    return tuple(tuple(row) for row in result)
+    product = fmpz_mat(left) * fmpz_mat(right)
+    return tuple(
+        tuple(min(int(product[row, column]), cap) for column in range(size))
+        for row in range(size)
+    )
 
 
 def dfa_complement(dfa: DFA) -> DFA:

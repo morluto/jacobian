@@ -12,6 +12,7 @@ from jacobian.math.finite_dim_algebras._models import (
 )
 
 
+@pytest.mark.scale
 def test_published_dimension_matches_structural_request_bound() -> None:
     """Worst-case valid tensors survive strict dispatch parsing."""
     n = MAX_DIM

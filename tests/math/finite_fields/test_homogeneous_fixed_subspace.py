@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+
 import pytest
 from pydantic import ValidationError
 
@@ -394,16 +396,25 @@ def test_native_action_preserves_the_exact_prime_fallback() -> None:
 
 
 def test_native_action_rejects_a_prime_the_worker_cannot_serialize() -> None:
-    prime = 2**19_937 - 1
-    action = PrimeFieldLinearAction(
-        variable_axis=PrimeFieldActionAxis(name="polynomial_variables", labels=("x",)),
-        generator_matrices=(PrimeFieldMatrix(prime=prime, entries=((1,),), columns=1),),
-    )
+    prior_limit = sys.get_int_max_str_digits()
+    try:
+        sys.set_int_max_str_digits(640)
+        prime = 2**2_203 - 1
+        action = PrimeFieldLinearAction(
+            variable_axis=PrimeFieldActionAxis(
+                name="polynomial_variables", labels=("x",)
+            ),
+            generator_matrices=(
+                PrimeFieldMatrix(prime=prime, entries=((1,),), columns=1),
+            ),
+        )
 
-    with pytest.raises(
-        OperationDomainValidationError, match="worker JSON integer serialization"
-    ):
-        homogeneous_fixed_subspace(action, 1)
+        with pytest.raises(
+            OperationDomainValidationError, match="worker JSON integer serialization"
+        ):
+            homogeneous_fixed_subspace(action, 1)
+    finally:
+        sys.set_int_max_str_digits(prior_limit)
 
 
 def test_catalog_action_rejects_non_word_safe_prime_before_nested_work() -> None:

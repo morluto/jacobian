@@ -81,13 +81,19 @@ def compute_gowers_cube_profile(
     # For small modulus and order, this is feasible
     for x in range(n):
         for e_tuple in product(range(n), repeat=order):
-            # Compute all 2^s vertices
+            # Compute each subset vertex from the vertex with its least
+            # significant direction removed. This performs one modular
+            # addition per nonempty subset instead of rescanning all s bits.
             all_in = True
+            vertices = [x]
             for mask in range(1 << order):
-                vertex = x
-                for bit in range(order):
-                    if mask & (1 << bit):
-                        vertex = (vertex + e_tuple[bit]) % n
+                if mask:
+                    least_bit = mask & -mask
+                    direction_index = least_bit.bit_length() - 1
+                    vertex = (vertices[mask ^ least_bit] + e_tuple[direction_index]) % n
+                    vertices.append(vertex)
+                else:
+                    vertex = x
                 if vertex not in subset_values:
                     all_in = False
                     break

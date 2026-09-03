@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from itertools import product
 
 import pytest
 
@@ -8,6 +9,20 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.gowers_cube_profile.operations import (
     compute_gowers_cube_profile,
 )
+
+
+def _direct_cube_count(modulus: int, subset: tuple[int, ...], order: int) -> int:
+    subset_values = set(subset)
+    return sum(
+        all(
+            (x + sum(directions[bit] for bit in range(order) if mask & (1 << bit)))
+            % modulus
+            in subset_values
+            for mask in range(1 << order)
+        )
+        for x in range(modulus)
+        for directions in product(range(modulus), repeat=order)
+    )
 
 
 def test_full_set() -> None:
@@ -50,3 +65,26 @@ def test_noncanonical_subset_representative_is_rejected() -> None:
 def test_coupled_cube_work_is_rejected_before_enumeration() -> None:
     with pytest.raises(OperationDomainValidationError, match="vertex-check bound"):
         compute_gowers_cube_profile(3, (0, 1, 2), 12)
+
+
+@pytest.mark.parametrize(
+    ("modulus", "subset", "order"),
+    [(2, (0, 1), 3), (3, (0, 1), 2), (4, (0, 1, 3), 2)],
+)
+def test_cube_count_matches_direct_vertex_definition(
+    modulus: int, subset: tuple[int, ...], order: int
+) -> None:
+    result = compute_gowers_cube_profile(modulus, subset, order)
+
+    assert result.cube_count == _direct_cube_count(modulus, subset, order)
+
+
+@pytest.mark.scale
+def test_full_binary_set_reaches_recurrence_vertex_boundary() -> None:
+    result = compute_gowers_cube_profile(2, (0, 1), 9)
+
+    assert result.cube_count == 2**10
+    assert result.normalized_count.as_fraction() == 1
+
+    with pytest.raises(OperationDomainValidationError, match="vertex-check bound"):
+        compute_gowers_cube_profile(2, (0, 1), 10)

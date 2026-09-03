@@ -299,26 +299,33 @@ def test_real_interval_is_bound_to_the_selected_real_root() -> None:
 def test_profiles_are_deterministic_across_backend_cache_refinement(
     coefficients: tuple[str, ...],
 ) -> None:
-    field = _field(*coefficients)
-    first = compute_embeddings_worker_response(_worker_request(field)).model_dump_json()
-
     import sympy
+    from sympy.polys.rootoftools import CRootOf
 
-    variable = sympy.Symbol("a")
-    polynomial = sympy.Poly.from_list(
-        [int(coefficient) for coefficient in coefficients],
-        variable,
-    )
-    roots = polynomial.all_roots(radicals=False)
-    intervals_before = tuple(root._get_interval() for root in roots)
-    for root in roots:
-        root.eval_rational(n=5)
-    assert tuple(root._get_interval() for root in roots) != intervals_before
+    CRootOf.clear_cache()
+    try:
+        field = _field(*coefficients)
+        first = compute_embeddings_worker_response(
+            _worker_request(field)
+        ).model_dump_json()
 
-    assert (
-        compute_embeddings_worker_response(_worker_request(field)).model_dump_json()
-        == first
-    )
+        variable = sympy.Symbol("a")
+        polynomial = sympy.Poly.from_list(
+            [int(coefficient) for coefficient in coefficients],
+            variable,
+        )
+        roots = polynomial.all_roots(radicals=False)
+        intervals_before = tuple(root._get_interval() for root in roots)
+        for root in roots:
+            root.eval_rational(n=5)
+        assert tuple(root._get_interval() for root in roots) != intervals_before
+
+        assert (
+            compute_embeddings_worker_response(_worker_request(field)).model_dump_json()
+            == first
+        )
+    finally:
+        CRootOf.clear_cache()
 
 
 def test_worker_executes_one_all_root_isolation_pass() -> None:

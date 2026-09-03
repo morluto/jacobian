@@ -649,7 +649,7 @@ class TestSubgraphPatternFindLabelCost:
         assert found.decision == "EXISTS"
 
 
-class TestBacktrackingNodeBudget:
+class TestSubgraphDegreeFiltering:
     def _complete(self, n: int) -> SimpleUndirectedGraph:
         from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -657,15 +657,8 @@ class TestBacktrackingNodeBudget:
         edges = tuple((a, b) for idx, a in enumerate(verts) for b in verts[idx + 1 :])
         return SimpleUndirectedGraph(vertices=verts, edges=edges)
 
-    @pytest.mark.scale
-    def test_internal_backtracking_nodes_are_charged_to_the_budget(self) -> None:
-        """K10 into K10-minus-an-edge cannot return a free negative.
-
-        A failed search visits 1,863,219 partial mappings and scans all ten
-        host candidates at each one (~18.6M candidate checks in one pass).
-        Admission bounds the complete assignment family, so execution must
-        finish the search and return the negative decision.
-        """
+    def test_degree_deficit_proves_complete_graph_has_no_embedding(self) -> None:
+        """K10 cannot embed into K10 minus an edge."""
         from jacobian.math.graphs.morphisms._models import (
             SubgraphPatternFindRequest,
         )

@@ -259,8 +259,8 @@ def _backtrack_subgraph_embedding(
     position: int,
     pattern_order: list[int],
     pattern_adj: list[list[int]],
+    candidate_domains: list[tuple[int, ...]],
     host_adj: list[set[int]],
-    host_count: int,
     vertex_map_idx: list[int],
     used_host_idx: set[int],
     budget: int | None,
@@ -269,7 +269,7 @@ def _backtrack_subgraph_embedding(
     if position == len(pattern_order):
         return True
     pattern_idx = pattern_order[position]
-    for host_idx in range(host_count):
+    for host_idx in candidate_domains[pattern_idx]:
         if budget is not None:
             candidate_checks[0] += 1
             if candidate_checks[0] > budget:
@@ -289,8 +289,8 @@ def _backtrack_subgraph_embedding(
             position + 1,
             pattern_order,
             pattern_adj,
+            candidate_domains,
             host_adj,
-            host_count,
             vertex_map_idx,
             used_host_idx,
             budget,
@@ -314,9 +314,10 @@ def _find_subgraph_embedding(
     Ordinary (non-induced) subgraph containment via exhaustive bounded
     backtracking.  Callers must enforce the request's assignment-count
     admission before invoking this kernel.  Every host-candidate scan at an
-    internal backtracking node is charged against ``max_candidate_checks``
-    when given; exceeding it raises ``SearchBudgetExceededError`` so a
-    partially searched space can never masquerade as a negative decision.
+    eligible host-candidate scan at an internal backtracking node is charged
+    against ``max_candidate_checks`` when given; exceeding it raises
+    ``SearchBudgetExceededError`` so a partially searched space can never
+    masquerade as a negative decision.
     """
     # Normalize host labels to indices once, as the cycle kernel does: the
     # assignment-count admission bounds search paths, so every per-check
@@ -325,7 +326,6 @@ def _find_subgraph_embedding(
     # unbounded admitted run.
     _, host_adj = _canonical_label_adjacency(host_vertices, host_edges)
     p_n = len(pattern_vertices)
-    h_n = len(host_vertices)
     pattern_index = {label: i for i, label in enumerate(pattern_vertices)}
     # Map pattern vertex label -> degree for ordering.
     pattern_degree: dict[str, int] = dict.fromkeys(pattern_vertices, 0)
@@ -351,13 +351,21 @@ def _find_subgraph_embedding(
     for u_idx, v_idx in pattern_edge_idx:
         pattern_adj[u_idx].append(v_idx)
         pattern_adj[v_idx].append(u_idx)
+    candidate_domains = [
+        tuple(
+            host_idx
+            for host_idx, neighbors in enumerate(host_adj)
+            if len(neighbors) >= len(pattern_adj[pattern_idx])
+        )
+        for pattern_idx in range(p_n)
+    ]
 
     if _backtrack_subgraph_embedding(
         0,
         pattern_order,
         pattern_adj,
+        candidate_domains,
         host_adj,
-        h_n,
         vertex_map_idx,
         used_host_idx,
         budget,

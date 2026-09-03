@@ -340,7 +340,7 @@ def test_all_three_vertex_hypergraphs_match_exhaustive_search() -> None:
                 ],
             }
         )
-        result = _compute(source)
+        result = _kernel_compute(source)
         assert result.status == "EXACT"
         assert result.independence_number == len(_brute_force_witness(source))
 

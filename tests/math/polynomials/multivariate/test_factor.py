@@ -2,6 +2,7 @@
 
 from collections.abc import Iterable
 from fractions import Fraction
+from itertools import islice
 from types import SimpleNamespace
 from typing import Any
 
@@ -279,23 +280,26 @@ class TestUniqueFactorizationReplay:
         assert degrees == [1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 4, 4]
 
 
-def _prime_denominator_poly(prime_count: int) -> RationalPolynomial:
-    """Distinct 256-digit prime reciprocals over distinct bivariate monomials."""
-    from sympy import nextprime
+def _coprime_denominator_poly(denominator_count: int) -> RationalPolynomial:
+    """Pairwise-coprime 256-digit reciprocals over distinct monomials."""
+    from sympy import primerange
 
-    primes: list[int] = []
-    candidate = 10**255 + 12345
-    for _ in range(prime_count):
-        candidate = nextprime(candidate)
-        primes.append(candidate)
+    # Powers of distinct primes remain pairwise coprime.  Using small prime
+    # bases preserves the 256-digit LCM fixture without spending the test's
+    # time proving primality for 129 unrelated 256-digit values.
+    primes = tuple(islice(primerange(1_200_000, 1_220_000), denominator_count))
+    denominators = tuple(prime**42 for prime in primes)
     monomials = [
         (exponent_x, exponent_y)
         for exponent_x in range(63, -1, -1)
         for exponent_y in range(63, -1, -1)
-    ][:prime_count]
+    ][:denominator_count]
     return _poly(
         ("x", "y"),
-        tuple((1, primes[index], monomials[index]) for index in range(prime_count)),
+        tuple(
+            (1, denominators[index], monomials[index])
+            for index in range(denominator_count)
+        ),
     )
 
 
@@ -309,12 +313,12 @@ class TestAggregateContentAdmission:
     """
 
     @pytest.mark.scale
-    def test_many_prime_denominators_rejected_before_backend(self) -> None:
-        """129 distinct 256-digit prime denominators pass every per-term
+    def test_many_coprime_denominators_rejected_before_backend(self) -> None:
+        """129 pairwise-coprime 256-digit denominators pass every per-term
         budget yet their least common multiple exceeds the canonical
         32,768-digit rational limit, so the operation could never return its
         declared typed result; admission rejects before invoking SymPy."""
-        request = MultivariateFactorRequest(polynomial=_prime_denominator_poly(129))
+        request = MultivariateFactorRequest(polynomial=_coprime_denominator_poly(129))
         with pytest.raises(OperationDomainValidationError):
             _compute_factor(request)
 
@@ -323,7 +327,7 @@ class TestAggregateContentAdmission:
         """Even with the least common multiple inside the canonical limit,
         clearing denominators can push every primitive coefficient past the
         operation's own 256-digit coefficient budget."""
-        request = MultivariateFactorRequest(polynomial=_prime_denominator_poly(127))
+        request = MultivariateFactorRequest(polynomial=_coprime_denominator_poly(127))
         with pytest.raises(OperationDomainValidationError):
             _compute_factor(request)
 

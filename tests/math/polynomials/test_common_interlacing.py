@@ -25,6 +25,7 @@ from jacobian.math.polynomials.real_algebra import common_interlacing_profile
 from jacobian.math.polynomials.real_algebra._common_interlacing import (
     _admit_common_interlacing,
     _common_interlacing_outcome,
+    _common_interlacing_profile_in_process,
     _root_profile,
 )
 from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
@@ -930,7 +931,7 @@ def test_small_split_quadratics_match_the_gap_criterion_exhaustively() -> None:
         root_pairs,
         repeat=2,
     ):
-        result = common_interlacing_profile(
+        result = _common_interlacing_profile_in_process(
             (
                 _quadratic("left", left_lower, left_upper),
                 _quadratic("right", right_lower, right_upper),

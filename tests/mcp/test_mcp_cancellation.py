@@ -62,7 +62,7 @@ def test_stdio_cancellation_reaps_tree_and_server_remains_responsive(
                             "operation_id": "test.process.wait",
                             "payload": {"marker": str(marker)},
                         },
-                        read_timeout_seconds=2,
+                        read_timeout_seconds=0.5,
                     )
                 await _assert_pids_exit(await _read_pids(marker))
             follow_up = await client.call_tool(

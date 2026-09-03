@@ -86,24 +86,19 @@ def multilinear_extension(
     the character ``prod_{i in S} (1 - 2 x_i)`` equals ``(-1)^{<S, x>}``.
     """
     n = _admit_truth_table(values)
-    truth = _truth_values(values)
-    spectrum = _fast_walsh_hadamard_transform(truth)
-    total = len(truth)
+    coefficients = _subset_mobius_transform(_truth_values(values))
 
     symbols = sympy.symbols(f"x0:{n}")
     if not isinstance(symbols, tuple):
         symbols = (symbols,)
 
-    poly = sympy.Integer(0)
-    for subset_mask in range(total):
-        weight = sympy.Rational(spectrum[subset_mask], total)
-        character = sympy.Integer(1)
-        for bit in range(n):
-            if subset_mask & (1 << bit):
-                character *= 1 - 2 * symbols[bit]
-        poly += weight * character
-
-    poly = sympy.expand(poly)
+    terms = [
+        sympy.Integer(coefficient)
+        * sympy.prod(symbols[bit] for bit in range(n) if subset_mask & (1 << bit))
+        for subset_mask, coefficient in enumerate(coefficients)
+        if coefficient
+    ]
+    poly = sympy.Add(*terms)
     return MultilinearExtensionResult(
         polynomial=str(poly),
         variable_count=n,
@@ -190,6 +185,19 @@ def _fast_walsh_hadamard_transform(values: list[int]) -> list[int]:
             i += step * 2
         step *= 2
     return result
+
+
+def _subset_mobius_transform(values: list[int]) -> list[int]:
+    """Return coefficients of the natural-order multilinear extension."""
+
+    coefficients = list(values)
+    bit = 1
+    while bit < len(coefficients):
+        for subset_mask in range(len(coefficients)):
+            if subset_mask & bit:
+                coefficients[subset_mask] -= coefficients[subset_mask ^ bit]
+        bit <<= 1
+    return coefficients
 
 
 __all__ = ["erasure_noise", "fourier_spectrum", "multilinear_extension", "truth_table"]

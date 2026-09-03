@@ -220,6 +220,30 @@ def test_multilinear_extension_agrees_on_hypercube() -> None:
         assert poly.subs(assignment) == truth[x], f"MLE disagrees at {x}"
 
 
+@pytest.mark.scale
+def test_ten_variable_parity_has_all_closed_form_multilinear_coefficients() -> None:
+    import sympy
+
+    variable_count = 10
+    truth = [index.bit_count() % 2 for index in range(1 << variable_count)]
+
+    result = compute_multilinear_extension(
+        MultilinearExtensionRequest(truth_table=_truth_table(truth))
+    )
+
+    symbols = sympy.symbols(f"x0:{variable_count}")
+    expected_coefficients = {
+        tuple((subset_mask >> bit) & 1 for bit in range(variable_count)): (-2)
+        ** (subset_mask.bit_count() - 1)
+        for subset_mask in range(1, 1 << variable_count)
+    }
+    expected = sympy.Poly.from_dict(
+        expected_coefficients, symbols, domain="ZZ"
+    ).as_expr()
+
+    assert result.polynomial == str(expected)
+
+
 # ---------------------------------------------------------------------------
 # Erasure noise
 # ---------------------------------------------------------------------------

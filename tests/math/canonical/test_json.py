@@ -6,6 +6,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 from pydantic import ValidationError
+from sympy import Integer
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian.canonical import (
@@ -13,6 +14,7 @@ from jacobian.canonical import (
     CanonicalLimits,
     canonicalize_json,
     encode_strict_json,
+    format_canonical_integer,
     sha256_digest,
     strict_json_object_size,
 )
@@ -21,6 +23,10 @@ from jacobian.canonical import (
 def test_sha256_digest_uses_the_canonical_prefixed_format() -> None:
     for value in (b"", b"\x00", b"jacobian", b"\xde\xad\xbe\xef" * 100):
         assert sha256_digest(value) == "sha256:" + hashlib.sha256(value).hexdigest()
+
+
+def test_format_canonical_integer_accepts_integral_backend_scalars() -> None:
+    assert format_canonical_integer(Integer(-12)) == "-12"
 
 
 def test_equivalent_rationals_have_identical_canonical_bytes() -> None:

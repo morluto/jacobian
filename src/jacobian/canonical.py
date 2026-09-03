@@ -9,7 +9,7 @@ import unicodedata
 from collections.abc import Iterable
 from dataclasses import dataclass
 from fractions import Fraction
-from typing import Any, NoReturn
+from typing import Any, NoReturn, SupportsInt
 
 import rfc8785
 from flint import fmpz
@@ -38,10 +38,10 @@ def parse_canonical_integer(value: str) -> int:
     return int(fmpz(value))
 
 
-def format_canonical_integer(value: int) -> str:
+def format_canonical_integer(value: SupportsInt) -> str:
     """Format an integer without Python's string-digit limit."""
 
-    return fmpz(value).str()
+    return fmpz(int(value)).str()
 
 
 @dataclass(frozen=True, slots=True)

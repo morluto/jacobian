@@ -915,21 +915,9 @@ class TestAggregateSearchBudgetAcrossValidation:
     """One request performs exactly one charged search: result construction
     and serialized re-validation must not repeat the bounded search, so the
     total visited states stay within resource_budget.max_states (review
-    thread: PR #2223, 19-edge Z/2 bridge case previously charged 3x)."""
+    thread: PR #2223). The separate 19-edge test owns the full-search boundary;
+    replay behavior is independent of search size."""
 
-    @staticmethod
-    def _bridge19_graph() -> LooplessMultigraph:
-        edges = []
-        for i in range(9):
-            edges.append(MultigraphEdge(edge_id=f"a{i}", left=i, right=(i + 1) % 9))
-        for i in range(9):
-            edges.append(
-                MultigraphEdge(edge_id=f"b{i}", left=9 + i, right=9 + (i + 1) % 9)
-            )
-        edges.append(MultigraphEdge(edge_id="br", left=0, right=9))
-        return LooplessMultigraph(vertex_count=18, edges=tuple(edges))
-
-    @pytest.mark.scale
     def test_construction_and_revalidation_charge_one_search(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -948,7 +936,7 @@ class TestAggregateSearchBudgetAcrossValidation:
             multigraph_operations, "_search_flow_unbound", counting_search
         )
         result = _flow_find(
-            self._bridge19_graph(),
+            BRIDGE_GRAPH,
             Z2,
             resource_budget={"require_nowhere_zero": True},
         )

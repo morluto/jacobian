@@ -126,8 +126,11 @@ def _homogeneous_fixed_subspace_envelope(
     equation_rows = generator_count * monomial_count
     equation_entries = generator_count * monomial_count**2
     output_entries = monomial_count**2
+    exponentiation_steps = max(1, degree.bit_length())
     expansion_work = (
-        generator_count * max(1, degree) * variable_count * monomial_count**2
+        generator_count * exponentiation_steps
+        if variable_count == 1
+        else generator_count * max(1, degree) * variable_count * monomial_count**2
     )
     # One elimination solves the stacked fixed equations; the second puts the
     # returned nullspace rows into backend-independent canonical RREF form.
@@ -136,7 +139,11 @@ def _homogeneous_fixed_subspace_envelope(
     # The Python substitution loop does sum(exponents) calls to
     # _multiply_by_linear_form per monomial, each iterating over at most
     # monomial_count terms. Bound it separately from FLINT work.
-    substitution_work = generator_count * max(1, degree) * monomial_count**2
+    substitution_work = (
+        generator_count * exponentiation_steps
+        if variable_count == 1
+        else generator_count * max(1, degree) * monomial_count**2
+    )
     if equation_rows > MAX_PRIME_FIELD_MATRIX_AXIS:
         raise OperationDomainValidationError(
             location=("action", "generator_matrices"),
@@ -491,6 +498,10 @@ def _induced_action_matrix(
 ) -> tuple[tuple[int, ...], ...]:
     """Substitute one generator into every ordered homogeneous monomial."""
 
+    if len(action.variable_axis.labels) == 1:
+        degree = monomial_basis[0][0]
+        return ((pow(generator.entries[0][0], degree, action.prime),),)
+
     monomial_index = {
         exponents: index for index, exponents in enumerate(monomial_basis)
     }
@@ -544,6 +555,33 @@ def homogeneous_fixed_subspace(
         checkpoint=checkpoint,
     )
     variable_count = len(action.variable_axis.labels)
+    if variable_count == 1:
+        scalars = tuple(
+            generator.entries[0][0] for generator in action.generator_matrices
+        )
+        if any(scalar == 0 for scalar in scalars):
+            raise OperationDomainValidationError(
+                location=("action", "generator_matrices"),
+                code="finite_field.linear_action_generator_invertible",
+                message="every linear-action generator matrix must be invertible",
+            )
+        scalar_basis_rows = (
+            ((1,),)
+            if all(pow(scalar, degree, action.prime) == 1 for scalar in scalars)
+            else ()
+        )
+        result = HomogeneousFixedSubspace._from_kernel(
+            action=action,
+            degree=degree,
+            monomial_basis=((degree,),),
+            basis_matrix=PrimeFieldMatrix(
+                prime=action.prime,
+                entries=scalar_basis_rows,
+                columns=monomial_count,
+            ),
+        )
+        checkpoint("after result construction")
+        return result
     checkpoint("before generator validation")
     checkpoint("during generator validation")
     if not run_fixed_subspace_generator_validation(

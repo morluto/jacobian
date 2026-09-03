@@ -122,6 +122,16 @@ def test_zero_fixed_space_retains_the_ambient_monomial_axis() -> None:
     assert result.fixed_dimension == 0
 
 
+def test_singular_one_variable_generator_is_rejected_by_scalar_admission() -> None:
+    action = PrimeFieldLinearAction(
+        variable_axis=PrimeFieldActionAxis(name="polynomial_variables", labels=("x",)),
+        generator_matrices=(PrimeFieldMatrix(prime=3, entries=((0,),), columns=1),),
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="invertible"):
+        homogeneous_fixed_subspace(action, 1)
+
+
 def test_multiple_generators_compute_their_simultaneous_fixed_space() -> None:
     action = PrimeFieldLinearAction(
         variable_axis=PrimeFieldActionAxis(
@@ -356,14 +366,16 @@ def test_seventeen_one_variable_generators_use_derived_admission() -> None:
     assert result.fixed_dimension == 0
 
 
-def test_huge_one_variable_degree_is_rejected_by_substitution_bound() -> None:
+def test_huge_one_variable_degree_uses_logarithmic_scalar_powering() -> None:
     action = PrimeFieldLinearAction(
         variable_axis=PrimeFieldActionAxis(name="polynomial_variables", labels=("x",)),
         generator_matrices=(PrimeFieldMatrix(prime=3, entries=((1,),), columns=1),),
     )
 
-    with pytest.raises(OperationDomainValidationError, match="expansion bound"):
-        homogeneous_fixed_subspace(action, 1_100_000_000)
+    result = homogeneous_fixed_subspace(action, 1_100_000_000)
+
+    assert result.monomial_basis == ((1_100_000_000,),)
+    assert result.basis_matrix.entries == ((1,),)
 
 
 def test_native_action_preserves_the_exact_prime_fallback() -> None:

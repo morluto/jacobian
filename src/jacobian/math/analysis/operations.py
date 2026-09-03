@@ -280,14 +280,28 @@ def _power_second_jet(child: _SecondJet, exponent: int) -> _SecondJet:
 
     from flint import arb
 
-    value = child.value**exponent
+    def integer_power(value: Any, power: int) -> Any:
+        if power < 0 or not value.contains(0):
+            return value**power
+        result = arb(1)
+        factor = value
+        remaining = power
+        while remaining:
+            if remaining & 1:
+                result = result * factor
+            remaining >>= 1
+            if remaining:
+                factor = factor * factor
+        return result
+
+    value = integer_power(child.value, exponent)
     if exponent == 1:
         return _compose_second_jet_unary(value, arb(1), arb(0), child)
-    first = exponent * child.value ** (exponent - 1)
+    first = exponent * integer_power(child.value, exponent - 1)
     if exponent == -1:
-        second = 2 * child.value**-3
+        second = 2 * integer_power(child.value, -3)
     else:
-        second = exponent * (exponent - 1) * child.value ** (exponent - 2)
+        second = exponent * (exponent - 1) * integer_power(child.value, exponent - 2)
     return _compose_second_jet_unary(value, first, second, child)
 
 

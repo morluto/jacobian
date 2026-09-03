@@ -105,6 +105,21 @@ def test_quadratic_encloses_known_gradient_and_hessian() -> None:
     assert _contains(hessian[("y", "y")], Fraction(2))
 
 
+def test_even_power_over_symmetric_zero_crossing_box_is_finite() -> None:
+    result = _run(
+        {"op": "pow", "exponent": 2, "children": [_var("x")]},
+        (("x", Fraction(-1), Fraction(1)),),
+    )
+
+    assert result.status == "ENCLOSED"
+    assert result.value is not None
+    assert _contains(result.value, Fraction(0))
+    assert _contains(result.value, Fraction(1))
+    assert _contains(_gradient(result)["x"], Fraction(-2))
+    assert _contains(_gradient(result)["x"], Fraction(2))
+    assert _contains(_hessian(result)[("x", "x")], Fraction(2))
+
+
 def test_product_has_constant_mixed_second_partial() -> None:
     result = _run(
         {"op": "mul", "children": [_var("x"), _var("y")]},

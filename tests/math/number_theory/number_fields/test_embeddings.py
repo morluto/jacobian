@@ -300,7 +300,7 @@ def test_profiles_are_deterministic_across_backend_cache_refinement(
     coefficients: tuple[str, ...],
 ) -> None:
     field = _field(*coefficients)
-    first = embeddings(field).model_dump_json()
+    first = compute_embeddings_worker_response(_worker_request(field)).model_dump_json()
 
     import sympy
 
@@ -312,7 +312,10 @@ def test_profiles_are_deterministic_across_backend_cache_refinement(
     for root in polynomial.all_roots(radicals=False):
         root.eval_rational(n=40)
 
-    assert embeddings(field).model_dump_json() == first
+    assert (
+        compute_embeddings_worker_response(_worker_request(field)).model_dump_json()
+        == first
+    )
 
 
 def test_worker_executes_one_all_root_isolation_pass() -> None:

@@ -28,16 +28,18 @@ class _SidonExtensionAdmissionPlan:
     source_differences: Mapping[int, _DifferencePair]
 
 
-def _ordered_difference_pairs(
+def _positive_difference_pairs(
     elements: tuple[AdditiveInteger, ...],
 ) -> dict[int, _DifferencePair]:
     integers = tuple(map(int, elements))
-    return {
-        left - right: (left, right)
-        for left in integers
-        for right in integers
-        if left != right
-    }
+    pairs: dict[int, _DifferencePair] = {}
+    for index, left in enumerate(integers):
+        for right in integers[:index]:
+            if left > right:
+                pairs[left - right] = (left, right)
+            else:
+                pairs[right - left] = (right, left)
+    return pairs
 
 
 def _extension_work_units(source_count: int, candidate_count: int) -> int:
@@ -83,8 +85,8 @@ def _require_extension_work_budget(
 def _validate_source_is_sidon(
     source_elements: tuple[AdditiveInteger, ...],
 ) -> dict[int, _DifferencePair]:
-    source_pairs = _ordered_difference_pairs(source_elements)
-    if len(source_pairs) != len(source_elements) * (len(source_elements) - 1):
+    source_pairs = _positive_difference_pairs(source_elements)
+    if len(source_pairs) != len(source_elements) * (len(source_elements) - 1) // 2:
         raise _difference_set_validation_error(
             "combinatorics.sidon_invariant",
             "source elements must form a Sidon set",
@@ -284,17 +286,18 @@ def _candidate_obstruction(
     candidate_pairs: dict[int, tuple[int, int]] = {}
     for source_element in source_elements:
         source_value = int(source_element)
-        for pair in (
-            (candidate_value, source_value),
-            (source_value, candidate_value),
-        ):
-            difference = pair[0] - pair[1]
-            previous = source_pairs.get(difference)
-            if previous is None:
-                previous = candidate_pairs.get(difference)
-            if previous is not None:
-                return difference, previous, pair
-            candidate_pairs[difference] = pair
+        pair = (
+            (candidate_value, source_value)
+            if candidate_value > source_value
+            else (source_value, candidate_value)
+        )
+        difference = pair[0] - pair[1]
+        previous = source_pairs.get(difference)
+        if previous is None:
+            previous = candidate_pairs.get(difference)
+        if previous is not None:
+            return difference, previous, pair
+        candidate_pairs[difference] = pair
     return None
 
 

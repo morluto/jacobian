@@ -35,7 +35,7 @@ def compute_sidon_extension_profile(
     """Partition candidates into admissible and rejected.
 
     For each candidate x, check whether A plus x is Sidon by computing
-    all ordered differences and checking for collisions. If a collision
+    canonical positive differences and checking for collisions. If a collision
     is found, record the repeated difference and the two source pairs.
     """
     candidates = candidate_elements

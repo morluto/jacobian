@@ -220,13 +220,13 @@ class TestSidonExtensionProfile:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         calls = 0
-        real_profile = sidon_models._ordered_difference_pairs
+        real_profile = sidon_models._positive_difference_pairs
 
         def counted_profile(*args: Any, **kwargs: Any) -> Any:
             nonlocal calls
             calls += 1
             return real_profile(*args, **kwargs)
 
-        monkeypatch.setattr(sidon_models, "_ordered_difference_pairs", counted_profile)
+        monkeypatch.setattr(sidon_models, "_positive_difference_pairs", counted_profile)
         _extension(["1", "2", "5"], ["3", "4"])
         assert calls == 1

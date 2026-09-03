@@ -134,7 +134,10 @@ def _incremental_balances_hold(net: list[list[int]], moduli: tuple[int, ...]) ->
 def _leaf_found_outcome(
     net: list[list[int]],
     moduli: tuple[int, ...],
-    assignments: list[FlowEdgeAssignment],
+    edges: tuple[MultigraphEdge, ...],
+    assignments: list[
+        tuple[Literal["left_to_right", "right_to_left"], tuple[int, ...]]
+    ],
     states_explored: int,
 ) -> _FlowSearchOutcome | None:
     """Evaluate one complete assignment; return the FOUND outcome or None.
@@ -146,7 +149,14 @@ def _leaf_found_outcome(
         return None
     return _FlowSearchOutcome(
         status="FOUND",
-        flow=tuple(assignments),
+        flow=tuple(
+            FlowEdgeAssignment(
+                edge_id=edge.edge_id,
+                orientation=orientation,
+                value=value,
+            )
+            for edge, (orientation, value) in zip(edges, assignments, strict=True)
+        ),
         states_explored=states_explored,
         termination_reason="WITNESS_FOUND",
     )
@@ -155,24 +165,27 @@ def _leaf_found_outcome(
 def _balance_apply(
     net: list[list[int]],
     edge: MultigraphEdge,
-    assignment: FlowEdgeAssignment,
+    orientation: Literal["left_to_right", "right_to_left"],
+    value: tuple[int, ...],
     sign: int,
 ) -> None:
     """Add (sign=1) or remove (sign=-1) one assignment's divergence update."""
-    tail, head = oriented_endpoints(edge, assignment.orientation)
-    for k, component in enumerate(assignment.value):
+    tail, head = oriented_endpoints(edge, orientation)
+    for k, component in enumerate(value):
         net[tail][k] += sign * component
         net[head][k] -= sign * component
 
 
 def _pop_balanced_assignment(
-    assignments: list[FlowEdgeAssignment],
+    assignments: list[
+        tuple[Literal["left_to_right", "right_to_left"], tuple[int, ...]]
+    ],
     edges: tuple[MultigraphEdge, ...],
     net: list[list[int]],
 ) -> None:
     """Pop the deepest assignment and undo its divergence update."""
-    assignment = assignments.pop()
-    _balance_apply(net, edges[len(assignments)], assignment, -1)
+    orientation, value = assignments.pop()
+    _balance_apply(net, edges[len(assignments)], orientation, value, -1)
 
 
 def _search_dfs(
@@ -201,7 +214,9 @@ def _search_dfs(
     # budget on every partial state. This avoids eagerly pushing all
     # children while copying prefix lists, which would retain up to
     # ``branching * depth`` assignments even when ``max_states == 1``.
-    assignments: list[FlowEdgeAssignment] = []
+    assignments: list[
+        tuple[Literal["left_to_right", "right_to_left"], tuple[int, ...]]
+    ] = []
     next_index: list[int] = [0]
 
     while next_index:
@@ -210,7 +225,9 @@ def _search_dfs(
             # Complete assignment was already counted when the final edge
             # was pushed; its incremental balances were maintained on the
             # way down, so evaluating conservation is O(vertices * dimension).
-            found = _leaf_found_outcome(net, moduli, assignments, states_explored)
+            found = _leaf_found_outcome(
+                net, moduli, edges, assignments, states_explored
+            )
             if found is not None:
                 return found
             # Backtrack from leaf: pop placeholder and last assignment.
@@ -245,13 +262,8 @@ def _search_dfs(
 
         orientation, value = choices[idx]
         edge = edges[depth]
-        new_assign = FlowEdgeAssignment(
-            edge_id=edge.edge_id,
-            orientation=orientation,
-            value=value,
-        )
-        assignments.append(new_assign)
-        _balance_apply(net, edge, new_assign, 1)
+        assignments.append((orientation, value))
+        _balance_apply(net, edge, orientation, value, 1)
         next_index.append(0)
 
     return _FlowSearchOutcome(

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from fractions import Fraction
+from functools import lru_cache
 from math import gcd
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
@@ -15,6 +17,16 @@ from jacobian.math.number_theory.arithmetic_functions._models import (
 )
 
 MAX_DIVISOR_INCIDENCES = 600_000
+
+
+@dataclass(frozen=True)
+class _ConvolutionPlan:
+    incidences: tuple[tuple[int, int], ...]
+    left_nums: tuple[int, ...]
+    left_dens: tuple[int, ...]
+    right_nums: tuple[int, ...]
+    right_dens: tuple[int, ...]
+    slot_lcms: tuple[int, ...]
 
 
 def _rational(value: Fraction | int) -> CanonicalRational:
@@ -78,12 +90,44 @@ class _HeightSums:
         *,
         denominator: int | None = None,
     ) -> None:
-        self.denominator_digits[index] += height.denominator_digits
+        self._add_digits(
+            index,
+            numerator_digits=height.numerator_digits,
+            denominator_digits=height.denominator_digits,
+            denominator=denominator,
+        )
+
+    def add_product(
+        self,
+        index: int,
+        left: RationalHeight,
+        right: RationalHeight,
+        *,
+        denominator: int | None = None,
+    ) -> None:
+        self._add_digits(
+            index,
+            numerator_digits=left.numerator_digits + right.numerator_digits,
+            denominator_digits=(
+                left.denominator_digits + right.denominator_digits
+            ),
+            denominator=denominator,
+        )
+
+    def _add_digits(
+        self,
+        index: int,
+        *,
+        numerator_digits: int,
+        denominator_digits: int,
+        denominator: int | None,
+    ) -> None:
+        self.denominator_digits[index] += denominator_digits
         self.maximum_adjusted_numerator[index] = max(
             self.maximum_adjusted_numerator[index],
-            height.numerator_digits - height.denominator_digits,
+            numerator_digits - denominator_digits,
         )
-        lifted_numerator = height.numerator_digits
+        lifted_numerator = numerator_digits
         if self.slot_lcms is not None:
             slot_lcm = self.slot_lcms[index]
             if slot_lcm is None:
@@ -212,6 +256,8 @@ def _convolution_slot_lcms(
 ) -> tuple[int | None, ...]:
     """Bound the denominator LCM independently for each output position."""
 
+    cached_product = lru_cache(maxsize=4_096)(_bounded_product)
+    cached_lcm = lru_cache(maxsize=4_096)(_bounded_lcm)
     lcms: list[int | None] = [1] * length
     interned_lcms: dict[int, int] = {1: 1}
     for divisor, multiple in incidences:
@@ -219,13 +265,13 @@ def _convolution_slot_lcms(
         current = lcms[index]
         if current is None:
             continue
-        term_denominator = _bounded_product(
+        term_denominator = cached_product(
             left_dens[divisor - 1], right_dens[multiple // divisor - 1]
         )
         if term_denominator is None:
             lcms[index] = None
             continue
-        merged = _bounded_lcm(current, term_denominator)
+        merged = cached_lcm(current, term_denominator)
         if merged is not None:
             merged = interned_lcms.setdefault(merged, merged)
         lcms[index] = merged
@@ -241,24 +287,29 @@ def _bounded_product(left: int, right: int) -> int | None:
 
 def _admit_convolution(
     f: tuple[CanonicalRational, ...], g: tuple[CanonicalRational, ...]
-) -> tuple[tuple[int, int], ...]:
+) -> _ConvolutionPlan:
     _require_length(f, "f", _MAX_DIVISOR_PREFIX_LENGTH)
     if len(f) != len(g):
         raise ValueError("f and g must have the same length")
     incidences = _require_divisor_incidences(len(f))
     left = _heights(f)
     right = _heights(g)
-    left_dens = tuple(parse_canonical_integer(value.den) for value in f)
-    right_dens = tuple(parse_canonical_integer(value.den) for value in g)
+    left_ratios = tuple(value.as_integer_ratio() for value in f)
+    right_ratios = tuple(value.as_integer_ratio() for value in g)
+    left_nums = tuple(numerator for numerator, _ in left_ratios)
+    left_dens = tuple(denominator for _, denominator in left_ratios)
+    right_nums = tuple(numerator for numerator, _ in right_ratios)
+    right_dens = tuple(denominator for _, denominator in right_ratios)
     slot_lcms = _convolution_slot_lcms(len(left), incidences, left_dens, right_dens)
     sums = _HeightSums(len(left), slot_lcms=slot_lcms)
     for divisor, multiple in incidences:
         left_index = divisor - 1
         right_index = multiple // divisor - 1
         slot_lcm = slot_lcms[multiple - 1]
-        sums.add(
+        sums.add_product(
             multiple - 1,
-            left[left_index].product(right[right_index]),
+            left[left_index],
+            right[right_index],
             denominator=(
                 left_dens[left_index] * right_dens[right_index]
                 if slot_lcm not in (None, 1)
@@ -266,7 +317,15 @@ def _admit_convolution(
             ),
         )
     _require_result_envelope(sums.heights(), "Dirichlet convolution")
-    return incidences
+    assert all(slot_lcm is not None for slot_lcm in slot_lcms)
+    return _ConvolutionPlan(
+        incidences=incidences,
+        left_nums=left_nums,
+        left_dens=left_dens,
+        right_nums=right_nums,
+        right_dens=right_dens,
+        slot_lcms=tuple(slot_lcm for slot_lcm in slot_lcms if slot_lcm is not None),
+    )
 
 
 def _admit_mobius(
@@ -359,16 +418,24 @@ def dirichlet_convolution(
     f: tuple[CanonicalRational, ...], g: tuple[CanonicalRational, ...]
 ) -> tuple[CanonicalRational, ...]:
     """Compute ``h = f * g`` where ``h(K) = sum_{d|K} f(d) * g(K/d)``."""
-    incidences = _admit_convolution(f, g)
+    plan = _admit_convolution(f, g)
     n = len(f)
-    f_values = [v.as_fraction() for v in f]
-    g_values = [v.as_fraction() for v in g]
-    result_values: list[Fraction] = [Fraction(0)] * n
-    for divisor, multiple in incidences:
-        result_values[multiple - 1] += (
-            f_values[divisor - 1] * g_values[multiple // divisor - 1]
+    result_numerators = [0] * n
+    for divisor, multiple in plan.incidences:
+        left_index = divisor - 1
+        right_index = multiple // divisor - 1
+        denominator = plan.left_dens[left_index] * plan.right_dens[right_index]
+        result_numerators[multiple - 1] += (
+            plan.left_nums[left_index]
+            * plan.right_nums[right_index]
+            * (plan.slot_lcms[multiple - 1] // denominator)
         )
-    return tuple(_rational(v) for v in result_values)
+    return tuple(
+        CanonicalRational.from_integer_ratio(numerator, denominator)
+        for numerator, denominator in zip(
+            result_numerators, plan.slot_lcms, strict=True
+        )
+    )
 
 
 def mobius_transform(

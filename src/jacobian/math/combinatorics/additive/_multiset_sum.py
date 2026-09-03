@@ -104,6 +104,29 @@ def _bar_position_tuples(pool_size: int, bars: int) -> Iterator[tuple[int, ...]]
         yield tuple(positions)
 
 
+def _count_pair_sums_with_flint(
+    values: tuple[int, ...], bounds: tuple[int, int] | None
+) -> Counter[int]:
+    from flint import fmpz_poly
+
+    minimum = values[0]
+    coefficients = [0] * (values[-1] - minimum + 1)
+    for value in values:
+        coefficients[value - minimum] = 1
+    ordered_counts = (fmpz_poly(coefficients) ** 2).coeffs()
+    source = set(values)
+    counts = Counter[int]()
+    for offset, ordered_count in enumerate(ordered_counts):
+        value = 2 * minimum + offset
+        if bounds is not None and not bounds[0] <= value <= bounds[1]:
+            continue
+        diagonal = int(value % 2 == 0 and value // 2 in source)
+        multiplicity = (int(ordered_count) + diagonal) // 2
+        if multiplicity:
+            counts[value] = multiplicity
+    return counts
+
+
 def count_sums(
     values: tuple[int, ...],
     arity: int,
@@ -127,6 +150,16 @@ def count_sums(
         arity * values[0] > bounds[1] or arity * values[-1] < bounds[0]
     ):
         return Counter()
+
+    # For pairs whose complete attainable interval is already result-bounded,
+    # polynomial squaring computes all ordered multiplicities in FLINT.  An
+    # unordered pair count is half the ordered count plus the diagonal
+    # indicator.  Keep sparse, wide-coordinate requests on the candidate
+    # iterator below so this specialization cannot create a large dense
+    # intermediate.
+    attainable_span = 2 * (values[-1] - values[0]) + 1
+    if arity == 2 and attainable_span <= MAX_SUPPORT_SIZE:
+        return _count_pair_sums_with_flint(values, bounds)
 
     counts: Counter[int] = Counter()
     if arity <= len(values):

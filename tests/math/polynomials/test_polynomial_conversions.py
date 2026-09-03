@@ -196,6 +196,18 @@ def test_invariant_operations_accept_canonical_polynomial_values() -> None:
     assert resultant.resultant.value.num == "0"
 
 
+def test_zero_polynomial_has_zero_discriminant() -> None:
+    zero = RationalPolynomial(
+        variables=("x",),
+        polynomial=SparseRationalPolynomial(),
+    )
+
+    result = polynomial_discriminant(zero, "x")
+
+    assert result.discriminant.kind == "SCALAR"
+    assert result.discriminant.value.as_fraction() == 0
+
+
 def test_flint_discriminant_accepts_degree_above_previous_ceiling() -> None:
     degree = 512
     result = polynomial_discriminant(_binomial(degree, -2), "x")

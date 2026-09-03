@@ -511,7 +511,15 @@ def polynomial_discriminant(
     _run_admission(lambda: _admit_discriminant(polynomial, variable))
     variables = polynomial.variables
     if len(variables) == 1:
-        value = _flint_univariate(polynomial).discriminant()
+        flint_polynomial = _flint_univariate(polynomial)
+        if flint_polynomial.is_zero():
+            return PolynomialDiscriminantResult(
+                variable=variable,
+                discriminant=PolynomialScalarValue(
+                    value=CanonicalRational.from_integer_ratio(0, 1)
+                ),
+            )
+        value = flint_polynomial.discriminant()
         return PolynomialDiscriminantResult(
             variable=variable,
             discriminant=PolynomialScalarValue(

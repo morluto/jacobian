@@ -15,6 +15,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationExample,
 )
+from jacobian.math.matrices._flint import rational_determinant
 from jacobian.math.number_theory.arithmetic import primitive_integer_vector
 from jacobian.math.polynomials._conversions import (
     rational_from_sympy,
@@ -294,13 +295,19 @@ def _compute_graded_jacobian_syzygy(
             independent_rows = matrix[:, list(pivot_columns)].T.rref()[1]
             row_indices = tuple(int(index) for index in independent_rows)
             column_indices = tuple(int(index) for index in pivot_columns)
-            determinant = matrix.extract(row_indices, column_indices).det()
+            minor = matrix.extract(row_indices, column_indices)
+            determinant = rational_determinant(
+                tuple(
+                    tuple(Fraction(value) for value in row)
+                    for row in minor.tolist()
+                )
+            )
             if determinant == 0:
                 raise RuntimeError("rank-minor extraction returned a zero determinant")
             rank_minor = GradedJacobianRankMinor(
                 row_indices=row_indices,
                 column_indices=column_indices,
-                determinant=rational_from_sympy(determinant),
+                determinant=CanonicalRational.from_fraction(determinant),
             )
         nullity = matrix.cols - rank
         maps.append(

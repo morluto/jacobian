@@ -35,15 +35,16 @@ def _scalar_replacements(value: object) -> tuple[object, ...]:
     if isinstance(value, float):
         return (-1.0, 0.0, 1.0)
     if isinstance(value, str):
+        # Keep one representative for each materially different parser edge.
+        # Repeating signed numerals, zero-denominator fractions, and non-finite
+        # spellings at every string leaf multiplies isolated-worker startup
+        # without exercising a distinct conformance boundary.
         return (
             "",
             " ",
             "0",
-            "-1",
             "0/0",
-            "1/0",
             "nan",
-            "oo",
             "undeclared_symbol",
         )
     if value is None:

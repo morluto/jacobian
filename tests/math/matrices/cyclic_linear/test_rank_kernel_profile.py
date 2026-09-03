@@ -34,6 +34,7 @@ from jacobian.math.matrices.cyclic_linear._tools import TOOLS
 from jacobian.math.matrices.cyclic_linear.operations import (
     _CYCLIC_PROFILE_WALL_SECONDS,
     CyclicRankKernelAdmissionError,
+    _multiplication_norm,
 )
 from jacobian.process import bounded_process_cancellation
 
@@ -71,6 +72,25 @@ def _symbol(
 
 def _coefficients(element: object) -> tuple[Fraction, ...]:
     return tuple(value.as_fraction() for value in element.coefficients_ascending)  # type: ignore[attr-defined]
+
+
+def test_multiplication_norm_matches_power_basis_structure_constants() -> None:
+    import sympy
+
+    variable = sympy.Symbol("x")
+    for order in (3, 4, 5, 8):
+        polynomial = sympy.Poly(sympy.cyclotomic_poly(order, variable), variable)
+        degree = polynomial.degree()
+        output_sums = [0] * degree
+        for left_power in range(degree):
+            for right_power in range(degree):
+                remainder = sympy.Poly(
+                    variable ** (left_power + right_power), variable
+                ).rem(polynomial)
+                for output_power in range(degree):
+                    output_sums[output_power] += abs(int(remainder.nth(output_power)))
+
+        assert _multiplication_norm(polynomial, degree, variable) == max(output_sums)
 
 
 def test_cyclotomic_element_has_explicit_shared_number_field_conversion() -> None:
@@ -729,11 +749,24 @@ def test_owner_checkpoint_observes_existing_request_deadline() -> None:
 def test_owner_checkpoint_observes_deadline_inside_cyclotomic_admission(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    clock_values = iter((0.0, 0.0, 0.0, 0.0))
+    from jacobian.math.matrices.cyclic_linear import operations
+
+    expired = False
+    original_checkpoint = operations._require_execution_active
+
+    def expire_at_multiplication_norm(stage: str) -> None:
+        nonlocal expired
+        if "multiplication-norm" in stage:
+            expired = True
+        original_checkpoint(stage)
+
     monkeypatch.setattr(
         time,
         "monotonic",
-        lambda: next(clock_values, _CYCLIC_PROFILE_WALL_SECONDS + 1),
+        lambda: _CYCLIC_PROFILE_WALL_SECONDS + 1 if expired else 0.0,
+    )
+    monkeypatch.setattr(
+        operations, "_require_execution_active", expire_at_multiplication_norm
     )
 
     with (

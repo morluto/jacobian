@@ -259,21 +259,18 @@ def _multiplication_norm(polynomial: Any, degree: int, variable: Any) -> int:
         remainders.append(
             sympy.Poly(variable**power, variable, domain=sympy.QQ).rem(polynomial)
         )
-    operation_count = 0
-    for left_power in range(degree):
-        for right_power in range(degree):
-            operation_count += 1
-            if operation_count % _ADMISSION_CHECK_INTERVAL == 0:
-                _require_execution_active(
-                    "during cyclotomic multiplication-norm admission"
-                )
-            coordinates = _polynomial_coordinates(
-                remainders[left_power + right_power], degree
+    _require_execution_active("during cyclotomic multiplication-norm admission")
+    for total_power, remainder in enumerate(remainders):
+        if total_power and total_power % _ADMISSION_CHECK_INTERVAL == 0:
+            _require_execution_active(
+                "during cyclotomic multiplication-norm admission"
             )
-            for output_power, coefficient in enumerate(coordinates):
-                if coefficient.denominator != 1:  # pragma: no cover
-                    raise RuntimeError("monic cyclotomic reduction left ZZ")
-                output_sums[output_power] += abs(coefficient.numerator)
+        multiplicity = min(total_power + 1, 2 * degree - 1 - total_power)
+        coordinates = _polynomial_coordinates(remainder, degree)
+        for output_power, coefficient in enumerate(coordinates):
+            if coefficient.denominator != 1:  # pragma: no cover
+                raise RuntimeError("monic cyclotomic reduction left ZZ")
+            output_sums[output_power] += multiplicity * abs(coefficient.numerator)
     return max(output_sums, default=1)
 
 

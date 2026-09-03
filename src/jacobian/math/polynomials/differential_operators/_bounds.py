@@ -322,6 +322,21 @@ _HEIGHT_CAP_BITS = 64 * MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS
 _ADMISSION_SCAN_PASSES = 2
 
 
+def _power_enumeration_work_floor(term_count: int, iterations: int) -> int:
+    """Lower-bound pair expansions for a nonconstant sparse power.
+
+    Two distinct integer shifts generate at least ``exponent + 1`` distinct
+    shifts at every positive exponent: choose the number of copies of either
+    endpoint.  Thus an exact iterative expansion with at least two terms must
+    visit at least ``term_count * sum(1..iterations)`` pairs.  A one-term power
+    retains one shift and visits one pair per iteration.
+    """
+
+    if term_count < 2:
+        return term_count * iterations
+    return term_count * iterations * (iterations + 1) // 2
+
+
 def _distinct_powered_orders(
     operator: ConstantCoefficientDifferentialOperator,
     iterations: int,
@@ -339,6 +354,11 @@ def _distinct_powered_orders(
     terms = tuple(term.orders for term in operator.terms)
     if not terms:
         return ()
+    if len(terms) >= 2 and (
+        iterations + 1 > limit
+        or _power_enumeration_work_floor(len(terms), iterations) > work_cap
+    ):
+        return None
     current = {tuple(orders) for orders in terms}
     work = len(current)
     for _ in range(iterations - 1):
@@ -486,6 +506,8 @@ def _shift_weights(
         (term.orders, term.coefficient.as_fraction()) for term in operator.terms
     )
     if not terms:
+        return None
+    if _power_enumeration_work_floor(len(terms), iterations) > ENUMERATION_WORK_CAP:
         return None
     zero_shift = tuple(0 for _ in range(len(terms[0][0])))
     weights = {zero_shift: Fraction(1)}

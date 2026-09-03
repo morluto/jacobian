@@ -29,6 +29,14 @@ class _ConvolutionPlan:
     slot_lcms: tuple[int, ...]
 
 
+@dataclass(frozen=True)
+class _MobiusPlan:
+    incidences: tuple[tuple[int, int], ...]
+    numerators: tuple[int, ...]
+    denominators: tuple[int, ...]
+    shared_lcm: int | None
+
+
 def _rational(value: Fraction | int) -> CanonicalRational:
     """Convert an exact Fraction or int to a CanonicalRational."""
     return CanonicalRational.from_fraction(Fraction(value))
@@ -82,6 +90,7 @@ class _HeightSums:
         self.term_counts = [0] * length
         self.shared_lcm = shared_lcm
         self.slot_lcms = slot_lcms
+        self._shared_lift_digits: dict[int, int] = {}
 
     def add(
         self,
@@ -143,9 +152,13 @@ class _HeightSums:
         elif self.shared_lcm is not None:
             if denominator is None:
                 raise ValueError("shared-LCM height sums require a source denominator")
-            common = gcd(self.shared_lcm, denominator)
-            lift = max(1, self.shared_lcm // common)
-            lifted_numerator += _decimal_digits_from_bits(lift.bit_length())
+            lift_digits = self._shared_lift_digits.get(denominator)
+            if lift_digits is None:
+                common = gcd(self.shared_lcm, denominator)
+                lift = max(1, self.shared_lcm // common)
+                lift_digits = _decimal_digits_from_bits(lift.bit_length())
+                self._shared_lift_digits[denominator] = lift_digits
+            lifted_numerator += lift_digits
         self.maximum_numerator[index] = max(
             self.maximum_numerator[index], lifted_numerator
         )
@@ -330,20 +343,30 @@ def _admit_convolution(
 
 def _admit_mobius(
     values: tuple[CanonicalRational, ...],
-) -> tuple[tuple[int, int], ...]:
+) -> _MobiusPlan:
     _require_length(values, "values", _MAX_DIVISOR_PREFIX_LENGTH)
     incidences = _require_divisor_incidences(len(values))
     heights = _heights(values)
-    dens = tuple(parse_canonical_integer(value.den) for value in values)
+    ratios = tuple(
+        (parse_canonical_integer(value.num), parse_canonical_integer(value.den))
+        for value in values
+    )
+    dens = tuple(denominator for _, denominator in ratios)
+    shared_lcm = _shared_denominator_lcm(values)
     sums = _HeightSums(
         len(heights),
-        shared_lcm=_shared_denominator_lcm(values),
+        shared_lcm=shared_lcm,
     )
     for divisor, multiple in incidences:
         source = multiple // divisor - 1
         sums.add(multiple - 1, heights[source], denominator=dens[source])
     _require_result_envelope(sums.heights(), "Möbius transform")
-    return incidences
+    return _MobiusPlan(
+        incidences=incidences,
+        numerators=tuple(numerator for numerator, _ in ratios),
+        denominators=dens,
+        shared_lcm=shared_lcm,
+    )
 
 
 def _admit_inverse(values: tuple[CanonicalRational, ...]) -> None:
@@ -452,23 +475,35 @@ def mobius_transform(
     The two operations are mutually inverse: forward then inverse (or vice
     versa) recovers the original function.
     """
-    incidences = _admit_mobius(values)
+    plan = _admit_mobius(values)
     n = len(values)
+    if plan.shared_lcm is not None:
+        result_numerators = [0] * n
+        mobius = None if inverse else _mobius_sieve(n)
+        for divisor, multiple in plan.incidences:
+            coefficient = 1 if mobius is None else mobius[divisor]
+            if coefficient:
+                source = multiple // divisor - 1
+                result_numerators[multiple - 1] += (
+                    coefficient
+                    * plan.numerators[source]
+                    * (plan.shared_lcm // plan.denominators[source])
+                )
+        return tuple(
+            CanonicalRational.from_integer_ratio(numerator, plan.shared_lcm)
+            for numerator in result_numerators
+        )
+
     fraction_values = [v.as_fraction() for v in values]
     result_values: list[Fraction] = [Fraction(0)] * n
-    if inverse:
-        # F(K) = sum_{d|K} f(K/d)  (Dirichlet convolution with 1)
-        for divisor, multiple in incidences:
-            result_values[multiple - 1] += fraction_values[multiple // divisor - 1]
-    else:
-        # f(K) = sum_{d|K} mu(d) * F(K/d)  (Dirichlet convolution with mu)
-        mobius = _mobius_sieve(n)
-        for divisor, multiple in incidences:
-            if mobius[divisor]:
-                result_values[multiple - 1] += (
-                    mobius[divisor] * fraction_values[multiple // divisor - 1]
-                )
-    return tuple(_rational(v) for v in result_values)
+    mobius = None if inverse else _mobius_sieve(n)
+    for divisor, multiple in plan.incidences:
+        coefficient = 1 if mobius is None else mobius[divisor]
+        if coefficient:
+            result_values[multiple - 1] += (
+                coefficient * fraction_values[multiple // divisor - 1]
+            )
+    return tuple(_rational(value) for value in result_values)
 
 
 def summatory_function(

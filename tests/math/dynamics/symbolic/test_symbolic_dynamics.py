@@ -420,25 +420,28 @@ def test_random_block_languages_match_bounded_extension_oracle() -> None:
             itertools.product(alphabet, repeat=3),
         )
     )
+
+    def avoids_forbidden_blocks(
+        word: tuple[str, ...], forbidden_words: tuple[str, ...]
+    ) -> bool:
+        encoded = "".join(word)
+        return all(block not in encoded for block in forbidden_words)
+
     for _ in range(120):
         forbidden = tuple(
             block for block in candidate_forbidden if random_source.random() < 0.18
         )
         shift = ForbiddenBlockShift(alphabet=alphabet, forbidden_blocks=forbidden)
+        forbidden_words = tuple("".join(block) for block in forbidden)
+        memory = max((len(block) - 1 for block in forbidden), default=0)
+        state_count = len(alphabet) ** memory
+        padding = state_count + memory
+
         for length in range(5):
-            memory = max((len(block) - 1 for block in forbidden), default=0)
-            state_count = len(alphabet) ** memory
-            padding = state_count + memory
             extended = (
                 word
                 for word in itertools.product(alphabet, repeat=length + 2 * padding)
-                if all(
-                    not any(
-                        word[start : start + len(block)] == block
-                        for start in range(len(word) - len(block) + 1)
-                    )
-                    for block in forbidden
-                )
+                if avoids_forbidden_blocks(word, forbidden_words)
             )
             expected = tuple(
                 sorted({word[padding : padding + length] for word in extended})

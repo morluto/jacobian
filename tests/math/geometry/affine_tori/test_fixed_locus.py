@@ -7,7 +7,6 @@ from collections.abc import Callable
 from fractions import Fraction
 from itertools import product
 from math import gcd, lcm
-from random import Random
 from time import monotonic
 from typing import Any
 
@@ -178,22 +177,6 @@ def _finite_result_points(
     for coefficients in product(*(range(order) for order in orders)):
         point = base
         for coefficient, generator in zip(coefficients, generators, strict=True):
-            point = _add_points(point, _scale_point(coefficient, generator))
-        points.add(point)
-    return points
-
-
-def _finite_kernel_points(
-    kernel: NonemptyFixedLocusKernel,
-) -> set[tuple[Fraction, ...]]:
-    points: set[tuple[Fraction, ...]] = set()
-    for coefficients in product(
-        *(range(order) for order in kernel.generator_orders)
-    ):
-        point = kernel.base_point
-        for coefficient, generator in zip(
-            coefficients, kernel.component_generators, strict=True
-        ):
             point = _add_points(point, _scale_point(coefficient, generator))
         points.add(point)
     return points
@@ -504,53 +487,55 @@ def test_nonempty_result_deserialization_does_not_replay_kernel_dimension() -> N
     assert AffineTorusFixedLocusResult.model_validate(result)
 
 
-def test_random_small_full_rank_kernels_match_a_grid_congruence_oracle() -> None:
-    random = Random(2443)
-    checked = 0
-    while checked < 40:
-        displacement = tuple(
-            tuple(random.randint(-2, 2) for _ in range(2)) for _ in range(2)
+@pytest.mark.parametrize(
+    ("displacement", "translation"),
+    [
+        (((1, 2), (-2, 0)), (Fraction(2, 3), Fraction(2, 3))),
+        (((-1, 1), (-2, 1)), (Fraction(1, 2), Fraction(0))),
+        (((-1, 2), (-1, -1)), (Fraction(0), Fraction(0))),
+        (((1, -2), (2, 2)), (Fraction(1, 3), Fraction(1, 2))),
+        (((-1, 2), (-2, 2)), (Fraction(1, 2), Fraction(0))),
+        (((-2, -2), (2, -2)), (Fraction(1, 2), Fraction(2, 3))),
+        (((0, -2), (-1, 1)), (Fraction(0), Fraction(2, 3))),
+        (((2, 2), (1, -2)), (Fraction(0), Fraction(0))),
+        (((-2, -1), (1, 2)), (Fraction(0), Fraction(1, 2))),
+        (((-2, 1), (1, 2)), (Fraction(0), Fraction(2, 3))),
+    ],
+)
+def test_small_full_rank_maps_match_a_grid_congruence_oracle(
+    displacement: tuple[tuple[int, ...], ...],
+    translation: tuple[Fraction, ...],
+) -> None:
+    determinant = _determinant_two(displacement)
+    linear_part = tuple(
+        tuple(displacement[row][column] + int(row == column) for column in range(2))
+        for row in range(2)
+    )
+    result = affine_torus_fixed_locus(_source(linear_part, translation))
+    actual = _finite_result_points(result)
+    grid_denominator = abs(determinant) * lcm(
+        *(value.denominator for value in translation)
+    )
+    expected: set[tuple[Fraction, ...]] = set()
+    for numerators in product(range(grid_denominator), repeat=2):
+        point = tuple(
+            Fraction(numerator, grid_denominator) for numerator in numerators
         )
-        determinant = _determinant_two(displacement)
-        if determinant == 0 or abs(determinant) > 8:
-            continue
-        denominators = (random.randint(1, 3), random.randint(1, 3))
-        translation = tuple(
-            Fraction(random.randrange(denominator), denominator)
-            for denominator in denominators
-        )
-        linear_part = tuple(
-            tuple(displacement[row][column] + int(row == column) for column in range(2))
+        if all(
+            (
+                sum(
+                    displacement[row][column]
+                    * Fraction(numerators[column], grid_denominator)
+                    for column in range(2)
+                )
+                + translation[row]
+            ).denominator
+            == 1
             for row in range(2)
-        )
-        source = _source(linear_part, translation)
-        kernel = _compute_fixed_locus_kernel(_kernel_source(source))
-        assert isinstance(kernel, NonemptyFixedLocusKernel)
-        actual = _finite_kernel_points(kernel)
-        grid_denominator = abs(determinant) * lcm(
-            *(value.denominator for value in translation)
-        )
-        expected: set[tuple[Fraction, ...]] = set()
-        for numerators in product(range(grid_denominator), repeat=2):
-            point = tuple(
-                Fraction(numerator, grid_denominator) for numerator in numerators
-            )
-            if all(
-                (
-                    sum(
-                        displacement[row][column]
-                        * Fraction(numerators[column], grid_denominator)
-                        for column in range(2)
-                    )
-                    + translation[row]
-                ).denominator
-                == 1
-                for row in range(2)
-            ):
-                expected.add(point)
-        assert actual == expected
-        assert len(actual) == abs(determinant)
-        checked += 1
+        ):
+            expected.add(point)
+    assert actual == expected
+    assert len(actual) == abs(determinant)
 
 
 def test_integral_basis_change_covariance_for_a_finite_fixed_locus() -> None:

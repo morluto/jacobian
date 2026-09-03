@@ -50,6 +50,11 @@ def _rational(value: Fraction | int) -> dict[str, str]:
     return {"num": str(fraction.numerator), "den": str(fraction.denominator)}
 
 
+def test_finite_set_system_requires_canonical_subset_order() -> None:
+    with _validation_code("discrepancy_theory.subset_elements_not_strictly_increasing"):
+        FiniteSetSystem(ground_set_size=3, sets=((2, 0),))
+
+
 def _rounding_request(
     *,
     values: tuple[Fraction | int, ...] = (

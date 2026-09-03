@@ -380,6 +380,7 @@ class FiniteSetSystem(StrictModel):
     def require_valid_sets(self) -> Self:
         for subset in self.sets:
             seen: set[int] = set()
+            previous = -1
             for element in subset:
                 if not (0 <= element < self.ground_set_size):
                     raise _validation_error(
@@ -391,7 +392,13 @@ class FiniteSetSystem(StrictModel):
                         "subset_elements_not_distinct",
                         "subset elements must be distinct",
                     )
+                if element <= previous:
+                    raise _validation_error(
+                        "subset_elements_not_strictly_increasing",
+                        "subset elements must be strictly increasing",
+                    )
                 seen.add(element)
+                previous = element
         return self
 
 

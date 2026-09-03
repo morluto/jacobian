@@ -297,10 +297,7 @@ def _compute_graded_jacobian_syzygy(
             column_indices = tuple(int(index) for index in pivot_columns)
             minor = matrix.extract(row_indices, column_indices)
             determinant = rational_determinant(
-                tuple(
-                    tuple(Fraction(value) for value in row)
-                    for row in minor.tolist()
-                )
+                tuple(tuple(Fraction(value) for value in row) for row in minor.tolist())
             )
             if determinant == 0:
                 raise RuntimeError("rank-minor extraction returned a zero determinant")

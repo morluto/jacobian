@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from collections import Counter
 from collections.abc import Sequence
+from dataclasses import dataclass
 from math import log
 from typing import Protocol
 
@@ -80,43 +81,95 @@ class SearchableOperation(Protocol):
     def discovery_terms(self) -> tuple[str, ...]: ...
 
 
+@dataclass(frozen=True, slots=True)
+class _SearchCorpus:
+    entries: tuple[tuple[SearchableOperation, tuple[frozenset[str], ...]], ...]
+    document_frequency: Counter[str]
+
+
+class OperationSearchIndex:
+    """Precomputed lexical projections for one immutable operation sequence."""
+
+    def __init__(self, operations: Sequence[SearchableOperation]) -> None:
+        entries = tuple(
+            (operation, _operation_field_terms(operation)) for operation in operations
+        )
+        self._all = self._corpus(entries)
+        namespaces = {operation_namespace(operation) for operation in operations}
+        self._namespaces = {
+            namespace: self._corpus(
+                tuple(
+                    entry
+                    for entry in entries
+                    if operation_namespace(entry[0]) == namespace
+                )
+            )
+            for namespace in namespaces
+        }
+
+    @staticmethod
+    def _corpus(
+        entries: tuple[tuple[SearchableOperation, tuple[frozenset[str], ...]], ...],
+    ) -> _SearchCorpus:
+        document_terms = tuple(frozenset().union(*fields) for _, fields in entries)
+        return _SearchCorpus(
+            entries=entries,
+            document_frequency=Counter(
+                term for terms in document_terms for term in terms
+            ),
+        )
+
+    def match(self, request: OperationMatchRequest) -> OperationMatchResult:
+        normalized_namespace = (
+            normalize_namespace(request.namespace)
+            if request.namespace is not None
+            else None
+        )
+        corpus = (
+            self._all
+            if normalized_namespace is None
+            else self._namespaces.get(
+                normalized_namespace, _SearchCorpus((), Counter())
+            )
+        )
+        return _match_corpus(corpus, request, normalized_namespace)
+
+
 def match_operations(
     operations: Sequence[SearchableOperation],
     request: OperationMatchRequest,
 ) -> OperationMatchResult:
     """Match a local mathematical need against immutable operation declarations."""
 
-    normalized_namespace = (
-        normalize_namespace(request.namespace)
-        if request.namespace is not None
-        else None
-    )
-    eligible = tuple(
-        descriptor
-        for descriptor in operations
-        if normalized_namespace is None
-        or matches_namespace(descriptor, normalized_namespace)
-    )
-    operation_fields = tuple(_operation_field_terms(item) for item in eligible)
-    document_terms = tuple(frozenset().union(*fields) for fields in operation_fields)
-    document_frequency = Counter(term for terms in document_terms for term in terms)
+    return OperationSearchIndex(operations).match(request)
+
+
+def _match_corpus(
+    corpus: _SearchCorpus,
+    request: OperationMatchRequest,
+    normalized_namespace: str | None,
+) -> OperationMatchResult:
     need_terms = discovery_terms(request.need)
     ranked: list[tuple[float, OperationDiscoveryMatch]] = []
-    for descriptor, fields in zip(eligible, operation_fields, strict=True):
+    for descriptor, fields in corpus.entries:
         score = need_relevance(
             fields,
             need_terms,
-            document_frequency=document_frequency,
-            document_count=len(document_terms),
-        )
-        match = OperationDiscoveryMatch(
-            operation_id=descriptor.operation_id,
-            title=descriptor.title,
-            description=descriptor.description,
-            tags=descriptor.tags,
+            document_frequency=corpus.document_frequency,
+            document_count=len(corpus.entries),
         )
         if score > 0:
-            ranked.append((score, match))
+            ranked.append(
+                (
+                    score,
+                    OperationDiscoveryMatch(
+                        operation_id=descriptor.operation_id,
+                        title=descriptor.title,
+                        description=descriptor.description,
+                        tags=descriptor.tags,
+                    ),
+                )
+            )
     ranked.sort(key=lambda item: (-item[0], item[1].operation_id))
     total_matches = len(ranked)
     start = 0
@@ -300,6 +353,7 @@ def matches_namespace(
 
 
 __all__ = [
+    "OperationSearchIndex",
     "browse_operations",
     "match_operations",
     "matches_namespace",

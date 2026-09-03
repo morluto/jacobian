@@ -17,7 +17,7 @@ from jacobian.catalog.models import (
     OperationMatchRequest,
     OperationMatchResult,
 )
-from jacobian.catalog.search import browse_operations, match_operations
+from jacobian.catalog.search import OperationSearchIndex, browse_operations
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +67,7 @@ class Catalog:
             operation_id: _bind_operation(operation)
             for operation_id, operation in self._operations.items()
         }
+        self._search_index = OperationSearchIndex(tuple(self._operations.values()))
 
     @classmethod
     def open(cls) -> Catalog:
@@ -91,7 +92,7 @@ class Catalog:
     def match(self, request: OperationMatchRequest) -> OperationMatchResult:
         """Match one desired local outcome against installed operations."""
 
-        return match_operations(tuple(self._operations.values()), request)
+        return self._search_index.match(request)
 
     def browse(
         self,

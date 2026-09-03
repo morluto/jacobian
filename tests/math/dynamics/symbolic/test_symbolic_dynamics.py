@@ -437,16 +437,23 @@ def test_random_block_languages_match_bounded_extension_oracle() -> None:
         state_count = len(alphabet) ** memory
         padding = state_count + memory
 
-        for length in range(5):
-            extended = (
-                word
-                for word in itertools.product(alphabet, repeat=length + 2 * padding)
-                if avoids_forbidden_blocks(word, forbidden_words)
-            )
-            expected = tuple(
-                sorted({word[padding : padding + length] for word in extended})
-            )
-            assert block_language(shift, length) == expected
+        maximum_length = 4
+        expected_by_length: list[set[tuple[str, ...]]] = [
+            set() for _ in range(maximum_length + 1)
+        ]
+        # The state-count padding reaches a repeated finite-type state on each
+        # side. Any admitted central block can therefore be extended through
+        # that cycle to the maximum tested length. Enumerating the longest
+        # extension once gives the same occurrence oracle for every prefix
+        # length without repeating the exponential product search.
+        for word in itertools.product(alphabet, repeat=maximum_length + 2 * padding):
+            if not avoids_forbidden_blocks(word, forbidden_words):
+                continue
+            for length, expected in enumerate(expected_by_length):
+                expected.add(word[padding : padding + length])
+
+        for length, expected in enumerate(expected_by_length):
+            assert block_language(shift, length) == tuple(sorted(expected))
 
 
 def test_periodic_profiles_match_closed_walk_and_divisor_oracles() -> None:

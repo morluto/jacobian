@@ -27,7 +27,9 @@ def _builtin_operations() -> tuple[MathTool[Any, Any], ...]:
     )
 
 
-def _scalar_replacements(value: object) -> tuple[object, ...]:
+def _scalar_replacements(
+    value: object, *, path: tuple[object, ...]
+) -> tuple[object, ...]:
     if isinstance(value, bool):
         return (not value,)
     if isinstance(value, int):
@@ -35,6 +37,12 @@ def _scalar_replacements(value: object) -> tuple[object, ...]:
     if isinstance(value, float):
         return (-1.0, 0.0, 1.0)
     if isinstance(value, str):
+        if path and (path[-1] == "name" or "labels" in path):
+            # Names and axis labels are explicitly opaque. Empty-string
+            # rejection and one distinct accepted spelling cover their two
+            # scalar boundaries; syntax-like spellings are not additional
+            # parser classes for these fields.
+            return ("", "opaque_label_boundary")
         # Keep one representative for each materially different parser edge.
         # Repeating signed numerals, zero-denominator fractions, and non-finite
         # spellings at every string leaf multiplies isolated-worker startup
@@ -109,7 +117,7 @@ def _mutations(
     root: object,
     path: tuple[object, ...] = (),
 ) -> Iterator[tuple[str, object]]:
-    for replacement in _scalar_replacements(value):
+    for replacement in _scalar_replacements(value, path=path):
         if replacement != value:
             yield f"{path}={replacement!r}", _replace_at_path(root, path, replacement)
 

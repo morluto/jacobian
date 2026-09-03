@@ -548,16 +548,31 @@ def _pivot_columns(basis: tuple[RationalRow, ...]) -> tuple[int, ...]:
     )
 
 
-def _row_is_in_span(row: IntegerRow, basis: tuple[RationalRow, ...]) -> bool:
-    residual = [Fraction(value) for value in row]
-    for basis_row, pivot in zip(basis, _pivot_columns(basis), strict=True):
-        multiplier = residual[pivot]
-        if multiplier:
-            residual = [
-                value - multiplier * basis_value
-                for value, basis_value in zip(residual, basis_row, strict=True)
-            ]
-    return not any(residual)
+def _span_coordinates(
+    basis: tuple[RationalRow, ...], ambient_dimension: int
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    pivots = _pivot_columns(basis)
+    pivot_set = frozenset(pivots)
+    nonpivots = tuple(
+        column for column in range(ambient_dimension) if column not in pivot_set
+    )
+    return pivots, nonpivots
+
+
+def _row_is_in_span(
+    row: IntegerRow,
+    basis: tuple[RationalRow, ...],
+    pivots: tuple[int, ...],
+    nonpivots: tuple[int, ...],
+) -> bool:
+    return all(
+        row[column]
+        == sum(
+            row[pivot] * basis_row[column]
+            for basis_row, pivot in zip(basis, pivots, strict=True)
+        )
+        for column in nonpivots
+    )
 
 
 def _closed_candidates(
@@ -576,8 +591,11 @@ def _closed_candidates(
             ambient_dimension=ambient_dimension,
         ),
     )
+    pivots, nonpivots = _span_coordinates(basis, ambient_dimension)
     return tuple(
-        index for index, row in enumerate(candidate_rows) if _row_is_in_span(row, basis)
+        index
+        for index, row in enumerate(candidate_rows)
+        if _row_is_in_span(row, basis, pivots, nonpivots)
     )
 
 
@@ -728,8 +746,10 @@ def _contains_forbidden_row(
             ambient_dimension=ambient_dimension,
         ),
     )
+    pivots, nonpivots = _span_coordinates(state.row_space_basis, ambient_dimension)
     return any(
-        _row_is_in_span(row, state.row_space_basis) for row in plan.forbidden_rows
+        _row_is_in_span(row, state.row_space_basis, pivots, nonpivots)
+        for row in plan.forbidden_rows
     )
 
 

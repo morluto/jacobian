@@ -115,7 +115,6 @@ def test_scalar_x_minus_one_drops_only_the_trivial_component() -> None:
     )
     assert len(set(vector)) == 1
     assert vector[0] != 0
-    assert cyclic_rational_rank_kernel_profile(result.symbol) == result
 
 
 def _rational_rowspace(

@@ -136,7 +136,7 @@ def _admit_p_adic_interval_profile(
 
 def ksigma_preimages(k: int, target: int) -> tuple[int, ...]:
     """Compute every positive ``n`` with ``k * sigma(n) == target``."""
-    from sympy import divisor_sigma
+    from flint import fmpz
 
     if not 1 <= target <= MAX_KSIGMA_TARGET:
         raise OperationDomainValidationError(
@@ -167,7 +167,9 @@ def ksigma_preimages(k: int, target: int) -> tuple[int, ...]:
     # sigma(n) >= n + 1 for n > 1, while sigma(1) = 1, so this is a
     # complete search of the positive preimage rather than a heuristic cap.
     preimages = tuple(
-        n for n in range(1, sigma_target + 1) if int(divisor_sigma(n)) == sigma_target
+        n
+        for n in range(1, sigma_target + 1)
+        if fmpz(n).divisor_sigma(1) == sigma_target
     )
     return preimages
 

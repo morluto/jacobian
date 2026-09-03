@@ -372,15 +372,7 @@ def _build_composed_matrix(
         mat = new_mat
 
     if final_perm is not None:
-        perm_mat = [[Fraction(0)] * n for _ in range(n)]
-        for r in range(n):
-            perm_mat[r][final_perm[r]] = Fraction(1)
-        result = [[Fraction(0)] * n for _ in range(n)]
-        for r in range(n):
-            for c in range(n):
-                for k in range(n):
-                    result[r][c] += perm_mat[r][k] * mat[k][c]
-        mat = result
+        mat = [mat[source_row][:] for source_row in final_perm]
 
     return mat
 

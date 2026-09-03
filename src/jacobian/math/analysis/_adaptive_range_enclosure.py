@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from fractions import Fraction
+from heapq import heappop, heappush
 from time import monotonic
 from typing import Annotated, Any, Literal, Self
 
@@ -1121,6 +1122,72 @@ def _leaf_selection_key(
     return (1, -leaf.enclosure_width, leaf.path)
 
 
+class _AdaptiveLeafFrontier:
+    """Maintain refinement priorities and exact hull extrema incrementally."""
+
+    def __init__(
+        self, root: _EvaluatedAdaptiveRangeLeaf, *, maximum_depth: int
+    ) -> None:
+        self._maximum_depth = maximum_depth
+        self._leaves = {root.path: root}
+        self._selection: list[
+            tuple[tuple[int, Fraction, tuple[int, ...]], tuple[int, ...]]
+        ] = []
+        self._lower: list[tuple[Fraction, tuple[int, ...]]] = []
+        self._upper: list[tuple[Fraction, tuple[int, ...]]] = []
+        self._unproven_count = 0
+        self._push(root)
+
+    def _push(self, leaf: _EvaluatedAdaptiveRangeLeaf) -> None:
+        if len(leaf.path) < self._maximum_depth and leaf.split_coordinate is not None:
+            heappush(self._selection, (_leaf_selection_key(leaf), leaf.path))
+        if leaf.domain_failure is not None:
+            self._unproven_count += 1
+            return
+        assert leaf.enclosure_lower is not None
+        assert leaf.enclosure_upper is not None
+        heappush(self._lower, (leaf.enclosure_lower, leaf.path))
+        heappush(self._upper, (-leaf.enclosure_upper, leaf.path))
+
+    def replace(
+        self,
+        selected: _EvaluatedAdaptiveRangeLeaf,
+        children: tuple[_EvaluatedAdaptiveRangeLeaf, ...],
+    ) -> None:
+        del self._leaves[selected.path]
+        if selected.domain_failure is not None:
+            self._unproven_count -= 1
+        for child in children:
+            self._leaves[child.path] = child
+            self._push(child)
+
+    def select(self) -> _EvaluatedAdaptiveRangeLeaf | None:
+        while self._selection:
+            _, path = heappop(self._selection)
+            leaf = self._leaves.get(path)
+            if leaf is not None:
+                return leaf
+        return None
+
+    def target_met(self, target_width: Fraction) -> bool:
+        if self._unproven_count:
+            return False
+        while self._lower[0][1] not in self._leaves:
+            heappop(self._lower)
+        while self._upper[0][1] not in self._leaves:
+            heappop(self._upper)
+        return -self._upper[0][0] - self._lower[0][0] <= target_width
+
+    def leaves(self) -> tuple[_EvaluatedAdaptiveRangeLeaf, ...]:
+        return tuple(self._leaves.values())
+
+    def has_unproven(self) -> bool:
+        return self._unproven_count > 0
+
+    def __len__(self) -> int:
+        return len(self._leaves)
+
+
 def _run_adaptive_range_enclosure(
     problem: _AdaptiveRangeProblem, *, started_at: float
 ) -> AdaptiveRangeEnclosureResult:
@@ -1189,13 +1256,20 @@ def _run_adaptive_range_enclosure(
             )
 
     reason: AdaptiveRangeBudgetReason
+    frontier = _AdaptiveLeafFrontier(leaves[0], maximum_depth=problem.max_depth)
     while True:
         _require_deadline(admission.deadline, "before partition refinement")
-        blocked_unproven = tuple(
-            leaf
-            for leaf in leaves
-            if leaf.domain_failure is not None
-            and (len(leaf.path) >= problem.max_depth or leaf.split_coordinate is None)
+        blocked_unproven = (
+            tuple(
+                leaf
+                for leaf in frontier.leaves()
+                if leaf.domain_failure is not None
+                and (
+                    len(leaf.path) >= problem.max_depth or leaf.split_coordinate is None
+                )
+            )
+            if frontier.has_unproven()
+            else ()
         )
         if blocked_unproven:
             has_positive_coordinate = any(
@@ -1203,27 +1277,19 @@ def _run_adaptive_range_enclosure(
             )
             reason = "MAX_DEPTH" if has_positive_coordinate else "MAX_PRECISION"
             break
-        candidates = tuple(
-            leaf
-            for leaf in leaves
-            if len(leaf.path) < problem.max_depth and leaf.split_coordinate is not None
-        )
-        if not candidates:
+        selected = frontier.select()
+        if selected is None:
             any_positive_coordinate = any(
-                leaf.split_coordinate is not None for leaf in leaves
+                leaf.split_coordinate is not None for leaf in frontier.leaves()
             )
             reason = "MAX_DEPTH" if any_positive_coordinate else "MAX_PRECISION"
             break
-        if len(leaves) >= problem.max_leaves:
+        if len(frontier) >= problem.max_leaves:
             reason = "MAX_LEAVES"
             break
         if problem.max_evaluations - evaluations < 2:
             reason = "MAX_EVALUATIONS"
             break
-        selected = min(
-            candidates,
-            key=_leaf_selection_key,
-        )
         coordinate = selected.split_coordinate
         assert coordinate is not None
         child_boxes = _split_box(selected.box, coordinate)
@@ -1237,13 +1303,13 @@ def _run_adaptive_range_enclosure(
             )
             for bit, child_box in enumerate(child_boxes)
         )
+        assert len(children) == 2
         evaluations += 2
-        leaves = tuple(leaf for leaf in leaves if leaf.path != selected.path) + children
-        leaves = tuple(sorted(leaves, key=lambda leaf: leaf.path))
-        if _evaluated_target_met(leaves, admission.target_width):
+        frontier.replace(selected, children)
+        if frontier.target_met(admission.target_width):
             return _finish_result(
                 problem,
-                leaves,
+                frontier.leaves(),
                 admission=admission,
                 evaluations_used=evaluations,
                 maximum_precision_bits_used=problem.maximum_precision_bits,
@@ -1252,7 +1318,7 @@ def _run_adaptive_range_enclosure(
 
     return _finish_result(
         problem,
-        leaves,
+        frontier.leaves(),
         admission=admission,
         evaluations_used=evaluations,
         maximum_precision_bits_used=precision_used,

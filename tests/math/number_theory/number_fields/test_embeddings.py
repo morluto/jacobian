@@ -309,8 +309,11 @@ def test_profiles_are_deterministic_across_backend_cache_refinement(
         [int(coefficient) for coefficient in coefficients],
         variable,
     )
-    for root in polynomial.all_roots(radicals=False):
-        root.eval_rational(n=40)
+    roots = polynomial.all_roots(radicals=False)
+    intervals_before = tuple(root._get_interval() for root in roots)
+    for root in roots:
+        root.eval_rational(n=5)
+    assert tuple(root._get_interval() for root in roots) != intervals_before
 
     assert (
         compute_embeddings_worker_response(_worker_request(field)).model_dump_json()

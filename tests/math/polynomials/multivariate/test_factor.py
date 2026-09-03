@@ -385,7 +385,10 @@ class TestKillableFactorBackend:
 
         from jacobian.math.polynomials.multivariate import _factor_backend
 
-        monkeypatch.setattr(_factor_backend, "FACTOR_WORK_WALL_SECONDS", 5.0)
+        # The fixture is intentionally intractable. One second covers worker
+        # startup with ample margin while keeping the scale lane from spending
+        # five seconds proving the same bounded-termination postcondition.
+        monkeypatch.setattr(_factor_backend, "FACTOR_WORK_WALL_SECONDS", 1.0)
 
         dense = _expanded_product(
             ("x1", "x2", "x3", "x4", "x5", "x6", "x7", "z"),

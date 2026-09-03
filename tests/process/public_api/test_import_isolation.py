@@ -1,19 +1,36 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
 
 
-def _imported_modules(target: str) -> set[str]:
+def _imported_module_snapshots(targets: tuple[str, ...]) -> dict[str, set[str]]:
+    script = (
+        "import importlib, json, sys\n"
+        f"targets = {targets!r}\n"
+        "snapshots = {}\n"
+        "for target in targets:\n"
+        "    importlib.import_module(target)\n"
+        "    snapshots[target] = tuple(sys.modules)\n"
+        "print(json.dumps(snapshots))\n"
+    )
     completed = subprocess.run(
-        [sys.executable, "-c", f"import {target}, sys; print('\\n'.join(sys.modules))"],
+        [sys.executable, "-c", script],
         check=True,
         capture_output=True,
         env={**os.environ, "SYMPY_GROUND_TYPES": "python"},
         text=True,
     )
-    return set(completed.stdout.splitlines())
+    return {
+        target: set(imported)
+        for target, imported in json.loads(completed.stdout).items()
+    }
+
+
+def _imported_modules(target: str) -> set[str]:
+    return _imported_module_snapshots((target,))[target]
 
 
 def _assert_not_imported(imported: set[str], prefixes: tuple[str, ...]) -> None:
@@ -83,20 +100,26 @@ def test_native_finite_fields_does_not_eagerly_import_flint() -> None:
 
 
 def test_affine_torus_public_and_catalog_imports_keep_flint_worker_private() -> None:
+    targets = (
+        "jacobian.math.geometry.affine_tori",
+        "jacobian.math.geometry.affine_tori._tools",
+        "jacobian.catalog.catalog",
+    )
+    snapshots = _imported_module_snapshots(targets)
     forbidden = (
         "flint",
         "jacobian.math.geometry.affine_tori._flint",
     )
     _assert_not_imported(
-        _imported_modules("jacobian.math.geometry.affine_tori"),
+        snapshots[targets[0]],
         forbidden,
     )
     _assert_not_imported(
-        _imported_modules("jacobian.math.geometry.affine_tori._tools"),
+        snapshots[targets[1]],
         forbidden,
     )
     _assert_not_imported(
-        _imported_modules("jacobian.catalog.catalog"),
+        snapshots[targets[2]],
         ("jacobian.math.geometry.affine_tori._flint",),
     )
 

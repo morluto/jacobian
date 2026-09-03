@@ -602,6 +602,8 @@ def _capture_stream(
         # The coordinator may close the pipe after killing descendants that
         # retained it beyond the operation deadline.
         return
+    finally:
+        stream.close()
 
 
 def _apply_post_start_limits(
@@ -843,13 +845,16 @@ def run_bounded_process(
                 # output as a successful worker completion.  Do not override
                 # an existing output-limit-exceeded signal with timed_out.
                 timed_out = True
-            process.stdout.close()
-            process.stderr.close()
-            for reader in readers:
-                # Closing the pipes can unblock a reader that was still
-                # draining when the shared cleanup deadline expired.  Give
-                # it only the time remaining in that same envelope; never
-                # append a fresh grace period after the request has ended.
+            for reader, stream in zip(
+                readers, (process.stdout, process.stderr), strict=True
+            ):
+                if not reader.is_alive():
+                    stream.close()
+                # A buffered reader can hold its stream lock inside read1 while
+                # an escaped descendant retains the write end. In that case
+                # the daemon reader owns eventual close; the coordinator must
+                # not block past the request deadline trying to acquire the
+                # same lock.
                 reader.join(timeout=max(0.0, absolute_deadline - time.monotonic()))
 
     return BoundedProcessResult(

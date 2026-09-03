@@ -179,6 +179,7 @@ def test_detached_descendant_with_inherited_pipe_fails_closed(
         encoding="utf-8",
     )
     escaped_pid: int | None = None
+    started = time.monotonic()
     try:
         completed = run_bounded_process(
             [sys.executable, str(script), str(marker)],
@@ -191,6 +192,7 @@ def test_detached_descendant_with_inherited_pipe_fails_closed(
 
         assert completed.returncode == 0
         assert completed.timed_out
+        assert time.monotonic() - started < 3
     finally:
         if marker.exists():
             try:

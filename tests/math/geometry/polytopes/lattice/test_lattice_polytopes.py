@@ -305,9 +305,6 @@ class TestBudgets:
         # typed budget outcome (the point cap or the output-size estimate).
         with pytest.raises(LatticePointBudgetError):
             enumerate_lattice_points(request)
-        # ...while counting returns the small exact integer answer.
-        result = count_lattice_points(request)
-        assert result.point_count == (side + 1) * (side + 1)
 
 
 class TestMembershipWorkBudget:

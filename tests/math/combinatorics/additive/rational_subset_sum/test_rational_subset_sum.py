@@ -12,7 +12,7 @@ from jacobian.math.combinatorics.additive.rational_subset_sum.operations import 
 )
 
 
-def _cr(num, den=None):
+def _cr(num: int, den: int | None = None) -> CanonicalRational:
     if den is None:
         return CanonicalRational.from_fraction(Fraction(num))
     return CanonicalRational.from_fraction(Fraction(num, den))
@@ -56,7 +56,7 @@ def test_replay() -> None:
     expected: dict[Fraction, int] = {}
     for r in range(n + 1):
         for indices in combinations(range(n), r):
-            s = sum(fracs[i] for i in indices)
+            s = sum((fracs[i] for i in indices), Fraction(0))
             expected[s] = expected.get(s, 0) + 1
     actual = {r.sum_value.as_fraction(): r.multiplicity for r in result.rows}
     assert actual == expected

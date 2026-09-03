@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from fractions import Fraction
-from itertools import combinations
-from math import gcd
+from math import comb, gcd
 from typing import NoReturn
 
 from jacobian._exact import (
@@ -19,6 +19,11 @@ from jacobian.math.combinatorics.additive.rational_subset_sum._models import (
 )
 
 __all__ = ["compute_rational_subset_sum_profile"]
+
+
+@dataclass(frozen=True, slots=True)
+class _RationalSubsetSumPlan:
+    multiplicities: tuple[tuple[Fraction, int], ...]
 
 
 def _reject(code: str, message: str) -> NoReturn:
@@ -39,7 +44,9 @@ def _decimal_digits(value: int) -> int:
     return estimate
 
 
-def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
+def _admit_values(
+    values: tuple[CanonicalRational, ...],
+) -> _RationalSubsetSumPlan:
     if not isinstance(values, tuple) or any(
         not isinstance(value, CanonicalRational) for value in values
     ):
@@ -50,15 +57,21 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
             "sequence_length_bound",
             f"at most {MAX_SEQUENCE_LENGTH} values are supported",
         )
+    fractions = tuple(value.as_fraction() for value in values)
+    multiplicities: dict[Fraction, int] = {}
+    for value in fractions:
+        multiplicities[value] = multiplicities.get(value, 0) + 1
+    plan = _RationalSubsetSumPlan(
+        multiplicities=tuple(multiplicities.items()),
+    )
     if not n:
-        return
+        return plan
 
-    nonzero = [value for value in values if value.as_fraction()]
+    nonzero = [value for value in fractions if value]
     common_denominator_overflow = False
     if nonzero:
-        fractions = [value.as_fraction() for value in nonzero]
         common_denominator = 1
-        for value in fractions:
+        for value in nonzero:
             common_denominator = (
                 common_denominator
                 // gcd(common_denominator, value.denominator)
@@ -69,7 +82,7 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
             )
         scaled: list[int] = [
             value.numerator * (common_denominator // value.denominator)
-            for value in fractions
+            for value in nonzero
         ]
         positive_span = sum(value for value in scaled if value > 0)
         negative_span = sum(value for value in scaled if value < 0)
@@ -83,11 +96,10 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
     # them before estimating the support; the product of (multiplicity + 1)
     # bounds the number of distinct sums while retaining the actual
     # exponential work bound below.
-    multiplicities: dict[Fraction, int] = {}
-    for value in (item.as_fraction() for item in nonzero):
-        multiplicities[value] = multiplicities.get(value, 0) + 1
     support_upper_bound = 1
-    for multiplicity in multiplicities.values():
+    for value, multiplicity in multiplicities.items():
+        if not value:
+            continue
         support_upper_bound *= multiplicity + 1
     if nonzero:
         lattice_step: int = 0
@@ -104,7 +116,7 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
                     "rational_growth_bound",
                     "subset-sum intermediates exceed the canonical rational digit bound",
                 )
-            exact_sums = {Fraction(0), *fractions, sum(fractions, Fraction(0))}
+            exact_sums = {Fraction(0), *nonzero, sum(nonzero, Fraction(0))}
             if any(
                 max(
                     _decimal_digits(value.numerator), _decimal_digits(value.denominator)
@@ -127,6 +139,7 @@ def _admit_values(values: tuple[CanonicalRational, ...]) -> None:
             "rational_growth_bound",
             "subset-sum intermediates exceed the canonical rational digit bound",
         )
+    return plan
 
 
 def compute_rational_subset_sum_profile(
@@ -138,15 +151,26 @@ def compute_rational_subset_sum_profile(
     corresponding rational values. Group by canonical rational value
     and count multiplicities.
     """
-    _admit_values(values)
-    fractions = [v.as_fraction() for v in values]
-    n = len(fractions)
-    sum_to_count: dict[Fraction, int] = {}
-
-    for r in range(n + 1):
-        for indices in combinations(range(n), r):
-            s = sum((fractions[i] for i in indices), Fraction(0))
-            sum_to_count[s] = sum_to_count.get(s, 0) + 1
+    plan = _admit_values(values)
+    sum_to_count = {Fraction(0): 1}
+    for value, multiplicity in plan.multiplicities:
+        if not value:
+            factor = 1 << multiplicity
+            sum_to_count = {
+                subset_sum: count * factor for subset_sum, count in sum_to_count.items()
+            }
+            continue
+        binomial_counts = tuple(
+            comb(multiplicity, chosen) for chosen in range(multiplicity + 1)
+        )
+        shifted_counts: dict[Fraction, int] = {}
+        for subset_sum, count in sum_to_count.items():
+            for chosen, binomial_count in enumerate(binomial_counts):
+                shifted_sum = subset_sum + chosen * value
+                shifted_counts[shifted_sum] = (
+                    shifted_counts.get(shifted_sum, 0) + count * binomial_count
+                )
+        sum_to_count = shifted_counts
 
     rows = [
         SubsetSumRow(

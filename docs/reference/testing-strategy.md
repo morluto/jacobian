@@ -201,6 +201,33 @@ cases; they must not stand in for mathematical correctness. A timeout,
 cancellation, unavailable external executable, or solver `UNKNOWN` is never a
 positive mathematical conclusion.
 
+### Mathematical and execution-boundary evidence
+
+Public typed operations own the authoritative mathematical evidence. Test
+convention-sensitive known answers, defining identities, reconstruction,
+metamorphic laws, producer-consumer composition, and bounded independent
+oracles through that interface. A private-kernel test may supplement this
+evidence when an internal algorithm or admission formula has its own defining
+invariant, but it must not replace the representative public test for the
+mathematical behavior.
+
+Keep process and transport evidence focused on their boundaries. Prove worker
+startup, isolation, cancellation, timeout, codec, and result projection with
+the smallest discriminating cases; do not make a broad mathematical sweep pay
+for repeated worker or transport setup merely to duplicate evidence already
+owned by those cases. When startup dominates an otherwise useful sweep, retain
+a deliberately varied public corpus and use direct kernel cases only for
+additional internal evidence.
+
+Before trimming or accelerating a slow test, identify whether its cost comes
+from mathematical coverage, backend computation, process isolation, or
+transport. Consolidate repeated setup or duplicate execution only after naming
+the evidence each retained fixture contributes. Do not trade public
+mathematical evidence for a faster private implementation test. Golden examples
+anchor conventions and regressions; pair them with a defining invariant,
+metamorphic property, reconstruction, or independent oracle when they support
+a broader correctness claim.
+
 Boundary rejection tests do not replace a realistic admitted workload. For a
 new or repaired operation, run at least one motivating interior request through
 the final public boundary and assert its typed mathematical result. When the

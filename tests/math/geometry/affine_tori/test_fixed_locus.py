@@ -183,6 +183,22 @@ def _finite_result_points(
     return points
 
 
+def _finite_kernel_points(
+    kernel: NonemptyFixedLocusKernel,
+) -> set[tuple[Fraction, ...]]:
+    points: set[tuple[Fraction, ...]] = set()
+    for coefficients in product(
+        *(range(order) for order in kernel.generator_orders)
+    ):
+        point = kernel.base_point
+        for coefficient, generator in zip(
+            coefficients, kernel.component_generators, strict=True
+        ):
+            point = _add_points(point, _scale_point(coefficient, generator))
+        points.add(point)
+    return points
+
+
 def test_identity_map_has_the_whole_torus_and_zero_dimensional_presentation() -> None:
     source = _source(((1, 0), (0, 1)), (Fraction(0), Fraction(0)))
 
@@ -488,7 +504,7 @@ def test_nonempty_result_deserialization_does_not_replay_kernel_dimension() -> N
     assert AffineTorusFixedLocusResult.model_validate(result)
 
 
-def test_random_small_full_rank_maps_match_a_grid_congruence_oracle() -> None:
+def test_random_small_full_rank_kernels_match_a_grid_congruence_oracle() -> None:
     random = Random(2443)
     checked = 0
     while checked < 40:
@@ -507,8 +523,10 @@ def test_random_small_full_rank_maps_match_a_grid_congruence_oracle() -> None:
             tuple(displacement[row][column] + int(row == column) for column in range(2))
             for row in range(2)
         )
-        result = affine_torus_fixed_locus(_source(linear_part, translation))
-        actual = _finite_result_points(result)
+        source = _source(linear_part, translation)
+        kernel = _compute_fixed_locus_kernel(_kernel_source(source))
+        assert isinstance(kernel, NonemptyFixedLocusKernel)
+        actual = _finite_kernel_points(kernel)
         grid_denominator = abs(determinant) * lcm(
             *(value.denominator for value in translation)
         )

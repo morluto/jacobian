@@ -45,17 +45,37 @@ def _poly_multiply(a: Sequence[Fraction], b: Sequence[Fraction]) -> list[Fractio
     return result
 
 
-def _poly_add(a: Sequence[Fraction], b: Sequence[Fraction]) -> list[Fraction]:
-    result = [Fraction(0)] * max(len(a), len(b))
-    for i, value in enumerate(a):
-        result[i] += value
-    for i, value in enumerate(b):
-        result[i] += value
-    return result
-
-
 def _poly_scale(a: Sequence[Fraction], scale: Fraction) -> list[Fraction]:
     return [value * scale for value in a]
+
+
+def _nodal_polynomial_and_weights(
+    nodes: Sequence[Fraction],
+) -> tuple[list[Fraction], list[Fraction]]:
+    """Return ``prod(x-x_i)`` and the exact barycentric weights."""
+
+    polynomial = [Fraction(1)]
+    denominators = [Fraction(1) for _ in nodes]
+    for right, right_node in enumerate(nodes):
+        polynomial = _poly_multiply(polynomial, [-right_node, Fraction(1)])
+        for left in range(right):
+            difference = nodes[left] - right_node
+            denominators[left] *= difference
+            denominators[right] *= -difference
+    return polynomial, [Fraction(1) / denominator for denominator in denominators]
+
+
+def _divide_by_nodal_factor(
+    polynomial: Sequence[Fraction], root: Fraction
+) -> list[Fraction]:
+    """Divide an ascending coefficient vector exactly by ``x - root``."""
+
+    quotient = [Fraction(0)] * (len(polynomial) - 1)
+    quotient[-1] = polynomial[-1]
+    for degree in range(len(quotient) - 2, -1, -1):
+        quotient[degree] = polynomial[degree + 1] + root * quotient[degree + 1]
+    assert polynomial[0] + root * quotient[0] == 0
+    return quotient
 
 
 def _interpolate(
@@ -64,14 +84,13 @@ def _interpolate(
     admit_interpolation_values(node_set, values)
     nodes = [node.as_fraction() for node in node_set.nodes]
     samples = [value.as_fraction() for value in values]
-    result = [Fraction(0)]
-    for k, x_k in enumerate(nodes):
-        basis = [Fraction(1)]
-        for i, x_i in enumerate(nodes):
-            if i != k:
-                basis = _poly_multiply(basis, [-x_i, Fraction(1)])
-                basis = _poly_scale(basis, Fraction(1) / (x_k - x_i))
-        result = _poly_add(result, _poly_scale(basis, samples[k]))
+    nodal_polynomial, weights = _nodal_polynomial_and_weights(nodes)
+    result = [Fraction(0)] * len(nodes)
+    for node, sample, weight in zip(nodes, samples, weights, strict=True):
+        scale = sample * weight
+        quotient = _divide_by_nodal_factor(nodal_polynomial, node)
+        for degree, coefficient in enumerate(quotient):
+            result[degree] += scale * coefficient
     while len(result) > 1 and result[-1] == 0:
         result.pop()
     return _polynomial_from_coeffs(result)
@@ -98,15 +117,10 @@ def lagrange_basis(nodes: RationalNodeSet) -> LagrangeBasisResult:
     """Return the exact Lagrange basis and barycentric weights for ``nodes``."""
 
     rational_nodes = [node.as_fraction() for node in nodes.nodes]
+    nodal_polynomial, weights = _nodal_polynomial_and_weights(rational_nodes)
     basis = []
-    for k, x_k in enumerate(rational_nodes):
-        polynomial = [Fraction(1)]
-        denominator = Fraction(1)
-        for i, x_i in enumerate(rational_nodes):
-            if i != k:
-                polynomial = _poly_multiply(polynomial, [-x_i, Fraction(1)])
-                denominator *= x_k - x_i
-        weight = Fraction(1) / denominator
+    for k, (node, weight) in enumerate(zip(rational_nodes, weights, strict=True)):
+        polynomial = _divide_by_nodal_factor(nodal_polynomial, node)
         basis.append(
             LagrangeBasisPolynomial(
                 index=k,

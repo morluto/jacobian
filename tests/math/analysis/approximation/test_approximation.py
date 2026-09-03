@@ -231,6 +231,22 @@ class TestLagrangeInterpolation:
         )
         assert _polynomial_terms(result.polynomial) == {(0,): Fraction(5)}
 
+    @pytest.mark.scale
+    def test_full_node_boundary_recovers_quadratic(self) -> None:
+        nodes = tuple(_canonical_node(_node(str(index))) for index in range(32))
+        values = tuple(
+            CanonicalRational.from_fraction(Fraction(index * index - 3 * index + 7))
+            for index in range(32)
+        )
+
+        polynomial = lagrange_interpolate(nodes, values)
+
+        assert _polynomial_terms(polynomial) == {
+            (2,): Fraction(1),
+            (1,): Fraction(-3),
+            (0,): Fraction(7),
+        }
+
     def test_mismatched_lengths_rejected(self) -> None:
         """Values length must match nodes length."""
         nodes = _node_set(_node("0"), _node("1"))

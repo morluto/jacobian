@@ -173,13 +173,14 @@ def test_repeated_generators_are_canonicalized_without_changing_the_fixed_space(
     )
 
 
-def test_source_d8_action_reproduces_every_reported_fixed_dimension() -> None:
-    # The dimensions are the degree-zero-through-seven ledger cited in #1264
-    # for the paper's five-variable U calculation, where k[U] = Sym(Q).
+def test_source_d8_action_reproduces_reported_dimensions_through_degree_six() -> None:
+    # Degrees zero through six from the ledger cited in #1264 for the paper's
+    # five-variable U calculation, where k[U] = Sym(Q). Degree seven is kept in
+    # the public-operation boundary test below rather than computed twice.
     assert tuple(
         homogeneous_fixed_subspace(_anwar_q_action(), degree).fixed_dimension
-        for degree in range(8)
-    ) == (1, 2, 4, 7, 15, 23, 37, 53)
+        for degree in range(7)
+    ) == (1, 2, 4, 7, 15, 23, 37)
 
 
 def test_source_d8_degree_seven_crosses_the_declared_operation_boundary() -> None:

@@ -648,6 +648,38 @@ def test_depth_zero_eight_variable_request_reserves_one_result_leaf() -> None:
     assert len(result.leaves) == 1
 
 
+@pytest.mark.scale
+def test_quadratic_full_leaf_boundary_retains_exact_partition_enclosures() -> None:
+    request = _request(
+        {"op": "mul", "children": [_var("x"), _var("x")]},
+        (("x", Fraction(-1), Fraction(1)),),
+        target_width=Fraction(1, 10**9),
+        precision_bits=64,
+        maximum_precision_bits=64,
+        max_leaves=1024,
+        max_depth=32,
+        max_evaluations=2047,
+    )
+
+    result = _compute_adaptive_range_enclosure(request)
+
+    assert isinstance(result.disposition, AdaptiveRangeBudgetExhausted)
+    assert result.disposition.reason == "MAX_LEAVES"
+    assert result.evaluations_used == 2047
+    assert len(result.leaves) == 1024
+    assert result.enclosure.lower.as_fraction() <= 0
+    assert result.enclosure.upper.as_fraction() >= 1
+    for leaf in result.leaves:
+        assert isinstance(leaf, AdaptiveRangeLeaf)
+        interval = leaf.box.intervals[0]
+        lower = interval.lower.as_fraction()
+        upper = interval.upper.as_fraction()
+        exact_lower = 0 if lower <= 0 <= upper else min(lower * lower, upper * upper)
+        exact_upper = max(lower * lower, upper * upper)
+        assert leaf.enclosure.lower.as_fraction() <= exact_lower
+        assert leaf.enclosure.upper.as_fraction() >= exact_upper
+
+
 def test_precision_weighted_work_is_rejected_before_arb() -> None:
     level = [_var("x") for _ in range(32)]
     while len(level) > 1:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from fractions import Fraction
 from time import monotonic
 from typing import Annotated, Any, Literal, Self
@@ -692,10 +693,24 @@ class _EvaluatedAdaptiveRangeLeaf:
     box: RationalIntervalBox
     enclosure: DyadicClosedInterval | None = None
     domain_failure: IntervalExpressionDomainFailure | None = None
+    split_coordinate: int | None = dataclass_field(init=False, repr=False)
+    enclosure_lower: Fraction | None = dataclass_field(init=False, repr=False)
+    enclosure_upper: Fraction | None = dataclass_field(init=False, repr=False)
+    enclosure_width: Fraction | None = dataclass_field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         if (self.enclosure is None) == (self.domain_failure is None):
             raise AssertionError("one adaptive leaf must carry exactly one outcome")
+        object.__setattr__(self, "split_coordinate", _widest_coordinate(self.box))
+        if self.enclosure is None:
+            lower = upper = width = None
+        else:
+            lower = _dyadic_fraction(self.enclosure.lower)
+            upper = _dyadic_fraction(self.enclosure.upper)
+            width = upper - lower
+        object.__setattr__(self, "enclosure_lower", lower)
+        object.__setattr__(self, "enclosure_upper", upper)
+        object.__setattr__(self, "enclosure_width", width)
 
 
 def _plan_adaptive_range(problem: _AdaptiveRangeProblem) -> _AdaptiveRangeExecutionPlan:
@@ -1012,10 +1027,26 @@ def _public_leaves(
 def _evaluated_hull(
     leaves: tuple[_EvaluatedAdaptiveRangeLeaf, ...],
 ) -> DyadicClosedInterval:
-    enclosed = tuple(leaf.enclosure for leaf in leaves if leaf.enclosure is not None)
-    if len(enclosed) != len(leaves):
+    if any(leaf.enclosure is None for leaf in leaves):
         raise AssertionError("a global adaptive hull requires every leaf enclosure")
-    return _enclosure_hull(enclosed)
+    lower_leaf = min(
+        leaves,
+        key=lambda leaf: (
+            leaf.enclosure_lower if leaf.enclosure_lower is not None else Fraction()
+        ),
+    )
+    upper_leaf = max(
+        leaves,
+        key=lambda leaf: (
+            leaf.enclosure_upper if leaf.enclosure_upper is not None else Fraction()
+        ),
+    )
+    assert lower_leaf.enclosure is not None
+    assert upper_leaf.enclosure is not None
+    return DyadicClosedInterval(
+        lower=lower_leaf.enclosure.lower,
+        upper=upper_leaf.enclosure.upper,
+    )
 
 
 def _result(
@@ -1086,8 +1117,8 @@ def _leaf_selection_key(
 ) -> tuple[int, Fraction, tuple[int, ...]]:
     if leaf.domain_failure is not None:
         return (0, Fraction(), leaf.path)
-    assert leaf.enclosure is not None
-    return (1, -_enclosure_width(leaf.enclosure), leaf.path)
+    assert leaf.enclosure_width is not None
+    return (1, -leaf.enclosure_width, leaf.path)
 
 
 def _run_adaptive_range_enclosure(
@@ -1164,26 +1195,22 @@ def _run_adaptive_range_enclosure(
             leaf
             for leaf in leaves
             if leaf.domain_failure is not None
-            and (
-                len(leaf.path) >= problem.max_depth
-                or _widest_coordinate(leaf.box) is None
-            )
+            and (len(leaf.path) >= problem.max_depth or leaf.split_coordinate is None)
         )
         if blocked_unproven:
             has_positive_coordinate = any(
-                _widest_coordinate(leaf.box) is not None for leaf in blocked_unproven
+                leaf.split_coordinate is not None for leaf in blocked_unproven
             )
             reason = "MAX_DEPTH" if has_positive_coordinate else "MAX_PRECISION"
             break
         candidates = tuple(
             leaf
             for leaf in leaves
-            if len(leaf.path) < problem.max_depth
-            and _widest_coordinate(leaf.box) is not None
+            if len(leaf.path) < problem.max_depth and leaf.split_coordinate is not None
         )
         if not candidates:
             any_positive_coordinate = any(
-                _widest_coordinate(leaf.box) is not None for leaf in leaves
+                leaf.split_coordinate is not None for leaf in leaves
             )
             reason = "MAX_DEPTH" if any_positive_coordinate else "MAX_PRECISION"
             break
@@ -1197,7 +1224,7 @@ def _run_adaptive_range_enclosure(
             candidates,
             key=_leaf_selection_key,
         )
-        coordinate = _widest_coordinate(selected.box)
+        coordinate = selected.split_coordinate
         assert coordinate is not None
         child_boxes = _split_box(selected.box, coordinate)
         children = tuple(

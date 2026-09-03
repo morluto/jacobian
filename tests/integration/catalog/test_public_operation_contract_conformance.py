@@ -123,9 +123,10 @@ def _mutations(
     _builtin_operations(),
     ids=lambda operation: operation.operation_id,
 )
-def test_every_accepted_boundary_mutation_returns_the_declared_result(
+def test_every_distinct_accepted_boundary_mutation_returns_the_declared_result(
     operation: MathTool[Any, Any],
 ) -> None:
+    seen_requests: set[str] = set()
     for invocation_example in operation.examples:
         mutations = _mutations(invocation_example.input, root=invocation_example.input)
         for index, (mutation, payload) in enumerate(mutations):
@@ -135,6 +136,10 @@ def test_every_accepted_boundary_mutation_returns_the_declared_result(
                 request = operation.request_type.model_validate(payload)
             except ValidationError:
                 continue
+            canonical_request = request.model_dump_json()
+            if canonical_request in seen_requests:
+                continue
+            seen_requests.add(canonical_request)
             try:
                 result = operation.run(request)
             except OperationDomainValidationError:

@@ -32,7 +32,7 @@ from jacobian.math.matrices._number_field import (
     recognize_real_simple_number_field,
 )
 from jacobian.math.matrices.analysis._inertia_process import (
-    field_element_sign_killable,
+    algebraic_inertia_killable,
 )
 from jacobian.math.matrices.analysis._models import (
     MAX_INERTIA_DIGIT_WORK,
@@ -788,22 +788,14 @@ def _compute_inertia(
             source = domain_matrix_from_embedded(matrix, recognized).rep.to_ddm()
             execution_checkpoint("after exact number-field matrix conversion")
             source_rows = [list(row) for row in source]
-            if admission.regime == "DIAGONAL":
-                n_pos, n_neg, n_zero = _diagonal_inertia(
-                    [source_rows[index][index] for index in range(len(source_rows))],
-                    sign=lambda value: field_element_sign_killable(
-                        value, recognized, deadline=deadline
-                    ),
-                    checkpoint=execution_checkpoint,
-                )
-            else:
-                n_pos, n_neg, n_zero = _symmetric_algebraic_inertia(
-                    source_rows,
-                    sign=lambda value: field_element_sign_killable(
-                        value, recognized, deadline=deadline
-                    ),
-                    checkpoint=execution_checkpoint,
-                )
+            execution_checkpoint("before exact algebraic inertia worker")
+            n_pos, n_neg, n_zero = algebraic_inertia_killable(
+                source_rows,
+                recognized,
+                regime=admission.regime,
+                deadline=deadline,
+            )
+            execution_checkpoint("after exact algebraic inertia worker")
         except EmbeddedNumberFieldRecognitionError as exc:
             raise OperationDomainValidationError(
                 location=("matrix", "embedding"),

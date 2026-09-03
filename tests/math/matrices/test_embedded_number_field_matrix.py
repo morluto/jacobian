@@ -278,7 +278,20 @@ def test_exact_inertia_distinguishes_the_two_real_quartic_embeddings() -> None:
     assert compute_inertia_wire(wire_request) == positive
 
 
-def test_exact_sign_isolation_handles_close_quartic_power_basis_values() -> None:
+def test_one_worker_handles_close_quartic_power_basis_signs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.process as process
+
+    worker_calls = 0
+    run_bounded_process = process.run_bounded_process
+
+    def count_worker(*args: Any, **kwargs: Any) -> process.BoundedProcessResult:
+        nonlocal worker_calls
+        worker_calls += 1
+        return run_bounded_process(*args, **kwargs)
+
+    monkeypatch.setattr(process, "run_bounded_process", count_worker)
     presentation = SimpleNumberFieldPresentation(
         coefficients_descending=("1", "0", "0", "0", "-2")
     )
@@ -308,6 +321,7 @@ def test_exact_sign_isolation_handles_close_quartic_power_basis_values() -> None
     # alpha^3 > 5/3 because 8 > (5/3)^4, while alpha^3 < 7/4 because
     # 8 < (7/4)^4. Both signs are established by exact common-root isolation.
     assert (result.n_positive, result.n_negative, result.n_zero) == (2, 0, 0)
+    assert worker_calls == 1
 
 
 def test_exact_sign_isolation_handles_the_admitted_degree_boundary() -> None:

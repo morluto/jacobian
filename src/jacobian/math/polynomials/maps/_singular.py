@@ -6,7 +6,6 @@ import re
 import time
 import typing
 from dataclasses import dataclass
-from fractions import Fraction
 from typing import Literal
 
 from jacobian._exact import CanonicalRational
@@ -17,10 +16,6 @@ from jacobian.math._singular import (
     read_singular_version,
     run_bounded_singular,
     singular_version_preamble,
-)
-from jacobian.math.polynomials._conversions import (
-    rational_function_from_sympy,
-    sparse_rational_polynomial_to_sympy,
 )
 from jacobian.math.polynomials.maps._generic_degree import (
     StandardMonomialLimitError,
@@ -297,17 +292,17 @@ def _parse_parameter_monomial(
 
 
 def _sparse_parameter_polynomial(
-    terms: dict[tuple[int, ...], int],
-    *,
-    scale: int,
+    terms: typing.Iterable[tuple[tuple[int, ...], typing.Any]],
 ) -> SparseRationalPolynomial:
     return SparseRationalPolynomial(
         terms=tuple(
             RationalPolynomialTerm(
-                coefficient=CanonicalRational.from_fraction(Fraction(value, scale)),
+                coefficient=CanonicalRational.from_integer_ratio(
+                    int(value.p), int(value.q)
+                ),
                 exponents=exponents,
             )
-            for exponents, value in sorted(terms.items(), reverse=True)
+            for exponents, value in terms
         )
     )
 
@@ -329,29 +324,35 @@ def _parse_generic_fiber_coefficient(
     )
     if not numerator or not denominator:
         raise ValueError("Singular returned a zero generic-fiber coefficient")
-    denominator_leading = denominator[max(denominator)]
-    numerator_value = _sparse_parameter_polynomial(
-        numerator,
-        scale=denominator_leading,
-    )
-    denominator_value = _sparse_parameter_polynomial(
-        denominator,
-        scale=denominator_leading,
-    )
-    numerator_polynomial = sparse_rational_polynomial_to_sympy(
-        numerator_value, target_parameters
-    )
-    denominator_polynomial = sparse_rational_polynomial_to_sympy(
-        denominator_value, target_parameters
-    )
+    from flint import fmpq_mpoly_ctx
+
+    context = fmpq_mpoly_ctx.get(target_parameters, "lex")
+    numerator_polynomial = context.from_dict(numerator)
+    denominator_polynomial = context.from_dict(denominator)
     try:
-        value = rational_function_from_sympy(
-            numerator_polynomial.as_expr() / denominator_polynomial.as_expr(),
-            target_parameters,
-            maximum_terms=MAX_GENERIC_FIBER_PARAMETER_TERMS,
-            deadline_check=deadline_check,
+        if deadline_check is not None:
+            deadline_check()
+        common = numerator_polynomial.gcd(denominator_polynomial)
+        numerator_polynomial = numerator_polynomial / common
+        denominator_polynomial = denominator_polynomial / common
+        leading = denominator_polynomial.leading_coefficient()
+        numerator_polynomial = numerator_polynomial / leading
+        denominator_polynomial = denominator_polynomial / leading
+        if deadline_check is not None:
+            deadline_check()
+        numerator_terms = tuple(numerator_polynomial.terms())
+        denominator_terms = tuple(denominator_polynomial.terms())
+        if (
+            len(numerator_terms) > MAX_GENERIC_FIBER_PARAMETER_TERMS
+            or len(denominator_terms) > MAX_GENERIC_FIBER_PARAMETER_TERMS
+        ):
+            raise ValueError("normalized coefficient support exceeds its bound")
+        value = RationalFunction._from_kernel(
+            variables=target_parameters,
+            numerator=_sparse_parameter_polynomial(numerator_terms),
+            denominator=_sparse_parameter_polynomial(denominator_terms),
         )
-    except ValueError as exc:
+    except (ArithmeticError, ValueError) as exc:
         raise _ResultLimitExceededError(
             "normalized Singular coefficient exceeds the exact-result limit"
         ) from exc

@@ -172,7 +172,7 @@ def test_detached_descendant_with_inherited_pipe_fails_closed(
     script.write_text(
         "import subprocess, sys\n"
         "p = subprocess.Popen("
-        "[sys.executable, '-c', 'import time; time.sleep(5)'], "
+        "[sys.executable, '-c', 'import time; time.sleep(2)'], "
         "stdout=sys.stdout, stderr=sys.stderr, start_new_session=True)\n"
         "open(sys.argv[1], 'w').write(str(p.pid))\n"
         "print('worker complete', flush=True)\n",
@@ -184,7 +184,7 @@ def test_detached_descendant_with_inherited_pipe_fails_closed(
         completed = run_bounded_process(
             [sys.executable, str(script), str(marker)],
             input_bytes=b"",
-            timeout_seconds=2,
+            timeout_seconds=0.5,
             environment=dict(os.environ),
             stdout_limit=4096,
             stderr_limit=4096,
@@ -192,7 +192,7 @@ def test_detached_descendant_with_inherited_pipe_fails_closed(
 
         assert completed.returncode == 0
         assert completed.timed_out
-        assert time.monotonic() - started < 3
+        assert time.monotonic() - started < 1.5
     finally:
         if marker.exists():
             try:

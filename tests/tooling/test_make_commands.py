@@ -86,6 +86,9 @@ def test_lanes_use_their_declared_worker_and_fixture_affinity() -> None:
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
     math = makefile.split("test-math:", 1)[1].split("test-catalog:", 1)[0]
     catalog = makefile.split("test-catalog:", 1)[1].split("test-dispatch:", 1)[0]
+    dispatch = makefile.split("test-dispatch:", 1)[1].split("test-cli:", 1)[0]
+    cli = makefile.split("test-cli:", 1)[1].split("test-tooling:", 1)[0]
+    tooling = makefile.split("test-tooling:", 1)[1].split("test-integration:", 1)[0]
     integration = makefile.split("test-integration:", 1)[1].split("test-fast:", 1)[0]
     scale = makefile.split("_test-scale:", 1)[1].split("test-exhaustive:", 1)[0]
     exhaustive = makefile.split("_test-exhaustive:", 1)[1].split("test-property:", 1)[0]
@@ -93,7 +96,8 @@ def test_lanes_use_their_declared_worker_and_fixture_affinity() -> None:
     assert "pytest -n 1 --dist worksteal" in math
     assert "pytest -n 2 --dist worksteal" in catalog
     assert "pytest -n 1 --dist worksteal" in integration
-    assert '-m "$(ORDINARY_MARKER_EXPRESSION)"' in integration
+    for ordinary_lane in (math, catalog, dispatch, cli, tooling, integration):
+        assert '-m "$(ORDINARY_MARKER_EXPRESSION)"' in ordinary_lane
     assert "SCALE_WORKERS ?= 2" in makefile
     assert "pytest -n $(SCALE_WORKERS) --dist worksteal" in scale
     assert "pytest -n 2 --dist worksteal" in exhaustive

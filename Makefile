@@ -46,21 +46,25 @@ test-math: ## Ordinary domain-owned mathematical behavior (1 worker, 120s).
 
 test-catalog: ## Immutable catalog and discovery behavior (2 workers, 30s).
 	$(UV_RUN) pytest -n 2 --dist worksteal --timeout=30 \
+		-m "$(ORDINARY_MARKER_EXPRESSION)" \
 		$(if $(TESTS),$(TESTS),tests/catalog) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 test-dispatch: ## Strict parsing and direct dispatch behavior (2 workers, 120s).
 	$(UV_RUN) pytest -n 2 --dist worksteal --timeout=120 \
+		-m "$(ORDINARY_MARKER_EXPRESSION)" \
 		$(if $(TESTS),$(TESTS),tests/dispatch) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 test-cli: ## Command-line boundary behavior (2 workers, 30s).
 	$(UV_RUN) pytest -n 2 --dist worksteal --timeout=30 \
+		-m "$(ORDINARY_MARKER_EXPRESSION)" \
 		$(if $(TESTS),$(TESTS),tests/cli) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
 test-tooling: ## Repository tooling and static contracts (2 workers, 30s).
 	$(UV_RUN) pytest -n 2 --dist worksteal --timeout=30 \
+		-m "$(ORDINARY_MARKER_EXPRESSION)" \
 		$(if $(TESTS),$(TESTS),tests/tooling) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 

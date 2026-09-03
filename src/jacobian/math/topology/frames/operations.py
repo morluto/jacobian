@@ -86,22 +86,29 @@ def coherence(value: VectorFamily) -> CoherenceResult:
     rank, matrix = integer_gram_and_rank(value.vectors)
     _admit_frame(value, rank=rank)
     assert matrix is not None
-    maximum = Fraction(0)
+    maximum_numerator = 0
+    maximum_denominator = 1
     pair: tuple[int, int] | None = None
     for left in range(len(value.vectors)):
         for right in range(left + 1, len(value.vectors)):
             inner_product = matrix[left][right]
             denominator = matrix[left][left] * matrix[right][right]
-            candidate = Fraction(inner_product * inner_product, denominator)
+            numerator = inner_product * inner_product
             candidate_pair = (left, right)
-            if candidate > maximum or (
-                candidate == maximum and (pair is None or candidate_pair > pair)
+            comparison = numerator * maximum_denominator - (
+                maximum_numerator * denominator
+            )
+            if comparison > 0 or (
+                comparison == 0 and (pair is None or candidate_pair > pair)
             ):
-                maximum = candidate
+                maximum_numerator = numerator
+                maximum_denominator = denominator
                 pair = candidate_pair
     return CoherenceResult._from_kernel(
         vectors=value.vectors,
-        coherence_squared=CanonicalRational.from_fraction(maximum),
+        coherence_squared=CanonicalRational.from_fraction(
+            Fraction(maximum_numerator, maximum_denominator)
+        ),
         maximizing_pair=pair,
     )
 

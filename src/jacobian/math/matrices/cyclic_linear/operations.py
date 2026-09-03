@@ -260,9 +260,7 @@ def _multiplication_norm(polynomial: Any, degree: int, variable: Any) -> int:
     _require_execution_active("during cyclotomic multiplication-norm admission")
     for total_power, remainder in enumerate(remainders):
         if total_power and total_power % _ADMISSION_CHECK_INTERVAL == 0:
-            _require_execution_active(
-                "during cyclotomic multiplication-norm admission"
-            )
+            _require_execution_active("during cyclotomic multiplication-norm admission")
         multiplicity = min(total_power + 1, 2 * degree - 1 - total_power)
         coordinates = _polynomial_coordinates(remainder, degree)
         for output_power, coefficient in enumerate(coordinates):

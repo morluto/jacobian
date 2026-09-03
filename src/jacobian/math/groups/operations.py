@@ -286,9 +286,7 @@ def subgroup_lattice(group: PermutationGroup) -> list[SubgroupEntry]:
                     f"lattice traversal exceeded {MAX_SUBGROUP_LATTICE_CLOSURES} "
                     "closure constructions"
                 )
-            seen, generated = _extend_by_element(
-                members, candidate, mask, chain, mul
-            )
+            seen, generated = _extend_by_element(members, candidate, mask, chain, mul)
             if seen not in known_masks:
                 known_masks.add(seen)
                 child_chain = (*chain, candidate)

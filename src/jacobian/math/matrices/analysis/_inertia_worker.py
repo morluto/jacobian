@@ -88,10 +88,7 @@ def _inertia(payload: dict[str, object]) -> tuple[int, int, int]:
         raise ValueError("worker inertia matrix must be square")
     x = defining.gens[0]
     matrix = [
-        [
-            field.new(_representative(value, x=x).all_coeffs())
-            for value in row
-        ]
+        [field.new(_representative(value, x=x).all_coeffs()) for value in row]
         for row in matrix_payload
     ]
 

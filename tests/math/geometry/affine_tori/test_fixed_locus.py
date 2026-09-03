@@ -518,9 +518,7 @@ def test_small_full_rank_maps_match_a_grid_congruence_oracle(
     )
     expected: set[tuple[Fraction, ...]] = set()
     for numerators in product(range(grid_denominator), repeat=2):
-        point = tuple(
-            Fraction(numerator, grid_denominator) for numerator in numerators
-        )
+        point = tuple(Fraction(numerator, grid_denominator) for numerator in numerators)
         if all(
             (
                 sum(

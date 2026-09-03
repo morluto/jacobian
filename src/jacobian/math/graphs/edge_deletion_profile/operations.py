@@ -227,9 +227,7 @@ def compute_edge_deletion_profile(
     vertices = list(graph.vertices)
     edge_keys = {frozenset(edge) for edge in edges}
     source_missing_edges = [
-        edge
-        for edge in combinations(vertices, 2)
-        if frozenset(edge) not in edge_keys
+        edge for edge in combinations(vertices, 2) if frozenset(edge) not in edge_keys
     ]
     complement_profile = (
         source_missing_edges

@@ -13,9 +13,7 @@ def main() -> None:
     input_data = sys.stdin.buffer.read()
     requests = pickle.loads(input_data)
     results = tuple(
-        _cyclotomic_kernel_child(
-            order, degree, matrix_coordinates, common_denominator
-        )
+        _cyclotomic_kernel_child(order, degree, matrix_coordinates, common_denominator)
         for order, degree, matrix_coordinates, common_denominator in requests
     )
     pickle.dump((sha256(input_data).digest(), results), sys.stdout.buffer)

@@ -39,9 +39,7 @@ def test_generator_marshalling_observes_request_cancellation() -> None:
         request_cancellation(cancellation),
         pytest.raises(OperationExecutionCancelledError, match="generator marshalling"),
     ):
-        _fixed_subspace_worker_input(
-            (matrix, matrix), matrix, deadline=float("inf")
-        )
+        _fixed_subspace_worker_input((matrix, matrix), matrix, deadline=float("inf"))
 
     assert cancellation.checks == 3
 
@@ -61,8 +59,7 @@ def test_fixed_subspace_rejects_an_unbound_worker_projection(
         return process.BoundedProcessResult(
             returncode=0,
             stdout=(
-                b'{"source_digest":"bad","generators_invertible":true,'
-                b'"basis_rows":[]}'
+                b'{"source_digest":"bad","generators_invertible":true,"basis_rows":[]}'
             ),
             stderr=b"",
             stdout_exceeded=False,

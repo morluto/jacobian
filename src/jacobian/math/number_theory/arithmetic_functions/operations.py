@@ -117,9 +117,7 @@ class _HeightSums:
         self._add_digits(
             index,
             numerator_digits=left.numerator_digits + right.numerator_digits,
-            denominator_digits=(
-                left.denominator_digits + right.denominator_digits
-            ),
+            denominator_digits=(left.denominator_digits + right.denominator_digits),
             denominator=denominator,
         )
 

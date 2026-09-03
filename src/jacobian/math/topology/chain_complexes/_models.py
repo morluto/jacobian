@@ -485,6 +485,12 @@ class MappingConeRequest(StrictModel):
                 maximum=MAX_OPERATION_MATRIX_CELLS,
                 label=f"mapping-cone {label}",
             )
+        _require_chain_map_components(
+            self.source,
+            self.target,
+            self.map_matrices,
+            label="mapping cone",
+        )
         return self
 
 

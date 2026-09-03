@@ -75,7 +75,14 @@ def _homology(request: ComputeHomologyRequest) -> HomologyResult:
 
 def _mapping_cone(request: MappingConeRequest) -> MappingConeResult:
     """Project a wire request into the canonical mapping-cone operation."""
-    return mapping_cone(request.source, request.target, request.map_matrices)
+    try:
+        return mapping_cone(request.source, request.target, request.map_matrices)
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("map_matrices",),
+            code="chain_complex.chain_map_relation",
+            message=str(exc),
+        ) from exc
 
 
 def _tensor_product(request: TensorProductRequest) -> TensorProductResult:

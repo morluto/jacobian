@@ -1078,6 +1078,12 @@ class TestMappingCone:
         )
         assert result.cone_basis_sizes is not None
 
+    def test_request_rejects_missing_chain_map_components(self) -> None:
+        circle = _circle_complex()
+
+        with pytest.raises(ValueError, match="one map component per chain degree"):
+            MappingConeRequest(source=circle, target=circle, map_matrices=())
+
 
 class TestChainMapAdmission:
     """Thread fixes: shapes, degree alignment, and defining equations are
@@ -1172,12 +1178,19 @@ class TestMappingConeDefiningEquations:
         source = self._complex("1")
         target = self._complex("0")
         one = (("1",),)
-        with pytest.raises(ValueError, match="commute"):
+        with pytest.raises(OperationDomainValidationError, match="commute") as caught:
             compute_mapping_cone(
                 MappingConeRequest(
                     source=source, target=target, map_matrices=(one, one)
                 )
             )
+        assert caught.value.errors() == (
+            {
+                "loc": ("map_matrices",),
+                "type": "chain_complex.chain_map_relation",
+                "msg": "chain map does not commute with differentials at degree index 0",
+            },
+        )
 
     def test_non_square_zero_source_cone_is_rejected(self) -> None:
         """A three-term complex violating d^2=0 is rejected before the cone."""

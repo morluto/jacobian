@@ -35,6 +35,7 @@ from __future__ import annotations
 import math
 from fractions import Fraction
 from itertools import product
+from operator import mul
 from typing import Literal
 
 from sympy import Matrix, Rational
@@ -375,8 +376,8 @@ def _is_inside_int(
     coord: tuple[int, ...], facets: list[tuple[tuple[int, ...], int]]
 ) -> bool:
     """Exact integer half-space membership test for one integer point."""
-    for coeffs, rhs in facets:
-        if sum(a * c for a, c in zip(coeffs, coord, strict=True)) > rhs:
+    for coeffs, rhs in facets:  # noqa: SIM110 - measured faster than all(...)
+        if sum(map(mul, coeffs, coord)) > rhs:
             return False
     return True
 

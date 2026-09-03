@@ -31,10 +31,11 @@ class _SidonExtensionAdmissionPlan:
 def _ordered_difference_pairs(
     elements: tuple[AdditiveInteger, ...],
 ) -> dict[int, _DifferencePair]:
+    integers = tuple(map(int, elements))
     return {
-        int(left) - int(right): (int(left), int(right))
-        for left in elements
-        for right in elements
+        left - right: (left, right)
+        for left in integers
+        for right in integers
         if left != right
     }
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from itertools import product
 
 import pytest
 from pydantic import ValidationError
@@ -55,6 +56,32 @@ def test_word_replay() -> None:
                 a, b = ga * a, ga * b + gb
             assert a == row.map.slope.as_fraction()
             assert b == row.map.intercept.as_fraction()
+
+
+def test_prefix_traversal_matches_independent_full_word_composition() -> None:
+    generators = (
+        (Fraction(2), Fraction(1)),
+        (Fraction(-1), Fraction(3)),
+        (Fraction(0), Fraction(5)),
+    )
+    result = compute_word_collision_profile(generators, 4)
+    observed = {
+        word: (row.map.slope.as_fraction(), row.map.intercept.as_fraction())
+        for row in result.rows
+        for word in row.words
+    }
+    expected: dict[tuple[int, ...], tuple[Fraction, Fraction]] = {}
+    for word in product(range(len(generators)), repeat=4):
+        slope, intercept = Fraction(1), Fraction(0)
+        for index in word:
+            generator_slope, generator_intercept = generators[index]
+            slope, intercept = (
+                generator_slope * slope,
+                generator_slope * intercept + generator_intercept,
+            )
+        expected[word] = (slope, intercept)
+
+    assert observed == expected
 
 
 def test_multiplicity_sum() -> None:

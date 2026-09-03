@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
-from itertools import product
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
 from jacobian.catalog.models import OperationDomainValidationError
@@ -260,8 +259,7 @@ def compute_word_collision_profile(
 
     class_to_words: dict[tuple[Fraction, Fraction], list[tuple[int, ...]]] = {}
 
-    for word in product(range(len(generators)), repeat=depth):
-        a, b = _compose_word(generators, word)
+    for word, a, b in _composed_words(generators, depth):
         key = (a, b)
         if key not in class_to_words:
             class_to_words[key] = []
@@ -283,6 +281,33 @@ def compute_word_collision_profile(
         depth=depth,
         rows=tuple(rows),
     )
+
+
+def _composed_words(
+    generators: tuple[tuple[Fraction, Fraction], ...], depth: int
+) -> Iterator[tuple[tuple[int, ...], Fraction, Fraction]]:
+    """Enumerate words while composing each shared prefix exactly once."""
+
+    if len(generators) == 1:
+        word = (0,) * depth
+        a, b = _compose_word(generators, word)
+        yield word, a, b
+        return
+
+    def visit(
+        word: tuple[int, ...], a: Fraction, b: Fraction
+    ) -> Iterator[tuple[tuple[int, ...], Fraction, Fraction]]:
+        if len(word) == depth:
+            yield word, a, b
+            return
+        for index, (generator_slope, generator_intercept) in enumerate(generators):
+            yield from visit(
+                (*word, index),
+                generator_slope * a,
+                generator_slope * b + generator_intercept,
+            )
+
+    yield from visit((), Fraction(1), Fraction(0))
 
 
 def _compose_word(

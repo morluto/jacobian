@@ -409,8 +409,9 @@ def _diagonal_linear_programs(
     )
 
 
-@given(_diagonal_linear_programs())
+@pytest.mark.property
 @settings(max_examples=30, deadline=None)
+@given(_diagonal_linear_programs())
 def test_diagonal_linear_program_property(
     case: tuple[dict[str, object], tuple[Fraction, ...], Fraction],
 ) -> None:

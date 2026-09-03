@@ -935,8 +935,21 @@ class _SelectedRealEmbeddingEvaluator:
         SimpleNumberFieldRealOrder,
         NumberFieldRealValueEnclosure,
     ]:
-        _require_execution_active(self.deadline, "during selected-embedding order")
         coordinates = self._coordinate_key(public_value)
+        return self.sign_coordinates(backend_value, coordinates, admission)
+
+    def sign_coordinates(
+        self,
+        backend_value: Any,
+        coordinates: tuple[Fraction, ...],
+        admission: RealEmbeddingDifferenceAdmission,
+    ) -> tuple[
+        SimpleNumberFieldRealOrder,
+        NumberFieldRealValueEnclosure,
+    ]:
+        """Order one private backend value from its bounded power-basis coordinates."""
+
+        _require_execution_active(self.deadline, "during selected-embedding order")
         cached = self._cache.get(coordinates)
         if cached is not None:
             return cached
@@ -995,10 +1008,10 @@ class _SelectedRealEmbeddingEvaluator:
         admission: RealEmbeddingDifferenceAdmission,
     ) -> int:
         difference_backend = left_backend - right_backend
-        difference_public = self.context.from_backend(difference_backend)
-        order, _enclosure_value = self.sign(
+        coordinates = self.context.coordinates_from_backend(difference_backend)
+        order, _enclosure_value = self.sign_coordinates(
             difference_backend,
-            difference_public,
+            coordinates,
             admission,
         )
         if order == "EQ":

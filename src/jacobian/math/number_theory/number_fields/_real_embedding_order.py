@@ -85,6 +85,14 @@ class RecognizedRealEmbeddingContext:
         return self.algebraic_field.new(coefficients)
 
     def from_backend(self, element: Any) -> SimpleNumberFieldElement:
+        return _element_from_fractions(
+            self.presentation,
+            self.coordinates_from_backend(element),
+        )
+
+    def coordinates_from_backend(self, element: Any) -> tuple[Fraction, ...]:
+        """Decode one reduced backend element without constructing a public value."""
+
         descending = list(element.to_list())
         degree = self.presentation.degree
         if len(descending) > degree:
@@ -97,7 +105,7 @@ class RecognizedRealEmbeddingContext:
             for value in reversed(descending)
         )
         _require_element_coordinates_fit(ascending, reason="kernel_coordinate_bound")
-        return _element_from_fractions(self.presentation, ascending)
+        return ascending
 
 
 def _decimal_digits_from_bits(bits: int) -> int:

@@ -65,6 +65,15 @@ authenticated service. Streamable HTTP is stateless by default. Use
 `--stateful-http` only when the deployment deliberately provides stateful
 session handling.
 
+## Observe discovery demand
+
+Each admitted `math.find` match request writes its mathematical need to the
+application log at INFO level as `math.find query='<need>'`. Control characters,
+including line breaks, are escaped so one query cannot forge additional log
+entries. Inspection requests and `math.run` payloads are not included. Treat
+these query logs as caller data when choosing access controls, retention, and
+redaction outside Jacobian.
+
 ## Install the example service files
 
 [`deploy/systemd/jacobian-mcp.service`](../../deploy/systemd/jacobian-mcp.service)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -50,6 +51,8 @@ _MAX_VALIDATION_ERRORS = 64
 _MAX_VALIDATION_LOCATION_COMPONENTS = 32
 _MAX_VALIDATION_LOCATION_LENGTH = 128
 
+logger = logging.getLogger(__name__)
+
 
 def math_find(
     request: OperationFindRequest,
@@ -58,6 +61,9 @@ def math_find(
 ) -> OperationFindResponse:
     active_catalog = _catalog(ctx)
     if isinstance(request, OperationMatchRequest):
+        # repr keeps caller-controlled line breaks and control characters from
+        # forging additional operator-log entries.
+        logger.info("math.find query=%r", request.need)
         match_response = _operation_match_response(
             active_catalog,
             need=request.need,

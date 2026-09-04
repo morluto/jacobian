@@ -87,6 +87,13 @@ semantics and types.
 
 ## Implement mathematics directly
 
+For implementation and review, follow the three checks in the
+[contributor quick path](CONTRIBUTING.md#contributor-quick-path): independent
+correctness evidence, the complete execution path and invariant owners, and
+useful accepted boundaries. Tests must challenge plausible wrong implementations,
+not reproduce their assumptions. Removing repeated validation must preserve
+the required invariant at its producing or consuming kernel boundary.
+
 > **Jacobian owns the contract; the backend owns the kernel.**
 
 Catalog admission means publication in the immutable catalog. Request

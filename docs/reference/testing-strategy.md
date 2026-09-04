@@ -343,6 +343,30 @@ identity against the same change. Before trusting backend output for a new
 claim, consult the [known backend defects](backend-known-defects.md) registry;
 add an entry whenever an adapter compensates for backend behavior.
 
+Do not obtain expected answers by copying the implementation's branch or
+snapshotting its current output. A passing test can preserve the same mistake
+as the code. Derive the expectation separately and explain the convention when
+it matters. For matrix formulas, write down dimensions and whether bases are
+rows or columns before choosing fixtures; square diagonal matrices often hide
+wrong multiplication order, transpose, and orientation errors.
+
+Use transformations and counterexamples that discriminate between plausible
+implementations:
+
+| Risk | Discriminating evidence |
+| --- | --- |
+| Wrong matrix orientation | Rectangular and nonorthogonal inputs; for a row dual basis, check `D B^T = I` and its returned Gram matrix. |
+| A proxy replaces a mathematical property | Check the defining predicate: covolume rationality depends on whether the integer Gram determinant is a perfect square, not on codimension. |
+| Ordering affects a mathematical conclusion | Permute constraint rows or apply a valid change of basis; compare objectives, statuses, or equivalent mathematical results, not incidental witness ordering. |
+| Candidate data is treated as established truth | Alter source and certificate fields independently and exercise the actual public consumer. |
+| A safety bound makes the operation unusable | Execute zero, identity, sparse, and representative dense inputs at useful orders, including immediately across an admission threshold. |
+| A producer outgrows its consumer | Serialize expanded outputs at the supported boundary and pass them unchanged to their actual consumers. |
+
+Select the rows relevant to the change; this is not a requirement to add every
+fixture to every operation. Redundant constraints are another useful
+meaning-preserving probe when both forms are admitted. If a transformation
+changes admission, record that separately from mathematical correctness.
+
 Classify each fixture by the evidence it contributes:
 
 | Fixture role | What it establishes |

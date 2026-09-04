@@ -27,6 +27,22 @@ predicate. An adapter may return ``False``, ``UNBOUNDED``, ``UNSAT``, or another
 mathematical outcome only from the defining computation; unexpected failures
 propagate to the owner for typed operational-failure translation.
 
+When an operation promotes a backend candidate to a mathematical certificate,
+the producing kernel must establish that certificate's conditions once before
+trusted result construction. A backend status or a second call to the same
+solver is not independent certification. For example, infeasibility of
+`Ax=b, x>=0` can be certified by `A^T y>=0` and `b^T y<0`; converting the
+candidate to exact rationals does not establish those inequalities. An invalid
+primal candidate establishes neither infeasibility nor unboundedness. Preserve
+an operational-failure outcome unless a valid mathematical result is obtained.
+
+This is part of producing the certificate, not a universal result-verification
+layer. Do not replay a solve, factorization, or other completed kernel in a
+Pydantic validator, serializer, or result constructor. Consult the
+[known backend defects](backend-known-defects.md) when investigating inconsistent
+candidates; use a maintained alternative or a bounded owner-local repair, with
+regressions for the pinned backend behavior.
+
 Automatic generator inference, ambient contexts, and implicit coercion are not
 public semantics. A result converter retains every unit, multiplicity, basis,
 axis, generator, quotient map, or witness needed by the declared result and

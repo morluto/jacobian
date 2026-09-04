@@ -103,6 +103,23 @@ applies. Before adopting a small fixed input cap, complete this review:
    envelope. Use defining invariants or an independent oracle to show that
    every selected regime has the same public semantics.
 
+Review the whole execution path, including presolve, certificate construction,
+and result conversion. A correct mathematical characterization need not be an
+appropriate algorithm. If a normal form or inclusion matrix already contains
+the desired index, retain that information instead of enumerating all maximal
+minors to recover it. Prefer the existing maintained kernel over a new search
+or a special-case shortcut that leaves the expensive general path intact.
+
+Check both soundness and precision of conservative admission. Repeatedly
+discarding zero support, common denominators, and relationships between
+intermediates can make a safe estimate reject almost every useful input.
+Constant-unit series and identity matrices are useful controls, alongside
+nontrivial sparse and dense cases. A worst-case bound over all possible solver
+branches may also be too coarse for the intended workload even when it is
+mathematically valid. Improve the analysis, presolve, or algorithm when needed;
+a compact answer alone does not prove bounded runtime, and increasing a digit
+cap does not repair an estimate that grows needlessly at every step.
+
 A timeout, cancellation, resource exhaustion, or backend `UNKNOWN` result is
 an execution outcome, never a negative mathematical conclusion. If the public
 result has no typed incomplete or unknown state, admission must reject the

@@ -19,6 +19,23 @@ contract and the
 
 ## Contributor quick path
 
+For mathematical changes, review three things before merging:
+
+1. **Independent correctness evidence:** state the defining identity, its
+   conventions, and a test that breaks a plausible wrong implementation.
+2. **The complete execution path:** identify who establishes each invariant,
+   where candidates become trusted results, and what work or expansion repeats.
+3. **A useful accepted boundary:** demonstrate a representative valid request
+   as well as an excessive request that is rejected. Rejection tests alone do
+   not establish that an operation remains usable.
+
+Record the applicable evidence in the existing PR description; do not add a
+new review artifact or framework. The
+[operation review](docs/reference/domain-operation-library.md#operation-contract-review),
+[test evidence guidance](docs/reference/testing-strategy.md#evidence-plans-for-exact-operations),
+and [backend contract](docs/reference/mathematical-backends.md#common-adapter-obligations)
+define these checks.
+
 Most changes should begin with the CI-planned affected local validation:
 
 ```sh

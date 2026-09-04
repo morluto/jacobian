@@ -32,8 +32,17 @@ def test_graph_rejects_edges_with_undeclared_vertices() -> None:
 
 
 def test_graph_rejects_edges_out_of_order() -> None:
-    with pytest.raises(ValidationError):
-        SimpleUndirectedGraph(vertices=("a", "b"), edges=(("b", "a"),))
+    with pytest.raises(ValidationError, match="lexicographic label order"):
+        SimpleUndirectedGraph(vertices=("x", "r"), edges=(("x", "r"),))
+
+
+def test_graph_edge_orientation_is_independent_of_vertex_and_edge_list_order() -> None:
+    graph = SimpleUndirectedGraph(
+        vertices=("x", "y", "r"), edges=(("x", "y"), ("r", "x"))
+    )
+    assert SimpleUndirectedGraph.model_validate_json(graph.model_dump_json()) == graph
+    assert graph.vertices == ("x", "y", "r")
+    assert graph.edges == (("x", "y"), ("r", "x"))
 
 
 def test_graph_rejects_duplicate_edges() -> None:

@@ -66,9 +66,21 @@ def _require_unicode_scalar_text(value: str, *, kind: str) -> None:
 class SimpleUndirectedGraph(StrictModel):
     """Immutable canonical value for a finite simple undirected graph."""
 
-    vertices: tuple[str, ...] = Field(max_length=MAX_INDEXED_SIMPLE_GRAPH_VERTICES)
+    vertices: tuple[str, ...] = Field(
+        max_length=MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+        description=(
+            "Unique Unicode NFC vertex labels containing valid Unicode scalar "
+            "values. Vertex list order is preserved and need not be sorted."
+        ),
+    )
     edges: tuple[tuple[str, str], ...] = Field(
-        max_length=MAX_INDEXED_SIMPLE_GRAPH_EDGES
+        max_length=MAX_INDEXED_SIMPLE_GRAPH_EDGES,
+        description=(
+            "Unique pairs of distinct declared vertices. Each pair must have "
+            "left < right in lexicographic label order (Unicode code points, "
+            "not positions in vertices). For vertices ['x', 'r'], the edge is "
+            "['r', 'x']. Edge list order is preserved and need not be sorted."
+        ),
     )
 
     @model_validator(mode="after")
@@ -92,7 +104,9 @@ class SimpleUndirectedGraph(StrictModel):
         ):
             raise PydanticCustomError(
                 "graph.edges_must_contain_two_declared_vertices_in_orde",
-                "edges must contain two declared vertices in order",
+                "edges must contain two distinct declared vertices with left < right "
+                "in lexicographic label order (Unicode code points, not positions "
+                "in vertices); orient each pair by label, e.g. ['r', 'x']",
             )
         if len(set(self.edges)) != len(self.edges):
             raise PydanticCustomError(

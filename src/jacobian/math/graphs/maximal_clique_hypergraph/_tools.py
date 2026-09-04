@@ -38,15 +38,19 @@ TOOLS: MathTools = (
         examples=(
             OperationExample(
                 name="triangle_with_pendant",
-                description="Triangle 0-1-2 with pendant vertex 3 attached to 2.",
+                description=(
+                    "Triangle x-y-z with pendant vertex r attached to z. "
+                    "Edge endpoints use lexicographic label order, independent "
+                    "of the vertex list order."
+                ),
                 input={
                     "graph": {
-                        "vertices": ["0", "1", "2", "3"],
+                        "vertices": ["x", "y", "z", "r"],
                         "edges": [
-                            ["0", "1"],
-                            ["0", "2"],
-                            ["1", "2"],
-                            ["2", "3"],
+                            ["x", "y"],
+                            ["x", "z"],
+                            ["y", "z"],
+                            ["r", "z"],
                         ],
                     },
                 },

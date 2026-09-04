@@ -417,7 +417,7 @@ def test_maximum_dense_shape_is_not_capped_by_serialized_result_size() -> None:
                     "edges": [["b", "a"]],
                 }
             },
-            "in order",
+            "lexicographic label order",
         ),
         (
             {

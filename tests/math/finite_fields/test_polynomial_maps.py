@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import pytest
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields import (
     FiniteMapTable,
     FinitePolynomialMap,
@@ -124,3 +127,57 @@ def test_slice_b_reuses_one_table_for_fiber_and_certificate_handoff() -> None:
 
     assert partition.table is table
     assert collision.table is table
+
+
+@pytest.mark.parametrize(
+    "consumer", [fiber_partition, analyze_collisions, analyze_permutation]
+)
+@pytest.mark.parametrize("mutation", ["target", "polynomial"])
+def test_consumers_authenticate_the_supplied_polynomial_table(
+    consumer: Callable[[FiniteMapTable], object],
+    mutation: str,
+) -> None:
+    table = finite_map_table(_map(2))
+    payload = table.model_dump(mode="json")
+    if mutation == "target":
+        payload["entries"][1][1] = payload["entries"][0][1]
+    else:
+        payload["map"]["polynomial"]["coefficients"] = [payload["entries"][0][0]]
+    candidate = FiniteMapTable.model_validate(payload)
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        consumer(candidate)
+    assert error.value.errors()[0]["type"] == (
+        "finite_field.finite_map_table_targets_match_bound_polynomial"
+    )
+
+
+@pytest.mark.parametrize(
+    "consumer", [fiber_partition, analyze_collisions, analyze_permutation]
+)
+def test_table_authentication_rejects_unadmitted_evaluation_work(
+    consumer: Callable[[FiniteMapTable], object],
+) -> None:
+    field = finite_field(2, (1, 1, 0, 1, 1, 0, 0, 0, 1))
+    one = element(field, (1,) + (0,) * 7)
+    table = finite_map_table(finite_polynomial_map(finite_polynomial(field, (one,))))
+    candidate_map = finite_polynomial_map(finite_polynomial(field, (one,) * 512))
+    candidate = FiniteMapTable(map=candidate_map, entries=table.entries)
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        consumer(candidate)
+    assert error.value.errors()[0]["type"] == (
+        "finite_field.finite_map_exceeds_operation_work_budget"
+    )
+
+
+@pytest.mark.parametrize("exponents", [(), (2,), (3,)])
+def test_serialized_producer_tables_enter_every_consumer(
+    exponents: tuple[int, ...],
+) -> None:
+    table = finite_map_table(_map(*exponents))
+    candidate = FiniteMapTable.model_validate_json(table.model_dump_json())
+    for consumer in (fiber_partition, analyze_collisions, analyze_permutation):
+        result = consumer(candidate)
+        assert result == consumer(table)
+        assert result.table is candidate

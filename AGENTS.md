@@ -89,6 +89,11 @@ useful accepted boundaries. Tests must challenge plausible wrong implementations
 not reproduce their assumptions. Removing repeated validation must preserve
 the required invariant at its producing or consuming kernel boundary.
 
+Before changing a backend or admission rule to fix a reported failure, reproduce
+it on the current revision and preserve a regression that fails for the
+intended reason. Check the defining mathematical identity independently; for
+scale changes, prove that a useful larger request is admitted safely.
+
 > **Jacobian owns the contract; the backend owns the kernel.**
 
 Catalog admission means publication in the immutable catalog. Request

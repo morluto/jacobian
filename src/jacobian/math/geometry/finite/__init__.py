@@ -4,6 +4,7 @@ from jacobian.math.geometry.finite.conversions import (
     embed_projective_point_in_finite_field,
 )
 from jacobian.math.geometry.finite.operations import (
+    coset_intersection_profile,
     grassmannian_count,
     prime_field_affine_plane,
     projective_point,
@@ -25,6 +26,7 @@ __all__ = [
     "PrimeFieldVectorSpace",
     "ProjectivePoint",
     "ProjectivePointSequence",
+    "coset_intersection_profile",
     "embed_projective_point_in_finite_field",
     "grassmannian_count",
     "prime_field_affine_plane",

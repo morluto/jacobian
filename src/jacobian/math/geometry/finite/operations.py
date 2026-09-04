@@ -19,7 +19,10 @@ from jacobian.math.geometry.finite._linear import (
 )
 from jacobian.math.geometry.finite._models import (
     MAX_AFFINE_PLANE_FIELD_ORDER,
+    MAX_COSET_PROFILE_SUBSET_SIZE,
     MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS,
+    CosetIntersectionProfileResult,
+    CosetIntersectionRow,
     GrassmannianCountResult,
     LinearSubspace,
     ParallelClass,
@@ -50,6 +53,7 @@ def _domain_error(location: tuple[str | int, ...], code: str, message: str) -> N
 
 
 __all__ = [
+    "coset_intersection_profile",
     "grassmannian_count",
     "prime_field_affine_plane",
     "projective_point",
@@ -296,6 +300,88 @@ def projective_space_enumerate(
 
     return ProjectiveSpaceEnumerateResult(
         sequence=ProjectivePointSequence(space=space, coordinates=tuple(points)),
+    )
+
+
+def _admit_coset_profile(
+    space: PrimeFieldVectorSpace,
+    subspace: LinearSubspace,
+    subset: tuple[tuple[int, ...], ...],
+) -> None:
+    if subspace.space != space:
+        _domain_error(
+            ("subspace",),
+            "coset_parent_mismatch",
+            "subspace must have the same parent space",
+        )
+    if len(subset) > MAX_COSET_PROFILE_SUBSET_SIZE:
+        _domain_error(
+            ("subset",),
+            "coset_subset_size_exceeds_bound",
+            f"subset size exceeds the {MAX_COSET_PROFILE_SUBSET_SIZE}-vector bound",
+        )
+    for vector in subset:
+        _validate_vector(vector, space)
+    if len(set(subset)) != len(subset):
+        _domain_error(
+            ("subset",),
+            "coset_subset_not_unique",
+            "subset vectors must be unique",
+        )
+
+
+def _canonical_coset_representative(
+    vector: tuple[int, ...],
+    subspace: LinearSubspace,
+) -> tuple[int, ...]:
+    """Return the canonical coset representative with zeros at pivot columns.
+
+    ``subspace`` is already in RREF, so each pivot column has exactly one
+    basis row with a 1 and zeros elsewhere in pivot columns. Subtracting the
+    appropriate multiple zeros each pivot coordinate independently.
+    """
+
+    field_order = subspace.space.field_order
+    if not subspace.basis:
+        return vector
+    # Extract pivots in increasing order; RREF guarantees they are sorted.
+    pivots: list[tuple[int, tuple[int, ...]]] = []
+    for row in subspace.basis:
+        pivot = next(i for i, value in enumerate(row) if value != 0)
+        pivots.append((pivot, row))
+    rep = list(vector)
+    for pivot, row in pivots:
+        coeff = rep[pivot] % field_order
+        if coeff != 0:
+            for col, entry in enumerate(row):
+                rep[col] = (rep[col] - coeff * entry) % field_order
+    return tuple(rep)
+
+
+def coset_intersection_profile(
+    space: PrimeFieldVectorSpace,
+    subspace: LinearSubspace,
+    subset: tuple[tuple[int, ...], ...],
+) -> CosetIntersectionProfileResult:
+    _admit_coset_profile(space, subspace, subset)
+    if not subset:
+        return CosetIntersectionProfileResult._from_kernel(
+            space=space, subspace=subspace, subset=subset, rows=()
+        )
+    # Group by canonical representative
+    buckets: dict[tuple[int, ...], list[tuple[int, ...]]] = {}
+    for vector in subset:
+        rep = _canonical_coset_representative(vector, subspace)
+        buckets.setdefault(rep, []).append(vector)
+    rows: list[CosetIntersectionRow] = []
+    for rep in sorted(buckets):
+        members = tuple(sorted(buckets[rep]))
+        rows.append(
+            CosetIntersectionRow._from_kernel(representative=rep, members=members)
+        )
+    rows_tuple = tuple(sorted(rows, key=lambda r: r.representative))
+    return CosetIntersectionProfileResult._from_kernel(
+        space=space, subspace=subspace, subset=subset, rows=rows_tuple
     )
 
 

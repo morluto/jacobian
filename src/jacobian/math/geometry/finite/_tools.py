@@ -4,6 +4,8 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.geometry.finite._models import (
+    CosetIntersectionProfileRequest,
+    CosetIntersectionProfileResult,
     GrassmannianCountRequest,
     GrassmannianCountResult,
     PrimeFieldAffinePlaneRequest,
@@ -24,6 +26,7 @@ from jacobian.math.geometry.finite._models import (
     SubspaceSpanResult,
 )
 from jacobian.math.geometry.finite.operations import (
+    coset_intersection_profile,
     grassmannian_count,
     prime_field_affine_plane,
     projective_point_canonicalize,
@@ -88,6 +91,12 @@ def _compute_prime_field_affine_plane(
     request: PrimeFieldAffinePlaneRequest,
 ) -> PrimeFieldAffinePlaneResult:
     return prime_field_affine_plane(request.prime_order)
+
+
+def _compute_coset_intersection_profile(
+    request: CosetIntersectionProfileRequest,
+) -> CosetIntersectionProfileResult:
+    return coset_intersection_profile(request.space, request.subspace, request.subset)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
@@ -283,6 +292,51 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="ag_2_2",
                 description="Construct the affine plane AG(2, 2).",
                 input={"prime_order": 2},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="finite_geometry.subspace.coset_intersection_profile.compute",
+        title="Partition a finite subset by subspace cosets",
+        description=(
+            "For a prime-field vector space V, a linear subspace H in RREF, and "
+            "a duplicate-free finite subset A of V, return the complete "
+            "partition of A by affine cosets of H. Each occupied coset row "
+            "retains its canonical quotient representative with zeros in every "
+            "pivot column of H, the sorted members of A in that coset, and "
+            "their count. Rows are sorted by representative. The operation "
+            f"admits at most {1024:,} subset elements, dimension 32, "
+            "field order 10,000, and one bounded quotient-reduction pass."
+        ),
+        request_type=CosetIntersectionProfileRequest,
+        result_type=CosetIntersectionProfileResult,
+        run=_compute_coset_intersection_profile,
+        tags=(
+            "finite-geometry",
+            "subspace",
+            "coset",
+            "partition",
+            "affine",
+            "quotient",
+            "exact",
+        ),
+        examples=(
+            OperationExample(
+                name="f2_3_two_cosets",
+                description=(
+                    "Partition {(0,0,0), (1,0,0), (0,1,0)} in F_2^3 by the line "
+                    "H=span{(1,0,0)}; the subset has three vectors and occupies "
+                    "two cosets. The space axis must be identifiers and the "
+                    "subspace must be in RREF with the same field and axis."
+                ),
+                input={
+                    "space": {"field_order": 2, "axis": ["x", "y", "z"]},
+                    "subspace": {
+                        "space": {"field_order": 2, "axis": ["x", "y", "z"]},
+                        "basis": [[1, 0, 0]],
+                    },
+                    "subset": [[0, 0, 0], [1, 0, 0], [0, 1, 0]],
+                },
             ),
         ),
     ),

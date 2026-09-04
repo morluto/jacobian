@@ -53,6 +53,7 @@ def test_catalog_contains_only_audited_operations() -> None:
         "finite_geometry.projective_point.equal.decide",
         "finite_geometry.projective_space.enumerate_points",
         "finite_geometry.subspace.compute",
+        "finite_geometry.subspace.coset_intersection_profile.compute",
         "finite_geometry.subspace.intersection.compute",
         "finite_geometry.subspace.membership.decide",
         "finite_geometry.subspace.span.compute",
@@ -155,6 +156,7 @@ def test_public_api_constructs_and_embeds_without_private_imports() -> None:
         "PrimeFieldVectorSpace",
         "ProjectivePoint",
         "ProjectivePointSequence",
+        "coset_intersection_profile",
         "embed_projective_point_in_finite_field",
         "grassmannian_count",
         "prime_field_affine_plane",
@@ -436,3 +438,207 @@ def test_result_models_remain_structural_only() -> None:
     payload["count"] = "8"
     forged_count = type(count).model_validate(payload)
     assert forged_count.count == "8"
+
+
+# ---------------------------------------------------------------------------
+# Coset decomposition profile (issue #2900)
+# ---------------------------------------------------------------------------
+
+from jacobian.math.geometry.finite._models import (
+    CosetIntersectionProfileRequest,
+    CosetIntersectionProfileResult,
+)
+from jacobian.math.geometry.finite.operations import coset_intersection_profile
+
+
+def test_coset_profile_h_zero_yields_singleton_rows() -> None:
+    space = _space(2, ("x", "y"))
+    subspace = LinearSubspace(space=space, basis=())
+    request = CosetIntersectionProfileRequest(
+        space=space, subspace=subspace, subset=((0, 0), (1, 0), (0, 1))
+    )
+    result = coset_intersection_profile(request.space, request.subspace, request.subset)
+    assert len(result.rows) == 3
+    for row in result.rows:
+        assert len(row.members) == 1
+        assert row.representative == row.members[0]
+        # singleton rows: each representative equals its member
+        assert row.members[0] in request.subset
+    # All members covered exactly once
+    all_members = [m for row in result.rows for m in row.members]
+    assert sorted(all_members) == sorted(request.subset)
+
+
+def test_coset_profile_h_full_yields_single_zero_row() -> None:
+    space = _space(2, ("x", "y"))
+    subspace = LinearSubspace(space=space, basis=((1, 0), (0, 1)))
+    subset = ((0, 0), (1, 0), (0, 1), (1, 1))
+    request = CosetIntersectionProfileRequest(
+        space=space, subspace=subspace, subset=subset
+    )
+    result = coset_intersection_profile(request.space, request.subspace, request.subset)
+    assert len(result.rows) == 1
+    assert result.rows[0].representative == (0, 0)
+    assert set(result.rows[0].members) == set(subset)
+    assert result.rows[0].size == 4
+
+
+def test_coset_profile_f2_3_one_dimensional_h_unequal_fibres() -> None:
+    space = _space(3, ("x", "y", "z"))
+    subspace = LinearSubspace(space=space, basis=((1, 0, 0),))
+    subset = ((0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1))
+    request = CosetIntersectionProfileRequest(
+        space=space, subspace=subspace, subset=subset
+    )
+    result = coset_intersection_profile(request.space, request.subspace, request.subset)
+    # H has two cosets: representative with x=0 and x=0? Actually pivot at x
+    # Representative zeros x, so (0,0,0) coset contains (0,0,0) and (1,0,0)
+    # and (0,1,0) and (0,0,1) each in different? Let's compute:
+    # (0,0,0) -> (0,0,0)
+    # (1,0,0) -> (0,0,0)
+    # (0,1,0) -> (0,1,0)
+    # (0,0,1) -> (0,0,1)
+    assert len(result.rows) == 3
+    sizes = sorted(row.size for row in result.rows)
+    assert sizes == [1, 1, 2]
+    # Verify each member's difference from representative lies in H
+    for row in result.rows:
+        for member in row.members:
+            diff = tuple((member[i] - row.representative[i]) % 2 for i in range(3))
+            # diff must be in H = span{(1,0,0)} => y=z=0
+            assert diff[1] == 0 and diff[2] == 0
+
+
+def test_coset_profile_empty_subset_returns_empty() -> None:
+    space = _space(2, ("x", "y"))
+    subspace = LinearSubspace(space=space, basis=((1, 0),))
+    request = CosetIntersectionProfileRequest(
+        space=space, subspace=subspace, subset=()
+    )
+    result = coset_intersection_profile(request.space, request.subspace, request.subset)
+    assert result.rows == ()
+
+
+def test_coset_profile_translation_preserves_fibre_sizes() -> None:
+    space = _space(2, ("x", "y"))
+    subspace = LinearSubspace(space=space, basis=((1, 1),))
+    subset = ((0, 0), (1, 0), (0, 1))
+    result = coset_intersection_profile(space, subspace, subset)
+    sizes_before = sorted(row.size for row in result.rows)
+    shift = (1, 1)
+    translated = tuple(
+        tuple((v[i] + shift[i]) % 2 for i in range(2)) for v in subset
+    )
+    result2 = coset_intersection_profile(space, subspace, translated)
+    sizes_after = sorted(row.size for row in result2.rows)
+    assert sizes_before == sizes_after
+
+
+def test_coset_profile_equivalent_generators_same_profile() -> None:
+    space = _space(3, ("x", "y", "z"))
+    # Two different generating sets for the same subspace
+    span_a = subspace_compute(space, ((1, 0, 0), (1, 1, 0))).subspace
+    span_b = subspace_compute(space, ((1, 1, 0), (0, 1, 0))).subspace
+    assert span_a == span_b
+    subset = ((0, 0, 0), (1, 0, 0), (0, 1, 0), (1, 1, 0), (0, 0, 1))
+    result_a = coset_intersection_profile(space, span_a, subset)
+    result_b = coset_intersection_profile(space, span_b, subset)
+    assert result_a.rows == result_b.rows
+
+
+def test_coset_profile_rejects_parent_mismatch() -> None:
+    space = _space(2, ("x", "y"))
+    other_space = _space(2, ("a", "b"))
+    subspace = LinearSubspace(space=other_space, basis=((1, 0),))
+    with pytest.raises(OperationDomainValidationError, match="parent"):
+        coset_intersection_profile(space, subspace, ((0, 0),))
+
+
+def test_coset_profile_rejects_duplicate_vectors() -> None:
+    space = _space(2, ("x", "y"))
+    subspace = LinearSubspace(space=space, basis=((1, 0),))
+    with pytest.raises(ValidationError, match="unique"):
+        CosetIntersectionProfileRequest(
+            space=space, subspace=subspace, subset=((0, 0), (0, 0))
+        )
+
+
+def test_coset_profile_rejects_out_of_field_vector() -> None:
+    space = _space(2, ("x", "y"))
+    subspace = LinearSubspace(space=space, basis=((1, 0),))
+    with pytest.raises(ValidationError, match="canonical"):
+        CosetIntersectionProfileRequest(
+            space=space, subspace=subspace, subset=((2, 0),)
+        )
+
+
+def test_coset_profile_defining_invariant_replay() -> None:
+    """Each row member differs from its representative by an element of H."""
+    space = _space(3, ("x", "y", "z"))
+    subspace = LinearSubspace(space=space, basis=((1, 1, 0), (0, 0, 1)))
+    subset = tuple(
+        (x, y, z) for x in range(2) for y in range(2) for z in range(2)
+    )[:6]
+    result = coset_intersection_profile(space, subspace, subset)
+    # Reconstruct membership via subspace_membership kernel
+    for row in result.rows:
+        for member in row.members:
+            diff = tuple((member[i] - row.representative[i]) % space.field_order for i in range(3))
+            assert subspace_membership(subspace, diff).is_member is True
+            # Distinct representatives differ modulo H
+    reps = [row.representative for row in result.rows]
+    for i, a in enumerate(reps):
+        for b in reps[i + 1 :]:
+            diff = tuple((a[j] - b[j]) % space.field_order for j in range(3))
+            assert subspace_membership(subspace, diff).is_member is False
+
+
+def test_coset_profile_small_pfr_fixture_exhaustive() -> None:
+    """Brute-force check against direct coset enumeration for small F2^3."""
+    space = _space(3, ("x", "y", "z"))
+    subspace = LinearSubspace(space=space, basis=((1, 0, 0),))
+    subset = ((0, 0, 0), (1, 1, 0), (0, 1, 1), (1, 0, 1))
+    result = coset_intersection_profile(space, subspace, subset)
+    # Direct oracle: group by naive coset representative (zero pivot)
+    def oracle_rep(v):
+        # H = span{(1,0,0)} => rep zeros first coordinate
+        return (0, v[1], v[2])
+    expected = {}
+    for v in subset:
+        expected.setdefault(oracle_rep(v), []).append(v)
+    assert len(result.rows) == len(expected)
+    for row in result.rows:
+        assert tuple(sorted(expected[row.representative])) == row.members
+
+
+def test_coset_profile_via_catalog_example_replay() -> None:
+    """The published catalog example must validate and produce the expected partition."""
+    request = CosetIntersectionProfileRequest.model_validate(
+        {
+            "space": {"field_order": 2, "axis": ["x", "y", "z"]},
+            "subspace": {
+                "space": {"field_order": 2, "axis": ["x", "y", "z"]},
+                "basis": [[1, 0, 0]],
+            },
+            "subset": [[0, 0, 0], [1, 0, 0], [0, 1, 0]],
+        }
+    )
+    result = coset_intersection_profile(request.space, request.subspace, request.subset)
+    assert len(result.rows) == 2
+    assert result.rows[0].representative == (0, 0, 0)
+    assert result.rows[0].members == ((0, 0, 0), (1, 0, 0))
+    assert result.rows[1].representative == (0, 1, 0)
+    assert result.model_dump(mode="json")["rows"][0]["size"] == 2
+
+
+def test_coset_profile_admission_rejects_oversized_subset() -> None:
+    space = _space(2, ("x", "y"))
+    subspace = LinearSubspace(space=space, basis=((1, 0),))
+    # F2^2 only has 4 distinct vectors, so test schema-level max_length
+    big_space = _space(2, tuple(f"x{i}" for i in range(10)))
+    big_subspace = LinearSubspace(space=big_space, basis=())
+    subset = tuple(
+        tuple((i >> j) & 1 for j in range(10)) for i in range(1025)
+    )
+    with pytest.raises((OperationDomainValidationError, ValidationError), match="subset"):
+        coset_intersection_profile(big_space, big_subspace, subset)

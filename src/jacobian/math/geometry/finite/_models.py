@@ -22,6 +22,7 @@ from jacobian.math.geometry.finite.values import (
 )
 
 MAX_PROJECTIVE_SPACE_ENUMERATION_VECTORS = 65_536
+MAX_COSET_PROFILE_SUBSET_SIZE = 1_024
 
 
 class LinearSubspace(StrictModel):
@@ -416,3 +417,173 @@ class PrimeFieldAffinePlaneResult(StrictModel):
     incidence: IncidenceStructure
     parallel_classes: tuple[ParallelClass, ...] = Field(min_length=2)
     total_incidences: int = Field(ge=0)
+
+
+# ---------------------------------------------------------------------------
+# Coset decomposition of a finite subset by a linear subspace
+# ---------------------------------------------------------------------------
+
+
+class CosetIntersectionRow(StrictModel):
+    """One occupied coset of ``H`` and the members of ``A`` it contains.
+
+    ``representative`` is the canonical quotient representative with zeros in
+    every pivot column of ``H``. ``members`` are the source elements of
+    ``A`` lying in this coset, sorted lexicographically.
+    """
+
+    representative: tuple[int, ...]
+    members: tuple[tuple[int, ...], ...] = Field(
+        min_length=1, max_length=MAX_COSET_PROFILE_SUBSET_SIZE
+    )
+    size: int = Field(ge=1, le=MAX_COSET_PROFILE_SUBSET_SIZE)
+
+    @model_validator(mode="after")
+    def require_consistent(self) -> Self:
+        if self.size != len(self.members):
+            raise _validation_error(
+                "coset_row_size_mismatch",
+                "coset row size must equal the number of members",
+            )
+        if tuple(sorted(self.members)) != self.members:
+            raise _validation_error(
+                "coset_members_not_sorted",
+                "coset members must be sorted lexicographically",
+            )
+        if len(set(self.members)) != len(self.members):
+            raise _validation_error(
+                "coset_members_not_unique",
+                "coset members must be unique",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        representative: tuple[int, ...],
+        members: tuple[tuple[int, ...], ...],
+    ) -> Self:
+        return cls.model_construct(
+            representative=representative,
+            members=members,
+            size=len(members),
+        )
+
+
+class CosetIntersectionProfileRequest(StrictModel):
+    """Partition a finite subset by the affine cosets of a linear subspace.
+
+    ``space`` is the ambient prime-field vector space. ``subspace`` must
+    have the same parent. ``subset`` is a duplicate-free tuple of canonical
+    residues in ``space``; empty subset yields an empty profile.
+    """
+
+    space: PrimeFieldVectorSpace
+    subspace: LinearSubspace
+    subset: tuple[tuple[int, ...], ...] = Field(
+        default=(),
+        max_length=MAX_COSET_PROFILE_SUBSET_SIZE,
+        description=(
+            "Duplicate-free tuple of vectors in the declared ambient space. "
+            f"At most {MAX_COSET_PROFILE_SUBSET_SIZE} elements."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_valid(self) -> Self:
+        if self.subspace.space != self.space:
+            raise _validation_error(
+                "coset_parent_mismatch",
+                "subspace must have the same parent space",
+            )
+        dimension = len(self.space.axis)
+        seen: set[tuple[int, ...]] = set()
+        for vector in self.subset:
+            _validate_vector(vector, self.space)
+            if vector in seen:
+                raise _validation_error(
+                    "coset_subset_not_unique",
+                    "subset vectors must be unique",
+                )
+            seen.add(vector)
+            if len(vector) != dimension:
+                raise _validation_error(
+                    "coset_vector_length",
+                    "subset vector length must match the ambient axis",
+                )
+        return self
+
+
+class CosetIntersectionProfileResult(CosetIntersectionProfileRequest):
+    """Complete partition of ``A`` by cosets of ``H`` with canonical representatives.
+
+    ``rows`` is sorted by representative. Every source member occurs in
+    exactly one row; empty ambient cosets are not materialized.
+    """
+
+    rows: tuple[CosetIntersectionRow, ...] = Field(
+        max_length=MAX_COSET_PROFILE_SUBSET_SIZE
+    )
+
+    @model_validator(mode="after")
+    def require_complete_partition(self) -> Self:
+        if self.subspace.space != self.space:
+            raise _validation_error(
+                "coset_parent_mismatch",
+                "subspace must have the same parent space",
+            )
+        # Validate representative / member parent and ordering
+        if tuple(sorted(row.representative for row in self.rows)) != tuple(
+            row.representative for row in self.rows
+        ):
+            raise _validation_error(
+                "coset_rows_not_sorted",
+                "coset rows must be sorted by representative",
+            )
+        if len({row.representative for row in self.rows}) != len(self.rows):
+            raise _validation_error(
+                "coset_representatives_not_unique",
+                "coset representatives must be unique",
+            )
+        # Representative axis check
+        for row in self.rows:
+            _validate_vector(row.representative, self.space)
+            for member in row.members:
+                _validate_vector(member, self.space)
+        # Disjointness and coverage
+        all_members: list[tuple[int, ...]] = []
+        for row in self.rows:
+            all_members.extend(row.members)
+        if len(all_members) != len(self.subset):
+            raise _validation_error(
+                "coset_partition_size",
+                "coset rows must partition exactly the declared subset",
+            )
+        if set(all_members) != set(self.subset):
+            raise _validation_error(
+                "coset_partition_coverage",
+                "coset rows must contain exactly the source subset elements",
+            )
+        if len(set(all_members)) != len(all_members):
+            raise _validation_error(
+                "coset_partition_overlap",
+                "coset rows must be disjoint",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        space: PrimeFieldVectorSpace,
+        subspace: LinearSubspace,
+        subset: tuple[tuple[int, ...], ...],
+        rows: tuple[CosetIntersectionRow, ...],
+    ) -> Self:
+        return cls.model_construct(
+            space=space,
+            subspace=subspace,
+            subset=subset,
+            rows=rows,
+        )

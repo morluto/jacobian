@@ -3,6 +3,36 @@
 ## [0.17.0](https://github.com/morluto/jacobian/compare/jacobian-v0.16.0...jacobian-v0.17.0) (2026-09-03)
 
 
+### ⚠ BREAKING CHANGES
+
+* **discovery:** `math.find` accepts `op: "match"`; replace the former
+  `"search"` and `"browse"` variants and their response discriminators.
+* **execution:** operational non-completion is now projected as a `math.run`
+  tool error rather than a mathematical result status. Update clients that
+  handled `SOLVER_BUDGET_EXCEEDED` or `EXECUTION_FAILED` result variants.
+* **integer operations:** replace `number_theory.divisibility_poset.compute`,
+  `number_theory.friable.family.enumerate`, and `number_theory.r_full.enumerate`
+  with `integer.divisibility_poset.compute`, `integer.friable.enumerate`, and
+  `integer.r_full.enumerate`, respectively. `sat.refutation.check` has been
+  retired without a replacement.
+* **polynomial ideals:** `resource_budget.maximum_output_generators` and
+  `maximum_output_terms` are no longer accepted; retain only `wall_seconds`.
+  Successful ideal results no longer carry `outcome: "COMPUTED"`, and some no
+  longer carry `backend_version`.
+* **result schemas:** adapt strict decoders to the removed status metadata:
+  `number_field.discriminant.compute` no longer returns `status` or `detail`;
+  `group.subgroup_lattice.compute` no longer returns `outcome` or `detail`;
+  the integer factorization, divisor, and prime-factorization results and
+  `polynomial.map.generic_degree.compute` no longer return `detail`; and
+  incomplete `matroid.rational_flat.constrained_orbits.compute` results no
+  longer return `result_output_byte_limit`.
+* **quiver paths:** `quiver.paths.fixed_length.compute` serializes
+  `path_matrix` and `total_paths` as canonical decimal strings rather than JSON
+  integers.
+* **finite geometry:** `PrimeFieldVectorSpace` axis labels are now limited to
+  4,096 characters each and 65,536 characters in total.
+
+
 ### Features
 
 * publish formal attribute closure ([1a15b66](https://github.com/morluto/jacobian/commit/1a15b66e15711831cbd45337d4545d80f47178d0))

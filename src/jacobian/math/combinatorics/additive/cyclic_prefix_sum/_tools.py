@@ -64,12 +64,12 @@ TOOLS: MathTools = (
             "Given a distinct subset of an explicitly presented finite Abelian "
             "group, an optional prescribed first element, and a finite forbidden "
             "set, return the first deterministic ordering whose proper prefix "
-            "sums are pairwise distinct, nonzero, and avoid the forbidden set, "
+            "sums are pairwise distinct, nonzero, and omit every forbidden value, "
             "or establish exact nonexistence after exhausting the admitted "
-            "source-index permutation search. A zero terminal sum follows the "
-            "standard cyclic convention and is never a collision. The source is "
-            f"bounded to {MAX_SEQUENCING_SOURCE_ITEMS} elements, the ambient group "
-            f"to {MAX_SEQUENCING_GROUP_ORDER:,} elements, and the complete search "
+            "source-index permutation search. The result preserves the "
+            "standard cyclic convention when a zero-sum source returns to zero. The source is "
+            f"bounded to {MAX_SEQUENCING_SOURCE_ITEMS} elements, its ambient "
+            f"group to {MAX_SEQUENCING_GROUP_ORDER:,} elements, and the complete search "
             f"to {MAX_SEQUENCING_PERMUTATION_NODES:,} states; a node budget stop "
             "would be UNKNOWN, not nonexistence."
         ),
@@ -82,14 +82,13 @@ TOOLS: MathTools = (
             "cyclic-sequencing",
             "partial-sums",
             "bounded-search",
-            "witness",
             "exact",
         ),
         examples=(
             OperationExample(
-                name="z7_forbid_one_and_start_at_two",
+                name="fixed_start_z7",
                 description=(
-                    "In Z/7Z, search the four-element subset {1,2,5,6} with "
+                    "In Z/7Z, search the four-element source {1,2,5,6} with "
                     "first element 2 while avoiding proper prefix sum 1; the "
                     "input group must be a finite cyclic product and reduced "
                     "source elements must be distinct and sorted."

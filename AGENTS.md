@@ -203,8 +203,20 @@ representations, maintained specialist backends, and algorithms selected for
 the admitted input regime. A backend limitation must not masquerade as a
 mathematical domain restriction: accept large inputs when predicted work,
 intermediate growth, and exact output remain within budget. Use a fixed cap
-only as a documented conservative fallback when a sharper safe envelope has
-not yet been established.
+only as a documented conservative fallback after investigating how to scale
+the operation, not as a substitute for that work.
+
+**Scale first.** When a valid workload hits an admission limit, first try to
+make it executable: sharpen the estimate, preserve algebraic dependencies,
+reduce the problem exactly, improve its representation, or use a better
+algorithm or maintained backend. A pessimistic upper bound is not evidence
+that the workload is expensive. Probe the motivating rejected case in a
+bounded diagnostic run and check its defining invariant. If it is cheap,
+treat the rejection as an admission defect and retain the case as an accepted
+regression; do not declare the fix complete by adding a rejection test.
+Measurements guide the repair but do not replace a sound work/growth bound.
+If scaling remains unresolved, report the limitation and attempted approaches
+explicitly instead of presenting a narrower domain as the completed fix.
 
 Distinguish decision or first-witness operations from complete profiles and
 all-witness operations: they may inspect the same candidate family but have

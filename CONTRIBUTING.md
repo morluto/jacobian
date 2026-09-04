@@ -29,6 +29,13 @@ For mathematical changes, review three things before merging:
    as well as an excessive request that is rejected. Rejection tests alone do
    not establish that an operation remains usable.
 
+For an admission or scale defect, scale first: improve the estimate,
+representation, reduction, algorithm, or backend so the motivating valid
+request succeeds. Do not turn a cheaply executable request into a permanent
+rejection regression. Follow the
+[execution-envelope review](docs/reference/public-operation-admission.md#execution-envelope-review)
+before retaining a limit.
+
 Record the applicable evidence in the existing PR description; do not add a
 new review artifact or framework. The
 [operation review](docs/reference/domain-operation-library.md#operation-contract-review),

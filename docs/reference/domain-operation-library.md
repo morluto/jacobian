@@ -681,6 +681,15 @@ kernel. Measurements show usefulness; the mathematical work and growth
 analysis remains the safety proof. Name each enforced budget in code and make
 rejections identify the controlling quantity that was exceeded.
 
+Scale first when an estimate rejects a motivating valid workload. Preserve
+relationships between intermediates, reduce the problem exactly, or improve
+the representation, algorithm, or backend before retaining the restriction.
+A sound but grossly pessimistic estimate can still be a product defect. Follow
+the [execution-envelope review](public-operation-admission.md#execution-envelope-review):
+a cheaply executable rejected case must become an accepted regression, not a
+new permanent rejection test. Report an unresolved scaling limitation as
+unfinished work rather than claiming that narrowing admission fixed it.
+
 ### Finite enumeration budgets
 
 Large finite enumeration is compatible with a bounded exact operation. Admit it

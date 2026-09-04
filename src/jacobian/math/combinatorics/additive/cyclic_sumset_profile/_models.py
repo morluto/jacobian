@@ -8,13 +8,12 @@ from pydantic_core import PydanticCustomError
 from jacobian._models import StrictModel
 
 MAX_CYCLIC_SUMSET_PAIRS = 100_000
-MAX_CYCLIC_SUMSET_MODULUS = (1 << 53) - 1
 
 
 class CyclicSumsetRequest(StrictModel):
     """Request the cyclic sumset representation profile."""
 
-    modulus: int = Field(gt=0, le=MAX_CYCLIC_SUMSET_MODULUS)
+    modulus: int = Field(gt=0)
     left: tuple[int, ...]
     right: tuple[int, ...]
 
@@ -58,7 +57,6 @@ class CyclicSumsetResult(StrictModel):
 
 
 __all__ = [
-    "MAX_CYCLIC_SUMSET_MODULUS",
     "MAX_CYCLIC_SUMSET_PAIRS",
     "CyclicSumsetEntry",
     "CyclicSumsetRequest",

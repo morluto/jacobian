@@ -718,9 +718,9 @@ def evaluate_finite_polynomial(
     )
 
 
-def finite_map_table(polynomial_map: FinitePolynomialMap) -> FiniteMapTable:
-    """Enumerate a complete finite polynomial-map table in canonical order."""
-
+def _admit_map_evaluation(
+    polynomial_map: FinitePolynomialMap, *, location: tuple[str, ...]
+) -> None:
     work = (
         polynomial_map.domain.order
         * len(polynomial_map.polynomial.coefficients)
@@ -728,10 +728,16 @@ def finite_map_table(polynomial_map: FinitePolynomialMap) -> FiniteMapTable:
     )
     if work > _MAX_FINITE_MAP_WORK:
         raise OperationDomainValidationError(
-            location=("polynomial_map",),
+            location=location,
             code="finite_field.finite_map_exceeds_operation_work_budget",
             message="finite map exceeds the operation work budget",
         )
+
+
+def finite_map_table(polynomial_map: FinitePolynomialMap) -> FiniteMapTable:
+    """Enumerate a complete finite polynomial-map table in canonical order."""
+
+    _admit_map_evaluation(polynomial_map, location=("polynomial_map",))
     from jacobian.math.finite_fields import _flint
 
     sources = _field_elements(polynomial_map.domain)
@@ -748,15 +754,42 @@ def finite_map_table(polynomial_map: FinitePolynomialMap) -> FiniteMapTable:
     )
 
 
+def _authenticate_map_table(table: FiniteMapTable) -> None:
+    """Establish the caller-supplied evaluation relation within consumer work.
+
+    Shape validation and serialization cannot establish polynomial evaluation.
+    Each public consumer admits and computes that relation once; trusted result
+    construction and deserialization never invoke this recognition step.
+    """
+    _admit_map_evaluation(table.map, location=("table", "map"))
+    from jacobian.math.finite_fields import _flint
+
+    expected = _flint.evaluate_polynomial_values(
+        table.map.polynomial.coefficients,
+        tuple(source for source, _ in table.entries),
+    )
+    if any(
+        target.coordinates != coordinates
+        for (_, target), coordinates in zip(table.entries, expected, strict=True)
+    ):
+        raise OperationDomainValidationError(
+            location=("table", "entries"),
+            code="finite_field.finite_map_table_targets_match_bound_polynomial",
+            message="finite map table targets must match the bound polynomial",
+        )
+
+
 def fiber_partition(table: FiniteMapTable) -> FiberPartition:
     """Partition the complete domain by exact map image."""
 
+    _authenticate_map_table(table)
     return FiberPartition.from_table(table)
 
 
 def analyze_collisions(table: FiniteMapTable) -> CollisionResult:
     """Return either the first canonical collision or an injectivity result."""
 
+    _authenticate_map_table(table)
     seen: dict[str, tuple[FiniteFieldElement, FiniteFieldElement]] = {}
     for source, target in table.entries:
         previous = seen.get(target.digest)
@@ -775,6 +808,7 @@ def analyze_collisions(table: FiniteMapTable) -> CollisionResult:
 def analyze_permutation(table: FiniteMapTable) -> PermutationResult:
     """Return either an inverse table or a non-permutation result."""
 
+    _authenticate_map_table(table)
     inverse_entries = tuple(
         sorted(
             ((target, source) for source, target in table.entries),

@@ -1083,8 +1083,8 @@ class OrbitDistribution(StrictModel):
         return self
 
     @classmethod
-    def from_ledger(cls, ledger: DirectionRankLedger) -> Self:
-        return cls(ledger=ledger, counts=_orbit_counts(ledger))
+    def _from_kernel(cls, ledger: DirectionRankLedger) -> Self:
+        return cls.model_construct(ledger=ledger, counts=_orbit_counts(ledger))
 
     @property
     def digest(self) -> str:

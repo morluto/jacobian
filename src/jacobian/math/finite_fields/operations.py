@@ -664,7 +664,25 @@ def direction_rank_ledger(
 def orbit_distribution(ledger: DirectionRankLedger) -> OrbitDistribution:
     """Aggregate projective orbit counts from a complete direction-rank ledger."""
 
-    return OrbitDistribution.from_ledger(ledger)
+    if (
+        _direction_rank_work(ledger.subspace, len(ledger.entries))
+        > _MAX_DIRECTION_RANK_WORK
+    ):
+        raise OperationDomainValidationError(
+            location=("ledger",),
+            code="finite_field.orbit_ledger_exceeds_operation_work_budget",
+            message="orbit ledger authentication exceeds the operation work budget",
+        )
+    for index, entry in enumerate(ledger.entries):
+        request_checkpoint("before orbit ledger entry authentication")
+        expected = linear_map_rank(ledger.subspace, entry.direction)
+        if entry.linear_map != expected.linear_map or entry.rank != expected.rank:
+            raise OperationDomainValidationError(
+                location=("ledger", "entries", index),
+                code="finite_field.ledger_entry_matches_source_restriction",
+                message="ledger entry must match the restricted map and rank of its bound source",
+            )
+    return OrbitDistribution._from_kernel(ledger)
 
 
 def finite_polynomial(

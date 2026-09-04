@@ -8,6 +8,7 @@ from jacobian.math import finite_fields
 from jacobian.math.finite_fields import (
     Axis,
     AxisBoundMatrix,
+    DirectionRankLedger,
     FiniteDimensionalSubspace,
     FiniteFieldElement,
     ProjectiveLine,
@@ -207,6 +208,41 @@ def test_slice_a_keeps_directions_bound_through_orbit_aggregation() -> None:
     assert tuple(entry.rank for entry in ledger.entries) == (3, 3, 3, 3, 3, 3, 4, 4, 4)
     assert distribution.counts == ((1, 9), (8, 48), (16, 12))
     assert distribution.ledger is ledger
+
+
+@pytest.mark.parametrize("mutation", ["rank", "matrix", "direction", "target_axis"])
+def test_orbit_consumer_rejects_a_forged_source_bound_ledger(mutation: str) -> None:
+    subspace, directions = _slice_a_values()
+    ledger = direction_rank_ledger(subspace, directions)
+    payload = ledger.model_dump(mode="json")
+    entries = payload["entries"]
+    if mutation == "rank":
+        entries[0]["rank"] = 0
+    elif mutation == "matrix":
+        entries[0]["linear_map"]["matrix"]["entries"][0][0] ^= 1
+    elif mutation == "direction":
+        entries[0]["direction"], entries[-1]["direction"] = (
+            entries[-1]["direction"],
+            entries[0]["direction"],
+        )
+    else:
+        for entry in entries:
+            entry["linear_map"]["target_axis"]["name"] = "unrelated target"
+    candidate = DirectionRankLedger.model_validate(payload)
+    with pytest.raises(OperationDomainValidationError) as error:
+        orbit_distribution(candidate)
+    assert error.value.errors()[0]["type"] == (
+        "finite_field.ledger_entry_matches_source_restriction"
+    )
+
+
+def test_serialized_rank_ledger_composes_into_orbit_distribution() -> None:
+    subspace, directions = _slice_a_values()
+    ledger = direction_rank_ledger(subspace, directions)
+    candidate = DirectionRankLedger.model_validate_json(ledger.model_dump_json())
+    result = orbit_distribution(candidate)
+    assert result.counts == ((1, 9), (8, 48), (16, 12))
+    assert result.ledger is candidate
 
 
 def test_slice_a_rank_derives_the_restriction_from_its_source() -> None:

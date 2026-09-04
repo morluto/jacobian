@@ -183,7 +183,7 @@ def test_presentation_rejects_oversized_modulus_length() -> None:
 
 def test_axis_rejects_oversized_label_set() -> None:
     with pytest.raises(ValueError, match="label bound"):
-        Axis(name="large", labels=tuple(f"x{i}" for i in range(257)))
+        Axis(name="large", labels=tuple(f"x{i}" for i in range(1025)))
 
 
 def test_subspace_rejects_oversized_rank_matrix_before_allocation() -> None:

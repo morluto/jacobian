@@ -18,3 +18,15 @@ def test_math_run_executes_independence_compute() -> None:
     assert result.output["status"] == "EXACT"
     assert result.output["independence_number"] == 2
     assert result.output["lower_bound"] == result.output["upper_bound"] == 2
+
+
+def test_math_run_admits_carrier_sized_edgeless_source() -> None:
+    vertices = [f"v{i:03}" for i in reversed(range(256))]
+    result = invoke_operation(
+        "hypergraph.independence_number.compute",
+        {"hypergraph": {"vertices": vertices, "edges": []}},
+        Catalog.open(),
+    )
+    assert result.output["independence_number"] == 256
+    assert result.output["incumbent_vertices"] == vertices
+    assert result.output["solver_calls"] == 0

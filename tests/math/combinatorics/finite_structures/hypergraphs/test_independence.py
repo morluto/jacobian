@@ -9,7 +9,11 @@ from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
+    MAX_EDGES,
+    MAX_HYPERGRAPH_INDEPENDENCE_INCIDENCES,
     MAX_HYPERGRAPH_INDEPENDENCE_SOLVER_CALLS,
+    MAX_HYPERGRAPH_INDEPENDENCE_VERTICES,
+    MAX_VERTICES,
     FiniteHypergraph,
     HypergraphIndependenceRequest,
     HypergraphIndependenceResult,
@@ -221,12 +225,86 @@ def test_edge_free_hypergraph_returns_all_vertices() -> None:
     assert result.termination_reason == "SPECIAL_CASE"
 
 
+@pytest.mark.parametrize("order", [101, MAX_VERTICES])
+@pytest.mark.parametrize("forbidden", [False, True])
+def test_carrier_sized_trivial_sources_skip_worker(
+    order: int, forbidden: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from jacobian.math.combinatorics.finite_structures.hypergraphs import (
+        _independence_z3,
+    )
+
+    def unexpected_worker(*args: object, **kwargs: object) -> None:
+        pytest.fail("source-trivial independence must not launch a worker")
+
+    monkeypatch.setattr(_independence_z3, "_run_independence_worker", unexpected_worker)
+    vertices = tuple(f"v{i:03}" for i in reversed(range(order)))
+    edges = (
+        (
+            ("forbid", (vertices[0],)),
+            ("duplicate", (vertices[0],)),
+            ("redundant", vertices),
+        )
+        if forbidden
+        else ()
+    )
+    source = FiniteHypergraph(vertices=vertices, edges=edges)
+    result = independence_number(source)
+    expected = vertices[1:] if forbidden else vertices
+    assert result.status == "EXACT"
+    assert (
+        result.independence_number
+        == result.lower_bound
+        == result.upper_bound
+        == len(expected)
+    )
+    assert result.incumbent_vertices == expected
+    assert result.hypergraph == source
+    assert result.solver_calls == 0
+    assert result.termination_reason == "SPECIAL_CASE"
+    assert (
+        HypergraphIndependenceResult.model_validate_json(result.model_dump_json())
+        == result
+    )
+
+
 def test_empty_hypergraph_returns_zero() -> None:
     result = _compute({"vertices": [], "edges": []})
     assert result.status == "EXACT"
     assert result.independence_number == 0
     assert result.incumbent_vertices == ()
     assert result.lower_bound == result.upper_bound == 0
+
+
+def test_singleton_only_at_carrier_edge_boundary() -> None:
+    vertices = tuple(f"v{i}" for i in range(MAX_VERTICES))
+    source = FiniteHypergraph(
+        vertices=vertices,
+        edges=tuple((f"e{i}", (vertices[i % 2],)) for i in range(MAX_EDGES)),
+    )
+    result = independence_number(source)
+    assert result.incumbent_vertices == vertices[2:]
+    assert result.independence_number == MAX_VERTICES - 2
+    assert result.solver_calls == 0
+
+
+@pytest.mark.parametrize("bound", ["vertex", "incidence"])
+def test_nontrivial_sources_still_require_solver_admission(bound: str) -> None:
+    order = MAX_HYPERGRAPH_INDEPENDENCE_VERTICES + 1 if bound == "vertex" else 2
+    vertices = tuple(f"v{i}" for i in range(order))
+    edge_count = (
+        1 if bound == "vertex" else MAX_HYPERGRAPH_INDEPENDENCE_INCIDENCES // 2 + 1
+    )
+    source = FiniteHypergraph(
+        vertices=vertices,
+        edges=tuple((f"e{i}", vertices[:2]) for i in range(edge_count)),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        independence_number(source)
+    assert (
+        error.value.errors()[0]["type"]
+        == f"hypergraph.independence_number.{bound}_bound"
+    )
 
 
 def test_singleton_edges_forbid_their_vertices() -> None:

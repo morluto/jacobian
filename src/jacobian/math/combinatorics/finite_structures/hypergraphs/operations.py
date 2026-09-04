@@ -50,7 +50,7 @@ __all__ = [
 ]
 
 
-def _admit_independence(hypergraph: FiniteHypergraph) -> None:
+def _admit_independence(hypergraph: FiniteHypergraph) -> tuple[str, ...] | None:
     if any(not members for _, members in hypergraph.edges):
         raise OperationDomainValidationError(
             location=("hypergraph",),
@@ -58,6 +58,18 @@ def _admit_independence(hypergraph: FiniteHypergraph) -> None:
             message="independence-number search does not admit empty edges",
         )
     total_incidences = sum(len(members) for _, members in hypergraph.edges)
+    # The canonical carrier bounds this linear scan by 256 vertices,
+    # 12,000 edges and 36,000 incidences. Singleton constraints force these
+    # exclusions; if they hit every edge, all remaining vertices attain the
+    # resulting upper bound. No greedy scan or solver encoding is needed.
+    forbidden = {members[0] for _, members in hypergraph.edges if len(members) == 1}
+    if all(
+        any(vertex in forbidden for vertex in members)
+        for _, members in hypergraph.edges
+    ):
+        return tuple(
+            vertex for vertex in hypergraph.vertices if vertex not in forbidden
+        )
     if len(hypergraph.vertices) > MAX_HYPERGRAPH_INDEPENDENCE_VERTICES:
         raise OperationDomainValidationError(
             location=("hypergraph",),
@@ -76,6 +88,7 @@ def _admit_independence(hypergraph: FiniteHypergraph) -> None:
                 f"{MAX_HYPERGRAPH_INDEPENDENCE_INCIDENCES}-incidence solver bound"
             ),
         )
+    return None
 
 
 def _admit_dual(hypergraph: FiniteHypergraph) -> None:
@@ -182,12 +195,26 @@ def independence_number(
 ) -> HypergraphIndependenceResult:
     """Return an exact optimum or source-bound incumbent and sound bounds."""
 
+    resource_budget = resource_budget or HypergraphIndependenceBudget()
+    trivial_witness = _admit_independence(hypergraph)
+    if trivial_witness is not None:
+        return HypergraphIndependenceResult._from_kernel(
+            hypergraph=hypergraph,
+            resource_budget=resource_budget,
+            status="EXACT",
+            independence_number=len(trivial_witness),
+            incumbent_vertices=trivial_witness,
+            upper_bound=len(trivial_witness),
+            solver_calls=0,
+            wall_budget_exhausted=False,
+            termination_reason="SPECIAL_CASE",
+            detail="singleton-forbidden vertices hit every edge; all other vertices form a maximum independent set",
+        )
+
     from jacobian.math.combinatorics.finite_structures.hypergraphs import (
         _independence_z3,
     )
 
-    resource_budget = resource_budget or HypergraphIndependenceBudget()
-    _admit_independence(hypergraph)
     return _independence_z3.solve_independence_number(hypergraph, resource_budget)
 
 

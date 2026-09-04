@@ -294,7 +294,7 @@ class Axis(StrictModel):
             raise _validation_error(
                 "finite_field.axis_labels_nonempty", "axis labels must be nonempty"
             )
-        if len(self.labels) > _MAX_VALUE_AXIS_LABELS:
+        if len(self.labels) > MAX_PRIME_FIELD_MATRIX_AXIS:
             raise _validation_error(
                 "finite_field.axis_exceeds_supported_label_bound",
                 "axis exceeds the supported label bound",

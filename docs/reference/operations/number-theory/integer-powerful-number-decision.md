@@ -37,9 +37,9 @@ The result records one of three exact conclusions:
   residual whose exact perfect-power classification is negative.
 
 Every result retains the source, derived cutoff, checked range, removed prime
-powers, and residual. The operation's explicit bounded verifier replays the
-decision, so changing the source, cutoff, checked range, exponent, residual,
-conclusion, or perfect-power witness invalidates the result.
+powers, and residual. The kernel computes the decision once and constructs
+the result directly. Result parsing checks branch consistency; it does not
+rerun trial division or authenticate an independently supplied certificate.
 
 ## Execution envelope
 

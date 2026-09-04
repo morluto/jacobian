@@ -25,17 +25,13 @@ and incidence-matrix operations:
   letters, the least sufficient iterate depth, and the retained prefix length
   at every generation. The source conditions imply unbounded nested seed
   iterates. Admission bounds aggregate source occurrences, retained-generation
-  work, and the predicted serialized result; each generation collects at most
-  the requested number of letters. The initial envelope admits 20,000 source
-  image occurrences, 1,000,000 generation work units including explicit result
-  verification,
-  and a 512,000-byte
-  predicted result.
+  work, and retained prefix length; each generation collects at most
+  the requested number of letters. The envelope admits 20,000 source image
+  occurrences and bounds generation work by `4 * prefix_length^2 <= 1,000,000`.
 
-All three operation contracts include bounded source verification: their
-explicit verifiers replay the exact sources when checking the returned
-profiles. This is an operation-specific verification obligation, not a
-universal result-construction step.
+The kernels compute these profiles once. Result models check structural
+consistency without replaying the source computations; parsing a supplied
+profile is not independent mathematical certification.
 Alphabet order fixes morphism rows, matrix axes, edge order, and component
 order; coherent relabelling changes labels but not scalar primitivity data.
 NetworkX 3.6 supplies the maintained SCC and aperiodicity kernels. A bounded

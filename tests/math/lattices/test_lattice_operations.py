@@ -83,7 +83,7 @@ def test_rank_gram_of_identity_is_identity() -> None:
     assert result.rank == 2
     assert result.ambient_dimension == 2
     assert result.squared_covolume == "1"
-    assert result.covolume_rational is False
+    assert result.covolume_rational is True
     gram = result.gram_matrix.entries
     assert gram == (("1", "0"), ("0", "1"))
 
@@ -97,8 +97,7 @@ def test_rank_gram_of_scaled_lattice() -> None:
     assert result.squared_covolume == "36"
 
 
-def test_rank_gram_rank_deficient_reports_rational_covolume() -> None:
-    """A rank-1 lattice in ambient 2 has a rational (non-finite) covolume."""
+def test_rank_gram_rejects_dependent_basis_rows() -> None:
     with pytest.raises(ValueError, match="full row rank"):
         compute_rank_gram(_lattice(2, [[1, 0], [2, 0]]))
 
@@ -153,7 +152,7 @@ def test_dual_of_unimodular_is_itself() -> None:
 def test_dual_pairing_is_integer() -> None:
     """The dual basis times the basis transpose should be the identity."""
     result = compute_dual(_lattice(2, [[2, 0], [0, 3]]))
-    # B* = B (B B^T)^{-1}; B* B^T = I
+    # B* = (B B^T)^{-1} B; B* B^T = I
     # B B^T = diag(4, 9), so B* = diag(1/2, 1/3)
     dual = result.dual_basis.entries
     assert dual[0][0].num == "1" and dual[0][0].den == "2"

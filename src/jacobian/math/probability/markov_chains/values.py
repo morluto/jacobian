@@ -89,19 +89,34 @@ def _decimal_digits(value: int) -> int:
     return estimate
 
 
-def require_stationary_distribution_admission(matrix: TransitionMatrix) -> None:
-    """Bound exact stationary coordinates for a native transition matrix."""
+def require_stationary_distribution_admission(
+    matrix: TransitionMatrix, closed_classes: tuple[tuple[int, ...], ...]
+) -> None:
+    """Price solves on the already validated carrier's closed classes.
 
-    require_transition_matrix(matrix, maximum_states=MAX_STATIONARY_STATES)
-    dimension = len(matrix)
-    if dimension**3 > MAX_STATIONARY_SOLVE_WORK:
+    Support decomposition uses at most n squared cells. Exact solve work is
+    the sum of the closed-class dimension cubes; transient states introduce
+    no solve rows. Each class has its own determinant-height bound. Embedding
+    all class vectors retains at most n squared canonical rational entries,
+    since there are at most n closed classes and n is at most 128.
+    """
+
+    if sum(len(states) ** 3 for states in closed_classes) > MAX_STATIONARY_SOLVE_WORK:
         raise TransitionMatrixAdmissionError(
             "stationary_solve_work_exceeds_bound",
             "stationary closed-class systems exceed the exact solve-work bound",
         )
+    for states in closed_classes:
+        _require_stationary_class_height(matrix, states)
+
+
+def _require_stationary_class_height(
+    matrix: TransitionMatrix, states: tuple[int, ...]
+) -> None:
+    dimension = len(states)
     row_bounds: list[int] = []
-    for column in range(dimension - 1):
-        entries = tuple(matrix[row][column] for row in range(dimension))
+    for column in states[:-1]:
+        entries = tuple(matrix[row][column] for row in states)
         denominator_digits = sum(
             _decimal_digits(value.denominator) for value in entries
         )

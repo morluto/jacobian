@@ -1,7 +1,11 @@
+from fractions import Fraction
+
 import pytest
 
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.probability.markov_chains import stationary_distribution_result
 from jacobian.math.probability.markov_chains._models import (
     StationaryDistributionRequest,
     TransitionMatrixRequest,
@@ -63,3 +67,36 @@ def test_useful_near_boundary_stationary_request_remains_admitted() -> None:
     )
 
     assert len(request.matrix) == 2
+
+
+@pytest.mark.parametrize("exponent", [100, MAX_CANONICAL_RATIONAL_DIGITS - 1])
+def test_transient_height_is_only_charged_for_retaining_the_source(
+    exponent: int,
+) -> None:
+    p = Fraction(1, 10**exponent)
+    matrix = (
+        (Fraction(), p, 1 - p),
+        (Fraction(), Fraction(1), Fraction()),
+        (Fraction(), Fraction(), Fraction(1)),
+    )
+    result = stationary_distribution_result(matrix)
+    assert [item.closed_class for item in result.extreme_distributions] == [(1,), (2,)]
+    assert (
+        tuple(value.as_fraction() for value in result.transition_matrix[0]) == matrix[0]
+    )
+    type(result).model_validate_json(result.model_dump_json())
+
+
+def test_native_stationary_rejects_unrepresentable_transient_source() -> None:
+    p = Fraction(1, 10**MAX_CANONICAL_RATIONAL_DIGITS)
+    matrix = (
+        (Fraction(), p, 1 - p),
+        (Fraction(), Fraction(1), Fraction()),
+        (Fraction(), Fraction(), Fraction(1)),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        stationary_distribution_result(matrix)
+    assert (
+        error.value.errors()[0]["type"]
+        == "markov_chain.stationary_source_height_exceeds_bound"
+    )

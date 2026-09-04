@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import sys
 from fractions import Fraction
+from types import FrameType
 
 import pytest
 from pydantic import ValidationError
@@ -9,6 +11,7 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.probability.markov_chains import (
     ergodic_properties,
     stationary_distribution,
+    stationary_distribution_result,
 )
 from jacobian.math.probability.markov_chains._models import (
     StationaryDistributionRequest,
@@ -289,3 +292,109 @@ def test_transition_contract_rejects_non_stochastic_matrices(
         with pytest.raises(OperationDomainValidationError) as domain_error:
             compute_ergodic_decision(request)
         assert domain_error.value.errors()[0]["type"] == error_code
+
+
+@pytest.mark.parametrize("class_size", [1, 2])
+def test_stationary_family_admits_many_small_closed_classes(class_size: int) -> None:
+    from jacobian.math.probability.markov_chains.values import MAX_STATIONARY_STATES
+
+    size = MAX_STATIONARY_STATES
+    matrix = tuple(
+        tuple(
+            Fraction(1, class_size)
+            if i // class_size == j // class_size
+            else Fraction()
+            for j in range(size)
+        )
+        for i in range(size)
+    )
+    result = stationary_distribution_result(matrix)
+    assert len(result.extreme_distributions) == size // class_size
+    for index, extreme in enumerate(result.extreme_distributions):
+        states = tuple(range(index * class_size, (index + 1) * class_size))
+        assert extreme.closed_class == states
+        expected = tuple(
+            Fraction(1, class_size) if j in states else Fraction() for j in range(size)
+        )
+        assert tuple(value.as_fraction() for value in extreme.distribution) == expected
+
+
+def test_stationary_admission_does_not_charge_transient_states_as_solve_rows() -> None:
+    from jacobian.math.probability.markov_chains.values import MAX_STATIONARY_STATES
+
+    size = MAX_STATIONARY_STATES
+    matrix = tuple(
+        tuple(Fraction(1, 2) if j >= size - 2 else Fraction() for j in range(size))
+        for _ in range(size)
+    )
+    assert stationary_distribution(matrix) == matrix[0]
+
+
+def test_stationary_class_decomposition_and_solve_work_are_not_repeated() -> None:
+    from tests.fixtures.accounting import assert_charged_work_parity
+
+    from jacobian.math.probability.markov_chains import operations
+    from jacobian.math.probability.markov_chains._flint import solve_stationary_class
+    from jacobian.math.probability.markov_chains.values import MAX_STATIONARY_STATES
+
+    size = MAX_STATIONARY_STATES
+    matrix = tuple(
+        tuple(Fraction(int(i == j)) for j in range(size)) for i in range(size)
+    )
+    executed = {"support_cells": 0, "solve_cubes": 0}
+
+    def observe(frame: FrameType, event: str, _arg: object) -> None:
+        if event != "call":
+            return
+        if frame.f_code is operations._closed_communicating_classes.__code__:
+            executed["support_cells"] += len(frame.f_locals["matrix"]) ** 2
+        elif frame.f_code is solve_stationary_class.__code__:
+            executed["solve_cubes"] += len(frame.f_locals["closed_class"]) ** 3
+
+    previous = sys.getprofile()
+    sys.setprofile(observe)
+    try:
+        result = stationary_distribution_result(matrix)
+        serialized = result.model_dump_json()
+        type(result).model_validate_json(serialized)
+    finally:
+        sys.setprofile(previous)
+
+    charged = {"support_cells": size**2, "solve_cubes": size}
+    assert executed == charged
+    assert_charged_work_parity(charged=charged, executed=executed)
+    assert len(result.extreme_distributions) == size
+
+
+@pytest.mark.parametrize(("first_size", "admitted"), [(99, True), (100, False)])
+def test_stationary_sums_work_across_closed_classes(
+    first_size: int, admitted: bool
+) -> None:
+    from jacobian.math.probability.markov_chains.values import MAX_STATIONARY_STATES
+
+    size = MAX_STATIONARY_STATES
+    matrix = tuple(
+        tuple(
+            Fraction(1, first_size if i < first_size else size - first_size)
+            if (i < first_size) == (j < first_size)
+            else Fraction()
+            for j in range(size)
+        )
+        for i in range(size)
+    )
+    if not admitted:
+        with pytest.raises(OperationDomainValidationError, match="solve-work bound"):
+            stationary_distribution_result(matrix)
+        return
+    result = stationary_distribution_result(matrix)
+    assert [item.closed_class for item in result.extreme_distributions] == [
+        tuple(range(first_size)),
+        tuple(range(first_size, size)),
+    ]
+    for state, extreme in zip(
+        (0, first_size), result.extreme_distributions, strict=True
+    ):
+        assert (
+            tuple(value.as_fraction() for value in extreme.distribution)
+            == matrix[state]
+        )

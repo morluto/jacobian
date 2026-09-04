@@ -21,6 +21,7 @@ import math
 import os
 import signal
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -704,6 +705,9 @@ def run_bounded_process(
     never discovers executables.  *cancellation_event* overrides the context-bound cancellation
     event for explicit callers; when ``None`` the engine uses the
     context-bound event set by :func:`bounded_process_cancellation`.
+
+    Commands using ``sys.executable`` receive the loaded package's import root
+    when *environment* does not explicitly supply ``PYTHONPATH``.
     """
 
     if stdout_limit < 0 or stderr_limit < 0:
@@ -771,7 +775,7 @@ def run_bounded_process(
             stdin=stdin_file,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            env=environment,
+            env=_command_environment(command, environment),
             cwd=cwd,
             start_new_session=start_new_session,
             creationflags=creationflags,
@@ -889,6 +893,8 @@ def run_bounded_worker_dialogue[ValueT](
     launch admission, every read and write, child exit, stream drain, and
     cleanup. ``stdout_limit`` is cumulative across all frames; ``frame_limit``
     on :meth:`BoundedWorkerDialogue.read_until` bounds one unread frame.
+    Python commands use the same package import binding as
+    :func:`run_bounded_process`.
     """
 
     if stdout_limit < 0 or stderr_limit < 0:
@@ -920,7 +926,7 @@ def run_bounded_worker_dialogue[ValueT](
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             bufsize=0,
-            env=environment,
+            env=_command_environment(command, environment),
             cwd=cwd,
             start_new_session=False,
             creationflags=0,
@@ -960,6 +966,20 @@ def run_bounded_worker_dialogue[ValueT](
     state.deactivate()
     state.cleanup(kill=False)
     return BoundedWorkerDialogueCompleted(value=value, stdout_bytes=stdout_bytes)
+
+
+def _command_environment(
+    command: Sequence[str], environment: Mapping[str, str]
+) -> Mapping[str, str]:
+    # Bind only the host interpreter, before any prlimit wrapping. Do not infer
+    # Python from executable names or resolved symlinks: another virtualenv may
+    # share the binary while owning a different package environment.
+    if command and command[0] == sys.executable and "PYTHONPATH" not in environment:
+        return {
+            **environment,
+            "PYTHONPATH": str(Path(__file__).resolve().parent.parent),
+        }
+    return environment
 
 
 def worker_environment(

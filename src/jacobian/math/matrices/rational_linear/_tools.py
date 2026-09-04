@@ -47,11 +47,20 @@ TOOLS: MathTools = (
     MathTool(
         operation_id="linear.rational_solution.compute",
         title="Compute an exact rational solution",
-        description="Return an exact rational solution or an inconsistent outcome for one canonical coordinate-sparse system, subject to nonzero, scalar-work, and result-height bounds.",
+        description="Return one exact rational solution of a rectangular Ax=b system, including underdetermined and coordinate-sparse systems, or an inconsistent outcome, subject to nonzero, scalar-work, and result-height bounds.",
         request_type=LinearRationalSolutionFindRequest,
         result_type=LinearRationalSolutionResult,
         run=compute_rational_solution,
         tags=("linear-algebra", "rational", "solution", "exact"),
+        discovery_terms=(
+            "rectangular system",
+            "underdetermined system",
+            "span membership",
+            "linear combination coefficients",
+            "Ax=b",
+            "sparse rational linear system",
+            "solve Ax=b",
+        ),
         examples=(
             OperationExample(
                 name="identity_solution",

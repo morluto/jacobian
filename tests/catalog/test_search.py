@@ -67,6 +67,21 @@ def test_determinant_need_ranks_determinants_before_charpolys() -> None:
 
 
 @pytest.mark.parametrize(
+    "query",
+    (
+        "solve a sparse rational linear system",
+        "find rational coefficients expressing a target vector in the span of sparse generators",
+    ),
+)
+def test_rectangular_rational_system_intents_route_to_general_solution(
+    query: str,
+) -> None:
+    result = Catalog.open().match(OperationMatchRequest(need=query, limit=12))
+
+    assert result.matches[0].operation_id == "linear.rational_solution.compute"
+
+
+@pytest.mark.parametrize(
     ("term", "expected"),
     [
         ("sum", "sum"),

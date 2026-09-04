@@ -172,7 +172,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="graph.chip_firing.stabilize.compute",
         title="Stabilize a sink configuration",
-        description="Stabilize a bounded sink configuration and return the unique "
+        description="Stabilize a bounded sink configuration on a connected graph and return the unique "
         "stable configuration, exact odometer (toppling-count) vector, "
         "and total firing count.",
         request_type=StabilizeRequest,
@@ -278,7 +278,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         title="Abel-Jacobi coordinates",
         description="Map a degree-zero graph divisor into the critical group via "
         "the Abel-Jacobi map, returning canonical class coordinates in "
-        "the cokernel of the reduced Laplacian.",
+        "the cokernel of the reduced Laplacian of a connected graph. "
+        "Coordinates use row/column Hermite unit reductions and the pinned "
+        "SymPy Smith basis, with unit factors omitted. The HNF residual must "
+        "fit the conservative transformation work and intermediate-height envelope.",
         request_type=AbelJacobiRequest,
         result_type=AbelJacobiResult,
         run=compute_abel_jacobi,

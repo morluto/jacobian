@@ -91,6 +91,14 @@ interpretation when those affect its meaning, and enough information for exact
 reconstruction and producer-consumer composition. Mathematically distinct
 values must remain distinguishable after serialization.
 
+Check expanded dimensions against both the result carrier and downstream
+consumers. A shared label or axis limit must not silently impose a smaller
+capacity than the matrix it describes. Reuse an existing carrier's supported
+capacity when appropriate, while retaining the bounds of containers that own
+more expensive work. Before adding an expansion guard, check whether existing
+source admission already proves it. Do not duplicate that check or bypass
+public round-trip validation with trusted construction.
+
 A backend expression or ambient symbol is not a public mathematical identity.
 Values that depend on a field, ring, module, coordinate system, embedding,
 analytic branch, orientation, or basis must carry that context or bind to a
@@ -284,12 +292,15 @@ mathematical and execution envelope. It may also produce an owner-local
 execution plan when the kernel needs reusable derived facts. Backend conversion
 converts an already-admitted value; it does not widen
 or discover that domain. Result construction converts the output of that
-execution into the canonical typed result. The defining invariant is
-primarily established by the operation's known-answer, defining-identity, and
-adversarial tests; ordinary execution must not replay the entire mathematical
-computation just to construct its own result. Adapters may reject malformed
-backend data during conversion, but that is integration safety rather than a
-separate mathematical result stage.
+execution into the canonical typed result. The kernel establishes the returned
+instance's mathematical postcondition; known-answer, defining-identity, and
+adversarial tests independently check that implementation. Ordinary execution
+must not replay the entire mathematical computation just to construct its own
+result. Establishing a backend candidate's certificate conditions belongs to
+the producing kernel, as specified in the
+[backend contract](mathematical-backends.md#common-adapter-obligations).
+Adapters may reject malformed backend data during conversion, but that is
+integration safety rather than a separate mathematical result stage.
 
 Request-model validation is not a second execution-plan layer. A raw
 ``mode="before"`` preflight may reject cheap representation facts—such as
@@ -310,6 +321,13 @@ only after the kernel has established every invariant it skips. Pydantic result
 validators remain limited to structural, linearly bounded checks; they do not
 call a backend, enumerate a search space, invoke a solver, or recompute the
 operation's defining relation.
+
+When removing repeated validation, trace each removed invariant to its owner.
+Removing replay does not authorize removing recognition of a caller-supplied
+claim. Review every public entry point, including convenience constructors and
+native functions: an unchecked public factory must not bypass an authenticated
+operation. Keep trusted factories private rather than introducing compatibility
+paths that preserve the bypass.
 
 Do not use ordinary result construction to validate independently supplied
 results, and do not add a companion checker by default. A compute-only
@@ -372,8 +390,10 @@ Apply these adapter and request-boundary rules:
   must construct the same value from an explicit allowlist.
 - For every backend routine, record the coefficient domain, dimensional or
   degree limits, structural preconditions, and degenerate cases it accepts.
-  Encode those mathematical constraints in the concrete request model so an
-  admitted request does not discover the backend domain through an exception.
+  Enforce structural constraints in the request model and mathematical
+  admission in the owning domain before backend invocation. Native and MCP
+  callers use that same admission path once; an admitted request must not
+  discover an unsupported backend domain through an exception.
   Keep configured worker and host capacity limits in the adapter or deployment;
   exhaustion there is an operational failure, not invalid input.
 - Every exact decomposition, certificate, or authoritative derived value must

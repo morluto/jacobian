@@ -16,8 +16,9 @@ schema.
 
 The result retains the complete declared source action - canonical graph,
 generator mappings, and declared colors - through the domain-owned request
-value, and its explicit bounded verifier replays the exact vertex and edge
-orbits of that declared generated subgroup against the returned partitions.
+value. The kernel computes the vertex and edge orbits once; result parsing
+checks canonical partition shape and source references without recomputing
+the generated subgroup orbits.
 The result echoes its complete source plus the derived partitions. Request
 admission bounds graph, generator, vertex-orbit, and edge-orbit cardinalities;
 native execution does not inherit a JSON response-byte ceiling.

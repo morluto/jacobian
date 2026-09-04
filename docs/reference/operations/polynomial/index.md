@@ -26,9 +26,9 @@ callers.
 
 Exact polynomial values retain their variable order, sparse terms, and
 canonical rational coefficients. Operation-specific bounds are checked by the
-shared domain admission path before SymPy is called; a wire request model may
-invoke that path after parsing, while native callers use it directly. A bounded
-result is returned inline; no polynomial is implicitly published or retained
+owning domain admission path before the backend is called. MCP parses the
+wire request before invoking the domain function; native callers use the same
+function directly. A bounded result is returned inline; no polynomial is implicitly published or retained
 for replay.
 
 ## Focused contracts

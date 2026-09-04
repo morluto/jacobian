@@ -26,7 +26,7 @@ crosses its real boundary:
 | Change | Additional check |
 | --- | --- |
 | MCP tool schema or transport | `make test-mcp` |
-| One mathematical domain | `make handoff LANE=math TESTS=tests/math/logic/test_tools.py` |
+| Focused mathematical edit loop | `make handoff LANE=math TESTS=tests/math/logic/test_tools.py` |
 | Cross-owner behavior | `make test-integration` |
 | Child-process behavior | `make test-process` |
 | Singular ideal backend | `make test-singular` |
@@ -51,10 +51,10 @@ make handoff-scoped \
 
 `PATHS` is required and is passed directly to Ruff and mypy; use repository
 paths only, without pytest node IDs. This is additive local evidence, not a
-replacement for `make handoff`, `make check`, or CI's full static gate.
+replacement for final planner-selected validation or CI's full static gate.
 
-`make check` is the final broad ordinary gate: it runs lint, types, and all
-non-integration owners once, excluding separately marked property, exhaustive,
+`make check` is an explicit broad local gate: it runs lint, types, and the math,
+catalog, dispatch, CLI, and tooling owners, excluding property, exhaustive,
 and scale evidence. `make check-all` adds the ordinary integration owner.
 `make test-full` is the exceptional complete local reproduction. Do not use a
 broad or full suite as a substitute for a focused regression test.
@@ -68,9 +68,11 @@ host with less capacity.
 
 Use `make affected` for normal branch-local validation and
 `make handoff-scoped LANE=... TESTS=... PATHS="..."` for a one-owner edit loop.
-Run `make check` once on a frozen tree. `make check-all` reproduces ordinary CI
-lanes and `make test-full` is the complete local escalation path; neither is an
-iteration command.
+Use `make check` on a frozen tree when broad ordinary evidence is requested or
+the changed scope needs it. A completed affected plan does not automatically
+require another broad run. `make check-all` adds ordinary integration tests;
+`make test-full` includes the named process, MCP, and external-backend lanes.
+Neither reproduces hosted packaging, coverage, or all CI jobs.
 
 `make check` and `make check-all` take a worktree-local non-blocking validation
 lease. `make validation-status` identifies a competing broad run immediately;
@@ -78,9 +80,9 @@ focused and affected commands remain unblocked. Use
 `ALLOW_PARALLEL_VALIDATION=1` only for an intentional parallel broad run on a
 host with known capacity.
 
-Every CI lane emits a JUnit artifact and a worker-timing sidecar retained for
-90 days. Download both to identify slow testcases, xdist call-time skew, and
-the non-call wall remainder before changing worker counts, fixtures, or shards:
+CI lanes using the shared `run-test-lane` action emit a JUnit artifact and a
+worker-timing sidecar retained for 90 days. Download both to identify slow
+testcases, xdist call-time skew, and the non-call wall remainder before changing worker counts, fixtures, or shards:
 
 ```sh
 make test-timings JUNIT=pytest.xml TIMING=timing.json
@@ -134,9 +136,9 @@ boundary and a behavioral regression proves the failure can no longer recur.
 For findings about malformed or over-sized input, cover the smallest valid
 near-boundary case, the malformed boundary form, and deeply nested data when
 canonicalization or parsing is involved. For findings about exact results,
-also cover the defining invariant, generated-schema/runtime parity, native and
-MCP parity when both are public, producer-consumer round trips, and late
-serialization or deadline phases. Prefer tests that exercise the supported
+cover the defining invariant. Add schema/runtime parity, native/MCP parity,
+producer-consumer round trips, or late serialization and deadline cases when
+the finding affects those boundaries. Prefer tests that exercise the supported
 interface; do not assert private helper names or copied source text.
 
 ## What to test
@@ -323,7 +325,6 @@ definition.
 
 ### Evidence plans for exact operations
 
-
 Before implementing an exact decomposition, certificate, or authoritative
 derived value, state its defining invariant: the reconstruction equation,
 preservation law, or independently checkable property that makes a returned
@@ -343,11 +344,35 @@ identity against the same change. Before trusting backend output for a new
 claim, consult the [known backend defects](backend-known-defects.md) registry;
 add an entry whenever an adapter compensates for backend behavior.
 
+Do not obtain expected answers by copying the implementation's branch or
+snapshotting its current output. A passing test can preserve the same mistake
+as the code. Derive the expectation separately and explain the convention when
+it matters. For matrix formulas, write down dimensions and whether bases are
+rows or columns before choosing fixtures; square diagonal matrices often hide
+wrong multiplication order, transpose, and orientation errors.
+
+Use transformations and counterexamples that discriminate between plausible
+implementations:
+
+| Risk | Discriminating evidence |
+| --- | --- |
+| Wrong matrix orientation | Rectangular and nonorthogonal inputs; for a row dual basis, check `D B^T = I` and its returned Gram matrix. |
+| A proxy replaces a mathematical property | Check the defining predicate: covolume rationality depends on whether the integer Gram determinant is a perfect square, not on codimension. |
+| Ordering affects a mathematical conclusion | Permute constraint rows or apply a valid change of basis; compare objectives, statuses, or equivalent mathematical results, not incidental witness ordering. |
+| Candidate data is treated as established truth | Alter source and certificate fields independently and exercise the actual public consumer. |
+| A safety bound makes the operation unusable | Execute zero, identity, sparse, and representative dense inputs at useful orders, including immediately across an admission threshold. |
+| A producer outgrows its consumer | Serialize expanded outputs at the supported boundary and pass them unchanged to their actual consumers. |
+
+Select the rows relevant to the change; this is not a requirement to add every
+fixture to every operation. Redundant constraints are another useful
+meaning-preserving probe when both forms are admitted. If a transformation
+changes admission, record that separately from mathematical correctness.
+
 Classify each fixture by the evidence it contributes:
 
 | Fixture role | What it establishes |
 | --- | --- |
-| Defining-invariant | Tests the reconstruction equation, preservation law, or certificate relation owned by the result; use bounded replay only when the public contract accepts independently supplied result data. |
+| Defining-invariant | Independently checks the reconstruction equation, preservation law, or certificate relation in tests. Production recognition of caller-supplied claims belongs to the consuming operation. |
 | Convention/known-answer | Fixes terminology, normalization, indexing, signs, or another convention-sensitive value. |
 | Adversarial weaker-semantics | Rejects a tempting result that has the right shape or satisfies only a weaker claim. |
 | Metamorphic or equivalence | Checks invariance under a meaning-preserving transformation or compares noncanonical outputs by mathematical equivalence. |

@@ -18,19 +18,20 @@ Contributor quick path:
 
 ```sh
 make setup
-make handoff LANE=math TESTS=tests/math/graphs/test_graph_distance_matrix.py
+make affected AFFECTED_BASE=origin/main
 ```
 
 If this change crosses a named boundary, list the explicitly relevant specialist
-lane(s) in the validation section. Specialist lanes are troubleshooting or
-boundary work, not a routine gate; CI owns coverage, compatibility, packaging,
-and the ordinary Python surface. See [CONTRIBUTING.md](../CONTRIBUTING.md) and
+lane(s) in the validation section. The affected planner selects changed owner
+and boundary tests. Add a named lane when it supplies evidence the plan or
+focused run does not cover; hosted CI also owns coverage, compatibility, and
+packaging. See [CONTRIBUTING.md](../CONTRIBUTING.md) and
 the [testing strategy](../docs/reference/testing-strategy.md) for lane ownership.
 
 ## Contract impact
 <!-- State "none" when this PR changes no operation ID, request/result schema,
-native API, MCP contract, or mathematical semantics. Check only applicable
-items; write N/A with a reason for the rest. -->
+native API, MCP contract, or mathematical semantics. Keep applicable
+items; omit irrelevant items or mark them N/A when the reason is not obvious. -->
 
 - Public contract impact:
 - [ ] Schema and runtime accept/reject the same requests
@@ -45,13 +46,14 @@ items; write N/A with a reason for the rest. -->
 <!-- Complete or update this section when responding to review. For a new PR,
 the review-thread item is not applicable until review begins. -->
 
-- [ ] Every substantive review thread has a root-cause fix, regression proof,
-      and reply
+- [ ] Every substantive review finding has a fix and applicable regression
+      evidence, or an evidence-backed explanation of why no change is needed
 - [ ] Merge conflicts were resolved against the intended base
-- [ ] Validation was rerun after the final commit or autofix
+- [ ] Validation covers the final changed tree; checks invalidated by later
+      edits or autofixes were rerun
 - [ ] CI evidence matches the final head SHA
 - [ ] The appropriate repository validation target and any specialist lane are
-      listed above (normally `make handoff ...`; docs use `make docs-linkcheck`)
+      listed above (normally `make affected`; docs use `make docs-linkcheck`)
 - [ ] Repository conventions were checked: no compatibility or shadow paths
       were added; if a shared abstraction was introduced, two existing paths
       already share its mechanics and contract
@@ -70,7 +72,7 @@ not touch an operation boundary. -->
 - Execution envelope: <!-- work, intermediate, memory, exact output, deadline, cleanup/reaping grace, and caller-selectable range; state actual enforcing limits, not an unexplained safety reserve -->
 - Backend or kernel path:
 - Result construction: <!-- canonical conversion; malformed-backend handling belongs to the adapter -->
-- Independent-result verifier (only if the public contract accepts independently supplied result data): <!-- none, or state its explicit replay bound -->
+- Caller-supplied claim recognition (if applicable): <!-- consuming domain operation and its admitted work; not a generic result-validation layer -->
 - Native/MCP parity: <!-- same semantic admission/results, with transport-only differences stated -->
 - Serialized-result and round-trip evidence:
 

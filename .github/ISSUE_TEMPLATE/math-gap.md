@@ -18,7 +18,8 @@ Preserve the exact evidence rather than only summarizing the failure. Write
 -->
 - Operation ID and version:
 - Exact request or minimal reproducible fixture:
-- Runtime and catalog revision:
+- Runtime and catalog revision (keep installed MCP and local source distinct
+  unless their identity is verified):
 - Exact typed result, validation error, or transport error:
 - Timeout owner, configured deadline, and observed elapsed time (if applicable):
 - Failure stage and contract owner (if applicable):
@@ -56,7 +57,8 @@ native-only support, or leaves disposition unresolved. This is catalog
 publication; request bounds for an existing operation belong to its domain. -->
 
 ## Existing math.find queries
-<!-- Queries already tried and what they returned. -->
+<!-- Queries already tried and what they returned. Search misses alone do not
+establish absence; inspect plausible operation contracts and actual composition. -->
 
 ## Existing operations inspected
 <!-- Closest current operations and why a clean composition still fails. -->

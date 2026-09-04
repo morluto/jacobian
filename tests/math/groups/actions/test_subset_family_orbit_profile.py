@@ -58,7 +58,7 @@ def _result(
     action: FinitePermutationAction,
     *subsets: tuple[int, ...],
 ) -> SubsetFamilyOrbitProfileResult:
-    return subset_family_orbit_profile(_request(action, *subsets))
+    return subset_family_orbit_profile(action, subsets)
 
 
 def _assert_error_type(error: ValidationError, expected: str) -> None:

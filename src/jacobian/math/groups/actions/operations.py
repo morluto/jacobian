@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pydantic import ValidationError
+
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.groups.actions._models import (
     MAX_GROUP_ORDER,
@@ -15,7 +17,6 @@ from jacobian.math.groups.actions._models import (
     FinitePermutationAction,
     PolyaInventoryResult,
     SubsetCanonicalizationResult,
-    SubsetFamilyOrbitProfileRequest,
     SubsetFamilyOrbitProfileResult,
     SubsetFamilyOrbitProfileRow,
 )
@@ -131,6 +132,22 @@ def _cycle_decomposition(
     lengths = tuple(sorted((len(c) for c in cycles), reverse=True))
     fixed = tuple(i for i in range(n) if perm[i] == i)
     return tuple(cycles), lengths, lengths, fixed
+
+
+def _canonical_family_subset(
+    action: FinitePermutationAction, subset: tuple[int, ...]
+) -> tuple[int, ...]:
+    """Canonicalize one family row or fail with the owner-local typed error."""
+
+    try:
+        return ActionBoundSubset(action=action, positions=subset).positions
+    except ValidationError as error:
+        detail = error.errors()[0]
+        raise OperationDomainValidationError(
+            location=("subsets", *tuple(detail.get("loc", ()))),
+            code=detail["type"],
+            message=detail["msg"],
+        ) from error
 
 
 def _support(perm: tuple[int, ...]) -> tuple[int, ...]:
@@ -258,7 +275,7 @@ def _polya_inventory_data(
 
 
 def subset_family_orbit_profile(
-    request: SubsetFamilyOrbitProfileRequest,
+    action: FinitePermutationAction, subsets: tuple[tuple[int, ...], ...]
 ) -> SubsetFamilyOrbitProfileResult:
     """Partition a materialized family by ambient permutation-action orbits.
 
@@ -269,10 +286,11 @@ def subset_family_orbit_profile(
     than the unrelated carrier size alone.
     """
 
-    action = request.action
     group = _enumerate_group(action)
     group_order = len(group)
-    source_positions = request.subsets
+    source_positions = tuple(
+        _canonical_family_subset(action, subset) for subset in subsets
+    )
 
     source_index = {
         positions: index for index, positions in enumerate(source_positions)

@@ -51,7 +51,7 @@ def _polya(request: PolyaInventoryRequest) -> PolyaInventoryResult:
 def _subset_family_orbit_profile(
     request: SubsetFamilyOrbitProfileRequest,
 ) -> SubsetFamilyOrbitProfileResult:
-    return subset_family_orbit_profile(request)
+    return subset_family_orbit_profile(request.action, request.subsets)
 
 
 # The cyclic group C_3 acting on three labelled points by rotation.

@@ -350,13 +350,28 @@ def test_general_lp_rejects_variables_beyond_the_public_envelope() -> None:
 
 def test_general_lp_defers_free_split_admission_to_the_normalized_columns() -> None:
     variables = [_variable(f"x{index}") for index in range(17)]
+    result = _run(
+        _program(
+            variables=variables,
+            sense="MINIMIZE",
+            objective=[q(1) for _ in variables],
+            constraints=[],
+        )
+    )
+    assert result.status == "UNBOUNDED"
+    assert _fractions(result.primal_candidate) == (Fraction(),) * 17
+    assert (
+        _fractions(result.recession_direction) == (Fraction(-1),) + (Fraction(),) * 16
+    )
+
+    # Coupled constraints still require normalized-column admission.
     with pytest.raises(OperationDomainValidationError):
         _run(
             _program(
                 variables=variables,
                 sense="MINIMIZE",
                 objective=[q(1) for _ in variables],
-                constraints=[],
+                constraints=[_row("coupled", [q(1) for _ in variables], "EQ", q(0))],
             )
         )
 

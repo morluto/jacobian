@@ -1,5 +1,7 @@
 """Process-boundary behavior for contiguous-sum profiling."""
 
+import re
+
 import pytest
 
 from jacobian import process as process_runtime
@@ -39,13 +41,16 @@ def test_timed_out_high_magnitude_profile_is_unknown(
         )
     )
 
-    assert result.model_dump() == {
-        "status": "UNKNOWN",
-        "lower_bound": "1099511627776",
-        "upper_bound": "1099511627776",
-        "rows": (),
-        "detail": "the bounded factorization worker did not establish the complete profile",
-    }
+    assert result.status == "UNKNOWN"
+    assert result.rows == ()
+    assert result.diagnostic is not None
+    assert result.diagnostic.failure == "WORKER_TIMEOUT"
+    assert result.diagnostic.timeout_layer == "WORKER_WALL"
+    assert result.diagnostic.elapsed_ms >= 0
+    assert 0 < result.diagnostic.worker_timeout_ms <= 60_000
+    assert result.diagnostic.budget_seconds == 60
+    assert result.diagnostic.operation_version == "1"
+    assert re.fullmatch(r"unknown|[0-9a-f]{40}", result.diagnostic.repository_revision)
     assert recorded["resource_limits"] == ProcessResourceLimits(
         cpu_seconds=60,
         address_space_bytes=_FACTORIZATION_WORKER_ADDRESS_SPACE_BYTES,
@@ -55,54 +60,76 @@ def test_timed_out_high_magnitude_profile_is_unknown(
 
 
 @pytest.mark.parametrize(
-    "completed",
+    ("completed", "failure", "timeout_layer"),
     [
-        BoundedProcessResult(
-            returncode=None,
-            stdout=b"",
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=False,
-            cancelled=True,
+        (
+            BoundedProcessResult(
+                returncode=None,
+                stdout=b"",
+                stderr=b"",
+                stdout_exceeded=False,
+                stderr_exceeded=False,
+                timed_out=False,
+                cancelled=True,
+            ),
+            "WORKER_CANCELLED",
+            "REQUEST_CANCELLATION",
         ),
-        BoundedProcessResult(
-            returncode=None,
-            stdout=b"",
-            stderr=b"",
-            stdout_exceeded=True,
-            stderr_exceeded=False,
-            timed_out=False,
+        (
+            BoundedProcessResult(
+                returncode=None,
+                stdout=b"",
+                stderr=b"",
+                stdout_exceeded=True,
+                stderr_exceeded=False,
+                timed_out=False,
+            ),
+            "STDOUT_LIMIT_EXCEEDED",
+            "OUTPUT_LIMIT",
         ),
-        BoundedProcessResult(
-            returncode=-9,
-            stdout=b"",
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=False,
+        (
+            BoundedProcessResult(
+                returncode=-9,
+                stdout=b"",
+                stderr=b"",
+                stdout_exceeded=False,
+                stderr_exceeded=False,
+                timed_out=False,
+            ),
+            "WORKER_RESOURCE_LIMIT",
+            "PROCESS_RESOURCE",
         ),
-        BoundedProcessResult(
-            returncode=0xC0000005,
-            stdout=b"",
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=False,
+        (
+            BoundedProcessResult(
+                returncode=0xC0000005,
+                stdout=b"",
+                stderr=b"",
+                stdout_exceeded=False,
+                stderr_exceeded=False,
+                timed_out=False,
+            ),
+            "WORKER_EXITED",
+            "WORKER_EXIT",
         ),
-        BoundedProcessResult(
-            returncode=0,
-            stdout=b"not json",
-            stderr=b"",
-            stdout_exceeded=False,
-            stderr_exceeded=False,
-            timed_out=False,
+        (
+            BoundedProcessResult(
+                returncode=0,
+                stdout=b"not json",
+                stderr=b"",
+                stdout_exceeded=False,
+                stderr_exceeded=False,
+                timed_out=False,
+            ),
+            "MALFORMED_OUTPUT",
+            "RESULT_VALIDATION",
         ),
     ],
 )
-def test_worker_stop_reason_is_hidden_from_public_result(
+def test_worker_stop_reason_is_retained_in_public_result(
     monkeypatch: pytest.MonkeyPatch,
     completed: BoundedProcessResult,
+    failure: str,
+    timeout_layer: str,
 ) -> None:
     monkeypatch.setattr(
         process_runtime, "run_bounded_process", lambda *_args, **_kwargs: completed
@@ -115,10 +142,14 @@ def test_worker_stop_reason_is_hidden_from_public_result(
         )
     )
 
-    assert result.model_dump() == {
-        "status": "UNKNOWN",
-        "lower_bound": "1099511627776",
-        "upper_bound": "1099511627776",
-        "rows": (),
-        "detail": "the bounded factorization worker did not establish the complete profile",
-    }
+    assert result.status == "UNKNOWN"
+    assert result.rows == ()
+    assert result.diagnostic is not None
+    assert result.diagnostic.failure == failure
+    assert result.diagnostic.timeout_layer == timeout_layer
+    assert result.diagnostic.returncode == completed.returncode
+    assert result.diagnostic.elapsed_ms >= 0
+    assert 0 < result.diagnostic.worker_timeout_ms <= 60_000
+    assert result.diagnostic.budget_seconds == 60
+    assert result.diagnostic.operation_version == "1"
+    assert re.fullmatch(r"unknown|[0-9a-f]{40}", result.diagnostic.repository_revision)

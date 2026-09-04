@@ -10,6 +10,9 @@ from jacobian.math.number_theory._contiguous_sum import (
 from jacobian.math.number_theory._contiguous_sum_admission import (
     require_contiguous_sum_profile_admission,
 )
+from jacobian.math.number_theory._contiguous_sum_kernel import (
+    run_contiguous_sum_profile,
+)
 from jacobian.math.number_theory._contiguous_sum_models import (
     ContiguousSumProfileRequest,
     ContiguousSumProfileResult,
@@ -127,17 +130,41 @@ def test_unknown_profile_rejects_rows() -> None:
         )
 
 
-def test_complete_profile_cannot_carry_failure_detail() -> None:
-    with pytest.raises(ValidationError, match="cannot include failure detail"):
+def test_complete_profile_cannot_carry_worker_diagnostics() -> None:
+    with pytest.raises(ValidationError, match="cannot include diagnostics"):
         ContiguousSumProfileResult.model_validate(
             {
                 "status": "COMPLETE",
                 "lower_bound": "1",
                 "upper_bound": "1",
                 "rows": [{"n": "1", "representation_count": 1}],
-                "detail": "worker did not finish",
+                "diagnostic": {
+                    "failure": "WORKER_TIMEOUT",
+                    "timeout_layer": "WORKER_WALL",
+                    "elapsed_ms": 1,
+                    "worker_timeout_ms": 60_000,
+                    "budget_seconds": 60,
+                    "operation_version": "1",
+                    "repository_revision": "unknown",
+                },
             }
         )
+
+
+def test_expired_direct_profile_retains_replay_diagnostic() -> None:
+    admission = require_contiguous_sum_profile_admission(
+        1_000_000_000_001,
+        1_000_000_000_001,
+        started_at=0.0,
+    )
+
+    result = run_contiguous_sum_profile(admission, profile_started=0.0)
+
+    assert result.status == "UNKNOWN"
+    assert result.diagnostic is not None
+    assert result.diagnostic.failure == "REQUEST_DEADLINE_EXPIRED"
+    assert result.diagnostic.timeout_layer == "REQUEST_DEADLINE"
+    assert result.diagnostic.budget_seconds == 60
 
 
 def test_request_schema_publishes_coupled_bounds() -> None:

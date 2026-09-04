@@ -19,6 +19,7 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices import operations
 from jacobian.math.matrices._operation_models import (
     MAX_EXACT_LINEAR_MATRIX_WORK,
+    MAX_FLINT_SPARSE_RANK_WORK,
     MAX_INPUT_SCALAR_DIGITS,
     MAX_SPARSE_RANK_INTERMEDIATE_CELLS,
     MatrixRankRequest,
@@ -269,14 +270,36 @@ def test_sparse_rank_charges_every_near_envelope_kernel_primitive() -> None:
     assert_charged_work_parity(charged=charged, executed=executed)
 
 
-def test_sparse_rank_rejects_the_first_connected_order_above_the_work_bound() -> None:
-    order = 465
+def test_sparse_rank_rejects_the_first_connected_order_above_the_flint_work_bound() -> (
+    None
+):
+    order = 1
+    while _connected_fill_work(order) <= MAX_FLINT_SPARSE_RANK_WORK:
+        order += 1
     matrix = _connected_fill_matrix(order)
 
     with pytest.raises(OperationDomainValidationError, match="scalar-work budget"):
         rank_result(matrix)
-    assert _connected_fill_work(order) == 100_546_948
-    assert _connected_fill_work(order) > MAX_EXACT_LINEAR_MATRIX_WORK
+    assert _connected_fill_work(order - 1) <= MAX_FLINT_SPARSE_RANK_WORK
+    assert _connected_fill_work(order) > MAX_FLINT_SPARSE_RANK_WORK
+
+
+def test_sparse_rank_uses_flint_for_a_dense_support_crossover() -> None:
+    rows = 518
+    columns = 298
+    matrix = SparseRationalMatrix(
+        row_count=rows,
+        column_count=columns,
+        entries=(
+            *(_entry(0, column, Fraction(1000)) for column in range(columns)),
+            *(_entry(row, 0, Fraction(1000)) for row in range(1, rows)),
+        ),
+    )
+
+    result = rank_result(matrix)
+
+    assert result.rank == 2
+    assert result.pivot_columns == (0, 1)
 
 
 def test_sparse_rank_rejects_above_the_intermediate_height_bound() -> None:

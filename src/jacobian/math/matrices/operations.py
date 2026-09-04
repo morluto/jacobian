@@ -25,6 +25,7 @@ from jacobian.math.matrices._operation_models import (
     MAX_DETERMINANT_MATRIX_DIMENSION,
     MAX_DETERMINANT_SCALAR_WORK,
     MAX_EXACT_LINEAR_MATRIX_WORK,
+    MAX_FLINT_SPARSE_RANK_WORK,
     MAX_INPUT_SCALAR_DIGITS,
     MAX_INVERSE_MATRIX_ORDER,
     MAX_INVERSE_OUTPUT_DIGIT_WORK,
@@ -476,6 +477,7 @@ class _SparseRankPlan:
     components: tuple[_SparseRankComponent, ...]
     row_count: int
     column_count: int
+    backend: str
 
 
 def _sparse_rank_components(
@@ -588,11 +590,11 @@ def _admit_sparse_rank(matrix: SparseRationalMatrix) -> _SparseRankPlan:
         column_count=matrix.column_count,
         components=components,
     )
-    if work > MAX_EXACT_LINEAR_MATRIX_WORK:
+    if work > MAX_FLINT_SPARSE_RANK_WORK:
         raise _validation_error(
             "budget_exceeded",
             "sparse rank elimination exceeds the "
-            f"{MAX_EXACT_LINEAR_MATRIX_WORK:,}-unit scalar-work budget",
+            f"{MAX_FLINT_SPARSE_RANK_WORK:,}-unit scalar-work budget",
         )
 
     for component in components:
@@ -634,6 +636,11 @@ def _admit_sparse_rank(matrix: SparseRationalMatrix) -> _SparseRankPlan:
         components=components,
         row_count=matrix.row_count,
         column_count=matrix.column_count,
+        backend=(
+            "sympy_sparse"
+            if work <= MAX_EXACT_LINEAR_MATRIX_WORK
+            else "flint_component_rref"
+        ),
     )
 
 
@@ -652,6 +659,29 @@ def _sympy_sparse_rank_pivots(plan: _SparseRankPlan) -> tuple[int, ...]:
     source = DomainMatrix(rows, (plan.row_count, plan.column_count), QQ)
     _reduced, pivots = source.rref(method="GJ")
     return tuple(int(column) for column in pivots)
+
+
+def _flint_sparse_rank_pivots(plan: _SparseRankPlan) -> tuple[int, ...]:
+    """Compute component-local exact pivots through FLINT's dense QQ kernel."""
+
+    from jacobian.math.matrices._flint import rational_rref
+
+    pivots: list[int] = []
+    for component in plan.components:
+        row_positions = {row: index for index, row in enumerate(component.rows)}
+        column_positions = {
+            column: index for index, column in enumerate(component.columns)
+        }
+        dense = [[Fraction(0) for _ in component.columns] for _ in component.rows]
+        for row, column, value in component.entries:
+            dense[row_positions[row]][column_positions[column]] = value
+        reduced, rank_value = rational_rref(tuple(tuple(row) for row in dense))
+        for reduced_row in reduced[:rank_value]:
+            local_pivot = next(
+                index for index, value in enumerate(reduced_row) if value
+            )
+            pivots.append(component.columns[local_pivot])
+    return tuple(sorted(pivots))
 
 
 def _flint_rref(
@@ -1160,7 +1190,11 @@ def rank_result(
 ) -> MatrixRankResult:
     if isinstance(matrix, SparseRationalMatrix):
         plan = _admit(_admit_sparse_rank, matrix)
-        pivot_columns = _sympy_sparse_rank_pivots(plan)
+        pivot_columns = (
+            _sympy_sparse_rank_pivots(plan)
+            if plan.backend == "sympy_sparse"
+            else _flint_sparse_rank_pivots(plan)
+        )
     else:
         _admit(_admit_exact_linear_matrix, matrix.entries)
         _, pivot_columns = _flint_rref(matrix)

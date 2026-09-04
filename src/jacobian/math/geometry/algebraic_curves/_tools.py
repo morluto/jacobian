@@ -3,6 +3,11 @@
 from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.geometry.algebraic_curves._gaussian_realification import (
+    GaussianRealificationRequest,
+    GaussianRealificationResult,
+    gaussian_realification,
+)
 from jacobian.math.geometry.algebraic_curves._models import (
     AffineChartRequest,
     AffineChartResult,
@@ -69,6 +74,12 @@ def compute_projective_plane_curve_singularity_profile(
     """Compute one exact source-bound global projective singular locus."""
 
     return singularity_profile(request.polynomial, request.resource_budget)
+
+
+def compute_gaussian_realification(
+    request: GaussianRealificationRequest,
+) -> GaussianRealificationResult:
+    return gaussian_realification(request.polynomial, request.target_variables)
 
 
 def _polynomial(
@@ -226,6 +237,59 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         (-1, (0, 0, 2)),
                     ),
                     "chart_variable": "z",
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="algebraic_geometry.gaussian_polynomial.realification.compute",
+        title="Realify a univariate Gaussian-rational polynomial",
+        description=(
+            "For a sparse univariate polynomial p(z) over Q(i) and distinct target "
+            "variables x,y distinct from z, return the unique bivariate rational "
+            "polynomials u(x,y), v(x,y) over QQ with p(x+i y)=u+i v. Uses exact "
+            "binomial expansion with predicted raw terms at most 4,096 and result "
+            "terms at most 256, degree at most 64, coefficient digits at most 256."
+        ),
+        request_type=GaussianRealificationRequest,
+        result_type=GaussianRealificationResult,
+        run=compute_gaussian_realification,
+        tags=(
+            "algebraic-geometry",
+            "gaussian-polynomial",
+            "realification",
+            "exact",
+            "binomial",
+        ),
+        examples=(
+            OperationExample(
+                name="quadratic_gaussian",
+                description=(
+                    "Realify p(z)=z^2-(1+i) with z=x+i y; the source polynomial must "
+                    "be canonical with strictly decreasing exponents and the target "
+                    "variables must be distinct from z."
+                ),
+                input={
+                    "polynomial": {
+                        "variable": "z",
+                        "terms": [
+                            {
+                                "coefficient": {
+                                    "real": {"num": "1", "den": "1"},
+                                    "imag": {"num": "0", "den": "1"},
+                                },
+                                "exponent": 2,
+                            },
+                            {
+                                "coefficient": {
+                                    "real": {"num": "-1", "den": "1"},
+                                    "imag": {"num": "-1", "den": "1"},
+                                },
+                                "exponent": 0,
+                            },
+                        ],
+                    },
+                    "target_variables": ["x", "y"],
                 },
             ),
         ),

@@ -152,7 +152,7 @@ Jacobian uses Python 3.12, `uv`, and a small `Makefile`:
 
 ```sh
 make setup
-make handoff LANE=math TESTS=tests/math/graphs/test_graph_distance_matrix.py
+make affected AFFECTED_BASE=origin/main
 ```
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before changing code. It documents

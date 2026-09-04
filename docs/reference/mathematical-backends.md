@@ -58,8 +58,9 @@ version range when behavior is version-sensitive, and exhaustive exception
 translation for every accepted request. The shared domain admission path
 enforces the backend's coefficient domain, dimensional or degree limits,
 structural preconditions, degeneracies, and work bounds before calling it. A
-wire request model may invoke that path after parsing; native callers use the
-same domain function directly.
+wire request model handles structural parsing; execution then calls the same
+domain function as the native API. Non-trivial admission is not repeated in
+request validators.
 
 ### Owner-local adapter placement
 

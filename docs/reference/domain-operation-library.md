@@ -390,8 +390,10 @@ Apply these adapter and request-boundary rules:
   must construct the same value from an explicit allowlist.
 - For every backend routine, record the coefficient domain, dimensional or
   degree limits, structural preconditions, and degenerate cases it accepts.
-  Encode those mathematical constraints in the concrete request model so an
-  admitted request does not discover the backend domain through an exception.
+  Enforce structural constraints in the request model and mathematical
+  admission in the owning domain before backend invocation. Native and MCP
+  callers use that same admission path once; an admitted request must not
+  discover an unsupported backend domain through an exception.
   Keep configured worker and host capacity limits in the adapter or deployment;
   exhaustion there is an operational failure, not invalid input.
 - Every exact decomposition, certificate, or authoritative derived value must

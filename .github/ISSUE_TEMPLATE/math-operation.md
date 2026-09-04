@@ -1,13 +1,14 @@
 ---
-name: Admitted mathematical operation
-about: Propose one admitted, user-facing operation with a stable postcondition
+name: Mathematical operation proposal
+about: Propose one user-facing mathematical postcondition for catalog review
 title: "[Operation]: "
 labels: ["request: math-operation", "status: needs-triage"]
 assignees: []
 ---
 
 ## Parent gap / RFC
-<!-- Link the gap issue or domain RFC this operation satisfies. -->
+<!-- Link the gap issue or domain RFC this operation satisfies. Filing this
+proposal does not establish catalog admission; record the review decision. -->
 
 ## Public mathematical postcondition
 <!-- One sentence stating exactly what the operation establishes or returns. -->
@@ -54,7 +55,7 @@ not catalog publication. -->
 - Request-bounds owner and execution-plan quantities:
 - Maintained backend or Jacobian kernel adapter:
 - Canonical result construction and malformed-backend handling:
-- Independent-result verifier (only if the public contract accepts independently supplied result data): <!-- none, or explicit replay bound and claim -->
+- Caller-supplied claim recognition (if applicable): <!-- consuming domain operation, required property, and admitted work -->
 - Serialized-result bound and transport projection:
 - Native/MCP semantic parity and transport-only differences:
 

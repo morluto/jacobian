@@ -53,8 +53,8 @@ cases:
 | One-owner edit loop with unrelated static drift | `make handoff-scoped LANE=... TESTS=... PATHS="..."` |
 | A changed process, MCP, or Singular boundary | Add its named `make test-*` lane |
 | Documentation | `make docs-linkcheck` |
-| Frozen ordinary tree | `make check` once |
-| Reproduce all ordinary CI or exhaustive evidence | `make check-all` or `make test-full` |
+| Broad ordinary validation requested or needed for cross-cutting evidence | `make check` once on the frozen tree |
+| Add ordinary integration or reproduce all local semantic test lanes | `make check-all` or `make test-full` |
 
 `make check` and `make check-all` take the worktree-local broad-validation
 lease. Run `make validation-status` if one is already running. The
@@ -77,7 +77,8 @@ Run `make hooks` once to install commit-time formatting, syntax, secret,
 large-file, dead-code, and actionlint hooks plus the static
 `make lint typecheck` pre-push gate. `make fix` applies Ruff's safe lint fixes
 followed by formatting; `make precommit` then runs the broad ordinary gate.
-Use `make handoff LANE=... TESTS=...` for the normal focused path instead.
+Use `make affected` for branch validation or `make handoff LANE=... TESTS=...`
+for a focused owner check.
 Hooks remain bypassable for exceptional cases with Git's standard `--no-verify`
 option.
 
@@ -85,9 +86,11 @@ On macOS, read the
 [Z3 installation guide](docs/how-to/troubleshoot-z3-macos.md) before
 troubleshooting a source-build failure from `uv sync --dev`.
 
-Every `make test-*` target accepts `TESTS=<file-or-node>` and extra pytest
-options through `PYTEST_ARGS`; `test-focused` is the discoverable form for an
-explicit owner plus path. They print their ten slowest tests by default
+Ordinary owner targets accept `TESTS=<file-or-node>`; `test-focused` is the
+discoverable form for an
+explicit owner plus path. Specialist and aggregate targets may select fixed
+paths; inspect their Make recipes before narrowing them. Test targets accept
+extra pytest options through `PYTEST_ARGS` and print their ten slowest tests by default
 (override with `PYTEST_DIAGNOSTIC_ARGS=--durations=0`). Use
 `uv run --locked pytest --lf` after a failure and `uv run --locked pytest -n 0`
 while debugging. Default `uv run pytest` omits process and MCP trees; use
@@ -111,9 +114,9 @@ than retrying equivalent work. Do not recreate a merged or closed pull-request
 branch: start a follow-up branch instead. The agent-facing version of this
 protocol, including conflict-resolution checks, lives in `AGENTS.md`.
 
-Before final validation, run `make handoff LANE=... TESTS=...` for the changed
-behavior. If the tree changes during validation, rerun checks whose evidence was
-invalidated by that change; do not describe results from an earlier tree as
+Run focused owner checks while editing, then planner-selected validation on
+the final tree. If the tree changes during validation, rerun checks whose
+evidence was invalidated by that change; do not describe results from an earlier tree as
 final-tree validation. `make check-all` is an explicit broad reproduction, not
 a routine closeout requirement. Merge-group CI owns the complete ordinary matrix
 and scale evidence.
@@ -135,8 +138,9 @@ changed. Follow it with
 `make harbor-validate-task DATASET=... TASKS="..."` for the complete
 source-read-only leaf gate, which resolves membership and planner selectors
 once, fails fast through static quality and contracts, runs the selected host
-tests serially, then runs each exact Oracle serially. Neither command starts an
-Oracle or model.
+tests serially, then runs each selected Oracle serially and writes run evidence.
+Preparation starts neither Oracle nor a model; validation starts Oracle, but no
+model agent.
 
 `make harbor-check` validates repository-wide Harbor contracts (job JSON, MCP
 config, job-level Compose overlays, adapters, and execution helpers) and the
@@ -199,12 +203,14 @@ For documentation-only changes, run:
 
 ```sh
 git diff --check
-git diff -- AGENTS.md README.md CONTRIBUTING.md docs/
+git diff -- AGENTS.md README.md CONTRIBUTING.md docs/ .github/
 make docs-linkcheck
 ```
 
 Verify every relative Markdown link before submitting the change
-(`make docs-linkcheck` checks project Markdown offline).
+(`make docs-linkcheck` checks the root guides and `docs/` offline). For changes
+to `.github/` templates, also check their relative links and issue-template YAML
+front matter; the docs target does not traverse that directory.
 
 ## Releases
 
@@ -259,7 +265,8 @@ separate `tests/process` and `tests/mcp` boundary owners. Use the matching
 `make test-*` target as the canonical entry point. Markers are retained
 only when they alter execution: `requires_backend(name)`, `property`,
 `exhaustive`, and `scale`. They do not replace directory ownership. Scheduled
-validation owns property, exhaustive, and scale evidence; keep a representative
+validation owns repeated property and exhaustive evidence; merge-group and
+scheduled validation select scale evidence. Keep a representative
 behavioral case in the ordinary owning lane.
 
 Lane execution follows those owners. MCP and process stay on named Make targets

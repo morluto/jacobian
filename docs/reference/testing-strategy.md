@@ -26,7 +26,7 @@ crosses its real boundary:
 | Change | Additional check |
 | --- | --- |
 | MCP tool schema or transport | `make test-mcp` |
-| One mathematical domain | `make handoff LANE=math TESTS=tests/math/logic/test_tools.py` |
+| Focused mathematical edit loop | `make handoff LANE=math TESTS=tests/math/logic/test_tools.py` |
 | Cross-owner behavior | `make test-integration` |
 | Child-process behavior | `make test-process` |
 | Singular ideal backend | `make test-singular` |
@@ -51,10 +51,10 @@ make handoff-scoped \
 
 `PATHS` is required and is passed directly to Ruff and mypy; use repository
 paths only, without pytest node IDs. This is additive local evidence, not a
-replacement for `make handoff`, `make check`, or CI's full static gate.
+replacement for final planner-selected validation or CI's full static gate.
 
-`make check` is the final broad ordinary gate: it runs lint, types, and all
-non-integration owners once, excluding separately marked property, exhaustive,
+`make check` is an explicit broad local gate: it runs lint, types, and the math,
+catalog, dispatch, CLI, and tooling owners, excluding property, exhaustive,
 and scale evidence. `make check-all` adds the ordinary integration owner.
 `make test-full` is the exceptional complete local reproduction. Do not use a
 broad or full suite as a substitute for a focused regression test.
@@ -68,9 +68,11 @@ host with less capacity.
 
 Use `make affected` for normal branch-local validation and
 `make handoff-scoped LANE=... TESTS=... PATHS="..."` for a one-owner edit loop.
-Run `make check` once on a frozen tree. `make check-all` reproduces ordinary CI
-lanes and `make test-full` is the complete local escalation path; neither is an
-iteration command.
+Use `make check` on a frozen tree when broad ordinary evidence is requested or
+the changed scope needs it. A completed affected plan does not automatically
+require another broad run. `make check-all` adds ordinary integration tests;
+`make test-full` includes the named process, MCP, and external-backend lanes.
+Neither reproduces hosted packaging, coverage, or all CI jobs.
 
 `make check` and `make check-all` take a worktree-local non-blocking validation
 lease. `make validation-status` identifies a competing broad run immediately;
@@ -78,9 +80,9 @@ focused and affected commands remain unblocked. Use
 `ALLOW_PARALLEL_VALIDATION=1` only for an intentional parallel broad run on a
 host with known capacity.
 
-Every CI lane emits a JUnit artifact and a worker-timing sidecar retained for
-90 days. Download both to identify slow testcases, xdist call-time skew, and
-the non-call wall remainder before changing worker counts, fixtures, or shards:
+CI lanes using the shared `run-test-lane` action emit a JUnit artifact and a
+worker-timing sidecar retained for 90 days. Download both to identify slow
+testcases, xdist call-time skew, and the non-call wall remainder before changing worker counts, fixtures, or shards:
 
 ```sh
 make test-timings JUNIT=pytest.xml TIMING=timing.json
@@ -134,9 +136,9 @@ boundary and a behavioral regression proves the failure can no longer recur.
 For findings about malformed or over-sized input, cover the smallest valid
 near-boundary case, the malformed boundary form, and deeply nested data when
 canonicalization or parsing is involved. For findings about exact results,
-also cover the defining invariant, generated-schema/runtime parity, native and
-MCP parity when both are public, producer-consumer round trips, and late
-serialization or deadline phases. Prefer tests that exercise the supported
+cover the defining invariant. Add schema/runtime parity, native/MCP parity,
+producer-consumer round trips, or late serialization and deadline cases when
+the finding affects those boundaries. Prefer tests that exercise the supported
 interface; do not assert private helper names or copied source text.
 
 ## What to test
@@ -323,7 +325,6 @@ definition.
 
 ### Evidence plans for exact operations
 
-
 Before implementing an exact decomposition, certificate, or authoritative
 derived value, state its defining invariant: the reconstruction equation,
 preservation law, or independently checkable property that makes a returned
@@ -371,7 +372,7 @@ Classify each fixture by the evidence it contributes:
 
 | Fixture role | What it establishes |
 | --- | --- |
-| Defining-invariant | Tests the reconstruction equation, preservation law, or certificate relation owned by the result; use bounded replay only when the public contract accepts independently supplied result data. |
+| Defining-invariant | Independently checks the reconstruction equation, preservation law, or certificate relation in tests. Production recognition of caller-supplied claims belongs to the consuming operation. |
 | Convention/known-answer | Fixes terminology, normalization, indexing, signs, or another convention-sensitive value. |
 | Adversarial weaker-semantics | Rejects a tempting result that has the right shape or satisfies only a weaker claim. |
 | Metamorphic or equivalence | Checks invariance under a meaning-preserving transformation or compares noncanonical outputs by mathematical equivalence. |

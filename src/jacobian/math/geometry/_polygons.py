@@ -1,6 +1,13 @@
 """Polygon-owned exact geometry operations."""
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
+from jacobian.math.geometry._convex_polygon_intersection import (
+    ConvexPolygonIntersectionRequest,
+    ConvexPolygonIntersectionResult,
+)
+from jacobian.math.geometry._convex_polygon_intersection import (
+    convex_polygon_intersection as _convex_polygon_intersection_kernel,
+)
 from jacobian.math.geometry._euclidean_triangulation import (
     minimum_euclidean_weight_triangulation,
 )
@@ -20,6 +27,13 @@ from jacobian.math.geometry._tools import (
     simple_polygon,
 )
 from jacobian.math.geometry._triangulation import minimum_weight_triangulation
+
+
+def _run_convex_polygon_intersection(
+    request: ConvexPolygonIntersectionRequest,
+) -> ConvexPolygonIntersectionResult:
+    return _convex_polygon_intersection_kernel(request.polygon_a, request.polygon_b)
+
 
 _UNIT_SQUARE = [
     {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},
@@ -134,6 +148,74 @@ POLYGON_OPERATIONS: MathTools = (
                     "point": {
                         "x": {"num": "1", "den": "2"},
                         "y": {"num": "1", "den": "2"},
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="geometry.convex_polygon.intersection.compute",
+        title="Compute the exact intersection of two convex polygons",
+        description=(
+            "For two strict CCW convex rational polygons with at least three "
+            "vertices, return their exact closed-set intersection as EMPTY, a "
+            "single rational point, a maximal lexicographically ordered segment, "
+            "or a strict CCW polygon beginning with its least vertex. The "
+            f"operation admits at most {64} vertices per polygon, output at most "
+            "128 vertices, and uses exact Sutherland-Hodgman clipping with "
+            "Fractions and provenance of tight source edges."
+        ),
+        request_type=ConvexPolygonIntersectionRequest,
+        result_type=ConvexPolygonIntersectionResult,
+        run=_run_convex_polygon_intersection,
+        tags=("geometry", "convex-polygon", "intersection", "exact"),
+        examples=(
+            OperationExample(
+                name="overlapping_squares",
+                description=(
+                    "Intersect [0,2]^2 with [1,3]x[1,3]; both polygons must be "
+                    "strict CCW convex and the result is the polygon [1,2]^2."
+                ),
+                input={
+                    "polygon_a": {
+                        "vertices": [
+                            {
+                                "x": {"num": "0", "den": "1"},
+                                "y": {"num": "0", "den": "1"},
+                            },
+                            {
+                                "x": {"num": "2", "den": "1"},
+                                "y": {"num": "0", "den": "1"},
+                            },
+                            {
+                                "x": {"num": "2", "den": "1"},
+                                "y": {"num": "2", "den": "1"},
+                            },
+                            {
+                                "x": {"num": "0", "den": "1"},
+                                "y": {"num": "2", "den": "1"},
+                            },
+                        ]
+                    },
+                    "polygon_b": {
+                        "vertices": [
+                            {
+                                "x": {"num": "1", "den": "1"},
+                                "y": {"num": "1", "den": "1"},
+                            },
+                            {
+                                "x": {"num": "3", "den": "1"},
+                                "y": {"num": "1", "den": "1"},
+                            },
+                            {
+                                "x": {"num": "3", "den": "1"},
+                                "y": {"num": "3", "den": "1"},
+                            },
+                            {
+                                "x": {"num": "1", "den": "1"},
+                                "y": {"num": "3", "den": "1"},
+                            },
+                        ]
                     },
                 },
             ),

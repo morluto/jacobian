@@ -1,5 +1,110 @@
 # Changelog
 
+## [0.17.0](https://github.com/morluto/jacobian/compare/jacobian-v0.16.0...jacobian-v0.17.0) (2026-09-03)
+
+
+### ⚠ BREAKING CHANGES
+
+* **discovery:** `math.find` accepts `op: "match"`; replace the former
+  `"search"` and `"browse"` variants and their response discriminators.
+* **execution:** operational non-completion is now projected as a `math.run`
+  tool error rather than a mathematical result status. Update clients that
+  handled `SOLVER_BUDGET_EXCEEDED` or `EXECUTION_FAILED` result variants.
+* **integer operations:** replace `number_theory.divisibility_poset.compute`,
+  `number_theory.friable.family.enumerate`, and `number_theory.r_full.enumerate`
+  with `integer.divisibility_poset.compute`, `integer.friable.enumerate`, and
+  `integer.r_full.enumerate`, respectively. `sat.refutation.check` has been
+  retired without a replacement.
+* **polynomial ideals:** `resource_budget.maximum_output_generators` and
+  `maximum_output_terms` are no longer accepted; retain only `wall_seconds`.
+  Successful ideal results no longer carry `outcome: "COMPUTED"`, and some no
+  longer carry `backend_version`.
+* **result schemas:** adapt strict decoders to the removed status metadata:
+  `number_field.discriminant.compute` no longer returns `status` or `detail`;
+  `group.subgroup_lattice.compute` no longer returns `outcome` or `detail`;
+  the integer factorization, divisor, and prime-factorization results and
+  `polynomial.map.generic_degree.compute` no longer return `detail`; and
+  incomplete `matroid.rational_flat.constrained_orbits.compute` results no
+  longer return `result_output_byte_limit`.
+* **quiver paths:** `quiver.paths.fixed_length.compute` serializes
+  `path_matrix` and `total_paths` as canonical decimal strings rather than JSON
+  integers.
+* **finite geometry:** `PrimeFieldVectorSpace` axis labels are now limited to
+  4,096 characters each and 65,536 characters in total.
+
+
+### Features
+
+* publish formal attribute closure ([1a15b66](https://github.com/morluto/jacobian/commit/1a15b66e15711831cbd45337d4545d80f47178d0))
+
+
+### Bug Fixes
+
+* align curve ideal budget construction ([7d1c0eb](https://github.com/morluto/jacobian/commit/7d1c0ebb9bb80cd2a714c0e20e922a4d9a56a03e))
+* align hidden worker diagnostic tests ([#3133](https://github.com/morluto/jacobian/issues/3133)) ([dd5adaf](https://github.com/morluto/jacobian/commit/dd5adafbb07598b137ef5e5207a50f8202885ccc))
+* **analysis:** enclose zero-crossing integer powers ([bdc36f8](https://github.com/morluto/jacobian/commit/bdc36f8845e100a7a3686c9a3b415f88ab26bd6a))
+* **canonical:** accept integral backend scalars ([d578760](https://github.com/morluto/jacobian/commit/d578760aebde3d858413cc699a1665595a3b8644))
+* **canonical:** preserve backend-free imports ([788b305](https://github.com/morluto/jacobian/commit/788b305c5dcee75ade861f716bfabe98ebaae9de))
+* **chain-complexes:** type mapping-cone admission failures ([77336c6](https://github.com/morluto/jacobian/commit/77336c64c0481ac883bec1c639b4f6b782f6479a))
+* **combinatorics:** type Sidon admission failures ([da73017](https://github.com/morluto/jacobian/commit/da73017374ba3dbfe500c02a5a523ddc57fbca17))
+* **discrepancy:** enforce canonical subset order ([865224c](https://github.com/morluto/jacobian/commit/865224c061a772f39f1e5e600dc6e8f5eed37be9))
+* **evaluation:** restore Codex visibility runs ([b65cdad](https://github.com/morluto/jacobian/commit/b65cdadbb5336bd7d8d8c9c21b73d95e32046d46))
+* **finite-fields:** bound generator worker input ([3e8883d](https://github.com/morluto/jacobian/commit/3e8883d82f5a5744064c6a36c2eb7e327c8e46bd))
+* **graphs:** widen exact edge-deletion profiles ([3765aa3](https://github.com/morluto/jacobian/commit/3765aa3333c185789e6a5093e5acb965abe32e19))
+* keep catalog examples backend independent ([ed4c9c7](https://github.com/morluto/jacobian/commit/ed4c9c70a1e241367ec8cb19ac0591eff6201fb0))
+* **polynomials:** define the zero discriminant ([263adb7](https://github.com/morluto/jacobian/commit/263adb7750d1bc6762e1cd3a20fc27c2447a529a))
+* **process:** keep pipe cleanup within deadline ([43d6bf9](https://github.com/morluto/jacobian/commit/43d6bf9ba4db6dabf86d95e1263a385b79db8693))
+* **sets:** bound exact-cover integer parsing ([79b7bac](https://github.com/morluto/jacobian/commit/79b7bacf7378966af1b6d12a8890cf0426590109))
+
+
+### Performance Improvements
+
+* **adaptive-range:** cache leaf geometry ([f1f38ca](https://github.com/morluto/jacobian/commit/f1f38cabfa854a7e08ecd27ae7394f0cf6055ee7))
+* **additive:** convolve bounded pair profiles ([de89c16](https://github.com/morluto/jacobian/commit/de89c16481bb79c3238f33cb69b5764bd1555626))
+* **affine-maps:** reuse word-prefix compositions ([d6f80a5](https://github.com/morluto/jacobian/commit/d6f80a56a165a8c194f0e696c5995b6b08b60b81))
+* **analysis:** index adaptive range refinement ([d842e28](https://github.com/morluto/jacobian/commit/d842e283c7040fa69658a8539b200391a41fa2ce))
+* **arithmetic:** reuse convolution admission plan ([fc12e91](https://github.com/morluto/jacobian/commit/fc12e918385a974a54f6221fc3336946ef917e83)), closes [#3140](https://github.com/morluto/jacobian/issues/3140)
+* **arithmetic:** reuse Möbius denominator plan ([10bf806](https://github.com/morluto/jacobian/commit/10bf80612a5dcd9c7961fda862cf22e0c66fa26e))
+* **boolean-fourier:** construct multilinear coefficients directly ([67f9894](https://github.com/morluto/jacobian/commit/67f98947aefd6f59505311586577b94eb4b2e016))
+* **canonical:** use FLINT for decimal integers ([4c214f0](https://github.com/morluto/jacobian/commit/4c214f072f844cd2d4c69b86187a93c57b57def9))
+* **catalog:** precompute discovery search terms ([85276e9](https://github.com/morluto/jacobian/commit/85276e9f1413462f3a28b63a845aea73852fc9f4))
+* **combinatorics:** canonicalize Sidon differences by sign ([785faf7](https://github.com/morluto/jacobian/commit/785faf78a120f0ec78d1ea7aa228e0fa2798b730))
+* **combinatorics:** group rational subset sums ([6d12ca1](https://github.com/morluto/jacobian/commit/6d12ca128e30e2755583f4ebc86f23d1428c1a0f))
+* **combinatorics:** intern rational series wires ([6e1f464](https://github.com/morluto/jacobian/commit/6e1f46462fd461b1defaff98b0f34911a8f490e4))
+* **combinatorics:** parse Sidon elements once ([103f2fe](https://github.com/morluto/jacobian/commit/103f2fefb0b76e4d12b0d8d90d62be809e445abd))
+* **cyclic-linear:** batch cyclotomic kernels ([c426e39](https://github.com/morluto/jacobian/commit/c426e39c558868b64d4cc7cb8d4dfc8fd07d0845))
+* **cyclic-linear:** reuse reduced power coordinates ([a88793e](https://github.com/morluto/jacobian/commit/a88793efc2ae0c86da80adb4696593f82fee99bf))
+* **differential-operators:** preflight power enumeration ([5284517](https://github.com/morluto/jacobian/commit/5284517c1302797a99932870e0d7a3a222c7c15c))
+* **edge-deletion:** reuse near-complete complement ([fec58dc](https://github.com/morluto/jacobian/commit/fec58dcd068991a544e1a8cabb0e7ed69375a073))
+* **finite-fields:** specialize scalar fixed subspaces ([d346385](https://github.com/morluto/jacobian/commit/d346385299afdd0bc8cdcc4a26d4ad6be1a29f98))
+* **fixed-subspace:** consolidate linear algebra worker ([22e2b51](https://github.com/morluto/jacobian/commit/22e2b510f713b81dcbedd43b0e0543c545eb9f1f))
+* **formal-concepts:** index context derivations ([39a119c](https://github.com/morluto/jacobian/commit/39a119cac5acbb399b134952ccd866534cae594e))
+* **frames:** defer coherence ratio normalization ([0655392](https://github.com/morluto/jacobian/commit/06553928b40e7037fc9f9ab45d8d598337b5d199))
+* **gowers-cubes:** reuse subset vertices ([b3202cc](https://github.com/morluto/jacobian/commit/b3202cc0acce91c239f1492327f377008f8d98df))
+* **graphs:** filter subgraph candidates by degree ([c68617a](https://github.com/morluto/jacobian/commit/c68617aca7e423456e050fd98c012825c7db0f47))
+* **graphs:** keep flow search assignments private ([4b2973f](https://github.com/morluto/jacobian/commit/4b2973fc760214cd1af4292b7da52fd6df8b681d))
+* **groups:** close subgroup extensions by generators ([1ffc040](https://github.com/morluto/jacobian/commit/1ffc040a161ce91a74f2844f7a987a100dd63d89))
+* **groups:** track closure size locally ([14c7e5c](https://github.com/morluto/jacobian/commit/14c7e5c739a1a32020b48bdd9092e084ea3fbe8d))
+* **interpolation:** reuse the nodal polynomial ([46f645a](https://github.com/morluto/jacobian/commit/46f645a2d0b622d6fb069d44745e29946256a40c))
+* **lattice-points:** reduce half-space scan overhead ([ccb1ed6](https://github.com/morluto/jacobian/commit/ccb1ed696d57c95dc6cc749542ae31b761ca0b4d))
+* **majorization:** apply final permutation directly ([2d31210](https://github.com/morluto/jacobian/commit/2d312108a8bbcc0b7279b86f96b31284fab54c93))
+* **matrix-inertia:** consolidate algebraic sign workers ([69bdfdc](https://github.com/morluto/jacobian/commit/69bdfdc51ea3b989f4ff10744073dbe6a8d1e7bc)), closes [#3144](https://github.com/morluto/jacobian/issues/3144)
+* **matroids:** reduce RREF span coordinates ([8b66a0d](https://github.com/morluto/jacobian/commit/8b66a0d80b470bf2fca3b952382e5cf6cea5db75)), closes [#3142](https://github.com/morluto/jacobian/issues/3142)
+* **number-fields:** compare private embedding coordinates ([3a32944](https://github.com/morluto/jacobian/commit/3a329441da9a3a033df88787cb43534ab67dac65))
+* **number-theory:** accelerate divisor-sum preimages ([19881de](https://github.com/morluto/jacobian/commit/19881debc6d670e67a8d879280814af362702926))
+* **polynomials:** normalize generic fibers with FLINT ([0f9ec70](https://github.com/morluto/jacobian/commit/0f9ec7088fce4e4e2c882bc7f26d7ac44a8f367c)), closes [#3139](https://github.com/morluto/jacobian/issues/3139)
+* **polynomials:** use FLINT for syzygy rank minors ([5953821](https://github.com/morluto/jacobian/commit/5953821cd5e6d52ce4ed9fd9ab00cd423e66b3fc))
+* **polytopes:** accelerate exact hull preparation ([cc7f1fe](https://github.com/morluto/jacobian/commit/cc7f1fedeb68a39546cf2750de6502816476787c)), closes [#3141](https://github.com/morluto/jacobian/issues/3141)
+* **polytopes:** defer lattice point projection ([603de06](https://github.com/morluto/jacobian/commit/603de06cd9de85363499bfa0b37eeaf373b711c6))
+* **regular-languages:** power capped matrices with FLINT ([9255791](https://github.com/morluto/jacobian/commit/9255791c9eca4766fd02bbf788c477e5a697057d))
+
+
+### Documentation
+
+* describe mathematical bounds without transport policy ([5859ee5](https://github.com/morluto/jacobian/commit/5859ee5f2265e5d0300df7c1545aa5a8f9a8243a))
+* distinguish capacity failures from admission ([dff336f](https://github.com/morluto/jacobian/commit/dff336fe17e314f6c196a0bbec7407e327bfa7c9))
+* **testing:** distinguish math and boundary evidence ([7ef1d92](https://github.com/morluto/jacobian/commit/7ef1d92159f7cae8952618a1e3247aa18c93b85f))
+
 ## [0.16.0](https://github.com/morluto/jacobian/compare/jacobian-v0.15.2...jacobian-v0.16.0) (2026-09-01)
 
 

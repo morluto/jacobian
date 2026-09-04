@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.cyclic_sumset_profile._models import (
-    MAX_CYCLIC_SUMSET_MODULUS,
     MAX_CYCLIC_SUMSET_PAIRS,
     CyclicSumsetEntry,
     CyclicSumsetResult,
@@ -19,14 +18,11 @@ def compute_cyclic_sumset_profile(
     right: tuple[int, ...],
 ) -> CyclicSumsetResult:
     """Return the complete cyclic representation function r_{A+B}(c)."""
-    if not 0 < modulus <= MAX_CYCLIC_SUMSET_MODULUS:
+    if modulus <= 0:
         raise OperationDomainValidationError(
             location=("modulus",),
             code="cyclic_sumset.positive_modulus",
-            message=(
-                "cyclic sumset modulus must be positive and fit the "
-                "interoperable JSON integer range"
-            ),
+            message="cyclic sumset modulus must be positive",
         )
     if len(left) * len(right) > MAX_CYCLIC_SUMSET_PAIRS:
         raise OperationDomainValidationError(

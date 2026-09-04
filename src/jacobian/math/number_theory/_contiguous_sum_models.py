@@ -30,6 +30,46 @@ ContiguousSumInteger = Annotated[
     StringConstraints(max_length=MAX_PROFILE_INTEGER_DIGITS, strict=True),
 ]
 
+ContiguousSumFailureKind = Literal[
+    "WORKER_START_FAILED",
+    "WORKER_TIMEOUT",
+    "WORKER_CANCELLED",
+    "STDOUT_LIMIT_EXCEEDED",
+    "STDERR_LIMIT_EXCEEDED",
+    "WORKER_RESOURCE_LIMIT",
+    "WORKER_EXITED",
+    "MALFORMED_OUTPUT",
+    "REQUEST_DEADLINE_EXPIRED",
+]
+ContiguousSumTimeoutLayer = Literal[
+    "WORKER_START",
+    "WORKER_WALL",
+    "REQUEST_CANCELLATION",
+    "OUTPUT_LIMIT",
+    "PROCESS_RESOURCE",
+    "WORKER_EXIT",
+    "RESULT_VALIDATION",
+    "REQUEST_DEADLINE",
+]
+
+
+class ContiguousSumWorkerDiagnostic(StrictModel):
+    """Bounded replay evidence for a contiguous-sum ``UNKNOWN`` result."""
+
+    failure: ContiguousSumFailureKind
+    timeout_layer: ContiguousSumTimeoutLayer
+    elapsed_ms: StrictInt = Field(ge=0)
+    worker_timeout_ms: StrictInt = Field(ge=0, le=MAX_FACTORING_WORK_SECONDS * 1000)
+    budget_seconds: StrictInt = Field(ge=1, le=MAX_FACTORING_WORK_SECONDS)
+    returncode: StrictInt | None = Field(default=None, ge=-(2**31), le=(2**32) - 1)
+    operation_version: Literal["1"] = "1"
+    repository_revision: Annotated[
+        str,
+        StringConstraints(
+            pattern=r"^(?:unknown|[0-9a-f]{40})$", max_length=40, strict=True
+        ),
+    ]
+
 
 class ContiguousSumProfileRequest(StrictModel):
     """A bounded closed positive interval [L, U] for contiguous-sum profiling.
@@ -91,6 +131,7 @@ class ContiguousSumProfileResult(StrictModel):
         min_length=0, max_length=MAX_INTERVAL_WIDTH
     )
     detail: str | None = None
+    diagnostic: ContiguousSumWorkerDiagnostic | None = None
 
     @classmethod
     def _unknown_from_kernel(
@@ -98,6 +139,7 @@ class ContiguousSumProfileResult(StrictModel):
         *,
         admission: ContiguousSumProfileAdmission,
         detail: str,
+        diagnostic: ContiguousSumWorkerDiagnostic,
     ) -> Self:
         """Build the typed non-conclusion from the admitted execution plan."""
 
@@ -107,6 +149,7 @@ class ContiguousSumProfileResult(StrictModel):
             upper_bound=format_canonical_integer(admission.upper_bound),
             rows=(),
             detail=detail,
+            diagnostic=diagnostic,
         )
 
     @classmethod
@@ -136,6 +179,7 @@ class ContiguousSumProfileResult(StrictModel):
             upper_bound=format_canonical_integer(admission.upper_bound),
             rows=rows,
             detail=None,
+            diagnostic=None,
         )
 
     @model_validator(mode="after")
@@ -145,11 +189,13 @@ class ContiguousSumProfileResult(StrictModel):
         if lower < 1 or upper < lower:
             raise ValueError("result endpoints must form a positive interval")
         if self.status == "UNKNOWN":
-            if self.rows or not self.detail:
-                raise ValueError("an unknown profile has no rows and includes detail")
+            if self.rows or not self.detail or self.diagnostic is None:
+                raise ValueError(
+                    "an unknown profile has no rows, detail, and diagnostic"
+                )
             return self
-        if self.detail is not None:
-            raise ValueError("a complete profile cannot include failure detail")
+        if self.detail is not None or self.diagnostic is not None:
+            raise ValueError("a complete profile cannot include diagnostics")
         expected_width = upper - lower + 1
         if len(self.rows) != expected_width:
             raise ValueError("a complete profile has one row per interval integer")
@@ -170,4 +216,5 @@ __all__ = [
     "ContiguousSumProfileRequest",
     "ContiguousSumProfileResult",
     "ContiguousSumProfileRow",
+    "ContiguousSumWorkerDiagnostic",
 ]

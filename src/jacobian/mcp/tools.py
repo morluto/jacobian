@@ -16,7 +16,11 @@ from jacobian._execution import (
     OperationExecutionCancelledError,
     RequestCancellationSignal,
 )
-from jacobian.catalog.models import OperationId, OperationResult
+from jacobian.catalog.models import (
+    OperationId,
+    OperationResourceAdmissionError,
+    OperationResult,
+)
 from jacobian.dispatch import (
     OperationDomainValidationError,
     OperationExecutionTimeoutError,
@@ -136,9 +140,7 @@ def _invalid_request_error(
     """Project one owner-bound rejection without reflecting caller values."""
 
     issues = _bounded_validation_issues(error.errors())
-    if isinstance(error, OperationDomainValidationError) and all(
-        issue.code.endswith("budget_exceeded") for issue in issues
-    ):
+    if isinstance(error, OperationResourceAdmissionError):
         data: OperationInvalidRequestData | OperationResourceAdmissionData = (
             OperationResourceAdmissionData(operation_id=operation_id, errors=issues)
         )

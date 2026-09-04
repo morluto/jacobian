@@ -19,7 +19,11 @@ from jacobian._execution import (
 )
 from jacobian._models import StrictModel
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.mcp.direct_tools import (
     _operation_input_schema,
     _operation_tool_name,
@@ -27,6 +31,7 @@ from jacobian.mcp.direct_tools import (
 )
 from jacobian.mcp.runtime import AppState
 from jacobian.mcp.server import _build_server, create_server
+from jacobian.mcp.tools import _invalid_request_error
 
 _FIXED_TOOLS = {"math.find", "math.run"}
 
@@ -467,7 +472,7 @@ def test_math_run_reports_resource_admission_separately_from_invalid_payload() -
         value: int
 
     def reject(_request: Request) -> Result:
-        raise OperationDomainValidationError(
+        raise OperationResourceAdmissionError(
             location=("value",),
             code="test.budget_exceeded",
             message="test work exceeds the 10-unit budget",
@@ -501,3 +506,15 @@ def test_math_run_reports_resource_admission_separately_from_invalid_payload() -
         assert "correct the fields" not in error.value.data["hint"]
 
     asyncio.run(scenario())
+
+
+def test_budget_named_mathematical_precondition_remains_invalid_payload() -> None:
+    error = OperationDomainValidationError(
+        location=("matrix",),
+        code="matrix.budget_exceeded",
+        message="matrix must be square",
+    )
+
+    projected = _invalid_request_error("matrix.determinant.compute", error)
+
+    assert projected.data["code"] == "INVALID_REQUEST"

@@ -30,10 +30,11 @@ class OperationDomainValidationError(ValueError):
     """One owner-declared semantic rejection discovered during execution.
 
     Request models establish the structural wire shape. Domain operations use
-    this error for documented mathematical or resource-admission failures
-    discovered after parsing and before or during their bounded exact kernel.
-    MCP projects it through the same typed invalid-parameter channel as request
-    validation. It is deliberately not a catch-all for backend exceptions.
+    this error for documented mathematical failures discovered after parsing and
+    before or during their bounded exact kernel. Resource-envelope failures use
+    ``OperationResourceAdmissionError`` so transport recovery does not infer
+    semantics from diagnostic spelling. Neither class is a catch-all for backend
+    exceptions.
     """
 
     def __init__(
@@ -52,6 +53,10 @@ class OperationDomainValidationError(ValueError):
         """Return the stable owner diagnostic for the MCP projection."""
 
         return self._errors
+
+
+class OperationResourceAdmissionError(OperationDomainValidationError):
+    """A structurally valid mathematical request outside its resource envelope."""
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -296,5 +301,6 @@ __all__ = [
     "OperationId",
     "OperationMatchRequest",
     "OperationMatchResult",
+    "OperationResourceAdmissionError",
     "OperationResult",
 ]

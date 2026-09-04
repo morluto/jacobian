@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.matrices.rational_linear._models import LinearRationalSystem
 
 __all__ = ["inconsistency_witness", "solve"]
@@ -61,7 +61,7 @@ def _minor_component_bits(
 
 
 def _reject(message: str) -> None:
-    raise OperationDomainValidationError(
+    raise OperationResourceAdmissionError(
         location=("system",), code="matrix.budget_exceeded", message=message
     )
 
@@ -203,6 +203,12 @@ def solve(system: LinearRationalSystem) -> tuple[CanonicalRational, ...] | None:
     """Return one exact solution, or ``None`` when the system is inconsistent."""
 
     plan = _admit_system(system, outcome="solution")
+    return _solve_admitted(plan)
+
+
+def _solve_admitted(plan: _LinearPlan) -> tuple[CanonicalRational, ...] | None:
+    """Execute one solution plan whose mathematical work was already admitted."""
+
     kernel = _solve_sparse if plan.backend == "sympy_sparse" else _solve_flint
     values = kernel(
         plan.entries,

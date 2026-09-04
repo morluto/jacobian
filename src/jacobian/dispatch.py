@@ -10,6 +10,7 @@ from typing import Any
 from pydantic import BaseModel, ValidationError
 
 from jacobian._execution import (
+    OperationExecutionStage,
     OperationExecutionTimeoutError,
     RequestCancellationSignal,
     request_cancellation,
@@ -112,7 +113,9 @@ def execute_operation[ProjectedT](
             request = parse_operation_input(binding.request_type, payload)
         except (CanonicalizationError, ValidationError) as exc:
             raise OperationRequestValidationError(exc) from exc
-        request_checkpoint("after parsing")
+        request_checkpoint(
+            "after parsing", public_stage=OperationExecutionStage.REQUEST_PARSING
+        )
         result = binding.run(request)
         request_checkpoint("after operation execution")
         projected = projector(operation_id, result, started)

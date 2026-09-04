@@ -8,6 +8,7 @@ from pydantic import ValidationError, field_serializer, model_validator
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
+    OperationExecutionStage,
     bind_request_deadline,
     current_request_execution,
 )
@@ -297,6 +298,27 @@ def test_shared_execution_rejects_cancellation_before_parsing() -> None:
             projector=lambda _operation_id, result, _started: result,
             cancellation_signal=Cancelled(),
         )
+
+
+def test_shared_execution_reports_cancellation_observed_after_parsing() -> None:
+    class CancelledAfterParsing:
+        checks = 0
+
+        @classmethod
+        def is_set(cls) -> bool:
+            cls.checks += 1
+            return cls.checks == 2
+
+    with pytest.raises(OperationExecutionCancelledError) as error:
+        execute_operation(
+            "test.invalid-result",
+            {"value": 1},
+            cast(Catalog, _CatalogWithInvalidResult()),
+            projector=lambda _operation_id, result, _started: result,
+            cancellation_signal=CancelledAfterParsing(),
+        )
+
+    assert error.value.stage is OperationExecutionStage.REQUEST_PARSING
 
 
 def test_shared_execution_checks_deadline_after_projection(

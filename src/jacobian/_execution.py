@@ -83,12 +83,14 @@ class OperationExecutionStage(StrEnum):
     RESULT_PROJECTION = "result_projection"
 
 
-def request_checkpoint(stage: str) -> None:
+def request_checkpoint(
+    stage: str, *, public_stage: OperationExecutionStage | None = None
+) -> None:
     """Reject a cancelled or expired request at one documented execution stage."""
 
     if request_cancelled():
         raise OperationExecutionCancelledError(
-            f"request cancelled {stage}", stage=_public_stage(stage)
+            f"request cancelled {stage}", stage=public_stage or _public_stage(stage)
         )
     execution = current_request_execution()
     if (
@@ -97,7 +99,8 @@ def request_checkpoint(stage: str) -> None:
         and time.monotonic() >= execution.deadline
     ):
         raise OperationExecutionTimeoutError(
-            f"request deadline expired {stage}", stage=_public_stage(stage)
+            f"request deadline expired {stage}",
+            stage=public_stage or _public_stage(stage),
         )
 
 

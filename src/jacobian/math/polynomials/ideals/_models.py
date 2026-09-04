@@ -958,10 +958,18 @@ class IdealMembershipCertificateRequest(StrictModel):
         description=(
             f"An ordered ideal presentation with at most {MAX_VARS} variables, "
             f"{MAX_GENERATORS} generators, and {MAX_CERTIFICATE_INPUT_TERMS} "
-            "aggregate source terms."
+            f"aggregate source terms. Generator exponents are at most "
+            f"{MAX_INPUT_EXPONENT}, and coefficient components are at most "
+            f"{MAX_COEFFICIENT_DIGITS} digits."
         )
     )
-    polynomial: RationalPolynomial
+    polynomial: RationalPolynomial = Field(
+        description=(
+            f"The target polynomial, with at most {MAX_CERTIFICATE_INPUT_TERMS} "
+            f"terms, exponents at most {MAX_INPUT_EXPONENT}, and coefficient "
+            f"components at most {MAX_COEFFICIENT_DIGITS} digits."
+        )
+    )
     cofactor_degree_bound: StrictInt = Field(
         ge=0,
         le=MAX_CERTIFICATE_COFACTOR_DEGREE,

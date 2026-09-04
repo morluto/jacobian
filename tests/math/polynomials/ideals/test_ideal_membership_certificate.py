@@ -6,9 +6,14 @@ import pytest
 import sympy
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
 from jacobian.math.polynomials.ideals._models import (
+    MAX_CERTIFICATE_INPUT_TERMS,
+    MAX_INPUT_EXPONENT,
     IdealMembershipCertificateRequest,
     IdealMembershipCertificateResult,
 )
@@ -129,3 +134,52 @@ def test_certificate_search_rejects_expansion_before_enumeration() -> None:
         ideal_membership_certificate(
             request.ideal, request.polynomial, request.cofactor_degree_bound
         )
+
+
+def test_certificate_schema_publishes_its_narrow_source_bounds() -> None:
+    properties = IdealMembershipCertificateRequest.model_json_schema()["properties"]
+
+    assert (
+        f"{MAX_CERTIFICATE_INPUT_TERMS} aggregate source terms"
+        in properties["ideal"]["description"]
+    )
+    assert (
+        f"exponents are at most {MAX_INPUT_EXPONENT}"
+        in properties["ideal"]["description"]
+    )
+    assert (
+        f"at most {MAX_CERTIFICATE_INPUT_TERMS} terms"
+        in properties["polynomial"]["description"]
+    )
+    assert (
+        f"exponents at most {MAX_INPUT_EXPONENT}"
+        in properties["polynomial"]["description"]
+    )
+
+
+def test_generated_linear_work_is_rejected_at_the_certificate_boundary() -> None:
+    variables = ("x", "y")
+    dense_generator = _polynomial(
+        variables,
+        tuple(
+            sorted(
+                ((1, (x, y)) for x in range(21) for y in range(21) if (x + y) % 2 == 0),
+                key=lambda term: term[1],
+                reverse=True,
+            )
+        ),
+    )
+    zero = _polynomial(variables, ())
+    request = _request(
+        (dense_generator, zero, zero, zero, zero, zero, zero),
+        _polynomial(variables, ((1, (0, 0)),)),
+        15,
+    )
+
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        ideal_membership_certificate(
+            request.ideal, request.polynomial, request.cofactor_degree_bound
+        )
+
+    assert error.value.errors()[0]["loc"] == ("cofactor_degree_bound",)
+    assert "linear" in error.value.errors()[0]["type"]

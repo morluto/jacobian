@@ -136,6 +136,31 @@ def test_mcp_compact_operation_matches_are_paginated() -> None:
                 descriptor["operation_id"] for descriptor in first["matches"]
             }.isdisjoint(descriptor["operation_id"] for descriptor in second["matches"])
 
+            changed_limit = await client.call_tool(
+                "math.find",
+                {
+                    "request": {
+                        "op": "match",
+                        "need": "exact mathematical computation",
+                        "cursor": first["next_cursor"],
+                        "limit": 20,
+                    }
+                },
+            )
+            assert changed_limit.structured_content["kind"] == "matches"
+
+            changed_need = await client.call_tool(
+                "math.find",
+                {
+                    "request": {
+                        "op": "match",
+                        "need": "exact integer greatest common divisor",
+                        "cursor": first["next_cursor"],
+                    }
+                },
+            )
+            assert changed_need.structured_content["error"]["code"] == "INVALID_CURSOR"
+
             wider_page = await client.call_tool(
                 "math.find",
                 {

@@ -6,6 +6,7 @@ import re
 from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
+from hashlib import sha256
 from math import log
 from typing import Protocol
 
@@ -179,7 +180,12 @@ def _match_corpus(
                 next(
                     index
                     for index, (_, match) in enumerate(ranked)
-                    if match.operation_id == request.cursor
+                    if _match_cursor(
+                        need=request.need,
+                        namespace=normalized_namespace,
+                        operation_id=match.operation_id,
+                    )
+                    == request.cursor
                 )
                 + 1
             )
@@ -189,7 +195,13 @@ def _match_corpus(
             ) from None
     page = ranked[start : start + request.limit]
     next_cursor = (
-        page[-1][1].operation_id if page and start + len(page) < total_matches else None
+        _match_cursor(
+            need=request.need,
+            namespace=normalized_namespace,
+            operation_id=page[-1][1].operation_id,
+        )
+        if page and start + len(page) < total_matches
+        else None
     )
     return OperationMatchResult(
         need=request.need,
@@ -198,6 +210,13 @@ def _match_corpus(
         total_matches=total_matches,
         next_cursor=next_cursor,
     )
+
+
+def _match_cursor(*, need: str, namespace: str | None, operation_id: str) -> str:
+    """Bind one opaque stateless cursor to its ranked discovery result."""
+
+    identity = f"{need}\0{namespace or ''}\0{operation_id}".encode()
+    return f"cursor.{sha256(identity).hexdigest()}"
 
 
 def browse_operations(

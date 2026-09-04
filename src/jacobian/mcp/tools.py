@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -31,6 +32,7 @@ from jacobian.mcp.models import (
     OperationInspectionResult,
     OperationInvalidRequestData,
     OperationMatchRequest,
+    OperationResourceAdmissionData,
     OperationValidationIssue,
 )
 from jacobian.mcp.projections import _operation_match_response
@@ -112,9 +114,13 @@ def math_run(
     except (OperationRequestValidationError, OperationDomainValidationError) as exc:
         raise _invalid_request_error(operation_id, exc) from exc
     except OperationExecutionTimeoutError as exc:
-        raise ToolError("operation execution deadline expired") from exc
+        raise _execution_tool_error(
+            code="OPERATION_TIMEOUT", operation_id=operation_id, stage=exc.stage
+        ) from exc
     except OperationExecutionCancelledError as exc:
-        raise ToolError("operation cancelled") from exc
+        raise _execution_tool_error(
+            code="OPERATION_CANCELLED", operation_id=operation_id, stage=exc.stage
+        ) from exc
     except (MCPError, ToolError):
         raise
     except Exception as exc:
@@ -129,14 +135,33 @@ def _invalid_request_error(
 ) -> MCPError:
     """Project one owner-bound rejection without reflecting caller values."""
 
-    data = OperationInvalidRequestData(
-        operation_id=operation_id,
-        errors=_bounded_validation_issues(error.errors()),
-    )
+    issues = _bounded_validation_issues(error.errors())
+    if isinstance(error, OperationDomainValidationError) and all(
+        issue.code.endswith("budget_exceeded") for issue in issues
+    ):
+        data: OperationInvalidRequestData | OperationResourceAdmissionData = (
+            OperationResourceAdmissionData(operation_id=operation_id, errors=issues)
+        )
+        message = "operation request exceeds its admitted resource envelope"
+    else:
+        data = OperationInvalidRequestData(operation_id=operation_id, errors=issues)
+        message = "operation payload failed validation"
     return MCPError(
         code=INVALID_PARAMS,
-        message="operation payload failed validation",
+        message=message,
         data=data.model_dump(mode="json"),
+    )
+
+
+def _execution_tool_error(*, code: str, operation_id: str, stage: str) -> ToolError:
+    """Project bounded operation context through the SDK's text-only tool error."""
+
+    return ToolError(
+        json.dumps(
+            {"code": code, "operation_id": operation_id, "stage": stage},
+            separators=(",", ":"),
+            sort_keys=True,
+        )
     )
 
 

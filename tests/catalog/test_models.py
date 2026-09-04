@@ -59,19 +59,11 @@ def test_catalog_need_accepts_a_concise_mathematical_description() -> None:
 def test_discovery_page_metadata_is_bound_to_returned_matches() -> None:
     base = {
         "need": "gcd",
-        "matches": [
-            {
-                "operation_id": "integer.compute.gcd",
-                "title": "Compute gcd",
-                "description": "Compute one exact gcd.",
-            }
-        ],
+        "matches": [],
         "total_matches": 2,
     }
     with pytest.raises(ValidationError) as error:
-        OperationMatchResult.model_validate(
-            {**base, "next_cursor": "integer.compute.lcm"}
-        )
+        OperationMatchResult.model_validate({**base, "next_cursor": "cursor.abc"})
     assert _error_type(error.value) == "catalog.cursor_position"
 
 

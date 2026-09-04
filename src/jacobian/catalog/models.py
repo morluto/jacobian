@@ -128,11 +128,9 @@ class OperationMatchResult(StrictModel):
             raise _validation_error(
                 "match_count", "total_matches cannot be smaller than the returned page"
             )
-        if self.next_cursor is not None and (
-            not operation_ids or self.next_cursor != operation_ids[-1]
-        ):
+        if self.next_cursor is not None and not operation_ids:
             raise _validation_error(
-                "cursor_position", "next_cursor must identify the final returned match"
+                "cursor_position", "next_cursor requires a nonempty returned page"
             )
         return self
 

@@ -7,17 +7,19 @@ import copy
 import json
 from typing import Any, Self
 
+import pytest
 from mcp.shared.exceptions import MCPError
 from mcp.types import INVALID_PARAMS, TextContent
 from pydantic import model_validator
 
 from jacobian._execution import (
     OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
     current_request_execution,
 )
 from jacobian._models import StrictModel
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.mcp.direct_tools import (
     _operation_input_schema,
     _operation_tool_name,
@@ -396,5 +398,106 @@ def test_direct_calls_preserve_owner_cancellation_diagnosis() -> None:
         )
         assert "private cancellation detail" not in result.content[0].text
         assert "operation execution failed" not in result.content[0].text
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    ("exception", "code"),
+    (
+        (OperationExecutionTimeoutError("private timeout detail"), "OPERATION_TIMEOUT"),
+        (
+            OperationExecutionCancelledError("private cancellation detail"),
+            "OPERATION_CANCELLED",
+        ),
+    ),
+)
+def test_math_run_preserves_bounded_operation_failure_context(
+    exception: Exception, code: str
+) -> None:
+    class Request(StrictModel):
+        value: int
+
+    class Result(StrictModel):
+        value: int
+
+    def fail(_request: Request) -> Result:
+        raise exception
+
+    operation = MathTool(
+        operation_id="test.context.failure",
+        title="Context failure sentinel",
+        description="Exercises bounded math.run execution diagnostics.",
+        request_type=Request,
+        result_type=Result,
+        run=fail,
+    )
+
+    async def scenario() -> None:
+        from mcp import Client
+
+        async with Client(
+            _direct_server(Catalog((operation,))), raise_exceptions=False
+        ) as client:
+            result = await client.call_tool(
+                "math.run",
+                {"operation_id": operation.operation_id, "payload": {"value": 1}},
+            )
+
+        assert result.is_error is True
+        assert result.content and isinstance(result.content[0], TextContent)
+        diagnostic = json.loads(
+            result.content[0].text.removeprefix("Error executing tool math.run: ")
+        )
+        assert diagnostic == {
+            "code": code,
+            "operation_id": operation.operation_id,
+            "stage": "operation_execution",
+        }
+        assert "private" not in result.content[0].text
+
+    asyncio.run(scenario())
+
+
+def test_math_run_reports_resource_admission_separately_from_invalid_payload() -> None:
+    class Request(StrictModel):
+        value: int
+
+    class Result(StrictModel):
+        value: int
+
+    def reject(_request: Request) -> Result:
+        raise OperationDomainValidationError(
+            location=("value",),
+            code="test.budget_exceeded",
+            message="test work exceeds the 10-unit budget",
+        )
+
+    operation = MathTool(
+        operation_id="test.resource.reject",
+        title="Resource rejection sentinel",
+        description="Exercises math.run resource-admission recovery.",
+        request_type=Request,
+        result_type=Result,
+        run=reject,
+    )
+
+    async def scenario() -> None:
+        from mcp import Client
+
+        async with Client(
+            _direct_server(Catalog((operation,))), raise_exceptions=True
+        ) as client:
+            with pytest.raises(MCPError) as error:
+                await client.call_tool(
+                    "math.run",
+                    {"operation_id": operation.operation_id, "payload": {"value": 1}},
+                )
+
+        assert error.value.code == INVALID_PARAMS
+        assert error.value.data["code"] == "RESOURCE_ADMISSION_REJECTED"
+        assert error.value.data["stage"] == "resource_admission"
+        assert error.value.data["operation_id"] == operation.operation_id
+        assert "correct the fields" not in error.value.data["hint"]
 
     asyncio.run(scenario())

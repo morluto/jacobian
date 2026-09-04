@@ -3,6 +3,14 @@
 from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.combinatorics.additive._finite_abelian_subset_sum import (
+    MAX_FINITE_ABELIAN_GROUP_ORDER,
+    MAX_FINITE_ABELIAN_SUBSET_SUM_DP_CELLS,
+    MAX_FINITE_ABELIAN_SUBSET_SUM_ITEMS,
+    FiniteAbelianSubsetSumProfileRequest,
+    FiniteAbelianSubsetSumProfileResult,
+    finite_abelian_subset_sum_profile,
+)
 from jacobian.math.combinatorics.additive._models import (
     _MAX_DIMENSION,
     _MAX_VECTOR_SET_SIZE,
@@ -106,6 +114,15 @@ def _run_subset_sum_residue(
         request.modulus,
         request.include_empty_subset,
         request.include_witnesses,
+    )
+
+
+def _run_finite_abelian_subset_sum(
+    request: FiniteAbelianSubsetSumProfileRequest,
+) -> FiniteAbelianSubsetSumProfileResult:
+    return finite_abelian_subset_sum_profile(
+        request.invariant_factors,
+        request.source,
     )
 
 
@@ -402,6 +419,45 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "modulus": 5,
                     "include_empty_subset": False,
                     "include_witnesses": True,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="additive.subset_sum.finite_abelian_profile.compute",
+        title="Compute the exact subset-sum profile in a finite abelian group",
+        description=(
+            "Given invariant factors d1|...|dr for G=Z/d1 x ... x Z/dr and an indexed "
+            "tuple of group elements, return the exact number of indexed subfamilies "
+            "summing to each group element, including the empty subset at zero. "
+            f"The dense DP visits at most {MAX_FINITE_ABELIAN_SUBSET_SUM_DP_CELLS:,} "
+            f"cells (|G| ≤ {MAX_FINITE_ABELIAN_GROUP_ORDER:,}, "
+            f"source length ≤ {MAX_FINITE_ABELIAN_SUBSET_SUM_ITEMS}); result has "
+            "exactly |G| rows sorted lexicographically with support size and "
+            "covers_group status. Repeated source positions are distinct."
+        ),
+        request_type=FiniteAbelianSubsetSumProfileRequest,
+        result_type=FiniteAbelianSubsetSumProfileResult,
+        run=_run_finite_abelian_subset_sum,
+        tags=(
+            "additive-combinatorics",
+            "subset-sum",
+            "finite-abelian-group",
+            "invariant-factors",
+            "exact",
+        ),
+        examples=(
+            OperationExample(
+                name="z4_two_elements_full_coverage",
+                description=(
+                    "In Z/4Z, the indexed sequence ((1),(2)) attains every residue "
+                    "once, so support_size=4 and covers_group is true; invariant "
+                    "factors must divide sequentially and the group order times "
+                    "source length must fit the DP bound."
+                ),
+                input={
+                    "invariant_factors": [4],
+                    "source": [[1], [2]],
                 },
             ),
         ),

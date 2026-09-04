@@ -51,10 +51,6 @@ def _source(
 ) -> ZeroSumAtomSource:
     return ZeroSumAtomSource.model_validate(
         {
-            "source": None,  # overwritten below after model shape is defined
-        }
-        if False
-        else {
             "group": {"moduli": list(moduli)},
             "elements": [list(element) for element in elements],
         }

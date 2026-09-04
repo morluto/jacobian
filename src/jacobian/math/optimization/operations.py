@@ -1,544 +1,216 @@
-"""Bounded rational optimization operations backed by SymPy."""
-
-from __future__ import annotations
+"""Bounded exact LP outcomes from FLINT basis linear algebra."""
 
 from fractions import Fraction
 from typing import Any, NoReturn
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import request_checkpoint
+from jacobian.canonical import format_canonical_integer
+from jacobian.math.optimization._arithmetic import rational_dot
+from jacobian.math.optimization._linear_basis import (
+    LinearAdmission,
+    admit_linear_program,
+    independent_rows,
+    linear_execution,
+    search_bases,
+)
 from jacobian.math.optimization._models import (
     RationalLinearProgramResult,
     StandardFormRationalLinearProgram,
-    _active_equations,
     _dual_diagnostics,
     _primal_diagnostics,
-    _result_digit_bound,
+    _program_fractions,
 )
 
 
-def _rational(value: CanonicalRational) -> Any:
-    import sympy
-
-    return sympy.Rational(value.as_fraction())
+def _execution_failure() -> NoReturn:
+    raise RuntimeError("exact linear-program execution produced no mathematical result")
 
 
-def _linear(coefficients: tuple[Any, ...], symbols: tuple[Any, ...]) -> Any:
-    import sympy
-
-    return sum(
-        (
-            coefficient * symbol
-            for coefficient, symbol in zip(coefficients, symbols, strict=True)
-        ),
-        sympy.S.Zero,
-    )
-
-
-def _wire(value: Any, *, max_digits: int) -> CanonicalRational | None:
-    import sympy
-
-    try:
-        rational = sympy.Rational(value)
-        numerator = int(rational.p)
-        denominator = int(rational.q)
-    except (TypeError, ValueError, ZeroDivisionError):
-        return None
-    if len(str(abs(numerator))) > max_digits or len(str(denominator)) > max_digits:
-        return None
-    return CanonicalRational.from_integer_ratio(numerator, denominator)
-
-
-def _wire_fraction(
-    value: Fraction,
-    *,
-    max_digits: int,
-) -> CanonicalRational | None:
-    if (
-        len(str(abs(value.numerator))) > max_digits
-        or len(str(value.denominator)) > max_digits
-    ):
-        return None
-    return CanonicalRational.from_fraction(value)
-
-
-def _wire_solution(
-    solution: dict[Any, Any],
-    symbols: tuple[Any, ...],
-    *,
-    max_digits: int,
-) -> tuple[CanonicalRational, ...] | None:
-    import sympy
-
-    values: list[CanonicalRational] = []
-    for symbol in symbols:
-        value = _wire(solution.get(symbol, sympy.S.Zero), max_digits=max_digits)
-        if value is None:
-            return None
-        values.append(value)
-    return tuple(values)
-
-
-def _wire_difference_solution(
-    solution: dict[Any, Any],
-    positive_symbols: tuple[Any, ...],
-    negative_symbols: tuple[Any, ...],
-    *,
-    max_digits: int,
-) -> tuple[CanonicalRational, ...] | None:
-    import sympy
-
-    values: list[CanonicalRational] = []
-    for positive, negative in zip(positive_symbols, negative_symbols, strict=True):
-        value = _wire(
-            solution.get(positive, sympy.S.Zero) - solution.get(negative, sympy.S.Zero),
-            max_digits=max_digits,
-        )
-        if value is None:
-            return None
-        values.append(value)
-    return tuple(values)
-
-
-def _program_arrays(
-    program: StandardFormRationalLinearProgram,
-) -> tuple[tuple[Any, ...], tuple[tuple[Any, ...], ...], tuple[Any, ...]]:
-    return (
-        tuple(_rational(value) for value in program.objective),
-        tuple(tuple(_rational(value) for value in row) for row in program.coefficients),
-        tuple(_rational(value) for value in program.rhs),
-    )
-
-
-def _active_row_indices(program: StandardFormRationalLinearProgram) -> tuple[int, ...]:
-    """Return source rows that impose a nontrivial equality."""
-
+def _fractions(vector: Any) -> tuple[Fraction, ...]:
     return tuple(
-        index
-        for index, (row, rhs) in enumerate(
-            zip(program.coefficients, program.rhs, strict=True)
-        )
-        if any(value.num != "0" for value in row) or rhs.num != "0"
+        Fraction(int(v.numerator), int(v.denominator)) for v in vector.entries()
     )
 
 
-def _expand_active_row_values(
-    values: tuple[CanonicalRational, ...],
-    indices: tuple[int, ...],
-    *,
-    source_rows: int,
-) -> tuple[CanonicalRational, ...]:
-    """Embed an auxiliary-row vector back into the source row coordinates."""
+def _wire(values: tuple[Fraction, ...], digits: int) -> tuple[CanonicalRational, ...]:
+    result = []
+    for value in values:
+        numerator = format_canonical_integer(value.numerator)
+        denominator = format_canonical_integer(value.denominator)
+        if max(len(numerator.lstrip("-")), len(denominator)) > digits:
+            _execution_failure()
+        result.append(CanonicalRational(num=numerator, den=denominator))
+    return tuple(result)
 
-    zero = CanonicalRational.from_integer_ratio(0, 1)
-    expanded = [zero] * source_rows
+
+def _certify_infeasible(
+    program: StandardFormRationalLinearProgram,
+    witness: tuple[Fraction, ...],
+    digits: int,
+) -> RationalLinearProgramResult:
+    """Establish A^T y>=0 AND b^T y<0 before the trusted boundary."""
+    _, a, b = _program_fractions(program)
+    if (
+        len(witness) != len(b)
+        or rational_dot(b, witness) >= 0
+        or any(
+            sum((row[j] * y for row, y in zip(a, witness, strict=True)), Fraction()) < 0
+            for j in range(len(program.variables))
+        )
+    ):
+        _execution_failure()
+    return RationalLinearProgramResult._from_kernel(
+        program=program,
+        status="INFEASIBLE",
+        farkas_candidate=_wire(witness, digits),
+    )
+
+
+def _certify_point(
+    program: StandardFormRationalLinearProgram,
+    point: tuple[Fraction, ...],
+    dual: tuple[Fraction, ...],
+    ray: tuple[Fraction, ...] | None,
+    digits: int,
+) -> RationalLinearProgramResult:
+    objective, residuals = _primal_diagnostics(program, point)
+    if any(v < 0 for v in point) or any(residuals):
+        _execution_failure()
+    values: dict[str, Any] = {
+        "program": program,
+        "primal_candidate": _wire(point, digits),
+        "primal_objective": _wire((objective,), digits)[0],
+        "primal_residuals": _wire(residuals, digits),
+    }
+    if ray is not None:
+        c, a, _ = _program_fractions(program)
+        if (
+            any(v < 0 for v in ray)
+            or any(rational_dot(row, ray) for row in a)
+            or rational_dot(c, ray) >= 0
+        ):
+            _execution_failure()
+        return RationalLinearProgramResult._from_kernel(
+            **values,
+            status="UNBOUNDED",
+            recession_direction=_wire(ray, digits),
+        )
+    dual_objective, slacks = _dual_diagnostics(program, dual)
+    if any(v < 0 for v in slacks) or dual_objective != objective:
+        _execution_failure()
+    return RationalLinearProgramResult._from_kernel(
+        **values,
+        status="OPTIMAL",
+        dual_candidate=_wire(dual, digits),
+        dual_objective=_wire((dual_objective,), digits)[0],
+        dual_slacks=_wire(slacks, digits),
+    )
+
+
+def _expand_vector(
+    indices: tuple[int, ...], values: tuple[Fraction, ...], size: int
+) -> tuple[Fraction, ...]:
+    expanded = [Fraction()] * size
     for index, value in zip(indices, values, strict=True):
         expanded[index] = value
     return tuple(expanded)
 
 
-def _solve_primal(
+def _linear_program_admitted(
     program: StandardFormRationalLinearProgram,
-    objective: tuple[Any, ...],
-    *,
-    symbol_prefix: str,
-) -> tuple[tuple[Any, ...], dict[Any, Any]]:
-    import sympy
-    from sympy.solvers.simplex import InfeasibleLPError, lpmin
-
-    _, coefficients, rhs = _program_arrays(program)
-    symbols = tuple(sympy.symbols(f"{symbol_prefix}0:{len(program.variables)}"))
-    constraints = []
-    for row, expected in zip(coefficients, rhs, strict=True):
-        if any(row):
-            constraints.append(
-                sympy.Eq(_linear(row, symbols), expected, evaluate=False)
-            )
-        elif expected:
-            raise InfeasibleLPError("zero coefficient row has a nonzero rhs")
-    constraints.extend(
-        sympy.Ge(symbol, sympy.S.Zero, evaluate=False) for symbol in symbols
-    )
-    _, solution = lpmin(_linear(objective, symbols), constraints)
-    return symbols, solution
-
-
-def _solve_dual(
-    program: StandardFormRationalLinearProgram,
-) -> tuple[tuple[int, ...], tuple[Any, ...], dict[Any, Any]]:
-    import sympy
-    from sympy.solvers.simplex import lpmax
-
-    objective, all_coefficients, all_rhs = _program_arrays(program)
-    indices = _active_row_indices(program)
-    coefficients = tuple(all_coefficients[index] for index in indices)
-    rhs = tuple(all_rhs[index] for index in indices)
-    symbols = tuple(sympy.symbols(f"_lp_dual0:{len(rhs)}"))
-    constraints = [
-        sympy.Le(
-            _linear(
-                tuple(row[column] for row in coefficients),
-                symbols,
-            ),
-            objective[column],
-            evaluate=False,
-        )
-        for column in range(len(objective))
-    ]
-    _, solution = lpmax(_linear(rhs, symbols), constraints)
-    return indices, symbols, solution
-
-
-def _solve_farkas(
-    program: StandardFormRationalLinearProgram,
-) -> tuple[tuple[int, ...], tuple[Any, ...], tuple[Any, ...], dict[Any, Any]]:
-    import sympy
-    from sympy.solvers.simplex import InfeasibleLPError, lpmin
-
-    _, all_coefficients, all_rhs = _program_arrays(program)
-    indices = _active_row_indices(program)
-    coefficients = tuple(all_coefficients[index] for index in indices)
-    rhs = tuple(all_rhs[index] for index in indices)
-    if not any(rhs):
-        raise InfeasibleLPError("Farkas normalization requires a nonzero rhs")
-    positive = tuple(sympy.symbols(f"_lp_farkas_positive0:{len(rhs)}"))
-    negative = tuple(sympy.symbols(f"_lp_farkas_negative0:{len(rhs)}"))
-    symbols = tuple(
-        positive_value - negative_value
-        for positive_value, negative_value in zip(positive, negative, strict=True)
-    )
-    constraints = [
-        sympy.Ge(
-            _linear(
-                tuple(row[column] for row in coefficients),
-                symbols,
-            ),
-            sympy.S.Zero,
-            evaluate=False,
-        )
-        for column in range(len(program.variables))
-    ]
-    constraints.append(
-        sympy.Eq(
-            _linear(rhs, symbols),
-            -sympy.S.One,
-            evaluate=False,
-        )
-    )
-    constraints.extend(
-        sympy.Ge(symbol, sympy.S.Zero, evaluate=False)
-        for symbol in (*positive, *negative)
-    )
-    _, solution = lpmin(sum((*positive, *negative), sympy.S.Zero), constraints)
-    return indices, positive, negative, solution
-
-
-def _solve_recession_direction(
-    program: StandardFormRationalLinearProgram,
-) -> tuple[tuple[Any, ...], dict[Any, Any]]:
-    import sympy
-    from sympy.solvers.simplex import InfeasibleLPError, lpmin
-
-    objective, coefficients, _ = _program_arrays(program)
-    if not any(objective):
-        raise InfeasibleLPError("a zero objective has no decreasing direction")
-    symbols = tuple(sympy.symbols(f"_lp_ray0:{len(program.variables)}"))
-    constraints = [
-        sympy.Eq(_linear(row, symbols), sympy.S.Zero, evaluate=False)
-        for row in coefficients
-        if any(row)
-    ]
-    constraints.append(
-        sympy.Eq(
-            _linear(objective, symbols),
-            -sympy.S.One,
-            evaluate=False,
-        )
-    )
-    constraints.extend(
-        sympy.Ge(symbol, sympy.S.Zero, evaluate=False) for symbol in symbols
-    )
-    one_objective = tuple(sympy.S.One for _ in symbols)
-    _, solution = lpmin(_linear(one_objective, symbols), constraints)
-    return symbols, solution
-
-
-def _primal_data(
-    program: StandardFormRationalLinearProgram,
-    candidate: tuple[CanonicalRational, ...],
-    *,
-    max_digits: int,
-) -> tuple[CanonicalRational, tuple[CanonicalRational, ...]] | None:
-    values = tuple(value.as_fraction() for value in candidate)
-    objective, residuals = _primal_diagnostics(program, values)
-    # SymPy can return a symbolic/partial point for an infeasible model.  The
-    # diagnostics are already computed while converting that point; reject it
-    # here instead of constructing a result and replaying the whole claim.
-    if any(value < 0 for value in values) or any(residuals):
-        return None
-    wire_objective = _wire_fraction(objective, max_digits=max_digits)
-    wire_residuals = tuple(
-        _wire_fraction(value, max_digits=max_digits) for value in residuals
-    )
-    if wire_objective is None or any(value is None for value in wire_residuals):
-        return None
-    return wire_objective, tuple(value for value in wire_residuals if value is not None)
-
-
-def _dual_data(
-    program: StandardFormRationalLinearProgram,
-    candidate: tuple[CanonicalRational, ...],
-    *,
-    max_digits: int,
-) -> tuple[CanonicalRational, tuple[CanonicalRational, ...]] | None:
-    values = tuple(value.as_fraction() for value in candidate)
-    objective, slacks = _dual_diagnostics(program, values)
-    # A dual point with a negative slack is not an optimality certificate.
-    # This is an integration check on the backend output, not a second solve.
-    if any(value < 0 for value in slacks):
-        return None
-    wire_objective = _wire_fraction(objective, max_digits=max_digits)
-    wire_slacks = tuple(
-        _wire_fraction(value, max_digits=max_digits) for value in slacks
-    )
-    if wire_objective is None or any(value is None for value in wire_slacks):
-        return None
-    return wire_objective, tuple(value for value in wire_slacks if value is not None)
-
-
-def _execution_failure(
-    program: StandardFormRationalLinearProgram,
-) -> NoReturn:
-    raise RuntimeError("exact linear-program execution produced no mathematical result")
-
-
-def _trivial_infeasibility(
-    program: StandardFormRationalLinearProgram,
-) -> RationalLinearProgramResult | None:
-    zero = CanonicalRational.from_integer_ratio(0, 1)
-    for row_index, (row, rhs) in enumerate(
-        zip(program.coefficients, program.rhs, strict=True)
-    ):
-        if any(value.num != "0" for value in row) or rhs.num == "0":
-            continue
-        witness = [zero] * len(program.rhs)
-        witness[row_index] = CanonicalRational.from_integer_ratio(
-            1 if rhs.num.startswith("-") else -1,
-            1,
-        )
-        return RationalLinearProgramResult._from_kernel(
-            program=program,
-            status="INFEASIBLE",
-            farkas_candidate=tuple(witness),
-        )
-    return None
-
-
-def _certify_infeasible(
-    program: StandardFormRationalLinearProgram,
-    *,
-    result_digits: int,
+    admission: LinearAdmission,
 ) -> RationalLinearProgramResult:
-    from sympy.solvers.simplex import InfeasibleLPError, UnboundedLPError
+    from flint import fmpq, fmpq_mat
 
-    try:
-        active_rows, positive_symbols, negative_symbols, farkas_solution = (
-            _solve_farkas(program)
+    digits = admission.result_digits
+    width, height = len(program.variables), len(program.rhs)
+    zero = Fraction()
+    for i, (row, rhs) in enumerate(zip(program.coefficients, program.rhs, strict=True)):
+        if not any(v.num != "0" for v in row) and rhs.num != "0":
+            witness = [zero] * height
+            witness[i] = Fraction(1 if rhs.num.startswith("-") else -1)
+            return _certify_infeasible(program, tuple(witness), digits)
+    columns = admission.columns
+    active_rows = tuple(
+        i
+        for i, row in enumerate(program.coefficients)
+        if any(v.num != "0" for v in row)
+    )
+    zero_ray = next(
+        (
+            j
+            for j, c in enumerate(program.objective)
+            if j not in columns and c.num.startswith("-")
+        ),
+        None,
+    )
+    if not columns:
+        ray = None
+        if zero_ray is not None:
+            ray_values = [zero] * width
+            ray_values[zero_ray] = Fraction(1)
+            ray = tuple(ray_values)
+        return _certify_point(program, (zero,) * width, (zero,) * height, ray, digits)
+
+    def scalar(v: CanonicalRational) -> Any:
+        return fmpq(*v.as_integer_ratio())
+
+    a = fmpq_mat(
+        [[scalar(program.coefficients[i][j]) for j in columns] for i in active_rows]
+    )
+    b = fmpq_mat([[scalar(program.rhs[i])] for i in active_rows])
+    row_indices, inconsistent = independent_rows(a, b)
+    if inconsistent is not None:
+        witness = [zero] * height
+        for i, v in zip(active_rows, _fractions(inconsistent), strict=True):
+            witness[i] = v
+        return _certify_infeasible(program, tuple(witness), digits)
+    reduced_a = fmpq_mat([[a[i, j] for j in range(len(columns))] for i in row_indices])
+    reduced_b = fmpq_mat([[b[i, 0]] for i in row_indices])
+    c = fmpq_mat([[scalar(program.objective[j]) for j in columns]])
+    solved = search_bases(reduced_a, reduced_b, c)
+    if solved is None:
+        augmented = fmpq_mat(
+            [
+                [reduced_a[i, j] for j in range(len(columns))] + [reduced_b[i, 0]]
+                for i in range(len(row_indices))
+            ]
         )
-    except (
-        InfeasibleLPError,
-        UnboundedLPError,
-        AttributeError,
-        IndexError,
-        TypeError,
-        ValueError,
-        ZeroDivisionError,
-    ):
-        return _execution_failure(program)
-    active_farkas = _wire_difference_solution(
-        farkas_solution,
-        positive_symbols,
-        negative_symbols,
-        max_digits=result_digits,
-    )
-    if active_farkas is None:
-        return _execution_failure(program)
-    farkas = _expand_active_row_values(
-        active_farkas,
-        active_rows,
-        source_rows=len(program.rhs),
-    )
-    try:
-        return RationalLinearProgramResult._from_kernel(
-            program=program, status="INFEASIBLE", farkas_candidate=farkas
+        phase_one = search_bases(
+            augmented, reduced_b, fmpq_mat([[0] * len(columns) + [1]]), artificial=True
         )
-    except ValueError:
-        return _execution_failure(program)
+        if phase_one is None:
+            _execution_failure()
+        witness = [zero] * height
+        for i, v in zip(row_indices, _fractions(phase_one[1]), strict=True):
+            witness[active_rows[i]] = -v
+        return _certify_infeasible(program, tuple(witness), digits)
 
-
-def _certify_unbounded(
-    program: StandardFormRationalLinearProgram,
-    *,
-    result_digits: int,
-) -> RationalLinearProgramResult:
-    import sympy
-    from sympy.solvers.simplex import InfeasibleLPError, UnboundedLPError
-
-    feasibility_objective = tuple(sympy.S.One for _ in program.variables)
-    try:
-        feasible_symbols, feasible_solution = _solve_primal(
-            program,
-            feasibility_objective,
-            symbol_prefix="_lp_feasible",
-        )
-        ray_symbols, ray_solution = _solve_recession_direction(program)
-    except (
-        InfeasibleLPError,
-        UnboundedLPError,
-        AttributeError,
-        IndexError,
-        TypeError,
-        ValueError,
-        ZeroDivisionError,
-    ):
-        return _execution_failure(program)
-    feasible = _wire_solution(
-        feasible_solution,
-        feasible_symbols,
-        max_digits=result_digits,
+    basic_point, basic_dual, basic_ray = solved
+    point = _expand_vector(columns, _fractions(basic_point), width)
+    dual = _expand_vector(
+        tuple(active_rows[i] for i in row_indices), _fractions(basic_dual), height
     )
-    ray = _wire_solution(
-        ray_solution,
-        ray_symbols,
-        max_digits=result_digits,
-    )
-    if feasible is None or ray is None:
-        return _execution_failure(program)
-    primal_data = _primal_data(
-        program,
-        feasible,
-        max_digits=result_digits,
-    )
-    if primal_data is None:
-        return _execution_failure(program)
-    primal_objective, primal_residuals = primal_data
-    try:
-        return RationalLinearProgramResult._from_kernel(
-            program=program,
-            status="UNBOUNDED",
-            primal_candidate=feasible,
-            primal_objective=primal_objective,
-            primal_residuals=primal_residuals,
-            recession_direction=ray,
-        )
-    except ValueError:
-        return _execution_failure(program)
-
-
-def _positive_result(
-    program: StandardFormRationalLinearProgram,
-    primal_symbols: tuple[Any, ...],
-    primal_solution: dict[Any, Any],
-    *,
-    result_digits: int,
-) -> RationalLinearProgramResult:
-    from sympy.solvers.simplex import InfeasibleLPError, UnboundedLPError
-
-    primal = _wire_solution(
-        primal_solution,
-        primal_symbols,
-        max_digits=result_digits,
-    )
-    if primal is None:
-        return _certify_infeasible(program, result_digits=result_digits)
-    primal_data = _primal_data(program, primal, max_digits=result_digits)
-    if primal_data is None:
-        return _certify_infeasible(program, result_digits=result_digits)
-    primal_objective, primal_residuals = primal_data
-    primal_result = RationalLinearProgramResult._from_kernel(
-        program=program,
-        status="PRIMAL_FEASIBLE",
-        primal_candidate=primal,
-        primal_objective=primal_objective,
-        primal_residuals=primal_residuals,
-    )
-    if not _active_equations(program):
-        dual = tuple(CanonicalRational.from_integer_ratio(0, 1) for _ in program.rhs)
-    else:
-        try:
-            active_rows, dual_symbols, dual_solution = _solve_dual(program)
-        except (
-            InfeasibleLPError,
-            UnboundedLPError,
-            AttributeError,
-            IndexError,
-            TypeError,
-            ValueError,
-            ZeroDivisionError,
-        ):
-            return primal_result
-        converted_dual = _wire_solution(
-            dual_solution,
-            dual_symbols,
-            max_digits=result_digits,
-        )
-        if converted_dual is None:
-            return primal_result
-        dual = _expand_active_row_values(
-            converted_dual,
-            active_rows,
-            source_rows=len(program.rhs),
-        )
-    dual_data = _dual_data(program, dual, max_digits=result_digits)
-    if dual_data is None:
-        return primal_result
-    dual_objective, dual_slacks = dual_data
-    if dual_objective != primal_objective:
-        return primal_result
-    optimal_result = RationalLinearProgramResult._from_kernel(
-        program=program,
-        status="OPTIMAL",
-        primal_candidate=primal,
-        primal_objective=primal_objective,
-        primal_residuals=primal_residuals,
-        dual_candidate=dual,
-        dual_objective=dual_objective,
-        dual_slacks=dual_slacks,
-    )
-    return optimal_result
+    ray = None
+    if zero_ray is not None or basic_ray is not None:
+        ray_values = [zero] * width
+        if zero_ray is not None:
+            ray_values[zero_ray] = Fraction(1)
+        else:
+            for j, v in zip(columns, _fractions(basic_ray), strict=True):
+                ray_values[j] = v
+        ray = tuple(ray_values)
+    request_checkpoint("linear-program certificate construction")
+    return _certify_point(program, tuple(point), tuple(dual), ray, digits)
 
 
 def linear_program(
     program: StandardFormRationalLinearProgram,
 ) -> RationalLinearProgramResult:
-    import sympy
-    from sympy.solvers.simplex import InfeasibleLPError, UnboundedLPError
-
-    trivial_infeasibility = _trivial_infeasibility(program)
-    if trivial_infeasibility is not None:
-        return trivial_infeasibility
-    result_digits = _result_digit_bound(program)
-    objective, _, _ = _program_arrays(program)
-    backend_objective = (
-        objective if any(objective) else tuple(sympy.S.One for _ in program.variables)
-    )
-    try:
-        primal_symbols, primal_solution = _solve_primal(
-            program,
-            backend_objective,
-            symbol_prefix="_lp_primal",
-        )
-    except InfeasibleLPError:
-        return _certify_infeasible(program, result_digits=result_digits)
-    except UnboundedLPError:
-        return _certify_unbounded(program, result_digits=result_digits)
-    except (AttributeError, IndexError, TypeError, ValueError, ZeroDivisionError):
-        return _execution_failure(program)
-    return _positive_result(
-        program,
-        primal_symbols,
-        primal_solution,
-        result_digits=result_digits,
-    )
+    """Minimize c^T x over Ax=b, x>=0 with exact source certificates."""
+    with linear_execution():
+        return _linear_program_admitted(program, admit_linear_program(program))
 
 
 __all__ = ["linear_program"]

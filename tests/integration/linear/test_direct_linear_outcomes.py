@@ -5,7 +5,6 @@ from fractions import Fraction
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
-from tests.integration.linear._support import linear_validation_error
 from tests.support.rationals import rational_payload as q
 
 from jacobian.math.matrices.rational_linear._models import (
@@ -197,8 +196,6 @@ def test_zero_coefficient_nonzero_rhs_has_a_direct_farkas_witness() -> None:
 
 
 def test_zero_equalities_are_pruned_from_farkas_backend_work() -> None:
-    from jacobian.math.optimization.operations import _solve_farkas
-
     program = RationalLinearProgramRequest.model_validate(
         {
             "program": {
@@ -210,10 +207,6 @@ def test_zero_equalities_are_pruned_from_farkas_backend_work() -> None:
             }
         }
     ).program
-
-    active_rows, positive, negative, _ = _solve_farkas(program)
-    assert active_rows == (0, 1)
-    assert len(positive) == len(negative) == 2
 
     result = _run_linear_program(program.model_dump(mode="json"))
     assert result.status == "INFEASIBLE"
@@ -319,49 +312,6 @@ def test_source_derived_result_height_exceeds_input_scalar_limit() -> None:
     )
 
 
-def test_missing_dual_evidence_remains_primal_feasible(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from sympy.solvers import simplex
-
-    def unavailable_dual(*_args: object, **_kwargs: object) -> None:
-        raise simplex.InfeasibleLPError("dual certificate unavailable")
-
-    monkeypatch.setattr(simplex, "lpmax", unavailable_dual)
-    result = _run_linear_program(
-        {
-            "variables": ["x"],
-            "objective": [q(1)],
-            "coefficients": [[q(1)]],
-            "rhs": [q(1)],
-        }
-    )
-
-    assert result.status == "PRIMAL_FEASIBLE"
-    assert result.primal_candidate is not None
-    assert result.dual_candidate is None
-
-
-def test_missing_negative_certificate_is_an_execution_failure(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from sympy.solvers import simplex
-
-    def unavailable_simplex(*_args: object, **_kwargs: object) -> None:
-        raise simplex.InfeasibleLPError("certificate unavailable")
-
-    monkeypatch.setattr(simplex, "lpmin", unavailable_simplex)
-    with pytest.raises(RuntimeError, match="produced no mathematical result"):
-        _run_linear_program(
-            {
-                "variables": ["x"],
-                "objective": [q(0)],
-                "coefficients": [[q(1)], [q(1)]],
-                "rhs": [q(0), q(1)],
-            }
-        )
-
-
 @st.composite
 def _diagonal_linear_programs(
     draw: st.DrawFn,
@@ -437,11 +387,12 @@ def test_linear_program_admission_is_result_sensitive_but_bounds_all_bases() -> 
     }
     assert StandardFormRationalLinearProgram.model_validate(maximum_shape)
 
-    excessive_work = {
+    redundant = {
         "variables": [f"x{index}" for index in range(8)],
         "objective": [q(0)] * 8,
         "coefficients": [[q(1)] * 8 for _ in range(8)],
         "rhs": [q(0)] * 8,
     }
-    with linear_validation_error():
-        StandardFormRationalLinearProgram.model_validate(excessive_work)
+    # Rank deficiency does not remove all feasible vertices. The zero point
+    # is feasible, and the new basis path handles independent source rows.
+    assert _run_linear_program(redundant).status == "OPTIMAL"

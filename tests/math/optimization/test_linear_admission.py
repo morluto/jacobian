@@ -1,0 +1,88 @@
+"""Derived LP limits, useful boundaries, and one request deadline."""
+
+from time import monotonic
+
+import pytest
+from tests.support.rationals import rational_payload as q
+
+from jacobian._execution import (
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    current_request_execution,
+    request_execution,
+)
+from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.math.optimization import general_linear_program, linear_program
+from jacobian.math.optimization._general_models import GeneralFormRationalLinearProgram
+from jacobian.math.optimization._linear_basis import (
+    LINEAR_PROGRAM_WALL_SECONDS,
+    basis_bounds,
+)
+from jacobian.math.optimization._models import StandardFormRationalLinearProgram
+
+
+@pytest.mark.parametrize(
+    ("n", "m", "code"), [(18, 6, "work_bound"), (24, 12, "basis_bound")]
+)
+def test_standard_admission_reports_measured_costs(n: int, m: int, code: str) -> None:
+    program = StandardFormRationalLinearProgram.model_validate(
+        {
+            "variables": [f"x{i}" for i in range(n)],
+            "objective": [q(1)] * n,
+            "coefficients": [[q(int(i == j % m)) for j in range(n)] for i in range(m)],
+            "rhs": [q(1)] * m,
+        }
+    )
+    with pytest.raises(OperationResourceAdmissionError) as caught:
+        linear_program(program)
+    assert caught.value.errors()[0]["type"] == f"optimization.linear.{code}"
+    count, work = basis_bounds(n, m)
+    assert f"basis_estimate={count}" in str(caught.value)
+    assert f"work_estimate={work}" in str(caught.value)
+    assert "input_value" not in str(caught.value)
+
+
+def test_native_general_deadline_covers_normalization_and_respects_outer_deadline() -> (
+    None
+):
+    program = GeneralFormRationalLinearProgram.model_validate(
+        {
+            "variables": [
+                {"name": "x", "lower_bound": q(0)},
+                {"name": "y", "lower_bound": q(0)},
+            ],
+            "objective": {"sense": "MINIMIZE", "coefficients": [q(1), q(1)]},
+            "constraints": [
+                {
+                    "label": "sum",
+                    "relation": "GE",
+                    "coefficients": [q(1), q(1)],
+                    "rhs": q(1),
+                }
+            ],
+        }
+    )
+    start = monotonic()
+    with request_execution(start):
+        assert general_linear_program(program).status == "OPTIMAL"
+        execution = current_request_execution()
+        assert (
+            execution is not None
+            and execution.deadline == start + LINEAR_PROGRAM_WALL_SECONDS
+        )
+    with request_execution(start):
+        bind_request_deadline(start - 1)
+        with pytest.raises(OperationExecutionTimeoutError):
+            general_linear_program(program)
+
+
+def test_rank_zero_maximum_shape_executes_without_empty_matrix_backend() -> None:
+    program = StandardFormRationalLinearProgram.model_validate(
+        {
+            "variables": [f"x{i}" for i in range(32)],
+            "objective": [q(0)] * 32,
+            "coefficients": [[q(0)] * 32 for _ in range(64)],
+            "rhs": [q(0)] * 64,
+        }
+    )
+    assert linear_program(program).status == "OPTIMAL"

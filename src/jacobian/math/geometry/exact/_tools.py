@@ -7,12 +7,15 @@ from jacobian.math.geometry.exact._models import (
     DistanceGraphRequest,
     DistanceProfileRequest,
     DistanceProfileResult,
+    EuclideanOrbitProfileRequest,
+    EuclideanOrbitProfileResult,
     PinnedLineDistanceRequest,
     PinnedLineDistanceResult,
 )
 from jacobian.math.geometry.exact.operations import (
     distance_graph,
     distance_profile,
+    euclidean_orbit_profile,
     pinned_line_distance_profile,
 )
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
@@ -20,6 +23,12 @@ from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
 def _run_distance_profile(request: DistanceProfileRequest) -> DistanceProfileResult:
     return distance_profile(request.configuration)
+
+
+def _run_euclidean_orbit_profile(
+    request: EuclideanOrbitProfileRequest,
+) -> EuclideanOrbitProfileResult:
+    return euclidean_orbit_profile(request.configuration)
 
 
 def _run_distance_graph(request: DistanceGraphRequest) -> IndexedSimpleUndirectedGraph:
@@ -114,6 +123,35 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="unit_square_profile",
                 description="Distance profile of the unit square.",
+                input=UNIT_SQUARE,
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="geometry.point_configuration.euclidean_orbit_profile.compute",
+        title="Canonicalize a rational point configuration",
+        description=(
+            "For one bounded labelled rational point configuration, return the "
+            "lexicographically least complete squared-distance matrix under "
+            "relabeling, both for isometry and for similarity normalization by "
+            "the least positive squared distance, with deterministic source-to-"
+            "canonical mappings."
+        ),
+        request_type=EuclideanOrbitProfileRequest,
+        result_type=EuclideanOrbitProfileResult,
+        run=_run_euclidean_orbit_profile,
+        tags=(
+            "geometry",
+            "point-configuration",
+            "isometry",
+            "similarity",
+            "canonical-form",
+            "exact",
+        ),
+        examples=(
+            OperationExample(
+                name="unit_square",
+                description="Canonicalize the unit square and its scale class.",
                 input=UNIT_SQUARE,
             ),
         ),

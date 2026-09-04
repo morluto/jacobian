@@ -113,6 +113,23 @@ class DistanceProfileResult(StrictModel):
     entries: tuple[DistanceMultiplicityEntry, ...]
 
 
+class EuclideanOrbitProfileRequest(StrictModel):
+    """Canonicalize one exact rational point configuration."""
+
+    configuration: PointConfiguration
+
+
+class EuclideanOrbitProfileResult(StrictModel):
+    """Canonical unlabeled isometry and similarity forms of one source."""
+
+    configuration: PointConfiguration
+    isometry_form: tuple[tuple[CanonicalRational, ...], ...]
+    isometry_relabeling: tuple[int, ...]
+    similarity_form: tuple[tuple[CanonicalRational, ...], ...]
+    similarity_relabeling: tuple[int, ...]
+    normalizing_squared_distance: CanonicalRational
+
+
 class DistanceGraphRequest(StrictModel):
     """Build the graph induced by a selected squared distance."""
 
@@ -136,6 +153,8 @@ __all__ = [
     "DistanceMultiplicityEntry",
     "DistanceProfileRequest",
     "DistanceProfileResult",
+    "EuclideanOrbitProfileRequest",
+    "EuclideanOrbitProfileResult",
     "LabelledRationalPoint",
     "PinnedLineDistanceRequest",
     "PinnedLineDistanceResult",

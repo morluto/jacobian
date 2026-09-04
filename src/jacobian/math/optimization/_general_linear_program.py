@@ -620,11 +620,107 @@ def _map_standard_result(
     )
 
 
+def _box_program_result(
+    program: GeneralFormRationalLinearProgram,
+) -> GeneralRationalLinearProgramResult | None:
+    """Solve independent source intervals with linear work and exact certificates.
+
+    Source validation establishes nonempty intervals, n <= 32, and D <= 128
+    digits per rational component. Endpoints and multipliers retain D digits;
+    slacks need at most 2D+1. Summing n endpoint/coefficient products needs at
+    most 2nD + ceil(log10(n)) + 1 digits, below the canonical rational limit.
+    No normalized variables, basis enumeration, or solver launch is needed.
+    """
+    if program.constraints:
+        return None
+
+    point: list[Fraction] = []
+    lower_dual: list[Fraction] = []
+    upper_dual: list[Fraction] = []
+    direction = [Fraction()] * len(program.variables)
+    unbounded = False
+    for index, (variable, coefficient) in enumerate(
+        zip(program.variables, program.objective.coefficients, strict=True)
+    ):
+        lower = (
+            variable.lower_bound.as_fraction()
+            if variable.lower_bound is not None
+            else None
+        )
+        upper = (
+            variable.upper_bound.as_fraction()
+            if variable.upper_bound is not None
+            else None
+        )
+        c = coefficient.as_fraction()
+        effective = c if program.objective.sense == "MINIMIZE" else -c
+        active = lower if effective > 0 else upper if effective < 0 else None
+        point.append(
+            active
+            if active is not None
+            else lower
+            if lower is not None
+            else upper
+            if upper is not None
+            else Fraction()
+        )
+        lower_dual.append(c if effective > 0 and lower is not None else Fraction())
+        upper_dual.append(c if effective < 0 and upper is not None else Fraction())
+        if effective != 0 and active is None and not unbounded:
+            direction[index] = Fraction(-1 if effective > 0 else 1)
+            unbounded = True
+
+    objective, residuals, slacks, lower_slacks, upper_slacks = _primal_data(
+        program, tuple(point)
+    )
+    wire_objective = CanonicalRational.from_fraction(objective)
+    primal, wire_residuals, wire_slacks, wire_lower_slacks, wire_upper_slacks = (
+        tuple(CanonicalRational.from_fraction(value) for value in values)
+        for values in (point, residuals, slacks, lower_slacks, upper_slacks)
+    )
+    if unbounded:
+        return GeneralRationalLinearProgramResult._from_kernel(
+            program=program,
+            status="UNBOUNDED",
+            primal_candidate=primal,
+            primal_objective=wire_objective,
+            primal_residuals=wire_residuals,
+            constraint_slacks=wire_slacks,
+            lower_bound_slacks=wire_lower_slacks,
+            upper_bound_slacks=wire_upper_slacks,
+            recession_direction=tuple(
+                CanonicalRational.from_fraction(value) for value in direction
+            ),
+        )
+    return GeneralRationalLinearProgramResult._from_kernel(
+        program=program,
+        status="OPTIMAL",
+        primal_candidate=primal,
+        primal_objective=wire_objective,
+        primal_residuals=wire_residuals,
+        constraint_slacks=wire_slacks,
+        lower_bound_slacks=wire_lower_slacks,
+        upper_bound_slacks=wire_upper_slacks,
+        constraint_dual=(),
+        lower_bound_dual=tuple(
+            CanonicalRational.from_fraction(value) for value in lower_dual
+        ),
+        upper_bound_dual=tuple(
+            CanonicalRational.from_fraction(value) for value in upper_dual
+        ),
+        dual_objective=wire_objective,
+        stationarity_residuals=(CanonicalRational.from_fraction(Fraction()),)
+        * len(program.variables),
+    )
+
+
 def general_linear_program(
     program: GeneralFormRationalLinearProgram,
 ) -> GeneralRationalLinearProgramResult:
     from jacobian.math.optimization.operations import linear_program
 
+    if (box_result := _box_program_result(program)) is not None:
+        return box_result
     if (presolved := _one_variable_interval_result(program)) is not None:
         return presolved
 

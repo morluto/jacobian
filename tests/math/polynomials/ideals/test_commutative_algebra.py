@@ -14,6 +14,9 @@ from jacobian._exact import CanonicalRational
 from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
 from jacobian.math.polynomials.ideals import _singular
 from jacobian.math.polynomials.ideals._models import (
+    MAX_GENERATORS,
+    MAX_INPUT_EXPONENT,
+    MAX_VARS,
     EliminationIdealResult,
     IdealComputationBudget,
     IdealQuotientRequest,
@@ -22,6 +25,7 @@ from jacobian.math.polynomials.ideals._models import (
     IdealRadicalMembershipResult,
     IdealRadicalRequest,
     IdealRadicalResult,
+    IdealSaturationRequest,
 )
 from jacobian.math.polynomials.ideals._tools import TOOLS
 from jacobian.math.polynomials.ideals.operations import (
@@ -151,6 +155,7 @@ def test_catalog_contains_only_audited_operations() -> None:
         "polynomial.ideal.saturation.compute",
         "polynomial.ideal.groebner_basis.compute",
         "polynomial.ideal.minimal_primes.compute",
+        "polynomial.ideal.membership_certificate.compute",
         "polynomial.ideal.normal_form.compute",
         "polynomial.ideal.elimination.compute",
         "polynomial.monomial_ideal.graded_betti_table.compute",
@@ -311,11 +316,29 @@ def test_singular_protocol_classifies_oversized_generators_as_a_limit() -> None:
         )
 
 
-def test_radical_membership_schema_publishes_operation_bounds() -> None:
-    properties = IdealRadicalMembershipRequest.model_json_schema()["properties"]
+def test_radical_operation_schemas_publish_current_operation_bounds() -> None:
+    request_types = (
+        IdealRadicalRequest,
+        IdealRadicalMembershipRequest,
+        IdealSaturationRequest,
+    )
+    for request_type in request_types:
+        properties = request_type.model_json_schema()["properties"]
+        description = properties["ideal"]["description"]
+        assert f"at most {MAX_VARS} variables" in description
+        assert f"at most {MAX_GENERATORS} generators" in description
+        assert f"at most {MAX_INPUT_EXPONENT}" in description
 
-    assert "at most 6 variables" in properties["ideal"]["description"]
-    assert "total degree at most 12" in properties["polynomial"]["description"]
+    properties = IdealRadicalMembershipRequest.model_json_schema()["properties"]
+    assert (
+        f"total degree at most {MAX_INPUT_EXPONENT}"
+        in properties["polynomial"]["description"]
+    )
+    saturation = IdealSaturationRequest.model_json_schema()["properties"]
+    assert (
+        f"total degree at most {MAX_INPUT_EXPONENT}"
+        in saturation["denominator"]["description"]
+    )
 
 
 def test_singular_script_uses_internal_identifiers_not_caller_names() -> None:

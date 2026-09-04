@@ -7,12 +7,14 @@ from typing import Any, Literal
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import format_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.matrices.rational_linear._models import LinearRationalSystem
 
 __all__ = ["inconsistency_witness", "solve"]
 
 MAX_LINEAR_SCALAR_WORK = 100_000_000
+MAX_FLINT_LINEAR_SCALAR_WORK = 500_000_000
+MAX_FLINT_LINEAR_CELLS = 1_000_000
 
 
 @dataclass(frozen=True)
@@ -21,6 +23,7 @@ class _LinearPlan:
     bounds: tuple[Fraction, ...]
     row_count: int
     column_count: int
+    backend: str
 
 
 def _decimal_digits_from_bits(bits: int) -> int:
@@ -58,7 +61,7 @@ def _minor_component_bits(
 
 
 def _reject(message: str) -> None:
-    raise OperationDomainValidationError(
+    raise OperationResourceAdmissionError(
         location=("system",), code="matrix.budget_exceeded", message=message
     )
 
@@ -81,6 +84,7 @@ def _admit_system(
     )
     if outcome == "solution":
         work = rows * (columns + 1) * min(rows, columns + 1)
+        dense_cells = rows * (columns + 1)
         grouped: dict[int, list[Fraction]] = {row: [] for row in range(rows)}
         for (row, _column), fraction in entries.items():
             grouped[row].append(fraction)
@@ -91,6 +95,7 @@ def _admit_system(
         minor_columns = columns + 1
     else:
         work = (columns + 1) * (rows + 1) * min(columns + 1, rows + 1)
+        dense_cells = (columns + 1) * (rows + 1)
         grouped = {column: [] for column in range(columns)}
         for (_row, column), fraction in entries.items():
             grouped[column].append(fraction)
@@ -99,10 +104,15 @@ def _admit_system(
             tuple(bound for bound in bounds if bound),
         )
         minor_columns = rows + 1
-    if work * scalar_digits > MAX_LINEAR_SCALAR_WORK:
+    charged_work = work * scalar_digits
+    if charged_work > MAX_LINEAR_SCALAR_WORK and (
+        charged_work > MAX_FLINT_LINEAR_SCALAR_WORK
+        or dense_cells > MAX_FLINT_LINEAR_CELLS
+    ):
         _reject(
             "sparse exact linear algebra exceeds the "
-            f"{MAX_LINEAR_SCALAR_WORK:,}-unit scalar-work budget"
+            f"{MAX_FLINT_LINEAR_SCALAR_WORK:,}-unit scalar-work budget or "
+            f"{MAX_FLINT_LINEAR_CELLS:,}-cell FLINT envelope"
         )
 
     result_digits = _decimal_digits_from_bits(
@@ -116,6 +126,9 @@ def _admit_system(
         bounds=bounds,
         row_count=rows,
         column_count=columns,
+        backend=(
+            "sympy_sparse" if charged_work <= MAX_LINEAR_SCALAR_WORK else "flint_dense"
+        ),
     )
 
 
@@ -157,11 +170,47 @@ def _solve_sparse(
     return tuple(values)
 
 
+def _solve_flint(
+    entries: dict[tuple[int, int], Fraction],
+    *,
+    row_count: int,
+    column_count: int,
+    rhs: tuple[Fraction, ...],
+) -> tuple[Fraction, ...] | None:
+    """Return one zero-free-variable solution through FLINT's dense QQ RREF."""
+
+    from jacobian.math.matrices._flint import rational_rref
+
+    dense = [[Fraction(0) for _ in range(column_count + 1)] for _ in range(row_count)]
+    for (row, column), value in entries.items():
+        dense[row][column] = value
+    for row, value in enumerate(rhs):
+        dense[row][column_count] = value
+    reduced, rank_value = rational_rref(tuple(tuple(row) for row in dense))
+    pivots = tuple(
+        next(column for column, value in enumerate(row) if value)
+        for row in reduced[:rank_value]
+    )
+    if column_count in pivots:
+        return None
+    values = [Fraction(0)] * column_count
+    for row, pivot in enumerate(pivots):
+        values[pivot] = reduced[row][column_count]
+    return tuple(values)
+
+
 def solve(system: LinearRationalSystem) -> tuple[CanonicalRational, ...] | None:
     """Return one exact solution, or ``None`` when the system is inconsistent."""
 
     plan = _admit_system(system, outcome="solution")
-    values = _solve_sparse(
+    return _solve_admitted(plan)
+
+
+def _solve_admitted(plan: _LinearPlan) -> tuple[CanonicalRational, ...] | None:
+    """Execute one solution plan whose mathematical work was already admitted."""
+
+    kernel = _solve_sparse if plan.backend == "sympy_sparse" else _solve_flint
+    values = kernel(
         plan.entries,
         row_count=plan.row_count,
         column_count=plan.column_count,
@@ -186,7 +235,8 @@ def inconsistency_witness(
             if value
         }
     )
-    values = _solve_sparse(
+    kernel = _solve_sparse if plan.backend == "sympy_sparse" else _solve_flint
+    values = kernel(
         dual,
         row_count=len(system.variables) + 1,
         column_count=plan.row_count,

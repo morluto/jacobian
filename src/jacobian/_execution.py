@@ -7,6 +7,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, replace
+from enum import StrEnum
 from typing import Protocol
 
 
@@ -74,26 +75,67 @@ def request_cancelled() -> bool:
     return event is not None and event.is_set()
 
 
-def request_checkpoint(stage: str) -> None:
+class OperationExecutionStage(StrEnum):
+    """Bounded public phase for timeout and cancellation recovery."""
+
+    REQUEST_PARSING = "request_parsing"
+    OPERATION_EXECUTION = "operation_execution"
+    RESULT_PROJECTION = "result_projection"
+
+
+def request_checkpoint(
+    stage: str, *, public_stage: OperationExecutionStage | None = None
+) -> None:
     """Reject a cancelled or expired request at one documented execution stage."""
 
     if request_cancelled():
-        raise OperationExecutionCancelledError(f"request cancelled {stage}")
+        raise OperationExecutionCancelledError(
+            f"request cancelled {stage}", stage=public_stage or _public_stage(stage)
+        )
     execution = current_request_execution()
     if (
         execution is not None
         and execution.deadline is not None
         and time.monotonic() >= execution.deadline
     ):
-        raise OperationExecutionTimeoutError(f"request deadline expired {stage}")
+        raise OperationExecutionTimeoutError(
+            f"request deadline expired {stage}",
+            stage=public_stage or _public_stage(stage),
+        )
+
+
+def _public_stage(stage: str) -> OperationExecutionStage:
+    if stage == "before parsing":
+        return OperationExecutionStage.REQUEST_PARSING
+    if "projection" in stage or "result construction" in stage:
+        return OperationExecutionStage.RESULT_PROJECTION
+    return OperationExecutionStage.OPERATION_EXECUTION
 
 
 class OperationExecutionTimeoutError(TimeoutError):
     """The request-scoped owner envelope expired."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        stage: OperationExecutionStage = OperationExecutionStage.OPERATION_EXECUTION,
+    ) -> None:
+        self.stage = stage
+        super().__init__(message)
+
 
 class OperationExecutionCancelledError(Exception):
     """The caller cancelled the request during a killable backend."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        stage: OperationExecutionStage = OperationExecutionStage.OPERATION_EXECUTION,
+    ) -> None:
+        self.stage = stage
+        super().__init__(message)
 
 
 def bind_request_deadline(deadline: float) -> None:
@@ -106,6 +148,7 @@ def bind_request_deadline(deadline: float) -> None:
 
 __all__ = [
     "OperationExecutionCancelledError",
+    "OperationExecutionStage",
     "OperationExecutionTimeoutError",
     "RequestCancellationSignal",
     "RequestExecution",

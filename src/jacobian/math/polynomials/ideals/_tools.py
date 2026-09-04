@@ -12,6 +12,8 @@ from jacobian.math.polynomials.ideals._models import (
     IdealContainmentResult,
     IdealEqualityRequest,
     IdealEqualityResult,
+    IdealMembershipCertificateRequest,
+    IdealMembershipCertificateResult,
     IdealMinimalPrimesRequest,
     IdealMinimalPrimesResult,
     IdealNormalFormRequest,
@@ -32,6 +34,7 @@ from jacobian.math.polynomials.ideals.operations import (
     groebner_basis,
     ideal_containment,
     ideal_equality,
+    ideal_membership_certificate,
     ideal_minimal_primes,
     ideal_normal_form,
     ideal_quotient,
@@ -104,6 +107,14 @@ def _run_groebner(request: GroebnerBasisRequest) -> GroebnerBasisResult:
 
 def _run_normal_form(request: IdealNormalFormRequest) -> IdealNormalFormResult:
     return ideal_normal_form(request.ideal, request.polynomial, request.monomial_order)
+
+
+def _run_membership_certificate(
+    request: IdealMembershipCertificateRequest,
+) -> IdealMembershipCertificateResult:
+    return ideal_membership_certificate(
+        request.ideal, request.polynomial, request.cofactor_degree_bound
+    )
 
 
 def _run_elimination(request: EliminationIdealRequest) -> EliminationIdealResult:
@@ -417,6 +428,52 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         ("x", "y"),
                         ((1, 1, (2, 0)),),
                     ),
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="polynomial.ideal.membership_certificate.compute",
+        title="Compute a bounded ideal-membership certificate",
+        description=(
+            "Search all generator cofactors through a declared total-degree bound. "
+            "Return a primitive integral identity m*P = sum(A_i*G_i), or report "
+            "that no such representation exists within that bound."
+        ),
+        request_type=IdealMembershipCertificateRequest,
+        result_type=IdealMembershipCertificateResult,
+        run=_run_membership_certificate,
+        tags=(
+            "commutative-algebra",
+            "ideal-membership",
+            "certificate",
+            "generator-coefficients",
+            "exact",
+        ),
+        discovery_terms=(
+            "ideal representation",
+            "polynomial cofactors",
+            "generator coefficients",
+            "Macaulay matrix",
+        ),
+        examples=(
+            OperationExample(
+                name="bounded_xy_certificate",
+                description=(
+                    "Express x^2-y^2 using the ordered generators x-y and x+y; "
+                    "cofactor total degree is bounded by one."
+                ),
+                input={
+                    "ideal": _ideal(
+                        ("x", "y"),
+                        ((1, 1, (1, 0)), (-1, 1, (0, 1))),
+                        ((1, 1, (1, 0)), (1, 1, (0, 1))),
+                    ),
+                    "polynomial": _polynomial(
+                        ("x", "y"),
+                        ((1, 1, (2, 0)), (-1, 1, (0, 2))),
+                    ),
+                    "cofactor_degree_bound": 1,
                 },
             ),
         ),

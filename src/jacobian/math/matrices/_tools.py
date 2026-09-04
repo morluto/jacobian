@@ -327,7 +327,7 @@ TOOLS = (
     ),
     MathTool(
         operation_id="matrix.rational_linear_system.solve",
-        title="Solve an exact rational linear system",
+        title="Classify a square rational linear system",
         description="Classify and solve a bounded square system Ax=b over QQ, returning a "
         "unique solution only when one exists.",
         request_type=RationalLinearSolveRequest,

@@ -56,7 +56,10 @@ OperationCursor = Annotated[
     Field(
         max_length=128,
         pattern=r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$",
-        description="Continuation cursor from a prior call with the same need.",
+        description=(
+            "Opaque continuation cursor from a prior call with the same need and "
+            "namespace. The page limit may change between calls."
+        ),
     ),
 ]
 
@@ -128,6 +131,23 @@ class OperationInvalidRequestData(StrictModel):
     )
 
 
+class OperationResourceAdmissionData(StrictModel):
+    """Structured recovery data for a valid request outside an owner envelope."""
+
+    code: Literal["RESOURCE_ADMISSION_REJECTED"] = "RESOURCE_ADMISSION_REJECTED"
+    stage: Literal["resource_admission"] = "resource_admission"
+    operation_id: OperationId
+    errors: tuple[OperationValidationIssue, ...] = Field(
+        min_length=1,
+        max_length=64,
+    )
+    hint: str = (
+        "Reduce the mathematical workload, use an applicable exact operation or "
+        "backend with a wider admitted envelope, or record that this release does "
+        "not admit the requested scale."
+    )
+
+
 class OperationDiscoveryError(StrictModel):
     kind: Literal["error"]
     error: OperationDiscoveryErrorDetail
@@ -160,5 +180,6 @@ __all__ = [
     "OperationMatchRequest",
     "OperationNamespace",
     "OperationNeed",
+    "OperationResourceAdmissionData",
     "OperationValidationIssue",
 ]

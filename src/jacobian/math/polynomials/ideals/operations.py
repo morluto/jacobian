@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
+from dataclasses import dataclass
+from math import comb, lcm
 from typing import Any, Literal, NoReturn
 
 import sympy
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalRational
 from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
@@ -16,12 +20,29 @@ from jacobian._execution import (
     current_request_execution,
     request_cancelled,
 )
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.canonical import format_canonical_integer
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.matrices.rational_linear._models import LinearRationalSystem
+from jacobian.math.matrices.rational_linear.operations import (
+    _admit_system,
+    _LinearPlan,
+    _solve_admitted,
+)
+from jacobian.math.matrices.values import (
+    MAX_SPARSE_RATIONAL_MATRIX_NONZEROS,
+    SparseRationalMatrix,
+    SparseRationalMatrixEntry,
+)
 from jacobian.math.polynomials._conversions import (
     rational_polynomial_to_sympy,
     symbols_for_variables,
 )
 from jacobian.math.polynomials.ideals._models import (
+    MAX_CERTIFICATE_COFACTOR_DEGREE,
+    MAX_CERTIFICATE_INPUT_TERMS,
     MAX_COEFFICIENT_DIGITS,
     MAX_GENERATORS,
     MAX_INPUT_EXPONENT,
@@ -35,6 +56,7 @@ from jacobian.math.polynomials.ideals._models import (
     IdealContainmentLedger,
     IdealContainmentResult,
     IdealEqualityResult,
+    IdealMembershipCertificateResult,
     IdealMinimalPrimesResult,
     IdealNormalFormResult,
     IdealQuotientResult,
@@ -61,13 +83,25 @@ from jacobian.math.polynomials.ideals._singular import (
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialIdeal,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
     require_polynomial_budget,
 )
 
+_MAX_CERTIFICATE_COLUMNS = 1_024
+_MAX_CERTIFICATE_ROWS = 2_048
+_MAX_CERTIFICATE_NONZEROS = MAX_SPARSE_RATIONAL_MATRIX_NONZEROS
 
-def _run_admission(admission: Any) -> None:
+
+@dataclass(frozen=True)
+class _MembershipCertificatePlan:
+    columns: tuple[tuple[int, tuple[int, ...]], ...]
+    linear_plan: _LinearPlan
+
+
+def _run_admission[T](admission: Callable[[], T]) -> T:
     try:
-        admission()
+        return admission()
     except OperationDomainValidationError:
         raise
     except PydanticCustomError as exc:
@@ -239,6 +273,236 @@ def _admit_normal_form(
         maximum_exponent=MAX_INPUT_EXPONENT,
         maximum_coefficient_digits=MAX_COEFFICIENT_DIGITS,
         label="polynomial",
+    )
+
+
+def _admit_membership_certificate(
+    ideal: RationalPolynomialIdeal,
+    polynomial: RationalPolynomial,
+    cofactor_degree_bound: int,
+) -> _MembershipCertificatePlan | None:
+    if type(cofactor_degree_bound) is not int or not (
+        0 <= cofactor_degree_bound <= MAX_CERTIFICATE_COFACTOR_DEGREE
+    ):
+        raise _validation_error(
+            f"cofactor degree must be between 0 and {MAX_CERTIFICATE_COFACTOR_DEGREE}"
+        )
+    if polynomial.variables != ideal.variables:
+        raise _validation_error(
+            "certificate polynomial must use the ideal's ordered ring"
+        )
+    aggregate_terms = sum(
+        len(generator.polynomial.terms) for generator in ideal.generators
+    )
+    if len(ideal.variables) > MAX_VARS or len(ideal.generators) > MAX_GENERATORS:
+        raise OperationResourceAdmissionError(
+            location=("ideal",),
+            code="polynomial.ideal_certificate.source_budget_exceeded",
+            message="ideal exceeds the certificate variable or generator bound",
+        )
+    if aggregate_terms > MAX_CERTIFICATE_INPUT_TERMS:
+        raise OperationResourceAdmissionError(
+            location=("ideal",),
+            code="polynomial.ideal_certificate.source_budget_exceeded",
+            message="ideal exceeds the certificate aggregate source-term bound",
+        )
+    try:
+        for generator in ideal.generators:
+            require_polynomial_budget(
+                generator,
+                maximum_terms=MAX_CERTIFICATE_INPUT_TERMS,
+                maximum_exponent=MAX_INPUT_EXPONENT,
+                maximum_coefficient_digits=MAX_COEFFICIENT_DIGITS,
+                label="ideal generator",
+            )
+        require_polynomial_budget(
+            polynomial,
+            maximum_terms=MAX_CERTIFICATE_INPUT_TERMS,
+            maximum_exponent=MAX_INPUT_EXPONENT,
+            maximum_coefficient_digits=MAX_COEFFICIENT_DIGITS,
+            label="polynomial",
+        )
+    except ValueError as exc:
+        raise OperationResourceAdmissionError(
+            location=("ideal",) if "ideal generator" in str(exc) else ("polynomial",),
+            code="polynomial.ideal_certificate.source_budget_exceeded",
+            message=str(exc),
+        ) from exc
+    monomial_count = comb(
+        len(ideal.variables) + cofactor_degree_bound,
+        cofactor_degree_bound,
+    )
+    if monomial_count * len(ideal.generators) > _MAX_CERTIFICATE_COLUMNS:
+        raise OperationResourceAdmissionError(
+            location=("cofactor_degree_bound",),
+            code="polynomial.ideal_certificate.work_budget_exceeded",
+            message="cofactor search exceeds the 1,024-column certificate envelope",
+        )
+    if monomial_count * aggregate_terms > _MAX_CERTIFICATE_NONZEROS:
+        raise OperationResourceAdmissionError(
+            location=("cofactor_degree_bound",),
+            code="polynomial.ideal_certificate.work_budget_exceeded",
+            message=(
+                "cofactor expansion exceeds the "
+                f"{_MAX_CERTIFICATE_NONZEROS:,}-nonzero certificate envelope"
+            ),
+        )
+    if not polynomial.polynomial.terms:
+        return None
+    monomials = _cofactor_monomials(len(ideal.variables), cofactor_degree_bound)
+    columns = tuple(
+        (generator_index, monomial)
+        for generator_index in range(len(ideal.generators))
+        for monomial in monomials
+    )
+    row_exponents = {tuple(term.exponents) for term in polynomial.polynomial.terms}
+    entries: list[SparseRationalMatrixEntry] = []
+    expanded: list[tuple[int, tuple[int, ...], RationalPolynomialTerm]] = []
+    for column, (generator_index, multiplier_exponents) in enumerate(columns):
+        for term in ideal.generators[generator_index].polynomial.terms:
+            product_exponents = tuple(
+                left + right
+                for left, right in zip(
+                    multiplier_exponents, term.exponents, strict=True
+                )
+            )
+            row_exponents.add(product_exponents)
+            expanded.append((column, product_exponents, term))
+            if len(row_exponents) > _MAX_CERTIFICATE_ROWS:
+                raise OperationResourceAdmissionError(
+                    location=("cofactor_degree_bound",),
+                    code="polynomial.ideal_certificate.work_budget_exceeded",
+                    message=(
+                        "cofactor expansion exceeds the 2,048-row certificate envelope"
+                    ),
+                )
+    ordered_rows = tuple(sorted(row_exponents, reverse=True))
+    row_index = {exponents: index for index, exponents in enumerate(ordered_rows)}
+    for column, product_exponents, term in expanded:
+        entries.append(
+            SparseRationalMatrixEntry(
+                row=row_index[product_exponents],
+                column=column,
+                value=term.coefficient,
+            )
+        )
+    target = {
+        tuple(term.exponents): term.coefficient for term in polynomial.polynomial.terms
+    }
+    system = LinearRationalSystem(
+        variables=tuple(f"c{index}" for index in range(len(columns))),
+        coefficients=SparseRationalMatrix(
+            row_count=len(ordered_rows),
+            column_count=len(columns),
+            entries=tuple(sorted(entries, key=lambda entry: (entry.row, entry.column))),
+        ),
+        rhs=tuple(
+            target.get(exponents, CanonicalRational(num="0", den="1"))
+            for exponents in ordered_rows
+        ),
+    )
+    try:
+        linear_plan = _admit_system(system, outcome="solution")
+    except OperationDomainValidationError as exc:
+        issue = exc.errors()[0]
+        raise OperationResourceAdmissionError(
+            location=("cofactor_degree_bound",),
+            code="polynomial.ideal_certificate.linear_work_budget_exceeded",
+            message=str(issue["msg"]),
+        ) from exc
+    return _MembershipCertificatePlan(
+        columns=columns,
+        linear_plan=linear_plan,
+    )
+
+
+def _cofactor_monomials(
+    variable_count: int, degree_bound: int
+) -> tuple[tuple[int, ...], ...]:
+    def exact(total: int, slots: int) -> tuple[tuple[int, ...], ...]:
+        if slots == 1:
+            return ((total,),)
+        return tuple(
+            (first, *tail)
+            for first in range(total + 1)
+            for tail in exact(total - first, slots - 1)
+        )
+
+    return tuple(
+        sorted(
+            (
+                monomial
+                for degree in range(degree_bound + 1)
+                for monomial in exact(degree, variable_count)
+            ),
+            reverse=True,
+        )
+    )
+
+
+def ideal_membership_certificate(
+    ideal: RationalPolynomialIdeal,
+    polynomial: RationalPolynomial,
+    cofactor_degree_bound: int,
+) -> IdealMembershipCertificateResult:
+    """Return an integral source-generator identity within a cofactor bound."""
+
+    plan = _run_admission(
+        lambda: _admit_membership_certificate(ideal, polynomial, cofactor_degree_bound)
+    )
+    if plan is None:
+        zero = RationalPolynomial(
+            variables=ideal.variables,
+            polynomial=SparseRationalPolynomial(terms=()),
+        )
+        return IdealMembershipCertificateResult._from_kernel(
+            ideal=ideal,
+            polynomial=polynomial,
+            cofactor_degree_bound=cofactor_degree_bound,
+            status="CERTIFICATE",
+            multiplier="1",
+            cofactors=tuple(zero for _ in ideal.generators),
+        )
+
+    solution = _solve_admitted(plan.linear_plan)
+    if solution is None:
+        return IdealMembershipCertificateResult._from_kernel(
+            ideal=ideal,
+            polynomial=polynomial,
+            cofactor_degree_bound=cofactor_degree_bound,
+            status="NO_CERTIFICATE_WITHIN_BOUND",
+        )
+
+    fractions = tuple(value.as_fraction() for value in solution)
+    multiplier = lcm(*(value.denominator for value in fractions))
+    cofactor_terms: list[list[RationalPolynomialTerm]] = [[] for _ in ideal.generators]
+    for value, (generator_index, exponents) in zip(
+        fractions, plan.columns, strict=True
+    ):
+        coefficient = value * multiplier
+        if coefficient:
+            cofactor_terms[generator_index].append(
+                RationalPolynomialTerm(
+                    coefficient=CanonicalRational(
+                        num=format_canonical_integer(coefficient.numerator), den="1"
+                    ),
+                    exponents=exponents,
+                )
+            )
+    cofactors = tuple(
+        RationalPolynomial(
+            variables=ideal.variables,
+            polynomial=SparseRationalPolynomial(terms=tuple(terms)),
+        )
+        for terms in cofactor_terms
+    )
+    return IdealMembershipCertificateResult._from_kernel(
+        ideal=ideal,
+        polynomial=polynomial,
+        cofactor_degree_bound=cofactor_degree_bound,
+        status="CERTIFICATE",
+        multiplier=format_canonical_integer(multiplier),
+        cofactors=cofactors,
     )
 
 
@@ -997,6 +1261,7 @@ __all__ = [
     "groebner_basis",
     "ideal_containment",
     "ideal_equality",
+    "ideal_membership_certificate",
     "ideal_minimal_primes",
     "ideal_normal_form",
     "ideal_quotient",

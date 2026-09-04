@@ -37,7 +37,11 @@ from jacobian.math.polynomials.operations import (
 
 
 def __getattr__(name: str) -> object:
-    if name not in {"ideal_containment", "ideal_equality"}:
+    if name not in {
+        "ideal_containment",
+        "ideal_equality",
+        "ideal_membership_certificate",
+    }:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     from jacobian.math.polynomials.ideals import operations
 
@@ -57,6 +61,7 @@ __all__ = [
     "hermite_reduction",
     "ideal_containment",
     "ideal_equality",
+    "ideal_membership_certificate",
     "integer_polynomial_compose",
     "integer_polynomial_content",
     "integer_polynomial_evaluate",

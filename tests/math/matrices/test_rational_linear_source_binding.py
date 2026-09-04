@@ -237,6 +237,35 @@ def test_solution_result_replays_against_the_source() -> None:
         assert residual == bound
 
 
+def test_solution_uses_flint_for_a_dense_support_crossover() -> None:
+    rows = 518
+    columns = 298
+    entries = [
+        {"row": 0, "column": column, "value": q(1000)} for column in range(columns)
+    ]
+    entries.extend(
+        {"row": row, "column": 0, "value": q(1000)} for row in range(1, rows)
+    )
+    system = LinearRationalSystem.model_validate(
+        {
+            "variables": [f"x{column}" for column in range(columns)],
+            "coefficients": {
+                "row_count": rows,
+                "column_count": columns,
+                "entries": entries,
+            },
+            "rhs": [q(1000) for _ in range(rows)],
+        }
+    )
+
+    result = compute_rational_solution(LinearRationalSolutionFindRequest(system=system))
+
+    assert result.status == "SOLUTION"
+    assert result.values is not None
+    assert result.values[0].as_fraction() == 1
+    assert all(value.as_fraction() == 0 for value in result.values[1:])
+
+
 def test_inconsistent_result_replays_witness_relations() -> None:
     """The separating witness annihilates every column with a nonzero pairing."""
 
@@ -575,8 +604,8 @@ def test_sparse_coefficients_reject_noncanonical_storage(
         )
 
 
-def test_sparse_work_budget_rejects_large_fill_envelope() -> None:
-    dimension = 500
+def test_flint_work_budget_rejects_large_fill_envelope() -> None:
+    dimension = 800
     system = LinearRationalSystem.model_validate(
         {
             "variables": [f"x_{index}" for index in range(dimension)],

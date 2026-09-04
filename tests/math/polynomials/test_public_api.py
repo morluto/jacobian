@@ -81,6 +81,7 @@ def test_exact_public_api_symbols() -> None:
         "hermite_reduction",
         "ideal_containment",
         "ideal_equality",
+        "ideal_membership_certificate",
         "integer_polynomial_compose",
         "integer_polynomial_content",
         "integer_polynomial_evaluate",

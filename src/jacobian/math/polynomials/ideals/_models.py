@@ -9,7 +9,7 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalInteger, CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
@@ -29,6 +29,8 @@ MAX_INPUT_EXPONENT = 20
 MAX_COEFFICIENT_DIGITS = 128
 MAX_OUTPUT_GENERATORS = 64
 MAX_OUTPUT_TERMS = 1024
+MAX_CERTIFICATE_INPUT_TERMS = 512
+MAX_CERTIFICATE_COFACTOR_DEGREE = 16
 _RATIONAL_ROOT_PROBES = (0, 1, -1)
 
 MAX_MONOMIAL_IDEAL_VARIABLES = 8
@@ -452,9 +454,10 @@ class IdealRadicalRequest(StrictModel):
 
     ideal: RationalPolynomialIdeal = Field(
         description=(
-            "An ideal in at most 6 variables with at most 16 generators and "
-            "256 aggregate terms; generator total degree is at most 12 and "
-            "coefficient components are at most 128 digits."
+            f"An ideal in at most {MAX_VARS} variables with at most "
+            f"{MAX_GENERATORS} generators and {MAX_INPUT_TERMS} aggregate terms; "
+            f"generator total degree is at most {MAX_INPUT_EXPONENT} and coefficient "
+            f"components are at most {MAX_COEFFICIENT_DIGITS} digits."
         )
     )
     resource_budget: IdealComputationBudget = Field(
@@ -467,16 +470,17 @@ class IdealRadicalMembershipRequest(StrictModel):
 
     ideal: RationalPolynomialIdeal = Field(
         description=(
-            "An ideal in at most 6 variables with at most 16 generators and "
-            "256 aggregate terms; generator total degree is at most 12 and "
-            "coefficient components are at most 128 digits."
+            f"An ideal in at most {MAX_VARS} variables with at most "
+            f"{MAX_GENERATORS} generators and {MAX_INPUT_TERMS} aggregate terms; "
+            f"generator total degree is at most {MAX_INPUT_EXPONENT} and coefficient "
+            f"components are at most {MAX_COEFFICIENT_DIGITS} digits."
         )
     )
     polynomial: RationalPolynomial = Field(
         description=(
-            "A polynomial in the ideal's exact ordered ring, with at most 256 "
-            "terms, total degree at most 12, and coefficient components at most "
-            "128 digits."
+            f"A polynomial in the ideal's exact ordered ring, with at most "
+            f"{MAX_INPUT_TERMS} terms, total degree at most {MAX_INPUT_EXPONENT}, "
+            f"and coefficient components at most {MAX_COEFFICIENT_DIGITS} digits."
         )
     )
 
@@ -494,16 +498,18 @@ class IdealSaturationRequest(StrictModel):
 
     ideal: RationalPolynomialIdeal = Field(
         description=(
-            "An ideal in at most 6 variables with at most 16 generators and "
-            "256 aggregate terms; generator total degree is at most 12 and "
-            "coefficient components are at most 128 digits."
+            f"An ideal in at most {MAX_VARS} variables with at most "
+            f"{MAX_GENERATORS} generators and {MAX_INPUT_TERMS} aggregate terms; "
+            f"generator total degree is at most {MAX_INPUT_EXPONENT} and coefficient "
+            f"components are at most {MAX_COEFFICIENT_DIGITS} digits."
         )
     )
     denominator: RationalPolynomial = Field(
         description=(
             "A single nonzero polynomial d in the dividend's exact ordered "
-            "ring, with at most 256 terms, total degree at most 12, and "
-            "coefficient components at most 128 digits."
+            f"ring, with at most {MAX_INPUT_TERMS} terms, total degree at most "
+            f"{MAX_INPUT_EXPONENT}, and coefficient components at most "
+            f"{MAX_COEFFICIENT_DIGITS} digits."
         )
     )
     resource_budget: IdealComputationBudget = Field(
@@ -832,6 +838,8 @@ def _require_computed_minimal_prime_family(
 
 
 __all__ = [
+    "MAX_CERTIFICATE_COFACTOR_DEGREE",
+    "MAX_CERTIFICATE_INPUT_TERMS",
     "MAX_OUTPUT_GENERATORS",
     "MAX_OUTPUT_TERMS",
     "EliminationIdealRequest",
@@ -844,6 +852,8 @@ __all__ = [
     "IdealContainmentResult",
     "IdealEqualityRequest",
     "IdealEqualityResult",
+    "IdealMembershipCertificateRequest",
+    "IdealMembershipCertificateResult",
     "IdealMinimalPrimesRequest",
     "IdealMinimalPrimesResult",
     "IdealNormalFormRequest",
@@ -939,6 +949,105 @@ def _require_basis_shape(
 
 
 NormalFormMonomialOrder = Literal["lex", "grlex", "grevlex"]
+
+
+class IdealMembershipCertificateRequest(StrictModel):
+    """Search a finite cofactor-degree space for an ideal representation."""
+
+    ideal: RationalPolynomialIdeal = Field(
+        description=(
+            f"An ordered ideal presentation with at most {MAX_VARS} variables, "
+            f"{MAX_GENERATORS} generators, and {MAX_CERTIFICATE_INPUT_TERMS} "
+            f"aggregate source terms. Generator exponents are at most "
+            f"{MAX_INPUT_EXPONENT}, and coefficient components are at most "
+            f"{MAX_COEFFICIENT_DIGITS} digits."
+        )
+    )
+    polynomial: RationalPolynomial = Field(
+        description=(
+            f"The target polynomial, with at most {MAX_CERTIFICATE_INPUT_TERMS} "
+            f"terms, exponents at most {MAX_INPUT_EXPONENT}, and coefficient "
+            f"components at most {MAX_COEFFICIENT_DIGITS} digits."
+        )
+    )
+    cofactor_degree_bound: StrictInt = Field(
+        ge=0,
+        le=MAX_CERTIFICATE_COFACTOR_DEGREE,
+        description=(
+            "Maximum total degree of each generator coefficient. A negative outcome "
+            "means only that no representation exists within this finite bound."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_matching_ring(self) -> Self:
+        if self.polynomial.variables != self.ideal.variables:
+            raise _validation_error(
+                "certificate polynomial must use the ideal's ordered ring"
+            )
+        return self
+
+
+class IdealMembershipCertificateResult(StrictModel):
+    """A source-bound integral identity or exact bounded-search nonexistence."""
+
+    ideal: RationalPolynomialIdeal
+    polynomial: RationalPolynomial
+    cofactor_degree_bound: StrictInt = Field(ge=0, le=MAX_CERTIFICATE_COFACTOR_DEGREE)
+    status: Literal["CERTIFICATE", "NO_CERTIFICATE_WITHIN_BOUND"]
+    multiplier: CanonicalInteger | None = None
+    cofactors: tuple[RationalPolynomial, ...] | None = Field(
+        default=None, max_length=MAX_GENERATORS
+    )
+
+    @model_validator(mode="after")
+    def require_certificate_shape(self) -> Self:
+        produced = self.status == "CERTIFICATE"
+        if produced != (self.multiplier is not None and self.cofactors is not None):
+            raise _validation_error(
+                "certificate fields must agree with the result status"
+            )
+        if not produced:
+            return self
+        assert self.multiplier is not None
+        assert self.cofactors is not None
+        if int(self.multiplier) <= 0:
+            raise _validation_error("certificate multiplier must be positive")
+        if len(self.cofactors) != len(self.ideal.generators):
+            raise _validation_error(
+                "certificate must carry one cofactor per ordered source generator"
+            )
+        if any(
+            cofactor.variables != self.ideal.variables for cofactor in self.cofactors
+        ):
+            raise _validation_error("certificate cofactors must use the source ring")
+        if any(
+            term.coefficient.den != "1"
+            for cofactor in self.cofactors
+            for term in cofactor.polynomial.terms
+        ):
+            raise _validation_error("certificate cofactors must be integral")
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        ideal: RationalPolynomialIdeal,
+        polynomial: RationalPolynomial,
+        cofactor_degree_bound: int,
+        status: Literal["CERTIFICATE", "NO_CERTIFICATE_WITHIN_BOUND"],
+        multiplier: CanonicalInteger | None = None,
+        cofactors: tuple[RationalPolynomial, ...] | None = None,
+    ) -> Self:
+        return cls.model_construct(
+            ideal=ideal,
+            polynomial=polynomial,
+            cofactor_degree_bound=cofactor_degree_bound,
+            status=status,
+            multiplier=multiplier,
+            cofactors=cofactors,
+        )
 
 
 class IdealNormalFormRequest(StrictModel):

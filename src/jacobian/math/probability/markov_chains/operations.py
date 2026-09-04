@@ -16,6 +16,7 @@ from jacobian.math.probability.markov_chains._models import (
     StationaryDistributionResult,
 )
 from jacobian.math.probability.markov_chains.values import (
+    MAX_STATIONARY_STATES,
     TransitionMatrix,
     TransitionMatrixAdmissionError,
     _decimal_digits,
@@ -79,10 +80,10 @@ def mixing_time(
     )
 
 
-def _stationary_distribution_extremes(
+def _closed_communicating_classes(
     matrix: TransitionMatrix,
-) -> list[tuple[tuple[int, ...], tuple[Fraction, ...]]]:
-    """Return one normalized stationary vector for every closed class."""
+) -> tuple[tuple[int, ...], ...]:
+    """Decompose an admitted carrier once in bounded quadratic support work."""
 
     import networkx as nx
 
@@ -107,6 +108,15 @@ def _stationary_distribution_extremes(
         ),
         key=lambda component: component,
     )
+    return tuple(closed_classes)
+
+
+def _stationary_distribution_extremes(
+    matrix: TransitionMatrix, closed_classes: tuple[tuple[int, ...], ...]
+) -> list[tuple[tuple[int, ...], tuple[Fraction, ...]]]:
+    """Solve the admitted classes and embed their vectors in source order."""
+
+    n = len(matrix)
     extremes: list[tuple[tuple[int, ...], tuple[Fraction, ...]]] = []
     from jacobian.math.probability.markov_chains._flint import solve_stationary_class
 
@@ -129,8 +139,8 @@ def stationary_distribution_extremes(
 ) -> list[tuple[tuple[int, ...], tuple[Fraction, ...]]]:
     """Return one normalized stationary vector for every closed class."""
 
-    _admit_stationary(matrix)
-    return _stationary_distribution_extremes(matrix)
+    closed_classes = _admit_stationary(matrix)
+    return _stationary_distribution_extremes(matrix, closed_classes)
 
 
 def stationary_distribution(
@@ -138,8 +148,8 @@ def stationary_distribution(
 ) -> tuple[Fraction, ...]:
     """Return the unique stationary distribution, rejecting non-unique chains."""
 
-    _admit_stationary(matrix)
-    extremes = _stationary_distribution_extremes(matrix)
+    closed_classes = _admit_stationary(matrix)
+    extremes = _stationary_distribution_extremes(matrix, closed_classes)
     if len(extremes) != 1:
         raise ValueError(
             "the Markov chain does not have a unique stationary distribution"
@@ -190,11 +200,26 @@ def _admit_transition_matrix(matrix: TransitionMatrix) -> None:
         _reject(exc.location, exc.reason, str(exc))
 
 
-def _admit_stationary(matrix: TransitionMatrix) -> None:
+def _admit_stationary(matrix: TransitionMatrix) -> tuple[tuple[int, ...], ...]:
     try:
-        require_stationary_distribution_admission(matrix)
+        require_transition_matrix(matrix, maximum_states=MAX_STATIONARY_STATES)
+        if any(
+            max(_decimal_digits(value.numerator), _decimal_digits(value.denominator))
+            > MAX_CANONICAL_RATIONAL_DIGITS
+            for row in matrix
+            for value in row
+        ):
+            _reject(
+                ("matrix",),
+                "stationary_source_height_exceeds_bound",
+                "stationary source probabilities exceed the "
+                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit canonical bound",
+            )
+        closed_classes = _closed_communicating_classes(matrix)
+        require_stationary_distribution_admission(matrix, closed_classes)
     except TransitionMatrixAdmissionError as exc:
         _reject(exc.location, exc.reason, str(exc))
+    return closed_classes
 
 
 def _admit_mixing(
@@ -292,7 +317,9 @@ def mixing_time_result(
             max_steps=max_steps,
             steps_examined=0,
         )
-    extremes = _stationary_distribution_extremes(matrix)
+    extremes = _stationary_distribution_extremes(
+        matrix, _closed_communicating_classes(matrix)
+    )
     stationary = extremes[0][1]
     outcome = mixing_time(matrix, stationary, epsilon, max_steps)
     distance = CanonicalRational.from_integer_ratio(
@@ -314,8 +341,8 @@ def stationary_distribution_result(
 ) -> StationaryDistributionResult:
     """Compute the complete stationary family for a canonical matrix value."""
 
-    _admit_stationary(matrix)
-    extremes = _stationary_distribution_extremes(matrix)
+    closed_classes = _admit_stationary(matrix)
+    extremes = _stationary_distribution_extremes(matrix, closed_classes)
     return StationaryDistributionResult._from_kernel(
         transition_matrix=as_canonical_transition_matrix(matrix),
         extreme_distributions=tuple(

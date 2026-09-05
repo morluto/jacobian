@@ -25,6 +25,7 @@ from jacobian.math.geometry.exact._models import (
     _require_bounded_point_configuration,
     _validation_error,
 )
+from jacobian.math.matrices.values import RationalMatrix
 from jacobian.math.geometry.exact._orbit_bounds import admit_orbit_profile
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
@@ -137,10 +138,12 @@ def euclidean_orbit_profile(
 
     def canonical_rational_matrix(
         form: tuple[tuple[Fraction, ...], ...],
-    ) -> tuple[tuple[CanonicalRational, ...], ...]:
-        return tuple(
-            tuple(CanonicalRational.from_fraction(value) for value in row)
-            for row in form
+    ) -> RationalMatrix:
+        return RationalMatrix(
+            entries=tuple(
+                tuple(CanonicalRational.from_fraction(value) for value in row)
+                for row in form
+            )
         )
 
     return EuclideanOrbitProfileResult(

@@ -10,8 +10,6 @@ from jacobian.math.lattices import hermite_normal_form
 from jacobian.math.lattices._models import (
     HermiteNormalFormRequest,
     HermiteNormalFormResult,
-    _require_lattice_matrix_envelope,
-    _run_admission,
 )
 from jacobian.math.matrices.values import IntegerMatrix
 
@@ -31,12 +29,6 @@ def _matrix(value: Any) -> IntegerMatrix:
 def compute_hermite_normal_form(
     request: HermiteNormalFormRequest,
 ) -> HermiteNormalFormResult:
-    _run_admission(
-        lambda: _require_lattice_matrix_envelope(
-            request.matrix, label="Hermite normal form input"
-        ),
-        location=("matrix",),
-    )
     integer_entries = [
         [parse_canonical_integer(value) for value in row]
         for row in request.matrix.entries

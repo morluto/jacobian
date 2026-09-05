@@ -78,7 +78,22 @@ def hermite_normal_form(entries: list[list[int]]) -> tuple[Any, Any]:
 
     import flint
 
-    return flint.fmpz_mat(entries).hnf(True)
+    from jacobian.math.lattices._hnf_bounds import admit_hermite_normal_form
+
+    admit_hermite_normal_form(entries)
+    rows, columns = len(entries), len(entries[0])
+    # The canonical row HNF of [A | I] is [H | U]. Appending I makes
+    # the rows independent and bounds U by the same minors as H.
+    augmented = flint.fmpz_mat(
+        [row + [int(i == j) for j in range(rows)] for i, row in enumerate(entries)]
+    ).hnf()
+    normal_form = flint.fmpz_mat(
+        [[augmented[i, j] for j in range(columns)] for i in range(rows)]
+    )
+    transformation = flint.fmpz_mat(
+        [[augmented[i, columns + j] for j in range(rows)] for i in range(rows)]
+    )
+    return normal_form, transformation
 
 
 def reduce_basis(

@@ -11,6 +11,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.values import (
+    MAX_INTEGER_MATRIX_ORDER,
     MAX_MATRIX_DIMENSION,
     IntegerMatrix,
     RationalMatrix,
@@ -57,24 +58,29 @@ def _run_admission(admission: Callable[[], None], *, location: tuple[str, ...]) 
 
 
 class HermiteNormalFormRequest(StrictModel):
-    """One bounded integer matrix for row Hermite normal form.
+    """An integer matrix for row HNF, with H = U A and unimodular U.
 
-    Row and column counts are at most ``MAX_MATRIX_DIMENSION``.
+    HNF-specific admission bounds the full augmented matrix [A | I],
+    including coefficient growth and the square transformation.
     """
 
-    matrix: Annotated[
-        IntegerMatrix,
-        WithJsonSchema(integer_matrix_axis_schema(MAX_MATRIX_DIMENSION)),
-    ] = Field(
+    matrix: IntegerMatrix = Field(
         description=(
-            "Integer matrix whose row and column counts are at most "
-            f"{MAX_MATRIX_DIMENSION}."
+            f"Nonempty integer matrix with axes at most {MAX_INTEGER_MATRIX_ORDER} "
+            "and at most 256 digits per scalar. HNF admission bounds the "
+            "augmented matrix, including its square transformation, with "
+            "m*m*(n+m)*(r*d+digits(r!)) by 100,000,000, where "
+            "r=min(m,n) and d is the maximum input decimal width."
         ),
     )
 
     @model_validator(mode="after")
-    def require_admitted_envelope(self) -> Self:
-        _require_lattice_matrix_envelope(self.matrix, label="Hermite normal form input")
+    def require_scalar_envelope(self) -> Self:
+        require_matrix_scalar_digits(
+            self.matrix.entries,
+            maximum=_MAX_LATTICE_INPUT_SCALAR_DIGITS,
+            label="Hermite normal form input",
+        )
         return self
 
 

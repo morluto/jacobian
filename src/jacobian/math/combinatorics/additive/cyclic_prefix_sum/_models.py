@@ -270,7 +270,9 @@ class ForbiddenPrefixSequencingResult(StrictModel):
 
     source: FiniteAbelianSequencingSource
     first_element: CanonicalGroupElement | None
-    forbidden_values: tuple[CanonicalGroupElement, ...]
+    forbidden_values: tuple[CanonicalGroupElement, ...] = Field(
+        max_length=MAX_SEQUENCING_FORBIDDEN_VALUES
+    )
     search_node_limit: StrictInt = Field(ge=1, le=MAX_SEQUENCING_PERMUTATION_NODES)
     status: Literal["FOUND", "EXHAUSTED", "UNKNOWN"]
     ordering: tuple[SequencingPrefixSum, ...] | None = Field(
@@ -299,6 +301,17 @@ class ForbiddenPrefixSequencingResult(StrictModel):
 
     @model_validator(mode="after")
     def require_result_branch_shape(self) -> Self:
+        rank = len(self.source.group.moduli)
+        if rank * (len(self.source.elements) + len(self.forbidden_values) + 1) > MAX_SEQUENCING_COORDINATE_CELLS:
+            raise _validation_error("sequencing_coordinate_work", "retained sequencing coordinates exceed the admitted envelope")
+        canonical_forbidden = tuple(
+            sorted(
+                tuple(coordinate % modulus for coordinate, modulus in zip(value, self.source.group.moduli, strict=True))
+                for value in self.forbidden_values
+            )
+        ) if all(len(value) == rank for value in self.forbidden_values) else ()
+        if canonical_forbidden != self.forbidden_values or len(set(self.forbidden_values)) != len(self.forbidden_values):
+            raise _validation_error("sequencing_forbidden_canonical", "forbidden values must be reduced, sorted, distinct source-group elements")
         if self.first_element is not None:
             if len(self.first_element) != len(self.source.group.moduli) or self.first_element not in self.source.elements:
                 raise _validation_error("sequencing_first_element_membership", "first_element must be a source element with the source rank")
@@ -323,6 +336,12 @@ class ForbiddenPrefixSequencingResult(StrictModel):
                     "sequencing_found_elements",
                     "each ordering row element must equal its indexed source element",
                 )
+            if any(
+                len(row.prefix_sum) != rank
+                or any(coordinate < 0 or coordinate >= modulus for coordinate, modulus in zip(row.prefix_sum, self.source.group.moduli, strict=True))
+                for row in self.ordering
+            ):
+                raise _validation_error("sequencing_prefix_sum_shape", "every prefix sum must be a reduced element of the source group")
             if self.first_element is not None and self.ordering[0].element != self.first_element:
                 raise _validation_error(
                     "sequencing_found_first_element",

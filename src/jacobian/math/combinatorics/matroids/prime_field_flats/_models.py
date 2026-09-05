@@ -171,6 +171,10 @@ class PrimeFieldRowMatrix(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_matrix(self) -> Self:
+        from sympy import isprime
+
+        if not isprime(self.prime):
+            raise _validation_error("matrix_prime", "matrix prime must be prime")
         if any(
             len(row) != self.columns or any(value >= self.prime for value in row)
             for row in self.entries

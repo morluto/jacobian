@@ -52,7 +52,6 @@ MAX_CHARACTER_SUM_REMAINDER_COEFFICIENT_BITS = MAX_SPECTRAL_REMAINDER_COEFFICIEN
 MAX_CHARACTER_SUM_REMAINDER_COEFFICIENT_DIGITS = (
     MAX_CHARACTER_SUM_REMAINDER_COEFFICIENT_BITS * 30_103 + 99_999
 ) // 100_000 + 1
-MAX_CHARACTER_SUM_RESULT_BYTES = 5 * 1024 * 1024
 MAX_CHARACTER_SUM_PREFIX_WORK = 1_048_576
 
 
@@ -838,7 +837,6 @@ class _CharacterSumIntervalProfileWork:
     cyclotomic_coefficient_bits: int
     cyclotomic_intermediate_bits: int
     remainder_coefficient_bits: int
-    result_bytes_estimate: int
 
 
 def _character_sum_interval_profile_work(
@@ -850,7 +848,7 @@ def _character_sum_interval_profile_work(
     sequence, frequencies, intervals) from derived mathematical work:
     group rank/moduli via the exponent, cyclotomic degree and construction
     costs, frequency-interval cells, total character-term visits, prefix-table
-    work, coefficient growth after monic reduction, and canonical result bytes.
+    work, and coefficient growth after monic reduction.
     Every check occurs before SymPy is invoked. Budgets are conservative
     over-approximations matching the spectral-pair construction analysis.
     """
@@ -911,15 +909,6 @@ def _character_sum_interval_profile_work(
     if remainder_coefficient_bits > MAX_CHARACTER_SUM_REMAINDER_COEFFICIENT_BITS:
         raise ValueError("character-sum remainder intermediate exceeds its bit bound")
 
-    # Conservative result-bytes upper bound: each cell stores phi coefficients each
-    # up to MAX_REMAINDER_DIGITS characters plus JSON overhead, plus frequencies
-    # and intervals. The 64-byte per-cell overhead covers brackets, commas, keys,
-    # and interval/frequency framing.
-    per_cell_digits = degree * (MAX_CHARACTER_SUM_REMAINDER_COEFFICIENT_DIGITS + 1)
-    result_bytes_estimate = cells * (per_cell_digits + 64)
-    if result_bytes_estimate > MAX_CHARACTER_SUM_RESULT_BYTES:
-        raise ValueError("character-sum result bytes exceed their bound")
-
     return _CharacterSumIntervalProfileWork(
         group_exponent=exponent,
         cyclotomic_degree=degree,
@@ -930,7 +919,6 @@ def _character_sum_interval_profile_work(
         cyclotomic_coefficient_bits=degree + 1,
         cyclotomic_intermediate_bits=cyclotomic_intermediate_bits,
         remainder_coefficient_bits=remainder_coefficient_bits,
-        result_bytes_estimate=result_bytes_estimate,
     )
 
 

@@ -122,7 +122,11 @@ class GaussianRealificationResult(StrictModel):
     real_part: RationalPolynomial
     imag_part: RationalPolynomial
     substitution: str = Field(
-        description="Human-readable substitution, e.g. 'z = x + i*y'.",
+        description=(
+            "Display-only, non-evaluated substitution with the exact grammar "
+            "'<source> = <first-target> + i*<second-target>', derived from "
+            "the retained variables."
+        ),
         max_length=128,
     )
 

@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import time
 from itertools import combinations
 from math import comb
 
-from jacobian._execution import request_checkpoint
+from jacobian._execution import (
+    bind_request_deadline,
+    current_request_execution,
+    request_checkpoint,
+    request_execution,
+)
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.zero_sum_atoms._models import (
     MAX_ATOM_EDGES,
@@ -20,6 +26,8 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 )
 
 __all__ = ["construct_zero_sum_atom_hypergraph"]
+
+_OWNER_DEADLINE_SECONDS = 3600.0
 
 
 def _reject(location: tuple[str | int, ...], code: str, message: str) -> None:
@@ -72,9 +80,14 @@ def _admit_zero_sum_atom_source(source: ZeroSumAtomSource) -> None:
             "zero_sum_atom.result_edge_bound",
             "atom antichain exceeds the exact result envelope",
         )
-    coordinate_work = (
-        len(source.group.moduli) * element_count * (1 << max(0, element_count - 1))
-    )
+    axis_count = len(source.group.moduli)
+    if axis_count > MAX_ATOM_SUBSET_CHECKS:
+        _reject(
+            ("source", "group", "moduli"),
+            "zero_sum_atom.axis_count",
+            "retained group axes exceed the exact result envelope",
+        )
+    coordinate_work = axis_count * element_count * (1 << max(0, element_count - 1))
     if coordinate_work > MAX_ATOM_SUBSET_CHECKS:
         _reject(
             ("source", "group", "moduli"),
@@ -97,6 +110,13 @@ def construct_zero_sum_atom_hypergraph(
     produce this result.
     """
 
+    execution = current_request_execution()
+    if execution is None:
+        with request_execution(time.monotonic()):
+            return construct_zero_sum_atom_hypergraph(source)
+    if execution.deadline is None:
+        bind_request_deadline(execution.started_at + _OWNER_DEADLINE_SECONDS)
+    request_checkpoint("before zero-sum atom admission")
     _admit_zero_sum_atom_source(source)
     elements = source.elements
     moduli = source.group.moduli

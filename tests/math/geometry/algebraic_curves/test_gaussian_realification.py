@@ -6,7 +6,6 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.algebraic_curves._gaussian_realification import (
     GaussianComplexCoefficient,
     GaussianRealificationRequest,
@@ -15,7 +14,6 @@ from jacobian.math.geometry.algebraic_curves._gaussian_realification import (
     gaussian_realification,
 )
 from jacobian.math.geometry.algebraic_curves._tools import TOOLS
-from jacobian.math.polynomials.values import RationalPolynomial
 
 
 def _cr(real: str, imag: str = "0") -> GaussianComplexCoefficient:
@@ -228,7 +226,7 @@ def test_json_round_trip():
 
 
 def test_admission_rejects_excessive_degree():
-    with pytest.raises(ValidationError, match="64|less_than_equal|degree"):
+    with pytest.raises(ValidationError, match=r"64|less_than_equal|degree"):
         UnivariateGaussianPolynomial(
             variable="z",
             terms=(

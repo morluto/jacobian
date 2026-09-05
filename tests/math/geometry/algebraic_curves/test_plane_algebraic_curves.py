@@ -113,6 +113,7 @@ def test_catalog_contains_only_audited_operations() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
         "algebraic_geometry.affine_plane_curve.check",
         "algebraic_geometry.conic.rational_parametrization.compute",
+        "algebraic_geometry.gaussian_polynomial.realification.compute",
         "algebraic_geometry.plane_curve.projective_closure.compute",
         "algebraic_geometry.projective_plane_curve.singularity_profile.compute",
         "algebraic_geometry.projective_curve.affine_chart.compute",

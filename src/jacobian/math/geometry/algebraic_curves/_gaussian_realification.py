@@ -174,9 +174,17 @@ def _admit_gaussian_realification(
     target_variables: tuple[PolynomialVariable, PolynomialVariable],
 ) -> None:
     if len(set(target_variables)) != 2:
-        raise OperationDomainValidationError(location=("target_variables",), code="algebraic_geometry.gaussian_target_variables_not_unique", message="target variables must be distinct")
+        raise OperationDomainValidationError(
+            location=("target_variables",),
+            code="algebraic_geometry.gaussian_target_variables_not_unique",
+            message="target variables must be distinct",
+        )
     if poly.variable in target_variables:
-        raise OperationDomainValidationError(location=("target_variables",), code="algebraic_geometry.gaussian_target_collides_with_source", message="target variables must be distinct from the source variable")
+        raise OperationDomainValidationError(
+            location=("target_variables",),
+            code="algebraic_geometry.gaussian_target_collides_with_source",
+            message="target variables must be distinct from the source variable",
+        )
     # Source bounds already enforced by model, but check predicted expansion
     degree = max((t.exponent for t in poly.terms), default=0)
     term_count = len(poly.terms)

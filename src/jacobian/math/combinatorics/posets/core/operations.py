@@ -263,9 +263,7 @@ def linear_extension_count(poset: FinitePoset) -> LinearExtensionCountResult:
         )
         count = sum(counts[mask ^ (1 << index[element])] for element in removable)
         counts[mask] = count
-    return LinearExtensionCountResult(
-        count=counts[subset_count - 1],
-    )
+    return LinearExtensionCountResult._from_kernel(counts[subset_count - 1])
 
 
 def mobius_function(

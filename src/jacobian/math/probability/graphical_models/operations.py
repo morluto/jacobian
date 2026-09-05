@@ -100,9 +100,37 @@ def variable_elimination(
         product = _multiply_all(relevant)
         working.append(factor_marginalize(product, variable))
     result = _multiply_all(working)
-    if result.variables != query_variables:
+    if set(result.variables) != set(query_variables):
         raise RuntimeError("variable elimination did not produce the bound query scope")
-    return result
+    return _reindex_factor(result, query_variables)
+
+
+def _reindex_factor(factor: Factor, target: tuple[int, ...]) -> Factor:
+    """Transport a factor into an exact target variable order.
+
+    Factor scopes are ordered; the table is lexicographic in that order.
+    A singleton product preserves its source order, so the final scope can
+    carry the right axes in a different valid order than the sorted query.
+    Reindexing permutes the table exactly instead of relabeling it.
+    """
+
+    if factor.variables == target:
+        return factor
+    assignment_for = _index_to_assignment
+    table: list[CanonicalRational] = []
+    for index in range(scope_size(target, factor.domain_sizes)):
+        assignment = assignment_for(index, target, factor.domain_sizes)
+        value_for = dict(zip(target, assignment, strict=True))
+        source_assignment = tuple(value_for[variable] for variable in factor.variables)
+        source_index = _assignment_to_index(
+            source_assignment, factor.variables, factor.domain_sizes
+        )
+        table.append(factor.table[source_index])
+    return Factor(
+        variables=target,
+        domain_sizes=factor.domain_sizes,
+        table=tuple(table),
+    )
 
 
 def d_separation(

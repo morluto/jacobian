@@ -7,7 +7,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 from pydantic import ValidationError
 
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.p_adic._models import (
     HenselFactorLiftRequest,
@@ -43,7 +43,9 @@ class TestHenselRootLifting:
 
     def test_native_surface_accepts_canonical_polynomial_value(self) -> None:
         poly = IntegerPolynomial(coefficients=("1", "0", "1"))
-        assert hensel_lift_root(poly, 5, 2, 3).lifted_root == 57
+        assert (
+            parse_canonical_integer(hensel_lift_root(poly, 5, 2, 3).lifted_root) == 57
+        )
         assert find_padic_roots(poly, 5, 3).root_count == 2
 
     def test_lift_simple_root(self) -> None:
@@ -53,7 +55,7 @@ class TestHenselRootLifting:
             HenselRootRequest(polynomial=poly, prime=5, root_mod_p=2, precision=3)
         )
         assert result.is_simple_root
-        assert (result.lifted_root**2 + 1) % 125 == 0
+        assert (parse_canonical_integer(result.lifted_root) ** 2 + 1) % 125 == 0
 
     def test_lift_mod_p_squared(self) -> None:
         """Lift root to mod p^2."""
@@ -62,7 +64,7 @@ class TestHenselRootLifting:
             HenselRootRequest(polynomial=poly, prime=5, root_mod_p=1, precision=2)
         )
         assert result.is_simple_root
-        assert (result.lifted_root**3 - 1) % 25 == 0
+        assert (parse_canonical_integer(result.lifted_root) ** 3 - 1) % 25 == 0
 
     def test_non_root_rejected(self) -> None:
         """A non-root mod p should be rejected."""
@@ -79,8 +81,9 @@ class TestHenselRootLifting:
         result = _hensel_lift_root(
             HenselRootRequest(polynomial=poly, prime=7, root_mod_p=2, precision=4)
         )
-        assert 0 <= result.lifted_root < 7**4
-        assert (result.lifted_root**2 + 3) % (7**4) == 0
+        lifted = parse_canonical_integer(result.lifted_root)
+        assert 0 <= lifted < 7**4
+        assert (lifted**2 + 3) % (7**4) == 0
 
 
 class TestPAdicRoots:
@@ -94,7 +97,7 @@ class TestPAdicRoots:
         )
         assert result.root_count >= 1
         for root in result.roots:
-            assert (root.root**3 - 1) % 25 == 0
+            assert (parse_canonical_integer(root.root) ** 3 - 1) % 25 == 0
 
     def test_find_roots_no_roots(self) -> None:
         """Find roots of x^2 + 1 mod 3 (no roots mod 3)."""
@@ -130,7 +133,7 @@ class TestPAdicRoots:
         )
         assert result.polynomial == poly
         assert result.root_mod_p == 2
-        assert result.lifted_root % 5 == 2
+        assert parse_canonical_integer(result.lifted_root) % 5 == 2
 
         roundtrip = HenselRootResult.model_validate(result.model_dump())
         assert roundtrip == result
@@ -152,7 +155,7 @@ class TestPAdicRoots:
             )
         )
         forged = result.model_dump()
-        forged["roots"][0]["root"] = 25
+        forged["roots"][0]["root"] = "25"
         with pytest.raises(ValidationError) as exc_info:
             PAdicRootsResult.model_validate(forged)
         assert (
@@ -175,7 +178,7 @@ class TestPAdicRoots:
             PAdicRootsRequest(polynomial=poly, prime=7, precision=3)
         )
         for root in result.roots:
-            assert (root.root**3 - 1) % (7**3) == 0
+            assert (parse_canonical_integer(root.root) ** 3 - 1) % (7**3) == 0
 
 
 def _wire_poly(*ascending: int) -> IntegerPolynomial:

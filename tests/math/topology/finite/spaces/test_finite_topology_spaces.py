@@ -30,7 +30,7 @@ from jacobian.math.topology.finite.spaces._tools import (
 
 
 def _sierpinski() -> FiniteTopologicalSpace:
-    """Sierpinski space: points {a, b}, a <= b (open sets: {}, {a}, {a,b})."""
+    """Sierpinski space: points {a, b}, a <= b (open sets: {}, {b}, {a,b})."""
     return FiniteTopologicalSpace(
         points=("a", "b"),
         preorder=((0,), (0, 1)),
@@ -67,14 +67,14 @@ def test_catalog_contains_only_audited_agent_outcomes() -> None:
 
 class TestInterior:
     def test_sierpinski_interior_a(self) -> None:
-        # Interior of {a}: {a} is open, so interior = {a}.
+        # Interior of {a}: {a} is not open (minimal nbhd of a is {a,b}), so interior = {}.
         result = _interior(SubsetRequest(space=_sierpinski(), subset=(0,)))
-        assert result.interior == (0,)
+        assert result.interior == ()
 
     def test_sierpinski_interior_b(self) -> None:
-        # Interior of {b}: {b} is not open (its minimal nbhd is {a,b}), so interior = {}.
+        # Interior of {b}: {b} is open (minimal nbhd of b is {b}), so interior = {b}.
         result = _interior(SubsetRequest(space=_sierpinski(), subset=(1,)))
-        assert result.interior == ()
+        assert result.interior == (1,)
 
     def test_sierpinski_interior_ab(self) -> None:
         result = _interior(SubsetRequest(space=_sierpinski(), subset=(0, 1)))
@@ -88,13 +88,13 @@ class TestInterior:
 
 class TestClosure:
     def test_sierpinski_closure_a(self) -> None:
-        # Closure of {a}: up-set of a = {b} (since b >= a in specialization).
+        # Closure of {a}: down-set of a = {a} (preorder row).
         result = _closure(SubsetRequest(space=_sierpinski(), subset=(0,)))
-        assert result.closure == (0, 1)
+        assert result.closure == (0,)
 
     def test_sierpinski_closure_b(self) -> None:
         result = _closure(SubsetRequest(space=_sierpinski(), subset=(1,)))
-        assert result.closure == (1,)
+        assert result.closure == (0, 1)
 
 
 # ---------------------------------------------------------------------------
@@ -104,9 +104,9 @@ class TestClosure:
 
 class TestBoundary:
     def test_sierpinski_boundary_a(self) -> None:
-        # Closure({a}) = {a,b}, Interior({a}) = {a}. Boundary = {b}.
+        # Closure({a}) = {a}, Interior({a}) = {}. Boundary = {a}.
         result = _boundary(SubsetRequest(space=_sierpinski(), subset=(0,)))
-        assert result.boundary == (1,)
+        assert result.boundary == (0,)
 
 
 # ---------------------------------------------------------------------------

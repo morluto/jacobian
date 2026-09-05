@@ -424,7 +424,7 @@ def find_padic_roots(
             multiple_residues.append(r)
             continue
         lifted = _hensel_lift_root(coeffs, p, r, k)
-        lifted_roots.append(PAdicRootEntry(root=lifted, root_type="SIMPLE"))
+        lifted_roots.append(PAdicRootEntry._from_kernel(lifted))
 
     return PAdicRootsResult._from_kernel(
         polynomial, prime, precision, tuple(lifted_roots), tuple(multiple_residues)

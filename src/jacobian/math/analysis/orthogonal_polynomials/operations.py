@@ -9,6 +9,7 @@ from jacobian.math._rational_height import RationalHeight
 from jacobian.math.analysis.orthogonal_polynomials._jacobi import (
     jacobi_matrix_from_family,
     require_jacobi_matrix_admission,
+    require_three_term_identities,
 )
 from jacobian.math.analysis.orthogonal_polynomials.values import (
     MAX_HANKEL_ORDER,
@@ -434,6 +435,13 @@ def recurrence_coefficients_from_family(
                 "recurrence coefficients exceed the canonical rational "
                 "digit limit for this family",
             )
+    try:
+        require_three_term_identities(family, alphas, betas)
+    except ValueError as exc:
+        raise MomentsOrthogonalAdmissionError(
+            "incompatible_family",
+            str(exc),
+        ) from None
     return ThreeTermRecurrence._from_kernel(
         alpha=tuple(_from_fraction(a) for a in alphas),
         beta=tuple(_from_fraction(b) for b in betas),

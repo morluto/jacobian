@@ -11,6 +11,7 @@ from jacobian._models import StrictModel
 
 MAX_RANK = 8
 MAX_REFLECTION_COORDINATE = ((1 << 53) - 1) // (1 + 3 * MAX_RANK)
+MAX_REFLECTION_REPRESENTABLE = (1 << 53) - 1
 MAX_POSITIVE_ROOTS = 120
 MAX_ROOT_COORDINATE = 6
 MAX_COXETER_NUMBER = 30
@@ -210,7 +211,7 @@ class SimpleReflectionRequest(StrictModel):
     vector: tuple[
         Annotated[
             int,
-            Field(ge=-MAX_REFLECTION_COORDINATE, le=MAX_REFLECTION_COORDINATE),
+            Field(ge=-MAX_REFLECTION_REPRESENTABLE, le=MAX_REFLECTION_REPRESENTABLE),
         ],
         ...,
     ] = Field(
@@ -218,8 +219,11 @@ class SimpleReflectionRequest(StrictModel):
         description=(
             "Root-lattice coordinates in the matrix's simple-root basis; "
             "length must equal the Cartan-matrix rank, and each coordinate "
-            f"must lie in [-{MAX_REFLECTION_COORDINATE}, "
-            f"{MAX_REFLECTION_COORDINATE}]."
+            f"must lie in [-{MAX_REFLECTION_REPRESENTABLE}, "
+            f"{MAX_REFLECTION_REPRESENTABLE}]. Inputs within "
+            f"[-{MAX_REFLECTION_COORDINATE}, {MAX_REFLECTION_COORDINATE}] "
+            "are guaranteed a representable image; larger representable "
+            "inputs are admitted when their exact reflection also fits."
         ),
     )
     simple_index: int = Field(
@@ -242,7 +246,7 @@ class SimpleReflectionResult(StrictModel):
     @model_validator(mode="after")
     def require_reflection_shape(self) -> Self:
         if len(self.reflected_vector) != len(self.vector) or any(
-            abs(coordinate) > MAX_REFLECTION_COORDINATE
+            abs(coordinate) > MAX_REFLECTION_REPRESENTABLE
             for coordinate in self.reflected_vector
         ):
             raise _validation_error(

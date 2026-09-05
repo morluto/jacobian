@@ -15,7 +15,7 @@ from jacobian.math.groups.root_systems._cartan import (
 from jacobian.math.groups.root_systems._models import (
     MAX_POSITIVE_ROOTS,
     MAX_RANK,
-    MAX_REFLECTION_COORDINATE,
+    MAX_REFLECTION_REPRESENTABLE,
     PositiveRootsResult,
     RootComponentData,
     RootSystemDataResult,
@@ -189,7 +189,7 @@ def simple_reflection(
             message="vector length must match rank",
         )
     if any(
-        type(coordinate) is not int or abs(coordinate) > MAX_REFLECTION_COORDINATE
+        type(coordinate) is not int or abs(coordinate) > MAX_REFLECTION_REPRESENTABLE
         for coordinate in vector
     ):
         raise OperationDomainValidationError(
@@ -204,6 +204,12 @@ def simple_reflection(
             simple_index,
         )
     )
+    if any(abs(coordinate) > MAX_REFLECTION_REPRESENTABLE for coordinate in reflected):
+        raise OperationDomainValidationError(
+            location=("reflected_vector",),
+            code="root_system.reflected_vector_out_of_range",
+            message="reflection image exceeds the interoperable root-lattice axis",
+        )
     return SimpleReflectionResult._from_kernel(matrix, vector, simple_index, reflected)
 
 

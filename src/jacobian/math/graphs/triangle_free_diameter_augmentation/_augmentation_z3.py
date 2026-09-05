@@ -685,7 +685,9 @@ def solve_triangle_free_diameter_augmentation_values(  # noqa: C901
             else fallback("request expired during validation")
         )
     except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
-        raise RuntimeError("bounded augmentation worker returned malformed output") from exc
+        raise RuntimeError(
+            "bounded augmentation worker returned malformed output"
+        ) from exc
 
 
 # Re-export helper for tests

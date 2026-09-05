@@ -362,7 +362,10 @@ def test_admission_bounds_candidate_and_reachability() -> None:
 
     # A target already met by the source returns before Z3-only reachability
     # admission, even though the backend encoding would exceed its cap.
-    assert triangle_free_diameter_augmentation(g, 12, resource_budget=budget).status == "EXACT"
+    assert (
+        triangle_free_diameter_augmentation(g, 12, resource_budget=budget).status
+        == "EXACT"
+    )
 
 
 def test_empty_graph_rejected() -> None:

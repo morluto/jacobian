@@ -8,6 +8,7 @@ from jacobian.math.combinatorics.matroids.prime_field_flats._models import (
     PrimeFieldFlatOrbitRepresentative,
     PrimeFieldFlatRankInterval,
     PrimeFieldFlatSymmetryGenerator,
+    PrimeFieldRowMatrix,
     PrimeFieldVectorConfiguration,
 )
 from jacobian.math.combinatorics.matroids.prime_field_flats.operations import (
@@ -22,6 +23,7 @@ __all__ = [
     "PrimeFieldFlatOrbitRepresentative",
     "PrimeFieldFlatRankInterval",
     "PrimeFieldFlatSymmetryGenerator",
+    "PrimeFieldRowMatrix",
     "PrimeFieldVectorConfiguration",
     "classify_clause_constrained_prime_field_flats",
 ]

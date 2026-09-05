@@ -75,6 +75,13 @@ def _require_raw_envelope(data: object) -> None:
                 raise _validation_error(
                     "raw_matrix_bound", "candidate matrix exceeds the raw row envelope"
                 )
+        for key, maximum in (
+            ("coordinate_axis", MAX_PRIME_FIELD_FLAT_AMBIENT_DIMENSION),
+            ("vector_labels", MAX_PRIME_FIELD_FLAT_CANDIDATES),
+        ):
+            value = candidates.get(key)
+            if isinstance(value, (list, tuple)) and len(value) > maximum:
+                raise _validation_error("raw_container_bound", f"{key} exceeds the raw envelope")
     for key, maximum in (
         ("clauses", MAX_PRIME_FIELD_FLAT_CLAUSES),
         ("symmetry_generators", MAX_PRIME_FIELD_FLAT_SYMMETRY_GENERATORS),
@@ -84,6 +91,26 @@ def _require_raw_envelope(data: object) -> None:
             raise _validation_error(
                 "raw_container_bound", f"{key} exceeds the raw envelope"
             )
+    clauses = data.get("clauses")
+    if isinstance(clauses, (list, tuple)) and any(
+        not isinstance(clause, (list, tuple))
+        or len(clause) > MAX_PRIME_FIELD_FLAT_CANDIDATES
+        for clause in clauses
+    ):
+        raise _validation_error("raw_container_bound", "clause exceeds the raw envelope")
+    generators = data.get("symmetry_generators")
+    if isinstance(generators, (list, tuple)) and any(
+        isinstance(generator, Mapping)
+        and any(
+            isinstance(generator.get(key), (list, tuple)) and len(generator[key]) > maximum
+            for key, maximum in (
+                ("coordinate_permutation", MAX_PRIME_FIELD_FLAT_AMBIENT_DIMENSION),
+                ("candidate_permutation", MAX_PRIME_FIELD_FLAT_CANDIDATES),
+            )
+        )
+        for generator in generators
+    ):
+        raise _validation_error("raw_container_bound", "symmetry generator exceeds the raw envelope")
     forbidden = data.get("forbidden_vectors")
     if isinstance(forbidden, Mapping):
         rows = forbidden.get("entries")

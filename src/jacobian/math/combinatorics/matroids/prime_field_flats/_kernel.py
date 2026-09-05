@@ -23,6 +23,7 @@ from jacobian.math.combinatorics.matroids.prime_field_flats._models import (
     PrimeFieldVectorSpaceBasis,
     _validation_error,
 )
+from jacobian.math.matrices.finite_fields import PrimeFieldMatrix, rref
 
 MAX_PRIME_FIELD_FLAT_SEARCH_STATE_ORBITS = 100_000
 MAX_PRIME_FIELD_FLAT_SEARCH_WORK = 5_000_000_000
@@ -336,37 +337,14 @@ def _rref_basis(
         "row_reduction",
         input_cells * max(rank_bound, 1) + input_cells + rank_bound * ambient_dimension,
     )
-    matrix = [list(row) for row in rows]
-    pivot = 0
-    row_index = 0
-    while row_index < len(matrix) and pivot < ambient_dimension:
-        selected = next(
-            (index for index in range(row_index, len(matrix)) if matrix[index][pivot]),
-            None,
-        )
-        if selected is None:
-            pivot += 1
-            continue
-        matrix[row_index], matrix[selected] = matrix[selected], matrix[row_index]
-        inverse = pow(matrix[row_index][pivot], -1, prime)
-        matrix[row_index] = [value * inverse % prime for value in matrix[row_index]]
-        for index in range(len(matrix)):
-            if index == row_index or not matrix[index][pivot]:
-                continue
-            factor = matrix[index][pivot]
-            matrix[index] = [
-                (value - factor * pivot_value) % prime
-                for value, pivot_value in zip(
-                    matrix[index], matrix[row_index], strict=True
-                )
-            ]
-        row_index += 1
-        pivot += 1
+    reduced_rows, pivot_columns = rref(
+        PrimeFieldMatrix(prime=prime, entries=rows, columns=ambient_dimension)
+    )
     _require_execution_active(ledger.deadline, "after exact modular row reduction")
     # The elimination loop clears each pivot both above and below its pivot
     # row.  Return the final first ``row_index`` rows, not snapshots taken
     # before later pivot columns clear earlier pivot coordinates.
-    return tuple(tuple(row) for row in matrix[:row_index])
+    return reduced_rows[: len(pivot_columns)]
 
 
 def _pivot_columns(basis: tuple[ResidueRow, ...]) -> tuple[int, ...]:

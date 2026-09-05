@@ -67,14 +67,24 @@ def _admit_zero_sum_atom_source(source: ZeroSumAtomSource) -> None:
             "complete zero-sum subset enumeration exceeds the "
             f"{MAX_ATOM_SUBSET_CHECKS:,}-subset bound",
         )
-    # Minimal zero-sum subsets form an antichain.  Sperner's bound admits
+    # A positive one-axis source whose total remains below its modulus has no
+    # nonempty zero-sum subset, so its exact result is provably empty.
+    provably_empty = (
+        len(source.group.moduli) == 1
+        and all(element[0] > 0 for element in source.elements)
+        and sum(element[0] for element in source.elements) < source.group.moduli[0]
+    )
+    # Otherwise minimal zero-sum subsets form an antichain.  Sperner's bound
+    # proves the result carrier fits before enumeration.
     # cheap source families while still proving the exact result carrier fits.
     antichain_edges = comb(element_count, element_count // 2)
     antichain_incidences = max(
         (size * comb(element_count, size) for size in range(element_count + 1)),
         default=0,
     )
-    if antichain_edges > MAX_ATOM_EDGES or antichain_incidences > MAX_ATOM_INCIDENCES:
+    if not provably_empty and (
+        antichain_edges > MAX_ATOM_EDGES or antichain_incidences > MAX_ATOM_INCIDENCES
+    ):
         _reject(
             ("source", "elements"),
             "zero_sum_atom.result_edge_bound",

@@ -305,6 +305,14 @@ class ForbiddenPrefixSequencingResult(StrictModel):
                     "sequencing_found_indices",
                     "a FOUND ordering must be a source-index permutation",
                 )
+            if any(
+                row.element != self.source.elements[row.source_index]
+                for row in self.ordering
+            ):
+                raise _validation_error(
+                    "sequencing_found_elements",
+                    "each ordering row element must equal its indexed source element",
+                )
         elif self.ordering is not None:
             raise _validation_error(
                 "sequencing_nonfound_shape",

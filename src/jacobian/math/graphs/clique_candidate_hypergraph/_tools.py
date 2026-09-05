@@ -30,12 +30,19 @@ TOOLS: MathTools = (
             "nontrivial clique (order at least two, including nonmaximal "
             "ones), each holding exactly its internal-edge resources. "
             "Retains the resource-to-edge and candidate-to-vertex-subset "
-            "maps for weighted selection and conflict analysis."
+            "maps for weighted selection and conflict analysis. These are the "
+            "complete candidate supports for integral and fractional "
+            "edge-clique partitions, including every clique size."
         ),
         request_type=AllCliqueCandidatesRequest,
         result_type=CliqueCandidateHypergraphResult,
         run=_compute_all_clique_candidates,
         tags=("graph", "hypergraph", "clique", "exact"),
+        discovery_terms=(
+            "edge clique partition all nontrivial cliques",
+            "edge-disjoint complete subgraphs every clique size",
+            "integral and fractional edge partition candidates",
+        ),
         examples=(
             OperationExample(
                 name="bowtie_candidates",

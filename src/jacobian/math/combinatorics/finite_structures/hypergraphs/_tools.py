@@ -348,10 +348,18 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description="Compute a maximum-weight family of pairwise-disjoint hyperedges "
         "(weighted set packing) with exact nonnegative per-edge weights: "
         "returns the optimum total weight and an attaining family in declared "
-        "edge order, ties broken toward the lexicographically smallest family.",
+        "edge order, ties broken toward the lexicographically smallest family. "
+        "For all nontrivial clique edge supports with weight |E(C)|-1, "
+        "the optimum equals |E(G)| minus the minimum edge-clique partition "
+        "number; uncovered edges contribute single-edge parts.",
         request_type=WeightedPackingRequest,
         result_type=WeightedPackingResult,
         run=_compute_maximum_weight_packing,
+        discovery_terms=(
+            "minimum edge clique partition number",
+            "edge-disjoint complete subgraphs integral partition optimization",
+            "clique edge savings weighted packing",
+        ),
         tags=("combinatorics", "hypergraph", "optimization", "exact"),
         examples=(
             OperationExample(

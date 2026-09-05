@@ -133,6 +133,11 @@ class GaussianRealificationResult(StrictModel):
                 "gaussian_target_variables_not_unique",
                 "target variables must be distinct",
             )
+        if self.source_polynomial.variable in self.target_variables:
+            raise _validation_error(
+                "gaussian_target_collides_with_source",
+                "target variables must be distinct from the source variable",
+            )
         if self.real_part.variables != self.target_variables:
             raise _validation_error(
                 "gaussian_real_part_variables",
@@ -239,17 +244,19 @@ def _admit_gaussian_realification(
     # A binomial multiplier can enlarge a numerator. Reserve that room during
     # admission so result construction never rejects an accepted coefficient.
     for index, term in enumerate(poly.terms):
-        multiplier = comb(term.exponent, term.exponent // 2)
         for label, value in (
             ("real", term.coefficient.real),
             ("imaginary", term.coefficient.imaginary),
         ):
-            numerator_digits = len(str(abs(int(value.num) * multiplier)))
-            denominator_digits = len(value.den)
-            if (
-                max(numerator_digits, denominator_digits)
-                > MAX_GAUSSIAN_REALIFICATION_COEFFICIENT_DIGITS
-            ):
+            coefficient = Fraction(int(value.num), int(value.den))
+            maximum_digits = max(
+                max(
+                    len(str(abs((coefficient * comb(term.exponent, j)).numerator))),
+                    len(str((coefficient * comb(term.exponent, j)).denominator)),
+                )
+                for j in range(term.exponent + 1)
+            )
+            if maximum_digits > MAX_GAUSSIAN_REALIFICATION_COEFFICIENT_DIGITS:
                 raise OperationDomainValidationError(
                     location=("polynomial", "terms", index, "coefficient", label),
                     code="algebraic_geometry.gaussian_realification.coefficient_digits",

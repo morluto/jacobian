@@ -1,5 +1,72 @@
 # Changelog
 
+## [0.18.0](https://github.com/morluto/jacobian/compare/jacobian-v0.17.0...jacobian-v0.18.0) (2026-09-05)
+
+
+### ⚠ BREAKING CHANGES
+
+* **integer and p-adic results:** `poset.linear_extensions.count` now returns
+  `count` as a canonical decimal string; `number_theory.padic.hensel_root.compute`
+  returns `lifted_root` as a string; and `number_theory.padic.roots.compute`
+  returns its roots as strings. Update strict JSON decoders accordingly.
+* **finite topology:** `topology.finite.interior.compute`,
+  `topology.finite.closure.compute`, and `topology.finite.boundary.compute` now
+  use the corrected specialization-preorder orientation, changing results for
+  asymmetric preorders.
+* **chip-firing:** `graph.chip_firing.q_reduced.compute` now returns the
+  corrected q-reduced divisor, and `graph.chip_firing.abel_jacobi.compute` now
+  transports coordinates through the Smith basis before reduction.
+* **MCP transport:** resource-admission rejections now use
+  `RESOURCE_ADMISSION_REJECTED` at the `resource_admission` stage. Timeout and
+  cancellation tool errors now use JSON diagnostics, and `math.find` match
+  cursors are opaque hashes rather than operation IDs. Update strict error and
+  cursor decoders.
+* **lattices:** `lattice.dual.compute` now returns the corrected dual basis for
+  nonsymmetric bases. `lattice.rank_gram.compute.covolume_rational` now reports
+  rationality of the covolume rather than ambient full rank.
+
+
+### Features
+
+* **additive:** construct zero-sum atom hypergraphs ([#3165](https://github.com/morluto/jacobian/issues/3165)) ([0024dcc](https://github.com/morluto/jacobian/commit/0024dccf911ea101f064c8691599e9f1a3f4e6fd))
+* **additive:** find forbidden-prefix cyclic orderings ([#3164](https://github.com/morluto/jacobian/issues/3164)) ([a95a724](https://github.com/morluto/jacobian/commit/a95a724b94e7f3ed90385b0444fc332bf5888bc0))
+* **algebraic-geometry:** add Gaussian polynomial realification ([#2869](https://github.com/morluto/jacobian/issues/2869)) ([#3150](https://github.com/morluto/jacobian/issues/3150)) ([3070081](https://github.com/morluto/jacobian/commit/30700815fbad8751ddfb5762ab80c2c4f374b62f))
+* **geometry:** add convex polygon intersection ([#2881](https://github.com/morluto/jacobian/issues/2881)) ([#3153](https://github.com/morluto/jacobian/issues/3153)) ([00c47e4](https://github.com/morluto/jacobian/commit/00c47e4ad63c213090a467d5f580e35cf9eb78b6))
+* **geometry:** publish `geometry.point_configuration.euclidean_orbit_profile.compute`
+  ([#3158](https://github.com/morluto/jacobian/issues/3158)) ([6d000dd](https://github.com/morluto/jacobian/commit/6d000dd354e17d6a351b035ec4f0df8a65e3d7bb))
+* **graph:** publish `graph.edge_deletion_diameter_profile.compute`
+  ([#2814](https://github.com/morluto/jacobian/issues/2814)) ([#3154](https://github.com/morluto/jacobian/issues/3154)) ([bc35a60](https://github.com/morluto/jacobian/commit/bc35a60c4a5d85e0e318788b668cb6d6f2b8f560))
+* **graph:** induced edge deletion profile to r-colourability ([#2856](https://github.com/morluto/jacobian/issues/2856)) ([#3156](https://github.com/morluto/jacobian/issues/3156)) ([28c18fc](https://github.com/morluto/jacobian/commit/28c18fcd34f8530b3a8447247520c5c381a9fe08))
+* **graph:** minimum triangle-free diameter augmentation (fixes [#2854](https://github.com/morluto/jacobian/issues/2854)) ([#3157](https://github.com/morluto/jacobian/issues/3157)) ([813b813](https://github.com/morluto/jacobian/commit/813b813cb7b8dba551b350bf9f00d3de21045ffc))
+* **graphs:** hypergraph/graph scale, recognition, and optimization batch ([#3224](https://github.com/morluto/jacobian/issues/3224)) ([80772f0](https://github.com/morluto/jacobian/commit/80772f03083fe80b541415bbb14ae968a3a73e9b))
+* **group-actions:** add subset-family orbit profiles ([#3163](https://github.com/morluto/jacobian/issues/3163)) ([ed590f5](https://github.com/morluto/jacobian/commit/ed590f552b77d331b7250f386b0d2fca406b725a))
+* **math:** add finite abelian character sum interval profile ([#2855](https://github.com/morluto/jacobian/issues/2855)) ([#3155](https://github.com/morluto/jacobian/issues/3155)) ([d08d5ef](https://github.com/morluto/jacobian/commit/d08d5efa86e0f5a418b2ead36ccf79c84a17e445))
+* **matroids:** classify constrained prime-field flats ([#3166](https://github.com/morluto/jacobian/issues/3166)) ([f4b2359](https://github.com/morluto/jacobian/commit/f4b235923e6f310fffeb52d6c7b8b2f1e6bc85ba))
+* **mcp:** log math.find match queries ([#3143](https://github.com/morluto/jacobian/issues/3143)) ([d9d831f](https://github.com/morluto/jacobian/commit/d9d831f90cc2940bb5ff240f916d677572f8487c))
+
+
+### Bug Fixes
+
+* **catalog:** surface edge-clique partition operations ([#3229](https://github.com/morluto/jacobian/issues/3229)) ([fc9e87f](https://github.com/morluto/jacobian/commit/fc9e87fc3a3ac9c2de263eea0adc6fed20089bce))
+* **finite-fields:** align axis capacity with prime-field matrices ([#3201](https://github.com/morluto/jacobian/issues/3201)) ([5ca01c6](https://github.com/morluto/jacobian/commit/5ca01c62ef0cc60c371158290068a0118edf088f))
+* **finite-fields:** authenticate orbit ledger source relations ([#3197](https://github.com/morluto/jacobian/issues/3197)) ([1d681e2](https://github.com/morluto/jacobian/commit/1d681e2d9ecf60a46af46468eb573e3f630b5933))
+* **finite-fields:** authenticate supplied polynomial tables in consumers ([#3195](https://github.com/morluto/jacobian/issues/3195)) ([f8ed03d](https://github.com/morluto/jacobian/commit/f8ed03d18b6e922833f20ff0875e3f72a986a6af))
+* **graph:** admit signed clique searches by biconnected block ([#3228](https://github.com/morluto/jacobian/issues/3228)) ([a1ede0f](https://github.com/morluto/jacobian/commit/a1ede0f2a3b5824eb6158c29dde574f2d717931e))
+* **graphs:** explain canonical edge endpoint ordering ([#3176](https://github.com/morluto/jacobian/issues/3176)) ([034cbb4](https://github.com/morluto/jacobian/commit/034cbb492463dd914265f7fa866bc0f3146985f0))
+* **hypergraphs:** binary threshold search for independence number ([#3223](https://github.com/morluto/jacobian/issues/3223)) ([9c5da64](https://github.com/morluto/jacobian/commit/9c5da6445c5119cf624596efe90608b5774c570c))
+* **lattice:** scale rectangular HNF with deterministic modular bounds ([#3230](https://github.com/morluto/jacobian/issues/3230)) ([b12adbd](https://github.com/morluto/jacobian/commit/b12adbd6982534820fec19c841140f71640206b0))
+* **markov-chain:** admit stationary solves by closed-class work ([#3190](https://github.com/morluto/jacobian/issues/3190)) ([1ce4215](https://github.com/morluto/jacobian/commit/1ce4215096b0f3326236e459d08cb26614b8655b))
+* **math:** repair ten admitted-operation boundary defects ([#3222](https://github.com/morluto/jacobian/issues/3222)) ([11c826b](https://github.com/morluto/jacobian/commit/11c826b2c704cc61b24f58b7699c848e7998ab0d))
+* **math:** restore exact results and scale valid operation requests ([#3221](https://github.com/morluto/jacobian/issues/3221)) ([f8ccb4a](https://github.com/morluto/jacobian/commit/f8ccb4a54e498335bdf414764e85a99644162ef7))
+* **optimization:** solve independent interval LPs before normalization ([#3193](https://github.com/morluto/jacobian/issues/3193)) ([40004e8](https://github.com/morluto/jacobian/commit/40004e8c5945925acc33f1798178b6ac8eedc534))
+
+
+### Documentation
+
+* clarify mathematical engineering review and evidence requirements ([#3203](https://github.com/morluto/jacobian/issues/3203)) ([a08ea95](https://github.com/morluto/jacobian/commit/a08ea958733c7d11cffe56574570cbcf42c385d9))
+* require baseline regression proof for backend and admission fixes ([8977037](https://github.com/morluto/jacobian/commit/8977037a7133f04b2b7856bfd157197502fa9fd4))
+* streamline agent guidance and skill routing ([2417f3a](https://github.com/morluto/jacobian/commit/2417f3ad445e0875b2a23b1cfdd86abea392bc3b))
+
 ## [0.17.0](https://github.com/morluto/jacobian/compare/jacobian-v0.16.0...jacobian-v0.17.0) (2026-09-03)
 
 

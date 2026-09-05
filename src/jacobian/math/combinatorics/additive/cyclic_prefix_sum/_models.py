@@ -313,6 +313,14 @@ class ForbiddenPrefixSequencingResult(StrictModel):
                     "sequencing_found_elements",
                     "each ordering row element must equal its indexed source element",
                 )
+            if self.first_element is not None and (
+                self.first_element not in self.source.elements
+                or self.ordering[0].element != self.first_element
+            ):
+                raise _validation_error(
+                    "sequencing_found_first_element",
+                    "a prescribed first element must equal the first ordering row",
+                )
         elif self.ordering is not None:
             raise _validation_error(
                 "sequencing_nonfound_shape",

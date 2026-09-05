@@ -14,7 +14,7 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.cyclic_prefix_sum._models import (
     MAX_MODULUS_DIGITS,
     MAX_SEQUENCE_LENGTH,
-    MAX_SEQUENCING_GROUP_ORDER,
+    MAX_SEQUENCING_FORBIDDEN_VALUES,
     MAX_SEQUENCING_PERMUTATION_NODES,
     MAX_SEQUENCING_SOURCE_ITEMS,
     CyclicPrefixSumResidueProfileResult,
@@ -195,15 +195,6 @@ def _admit_forbidden_prefix_sequencing(
             "search_node_limit must be positive and within the admitted bound",
         )
 
-    group_order = 1
-    for modulus in source.group.moduli:
-        group_order *= modulus
-        if group_order > MAX_SEQUENCING_GROUP_ORDER:
-            _reject(
-                ("source", "group", "moduli"),
-                "forbidden_prefix_sequencing.group_order",
-                f"source group exceeds the {MAX_SEQUENCING_GROUP_ORDER:,}-element bound",
-            )
     if len(source.elements) > MAX_SEQUENCING_SOURCE_ITEMS:
         _reject(
             ("source", "elements"),
@@ -211,11 +202,11 @@ def _admit_forbidden_prefix_sequencing(
             "source exceeds the "
             f"{MAX_SEQUENCING_SOURCE_ITEMS}-element exhaustive-search bound",
         )
-    if len(forbidden_values) > group_order:
+    if len(forbidden_values) > MAX_SEQUENCING_FORBIDDEN_VALUES:
         _reject(
             ("forbidden_values",),
             "forbidden_prefix_sequencing.forbidden_cardinality",
-            "forbidden values cannot exceed the ambient group order",
+            "forbidden values exceed the retained request envelope",
         )
 
     elements = tuple(
@@ -227,6 +218,19 @@ def _admit_forbidden_prefix_sequencing(
     )
     first_index = None
     if first_element is not None:
+        if (
+            len(first_element) != len(source.group.moduli)
+            or any(
+                type(coordinate) is not int
+                or len(str(abs(coordinate))) > MAX_MODULUS_DIGITS
+                for coordinate in first_element
+            )
+        ):
+            _reject(
+                ("first_element",),
+                "forbidden_prefix_sequencing.first_element_shape",
+                "first_element must contain bounded integer coordinates of the source rank",
+            )
         canonical_first = tuple(
             coordinate % modulus
             for coordinate, modulus in zip(
@@ -266,13 +270,13 @@ def _admit_forbidden_prefix_sequencing(
             "forbidden_prefix_sequencing.forbidden_coordinate",
             "forbidden coordinates must be bounded integers",
         )
-    canonical_forbidden = tuple(
+    canonical_forbidden = tuple(sorted(
         tuple(
             coordinate % modulus
             for coordinate, modulus in zip(value, source.group.moduli, strict=True)
         )
         for value in forbidden_values
-    )
+    ))
     if len(set(canonical_forbidden)) != len(canonical_forbidden):
         _reject(
             ("forbidden_values",),

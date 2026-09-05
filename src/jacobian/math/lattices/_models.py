@@ -68,9 +68,10 @@ class HermiteNormalFormRequest(StrictModel):
         description=(
             f"Nonempty integer matrix with axes at most {MAX_INTEGER_MATRIX_ORDER} "
             "and at most 256 digits per scalar. HNF admission bounds the "
-            "augmented matrix, including its square transformation, with "
-            "m*m*(n+m)*(r*d+digits(r!)) by 100,000,000, where "
-            "r=min(m,n) and d is the maximum input decimal width."
+            "fraction-free elimination, modular reduction and the square "
+            "transformation using row-norm minor bounds. At most 250,000,000 "
+            "scalar-operation units, 262,144 bits per intermediate and "
+            "12,000,000,000 retained coefficient bits are admitted."
         ),
     )
 

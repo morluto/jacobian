@@ -27,7 +27,9 @@ def _determinant(entries: tuple[tuple[str, ...], ...]) -> Fraction:
     return det
 
 
-@pytest.mark.parametrize("shape", [(61, 25), (25, 61), (33, 33)])
+@pytest.mark.parametrize(
+    "shape", [(61, 25), (25, 61), (33, 33), (64, 64), (128, 25), (128, 128)]
+)
 def test_rectangular_coefficient_lattice(shape: tuple[int, int]) -> None:
     rows, cols = shape
     entries = [
@@ -96,7 +98,7 @@ def test_degenerate_inputs_and_native_parity(entries: list[list[int]]) -> None:
 @pytest.mark.parametrize(
     ("rows", "columns", "value", "message"),
     [
-        (64, 64, 10**255, "digit-work"),
+        (64, 64, 10**255, "intermediate height"),
         (128, 128, 10**255, "minor height"),
     ],
 )
@@ -121,3 +123,82 @@ def test_hnf_specific_excessive_envelopes(
         tool.run(request)
     with pytest.raises(OperationDomainValidationError, match=message):
         hermite_normal_form(entries)
+
+
+@pytest.mark.parametrize("order", [2, 5, 9])
+def test_determinant_modulus_is_not_a_cancelled_rref_denominator(order: int) -> None:
+    # The rational RREF has denominator 2, but the square pivot determinant
+    # is 2**order. Passing 2 to modular HNF loses lattice index information.
+    entries = [[2 * int(i == j) for j in range(order)] for i in range(order)]
+    tool = HERMITE_NORMAL_FORM_OPERATION
+    result = tool.run(
+        tool.request_type.model_validate(
+            {"matrix": {"entries": [[str(x) for x in row] for row in entries]}}
+        )
+    )
+    assert result.normal_form.entries == tuple(
+        tuple(str(x) for x in row) for row in entries
+    )
+    assert result.transformation.entries == tuple(
+        tuple(str(int(i == j)) for j in range(order)) for i in range(order)
+    )
+
+
+def test_small_normal_form_retains_large_exact_transformation() -> None:
+    order, scale = 8, 10**50
+    # A=I+scale*N for the nilpotent upper shift. Its inverse has alternating
+    # powers of scale, even though its row HNF is the identity.
+    entries = [
+        [int(i == j) + scale * int(j == i + 1) for j in range(order)]
+        for i in range(order)
+    ]
+    tool = HERMITE_NORMAL_FORM_OPERATION
+    result = tool.run(
+        tool.request_type.model_validate(
+            {"matrix": {"entries": [[str(x) for x in row] for row in entries]}}
+        )
+    )
+    assert result.normal_form.entries == tuple(
+        tuple(str(int(i == j)) for j in range(order)) for i in range(order)
+    )
+    assert result.transformation.entries == tuple(
+        tuple(str((-scale) ** (j - i)) if j >= i else "0" for j in range(order))
+        for i in range(order)
+    )
+
+
+def test_seeded_rectangles_match_independent_reconstruction_and_flint_hnf() -> None:
+    from random import Random
+
+    from flint import fmpz_mat
+
+    from jacobian.math.lattices.operations import hermite_normal_form
+
+    rng = Random(3225)
+    for rows in range(1, 8):
+        for columns in range(1, 8):
+            entries = [
+                [rng.randrange(-9, 10) for _ in range(columns)] for _ in range(rows)
+            ]
+            # Some zero leading columns force nontrivial pivot selection.
+            if columns > 2 and rows % 2:
+                for row in entries:
+                    row[0] = 0
+            h, u = hermite_normal_form(entries)
+            assert h == fmpz_mat(entries).hnf()
+            assert (
+                abs(
+                    _determinant(
+                        tuple(
+                            tuple(str(u[i, j]) for j in range(rows))
+                            for i in range(rows)
+                        )
+                    )
+                )
+                == 1
+            )
+            assert all(
+                sum(int(u[i, k]) * entries[k][j] for k in range(rows)) == int(h[i, j])
+                for i in range(rows)
+                for j in range(columns)
+            )

@@ -1,4 +1,4 @@
-"""In-process Python-FLINT row-HNF producer owned by the lattice domain."""
+"""In-process deterministic modular row-HNF producer owned by the lattice domain."""
 
 from __future__ import annotations
 

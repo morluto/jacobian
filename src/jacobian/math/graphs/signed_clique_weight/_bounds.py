@@ -5,22 +5,25 @@ from __future__ import annotations
 from dataclasses import dataclass
 from math import lcm
 
+import networkx as nx
+
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.graphs._networkx import biconnected_components
 from jacobian.math.graphs.optimization._models import RationalWeightedGraph
 
-# A clique lies inside one connected component, so the Gray-code search runs
-# per component: 2**m subsets tracking the induced weight and the nonedge
+# A clique lies inside one biconnected block, so the Gray-code search runs
+# per block: 2**m subsets tracking the induced weight and the nonedge
 # count incrementally. One 20-vertex component is the exhaustive envelope.
 MAX_SIGNED_CLIQUE_VERTICES = 32
 MAX_SIGNED_CLIQUE_EDGES = 496
-MAX_SIGNED_CLIQUE_COMPONENT_VERTICES = 20
+MAX_SIGNED_CLIQUE_BLOCK_VERTICES = 20
 MAX_SIGNED_CLIQUE_WORK_UNITS = 25_000_000
 
 
 @dataclass(frozen=True, slots=True)
 class SignedCliqueComponent:
-    """One connected vertex set with its local dual-accumulator charge."""
+    """One biconnected vertex block with its local dual-accumulator charge."""
 
     vertices: tuple[int, ...]
     adjacency: tuple[tuple[tuple[int, int], ...], ...]
@@ -30,7 +33,7 @@ class SignedCliqueComponent:
 
 @dataclass(frozen=True, slots=True)
 class SignedCliqueWeightAdmission:
-    """One exact integer-scaled component-bounded clique-search plan."""
+    """One exact integer-scaled block-bounded clique-search plan."""
 
     denominator: int
     components: tuple[SignedCliqueComponent, ...]
@@ -46,35 +49,28 @@ def _decimal_digit_upper_bound(value: int) -> int:
     return (abs(value).bit_length() * 30_103) // 100_000 + 1
 
 
-def _connected_groups(
+def _block_groups(
     order: int,
     edges: tuple[tuple[int, int], ...],
 ) -> tuple[tuple[int, ...], ...]:
-    """Group vertex indices by graph connectivity via union-find."""
+    """Return blocks including bridges, in source-vertex order.
 
-    parent = list(range(order))
+    Every clique of order at least three is biconnected; every edge lies
+    in exactly one block. Isolated vertices cannot supply eligible cliques.
+    """
 
-    def find(index: int) -> int:
-        while parent[index] != index:
-            parent[index] = parent[parent[index]]
-            index = parent[index]
-        return index
-
-    for left, right in edges:
-        root_a, root_b = find(left), find(right)
-        if root_a != root_b:
-            parent[max(root_a, root_b)] = min(root_a, root_b)
-    groups: dict[int, list[int]] = {}
-    for index in range(order):
-        groups.setdefault(find(index), []).append(index)
-    ordered = sorted((min(group), tuple(group)) for group in groups.values() if group)
-    return tuple(group for _, group in ordered)
+    graph: nx.Graph[int] = nx.Graph()
+    graph.add_nodes_from(range(order))
+    graph.add_edges_from(edges)
+    return tuple(
+        sorted(tuple(sorted(block)) for block in biconnected_components(graph))
+    )
 
 
 def admit_signed_clique_weight(
     graph: RationalWeightedGraph,
 ) -> SignedCliqueWeightAdmission:
-    """Derive one bounded component-search plan shared by native and wire calls."""
+    """Derive one bounded block-search plan shared by native and wire calls."""
 
     if not isinstance(graph, RationalWeightedGraph):
         raise TypeError("signed_clique_weight_maximum expects a RationalWeightedGraph")
@@ -131,19 +127,20 @@ def admit_signed_clique_weight(
     )
     maximum_bits = max(denominator.bit_length(), scaled_absolute_sum.bit_length(), 1)
     integer_limbs = (maximum_bits + 63) // 64
-    presolve_work = len(graph.edges) + 2 * len(graph.edges)
+    # Decomposition is linear; constructing each local adjacency scans all edges.
+    presolve_work = order + 3 * len(graph.edges)
     components: list[SignedCliqueComponent] = []
     component_work = 0
-    for group in _connected_groups(order, pairs):
+    for group in _block_groups(order, pairs):
         if len(group) == 1:
             continue
-        if len(group) > MAX_SIGNED_CLIQUE_COMPONENT_VERTICES:
+        if len(group) > MAX_SIGNED_CLIQUE_BLOCK_VERTICES:
             raise OperationDomainValidationError(
                 location=("graph",),
                 code="graph.signed_clique_weight.work_budget",
                 message=(
-                    "a connected component exceeds the "
-                    f"{MAX_SIGNED_CLIQUE_COMPONENT_VERTICES}-vertex exhaustive "
+                    "a biconnected block exceeds the "
+                    f"{MAX_SIGNED_CLIQUE_BLOCK_VERTICES}-vertex exhaustive "
                     "search envelope"
                 ),
             )
@@ -160,7 +157,7 @@ def admit_signed_clique_weight(
             (size - 1) * (1 << (size - local - 1)) for local in range(size)
         )
         work = (1 << size) + edge_updates * integer_limbs
-        component_work += work
+        component_work += work + len(pairs)
         components.append(
             SignedCliqueComponent(
                 vertices=group,
@@ -175,7 +172,7 @@ def admit_signed_clique_weight(
             location=("graph",),
             code="graph.signed_clique_weight.work_budget",
             message=(
-                "the component-bounded clique-weight search requires "
+                "the block-bounded clique-weight search requires "
                 f"{work_units:,} candidate and integer-limb update work units, "
                 f"exceeding the {MAX_SIGNED_CLIQUE_WORK_UNITS:,}-unit bound"
             ),
@@ -189,7 +186,7 @@ def admit_signed_clique_weight(
 
 
 __all__ = [
-    "MAX_SIGNED_CLIQUE_COMPONENT_VERTICES",
+    "MAX_SIGNED_CLIQUE_BLOCK_VERTICES",
     "MAX_SIGNED_CLIQUE_EDGES",
     "MAX_SIGNED_CLIQUE_VERTICES",
     "MAX_SIGNED_CLIQUE_WORK_UNITS",

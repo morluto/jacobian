@@ -11,7 +11,7 @@ from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.math.graphs.optimization._models import RationalWeightedGraph
 
-# A clique lies inside one connected component, so components are optimized
+# A clique lies inside one biconnected block, so blocks are optimized
 # independently and the best (value, witness) pair wins globally.
 
 

@@ -109,16 +109,23 @@ class FiniteAbelianSequencingSource(StrictModel):
             raw_moduli = group.get("moduli")
             if isinstance(raw_moduli, list):
                 if len(raw_moduli) > MAX_SEQUENCING_COORDINATE_CELLS:
-                    raise _validation_error("sequencing_source_rank", "group axis count exceeds the sequencing coordinate envelope")
+                    raise _validation_error(
+                        "sequencing_source_rank",
+                        "group axis count exceeds the sequencing coordinate envelope",
+                    )
                 group["moduli"] = tuple(raw_moduli)
             prepared["group"] = group
         raw_elements = prepared.get("elements")
         if isinstance(raw_elements, list):
             if len(raw_elements) > MAX_SEQUENCING_SOURCE_ITEMS or any(
-                not isinstance(element, list) or len(element) > MAX_SEQUENCING_COORDINATE_CELLS
+                not isinstance(element, list)
+                or len(element) > MAX_SEQUENCING_COORDINATE_CELLS
                 for element in raw_elements
             ):
-                raise _validation_error("sequencing_source_rank", "source elements exceed the raw coordinate envelope")
+                raise _validation_error(
+                    "sequencing_source_rank",
+                    "source elements exceed the raw coordinate envelope",
+                )
             prepared["elements"] = tuple(raw_elements)
         return canonicalize_json_containers(prepared)
 
@@ -126,7 +133,10 @@ class FiniteAbelianSequencingSource(StrictModel):
     def require_canonical_source(self) -> Self:
         rank = len(self.group.moduli)
         if rank * (len(self.elements) + 1) > MAX_SEQUENCING_COORDINATE_CELLS:
-            raise _validation_error("sequencing_coordinate_work", "source coordinates exceed the sequencing envelope")
+            raise _validation_error(
+                "sequencing_coordinate_work",
+                "source coordinates exceed the sequencing envelope",
+            )
         if len(self.elements) > MAX_SEQUENCING_SOURCE_ITEMS:
             raise _validation_error(
                 "sequencing_source_cardinality",
@@ -201,15 +211,22 @@ class ForbiddenPrefixSequencingRequest(StrictModel):
         raw_first = prepared.get("first_element")
         if isinstance(raw_first, list):
             if len(raw_first) > MAX_SEQUENCING_COORDINATE_CELLS:
-                raise _validation_error("sequencing_first_element_rank", "first_element exceeds the raw coordinate envelope")
+                raise _validation_error(
+                    "sequencing_first_element_rank",
+                    "first_element exceeds the raw coordinate envelope",
+                )
             prepared["first_element"] = tuple(raw_first)
         raw_forbidden = prepared.get("forbidden_values")
         if isinstance(raw_forbidden, list):
             if len(raw_forbidden) > MAX_SEQUENCING_FORBIDDEN_VALUES or any(
-                not isinstance(item, list) or len(item) > MAX_SEQUENCING_COORDINATE_CELLS
+                not isinstance(item, list)
+                or len(item) > MAX_SEQUENCING_COORDINATE_CELLS
                 for item in raw_forbidden
             ):
-                raise _validation_error("sequencing_forbidden_rank", "forbidden values exceed the raw coordinate envelope")
+                raise _validation_error(
+                    "sequencing_forbidden_rank",
+                    "forbidden values exceed the raw coordinate envelope",
+                )
             prepared["forbidden_values"] = tuple(raw_forbidden)
         return canonicalize_json_containers(prepared)
 
@@ -235,8 +252,14 @@ class ForbiddenPrefixSequencingRequest(StrictModel):
             object.__setattr__(self, "first_element", reduced_first)
 
         rank = len(self.source.group.moduli)
-        if rank * (len(self.source.elements) + len(self.forbidden_values) + 1) > MAX_SEQUENCING_COORDINATE_CELLS:
-            raise _validation_error("sequencing_coordinate_work", "retained sequencing coordinates exceed the admitted envelope")
+        if (
+            rank * (len(self.source.elements) + len(self.forbidden_values) + 1)
+            > MAX_SEQUENCING_COORDINATE_CELLS
+        ):
+            raise _validation_error(
+                "sequencing_coordinate_work",
+                "retained sequencing coordinates exceed the admitted envelope",
+            )
         if any(len(value) != rank for value in self.forbidden_values):
             raise _validation_error(
                 "sequencing_forbidden_rank",
@@ -317,21 +340,44 @@ class ForbiddenPrefixSequencingResult(StrictModel):
                 "states_explored must be between one and search_node_limit",
             )
         rank = len(self.source.group.moduli)
-        if rank * (len(self.source.elements) + len(self.forbidden_values) + 1) > MAX_SEQUENCING_COORDINATE_CELLS:
-            raise _validation_error("sequencing_coordinate_work", "retained sequencing coordinates exceed the admitted envelope")
-        canonical_forbidden = tuple(
-            sorted(
-                tuple(coordinate % modulus for coordinate, modulus in zip(value, self.source.group.moduli, strict=True))
-                for value in self.forbidden_values
+        if (
+            rank * (len(self.source.elements) + len(self.forbidden_values) + 1)
+            > MAX_SEQUENCING_COORDINATE_CELLS
+        ):
+            raise _validation_error(
+                "sequencing_coordinate_work",
+                "retained sequencing coordinates exceed the admitted envelope",
             )
-        ) if all(len(value) == rank for value in self.forbidden_values) else ()
-        if canonical_forbidden != self.forbidden_values or len(set(self.forbidden_values)) != len(self.forbidden_values):
-            raise _validation_error("sequencing_forbidden_canonical", "forbidden values must be reduced, sorted, distinct source-group elements")
+        canonical_forbidden = (
+            tuple(
+                sorted(
+                    tuple(
+                        coordinate % modulus
+                        for coordinate, modulus in zip(
+                            value, self.source.group.moduli, strict=True
+                        )
+                    )
+                    for value in self.forbidden_values
+                )
+            )
+            if all(len(value) == rank for value in self.forbidden_values)
+            else ()
+        )
+        if canonical_forbidden != self.forbidden_values or len(
+            set(self.forbidden_values)
+        ) != len(self.forbidden_values):
+            raise _validation_error(
+                "sequencing_forbidden_canonical",
+                "forbidden values must be reduced, sorted, distinct source-group elements",
+            )
         if self.first_element is not None and (
             len(self.first_element) != len(self.source.group.moduli)
             or self.first_element not in self.source.elements
         ):
-            raise _validation_error("sequencing_first_element_membership", "first_element must be a source element with the source rank")
+            raise _validation_error(
+                "sequencing_first_element_membership",
+                "first_element must be a source element with the source rank",
+            )
         if self.status == "FOUND":
             if self.ordering is None or len(self.ordering) != len(self.source.elements):
                 raise _validation_error(
@@ -355,11 +401,22 @@ class ForbiddenPrefixSequencingResult(StrictModel):
                 )
             if any(
                 len(row.prefix_sum) != rank
-                or any(coordinate < 0 or coordinate >= modulus for coordinate, modulus in zip(row.prefix_sum, self.source.group.moduli, strict=True))
+                or any(
+                    coordinate < 0 or coordinate >= modulus
+                    for coordinate, modulus in zip(
+                        row.prefix_sum, self.source.group.moduli, strict=True
+                    )
+                )
                 for row in self.ordering
             ):
-                raise _validation_error("sequencing_prefix_sum_shape", "every prefix sum must be a reduced element of the source group")
-            if self.first_element is not None and self.ordering[0].element != self.first_element:
+                raise _validation_error(
+                    "sequencing_prefix_sum_shape",
+                    "every prefix sum must be a reduced element of the source group",
+                )
+            if (
+                self.first_element is not None
+                and self.ordering[0].element != self.first_element
+            ):
                 raise _validation_error(
                     "sequencing_found_first_element",
                     "a prescribed first element must equal the first ordering row",

@@ -209,7 +209,10 @@ def _admit_forbidden_prefix_sequencing(
             "forbidden_prefix_sequencing.forbidden_cardinality",
             "forbidden values exceed the retained request envelope",
         )
-    if len(source.group.moduli) * (len(source.elements) + len(forbidden_values) + 1) > MAX_SEQUENCING_COORDINATE_CELLS:
+    if (
+        len(source.group.moduli) * (len(source.elements) + len(forbidden_values) + 1)
+        > MAX_SEQUENCING_COORDINATE_CELLS
+    ):
         _reject(
             ("source", "group", "moduli"),
             "forbidden_prefix_sequencing.coordinate_work",
@@ -265,7 +268,8 @@ def _admit_forbidden_prefix_sequencing(
             "every forbidden value must match the source group rank",
         )
     if any(
-        type(coordinate) is not int or coordinate.bit_length() > MAX_MODULUS_DIGITS * 3322 // 1000 + 1
+        type(coordinate) is not int
+        or coordinate.bit_length() > MAX_MODULUS_DIGITS * 3322 // 1000 + 1
         for value in forbidden_values
         for coordinate in value
     ):

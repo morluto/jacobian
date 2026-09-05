@@ -464,7 +464,10 @@ def test_solver_call_limit_returns_only_sound_partial_bounds() -> None:
     assert result.status == "UNKNOWN"
     assert result.independence_number is None
     assert len(result.incumbent_vertices) == result.lower_bound == 1
-    assert result.upper_bound == 3
+    # Binary search first queries mid=(1+4+1)//2=3; UNSAT proves 3..4
+    # infeasible by monotonicity, so one call tightens upper to 2
+    # (linear descent would only reach 3).
+    assert result.upper_bound == 2
     assert result.termination_reason == "SOLVER_CALL_LIMIT"
     assert result.solver_calls == 1
     assert not result.wall_budget_exhausted
@@ -790,13 +793,16 @@ def test_producer_projects_solver_error_when_witness_misses_threshold(
             "edges": [["ca", ["c", "a"]], ["cb", ["c", "b"]]],
         }
     )
-    assert thresholds == [3, 2]
+    # Binary search on (lo=1, hi=3) first queries mid=2, where the mocked
+    # backend returns a below-threshold witness, so the run stops after
+    # one call (linear descent would query 3 first, then 2).
+    assert thresholds == [2]
     assert result.status == "UNKNOWN"
     assert result.independence_number is None
     assert result.incumbent_vertices == ("c",)
     assert result.lower_bound == 1
     assert result.upper_bound == 3
-    assert result.solver_calls == 2
+    assert result.solver_calls == 1
     assert not result.wall_budget_exhausted
     assert result.termination_reason == "SOLVER_ERROR"
     assert HypergraphIndependenceResult.model_validate(result.model_dump(mode="json"))
@@ -815,6 +821,40 @@ def test_produced_exact_result_meets_the_queried_threshold() -> None:
     assert len(result.incumbent_vertices) >= 2
     brute_force = _brute_force_witness(result.hypergraph)
     assert result.independence_number == len(brute_force)
+
+
+def test_pair_edge_k25_establishes_exact_one_within_budget() -> None:
+    vertices = tuple(f"v{index:03}" for index in range(25))
+    source = FiniteHypergraph.model_validate(
+        {
+            "vertices": list(vertices),
+            "edges": [
+                [f"e{index}", edge]
+                for index, edge in enumerate(combinations(vertices, 2))
+            ],
+        }
+    )
+    result = _kernel_compute(source)
+    assert result.status == "EXACT"
+    assert result.independence_number == 1
+    assert result.lower_bound == result.upper_bound == 1
+    assert result.termination_reason == "OPTIMUM_ESTABLISHED"
+    assert result.solver_calls <= MAX_HYPERGRAPH_INDEPENDENCE_SOLVER_CALLS
+    assert result.solver_calls == 4
+
+
+def test_binary_search_refines_sat_lower_bound_to_exact() -> None:
+    source = FiniteHypergraph.model_validate(
+        {
+            "vertices": ["c", "a", "b", "d"],
+            "edges": [["ca", ["c", "a"]], ["cb", ["c", "b"]], ["cd", ["c", "d"]]],
+        }
+    )
+    result = _kernel_compute(source)
+    assert result.status == "EXACT"
+    assert result.independence_number == len(_brute_force_witness(source)) == 3
+    assert result.lower_bound == result.upper_bound == 3
+    assert result.termination_reason == "OPTIMUM_ESTABLISHED"
 
 
 def test_backend_witness_choice_is_repeatable() -> None:

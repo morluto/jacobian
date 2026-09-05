@@ -132,13 +132,10 @@ def construct_zero_sum_atom_hypergraph(
     moduli = source.group.moduli
     zero = tuple(0 for _ in moduli)
     atom_masks: list[int] = []
-    subset_checks = 0
-    minimality_checks = 0
 
     for size in range(1, len(elements) + 1):
         for positions in combinations(range(len(elements)), size):
             request_checkpoint("zero-sum atom subset enumeration")
-            subset_checks += 1
             running = zero
             mask = 0
             for position in positions:
@@ -148,7 +145,6 @@ def construct_zero_sum_atom_hypergraph(
                 continue
             contains_atom = False
             for atom_mask in atom_masks:
-                minimality_checks += 1
                 if atom_mask & mask == atom_mask:
                     contains_atom = True
                     break
@@ -185,6 +181,4 @@ def construct_zero_sum_atom_hypergraph(
         vertex_source_indices=tuple(range(len(elements))),
         atom_count=atom_count,
         total_incidences=total_incidences,
-        subset_checks=subset_checks,
-        minimality_checks=minimality_checks,
     )

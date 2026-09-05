@@ -90,8 +90,6 @@ def test_empty_source_has_empty_atom_hypergraph() -> None:
     assert result.hypergraph.edges == ()
     assert result.atom_count == 0
     assert result.total_incidences == 0
-    assert result.subset_checks == 0
-    assert result.minimality_checks == 0
 
 
 def test_zero_only_source_has_identity_singleton_atom() -> None:
@@ -108,7 +106,6 @@ def test_zero_sum_free_source_has_no_edges() -> None:
 
     assert result.hypergraph.vertices == ("0", "1")
     assert result.hypergraph.edges == ()
-    assert result.subset_checks == 3
 
 
 def test_one_inverse_pair_is_an_atom() -> None:
@@ -140,8 +137,6 @@ def test_full_z7_atom_family_is_complete() -> None:
     assert set(_edge_indices(result)) == expected
     assert result.atom_count == 5
     assert result.total_incidences == 12
-    assert result.subset_checks == 63
-    assert result.minimality_checks == 15
 
 
 def test_product_group_coordinates_and_parent_moduli_survive() -> None:
@@ -173,6 +168,18 @@ def test_source_reduces_rows_and_rejects_duplicates_after_reduction() -> None:
                 "elements": [[7], [0]],
             }
         )
+
+
+@pytest.mark.parametrize(
+    "source",
+    (
+        {"group": {"moduli": [[7]]}, "elements": []},
+        {"group": {"moduli": [7]}, "elements": [[[1]]]},
+    ),
+)
+def test_source_rejects_nested_raw_scalars(source: dict[str, object]) -> None:
+    with pytest.raises(ValidationError, match="integer scalars"):
+        ZeroSumAtomSource.model_validate(source)
 
 
 def test_exhaustive_small_sources_match_independent_oracle() -> None:

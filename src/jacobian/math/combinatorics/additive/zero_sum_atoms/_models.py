@@ -70,6 +70,11 @@ class ZeroSumAtomSource(StrictModel):
                         "zero_sum_atom_source_rank",
                         "group axes exceed the raw retained-coordinate envelope",
                     )
+                if any(type(modulus) is not int for modulus in raw_moduli):
+                    raise _validation_error(
+                        "zero_sum_atom_source_moduli",
+                        "group moduli must be integer scalars",
+                    )
                 group["moduli"] = tuple(raw_moduli)
             prepared["group"] = group
         raw_elements = prepared.get("elements")
@@ -80,12 +85,14 @@ class ZeroSumAtomSource(StrictModel):
                     "zero-sum atom source permits at most 24 items",
                 )
             if any(
-                not isinstance(element, list) or len(element) > MAX_ATOM_RETAINED_AXES
+                not isinstance(element, list)
+                or len(element) > MAX_ATOM_RETAINED_AXES
+                or any(type(coordinate) is not int for coordinate in element)
                 for element in raw_elements
             ):
                 raise _validation_error(
                     "zero_sum_atom_source_rank",
-                    "source coordinates exceed the raw retained-coordinate envelope",
+                    "source coordinates must be bounded integer scalars",
                 )
             prepared["elements"] = tuple(raw_elements)
         return canonicalize_json_containers(prepared)
@@ -151,8 +158,6 @@ class ZeroSumAtomHypergraphResult(StrictModel):
     )
     atom_count: int = Field(ge=0, le=MAX_ATOM_EDGES)
     total_incidences: int = Field(ge=0, le=MAX_ATOM_INCIDENCES)
-    subset_checks: int = Field(ge=0, le=MAX_ATOM_SUBSET_CHECKS)
-    minimality_checks: int = Field(ge=0, le=MAX_ATOM_MINIMALITY_CHECKS)
 
     @model_validator(mode="after")
     def require_consistent_projection(self) -> Self:

@@ -624,13 +624,34 @@ def solve_triangle_free_diameter_augmentation_values(
         return fallback("augmentation request expired before response validation")
     try:
         payload = json.loads(completed.stdout.decode("utf-8"))
-        # payload excludes graph; reattach
-        result = TriangleFreeDiameterAugmentationResult.model_validate(
-            {**payload, "graph": graph.model_dump(mode="json")}
-        )
-        # additional binding checks: status vs graph order already via model
-        if result.target_diameter != target_diameter:
+        if not isinstance(payload, dict):
+            raise ValueError("worker projection must be an object")
+        status = payload.get("status")
+        worker_target = payload.get("target_diameter")
+        added_edges = payload.get("added_edges", [])
+        augmented_diameter = payload.get("augmented_diameter")
+        detail = payload.get("detail")
+        if (
+            status not in {"EXACT", "INFEASIBLE", "SOLVER_BUDGET_EXCEEDED"}
+            or type(worker_target) is not int
+            or not isinstance(added_edges, list)
+            or (augmented_diameter is not None and type(augmented_diameter) is not int)
+            or not isinstance(detail, str)
+        ):
+            raise ValueError("worker projection has an invalid shape")
+        edges = tuple(tuple(edge) for edge in added_edges)
+        if any(len(edge) != 2 or not all(isinstance(label, str) for label in edge) for edge in edges):
+            raise ValueError("worker added-edge projection is invalid")
+        if worker_target != target_diameter:
             raise ValueError("worker target mismatch")
+        result = TriangleFreeDiameterAugmentationResult._from_kernel(
+            graph=graph,
+            target_diameter=target_diameter,
+            status=status,
+            added_edges=edges,
+            augmented_diameter=augmented_diameter,
+            detail=detail,
+        )
         return (
             result
             if time.monotonic() < deadline

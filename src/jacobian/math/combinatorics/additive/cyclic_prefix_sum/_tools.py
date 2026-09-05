@@ -2,7 +2,6 @@
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.combinatorics.additive.cyclic_prefix_sum._models import (
-    MAX_SEQUENCING_GROUP_ORDER,
     MAX_SEQUENCING_PERMUTATION_NODES,
     MAX_SEQUENCING_SOURCE_ITEMS,
     CyclicPrefixSumResidueProfileRequest,
@@ -69,7 +68,7 @@ TOOLS: MathTools = (
             "source-index permutation search. The result preserves the "
             "standard cyclic convention when a zero-sum source returns to zero. The source is "
             f"bounded to {MAX_SEQUENCING_SOURCE_ITEMS} elements, its ambient "
-            f"group to {MAX_SEQUENCING_GROUP_ORDER:,} elements, and the complete search "
+            "group axes and retained coordinates to the operation's coordinate envelope, and the complete search "
             f"to {MAX_SEQUENCING_PERMUTATION_NODES:,} states; a node budget stop "
             "would be UNKNOWN, not nonexistence."
         ),

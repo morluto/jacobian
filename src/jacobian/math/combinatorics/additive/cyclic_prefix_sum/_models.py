@@ -27,6 +27,7 @@ MAX_SEQUENCING_SOURCE_ITEMS = 8
 MAX_SEQUENCING_GROUP_ORDER = 4_096
 MAX_SEQUENCING_PERMUTATION_NODES = 109_601
 MAX_SEQUENCING_FORBIDDEN_VALUES = MAX_SEQUENCING_GROUP_ORDER
+MAX_SEQUENCING_COORDINATE_CELLS = 32_768
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -108,6 +109,8 @@ class FiniteAbelianSequencingSource(StrictModel):
             group: dict[str, object] = dict(raw_group)
             raw_moduli = group.get("moduli")
             if isinstance(raw_moduli, list):
+                if len(raw_moduli) > MAX_SEQUENCING_COORDINATE_CELLS:
+                    raise _validation_error("sequencing_source_rank", "group axis count exceeds the sequencing coordinate envelope")
                 group["moduli"] = tuple(raw_moduli)
             prepared["group"] = group
         raw_elements = prepared.get("elements")
@@ -118,6 +121,8 @@ class FiniteAbelianSequencingSource(StrictModel):
     @model_validator(mode="after")
     def require_canonical_source(self) -> Self:
         rank = len(self.group.moduli)
+        if rank * (len(self.elements) + 1) > MAX_SEQUENCING_COORDINATE_CELLS:
+            raise _validation_error("sequencing_coordinate_work", "source coordinates exceed the sequencing envelope")
         if len(self.elements) > MAX_SEQUENCING_SOURCE_ITEMS:
             raise _validation_error(
                 "sequencing_source_cardinality",
@@ -220,6 +225,8 @@ class ForbiddenPrefixSequencingRequest(StrictModel):
             object.__setattr__(self, "first_element", reduced_first)
 
         rank = len(self.source.group.moduli)
+        if rank * (len(self.source.elements) + len(self.forbidden_values) + 1) > MAX_SEQUENCING_COORDINATE_CELLS:
+            raise _validation_error("sequencing_coordinate_work", "retained sequencing coordinates exceed the admitted envelope")
         if any(len(value) != rank for value in self.forbidden_values):
             raise _validation_error(
                 "sequencing_forbidden_rank",
@@ -292,6 +299,9 @@ class ForbiddenPrefixSequencingResult(StrictModel):
 
     @model_validator(mode="after")
     def require_result_branch_shape(self) -> Self:
+        if self.first_element is not None:
+            if len(self.first_element) != len(self.source.group.moduli) or self.first_element not in self.source.elements:
+                raise _validation_error("sequencing_first_element_membership", "first_element must be a source element with the source rank")
         if self.status == "FOUND":
             if self.ordering is None or len(self.ordering) != len(self.source.elements):
                 raise _validation_error(
@@ -313,10 +323,7 @@ class ForbiddenPrefixSequencingResult(StrictModel):
                     "sequencing_found_elements",
                     "each ordering row element must equal its indexed source element",
                 )
-            if self.first_element is not None and (
-                self.first_element not in self.source.elements
-                or self.ordering[0].element != self.first_element
-            ):
+            if self.first_element is not None and self.ordering[0].element != self.first_element:
                 raise _validation_error(
                     "sequencing_found_first_element",
                     "a prescribed first element must equal the first ordering row",

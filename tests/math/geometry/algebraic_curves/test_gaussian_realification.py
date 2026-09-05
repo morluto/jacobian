@@ -46,7 +46,10 @@ def test_native_api_and_gaussian_scalar_compose():
         variable="z",
         terms=(UnivariateGaussianPolynomialTerm(coefficient=coefficient, exponent=1),),
     )
-    assert public_gaussian_realification(polynomial, ("x", "y")).source_polynomial == polynomial
+    assert (
+        public_gaussian_realification(polynomial, ("x", "y")).source_polynomial
+        == polynomial
+    )
 
 
 def test_quadratic_gaussian_realification():

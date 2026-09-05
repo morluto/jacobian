@@ -327,9 +327,11 @@ class ForbiddenPrefixSequencingResult(StrictModel):
         ) if all(len(value) == rank for value in self.forbidden_values) else ()
         if canonical_forbidden != self.forbidden_values or len(set(self.forbidden_values)) != len(self.forbidden_values):
             raise _validation_error("sequencing_forbidden_canonical", "forbidden values must be reduced, sorted, distinct source-group elements")
-        if self.first_element is not None:
-            if len(self.first_element) != len(self.source.group.moduli) or self.first_element not in self.source.elements:
-                raise _validation_error("sequencing_first_element_membership", "first_element must be a source element with the source rank")
+        if self.first_element is not None and (
+            len(self.first_element) != len(self.source.group.moduli)
+            or self.first_element not in self.source.elements
+        ):
+            raise _validation_error("sequencing_first_element_membership", "first_element must be a source element with the source rank")
         if self.status == "FOUND":
             if self.ordering is None or len(self.ordering) != len(self.source.elements):
                 raise _validation_error(

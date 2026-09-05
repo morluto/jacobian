@@ -143,14 +143,19 @@ class ZeroSumAtomHypergraphResult(StrictModel):
                 "zero_sum_atom_vertex_indices",
                 "vertex_source_indices must enumerate the retained source",
             )
-        vertices = tuple(str(index) for index in self.vertex_source_indices)
+        label_width = len(str(max(0, len(self.source.elements) - 1)))
+        vertices = tuple(
+            str(index).zfill(label_width) for index in self.vertex_source_indices
+        )
         if self.hypergraph.vertices != vertices:
             raise _validation_error(
                 "zero_sum_atom_vertices",
                 "hypergraph vertices must be decimal source indices in order",
             )
         for edge_id, members in self.hypergraph.edges:
-            expected = tuple(str(index) for index in sorted(map(int, members)))
+            expected = tuple(
+                str(index).zfill(label_width) for index in sorted(map(int, members))
+            )
             if edge_id != ",".join(expected) or members != expected:
                 raise _validation_error(
                     "zero_sum_atom_edge_encoding",

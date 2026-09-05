@@ -112,12 +112,15 @@ def construct_zero_sum_atom_hypergraph(
             "complete zero-sum atom family exceeds the hypergraph result bound",
         )
 
-    vertices = tuple(str(index) for index in range(len(elements)))
+    label_width = len(str(max(0, len(elements) - 1)))
+
+    def label(index: int) -> str:
+        return str(index).zfill(label_width)
+
+    vertices = tuple(label(index) for index in range(len(elements)))
     edges: list[tuple[str, tuple[str, ...]]] = []
     for mask in atom_masks:
-        members = tuple(
-            str(index) for index in range(len(elements)) if mask & (1 << index)
-        )
+        members = tuple(label(index) for index in range(len(elements)) if mask & (1 << index))
         edges.append((",".join(members), members))
     hypergraph = FiniteHypergraph(vertices=vertices, edges=tuple(edges))
 

@@ -17,10 +17,10 @@ there is no geometry artifact or generic verification service.
 
 `geometry.point_configuration.euclidean_orbit_profile.compute` canonicalizes
 one bounded labelled rational point configuration. It returns the
-lexicographically least complete squared-distance matrix over source
+lexicographically least complete squared-distance matrix and ambient dimension over source
 relabelings, retaining a deterministic source-to-canonical map. The isometry
 form uses the source distances unchanged; the similarity form divides them by
-the least positive squared distance. Equal forms characterize congruence and,
+the least positive squared distance. Equal forms with the same ambient dimension characterize congruence and,
 after the common positive normalization, similarity, respectively, including
 reflections.
 

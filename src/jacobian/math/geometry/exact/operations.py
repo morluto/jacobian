@@ -148,6 +148,7 @@ def euclidean_orbit_profile(
 
     return EuclideanOrbitProfileResult(
         configuration=configuration,
+        ambient_dimension=len(configuration.points[0].coordinates),
         isometry_form=canonical_rational_matrix(isometry_form),
         isometry_relabeling=isometry_relabeling,
         similarity_form=canonical_rational_matrix(similarity_form),

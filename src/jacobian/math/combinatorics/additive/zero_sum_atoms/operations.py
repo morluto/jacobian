@@ -120,7 +120,9 @@ def construct_zero_sum_atom_hypergraph(
     vertices = tuple(label(index) for index in range(len(elements)))
     edges: list[tuple[str, tuple[str, ...]]] = []
     for mask in atom_masks:
-        members = tuple(label(index) for index in range(len(elements)) if mask & (1 << index))
+        members = tuple(
+            label(index) for index in range(len(elements)) if mask & (1 << index)
+        )
         edges.append((",".join(members), members))
     hypergraph = FiniteHypergraph(vertices=vertices, edges=tuple(edges))
 

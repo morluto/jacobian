@@ -51,9 +51,10 @@ MAX_SPECTRAL_REMAINDER_COEFFICIENT_DIGITS = (
 ) // 100_000 + 1
 
 MAX_CHARACTER_SUM_SEQUENCE_LENGTH = 4_096
-MAX_CHARACTER_SUM_FREQUENCIES = 256
 MAX_CHARACTER_SUM_INTERVALS = 256
 MAX_CHARACTER_SUM_CELLS = 4_096
+MAX_CHARACTER_SUM_FREQUENCIES = MAX_CHARACTER_SUM_CELLS
+"""A raw-input guard implied by at least one retained interval per frequency."""
 MAX_CHARACTER_SUM_TOTAL_VISITS = 262_144
 MAX_CHARACTER_SUM_CYCLOTOMIC_DEGREE = MAX_SPECTRAL_CYCLOTOMIC_DEGREE
 MAX_CHARACTER_SUM_CYCLOTOMIC_DENSE_OPS = MAX_SPECTRAL_CYCLOTOMIC_DENSE_OPS
@@ -443,20 +444,12 @@ def _spectral_pair_work(source: FiniteAbelianSpectralPairSource) -> _SpectralPai
     itself trivially bounded.
     """
 
-    exponent = 1
-    for modulus in source.group.moduli:
-        exponent = exponent // gcd(exponent, int(modulus)) * int(modulus)
-        dense_ops = 10 * exponent.bit_length() * (exponent + 1) * (exponent + 1)
-        if dense_ops > MAX_CHARACTER_SUM_CYCLOTOMIC_DENSE_OPS:
-            raise ValueError(
-                "character-sum cyclotomic construction work exceeds its dense-op bound"
-            )
     needs_reduction = (
         len(source.points) == len(source.frequencies) and len(source.frequencies) > 1
     )
     if not needs_reduction:
-        work = _SpectralPairWork(
-            group_exponent=exponent,
+        return _SpectralPairWork(
+            group_exponent=1,
             cyclotomic_degree=None,
             character_terms=0,
             cyclotomic_reductions=0,
@@ -465,8 +458,14 @@ def _spectral_pair_work(source: FiniteAbelianSpectralPairSource) -> _SpectralPai
             cyclotomic_intermediate_bits=0,
             remainder_coefficient_bits=0,
         )
-        return work
-
+    exponent = 1
+    for modulus in source.group.moduli:
+        exponent = exponent // gcd(exponent, int(modulus)) * int(modulus)
+        dense_ops = 10 * exponent.bit_length() * (exponent + 1) * (exponent + 1)
+        if dense_ops > MAX_CHARACTER_SUM_CYCLOTOMIC_DENSE_OPS:
+            raise ValueError(
+                "character-sum cyclotomic construction work exceeds its dense-op bound"
+            )
     cyclotomic_dense_ops = 10 * exponent.bit_length() * (exponent + 1) * (exponent + 1)
     cyclotomic_intermediate_bits = 2 * exponent + (exponent + 1).bit_length() + 1
     if cyclotomic_dense_ops > MAX_SPECTRAL_CYCLOTOMIC_DENSE_OPS:
@@ -652,7 +651,7 @@ class FiniteAbelianCharacterSumIntervalProfileSource(StrictModel):
     )
     frequencies: tuple[BoundedGroupElement, ...] = Field(
         min_length=1,
-        max_length=MAX_CHARACTER_SUM_FREQUENCIES,
+        max_length=MAX_CHARACTER_SUM_CELLS,
     )
     intervals: tuple[BoundedCharacterSumInterval, ...] = Field(
         min_length=1,
@@ -899,8 +898,6 @@ def _character_sum_interval_profile_work(
 
     if sequence_length > MAX_CHARACTER_SUM_SEQUENCE_LENGTH:
         raise ValueError("character-sum sequence length exceeds its bound")
-    if frequency_count > MAX_CHARACTER_SUM_FREQUENCIES:
-        raise ValueError("character-sum frequency count exceeds its bound")
     if interval_count > MAX_CHARACTER_SUM_INTERVALS:
         raise ValueError("character-sum interval count exceeds its bound")
 

@@ -34,7 +34,7 @@ def search_forbidden_prefix_sequencing(
 
     element_count = len(elements)
     if element_count == 0:
-        return SequencingKernelResult(status="EXHAUSTED", states_explored=1)
+        return SequencingKernelResult(status="FOUND", ordering_indices=(), states_explored=1)
     if first_index is None:
         initial_indices = tuple(range(element_count))
     else:

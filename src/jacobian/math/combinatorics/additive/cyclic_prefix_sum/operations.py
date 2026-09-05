@@ -196,13 +196,15 @@ def _admit_forbidden_prefix_sequencing(
             "search_node_limit must be positive and within the admitted bound",
         )
 
-    group_order = prod(source.group.moduli)
-    if group_order > MAX_SEQUENCING_GROUP_ORDER:
-        _reject(
-            ("source", "group", "moduli"),
-            "forbidden_prefix_sequencing.group_order",
-            f"source group exceeds the {MAX_SEQUENCING_GROUP_ORDER:,}-element bound",
-        )
+    group_order = 1
+    for modulus in source.group.moduli:
+        group_order *= modulus
+        if group_order > MAX_SEQUENCING_GROUP_ORDER:
+            _reject(
+                ("source", "group", "moduli"),
+                "forbidden_prefix_sequencing.group_order",
+                f"source group exceeds the {MAX_SEQUENCING_GROUP_ORDER:,}-element bound",
+            )
     if len(source.elements) > MAX_SEQUENCING_SOURCE_ITEMS:
         _reject(
             ("source", "elements"),
@@ -335,7 +337,7 @@ def search_forbidden_prefix_cyclic_ordering(
     )
     return _build_sequencing_result(
         source,
-        first_element,
+        source.elements[plan.first_index] if plan.first_index is not None else None,
         plan.forbidden_values,
         plan.search_node_limit,
         search,

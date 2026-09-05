@@ -166,11 +166,11 @@ def test_empty_forbidden_set_and_nonzero_sum_source() -> None:
     assert result.ordering[-1].prefix_sum != (0,)
 
 
-def test_empty_source_is_exactly_exhausted() -> None:
+def test_empty_source_has_the_vacuous_found_ordering() -> None:
     result = _run(_request((), (3,)))
 
-    assert result.status == "EXHAUSTED"
-    assert result.ordering is None
+    assert result.status == "FOUND"
+    assert result.ordering == ()
     assert result.states_explored == 1
 
 

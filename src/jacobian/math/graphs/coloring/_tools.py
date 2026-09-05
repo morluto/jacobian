@@ -15,6 +15,8 @@ from jacobian.math.graphs.coloring._models import (
     EdgeKColorabilityResult,
     KColorabilityRequest,
     KColorabilityResult,
+    ListCapacityEdgeColoringRequest,
+    ListCapacityEdgeColoringResult,
     MaximalIndependentSetRequest,
     MaximalIndependentSetResult,
 )
@@ -55,6 +57,14 @@ def compute_edge_coloring_check(
     request: EdgeColoringCheckRequest,
 ) -> EdgeColoringCheckResult:
     return native.edge_coloring_check(request.assignment)
+
+
+def compute_list_capacity_edge_coloring(
+    request: ListCapacityEdgeColoringRequest,
+) -> ListCapacityEdgeColoringResult:
+    return native.list_capacity_edge_coloring(
+        request.graph, request.palette, request.lists, request.capacities
+    )
 
 
 PETERSEN_GRAPH = {
@@ -235,6 +245,40 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "colors": 4,
                         "coloring": [1, 0, 1, 3, 2, 3, 0, 3, 1, 2, 0, 2, 2, 0, 1],
                     },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="graph.edge_coloring.list_capacity.assign",
+        title="Assign prescribed-list edge colors under capacities",
+        description="Given a simple graph, a finite palette, one allowed-color "
+        "list per edge, and one upper capacity per color, find a proper edge "
+        "assignment within lists and capacities or establish infeasibility. "
+        "Capacities clamp to the edge count; budget exhaustion reports "
+        "UNKNOWN, never infeasibility.",
+        request_type=ListCapacityEdgeColoringRequest,
+        result_type=ListCapacityEdgeColoringResult,
+        run=compute_list_capacity_edge_coloring,
+        tags=("graph", "edge-coloring", "exact"),
+        examples=(
+            OperationExample(
+                name="path_list_capacity_feasible",
+                description="Color a 2-edge path with lists [x],[x,y] and unit capacities.",
+                input={
+                    "graph": {
+                        "vertices": ["a", "b", "c"],
+                        "edges": [["a", "b"], ["b", "c"]],
+                    },
+                    "palette": ["x", "y"],
+                    "lists": [
+                        {"edge": ["a", "b"], "colors": ["x"]},
+                        {"edge": ["b", "c"], "colors": ["x", "y"]},
+                    ],
+                    "capacities": [
+                        {"color": "x", "capacity": 1},
+                        {"color": "y", "capacity": 1},
+                    ],
                 },
             ),
         ),

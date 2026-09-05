@@ -14,6 +14,10 @@ from pydantic import (
 from pydantic_core import PydanticCustomError
 
 from jacobian._digest import Sha256Digest
+from jacobian._exact import (
+    CanonicalRational,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import encode_strict_json, sha256_digest
 from jacobian.math.graphs.values import (
@@ -63,6 +67,7 @@ def _validation_error(message: str) -> PydanticCustomError:
     # validator requires adding its reason here rather than creating an opaque
     # catch-all error type.
     reason_fragments = (
+        ("packing", "weighted_packing"),
         ("valid UTF-8", "label_encoding"),
         ("label exceeds", "label_length"),
         ("labels must be distinct", "vertex_identity"),
@@ -1015,10 +1020,40 @@ MAX_TRANSVERSAL_RESULT_VERTICES = MAX_VERTICES
 MAX_TRANSVERSAL_SEARCH_WORK = 50_000_000
 
 
+@dataclass(frozen=True, slots=True)
+class _TransversalComponent:
+    """One independent residual transversal subproblem."""
+
+    vertices: tuple[str, ...]
+    edge_sets: tuple[frozenset[str], ...]
+    search_depth: int
+
+
+@dataclass(frozen=True, slots=True)
+class _TransversalSearchPlan:
+    """Request-scoped forced-vertex and component plan for one transversal."""
+
+    vertices: tuple[str, ...]
+    forced_vertices: tuple[str, ...]
+    components: tuple[_TransversalComponent, ...]
+    search_work: int
+
+
 def _minimum_transversal_search_plan(
     hypergraph: FiniteHypergraph,
-) -> tuple[tuple[str, ...], tuple[frozenset[str], ...], int, int]:
-    """Return active vertices, unique edges, search depth, and work bound."""
+) -> _TransversalSearchPlan:
+    """Return forced vertices, residual components, and total work bound.
+
+    Singleton edges force their vertex into every transversal; hit
+    constraints are removed and newly inactive vertices omitted. The residual
+    incidence structure splits into independent connected components (a
+    transversal hits every edge iff it hits every component's edges, and its
+    size is the sum of component sizes). Each component keeps the previous
+    greedy-depth candidate/edge-check charge; the total adds one
+    incidence-proportional presolve charge. Superset edges are intentionally
+    retained: pairwise inclusion tests need their own quadratic bound and are
+    unnecessary for the admitted easy cases.
+    """
 
     from math import comb
 
@@ -1030,26 +1065,80 @@ def _minimum_transversal_search_plan(
             seen_edges.add(edge)
             unique_edges.append(edge)
     unique_edges.sort(key=lambda edge: (len(edge), tuple(sorted(edge))))
-    active_labels = set().union(*unique_edges) if unique_edges else set()
-    active_vertices = tuple(
-        vertex for vertex in hypergraph.vertices if vertex in active_labels
+    presolve_work = sum(len(edge) for edge in unique_edges) + len(unique_edges)
+
+    forced: tuple[str, ...] = tuple(
+        vertex for vertex in hypergraph.vertices if frozenset((vertex,)) in seen_edges
+    )
+    forced_set = set(forced)
+    residual_edges = tuple(edge for edge in unique_edges if not edge & forced_set)
+    residual_labels = set().union(*residual_edges) if residual_edges else set()
+    residual_vertices = tuple(
+        vertex for vertex in hypergraph.vertices if vertex in residual_labels
     )
 
-    greedy_witness: set[str] = set()
-    for edge in unique_edges:
-        if not greedy_witness & edge:
-            greedy_witness.add(
-                next(vertex for vertex in active_vertices if vertex in edge)
+    components: list[_TransversalComponent] = []
+    if residual_edges:
+        # Union-find over residual vertex positions and edge positions on the
+        # bipartite incidence structure.
+        vertex_position = {
+            vertex: index for index, vertex in enumerate(residual_vertices)
+        }
+        offset = len(residual_vertices)
+        parent = list(range(offset + len(residual_edges)))
+
+        def find(index: int) -> int:
+            while parent[index] != index:
+                parent[index] = parent[parent[index]]
+                index = parent[index]
+            return index
+
+        for edge_index, edge in enumerate(residual_edges):
+            for vertex in edge:
+                root_a, root_b = (
+                    find(offset + edge_index),
+                    find(vertex_position[vertex]),
+                )
+                if root_a != root_b:
+                    parent[max(root_a, root_b)] = min(root_a, root_b)
+        groups: dict[int, dict[str, list[int]]] = {}
+        for edge_index in range(len(residual_edges)):
+            groups.setdefault(find(offset + edge_index), {"vertices": [], "edges": []})[
+                "edges"
+            ].append(edge_index)
+        for vertex_index in range(len(residual_vertices)):
+            groups.setdefault(find(vertex_index), {"vertices": [], "edges": []})[
+                "vertices"
+            ].append(vertex_index)
+        for group in groups.values():
+            group_vertices = tuple(residual_vertices[i] for i in group["vertices"])
+            group_edges = tuple(residual_edges[i] for i in group["edges"])
+            if not group_edges:
+                continue
+            greedy_witness: set[str] = set()
+            for edge in group_edges:
+                if not greedy_witness & edge:
+                    greedy_witness.add(
+                        next(vertex for vertex in group_vertices if vertex in edge)
+                    )
+            search_depth = len(greedy_witness)
+            candidate_count = sum(
+                comb(len(group_vertices), size) for size in range(1, search_depth + 1)
             )
-    search_depth = len(greedy_witness)
-    candidate_count = sum(
-        comb(len(active_vertices), size) for size in range(1, search_depth + 1)
-    )
-    return (
-        active_vertices,
-        tuple(unique_edges),
-        search_depth,
-        candidate_count * len(unique_edges),
+            components.append(
+                _TransversalComponent(
+                    vertices=group_vertices,
+                    edge_sets=group_edges,
+                    search_depth=search_depth,
+                )
+            )
+            presolve_work += candidate_count * len(group_edges)
+
+    return _TransversalSearchPlan(
+        vertices=hypergraph.vertices,
+        forced_vertices=forced,
+        components=tuple(components),
+        search_work=presolve_work,
     )
 
 
@@ -1057,9 +1146,10 @@ class MinimumTransversalRequest(StrictModel):
     """Request an exact minimum-cardinality transversal (hitting set).
 
     A transversal is a set of vertices that intersects every hyperedge.
-    The exact bounded search ignores carrier vertices absent from every edge,
-    deduplicates the edge family, and enumerates active-vertex subsets by
-    increasing cardinality. Admission bounds the resulting candidate/edge
+    The exact bounded search selects singleton-forced vertices, splits the
+    residual incidence structure into independent components, and enumerates
+    active-vertex subsets by increasing cardinality within each component.
+    Admission bounds presolve plus the summed component candidate/edge
     intersection checks by MAX_TRANSVERSAL_SEARCH_WORK.
     """
 
@@ -1118,24 +1208,40 @@ class MinimumTransversalResult(StrictModel):
 
 MAX_MATCHING_EDGES = 20
 
+# Conflict-component search charges for maximum edge matching. A component of
+# m candidates costs at most 2**m subset states, each testing pairwise
+# disjointness with at most m**2 member-set intersections. One 20-candidate
+# search is the previously admitted exhaustive envelope, so the summed budget
+# below admits exactly the same hardest single search while also admitting
+# many small independent components (e.g. 21 disjoint singletons).
+MAX_MATCHING_SEARCH_WORK = (
+    (1 << MAX_MATCHING_EDGES) * MAX_MATCHING_EDGES * MAX_MATCHING_EDGES
+)
+
 
 class MaximumEdgeMatchingRequest(StrictModel):
     """Request an exact maximum-cardinality edge matching.
 
-    A matching is a set of pairwise-disjoint hyperedges.  The exact bounded
-    search enumerates nonempty edge subsets by decreasing cardinality and
-    admits at most ``MAX_MATCHING_EDGES`` search edges.  Empty edges form a
-    mandatory witness prefix because they are disjoint from every edge.
+    A matching is a set of pairwise-disjoint hyperedges. The exact bounded
+    search splits nonempty candidates into conflict-connected components
+    (candidates sharing no vertex are independent subproblems) and enumerates
+    each component by decreasing cardinality. Every component admits at most
+    ``MAX_MATCHING_EDGES`` search edges and the summed component search work
+    fits ``MAX_MATCHING_SEARCH_WORK``. Empty edges form a mandatory witness
+    prefix because they are disjoint from every edge.
     """
 
     hypergraph: FiniteHypergraph = Field(
         description=(
-            "Canonical finite hypergraph. Exact matching search admits at most "
-            f"{MAX_MATCHING_EDGES} nonempty edges; empty edge IDs are included "
+            "Canonical finite hypergraph. Exact matching search splits "
+            f"nonempty candidates into conflict components of at most "
+            f"{MAX_MATCHING_EDGES} edges with summed search work at most "
+            f"{MAX_MATCHING_SEARCH_WORK} checks; empty edge IDs are included "
             "in every matching witness."
         ),
         json_schema_extra={
             "search_edge_bound": MAX_MATCHING_EDGES,
+            "search_work_bound": MAX_MATCHING_SEARCH_WORK,
             "empty_edge_witness_prefix": True,
         },
     )
@@ -1174,3 +1280,124 @@ class MaximumEdgeMatchingResult(StrictModel):
         if self.count != len(self.matching):
             raise _validation_error("count must equal the matching size")
         return self
+
+
+# ---------------------------------------------------------------------------
+# Bounded exact maximum-weight edge packings
+# --------------------------------------------------------------------------
+
+# Weighted set packing shares the cardinality-matching exhaustive shape: a
+# component of m candidates costs at most 2**m subset states, each testing
+# pairwise disjointness and accumulating weights in O(m**2) field work.
+# The summed component budget below admits exactly the same hardest single
+# search as maximum edge matching.
+MAX_WEIGHTED_PACKING_SEARCH_WORK = (
+    (1 << MAX_MATCHING_EDGES) * MAX_MATCHING_EDGES * MAX_MATCHING_EDGES
+)
+# One weight component stays within the canonical rational envelope: even
+# 12,000 entries of 256 digits accumulate far below the 32,768-digit bound.
+MAX_PACKING_WEIGHT_DIGITS = 256
+
+
+class EdgeWeight(StrictModel):
+    """One exact nonnegative weight bound to a named hyperedge."""
+
+    edge_id: str = Field(min_length=1, max_length=MAX_LABEL_LENGTH)
+    weight: CanonicalRational
+
+    @model_validator(mode="after")
+    def require_nonnegative_bounded_weight(self) -> Self:
+        if self.weight.as_fraction() < 0:
+            raise _validation_error("packing weights must be nonnegative")
+        try:
+            require_bounded_rational(
+                self.weight,
+                max_digits=MAX_PACKING_WEIGHT_DIGITS,
+                label="packing weight",
+            )
+        except ValueError as error:
+            raise _validation_error(str(error)) from error
+        return self
+
+
+class WeightedPackingRequest(StrictModel):
+    """Request an exact maximum-weight pairwise-disjoint hyperedge family.
+
+    Every hyperedge needs exactly one weight; the mapping is total over the
+    source edge IDs. Zero weights are admitted and participate in the
+    lexicographic tie-break.
+    """
+
+    hypergraph: FiniteHypergraph
+    weights: tuple[EdgeWeight, ...]
+
+    @model_validator(mode="after")
+    def require_total_weight_binding(self) -> Self:
+        edge_ids = tuple(edge_id for edge_id, _ in self.hypergraph.edges)
+        weight_ids = tuple(entry.edge_id for entry in self.weights)
+        if len(set(weight_ids)) != len(weight_ids):
+            raise _validation_error("packing weights must use distinct edge IDs")
+        if set(weight_ids) != set(edge_ids):
+            raise _validation_error(
+                "packing weights must cover exactly the source hyperedge IDs"
+            )
+        return self
+
+
+class WeightedPackingResult(StrictModel):
+    """An exact maximum-weight pairwise-disjoint hyperedge family.
+
+    ``packing`` holds the selected edge IDs in declared edge order and
+    ``total_weight`` is the kernel-established optimum. Ties resolve per
+    conflict-component toward the lexicographically smallest declared-order
+    family, and the union is the witness; zero-weight candidates therefore
+    survive only when locally canonical. Weights add across independent
+    components, but globally smallest ID-tuples need not decompose, so the
+    tie-break is defined component-wise.
+    """
+
+    hypergraph: FiniteHypergraph
+    weights: tuple[EdgeWeight, ...]
+    packing: tuple[str, ...] = Field(max_length=MAX_EDGES)
+    total_weight: CanonicalRational
+
+    @model_validator(mode="after")
+    def bind_packing(self) -> Self:
+        edge_ids = tuple(edge_id for edge_id, _ in self.hypergraph.edges)
+        edge_id_set = set(edge_ids)
+        witness_set = set(self.packing)
+        if len(witness_set) != len(self.packing):
+            raise _validation_error("packing edge ids must be distinct")
+        if not witness_set <= edge_id_set:
+            raise _validation_error("packing edge ids must be declared source edge ids")
+        expected_order = tuple(
+            edge_id for edge_id in edge_ids if edge_id in witness_set
+        )
+        if self.packing != expected_order:
+            raise _validation_error(
+                "packing edge ids must be unique and in declared edge order"
+            )
+        weight_ids = tuple(entry.edge_id for entry in self.weights)
+        if set(weight_ids) != edge_id_set or len(set(weight_ids)) != len(weight_ids):
+            raise _validation_error(
+                "packing weights must cover exactly the source hyperedge IDs"
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        hypergraph: FiniteHypergraph,
+        weights: tuple[EdgeWeight, ...],
+        packing: tuple[str, ...],
+        total_weight: CanonicalRational,
+    ) -> Self:
+        """Construct an optimum established by the owner-local kernel."""
+
+        return cls.model_construct(
+            hypergraph=hypergraph,
+            weights=weights,
+            packing=packing,
+            total_weight=total_weight,
+        )

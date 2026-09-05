@@ -16,6 +16,7 @@ def test_hypergraph_public_api_is_explicit() -> None:
         "independence_number",
         "induced_type_profile",
         "maximum_edge_matching",
+        "maximum_weight_packing",
         "minimum_transversal",
         "parameters",
         "vertex_degrees",

@@ -1,6 +1,6 @@
 ---
 name: evaluate-mcp-tool-adoption
-description: Diagnose whether agents can see, discover, select, and correctly execute MCP tools without conflating those stages. Use when investigating why agents did or did not use an MCP tool, evaluating MCP server instructions or tool descriptions, testing natural-language discovery, or designing a frozen control/treatment adoption evaluation. Do not use for ordinary MCP implementation or task-specific benchmark authoring.
+description: Investigate MCP tool availability, discovery, and selection, including controlled adoption evaluations.
 ---
 
 # Evaluate MCP Tool Adoption
@@ -16,15 +16,16 @@ adoption diagnosis and its evidence boundary.
 
 ## Freeze the question
 
-Write one falsifiable question, such as “does server-level guidance cause an
-agent to inspect a matching operation when the ordinary prompt does not?” Keep
+For a controlled comparison, write one falsifiable question, such as “does
+server-level guidance cause an agent to inspect a matching operation when the
+ordinary prompt does not?” Keep
 the model, model version, reasoning effort, client version, Jacobian revision,
 image digest, task digest, MCP configuration, egress/proxy state, attempt
 count, and budgets fixed across comparable arms.
 
-Record the public task prompt and the complete agent-visible MCP surface. Do
-not include an operation ID, answer, or routing instruction in a natural-use
-arm. Do not score a tool call as success: final mathematical correctness,
+Record the relevant prompt and agent-visible MCP surface. In a controlled
+comparison, do not include an operation ID, answer, or routing instruction in a
+natural-use arm. Do not score a tool call as success: final mathematical correctness,
 declared witness validity, and truthful claims remain the task outcomes.
 
 ## Establish the four-stage control matrix
@@ -45,43 +46,12 @@ Likewise, a task-level instruction can prove that the client can call a tool,
 but cannot prove that server initialization instructions are salient enough to
 change ordinary selection.
 
-## Run clean model arms
+## When model comparisons are needed
 
-Use fresh contexts and identical task inputs. Change one intervention at a
-time:
-
-1. **No cue:** expose the MCP server with the ordinary task prompt.
-2. **Server guidance:** change only the initialization guidance or tool
-   presentation being evaluated.
-3. **Task-level cue:** state a short conditional lookup request in the task;
-   label this as an intervention, never as natural behavior.
-4. **Direct-execution control:** name the matching operation and require one
-   typed execution while forbidding a manual substitute; use this only to
-   localize a suspected availability or execution failure.
-
-Avoid a routing cue that mandates a result, a proof strategy, or routine calls
-when no operation fits. If a matching operation is materially cheaper than a
-fallback, document why with a bounded representative input; otherwise non-use
-may be rational rather than a usability defect.
-
-## Capture and score evidence
-
-Persist raw initialization, tool-list, `math.find`, inspection, `math.run`,
-and final-answer events. Record operation IDs, request payloads, typed results,
-retries, visible MCP bytes, input/output tokens, elapsed time, task reward,
-and verifier outcome. Hash frozen task and configuration inputs.
-
-Report these separately:
-
-- final mathematical outcome and verifier result;
-- discovery of an applicable operation;
-- valid first execution, recovery, and use of the typed result;
-- resource cost relative to the no-cue arm; and
-- failures by stage, not by a generic “tool use” label.
-
-Do not infer hidden reasoning from a transcript. A successful answer without a
-call is valid task success, and a call without a correct answer is not adoption
-success.
+Use [model comparisons](references/model-comparisons.md) for controlled arms,
+event capture, and scoring. Run only the arms needed to answer the frozen
+question within user-authorized cost boundaries. A deterministic diagnosis does
+not require a model experiment.
 
 ## Attribute conservatively
 

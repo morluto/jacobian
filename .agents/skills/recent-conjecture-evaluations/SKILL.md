@@ -1,156 +1,62 @@
 ---
 name: recent-conjecture-evaluations
-description: Run source-grounded Jacobian reliability evaluations using recently resolved conjectures as held-out probes. Use for source selection and deduplication, exact input-bound oracles, current-main math.find/math.run contract audits, frozen control/treatment comparisons, observable trajectory scoring, failure attribution, and independent review of another evaluation. Do not use merely to solve a conjecture or create benchmark-specific mathematical helpers.
+description: Evaluate Jacobian reliability using recently resolved conjectures as held-out probes.
 ---
 
 # Recent Conjecture Evaluations
 
-Treat conjectures as probes. The objective is to improve Jacobian from discovery
-through final-answer use, not to accumulate solved examples.
+Use recently resolved conjectures to probe Jacobian reliability. The outcome is
+an evidence-backed diagnosis, not a collection of solved examples. This skill
+owns source selection, deterministic replay, optional model comparisons, and
+attribution; Harbor packaging is a separate workflow.
 
-This skill owns source selection, deterministic operation audits, optional
-control/treatment evaluation, attribution, and repository-action decisions. It
-does not create Harbor tasks. Use `harbor-benchmarks` and
-`verifier-evaluations` when a selected case is later packaged as a benchmark.
+## Choose the requested mode
 
-## Select a mode
+- **Probe:** read [probe workflow](references/probe.md) for one source cycle,
+  including source gating, independent oracle, current-main replay, and reporting.
+- **Review:** inspect the completed cycle against
+  [source gating](references/source-gating.md), the oracle and frozen inputs,
+  and the applicable [scoring rules](references/evaluation-and-scoring.md).
+  Use [report fields](references/report-schema.md) to identify missing evidence.
+  Reproduce disputed deterministic claims where useful; do not repeat model arms.
+- **Coordinate:** search saved reports, reservations, and issue/PR ownership for
+  the source and root mechanism. Use the inventory helper shown below and the
+  ownership rules in [action policy](references/action-policy.md). Do not begin
+  a new probe merely to answer a coordination question.
 
-- **Probe:** run one new source cycle.
-- **Review:** independently audit a completed cycle without repeating model calls.
-- **Coordinate:** check reservations, duplicates, and ownership before another evaluator proceeds.
-
-Run one cycle by default. Continue looping only when the operator explicitly
-requests it. A loop does not authorize unlimited model calls.
-
-## Preserve these invariants
-
-1. Prefer primary sources and record the precise theorem status and date.
-2. Bind every oracle, prompt, suite, and tool payload to the intended input.
-3. Reconstruct the gold result independently of evaluated model arms.
-4. Audit current main deterministically before any model call.
-5. Keep `COMPUTED`, `VERIFIED`, source-imported, and unproved claims separate.
-6. Treat missing operation, timeout, cancellation, transport failure, and failure to find evidence as non-conclusions.
-7. Never attribute a model-authored fallback error to Jacobian when no Jacobian result produced it.
-8. Never weaken verification, artifact binding, scope, or assurance to make a case pass.
-9. Never merge a PR. Open only a draft PR when the localized-fix gate passes.
-10. Never create a benchmark-specific operation from one conjecture family.
-
-## Run the workflow
-
-### 1. Inventory before research
-
-Search saved reports, suites, trajectories, issues, PRs of every state,
-branches, and active reservations. Search in layers: exact identifier/title,
-artifact, mathematical family, required operation/provider, and suspected root
-cause. One exact-source miss does not establish independence.
-
-Run the local helper with positional arguments, then search GitHub separately:
-
-```bash
+```sh
 python .agents/skills/recent-conjecture-evaluations/scripts/search_inventory.py \
   "source or root-cause phrase" outputs benchmarks/results
 ```
 
-Classify the source as selected, rejected, reserved elsewhere, or completed
-duplicate. Read [source-gating.md](references/source-gating.md).
+## Preserve the evidence boundary
 
-### 2. Establish the source gate
+Bind prompts, payloads, and oracles to the exact intended input. Reconstruct gold
+independently of evaluated model arms and distinguish source-supplied replay from
+an independent oracle. Record precise source status and dates. Computation,
+verification, imported theorems, and unproved claims establish different things.
+Timeouts, unavailable operations, and missing witnesses are non-conclusions.
+Never attribute a model's fallback or transcription error to Jacobian.
 
-Read enough of the primary source to identify the prior conjecture, exact
-resolution status, proof-carrying theorem or construction, finite obligations,
-and imported boundaries.
+Audit new probes deterministically on current main before paid model calls.
+Run comparisons only when they resolve uncertainty that direct evidence cannot,
+with user-authorized cost boundaries and frozen control/treatment conditions.
+Do not weaken verification or create a benchmark-specific operation to make a
+probe pass. Before external action, apply the
+[action policy](references/action-policy.md) within existing user authorization.
+This evaluation workflow produces at most a localized draft PR; merging is a
+separate user-authorized task.
 
-Reject before model calls when the bounded task is illustrative, leaks the
-answer, tests literature recall, requires private data, cannot represent the
-decisive obligation faithfully, duplicates prior work, or only exercises a
-near-match.
+## Completion and stalls
 
-### 3. Build the independent oracle
+Complete one requested cycle by default, including rejected and deterministic-only
+outcomes. An oracle disagreement stops dependent model evaluation while allowing
+bounded diagnosis. A known unavailable operation skips dependent work, not the
+attribution and report. Preserve checkpoints and raw evidence at phase boundaries;
+inspect a phase without a checkpoint for 30 minutes.
 
-Reconstruct every finite obligation with a clean-room script or exact
-derivation. Hash the canonical input. Stop if it disagrees with the primary
-source. Label author-supplied code as `SOURCE-SUPPLIED REPLAY`; reserve
-`INDEPENDENT ORACLE` for separately implemented or derived evidence.
-
-Record acceptable alternative witnesses and representations. Define what
-remains imported or uncertain.
-
-### 4. Audit current main
-
-On a clean current-main worktree, check installed providers, authorized
-checkers, input bounds, and estimated payload/runtime before materializing a
-large artifact. Stop early when the decisive operation is unavailable and the
-boundary is already documented.
-
-Then:
-
-1. Search with natural task language.
-2. Treat bounded `math.find` search as candidate retrieval, not complete inventory;
-   use `operation://catalog` when full installed membership matters.
-3. Inspect returned cards and exact IDs for schemas, examples, domains, bounds,
-   and provider availability. Treat these as operation facts, not workflow advice.
-4. Inspect the producer and independent checker as separate operation contracts.
-   A checker verdict must bind the exact claim and semantics; do not expect a
-   generic verification record or artifact URI from an ordinary operation.
-5. Execute the frozen input directly.
-6. Run the independent checker when installed.
-7. Replay relevant malformed, wrong-input, over-bound, and unsupported-domain cases.
-8. Run focused deterministic tests.
-
-Persist complete machine-readable discovery and invocation outputs, including
-failures, before summarizing them. Hash the input, probe, raw output, and
-report. Never support an artifact URI, elapsed time, ranking, or diagnostic
-only with terminal scrollback.
-
-If this phase identifies the root cause, do not run model arms merely to
-demonstrate it again.
-
-### 5. Decide whether model arms have information value
-
-Read [evaluation-and-scoring.md](references/evaluation-and-scoring.md). Run
-paired arms only if every gate passes. Otherwise record a deterministic-only
-cycle. Freeze the suite and its digest before execution; use the repository's
-evaluation harness to validate the applicable suite shape.
-
-Use fresh isolated contexts and identical settings except for Jacobian
-availability. The control must not see Jacobian tools, skills, catalog content,
-or routing hints. The treatment exposes the public surface only: the agent
-still decides whether discovery is useful, which operation to call, and when to
-stop.
-
-### 6. Score observable evidence
-
-Score final correctness, certificate validity, input binding, source fidelity,
-scope, completeness, assurance, discovery, contract inspection, execution,
-recovery, stopping, elapsed time, token use, and model-visible tool bytes.
-
-Do not claim access to hidden chain-of-thought. Score observable calls, outputs,
-retries, concise visible reasoning, and final answers.
-
-### 7. Attribute before acting
-
-Assign each failure to one primary class: Jacobian implementation; tool
-interface or contract; discovery or routing; evaluator or telemetry;
-infrastructure or transport; model transcription or input binding; model
-mathematical reasoning; unsupported operation; or no issue.
-
-Reproduce suspected Jacobian failures directly on current main and search
-ownership again. Read [action-policy.md](references/action-policy.md) before
-opening an issue or draft PR.
-
-### 8. Publish the cycle record
-
-Write a persistent report using [report-schema.md](references/report-schema.md).
-Include rejected and deterministic-only cycles because they prevent duplicate
-work. Update the shared reservation ledger. End with a distinct next source
-direction, not an unsupported claim that the search space is exhausted.
-
-## Manage cost and stalls
-
-- Prefer deterministic checks.
-- Require explicit model-call authorization and cost boundaries.
-- Checkpoint after source gate, oracle, current-main replay, each model arm, scoring, and repository action.
-- Inspect any phase that produces no checkpoint for 30 minutes.
-- Do not retry a cancelled call without new diagnostic evidence.
-- Stop collecting examples for an owned root cause once the agreed independence threshold is met.
-- Do not use a weaker model merely to manufacture errors; use it only in a frozen comparison with a falsifiable question.
+Additional cycles or model calls must fit the operator's requested scope and
+cost limits. Retry a cancelled call only with new diagnostic evidence. Stop
+collecting examples for an owned root cause once the agreed independence
+threshold is met. Report unresolved evidence and a distinct next direction
+without silently starting it.

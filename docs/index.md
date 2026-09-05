@@ -50,5 +50,5 @@ current schemas.
 
 ## Contributing
 
-Read [CONTRIBUTING.md](../CONTRIBUTING.md) before changing code or public
-contracts.
+Use the relevant section of [CONTRIBUTING.md](../CONTRIBUTING.md) for validation,
+documentation changes, releases, or pull requests.

@@ -1,6 +1,6 @@
 ---
 name: decompose-mathematical-solution-corpora
-description: Decompose a bounded corpus of mathematical proofs, formalizations, scripts, and certificates into recurring solution techniques and the smallest reusable Jacobian postconditions. Use for repository- or corpus-level “what can Jacobian learn?” audits; do not use for one operation contract or one agent trajectory.
+description: Extract reusable Jacobian capabilities from a mathematical solution corpus, rather than one agent trajectory.
 ---
 
 # Decompose Mathematical Solution Corpora
@@ -46,21 +46,9 @@ mode.
 
 ## Decompose each representative
 
-Write a compact method record:
-
-```text
-target theorem:
-exact finite carrier:
-local mathematical move:
-theorem-specific lift:
-source representation:
-established technique:
-stable reusable postcondition:
-degenerate or closure cases:
-discovery vocabulary:
-technique disposition:
-evidence and fixture:
-```
+Describe the exact carrier, local move and stable postcondition, how the
+surrounding theorem uses it, and the evidence or fixture. Add representation,
+closure, and discovery details when they affect the proposed operation.
 
 The local move is not automatically an operation. Reject boundaries that
 merely expose one loop iteration, solver control, callback, proof bookkeeping,
@@ -76,27 +64,9 @@ maximizers can be all points of a curve, for example, needs an exact locus
 variant rather than a fictitious complete finite witness list.  This is part
 of the postcondition, not an implementation footnote.
 
-### Sieve continuous and analytic proof moves
-
-For a smooth, complex-analytic, metric, asymptotic, probabilistic, or PDE
-source, state whether the proposed carrier preserves the semantics used by the
-decisive step. Check, where relevant:
-
-- the ambient category and regularity (for example, a fixed rational chart
-  versus an atlas or a smooth manifold);
-- metric, measure, orientation, or complex-structure data;
-- the topology and mode of convergence used by a limit, compactness, or
-  stability argument;
-- scale, approximation, and quantified error/loss conventions; and
-- the exact domain on which a claimed identity or inequality is valid.
-
-A finite discretisation, coordinate sample, or numerical trace is not the
-source move merely because it shares its nouns. It may expose an exact local
-leaf—such as a gradient, curvature profile, covariant derivative, or rigorous
-range enclosure—when that leaf has its own stable postcondition. Otherwise
-record caller reasoning, a representation prerequisite, or no action; do not
-publish a `ricci_flow`, Kakeya-tube, HRT-cocycle, compactness, or limit
-operation without the required continuum semantics and validated errors.
+For continuous or analytic sources, use the
+[carrier checks](references/continuous-moves.md) to distinguish an exact local
+operation from a discretization that loses the source's decisive semantics.
 
 Classify an established technique as a public-operation candidate, native-only
 function, private kernel, invariant or fixture, or caller reasoning. Technique

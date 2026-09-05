@@ -15,6 +15,9 @@ evaluations, and copied implementation lineages.
 
 ## Draft-PR gate
 
+External issue and draft-PR writes require user authorization; the gates below
+do not grant it. Reuse existing authorization within its scope.
+
 Open a draft PR only when:
 
 - the failure reproduces on current main;

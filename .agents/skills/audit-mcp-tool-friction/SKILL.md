@@ -1,6 +1,6 @@
 ---
 name: audit-mcp-tool-friction
-description: Audit existing MCP tools for execution friction after an agent has reached the tool. Use when reviewing public JSON Schemas, Pydantic validation, operation examples, error recovery, completed agent traces, or benchmark runs to explain malformed calls, retries, or unusable results. Do not use to measure whether agents discover or select a tool; use evaluate-mcp-tool-adoption for that.
+description: Diagnose malformed calls, retries, and unusable results after an agent selects an MCP tool.
 ---
 
 # Audit MCP Tool Friction

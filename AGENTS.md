@@ -1,304 +1,84 @@
 # Jacobian agent guide
 
-This file states the product choices and repository invariants that changes must
-preserve. Follow [CONTRIBUTING.md](CONTRIBUTING.md) when selecting validation,
-changing documentation, preparing commits or pull requests, or working on
-releases and evaluations. Follow the
-[product model](docs/explanation/product-blueprint.md) and
-[architecture](docs/explanation/architecture.md) when changing product scope,
-ownership, or the execution path.
+Jacobian gives agents atomic, composable tools for higher mathematics.
+`math.find` discovers immutable operation declarations; `math.run` executes one
+bounded typed computation. The caller owns reasoning, composition, and durable
+state. Use “operation” or “math tool,” not “product” or “provider,” for built-ins.
 
-## What we are building
+## Product invariants
 
-Jacobian gives agents atomic, composable tools for higher mathematics:
-discovering, running, and combining typed computations to investigate
-conjectures, build examples, calculate invariants, and check bounded claims.
+- Atomicity is semantic: one operation establishes one stable, reusable
+  mathematical postcondition. Alternative algorithms remain private kernel
+  choices. Discovery describes mathematics, not a proof strategy or call order.
+- Keep the kernel stateless. Temporary execution state is request-scoped.
+  Return mathematical values directly, without generic assurance, verification,
+  obligation, or completeness wrappers. Operational non-completion never
+  establishes a mathematical conclusion.
+- Built-ins are immutable `MathTool` tuples in owner-local `_tools.py` manifests
+  under `jacobian.math`. Manifest presence is publication; catalog construction
+  fails closed on malformed declarations and duplicate IDs.
+- Each mathematical value has one domain-owned canonical type. Producers and
+  consumers compose unchanged through serialization, including empty and
+  degenerate values. Exact results retain reconstruction and ambient context;
+  changes of ring, field, parent, or axes require explicit typed maps.
+- Admit mathematical work, intermediate growth, and exact output before backend
+  expansion. Compute semantic admission once after canonicalization. Validators,
+  result construction, worker decoding, and transport must not replay computed
+  mathematics. Caller-supplied claims require their own admitted domain check.
+- **Scale first:** probe a motivating rejected request, improve the estimate,
+  representation, algorithm, or backend, and retain cheaply executable cases as
+  accepted regressions. Measurements do not replace a sound bound. A remaining
+  limitation must be reported, not presented as a completed scale repair.
+- Prefer maintained mathematical backends through thin typed adapters. Jacobian
+  owns the accepted contract; backend exceptions cannot define it. A subprocess
+  needs a concrete isolation, killability, or fixed-toolchain reason. All
+  mandatory phases share the request's deadline and work accounting; wall time
+  is a safety limit, not mathematical evidence or a universal short timeout.
+- Mathematical syntax has a named, non-evaluating grammar. Caller strings must
+  never reach `sympify`, `parse_expr`, `eval`, `exec`, or generated evaluators.
+- Jacobian is pre-stable: repair an unsound contract rather than preserving it
+  through compatibility machinery. Diagnose operation, representation,
+  interoperability, discovery, contract, scale/backend, and reasoning gaps
+  before proposing a new public operation.
 
-**Jacobian's hypothesis is that mathematical reasoning benefits from an
-executable vocabulary of semantically scoped, bounded operations.** Prefer
-reusable mathematical primitives over large solvers or workflows: Jacobian
-supplies the mathematical moves; the model decides how to compose them into
-larger solutions.
+## Read for the change
 
-Atomicity is semantic: an operation establishes one stable, reusable
-mathematical postcondition. It need not have a small or simple implementation.
+Use the relevant sections; these links are not a prerequisite reading stack.
 
-Established mathematical techniques are sources of executable vocabulary, not
-automatic operation IDs. Make a technique discoverable through relevant public
-operations, but admit it separately only when it establishes a distinct stable
-postcondition. Alternative algorithms for the same postcondition remain private
-kernel choices.
+| Change | Authority |
+| --- | --- |
+| Product scope, ownership, execution path | [Product model](docs/explanation/product-blueprint.md), [architecture](docs/explanation/architecture.md) |
+| Operation implementation or contract | [Operation library](docs/reference/domain-operation-library.md) |
+| New public operation | [Public operation admission](docs/reference/public-operation-admission.md) |
+| Native functions or mathematical values | [Python API](docs/reference/python-api.md) |
+| Backend adapter or child worker | [Backend contract](docs/reference/mathematical-backends.md) |
+| MCP projection or transport | [Tool reference](docs/reference/tools.md) |
+| Authentication, health, or deployment | [Remote deployment](docs/how-to/deploy-remote-mcp.md) |
+| Validation, docs, contributions, or evaluations | Relevant section of [CONTRIBUTING.md](CONTRIBUTING.md) |
 
-It exposes two MCP tools:
+For mathematical changes, establish independent correctness evidence, invariant
+ownership across the execution path, and useful accepted boundaries. The
+[contributor quick path](CONTRIBUTING.md#contributor-quick-path) and
+[testing strategy](docs/reference/testing-strategy.md) define the evidence and
+owning lanes. Use real mathematical behavior, not fakes or source-text assertions,
+for correctness. Reproduce a reported backend or admission defect before repair.
 
-| Agent verb | MCP tool | Meaning |
-| --- | --- | --- |
-| Search | `math.find` | Find or inspect an operation. |
-| Execute | `math.run` | Run one operation and return its mathematical value. |
+## Shared work and completion
 
-Jacobian supplies bounded typed operations and immutable discovery. Use
-“operation” or “math tool,” not “product” or “provider,” for built-ins. It is
-local-first: ordinary mathematical tool work should stay focused on mathematics;
-preserve an explicit transport/security boundary only when the task actually
-changes one.
+Preserve unrelated work. Agents must not concurrently switch branches, stage,
+commit, clean, rewrite history, or edit overlapping paths. Parallel PR writers
+need isolated worktrees, distinct branches, and one active writer per branch;
+record and check issue/PR claims before implementation. Only the coordinator
+runs exhaustive validation in a shared checkout.
 
-The authoritative operation path and ownership vocabulary are defined in the
-[architecture](docs/explanation/architecture.md). In summary, `math.find`
-selects an immutable declaration and `math.run` parses one strict request,
-executes one owner-local bounded domain operation, and returns a canonical
-mathematical result through the delivery boundary. Any execution plan is
-request-scoped internal data, not caller-visible workflow state or a new MCP
-verb.
+Before a first public-operation push, search open PRs for its ID. Identify any
+superseded contract in the PR description. After catalog-conflict resolution,
+run catalog conformance and compare the final diff with intended public symbols.
+Fetch immediately before pushing and inspect a changed head. Never push to a
+merged or closed PR head; use a follow-up branch.
 
-## Non-negotiable boundaries
-
-- Return bounded mathematical values directly. Results may report their own exact,
-  incomplete, or unknown status, but do not add generic assurance, obligation,
-  verification, or completeness wrappers.
-- **Anti-regression:** keep the kernel stateless; the caller owns composition and
-  durable state. Internal temporary state is request-scoped and exists only when
-  one bounded external call genuinely requires it.
-- Built-in tools are explicit immutable `MathTool` tuples in owner-local
-  `_tools.py` manifests: discovery metadata plus one direct typed domain
-  function. Presence in that manifest is the publication decision. Catalog
-  construction discovers those manifests directly and fails closed on malformed
-  declarations or duplicate operation IDs (see the
-  [public operation admission](docs/reference/public-operation-admission.md)
-  contract).
-- Before adding a public operation, establish that the missing capability is an
-  operation gap rather than a discovery, representation, interoperability,
-  contract, scale, backend, or reasoning failure.
-- Keep operations composable and domain-owned. Discovery must not prescribe a
-  proof strategy, caller workflow, next step, or stopping rule. It may state
-  declarative mathematical relationships, alternate terminology, and defining
-  identities when they clarify an operation's actual postcondition, but phrase
-  them as facts about the mathematics rather than instructions for composing
-  calls. For example, "proper-divisor lists omit the input" is allowed, while
-  "callers obtain proper divisors by removing the input" is not.
-- Jacobian is pre-stable. When a request/result contract is broader than the
-  implementation, reports a wrong mathematical value, or turns an accepted
-  request into a host exception, change the contract rather than preserving the
-  old shape through compatibility machinery.
-
-## Implement mathematics directly
-
-For implementation and review, follow the three checks in the
-[contributor quick path](CONTRIBUTING.md#contributor-quick-path): independent
-correctness evidence, the complete execution path and invariant owners, and
-useful accepted boundaries. Tests must challenge plausible wrong implementations,
-not reproduce their assumptions. Removing repeated validation must preserve
-the required invariant at its producing or consuming kernel boundary.
-
-Before changing a backend or admission rule to fix a reported failure, reproduce
-it on the current revision and preserve a regression that fails for the
-intended reason. Check the defining mathematical identity independently; for
-scale changes, prove that a useful larger request is admitted safely.
-
-> **Jacobian owns the contract; the backend owns the kernel.**
-
-Catalog admission means publication in the immutable catalog. Request
-admission means per-call mathematical and resource bounds. Result construction
-means conversion to Jacobian's canonical typed result; defining-invariant
-evidence belongs in tests. Never replay computed mathematical work during
-request validation, result construction, deserialization, transport projection,
-or worker-output decoding. A public operation that checks a caller-supplied
-mathematical claim is an ordinary domain operation with its own admitted work;
-it does not create a generic result-verification layer. Transport projection is
-the final MCP/JSON delivery step.
-
-- Raw preflight may enforce cheap representation limits before canonicalization.
-  After canonicalization, semantic admission is computed once per invocation
-  and reused by the kernel and trusted result construction; do not repeat
-  non-trivial admission in request validators, operation wrappers, or result
-  validators.
-
-- Pydantic validators and result wrappers may enforce cheap canonical shape,
-  bounds, discriminated-state consistency, and source references. They must not
-  factor, isolate roots, enumerate candidates, invoke a solver or backend,
-  recompute a defining relation, or call a nested public validator that does so.
-  The admitted kernel computes once and constructs through an owner-local
-  trusted factory such as `_from_kernel`; tests establish defining invariants.
-- A child worker returns only a bounded derived projection. The parent retains
-  the admitted source, structurally decodes and binds that projection, and uses
-  trusted result construction. Never echo a full public result from a worker or
-  pass worker output to the public result model's `model_validate` path.
-
-- Public contracts use canonical mathematical values, not backend expressions
-  or ambient contexts.
-- Each mathematical value has one domain-owned canonical type. Producers return
-  that type and consumers accept it unchanged, including for empty and
-  degenerate values; operation-specific models must not recreate it.
-- Before adding a mathematical value, search for an existing owner by meaning
-  and fields, not just by class name. Reuse it whenever possible. If a new
-  type is necessary, document the distinction, define an explicit conversion,
-  and test serialized producer-consumer composition.
-- Backends never define the accepted public domain through runtime exceptions.
-- Intentional changes of ring, field, parent, or axis require explicit typed
-  maps; implicit coercion is forbidden.
-- Exact results retain all information needed for reconstruction and downstream
-  composition. Before admitting an operation, apply the
-  [codomain-closure](docs/reference/domain-operation-library.md#codomain-closure)
-  rule to its complete advertised result domain.
-
-A `MathTool` is a bounded mathematical instrument, not a lesson, proof recipe,
-or workflow. Add an operation only when it exposes a stable bounded computation
-or check that remains useful as models improve at mathematical reasoning and
-notation. The model chooses what to investigate and how to compose results;
-the operation returns a concrete mathematical value or certificate.
-
-- Prefer a thin typed adapter to an appropriate maintained mathematical library.
-  Treat any library, solver, or external tool as a private computational engine;
-  do not reimplement its kernel. Research established options before writing a
-  custom algorithm. A public claim may be no broader than the implementation
-  can establish. If the engine cannot exhaust the advertised request, narrow
-  the request or do not expose the operation. A fallback, sentinel, or omitted
-  comparison is not an exact invariant.
-- Use a direct Python binding whenever it can perform the bounded computation.
-  A subprocess needs a concrete isolation, killability, or fixed-toolchain
-  reason. It must handle one bounded request with temporary files, a timeout,
-  and typed diagnostics.
-- Native public functions belong under `jacobian.math`, have explicit `__all__`,
-  call typed kernels directly, and accept domain values or a maintained backend
-  type that already carries the complete mathematical meaning (see the
-  [native Python API](docs/reference/python-api.md) contract).
-
-### Mathematical boundedness is a proof obligation
-
-Jacobian is a library of mathematical instruments for agents doing high-level
-mathematics and investigating conjectures. Treat every operation as a
-trust-bearing function: do not paper over an unproved algorithm or backend
-limit with a sentinel, truncation, post-hoc conversion failure, or optimistic
-contract. Separately bound the accepted input, algorithmic work and
-intermediates, and exact result or certificate. Derive budgets from the
-mathematics before backend expansion; use explicit, named, tested conservative
-domains when necessary, and narrow the domain or change the typed result when
-the claim cannot be established. Add known-answer, boundary, adversarial, and
-defining-invariant tests.
-
-Bounded does not mean small or constant-time. Exact higher mathematics may
-legitimately take minutes or longer. Without an explicit latency requirement,
-do not impose a universal short timeout. Admit work from mathematical bounds on
-search, intermediate growth, and output size; use wall time only as a generous,
-killable safety limit.
-
-All mandatory phases—including normalization, presolve, backend work,
-validation, and serialization—must share one request-scoped deadline and work
-ledger. An outer client timeout must cover that complete envelope. A timeout is
-not mathematical evidence: preserve the exact request or digest, budget,
-elapsed time, error, timeout layer, operation version, and repository revision
-before retrying or reporting a gap.
-
-Keep the mathematical postcondition separate from one call's admitted
-execution envelope. Do not impose a convenient ceiling on a coarse input such
-as `n` when an output-size, digit-length, or algorithm-specific budget safely
-admits materially larger useful cases. If an existing operation has the right
-postcondition but an unnecessarily narrow envelope, treat that as a
-scale/backend gap rather than adding a near-duplicate operation. Follow the
-[boundedness proof](docs/reference/domain-operation-library.md#boundedness-proof)
-when choosing or reviewing limits.
-
-Keep the semantic mathematical domain broad and accelerate before imposing a
-small fixed cap. Prefer result-sensitive admission, compact exact
-representations, maintained specialist backends, and algorithms selected for
-the admitted input regime. A backend limitation must not masquerade as a
-mathematical domain restriction: accept large inputs when predicted work,
-intermediate growth, and exact output remain within budget. Use a fixed cap
-only as a documented conservative fallback after investigating how to scale
-the operation, not as a substitute for that work.
-
-**Scale first.** When a valid workload hits an admission limit, first try to
-make it executable: sharpen the estimate, preserve algebraic dependencies,
-reduce the problem exactly, improve its representation, or use a better
-algorithm or maintained backend. A pessimistic upper bound is not evidence
-that the workload is expensive. Probe the motivating rejected case in a
-bounded diagnostic run and check its defining invariant. If it is cheap,
-treat the rejection as an admission defect and retain the case as an accepted
-regression; do not declare the fix complete by adding a rejection test.
-Measurements guide the repair but do not replace a sound work/growth bound.
-If scaling remains unresolved, report the limitation and attempted approaches
-explicitly instead of presenting a narrower domain as the completed fix.
-
-Distinguish decision or first-witness operations from complete profiles and
-all-witness operations: they may inspect the same candidate family but have
-different output obligations. When a useful finite search exceeds one call's
-ceiling, either narrow the request or expose a deterministic mathematical
-partition whose result identifies the exact region searched. A partial search
-must never establish global absence or completeness, and request-scoped
-partitioning must not introduce kernel-owned durable state.
-
-## Types and transport
-
-- Domain values, request/result models, and declarations live with their owner
-  under `jacobian.math`. Compose operations through typed mathematical values.
-  Follow the [native Python API](docs/reference/python-api.md) when changing
-  exported Python functions or values.
-- Validate the mathematical request envelope before invoking a backend.
-  Admission accounts for mathematical work, intermediate growth, and exact
-  output cardinality or representation growth. Actual worker, host, and final
-  transport capacity belongs to the concrete adapter or deployment and may
-  fail operationally; the canonical codec's default is not a mathematical or
-  MCP response-byte limit. MCP projects execution failures as tool errors;
-  native callers receive the owning operational exception. Operational
-  non-completion never establishes a mathematical conclusion. Follow the
-  [operation library](docs/reference/domain-operation-library.md) when changing
-  an operation contract or implementation.
-- Do not add aggregate response-byte caps or post-execution truncation without
-  a concrete enforcing boundary. Keep exact values exact; bound discovery
-  metadata at declaration time and diagnostics structurally without echoing
-  raw caller values.
-- For every public string field that carries mathematical syntax, name its
-  grammar and prove that parsing is non-evaluating. Caller input must never
-  reach `sympify`, `parse_expr`, `eval`, `exec`, or an evaluator generated by
-  `lambdify`.
-- For every backend call, document its accepted mathematical domain. Enforce
-  cheap structural constraints in the request model and semantic admission in
-  the owning domain before invocation; do not repeat admission in validators.
-- For every exact decomposition, certificate, or authoritative derived value,
-  state its reconstruction or defining invariant and test that invariant.
-- Center correctness tests on regression evidence when fixing a concrete
-  regression, defining identities, consistency checks, and property-based
-  tests against actual symbolic or mathematical behavior. Use real
-  mathematical and numerical assertions at public typed interfaces with
-  deterministic or replayable inputs; keep fixtures sparse and name the
-  evidence each one contributes. Do not monkeypatch or use test fakes for
-  mathematical values, validators, serializers, or backend correctness.
-  Isolate unavailable-environment or transport-failure tests separately; they
-  must not stand in for mathematical correctness.
-- Keep mathematical results separate from transport failures. Timeout,
-  incompleteness, unavailable execution, and missing witnesses do not establish
-  mathematical conclusions. Follow the
-  [tool reference](docs/reference/tools.md) only when changing MCP projection or
-  transport behavior.
-
-## Service and deployment
-
-Keep mathematical execution stateless and deployment responsibilities outside
-the operation library. Follow the
-[remote deployment guide](docs/how-to/deploy-remote-mcp.md) only when changing
-authentication, configuration, health checks, deployment templates, or remote
-service behavior.
-
-## Working in this repository
-
-- Preserve unrelated work in a shared checkout. Agents must not concurrently
-  switch branches, stage, commit, clean, rewrite history, or edit overlapping
-  paths.
-- For a parallel change wave, give each writer an isolated worktree and a
-  distinct branch. A branch has one active writer at a time; the coordinator
-  records each issue or PR claim before implementation, and a worker checks
-  for a current claim before starting the same scope.
-- Before a first public-operation push, search open pull requests for the
-  operation ID. If this change intentionally replaces an existing operation,
-  say which contract it supersedes in the PR body. After resolving a catalog
-  conflict, run catalog conformance before pushing and compare the final
-  branch diff with the intended files and public symbols.
-- Fetch the branch immediately before pushing. If its head changed, inspect
-  the landed work instead of retrying an equivalent fix. Never push to a
-  merged or closed PR head: move remaining work to a new follow-up branch.
-- Run the validation selected by [CONTRIBUTING.md](CONTRIBUTING.md), including
-  the named lane that owns changed behavior. Run `make check` only when that
-  guide calls for the broad gate. Only the coordinating agent may run
-  exhaustive validation in a shared checkout.
-- Follow [CONTRIBUTING.md](CONTRIBUTING.md) and the
-  [testing strategy](docs/reference/testing-strategy.md) when selecting
-  specialist validation or preparing a contribution.
+Complete authorized implementation, relevant validation, and repairs caused by
+the change before handing back. Rerun only checks invalidated by later edits.
+Use the contributor guide's affected checks; broad validation is conditional.
+Report remaining limitations and checks that could not run. Existing user
+authorization persists; local work does not imply permission for external writes.

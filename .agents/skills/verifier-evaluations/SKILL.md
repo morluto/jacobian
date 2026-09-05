@@ -1,146 +1,53 @@
 ---
 name: verifier-evaluations
-description: Design, audit, and repair fail-closed mathematical verifiers and evaluation contracts, including public schemas, frozen-input binding, task-specific witnesses, diagnostic scoring, adversarial fixtures, and Oracle validation. Use when a verifier can crash, accept malformed claims, reject equivalent witnesses, leak answers, or collapse independent diagnostics.
+description: Design, audit, or repair mathematical benchmark verifiers, submission contracts, and scoring.
 ---
 
 # Verifier Evaluations
 
-Use this skill with `harbor-benchmarks`. In Jacobian, a verifier checks the
-mathematical outcome of a benchmark task. `math.find` and `math.run` may be an
-experimental intervention, but neither their availability nor an agent's call
-trace determines task correctness. A verifier is not a parser for the
-canonical solution, a grader of confidence and prose, or a recorder of which
-tool calls the agent made.
+A verifier decides a benchmark's mathematical predicate from frozen input and
+a bounded submission. It does not grade prose, confidence, tool use, or equality
+with one preferred solution. Use `harbor-benchmarks` only when the task also
+needs Harbor packaging, environment changes, or execution guidance.
 
-## Choose the smallest checkable contract
+## Establish the contract
 
-Start from the mathematical predicate, then choose the smallest submission that
-lets the verifier decide it:
+Choose the smallest checkable submission: a typed result, a result with a
+necessary finite witness, or a supported formal proof. Accept mathematically
+equivalent representations unless canonicalization is an explicit task outcome.
+The visible instruction and schema must describe every enforced condition and
+must not leak the solution or derived conclusions.
 
-- **Result only** when the verifier can replay the claim from frozen input.
-- **Result plus witness** when a finite construction, counterexample, trace, or
-  certificate is required for replay.
-- **Formal proof** only when a supported checker accepts the language.
+For a new or changed submission shape, read
+[submission contracts](references/submission-contracts.md), including witness
+selection, schema reductions, and independent result fields. Keep instruction,
+schema, verifier, gold, public contract, and host tests consistent when changing
+that shape.
 
-Put small structured mathematical certificates in `result`. Use a witness
-artifact only for an external finite object that replay genuinely needs; it
-must not duplicate the result or carry a natural-language explanation. Do not
-add generic assurance claims, scope, completeness, limitations, or prose. If a
-task exposes an independently authorized claim, publish the exact record that
-authorizes it and reject a false claim. If a boundary affects score, use a
-closed structured obligation ID, not a phrase, keyword count, or negation
-heuristic.
+## Replay and score
 
-Treat a typed result as the represented mathematical value, not a frozen JSON
-layout or string rendering. Normalize and compare equivalent rational, scaled,
-or unordered representations unless canonicalization is an explicit public
-task outcome with an exact stated rule. `answer.txt` is never an authoritative
-submission format.
+Bound input before parsing; enforce exact types and shapes before computation.
+Replay mathematics against the frozen verifier copy. Malformed submissions must
+produce a deterministic false predicate and reward artifact, not a host exception.
+Input binding, mathematical correctness, and declared witness validity remain
+separate diagnostics where independently observable; required gates combine in
+reward. Default reward is binary. Partial credit requires explicitly declared,
+independent mathematical subclaims.
 
-Compute the scored predicate from the frozen input. Do not implement
-correctness as equality with hidden `expected.json`. Do not compare a
-normalized `Fraction` back to the submitted numerator and denominator. Do not
-score formula strings or keyword-bearing prose when a task-local type or
-already-derived enum exists. Generated family schemas must admit only the
-certificate kinds that family can reward.
+For implementation, diagnostic binding exceptions, artifact/path handling, or
+regression tests, read [replay and attacks](references/replay-and-attacks.md).
+Preserve alternate valid witnesses and a discriminating wrong mathematical
+claim alongside malformed-input cases. Natural-language proofs need human
+review unless formalization or an executable certificate makes them checkable.
 
-Independent result fields are independent predicates. A corrupted claimed
-image does not decide whether two distinct points actually collide.
+## Complete the repair
 
-The visible schema and instructions must describe every field, type, bound,
-scope rule, and witness requirement the verifier enforces. They must be
-jointly satisfiable: an instruction-conforming object cannot be schema-valid
-yet reward-ineligible because of an undocumented key set. Do not expose hidden
-solutions, Oracle fixtures, or verifier implementation merely to explain the
-format. A task may name the relevant Jacobian operations and their public
-contracts as its experimental condition, but must not require a particular
-discovery query, call order, or intermediate transcript unless that trace is
-itself the mathematical object being checked. A hard task may deliberately
-expose no operation that solves it today: that is a capability finding, not a
-verifier defect.
+Run focused behavioral attacks, the selected Oracle, and the repository's
+planned Harbor gate when the verifier or task contract changes. Refresh selected
+Dockerfile checksums after verifier edits through the task preparation workflow.
+Shared support changes require the affected task-local copies and Oracles;
+historical snapshots remain unchanged.
 
-The verifier derives conclusions from submitted mathematics. Do not score a
-submitted copy of those conclusions, and do not publish them as schema
-`const` fields. If a review asks to restore leaked constants so the schema and
-verifier match, refuse and shrink the verifier and instruction instead. When
-reducing a schema, update instruction, verifier key set, gold, public
-contract, and host tests together. Closed `oneOf` success variants omit
-inapplicable failure fields; they do not send JSON `null`. If one submitted
-object implies a dimension, parse every related object at that derived size.
-
-## Implement total predicates
-
-Follow this order:
-
-```text
-bounded submission → bind visible input to frozen input → exact envelope
-→ semantic replay → declared witness/scope checks → reward artifact
-```
-
-At each boundary, malformed data must yield a deterministic false predicate and
-a reward artifact, not an exception. Check `type(value) is int` when booleans
-are invalid integers; reject non-finite numbers; validate nested shapes before
-indexing or hashing; compare JSON values recursively with type-strict equality;
-and accept mathematically equivalent rational, reordered, or scaled results and
-witnesses when the task permits them.
-
-Read and bound submissions and visible/frozen inputs before parsing. A witness
-artifact needs a published finite bound only when its encoding or task mechanics
-justify one; do not inherit a universal/default cap or create a redundant
-artifact merely to add one. For declared artifacts, reject traversal, symlinks,
-a symlinked solution root, non-regular files, wrong cardinality, wrong digest,
-and content that does not support the claimed result.
-
-Compute mathematical correctness from the frozen verifier copy. Keep input
-binding, declared witness validity, scope, and independent authorization as
-separate diagnostics where they can safely be observed. Apply their hard gates
-only when calculating aggregate reward. Default reward is binary: return `1`
-only for a valid replayed mathematical outcome and `0` otherwise. Add partial
-credit only when the public task explicitly contains independent, meaningful,
-replayable mathematical subclaims; diagnostics alone never earn credit.
-`load_submission()` may refuse an unbound workspace input; that must not zero
-`correctness` or `witness_validity` when those diagnostics are independent.
-Parse without requiring binding, replay against frozen tests input, and AND
-binding only into `reward`.
-
-For a deliberate raw/strict split, raw parsing is bounded and diagnostic-only.
-`load_submission()` remains the strict authoritative loader; a raw object never
-bypasses public validation, witness validation, or reward gating.
-
-## Test behavior, not implementation
-
-Before trusting an Oracle, mutate a canonical valid submission to cover:
-
-- malformed, missing, extra, wrong-shaped, and wrong-typed output;
-- malformed or replaced visible input;
-- wrong result and an alternate valid witness;
-- boolean/float coercion, non-finite values, deep or oversized input;
-- every declared witness failure: wrong path, digest, type, duplicate,
-  traversal, symlink, or unrelated content;
-- every declared structured scope or authorization failure.
-
-Assert observable reward and diagnostics, including that the reward artifact is
-written. Do not assert private helper names or mirror hidden solution text. A
-large valid declared artifact should remain valid unless the published task
-contract itself gives it a finite bound.
-
-When removing a prose or envelope gate, keep a mutation that makes the
-mathematical predicate false. Generic schema attacks alone do not demonstrate
-that replay still rejects a wrong mathematical claim.
-
-Natural-language proofs belong in a human-reviewed diagnostic setting unless a
-formalization or executable certificate makes their key claims checkable. Never
-award credit for rhetorical keywords, arbitrary nonempty text, or a preferred
-proof strategy.
-
-## Finish cleanly
-
-After verifier, schema, Dockerfile, or task-contract changes, run focused
-attacks, the selected Oracle, and the repository's planned Harbor gate. Refresh
-the selected task's Dockerfile checksum after every verifier edit. When shared
-support changes, migrate only deliberate task-local copies and run the affected
-Oracles; do not rewrite historical snapshots.
-
-Report the exact command, task digest, Oracle result, and any deferred
-validation. Keep claims distinct: a verifier test, selected Oracle, repository
-gate, and causal benchmark result are different evidence.
+Report the actual command, task digest, Oracle result, and deferred validation.
+A verifier test, Oracle pass, repository gate, and causal benchmark comparison
+establish different evidence.

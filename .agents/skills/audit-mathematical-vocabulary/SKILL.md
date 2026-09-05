@@ -1,6 +1,6 @@
 ---
 name: audit-mathematical-vocabulary
-description: Audit one bounded Jacobian mathematical slice for missing or unusable executable vocabulary using source demand, catalog composition, contract evidence, and maintained-backend feasibility. Use for proactive gap audits that are broader than one operation but narrower than a repository-wide inventory; do not use for reviewing one changed operation or running a full conjecture evaluation.
+description: Audit a bounded mathematical slice for missing or unusable Jacobian capabilities, beyond a single-operation review.
 ---
 
 # Audit Mathematical Vocabulary
@@ -8,14 +8,12 @@ description: Audit one bounded Jacobian mathematical slice for missing or unusab
 Find confirmed gaps in one mathematical slice without turning the audit into a
 backend-wrapper wishlist or a claim of complete coverage.
 
-Read the current `AGENTS.md`,
-`docs/explanation/executable-mathematical-vocabulary.md`, and the relevant
-domain references before starting. Read
-`docs/reference/public-operation-admission.md` when the slice exposes a public
-operation or a scale/backend candidate. Use `audit-public-operation-contracts`
-for a deep review of one existing operation. Use
-`recent-conjecture-evaluations` when the task is a full held-out conjecture
-evaluation rather than a capability audit.
+Use the relevant [vocabulary model](../../../docs/explanation/executable-mathematical-vocabulary.md)
+and domain references to assess the slice. Consult the
+[admission contract](../../../docs/reference/public-operation-admission.md)
+when proposing publication or changing an execution envelope. Use
+`audit-public-operation-contracts` for a deep review of one operation and
+`recent-conjecture-evaluations` for a held-out conjecture evaluation.
 
 ## Audit one slice
 
@@ -101,23 +99,12 @@ implicit representation avoids expansion; and whether a maintained backend or
 different exact algorithm materially widens the envelope. If so, record a
 scale/backend or admission gap against the existing postcondition.
 
-## Leave a short durable report
+## Report the result
 
-Report the conclusion first, then the slice and revision, the four lenses
-completed, confirmed findings with classifications and ownership, meaningful
-proof gaps, and one distinct next slice. A valid audit may end with `no gap`.
+Report the slice and revision, evidence coverage, classified findings, ownership,
+and meaningful proof gaps. A valid audit may end with `no gap`. Propose another
+slice only when continued exploration is relevant to the request.
 
-Keep this small metadata block in every persisted report:
-
-```text
-revision:
-slice:
-lanes: source | composition | contract | backend
-outcome:
-owned_by:
-next_slice:
-```
-
-The reports are the source of truth. Do not create a separate coverage database
-for a few audits. If repeated audits later need a ledger, derive a compact index
-from this metadata rather than maintaining parallel state.
+Persist a report when requested or needed for an ongoing audit campaign. Keep
+revision, slice, outcome, and ownership identifiable so later audits can check
+coverage; do not maintain a separate database for a few reports.

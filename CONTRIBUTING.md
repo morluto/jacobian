@@ -6,16 +6,16 @@ Contributions should preserve that product model—see
 [product-blueprint](docs/explanation/product-blueprint.md) and
 [architecture](docs/explanation/architecture.md).
 
-## Before changing code
+## Find the relevant guidance
 
-Read the [documentation home](docs/index.md), the
-[product model](docs/explanation/product-blueprint.md), and the
-[testing strategy](docs/reference/testing-strategy.md).
-Use the installed catalog and current references for present tool membership.
-Before proposing a public operation, follow the
-[public operation admission](docs/reference/public-operation-admission.md)
-contract and the
-[operation contract review](docs/reference/domain-operation-library.md#operation-contract-review).
+Use [docs/index.md](docs/index.md) to find task-specific documentation. Read the
+[product model](docs/explanation/product-blueprint.md) and
+[architecture](docs/explanation/architecture.md) when changing product scope or
+ownership. For public-operation proposals, follow
+[public operation admission](docs/reference/public-operation-admission.md);
+for operation contracts or implementations, use the applicable
+[operation review](docs/reference/domain-operation-library.md#operation-contract-review)
+sections. The installed catalog owns current operation membership.
 
 ## Contributor quick path
 
@@ -43,10 +43,9 @@ new review artifact or framework. The
 and [backend contract](docs/reference/mathematical-backends.md#common-adapter-obligations)
 define these checks.
 
-Most changes should begin with the CI-planned affected local validation:
+For code changes, run CI-planned affected validation on the final tree:
 
 ```sh
-make setup
 make affected AFFECTED_BASE=origin/main
 ```
 
@@ -93,17 +92,9 @@ On macOS, read the
 [Z3 installation guide](docs/how-to/troubleshoot-z3-macos.md) before
 troubleshooting a source-build failure from `uv sync --dev`.
 
-Ordinary owner targets accept `TESTS=<file-or-node>`; `test-focused` is the
-discoverable form for an
-explicit owner plus path. Specialist and aggregate targets may select fixed
-paths; inspect their Make recipes before narrowing them. Test targets accept
-extra pytest options through `PYTEST_ARGS` and print their ten slowest tests by default
-(override with `PYTEST_DIAGNOSTIC_ARGS=--durations=0`). Use
-`uv run --locked pytest --lf` after a failure and `uv run --locked pytest -n 0`
-while debugging. Default `uv run pytest` omits process and MCP trees; use
-`make test-process` or `make test-mcp` for those boundaries.
-See the [testing strategy](docs/reference/testing-strategy.md) for the canonical
-lane commands and narrowing examples.
+For focused test syntax and specialist lanes, use the
+[testing strategy](docs/reference/testing-strategy.md). Default `uv run pytest`
+omits process and MCP trees; those boundaries have named Make targets.
 
 ### Parallel agents sharing a checkout
 
@@ -118,8 +109,8 @@ one branch at a time. Record an issue or PR claim before implementation; check
 for a current claim and for sibling public-operation IDs before beginning the
 same scope. Fetch immediately before pushing and inspect a changed head rather
 than retrying equivalent work. Do not recreate a merged or closed pull-request
-branch: start a follow-up branch instead. The agent-facing version of this
-protocol, including conflict-resolution checks, lives in `AGENTS.md`.
+branch: start a follow-up branch instead. See `AGENTS.md` for public-operation
+collision and catalog-conflict checks.
 
 Run focused owner checks while editing, then planner-selected validation on
 the final tree. If the tree changes during validation, rerun checks whose
@@ -173,20 +164,6 @@ Branch protection should require the CI check named `required`.
 Benchmark and evaluation material is not part of the Jacobian product
 documentation. Keep any such work isolated from the server's operation
 contracts and validate it through its own repository-local workflow.
-
-## Bounded-result rules
-
-- Do not turn a timeout, cancellation, error, incomplete enumeration, or
-  missing witness into a mathematical conclusion.
-- Bound mathematical output through cardinality and intrinsic representation
-  growth. Use encoded bytes only for a concrete configured transport or worker
-  channel; the canonical encoder's ordinary mode is not an admission budget.
-- Keep execution status, input validity, and the domain mathematical conclusion
-  separate.
-- Do not promote an evaluator score, solver status, model answer, or search
-  result beyond the conclusion stated by its typed domain result.
-
-For trust-sensitive changes, write the failing invariant or attack test first.
 
 ## Documentation
 
@@ -266,26 +243,6 @@ actually run, optional-backend skips, and any remaining proof gap.
 
 ## Test ownership and selection
 
-Test directories mirror their semantic owners: `tests/math`, `tests/catalog`,
-`tests/dispatch`, `tests/cli`, `tests/tooling`, and `tests/integration`, with
-separate `tests/process` and `tests/mcp` boundary owners. Use the matching
-`make test-*` target as the canonical entry point. Markers are retained
-only when they alter execution: `requires_backend(name)`, `property`,
-`exhaustive`, and `scale`. They do not replace directory ownership. Scheduled
-validation owns repeated property and exhaustive evidence; merge-group and
-scheduled validation select scale evidence. Keep a representative
-behavioral case in the ordinary owning lane.
-
-Lane execution follows those owners. MCP and process stay on named Make targets
-because they exercise transport and kill-safe process boundaries.
-Prefer a direct domain test, then a focused MCP test only when the public
-projection changes.
-
-Tests may reuse concept-specific helpers under `tests/support`, but must not
-import helpers from a sibling semantic lane. Keep fixtures in the narrowest
-directory or module that needs them, and keep support modules to ordinary data
-builders or one stable test concept rather than hidden setup.
-
-The [testing strategy](docs/reference/testing-strategy.md) is the authoritative
-source for the change matrix, the canonical lane commands, directory ownership,
-and the specialist-lane escalation rules.
+The [testing strategy](docs/reference/testing-strategy.md) owns the change
+matrix, lane commands, fixture ownership, specialist escalation, and exact
+mathematical evidence. Select its sections for the behavior being changed.

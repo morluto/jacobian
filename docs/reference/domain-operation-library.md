@@ -449,8 +449,8 @@ dimension, or other mathematical context. This closure rule applies to empty
 and degenerate values too: for example, a zero-row matrix still retains its
 declared column axis.
 
-When a producer-consumer relationship exists, the operation review artifact
-must name it and its tests must pass the producer's serialized value directly
+When a producer-consumer relationship exists, the issue, PR description, or
+requested audit must name it and its tests must pass the producer's serialized value directly
 through the consumer's typed boundary. Do not introduce a generic value
 registry or universal mathematical-object base class for this purpose; reuse
 the owner domain's concrete value type.
@@ -463,8 +463,8 @@ Classify public outputs before choosing their schema:
 | Source-bound result | A source value plus a conclusion or certificate whose defining relation is validated. |
 | Display projection | A human-readable summary that is not accepted as a composable mathematical value. |
 
-For every producer or materially changed consumer, answer all of the following
-in the producer/consumer closure field of the review artifact:
+For every producer or materially changed consumer, record the applicable
+closure evidence in the issue, PR description, or requested audit:
 
 - What domain-owned canonical type does the producer return?
 - Which downstream operations consume that type?

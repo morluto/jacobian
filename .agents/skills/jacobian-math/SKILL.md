@@ -1,6 +1,6 @@
 ---
 name: jacobian-math
-description: Use when solving nontrivial mathematical problems or investigating conjectures that may benefit from Jacobian's local library of typed operations for exact computation, finite search, structural analysis, formal reasoning, probability, or optimization.
+description: Use Jacobian’s typed operations when exact computation or structural analysis can help solve a mathematical problem.
 ---
 
 # Jacobian Math Tools

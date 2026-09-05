@@ -15,6 +15,10 @@ MAX_GENERATORS = 50
 MAX_LABEL_LENGTH = 64
 MAX_COLORS = 50
 MAX_TERMS = 5000
+MAX_FAMILY_MEMBERS = 5000
+MAX_ORBIT_PROFILE_IMAGES = 200000
+MAX_ORBIT_PROFILE_INCIDENCES = 1000000
+MAX_ORBIT_PROFILE_TRANSPORTERS = 100000
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -238,6 +242,245 @@ class SubsetCanonicalizationResult(StrictModel):
             transporter=transporter,
             orbit_size=orbit_size,
             stabilizer_size=stabilizer_size,
+        )
+
+
+# ---------------------------------------------------------------------------
+# group_action.subset_family.orbit_profile.compute
+# ---------------------------------------------------------------------------
+
+
+class SubsetFamilyOrbitProfileRequest(StrictModel):
+    """Request an exact orbit partition of a materialized subset family.
+
+    The finite permutation action is supplied once and remains the parent of
+    every source row. ``subsets`` are distinct increasing position tuples in
+    source order. Duplicates are rejected before the group is expanded, and
+    the empty family is valid.
+    """
+
+    action: FinitePermutationAction
+    subsets: tuple[FiniteActionSubset, ...] = Field(
+        max_length=MAX_FAMILY_MEMBERS,
+        description=(
+            "Distinct increasing position tuples in source order, each indexing "
+            "the supplied action domain. The generated group must have order at "
+            f"most {MAX_GROUP_ORDER}, and the admitted family, generated orbit "
+            "images, retained incidences, and output must fit the operation "
+            "ledger."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_bound_and_distinct_subsets(self) -> Self:
+        if not self.subsets:
+            return self
+        for subset in self.subsets:
+            _canonical_subset_positions(self.action, subset)
+        if len(set(self.subsets)) != len(self.subsets):
+            raise _validation_error(
+                "subset_family_duplicates", "supplied subsets must be pairwise distinct"
+            )
+        return self
+
+
+class SubsetFamilyOrbitProfileRow(StrictModel):
+    """One orbit class of the supplied subset family.
+
+    ``source_indices`` are indices into the request's source order. The class
+    contains exactly those supplied subsets that lie in the ambient orbit;
+    ``supplied_count`` may be smaller than ``orbit_size`` when the family is
+    not invariant.
+    """
+
+    representative: ActionBoundSubset
+    source_indices: tuple[int, ...] = Field(
+        min_length=1,
+        max_length=MAX_FAMILY_MEMBERS,
+        description=(
+            "Increasing source indices of all supplied members of this orbit."
+        ),
+    )
+    supplied_count: int = Field(
+        ge=1,
+        le=MAX_FAMILY_MEMBERS,
+        description="Number of supplied family members in this ambient orbit.",
+    )
+    orbit_size: int = Field(
+        ge=1,
+        le=MAX_GROUP_ORDER,
+        description=(
+            "Number of distinct images of the representative under the "
+            "generated group, including ambient images absent from the request."
+        ),
+    )
+    stabilizer_size: int = Field(
+        ge=1,
+        le=MAX_GROUP_ORDER,
+        description=(
+            "Order of the setwise stabilizer of the representative; its "
+            "product with orbit_size equals the generated group order."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def bind_orbit_profile_row(self) -> Self:
+        if self.supplied_count != len(self.source_indices):
+            raise _validation_error(
+                "orbit_profile_row_count_mismatch",
+                "supplied_count must equal the number of retained source indices",
+            )
+        if tuple(sorted(set(self.source_indices))) != self.source_indices:
+            raise _validation_error(
+                "orbit_profile_source_indices_not_canonical",
+                "source indices must be distinct and increasing",
+            )
+        if self.orbit_size * self.stabilizer_size > MAX_GROUP_ORDER:
+            raise _validation_error(
+                "orbit_stabilizer_product_exceeds_bound",
+                "orbit_size * stabilizer_size must stay within the group-order bound",
+            )
+        return self
+
+
+class SubsetFamilyOrbitProfileResult(StrictModel):
+    """Complete source-indexed orbit partition of a materialized subset family.
+
+    Rows are sorted by the canonical representative's increasing position
+    tuple and then by its action presentation. Together the ``source_indices``
+    fields form the exact partition of the supplied source range. The family is
+    a union of complete ambient orbits exactly when every supplied class count
+    equals its full orbit size.
+    """
+
+    action: FinitePermutationAction
+    subsets: tuple[FiniteActionSubset, ...] = Field(max_length=MAX_FAMILY_MEMBERS)
+    group_order: int = Field(ge=1, le=MAX_GROUP_ORDER)
+    family_size: int = Field(ge=0, le=MAX_FAMILY_MEMBERS)
+    rows: tuple[SubsetFamilyOrbitProfileRow, ...] = Field(max_length=MAX_FAMILY_MEMBERS)
+    is_union_of_complete_orbits: bool
+    total_supplied_subsets: int = Field(ge=0, le=MAX_FAMILY_MEMBERS)
+    total_full_orbit_size: int = Field(ge=0, le=MAX_ORBIT_PROFILE_IMAGES)
+
+    @model_validator(mode="after")
+    def bind_subset_family_orbit_profile(self) -> Self:  # noqa: C901
+        if self.rows != tuple(
+            sorted(
+                self.rows,
+                key=lambda row: (
+                    row.representative.positions,
+                    row.representative.action.domain,
+                    row.representative.action.generators,
+                ),
+            )
+        ):
+            raise _validation_error(
+                "orbit_profile_rows_not_canonical",
+                "rows must be ordered by representative and action presentation",
+            )
+        if len(self.subsets) != self.family_size:
+            raise _validation_error(
+                "orbit_profile_family_size_mismatch",
+                "subsets must contain exactly family_size source members",
+            )
+        canonical_subsets = tuple(
+            _canonical_subset_positions(self.action, subset) for subset in self.subsets
+        )
+        if canonical_subsets != self.subsets:
+            raise _validation_error(
+                "orbit_profile_subsets_not_canonical",
+                "subsets must use increasing canonical action positions",
+            )
+        if len(set(canonical_subsets)) != len(canonical_subsets):
+            raise _validation_error(
+                "orbit_profile_duplicate_subsets",
+                "subsets must be pairwise distinct",
+            )
+        seen_indices: set[int] = set()
+        seen_representatives: set[tuple[int, ...]] = set()
+        total_supplied = 0
+        total_orbits = 0
+        complete = True
+        for row in self.rows:
+            if row.orbit_size * row.stabilizer_size != self.group_order:
+                raise _validation_error(
+                    "orbit_profile_orbit_stabilizer_mismatch",
+                    "every row must satisfy orbit_size * stabilizer_size == group_order",
+                )
+            if row.representative.action != self.action:
+                raise _validation_error(
+                    "orbit_profile_representative_action_mismatch",
+                    "every orbit representative must be bound to the source action",
+                )
+            representative = row.representative.positions
+            if representative in seen_representatives:
+                raise _validation_error(
+                    "orbit_profile_duplicate_representatives",
+                    "orbit representatives must be pairwise distinct",
+                )
+            seen_representatives.add(representative)
+            for index in row.source_indices:
+                if not 0 <= index < self.family_size:
+                    raise _validation_error(
+                        "orbit_profile_source_index_out_of_range",
+                        "every source index must address the supplied family",
+                    )
+                if index in seen_indices:
+                    raise _validation_error(
+                        "orbit_profile_duplicate_source_indices",
+                        "each supplied subset must occur in exactly one orbit row",
+                    )
+                seen_indices.add(index)
+            total_supplied += row.supplied_count
+            total_orbits += row.orbit_size
+            complete = complete and row.supplied_count == row.orbit_size
+        if self.total_supplied_subsets != total_supplied:
+            raise _validation_error(
+                "orbit_profile_supplied_total_mismatch",
+                "total_supplied_subsets must equal the retained source-index count",
+            )
+        if self.total_full_orbit_size != total_orbits:
+            raise _validation_error(
+                "orbit_profile_orbit_total_mismatch",
+                "total_full_orbit_size must equal the sum of row orbit sizes",
+            )
+        if self.is_union_of_complete_orbits != complete:
+            raise _validation_error(
+                "orbit_profile_completeness_claim_mismatch",
+                "is_union_of_complete_orbits must match per-row supplied/orbit equality",
+            )
+        if len(seen_indices) != self.family_size:
+            raise _validation_error(
+                "orbit_profile_source_coverage_mismatch",
+                "orbit rows must cover every supplied family index exactly once",
+            )
+        if complete and self.family_size != self.total_full_orbit_size:
+            raise _validation_error(
+                "orbit_profile_complete_family_size_mismatch",
+                "a complete-orbit family must have family_size equal to total orbit size",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        action: FinitePermutationAction,
+        group_order: int,
+        family_size: int,
+        subsets: tuple[FiniteActionSubset, ...],
+        rows: tuple[SubsetFamilyOrbitProfileRow, ...],
+    ) -> Self:
+        return cls.model_construct(
+            action=action,
+            subsets=subsets,
+            group_order=group_order,
+            family_size=family_size,
+            rows=rows,
+            is_union_of_complete_orbits=all(
+                row.supplied_count == row.orbit_size for row in rows
+            ),
+            total_supplied_subsets=sum(row.supplied_count for row in rows),
+            total_full_orbit_size=sum(row.orbit_size for row in rows),
         )
 
 

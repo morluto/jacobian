@@ -6,6 +6,7 @@ from jacobian.math.groups.actions.operations import (
     element_cycles,
     polya_inventory,
     subset_canonicalization,
+    subset_family_orbit_profile,
 )
 
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     "element_cycles",
     "polya_inventory",
     "subset_canonicalization",
+    "subset_family_orbit_profile",
 ]

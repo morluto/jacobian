@@ -15,6 +15,8 @@ from jacobian.math.groups.actions._models import (
     PolyaInventoryResult,
     SubsetCanonicalizationRequest,
     SubsetCanonicalizationResult,
+    SubsetFamilyOrbitProfileRequest,
+    SubsetFamilyOrbitProfileResult,
 )
 from jacobian.math.groups.actions.operations import (
     burnside_count,
@@ -22,6 +24,7 @@ from jacobian.math.groups.actions.operations import (
     element_cycles,
     polya_inventory,
     subset_canonicalization,
+    subset_family_orbit_profile,
 )
 
 
@@ -43,6 +46,12 @@ def _burnside(request: BurnsideCountRequest) -> BurnsideCountResult:
 
 def _polya(request: PolyaInventoryRequest) -> PolyaInventoryResult:
     return polya_inventory(request.action, request.colors)
+
+
+def _subset_family_orbit_profile(
+    request: SubsetFamilyOrbitProfileRequest,
+) -> SubsetFamilyOrbitProfileResult:
+    return subset_family_orbit_profile(request.action, request.subsets)
 
 
 # The cyclic group C_3 acting on three labelled points by rotation.
@@ -110,6 +119,43 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "action": _ACTION,
                         "positions": [2],
                     },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="group_action.subset_family.orbit_profile.compute",
+        title="Partition a finite subset family by permutation-action orbits",
+        description="Partition a supplied finite family of distinct action-bound "
+        "subsets into its ambient permutation-action orbit classes. Each exact "
+        "row retains a canonical representative, every supplied source index in "
+        "that orbit, the full ambient orbit size, and the setwise stabilizer "
+        "size; the result also states whether the family is a union of complete "
+        "ambient orbits. Empty families and invariant and non-invariant supplied "
+        "families are valid.",
+        request_type=SubsetFamilyOrbitProfileRequest,
+        result_type=SubsetFamilyOrbitProfileResult,
+        run=_subset_family_orbit_profile,
+        tags=(
+            "algebra",
+            "group",
+            "permutation",
+            "subset family",
+            "orbit profile",
+            "partition",
+            "orbit-stabilizer",
+            "exact",
+        ),
+        examples=(
+            OperationExample(
+                name="cyclic_c3_edge_pair_family",
+                description="Partition the singleton family {b} under the cyclic "
+                "group C_3 acting on three points; subsets must be bound to one "
+                "action, distinct, and ordered as source rows. The generated "
+                f"group must have order at most {MAX_GROUP_ORDER}.",
+                input={
+                    "action": _ACTION,
+                    "subsets": [[1]],
                 },
             ),
         ),

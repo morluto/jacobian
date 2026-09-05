@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+from pydantic import ValidationError
+
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.groups.actions._models import (
+    MAX_FAMILY_MEMBERS,
     MAX_GROUP_ORDER,
+    MAX_ORBIT_PROFILE_IMAGES,
+    MAX_ORBIT_PROFILE_INCIDENCES,
+    MAX_ORBIT_PROFILE_TRANSPORTERS,
     ActionBoundSubset,
     BurnsideCountResult,
     CycleIndexResult,
@@ -12,6 +18,8 @@ from jacobian.math.groups.actions._models import (
     FinitePermutationAction,
     PolyaInventoryResult,
     SubsetCanonicalizationResult,
+    SubsetFamilyOrbitProfileResult,
+    SubsetFamilyOrbitProfileRow,
 )
 
 CycleTypeCount = tuple[tuple[int, ...], int]
@@ -125,6 +133,22 @@ def _cycle_decomposition(
     lengths = tuple(sorted((len(c) for c in cycles), reverse=True))
     fixed = tuple(i for i in range(n) if perm[i] == i)
     return tuple(cycles), lengths, lengths, fixed
+
+
+def _canonical_family_subset(
+    action: FinitePermutationAction, subset: tuple[int, ...]
+) -> tuple[int, ...]:
+    """Canonicalize one family row or fail with the owner-local typed error."""
+
+    try:
+        return ActionBoundSubset(action=action, positions=subset).positions
+    except ValidationError as error:
+        detail = error.errors()[0]
+        raise OperationDomainValidationError(
+            location=("subsets", *tuple(detail.get("loc", ()))),
+            code=detail["type"],
+            message=detail["msg"],
+        ) from error
 
 
 def _support(perm: tuple[int, ...]) -> tuple[int, ...]:
@@ -251,6 +275,126 @@ def _polya_inventory_data(
     return degree, tuple(terms)
 
 
+def subset_family_orbit_profile(
+    action: FinitePermutationAction, subsets: tuple[tuple[int, ...], ...]
+) -> SubsetFamilyOrbitProfileResult:
+    """Partition a materialized family by ambient permutation-action orbits.
+
+    The kernel expands the generated group once. It materializes only the
+    distinct ambient orbits represented by the supplied family, then binds every
+    source index to its orbit class. Admission charges source incidences,
+    generated images, representative transporters, and retained output rather
+    than the unrelated carrier size alone.
+    """
+
+    if len(subsets) > MAX_FAMILY_MEMBERS:
+        raise OperationDomainValidationError(
+            location=("subsets",),
+            code="finite_group_action.subset_family_size_exceeded",
+            message=f"at most {MAX_FAMILY_MEMBERS} subsets are admitted",
+        )
+    source_positions = tuple(
+        _canonical_family_subset(action, subset) for subset in subsets
+    )
+    if len(set(source_positions)) != len(source_positions):
+        raise OperationDomainValidationError(
+            location=("subsets",),
+            code="finite_group_action.subset_family_duplicates",
+            message="supplied subsets must be pairwise distinct",
+        )
+    group = _enumerate_group(action)
+    group_order = len(group)
+
+    source_index = {
+        positions: index for index, positions in enumerate(source_positions)
+    }
+    unclassified = set(source_positions)
+    orbit_rows: list[SubsetFamilyOrbitProfileRow] = []
+    generated_images = 0
+    generated_transporters = 0
+    retained_incidences = 0
+
+    while unclassified:
+        seed = min(unclassified)
+        orbit_images: set[tuple[int, ...]] = set()
+        for permutation in group:
+            orbit_images.add(_transport_subset(permutation, seed))
+            generated_images += 1
+            if generated_images > MAX_ORBIT_PROFILE_IMAGES:
+                raise OperationDomainValidationError(
+                    location=("subsets",),
+                    code="finite_group_action.subset_family_orbit_work_exceeded",
+                    message=(
+                        f"generated orbit-image work exceeds the bounded maximum "
+                        f"{MAX_ORBIT_PROFILE_IMAGES}"
+                    ),
+                )
+
+        orbit_size = len(orbit_images)
+        representative = min(orbit_images)
+        generated_transporters += orbit_size
+        if generated_transporters > MAX_ORBIT_PROFILE_TRANSPORTERS:
+            raise OperationDomainValidationError(
+                location=("subsets",),
+                code="finite_group_action.subset_family_orbit_transport_work_exceeded",
+                message=(
+                    f"generated orbit-canonicalization work exceeds the bounded "
+                    f"maximum {MAX_ORBIT_PROFILE_TRANSPORTERS}"
+                ),
+            )
+        supplied = sorted(
+            index
+            for image in orbit_images
+            if (index := source_index.get(image)) is not None
+        )
+        if not supplied:
+            raise ValueError("orbit generation lost the representative source subset")
+        # Each serialized representative currently retains its action carrier;
+        # charge that repeated projection for every output row.
+        retained_incidences += len(representative) * (1 + len(supplied)) + len(
+            action.domain
+        ) * (1 + len(action.generators))
+        if retained_incidences > MAX_ORBIT_PROFILE_INCIDENCES:
+            raise OperationDomainValidationError(
+                location=("subsets",),
+                code="finite_group_action.subset_family_orbit_result_exceeded",
+                message=(
+                    "retained orbit-profile incidence work exceeds the bounded "
+                    f"maximum {MAX_ORBIT_PROFILE_INCIDENCES}"
+                ),
+            )
+        orbit_rows.append(
+            SubsetFamilyOrbitProfileRow(
+                representative=ActionBoundSubset(
+                    action=action, positions=representative
+                ),
+                source_indices=tuple(supplied),
+                supplied_count=len(supplied),
+                orbit_size=orbit_size,
+                stabilizer_size=group_order // orbit_size,
+            )
+        )
+        unclassified -= set(orbit_images)
+
+    rows = tuple(
+        sorted(
+            orbit_rows,
+            key=lambda row: (
+                row.representative.positions,
+                row.representative.action.domain,
+                row.representative.action.generators,
+            ),
+        )
+    )
+    return SubsetFamilyOrbitProfileResult._from_kernel(
+        action=action,
+        group_order=group_order,
+        family_size=len(source_positions),
+        subsets=source_positions,
+        rows=rows,
+    )
+
+
 def element_cycles(
     action: FinitePermutationAction, element: int
 ) -> ElementCyclesResult:
@@ -315,4 +459,5 @@ __all__ = [
     "element_cycles",
     "polya_inventory",
     "subset_canonicalization",
+    "subset_family_orbit_profile",
 ]

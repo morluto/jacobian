@@ -70,7 +70,10 @@ class ZeroSumAtomSource(StrictModel):
         raw_elements = prepared.get("elements")
         if isinstance(raw_elements, list):
             if len(raw_elements) > MAX_ATOM_SOURCE_ELEMENTS:
-                raise _validation_error("zero_sum_atom_source_cardinality", "zero-sum atom source permits at most 24 items")
+                raise _validation_error(
+                    "zero_sum_atom_source_cardinality",
+                    "zero-sum atom source permits at most 24 items",
+                )
             prepared["elements"] = tuple(raw_elements)
         return canonicalize_json_containers(prepared)
 

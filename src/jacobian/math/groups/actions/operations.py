@@ -368,16 +368,12 @@ def subset_family_orbit_profile(
             ),
         )
     )
-    return SubsetFamilyOrbitProfileResult(
+    return SubsetFamilyOrbitProfileResult._from_kernel(
         action=action,
         group_order=group_order,
         family_size=len(source_positions),
+        subsets=source_positions,
         rows=rows,
-        is_union_of_complete_orbits=all(
-            row.supplied_count == row.orbit_size for row in rows
-        ),
-        total_supplied_subsets=sum(row.supplied_count for row in rows),
-        total_full_orbit_size=sum(row.orbit_size for row in rows),
     )
 
 

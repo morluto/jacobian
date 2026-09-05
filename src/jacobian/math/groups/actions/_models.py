@@ -354,6 +354,7 @@ class SubsetFamilyOrbitProfileResult(StrictModel):
     """
 
     action: FinitePermutationAction
+    subsets: tuple[FiniteActionSubset, ...] = Field(max_length=MAX_FAMILY_MEMBERS)
     group_order: int = Field(ge=1, le=MAX_GROUP_ORDER)
     family_size: int = Field(ge=0, le=MAX_FAMILY_MEMBERS)
     rows: tuple[SubsetFamilyOrbitProfileRow, ...] = Field(max_length=MAX_FAMILY_MEMBERS)
@@ -434,10 +435,12 @@ class SubsetFamilyOrbitProfileResult(StrictModel):
         action: FinitePermutationAction,
         group_order: int,
         family_size: int,
+        subsets: tuple[FiniteActionSubset, ...],
         rows: tuple[SubsetFamilyOrbitProfileRow, ...],
     ) -> Self:
         return cls.model_construct(
             action=action,
+            subsets=subsets,
             group_order=group_order,
             family_size=family_size,
             rows=rows,

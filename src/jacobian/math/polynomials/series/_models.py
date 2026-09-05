@@ -10,6 +10,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
+from jacobian.canonical import parse_canonical_integer
 from jacobian.math._rational_height import RationalHeight, sum_heights
 
 # ---------------------------------------------------------------------------
@@ -178,10 +179,11 @@ def _cleared_series(series: TruncatedSeries) -> tuple[int, tuple[int, ...]]:
     """
     denominator = 1
     for value in series.coefficients:
-        denominator = lcm(denominator, int(value.den))
+        denominator = lcm(denominator, parse_canonical_integer(value.den))
         _require_binary_height(0, denominator.bit_length(), "inverse")
     return denominator, tuple(
-        int(value.num) * (denominator // int(value.den))
+        parse_canonical_integer(value.num)
+        * (denominator // parse_canonical_integer(value.den))
         for value in series.coefficients
     )
 

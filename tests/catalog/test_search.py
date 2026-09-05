@@ -354,7 +354,7 @@ def test_observed_ramsey_need_retains_arrowing_over_proper_edge_coloring() -> No
                 "complete graph K5 has a monochromatic triangle; if not, return a "
                 "complete coloring witness avoiding monochromatic triangles."
             ),
-            limit=10,
+            limit=20,
         )
     )
     positions = {

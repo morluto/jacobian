@@ -16,6 +16,11 @@
 * **chip-firing:** `graph.chip_firing.q_reduced.compute` now returns the
   corrected q-reduced divisor, and `graph.chip_firing.abel_jacobi.compute` now
   transports coordinates through the Smith basis before reduction.
+* **MCP transport:** resource-admission rejections now use
+  `RESOURCE_ADMISSION_REJECTED` at the `resource_admission` stage. Timeout and
+  cancellation tool errors now use JSON diagnostics, and `math.find` match
+  cursors are opaque hashes rather than operation IDs. Update strict error and
+  cursor decoders.
 * **lattices:** `lattice.dual.compute` now returns the corrected dual basis for
   nonsymmetric bases. `lattice.rank_gram.compute.covolume_rational` now reports
   rationality of the covolume rather than ambient full rank.

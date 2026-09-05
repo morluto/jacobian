@@ -338,7 +338,9 @@ def _rref_basis(
         input_cells * max(rank_bound, 1) + input_cells + rank_bound * ambient_dimension,
     )
     reduced_rows, pivot_columns = rref(
-        PrimeFieldMatrix(prime=prime, entries=rows, columns=ambient_dimension)
+        PrimeFieldMatrix._from_admitted(
+            prime=prime, entries=rows, columns=ambient_dimension
+        )
     )
     _require_execution_active(ledger.deadline, "after exact modular row reduction")
     # The elimination loop clears each pivot both above and below its pivot

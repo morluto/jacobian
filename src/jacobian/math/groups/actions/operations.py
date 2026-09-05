@@ -351,10 +351,9 @@ def subset_family_orbit_profile(
             raise ValueError("orbit generation lost the representative source subset")
         # Each serialized representative currently retains its action carrier;
         # charge that repeated projection for every output row.
-        retained_incidences += (
-            len(representative) * (1 + len(supplied))
-            + len(action.domain) * (1 + len(action.generators))
-        )
+        retained_incidences += len(representative) * (1 + len(supplied)) + len(
+            action.domain
+        ) * (1 + len(action.generators))
         if retained_incidences > MAX_ORBIT_PROFILE_INCIDENCES:
             raise OperationDomainValidationError(
                 location=("subsets",),

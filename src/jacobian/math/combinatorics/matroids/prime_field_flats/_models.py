@@ -66,21 +66,38 @@ def _require_raw_envelope(data: object) -> None:
             rows = vectors.get("entries")
             if isinstance(rows, (list, tuple)) and (
                 len(rows) > MAX_PRIME_FIELD_FLAT_CANDIDATES
-                or any(not isinstance(row, (list, tuple)) or len(row) > MAX_PRIME_FIELD_FLAT_AMBIENT_DIMENSION for row in rows)
+                or any(
+                    not isinstance(row, (list, tuple))
+                    or len(row) > MAX_PRIME_FIELD_FLAT_AMBIENT_DIMENSION
+                    for row in rows
+                )
             ):
-                raise _validation_error("raw_matrix_bound", "candidate matrix exceeds the raw row envelope")
-    for key, maximum in (("clauses", MAX_PRIME_FIELD_FLAT_CLAUSES), ("symmetry_generators", MAX_PRIME_FIELD_FLAT_SYMMETRY_GENERATORS)):
+                raise _validation_error(
+                    "raw_matrix_bound", "candidate matrix exceeds the raw row envelope"
+                )
+    for key, maximum in (
+        ("clauses", MAX_PRIME_FIELD_FLAT_CLAUSES),
+        ("symmetry_generators", MAX_PRIME_FIELD_FLAT_SYMMETRY_GENERATORS),
+    ):
         value = data.get(key)
         if isinstance(value, (list, tuple)) and len(value) > maximum:
-            raise _validation_error("raw_container_bound", f"{key} exceeds the raw envelope")
+            raise _validation_error(
+                "raw_container_bound", f"{key} exceeds the raw envelope"
+            )
     forbidden = data.get("forbidden_vectors")
     if isinstance(forbidden, Mapping):
         rows = forbidden.get("entries")
         if isinstance(rows, (list, tuple)) and (
             len(rows) > MAX_PRIME_FIELD_FLAT_FORBIDDEN_VECTORS
-            or any(not isinstance(row, (list, tuple)) or len(row) > MAX_PRIME_FIELD_FLAT_AMBIENT_DIMENSION for row in rows)
+            or any(
+                not isinstance(row, (list, tuple))
+                or len(row) > MAX_PRIME_FIELD_FLAT_AMBIENT_DIMENSION
+                for row in rows
+            )
         ):
-            raise _validation_error("raw_matrix_bound", "forbidden matrix exceeds the raw row envelope")
+            raise _validation_error(
+                "raw_matrix_bound", "forbidden matrix exceeds the raw row envelope"
+            )
 
 
 class PrimeFieldRowMatrix(StrictModel):

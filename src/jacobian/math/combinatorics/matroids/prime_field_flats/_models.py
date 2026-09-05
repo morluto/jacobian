@@ -61,8 +61,20 @@ def _require_raw_envelope(data: object) -> None:
         return
     candidates = data.get("candidates")
     if isinstance(candidates, Mapping):
+        _require_mapping_keys(
+            candidates,
+            allowed=frozenset({"prime", "coordinate_axis", "vector_labels", "vectors"}),
+            reason="configuration_shape",
+            label="candidate configuration",
+        )
         vectors = candidates.get("vectors")
         if isinstance(vectors, Mapping):
+            _require_mapping_keys(
+                vectors,
+                allowed=frozenset({"prime", "entries", "columns"}),
+                reason="matrix_shape",
+                label="candidate matrix",
+            )
             rows = vectors.get("entries")
             if isinstance(rows, (list, tuple)) and (
                 len(rows) > MAX_PRIME_FIELD_FLAT_CANDIDATES
@@ -102,6 +114,14 @@ def _require_raw_envelope(data: object) -> None:
         raise _validation_error(
             "raw_container_bound", "clause exceeds the raw envelope"
         )
+    rank_interval = data.get("rank_interval")
+    if isinstance(rank_interval, Mapping):
+        _require_mapping_keys(
+            rank_interval,
+            allowed=frozenset({"minimum", "maximum"}),
+            reason="rank_interval_shape",
+            label="rank interval",
+        )
     generators = data.get("symmetry_generators")
     if isinstance(generators, (list, tuple)) and any(
         isinstance(generator, Mapping)
@@ -120,6 +140,12 @@ def _require_raw_envelope(data: object) -> None:
         )
     forbidden = data.get("forbidden_vectors")
     if isinstance(forbidden, Mapping):
+        _require_mapping_keys(
+            forbidden,
+            allowed=frozenset({"prime", "entries", "columns"}),
+            reason="matrix_shape",
+            label="forbidden matrix",
+        )
         rows = forbidden.get("entries")
         if isinstance(rows, (list, tuple)) and (
             len(rows) > MAX_PRIME_FIELD_FLAT_FORBIDDEN_VECTORS

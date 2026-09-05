@@ -6,12 +6,25 @@ from collections import Counter
 from dataclasses import dataclass
 from itertools import product
 from math import comb, lcm, prod
+from time import monotonic
 from typing import TYPE_CHECKING, Annotated, Literal, Self, cast
 
-from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_validator
+from pydantic import (
+    Field,
+    StrictBool,
+    StrictInt,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
+from jacobian._execution import (
+    bind_request_deadline,
+    current_request_execution,
+    request_checkpoint,
+)
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
@@ -41,7 +54,6 @@ MAX_CHARACTER_SUM_FREQUENCIES = 256
 MAX_CHARACTER_SUM_INTERVALS = 256
 MAX_CHARACTER_SUM_CELLS = 4_096
 MAX_CHARACTER_SUM_TOTAL_VISITS = 262_144
-MAX_CHARACTER_SUM_RANK = 16
 MAX_CHARACTER_SUM_CYCLOTOMIC_DEGREE = MAX_SPECTRAL_CYCLOTOMIC_DEGREE
 MAX_CHARACTER_SUM_CYCLOTOMIC_DENSE_OPS = MAX_SPECTRAL_CYCLOTOMIC_DENSE_OPS
 MAX_CHARACTER_SUM_CYCLOTOMIC_COEFFICIENT_BITS = MAX_SPECTRAL_CYCLOTOMIC_COEFFICIENT_BITS
@@ -53,6 +65,7 @@ MAX_CHARACTER_SUM_REMAINDER_COEFFICIENT_DIGITS = (
     MAX_CHARACTER_SUM_REMAINDER_COEFFICIENT_BITS * 30_103 + 99_999
 ) // 100_000 + 1
 MAX_CHARACTER_SUM_PREFIX_WORK = 1_048_576
+CHARACTER_SUM_INTERVAL_PROFILE_WALL_SECONDS = 600.0
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -612,11 +625,13 @@ class FiniteAbelianCharacterSumIntervalProfileSource(StrictModel):
 
     The group, sequence, frequency set, and interval list are each bounded
     before deriving work: sequence length, frequency count, interval count,
-    their product, total term visits, prefix-table work, cyclotomic degree and
-    construction costs, coefficient growth, and result bytes. The sequence
-    retains order and repetitions and is normalized coordinate-wise modulo the
-    declared moduli; frequencies are reduced modulo the moduli, deduplicated,
-    and sorted lexicographically; intervals are distinct half-open index pairs
+    their product, total term visits, prefix-table and rank-linear
+    dot-product work, retained source coordinates, cyclotomic degree and
+    construction costs, and coefficient growth. Rank has no fixed ceiling;
+    it enters those derived budgets linearly. The sequence retains order and
+    repetitions and is normalized coordinate-wise modulo the declared moduli;
+    frequencies are reduced modulo the moduli, deduplicated, and sorted
+    lexicographically; intervals are distinct half-open index pairs
     ``[a, b)`` within the sequence and are sorted lexicographically. This
     canonicalization retains the labelling order while giving the profile a
     single source representation.
@@ -754,7 +769,20 @@ class FiniteAbelianCharacterSumIntervalProfileResult(StrictModel):
     character_convention: Literal["POSITIVE_PRODUCT_DUAL_PAIRING"] = (
         "POSITIVE_PRODUCT_DUAL_PAIRING"
     )
-    sums: tuple[FiniteAbelianCharacterSumCell, ...]
+    sums: tuple[FiniteAbelianCharacterSumCell, ...] = Field(
+        min_length=1,
+        max_length=MAX_CHARACTER_SUM_CELLS,
+    )
+
+    @field_validator("sums", mode="before")
+    @classmethod
+    def bound_raw_cells(cls, value: object) -> object:
+        if isinstance(value, (list, tuple)) and len(value) > MAX_CHARACTER_SUM_CELLS:
+            raise _validation_error(
+                "cell_count_bound",
+                "character-sum profile has at most 4,096 cells",
+            )
+        return tuple(value) if isinstance(value, list) else value
 
     @model_validator(mode="after")
     def bind_profile(self) -> Self:
@@ -764,11 +792,13 @@ class FiniteAbelianCharacterSumIntervalProfileResult(StrictModel):
                 "group_exponent_mismatch",
                 "group_exponent must equal the lcm of the source group moduli",
             )
-        degree = _euler_totient(exponent)
-        if self.cyclotomic_degree != degree:
+        # Bind the kernel-declared degree structurally. Totient factorization
+        # belongs to admission, not result parsing of untrusted payloads.
+        degree = self.cyclotomic_degree
+        if degree >= exponent:
             raise _validation_error(
-                "cyclotomic_degree_mismatch",
-                "cyclotomic_degree must be phi(group_exponent)",
+                "cyclotomic_degree_bound",
+                "cyclotomic_degree must be strictly less than group_exponent",
             )
         expected_cells = len(self.source.frequencies) * len(self.source.intervals)
         if len(self.sums) != expected_cells:
@@ -779,7 +809,7 @@ class FiniteAbelianCharacterSumIntervalProfileResult(StrictModel):
         if any(len(cell.remainder_coefficients) != degree for cell in self.sums):
             raise _validation_error(
                 "remainder_length",
-                "every cell remainder must have length phi(group_exponent)",
+                "every cell remainder must have length cyclotomic_degree",
             )
         # Cheap shape checks on source binding; defining invariant (exact
         # remainder equality with term-by-term accumulator) is established by
@@ -846,11 +876,12 @@ def _character_sum_interval_profile_work(
 
     The envelope separates representation caps (Pydantic ``max_length`` on
     sequence, frequencies, intervals) from derived mathematical work:
-    group rank/moduli via the exponent, cyclotomic degree and construction
-    costs, frequency-interval cells, total character-term visits, prefix-table
-    work, and coefficient growth after monic reduction.
-    Every check occurs before SymPy is invoked. Budgets are conservative
-    over-approximations matching the spectral-pair construction analysis.
+    cyclotomic degree and construction costs, frequency-interval cells, total
+    character-term visits, rank-linear dot-product and retained-source work,
+    prefix-table assembly, and coefficient growth after monic reduction.
+    Rank has no fixed ceiling. Every check occurs before SymPy is invoked.
+    Budgets are conservative over-approximations matching the spectral-pair
+    construction analysis.
     """
 
     sequence_length = len(source.sequence)
@@ -864,8 +895,6 @@ def _character_sum_interval_profile_work(
         raise ValueError("character-sum frequency count exceeds its bound")
     if interval_count > MAX_CHARACTER_SUM_INTERVALS:
         raise ValueError("character-sum interval count exceeds its bound")
-    if rank > MAX_CHARACTER_SUM_RANK:
-        raise ValueError("character-sum group rank exceeds its bound")
 
     exponent = source.group.exponent
     cyclotomic_dense_ops = 10 * exponent.bit_length() * (exponent + 1) * (exponent + 1)
@@ -898,7 +927,10 @@ def _character_sum_interval_profile_work(
     if total_visits > MAX_CHARACTER_SUM_TOTAL_VISITS:
         raise ValueError("character-sum total term visits exceed their bound")
 
-    prefix_work = frequency_count * sequence_length + cells * degree
+    retained_source_work = rank * (sequence_length + frequency_count)
+    if retained_source_work > MAX_CHARACTER_SUM_PREFIX_WORK:
+        raise ValueError("character-sum retained source coordinates exceed their bound")
+    prefix_work = frequency_count * sequence_length * rank + cells * degree
     if prefix_work > MAX_CHARACTER_SUM_PREFIX_WORK:
         raise ValueError("character-sum prefix-table work exceeds its bound")
 
@@ -922,12 +954,29 @@ def _character_sum_interval_profile_work(
     )
 
 
+def _character_sum_execution_deadline() -> float:
+    """Bind one owner deadline measured from the original request start."""
+
+    execution = current_request_execution()
+    started_at = execution.started_at if execution is not None else monotonic()
+    owner_deadline = started_at + CHARACTER_SUM_INTERVAL_PROFILE_WALL_SECONDS
+    deadline = (
+        min(owner_deadline, execution.deadline)
+        if execution is not None and execution.deadline is not None
+        else owner_deadline
+    )
+    bind_request_deadline(deadline)
+    return deadline
+
+
 def _finite_abelian_character_sum_interval_profile_data(
     source: FiniteAbelianCharacterSumIntervalProfileSource,
 ) -> tuple[_CharacterSumIntervalProfileWork, tuple[FiniteAbelianCharacterSumCell, ...]]:
     """Compute all exact interval remainders after admission."""
 
+    request_checkpoint("before character-sum admission")
     work = _character_sum_interval_profile_work(source)
+    request_checkpoint("after character-sum admission")
     degree = work.cyclotomic_degree
     exponent = work.group_exponent
 
@@ -949,6 +998,7 @@ def _finite_abelian_character_sum_interval_profile_data(
     scale = tuple(exponent // int(modulus) for modulus in moduli)
     powers_by_frequency: list[list[int]] = []
     for frequency in source.frequencies:
+        request_checkpoint("character-sum frequency powers")
         row: list[int] = []
         for element in source.sequence:
             power = (
@@ -965,6 +1015,7 @@ def _finite_abelian_character_sum_interval_profile_data(
     for freq_index, frequency in enumerate(source.frequencies):
         powers = powers_by_frequency[freq_index]
         for a, b in source.intervals:
+            request_checkpoint("character-sum cell remainder")
             a_int = int(a)
             b_int = int(b)
             interval_powers = powers[a_int:b_int]
@@ -998,7 +1049,16 @@ def compute_finite_abelian_character_sum_interval_profile(
 ) -> FiniteAbelianCharacterSumIntervalProfileResult:
     """Return every exact character sum on the requested intervals."""
 
-    work, cells = _finite_abelian_character_sum_interval_profile_data(source)
+    _character_sum_execution_deadline()
+    try:
+        work, cells = _finite_abelian_character_sum_interval_profile_data(source)
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="finite_abelian_group.character_sum_not_admitted",
+            message=str(exc),
+        ) from exc
+    request_checkpoint("after character-sum result")
     return FiniteAbelianCharacterSumIntervalProfileResult._from_kernel(
         source,
         cells,

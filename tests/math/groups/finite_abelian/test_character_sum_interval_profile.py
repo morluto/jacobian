@@ -4,12 +4,21 @@ from __future__ import annotations
 
 from collections import Counter
 from itertools import product
+from time import monotonic
 
 import pytest
+from pydantic import ValidationError
 from sympy import Poly, Symbol, cyclotomic_poly
 from sympy.polys.domains import ZZ
 from tests.math.groups.finite_abelian._support import finite_abelian_validation_error
 
+from jacobian._execution import (
+    OperationExecutionCancelledError,
+    OperationExecutionTimeoutError,
+    request_cancellation,
+    request_execution,
+)
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.groups import finite_abelian as domain
 from jacobian.math.groups._tools import TOOLS as GROUP_TOOLS
 from jacobian.math.groups.finite_abelian import (
@@ -481,18 +490,6 @@ def test_work_bounds_rejections() -> None:
     # Interval out of bounds -> ValidationError
     with finite_abelian_validation_error():
         _source((4,), ((0,),), ((0,),), ((0, 2),))
-    # Rank beyond bound -> ValueError via work preflight
-    # Need rank 17 with moduli (2,)*17
-    rank17_moduli = (2,) * (domain.MAX_CHARACTER_SUM_RANK + 1)
-    group_rank17 = FiniteAbelianProductGroup(moduli=rank17_moduli)
-    seq17 = tuple((0,) * (domain.MAX_CHARACTER_SUM_RANK + 1) for _ in range(2))
-    freq17 = tuple((0,) * (domain.MAX_CHARACTER_SUM_RANK + 1) for _ in range(1))
-    # source creation itself will succeed (group has no rank limit), but work should reject
-    src_rank = FiniteAbelianCharacterSumIntervalProfileSource(
-        group=group_rank17, sequence=seq17, frequencies=freq17, intervals=((0, 1),)
-    )
-    with pytest.raises(ValueError, match="rank"):
-        compute_finite_abelian_character_sum_interval_profile(src_rank)
     # Cells bound: use product group to allow many distinct frequencies while keeping exponent small
     # Group (16,16) has exponent 16 phi 8, distinct elements 256, enough for 65 distinct frequencies
     group_big_mod = _group((16, 16))
@@ -597,3 +594,118 @@ def test_native_catalog_projection_does_not_replay_kernel() -> None:
     # Should validate structurally (zero allowed) without recomputing kernel's exact sum
     reparsed = FiniteAbelianCharacterSumIntervalProfileResult.model_validate(payload)
     assert reparsed.sums[0].remainder_coefficients == ("0", "0")
+
+
+def test_result_validation_does_not_factor_totient() -> None:
+    source = _source((4,), ((0,), (1,)), ((0,), (1,)), ((0, 2),))
+    result = compute_finite_abelian_character_sum_interval_profile(source)
+    payload = result.model_dump(mode="json")
+    payload["cyclotomic_degree"] = 1
+    for cell in payload["sums"]:
+        cell["remainder_coefficients"] = cell["remainder_coefficients"][:1]
+    parsed = FiniteAbelianCharacterSumIntervalProfileResult.model_validate(payload)
+    assert parsed.cyclotomic_degree == 1
+    assert all(len(cell.remainder_coefficients) == 1 for cell in parsed.sums)
+
+    large_prime = 2_147_483_647
+    forged = {
+        "source": {
+            "group": {"moduli": [large_prime]},
+            "sequence": [[0]],
+            "frequencies": [[0]],
+            "intervals": [[0, 1]],
+        },
+        "group_exponent": large_prime,
+        "cyclotomic_degree": 1,
+        "character_convention": "POSITIVE_PRODUCT_DUAL_PAIRING",
+        "sums": [
+            {
+                "frequency": [0],
+                "interval": [0, 1],
+                "remainder_coefficients": ["1"],
+            }
+        ],
+    }
+    parsed_large = FiniteAbelianCharacterSumIntervalProfileResult.model_validate(forged)
+    assert parsed_large.group_exponent == large_prime
+    assert parsed_large.cyclotomic_degree == 1
+
+
+def test_oversized_result_cells_reject_before_nested_validation() -> None:
+    invalid_cell = {"not": "a character-sum cell"}
+    payload = {
+        "source": {
+            "group": {"moduli": [4]},
+            "sequence": [[0]],
+            "frequencies": [[0]],
+            "intervals": [[0, 1]],
+        },
+        "group_exponent": 4,
+        "cyclotomic_degree": 2,
+        "character_convention": "POSITIVE_PRODUCT_DUAL_PAIRING",
+        "sums": [invalid_cell] * (domain.MAX_CHARACTER_SUM_CELLS + 1),
+    }
+    with pytest.raises(ValidationError) as caught:
+        FiniteAbelianCharacterSumIntervalProfileResult.model_validate(payload)
+    issue = caught.value.errors()[0]
+    assert issue["type"] == "finite_abelian_group.cell_count_bound"
+
+
+def test_z2_power_17_singleton_profile_is_admitted() -> None:
+    rank = 17
+    zero = (0,) * rank
+    source = _source((2,) * rank, (zero,), (zero,), ((0, 1),))
+    work = domain._character_sum_interval_profile_work(source)
+    assert work.cells == 1
+    assert work.prefix_work == rank + 1
+    result = compute_finite_abelian_character_sum_interval_profile(source)
+    assert result.group_exponent == 2
+    assert result.cyclotomic_degree == 1
+    assert result.sums[0].remainder_coefficients == ("1",)
+
+
+def test_rank_linear_prefix_work_rejects_expensive_profiles() -> None:
+    rank = 17
+    sequence = tuple((0,) * rank for _ in range(256))
+    frequencies = tuple(
+        tuple((index >> axis) & 1 for axis in range(rank)) for index in range(256)
+    )
+    source = FiniteAbelianCharacterSumIntervalProfileSource(
+        group=_group((2,) * rank),
+        sequence=sequence,
+        frequencies=frequencies,
+        intervals=((0, 1),),
+    )
+    with pytest.raises(OperationDomainValidationError, match="prefix-table"):
+        compute_finite_abelian_character_sum_interval_profile(source)
+
+
+def test_catalog_projects_admission_as_domain_error() -> None:
+    request = FiniteAbelianCharacterSumIntervalProfileRequest(
+        source=_source((128,), ((0,),), ((0,),), ((0, 1),))
+    )
+    with pytest.raises(OperationDomainValidationError, match="dense-op"):
+        PROFILE_OPERATION.run(request)
+
+
+def test_profile_observes_cancellation_during_execution() -> None:
+    class _Cancelled:
+        def is_set(self) -> bool:
+            return True
+
+    source = _source((4,), ((0,), (1,)), ((0,),), ((0, 2),))
+    with (
+        request_cancellation(_Cancelled()),
+        pytest.raises(OperationExecutionCancelledError, match="character-sum"),
+    ):
+        compute_finite_abelian_character_sum_interval_profile(source)
+
+
+def test_profile_observes_expired_owner_deadline() -> None:
+    source = _source((4,), ((0,), (1,)), ((0,),), ((0, 2),))
+    started_at = monotonic() - domain.CHARACTER_SUM_INTERVAL_PROFILE_WALL_SECONDS - 1
+    with (
+        request_execution(started_at=started_at),
+        pytest.raises(OperationExecutionTimeoutError, match="character-sum"),
+    ):
+        compute_finite_abelian_character_sum_interval_profile(source)

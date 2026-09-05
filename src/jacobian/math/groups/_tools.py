@@ -65,7 +65,16 @@ def compute_finite_abelian_spectral_pair(
 def compute_finite_abelian_character_sum_interval_profile(
     request: FiniteAbelianCharacterSumIntervalProfileRequest,
 ) -> FiniteAbelianCharacterSumIntervalProfileResult:
-    return native_character_sum_interval_profile(request.source)
+    try:
+        return native_character_sum_interval_profile(request.source)
+    except OperationDomainValidationError:
+        raise
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="finite_abelian_group.character_sum_not_admitted",
+            message=str(exc),
+        ) from exc
 
 
 def compute_group_order(request: PermutationGroup) -> GroupOrderResult:

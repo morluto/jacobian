@@ -197,11 +197,21 @@ def _admit_gaussian_realification(request: GaussianRealificationRequest) -> None
             message=f"predicted expansion {predicted_raw} exceeds {MAX_GAUSSIAN_REALIFICATION_EXPANDED_TERMS}",
         )
     real_terms = sum(
-        sum(1 for j in range(term.exponent + 1) if (j % 2 == 0 and term.coefficient.real.as_fraction() != 0) or (j % 2 == 1 and term.coefficient.imaginary.as_fraction() != 0))
+        sum(
+            1
+            for j in range(term.exponent + 1)
+            if (j % 2 == 0 and term.coefficient.real.as_fraction() != 0)
+            or (j % 2 == 1 and term.coefficient.imaginary.as_fraction() != 0)
+        )
         for term in poly.terms
     )
     imag_terms = sum(
-        sum(1 for j in range(term.exponent + 1) if (j % 2 == 1 and term.coefficient.real.as_fraction() != 0) or (j % 2 == 0 and term.coefficient.imaginary.as_fraction() != 0))
+        sum(
+            1
+            for j in range(term.exponent + 1)
+            if (j % 2 == 1 and term.coefficient.real.as_fraction() != 0)
+            or (j % 2 == 0 and term.coefficient.imaginary.as_fraction() != 0)
+        )
         for term in poly.terms
     )
     if max(real_terms, imag_terms) > MAX_GAUSSIAN_REALIFICATION_RESULT_TERMS:

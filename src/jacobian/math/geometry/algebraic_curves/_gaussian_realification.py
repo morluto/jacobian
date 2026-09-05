@@ -227,26 +227,19 @@ def _admit_gaussian_realification(request: GaussianRealificationRequest) -> None
     # A binomial multiplier can enlarge a numerator. Reserve that room during
     # admission so result construction never rejects an accepted coefficient.
     for index, term in enumerate(poly.terms):
-        multiplier_digits = len(str(comb(term.exponent, term.exponent // 2))) - 1
-        component_digits = (
-            MAX_GAUSSIAN_REALIFICATION_COEFFICIENT_DIGITS - multiplier_digits
-        )
+        multiplier = comb(term.exponent, term.exponent // 2)
         for label, value in (
             ("real", term.coefficient.real),
             ("imaginary", term.coefficient.imaginary),
         ):
-            try:
-                require_bounded_rational(
-                    value,
-                    max_digits=component_digits,
-                    label=f"Gaussian coefficient {label}",
-                )
-            except ValueError as exc:
+            numerator_digits = len(str(abs(int(value.num) * multiplier)))
+            denominator_digits = len(value.den)
+            if max(numerator_digits, denominator_digits) > MAX_GAUSSIAN_REALIFICATION_COEFFICIENT_DIGITS:
                 raise OperationDomainValidationError(
                     location=("polynomial", "terms", index, "coefficient", label),
                     code="algebraic_geometry.gaussian_realification.coefficient_digits",
-                    message=str(exc),
-                ) from exc
+                    message="Gaussian coefficient exceeds the result digit envelope after binomial multiplication",
+                )
 
 
 def _fraction_to_canonical_rational(value: Fraction) -> CanonicalRational:

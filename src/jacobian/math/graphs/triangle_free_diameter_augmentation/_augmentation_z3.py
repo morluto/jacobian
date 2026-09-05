@@ -551,6 +551,13 @@ def solve_triangle_free_diameter_augmentation_values(  # noqa: C901
 ) -> TriangleFreeDiameterAugmentationResult:
     """Run bounded augmentation in owner worker and decode result."""
 
+    if target_diameter < 1 or target_diameter > HARD_MAX_TARGET_DIAMETER:
+        raise OperationDomainValidationError(
+            location=("target_diameter",),
+            code="graph.triangle_free_diameter_augmentation.diameter_bound",
+            message=f"target diameter must be in 1..{HARD_MAX_TARGET_DIAMETER}",
+        )
+
     # This exact no-op path never constructs candidates or invokes Z3, so it
     # is admitted independently of the backend order envelope.
     if (
@@ -624,8 +631,8 @@ def solve_triangle_free_diameter_augmentation_values(  # noqa: C901
                 ),
                 cwd=directory,
             )
-    except OSError:
-        return fallback("bounded augmentation worker could not be started")
+    except OSError as exc:
+        raise RuntimeError("bounded augmentation worker could not be started") from exc
     if completed.cancelled:
         raise OperationExecutionCancelledError("augmentation worker cancelled")
     if completed.timed_out or completed.stdout_exceeded or completed.stderr_exceeded:

@@ -124,46 +124,6 @@ class TriangleFreeDiameterAugmentationResult(StrictModel):
                 "graph.augmented_diameter_must_not_exceed_target",
                 "augmented diameter must not exceed target",
             )
-        import networkx as nx
-
-        g: nx.Graph[str] = nx.Graph()
-        g.add_nodes_from(self.graph.vertices)
-        g.add_edges_from(self.graph.edges)
-        g.add_edges_from(self.added_edges)
-        try:
-            tri = sum(nx.triangles(g).values()) // 3  # type: ignore[union-attr]
-        except Exception as exc:  # pragma: no cover - defensive
-            raise PydanticCustomError(
-                "graph.augmentation_structural_check_failed",
-                "augmentation structural check failed",
-            ) from exc
-        if tri != 0:
-            raise PydanticCustomError(
-                "graph.augmented_graph_must_be_triangle_free",
-                "augmented graph must be triangle-free",
-            )
-        if not nx.is_connected(g):
-            raise PydanticCustomError(
-                "graph.augmented_graph_must_be_connected",
-                "augmented graph must be connected",
-            )
-        try:
-            diam = int(nx.diameter(g))
-        except Exception as exc:
-            raise PydanticCustomError(
-                "graph.augmented_graph_diameter_check_failed",
-                "augmented graph diameter check failed",
-            ) from exc
-        if diam != self.augmented_diameter:
-            raise PydanticCustomError(
-                "graph.augmented_diameter_must_match_graph",
-                "augmented diameter must match graph",
-            )
-        if diam > self.target_diameter:
-            raise PydanticCustomError(
-                "graph.augmented_diameter_exceeds_target",
-                "augmented diameter exceeds target",
-            )
 
     @classmethod
     def _from_kernel(

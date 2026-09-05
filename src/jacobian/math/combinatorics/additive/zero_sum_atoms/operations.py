@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from itertools import combinations
+from math import comb
 
 from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import OperationDomainValidationError
@@ -58,14 +59,25 @@ def _admit_zero_sum_atom_source(source: ZeroSumAtomSource) -> None:
             "complete zero-sum subset enumeration exceeds the "
             f"{MAX_ATOM_SUBSET_CHECKS:,}-subset bound",
         )
-    # Every retained atom is a nonempty subset.  Establish the public edge
-    # envelope before enumerating the subset lattice, rather than discovering
-    # an unrepresentable family after exhaustive work.
-    if subset_checks - 1 > MAX_ATOM_EDGES:
+    # Minimal zero-sum subsets form an antichain.  Sperner's bound admits
+    # cheap source families while still proving the exact result carrier fits.
+    antichain_edges = comb(element_count, element_count // 2)
+    antichain_incidences = max(
+        (size * comb(element_count, size) for size in range(element_count + 1)),
+        default=0,
+    )
+    if antichain_edges > MAX_ATOM_EDGES or antichain_incidences > MAX_ATOM_INCIDENCES:
         _reject(
             ("source", "elements"),
             "zero_sum_atom.result_edge_bound",
-            "source subset lattice exceeds the exact atom-family edge envelope",
+            "atom antichain exceeds the exact result envelope",
+        )
+    coordinate_work = len(source.group.moduli) * element_count * (1 << max(0, element_count - 1))
+    if coordinate_work > MAX_ATOM_SUBSET_CHECKS:
+        _reject(
+            ("source", "group", "moduli"),
+            "zero_sum_atom.coordinate_work",
+            "coordinate-wise subset work exceeds the admitted bound",
         )
 
 

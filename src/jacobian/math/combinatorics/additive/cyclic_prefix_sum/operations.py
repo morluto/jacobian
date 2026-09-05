@@ -227,7 +227,7 @@ def _admit_forbidden_prefix_sequencing(
     if first_element is not None:
         if len(first_element) != len(source.group.moduli) or any(
             type(coordinate) is not int
-            or len(str(abs(coordinate))) > MAX_MODULUS_DIGITS
+            or coordinate.bit_length() > MAX_MODULUS_DIGITS * 3322 // 1000 + 1
             for coordinate in first_element
         ):
             _reject(
@@ -265,7 +265,7 @@ def _admit_forbidden_prefix_sequencing(
             "every forbidden value must match the source group rank",
         )
     if any(
-        type(coordinate) is not int or len(str(abs(coordinate))) > MAX_MODULUS_DIGITS
+        type(coordinate) is not int or coordinate.bit_length() > MAX_MODULUS_DIGITS * 3322 // 1000 + 1
         for value in forbidden_values
         for coordinate in value
     ):

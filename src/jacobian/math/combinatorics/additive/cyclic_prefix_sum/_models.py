@@ -311,6 +311,11 @@ class ForbiddenPrefixSequencingResult(StrictModel):
 
     @model_validator(mode="after")
     def require_result_branch_shape(self) -> Self:
+        if not 1 <= self.states_explored <= self.search_node_limit:
+            raise _validation_error(
+                "sequencing_states_explored",
+                "states_explored must be between one and search_node_limit",
+            )
         rank = len(self.source.group.moduli)
         if rank * (len(self.source.elements) + len(self.forbidden_values) + 1) > MAX_SEQUENCING_COORDINATE_CELLS:
             raise _validation_error("sequencing_coordinate_work", "retained sequencing coordinates exceed the admitted envelope")

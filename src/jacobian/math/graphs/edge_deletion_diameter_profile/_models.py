@@ -49,19 +49,29 @@ class EdgeDeletionDiameterProfileRequest(StrictModel):
 class EdgeDeletionDiameterEntry(StrictModel):
     """Diameter after deleting one source edge, or disconnected."""
 
-    edge: tuple[str, str] = Field(description="Source edge in graph.edges order, sorted lexicographically.")
+    edge: tuple[str, str] = Field(
+        description="Source edge in graph.edges order, sorted lexicographically."
+    )
     edge_index: int = Field(ge=0, description="Index into graph.edges.")
-    result: Literal["DIAMETER", "DISCONNECTED"] = Field(description="DIAMETER if G-e remains connected, else DISCONNECTED.")
-    diameter: int | None = Field(default=None, ge=1, description="Exact diameter of G-e when connected.")
+    result: Literal["DIAMETER", "DISCONNECTED"] = Field(
+        description="DIAMETER if G-e remains connected, else DISCONNECTED."
+    )
+    diameter: int | None = Field(
+        default=None, ge=1, description="Exact diameter of G-e when connected."
+    )
 
     @model_validator(mode="after")
     def require_discriminated(self) -> Self:
         if self.result == "DIAMETER":
             if self.diameter is None:
-                raise _validation_error("diameter_missing", "DIAMETER must have diameter")
+                raise _validation_error(
+                    "diameter_missing", "DIAMETER must have diameter"
+                )
         else:
             if self.diameter is not None:
-                raise _validation_error("disconnected_diameter", "DISCONNECTED must have no diameter")
+                raise _validation_error(
+                    "disconnected_diameter", "DISCONNECTED must have no diameter"
+                )
         return self
 
 
@@ -69,7 +79,9 @@ class EdgeDeletionDiameterProfileResult(StrictModel):
     """Source diameter and per-edge deletion diameters."""
 
     graph: SimpleUndirectedGraph
-    source_diameter: int = Field(ge=1, description="Diameter of the original connected graph.")
+    source_diameter: int = Field(
+        ge=1, description="Diameter of the original connected graph."
+    )
     entries: tuple[EdgeDeletionDiameterEntry, ...] = Field(
         description="One entry per source edge, in graph.edges order."
     )
@@ -87,14 +99,19 @@ class EdgeDeletionDiameterProfileResult(StrictModel):
             )
         for idx, entry in enumerate(self.entries):
             if entry.edge_index != idx:
-                raise _validation_error("edge_index_order", "entries must be in graph.edges order")
+                raise _validation_error(
+                    "edge_index_order", "entries must be in graph.edges order"
+                )
             if tuple(entry.edge) != tuple(sorted(entry.edge)):
-                raise _validation_error("edge_sorted", "edge must be lexicographically sorted")
+                raise _validation_error(
+                    "edge_sorted", "edge must be lexicographically sorted"
+                )
             # Check edge matches graph.edges
             expected = tuple(sorted(self.graph.edges[idx]))
             if tuple(entry.edge) != expected:
                 raise _validation_error(
-                    "edge_mismatch", f"entry edge {entry.edge} does not match graph.edges[{idx}] {expected}"
+                    "edge_mismatch",
+                    f"entry edge {entry.edge} does not match graph.edges[{idx}] {expected}",
                 )
         return self
 
@@ -105,7 +122,9 @@ class EdgeDeletionDiameterProfileResult(StrictModel):
         source_diameter: int,
         entries: tuple[EdgeDeletionDiameterEntry, ...],
     ) -> Self:
-        return cls.model_construct(graph=graph, source_diameter=source_diameter, entries=entries)
+        return cls.model_construct(
+            graph=graph, source_diameter=source_diameter, entries=entries
+        )
 
 
 __all__ = [

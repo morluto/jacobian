@@ -10,7 +10,9 @@ from jacobian.math.graphs.edge_deletion_diameter_profile.operations import (
 )
 
 
-def _run(request: EdgeDeletionDiameterProfileRequest) -> EdgeDeletionDiameterProfileResult:
+def _run(
+    request: EdgeDeletionDiameterProfileRequest,
+) -> EdgeDeletionDiameterProfileResult:
     return edge_deletion_diameter_profile(request.graph)
 
 

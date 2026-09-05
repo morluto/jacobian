@@ -3,12 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.graphs.edge_deletion_diameter_profile._models import (
-    EdgeDeletionDiameterProfileRequest,
-)
 from jacobian.math.graphs.edge_deletion_diameter_profile.operations import (
     edge_deletion_diameter_profile,
 )
@@ -16,7 +12,9 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
 def _graph(vertices: list[str], edges: list[list[str]]) -> SimpleUndirectedGraph:
-    return SimpleUndirectedGraph(vertices=tuple(vertices), edges=tuple(tuple(e) for e in edges))
+    return SimpleUndirectedGraph(
+        vertices=tuple(vertices), edges=tuple(tuple(e) for e in edges)
+    )
 
 
 def test_path_three_vertices_disconnected():
@@ -56,7 +54,7 @@ def test_disconnected_rejected():
 
 def test_empty_graph_rejected():
     g = SimpleUndirectedGraph(vertices=(), edges=())
-    with pytest.raises(OperationDomainValidationError, match="nonempty|connected"):
+    with pytest.raises(OperationDomainValidationError, match=r"nonempty|connected"):
         edge_deletion_diameter_profile(g)
 
 

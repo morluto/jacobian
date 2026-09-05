@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from jacobian.math.graphs.clique_partition._models import (
     EdgeCliquePartitionResult,
-    SimpleUndirectedGraph,
 )
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 __all__ = ["check_edge_clique_partition"]
 

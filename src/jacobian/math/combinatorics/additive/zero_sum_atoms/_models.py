@@ -27,6 +27,7 @@ MAX_ATOM_MINIMALITY_CHECKS = 20_000_000
 MAX_ATOM_EDGES = MAX_EDGES
 MAX_ATOM_INCIDENCES = MAX_TOTAL_INCIDENCES
 MAX_ATOM_LABEL_LENGTH = 64
+MAX_ATOM_RETAINED_AXES = 32_768
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -56,7 +57,6 @@ class ZeroSumAtomSource(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def bound_raw_source(cls, value: object) -> object:
-        value = canonicalize_json_containers(value)
         if not isinstance(value, Mapping):
             return value
         prepared: dict[str, object] = dict(value)
@@ -69,8 +69,10 @@ class ZeroSumAtomSource(StrictModel):
             prepared["group"] = group
         raw_elements = prepared.get("elements")
         if isinstance(raw_elements, list):
+            if len(raw_elements) > MAX_ATOM_SOURCE_ELEMENTS:
+                raise _validation_error("zero_sum_atom_source_cardinality", "zero-sum atom source permits at most 24 items")
             prepared["elements"] = tuple(raw_elements)
-        return prepared
+        return canonicalize_json_containers(prepared)
 
     @model_validator(mode="after")
     def require_canonical_source(self) -> Self:

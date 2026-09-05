@@ -69,9 +69,9 @@ def _admit_zero_sum_atom_source(source: ZeroSumAtomSource) -> None:
         )
     # A positive one-axis source whose total remains below its modulus has no
     # nonempty zero-sum subset, so its exact result is provably empty.
-    provably_empty = (
+    positive_one_axis = (
         len(source.group.moduli) == 1
-        and all(element[0] > 0 for element in source.elements)
+        and all(element[0] > 0 for element in source.elements if element[0] != 0)
         and sum(element[0] for element in source.elements) < source.group.moduli[0]
     )
     # Otherwise minimal zero-sum subsets form an antichain.  Sperner's bound
@@ -82,7 +82,7 @@ def _admit_zero_sum_atom_source(source: ZeroSumAtomSource) -> None:
         (size * comb(element_count, size) for size in range(element_count + 1)),
         default=0,
     )
-    if not provably_empty and (
+    if not positive_one_axis and (
         antichain_edges > MAX_ATOM_EDGES or antichain_incidences > MAX_ATOM_INCIDENCES
     ):
         _reject(
@@ -91,7 +91,7 @@ def _admit_zero_sum_atom_source(source: ZeroSumAtomSource) -> None:
             "atom antichain exceeds the exact result envelope",
         )
     axis_count = len(source.group.moduli)
-    if axis_count > MAX_ATOM_SUBSET_CHECKS:
+    if axis_count > 32_768:
         _reject(
             ("source", "group", "moduli"),
             "zero_sum_atom.axis_count",

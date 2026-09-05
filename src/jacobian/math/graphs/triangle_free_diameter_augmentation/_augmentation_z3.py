@@ -578,10 +578,17 @@ def solve_triangle_free_diameter_augmentation_values(
             )
     except OSError:
         return fallback("bounded augmentation worker could not be started")
-    if completed.timed_out or completed.cancelled or completed.stdout_exceeded or completed.stderr_exceeded:
+    if (
+        completed.timed_out
+        or completed.cancelled
+        or completed.stdout_exceeded
+        or completed.stderr_exceeded
+    ):
         return fallback("bounded augmentation worker did not establish an outcome")
     if completed.returncode != 0:
-        raise RuntimeError("bounded augmentation worker failed before establishing an outcome")
+        raise RuntimeError(
+            "bounded augmentation worker failed before establishing an outcome"
+        )
     if time.monotonic() >= deadline:
         return fallback("augmentation request expired before response validation")
     try:

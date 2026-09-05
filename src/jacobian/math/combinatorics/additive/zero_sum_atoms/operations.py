@@ -72,7 +72,9 @@ def _admit_zero_sum_atom_source(source: ZeroSumAtomSource) -> None:
             "zero_sum_atom.result_edge_bound",
             "atom antichain exceeds the exact result envelope",
         )
-    coordinate_work = len(source.group.moduli) * element_count * (1 << max(0, element_count - 1))
+    coordinate_work = (
+        len(source.group.moduli) * element_count * (1 << max(0, element_count - 1))
+    )
     if coordinate_work > MAX_ATOM_SUBSET_CHECKS:
         _reject(
             ("source", "group", "moduli"),

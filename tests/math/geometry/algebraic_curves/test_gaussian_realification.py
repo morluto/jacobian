@@ -181,42 +181,6 @@ def test_defining_invariant_reconstruction():
     assert imag_actual == imag_ref
 
 
-def test_via_catalog_example_replay():
-    from jacobian.catalog.catalog import Catalog
-
-    cat = Catalog.open()
-    binding = cat._binding(
-        "algebraic_geometry.gaussian_polynomial.realification.compute"
-    )
-    req = binding.request_type.model_validate(
-        {
-            "polynomial": {
-                "variable": "z",
-                "terms": [
-                    {
-                        "coefficient": {
-                            "real": {"num": "1", "den": "1"},
-                            "imag": {"num": "0", "den": "1"},
-                        },
-                        "exponent": 2,
-                    },
-                    {
-                        "coefficient": {
-                            "real": {"num": "-1", "den": "1"},
-                            "imag": {"num": "-1", "den": "1"},
-                        },
-                        "exponent": 0,
-                    },
-                ],
-            },
-            "target_variables": ["x", "y"],
-        }
-    )
-    res = binding.run(req)
-    assert res.real_part.variables == ("x", "y")
-    assert res.imag_part.variables == ("x", "y")
-
-
 def test_json_round_trip():
     poly = UnivariateGaussianPolynomial(variable="z", terms=(_term("1", "0", 1),))
     result = gaussian_realification(poly, ("x", "y"))

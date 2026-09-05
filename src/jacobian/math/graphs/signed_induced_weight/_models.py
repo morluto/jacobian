@@ -30,11 +30,13 @@ class _SignedWeightGraphSchema:
     ) -> JsonSchemaValue:
         schema = handler.resolve_ref_schema(handler(core_schema)).copy()
         schema["description"] = (
-            "A canonical rational-weighted simple graph admitted for exhaustive "
-            "signed induced-weight optimization: at most "
+            "A canonical rational-weighted simple graph admitted for "
+            "component-bounded signed induced-weight optimization: at most "
             f"{MAX_SIGNED_WEIGHT_VERTICES} vertices and "
-            f"{MAX_SIGNED_WEIGHT_EDGES} edges, subject to the published arithmetic "
-            "work and exact-result height budgets."
+            f"{MAX_SIGNED_WEIGHT_EDGES} edges, with every nonzero-weight "
+            "support component inside the published exhaustive-search "
+            "envelope, subject to the published arithmetic work and "
+            "exact-result height budgets."
         )
         properties = schema["properties"]
         properties["vertices"] = {

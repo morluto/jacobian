@@ -26,6 +26,40 @@ def _transversal(source: object) -> MinimumTransversalResult:
     return minimum_transversal(FiniteHypergraph.model_validate(source))
 
 
+def _undecomposed_minimum_transversal(
+    hypergraph: FiniteHypergraph,
+) -> tuple[tuple[str, ...], int]:
+    """Reference global increasing-subset search without forced/component presolve."""
+
+    from itertools import combinations
+    from math import comb
+
+    unique_edges: list[frozenset[str]] = []
+    seen: set[frozenset[str]] = set()
+    for _, members in hypergraph.edges:
+        edge = frozenset(members)
+        if edge not in seen:
+            seen.add(edge)
+            unique_edges.append(edge)
+    unique_edges.sort(key=lambda edge: (len(edge), tuple(sorted(edge))))
+    active = tuple(
+        vertex
+        for vertex in hypergraph.vertices
+        if any(vertex in e for e in unique_edges)
+    )
+    greedy: set[str] = set()
+    for edge in unique_edges:
+        if not greedy & edge:
+            greedy.add(next(vertex for vertex in active if vertex in edge))
+    for size in range(len(greedy) + 1):
+        for combo in combinations(active, size):
+            candidate = frozenset(combo)
+            if all(candidate & edge for edge in unique_edges):
+                _ = comb(len(active), size)
+                return combo, size
+    raise AssertionError("reference search exhausted all vertices")
+
+
 class TestMinimumTransversal:
     def test_known_minimum(self) -> None:
         result = _transversal(HYPERGRAPH)
@@ -118,13 +152,75 @@ class TestMinimumTransversal:
         assert result.transversal == tuple(vertices)
 
     def test_search_work_bound_exceeded(self) -> None:
+        # 22 forced singletons are presolved with no residual search.
         vertices = [f"v{i}" for i in range(22)]
-        hg = {
-            "vertices": vertices,
-            "edges": [[f"e{i}", [vertex]] for i, vertex in enumerate(vertices)],
-        }
-        with pytest.raises(ValueError):
-            _transversal(hg)
+        result = _transversal(
+            {
+                "vertices": vertices,
+                "edges": [[f"e{i}", [vertex]] for i, vertex in enumerate(vertices)],
+            }
+        )
+        assert result.cardinality == 22
+        assert result.transversal == tuple(vertices)
+
+    def test_disjoint_pair_components_are_admitted(self) -> None:
+        vertices = [f"v{i:02}" for i in range(24)]
+        result = _transversal(
+            {
+                "vertices": vertices,
+                "edges": [
+                    [f"e{i:02}", [f"v{2 * i:02}", f"v{2 * i + 1:02}"]]
+                    for i in range(12)
+                ],
+            }
+        )
+        assert result.cardinality == 12
+        assert result.transversal == tuple(f"v{2 * i:02}" for i in range(12))
+
+    def test_hard_residual_component_still_rejected(self) -> None:
+        # 21 vertices with all 3-subsets: one dense component whose
+        # C(21,10)*1330 charge exceeds the search budget.
+        from itertools import combinations
+
+        vertices = [f"v{i}" for i in range(21)]
+        with pytest.raises(ValueError, match="search exceeds"):
+            _transversal(
+                {
+                    "vertices": vertices,
+                    "edges": [
+                        [f"e{index}", list(edge)]
+                        for index, edge in enumerate(combinations(vertices, 3))
+                    ],
+                }
+            )
+
+    def test_decomposed_search_matches_undecomposed_search(self) -> None:
+        from itertools import combinations
+
+        from jacobian.math.combinatorics.finite_structures.hypergraphs import (
+            operations as hypergraph_operations,
+        )
+
+        vertices = ("a", "b", "c")
+        pool = [
+            frozenset(combo)
+            for width in range(1, 4)
+            for combo in combinations(vertices, width)
+        ]
+        for mask in range(1 << len(pool)):
+            family = [pool[index] for index in range(len(pool)) if mask & (1 << index)]
+            source = FiniteHypergraph.model_validate(
+                {
+                    "vertices": list(vertices),
+                    "edges": [
+                        [f"e{index}", sorted(members)]
+                        for index, members in enumerate(family)
+                    ],
+                }
+            )
+            expected = _undecomposed_minimum_transversal(source)
+            actual = hypergraph_operations.minimum_transversal(source)
+            assert (actual.transversal, actual.cardinality) == expected
 
     def test_rejects_wrong_cardinality(self) -> None:
         with pytest.raises(ValidationError):

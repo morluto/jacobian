@@ -7,6 +7,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_HYPERGRAPH_INDEPENDENCE_INCIDENCES,
     MAX_HYPERGRAPH_INDEPENDENCE_VERTICES,
     MAX_MATCHING_EDGES,
+    MAX_MATCHING_SEARCH_WORK,
     MAX_TRANSVERSAL_SEARCH_WORK,
     MAX_VERTICES,
     CliqueExpansionResult,
@@ -28,6 +29,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     _induced_type_profile_admission_plan,
     _InducedTypeProfileAdmissionPlan,
     _minimum_transversal_search_plan,
+    _TransversalSearchPlan,
 )
 from jacobian.math.graphs.values import (
     MAX_GRAPH_LABEL_BYTES,
@@ -176,9 +178,78 @@ def _admit_edge_intersection_graph(
     return graph_edges
 
 
-def _admit_maximum_edge_matching(hypergraph: FiniteHypergraph) -> None:
-    nonempty_edge_count = sum(bool(members) for _, members in hypergraph.edges)
-    if nonempty_edge_count > MAX_MATCHING_EDGES:
+def _conflict_components(
+    edge_sets: tuple[frozenset[str], ...],
+) -> tuple[tuple[int, ...], ...]:
+    """Partition candidate positions into conflict-connected components.
+
+    Two candidates conflict when their member sets intersect. Union-find over
+    the vertex incidence index builds the components in near-linear
+    incidence work without enumerating conflict pairs: for each vertex, all
+    candidates containing it are united. Candidates from distinct components
+    are pairwise disjoint, so each component is an independent matching
+    subproblem and a global optimum is the union of component optima.
+    Components are returned in order of their smallest position, with
+    positions ascending inside each component.
+    """
+
+    parent = list(range(len(edge_sets)))
+
+    def find(index: int) -> int:
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    first_seen: dict[str, int] = {}
+    for index, members in enumerate(edge_sets):
+        for vertex in members:
+            seen = first_seen.get(vertex)
+            if seen is None:
+                first_seen[vertex] = index
+            else:
+                root_a, root_b = find(index), find(seen)
+                if root_a != root_b:
+                    parent[max(root_a, root_b)] = min(root_a, root_b)
+    groups: dict[int, list[int]] = {}
+    for index in range(len(edge_sets)):
+        groups.setdefault(find(index), []).append(index)
+    return tuple(
+        tuple(group)
+        for _, group in sorted(
+            ((min(group), tuple(group)) for group in groups.values()),
+            key=lambda pair: pair[0],
+        )
+    )
+
+
+def _matching_search_plan(
+    hypergraph: FiniteHypergraph,
+) -> tuple[
+    tuple[str, ...], tuple[frozenset[str], ...], tuple[tuple[int, ...], ...], int
+]:
+    """Build the reusable conflict-component search plan for one matching request."""
+
+    edges = _canonical_edges(hypergraph)
+    search_edges = tuple((edge_id, members) for edge_id, members in edges if members)
+    search_edge_ids = tuple(edge_id for edge_id, _ in search_edges)
+    edge_sets = tuple(frozenset(members) for _, members in search_edges)
+    components = _conflict_components(edge_sets)
+    search_work = sum(
+        (1 << len(component)) * len(component) * len(component)
+        for component in components
+    )
+    return search_edge_ids, edge_sets, components, search_work
+
+
+def _admit_maximum_edge_matching(
+    hypergraph: FiniteHypergraph,
+) -> tuple[
+    tuple[str, ...], tuple[frozenset[str], ...], tuple[tuple[int, ...], ...], int
+]:
+    plan = _matching_search_plan(hypergraph)
+    _, _, components, search_work = plan
+    if any(len(component) > MAX_MATCHING_EDGES for component in components):
         raise OperationDomainValidationError(
             location=("hypergraph",),
             code="hypergraph.maximum_edge_matching.search_bound",
@@ -187,6 +258,16 @@ def _admit_maximum_edge_matching(hypergraph: FiniteHypergraph) -> None:
                 f"{MAX_MATCHING_EDGES}-edge exact search bound"
             ),
         )
+    if search_work > MAX_MATCHING_SEARCH_WORK:
+        raise OperationDomainValidationError(
+            location=("hypergraph",),
+            code="hypergraph.maximum_edge_matching.search_bound",
+            message=(
+                "maximum edge matching search exceeds the "
+                f"{MAX_MATCHING_SEARCH_WORK:,}-check exact search bound"
+            ),
+        )
+    return plan
 
 
 def independence_number(
@@ -559,33 +640,54 @@ def induced_type_profile(
     )
 
 
-def _minimum_transversal_data(
-    plan: tuple[tuple[str, ...], tuple[frozenset[str], ...], int, int],
-) -> tuple[tuple[str, ...], int]:
-    """Return one minimum transversal (declared vertex order) and its size.
+def _minimum_component_transversal(
+    vertices: tuple[str, ...],
+    edge_sets: tuple[frozenset[str], ...],
+    search_depth: int,
+) -> tuple[str, ...]:
+    """Return one minimum transversal of one residual component.
 
-    The empty hyperedge family admits the empty transversal.  Otherwise the
-    search enumerates vertex subsets by increasing cardinality; the first
-    hitting set found is minimum by construction.
+    Vertex subsets are enumerated by increasing cardinality in declared
+    vertex order; the first hitting set found is minimum by construction.
     """
+
     from itertools import combinations
 
-    vertices, edge_sets, search_depth, _search_work = plan
     if not edge_sets:
-        return (), 0
+        return ()
     for size in range(1, search_depth + 1):
         for combo in combinations(vertices, size):
             candidate = frozenset(combo)
             if all(candidate & edge for edge in edge_sets):
-                ordered = tuple(vertex for vertex in vertices if vertex in candidate)
-                return ordered, size
-    # Unreachable: the full vertex set hits every nonempty edge.
+                return combo
+    # Unreachable: the component vertex set hits every component edge.
     raise AssertionError("minimum transversal search exhausted all vertices")
+
+
+def _minimum_transversal_data(
+    plan: _TransversalSearchPlan,
+) -> tuple[tuple[str, ...], int]:
+    """Return one minimum transversal (declared vertex order) and its size.
+
+    Forced singleton vertices join every optimum; each residual component
+    contributes its own minimum. The empty hyperedge family admits the empty
+    transversal.
+    """
+
+    chosen = set(plan.forced_vertices)
+    for component in plan.components:
+        chosen.update(
+            _minimum_component_transversal(
+                component.vertices, component.edge_sets, component.search_depth
+            )
+        )
+    ordered = tuple(vertex for vertex in plan.vertices if vertex in chosen)
+    return ordered, len(ordered)
 
 
 def _admit_minimum_transversal(
     hypergraph: FiniteHypergraph,
-) -> tuple[tuple[str, ...], tuple[frozenset[str], ...], int, int]:
+) -> _TransversalSearchPlan:
     """Admit a transversal request and return its reusable search plan."""
 
     if any(not members for _, members in hypergraph.edges):
@@ -595,8 +697,7 @@ def _admit_minimum_transversal(
             message="minimum transversal search does not admit empty edges",
         )
     plan = _minimum_transversal_search_plan(hypergraph)
-    _, _, _, search_work = plan
-    if search_work > MAX_TRANSVERSAL_SEARCH_WORK:
+    if plan.search_work > MAX_TRANSVERSAL_SEARCH_WORK:
         raise OperationDomainValidationError(
             location=("hypergraph",),
             code="hypergraph.minimum_transversal.search_bound",
@@ -620,51 +721,70 @@ def minimum_transversal(hypergraph: FiniteHypergraph) -> MinimumTransversalResul
     )
 
 
-def _maximum_edge_matching_data(
-    hypergraph: FiniteHypergraph,
-) -> tuple[tuple[str, ...], int]:
-    """Return one maximum matching (declared edge order) and its size.
+def _maximum_component_matching(
+    edge_sets: tuple[frozenset[str], ...],
+    component: tuple[int, ...],
+) -> tuple[int, ...]:
+    """Return the first (combo-order) maximum disjoint subfamily of one component.
 
-    The empty edge family admits the empty matching.  Otherwise the search
-    enumerates edge subsets by decreasing cardinality; the first pairwise-
-    disjoint family found is maximum by construction.
+    Subsets are enumerated by decreasing cardinality over positions into
+    ``edge_sets``; the first pairwise-disjoint family found is maximum by
+    construction. A singleton component is always taken in full.
     """
+
     from itertools import combinations
 
-    edges = _canonical_edges(hypergraph)
-    edge_ids = tuple(edge_id for edge_id, _ in edges)
-    empty_edge_ids = tuple(edge_id for edge_id, members in edges if not members)
-    search_edges = tuple((edge_id, members) for edge_id, members in edges if members)
-    search_edge_ids = tuple(edge_id for edge_id, _ in search_edges)
-    edge_sets = tuple(frozenset(members) for _, members in search_edges)
-    if not search_edges:
-        return edge_ids, len(edge_ids)
-    for size in range(len(search_edges), 0, -1):
-        for combo in combinations(range(len(search_edges)), size):
-            picked = [edge_sets[i] for i in combo]
+    members = [edge_sets[index] for index in component]
+    for size in range(len(component), 0, -1):
+        for combo in combinations(range(len(component)), size):
             disjoint = True
-            for i in range(len(picked)):
-                for j in range(i + 1, len(picked)):
-                    if picked[i] & picked[j]:
+            for left in range(len(combo)):
+                for right in range(left + 1, len(combo)):
+                    if members[combo[left]] & members[combo[right]]:
                         disjoint = False
                         break
                 if not disjoint:
                     break
             if disjoint:
-                selected_ids = set(empty_edge_ids)
-                selected_ids.update(search_edge_ids[i] for i in combo)
-                ordered = tuple(
-                    edge_id for edge_id in edge_ids if edge_id in selected_ids
-                )
-                return ordered, len(empty_edge_ids) + size
-    return (), 0
+                return tuple(component[position] for position in combo)
+    return ()
+
+
+def _maximum_edge_matching_data(
+    plan: tuple[
+        tuple[str, ...], tuple[frozenset[str], ...], tuple[tuple[int, ...], ...], int
+    ],
+    edge_ids: tuple[str, ...],
+    empty_edge_ids: tuple[str, ...],
+) -> tuple[tuple[str, ...], int]:
+    """Return one maximum matching (declared edge order) and its size.
+
+    The empty edge family admits the empty matching. Otherwise every
+    conflict-component optimum is computed by bounded exhaustive search and
+    the union — plus the mandatory empty-edge prefix — is maximum because
+    components share no vertices.
+    """
+
+    search_edge_ids, edge_sets, components, _ = plan
+    if not search_edge_ids:
+        return edge_ids, len(edge_ids)
+    selected: set[int] = set()
+    for component in components:
+        selected.update(_maximum_component_matching(edge_sets, component))
+    selected_ids = set(empty_edge_ids)
+    selected_ids.update(search_edge_ids[index] for index in selected)
+    ordered = tuple(edge_id for edge_id in edge_ids if edge_id in selected_ids)
+    return ordered, len(selected_ids)
 
 
 def maximum_edge_matching(hypergraph: FiniteHypergraph) -> MaximumEdgeMatchingResult:
     """Compute an exact maximum-cardinality edge matching of a finite hypergraph."""
 
-    _admit_maximum_edge_matching(hypergraph)
-    matching, count = _maximum_edge_matching_data(hypergraph)
+    plan = _admit_maximum_edge_matching(hypergraph)
+    edges = _canonical_edges(hypergraph)
+    edge_ids = tuple(edge_id for edge_id, _ in edges)
+    empty_edge_ids = tuple(edge_id for edge_id, members in edges if not members)
+    matching, count = _maximum_edge_matching_data(plan, edge_ids, empty_edge_ids)
     return MaximumEdgeMatchingResult(
         hypergraph=hypergraph,
         matching=matching,

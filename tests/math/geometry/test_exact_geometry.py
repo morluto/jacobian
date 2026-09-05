@@ -21,6 +21,7 @@ from jacobian.math.geometry.exact._models import (
 from jacobian.math.geometry.exact.operations import (
     distance_graph,
     distance_profile,
+    euclidean_orbit_profile,
     pinned_line_distance_profile,
 )
 from jacobian.math.graphs.spectra._models import GraphSpectrumRequest
@@ -163,6 +164,113 @@ class TestDistanceGraph:
             ).graph
             == produced
         )
+
+
+class TestEuclideanOrbitProfile:
+    def test_unit_square_relabelings_are_canonical(self) -> None:
+        configuration = PointConfiguration(
+            points=(
+                _make_point("a", [("0", "1"), ("0", "1")]),
+                _make_point("c", [("0", "1"), ("1", "1")]),
+                _make_point("d", [("1", "1"), ("1", "1")]),
+                _make_point("b", [("1", "1"), ("0", "1")]),
+            )
+        )
+        result = euclidean_orbit_profile(configuration)
+        one = CanonicalRational(num="1", den="1")
+        expected = (
+            (Fraction(0), Fraction(1), Fraction(1), Fraction(2)),
+            (Fraction(1), Fraction(0), Fraction(2), Fraction(1)),
+            (Fraction(1), Fraction(2), Fraction(0), Fraction(1)),
+            (Fraction(2), Fraction(1), Fraction(1), Fraction(0)),
+        )
+        assert (
+            tuple(
+                tuple(value.as_fraction() for value in row)
+                for row in result.isometry_form.entries
+            )
+            == expected
+        )
+        assert result.isometry_relabeling == (0, 1, 3, 2)
+        assert result.normalizing_squared_distance == one
+        assert result.similarity_form == result.isometry_form
+        assert result.similarity_relabeling == result.isometry_relabeling
+        assert type(result).model_validate(result.model_dump(mode="json")) == result
+
+    def test_scaled_rectangle_matches_only_under_similarity(self) -> None:
+        unit = PointConfiguration(
+            points=(
+                _make_point("a", [("0", "1"), ("0", "1")]),
+                _make_point("b", [("2", "1"), ("0", "1")]),
+                _make_point("c", [("2", "1"), ("1", "1")]),
+                _make_point("d", [("0", "1"), ("1", "1")]),
+            )
+        )
+        scaled = PointConfiguration(
+            points=(
+                _make_point("a", [("0", "1"), ("0", "1")]),
+                _make_point("b", [("6", "1"), ("0", "1")]),
+                _make_point("c", [("6", "1"), ("3", "1")]),
+                _make_point("d", [("0", "1"), ("3", "1")]),
+            )
+        )
+        unit_result = euclidean_orbit_profile(unit)
+        scaled_result = euclidean_orbit_profile(scaled)
+        assert unit_result.isometry_form != scaled_result.isometry_form
+        assert unit_result.similarity_form == scaled_result.similarity_form
+        assert scaled_result.normalizing_squared_distance == _cr(Fraction(9, 1))
+
+    def test_rectangle_and_square_are_not_congruent(self) -> None:
+        square = PointConfiguration(
+            points=tuple(
+                _make_point(label, [(x, "1"), (y, "1")])
+                for label, x, y in (
+                    ("a", "0", "0"),
+                    ("b", "1", "0"),
+                    ("c", "1", "1"),
+                    ("d", "0", "1"),
+                )
+            )
+        )
+        rectangle = PointConfiguration(
+            points=tuple(
+                _make_point(label, [(x, "1"), (y, "1")])
+                for label, x, y in (
+                    ("a", "0", "0"),
+                    ("b", "2", "0"),
+                    ("c", "2", "1"),
+                    ("d", "0", "1"),
+                )
+            )
+        )
+        square_result = euclidean_orbit_profile(square)
+        rectangle_result = euclidean_orbit_profile(rectangle)
+        assert square_result.isometry_form != rectangle_result.isometry_form
+        assert square_result.similarity_form != rectangle_result.similarity_form
+
+    def test_replays_permuted_source_matrix(self) -> None:
+        configuration = PointConfiguration(
+            points=(
+                _make_point("a", [("0", "1"), ("0", "1")]),
+                _make_point("b", [("3", "1"), ("1", "1")]),
+                _make_point("c", [("1", "1"), ("4", "1")]),
+            )
+        )
+        result = euclidean_orbit_profile(configuration)
+        points = [
+            tuple(x.as_fraction() for x in point.coordinates)
+            for point in configuration.points
+        ]
+        for source, target in enumerate(result.isometry_relabeling):
+            for other_source, other_target in enumerate(result.isometry_relabeling):
+                delta = sum(
+                    (points[source][axis] - points[other_source][axis]) ** 2
+                    for axis in range(2)
+                )
+                assert (
+                    result.isometry_form.entries[target][other_target].as_fraction()
+                    == delta
+                )
 
     def test_rejects_single_point_configuration(self) -> None:
         import pytest

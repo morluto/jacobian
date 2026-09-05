@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from fractions import Fraction
-from itertools import combinations
+from itertools import combinations, permutations
 
 from pydantic_core import PydanticCustomError
 
@@ -17,6 +17,7 @@ from jacobian.math.geometry.exact._line_arithmetic import (
 from jacobian.math.geometry.exact._models import (
     DistanceMultiplicityEntry,
     DistanceProfileResult,
+    EuclideanOrbitProfileResult,
     LabelledRationalPoint,
     PinnedLineConfiguration,
     PinnedLineDistanceResult,
@@ -24,7 +25,9 @@ from jacobian.math.geometry.exact._models import (
     _require_bounded_point_configuration,
     _validation_error,
 )
+from jacobian.math.geometry.exact._orbit_bounds import admit_orbit_profile
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
+from jacobian.math.matrices.values import RationalMatrix
 
 
 def _to_fraction_point(point: LabelledRationalPoint) -> tuple[Fraction, ...]:
@@ -78,6 +81,81 @@ def distance_graph(
     return IndexedSimpleUndirectedGraph(
         vertex_count=len(points),
         edges=edges,
+    )
+
+
+def euclidean_orbit_profile(
+    configuration: PointConfiguration,
+) -> EuclideanOrbitProfileResult:
+    """Return canonical unlabeled isometry and similarity distance forms."""
+    admit_orbit_profile(configuration)
+    points = [_to_fraction_point(point) for point in configuration.points]
+    size = len(points)
+    distances = [
+        [_squared_distance(points[left], points[right]) for right in range(size)]
+        for left in range(size)
+    ]
+
+    def canonical_form(
+        scale: Fraction,
+    ) -> tuple[tuple[tuple[Fraction, ...], ...], tuple[int, ...]]:
+        best_form: tuple[tuple[Fraction, ...], ...] | None = None
+        best_relabeling: tuple[int, ...] | None = None
+        for permutation in permutations(range(size)):
+            form = tuple(
+                tuple(
+                    distances[permutation[left]][permutation[right]] / scale
+                    for right in range(size)
+                )
+                for left in range(size)
+            )
+            if best_form is None or form < best_form:
+                best_form = form
+                best_relabeling = permutation
+        assert best_form is not None and best_relabeling is not None
+        # ``permutation`` indexes the source row for each canonical position;
+        # the public relabeling maps each source index to its canonical position.
+        inverse = [0] * size
+        for canonical_index, source_index in enumerate(best_relabeling):
+            inverse[source_index] = canonical_index
+        return best_form, tuple(inverse)
+
+    positive_distances = [
+        distances[left][right]
+        for left in range(size)
+        for right in range(size)
+        if right > left and distances[left][right] > 0
+    ]
+    if not positive_distances:
+        raise OperationDomainValidationError(
+            location=("configuration",),
+            code="point_configuration.orbit_degenerate",
+            message="orbit profiles require at least one positive squared distance",
+        )
+    minimum_positive_distance = min(positive_distances)
+    isometry_form, isometry_relabeling = canonical_form(Fraction(1))
+    similarity_form, similarity_relabeling = canonical_form(minimum_positive_distance)
+
+    def canonical_rational_matrix(
+        form: tuple[tuple[Fraction, ...], ...],
+    ) -> RationalMatrix:
+        return RationalMatrix(
+            entries=tuple(
+                tuple(CanonicalRational.from_fraction(value) for value in row)
+                for row in form
+            )
+        )
+
+    return EuclideanOrbitProfileResult(
+        configuration=configuration,
+        ambient_dimension=len(configuration.points[0].coordinates),
+        isometry_form=canonical_rational_matrix(isometry_form),
+        isometry_relabeling=isometry_relabeling,
+        similarity_form=canonical_rational_matrix(similarity_form),
+        similarity_relabeling=similarity_relabeling,
+        normalizing_squared_distance=CanonicalRational.from_fraction(
+            minimum_positive_distance
+        ),
     )
 
 
@@ -152,5 +230,6 @@ def pinned_line_distance_profile(
 __all__ = [
     "distance_graph",
     "distance_profile",
+    "euclidean_orbit_profile",
     "pinned_line_distance_profile",
 ]

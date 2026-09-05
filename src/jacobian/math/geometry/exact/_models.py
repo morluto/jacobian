@@ -9,6 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.math.matrices.values import RationalMatrix
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -113,6 +114,55 @@ class DistanceProfileResult(StrictModel):
     entries: tuple[DistanceMultiplicityEntry, ...]
 
 
+class EuclideanOrbitProfileRequest(StrictModel):
+    """Canonicalize one exact rational point configuration."""
+
+    configuration: PointConfiguration
+
+
+class EuclideanOrbitProfileResult(StrictModel):
+    """Canonical unlabeled isometry and similarity forms of one source."""
+
+    configuration: PointConfiguration
+    ambient_dimension: int = Field(ge=1, le=MAX_DIMENSION)
+    isometry_form: RationalMatrix
+    isometry_relabeling: tuple[int, ...]
+    similarity_form: RationalMatrix
+    similarity_relabeling: tuple[int, ...]
+    normalizing_squared_distance: CanonicalRational
+
+    @model_validator(mode="after")
+    def require_orbit_profile_shape(self) -> Self:
+        size = len(self.configuration.points)
+        if self.ambient_dimension != len(self.configuration.points[0].coordinates):
+            raise _validation_error(
+                "orbit_profile_ambient_dimension",
+                "ambient_dimension must match the configuration coordinate axis",
+            )
+        for form, relabeling in (
+            (self.isometry_form, self.isometry_relabeling),
+            (self.similarity_form, self.similarity_relabeling),
+        ):
+            if len(form.entries) != size or any(
+                len(row) != size for row in form.entries
+            ):
+                raise _validation_error(
+                    "orbit_profile_form_shape",
+                    "every orbit form must be square on the source point axis",
+                )
+            if tuple(sorted(relabeling)) != tuple(range(size)):
+                raise _validation_error(
+                    "orbit_profile_relabeling",
+                    "every orbit relabeling must be a permutation of the source axis",
+                )
+        if self.normalizing_squared_distance.as_fraction() <= 0:
+            raise _validation_error(
+                "orbit_profile_normalizer",
+                "normalizing_squared_distance must be positive",
+            )
+        return self
+
+
 class DistanceGraphRequest(StrictModel):
     """Build the graph induced by a selected squared distance."""
 
@@ -136,6 +186,8 @@ __all__ = [
     "DistanceMultiplicityEntry",
     "DistanceProfileRequest",
     "DistanceProfileResult",
+    "EuclideanOrbitProfileRequest",
+    "EuclideanOrbitProfileResult",
     "LabelledRationalPoint",
     "PinnedLineDistanceRequest",
     "PinnedLineDistanceResult",

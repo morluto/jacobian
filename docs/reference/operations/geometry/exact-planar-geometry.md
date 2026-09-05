@@ -13,6 +13,23 @@ Inputs are validated as their owning geometric value before computation. Results
 are returned inline and can be passed to another compatible typed operation;
 there is no geometry artifact or generic verification service.
 
+## Point-configuration orbit profiles
+
+`geometry.point_configuration.euclidean_orbit_profile.compute` canonicalizes
+one bounded labelled rational point configuration. It returns the
+lexicographically least complete squared-distance matrix and ambient dimension over source
+relabelings, retaining a deterministic source-to-canonical map. The isometry
+form uses the source distances unchanged; the similarity form divides them by
+the least positive squared distance. Equal forms with the same ambient dimension characterize congruence and,
+after the common positive normalization, similarity, respectively, including
+reflections.
+
+Admission separately bounds pairwise exact-distance output, rational height,
+and the complete exhaustive-permutation replay. The current release admits
+configurations whose complete relabeling search needs at most 8! permutations;
+larger finite sources reject before canonicalization rather than returning an
+unproved canonical form.
+
 ## Convex-polygon triangulation
 
 `geometry.polygon.triangulation.minimum_weight.compute` minimizes caller-supplied

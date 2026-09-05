@@ -133,8 +133,13 @@ class InducedEdgeDeletionProfileResult(StrictModel):
     @model_validator(mode="after")
     def require_profile_consistency(self) -> Self:  # noqa: C901
         n = len(self.graph.vertices)
-        expected_rows = 1 << n if n <= MAX_INDUCED_DELETION_VERTICES else None
-        if expected_rows is not None and len(self.rows) != expected_rows:
+        if n > MAX_INDUCED_DELETION_VERTICES:
+            raise PydanticCustomError(
+                "graph.vertex_count_exceeds_bound",
+                "result graph exceeds the induced deletion vertex bound",
+            )
+        expected_rows = 1 << n
+        if len(self.rows) != expected_rows:
             raise PydanticCustomError(
                 "graph.rows_must_cover_all_vertex_subsets",
                 "rows must cover all 2^n vertex subsets",
@@ -142,7 +147,7 @@ class InducedEdgeDeletionProfileResult(StrictModel):
         expected_subsets = tuple(
             subset
             for size in range(n + 1)
-            for subset in combinations(self.graph.vertices, size)
+            for subset in combinations(sorted(self.graph.vertices), size)
         )
         if tuple(row.vertex_subset for row in self.rows) != expected_subsets:
             raise PydanticCustomError(

@@ -121,7 +121,7 @@ def _z3_is_r_colorable(
         return True
     if outcome == z3.unsat:
         return False
-    if "max-conflicts-reached" in solver.reason_unknown():
+    if solver.reason_unknown() in {"timeout", "max-conflicts-reached"}:
         raise OperationExecutionTimeoutError(
             "induced deletion profile r-colourability check exhausted its conflict budget"
         )
@@ -183,7 +183,7 @@ def _z3_exists_deletion_leq_k(
         return True
     if outcome == z3.unsat:
         return False
-    if "max-conflicts-reached" in solver.reason_unknown():
+    if solver.reason_unknown() in {"timeout", "max-conflicts-reached"}:
         raise OperationExecutionTimeoutError(
             "induced deletion feasibility check exhausted its conflict budget"
         )

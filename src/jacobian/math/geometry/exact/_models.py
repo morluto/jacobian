@@ -135,7 +135,10 @@ class EuclideanOrbitProfileResult(StrictModel):
     def require_orbit_profile_shape(self) -> Self:
         size = len(self.configuration.points)
         if self.ambient_dimension != len(self.configuration.points[0].coordinates):
-            raise _validation_error("orbit_profile_ambient_dimension", "ambient_dimension must match the configuration coordinate axis")
+            raise _validation_error(
+                "orbit_profile_ambient_dimension",
+                "ambient_dimension must match the configuration coordinate axis",
+            )
         for form, relabeling in (
             (self.isometry_form, self.isometry_relabeling),
             (self.similarity_form, self.similarity_relabeling),

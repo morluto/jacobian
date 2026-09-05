@@ -65,6 +65,8 @@ class ZeroSumAtomSource(StrictModel):
             group: dict[str, object] = dict(raw_group)
             raw_moduli = group.get("moduli")
             if isinstance(raw_moduli, list):
+                if len(raw_moduli) > MAX_ATOM_RETAINED_AXES:
+                    raise _validation_error("zero_sum_atom_source_rank", "group axes exceed the raw retained-coordinate envelope")
                 group["moduli"] = tuple(raw_moduli)
             prepared["group"] = group
         raw_elements = prepared.get("elements")
@@ -73,6 +75,15 @@ class ZeroSumAtomSource(StrictModel):
                 raise _validation_error(
                     "zero_sum_atom_source_cardinality",
                     "zero-sum atom source permits at most 24 items",
+                )
+            if any(
+                not isinstance(element, list)
+                or len(element) > MAX_ATOM_RETAINED_AXES
+                for element in raw_elements
+            ):
+                raise _validation_error(
+                    "zero_sum_atom_source_rank",
+                    "source coordinates exceed the raw retained-coordinate envelope",
                 )
             prepared["elements"] = tuple(raw_elements)
         return canonicalize_json_containers(prepared)

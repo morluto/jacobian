@@ -36,6 +36,11 @@ TOOLS: MathTools = (
         result_type=EdgeCliquePartitionResult,
         run=_compute_edge_clique_partition,
         tags=("graph", "clique", "exact"),
+        discovery_terms=(
+            "integral edge clique partition certificate verification",
+            "partition graph edges exactly once complete subgraphs",
+            "clique partition number upper bound",
+        ),
         examples=(
             OperationExample(
                 name="diamond_valid_partition",

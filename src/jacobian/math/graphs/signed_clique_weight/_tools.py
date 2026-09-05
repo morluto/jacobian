@@ -30,12 +30,21 @@ TOOLS: MathTools = (
             "the graph and weights. Graphs without edges report a missing "
             "optimum explicitly; all-negative inputs may have a negative "
             "optimum. Maximal-clique-only tests are unsound for signed "
-            "weights."
+            "weights. For graphs with edges, fractional edge-clique partition "
+            "equality dual "
+            "feasibility of unrestricted-sign edge weights means this maximum "
+            "is at most one."
         ),
         request_type=SignedCliqueWeightRequest,
         result_type=SignedCliqueWeightResult,
         run=_compute_signed_clique_weight_maximum,
         tags=("graph", "clique", "exact"),
+        discovery_terms=(
+            "fractional edge clique partition dual",
+            "unrestricted-sign edge weights equality constraints",
+            "all nontrivial cliques nonmaximal cliques",
+            "complete subgraph signed edge sum certificate",
+        ),
         examples=(
             OperationExample(
                 name="signed_triangle",

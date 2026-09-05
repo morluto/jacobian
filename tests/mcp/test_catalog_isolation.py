@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import logging
 from types import SimpleNamespace
 from typing import Any, cast
@@ -9,6 +10,7 @@ import pytest
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationMatchResult
+from jacobian.mcp import tools
 from jacobian.mcp.models import OperationInspectRequest, OperationMatchRequest
 from jacobian.mcp.runtime import AppState
 from jacobian.mcp.tools import math_find
@@ -87,7 +89,9 @@ def test_math_find_logs_a_hashed_match_query(
     ]
     assert len(records) == 1
     message = records[0].getMessage()
-    query_hash = hashlib.sha256(need.encode("utf-8")).hexdigest()[:16]
+    query_hash = hmac.new(
+        tools._FIND_QUERY_LOG_KEY, need.encode("utf-8"), hashlib.sha256
+    ).hexdigest()[:16]
     assert message == f"math.find query_hash={query_hash}"
     assert need not in message
     assert "find an exact gcd" not in message

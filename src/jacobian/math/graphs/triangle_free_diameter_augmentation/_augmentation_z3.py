@@ -538,9 +538,10 @@ def solve_triangle_free_diameter_augmentation_values(
     # This exact no-op path never constructs candidates or invokes Z3, so it
     # is admitted independently of the backend order envelope.
     if (
-        len(graph.vertices) > budget.max_order
-        or len(graph.vertices) > HARD_MAX_ORDER
-    ) and _is_connected(graph) and _is_triangle_free(graph):
+        (len(graph.vertices) > budget.max_order or len(graph.vertices) > HARD_MAX_ORDER)
+        and _is_connected(graph)
+        and _is_triangle_free(graph)
+    ):
         original_diameter = _diameter(graph)
         if original_diameter is not None and original_diameter <= target_diameter:
             return TriangleFreeDiameterAugmentationResult._from_kernel(

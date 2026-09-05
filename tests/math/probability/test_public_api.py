@@ -13,6 +13,7 @@ def test_exact_public_api_symbols() -> None:
         "AsymmetricLocalLemmaInequality",
         "AsymmetricLocalLemmaWitness",
         "AsymmetricLocalLemmaWitnessCheckResult",
+        "ExactComplexRational",
         "FiniteJointTable",
         "MutualInformationLogRepresentation",
         "MutualInformationResult",

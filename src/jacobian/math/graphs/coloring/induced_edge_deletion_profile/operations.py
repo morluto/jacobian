@@ -468,7 +468,6 @@ def compute_induced_edge_deletion_profile(
     return InducedEdgeDeletionProfileResult._from_kernel(
         graph=graph,
         r=r,
-        solver_conflicts=solver_conflicts,
         rows=tuple(rows),
         max_deletions_by_size=tuple(per_size),
     )

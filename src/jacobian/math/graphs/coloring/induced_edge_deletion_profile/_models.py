@@ -128,7 +128,6 @@ class InducedEdgeDeletionProfileResult(StrictModel):
 
     graph: SimpleUndirectedGraph
     r: StrictInt = Field(ge=1, le=(1 << MAX_INDUCED_DELETION_R_BITS) - 1)
-    solver_conflicts: StrictInt = Field(ge=1, le=MAX_SOLVER_CONFLICT_BUDGET)
     rows: tuple[InducedDeletionRow, ...]
     max_deletions_by_size: tuple[PerSizeMaximum, ...]
 
@@ -244,14 +243,12 @@ class InducedEdgeDeletionProfileResult(StrictModel):
         *,
         graph: SimpleUndirectedGraph,
         r: int,
-        solver_conflicts: int,
         rows: tuple[InducedDeletionRow, ...],
         max_deletions_by_size: tuple[PerSizeMaximum, ...],
     ) -> Self:
         return cls.model_construct(
             graph=graph,
             r=r,
-            solver_conflicts=solver_conflicts,
             rows=rows,
             max_deletions_by_size=max_deletions_by_size,
         )

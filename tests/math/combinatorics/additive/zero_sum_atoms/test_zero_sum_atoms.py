@@ -236,9 +236,8 @@ def test_projection_composes_with_transversal_and_matching_consumers() -> None:
     assert matching.count == 3
 
 
-def test_admission_rejects_unbounded_group_and_result_boundaries() -> None:
-    with pytest.raises(ValueError, match="4,096-element"):
-        _run((), (4097,))
+def test_admission_accepts_cheap_large_group_sources_and_result_boundaries() -> None:
+    assert _run((), (4097,)).atom_count == 0
 
     with pytest.raises(ValidationError, match="at most 24 items"):
         ZeroSumAtomSource.model_validate(

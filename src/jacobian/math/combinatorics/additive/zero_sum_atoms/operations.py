@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from itertools import combinations
-from math import prod
 
+from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.zero_sum_atoms._models import (
     MAX_ATOM_EDGES,
-    MAX_ATOM_GROUP_ORDER,
     MAX_ATOM_INCIDENCES,
     MAX_ATOM_SOURCE_ELEMENTS,
     MAX_ATOM_SUBSET_CHECKS,
@@ -42,13 +41,6 @@ def _admit_zero_sum_atom_source(source: ZeroSumAtomSource) -> None:
             ("source",),
             "zero_sum_atom.source_domain",
             "source must be a ZeroSumAtomSource",
-        )
-    if prod(source.group.moduli) > MAX_ATOM_GROUP_ORDER:
-        _reject(
-            ("source", "group", "moduli"),
-            "zero_sum_atom.group_order",
-            "source group exceeds the "
-            f"{MAX_ATOM_GROUP_ORDER:,}-element zero-sum atom bound",
         )
     element_count = len(source.elements)
     if element_count > MAX_ATOM_SOURCE_ELEMENTS:
@@ -92,6 +84,7 @@ def construct_zero_sum_atom_hypergraph(
 
     for size in range(1, len(elements) + 1):
         for positions in combinations(range(len(elements)), size):
+            request_checkpoint("zero-sum atom subset enumeration")
             subset_checks += 1
             running = zero
             mask = 0

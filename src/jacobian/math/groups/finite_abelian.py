@@ -930,7 +930,9 @@ def _character_sum_interval_profile_work(
     if cells == 0:
         raise ValueError("character-sum profile requires at least one cell")
     if cells * rank > MAX_CHARACTER_SUM_PREFIX_WORK:
-        raise ValueError("character-sum result frequency coordinates exceed their bound")
+        raise ValueError(
+            "character-sum result frequency coordinates exceed their bound"
+        )
 
     total_interval_length = sum(b - a for a, b in source.intervals)
     total_visits = frequency_count * total_interval_length

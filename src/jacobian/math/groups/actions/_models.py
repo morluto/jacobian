@@ -364,6 +364,19 @@ class SubsetFamilyOrbitProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_subset_family_orbit_profile(self) -> Self:
+        if self.rows != tuple(
+            sorted(
+                self.rows,
+                key=lambda row: (
+                    row.representative.positions,
+                    row.representative.action.model_dump(),
+                ),
+            )
+        ):
+            raise _validation_error(
+                "orbit_profile_rows_not_canonical",
+                "rows must be ordered by representative and action presentation",
+            )
         if len(self.subsets) != self.family_size:
             raise _validation_error(
                 "orbit_profile_family_size_mismatch",

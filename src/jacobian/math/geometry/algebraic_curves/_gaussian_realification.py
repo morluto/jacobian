@@ -248,11 +248,11 @@ def _admit_gaussian_realification(
     # A binomial multiplier can enlarge a numerator. Reserve that room during
     # admission so result construction never rejects an accepted coefficient.
     for index, term in enumerate(poly.terms):
-        for label, value in (
-            ("real", term.coefficient.real),
-            ("imaginary", term.coefficient.imaginary),
+        real, imaginary = term.coefficient.as_fractions()
+        for label, coefficient in (
+            ("real", real),
+            ("imaginary", imaginary),
         ):
-            coefficient = Fraction(int(value.num), int(value.den))
             maximum_digits = max(
                 max(
                     len(str(abs((coefficient * comb(term.exponent, j)).numerator))),

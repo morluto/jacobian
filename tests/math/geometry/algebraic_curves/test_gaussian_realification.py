@@ -6,6 +6,9 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.math.geometry.algebraic_curves import (
+    gaussian_realification as public_gaussian_realification,
+)
 from jacobian.math.geometry.algebraic_curves._gaussian_realification import (
     GaussianComplexCoefficient,
     GaussianRealificationRequest,
@@ -14,12 +17,13 @@ from jacobian.math.geometry.algebraic_curves._gaussian_realification import (
     gaussian_realification,
 )
 from jacobian.math.geometry.algebraic_curves._tools import TOOLS
+from jacobian.math.probability import ExactComplexRational
 
 
 def _cr(real: str, imag: str = "0") -> GaussianComplexCoefficient:
     return GaussianComplexCoefficient(
         real=CanonicalRational(num=real, den="1"),
-        imag=CanonicalRational(num=imag, den="1"),
+        imaginary=CanonicalRational(num=imag, den="1"),
     )
 
 
@@ -31,6 +35,18 @@ def test_catalog_contains_gaussian_realification():
     assert "algebraic_geometry.gaussian_polynomial.realification.compute" in {
         tool.operation_id for tool in TOOLS
     }
+
+
+def test_native_api_and_gaussian_scalar_compose():
+    coefficient = ExactComplexRational(
+        real=CanonicalRational(num="1", den="1"),
+        imaginary=CanonicalRational(num="2", den="1"),
+    )
+    polynomial = UnivariateGaussianPolynomial(
+        variable="z",
+        terms=(UnivariateGaussianPolynomialTerm(coefficient=coefficient, exponent=1),),
+    )
+    assert public_gaussian_realification(polynomial, ("x", "y")).source_polynomial == polynomial
 
 
 def test_quadratic_gaussian_realification():
@@ -197,3 +213,21 @@ def test_admission_rejects_excessive_degree():
                 UnivariateGaussianPolynomialTerm(coefficient=_cr("1"), exponent=65),
             ),
         )
+
+
+def test_admission_bounds_each_component_before_expansion():
+    polynomial = UnivariateGaussianPolynomial(
+        variable="z",
+        terms=tuple(_term("1", "1", degree) for degree in range(64, 59, -1)),
+    )
+    with pytest.raises(Exception, match="each realification component"):
+        gaussian_realification(polynomial, ("x", "y"))
+
+
+def test_admission_reserves_binomial_coefficient_digits():
+    polynomial = UnivariateGaussianPolynomial(
+        variable="z",
+        terms=(_term("9" * 256, "0", 64),),
+    )
+    with pytest.raises(Exception, match="Gaussian coefficient"):
+        gaussian_realification(polynomial, ("x", "y"))

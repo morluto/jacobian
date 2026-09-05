@@ -10,6 +10,13 @@ from jacobian.math.geometry.algebraic_curves._conic import (
     derive_rational_conic_parametrization,
     validate_rational_conic_request,
 )
+from jacobian.math.geometry.algebraic_curves._gaussian_realification import (
+    GaussianRealificationResult,
+    UnivariateGaussianPolynomial,
+)
+from jacobian.math.geometry.algebraic_curves._gaussian_realification import (
+    gaussian_realification as _gaussian_realification,
+)
 from jacobian.math.geometry.algebraic_curves._models import (
     _MAX_CURVE_TERMS,
     HOMOGENIZING_COORDINATE,
@@ -44,6 +51,14 @@ def _admit_curve_polynomial(polynomial: RationalPolynomial) -> None:
             code=classified.type,
             message=classified.message(),
         ) from exc
+
+
+def gaussian_realification(
+    polynomial: UnivariateGaussianPolynomial,
+    target_variables: tuple[PolynomialVariable, PolynomialVariable],
+) -> GaussianRealificationResult:
+    """Return the real and imaginary parts after substituting ``x + i*y``."""
+    return _gaussian_realification(polynomial, target_variables)
 
 
 def affine_curve_check(polynomial: RationalPolynomial) -> tuple[bool, int]:

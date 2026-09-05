@@ -21,6 +21,7 @@ from jacobian.math.polynomials.values import (
     RationalPolynomialTerm,
     SparseRationalPolynomial,
 )
+from jacobian.math.probability import ExactComplexRational
 
 MAX_GAUSSIAN_REALIFICATION_TERMS = 64
 MAX_GAUSSIAN_REALIFICATION_DEGREE = 64
@@ -33,24 +34,10 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"algebraic_geometry.{reason}", message)
 
 
-class GaussianComplexCoefficient(StrictModel):
-    """One exact element of Q(i) without floating point."""
-
-    real: CanonicalRational
-    imag: CanonicalRational
-
-    def as_fractions(self) -> tuple[Fraction, Fraction]:
-        return self.real.as_fraction(), self.imag.as_fraction()
-
-    @model_validator(mode="after")
-    def require_bounded(self) -> Self:
-        for label, value in (("real", self.real), ("imag", self.imag)):
-            require_bounded_rational(
-                value,
-                max_digits=MAX_GAUSSIAN_REALIFICATION_COEFFICIENT_DIGITS,
-                label=f"Gaussian coefficient {label}",
-            )
-        return self
+# Q(i) has one shared serialized value across Jacobian.  Keep this alias for
+# existing Python callers while making the field and wire representation compose
+# with the Gaussian-moment operations.
+GaussianComplexCoefficient = ExactComplexRational
 
 
 class UnivariateGaussianPolynomialTerm(StrictModel):
@@ -209,12 +196,42 @@ def _admit_gaussian_realification(request: GaussianRealificationRequest) -> None
             code="algebraic_geometry.gaussian_realification.expanded_terms",
             message=f"predicted expansion {predicted_raw} exceeds {MAX_GAUSSIAN_REALIFICATION_EXPANDED_TERMS}",
         )
-    # Check coefficient digit bounds already via model, but also check target result terms
-    # We will check after expansion, but also preflight worst-case target terms <= predicted_raw
-    if predicted_raw > 2 * MAX_GAUSSIAN_REALIFICATION_RESULT_TERMS:
-        # Each of real and imag could have up to predicted_raw/2 distinct monomials, but worst-case is predicted_raw
-        pass
-    # Also check that target variables are valid (already)
+    # Distinct source degrees occupy distinct total-degree slices, so either
+    # component can retain every binomial monomial.  Enforce each output's
+    # carrier bound before expanding.
+    if predicted_raw > MAX_GAUSSIAN_REALIFICATION_RESULT_TERMS:
+        raise OperationDomainValidationError(
+            location=("polynomial", "terms"),
+            code="algebraic_geometry.gaussian_realification.result_terms",
+            message=(
+                f"each realification component may contain {predicted_raw} terms, "
+                f"exceeding {MAX_GAUSSIAN_REALIFICATION_RESULT_TERMS}"
+            ),
+        )
+
+    # A binomial multiplier can enlarge a numerator. Reserve that room during
+    # admission so result construction never rejects an accepted coefficient.
+    for index, term in enumerate(poly.terms):
+        multiplier_digits = len(str(comb(term.exponent, term.exponent // 2)))
+        component_digits = (
+            MAX_GAUSSIAN_REALIFICATION_COEFFICIENT_DIGITS - multiplier_digits
+        )
+        for label, value in (
+            ("real", term.coefficient.real),
+            ("imaginary", term.coefficient.imaginary),
+        ):
+            try:
+                require_bounded_rational(
+                    value,
+                    max_digits=component_digits,
+                    label=f"Gaussian coefficient {label}",
+                )
+            except ValueError as exc:
+                raise OperationDomainValidationError(
+                    location=("polynomial", "terms", index, "coefficient", label),
+                    code="algebraic_geometry.gaussian_realification.coefficient_digits",
+                    message=str(exc),
+                ) from exc
 
 
 def _fraction_to_canonical_rational(value: Fraction) -> CanonicalRational:
@@ -280,7 +297,7 @@ def gaussian_realification(
     real_monomials: dict[tuple[int, int], Fraction] = {}
     imag_monomials: dict[tuple[int, int], Fraction] = {}
 
-    for term in polynomial.terms:
+    for term in request.polynomial.terms:
         k = term.exponent
         a_real, a_imag = term.coefficient.as_fractions()
         # For each j in 0..k, binom(k,j) x^{k-j} (i y)^j

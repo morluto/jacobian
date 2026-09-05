@@ -1,5 +1,6 @@
 """Supported native exact finite-probability APIs."""
 
+from jacobian.math.probability._gaussian import ExactComplexRational
 from jacobian.math.probability.all_terminal_reliability import (
     AllTerminalReliabilityResult,
     all_terminal_reliability,
@@ -33,6 +34,7 @@ __all__ = [
     "AsymmetricLocalLemmaInequality",
     "AsymmetricLocalLemmaWitness",
     "AsymmetricLocalLemmaWitnessCheckResult",
+    "ExactComplexRational",
     "FiniteJointTable",
     "MutualInformationLogRepresentation",
     "MutualInformationResult",

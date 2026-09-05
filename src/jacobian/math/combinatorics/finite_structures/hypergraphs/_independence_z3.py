@@ -148,7 +148,15 @@ def _solve_independence_number_kernel(
     source: FiniteHypergraph,
     resource_budget: HypergraphIndependenceBudget,
 ) -> HypergraphIndependenceResult:
-    """Search cardinality thresholds from a sound source-derived upper bound."""
+    """Refine cardinality thresholds by binary search on a monotone predicate.
+
+    ``exists independent set of size >= k`` is monotone decreasing in ``k``
+    (subsets of independent sets are independent), so one UNSAT at ``k``
+    proves every larger threshold infeasible while one SAT witness of size
+    ``m`` proves every threshold ``<= m`` feasible. The loop keeps a feasible
+    lower bound ``lo`` with its incumbent witness and a proved upper bound
+    ``hi``, querying ``mid = (lo + hi + 1) // 2`` until they coincide.
+    """
 
     import z3
 
@@ -191,7 +199,8 @@ def _solve_independence_number_kernel(
         )
 
     solver_calls = 0
-    for threshold in range(upper_bound, len(incumbent), -1):
+    lower_bound = len(incumbent)
+    while lower_bound < upper_bound:
         if solver_calls >= resource_budget.max_solver_calls:
             return _result(
                 source,
@@ -203,7 +212,7 @@ def _solve_independence_number_kernel(
                 solver_calls=solver_calls,
                 wall_budget_exhausted=False,
                 termination_reason="SOLVER_CALL_LIMIT",
-                detail="the descending threshold search exhausted its solver-call budget",
+                detail="the binary threshold search exhausted its solver-call budget",
             )
         if _remaining_ms(started, resource_budget.wall_seconds) <= 0:
             return _result(
@@ -219,6 +228,7 @@ def _solve_independence_number_kernel(
                 detail="the wall-clock budget expired before the next threshold query",
             )
 
+        threshold = (lower_bound + upper_bound + 1) // 2
         try:
             solver_calls += 1
             solver_status, candidate, reason = _check_threshold(
@@ -267,18 +277,12 @@ def _solve_independence_number_kernel(
                         f"the submitted threshold {threshold}"
                     ),
                 )
-            return _result(
-                source,
-                resource_budget,
-                status="EXACT",
-                independence_number=len(candidate),
-                incumbent=candidate,
-                upper_bound=len(candidate),
-                solver_calls=solver_calls,
-                wall_budget_exhausted=False,
-                termination_reason="OPTIMUM_ESTABLISHED",
-                detail="the exact backend established the first feasible descending threshold",
-            )
+            if len(candidate) > len(incumbent):
+                incumbent = candidate
+                lower_bound = max(lower_bound, len(candidate))
+            else:
+                lower_bound = max(lower_bound, threshold)
+            continue
 
         wall_expired = (
             _remaining_ms(started, resource_budget.wall_seconds) <= 0
@@ -310,7 +314,7 @@ def _solve_independence_number_kernel(
         solver_calls=solver_calls,
         wall_budget_exhausted=False,
         termination_reason="OPTIMUM_ESTABLISHED",
-        detail="all larger cardinality thresholds were proved unsatisfiable",
+        detail="the binary threshold search established coincident feasible and infeasible bounds",
     )
 
 

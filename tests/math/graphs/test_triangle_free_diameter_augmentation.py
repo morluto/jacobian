@@ -8,9 +8,6 @@ from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.triangle_free_diameter_augmentation._augmentation_z3 import (
-    HARD_MAX_CANDIDATES,
-    HARD_MAX_ORDER,
-    HARD_MAX_REACHABILITY_VARS,
     _derive_candidates,
     _solve_augmentation_kernel,
 )
@@ -26,7 +23,9 @@ from jacobian.math.graphs.triangle_free_diameter_augmentation.operations import 
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
-def _graph(vertices: tuple[str, ...], edges: tuple[tuple[str, str], ...]) -> SimpleUndirectedGraph:
+def _graph(
+    vertices: tuple[str, ...], edges: tuple[tuple[str, str], ...]
+) -> SimpleUndirectedGraph:
     return SimpleUndirectedGraph(vertices=vertices, edges=edges)
 
 
@@ -93,15 +92,15 @@ def test_forbidden_triangle_shortcut_is_not_used() -> None:
 
 def test_exhaustive_differential_small_graphs() -> None:
     # Enumerate all small graphs up to order 5 for several targets and compare to brute force
-    from itertools import combinations
 
     def brute(graph: SimpleUndirectedGraph, target: int) -> int | None:
         verts = tuple(sorted(graph.vertices))
         _, cands, _ = _derive_candidates(graph)
         best = None
-        n = len(verts)
         for mask in range(1 << len(cands)):
-            added = tuple(sorted(cands[i] for i in range(len(cands)) if (mask >> i) & 1))
+            added = tuple(
+                sorted(cands[i] for i in range(len(cands)) if (mask >> i) & 1)
+            )
             if best is not None and len(added) >= best:
                 continue
             aug = nx.Graph()
@@ -119,14 +118,15 @@ def test_exhaustive_differential_small_graphs() -> None:
         return best
 
     labels = ["a", "b", "c", "d"]
-    # generate all triangle-free connected graphs on 4 vertices via atlas-like enumeration
-    # we will generate a subset via random but deterministic enumeration of edge sets
-    candidates = list(combinations([(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)], 2))
-    # Instead exhaustive over all 2^6=64 graphs
+    # Exhaustive over all 2^6=64 graphs
     verts = tuple(labels)
     all_edges = [(labels[i], labels[j]) for i in range(4) for j in range(i + 1, 4)]
     for mask in range(1 << len(all_edges)):
-        edges = tuple(sorted(_edge(*all_edges[i]) for i in range(len(all_edges)) if (mask >> i) & 1))
+        edges = tuple(
+            sorted(
+                _edge(*all_edges[i]) for i in range(len(all_edges)) if (mask >> i) & 1
+            )
+        )
         if not edges:
             continue
         try:
@@ -142,7 +142,9 @@ def test_exhaustive_differential_small_graphs() -> None:
         if not nx.is_connected(aug0):
             continue
         for target in [2, 3]:
-            budget = TriangleFreeDiameterAugmentationBudget(wall_seconds=5, max_order=10)
+            budget = TriangleFreeDiameterAugmentationBudget(
+                wall_seconds=5, max_order=10
+            )
             res = triangle_free_diameter_augmentation(g, target, resource_budget=budget)
             brute_best = brute(g, target)
             if brute_best is None:
@@ -181,7 +183,7 @@ def test_multiple_additions_minimality() -> None:
 
     # Cycle 6 target 2 needs 3 edges
     verts = tuple(f"{i:02d}" for i in range(6))
-    edges = tuple(_edge(f"{i:02d}", f"{(i+1)%6:02d}") for i in range(6))
+    edges = tuple(_edge(f"{i:02d}", f"{(i + 1) % 6:02d}") for i in range(6))
     g6 = SimpleUndirectedGraph(vertices=verts, edges=tuple(sorted(edges)))
     res6 = triangle_free_diameter_augmentation(g6, 2)
     assert res6.status == "EXACT"
@@ -240,11 +242,33 @@ def test_sparse_triangle_free_family_native_mcp_replay() -> None:
         _path_padded(6),
         SimpleUndirectedGraph(
             vertices=tuple(f"{i:02d}" for i in range(6)),
-            edges=tuple(sorted([_edge("00", "01"), _edge("00", "02"), _edge("01", "03"), _edge("02", "04"), _edge("03", "05")])),
+            edges=tuple(
+                sorted(
+                    [
+                        _edge("00", "01"),
+                        _edge("00", "02"),
+                        _edge("01", "03"),
+                        _edge("02", "04"),
+                        _edge("03", "05"),
+                    ]
+                )
+            ),
         ),
         SimpleUndirectedGraph(
             vertices=tuple(f"{i:02d}" for i in range(8)),
-            edges=tuple(sorted([_edge("00", "01"), _edge("01", "02"), _edge("02", "03"), _edge("03", "04"), _edge("04", "05"), _edge("05", "06"), _edge("06", "07")])),
+            edges=tuple(
+                sorted(
+                    [
+                        _edge("00", "01"),
+                        _edge("01", "02"),
+                        _edge("02", "03"),
+                        _edge("03", "04"),
+                        _edge("04", "05"),
+                        _edge("05", "06"),
+                        _edge("06", "07"),
+                    ]
+                )
+            ),
         ),
     ]
     tool = TOOLS[0]
@@ -256,9 +280,15 @@ def test_sparse_triangle_free_family_native_mcp_replay() -> None:
         assert sum(nx.triangles(aug).values()) // 3 == 0
         assert nx.is_connected(aug)
         for target in [2, 3]:
-            budget = TriangleFreeDiameterAugmentationBudget(wall_seconds=5, max_order=10)
-            native = triangle_free_diameter_augmentation(g, target, resource_budget=budget)
-            req = TriangleFreeDiameterAugmentationRequest(graph=g, target_diameter=target, resource_budget=budget)
+            budget = TriangleFreeDiameterAugmentationBudget(
+                wall_seconds=5, max_order=10
+            )
+            native = triangle_free_diameter_augmentation(
+                g, target, resource_budget=budget
+            )
+            req = TriangleFreeDiameterAugmentationRequest(
+                graph=g, target_diameter=target, resource_budget=budget
+            )
             mcp = tool.run(req)
             assert native == mcp
             # replay via serialization

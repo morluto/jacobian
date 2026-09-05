@@ -31,7 +31,7 @@ def triangle_free_diameter_augmentation(
         raise TypeError(
             "triangle_free_diameter_augmentation expects a SimpleUndirectedGraph"
         )
-    if not isinstance(target_diameter, int):
+    if type(target_diameter) is not int:
         raise TypeError("target_diameter must be an int")
     budget = resource_budget or TriangleFreeDiameterAugmentationBudget()
     # Admission is shared; reuse same validation as worker path

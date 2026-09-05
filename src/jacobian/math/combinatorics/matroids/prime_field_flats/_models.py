@@ -11,6 +11,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import CanonicalizationError
 from jacobian.math._labels import OpaqueLabel
+from jacobian.math.matrices.finite_fields import PrimeFieldMatrix
 
 MAX_PRIME_FIELD_FLAT_AMBIENT_DIMENSION = 16
 MAX_PRIME_FIELD_FLAT_CANDIDATES = 128
@@ -54,6 +55,34 @@ def _canonicalize_or_fail(data: object) -> object:
         ) from exc
 
 
+def _require_raw_envelope(data: object) -> None:
+    """Reject oversized JSON containers before canonicalization copies them."""
+    if not isinstance(data, Mapping):
+        return
+    candidates = data.get("candidates")
+    if isinstance(candidates, Mapping):
+        vectors = candidates.get("vectors")
+        if isinstance(vectors, Mapping):
+            rows = vectors.get("entries")
+            if isinstance(rows, (list, tuple)) and (
+                len(rows) > MAX_PRIME_FIELD_FLAT_CANDIDATES
+                or any(not isinstance(row, (list, tuple)) or len(row) > MAX_PRIME_FIELD_FLAT_AMBIENT_DIMENSION for row in rows)
+            ):
+                raise _validation_error("raw_matrix_bound", "candidate matrix exceeds the raw row envelope")
+    for key, maximum in (("clauses", MAX_PRIME_FIELD_FLAT_CLAUSES), ("symmetry_generators", MAX_PRIME_FIELD_FLAT_SYMMETRY_GENERATORS)):
+        value = data.get(key)
+        if isinstance(value, (list, tuple)) and len(value) > maximum:
+            raise _validation_error("raw_container_bound", f"{key} exceeds the raw envelope")
+    forbidden = data.get("forbidden_vectors")
+    if isinstance(forbidden, Mapping):
+        rows = forbidden.get("entries")
+        if isinstance(rows, (list, tuple)) and (
+            len(rows) > MAX_PRIME_FIELD_FLAT_FORBIDDEN_VECTORS
+            or any(not isinstance(row, (list, tuple)) or len(row) > MAX_PRIME_FIELD_FLAT_AMBIENT_DIMENSION for row in rows)
+        ):
+            raise _validation_error("raw_matrix_bound", "forbidden matrix exceeds the raw row envelope")
+
+
 class PrimeFieldRowMatrix(StrictModel):
     """Dense canonical residue rows in one explicit prime field."""
 
@@ -78,6 +107,14 @@ class PrimeFieldRowMatrix(StrictModel):
     @property
     def row_count(self) -> int:
         return len(self.entries)
+
+    def as_prime_field_matrix(self) -> PrimeFieldMatrix:
+        """Map this labelled-configuration carrier to the canonical matrix value."""
+        return PrimeFieldMatrix(self.prime, self.entries, self.columns)
+
+    @classmethod
+    def from_prime_field_matrix(cls, matrix: PrimeFieldMatrix) -> Self:
+        return cls(prime=matrix.prime, entries=matrix.entries, columns=matrix.columns)
 
 
 class PrimeFieldVectorConfiguration(StrictModel):
@@ -108,6 +145,7 @@ class PrimeFieldVectorConfiguration(StrictModel):
             reason="configuration_shape",
             label="prime-field vector configuration",
         )
+        _require_raw_envelope({"candidates": data})
         return _canonicalize_or_fail(data)
 
     @model_validator(mode="after")
@@ -214,6 +252,7 @@ class ClauseConstrainedPrimeFieldFlatProblem(StrictModel):
             reason="problem_shape",
             label="prime-field-flat problem",
         )
+        _require_raw_envelope(data)
         return _canonicalize_or_fail(data)
 
     @model_validator(mode="after")
@@ -331,6 +370,10 @@ class PrimeFieldVectorSpaceBasis(StrictModel):
                 "each basis vector must match the ambient dimension and prime",
             )
         return self
+
+    def as_prime_field_matrix(self) -> PrimeFieldMatrix:
+        """Expose a returned basis to the canonical finite-field matrix API."""
+        return PrimeFieldMatrix(self.prime, self.vectors, self.ambient_dimension)
 
 
 class PrimeFieldFlatOrbitRepresentative(StrictModel):

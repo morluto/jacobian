@@ -17,7 +17,7 @@ from jacobian.math.geometry._models import (
     RationalPoint2D,
 )
 
-MAX_CONVEX_POLYGON_VERTICES = 64
+MAX_CONVEX_POLYGON_VERTICES = MAX_CONVEX_INTERSECTION_VERTICES = 128
 MAX_CONVEX_INTERSECTION_COORDINATE_DIGITS = 256
 MAX_CONVEX_INTERSECTION_VERTICES = 128
 
@@ -179,10 +179,10 @@ class ConvexRationalPolygon(StrictModel):
 
     vertices: tuple[RationalPoint2D, ...] = Field(
         min_length=3,
-        max_length=MAX_CONVEX_POLYGON_VERTICES,
+        max_length=MAX_CONVEX_INTERSECTION_VERTICES,
         description=(
             "Strict CCW vertices with no three consecutive collinear. "
-            f"At least 3 and at most {MAX_CONVEX_POLYGON_VERTICES} vertices."
+            f"At least 3 and at most {MAX_CONVEX_INTERSECTION_VERTICES} vertices."
         ),
     )
 

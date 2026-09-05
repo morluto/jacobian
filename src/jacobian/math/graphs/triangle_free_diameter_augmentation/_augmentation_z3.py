@@ -640,7 +640,10 @@ def solve_triangle_free_diameter_augmentation_values(
         ):
             raise ValueError("worker projection has an invalid shape")
         edges = tuple(tuple(edge) for edge in added_edges)
-        if any(len(edge) != 2 or not all(isinstance(label, str) for label in edge) for edge in edges):
+        if any(
+            len(edge) != 2 or not all(isinstance(label, str) for label in edge)
+            for edge in edges
+        ):
             raise ValueError("worker added-edge projection is invalid")
         if worker_target != target_diameter:
             raise ValueError("worker target mismatch")

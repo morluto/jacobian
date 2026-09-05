@@ -248,10 +248,11 @@ def _solve_augmentation_kernel(  # noqa: C901
     graph: SimpleUndirectedGraph,
     target_diameter: int,
     budget: TriangleFreeDiameterAugmentationBudget,
+    admitted: tuple[tuple[str, ...], list[tuple[str, str]], list[tuple[int, ...]]] | None = None,
 ) -> TriangleFreeDiameterAugmentationResult:
     started = time.monotonic()
     # admission (also derives vertices/candidates)
-    vertices, candidates, triangle_constraints = _require_admitted_request(
+    vertices, candidates, triangle_constraints = admitted or _require_admitted_request(
         graph, target_diameter, budget
     )
     n = len(vertices)
@@ -568,7 +569,7 @@ def solve_triangle_free_diameter_augmentation_values(
 
     deadline = time.monotonic() + budget.wall_seconds
     # Shared admission before worker (native and MCP parity)
-    _require_admitted_request(graph, target_diameter, budget)
+    admitted = _require_admitted_request(graph, target_diameter, budget)
     if time.monotonic() >= deadline:
         return TriangleFreeDiameterAugmentationResult._from_kernel(
             graph=graph,
@@ -601,6 +602,11 @@ def solve_triangle_free_diameter_augmentation_values(
                         "graph": graph.model_dump(mode="json"),
                         "target_diameter": target_diameter,
                         "resource_budget": budget.model_dump(mode="json"),
+                        "admission": {
+                            "vertices": admitted[0],
+                            "candidates": admitted[1],
+                            "triangle_constraints": admitted[2],
+                        },
                     },
                     separators=(",", ":"),
                     ensure_ascii=False,

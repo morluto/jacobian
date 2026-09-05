@@ -25,7 +25,15 @@ def main() -> int:
         budget = TriangleFreeDiameterAugmentationBudget.model_validate(
             payload["resource_budget"]
         )
-        result = _solve_augmentation_kernel(graph, target_diameter, budget)
+        admission = payload["admission"]
+        if not isinstance(admission, dict):
+            raise ValueError("worker admission must be an object")
+        admitted = (
+            tuple(admission["vertices"]),
+            [tuple(edge) for edge in admission["candidates"]],
+            [tuple(constraint) for constraint in admission["triangle_constraints"]],
+        )
+        result = _solve_augmentation_kernel(graph, target_diameter, budget, admitted)
         # Exclude graph to reduce stdout, parent will reattach
         sys.stdout.write(
             json.dumps(

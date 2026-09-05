@@ -195,7 +195,7 @@ def _admit_induced_edge_deletion_profile(
     r: int,
     solver_conflicts: int,
 ) -> None:
-    if type(r) is not int or r < 1 or r.bit_length() > 4096:
+    if type(r) is not int or r < 1 or r.bit_length() > 53:
         raise OperationDomainValidationError(
             location=("r",),
             code="graph.induced_edge_deletion.r_out_of_range",

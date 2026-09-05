@@ -22,7 +22,7 @@ MAX_INDUCED_DELETION_VERTICES = 8
 # Values above the backend's colour-variable envelope are still exact trivial
 # cases whenever r covers an induced subset, so they are not an input bound.
 MAX_INDUCED_DELETION_R = MAX_COLORING_COLORS
-MAX_INDUCED_DELETION_R_BITS = 4096
+MAX_INDUCED_DELETION_R_BITS = 53
 DEFAULT_INDUCED_SOLVER_CONFLICTS = 100_000
 MAX_INDUCED_RETAINED_LABEL_CHARACTERS = 1_000_000
 MAX_INDUCED_EDGE_MATERIALIZATION = 200_000

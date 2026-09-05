@@ -566,8 +566,18 @@ def solve_triangle_free_diameter_augmentation_values(
                 detail="original graph already satisfies the target diameter",
             )
 
+    deadline = time.monotonic() + budget.wall_seconds
     # Shared admission before worker (native and MCP parity)
     _require_admitted_request(graph, target_diameter, budget)
+    if time.monotonic() >= deadline:
+        return TriangleFreeDiameterAugmentationResult._from_kernel(
+            graph=graph,
+            target_diameter=target_diameter,
+            status="SOLVER_BUDGET_EXCEEDED",
+            added_edges=(),
+            augmented_diameter=None,
+            detail="augmentation request expired during admission",
+        )
 
     def fallback(detail: str) -> TriangleFreeDiameterAugmentationResult:
         return TriangleFreeDiameterAugmentationResult._from_kernel(
@@ -579,7 +589,6 @@ def solve_triangle_free_diameter_augmentation_values(
             detail=detail,
         )
 
-    deadline = time.monotonic() + budget.wall_seconds
     try:
         with TemporaryDirectory(prefix="jacobian-graph-augmentation-") as directory:
             remaining = deadline - time.monotonic()

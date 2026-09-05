@@ -218,13 +218,10 @@ def _admit_forbidden_prefix_sequencing(
     )
     first_index = None
     if first_element is not None:
-        if (
-            len(first_element) != len(source.group.moduli)
-            or any(
-                type(coordinate) is not int
-                or len(str(abs(coordinate))) > MAX_MODULUS_DIGITS
-                for coordinate in first_element
-            )
+        if len(first_element) != len(source.group.moduli) or any(
+            type(coordinate) is not int
+            or len(str(abs(coordinate))) > MAX_MODULUS_DIGITS
+            for coordinate in first_element
         ):
             _reject(
                 ("first_element",),
@@ -270,13 +267,15 @@ def _admit_forbidden_prefix_sequencing(
             "forbidden_prefix_sequencing.forbidden_coordinate",
             "forbidden coordinates must be bounded integers",
         )
-    canonical_forbidden = tuple(sorted(
-        tuple(
-            coordinate % modulus
-            for coordinate, modulus in zip(value, source.group.moduli, strict=True)
+    canonical_forbidden = tuple(
+        sorted(
+            tuple(
+                coordinate % modulus
+                for coordinate, modulus in zip(value, source.group.moduli, strict=True)
+            )
+            for value in forbidden_values
         )
-        for value in forbidden_values
-    ))
+    )
     if len(set(canonical_forbidden)) != len(canonical_forbidden):
         _reject(
             ("forbidden_values",),

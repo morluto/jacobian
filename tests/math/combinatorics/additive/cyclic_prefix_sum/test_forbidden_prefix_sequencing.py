@@ -308,14 +308,17 @@ def test_request_reduces_and_validates_canonical_sources() -> None:
 
 
 def test_admission_uses_source_search_work_not_group_order() -> None:
-    assert _run(
-        ForbiddenPrefixSequencingRequest.model_validate(
-            {
-                "source": {"group": {"moduli": [4097]}, "elements": []},
-                "forbidden_values": [],
-            }
-        )
-    ).status == "FOUND"
+    assert (
+        _run(
+            ForbiddenPrefixSequencingRequest.model_validate(
+                {
+                    "source": {"group": {"moduli": [4097]}, "elements": []},
+                    "forbidden_values": [],
+                }
+            )
+        ).status
+        == "FOUND"
+    )
 
     with pytest.raises(ValidationError, match="at most 8 items"):
         _run(

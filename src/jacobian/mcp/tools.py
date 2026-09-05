@@ -61,9 +61,13 @@ def math_find(
 ) -> OperationFindResponse:
     active_catalog = _catalog(ctx)
     if isinstance(request, OperationMatchRequest):
-        # repr keeps caller-controlled line breaks and control characters from
-        # forging additional operator-log entries.
-        logger.info("math.find query=%r", request.need)
+        # Log a bounded hash of the need instead of the full caller-supplied
+        # value to avoid persisting sensitive mathematical objects or constraints
+        # in ordinary process logs. The SHA-256 digest is non-reversible and fixed-length.
+        import hashlib
+
+        need_hash = hashlib.sha256(request.need.encode("utf-8")).hexdigest()[:16]
+        logger.info("math.find query_hash=%s", need_hash)
         match_response = _operation_match_response(
             active_catalog,
             need=request.need,

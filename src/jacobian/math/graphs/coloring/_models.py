@@ -9,6 +9,7 @@ from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math._labels import OpaqueLabel
 from jacobian.math.graphs.values import (
     MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
     IndexedSimpleUndirectedGraph,
@@ -505,3 +506,165 @@ class EdgeColoringCheckResult(StrictModel):
                 "an improper coloring must carry a conflicting edge pair",
             )
         return self
+
+
+class EdgeColorList(StrictModel):
+    """Allowed colors for one canonical graph edge."""
+
+    edge: tuple[str, str] = Field(
+        description="One canonical graph edge with lexicographic endpoint order."
+    )
+    colors: tuple[OpaqueLabel, ...] = Field(
+        default=(),
+        description="Allowed colors for this edge; empty lists are feasible "
+        "only when the edge needs no color, i.e. never, so they force "
+        "infeasibility rather than malformation.",
+    )
+
+    @model_validator(mode="after")
+    def require_unique_list_colors(self) -> Self:
+        if len(set(self.colors)) != len(self.colors):
+            raise PydanticCustomError(
+                "graph.list_edge_coloring.list_colors_not_unique",
+                "every edge list must hold distinct colors",
+            )
+        if self.edge[0] >= self.edge[1]:
+            raise PydanticCustomError(
+                "graph.list_edge_coloring.list_edge_order",
+                "list edges must use lexicographic endpoint order",
+            )
+        return self
+
+
+class ColorCapacity(StrictModel):
+    """Upper capacity for one palette color."""
+
+    color: OpaqueLabel
+    capacity: StrictInt = Field(
+        ge=0,
+        description="Maximum edges carrying this color; zero forbids the color.",
+    )
+
+
+ListEdgeColoringStatus = Literal["FEASIBLE", "INFEASIBLE", "UNKNOWN"]
+
+
+class ListCapacityEdgeColoringRequest(StrictModel):
+    """Prescribed-list edge coloring with per-color capacities.
+
+    Every graph edge needs exactly one list entry and every palette color
+    exactly one capacity entry; capacities clamp to the edge count without
+    changing feasibility. An edge with an empty list is well-formed but
+    unsatisfiable.
+    """
+
+    graph: SimpleUndirectedGraph
+    palette: tuple[OpaqueLabel, ...] = Field(
+        description="Finite color palette with unique nonempty labels."
+    )
+    lists: tuple[EdgeColorList, ...] = Field(
+        description="One allowed-color list per graph edge."
+    )
+    capacities: tuple[ColorCapacity, ...] = Field(
+        description="One upper capacity per palette color."
+    )
+
+    @model_validator(mode="after")
+    def require_total_binding(self) -> Self:
+        if len(set(self.palette)) != len(self.palette) or any(
+            not color for color in self.palette
+        ):
+            raise PydanticCustomError(
+                "graph.list_edge_coloring.palette_not_unique",
+                "the palette must hold unique nonempty colors",
+            )
+        palette_set = set(self.palette)
+        graph_edges = {tuple(sorted(edge)) for edge in self.graph.edges}
+        list_edges = [tuple(entry.edge) for entry in self.lists]
+        if len(set(list_edges)) != len(list_edges):
+            raise PydanticCustomError(
+                "graph.list_edge_coloring.list_identity",
+                "edge lists must use distinct graph edges",
+            )
+        if set(list_edges) != graph_edges:
+            raise PydanticCustomError(
+                "graph.list_edge_coloring.list_coverage",
+                "edge lists must cover exactly the graph edges",
+            )
+        capacity_colors = [entry.color for entry in self.capacities]
+        if len(set(capacity_colors)) != len(capacity_colors):
+            raise PydanticCustomError(
+                "graph.list_edge_coloring.capacity_identity",
+                "capacities must use distinct colors",
+            )
+        if set(capacity_colors) != palette_set:
+            raise PydanticCustomError(
+                "graph.list_edge_coloring.capacity_coverage",
+                "capacities must cover exactly the palette",
+            )
+        for entry in self.lists:
+            outside = set(entry.colors) - palette_set
+            if outside:
+                raise PydanticCustomError(
+                    "graph.list_edge_coloring.list_color_outside_palette",
+                    "every list color must belong to the palette",
+                )
+        return self
+
+
+class ListCapacityEdgeColoringResult(StrictModel):
+    """Feasibility and assignment for list/capacity edge coloring.
+
+    ``assignment`` parallels ``graph.edges`` and is present exactly for
+    FEASIBLE outcomes. INFEASIBLE is claimed only after exhaustive search;
+    UNKNOWN records a node-limit stop without a mathematical conclusion.
+    """
+
+    graph: SimpleUndirectedGraph
+    palette: tuple[str, ...]
+    lists: tuple[EdgeColorList, ...]
+    capacities: tuple[ColorCapacity, ...]
+    status: ListEdgeColoringStatus
+    assignment: tuple[OpaqueLabel, ...] | None = None
+
+    @model_validator(mode="after")
+    def require_coherent_outcome(self) -> Self:
+        if (self.status == "FEASIBLE") != (self.assignment is not None):
+            raise PydanticCustomError(
+                "graph.list_edge_coloring.assignment_binding",
+                "an assignment is present exactly for feasible outcomes",
+            )
+        if self.assignment is not None:
+            if len(self.assignment) != len(self.graph.edges):
+                raise PydanticCustomError(
+                    "graph.list_edge_coloring.assignment_length",
+                    "the assignment must parallel the graph edges",
+                )
+            if any(color not in set(self.palette) for color in self.assignment):
+                raise PydanticCustomError(
+                    "graph.list_edge_coloring.assignment_palette",
+                    "assigned colors must belong to the palette",
+                )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        graph: SimpleUndirectedGraph,
+        palette: tuple[str, ...],
+        lists: tuple[EdgeColorList, ...],
+        capacities: tuple[ColorCapacity, ...],
+        status: ListEdgeColoringStatus,
+        assignment: tuple[OpaqueLabel, ...] | None = None,
+    ) -> Self:
+        """Construct an outcome established by the owner-local kernel."""
+
+        return cls.model_construct(
+            graph=graph,
+            palette=palette,
+            lists=lists,
+            capacities=capacities,
+            status=status,
+            assignment=assignment,
+        )

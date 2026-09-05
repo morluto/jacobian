@@ -5,6 +5,7 @@ from jacobian.math.graphs.coloring.operations import (
     edge_coloring_check,
     edge_k_colorability,
     k_colorability,
+    list_capacity_edge_coloring,
     maximal_independent_set,
 )
 
@@ -13,5 +14,6 @@ __all__ = [
     "edge_coloring_check",
     "edge_k_colorability",
     "k_colorability",
+    "list_capacity_edge_coloring",
     "maximal_independent_set",
 ]

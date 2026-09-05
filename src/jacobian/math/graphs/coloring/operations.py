@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
@@ -16,10 +18,14 @@ from jacobian.math.graphs.coloring._coloring_process import run_coloring_worker
 from jacobian.math.graphs.coloring._models import (
     MAX_COLORING_COLORS,
     MAX_SOLVER_CONFLICT_BUDGET,
+    ColorCapacity,
     EdgeColoringAssignment,
     EdgeColoringCheckResult,
+    EdgeColorList,
     EdgeKColorabilityResult,
     KColorabilityResult,
+    ListCapacityEdgeColoringResult,
+    ListEdgeColoringStatus,
     MaximalIndependentSetResult,
     _incident_edge_index_pairs_for_canonical_graph,
     _require_edge_coloring_graph_bound,
@@ -29,6 +35,9 @@ from jacobian.math.graphs.values import (
     IndexedSimpleUndirectedGraph,
     SimpleUndirectedGraph,
 )
+
+if TYPE_CHECKING:
+    from jacobian.math.combinatorics.exact_cover import GeneralizedExactCoverInstance
 
 
 def _admit_chromatic_number_certificate(
@@ -301,5 +310,186 @@ __all__ = [
     "edge_coloring_check",
     "edge_k_colorability",
     "k_colorability",
+    "list_capacity_edge_coloring",
     "maximal_independent_set",
 ]
+
+
+def _list_capacity_instance(
+    graph: SimpleUndirectedGraph,
+    palette: tuple[str, ...],
+    lists: tuple[EdgeColorList, ...],
+    capacities: tuple[ColorCapacity, ...],
+) -> GeneralizedExactCoverInstance:
+    """Build the slot-expanded exact-cover instance for one coloring request.
+
+    One primary item per graph edge; secondary items per vertex/color pair
+    enforce properness, and one secondary slot per color copy enforces
+    capacities (clamped to the edge count). Every row carries a namespaced
+    item ID so the primary, vertex/color, and slot namespaces stay disjoint
+    for arbitrary labels. Returns the instance or raises a domain error when
+    the expansion exceeds the exact-cover representation envelope.
+    """
+
+    from jacobian.math.combinatorics.exact_cover import (
+        MAX_EXACT_COVER_INCIDENCES,
+        MAX_EXACT_COVER_ITEMS,
+        MAX_EXACT_COVER_ROWS,
+        ExactCoverRow,
+        GeneralizedExactCoverInstance,
+    )
+
+    edge_count = len(graph.edges)
+    capacity_of = {entry.color: min(entry.capacity, edge_count) for entry in capacities}
+    list_of = {tuple(entry.edge): tuple(entry.colors) for entry in lists}
+    color_index = {color: position for position, color in enumerate(palette)}
+
+    primary = tuple(f"edge:{index}" for index in range(edge_count))
+    rows: list[ExactCoverRow] = []
+    for edge_index, edge in enumerate(graph.edges):
+        allowed = list_of[tuple(edge)]
+        left, right = edge
+        for color in allowed:
+            slots = capacity_of[color]
+            for slot in range(slots):
+                items = tuple(
+                    sorted(
+                        (
+                            f"edge:{edge_index}",
+                            f"vc:{len(left)}:{left}:{color}",
+                            f"vc:{len(right)}:{right}:{color}",
+                            f"slot:{color}:{slot}",
+                        )
+                    )
+                )
+                rows.append(
+                    ExactCoverRow(
+                        row_id=f"row:{edge_index}:{color_index[color]}:{slot}",
+                        items=items,
+                    )
+                )
+    rows.sort(key=lambda row: row.row_id)
+    primary_set = set(primary)
+    secondary: set[str] = set()
+    for row in rows:
+        secondary.update(item for item in row.items if item not in primary_set)
+    instance = GeneralizedExactCoverInstance(
+        primary_items=primary,
+        secondary_items=tuple(sorted(secondary)),
+        rows=tuple(rows),
+    )
+    if (
+        len(instance.primary_items) + len(instance.secondary_items)
+        > MAX_EXACT_COVER_ITEMS
+        or len(instance.rows) > MAX_EXACT_COVER_ROWS
+        or sum(len(row.items) for row in instance.rows) > MAX_EXACT_COVER_INCIDENCES
+    ):
+        raise OperationDomainValidationError(
+            location=("graph", "palette"),
+            code="graph.list_edge_coloring.encoding_bound",
+            message=(
+                "the slot-expanded list/capacity encoding exceeds the "
+                "exact-cover representation envelope"
+            ),
+        )
+    return instance
+
+
+def _decode_list_capacity_rows(
+    graph: SimpleUndirectedGraph,
+    palette: tuple[str, ...],
+    lists: tuple[EdgeColorList, ...],
+    capacities: tuple[ColorCapacity, ...],
+    selected_row_ids: tuple[str, ...],
+) -> tuple[str, ...] | None:
+    """Decode selected rows to a per-edge assignment, checking every relation."""
+
+    list_of = {tuple(entry.edge): set(entry.colors) for entry in lists}
+    capacity_of = {entry.color: entry.capacity for entry in capacities}
+    assignment: dict[int, str] = {}
+    counts: dict[str, int] = dict.fromkeys(palette, 0)
+    for row_id in selected_row_ids:
+        try:
+            _, edge_index, color_index, _ = row_id.split(":", 3)
+            edge_position = int(edge_index)
+            color = palette[int(color_index)]
+        except (ValueError, IndexError):
+            return None
+        if edge_position in assignment:
+            return None
+        edge = graph.edges[edge_position]
+        if color not in list_of[tuple(edge)]:
+            return None
+        assignment[edge_position] = color
+        counts[color] += 1
+    if set(assignment) != set(range(len(graph.edges))):
+        return None
+    incident: dict[str, set[str]] = {vertex: set() for vertex in graph.vertices}
+    for position, color in assignment.items():
+        left, right = graph.edges[position]
+        if color in incident[left] or color in incident[right]:
+            return None
+        incident[left].add(color)
+        incident[right].add(color)
+    if any(counts[color] > capacity_of[color] for color in palette):
+        return None
+    return tuple(assignment[index] for index in range(len(graph.edges)))
+
+
+def list_capacity_edge_coloring(
+    graph: SimpleUndirectedGraph,
+    palette: tuple[str, ...],
+    lists: tuple[EdgeColorList, ...],
+    capacities: tuple[ColorCapacity, ...],
+) -> ListCapacityEdgeColoringResult:
+    """Find a proper edge coloring within lists and capacities, or rule it out.
+
+    The slot-expanded generalized exact-cover encoding is a private kernel
+    choice: primary items force one row per edge, vertex/color secondaries
+    force properness, and distinguishable color slots force capacities.
+    FEASIBLE carries a checked assignment; INFEASIBLE follows exhaustive
+    search; UNKNOWN records a node-limit stop without a conclusion.
+    """
+
+    from jacobian.math.combinatorics.exact_cover import (
+        MAX_EXACT_COVER_SEARCH_NODES_PER_PASS,
+        find_generalized_exact_cover,
+    )
+
+    def outcome(
+        status: ListEdgeColoringStatus,
+        assignment: tuple[str, ...] | None = None,
+    ) -> ListCapacityEdgeColoringResult:
+        return ListCapacityEdgeColoringResult._from_kernel(
+            graph=graph,
+            palette=palette,
+            lists=lists,
+            capacities=capacities,
+            status=status,
+            assignment=assignment,
+        )
+
+    instance = _list_capacity_instance(graph, palette, lists, capacities)
+    try:
+        result = find_generalized_exact_cover(
+            instance,
+            search_node_limit=MAX_EXACT_COVER_SEARCH_NODES_PER_PASS,
+        )
+    except ValueError as error:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="graph.list_edge_coloring.search_bound",
+            message=str(error),
+        ) from error
+    if result.status == "FOUND":
+        if result.selected_row_ids is None:
+            return outcome("UNKNOWN")
+        assignment = _decode_list_capacity_rows(
+            graph, palette, lists, capacities, result.selected_row_ids
+        )
+        if assignment is None:
+            return outcome("UNKNOWN")
+        return outcome("FEASIBLE", assignment)
+    if result.status == "NO_COVER":
+        return outcome("INFEASIBLE")
+    return outcome("UNKNOWN")

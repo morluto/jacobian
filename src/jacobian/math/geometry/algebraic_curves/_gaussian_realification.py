@@ -234,7 +234,10 @@ def _admit_gaussian_realification(request: GaussianRealificationRequest) -> None
         ):
             numerator_digits = len(str(abs(int(value.num) * multiplier)))
             denominator_digits = len(value.den)
-            if max(numerator_digits, denominator_digits) > MAX_GAUSSIAN_REALIFICATION_COEFFICIENT_DIGITS:
+            if (
+                max(numerator_digits, denominator_digits)
+                > MAX_GAUSSIAN_REALIFICATION_COEFFICIENT_DIGITS
+            ):
                 raise OperationDomainValidationError(
                     location=("polynomial", "terms", index, "coefficient", label),
                     code="algebraic_geometry.gaussian_realification.coefficient_digits",

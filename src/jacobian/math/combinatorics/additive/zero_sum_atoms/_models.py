@@ -59,9 +59,18 @@ class ZeroSumAtomSource(StrictModel):
     def bound_raw_source(cls, value: object) -> object:
         if not isinstance(value, Mapping):
             return value
+        if any(key not in {"group", "elements"} for key in value):
+            raise _validation_error(
+                "zero_sum_atom_source_fields", "source contains unknown fields"
+            )
         prepared: dict[str, object] = dict(value)
         raw_group = prepared.get("group")
         if isinstance(raw_group, Mapping):
+            if any(key != "moduli" for key in raw_group):
+                raise _validation_error(
+                    "zero_sum_atom_source_group_fields",
+                    "source group contains unknown fields",
+                )
             group: dict[str, object] = dict(raw_group)
             raw_moduli = group.get("moduli")
             if isinstance(raw_moduli, list):

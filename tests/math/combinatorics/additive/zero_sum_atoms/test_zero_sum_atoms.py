@@ -182,6 +182,20 @@ def test_source_rejects_nested_raw_scalars(source: dict[str, object]) -> None:
         ZeroSumAtomSource.model_validate(source)
 
 
+@pytest.mark.parametrize(
+    "source",
+    (
+        {"group": {"moduli": [7]}, "elements": [], "extra": [[0] * 100]},
+        {"group": {"moduli": [7], "extra": [[0] * 100]}, "elements": []},
+    ),
+)
+def test_source_rejects_unknown_fields_before_canonicalization(
+    source: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError, match="unknown fields"):
+        ZeroSumAtomSource.model_validate(source)
+
+
 def test_exhaustive_small_sources_match_independent_oracle() -> None:
     moduli = (7,)
     values = (0, 1, 2, 3, 4, 5, 6)

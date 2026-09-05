@@ -14,6 +14,7 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.cyclic_prefix_sum._models import (
     MAX_MODULUS_DIGITS,
     MAX_SEQUENCE_LENGTH,
+    MAX_SEQUENCING_COORDINATE_CELLS,
     MAX_SEQUENCING_FORBIDDEN_VALUES,
     MAX_SEQUENCING_PERMUTATION_NODES,
     MAX_SEQUENCING_SOURCE_ITEMS,
@@ -207,6 +208,12 @@ def _admit_forbidden_prefix_sequencing(
             ("forbidden_values",),
             "forbidden_prefix_sequencing.forbidden_cardinality",
             "forbidden values exceed the retained request envelope",
+        )
+    if len(source.group.moduli) * (len(source.elements) + len(forbidden_values) + 1) > MAX_SEQUENCING_COORDINATE_CELLS:
+        _reject(
+            ("source", "group", "moduli"),
+            "forbidden_prefix_sequencing.coordinate_work",
+            "retained sequencing coordinates exceed the admitted envelope",
         )
 
     elements = tuple(

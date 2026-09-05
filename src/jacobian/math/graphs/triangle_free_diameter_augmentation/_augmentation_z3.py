@@ -24,6 +24,7 @@ from jacobian.process import (
 
 _AUGMENTATION_WORKER = Path(__file__).with_name("_augmentation_worker.py")
 _WORKER_OUTPUT_BYTES = 64 * 1024
+_WORKER_INPUT_BYTES = 64 * 1024
 _WORKER_ERROR_BYTES = 16_384
 _WORKER_ADDRESS_SPACE_BYTES = 1_536 * 1024 * 1024
 _WORKER_FILE_SIZE_BYTES = 1_024 * 1_024
@@ -160,6 +161,16 @@ def _require_admitted_request(
 ) -> tuple[tuple[str, ...], list[tuple[str, str]], list[tuple[int, ...]]]:
     # basic semantic admission before heavy derivation
     n = len(graph.vertices)
+    graph_channel_bytes = sum(len(label.encode("utf-8")) for label in graph.vertices) + sum(
+        len(left.encode("utf-8")) + len(right.encode("utf-8"))
+        for left, right in graph.edges
+    )
+    if graph_channel_bytes > _WORKER_INPUT_BYTES:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="graph.triangle_free_diameter_augmentation.worker_payload_bound",
+            message="graph representation exceeds the worker input channel bound",
+        )
     if n == 0:
         raise OperationDomainValidationError(
             location=("graph",),

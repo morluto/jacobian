@@ -66,7 +66,10 @@ class ZeroSumAtomSource(StrictModel):
             raw_moduli = group.get("moduli")
             if isinstance(raw_moduli, list):
                 if len(raw_moduli) > MAX_ATOM_RETAINED_AXES:
-                    raise _validation_error("zero_sum_atom_source_rank", "group axes exceed the raw retained-coordinate envelope")
+                    raise _validation_error(
+                        "zero_sum_atom_source_rank",
+                        "group axes exceed the raw retained-coordinate envelope",
+                    )
                 group["moduli"] = tuple(raw_moduli)
             prepared["group"] = group
         raw_elements = prepared.get("elements")
@@ -77,8 +80,7 @@ class ZeroSumAtomSource(StrictModel):
                     "zero-sum atom source permits at most 24 items",
                 )
             if any(
-                not isinstance(element, list)
-                or len(element) > MAX_ATOM_RETAINED_AXES
+                not isinstance(element, list) or len(element) > MAX_ATOM_RETAINED_AXES
                 for element in raw_elements
             ):
                 raise _validation_error(

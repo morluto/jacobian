@@ -50,8 +50,10 @@ MAX_SPECTRAL_REMAINDER_COEFFICIENT_DIGITS = (
     MAX_SPECTRAL_REMAINDER_COEFFICIENT_BITS * 30_103 + 99_999
 ) // 100_000 + 1
 
-MAX_CHARACTER_SUM_SEQUENCE_LENGTH = 4_096
-MAX_CHARACTER_SUM_INTERVALS = 256
+MAX_CHARACTER_SUM_SEQUENCE_LENGTH = 262_144
+"""Raw sequence envelope implied by one admitted frequency and one total visit."""
+MAX_CHARACTER_SUM_INTERVALS = 4_096
+"""Raw interval envelope implied by at least one retained frequency-cell."""
 MAX_CHARACTER_SUM_CELLS = 4_096
 MAX_CHARACTER_SUM_FREQUENCIES = MAX_CHARACTER_SUM_CELLS
 """A raw-input guard implied by at least one retained interval per frequency."""

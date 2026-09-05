@@ -211,6 +211,12 @@ def _admit_forbidden_prefix_sequencing(
             "source exceeds the "
             f"{MAX_SEQUENCING_SOURCE_ITEMS}-element exhaustive-search bound",
         )
+    if len(forbidden_values) > group_order:
+        _reject(
+            ("forbidden_values",),
+            "forbidden_prefix_sequencing.forbidden_cardinality",
+            "forbidden values cannot exceed the ambient group order",
+        )
 
     elements = tuple(
         tuple(
@@ -244,6 +250,23 @@ def _admit_forbidden_prefix_sequencing(
             "complete sequencing search exceeds the admitted global node bound",
         )
 
+    if any(len(value) != len(source.group.moduli) for value in forbidden_values):
+        _reject(
+            ("forbidden_values",),
+            "forbidden_prefix_sequencing.forbidden_rank",
+            "every forbidden value must match the source group rank",
+        )
+    if any(
+        type(coordinate) is not int
+        or len(str(abs(coordinate))) > MAX_MODULUS_DIGITS
+        for value in forbidden_values
+        for coordinate in value
+    ):
+        _reject(
+            ("forbidden_values",),
+            "forbidden_prefix_sequencing.forbidden_coordinate",
+            "forbidden coordinates must be bounded integers",
+        )
     canonical_forbidden = tuple(
         tuple(
             coordinate % modulus
@@ -251,6 +274,12 @@ def _admit_forbidden_prefix_sequencing(
         )
         for value in forbidden_values
     )
+    if len(set(canonical_forbidden)) != len(canonical_forbidden):
+        _reject(
+            ("forbidden_values",),
+            "forbidden_prefix_sequencing.forbidden_duplicates",
+            "forbidden values must be distinct after reduction",
+        )
     return _SequencingAdmissionPlan(
         elements=elements,
         forbidden_values=canonical_forbidden,

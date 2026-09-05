@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 from types import SimpleNamespace
 from typing import Any, cast
@@ -63,19 +64,20 @@ def test_math_find_inspection_does_not_log_a_query_or_acquire_a_runtime(
     ]
 
 
-def test_math_find_logs_the_match_query_on_one_line(
+def test_math_find_logs_a_hashed_match_query(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     state = AppState(
         operation_catalog=cast(Catalog, _Catalog()),
     )
     context = SimpleNamespace(request_context=SimpleNamespace(lifespan_context=state))
+    need = "find an exact gcd\nwithout logging a run payload"
 
     with caplog.at_level(logging.INFO, logger="jacobian.mcp.tools"):
         math_find(
             OperationMatchRequest(
                 op="match",
-                need="find an exact gcd\nwithout logging a run payload",
+                need=need,
             ),
             ctx=cast(Any, context),
         )
@@ -84,6 +86,10 @@ def test_math_find_logs_the_match_query_on_one_line(
         record for record in caplog.records if record.name == "jacobian.mcp.tools"
     ]
     assert len(records) == 1
-    assert records[0].getMessage() == (
-        "math.find query='find an exact gcd\\nwithout logging a run payload'"
-    )
+    message = records[0].getMessage()
+    query_hash = hashlib.sha256(need.encode("utf-8")).hexdigest()[:16]
+    assert message == f"math.find query_hash={query_hash}"
+    assert need not in message
+    assert "find an exact gcd" not in message
+    assert "query='" not in message
+    assert "\n" not in message

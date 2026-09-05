@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import time
@@ -50,6 +51,7 @@ from jacobian.mcp.runtime import (
 _MAX_VALIDATION_ERRORS = 64
 _MAX_VALIDATION_LOCATION_COMPONENTS = 32
 _MAX_VALIDATION_LOCATION_LENGTH = 128
+_FIND_QUERY_HASH_HEX_LENGTH = 16
 
 logger = logging.getLogger(__name__)
 
@@ -61,12 +63,10 @@ def math_find(
 ) -> OperationFindResponse:
     active_catalog = _catalog(ctx)
     if isinstance(request, OperationMatchRequest):
-        # Log a bounded hash of the need instead of the full caller-supplied
-        # value to avoid persisting sensitive mathematical objects or constraints
-        # in ordinary process logs. The SHA-256 digest is non-reversible and fixed-length.
-        import hashlib
-
-        need_hash = hashlib.sha256(request.need.encode("utf-8")).hexdigest()[:16]
+        # Logs a 16-hex SHA-256 prefix, not the caller need.
+        need_hash = hashlib.sha256(request.need.encode("utf-8")).hexdigest()[
+            :_FIND_QUERY_HASH_HEX_LENGTH
+        ]
         logger.info("math.find query_hash=%s", need_hash)
         match_response = _operation_match_response(
             active_catalog,

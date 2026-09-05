@@ -5,6 +5,7 @@ from fractions import Fraction
 import pytest
 
 from jacobian.math.lattices._hnf import HERMITE_NORMAL_FORM_OPERATION
+from jacobian.math.lattices._hnf_bounds import admit_hermite_normal_form
 
 
 def _determinant(entries: tuple[tuple[str, ...], ...]) -> Fraction:
@@ -123,6 +124,15 @@ def test_hnf_specific_excessive_envelopes(
         tool.run(request)
     with pytest.raises(OperationDomainValidationError, match=message):
         hermite_normal_form(entries)
+
+
+def test_hnf_admission_bounds_both_nonmodular_transformation_passes() -> None:
+    admission = admit_hermite_normal_form([[1, 0], [0, 1]])
+
+    # Each W column can receive one extended-GCD update and one above-pivot
+    # reduction. Both height-growth passes belong in the preflight bound.
+    assert admission.minor_bits == 2
+    assert admission.intermediate_bits == 20
 
 
 @pytest.mark.parametrize("order", [2, 5, 9])

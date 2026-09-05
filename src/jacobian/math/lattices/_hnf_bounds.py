@@ -15,8 +15,11 @@ from jacobian.math.matrices.values import (
 
 MAX_HNF_INPUT_DIGITS = 256
 MAX_HNF_WORK_UNITS = 250_000_000
-MAX_HNF_INTERMEDIATE_BITS = 262_144
-MAX_HNF_COEFFICIENT_BITS = 12_000_000_000
+# W has two non-modular transformation passes, each with bounded coefficient
+# growth. These ceilings reserve both passes while retaining the established
+# 128-by-128 coefficient-lattice regression.
+MAX_HNF_INTERMEDIATE_BITS = 524_288
+MAX_HNF_COEFFICIENT_BITS = 24_000_000_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,11 +59,13 @@ def admit_hermite_normal_form(entries: list[list[int]]) -> HNFAdmission:
     ZZ.gcdex uses the maintained scalar backend: this charge and its bounded
     operands do not purport to count native instructions. Modular
     column updates form products of operands <=P then reduce modulo R<=P.
-    Above-pivot reductions in W are not modular: a column undergoes at
-    most m reductions. If its current height is S>=1, one reduction has
-    height <=S+(S+1)*P <=(P+2)*S. Starting at P, (m+2)*(b+1)+2 bits bound
-    even the last pre-subtraction product. This separately accounts for
-    the intermediates that are larger than the final HNF.
+    The transformation matrix W has two non-modular update passes. A column
+    undergoes at most m-1 extended-GCD column transformations while finding
+    pivots and at most m-1 above-pivot reductions afterwards. If its current
+    height is S>=1, either update has height <=S+(S+1)*P <=(P+2)*S. Starting
+    at P, (2*m+2)*(b+1)+2 bits bound even the last pre-subtraction product.
+    This separately accounts for intermediates that are larger than the final
+    HNF.
 
     Lifting multiplies the square HNF by the fraction-free RREF numerator,
     then divides exactly by its denominator. At most 3*m*m*(n+m) scalar
@@ -106,7 +111,7 @@ def admit_hermite_normal_form(entries: list[list[int]]) -> HNFAdmission:
 
     cells = rows * (columns + rows)
     lift_bits = 2 * minor_bits + rows.bit_length() + 2
-    modular_bits = (rows + 2) * (minor_bits + 1) + 2
+    modular_bits = (2 * rows + 2) * (minor_bits + 1) + 2
     intermediate_bits = max(lift_bits, modular_bits)
     if intermediate_bits > MAX_HNF_INTERMEDIATE_BITS:
         _reject(

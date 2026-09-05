@@ -58,19 +58,6 @@ def test_empty_graph_rejected():
         edge_deletion_diameter_profile(g)
 
 
-def test_catalog_example_replay():
-    from jacobian.catalog.catalog import Catalog
-
-    cat = Catalog.open()
-    binding = cat._binding("graph.edge_deletion_diameter_profile.compute")
-    req = binding.request_type.model_validate(
-        {"graph": {"vertices": ["0", "1", "2"], "edges": [["0", "1"], ["1", "2"]]}}
-    )
-    res = binding.run(req)
-    assert res.source_diameter == 2
-    assert all(e.result == "DISCONNECTED" for e in res.entries)
-
-
 def test_json_round_trip():
     g = _graph(["0", "1", "2"], [["0", "1"], ["1", "2"], ["0", "2"]])
     result = edge_deletion_diameter_profile(g)

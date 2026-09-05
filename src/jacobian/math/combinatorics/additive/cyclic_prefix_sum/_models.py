@@ -100,7 +100,6 @@ class FiniteAbelianSequencingSource(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def bound_raw_source(cls, value: object) -> object:
-        value = canonicalize_json_containers(value)
         if not isinstance(value, Mapping):
             return value
         prepared: dict[str, object] = dict(value)
@@ -115,8 +114,13 @@ class FiniteAbelianSequencingSource(StrictModel):
             prepared["group"] = group
         raw_elements = prepared.get("elements")
         if isinstance(raw_elements, list):
+            if len(raw_elements) > MAX_SEQUENCING_SOURCE_ITEMS or any(
+                not isinstance(element, list) or len(element) > MAX_SEQUENCING_COORDINATE_CELLS
+                for element in raw_elements
+            ):
+                raise _validation_error("sequencing_source_rank", "source elements exceed the raw coordinate envelope")
             prepared["elements"] = tuple(raw_elements)
-        return prepared
+        return canonicalize_json_containers(prepared)
 
     @model_validator(mode="after")
     def require_canonical_source(self) -> Self:
@@ -191,17 +195,23 @@ class ForbiddenPrefixSequencingRequest(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def bound_raw_request(cls, value: object) -> object:
-        value = canonicalize_json_containers(value)
         if not isinstance(value, Mapping):
             return value
         prepared: dict[str, object] = dict(value)
         raw_first = prepared.get("first_element")
         if isinstance(raw_first, list):
+            if len(raw_first) > MAX_SEQUENCING_COORDINATE_CELLS:
+                raise _validation_error("sequencing_first_element_rank", "first_element exceeds the raw coordinate envelope")
             prepared["first_element"] = tuple(raw_first)
         raw_forbidden = prepared.get("forbidden_values")
         if isinstance(raw_forbidden, list):
+            if len(raw_forbidden) > MAX_SEQUENCING_FORBIDDEN_VALUES or any(
+                not isinstance(item, list) or len(item) > MAX_SEQUENCING_COORDINATE_CELLS
+                for item in raw_forbidden
+            ):
+                raise _validation_error("sequencing_forbidden_rank", "forbidden values exceed the raw coordinate envelope")
             prepared["forbidden_values"] = tuple(raw_forbidden)
-        return prepared
+        return canonicalize_json_containers(prepared)
 
     @model_validator(mode="after")
     def require_canonical_request(self) -> Self:

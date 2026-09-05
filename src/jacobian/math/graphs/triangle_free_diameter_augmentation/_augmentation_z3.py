@@ -535,6 +535,23 @@ def solve_triangle_free_diameter_augmentation_values(
 ) -> TriangleFreeDiameterAugmentationResult:
     """Run bounded augmentation in owner worker and decode result."""
 
+    # This exact no-op path never constructs candidates or invokes Z3, so it
+    # is admitted independently of the backend order envelope.
+    if (
+        len(graph.vertices) > budget.max_order
+        or len(graph.vertices) > HARD_MAX_ORDER
+    ) and _is_connected(graph) and _is_triangle_free(graph):
+        original_diameter = _diameter(graph)
+        if original_diameter is not None and original_diameter <= target_diameter:
+            return TriangleFreeDiameterAugmentationResult._from_kernel(
+                graph=graph,
+                target_diameter=target_diameter,
+                status="EXACT",
+                added_edges=(),
+                augmented_diameter=original_diameter,
+                detail="original graph already satisfies the target diameter",
+            )
+
     # Shared admission before worker (native and MCP parity)
     _require_admitted_request(graph, target_diameter, budget)
 

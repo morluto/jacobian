@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from jacobian.math.graphs.triangle_free_diameter_augmentation._augmentation_z3 import (
-    _require_admitted_request,
     solve_triangle_free_diameter_augmentation_values,
 )
 from jacobian.math.graphs.triangle_free_diameter_augmentation._models import (
@@ -34,8 +33,6 @@ def triangle_free_diameter_augmentation(
     if type(target_diameter) is not int:
         raise TypeError("target_diameter must be an int")
     budget = resource_budget or TriangleFreeDiameterAugmentationBudget()
-    # Admission is shared; reuse same validation as worker path
-    _require_admitted_request(graph, target_diameter, budget)
     return solve_triangle_free_diameter_augmentation_values(
         graph, target_diameter, budget
     )

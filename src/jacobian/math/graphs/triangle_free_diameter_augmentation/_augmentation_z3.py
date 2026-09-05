@@ -161,7 +161,9 @@ def _require_admitted_request(
 ) -> tuple[tuple[str, ...], list[tuple[str, str]], list[tuple[int, ...]]]:
     # basic semantic admission before heavy derivation
     n = len(graph.vertices)
-    graph_channel_bytes = sum(len(label.encode("utf-8")) for label in graph.vertices) + sum(
+    graph_channel_bytes = sum(
+        len(label.encode("utf-8")) for label in graph.vertices
+    ) + sum(
         len(left.encode("utf-8")) + len(right.encode("utf-8"))
         for left, right in graph.edges
     )

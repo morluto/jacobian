@@ -369,7 +369,9 @@ class ConvexPolygonIntersectionResult(StrictModel):
                     f"active-edge row {row_index} must be nonempty, distinct, and sorted",
                 )
             for polygon_index, edge_index in active_edges:
-                if polygon_index not in (0, 1) or not 0 <= edge_index < len(rings[polygon_index]):
+                if polygon_index not in (0, 1) or not 0 <= edge_index < len(
+                    rings[polygon_index]
+                ):
                     raise _validation_error(
                         "convex_intersection_active_edge_range",
                         f"active edge ({polygon_index}, {edge_index}) does not belong to a source ring",

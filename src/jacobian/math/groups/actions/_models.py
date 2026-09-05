@@ -364,6 +364,24 @@ class SubsetFamilyOrbitProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_subset_family_orbit_profile(self) -> Self:
+        if len(self.subsets) != self.family_size:
+            raise _validation_error(
+                "orbit_profile_family_size_mismatch",
+                "subsets must contain exactly family_size source members",
+            )
+        canonical_subsets = tuple(
+            _canonical_subset_positions(self.action, subset) for subset in self.subsets
+        )
+        if canonical_subsets != self.subsets:
+            raise _validation_error(
+                "orbit_profile_subsets_not_canonical",
+                "subsets must use increasing canonical action positions",
+            )
+        if len(set(canonical_subsets)) != len(canonical_subsets):
+            raise _validation_error(
+                "orbit_profile_duplicate_subsets",
+                "subsets must be pairwise distinct",
+            )
         seen_indices: set[int] = set()
         seen_representatives: set[tuple[int, ...]] = set()
         total_supplied = 0

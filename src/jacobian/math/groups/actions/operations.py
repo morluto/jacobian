@@ -287,15 +287,15 @@ def subset_family_orbit_profile(
     than the unrelated carrier size alone.
     """
 
-    source_positions = tuple(
-        _canonical_family_subset(action, subset) for subset in subsets
-    )
-    if len(source_positions) > MAX_FAMILY_MEMBERS:
+    if len(subsets) > MAX_FAMILY_MEMBERS:
         raise OperationDomainValidationError(
             location=("subsets",),
             code="finite_group_action.subset_family_size_exceeded",
             message=f"at most {MAX_FAMILY_MEMBERS} subsets are admitted",
         )
+    source_positions = tuple(
+        _canonical_family_subset(action, subset) for subset in subsets
+    )
     if len(set(source_positions)) != len(source_positions):
         raise OperationDomainValidationError(
             location=("subsets",),

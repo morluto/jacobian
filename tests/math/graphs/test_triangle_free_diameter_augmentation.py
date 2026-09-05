@@ -333,7 +333,12 @@ def test_result_rejects_forged_ledger() -> None:
     # the semantic diameter computation.
     payload2 = res.model_dump(mode="json")
     payload2["augmented_diameter"] = 1
-    assert TriangleFreeDiameterAugmentationResult.model_validate(payload2).augmented_diameter == 1
+    assert (
+        TriangleFreeDiameterAugmentationResult.model_validate(
+            payload2
+        ).augmented_diameter
+        == 1
+    )
 
 
 def test_admission_bounds_candidate_and_reachability() -> None:

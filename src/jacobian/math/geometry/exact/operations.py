@@ -112,7 +112,12 @@ def euclidean_orbit_profile(
                 best_form = form
                 best_relabeling = permutation
         assert best_form is not None and best_relabeling is not None
-        return best_form, best_relabeling
+        # ``permutation`` indexes the source row for each canonical position;
+        # the public relabeling maps each source index to its canonical position.
+        inverse = [0] * size
+        for canonical_index, source_index in enumerate(best_relabeling):
+            inverse[source_index] = canonical_index
+        return best_form, tuple(inverse)
 
     positive_distances = [
         distances[left][right]
@@ -120,6 +125,12 @@ def euclidean_orbit_profile(
         for right in range(size)
         if right > left and distances[left][right] > 0
     ]
+    if not positive_distances:
+        raise OperationDomainValidationError(
+            location=("configuration",),
+            code="point_configuration.orbit_degenerate",
+            message="orbit profiles require at least one positive squared distance",
+        )
     minimum_positive_distance = min(positive_distances)
     isometry_form, isometry_relabeling = canonical_form(Fraction(1))
     similarity_form, similarity_relabeling = canonical_form(minimum_positive_distance)

@@ -39,6 +39,9 @@ def admit_orbit_profile(configuration: PointConfiguration) -> None:
                 _rational_digits(coordinate.den),
             )
     pair_count = len(configuration.points) * (len(configuration.points) - 1) // 2
-    distance_digits = 2 * maximum_component_digits + 1
+    dimension = len(configuration.points[0].coordinates)
+    # Pairwise subtraction and summation combine independent denominators across
+    # every axis; normalizing a similarity form can spend the same envelope again.
+    distance_digits = 4 * dimension * maximum_component_digits + 2
     if pair_count * distance_digits > MAX_ORBIT_DISTANCE_DIGITS:
         _reject("pairwise squared-distance output exceeds the admitted digit budget")

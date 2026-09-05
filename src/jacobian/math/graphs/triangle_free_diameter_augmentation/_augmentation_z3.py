@@ -199,7 +199,6 @@ def _require_admitted_request(
             message=f"target diameter must be in 1..{HARD_MAX_TARGET_DIAMETER}",
         )
 
-    deadline = time.monotonic() + budget.wall_seconds
     # connected and triangle-free checks before backend
     if not _is_connected(graph):
         raise OperationDomainValidationError(

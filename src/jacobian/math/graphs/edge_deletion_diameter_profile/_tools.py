@@ -6,6 +6,7 @@ from jacobian.math.graphs.edge_deletion_diameter_profile._models import (
     EdgeDeletionDiameterProfileResult,
 )
 from jacobian.math.graphs.edge_deletion_diameter_profile.operations import (
+    MAX_EDGE_DELETION_DIAMETER_WORK,
     edge_deletion_diameter_profile,
 )
 
@@ -23,9 +24,10 @@ TOOLS: MathTools = (
         description=(
             "For a nonempty connected simple graph G, return its diameter and the "
             "exact diameter of G-e for every source edge e, or DISCONNECTED when "
-            f"deletion disconnects G. The operation admits at most {64} vertices and "
-            f"{256} edges and performs at most O(m·(n+m)) BFS work, reusing the "
-            "exact NetworkX diameter kernel."
+            "deletion disconnects G. A singleton has diameter 0. Admission charges "
+            "O((m+1)·n·(n+m)) all-sources BFS work for the NetworkX diameter kernel "
+            f"and admits at most {MAX_EDGE_DELETION_DIAMETER_WORK} such units, "
+            "together with a retained source-and-entry label bound."
         ),
         request_type=EdgeDeletionDiameterProfileRequest,
         result_type=EdgeDeletionDiameterProfileResult,

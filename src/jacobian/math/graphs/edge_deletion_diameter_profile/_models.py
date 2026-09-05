@@ -11,9 +11,6 @@ from pydantic_core import PydanticCustomError
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
-MAX_EDGE_DELETION_DIAMETER_VERTICES = 64
-MAX_EDGE_DELETION_DIAMETER_EDGES = 256
-
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"graph.{reason}", message)
@@ -22,9 +19,9 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 def _graph_schema() -> JsonSchemaValue:
     schema = SimpleUndirectedGraph.model_json_schema()
     schema["description"] = (
-        "A nonempty connected simple graph. The diameter profile requires "
-        "a connected graph; admission bounds vertices, edges, and aggregate "
-        "BFS work."
+        "A nonempty connected simple graph. Admission charges all-sources BFS "
+        "work for the source graph and every single-edge deletion, and bounds "
+        "retained source and entry labels."
     )
     return schema
 
@@ -57,7 +54,9 @@ class EdgeDeletionDiameterEntry(StrictModel):
         description="DIAMETER if G-e remains connected, else DISCONNECTED."
     )
     diameter: int | None = Field(
-        default=None, ge=1, description="Exact diameter of G-e when connected."
+        default=None,
+        ge=0,
+        description="Exact diameter of G-e when connected.",
     )
 
     @model_validator(mode="after")
@@ -80,7 +79,10 @@ class EdgeDeletionDiameterProfileResult(StrictModel):
 
     graph: SimpleUndirectedGraph
     source_diameter: int = Field(
-        ge=1, description="Diameter of the original connected graph."
+        ge=0,
+        description=(
+            "Diameter of the original connected graph, including 0 for a singleton."
+        ),
     )
     entries: tuple[EdgeDeletionDiameterEntry, ...] = Field(
         description="One entry per source edge, in graph.edges order."
@@ -106,7 +108,6 @@ class EdgeDeletionDiameterProfileResult(StrictModel):
                 raise _validation_error(
                     "edge_sorted", "edge must be lexicographically sorted"
                 )
-            # Check edge matches graph.edges
             expected = tuple(sorted(self.graph.edges[idx]))
             if tuple(entry.edge) != expected:
                 raise _validation_error(

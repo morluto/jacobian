@@ -36,15 +36,30 @@ def test_lattice_reduction_admits_before_lll_backend() -> None:
 
 
 def test_hermite_admits_before_hnf_backend() -> None:
-    matrix = IntegerMatrix.model_validate(
-        {"entries": _identity_entries(MAX_MATRIX_DIMENSION + 1)}
-    )
+    entries = [
+        [str(10**255 + ((i + 1) * (j + 3) + j * j) % 101) for j in range(64)]
+        for i in range(64)
+    ]
+    matrix = IntegerMatrix.model_validate({"entries": entries})
     request = HermiteNormalFormRequest.model_construct(matrix=matrix)
     with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_hermite_normal_form(request)
     error = exc_info.value.errors()[0]
     assert error["type"] == "lattice.budget_exceeded"
     assert error["loc"] == ("matrix",)
+    assert "intermediate height" in error["msg"]
+
+
+def test_dispatch_accepts_hnf_above_the_lll_axis() -> None:
+    entries = _identity_entries(MAX_MATRIX_DIMENSION + 1)
+    result = invoke_operation(
+        "lattice.hermite_normal_form.compute",
+        {"matrix": {"entries": entries}},
+        Catalog.open(),
+    )
+    expected = {"domain": "ZZ", "entries": entries}
+    assert result.output["normal_form"] == expected
+    assert result.output["transformation"] == expected
 
 
 def test_dispatch_rejects_lll_above_the_lattice_axis() -> None:

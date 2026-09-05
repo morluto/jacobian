@@ -26,6 +26,8 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     ParametersResult,
     VertexDegreesRequest,
     VertexDegreesResult,
+    WeightedPackingRequest,
+    WeightedPackingResult,
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs.operations import (
     clique_expansion,
@@ -36,6 +38,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs.operations import
     independence_number,
     induced_type_profile,
     maximum_edge_matching,
+    maximum_weight_packing,
     minimum_transversal,
     parameters,
     vertex_degrees,
@@ -100,6 +103,12 @@ def _compute_maximum_edge_matching(
     request: MaximumEdgeMatchingRequest,
 ) -> MaximumEdgeMatchingResult:
     return maximum_edge_matching(request.hypergraph)
+
+
+def _compute_maximum_weight_packing(
+    request: WeightedPackingRequest,
+) -> WeightedPackingResult:
+    return maximum_weight_packing(request.hypergraph, request.weights)
 
 
 # The Fano-plane-like hypergraph: four vertices and three hyperedges.
@@ -330,6 +339,32 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="maximum_edge_matching_of_4_vertex_hypergraph",
                 description="Compute a maximum edge matching of a 4-vertex, 3-edge hypergraph.",
                 input={"hypergraph": _HYPERGRAPH},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="hypergraph.maximum_weight_packing.compute",
+        title="Compute an exact maximum-weight disjoint hyperedge packing",
+        description="Compute a maximum-weight family of pairwise-disjoint hyperedges "
+        "(weighted set packing) with exact nonnegative per-edge weights: "
+        "returns the optimum total weight and an attaining family in declared "
+        "edge order, ties broken toward the lexicographically smallest family.",
+        request_type=WeightedPackingRequest,
+        result_type=WeightedPackingResult,
+        run=_compute_maximum_weight_packing,
+        tags=("combinatorics", "hypergraph", "optimization", "exact"),
+        examples=(
+            OperationExample(
+                name="maximum_weight_packing_of_4_vertex_hypergraph",
+                description="Compute a maximum-weight packing of a 4-vertex, 3-edge hypergraph.",
+                input={
+                    "hypergraph": _HYPERGRAPH,
+                    "weights": [
+                        {"edge_id": "e1", "weight": {"num": "2", "den": "1"}},
+                        {"edge_id": "e2", "weight": {"num": "1", "den": "1"}},
+                        {"edge_id": "e3", "weight": {"num": "1", "den": "1"}},
+                    ],
+                },
             ),
         ),
     ),

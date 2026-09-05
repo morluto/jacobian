@@ -14,6 +14,10 @@ from pydantic import (
 from pydantic_core import PydanticCustomError
 
 from jacobian._digest import Sha256Digest
+from jacobian._exact import (
+    CanonicalRational,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import encode_strict_json, sha256_digest
 from jacobian.math.graphs.values import (
@@ -63,6 +67,7 @@ def _validation_error(message: str) -> PydanticCustomError:
     # validator requires adding its reason here rather than creating an opaque
     # catch-all error type.
     reason_fragments = (
+        ("packing", "weighted_packing"),
         ("valid UTF-8", "label_encoding"),
         ("label exceeds", "label_length"),
         ("labels must be distinct", "vertex_identity"),
@@ -1275,3 +1280,124 @@ class MaximumEdgeMatchingResult(StrictModel):
         if self.count != len(self.matching):
             raise _validation_error("count must equal the matching size")
         return self
+
+
+# ---------------------------------------------------------------------------
+# Bounded exact maximum-weight edge packings
+# --------------------------------------------------------------------------
+
+# Weighted set packing shares the cardinality-matching exhaustive shape: a
+# component of m candidates costs at most 2**m subset states, each testing
+# pairwise disjointness and accumulating weights in O(m**2) field work.
+# The summed component budget below admits exactly the same hardest single
+# search as maximum edge matching.
+MAX_WEIGHTED_PACKING_SEARCH_WORK = (
+    (1 << MAX_MATCHING_EDGES) * MAX_MATCHING_EDGES * MAX_MATCHING_EDGES
+)
+# One weight component stays within the canonical rational envelope: even
+# 12,000 entries of 256 digits accumulate far below the 32,768-digit bound.
+MAX_PACKING_WEIGHT_DIGITS = 256
+
+
+class EdgeWeight(StrictModel):
+    """One exact nonnegative weight bound to a named hyperedge."""
+
+    edge_id: str = Field(min_length=1, max_length=MAX_LABEL_LENGTH)
+    weight: CanonicalRational
+
+    @model_validator(mode="after")
+    def require_nonnegative_bounded_weight(self) -> Self:
+        if self.weight.as_fraction() < 0:
+            raise _validation_error("packing weights must be nonnegative")
+        try:
+            require_bounded_rational(
+                self.weight,
+                max_digits=MAX_PACKING_WEIGHT_DIGITS,
+                label="packing weight",
+            )
+        except ValueError as error:
+            raise _validation_error(str(error)) from error
+        return self
+
+
+class WeightedPackingRequest(StrictModel):
+    """Request an exact maximum-weight pairwise-disjoint hyperedge family.
+
+    Every hyperedge needs exactly one weight; the mapping is total over the
+    source edge IDs. Zero weights are admitted and participate in the
+    lexicographic tie-break.
+    """
+
+    hypergraph: FiniteHypergraph
+    weights: tuple[EdgeWeight, ...]
+
+    @model_validator(mode="after")
+    def require_total_weight_binding(self) -> Self:
+        edge_ids = tuple(edge_id for edge_id, _ in self.hypergraph.edges)
+        weight_ids = tuple(entry.edge_id for entry in self.weights)
+        if len(set(weight_ids)) != len(weight_ids):
+            raise _validation_error("packing weights must use distinct edge IDs")
+        if set(weight_ids) != set(edge_ids):
+            raise _validation_error(
+                "packing weights must cover exactly the source hyperedge IDs"
+            )
+        return self
+
+
+class WeightedPackingResult(StrictModel):
+    """An exact maximum-weight pairwise-disjoint hyperedge family.
+
+    ``packing`` holds the selected edge IDs in declared edge order and
+    ``total_weight`` is the kernel-established optimum. Ties resolve per
+    conflict-component toward the lexicographically smallest declared-order
+    family, and the union is the witness; zero-weight candidates therefore
+    survive only when locally canonical. Weights add across independent
+    components, but globally smallest ID-tuples need not decompose, so the
+    tie-break is defined component-wise.
+    """
+
+    hypergraph: FiniteHypergraph
+    weights: tuple[EdgeWeight, ...]
+    packing: tuple[str, ...] = Field(max_length=MAX_EDGES)
+    total_weight: CanonicalRational
+
+    @model_validator(mode="after")
+    def bind_packing(self) -> Self:
+        edge_ids = tuple(edge_id for edge_id, _ in self.hypergraph.edges)
+        edge_id_set = set(edge_ids)
+        witness_set = set(self.packing)
+        if len(witness_set) != len(self.packing):
+            raise _validation_error("packing edge ids must be distinct")
+        if not witness_set <= edge_id_set:
+            raise _validation_error("packing edge ids must be declared source edge ids")
+        expected_order = tuple(
+            edge_id for edge_id in edge_ids if edge_id in witness_set
+        )
+        if self.packing != expected_order:
+            raise _validation_error(
+                "packing edge ids must be unique and in declared edge order"
+            )
+        weight_ids = tuple(entry.edge_id for entry in self.weights)
+        if set(weight_ids) != edge_id_set or len(set(weight_ids)) != len(weight_ids):
+            raise _validation_error(
+                "packing weights must cover exactly the source hyperedge IDs"
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        hypergraph: FiniteHypergraph,
+        weights: tuple[EdgeWeight, ...],
+        packing: tuple[str, ...],
+        total_weight: CanonicalRational,
+    ) -> Self:
+        """Construct an optimum established by the owner-local kernel."""
+
+        return cls.model_construct(
+            hypergraph=hypergraph,
+            weights=weights,
+            packing=packing,
+            total_weight=total_weight,
+        )

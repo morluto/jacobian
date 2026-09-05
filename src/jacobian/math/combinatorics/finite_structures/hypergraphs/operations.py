@@ -1,7 +1,9 @@
 """Exact bounded finite hypergraph operations."""
 
 import unicodedata
+from fractions import Fraction
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_HYPERGRAPH_INDEPENDENCE_INCIDENCES,
@@ -10,11 +12,13 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_MATCHING_SEARCH_WORK,
     MAX_TRANSVERSAL_SEARCH_WORK,
     MAX_VERTICES,
+    MAX_WEIGHTED_PACKING_SEARCH_WORK,
     CliqueExpansionResult,
     DualResult,
     EdgeIntersectionEntry,
     EdgeIntersectionGraphResult,
     EdgeIntersectionsResult,
+    EdgeWeight,
     FiniteHypergraph,
     HypergraphIndependenceBudget,
     HypergraphIndependenceResult,
@@ -25,6 +29,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MinimumTransversalResult,
     ParametersResult,
     VertexDegreesResult,
+    WeightedPackingResult,
     _admit_edge_intersection_profile,
     _induced_type_profile_admission_plan,
     _InducedTypeProfileAdmissionPlan,
@@ -46,6 +51,7 @@ __all__ = [
     "independence_number",
     "induced_type_profile",
     "maximum_edge_matching",
+    "maximum_weight_packing",
     "minimum_transversal",
     "parameters",
     "vertex_degrees",
@@ -789,4 +795,128 @@ def maximum_edge_matching(hypergraph: FiniteHypergraph) -> MaximumEdgeMatchingRe
         hypergraph=hypergraph,
         matching=matching,
         count=count,
+    )
+
+
+def _weighted_packing_plan(
+    hypergraph: FiniteHypergraph,
+    weights: tuple[EdgeWeight, ...],
+) -> tuple[
+    tuple[str, ...],
+    tuple[frozenset[str], ...],
+    tuple[Fraction, ...],
+    tuple[tuple[int, ...], ...],
+    int,
+]:
+    """Build the reusable conflict-component plan for one weighted packing."""
+
+    edges = _canonical_edges(hypergraph)
+    weight_of = {entry.edge_id: entry.weight.as_fraction() for entry in weights}
+    search_ids = tuple(edge_id for edge_id, _ in edges)
+    edge_sets = tuple(frozenset(members) for _, members in edges)
+    values = tuple(weight_of[edge_id] for edge_id in search_ids)
+    components = _conflict_components(edge_sets)
+    search_work = sum(
+        (1 << len(component)) * len(component) * len(component)
+        for component in components
+    )
+    return search_ids, edge_sets, values, components, search_work
+
+
+def _maximum_component_packing(
+    edge_sets: tuple[frozenset[str], ...],
+    values: tuple[Fraction, ...],
+    search_ids: tuple[str, ...],
+    component: tuple[int, ...],
+) -> tuple[tuple[str, ...], Fraction]:
+    """Return the best disjoint subfamily of one component with its weight.
+
+    Every subset is scored exactly; the best keeps the greatest total
+    weight, breaking ties toward the lexicographically smallest
+    declared-order family within the component. The union over components
+    is the witness: weights add across independent components, while a
+    globally smallest ID-tuple need not decompose.
+    """
+
+    from itertools import combinations
+
+    best_ids: tuple[str, ...] = ()
+    best_weight = Fraction(0)
+    members = [edge_sets[index] for index in component]
+    worth = [values[index] for index in component]
+    names = [search_ids[index] for index in component]
+    for size in range(len(component) + 1):
+        for combo in combinations(range(len(component)), size):
+            disjoint = True
+            for left in range(len(combo)):
+                for right in range(left + 1, len(combo)):
+                    if members[combo[left]] & members[combo[right]]:
+                        disjoint = False
+                        break
+                if not disjoint:
+                    break
+            if not disjoint:
+                continue
+            total = sum((worth[position] for position in combo), start=Fraction(0))
+            ids = tuple(names[position] for position in combo)
+            if total > best_weight or (total == best_weight and ids < best_ids):
+                best_ids, best_weight = ids, total
+    return best_ids, best_weight
+
+
+def maximum_weight_packing(
+    hypergraph: FiniteHypergraph,
+    weights: tuple[EdgeWeight, ...],
+) -> WeightedPackingResult:
+    """Compute an exact maximum-weight pairwise-disjoint hyperedge family."""
+
+    weight_ids = tuple(entry.edge_id for entry in weights)
+    if len(set(weight_ids)) != len(weight_ids):
+        raise OperationDomainValidationError(
+            location=("weights",),
+            code="hypergraph.weighted_packing.weight_identity",
+            message="packing weights must use distinct edge IDs",
+        )
+    edge_ids = tuple(edge_id for edge_id, _ in hypergraph.edges)
+    if set(weight_ids) != set(edge_ids):
+        raise OperationDomainValidationError(
+            location=("weights",),
+            code="hypergraph.weighted_packing.weight_coverage",
+            message="packing weights must cover exactly the source hyperedge IDs",
+        )
+    search_ids, edge_sets, values, components, search_work = _weighted_packing_plan(
+        hypergraph, weights
+    )
+    if any(len(component) > MAX_MATCHING_EDGES for component in components):
+        raise OperationDomainValidationError(
+            location=("hypergraph",),
+            code="hypergraph.weighted_packing.search_bound",
+            message=(
+                "maximum weight packing search exceeds the "
+                f"{MAX_MATCHING_EDGES}-edge exact search bound"
+            ),
+        )
+    if search_work > MAX_WEIGHTED_PACKING_SEARCH_WORK:
+        raise OperationDomainValidationError(
+            location=("hypergraph",),
+            code="hypergraph.weighted_packing.search_bound",
+            message=(
+                "maximum weight packing search exceeds the "
+                f"{MAX_WEIGHTED_PACKING_SEARCH_WORK:,}-check exact search bound"
+            ),
+        )
+    chosen: set[str] = set()
+    total = Fraction(0)
+    for component in components:
+        best_ids, best_weight = _maximum_component_packing(
+            edge_sets, values, search_ids, component
+        )
+        chosen.update(best_ids)
+        total += best_weight
+    packing = tuple(edge_id for edge_id in edge_ids if edge_id in chosen)
+    return WeightedPackingResult._from_kernel(
+        hypergraph=hypergraph,
+        weights=weights,
+        packing=packing,
+        total_weight=CanonicalRational.from_fraction(total),
     )

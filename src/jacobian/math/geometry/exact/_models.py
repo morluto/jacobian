@@ -137,7 +137,9 @@ class EuclideanOrbitProfileResult(StrictModel):
             (self.isometry_form, self.isometry_relabeling),
             (self.similarity_form, self.similarity_relabeling),
         ):
-            if len(form.entries) != size or any(len(row) != size for row in form.entries):
+            if len(form.entries) != size or any(
+                len(row) != size for row in form.entries
+            ):
                 raise _validation_error(
                     "orbit_profile_form_shape",
                     "every orbit form must be square on the source point axis",

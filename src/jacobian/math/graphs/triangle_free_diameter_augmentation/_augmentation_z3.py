@@ -198,6 +198,8 @@ def _require_admitted_request(
             code="graph.triangle_free_diameter_augmentation.diameter_bound",
             message=f"target diameter must be in 1..{HARD_MAX_TARGET_DIAMETER}",
         )
+
+    deadline = time.monotonic() + budget.wall_seconds
     # connected and triangle-free checks before backend
     if not _is_connected(graph):
         raise OperationDomainValidationError(
@@ -551,6 +553,8 @@ def solve_triangle_free_diameter_augmentation_values(  # noqa: C901
 ) -> TriangleFreeDiameterAugmentationResult:
     """Run bounded augmentation in owner worker and decode result."""
 
+    deadline = time.monotonic() + budget.wall_seconds
+
     if target_diameter < 1 or target_diameter > HARD_MAX_TARGET_DIAMETER:
         raise OperationDomainValidationError(
             location=("target_diameter",),
@@ -560,13 +564,11 @@ def solve_triangle_free_diameter_augmentation_values(  # noqa: C901
 
     # This exact no-op path never constructs candidates or invokes Z3, so it
     # is admitted independently of the backend order envelope.
-    if (
-        (len(graph.vertices) > budget.max_order or len(graph.vertices) > HARD_MAX_ORDER)
-        and _is_connected(graph)
-        and _is_triangle_free(graph)
-    ):
+    if _is_connected(graph) and _is_triangle_free(graph):
         original_diameter = _diameter(graph)
         if original_diameter is not None and original_diameter <= target_diameter:
+            if time.monotonic() >= deadline:
+                raise TimeoutError("augmentation request expired during no-op presolve")
             return TriangleFreeDiameterAugmentationResult._from_kernel(
                 graph=graph,
                 target_diameter=target_diameter,
@@ -576,7 +578,6 @@ def solve_triangle_free_diameter_augmentation_values(  # noqa: C901
                 detail="original graph already satisfies the target diameter",
             )
 
-    deadline = time.monotonic() + budget.wall_seconds
     # Shared admission before worker (native and MCP parity)
     admitted = _require_admitted_request(graph, target_diameter, budget)
     if time.monotonic() >= deadline:
@@ -668,21 +669,24 @@ def solve_triangle_free_diameter_augmentation_values(  # noqa: C901
             raise ValueError("worker added-edge projection is invalid")
         if worker_target != target_diameter:
             raise ValueError("worker target mismatch")
-        result = TriangleFreeDiameterAugmentationResult._from_kernel(
-            graph=graph,
-            target_diameter=target_diameter,
-            status=status,
-            added_edges=edges,
-            augmented_diameter=augmented_diameter,
-            detail=detail,
+        result = TriangleFreeDiameterAugmentationResult.model_validate(
+            {
+                "graph": graph,
+                "target_diameter": target_diameter,
+                "status": status,
+                "added_edges": edges,
+                "added_edge_count": len(edges) if status == "EXACT" else None,
+                "augmented_diameter": augmented_diameter,
+                "detail": detail,
+            }
         )
         return (
             result
             if time.monotonic() < deadline
             else fallback("request expired during validation")
         )
-    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
-        return fallback("bounded augmentation worker returned malformed output")
+    except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        raise RuntimeError("bounded augmentation worker returned malformed output") from exc
 
 
 # Re-export helper for tests

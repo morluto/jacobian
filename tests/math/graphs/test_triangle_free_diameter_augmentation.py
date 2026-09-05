@@ -360,9 +360,9 @@ def test_admission_bounds_candidate_and_reachability() -> None:
     finally:
         mod.HARD_MAX_CANDIDATES = orig_cand
 
-    # Reachability bound exceed: n=12 r=12 => 1728 >1000
-    with pytest.raises(OperationDomainValidationError, match="reachability"):
-        triangle_free_diameter_augmentation(g, 12, resource_budget=budget)
+    # A target already met by the source returns before Z3-only reachability
+    # admission, even though the backend encoding would exceed its cap.
+    assert triangle_free_diameter_augmentation(g, 12, resource_budget=budget).status == "EXACT"
 
 
 def test_empty_graph_rejected() -> None:

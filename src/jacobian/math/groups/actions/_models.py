@@ -369,7 +369,8 @@ class SubsetFamilyOrbitProfileResult(StrictModel):
                 self.rows,
                 key=lambda row: (
                     row.representative.positions,
-                    row.representative.action.model_dump(),
+                    row.representative.action.domain,
+                    row.representative.action.generators,
                 ),
             )
         ):

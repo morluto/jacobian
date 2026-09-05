@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from math import comb
-from typing import Literal, Self
+from typing import Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
@@ -125,7 +125,6 @@ class GaussianRealificationResult(StrictModel):
         description="Human-readable substitution, e.g. 'z = x + i*y'.",
         max_length=128,
     )
-    method: Literal["BINOMIAL_REALIFICATION"] = "BINOMIAL_REALIFICATION"
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
@@ -167,12 +166,17 @@ class GaussianRealificationResult(StrictModel):
             real_part=real_part,
             imag_part=imag_part,
             substitution=substitution,
-            method="BINOMIAL_REALIFICATION",
         )
 
 
-def _admit_gaussian_realification(request: GaussianRealificationRequest) -> None:
-    poly = request.polynomial
+def _admit_gaussian_realification(
+    poly: UnivariateGaussianPolynomial,
+    target_variables: tuple[PolynomialVariable, PolynomialVariable],
+) -> None:
+    if len(set(target_variables)) != 2:
+        raise OperationDomainValidationError(location=("target_variables",), code="algebraic_geometry.gaussian_target_variables_not_unique", message="target variables must be distinct")
+    if poly.variable in target_variables:
+        raise OperationDomainValidationError(location=("target_variables",), code="algebraic_geometry.gaussian_target_collides_with_source", message="target variables must be distinct from the source variable")
     # Source bounds already enforced by model, but check predicted expansion
     degree = max((t.exponent for t in poly.terms), default=0)
     term_count = len(poly.terms)
@@ -299,16 +303,13 @@ def gaussian_realification(
     target_variables: tuple[PolynomialVariable, PolynomialVariable],
 ) -> GaussianRealificationResult:
     """Compute the real and imaginary parts of p(x+i y) via binomial expansion."""
-    request = GaussianRealificationRequest(
-        polynomial=polynomial, target_variables=target_variables
-    )
-    _admit_gaussian_realification(request)
+    _admit_gaussian_realification(polynomial, target_variables)
 
     # Accumulate monomials for real and imag parts: dict (ix, iy) -> Fraction
     real_monomials: dict[tuple[int, int], Fraction] = {}
     imag_monomials: dict[tuple[int, int], Fraction] = {}
 
-    for term in request.polynomial.terms:
+    for term in polynomial.terms:
         k = term.exponent
         a_real, a_imag = term.coefficient.as_fractions()
         # For each j in 0..k, binom(k,j) x^{k-j} (i y)^j

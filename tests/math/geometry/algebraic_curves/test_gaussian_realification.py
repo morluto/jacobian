@@ -62,7 +62,6 @@ def test_quadratic_gaussian_realification():
     assert result.real_part.variables == ("x", "y")
     assert result.imag_part.variables == ("x", "y")
     assert result.substitution == "z = x + i*y"
-    assert result.method == "BINOMIAL_REALIFICATION"
     real_terms = {
         (t.exponents, t.coefficient.num, t.coefficient.den)
         for t in result.real_part.polynomial.terms

@@ -8,6 +8,13 @@ from typing import Any, cast
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.geometry._convex_polygon_intersection import (
+    ConvexPolygonIntersectionResult,
+    ConvexRationalPolygon,
+)
+from jacobian.math.geometry._convex_polygon_intersection import (
+    convex_polygon_intersection as _convex_polygon_intersection,
+)
 from jacobian.math.geometry._models import (
     INVERSION_ADMISSION_DIGITS,
     MAX_COORDINATE_DIGITS,
@@ -48,6 +55,7 @@ __all__ = [
     "collinear",
     "concyclic",
     "convex_hull_points",
+    "convex_polygon_intersection",
     "general_position_search",
     "line_intersection",
     "midpoint",
@@ -58,6 +66,13 @@ __all__ = [
     "simple_polygon",
     "squared_distance",
 ]
+
+
+def convex_polygon_intersection(
+    polygon_a: ConvexRationalPolygon, polygon_b: ConvexRationalPolygon
+) -> ConvexPolygonIntersectionResult:
+    """Return the exact closed-set intersection of two strict convex polygons."""
+    return _convex_polygon_intersection(polygon_a, polygon_b)
 
 
 def _reject_geometry_domain(

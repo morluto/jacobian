@@ -231,8 +231,22 @@ class ConvexRationalPolygon(StrictModel):
                     "convex polygon must be strictly CCW with no three consecutive collinear "
                     f"(cross at index {i + 1} is {cross})",
                 )
-        # Also check that polygon is convex via half-plane: already ensured by above, but also need to ensure no self-intersection implied
+        # Local left turns alone admit some star-shaped rings.  A convex CCW
+        # ring has every vertex in every directed edge's closed left half-plane.
+        for edge_index in range(n):
+            a = pts[edge_index]
+            b = pts[(edge_index + 1) % n]
+            if any(_cross_edge(a, b, point) < 0 for point in pts):
+                raise _validation_error(
+                    "convex_polygon_not_simple",
+                    "convex polygon vertices must lie in every directed edge's left half-plane",
+                )
         return self
+
+    @classmethod
+    def from_convex_hull(cls, hull: GeometryConvexHullResult) -> Self:
+        """Explicitly map the shared hull value into this strict input domain."""
+        return cls(vertices=hull.points)
 
 
 class ConvexPolygonIntersectionRequest(StrictModel):
@@ -262,7 +276,7 @@ class ConvexPolygonIntersectionResult(StrictModel):
     )
 
     @model_validator(mode="after")
-    def require_discriminated(self) -> Self:
+    def require_discriminated(self) -> Self:  # noqa: C901
         if self.kind == "EMPTY":
             if (
                 self.point is not None
@@ -311,7 +325,7 @@ class ConvexPolygonIntersectionResult(StrictModel):
             # Check segment endpoints lexicographically ordered
             a = _point_to_fraction(self.segment.start)
             b = _point_to_fraction(self.segment.end)
-            if a > b:
+            if a >= b:
                 raise _validation_error(
                     "convex_intersection_segment_order",
                     "segment endpoints must be lexicographically ordered",
@@ -331,6 +345,11 @@ class ConvexPolygonIntersectionResult(StrictModel):
                     "convex_intersection_polygon_active",
                     "POLYGON active edges must match polygon vertex count",
                 )
+            if len(self.polygon.points) < 3:
+                raise _validation_error(
+                    "convex_intersection_polygon_dimension",
+                    "POLYGON must contain at least three vertices",
+                )
             # Check polygon is strict CCW and canonical least vertex
             pts = [_point_to_fraction(p) for p in self.polygon.points]
             # Check least vertex
@@ -342,6 +361,19 @@ class ConvexPolygonIntersectionResult(StrictModel):
                 )
         else:
             raise _validation_error("convex_intersection_kind", "unknown kind")
+        rings = (self.polygon_a.vertices, self.polygon_b.vertices)
+        for row_index, active_edges in enumerate(self.vertex_active_edges):
+            if not active_edges or tuple(sorted(set(active_edges))) != active_edges:
+                raise _validation_error(
+                    "convex_intersection_active_edges",
+                    f"active-edge row {row_index} must be nonempty, distinct, and sorted",
+                )
+            for polygon_index, edge_index in active_edges:
+                if polygon_index not in (0, 1) or not 0 <= edge_index < len(rings[polygon_index]):
+                    raise _validation_error(
+                        "convex_intersection_active_edge_range",
+                        f"active edge ({polygon_index}, {edge_index}) does not belong to a source ring",
+                    )
         return self
 
     @classmethod

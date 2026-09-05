@@ -6,6 +6,9 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.math.geometry import (
+    convex_polygon_intersection as public_convex_polygon_intersection,
+)
 from jacobian.math.geometry._convex_polygon_intersection import (
     ConvexRationalPolygon,
     convex_polygon_intersection,
@@ -122,6 +125,16 @@ def test_rejects_non_convex_or_collinear():
         ConvexRationalPolygon(
             vertices=(_pt("0", "0"), _pt("1", "0"), _pt("2", "0"), _pt("1", "1"))
         )
+
+
+def test_rejects_self_intersecting_left_turn_ring():
+    with pytest.raises(ValidationError, match="left half-plane"):
+        _poly([("0", "3"), ("-2", "-3"), ("3", "1"), ("-3", "1"), ("2", "-3")])
+
+
+def test_native_geometry_api_exposes_intersection():
+    square = _poly([("0", "0"), ("1", "0"), ("1", "1"), ("0", "1")])
+    assert public_convex_polygon_intersection(square, square).kind == "POLYGON"
     # Not CCW (clockwise)
     with pytest.raises(ValidationError, match=r"strict.*CCW"):
         ConvexRationalPolygon(

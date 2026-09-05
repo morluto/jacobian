@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 from itertools import product
-from math import comb, lcm, prod
+from math import comb, gcd, lcm, prod
 from time import monotonic
 from typing import TYPE_CHECKING, Annotated, Literal, Self, cast
 
@@ -24,6 +24,7 @@ from jacobian._execution import (
     bind_request_deadline,
     current_request_execution,
     request_checkpoint,
+    request_execution,
 )
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
@@ -442,7 +443,14 @@ def _spectral_pair_work(source: FiniteAbelianSpectralPairSource) -> _SpectralPai
     itself trivially bounded.
     """
 
-    exponent = source.group.exponent
+    exponent = 1
+    for modulus in source.group.moduli:
+        exponent = exponent // gcd(exponent, int(modulus)) * int(modulus)
+        dense_ops = 10 * exponent.bit_length() * (exponent + 1) * (exponent + 1)
+        if dense_ops > MAX_CHARACTER_SUM_CYCLOTOMIC_DENSE_OPS:
+            raise ValueError(
+                "character-sum cyclotomic construction work exceeds its dense-op bound"
+            )
     needs_reduction = (
         len(source.points) == len(source.frequencies) and len(source.frequencies) > 1
     )
@@ -921,6 +929,8 @@ def _character_sum_interval_profile_work(
         raise ValueError("character-sum frequency-interval cells exceed their bound")
     if cells == 0:
         raise ValueError("character-sum profile requires at least one cell")
+    if cells * rank > MAX_CHARACTER_SUM_PREFIX_WORK:
+        raise ValueError("character-sum result frequency coordinates exceed their bound")
 
     total_interval_length = sum(b - a for a, b in source.intervals)
     total_visits = frequency_count * total_interval_length
@@ -1048,6 +1058,10 @@ def compute_finite_abelian_character_sum_interval_profile(
     source: FiniteAbelianCharacterSumIntervalProfileSource,
 ) -> FiniteAbelianCharacterSumIntervalProfileResult:
     """Return every exact character sum on the requested intervals."""
+
+    if current_request_execution() is None:
+        with request_execution(monotonic()):
+            return compute_finite_abelian_character_sum_interval_profile(source)
 
     _character_sum_execution_deadline()
     try:

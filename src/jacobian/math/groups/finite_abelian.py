@@ -5,13 +5,27 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 from itertools import product
-from math import comb, lcm, prod
+from math import comb, gcd, lcm, prod
+from time import monotonic
 from typing import TYPE_CHECKING, Annotated, Literal, Self, cast
 
-from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_validator
+from pydantic import (
+    Field,
+    StrictBool,
+    StrictInt,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
+from jacobian._execution import (
+    bind_request_deadline,
+    current_request_execution,
+    request_checkpoint,
+    request_execution,
+)
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
@@ -35,6 +49,27 @@ MAX_SPECTRAL_REMAINDER_COEFFICIENT_BITS = 2_048
 MAX_SPECTRAL_REMAINDER_COEFFICIENT_DIGITS = (
     MAX_SPECTRAL_REMAINDER_COEFFICIENT_BITS * 30_103 + 99_999
 ) // 100_000 + 1
+
+MAX_CHARACTER_SUM_SEQUENCE_LENGTH = 262_144
+"""Raw sequence envelope implied by one admitted frequency and one total visit."""
+MAX_CHARACTER_SUM_INTERVALS = 4_096
+"""Raw interval envelope implied by at least one retained frequency-cell."""
+MAX_CHARACTER_SUM_CELLS = 4_096
+MAX_CHARACTER_SUM_FREQUENCIES = MAX_CHARACTER_SUM_CELLS
+"""A raw-input guard implied by at least one retained interval per frequency."""
+MAX_CHARACTER_SUM_TOTAL_VISITS = 262_144
+MAX_CHARACTER_SUM_CYCLOTOMIC_DEGREE = MAX_SPECTRAL_CYCLOTOMIC_DEGREE
+MAX_CHARACTER_SUM_CYCLOTOMIC_DENSE_OPS = MAX_SPECTRAL_CYCLOTOMIC_DENSE_OPS
+MAX_CHARACTER_SUM_CYCLOTOMIC_COEFFICIENT_BITS = MAX_SPECTRAL_CYCLOTOMIC_COEFFICIENT_BITS
+MAX_CHARACTER_SUM_CYCLOTOMIC_INTERMEDIATE_BITS = (
+    MAX_SPECTRAL_CYCLOTOMIC_INTERMEDIATE_BITS
+)
+MAX_CHARACTER_SUM_REMAINDER_COEFFICIENT_BITS = MAX_SPECTRAL_REMAINDER_COEFFICIENT_BITS
+MAX_CHARACTER_SUM_REMAINDER_COEFFICIENT_DIGITS = (
+    MAX_CHARACTER_SUM_REMAINDER_COEFFICIENT_BITS * 30_103 + 99_999
+) // 100_000 + 1
+MAX_CHARACTER_SUM_PREFIX_WORK = 1_048_576
+CHARACTER_SUM_INTERVAL_PROFILE_WALL_SECONDS = 600.0
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -411,13 +446,12 @@ def _spectral_pair_work(source: FiniteAbelianSpectralPairSource) -> _SpectralPai
     itself trivially bounded.
     """
 
-    exponent = source.group.exponent
     needs_reduction = (
         len(source.points) == len(source.frequencies) and len(source.frequencies) > 1
     )
     if not needs_reduction:
-        work = _SpectralPairWork(
-            group_exponent=exponent,
+        return _SpectralPairWork(
+            group_exponent=1,
             cyclotomic_degree=None,
             character_terms=0,
             cyclotomic_reductions=0,
@@ -426,8 +460,14 @@ def _spectral_pair_work(source: FiniteAbelianSpectralPairSource) -> _SpectralPai
             cyclotomic_intermediate_bits=0,
             remainder_coefficient_bits=0,
         )
-        return work
-
+    exponent = 1
+    for modulus in source.group.moduli:
+        exponent = exponent // gcd(exponent, int(modulus)) * int(modulus)
+        dense_ops = 10 * exponent.bit_length() * (exponent + 1) * (exponent + 1)
+        if dense_ops > MAX_CHARACTER_SUM_CYCLOTOMIC_DENSE_OPS:
+            raise ValueError(
+                "character-sum cyclotomic construction work exceeds its dense-op bound"
+            )
     cyclotomic_dense_ops = 10 * exponent.bit_length() * (exponent + 1) * (exponent + 1)
     cyclotomic_intermediate_bits = 2 * exponent + (exponent + 1).bit_length() + 1
     if cyclotomic_dense_ops > MAX_SPECTRAL_CYCLOTOMIC_DENSE_OPS:
@@ -583,6 +623,463 @@ def decide_finite_abelian_spectral_pair(
 
     decision = _finite_abelian_spectral_pair_decision_data(source)
     return FiniteAbelianSpectralPairResult._from_kernel(source, decision)
+
+
+BoundedCharacterSumInterval = tuple[StrictInt, StrictInt]
+CharacterSumInterval = tuple[int, int]
+
+
+class FiniteAbelianCharacterSumIntervalProfileSource(StrictModel):
+    """One labelled sequence in an explicit product of cyclic groups.
+
+    The group, sequence, frequency set, and interval list are each bounded
+    before deriving work: sequence length, frequency count, interval count,
+    their product, total term visits, prefix-table and rank-linear
+    dot-product work, retained source coordinates, cyclotomic degree and
+    construction costs, and coefficient growth. Rank has no fixed ceiling;
+    it enters those derived budgets linearly. The sequence retains order and
+    repetitions and is normalized coordinate-wise modulo the declared moduli;
+    frequencies are reduced modulo the moduli, deduplicated, and sorted
+    lexicographically; intervals are distinct half-open index pairs
+    ``[a, b)`` within the sequence and are sorted lexicographically. This
+    canonicalization retains the labelling order while giving the profile a
+    single source representation.
+    """
+
+    group: FiniteAbelianProductGroup
+    sequence: tuple[BoundedGroupElement, ...] = Field(
+        min_length=1,
+        max_length=MAX_CHARACTER_SUM_SEQUENCE_LENGTH,
+    )
+    frequencies: tuple[BoundedGroupElement, ...] = Field(
+        min_length=1,
+        max_length=MAX_CHARACTER_SUM_CELLS,
+    )
+    intervals: tuple[BoundedCharacterSumInterval, ...] = Field(
+        min_length=1,
+        max_length=MAX_CHARACTER_SUM_INTERVALS,
+    )
+
+    @model_validator(mode="after")
+    def canonicalize_source(self) -> Self:
+        rank = len(self.group.moduli)
+
+        if any(len(row) != rank for row in self.sequence):
+            raise _validation_error(
+                "sequence_row_rank", "every sequence row must match the group rank"
+            )
+        canonical_sequence: tuple[tuple[int, ...], ...] = tuple(
+            tuple(
+                int(coordinate) % int(modulus)
+                for coordinate, modulus in zip(row, self.group.moduli, strict=True)
+            )
+            for row in self.sequence
+        )
+
+        if any(len(row) != rank for row in self.frequencies):
+            raise _validation_error(
+                "frequency_row_rank", "every frequency row must match the group rank"
+            )
+        normalized_frequencies = tuple(
+            tuple(
+                int(coordinate) % int(modulus)
+                for coordinate, modulus in zip(row, self.group.moduli, strict=True)
+            )
+            for row in self.frequencies
+        )
+        if len(set(normalized_frequencies)) != len(normalized_frequencies):
+            raise _validation_error(
+                "frequency_duplicate_row",
+                "frequency rows must be distinct after residue normalization",
+            )
+        canonical_frequencies = tuple(sorted(normalized_frequencies))
+
+        sequence_length = len(canonical_sequence)
+        if any(len(interval) != 2 for interval in self.intervals):
+            raise _validation_error(
+                "interval_shape", "every interval must be a half-open pair [a, b)"
+            )
+        canonical_intervals: tuple[tuple[int, int], ...] = tuple(
+            (int(a), int(b)) for a, b in self.intervals
+        )
+        if len(set(canonical_intervals)) != len(canonical_intervals):
+            raise _validation_error(
+                "interval_duplicate",
+                "intervals must be distinct",
+            )
+        for a, b in canonical_intervals:
+            if not (0 <= a <= b <= sequence_length):
+                raise _validation_error(
+                    "interval_bounds",
+                    "every interval must satisfy 0 <= a <= b <= len(sequence)",
+                )
+        canonical_intervals = tuple(sorted(canonical_intervals))
+
+        object.__setattr__(self, "sequence", canonical_sequence)
+        object.__setattr__(self, "frequencies", canonical_frequencies)
+        object.__setattr__(self, "intervals", canonical_intervals)
+        return self
+
+
+class FiniteAbelianCharacterSumIntervalProfileRequest(StrictModel):
+    """Compute every exact character sum on requested labelled intervals."""
+
+    source: FiniteAbelianCharacterSumIntervalProfileSource
+
+
+class FiniteAbelianCharacterSumCell(StrictModel):
+    """One exact character sum as a dense cyclotomic remainder.
+
+    ``remainder_coefficients[k]`` is the coefficient of ``X^k`` in the
+    remainder of the interval character-sum polynomial modulo the
+    group-exponent cyclotomic polynomial. The tuple has length ``phi(N)``
+    and is zero exactly for vanishing sums. The fixed pairing is
+    ``chi_lambda(a) = exp(2*pi*i*sum(lambda_j*a_j/m_j))`` with
+    ``N = lcm(m_j)`` and ``chi_lambda(x_t) = zeta_N^{sum (N/m_j) lambda_j x_{t,j}}``.
+    """
+
+    frequency: CanonicalGroupElement = Field(min_length=1)
+    interval: tuple[StrictInt, StrictInt]
+    remainder_coefficients: tuple[BoundedRemainderInteger, ...] = Field(
+        min_length=1,
+        max_length=MAX_CHARACTER_SUM_CYCLOTOMIC_DEGREE,
+    )
+
+    @model_validator(mode="after")
+    def require_bounded_remainder(self) -> Self:
+        if any(
+            len(coefficient.lstrip("-"))
+            > MAX_CHARACTER_SUM_REMAINDER_COEFFICIENT_DIGITS
+            for coefficient in self.remainder_coefficients
+        ):
+            raise _validation_error(
+                "remainder_digit_bound",
+                "character-sum cyclotomic remainder coefficient exceeds its digit bound",
+            )
+        return self
+
+
+class FiniteAbelianCharacterSumIntervalProfileResult(StrictModel):
+    """Complete exact character-sum table indexed by frequency and interval.
+
+    For each caller-selected frequency ``lambda`` and half-open index interval
+    ``[a, b)``, the corresponding ``FiniteAbelianCharacterSumCell`` stores the
+    exact cyclotomic remainder of ``S(lambda; a,b)=sum_{a<=t<b} chi_lambda(x_t)``.
+    The table is complete for the Cartesian product of the supplied axes and
+    preserves order (frequencies in lexicographic order, intervals in
+    lexicographic order) and zero values. Every coefficient vector is the
+    remainder of the integer character-sum polynomial modulo ``Phi_N`` with
+    ``N`` the group exponent.
+    """
+
+    source: FiniteAbelianCharacterSumIntervalProfileSource
+    group_exponent: StrictInt = Field(ge=2)
+    cyclotomic_degree: StrictInt = Field(ge=1, le=MAX_CHARACTER_SUM_CYCLOTOMIC_DEGREE)
+    character_convention: Literal["POSITIVE_PRODUCT_DUAL_PAIRING"] = (
+        "POSITIVE_PRODUCT_DUAL_PAIRING"
+    )
+    sums: tuple[FiniteAbelianCharacterSumCell, ...] = Field(
+        min_length=1,
+        max_length=MAX_CHARACTER_SUM_CELLS,
+    )
+
+    @field_validator("sums", mode="before")
+    @classmethod
+    def bound_raw_cells(cls, value: object) -> object:
+        if isinstance(value, (list, tuple)) and len(value) > MAX_CHARACTER_SUM_CELLS:
+            raise _validation_error(
+                "cell_count_bound",
+                "character-sum profile has at most 4,096 cells",
+            )
+        return tuple(value) if isinstance(value, list) else value
+
+    @model_validator(mode="after")
+    def bind_profile(self) -> Self:
+        exponent = self.source.group.exponent
+        if self.group_exponent != exponent:
+            raise _validation_error(
+                "group_exponent_mismatch",
+                "group_exponent must equal the lcm of the source group moduli",
+            )
+        # Bind the kernel-declared degree structurally. Totient factorization
+        # belongs to admission, not result parsing of untrusted payloads.
+        degree = self.cyclotomic_degree
+        if degree >= exponent:
+            raise _validation_error(
+                "cyclotomic_degree_bound",
+                "cyclotomic_degree must be strictly less than group_exponent",
+            )
+        expected_cells = len(self.source.frequencies) * len(self.source.intervals)
+        if len(self.sums) != expected_cells:
+            raise _validation_error(
+                "cell_count",
+                "sums must cover the complete frequency-interval product",
+            )
+        if any(len(cell.remainder_coefficients) != degree for cell in self.sums):
+            raise _validation_error(
+                "remainder_length",
+                "every cell remainder must have length cyclotomic_degree",
+            )
+        # Cheap shape checks on source binding; defining invariant (exact
+        # remainder equality with term-by-term accumulator) is established by
+        # the admitted kernel and tested, not replayed here.
+        seen: set[tuple[tuple[int, ...], tuple[int, int]]] = set()
+        expected: list[tuple[tuple[int, ...], tuple[int, int]]] = []
+        for frequency in self.source.frequencies:
+            for interval in self.source.intervals:
+                expected.append((frequency, interval))
+        for cell, (exp_freq, exp_interval) in zip(self.sums, expected, strict=True):
+            if cell.frequency != exp_freq or tuple(cell.interval) != tuple(
+                exp_interval
+            ):
+                raise _validation_error(
+                    "cell_order",
+                    "sums must be ordered frequency-major then interval-minor matching the source",
+                )
+            key = (cell.frequency, tuple(cell.interval))
+            if key in seen:
+                raise _validation_error(
+                    "duplicate_cell",
+                    "profile cells must be unique by frequency and interval",
+                )
+            seen.add(key)  # type: ignore[arg-type]
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        source: FiniteAbelianCharacterSumIntervalProfileSource,
+        sums: tuple[FiniteAbelianCharacterSumCell, ...],
+        *,
+        group_exponent: int,
+        cyclotomic_degree: int,
+    ) -> Self:
+        """Build a result after the admitted kernel established every remainder."""
+
+        return cls.model_construct(
+            source=source,
+            group_exponent=group_exponent,
+            cyclotomic_degree=cyclotomic_degree,
+            character_convention="POSITIVE_PRODUCT_DUAL_PAIRING",
+            sums=sums,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class _CharacterSumIntervalProfileWork:
+    group_exponent: int
+    cyclotomic_degree: int
+    cells: int
+    total_visits: int
+    prefix_work: int
+    cyclotomic_dense_ops: int
+    cyclotomic_coefficient_bits: int
+    cyclotomic_intermediate_bits: int
+    remainder_coefficient_bits: int
+
+
+def _character_sum_interval_profile_work(
+    source: FiniteAbelianCharacterSumIntervalProfileSource,
+) -> _CharacterSumIntervalProfileWork:
+    """Preflight exact work, intermediate growth, and output obligations.
+
+    The envelope separates representation caps (Pydantic ``max_length`` on
+    sequence, frequencies, intervals) from derived mathematical work:
+    cyclotomic degree and construction costs, frequency-interval cells, total
+    character-term visits, rank-linear dot-product and retained-source work,
+    prefix-table assembly, and coefficient growth after monic reduction.
+    Rank has no fixed ceiling. Every check occurs before SymPy is invoked.
+    Budgets are conservative over-approximations matching the spectral-pair
+    construction analysis.
+    """
+
+    sequence_length = len(source.sequence)
+    frequency_count = len(source.frequencies)
+    interval_count = len(source.intervals)
+    rank = len(source.group.moduli)
+
+    if sequence_length > MAX_CHARACTER_SUM_SEQUENCE_LENGTH:
+        raise ValueError("character-sum sequence length exceeds its bound")
+    if interval_count > MAX_CHARACTER_SUM_INTERVALS:
+        raise ValueError("character-sum interval count exceeds its bound")
+
+    exponent = source.group.exponent
+    cyclotomic_dense_ops = 10 * exponent.bit_length() * (exponent + 1) * (exponent + 1)
+    cyclotomic_intermediate_bits = 2 * exponent + (exponent + 1).bit_length() + 1
+    if cyclotomic_dense_ops > MAX_CHARACTER_SUM_CYCLOTOMIC_DENSE_OPS:
+        raise ValueError(
+            "character-sum cyclotomic construction work exceeds its dense-op bound"
+        )
+    if cyclotomic_intermediate_bits > MAX_CHARACTER_SUM_CYCLOTOMIC_INTERMEDIATE_BITS:
+        raise ValueError(
+            "character-sum cyclotomic construction intermediate exceeds its bit bound"
+        )
+
+    degree = _euler_totient(exponent)
+    if degree > MAX_CHARACTER_SUM_CYCLOTOMIC_DEGREE:
+        raise ValueError(
+            "character-sum cyclotomic degree exceeds the exact reduction bound"
+        )
+    if degree > MAX_CHARACTER_SUM_CYCLOTOMIC_COEFFICIENT_BITS - 1:
+        raise ValueError("character-sum cyclotomic coefficient exceeds its bit bound")
+
+    cells = frequency_count * interval_count
+    if cells > MAX_CHARACTER_SUM_CELLS:
+        raise ValueError("character-sum frequency-interval cells exceed their bound")
+    if cells == 0:
+        raise ValueError("character-sum profile requires at least one cell")
+    if cells * rank > MAX_CHARACTER_SUM_PREFIX_WORK:
+        raise ValueError(
+            "character-sum result frequency coordinates exceed their bound"
+        )
+
+    total_interval_length = sum(b - a for a, b in source.intervals)
+    total_visits = frequency_count * total_interval_length
+    if total_visits > MAX_CHARACTER_SUM_TOTAL_VISITS:
+        raise ValueError("character-sum total term visits exceed their bound")
+
+    retained_source_work = rank * (sequence_length + frequency_count)
+    if retained_source_work > MAX_CHARACTER_SUM_PREFIX_WORK:
+        raise ValueError("character-sum retained source coordinates exceed their bound")
+    prefix_work = frequency_count * sequence_length * rank + cells * degree
+    if prefix_work > MAX_CHARACTER_SUM_PREFIX_WORK:
+        raise ValueError("character-sum prefix-table work exceeds its bound")
+
+    max_interval_length = max((b - a for a, b in source.intervals), default=0)
+    remainder_coefficient_bits = max_interval_length.bit_length() + (degree + 1) * (
+        exponent - degree
+    )
+    if remainder_coefficient_bits > MAX_CHARACTER_SUM_REMAINDER_COEFFICIENT_BITS:
+        raise ValueError("character-sum remainder intermediate exceeds its bit bound")
+
+    return _CharacterSumIntervalProfileWork(
+        group_exponent=exponent,
+        cyclotomic_degree=degree,
+        cells=cells,
+        total_visits=total_visits,
+        prefix_work=prefix_work,
+        cyclotomic_dense_ops=cyclotomic_dense_ops,
+        cyclotomic_coefficient_bits=degree + 1,
+        cyclotomic_intermediate_bits=cyclotomic_intermediate_bits,
+        remainder_coefficient_bits=remainder_coefficient_bits,
+    )
+
+
+def _character_sum_execution_deadline() -> float:
+    """Bind one owner deadline measured from the original request start."""
+
+    execution = current_request_execution()
+    started_at = execution.started_at if execution is not None else monotonic()
+    owner_deadline = started_at + CHARACTER_SUM_INTERVAL_PROFILE_WALL_SECONDS
+    deadline = (
+        min(owner_deadline, execution.deadline)
+        if execution is not None and execution.deadline is not None
+        else owner_deadline
+    )
+    bind_request_deadline(deadline)
+    return deadline
+
+
+def _finite_abelian_character_sum_interval_profile_data(
+    source: FiniteAbelianCharacterSumIntervalProfileSource,
+) -> tuple[_CharacterSumIntervalProfileWork, tuple[FiniteAbelianCharacterSumCell, ...]]:
+    """Compute all exact interval remainders after admission."""
+
+    request_checkpoint("before character-sum admission")
+    work = _character_sum_interval_profile_work(source)
+    request_checkpoint("after character-sum admission")
+    degree = work.cyclotomic_degree
+    exponent = work.group_exponent
+
+    from sympy import Poly, Symbol, cyclotomic_poly
+    from sympy.polys.domains import ZZ
+
+    generator = Symbol("_finite_abelian_character")
+    cyclotomic = cast(
+        "Poly",
+        cyclotomic_poly(exponent, generator, polys=True),
+    )
+    if cyclotomic.domain != ZZ or cyclotomic.LC() != 1 or cyclotomic.degree() != degree:
+        raise RuntimeError("SymPy returned an incompatible cyclotomic polynomial")
+
+    # Precompute powers of zeta_N for each frequency across the labelled sequence.
+    # power[t, lambda] = sum_j (N/m_j) * lambda_j * x_{t,j} mod N.
+    moduli = source.group.moduli
+    # Cache N//m_j to avoid repeated division.
+    scale = tuple(exponent // int(modulus) for modulus in moduli)
+    powers_by_frequency: list[list[int]] = []
+    for frequency in source.frequencies:
+        request_checkpoint("character-sum frequency powers")
+        row: list[int] = []
+        for element in source.sequence:
+            power = (
+                sum(
+                    int(s) * int(lam) * int(coord)
+                    for s, lam, coord in zip(scale, frequency, element, strict=True)
+                )
+                % exponent
+            )
+            row.append(power)
+        powers_by_frequency.append(row)
+
+    cells: list[FiniteAbelianCharacterSumCell] = []
+    for freq_index, frequency in enumerate(source.frequencies):
+        powers = powers_by_frequency[freq_index]
+        for a, b in source.intervals:
+            request_checkpoint("character-sum cell remainder")
+            a_int = int(a)
+            b_int = int(b)
+            interval_powers = powers[a_int:b_int]
+            if not interval_powers:
+                coefficients = tuple(format_canonical_integer(0) for _ in range(degree))
+            else:
+                counts: Counter[int] = Counter(interval_powers)
+                polynomial = Poly.from_dict(
+                    {(int(power),): int(coeff) for power, coeff in counts.items()},
+                    generator,
+                    domain=ZZ,
+                )
+                remainder = polynomial.rem(cyclotomic, auto=False)
+                coefficients = tuple(
+                    format_canonical_integer(int(remainder.nth(power)))
+                    for power in range(degree)
+                )
+            cells.append(
+                FiniteAbelianCharacterSumCell(
+                    frequency=frequency,
+                    interval=(a_int, b_int),
+                    remainder_coefficients=coefficients,
+                )
+            )
+
+    return work, tuple(cells)
+
+
+def compute_finite_abelian_character_sum_interval_profile(
+    source: FiniteAbelianCharacterSumIntervalProfileSource,
+) -> FiniteAbelianCharacterSumIntervalProfileResult:
+    """Return every exact character sum on the requested intervals."""
+
+    if current_request_execution() is None:
+        with request_execution(monotonic()):
+            return compute_finite_abelian_character_sum_interval_profile(source)
+
+    _character_sum_execution_deadline()
+    try:
+        work, cells = _finite_abelian_character_sum_interval_profile_data(source)
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="finite_abelian_group.character_sum_not_admitted",
+            message=str(exc),
+        ) from exc
+    request_checkpoint("after character-sum result")
+    return FiniteAbelianCharacterSumIntervalProfileResult._from_kernel(
+        source,
+        cells,
+        group_exponent=work.group_exponent,
+        cyclotomic_degree=work.cyclotomic_degree,
+    )
 
 
 class FiniteAbelianRepresentationCount(StrictModel):
@@ -837,6 +1334,10 @@ def finite_abelian_group_factorization(
 
 
 __all__ = [
+    "FiniteAbelianCharacterSumCell",
+    "FiniteAbelianCharacterSumIntervalProfileRequest",
+    "FiniteAbelianCharacterSumIntervalProfileResult",
+    "FiniteAbelianCharacterSumIntervalProfileSource",
     "FiniteAbelianGroupFactorizationResult",
     "FiniteAbelianNonorthogonalityWitness",
     "FiniteAbelianProductGroup",
@@ -844,6 +1345,7 @@ __all__ = [
     "FiniteAbelianRepresentationWitness",
     "FiniteAbelianSpectralPairResult",
     "FiniteAbelianSpectralPairSource",
+    "compute_finite_abelian_character_sum_interval_profile",
     "decide_finite_abelian_spectral_pair",
     "finite_abelian_group_factorization",
 ]

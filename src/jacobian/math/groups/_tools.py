@@ -27,6 +27,8 @@ from jacobian.math.groups._models import (
     PermutationGroup,
 )
 from jacobian.math.groups.finite_abelian import (
+    FiniteAbelianCharacterSumIntervalProfileRequest,
+    FiniteAbelianCharacterSumIntervalProfileResult,
     FiniteAbelianGroupFactorizationRequest,
     FiniteAbelianGroupFactorizationResult,
     FiniteAbelianProductGroup,
@@ -34,6 +36,9 @@ from jacobian.math.groups.finite_abelian import (
     FiniteAbelianSpectralPairResult,
     decide_finite_abelian_spectral_pair,
     finite_abelian_group_factorization,
+)
+from jacobian.math.groups.finite_abelian import (
+    compute_finite_abelian_character_sum_interval_profile as native_character_sum_interval_profile,
 )
 
 
@@ -55,6 +60,21 @@ def compute_finite_abelian_spectral_pair(
     request: FiniteAbelianSpectralPairRequest,
 ) -> FiniteAbelianSpectralPairResult:
     return decide_finite_abelian_spectral_pair(request.source)
+
+
+def compute_finite_abelian_character_sum_interval_profile(
+    request: FiniteAbelianCharacterSumIntervalProfileRequest,
+) -> FiniteAbelianCharacterSumIntervalProfileResult:
+    try:
+        return native_character_sum_interval_profile(request.source)
+    except OperationDomainValidationError:
+        raise
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="finite_abelian_group.character_sum_not_admitted",
+            message=str(exc),
+        ) from exc
 
 
 def compute_group_order(request: PermutationGroup) -> GroupOrderResult:
@@ -171,6 +191,43 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "group": {"moduli": [4]},
                         "points": [[0], [2]],
                         "frequencies": [[0], [1]],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="finite_abelian_group.character_sum_interval_profile.compute",
+        title="Compute exact finite-Abelian character sums on labelled intervals",
+        description="For one explicit finite sequence of elements of a finite product "
+        "of cyclic groups, a duplicate-free frequency set, and a duplicate-free list "
+        "of half-open index intervals [a,b), return every exact character sum "
+        "S(lambda;a,b)=sum_{a<=t<b} chi_lambda(x_t) as a canonical dense remainder "
+        "modulo the group-exponent cyclotomic polynomial. The pairing is the "
+        "positive product dual pairing chi_lambda(a)=exp(2*pi*i*sum lambda_j a_j/m_j). "
+        "The sequence order and repetitions are retained; each frequency-interval "
+        "cell is reduced modulo Phi_N with N=lcm(m_j) and zero is the all-zero remainder.",
+        request_type=FiniteAbelianCharacterSumIntervalProfileRequest,
+        result_type=FiniteAbelianCharacterSumIntervalProfileResult,
+        run=compute_finite_abelian_character_sum_interval_profile,
+        tags=(
+            "harmonic-analysis",
+            "finite-abelian-group",
+            "character-sum",
+            "interval",
+            "cyclotomic",
+            "exact",
+        ),
+        examples=(
+            OperationExample(
+                name="z4_labelled_sequence_two_intervals",
+                description="Exact sums for G=Z/4, labelled sequence (0,1,2,3), frequencies 0 and 1, intervals [0,4) and [1,3); the second interval separates the labelled sums from a set transform.",
+                input={
+                    "source": {
+                        "group": {"moduli": [4]},
+                        "sequence": [[0], [1], [2], [3]],
+                        "frequencies": [[0], [1]],
+                        "intervals": [[0, 4], [1, 3]],
                     }
                 },
             ),

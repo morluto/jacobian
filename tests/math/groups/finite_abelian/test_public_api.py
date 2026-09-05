@@ -8,6 +8,10 @@ from jacobian.math.groups import finite_abelian as finite_abelian_groups
 def test_exact_public_api_symbols() -> None:
     """Exact owner-local contract for the finite_abelian_groups public API."""
     expected = (
+        "FiniteAbelianCharacterSumCell",
+        "FiniteAbelianCharacterSumIntervalProfileRequest",
+        "FiniteAbelianCharacterSumIntervalProfileResult",
+        "FiniteAbelianCharacterSumIntervalProfileSource",
         "FiniteAbelianGroupFactorizationResult",
         "FiniteAbelianNonorthogonalityWitness",
         "FiniteAbelianProductGroup",
@@ -15,6 +19,7 @@ def test_exact_public_api_symbols() -> None:
         "FiniteAbelianRepresentationWitness",
         "FiniteAbelianSpectralPairResult",
         "FiniteAbelianSpectralPairSource",
+        "compute_finite_abelian_character_sum_interval_profile",
         "decide_finite_abelian_spectral_pair",
         "finite_abelian_group_factorization",
     )

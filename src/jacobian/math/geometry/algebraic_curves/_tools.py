@@ -276,14 +276,14 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                             {
                                 "coefficient": {
                                     "real": {"num": "1", "den": "1"},
-                                    "imag": {"num": "0", "den": "1"},
+                                    "imaginary": {"num": "0", "den": "1"},
                                 },
                                 "exponent": 2,
                             },
                             {
                                 "coefficient": {
                                     "real": {"num": "-1", "den": "1"},
-                                    "imag": {"num": "-1", "den": "1"},
+                                    "imaginary": {"num": "-1", "den": "1"},
                                 },
                                 "exponent": 0,
                             },

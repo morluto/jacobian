@@ -223,7 +223,7 @@ def test_admission_bounds_each_component_before_expansion():
         variable="z",
         terms=tuple(_term("1", "1", degree) for degree in range(64, 59, -1)),
     )
-    with pytest.raises(Exception, match="each realification component"):
+    with pytest.raises(Exception, match="realification component"):
         gaussian_realification(polynomial, ("x", "y"))
 
 

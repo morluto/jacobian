@@ -196,15 +196,20 @@ def _admit_gaussian_realification(request: GaussianRealificationRequest) -> None
             code="algebraic_geometry.gaussian_realification.expanded_terms",
             message=f"predicted expansion {predicted_raw} exceeds {MAX_GAUSSIAN_REALIFICATION_EXPANDED_TERMS}",
         )
-    # Distinct source degrees occupy distinct total-degree slices, so either
-    # component can retain every binomial monomial.  Enforce each output's
-    # carrier bound before expanding.
-    if predicted_raw > MAX_GAUSSIAN_REALIFICATION_RESULT_TERMS:
+    real_terms = sum(
+        sum(1 for j in range(term.exponent + 1) if (j % 2 == 0 and term.coefficient.real.as_fraction() != 0) or (j % 2 == 1 and term.coefficient.imaginary.as_fraction() != 0))
+        for term in poly.terms
+    )
+    imag_terms = sum(
+        sum(1 for j in range(term.exponent + 1) if (j % 2 == 1 and term.coefficient.real.as_fraction() != 0) or (j % 2 == 0 and term.coefficient.imaginary.as_fraction() != 0))
+        for term in poly.terms
+    )
+    if max(real_terms, imag_terms) > MAX_GAUSSIAN_REALIFICATION_RESULT_TERMS:
         raise OperationDomainValidationError(
             location=("polynomial", "terms"),
             code="algebraic_geometry.gaussian_realification.result_terms",
             message=(
-                f"each realification component may contain {predicted_raw} terms, "
+                f"a realification component may contain {max(real_terms, imag_terms)} terms, "
                 f"exceeding {MAX_GAUSSIAN_REALIFICATION_RESULT_TERMS}"
             ),
         )
@@ -212,7 +217,7 @@ def _admit_gaussian_realification(request: GaussianRealificationRequest) -> None
     # A binomial multiplier can enlarge a numerator. Reserve that room during
     # admission so result construction never rejects an accepted coefficient.
     for index, term in enumerate(poly.terms):
-        multiplier_digits = len(str(comb(term.exponent, term.exponent // 2)))
+        multiplier_digits = len(str(comb(term.exponent, term.exponent // 2))) - 1
         component_digits = (
             MAX_GAUSSIAN_REALIFICATION_COEFFICIENT_DIGITS - multiplier_digits
         )

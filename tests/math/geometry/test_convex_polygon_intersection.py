@@ -6,9 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry._convex_polygon_intersection import (
-    ConvexPolygonIntersectionRequest,
     ConvexRationalPolygon,
     convex_polygon_intersection,
 )
@@ -105,7 +103,6 @@ def test_defining_invariant_half_plane_containment():
     result = convex_polygon_intersection(a, b)
     assert result.kind == "POLYGON"
     # Every output vertex must be inside both polygons (including boundary)
-    from fractions import Fraction
 
     def point_in_convex(pt: RationalPoint2D, poly: ConvexRationalPolygon) -> bool:
         p = (pt.x.as_fraction(), pt.y.as_fraction())
@@ -128,12 +125,12 @@ def test_defining_invariant_half_plane_containment():
 
 def test_rejects_non_convex_or_collinear():
     # Collinear consecutive triple
-    with pytest.raises(ValidationError, match="strict.*CCW|collinear"):
+    with pytest.raises(ValidationError, match=r"strict.*CCW|collinear"):
         ConvexRationalPolygon(
             vertices=(_pt("0", "0"), _pt("1", "0"), _pt("2", "0"), _pt("1", "1"))
         )
     # Not CCW (clockwise)
-    with pytest.raises(ValidationError, match="strict.*CCW"):
+    with pytest.raises(ValidationError, match=r"strict.*CCW"):
         ConvexRationalPolygon(
             vertices=(_pt("0", "0"), _pt("0", "2"), _pt("2", "2"), _pt("2", "0"))
         )

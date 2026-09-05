@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from fractions import Fraction
 from itertools import combinations
 
@@ -21,22 +22,26 @@ from jacobian.math.graphs.signed_clique_weight.operations import (
 )
 
 
-def _edge(a: str, b: str, w: int) -> RationalWeightedEdge:
+def _edge(a: str, b: str, w: int | Fraction) -> RationalWeightedEdge:
     return RationalWeightedEdge(
         endpoints=(a, b) if a < b else (b, a),
         weight=CanonicalRational.from_fraction(Fraction(w)),
     )
 
 
-def _graph(vertices, specs) -> RationalWeightedGraph:
+def _graph(
+    vertices: Sequence[str], specs: Sequence[tuple[str, str, int | Fraction]]
+) -> RationalWeightedGraph:
     return RationalWeightedGraph(
         vertices=tuple(vertices),
         edges=tuple(_edge(a, b, w) for a, b, w in specs),
     )
 
 
-def _brute_force(graph: RationalWeightedGraph):
-    adjacency = {vertex: set() for vertex in graph.vertices}
+def _brute_force(
+    graph: RationalWeightedGraph,
+) -> tuple[Fraction | int, tuple[str, ...]] | None:
+    adjacency: dict[str, set[str]] = {vertex: set() for vertex in graph.vertices}
     weight_of = {}
     for edge in graph.edges:
         left, right = edge.endpoints
@@ -145,3 +150,51 @@ class TestSignedCliqueWeight:
                     "clique": ("a",),
                 }
             )
+
+
+def test_five_overlapping_blocks_public_operation() -> None:
+    from jacobian.math.graphs.signed_clique_weight._tools import TOOLS
+
+    vertices = ["z"]
+    specs: list[tuple[str, str, int | Fraction]] = []
+    for t in range(5):
+        block = ["z", f"a{t}", f"b{t}", f"u{t}", f"v{t}"]
+        vertices.extend(block[1:])
+        for i, j in combinations(range(5), 2):
+            if (i, j) != (3, 4):
+                specs.append((block[i], block[j], Fraction(2 if j >= 3 else -1, 3)))
+    graph = _graph(vertices, specs)
+    tool = TOOLS[0]
+    result = tool.run(tool.request_type.model_validate({"graph": graph.model_dump()}))
+    assert result.optimum_value.as_fraction() == 1
+    assert result.clique == ("a0", "b0", "u0")
+
+
+@pytest.mark.parametrize("weight", [-2, 0, 3])
+def test_overlapping_blocks_and_bridges_match_subsets(weight: int) -> None:
+    graph = _graph(
+        ["z", "b", "a", "e", "d", "c", "isolated"],
+        [
+            ("z", "a", weight),
+            ("a", "b", -1),
+            ("b", "z", 2),
+            ("b", "c", weight),
+            ("c", "d", -3),
+            ("d", "e", weight),
+            ("e", "c", -1),
+        ],
+    )
+    result = signed_clique_weight_maximum(graph)
+    assert result.optimum_value is not None
+    assert (result.optimum_value.as_fraction(), result.clique) == _brute_force(graph)
+
+
+def test_large_biconnected_block_rejected() -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    vertices = [str(i) for i in range(21)]
+    graph = _graph(
+        vertices, [(vertices[i], vertices[(i + 1) % 21], 1) for i in range(21)]
+    )
+    with pytest.raises(OperationDomainValidationError, match="exhaustive"):
+        signed_clique_weight_maximum(graph)

@@ -91,8 +91,8 @@ def signed_clique_weight_maximum(
 ) -> SignedCliqueWeightResult:
     """Return the maximum signed edge-weight over cliques of order >= 2.
 
-    Every nontrivial clique lies inside one connected component, so each
-    component contributes its own optimum and the best (value, witness)
+    Every nontrivial clique lies inside one biconnected block, so each
+    block contributes its own optimum and the best (value, witness)
     pair wins globally. Graphs without edges report a missing optimum
     explicitly.
     """

@@ -227,7 +227,7 @@ class PrimeFieldVectorConfiguration(StrictModel):
             label="prime-field vector configuration",
         )
         _require_raw_envelope({"candidates": data})
-        return _canonicalize_or_fail(data)
+        return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_prime_and_labels(self) -> Self:
@@ -296,7 +296,7 @@ class PrimeFieldFlatSymmetryGenerator(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def canonicalize_containers(cls, data: object) -> object:
-        return _canonicalize_or_fail(data)
+        return canonicalize_json_containers(data)
 
 
 class ClauseConstrainedPrimeFieldFlatProblem(StrictModel):
@@ -334,7 +334,7 @@ class ClauseConstrainedPrimeFieldFlatProblem(StrictModel):
             label="prime-field-flat problem",
         )
         _require_raw_envelope(data)
-        return _canonicalize_or_fail(data)
+        return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_source_bound_problem(self) -> Self:

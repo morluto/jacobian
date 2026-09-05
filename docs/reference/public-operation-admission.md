@@ -64,7 +64,9 @@ global geometry or PDE workflow is not thereby defined.
 Keep the public mathematical postcondition as broad as its semantics permit.
 An implementation or backend limit describes the current admitted execution
 envelope; it does not redefine the mathematical objects to which the operation
-applies. Before adopting a small fixed input cap, complete this review:
+applies. **Scale first:** investigate how to execute the motivating valid
+workload before restricting admission. This applies to derived work, height,
+and storage estimates as well as fixed input caps. Complete this review:
 
 1. Identify the quantities that control work, intermediate growth, and exact
    output. Use quantities such as operand digits, coefficient height, degree,
@@ -93,9 +95,11 @@ applies. Before adopting a small fixed input cap, complete this review:
 6. Define request admission from the selected algorithm's work,
    intermediate, memory, and result bounds. Large scalar inputs should remain
    admissible when those derived quantities and the returned value are small.
-7. Document any remaining fixed ceiling as a conservative fallback. State
-   whether it is a mathematical, representation, backend, or currently
-   uninvestigated limit, and identify the evidence needed to raise it.
+7. Retain a restrictive ceiling only after investigating sharper bounds,
+   exact reductions, representations, algorithms, and maintained backends.
+   Document the remaining bottleneck, the approaches tried, and the evidence
+   needed to raise it. Calling a limit "conservative" or "uninvestigated"
+   does not discharge that investigation or complete a scale fix.
 8. Test accepted and rejected boundaries, algorithm or representation
    crossover points, and realistic source-backed cases. Exercise at least one
    motivating request through the final public boundary. Boundary-rejection
@@ -119,6 +123,22 @@ branches may also be too coarse for the intended workload even when it is
 mathematically valid. Improve the analysis, presolve, or algorithm when needed;
 a compact answer alone does not prove bounded runtime, and increasing a digit
 cap does not repair an estimate that grows needlessly at every step.
+
+When changing admission, freeze the motivating rejected input and compare the
+estimate with a bounded diagnostic execution of the selected kernel. Record
+the reduced problem, measured work or time, available intermediate/output
+sizes, and an independent defining-invariant check. Keep measurements distinct
+from proved bounds; a returned transform's size, for example, does not measure
+every intermediate used to obtain it. A cheap correct execution disproves the
+claim that rejection is a necessary practical limit, even though it does not
+prove a safe envelope for the whole domain.
+
+Such a case is an admission-precision regression: improve the analysis or
+kernel and require the final public operation to accept it. Do not special-case
+the fixture, raise constants without a justified analysis, or change the test
+to expect resource rejection. If no sound scalable repair is established,
+report the work as incomplete with the remaining limitation and attempted
+approaches; a safer rejection is not the requested scale improvement.
 
 A timeout, cancellation, resource exhaustion, or backend `UNKNOWN` result is
 an execution outcome, never a negative mathematical conclusion. If the public

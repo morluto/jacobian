@@ -276,13 +276,17 @@ class HypergraphIndependenceRequest(StrictModel):
     """One finite hypergraph and its operation-owned exact-search budget.
 
     Hyperedges must be nonempty. The source carrier has its own representation
-    envelope; this operation independently admits only Boolean encodings of at
-    most 100 vertices and 10,000 incidences before invoking the private backend.
+    envelope. Sources whose singleton-forbidden vertices hit every edge are
+    solved directly throughout that envelope, including edgeless sources.
+    Other sources admit Boolean encodings of at most 100 vertices and 10,000
+    incidences before invoking the private backend.
     """
 
     hypergraph: FiniteHypergraph = Field(
         description=(
-            "Canonical finite hypergraph. The Z3 threshold search separately "
+            "Canonical finite hypergraph. Edgeless sources and sources whose "
+            "singleton-forbidden vertices hit every edge are solved directly "
+            "throughout the carrier envelope. The Z3 threshold search separately "
             f"admits at most {MAX_HYPERGRAPH_INDEPENDENCE_VERTICES} vertices "
             f"and {MAX_HYPERGRAPH_INDEPENDENCE_INCIDENCES} incidences."
         )

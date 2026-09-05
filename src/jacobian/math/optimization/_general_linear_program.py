@@ -6,7 +6,7 @@ from fractions import Fraction
 from typing import NoReturn
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.optimization._arithmetic import rational_dot
 from jacobian.math.optimization._general_models import (
     MAX_GENERAL_RATIONAL_INPUT_DIGITS,
@@ -21,18 +21,21 @@ from jacobian.math.optimization._general_normalization import (
     _mapped_residual_digit_bound,
     admit_general_normalization,
 )
+from jacobian.math.optimization._linear_basis import (
+    admit_linear_program,
+    linear_execution,
+)
 from jacobian.math.optimization._models import RationalLinearProgramResult
 
 _INTERVAL_RESULT_DIGITS = 4 * MAX_GENERAL_RATIONAL_INPUT_DIGITS + 1
 
 
 def _wire(value: Fraction, *, max_digits: int) -> CanonicalRational | None:
-    if (
-        len(str(abs(value.numerator))) > max_digits
-        or len(str(value.denominator)) > max_digits
-    ):
+    numerator = format_canonical_integer(value.numerator)
+    denominator = format_canonical_integer(value.denominator)
+    if len(numerator.lstrip("-")) > max_digits or len(denominator) > max_digits:
         return None
-    return CanonicalRational.from_fraction(value)
+    return CanonicalRational(num=numerator, den=denominator)
 
 
 def _wire_vector(
@@ -714,33 +717,40 @@ def _box_program_result(
     )
 
 
-def general_linear_program(
+def _general_linear_program(
     program: GeneralFormRationalLinearProgram,
 ) -> GeneralRationalLinearProgramResult:
-    from jacobian.math.optimization.operations import linear_program
+    from jacobian.math.optimization.operations import _linear_program_admitted
 
     if (box_result := _box_program_result(program)) is not None:
         return box_result
     if (presolved := _one_variable_interval_result(program)) is not None:
         return presolved
 
-    try:
-        normalization = admit_general_normalization(program)
-    except ValueError as error:
-        raise OperationDomainValidationError(
-            location=("program",),
-            code="optimization.linear.general_normalization_admission",
-            message=str(error),
-        ) from error
-    standard_result = linear_program(normalization.standard_program)
+    normalization = admit_general_normalization(program)
+    admission = admit_linear_program(normalization.standard_program)
+    standard_result = _linear_program_admitted(
+        normalization.standard_program, admission
+    )
     return _map_standard_result(
         program,
         normalization,
         standard_result,
-        point_max_digits=_mapped_point_digit_bound(normalization),
-        residual_max_digits=_mapped_residual_digit_bound(normalization),
-        certificate_max_digits=_mapped_certificate_digit_bound(normalization),
+        point_max_digits=_mapped_point_digit_bound(admission.result_digits),
+        residual_max_digits=_mapped_residual_digit_bound(
+            normalization, admission.result_digits
+        ),
+        certificate_max_digits=_mapped_certificate_digit_bound(
+            normalization, admission.result_digits
+        ),
     )
+
+
+def general_linear_program(
+    program: GeneralFormRationalLinearProgram,
+) -> GeneralRationalLinearProgramResult:
+    with linear_execution():
+        return _general_linear_program(program)
 
 
 __all__ = ["general_linear_program"]

@@ -9,7 +9,11 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory.algebraic_numbers.quadratic import (
     RealQuadraticEmbeddingProfile,
     RealQuadraticOrderValue,
@@ -38,8 +42,10 @@ def test_order_preflights_a_difference_that_cannot_be_returned() -> None:
         left=_value(maximum_component),
         right=_value(-maximum_component),
     )
-    with pytest.raises(ValueError, match="difference"):
+    with pytest.raises(OperationResourceAdmissionError, match="difference") as error:
         real_quadratic_order(request.left, request.right)
+    assert error.value.errors()[0]["type"] == "real_quadratic.difference_bound_exceeded"
+    assert error.value.errors()[0]["loc"] == ()
 
 
 def test_native_order_api_accepts_canonical_values_without_a_wire_request() -> None:
@@ -87,7 +93,9 @@ def test_order_result_rejects_forged_source_bound_fields(
 
 
 def test_native_order_api_retains_shared_field_admission() -> None:
-    with pytest.raises(ValueError, match="comparison requires one shared radicand"):
+    with pytest.raises(
+        OperationDomainValidationError, match="comparison requires one shared radicand"
+    ) as error:
         real_quadratic_order(
             _value(1),
             RealQuadraticValue(
@@ -96,6 +104,8 @@ def test_native_order_api_retains_shared_field_admission() -> None:
                 radicand=3,
             ),
         )
+    assert error.value.errors()[0]["type"] == "real_quadratic.radicand_mismatch"
+    assert error.value.errors()[0]["loc"] == ("right", "radicand")
 
 
 def test_declarations_project_wire_requests_to_native_kernels() -> None:

@@ -1,0 +1,129 @@
+"""Useful inverse envelopes checked by independent finite convolution."""
+
+import json
+from fractions import Fraction
+from typing import Any, cast
+
+import pytest
+
+from jacobian._exact import CanonicalRational
+from jacobian._models import StrictModel
+from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.math.polynomials.series import divide, inverse
+from jacobian.math.polynomials.series._models import (
+    MAX_TRUNCATION_ORDER,
+    TruncatedSeries,
+)
+from jacobian.math.polynomials.series._tools import TOOLS
+
+
+def _series(values: list[Fraction]) -> TruncatedSeries:
+    return TruncatedSeries(
+        variable="x",
+        truncation_order=len(values),
+        coefficients=tuple(CanonicalRational.from_fraction(value) for value in values),
+    )
+
+
+def _product(left: TruncatedSeries, right: TruncatedSeries) -> list[Fraction]:
+    return [
+        sum(
+            (
+                left.coefficients[i].as_fraction()
+                * right.coefficients[k - i].as_fraction()
+                for i in range(k + 1)
+            ),
+            Fraction(),
+        )
+        for k in range(left.truncation_order)
+    ]
+
+
+@pytest.mark.parametrize("order", [5, 6, 7, 64, MAX_TRUNCATION_ORDER])
+@pytest.mark.parametrize("linear", [0, 1])
+def test_constant_and_geometric_inverse(order: int, linear: int) -> None:
+    source = _series([Fraction(1), Fraction(linear), *[Fraction()] * (order - 2)])
+    result = inverse(source)
+    assert [c.as_fraction() for c in result.result.coefficients] == [
+        (-linear) ** i for i in range(order)
+    ]
+    assert _product(source, result.result) == [1, *[0] * (order - 1)]
+    assert all(c.as_fraction() == 0 for c in result.residual_coefficients)
+
+
+def test_dense_rational_inverse_and_division() -> None:
+    order = 64
+    source = _series([Fraction((-1) ** i * (i + 1), 6) for i in range(order)])
+    numerator = _series([Fraction(i % 5 - 2, 7) for i in range(order)])
+    result = inverse(source)
+    assert _product(source, result.result) == [1, *[0] * (order - 1)]
+    quotient = divide(numerator, source)
+    assert _product(source, quotient.quotient) == [
+        c.as_fraction() for c in numerator.coefficients
+    ]
+    assert all(c.as_fraction() == 0 for c in quotient.residual_coefficients)
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        [Fraction(1, 2**700), *[Fraction(1)] * 7],
+        [Fraction(-2, 3), Fraction(3, 7), Fraction(-5, 11), *[Fraction(1, 13)] * 13],
+    ],
+)
+def test_nonunit_shared_denominators(values: list[Fraction]) -> None:
+    source = _series(values)
+    result = inverse(source)
+    assert _product(source, result.result) == [1, *[0] * (len(values) - 1)]
+    quotient = divide(source, source)
+    assert [c.as_fraction() for c in quotient.quotient.coefficients] == [
+        1,
+        *[0] * (len(values) - 1),
+    ]
+
+
+@pytest.mark.parametrize("operation", ["inverse", "divide"])
+def test_strict_json_execution_at_order_boundary(operation: str) -> None:
+    source = _series(
+        [Fraction(1), Fraction(1), *[Fraction()] * (MAX_TRUNCATION_ORDER - 2)]
+    )
+    tool = cast(
+        MathTool[Any, StrictModel],
+        next(
+            item
+            for item in TOOLS
+            if item.operation_id == f"formal_series.rational.{operation}.compute"
+        ),
+    )
+    if operation == "inverse":
+        payload = source.model_dump_json()
+        expected = inverse(source).model_dump()
+    else:
+        payload = json.dumps(
+            {
+                "left": source.model_dump(mode="json"),
+                "right": source.model_dump(mode="json"),
+            }
+        )
+        quotient = divide(source, source)
+        expected = quotient.model_dump()
+        assert [c.as_fraction() for c in quotient.quotient.coefficients] == [
+            1,
+            *[0] * (MAX_TRUNCATION_ORDER - 1),
+        ]
+    assert (
+        tool.run(tool.request_type.model_validate_json(payload)).model_dump()
+        == expected
+    )
+
+
+def test_growth_rejection_then_small_inverse_recovers() -> None:
+    source = _series([Fraction(1), Fraction(10**255), *[Fraction()] * 18])
+    with pytest.raises(OperationDomainValidationError) as error:
+        inverse(source)
+    assert (
+        error.value.errors()[0]["type"]
+        == "formal_power_series.inverse_coefficient_growth"
+    )
+    small = _series([Fraction(1), Fraction(1), *[Fraction()] * 4])
+    assert _product(small, inverse(small).result) == [1, 0, 0, 0, 0, 0]

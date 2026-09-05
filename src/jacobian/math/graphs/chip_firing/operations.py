@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import deque
 
+from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.chip_firing._models import (
     MAX_COEFFICIENT_DIGITS,
@@ -23,6 +24,24 @@ from jacobian.math.graphs.chip_firing._models import (
     StabilizeResult,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
+
+
+def _admit_connected(graph: SimpleUndirectedGraph) -> None:
+    if not _is_connected(graph):
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="chip_firing.requires_connected_graph",
+            message="sink chip-firing requires a connected graph",
+        )
+
+
+def _admit_coefficient_height(divisor: tuple[int, ...]) -> None:
+    if any(abs(value) >= 10**MAX_COEFFICIENT_DIGITS for value in divisor):
+        raise OperationDomainValidationError(
+            location=("divisor",),
+            code="chip_firing.coefficient_bound",
+            message="divisor coefficients exceed the digit bound",
+        )
 
 
 def _admit_graph(graph: SimpleUndirectedGraph) -> None:
@@ -240,7 +259,14 @@ def _stabilize_configuration(
 ) -> tuple[list[int], list[int]]:
     """Stabilize via least-action / legal-firing algorithm.
 
-    Returns (stable_config, odometer).
+    Returns (stable_config, odometer). The owner admits a connected graph
+    and an effective nonsink configuration. If H=Lq^-1, the maximum
+    principle and effective resistance give 0 <= H_ij <= n-1: column j
+    is the voltage of a unit j-to-sink current, maximized at j, whose
+    resistance is at most a simple path length. Thus h=H*1 <= (n-1)^2.
+    The nonnegative potential h.T*eta drops by one per legal firing,
+    bounding all firings by sum(eta_nonsink)*(n-1)^2. A batch is a
+    sequence of legal firings at the same vertex, not a parallel firing.
     """
     n = len(config)
     eta = list(config)
@@ -252,14 +278,16 @@ def _stabilize_configuration(
             queue.append(i)
             in_queue[i] = True
     while queue:
+        request_checkpoint("during chip-firing stabilization")
         v = queue.popleft()
         in_queue[v] = False
         if eta[v] < degrees[v]:
             continue
-        eta[v] -= degrees[v]
-        odometer[v] += 1
+        count = eta[v] // degrees[v]
+        eta[v] -= count * degrees[v]
+        odometer[v] += count
         for nb in adj[v]:
-            eta[nb] += 1
+            eta[nb] += count
             if nb == sink_idx:
                 continue
             if eta[nb] >= degrees[nb] and not in_queue[nb]:
@@ -273,12 +301,15 @@ def stabilize(
 ) -> StabilizeResult:
     """Stabilize a sink configuration and return the odometer."""
     _admit_configuration(graph, sink, configuration)
+    _admit_connected(graph)
+    request_checkpoint("before chip-firing stabilization")
     vertices = graph.vertices
     sink_idx = vertices.index(sink)
     adj = _adjacency(graph)
     degrees = _degrees(graph)
     config = list(configuration)
     eta, odometer = _stabilize_configuration(config, adj, degrees, sink_idx)
+    request_checkpoint("after chip-firing stabilization")
     return StabilizeResult(
         stable=tuple(eta),
         odometer=tuple(odometer),
@@ -318,59 +349,81 @@ def q_reduced(
 ) -> QReducedResult:
     """Compute the q-reduced normal form via Dhar's algorithm.
 
-    After repeatedly firing unstable nonsink vertices (as in stabilization),
-    we then perform the reverse step: borrow from the sink to create a
-    non-negative configuration, and re-stabilize. This produces the unique
-    q-reduced representative.
+    First make the nonsink divisor effective by an exact rational solve,
+    then fire Dhar's unburned sets. Every update uses D' = D - L*f with
+    f(sink)=0. All subsets burning is exactly the q-reduced criterion.
     """
     _admit_divisor(graph, divisor)
     _admit_sink(graph, sink)
+    _admit_connected(graph)
+    _admit_coefficient_height(divisor)
+    request_checkpoint("before q-reduction")
     vertices = graph.vertices
     n = len(vertices)
     sink_idx = vertices.index(sink)
     adj = _adjacency(graph)
     degrees = _degrees(graph)
-    # Use Dhar's burning algorithm for q-reduction:
-    # 1. Start with divisor D.
-    # 2. Fire unstable vertices until stable (standard stabilization).
-    # 3. Use Dhar's reverse: check if any nonempty set can fire by
-    #    testing if the stable config is superstable.
-    #    If not superstable, borrow from sink and re-stabilize.
-    #
-    # The q-reduced form is: D - L*f where f is the firing vector.
-    # We compute f = odometer from stabilization + borrow rounds.
-
     config = list(divisor)
     total_firing = [0] * n
+    nonsink = [i for i in range(n) if i != sink_idx]
+    if nonsink:
+        from flint import fmpq_mat
 
-    # Stabilize first
-    eta, odo = _stabilize_configuration(config, adj, degrees, sink_idx)
-    config = eta
-    for i in range(n):
-        total_firing[i] += odo[i]
-
-    # Borrow from sink when needed
-    # A stable config is q-reduced iff it is non-negative on nonsink vertices.
-    # If some nonsink vertex is negative, we borrow from the sink:
-    # fire the sink (which gives chips to its neighbors) and re-stabilize.
-    max_rounds = n * n + 10
-    rounds = 0
-    while any(config[i] < 0 for i in range(n) if i != sink_idx):
-        rounds += 1
-        if rounds > max_rounds:
-            raise RuntimeError("q-reduction did not converge")
-        # Fire the sink: each neighbor of sink gains 1 chip.
-        # Firing the sink is D' = D - L * e_sink, so it counts in the
-        # firing vector to preserve D_reduced = D - L * f.
-        for nb in adj[sink_idx]:
-            config[nb] += 1
-        total_firing[sink_idx] += 1
-        # Now re-stabilize
-        eta, odo = _stabilize_configuration(config, adj, degrees, sink_idx)
-        config = eta
+        # FLINT solves a nonsingular integer reduced Laplacian over Q.
+        # At n<=50 and 1000-digit coefficients, fraction-free elimination
+        # has O(n^3) arithmetic steps; its minors have at most
+        # 1000 + O(n log n) digits by Hadamard (only the RHS is large).
+        # Put x=Lq^-1*(D-deg), f=floor(x), r=x-f in [0,1)^n.
+        # Then D-Lq*f=deg+Lq*r is >=0 and <2*deg coordinatewise.
+        reduced = [
+            [degrees[i] if i == j else -int(j in adj[i]) for j in nonsink]
+            for i in nonsink
+        ]
+        solution = fmpq_mat(reduced).solve(  # type: ignore[call-arg]  # python-flint 0.9 stubs omit documented algorithm.
+            fmpq_mat([[divisor[i] - degrees[i]] for i in nonsink]),
+            algorithm="fflu",
+        )
+        request_checkpoint("after q-reduction exact solve")
+        for j, i in enumerate(nonsink):
+            value = solution[j, 0]
+            total_firing[i] = int(value.numerator) // int(value.denominator)
         for i in range(n):
-            total_firing[i] += odo[i]
+            config[i] -= degrees[i] * total_firing[i] - sum(
+                total_firing[j] for j in adj[i]
+            )
 
+    # Initial nonsink mass < 2*sum(deg) <= 4m. The Green-function
+    # potential from stabilization bounds total vertex firings by
+    # 4m*(n-1)^2, including |S| for each Dhar set S. Thus this loop is
+    # independent of divisor magnitude. Each burn pass costs O(n+m).
+    while True:
+        config, odo = _stabilize_configuration(config, adj, degrees, sink_idx)
+        for i in nonsink:
+            total_firing[i] += odo[i]
+        request_checkpoint("during q-reduction Dhar burning")
+        burned = {sink_idx}
+        pending = deque([sink_idx])
+        outgoing = [0] * n
+        while pending:
+            v = pending.popleft()
+            for j in adj[v]:
+                outgoing[j] += 1
+                if j not in burned and config[j] < outgoing[j]:
+                    burned.add(j)
+                    pending.append(j)
+        unburned = [i for i in nonsink if i not in burned]
+        if not unburned:
+            break
+        # Only cut edges change a simultaneous subset firing. Vertices
+        # inside S have at least outdeg_S chips, so effectivity persists.
+        for i in unburned:
+            total_firing[i] += 1
+            for j in adj[i]:
+                if j in burned:
+                    config[i] -= 1
+                    config[j] += 1
+
+    request_checkpoint("after q-reduction")
     return QReducedResult(
         reduced_divisor=tuple(config),
         firing_vector=tuple(total_firing),
@@ -508,12 +561,17 @@ def abel_jacobi(
 ) -> AbelJacobiResult:
     """Map a degree-zero divisor into critical-group coordinates.
 
-    The coordinates are the remainder of the nonsink divisor coefficients
-    modulo the invariant factors of the critical group (the diagonal of
-    the SNF of the reduced Laplacian). Zero and unit factors are excluded.
+    Successive column and row Hermite forms eliminate trivial quotient
+    directions while transporting the divisor by each exact row map.
+    For pinned SymPy U*C*V=S on the remaining quotient, return the reduced
+    image transported by U modulo S, omitting unit factors. Relative axis
+    order is retained throughout. Admission uses the reduced problem.
     """
     _admit_divisor(graph, divisor)
     _admit_sink(graph, sink)
+    _admit_connected(graph)
+    _admit_coefficient_height(divisor)
+    request_checkpoint("before Abel-Jacobi coordinates")
     if sum(divisor) != 0:
         raise OperationDomainValidationError(
             location=("divisor",),
@@ -524,21 +582,14 @@ def abel_jacobi(
     n = len(vertices)
     sink_idx = vertices.index(sink)
     nonsink = [i for i in range(n) if i != sink_idx]
-    nonsink_labels, invariant = _critical_group_factors(graph, sink)
-    nonsink_div = [divisor[i] for i in nonsink]
-    # The coordinates: nonsink_div mod the invariant factors.
-    # Only non-unit, non-zero factors matter for the quotient group.
-    coords = []
-    j = 0
-    for d in invariant:
-        if d <= 1:
-            continue
-        idx = nonsink[j] if j < len(nonsink_div) else 0
-        coords.append(nonsink_div[idx] % d)
-        j += 1
+    from jacobian.math.graphs.chip_firing._snf_process import smith_coordinates
+
+    matrix = [list(row) for row in reduced_laplacian(graph, sink).reduced_laplacian]
+    invariant, coords = smith_coordinates(matrix, [divisor[i] for i in nonsink])
+    request_checkpoint("after Abel-Jacobi coordinates")
     return AbelJacobiResult(
         sink=sink,
-        nonsink_vertices=nonsink_labels,
+        nonsink_vertices=tuple(vertices[i] for i in nonsink),
         coordinates=tuple(coords),
         invariant_factors=invariant,
     )

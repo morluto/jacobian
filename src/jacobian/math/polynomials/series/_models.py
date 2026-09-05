@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from math import lcm
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, StringConstraints, model_validator
@@ -9,6 +10,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
+from jacobian.canonical import parse_canonical_integer
 from jacobian.math._rational_height import RationalHeight, sum_heights
 
 # ---------------------------------------------------------------------------
@@ -131,13 +133,6 @@ def _max_height(values: tuple[CanonicalRational, ...]) -> RationalHeight:
     )
 
 
-def _merge_max(left: RationalHeight, right: RationalHeight) -> RationalHeight:
-    return RationalHeight(
-        max(left.numerator_digits, right.numerator_digits),
-        max(left.denominator_digits, right.denominator_digits),
-    )
-
-
 def _convolution_height(
     left: RationalHeight, right: RationalHeight, term_count: int
 ) -> RationalHeight:
@@ -169,17 +164,62 @@ def _require_zero_residual(
         )
 
 
-def _inverse_height(series: TruncatedSeries) -> RationalHeight:
-    source = _max_height(series.coefficients)
-    reciprocal = RationalHeight(1, 1).quotient(_height(series.coefficients[0]))
-    _require_height(reciprocal, "inverse")
-    result = reciprocal
-    for degree in range(1, series.truncation_order):
-        recurrence_sum = sum_heights(source.product(result) for _ in range(degree))
-        coefficient = reciprocal.product(recurrence_sum)
-        _require_height(coefficient, "inverse")
-        result = _merge_max(result, coefficient)
-    return result
+def _require_binary_height(numerator: int, denominator: int, operation: str) -> None:
+    # If |p| <= 2**b then p has at most floor(b / 3) + 1 decimal
+    # digits, since 2**3 < 10. No large power or floating log is needed.
+    _require_height(RationalHeight(numerator // 3 + 1, denominator // 3 + 1), operation)
+
+
+def _cleared_series(series: TruncatedSeries) -> tuple[int, tuple[int, ...]]:
+    """Bound denominator clearing before building P in A=P/D.
+
+    At most N lcms are formed. Each temporary integer adds at most one
+    admitted input denominator to the previous bounded lcm; no series
+    coefficients are computed during admission.
+    """
+    denominator = 1
+    for value in series.coefficients:
+        denominator = lcm(denominator, parse_canonical_integer(value.den))
+        _require_binary_height(0, denominator.bit_length(), "inverse")
+    return denominator, tuple(
+        parse_canonical_integer(value.num)
+        * (denominator // parse_canonical_integer(value.den))
+        for value in series.coefficients
+    )
+
+
+def _inverse_height(series: TruncatedSeries) -> tuple[int, int, int, int]:
+    """Return shared numerator/denominator bit bounds and source norm bounds.
+
+    Write A=P/D, p=|P[0]|, C=p+sum_{i>0}|P[i]|. The finite geometric
+    expansion gives a common denominator p**N and numerator magnitude at
+    most D*C**(N-1) for every inverse coefficient. Indeed the degree-k
+    numerator over p**(k+1) is bounded by D*C**k by induction in the
+    triangular recurrence. Homogenizing to p**N preserves that bound.
+    Constant sources only need denominator p. This also bounds every
+    partial recurrence sum after multiplication by a source coefficient.
+
+    With N<=512 the existing kernel uses O(N**2) Fraction operations.
+    Reduced terms and partial sums fit the checked common-denominator
+    bounds; Fraction's unreduced cross-products have at most twice their
+    component bit bounds. Thus intermediates are bounded before execution.
+    """
+    denominator, coefficients = _cleared_series(series)
+    constant = abs(coefficients[0])
+    tail = sum(abs(value) for value in coefficients[1:])
+    order = series.truncation_order if tail else 1
+    source_norm = (constant + tail).bit_length()
+    source_denominator = denominator.bit_length()
+    numerator = source_denominator + (order - 1) * source_norm
+    inverse_denominator = order * (constant - 1).bit_length()
+    _require_binary_height(numerator, inverse_denominator, "inverse")
+    # Product residuals and partial recurrence sums share D*p**N.
+    _require_binary_height(
+        numerator + source_norm + 1,
+        inverse_denominator + source_denominator,
+        "inverse residual",
+    )
+    return numerator, inverse_denominator, source_norm, source_denominator
 
 
 Variable = Annotated[
@@ -330,13 +370,7 @@ def admit_native_inverse(series: TruncatedSeries) -> None:
         raise _validation_error(
             "inverse_zero_constant", "inverse requires a nonzero constant term"
         )
-    inverse = _inverse_height(series)
-    _require_height(
-        _convolution_height(
-            _max_height(series.coefficients), inverse, series.truncation_order
-        ),
-        "inverse residual",
-    )
+    _inverse_height(series)
 
 
 def admit_native_divide(
@@ -347,16 +381,20 @@ def admit_native_divide(
         raise _validation_error(
             "denominator_zero_constant", "denominator must have a nonzero constant term"
         )
-    inverse = _inverse_height(denominator)
-    quotient = _convolution_height(
-        _max_height(numerator.coefficients), inverse, numerator.truncation_order
-    )
-    _require_height(quotient, "division")
-    residual = _convolution_height(
-        _max_height(denominator.coefficients), quotient, numerator.truncation_order
-    )
-    _require_height(
-        sum_heights((residual, _max_height(numerator.coefficients))),
+    inv_num, inv_den, source_norm, source_den = _inverse_height(denominator)
+    common_denominator, coefficients = _cleared_series(numerator)
+    norm = sum(abs(value) for value in coefficients).bit_length()
+    common_den = common_denominator.bit_length()
+    # For numerator Q/E, all quotient partial sums have denominator
+    # E*p**N and numerator bounded by ||Q||_1 times the inverse bound.
+    quotient_num = norm + inv_num
+    quotient_den = common_den + inv_den
+    _require_binary_height(quotient_num, quotient_den, "division")
+    # B*(Q/B)-Q has common denominator D*E*p**N. Include both
+    # convolution partial sums and the final source subtraction.
+    _require_binary_height(
+        max(source_norm + quotient_num, norm + source_den + inv_den) + 1,
+        source_den + quotient_den,
         "division residual",
     )
 

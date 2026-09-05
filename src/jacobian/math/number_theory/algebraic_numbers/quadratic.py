@@ -11,6 +11,10 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory.arithmetic._integer_predicates import is_square_free
 
 _MAX_RADICAND = 1_000_000
@@ -98,8 +102,10 @@ def _require_order_admission(
     """Validate the owner-local envelope of an exact order comparison."""
 
     if left.radicand != right.radicand:
-        raise _validation_error(
-            "radicand_mismatch", "comparison requires one shared radicand"
+        raise OperationDomainValidationError(
+            location=("right", "radicand"),
+            code="real_quadratic.radicand_mismatch",
+            message="comparison requires one shared radicand",
         )
     difference_components = (
         left.rational_part.as_fraction() - right.rational_part.as_fraction(),
@@ -111,9 +117,10 @@ def _require_order_admission(
         or len(format_canonical_integer(component.denominator)) > _MAX_DIGITS
         for component in difference_components
     ):
-        raise _validation_error(
-            "difference_bound_exceeded",
-            "exact quadratic difference exceeds the 256-digit result bound",
+        raise OperationResourceAdmissionError(
+            location=(),
+            code="real_quadratic.difference_bound_exceeded",
+            message="exact quadratic difference exceeds the 256-digit result bound",
         )
 
 

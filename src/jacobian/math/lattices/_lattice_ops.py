@@ -120,8 +120,8 @@ def smith_invariant_factors(entries: list[list[int]]) -> list[int]:
 def dual_basis(entries: list[list[int]]) -> list[list[Fraction]]:
     """Return a rational dual basis of the lattice spanned by ``entries``.
 
-    For a full-row-rank basis ``B`` of rank ``r``, the dual basis is
-    ``L^* = B^T (B B^T)^{-1}``, i.e. ``B^* = B (B B^T)^{-1}`` so that
+    For a full-row-rank basis ``B`` of rank ``r``, the row dual basis is
+    ``B^* = (B B^T)^{-1} B`` so that
     ``B^* B^T = I_r``.
     """
     from sympy import Matrix, Rational
@@ -129,7 +129,7 @@ def dual_basis(entries: list[list[int]]) -> list[list[Fraction]]:
     basis = Matrix(entries)
     gram = basis * basis.T
     inverse = gram.inv()
-    dual = basis * inverse
+    dual = inverse * basis
     rows, cols = dual.rows, dual.cols
     result: list[list[Fraction]] = []
     for i in range(rows):
@@ -155,8 +155,6 @@ def saturate_lattice(
     form.  ``inclusion`` is the integer matrix ``C`` with ``B = C @ sat``.
     ``index`` is the finite index ``[sat(L) : L]``.
     """
-    from math import gcd
-
     from sympy import ZZ, Matrix
     from sympy.matrices.normalforms import hermite_normal_form
     from sympy.polys.matrices import DomainMatrix
@@ -197,18 +195,9 @@ def saturate_lattice(
             row.append(int(frac.numerator))
         inclusion_rows.append(row)
 
-    # Index = gcd of all r x r minors of B.
-    from itertools import combinations
-
-    rank = rows
-    if basis.cols < rank:
-        index = 1
-    else:
-        minors_gcd = 0
-        for cols in combinations(range(basis.cols), rank):
-            minor = int(basis[:, list(cols)].det())
-            minors_gcd = gcd(minors_gcd, abs(minor))
-        index = minors_gcd if minors_gcd > 0 else 1
+    # B = C @ sat identifies L with the full-rank row lattice of the
+    # square integer matrix C in ZZ^r, so [sat(L) : L] = |det C|.
+    index = abs(integer_determinant(inclusion_rows))
 
     return (
         _sympy_to_int_list(sat),

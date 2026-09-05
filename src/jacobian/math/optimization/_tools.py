@@ -7,10 +7,27 @@ from jacobian.math.optimization._general_models import (
     GeneralRationalLinearProgramResult,
 )
 from jacobian.math.optimization._models import (
+    MAX_LINEAR_PROGRAM_BASES,
+    MAX_LINEAR_PROGRAM_CONSTRAINTS,
+    MAX_LINEAR_PROGRAM_SCALAR_UPDATES,
+    MAX_LINEAR_PROGRAM_VARIABLES,
     RationalLinearProgramRequest,
     RationalLinearProgramResult,
 )
 from jacobian.math.optimization.operations import linear_program
+
+_BASIS_ENVELOPE = (
+    "Resource admission removes zero columns and zero equalities for work estimates. "
+    "For n remaining columns and m remaining rows, the basis estimate is "
+    "max C(n+1,r) over 0<=r<=min(n,m); the work estimate is "
+    "8(m+1)^2(n+m+2) + max C(n+1,r)[4r^3+2r^2(n+2)+4r(n+2)]. "
+    f"Limits are {MAX_LINEAR_PROGRAM_BASES} bases and "
+    f"{MAX_LINEAR_PROGRAM_SCALAR_UPDATES} scalar updates, plus source-derived "
+    "rational-minor height within the canonical rational digit limit. "
+    "Rejections report derived counts, estimates and limits; shape bounds alone "
+    "do not guarantee admission. Execution has one 600-second cooperative safety "
+    "deadline; expiration yields an execution error, never a mathematical conclusion."
+)
 
 
 def _linear_program_request(
@@ -30,11 +47,11 @@ RATIONAL_LINEAR_OPERATIONS: MathTools = (
         operation_id="optimization.linear.rational_optimum.compute",
         title="Solve a rational linear program",
         description=(
-            "Use exact SymPy simplex calls to return a source-bound standard-form "
-            "rational LP outcome. Optimal and feasible outcomes retain replayed "
+            "Return a source-bound standard-form rational LP outcome using exact "
+            "basis linear algebra. Optimal and feasible outcomes retain checked "
             "points; infeasible outcomes carry a Farkas witness; unbounded outcomes "
             "carry a feasible point and recession direction. Operational failure "
-            "uses the execution-error path."
+            "uses the execution-error path. " + _BASIS_ENVELOPE
         ),
         request_type=RationalLinearProgramRequest,
         result_type=RationalLinearProgramResult,
@@ -71,8 +88,14 @@ RATIONAL_LINEAR_OPERATIONS = (
         description=(
             "Solve a bounded exact rational LP with labeled LE, EQ, and GE rows, "
             "finite bounds, and free variables. Results retain the original source "
-            "coordinates and replayed optimality, Farkas, or recession evidence; "
-            "private slack and sign-split columns never appear on the wire."
+            "coordinates and checked optimality, Farkas, or recession evidence; "
+            "private slack and sign-split columns never appear on the wire. "
+            "Bound-only boxes and one-variable intervals have direct exact paths. "
+            "Other programs normalize each free variable to two columns and each "
+            "one-sided variable to one, plus one slack per inequality and one "
+            "row/slack per two-sided variable bound. Normalized limits are "
+            f"{MAX_LINEAR_PROGRAM_VARIABLES} columns and {MAX_LINEAR_PROGRAM_CONSTRAINTS} rows. "
+            + _BASIS_ENVELOPE
         ),
         request_type=GeneralRationalLinearProgramRequest,
         result_type=GeneralRationalLinearProgramResult,

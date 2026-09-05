@@ -66,7 +66,9 @@ def test_power_propagates_binary_convolution_growth() -> None:
 
 
 def test_division_propagates_inverse_and_residual_growth() -> None:
-    order = 8
+    # The leading reciprocal contributes 2**700 at each recurrence degree;
+    # order 24 genuinely exceeds the result envelope (order 8 does not).
+    order = 24
     numerator = [_coefficient() for _ in range(order)]
     denominator = [_coefficient(den=str(2**700)), *[_coefficient()] * (order - 1)]
     request = SeriesDivideRequest.model_validate(

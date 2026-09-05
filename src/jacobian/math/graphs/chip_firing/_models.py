@@ -196,7 +196,7 @@ class SinkConfiguration(StrictModel):
 
 
 class StabilizeRequest(StrictModel):
-    """Stabilize a sink configuration."""
+    """Stabilize a sink configuration; every vertex must reach the sink."""
 
     configuration: SinkConfiguration
 
@@ -223,7 +223,7 @@ class ParallelStepResult(StrictModel):
 
 
 class QReducedRequest(StrictModel):
-    """Compute the q-reduced normal form of a divisor."""
+    """q-reduced form on a connected graph; coefficients have at most 1000 digits."""
 
     graph: _ChipFiringGraph
     divisor: tuple[int, ...] = Field(min_length=1)
@@ -295,7 +295,12 @@ class CriticalGroupResult(StrictModel):
 
 
 class AbelJacobiRequest(StrictModel):
-    """Map a degree-zero divisor into the critical group."""
+    """Connected-graph critical-group map; coefficients have at most 1000 digits.
+
+    The column-HNF residual must satisfy the conservative Smith transformation
+    work and intermediate-height envelope; graph order alone does not decide
+    resource admission.
+    """
 
     graph: _ChipFiringGraph
     divisor: tuple[int, ...] = Field(min_length=1)
@@ -317,7 +322,14 @@ class AbelJacobiRequest(StrictModel):
 
 
 class AbelJacobiResult(StrictModel):
-    """The critical-group coordinates of a degree-zero divisor."""
+    """Smith coordinates after successive Hermite unit reductions.
+
+    Column HNF preserves the column lattice; its unit block transports D
+    to D_tail-B*D_head. Row HNF R=U*C transports D to R*C^-1*D before
+    discarding unit coordinates. Retained indices keep their relative order.
+    Repeat only when dimension decreases, then use the pinned SymPy Smith
+    basis of the residual. Unit factors contribute no coordinates.
+    """
 
     sink: str
     nonsink_vertices: tuple[str, ...]

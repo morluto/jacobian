@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from math import isqrt
 from typing import Any
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
@@ -137,7 +138,7 @@ def compute_rank_gram(lattice: IntegerLattice) -> RankGramResult:
         ambient_dimension=lattice.ambient_dimension,
         gram_matrix=_integer_matrix(gram),
         squared_covolume=format_canonical_integer(det),
-        covolume_rational=bool(lattice.ambient_dimension != rank),
+        covolume_rational=isqrt(det) ** 2 == det,
     )
 
 

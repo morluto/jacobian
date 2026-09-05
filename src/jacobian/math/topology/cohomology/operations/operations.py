@@ -75,12 +75,10 @@ def _require_cocycle(
 
 
 def _validate_ambient_complex(
-    cochain_degree: int,
     support: tuple[tuple[int, ...], ...],
-    coefficients: tuple[int, ...],
     ambient: tuple[tuple[int, ...], ...],
 ) -> None:
-    """Verify ambient shape, support containment, closure, and cocyclicity."""
+    """Verify coefficient-independent ambient shape, support, and closure."""
 
     _validate_simplex_entries(ambient, "ambient simplex")
     if any(len(simplex) > MAX_AMBIENT_SIMPLEX_VERTICES for simplex in ambient):
@@ -97,7 +95,6 @@ def _validate_ambient_complex(
                 "cochain support must lie inside the ambient complex",
             )
     _require_downward_closed(ambient)
-    _require_cocycle(cochain_degree, support, coefficients, ambient)
 
 
 def _is_zero_mod2_cochain(
@@ -174,7 +171,8 @@ def _admit_steenrod_square(
                 "supply ambient_simplices or ambient_complex",
             )
         if effective_ambient:
-            _validate_ambient_complex(
+            _validate_ambient_complex(simplex_values, effective_ambient)
+            _require_cocycle(
                 cochain_degree,
                 simplex_values,
                 simplex_coefficients,
@@ -211,12 +209,8 @@ def _admit_bockstein(
             )
         effective_ambient = _effective_ambient(ambient_simplices, ambient_complex)
         if effective_ambient:
-            _validate_ambient_complex(
-                cochain_degree,
-                simplex_values,
-                simplex_coefficients,
-                effective_ambient,
-            )
+            # Zero modulo prime already establishes cocyclicity over Z/p.
+            _validate_ambient_complex(simplex_values, effective_ambient)
 
     _run_admission(admission)
 

@@ -395,6 +395,17 @@ with a source-backed accepted case even when its public dimensions are small.
 A compact request can still be the decisive scale fixture when private
 normalization, expansion, or backend representation makes it expensive.
 
+For an admission-precision defect, preserve the motivating valid request as an
+**accepted** public regression with a defining-invariant check. First compare
+the estimate against a bounded real-backend diagnostic; do not infer expense
+from the estimate being tested. If the computation is cheap, a test expecting
+resource rejection would freeze the defect rather than fix it. Exercise
+related sizes, nontrivial structures, and equivalent presentations so the
+repair scales a mathematical regime instead of recognizing one fixture.
+Keep timing measurements out of brittle unit-test thresholds and separate
+measured output sizes from proved intermediate bounds. See the
+[scale-first admission review](public-operation-admission.md#execution-envelope-review).
+
 Use a source-backed reference fixture when a standard example helps fix
 terminology, normalization, or another convention-sensitive output. Cite the
 specific theorem or example and record the convention the fixture depends on.

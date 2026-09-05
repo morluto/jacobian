@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.optimization._general_models import (
     MAX_GENERAL_LINEAR_PROGRAM_CONSTRAINTS,
     MAX_GENERAL_LINEAR_PROGRAM_VARIABLES,
@@ -14,7 +15,6 @@ from jacobian.math.optimization._general_models import (
 from jacobian.math.optimization._models import (
     MAX_RATIONAL_DIGITS,
     StandardFormRationalLinearProgram,
-    _result_digit_bound,
 )
 
 
@@ -72,6 +72,40 @@ def normalize_general_program(
     program: GeneralFormRationalLinearProgram,
 ) -> GeneralLinearNormalization:
     """Construct the bounded private standard-form source and exact ledger."""
+
+    normalized_columns = (
+        sum(
+            2 if v.lower_bound is None and v.upper_bound is None else 1
+            for v in program.variables
+        )
+        + sum(row.relation != "EQ" for row in program.constraints)
+        + sum(
+            v.lower_bound is not None and v.upper_bound is not None
+            for v in program.variables
+        )
+    )
+    normalized_rows = len(program.constraints) + sum(
+        v.lower_bound is not None and v.upper_bound is not None
+        for v in program.variables
+    )
+    for reason, count, limit in (
+        (
+            "normalized_columns",
+            normalized_columns,
+            MAX_GENERAL_LINEAR_PROGRAM_VARIABLES,
+        ),
+        ("normalized_rows", normalized_rows, MAX_GENERAL_LINEAR_PROGRAM_CONSTRAINTS),
+    ):
+        if count > limit:
+            raise OperationResourceAdmissionError(
+                location=("program",),
+                code=f"optimization.linear.{reason}",
+                message=(
+                    f"Exact LP {reason} exceeded: normalized_columns={normalized_columns}, "
+                    f"column_limit={MAX_GENERAL_LINEAR_PROGRAM_VARIABLES}, "
+                    f"normalized_rows={normalized_rows}, row_limit={MAX_GENERAL_LINEAR_PROGRAM_CONSTRAINTS}."
+                ),
+            )
 
     source_objective = tuple(
         value.as_fraction() for value in program.objective.coefficients
@@ -139,16 +173,6 @@ def normalize_general_program(
     for source_index, coefficient in enumerate(source_objective):
         for column, multiplier in columns[source_index]:
             objective[column] += sense_sign * coefficient * multiplier
-    if len(standard_names) > MAX_GENERAL_LINEAR_PROGRAM_VARIABLES:
-        raise ValueError(
-            "general linear-program normalized variables exceed the "
-            f"{MAX_GENERAL_LINEAR_PROGRAM_VARIABLES}-entry bound"
-        )
-    if len(rows) > MAX_GENERAL_LINEAR_PROGRAM_CONSTRAINTS:
-        raise ValueError(
-            "general linear-program normalized rows exceed the "
-            f"{MAX_GENERAL_LINEAR_PROGRAM_CONSTRAINTS}-entry bound"
-        )
     standard = StandardFormRationalLinearProgram.admit_derived_intermediate(
         {
             "variables": tuple(standard_names),
@@ -189,7 +213,7 @@ def _standard_intermediate_digit_bound(
 _MAPPED_RESULT_HEIGHT_SLACK = 16
 
 
-def _mapped_point_digit_bound(normalization: GeneralLinearNormalization) -> int:
+def _mapped_point_digit_bound(standard_digits: int) -> int:
     """Bound mapped coordinates, bound slacks, and mapped recession rays.
 
     A source coordinate adds its offset to at most two standard columns, and
@@ -198,14 +222,12 @@ def _mapped_point_digit_bound(normalization: GeneralLinearNormalization) -> int:
     before one chained difference.
     """
 
-    return (
-        2 * MAX_RATIONAL_DIGITS
-        + 2 * _result_digit_bound(normalization.standard_program)
-        + _MAPPED_RESULT_HEIGHT_SLACK
-    )
+    return 2 * MAX_RATIONAL_DIGITS + 2 * standard_digits + _MAPPED_RESULT_HEIGHT_SLACK
 
 
-def _mapped_residual_digit_bound(normalization: GeneralLinearNormalization) -> int:
+def _mapped_residual_digit_bound(
+    normalization: GeneralLinearNormalization, standard_digits: int
+) -> int:
     """Bound mapped objectives, residuals, and constraint slacks.
 
     These sums stack ``n`` coefficient-offset products and ``n``
@@ -219,11 +241,7 @@ def _mapped_residual_digit_bound(normalization: GeneralLinearNormalization) -> i
     variables = len(normalization.offsets)
     summed_terms = 2 * variables + 1
     return (
-        variables
-        * (
-            3 * MAX_RATIONAL_DIGITS
-            + _result_digit_bound(normalization.standard_program)
-        )
+        variables * (3 * MAX_RATIONAL_DIGITS + standard_digits)
         + MAX_RATIONAL_DIGITS
         + len(str(summed_terms))
         + 1
@@ -231,7 +249,9 @@ def _mapped_residual_digit_bound(normalization: GeneralLinearNormalization) -> i
     )
 
 
-def _mapped_certificate_digit_bound(normalization: GeneralLinearNormalization) -> int:
+def _mapped_certificate_digit_bound(
+    normalization: GeneralLinearNormalization, standard_digits: int
+) -> int:
     """Bound mapped dual, stationarity, and Farkas certificate values.
 
     Standard multipliers stay within ``_result_digit_bound`` of the private
@@ -245,7 +265,7 @@ def _mapped_certificate_digit_bound(normalization: GeneralLinearNormalization) -
 
     variables = len(normalization.offsets)
     return (
-        _result_digit_bound(normalization.standard_program)
+        standard_digits
         + (2 + 4 * variables) * MAX_RATIONAL_DIGITS
         + _MAPPED_RESULT_HEIGHT_SLACK
     )

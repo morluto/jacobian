@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from fractions import Fraction
-from math import comb, factorial
+from math import factorial
 from typing import Any, Literal, Self
 
 from pydantic import Field, ValidationInfo, model_validator
@@ -21,8 +21,8 @@ MAX_RATIONAL_DIGITS = 128
 MAX_LINEAR_PROGRAM_VARIABLES = 32
 MAX_LINEAR_PROGRAM_CONSTRAINTS = 64
 MAX_LINEAR_PROGRAM_VARIABLE_NAME_LENGTH = 64
-MAX_LINEAR_PROGRAM_SIMPLEX_BASES = 1_000_000
-MAX_LINEAR_PROGRAM_SIMPLEX_SCALAR_UPDATES = 50_000_000
+MAX_LINEAR_PROGRAM_BASES = 1_000_000
+MAX_LINEAR_PROGRAM_SCALAR_UPDATES = 50_000_000
 _INTERMEDIATE_SCALAR_DIGITS = "standard_intermediate_scalar_digits"
 
 
@@ -219,14 +219,15 @@ def _has_trivial_inconsistent_row(
 
 
 def _result_digit_bound(program: StandardFormRationalLinearProgram) -> int:
-    """Bound simplex tableaux, witnesses, and source-derived diagnostics.
+    """Conservatively bound basis witnesses and source-derived diagnostics.
 
     Clearing denominators row by row turns each exact LP used by the operation
-    into an integer tableau. Every basic coordinate, reduced cost, objective,
-    and normalized Farkas or recession coordinate is a ratio of minors. The
-    Leibniz bounds below include one additional row for a derived diagnostic.
-    Free dual/Farkas variables are represented as a difference of two
-    nonnegative basic variables; the final two digits cover that subtraction.
+    into an integer matrix. Every basic coordinate, reduced cost, objective,
+    and Farkas or recession coordinate is a ratio of minors. Both source-row
+    and transposed-row denominator clearings are covered below. Duplicated rows
+    and normalization rows deliberately overestimate the minors needed by the
+    single-artificial-column basis algorithm; the additional diagnostic rows
+    and final two digits cover exact dot products and differences.
     """
 
     if _has_trivial_inconsistent_row(program):
@@ -299,38 +300,6 @@ def _result_digit_bound(program: StandardFormRationalLinearProgram) -> int:
             ),
             variable_columns=2 * variables,
         ),
-    )
-
-
-def _simplex_candidate_and_update_bounds(
-    *,
-    variables: int,
-    equations: int,
-) -> tuple[int, int]:
-    """Bound Bland pivots by all possible bases in both simplex phases."""
-
-    def solve(rows: int, columns: int) -> tuple[int, int]:
-        # SymPy's pinned exact simplex uses Bland's rule. Each phase therefore
-        # visits no basis twice; the factor two covers feasibility and optimum.
-        candidates = 2 * comb(rows + columns, rows)
-        scalar_updates = candidates * (rows + 2) * (columns + 2)
-        return candidates, scalar_updates
-
-    # ``lpmin`` may introduce one shifted nonnegative auxiliary for each
-    # source variable whose univariate constraints form a finite interval.
-    primal = solve(2 * equations, 2 * variables)
-    dual = solve(variables, 2 * equations)
-    farkas = solve(variables + 2, 2 * equations)
-    feasible_point = primal
-    recession = solve(2 * (equations + 1), 2 * variables)
-    branches = (
-        (primal, dual),
-        (primal, farkas),
-        (primal, feasible_point, recession),
-    )
-    return (
-        max(sum(item[0] for item in branch) for branch in branches),
-        max(sum(item[1] for item in branch) for branch in branches),
     )
 
 
@@ -439,33 +408,6 @@ class StandardFormRationalLinearProgram(StrictModel):
                 "row_width", "every coefficient row must match the variable count"
             )
 
-        result_digits = _result_digit_bound(self)
-        if result_digits > MAX_CANONICAL_RATIONAL_DIGITS:
-            raise _validation_error(
-                "result_height",
-                "linear-program rational height can exceed the exact "
-                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit result bound",
-            )
-        direct_certificate = _has_trivial_inconsistent_row(self)
-        active_equations = 0 if direct_certificate else len(_active_equations(self))
-        candidates, scalar_updates = (0, 0)
-        if not direct_certificate:
-            candidates, scalar_updates = _simplex_candidate_and_update_bounds(
-                variables=len(self.variables),
-                equations=active_equations,
-            )
-        if candidates > MAX_LINEAR_PROGRAM_SIMPLEX_BASES:
-            raise _validation_error(
-                "simplex_basis_bound",
-                "linear-program possible simplex bases exceed the "
-                f"{MAX_LINEAR_PROGRAM_SIMPLEX_BASES}-candidate bound",
-            )
-        if scalar_updates > MAX_LINEAR_PROGRAM_SIMPLEX_SCALAR_UPDATES:
-            raise _validation_error(
-                "simplex_work_bound",
-                "linear-program exact simplex pivot work exceeds the "
-                f"{MAX_LINEAR_PROGRAM_SIMPLEX_SCALAR_UPDATES}-scalar-update bound",
-            )
         return self
 
     @classmethod
@@ -475,7 +417,7 @@ class StandardFormRationalLinearProgram(StrictModel):
         Public requests keep the ``MAX_RATIONAL_DIGITS`` source-scalar cap.
         A normalization step that derives its intermediates from admitted
         inputs may pass the envelope its own derivation proves; every derived
-        result-height and simplex-work checks above still run unchanged.
+        shape checks above still run; execution owns resource admission.
         """
 
         return cls.model_validate(
@@ -632,8 +574,8 @@ def _require_result_shape(result: RationalLinearProgramResult) -> None:
 
 
 __all__ = [
-    "MAX_LINEAR_PROGRAM_SIMPLEX_BASES",
-    "MAX_LINEAR_PROGRAM_SIMPLEX_SCALAR_UPDATES",
+    "MAX_LINEAR_PROGRAM_BASES",
+    "MAX_LINEAR_PROGRAM_SCALAR_UPDATES",
     "RationalLinearProgramRequest",
     "RationalLinearProgramResult",
     "RationalLinearProgramStatus",

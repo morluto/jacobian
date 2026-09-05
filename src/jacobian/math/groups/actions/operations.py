@@ -6,6 +6,7 @@ from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.groups.actions._models import (
+    MAX_FAMILY_MEMBERS,
     MAX_GROUP_ORDER,
     MAX_ORBIT_PROFILE_IMAGES,
     MAX_ORBIT_PROFILE_INCIDENCES,
@@ -286,11 +287,23 @@ def subset_family_orbit_profile(
     than the unrelated carrier size alone.
     """
 
-    group = _enumerate_group(action)
-    group_order = len(group)
     source_positions = tuple(
         _canonical_family_subset(action, subset) for subset in subsets
     )
+    if len(source_positions) > MAX_FAMILY_MEMBERS:
+        raise OperationDomainValidationError(
+            location=("subsets",),
+            code="finite_group_action.subset_family_size_exceeded",
+            message=f"at most {MAX_FAMILY_MEMBERS} subsets are admitted",
+        )
+    if len(set(source_positions)) != len(source_positions):
+        raise OperationDomainValidationError(
+            location=("subsets",),
+            code="finite_group_action.subset_family_duplicates",
+            message="supplied subsets must be pairwise distinct",
+        )
+    group = _enumerate_group(action)
+    group_order = len(group)
 
     source_index = {
         positions: index for index, positions in enumerate(source_positions)

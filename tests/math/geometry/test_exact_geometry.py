@@ -267,7 +267,10 @@ class TestEuclideanOrbitProfile:
                     (points[source][axis] - points[other_source][axis]) ** 2
                     for axis in range(2)
                 )
-                assert result.isometry_form.entries[target][other_target].as_fraction() == delta
+                assert (
+                    result.isometry_form.entries[target][other_target].as_fraction()
+                    == delta
+                )
 
     def test_rejects_single_point_configuration(self) -> None:
         import pytest

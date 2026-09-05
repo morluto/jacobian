@@ -248,7 +248,8 @@ def _solve_augmentation_kernel(  # noqa: C901
     graph: SimpleUndirectedGraph,
     target_diameter: int,
     budget: TriangleFreeDiameterAugmentationBudget,
-    admitted: tuple[tuple[str, ...], list[tuple[str, str]], list[tuple[int, ...]]] | None = None,
+    admitted: tuple[tuple[str, ...], list[tuple[str, str]], list[tuple[int, ...]]]
+    | None = None,
 ) -> TriangleFreeDiameterAugmentationResult:
     started = time.monotonic()
     # admission (also derives vertices/candidates)

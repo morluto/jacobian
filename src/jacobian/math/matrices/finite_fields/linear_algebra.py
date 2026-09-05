@@ -66,7 +66,7 @@ class PrimeFieldMatrix:
     @classmethod
     def _from_admitted(
         cls, *, prime: int, entries: tuple[tuple[int, ...], ...], columns: int
-    ) -> "PrimeFieldMatrix":
+    ) -> PrimeFieldMatrix:
         """Build a matrix whose field and canonical rows were already admitted."""
         matrix = object.__new__(cls)
         object.__setattr__(matrix, "prime", prime)

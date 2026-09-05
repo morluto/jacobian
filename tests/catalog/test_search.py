@@ -110,24 +110,15 @@ def test_discovery_terms_use_a_conservative_inflection_table(
     assert discovery_terms(term) == frozenset({expected})
 
 
-def test_subset_sum_singular_and_plural_queries_rank_the_profile_ahead_of_sidon() -> (
-    None
-):
+def test_subset_sum_singular_and_plural_queries_rank_the_profile_first() -> None:
     catalog = Catalog.open()
     for query in (
         "all subset sum and repeated representation of a finite integer set",
         "all subset sums and repeated representations of a finite integer set",
     ):
         result = catalog.match(OperationMatchRequest(need=query, limit=20))
-        positions = {
-            match.operation_id: index for index, match in enumerate(result.matches)
-        }
-
         assert result.need == query
-        assert (
-            positions["additive.subset_sum.profile.compute"]
-            < positions["combinatorics.integer_set.sidon.decide"]
-        )
+        assert result.matches[0].operation_id == "additive.subset_sum.profile.compute"
 
 
 @pytest.mark.parametrize(

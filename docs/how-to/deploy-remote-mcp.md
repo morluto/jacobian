@@ -69,12 +69,14 @@ session handling.
 
 Each admitted `math.find` match request writes a bounded correlation identifier
 at INFO as `math.find query_hash=<16 hex characters>`. The value is the first
-16 hexadecimal characters of the SHA-256 digest of the UTF-8 mathematical
-need. Identical needs produce the same identifier; the identifier is not
-reversible to the need, and the need itself is not written. Inspection
+16 hexadecimal characters of an HMAC-SHA-256 digest of the UTF-8 mathematical
+need, keyed by a random process-local secret. Identical needs produce the same
+identifier only within that process; identifiers change after a restart and
+can differ across replicas. The key and need are not written. Inspection
 requests and `math.run` payloads are not included. Use the identifier to
-correlate discovery demand. Treat it as operator-correlation data when
-choosing access controls and retention; it does not contain the query text.
+correlate discovery demand within one process. Treat it as operator-correlation
+data when choosing access controls and retention; it does not contain the
+query text.
 
 ## Install the example service files
 

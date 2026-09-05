@@ -10,6 +10,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
+from jacobian._execution import OperationExecutionCancelledError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.triangle_free_diameter_augmentation._models import (
     TriangleFreeDiameterAugmentationBudget,
@@ -543,7 +544,7 @@ def _augmentation_worker_stdout_limit(graph: SimpleUndirectedGraph) -> int:
     return len(base) + len(graph_bytes) + 1024
 
 
-def solve_triangle_free_diameter_augmentation_values(
+def solve_triangle_free_diameter_augmentation_values(  # noqa: C901
     graph: SimpleUndirectedGraph,
     target_diameter: int,
     budget: TriangleFreeDiameterAugmentationBudget,
@@ -625,12 +626,9 @@ def solve_triangle_free_diameter_augmentation_values(
             )
     except OSError:
         return fallback("bounded augmentation worker could not be started")
-    if (
-        completed.timed_out
-        or completed.cancelled
-        or completed.stdout_exceeded
-        or completed.stderr_exceeded
-    ):
+    if completed.cancelled:
+        raise OperationExecutionCancelledError("augmentation worker cancelled")
+    if completed.timed_out or completed.stdout_exceeded or completed.stderr_exceeded:
         return fallback("bounded augmentation worker did not establish an outcome")
     if completed.returncode != 0:
         raise RuntimeError(

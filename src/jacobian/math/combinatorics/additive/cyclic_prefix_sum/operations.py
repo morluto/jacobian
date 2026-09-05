@@ -257,8 +257,7 @@ def _admit_forbidden_prefix_sequencing(
             "every forbidden value must match the source group rank",
         )
     if any(
-        type(coordinate) is not int
-        or len(str(abs(coordinate))) > MAX_MODULUS_DIGITS
+        type(coordinate) is not int or len(str(abs(coordinate))) > MAX_MODULUS_DIGITS
         for value in forbidden_values
         for coordinate in value
     ):

@@ -288,7 +288,7 @@ def test_inverse_reuses_canonical_integer_matrix() -> None:
     assert inverse == ((Fraction(1), Fraction(0)), (Fraction(0), Fraction(1)))
 
 
-def test_non_inverse_integer_requests_keep_order_32_envelope() -> None:
+def test_integer_requests_keep_operation_specific_envelopes() -> None:
     from pydantic import ValidationError
 
     from jacobian.math.lattices._hnf import compute_hermite_normal_form
@@ -322,17 +322,19 @@ def test_non_inverse_integer_requests_keep_order_32_envelope() -> None:
         LatticeReductionRequest.model_validate({"basis": {"entries": entries}})
     with pytest.raises(ValidationError):
         LatticeReductionRequest(basis=matrix)
-    with pytest.raises(ValidationError):
-        HermiteNormalFormRequest.model_validate({"matrix": {"entries": entries}})
-    with pytest.raises(ValidationError):
-        HermiteNormalFormRequest(matrix=matrix)
+    assert (
+        HermiteNormalFormRequest.model_validate({"matrix": {"entries": entries}}).matrix
+        == matrix
+    )
+    assert HermiteNormalFormRequest(matrix=matrix).matrix is matrix
 
     with pytest.raises(OperationDomainValidationError, match="32"):
         reduce_lattice_basis(LatticeReductionRequest.model_construct(basis=matrix))
-    with pytest.raises(OperationDomainValidationError, match="32"):
-        compute_hermite_normal_form(
-            HermiteNormalFormRequest.model_construct(matrix=matrix)
-        )
+    hermite = compute_hermite_normal_form(
+        HermiteNormalFormRequest.model_construct(matrix=matrix)
+    )
+    assert hermite.normal_form == matrix
+    assert hermite.transformation == matrix
 
     inverse_schema = _operation(
         "matrix.inverse.compute"
@@ -340,8 +342,10 @@ def test_non_inverse_integer_requests_keep_order_32_envelope() -> None:
     square_schema = SquareIntegerMatrixRequest.model_json_schema()
     integer_schema = IntegerMatrixRequest.model_json_schema()
     lattice_schema = LatticeReductionRequest.model_json_schema()
+    hermite_schema = HermiteNormalFormRequest.model_json_schema()
     assert _entry_axis_limit(inverse_schema, "matrix") == 128
     assert _entry_axis_limit(square_schema, "matrix") == 32
     assert _entry_axis_limit(integer_schema, "matrix") == MAX_EXACT_LINEAR_MATRIX_AXIS
     assert _entry_axis_limit(lattice_schema, "basis") == 32
+    assert _entry_axis_limit(hermite_schema, "matrix") == 128
     assert IntegerMatrix.model_json_schema()["properties"]["entries"]["maxItems"] == 128

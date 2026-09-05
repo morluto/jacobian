@@ -363,12 +363,13 @@ def test_lattice_reduction_request_rejects_order_33_identity() -> None:
     assert exc_info.value.errors()[0]["type"] == "lattice.budget_exceeded"
 
 
-def test_hermite_request_rejects_order_33_identity() -> None:
-    with pytest.raises(ValidationError) as exc_info:
-        HermiteNormalFormRequest.model_validate(
-            {"matrix": {"entries": _identity_entries(MAX_MATRIX_DIMENSION + 1)}}
-        )
-    assert exc_info.value.errors()[0]["type"] == "lattice.budget_exceeded"
+def test_hermite_accepts_order_33_identity() -> None:
+    request = HermiteNormalFormRequest.model_validate(
+        {"matrix": {"entries": _identity_entries(MAX_MATRIX_DIMENSION + 1)}}
+    )
+    result = compute_hermite_normal_form(request)
+    assert result.normal_form == request.matrix
+    assert result.transformation == request.matrix
 
 
 def test_lattice_reduction_accepts_order_32_identity() -> None:

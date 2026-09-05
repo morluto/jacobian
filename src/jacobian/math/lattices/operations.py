@@ -76,9 +76,11 @@ __all__ = [
 def hermite_normal_form(entries: list[list[int]]) -> tuple[Any, Any]:
     """Return the row Hermite normal form and its left transformation."""
 
-    import flint
+    from jacobian.math.lattices._hnf_backend import modular_row_hnf
+    from jacobian.math.lattices._hnf_bounds import admit_hermite_normal_form
 
-    return flint.fmpz_mat(entries).hnf(True)
+    admission = admit_hermite_normal_form(entries)
+    return modular_row_hnf(entries, admission)
 
 
 def reduce_basis(

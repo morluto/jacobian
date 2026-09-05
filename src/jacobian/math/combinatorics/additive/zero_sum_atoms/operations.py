@@ -93,8 +93,13 @@ def construct_zero_sum_atom_hypergraph(
                 mask |= 1 << position
             if running != zero:
                 continue
-            minimality_checks += len(atom_masks)
-            if any(atom_mask & mask == atom_mask for atom_mask in atom_masks):
+            contains_atom = False
+            for atom_mask in atom_masks:
+                minimality_checks += 1
+                if atom_mask & mask == atom_mask:
+                    contains_atom = True
+                    break
+            if contains_atom:
                 continue
             atom_masks.append(mask)
 

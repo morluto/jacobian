@@ -141,7 +141,7 @@ def test_full_z7_atom_family_is_complete() -> None:
     assert result.atom_count == 5
     assert result.total_incidences == 12
     assert result.subset_checks == 63
-    assert result.minimality_checks == 30
+    assert result.minimality_checks == 15
 
 
 def test_product_group_coordinates_and_parent_moduli_survive() -> None:

@@ -461,36 +461,14 @@ def _solve_augmentation_kernel(  # noqa: C901
             tri = sum(nx.triangles(g_aug).values()) // 3  # type: ignore[union-attr]
             if tri != 0:
                 solver.pop()
-                # should not happen due to constraints, treat as budget exceeded? but fail closed
-                return TriangleFreeDiameterAugmentationResult._from_kernel(
-                    graph=graph,
-                    target_diameter=target_diameter,
-                    status="SOLVER_BUDGET_EXCEEDED",
-                    added_edges=(),
-                    augmented_diameter=None,
-                    detail="solver witness violates triangle-free invariant",
-                )
+                raise RuntimeError("solver witness violates triangle-free invariant")
             if not nx.is_connected(g_aug):
                 solver.pop()
-                return TriangleFreeDiameterAugmentationResult._from_kernel(
-                    graph=graph,
-                    target_diameter=target_diameter,
-                    status="SOLVER_BUDGET_EXCEEDED",
-                    added_edges=(),
-                    augmented_diameter=None,
-                    detail="solver witness is disconnected",
-                )
+                raise RuntimeError("solver witness is disconnected")
             diam = int(nx.diameter(g_aug))
             if diam > target_diameter:
                 solver.pop()
-                return TriangleFreeDiameterAugmentationResult._from_kernel(
-                    graph=graph,
-                    target_diameter=target_diameter,
-                    status="SOLVER_BUDGET_EXCEEDED",
-                    added_edges=(),
-                    augmented_diameter=None,
-                    detail="solver witness exceeds target diameter",
-                )
+                raise RuntimeError("solver witness exceeds target diameter")
             solver.pop()
             return TriangleFreeDiameterAugmentationResult._from_kernel(
                 graph=graph,
@@ -635,8 +613,10 @@ def solve_triangle_free_diameter_augmentation_values(  # noqa: C901
         raise RuntimeError("bounded augmentation worker could not be started") from exc
     if completed.cancelled:
         raise OperationExecutionCancelledError("augmentation worker cancelled")
-    if completed.timed_out or completed.stdout_exceeded or completed.stderr_exceeded:
+    if completed.timed_out:
         return fallback("bounded augmentation worker did not establish an outcome")
+    if completed.stdout_exceeded or completed.stderr_exceeded:
+        raise RuntimeError("bounded augmentation worker exceeded its stream limit")
     if completed.returncode != 0:
         raise RuntimeError(
             "bounded augmentation worker failed before establishing an outcome"

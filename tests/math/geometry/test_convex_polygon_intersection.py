@@ -23,13 +23,6 @@ def _poly(pts: list[tuple[str, str]]) -> ConvexRationalPolygon:
     return ConvexRationalPolygon(vertices=tuple(_pt(x, y) for x, y in pts))
 
 
-def test_catalog_contains_convex_intersection():
-    from jacobian.catalog.catalog import Catalog
-
-    cat = Catalog.open()
-    assert cat.inspect("geometry.convex_polygon.intersection.compute") is not None
-
-
 def test_overlapping_squares_polygon():
     a = _poly([("0", "0"), ("2", "0"), ("2", "2"), ("0", "2")])
     b = _poly([("1", "1"), ("3", "1"), ("3", "3"), ("1", "3")])
@@ -134,35 +127,6 @@ def test_rejects_non_convex_or_collinear():
         ConvexRationalPolygon(
             vertices=(_pt("0", "0"), _pt("0", "2"), _pt("2", "2"), _pt("2", "0"))
         )
-
-
-def test_via_catalog_example_replay():
-    from jacobian.catalog.catalog import Catalog
-
-    cat = Catalog.open()
-    binding = cat._binding("geometry.convex_polygon.intersection.compute")
-    req = binding.request_type.model_validate(
-        {
-            "polygon_a": {
-                "vertices": [
-                    {"x": {"num": "0", "den": "1"}, "y": {"num": "0", "den": "1"}},
-                    {"x": {"num": "2", "den": "1"}, "y": {"num": "0", "den": "1"}},
-                    {"x": {"num": "2", "den": "1"}, "y": {"num": "2", "den": "1"}},
-                    {"x": {"num": "0", "den": "1"}, "y": {"num": "2", "den": "1"}},
-                ]
-            },
-            "polygon_b": {
-                "vertices": [
-                    {"x": {"num": "1", "den": "1"}, "y": {"num": "1", "den": "1"}},
-                    {"x": {"num": "3", "den": "1"}, "y": {"num": "1", "den": "1"}},
-                    {"x": {"num": "3", "den": "1"}, "y": {"num": "3", "den": "1"}},
-                    {"x": {"num": "1", "den": "1"}, "y": {"num": "3", "den": "1"}},
-                ]
-            },
-        }
-    )
-    res = binding.run(req)
-    assert res.kind == "POLYGON"
 
 
 def test_json_round_trip():

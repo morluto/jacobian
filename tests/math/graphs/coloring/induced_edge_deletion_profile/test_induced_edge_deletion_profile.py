@@ -407,12 +407,14 @@ def test_r1_and_large_r_shortcuts() -> None:
         assert row.min_deletions == 0
 
 
-def test_empty_request_validation() -> None:
-    # request model validation for r out of range
+def test_request_validation_and_large_trivial_colour_count() -> None:
     from pydantic import ValidationError
 
     g = _graph(["a"], [])
     with pytest.raises(ValidationError):
         InducedEdgeDeletionProfileRequest(graph=g, r=0)
-    with pytest.raises(ValidationError):
-        InducedEdgeDeletionProfileRequest(graph=g, r=100)
+    assert InducedEdgeDeletionProfileRequest(graph=g, r=100).r == 100
+    assert all(
+        row.min_deletions == 0
+        for row in compute_induced_edge_deletion_profile(g, 100).rows
+    )

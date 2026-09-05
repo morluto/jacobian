@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from itertools import combinations
 from typing import Annotated, Self
 
 from pydantic import Field, StrictInt, WithJsonSchema, model_validator
@@ -18,6 +19,8 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 MAX_INDUCED_DELETION_VERTICES = 8
 """Conservative vertex envelope for the complete 2^n profile (8 => 256 rows)."""
 
+# Values above the backend's colour-variable envelope are still exact trivial
+# cases whenever r covers an induced subset, so they are not an input bound.
 MAX_INDUCED_DELETION_R = MAX_COLORING_COLORS
 DEFAULT_INDUCED_SOLVER_CONFLICTS = 100_000
 MAX_INDUCED_RETAINED_LABEL_CHARACTERS = 1_000_000
@@ -48,7 +51,6 @@ class InducedEdgeDeletionProfileRequest(StrictModel):
     graph: InducedDeletionGraph
     r: StrictInt = Field(
         ge=1,
-        le=MAX_INDUCED_DELETION_R,
         description="Target colour count r >=1; D(S) is min deletions to make G[S] r-colourable.",
     )
     solver_conflicts: StrictInt = Field(
@@ -123,7 +125,7 @@ class InducedEdgeDeletionProfileResult(StrictModel):
     """Complete profile D_{G,r}(S) over all 2^n vertex subsets with per-size maxima."""
 
     graph: SimpleUndirectedGraph
-    r: StrictInt = Field(ge=1, le=MAX_INDUCED_DELETION_R)
+    r: StrictInt = Field(ge=1)
     solver_conflicts: StrictInt = Field(ge=1, le=MAX_SOLVER_CONFLICT_BUDGET)
     rows: tuple[InducedDeletionRow, ...]
     max_deletions_by_size: tuple[PerSizeMaximum, ...]
@@ -136,6 +138,16 @@ class InducedEdgeDeletionProfileResult(StrictModel):
             raise PydanticCustomError(
                 "graph.rows_must_cover_all_vertex_subsets",
                 "rows must cover all 2^n vertex subsets",
+            )
+        expected_subsets = tuple(
+            subset
+            for size in range(n + 1)
+            for subset in combinations(self.graph.vertices, size)
+        )
+        if tuple(row.vertex_subset for row in self.rows) != expected_subsets:
+            raise PydanticCustomError(
+                "graph.rows_must_cover_each_vertex_subset",
+                "rows must contain every canonical vertex subset exactly once",
             )
         if len(self.max_deletions_by_size) != n + 1:
             raise PydanticCustomError(

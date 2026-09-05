@@ -17,7 +17,6 @@ from jacobian._execution import (
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.coloring.induced_edge_deletion_profile._models import (
     DEFAULT_INDUCED_SOLVER_CONFLICTS,
-    MAX_INDUCED_DELETION_R,
     MAX_INDUCED_DELETION_VERTICES,
     MAX_INDUCED_EDGE_MATERIALIZATION,
     MAX_INDUCED_LEDGER_CONFLICTS,
@@ -41,6 +40,17 @@ def _require_execution_active(stage: str) -> None:
         and time.monotonic() >= execution.deadline
     ):
         raise OperationExecutionTimeoutError(f"request deadline expired {stage}")
+
+
+def _set_remaining_z3_timeout(solver: Any) -> None:
+    """Give each in-process Z3 call the request's remaining wall-time budget."""
+    execution = current_request_execution()
+    if execution is None or execution.deadline is None:
+        return
+    remaining_milliseconds = int((execution.deadline - time.monotonic()) * 1000)
+    if remaining_milliseconds <= 0:
+        raise OperationExecutionTimeoutError("request deadline expired before Z3 call")
+    solver.set("timeout", remaining_milliseconds)
 
 
 def _is_bipartite_vertices_edges(
@@ -97,6 +107,7 @@ def _z3_is_r_colorable(
     _require_execution_active("during r-colourability check")
     solver = z3.Solver()
     solver.set("max_conflicts", solver_conflicts)
+    _set_remaining_z3_timeout(solver)
     # map vertex -> int var
     var_map: dict[str, Any] = {}
     for v in vertices:
@@ -105,6 +116,7 @@ def _z3_is_r_colorable(
     for a, b in edges:
         solver.add(var_map[a] != var_map[b])
     outcome = solver.check()
+    _require_execution_active("after r-colourability check")
     if outcome == z3.sat:
         return True
     if outcome == z3.unsat:
@@ -142,6 +154,7 @@ def _z3_exists_deletion_leq_k(
         return k >= m
     solver = z3.Solver()
     solver.set("max_conflicts", solver_conflicts)
+    _set_remaining_z3_timeout(solver)
     color_vars: dict[str, Any] = {}
     for v in vertices:
         color_vars[v] = z3.Int(f"c_{v}")
@@ -165,6 +178,7 @@ def _z3_exists_deletion_leq_k(
             else:
                 solver.add(z3.Not(deletion_vars[idx]))
     outcome = solver.check()
+    _require_execution_active("after deletion feasibility check")
     if outcome == z3.sat:
         return True
     if outcome == z3.unsat:
@@ -183,11 +197,11 @@ def _admit_induced_edge_deletion_profile(
     r: int,
     solver_conflicts: int,
 ) -> None:
-    if type(r) is not int or not 1 <= r <= MAX_INDUCED_DELETION_R:
+    if type(r) is not int or r < 1:
         raise OperationDomainValidationError(
             location=("r",),
             code="graph.induced_edge_deletion.r_out_of_range",
-            message=f"r must be an integer between 1 and {MAX_INDUCED_DELETION_R}",
+            message="r must be a positive integer",
         )
     if type(solver_conflicts) is not int or not 1 <= solver_conflicts <= 1_000_000:
         raise OperationDomainValidationError(
@@ -247,6 +261,9 @@ def _admit_induced_edge_deletion_profile(
     # quick map for counting
     predicted_calls = 0
     # also track ledger
+    graph_is_bipartite = r == 2 and _is_bipartite_vertices_edges(
+        sorted_vertices, list(sorted_edges)
+    )
     for size in range(n + 1):
         for subset in combinations(sorted_vertices, size):
             _require_execution_active("during admission subset scan")
@@ -255,7 +272,7 @@ def _admit_induced_edge_deletion_profile(
             for a, b in sorted_edges:
                 if a in subset_set and b in subset_set:
                     m_s += 1
-            if m_s == 0 or r == 1 or r >= len(subset):
+            if m_s == 0 or r == 1 or r >= len(subset) or graph_is_bipartite:
                 continue
             # if we can shortcut 0-deletion check we still need at least 1 call worst
             # need to estimate worst 2*m_s+1

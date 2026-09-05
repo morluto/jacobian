@@ -22,6 +22,7 @@ MAX_INDUCED_DELETION_VERTICES = 8
 # Values above the backend's colour-variable envelope are still exact trivial
 # cases whenever r covers an induced subset, so they are not an input bound.
 MAX_INDUCED_DELETION_R = MAX_COLORING_COLORS
+MAX_INDUCED_DELETION_R_BITS = 4096
 DEFAULT_INDUCED_SOLVER_CONFLICTS = 100_000
 MAX_INDUCED_RETAINED_LABEL_CHARACTERS = 1_000_000
 MAX_INDUCED_EDGE_MATERIALIZATION = 200_000
@@ -51,6 +52,7 @@ class InducedEdgeDeletionProfileRequest(StrictModel):
     graph: InducedDeletionGraph
     r: StrictInt = Field(
         ge=1,
+        le=(1 << MAX_INDUCED_DELETION_R_BITS) - 1,
         description="Target colour count r >=1; D(S) is min deletions to make G[S] r-colourable.",
     )
     solver_conflicts: StrictInt = Field(
@@ -125,7 +127,7 @@ class InducedEdgeDeletionProfileResult(StrictModel):
     """Complete profile D_{G,r}(S) over all 2^n vertex subsets with per-size maxima."""
 
     graph: SimpleUndirectedGraph
-    r: StrictInt = Field(ge=1)
+    r: StrictInt = Field(ge=1, le=(1 << MAX_INDUCED_DELETION_R_BITS) - 1)
     solver_conflicts: StrictInt = Field(ge=1, le=MAX_SOLVER_CONFLICT_BUDGET)
     rows: tuple[InducedDeletionRow, ...]
     max_deletions_by_size: tuple[PerSizeMaximum, ...]

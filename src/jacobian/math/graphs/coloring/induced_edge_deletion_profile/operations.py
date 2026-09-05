@@ -109,10 +109,9 @@ def _z3_is_r_colorable(
     solver.set("max_conflicts", solver_conflicts)
     _set_remaining_z3_timeout(solver)
     # map vertex -> int var
-    var_map: dict[str, Any] = {}
-    for v in vertices:
-        var_map[v] = z3.Int(f"c_{v}")
-        solver.add(var_map[v] >= 0, var_map[v] < r)
+    var_map = {vertex: z3.Int(f"c_{index}") for index, vertex in enumerate(vertices)}
+    for variable in var_map.values():
+        solver.add(variable >= 0, variable < r)
     for a, b in edges:
         solver.add(var_map[a] != var_map[b])
     outcome = solver.check()
@@ -155,10 +154,9 @@ def _z3_exists_deletion_leq_k(
     solver = z3.Solver()
     solver.set("max_conflicts", solver_conflicts)
     _set_remaining_z3_timeout(solver)
-    color_vars: dict[str, Any] = {}
-    for v in vertices:
-        color_vars[v] = z3.Int(f"c_{v}")
-        solver.add(color_vars[v] >= 0, color_vars[v] < r)
+    color_vars = {vertex: z3.Int(f"c_{index}") for index, vertex in enumerate(vertices)}
+    for variable in color_vars.values():
+        solver.add(variable >= 0, variable < r)
     deletion_vars = [z3.Bool(f"d_{idx}") for idx in range(m)]
     for idx, (a, b) in enumerate(edges):
         # if not deleted then colours differ
@@ -197,7 +195,7 @@ def _admit_induced_edge_deletion_profile(
     r: int,
     solver_conflicts: int,
 ) -> None:
-    if type(r) is not int or r < 1:
+    if type(r) is not int or r < 1 or r.bit_length() > 4096:
         raise OperationDomainValidationError(
             location=("r",),
             code="graph.induced_edge_deletion.r_out_of_range",

@@ -58,6 +58,15 @@ def _admit_zero_sum_atom_source(source: ZeroSumAtomSource) -> None:
             "complete zero-sum subset enumeration exceeds the "
             f"{MAX_ATOM_SUBSET_CHECKS:,}-subset bound",
         )
+    # Every retained atom is a nonempty subset.  Establish the public edge
+    # envelope before enumerating the subset lattice, rather than discovering
+    # an unrepresentable family after exhaustive work.
+    if subset_checks - 1 > MAX_ATOM_EDGES:
+        _reject(
+            ("source", "elements"),
+            "zero_sum_atom.result_edge_bound",
+            "source subset lattice exceeds the exact atom-family edge envelope",
+        )
 
 
 def construct_zero_sum_atom_hypergraph(

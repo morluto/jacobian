@@ -363,7 +363,7 @@ class SubsetFamilyOrbitProfileResult(StrictModel):
     total_full_orbit_size: int = Field(ge=0, le=MAX_ORBIT_PROFILE_IMAGES)
 
     @model_validator(mode="after")
-    def bind_subset_family_orbit_profile(self) -> Self:
+    def bind_subset_family_orbit_profile(self) -> Self:  # noqa: C901
         if self.rows != tuple(
             sorted(
                 self.rows,

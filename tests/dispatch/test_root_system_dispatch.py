@@ -10,6 +10,7 @@ from jacobian.dispatch import invoke_operation
 from jacobian.math.groups.root_systems._models import (
     MAX_RANK,
     MAX_REFLECTION_COORDINATE,
+    MAX_REFLECTION_REPRESENTABLE,
 )
 
 
@@ -32,9 +33,10 @@ def test_simple_reflection_catalog_contract_matches_dispatch() -> None:
         in properties["vector"]["description"]
     )
     assert str(MAX_REFLECTION_COORDINATE) in properties["vector"]["description"]
+    assert str(MAX_REFLECTION_REPRESENTABLE) in properties["vector"]["description"]
     assert properties["vector"]["items"] == {
-        "maximum": MAX_REFLECTION_COORDINATE,
-        "minimum": -MAX_REFLECTION_COORDINATE,
+        "maximum": MAX_REFLECTION_REPRESENTABLE,
+        "minimum": -MAX_REFLECTION_REPRESENTABLE,
         "type": "integer",
     }
     assert (

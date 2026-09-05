@@ -45,6 +45,38 @@ class MixingTimeSearchResult:
     max_total_variation_distance: Fraction
 
 
+def _admit_supplied_stationary(
+    matrix: TransitionMatrix,
+    stationary: tuple[Fraction, ...],
+) -> None:
+    dimension = len(matrix)
+    if len(stationary) != dimension:
+        _reject(
+            ("stationary",),
+            "mixing_stationary_length_mismatch",
+            "supplied stationary vector must have one entry per state",
+        )
+    if any(value < 0 for value in stationary) or sum(stationary) != 1:
+        _reject(
+            ("stationary",),
+            "mixing_stationary_not_probability",
+            "supplied stationary vector must be nonnegative and sum to one",
+        )
+    for target in range(dimension):
+        if (
+            sum(
+                stationary[source] * matrix[source][target]
+                for source in range(dimension)
+            )
+            != stationary[target]
+        ):
+            _reject(
+                ("stationary",),
+                "mixing_stationary_not_invariant",
+                "supplied vector is not stationary: pi P must equal pi",
+            )
+
+
 def mixing_time(
     matrix: TransitionMatrix,
     stationary: tuple[Fraction, ...],
@@ -52,6 +84,16 @@ def mixing_time(
     max_steps: int,
 ) -> MixingTimeSearchResult:
     """Return the first exact worst-case epsilon-mixing step within the bound."""
+    _admit_transition_matrix(matrix)
+    _admit_mixing(matrix, epsilon, max_steps)
+    _admit_supplied_stationary(matrix, stationary)
+    irreducible, aperiodic = _ergodic_properties(matrix)
+    if not (irreducible and aperiodic):
+        _reject(
+            ("matrix",),
+            "mixing_not_ergodic",
+            "mixing time requires an irreducible aperiodic chain",
+        )
     import sympy
 
     transition = sympy.Matrix(

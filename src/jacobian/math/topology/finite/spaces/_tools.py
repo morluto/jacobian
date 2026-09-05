@@ -63,7 +63,7 @@ def _kolmogorov_quotient(
 
 
 # A Sierpinski space: points {a, b}, preorder rows: a -> {a}, b -> {a, b}
-# (a <= b in specialization order, so open sets are {}, {a}, {a,b}).
+# (a <= b in specialization order, so open sets are {}, {b}, {a,b}).
 _SPACE = {
     "points": ["a", "b"],
     "preorder": [[0], [0, 1]],
@@ -93,7 +93,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="topology.finite.closure.compute",
         title="Compute the closure of a subset",
         description="Return the smallest closed set containing the subset. The closure "
-        "of x is the up-set of x in the specialization preorder.",
+        "of x is the down-set of x in the specialization preorder (the stored "
+        "preorder row).",
         request_type=SubsetRequest,
         result_type=ClosureResult,
         run=_closure,

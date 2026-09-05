@@ -32,6 +32,12 @@ def _admitted_max_degree(order: int) -> int:
     return degree - 1
 
 
+def _schreier_sims_order(group: PermutationGroup) -> int:
+    """Return the exact group order via Schreier-Sims without enumeration."""
+    perms = [Permutation(list(g)) for g in group.generators]
+    return int(SympyPermutationGroup(perms).order())
+
+
 def _admit_request(
     group: PermutationGroup, prime: int, max_degree: int
 ) -> list[tuple[int, ...]]:
@@ -57,8 +63,7 @@ def _admit_request(
                 f"max_degree must be an integer between 0 and {MAX_COCHAIN_DEGREE}"
             ),
         )
-    elements = _enumerate_group_elements(group)
-    order = len(elements)
+    order = _schreier_sims_order(group)
     if order > MAX_GROUP_ORDER:
         raise OperationDomainValidationError(
             location=("group",),
@@ -67,6 +72,13 @@ def _admit_request(
                 f"enumerated group order {order} exceeds the bounded maximum "
                 f"{MAX_GROUP_ORDER}"
             ),
+        )
+    elements = _enumerate_group_elements(group)
+    if len(elements) != order:
+        raise OperationDomainValidationError(
+            location=("group",),
+            code="group_cohomology.group_enumeration_mismatch",
+            message="enumerated group elements do not match the Schreier-Sims order",
         )
     admitted_degree = _admitted_max_degree(order)
     if max_degree > admitted_degree:

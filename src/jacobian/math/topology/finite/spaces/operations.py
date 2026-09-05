@@ -37,18 +37,23 @@ def minimal_neighbourhoods(
 ) -> tuple[tuple[int, ...], ...]:
     """Return the minimal open neighbourhood of each point.
 
-    In an Alexandrov space, the minimal open neighbourhood of x is {y : y <= x}
-    = the down-set of x in the specialization preorder.
+    The value stores ``preorder[y] = {x : x <= y}`` (the down-set, i.e. the
+    closure of {y}). The minimal open neighbourhood of x is the up-set
+    ``{y : x in preorder[y]}``.
     """
-    return space.preorder
+    count = len(space.points)
+    return tuple(
+        tuple(sorted(y for y in range(count) if x in space.preorder[y]))
+        for x in range(count)
+    )
 
 
 def interior(space: FiniteTopologicalSpace, subset: frozenset[int]) -> frozenset[int]:
     """Return the interior of a subset (largest open set contained in it)."""
+    neighbourhoods = minimal_neighbourhoods(space)
     result: set[int] = set()
     for i in range(len(space.points)):
-        nbhd = set(space.preorder[i])
-        if nbhd.issubset(subset):
+        if set(neighbourhoods[i]).issubset(subset):
             result.add(i)
     return frozenset(result)
 
@@ -59,9 +64,7 @@ def closure(space: FiniteTopologicalSpace, subset: frozenset[int]) -> frozenset[
     for i in subset:
         if not 0 <= i < len(space.points):
             raise ValueError("subset index out of range")
-        for j in range(len(space.points)):
-            if i in space.preorder[j]:
-                result.add(j)
+        result.update(space.preorder[i])
     return frozenset(result)
 
 

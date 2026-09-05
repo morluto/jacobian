@@ -7,8 +7,12 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
+from jacobian.canonical import (
+    format_canonical_integer,
+    parse_canonical_integer,
+)
 from jacobian.math.polynomials._models import IntegerPolynomial
 
 
@@ -52,11 +56,13 @@ class HenselRootResult(StrictModel):
 
     Retains the source polynomial and the original residue for downstream use.
     The producer establishes the Hensel-lift invariant; ordinary result parsing
-    checks only the serialized shape.
+    checks only the serialized shape. ``lifted_root`` uses the canonical
+    decimal-integer representation so residues above the interoperable JSON
+    integer range still cross the operation-result envelope exactly.
     """
 
     polynomial: IntegerPolynomial
-    lifted_root: int = Field(ge=0)
+    lifted_root: CanonicalInteger
     prime: int = Field(ge=2, le=MAX_PRIME)
     root_mod_p: int = Field(ge=0)
     precision: int = Field(ge=1, le=MAX_PRECISION)
@@ -68,7 +74,7 @@ class HenselRootResult(StrictModel):
             raise _validation_error(
                 "padic_arithmetic.root_out_of_range", "root_mod_p must be in 0..p-1"
             )
-        if self.lifted_root >= self.prime**self.precision:
+        if parse_canonical_integer(self.lifted_root) >= self.prime**self.precision:
             raise _validation_error(
                 "padic_arithmetic.lifted_root_out_of_range",
                 "lifted_root must be in 0..p^k - 1",
@@ -91,7 +97,7 @@ class HenselRootResult(StrictModel):
     ) -> Self:
         return cls.model_construct(
             polynomial=polynomial,
-            lifted_root=lifted_root,
+            lifted_root=format_canonical_integer(lifted_root),
             prime=prime,
             root_mod_p=root_mod_p,
             precision=precision,
@@ -135,8 +141,14 @@ class PAdicRootsRequest(StrictModel):
 class PAdicRootEntry(StrictModel):
     """One exact root of f mod p^k lifted from a simple root mod p."""
 
-    root: int = Field(ge=0)
+    root: CanonicalInteger
     root_type: Literal["SIMPLE"] = "SIMPLE"
+
+    @classmethod
+    def _from_kernel(cls, root: int) -> Self:
+        return cls.model_construct(
+            root=format_canonical_integer(root), root_type="SIMPLE"
+        )
 
 
 class PAdicRootsResult(StrictModel):
@@ -173,7 +185,7 @@ class PAdicRootsResult(StrictModel):
                 "multiple residues must lie in 0..p-1",
             )
         modulus = self.prime**self.precision
-        roots = tuple(entry.root for entry in self.roots)
+        roots = tuple(parse_canonical_integer(entry.root) for entry in self.roots)
         if any(root >= modulus for root in roots):
             raise _validation_error(
                 "padic_arithmetic.root_out_of_range", "roots must lie in 0..p^k - 1"

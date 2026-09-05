@@ -79,10 +79,11 @@ def _domain_matrix(matrix: PrimeFieldMatrix) -> Any:
     import sympy
     from sympy.polys.matrices import DomainMatrix
 
+    field = sympy.GF(matrix.prime)
     return DomainMatrix(
-        [list(row) for row in matrix.entries],
+        [[field(value) for value in row] for row in matrix.entries],
         (len(matrix.entries), matrix.columns),
-        sympy.GF(matrix.prime),
+        field,
     )
 
 

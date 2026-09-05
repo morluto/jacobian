@@ -87,10 +87,11 @@ def _boundary_rank(
         import sympy
         from sympy.polys.matrices import DomainMatrix
 
+        field = sympy.GF(algebra.prime)
         domain_matrix = DomainMatrix(
-            [list(row) for row in entries],
+            [[field(value) for value in row] for row in entries],
             (len(entries), len(entries[0])),
-            sympy.GF(algebra.prime),
+            field,
         )
         return int(domain_matrix.rank())
 

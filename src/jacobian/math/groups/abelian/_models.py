@@ -194,9 +194,30 @@ class QuotientRequest(StrictModel):
 
 
 class PresentationNormalizeResult(StrictModel):
-    invariant_factors: tuple[int, ...]
-    order: int = Field(ge=1)
-    rank: int = Field(ge=0)
+    """The canonical finite abelian-group presentation."""
+
+    presentation: AbelianPresentation
+
+    @property
+    def invariant_factors(self) -> tuple[int, ...]:
+        """Project the canonical invariant factors."""
+
+        return self.presentation.invariant_factors
+
+    @property
+    def order(self) -> int:
+        """Return the order of the presented finite group."""
+
+        order = 1
+        for factor in self.presentation.invariant_factors:
+            order *= factor
+        return order
+
+    @property
+    def rank(self) -> int:
+        """The finite-only contract admits no free summands."""
+
+        return 0
 
 
 class ElementReduceResult(StrictModel):
@@ -204,18 +225,31 @@ class ElementReduceResult(StrictModel):
 
 
 class ElementEqualResult(StrictModel):
+    """A source-bound equality claim for two finite abelian group elements."""
+
+    invariant_factors: tuple[int, ...]
+    coordinates_a: tuple[int, ...]
+    coordinates_b: tuple[int, ...]
     equal: bool
 
 
 class ElementOrderResult(StrictModel):
+    """A source-bound order claim for a finite abelian group element."""
+
+    invariant_factors: tuple[int, ...]
+    coordinates: tuple[int, ...]
     order: int = Field(ge=1)
 
 
 class SubgroupGeneratedResult(StrictModel):
+    invariant_factors: tuple[int, ...]
+    generators: tuple[tuple[int, ...], ...]
     index: int = Field(ge=1)
     coset_representatives: tuple[tuple[int, ...], ...] = ()
 
 
 class QuotientResult(StrictModel):
+    invariant_factors: tuple[int, ...]
+    subgroup_generators: tuple[tuple[int, ...], ...]
     quotient_invariant_factors: tuple[int, ...] = ()
     quotient_order: int = Field(ge=1)

@@ -7,6 +7,8 @@ from jacobian.math.graphs.polynomials.operations import (
     independence_polynomial_coefficients,
     matching_polynomial,
     tutte_polynomial,
+    verify_graph_polynomial,
+    verify_independence_polynomial,
 )
 
 __all__ = [
@@ -16,4 +18,6 @@ __all__ = [
     "independence_polynomial_coefficients",
     "matching_polynomial",
     "tutte_polynomial",
+    "verify_graph_polynomial",
+    "verify_independence_polynomial",
 ]

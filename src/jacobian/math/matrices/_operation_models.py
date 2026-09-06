@@ -451,11 +451,14 @@ class NullspaceResult(StrictModel):
     ambient_dimension: int = Field(ge=0, le=MAX_SPARSE_RATIONAL_MATRIX_AXIS)
     rank: int = Field(ge=0, le=MAX_SPARSE_RATIONAL_MATRIX_AXIS)
     nullity: int = Field(ge=0, le=MAX_SPARSE_RATIONAL_MATRIX_AXIS)
-    basis_vectors: tuple[tuple[CanonicalRational, ...], ...] = Field(
-        max_length=MAX_SPARSE_RATIONAL_MATRIX_AXIS
-    )
+    basis_matrix: RationalMatrix
     free_columns: tuple[int, ...] = Field(max_length=MAX_SPARSE_RATIONAL_MATRIX_AXIS)
     convention: Literal["RREF_FUNDAMENTAL_BASIS"] = "RREF_FUNDAMENTAL_BASIS"
+
+    @property
+    def basis_vectors(self) -> tuple[tuple[CanonicalRational, ...], ...]:
+        """Native row projection of the canonical QQ basis matrix."""
+        return self.basis_matrix.entries
 
     @classmethod
     def _from_kernel(cls, **values: Any) -> Self:
@@ -475,7 +478,7 @@ class NullspaceResult(StrictModel):
             raise _validation_error(
                 "shape_mismatch", "basis vector count must equal nullity"
             )
-        if any(len(vector) != self.ambient_dimension for vector in self.basis_vectors):
+        if self.basis_matrix.column_count != self.ambient_dimension:
             raise _validation_error(
                 "shape_mismatch", "each basis vector must have the ambient dimension"
             )
@@ -522,8 +525,20 @@ class CharacteristicPolynomialResult(StrictModel):
 
 
 class MatrixInverseResult(StrictModel):
+    matrix: IntegerMatrix
     inverse: RationalMatrix
     convention: Literal["TWO_SIDED_INVERSE_OVER_QQ"] = "TWO_SIDED_INVERSE_OVER_QQ"
+
+    @model_validator(mode="after")
+    def require_source_shape(self) -> Self:
+        if self.matrix.row_count != self.matrix.column_count or (
+            self.inverse.row_count,
+            self.inverse.column_count,
+        ) != (self.matrix.row_count, self.matrix.column_count):
+            raise _validation_error(
+                "shape_mismatch", "inverse must match its square source"
+            )
+        return self
 
 
 class MatrixTraceResult(StrictModel):
@@ -538,16 +553,31 @@ class MatrixTraceResult(StrictModel):
 
 
 class MatrixProductResult(StrictModel):
+    left: RationalMatrix
+    right: RationalMatrix
     product: RationalMatrix
-    left_rows: int = Field(ge=0, le=MAX_MATRIX_PRODUCT_AXIS)
-    inner_dimension: int = Field(ge=0, le=MAX_MATRIX_PRODUCT_AXIS)
-    right_columns: int = Field(ge=0, le=MAX_MATRIX_PRODUCT_AXIS)
     convention: Literal["STANDARD_ROW_BY_COLUMN_PRODUCT_OVER_QQ"] = (
         "STANDARD_ROW_BY_COLUMN_PRODUCT_OVER_QQ"
     )
 
+    @property
+    def left_rows(self) -> int:
+        return self.left.row_count
+
+    @property
+    def inner_dimension(self) -> int:
+        return self.left.column_count
+
+    @property
+    def right_columns(self) -> int:
+        return self.right.column_count
+
     @model_validator(mode="after")
     def require_product_shape(self) -> Self:
+        if self.left.column_count != self.right.row_count:
+            raise _validation_error(
+                "shape_mismatch", "product operands must have matching inner axes"
+            )
         if len(self.product.entries) != self.left_rows:
             raise _validation_error(
                 "budget_exceeded", "product row count must equal left_rows"
@@ -615,8 +645,20 @@ class RationalLinearSolveResult(StrictModel):
 
 
 class MatrixAdjugateResult(StrictModel):
+    matrix: IntegerMatrix
     adjugate: IntegerMatrix
     convention: Literal["CLASSICAL_ADJUGATE"] = "CLASSICAL_ADJUGATE"
+
+    @model_validator(mode="after")
+    def require_source_shape(self) -> Self:
+        if self.matrix.row_count != self.matrix.column_count or (
+            self.adjugate.row_count,
+            self.adjugate.column_count,
+        ) != (self.matrix.row_count, self.matrix.column_count):
+            raise _validation_error(
+                "shape_mismatch", "adjugate must match its square source"
+            )
+        return self
 
 
 class MatrixPermanentResult(StrictModel):
@@ -635,11 +677,25 @@ class MatrixKroneckerProductRequest(_MatrixRequest):
 class MatrixKroneckerProductResult(StrictModel):
     """The Kronecker product of two bounded matrices over QQ."""
 
+    left: RationalMatrix
+    right: RationalMatrix
     product: RationalMatrix
-    left_rows: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
-    left_columns: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
-    right_rows: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
-    right_columns: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
+
+    @property
+    def left_rows(self) -> int:
+        return self.left.row_count
+
+    @property
+    def left_columns(self) -> int:
+        return self.left.column_count
+
+    @property
+    def right_rows(self) -> int:
+        return self.right.row_count
+
+    @property
+    def right_columns(self) -> int:
+        return self.right.column_count
 
     @model_validator(mode="after")
     def require_product_shape(self) -> Self:
@@ -667,6 +723,7 @@ class MatrixPartialTraceRequest(_MatrixRequest):
 class MatrixPartialTraceResult(StrictModel):
     """The partial trace over the traced subsystem of a composite matrix."""
 
+    matrix: RationalMatrix
     reduced_matrix: RationalMatrix
     traced_dimension: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
     kept_dimension: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
@@ -674,6 +731,12 @@ class MatrixPartialTraceResult(StrictModel):
 
     @model_validator(mode="after")
     def require_reduced_shape(self) -> Self:
+        order = self.traced_dimension * self.kept_dimension
+        if (self.matrix.row_count, self.matrix.column_count) != (order, order):
+            raise _validation_error(
+                "shape_mismatch",
+                "partial trace source must match the tensor dimensions",
+            )
         if len(self.reduced_matrix.entries) != self.kept_dimension:
             raise _validation_error(
                 "shape_mismatch", "reduced matrix row count must equal kept_dimension"

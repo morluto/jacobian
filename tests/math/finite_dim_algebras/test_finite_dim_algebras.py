@@ -4,13 +4,14 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.finite_dim_algebras import center_basis
+from jacobian.math.finite_dim_algebras import center_basis, verify_center
 from jacobian.math.finite_dim_algebras._models import (
     MAX_COMMUTATOR_ELIMINATION_WORK,
     MAX_DIM,
     MAX_REQUEST_ENCODING_DIM,
     MAX_STRUCTURE_CONSTANT_ENTRIES,
     CenterRequest,
+    CenterResult,
     StructureConstants,
     commutator_elimination_work,
 )
@@ -124,6 +125,33 @@ def test_center_of_matrix_algebra_is_scalars() -> None:
     (basis_vec,) = result.center_basis
     assert _algebra_commutes(M2_F2, basis_vec)
     assert basis_vec != (0, 0, 0, 0)
+
+
+@pytest.mark.parametrize("algebra", [ZERO_ALG_2, NONCOMM_ALG_2, M2_F2])
+def test_serialized_center_basis_retains_source_and_empty_axes(
+    algebra: StructureConstants,
+) -> None:
+    claim = compute_center(CenterRequest(algebra=algebra))
+    decoded = CenterResult.model_validate_json(claim.model_dump_json())
+    assert decoded.basis_matrix.columns == algebra.dimension
+    assert verify_center(decoded)
+
+
+@pytest.mark.parametrize("entries", [[[0, 0, 0, 0]], [[1, 0, 0, 0]]])
+def test_serialized_center_rejects_zero_or_noncentral_basis(
+    entries: list[list[int]],
+) -> None:
+    payload = compute_center(CenterRequest(algebra=M2_F2)).model_dump(mode="json")
+    payload["basis_matrix"]["entries"] = entries
+    assert not verify_center(CenterResult.model_validate(payload))
+
+
+def test_serialized_center_checks_independence_but_allows_another_basis() -> None:
+    payload = compute_center(CenterRequest(algebra=ZERO_ALG_2)).model_dump(mode="json")
+    payload["basis_matrix"]["entries"] = [[1, 1], [0, 1]]
+    assert verify_center(CenterResult.model_validate(payload))
+    payload["basis_matrix"]["entries"] = [[1, 1], [1, 1]]
+    assert not verify_center(CenterResult.model_validate(payload))
 
 
 @pytest.mark.parametrize(

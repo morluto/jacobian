@@ -4,9 +4,14 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry._models import RationalPoint2D
-from jacobian.math.geometry.euclidean._models import Triangle
+from jacobian.math.geometry.euclidean._models import (
+    AngleEqualityResult,
+    Triangle,
+    TriangleSimilarityResult,
+)
 
 
 def _vector(
@@ -44,10 +49,12 @@ def _squared_segment_ratio_data(
 def squared_segment_ratio(
     first: tuple[RationalPoint2D, RationalPoint2D],
     second: tuple[RationalPoint2D, RationalPoint2D],
-) -> Fraction:
+) -> CanonicalRational:
     """Return the exact ratio of the two segments' squared lengths."""
 
-    return _squared_segment_ratio_data(first, second)[2]
+    return CanonicalRational.from_fraction(
+        _squared_segment_ratio_data(first, second)[2]
+    )
 
 
 def angles_equal(
@@ -83,9 +90,28 @@ def angles_equal(
     )
 
 
+def verify_angle_equality(claim: AngleEqualityResult) -> bool:
+    """Check the angle-equality relation asserted by a serialized claim."""
+
+    request = claim.request
+    return (
+        angles_equal(
+            request.vertex1,
+            request.ray1_a,
+            request.ray1_b,
+            request.vertex2,
+            request.ray2_a,
+            request.ray2_b,
+        )
+        is claim.equal
+    )
+
+
 def triangles_similar(first: Triangle, second: Triangle) -> bool:
     """Decide whether two nondegenerate triangles are similar."""
 
+    _admit_triangle(first, location=("triangle1",))
+    _admit_triangle(second, location=("triangle2",))
     first_sides = sorted(
         (
             _squared_distance(first.a, first.b),
@@ -106,4 +132,34 @@ def triangles_similar(first: Triangle, second: Triangle) -> bool:
     )
 
 
-__all__ = ["angles_equal", "squared_segment_ratio", "triangles_similar"]
+def verify_triangle_similarity(claim: TriangleSimilarityResult) -> bool:
+    """Check the triangle-similarity relation asserted by a serialized claim."""
+
+    return (
+        triangles_similar(
+            claim.request.triangle1,
+            claim.request.triangle2,
+        )
+        is claim.similar
+    )
+
+
+def _admit_triangle(triangle: Triangle, *, location: tuple[str, ...]) -> None:
+    """Admit nondegeneracy with a fixed number of bounded rational operations."""
+    bx, by = _vector(triangle.a, triangle.b)
+    cx, cy = _vector(triangle.a, triangle.c)
+    if bx * cy == by * cx:
+        raise OperationDomainValidationError(
+            location=location,
+            code="geometry.triangle_non_degenerate",
+            message="triangle must be non-degenerate",
+        )
+
+
+__all__ = [
+    "angles_equal",
+    "squared_segment_ratio",
+    "triangles_similar",
+    "verify_angle_equality",
+    "verify_triangle_similarity",
+]

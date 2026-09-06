@@ -21,10 +21,11 @@ from jacobian.math.geometry._models import (
     CircumradiusProfileResult,
     CircumradiusTripleEntry,
     ClosedSegment2D,
+    CollinearityResult,
     CollinearTripleWitness,
+    ConcyclicityResult,
     ConcyclicQuadrupleWitness,
     GeneralPositionResult,
-    GeometryBooleanResult,
     GeometryCircleResult,
     GeometryConvexHullResult,
     GeometryLineIntersectionResult,
@@ -65,6 +66,10 @@ __all__ = [
     "signed_area",
     "simple_polygon",
     "squared_distance",
+    "verify_collinearity",
+    "verify_concyclicity",
+    "verify_polygon_point_classification",
+    "verify_simple_polygon",
 ]
 
 
@@ -362,34 +367,51 @@ def segment_intersection(
 
 
 def collinear(
-    first_point: RationalPoint2D,
-    second_point: RationalPoint2D,
-    third_point: RationalPoint2D,
-) -> GeometryBooleanResult:
+    first: RationalPoint2D, second: RationalPoint2D, third: RationalPoint2D
+) -> CollinearityResult:
     from sympy.geometry import Point2D
 
-    return GeometryBooleanResult(
-        holds=Point2D.is_collinear(
-            _point(first_point), _point(second_point), _point(third_point)
-        )
+    return CollinearityResult(
+        first=first,
+        second=second,
+        third=third,
+        collinear=Point2D.is_collinear(_point(first), _point(second), _point(third)),
     )
 
 
 def concyclic(
-    first_point: RationalPoint2D,
-    second_point: RationalPoint2D,
-    third_point: RationalPoint2D,
-    fourth_point: RationalPoint2D,
-) -> GeometryBooleanResult:
+    first: RationalPoint2D,
+    second: RationalPoint2D,
+    third: RationalPoint2D,
+    fourth: RationalPoint2D,
+) -> ConcyclicityResult:
     from sympy.geometry import Point2D
 
-    return GeometryBooleanResult(
-        holds=Point2D.is_concyclic(
-            _point(first_point),
-            _point(second_point),
-            _point(third_point),
-            _point(fourth_point),
-        )
+    return ConcyclicityResult(
+        first=first,
+        second=second,
+        third=third,
+        fourth=fourth,
+        concyclic=Point2D.is_concyclic(
+            _point(first), _point(second), _point(third), _point(fourth)
+        ),
+    )
+
+
+def verify_collinearity(claim: CollinearityResult) -> bool:
+    """Check the collinearity relation asserted by a serialized claim."""
+
+    return (
+        collinear(claim.first, claim.second, claim.third).collinear is claim.collinear
+    )
+
+
+def verify_concyclicity(claim: ConcyclicityResult) -> bool:
+    """Check the concyclicity relation asserted by a serialized claim."""
+
+    return (
+        concyclic(claim.first, claim.second, claim.third, claim.fourth).concyclic
+        is claim.concyclic
     )
 
 
@@ -523,6 +545,8 @@ def signed_area(points: tuple[RationalPoint2D, ...]) -> GeometryRationalResult:
 
 
 def simple_polygon(points: tuple[RationalPoint2D, ...]) -> SimplePolygonDecisionResult:
+    """Decide simplicity for one structural polygon value."""
+
     checked = 0
     for first in range(len(points)):
         for second in range(first + 1, len(points)):
@@ -550,6 +574,7 @@ def simple_polygon(points: tuple[RationalPoint2D, ...]) -> SimplePolygonDecision
             )
             if not valid:
                 return SimplePolygonDecisionResult(
+                    polygon=points,
                     vertex_count=len(points),
                     is_simple=False,
                     checked_edge_pairs=checked,
@@ -560,33 +585,53 @@ def simple_polygon(points: tuple[RationalPoint2D, ...]) -> SimplePolygonDecision
                     ),
                 )
     return SimplePolygonDecisionResult(
+        polygon=points,
         vertex_count=len(points),
         is_simple=True,
         checked_edge_pairs=checked,
     )
 
 
+def verify_simple_polygon(claim: SimplePolygonDecisionResult) -> bool:
+    """Check the exact simplicity decision asserted by a serialized claim."""
+
+    return simple_polygon(claim.polygon) == claim
+
+
 def classify_polygon_point(
-    point_value: RationalPoint2D,
-    polygon_points: tuple[RationalPoint2D, ...],
+    polygon: tuple[RationalPoint2D, ...], point_value: RationalPoint2D
 ) -> PolygonPointClassificationResult:
     from sympy.geometry import Polygon
 
-    _admit_simple_polygon_point(polygon_points)
+    _admit_simple_polygon_point(polygon)
     point = _point(point_value)
-    points = tuple(_point(item) for item in polygon_points)
+    points = tuple(_point(item) for item in polygon)
     for index, start in enumerate(points):
         if _on_segment(point, start, points[(index + 1) % len(points)]):
             return PolygonPointClassificationResult(
+                polygon=polygon,
+                point=point_value,
                 polygon_vertex_count=len(points),
                 classification="BOUNDARY",
                 boundary_edge_index=index,
             )
-    polygon = Polygon(*points)
+    geometric_polygon = Polygon(*points)
     return PolygonPointClassificationResult(
+        polygon=polygon,
+        point=point_value,
         polygon_vertex_count=len(points),
-        classification=("INSIDE" if polygon.encloses_point(point) else "OUTSIDE"),
+        classification=(
+            "INSIDE" if geometric_polygon.encloses_point(point) else "OUTSIDE"
+        ),
     )
+
+
+def verify_polygon_point_classification(
+    claim: PolygonPointClassificationResult,
+) -> bool:
+    """Check the polygon-point relation asserted by a serialized claim."""
+
+    return classify_polygon_point(claim.polygon, claim.point) == claim
 
 
 def convex_hull_points(

@@ -13,7 +13,28 @@ from jacobian.math.graphs.chordal._models import (
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
-__all__ = ["recognize_chordal"]
+__all__ = ["recognize_chordal", "verify_chordality"]
+
+
+def verify_chordality(claim: ChordalRecognitionResult) -> bool:
+    """Check the PEO or chordless-cycle relation without recognition replay.
+
+    PEO work shares recognition's degree-square admission. Checking a supplied
+    cycle costs at most 256 squared adjacency lookups; no cycle search runs.
+    """
+    neighbors, edge_count = _adjacency(claim.graph)
+    indices = {label: i for i, label in enumerate(claim.graph.vertices)}
+    if claim.status == "CHORDAL":
+        _admit_recognition(claim.graph, [len(row) for row in neighbors], edge_count)
+        ordering = tuple(indices[label] for label in claim.elimination_ordering)
+        return _later_clique_failure(ordering, neighbors) is None
+    cycle = tuple(indices[label] for label in claim.induced_cycle)
+    for i, first in enumerate(cycle):
+        for j in range(i + 1, len(cycle)):
+            consecutive = j == i + 1 or (i == 0 and j == len(cycle) - 1)
+            if (cycle[j] in neighbors[first]) != consecutive:
+                return False
+    return True
 
 
 def _reject(code: str, message: str) -> OperationDomainValidationError:

@@ -185,10 +185,13 @@ def verify_pratt_certificate(claim: PrattCertificateNode) -> bool:
         factor_primes
     ):
         return False
-    if math.prod(
-        factor_prime**factor.exponent
-        for factor_prime, factor in zip(factor_primes, claim.factors, strict=True)
-    ) != prime - 1:
+    if (
+        math.prod(
+            factor_prime**factor.exponent
+            for factor_prime, factor in zip(factor_primes, claim.factors, strict=True)
+        )
+        != prime - 1
+    ):
         return False
     return all(
         parse_canonical_integer(factor.certificate.prime) == factor_prime
@@ -212,9 +215,10 @@ def verify_certified_factorization(claim: CertifiedFactorizationResult) -> bool:
     ):
         return False
     reconstructed = math.prod(
-        prime**factor.exponent for prime, factor in zip(primes, claim.factors, strict=True)
+        prime**factor.exponent
+        for prime, factor in zip(primes, claim.factors, strict=True)
     )
-    return reconstructed == value
+    return bool(reconstructed == value)
 
 
 def verify_primality_certificate(claim: PrimalityCertificateResult) -> bool:

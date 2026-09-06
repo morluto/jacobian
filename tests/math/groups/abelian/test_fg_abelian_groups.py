@@ -20,6 +20,10 @@ from jacobian.math.groups.abelian.operations import (
     normalize_presentation,
     quotient_group,
     reduce_element,
+    verify_element_order,
+    verify_elements_equal,
+    verify_generated_subgroup,
+    verify_quotient_group,
 )
 
 
@@ -72,6 +76,12 @@ def test_element_equal_same() -> None:
     )
     result = compute_element_equal(request)
     assert result.equal is True
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_elements_equal(decoded)
+
+    payload = result.model_dump(mode="json")
+    payload["equal"] = False
+    assert not verify_elements_equal(type(result).model_validate(payload))
 
 
 def test_element_equal_different() -> None:
@@ -86,6 +96,12 @@ def test_element_order_in_z6() -> None:
     request = ElementOrderRequest(invariant_factors=(6,), coordinates=(2,))
     result = compute_element_order(request)
     assert result.order == 3
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_element_order(decoded)
+
+    payload = result.model_dump(mode="json")
+    payload["order"] = 6
+    assert not verify_element_order(type(result).model_validate(payload))
 
 
 def test_element_order_identity() -> None:
@@ -159,6 +175,26 @@ def test_subgroup_generated_z2_x_z4() -> None:
     request = SubgroupGeneratedRequest(invariant_factors=(2, 4), generators=((1, 0),))
     result = compute_subgroup_generated(request)
     assert result.index == 4
+    assert verify_generated_subgroup(
+        type(result).model_validate_json(result.model_dump_json())
+    )
+
+    payload = result.model_dump(mode="json")
+    payload["index"] = 2
+    assert not verify_generated_subgroup(type(result).model_validate(payload))
+
+
+def test_quotient_claim_round_trips_and_rejects_a_forged_order() -> None:
+    result = compute_quotient(
+        QuotientRequest(invariant_factors=(6,), subgroup_generators=((2,),))
+    )
+    assert verify_quotient_group(
+        type(result).model_validate_json(result.model_dump_json())
+    )
+
+    payload = result.model_dump(mode="json")
+    payload["quotient_order"] = 3
+    assert not verify_quotient_group(type(result).model_validate(payload))
 
 
 @pytest.mark.parametrize(

@@ -8,6 +8,7 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, WithJsonSchema, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.values import (
@@ -217,19 +218,39 @@ class RankGramRequest(StrictModel):
 class RankGramResult(StrictModel):
     """Exact rank, labelled Gram matrix ``G = B B^T``, and squared covolume."""
 
-    rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
-    ambient_dimension: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
+    lattice: IntegerLattice
     gram_matrix: IntegerMatrix
-    squared_covolume: str
+    squared_covolume: CanonicalInteger
     covolume_rational: bool
     relation: Literal["GRAM_EQUALS_BASIS_TIMES_BASIS_TRANSPOSE"] = (
         "GRAM_EQUALS_BASIS_TIMES_BASIS_TRANSPOSE"
     )
     gram_mode: Literal["EXACT"] = "EXACT"
 
+    @property
+    def rank(self) -> int:
+        return len(self.lattice.basis.entries)
+
+    @property
+    def ambient_dimension(self) -> int:
+        return self.lattice.ambient_dimension
+
+    @model_validator(mode="after")
+    def require_gram_shape(self) -> Self:
+        if (
+            len(self.gram_matrix.entries) != self.rank
+            or self.gram_matrix.column_count != self.rank
+        ):
+            raise _validation_error(
+                "gram_shape", "Gram matrix must be square on the lattice basis axis"
+            )
+        return self
+
 
 class CanonicalBasisResult(StrictModel):
     """Canonical HNF basis of a lattice and its unimodular transformation."""
+
+    lattice: IntegerLattice
 
     canonical_basis: IntegerMatrix
     transformation: IntegerMatrix
@@ -248,6 +269,8 @@ class DualRequest(StrictModel):
 class DualResult(StrictModel):
     """Exact rational dual basis ``L^* = {x in span_Q(L) : <x,L> subset ZZ}``."""
 
+    lattice: IntegerLattice
+
     dual_basis: RationalMatrix
     dual_gram: RationalMatrix
     relation: Literal["DUAL_BASIS_BASIS_PAIRING_IS_INTEGER"] = (
@@ -257,6 +280,8 @@ class DualResult(StrictModel):
 
 class SaturationResult(StrictModel):
     """Primitive closure ``sat(L) = span_Q(L) cap ZZ^n`` and its index."""
+
+    lattice: IntegerLattice
 
     saturated_basis: IntegerMatrix
     inclusion_transform: IntegerMatrix
@@ -316,8 +341,13 @@ class SublatticeIndexRequest(StrictModel):
 class SublatticeIndexResult(StrictModel):
     """Finite quotient invariant factors and the sublattice index."""
 
+    sublattice: IntegerLattice
+    parent: IntegerLattice
+    embedding: IntegerMatrix
     index: int = Field(ge=1)
-    invariant_factors: tuple[str, ...]
+    invariant_factors: tuple[CanonicalInteger, ...] = Field(
+        max_length=MAX_MATRIX_DIMENSION
+    )
     free_rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
     relation: Literal["QUOTIENT_IS_DIRECT_SUM_OF_CYCLIC_GROUPS"] = (
         "QUOTIENT_IS_DIRECT_SUM_OF_CYCLIC_GROUPS"
@@ -333,8 +363,11 @@ class DiscriminantGroupRequest(StrictModel):
 class DiscriminantGroupResult(StrictModel):
     """Finite abelian group ``L^*/L`` and the discriminant order ``|det G|``."""
 
+    lattice: IntegerLattice
     discriminant_order: int = Field(ge=1)
-    invariant_factors: tuple[str, ...]
+    invariant_factors: tuple[CanonicalInteger, ...] = Field(
+        max_length=MAX_MATRIX_DIMENSION
+    )
     relation: Literal["DISCRIMINANT_GROUP_EQUALS_DUAL_MOD_LATTICE"] = (
         "DISCRIMINANT_GROUP_EQUALS_DUAL_MOD_LATTICE"
     )
@@ -348,6 +381,8 @@ class OrthogonalComplementRequest(StrictModel):
 
 class OrthogonalComplementResult(StrictModel):
     """A canonical rational basis for the orthogonal complement."""
+
+    lattice: IntegerLattice
 
     complement_basis: RationalVectorSpaceBasis
     complement_rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
@@ -382,6 +417,9 @@ class OrthogonalSumRequest(StrictModel):
 class DirectSumResult(StrictModel):
     """Block-coordinate direct sum of two lattices."""
 
+    first: IntegerLattice
+    second: IntegerLattice
+
     direct_sum_basis: IntegerMatrix
     ambient_dimension: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
     relation: Literal["DIRECT_SUM_IS_BLOCK_DIAGONAL_EMBEDDING"] = (
@@ -391,6 +429,9 @@ class DirectSumResult(StrictModel):
 
 class OrthogonalSumResult(StrictModel):
     """Block-diagonal orthogonal sum of two lattices under the standard form."""
+
+    first: IntegerLattice
+    second: IntegerLattice
 
     orthogonal_sum_basis: IntegerMatrix
     ambient_dimension: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)

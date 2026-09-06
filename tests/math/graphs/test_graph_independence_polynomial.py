@@ -287,14 +287,16 @@ def test_result_rejects_a_polynomial_inconsistent_with_dense_coefficients() -> N
             ]
         },
     }
-    with pytest.raises(ValidationError):
+    from jacobian.math.graphs.polynomials import verify_independence_polynomial
+
+    assert not verify_independence_polynomial(
         TreeIndependencePolynomialResult.model_validate(weaker)
+    )
 
 
 @pytest.mark.parametrize(
     ("field", "replacement", "message"),
     [
-        ("coefficients", ["1", "4", "2"], "count must equal the dense coefficient sum"),
         ("independence_number", 1, "must equal the dense coefficient degree"),
         ("independent_set_count", "7", "count must equal the dense coefficient sum"),
     ],
@@ -309,8 +311,11 @@ def test_result_rejects_mutated_derived_values(
     ).model_dump(mode="json")
     valid[field] = replacement
 
-    with pytest.raises(ValidationError, match=message):
+    from jacobian.math.graphs.polynomials import verify_independence_polynomial
+
+    assert not verify_independence_polynomial(
         TreeIndependencePolynomialResult.model_validate(valid)
+    )
 
 
 def test_result_rejects_a_polynomial_outside_qq_x() -> None:
@@ -371,6 +376,8 @@ def test_native_module_exports_canonical_value_and_dense_projection() -> None:
         "independence_polynomial_coefficients",
         "matching_polynomial",
         "tutte_polynomial",
+        "verify_graph_polynomial",
+        "verify_independence_polynomial",
     ]
     assert all(hasattr(polynomials, name) for name in polynomials.__all__)
     assert type(independence_polynomial(_path(2))) is RationalPolynomial

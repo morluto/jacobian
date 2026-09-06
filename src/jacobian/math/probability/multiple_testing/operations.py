@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from jacobian._exact import CanonicalRational, format_canonical_rational
+from jacobian._exact import CanonicalRational
 from jacobian.math._labels import OpaqueLabel
 from jacobian.math.probability.multiple_testing._models import (
     MAX_HYPOTHESES,
@@ -49,10 +49,11 @@ def bh_step_up(
     rejected_ids = tuple(h.hypothesis_id for h in hyps[:critical_k])
 
     return BHStepUpResult(
+        hypotheses=hypotheses,
+        level=level,
         critical_index=critical_k,
-        cutoff_threshold=format_canonical_rational(cutoff),
+        cutoff_threshold=CanonicalRational.from_fraction(cutoff),
         rejected=tuple(sorted(rejected_ids)),
-        total_hypotheses=n,
     )
 
 
@@ -60,16 +61,40 @@ def false_discovery_proportion(
     rejected_ids: tuple[OpaqueLabel, ...], true_null_ids: tuple[OpaqueLabel, ...]
 ) -> FDPResult:
     """Compute the false discovery proportion."""
+    if max(len(rejected_ids), len(true_null_ids)) > MAX_HYPOTHESES:
+        raise ValueError(f"hypothesis sets must have at most {MAX_HYPOTHESES} entries")
     rejected = set(rejected_ids)
     nulls = set(true_null_ids)
     false_d = len(rejected & nulls)
     total = len(rejected)
     fdp = Fraction(false_d, total) if total > 0 else Fraction(0)
     return FDPResult(
+        rejected_ids=tuple(sorted(rejected)),
+        true_null_ids=tuple(sorted(nulls)),
         false_discoveries=false_d,
         total_rejections=total,
-        fdp=format_canonical_rational(fdp),
+        fdp=CanonicalRational.from_fraction(fdp),
     )
 
 
-__all__ = ["bh_step_up", "false_discovery_proportion"]
+def verify_bh_step_up(claim: BHStepUpResult) -> bool:
+    """Check a retained BH claim with the bounded step-up procedure."""
+    return bh_step_up(claim.hypotheses, claim.level) == claim
+
+
+def verify_fdp(claim: FDPResult) -> bool:
+    """Check the intersection count and exact ratio of retained hypothesis sets."""
+    expected = false_discovery_proportion(claim.rejected_ids, claim.true_null_ids)
+    return (expected.false_discoveries, expected.total_rejections, expected.fdp) == (
+        claim.false_discoveries,
+        claim.total_rejections,
+        claim.fdp,
+    )
+
+
+__all__ = [
+    "bh_step_up",
+    "false_discovery_proportion",
+    "verify_bh_step_up",
+    "verify_fdp",
+]

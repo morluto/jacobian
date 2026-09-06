@@ -29,14 +29,46 @@ from jacobian.math.combinatorics.codes.linear._models import (
     _require_selected_coordinate,
     _threshold_matches_distance,
     _validate_coordinate_axis,
-    _validate_prime_matrix,
 )
-from jacobian.math.combinatorics.codes.linear.values import PrimeFieldLinearEncoder
+from jacobian.math.combinatorics.codes.linear.values import (
+    MAX_LINEAR_CODE_LENGTH,
+    PrimeFieldLinearEncoder,
+)
 from jacobian.math.matrices.finite_fields.linear_algebra import (
     PrimeFieldMatrix,
     _nullspace_admitted,
     _rref_admitted,
 )
+
+
+def _validate_prime_matrix(
+    field_order: int, generator_matrix: tuple[tuple[int, ...], ...]
+) -> int:
+    """Admit one generator matrix over a prime field."""
+
+    from sympy import isprime
+
+    if not isprime(field_order):
+        raise PydanticCustomError(
+            "code_linear.field_order_must_be_prime", "field_order must be prime"
+        )
+    width = len(generator_matrix[0])
+    if width == 0 or width > MAX_LINEAR_CODE_LENGTH:
+        raise PydanticCustomError(
+            "code_linear.generator_rows_length", "generator rows have invalid length"
+        )
+    if any(len(row) != width for row in generator_matrix):
+        raise PydanticCustomError(
+            "code_linear.generator_matrix_rows_must_have_equal_length",
+            "generator matrix rows must have equal length",
+        )
+    if any(not 0 <= entry < field_order for row in generator_matrix for entry in row):
+        raise PydanticCustomError(
+            "code_linear.generator_entries_must_be_canonical_field_residues",
+            "generator entries must be canonical field residues",
+        )
+    return width
+
 
 __all__ = [
     "code_equal",

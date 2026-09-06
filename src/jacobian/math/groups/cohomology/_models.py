@@ -116,18 +116,10 @@ class GroupCohomologyResult(StrictModel):
                 f"group_order must not exceed {MAX_GROUP_ORDER}",
             )
         for group in self.groups:
-            expected_dimension = self.group_order**group.degree
-            if group.cochain_dimension != expected_dimension:
-                raise _validation_error(
-                    "cochain_dimension",
-                    "cochain_dimension must equal group_order**degree",
-                )
             if group.betti > group.cochain_dimension:
                 raise _validation_error(
                     "betti_bound", "betti cannot exceed cochain_dimension"
                 )
-        if self.groups[0].betti != 1:
-            raise _validation_error("degree_zero_betti", "H^0 has betti one")
         return self
 
     @classmethod

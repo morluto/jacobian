@@ -6,6 +6,7 @@ from jacobian.math.combinatorics.algebraic.operations import (
     inverse_row_insertion_rsk,
     row_insertion_rsk,
     standard_young_tableaux_count,
+    verify_rsk,
 )
 from jacobian.math.combinatorics.algebraic.values import RSKTableauPair
 from jacobian.math.combinatorics.algebraic.weighted_monotone._models import (
@@ -28,4 +29,5 @@ __all__ = [
     "inverse_row_insertion_rsk",
     "row_insertion_rsk",
     "standard_young_tableaux_count",
+    "verify_rsk",
 ]

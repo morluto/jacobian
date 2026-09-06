@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from math import isqrt
 
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.p_adic._models import (
     MAX_PRECISION,
@@ -199,6 +199,29 @@ def hensel_lift_root(
     )
 
 
+def verify_hensel_root(claim: HenselRootResult) -> bool:
+    """Check the local congruence relation carried by a Hensel-root witness."""
+
+    try:
+        coeffs = _admit_root(
+            claim.polynomial,
+            claim.prime,
+            claim.root_mod_p,
+            claim.precision,
+        )
+    except OperationDomainValidationError:
+        return False
+    lifted = parse_canonical_integer(claim.lifted_root)
+    modulus = claim.prime**claim.precision
+    return (
+        0 <= lifted < modulus
+        and lifted % claim.prime == claim.root_mod_p
+        and _eval_poly(coeffs, claim.root_mod_p, claim.prime) == 0
+        and _eval_deriv(coeffs, claim.root_mod_p, claim.prime) != 0
+        and _eval_poly(coeffs, lifted, modulus) == 0
+    )
+
+
 def _poly_mul_exact_mod(
     a: Sequence[int],
     b: Sequence[int],
@@ -388,10 +411,66 @@ def hensel_lift_factors(
         )
 
     return HenselFactorLiftResult(
+        polynomial=polynomial,
+        factor_g=factor_g,
+        factor_h=factor_h,
         lifted_g=_wire_polynomial(lifted_g),
         lifted_h=_wire_polynomial(lifted_h),
         prime=p,
         precision=k,
+    )
+
+
+def verify_hensel_factor_lift(claim: HenselFactorLiftResult) -> bool:
+    """Check the product and coprimality relations of a factor-lift witness."""
+
+    prime = claim.prime
+    try:
+        _admit_factors(
+            claim.polynomial,
+            claim.factor_g,
+            claim.factor_h,
+            prime,
+            claim.precision,
+        )
+    except OperationDomainValidationError:
+        return False
+    modulus = prime**claim.precision
+    polynomial = _kernel_coefficients(claim.polynomial)
+    factor_g = _kernel_coefficients(claim.factor_g)
+    factor_h = _kernel_coefficients(claim.factor_h)
+    lifted_g = _kernel_coefficients(claim.lifted_g)
+    lifted_h = _kernel_coefficients(claim.lifted_h)
+    try:
+        _bezout_unit_mod_p(
+            _trim_asc([coefficient % prime for coefficient in factor_g]),
+            _trim_asc([coefficient % prime for coefficient in factor_h]),
+            prime,
+        )
+    except ValueError:
+        return False
+    return (
+        _is_zero_polynomial(
+            _poly_sub_mod(
+                polynomial,
+                _poly_mul_exact_mod(lifted_g, lifted_h, modulus),
+                modulus,
+            )
+        )
+        and _is_zero_polynomial(
+            _poly_sub_mod(
+                factor_g,
+                lifted_g,
+                prime,
+            )
+        )
+        and _is_zero_polynomial(
+            _poly_sub_mod(
+                factor_h,
+                lifted_h,
+                prime,
+            )
+        )
     )
 
 

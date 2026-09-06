@@ -11,6 +11,7 @@ from jacobian.math.number_theory.numerical_semigroups._models import (
     _GENERAL_GENERATOR_ENVELOPE,
     MAX_GENERATORS,
 )
+from jacobian.math.number_theory.numerical_semigroups.values import NumericalSemigroup
 
 
 class NumericalSemigroupSummaryRequest(StrictModel):
@@ -30,15 +31,16 @@ class NumericalSemigroupSummaryRequest(StrictModel):
 class NumericalSemigroupSummaryResult(StrictModel):
     """Summary of a numerical semigroup."""
 
-    minimal_generators: tuple[CanonicalInteger, ...] = Field(
-        min_length=1,
-        max_length=MAX_GENERATORS,
-        description="Increasing minimal generator axis of the numerical semigroup.",
-    )
+    semigroup: NumericalSemigroup
+
+    @property
+    def minimal_generators(self) -> tuple[CanonicalInteger, ...]:
+        return self.semigroup.minimal_generators
+
     multiplicity: CanonicalInteger
     embedding_dimension: int = Field(ge=1)
-    frobenius_number: str
-    conductor: str
+    frobenius_number: CanonicalInteger
+    conductor: CanonicalInteger
     genus: int = Field(ge=0)
     gaps: tuple[CanonicalInteger, ...]
 
@@ -49,15 +51,15 @@ class NumericalSemigroupSummaryResult(StrictModel):
         minimal_generators: tuple[CanonicalInteger, ...],
         multiplicity: CanonicalInteger,
         embedding_dimension: int,
-        frobenius_number: str,
-        conductor: str,
+        frobenius_number: CanonicalInteger,
+        conductor: CanonicalInteger,
         genus: int,
         gaps: tuple[CanonicalInteger, ...],
     ) -> NumericalSemigroupSummaryResult:
         """Construct a summary after the native kernel establishes its invariants."""
 
         return cls.model_construct(
-            minimal_generators=minimal_generators,
+            semigroup=NumericalSemigroup(minimal_generators=minimal_generators),
             multiplicity=multiplicity,
             embedding_dimension=embedding_dimension,
             frobenius_number=frobenius_number,

@@ -233,7 +233,6 @@ class ComultiplicationResult(StrictModel):
     coalgebra: Coalgebra
     element_index: int = Field(ge=0)
     matrix: PrimeFieldMatrix
-    dimension: int = Field(ge=1)
 
     @model_validator(mode="before")
     @classmethod
@@ -278,11 +277,7 @@ class ComultiplicationResult(StrictModel):
             raise _validation_error(
                 "element_index_out_of_range", "element_index must be in 0..dimension-1"
             )
-        if self.dimension != n:
-            raise _validation_error(
-                "dimension_mismatch", "dimension must match the retained coalgebra"
-            )
-        if self.dimension != self.matrix.columns or len(self.matrix.entries) != n:
+        if self.matrix.columns != n or len(self.matrix.entries) != n:
             raise _validation_error(
                 "dimension_mismatch", "dimension must match the retained coalgebra"
             )
@@ -306,7 +301,6 @@ class ComultiplicationResult(StrictModel):
             coalgebra=request.coalgebra,
             element_index=request.element_index,
             matrix=matrix,
-            dimension=request.coalgebra.dimension,
         )
 
 

@@ -24,6 +24,10 @@ from jacobian.math.topology.finite.spaces.operations import (
     interior,
     kolmogorov_quotient,
 )
+from jacobian.math.topology.finite.spaces.values import (
+    FiniteTopologicalSpace,
+    FiniteTopologicalSubset,
+)
 
 
 def _admit_subset(request: SubsetRequest) -> frozenset[int]:
@@ -36,24 +40,45 @@ def _admit_subset(request: SubsetRequest) -> frozenset[int]:
     return frozenset(request.subset)
 
 
+def _bound_subset(
+    space: FiniteTopologicalSpace, subset: frozenset[int]
+) -> FiniteTopologicalSubset:
+    return FiniteTopologicalSubset(space=space, indices=tuple(sorted(subset)))
+
+
 def _interior(request: SubsetRequest) -> InteriorResult:
-    result = interior(request.space, _admit_subset(request))
-    return InteriorResult(interior=tuple(sorted(result)))
+    admitted = _admit_subset(request)
+    result = interior(request.space, admitted)
+    return InteriorResult(
+        space=request.space,
+        subset=_bound_subset(request.space, admitted),
+        interior=_bound_subset(request.space, result),
+    )
 
 
 def _closure(request: SubsetRequest) -> ClosureResult:
-    result = closure(request.space, _admit_subset(request))
-    return ClosureResult(closure=tuple(sorted(result)))
+    admitted = _admit_subset(request)
+    result = closure(request.space, admitted)
+    return ClosureResult(
+        space=request.space,
+        subset=_bound_subset(request.space, admitted),
+        closure=_bound_subset(request.space, result),
+    )
 
 
 def _boundary(request: SubsetRequest) -> BoundaryResult:
-    result = boundary(request.space, _admit_subset(request))
-    return BoundaryResult(boundary=tuple(sorted(result)))
+    admitted = _admit_subset(request)
+    result = boundary(request.space, admitted)
+    return BoundaryResult(
+        space=request.space,
+        subset=_bound_subset(request.space, admitted),
+        boundary=_bound_subset(request.space, result),
+    )
 
 
 def _continuous_check(request: ContinuousCheckRequest) -> ContinuousCheckResult:
     result = continuous_check(request.point_map)
-    return ContinuousCheckResult(is_continuous=result)
+    return ContinuousCheckResult(point_map=request.point_map, is_continuous=result)
 
 
 def _kolmogorov_quotient(

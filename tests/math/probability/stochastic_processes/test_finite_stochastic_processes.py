@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.probability.stochastic_processes import (
     FiniteProbabilitySpace,
     FiniteRandomVariable,
@@ -23,6 +24,11 @@ from jacobian.math.probability.stochastic_processes._tools import (
     compute_doob_martingale,
     compute_filtration,
     compute_sigma_from_observation,
+)
+from jacobian.math.probability.stochastic_processes.operations import (
+    conditional_expectation,
+    sigma_algebra_from_observation,
+    sigma_algebra_join,
 )
 
 # ---------------------------------------------------------------------------
@@ -179,16 +185,24 @@ class TestDoobMartingale:
 
 class TestValidation:
     def test_nonpositive_mass_rejected(self) -> None:
-        with pytest.raises(ValidationError) as error:
-            FiniteProbabilitySpace(samples=("a",), masses=(_q(0),))
+        space = FiniteProbabilitySpace(samples=("a",), masses=(_q(0),))
+        with pytest.raises(OperationDomainValidationError) as error:
+            sigma_algebra_from_observation(
+                FiniteProbabilitySpace.model_validate_json(space.model_dump_json()),
+                ("x",),
+            )
         assert (
             error.value.errors()[0]["type"]
             == "finite_stochastic_process.mass_nonpositive"
         )
 
     def test_masses_not_summing_to_one_rejected(self) -> None:
-        with pytest.raises(ValidationError) as error:
-            FiniteProbabilitySpace(samples=("a", "b"), masses=(_q(1, 3), _q(1, 3)))
+        space = FiniteProbabilitySpace(samples=("a", "b"), masses=(_q(1, 3), _q(1, 3)))
+        with pytest.raises(OperationDomainValidationError) as error:
+            sigma_algebra_from_observation(
+                FiniteProbabilitySpace.model_validate_json(space.model_dump_json()),
+                ("x", "y"),
+            )
         assert (
             error.value.errors()[0]["type"]
             == "finite_stochastic_process.mass_sum_invalid"
@@ -201,6 +215,22 @@ class TestValidation:
             error.value.errors()[0]["type"]
             == "finite_stochastic_process.sample_duplicate"
         )
+
+    @pytest.mark.parametrize("blocks", [(("H",),), (("H", "T"), ("T",))])
+    def test_forged_partition_rejected_by_consumers(
+        self, blocks: tuple[tuple[str, ...], ...]
+    ) -> None:
+        space = _coin_space()
+        sigma = FiniteSigmaAlgebra.model_validate_json(
+            FiniteSigmaAlgebra(space=space, blocks=blocks).model_dump_json()
+        )
+        valid = sigma_algebra_from_observation(space, ("x", "y"))
+        with pytest.raises(OperationDomainValidationError):
+            sigma_algebra_join(sigma, valid)
+        with pytest.raises(OperationDomainValidationError):
+            conditional_expectation(
+                FiniteRandomVariable(space=space, values=(_q(0), _q(1))), sigma
+            )
 
     @pytest.mark.parametrize(
         "payoff",

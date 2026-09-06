@@ -202,7 +202,9 @@ class TestGraphRealization:
         )
         payload = result.model_dump(mode="json")
         payload["graph"]["edges"] = [[0, 1], [1, 2], [0, 3]]
-        assert not verify_graph_realization(GraphRealizationResult.model_validate(payload))
+        assert not verify_graph_realization(
+            GraphRealizationResult.model_validate(payload)
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -343,7 +345,9 @@ class TestCrossConsistency:
         )
         forged = check.model_dump(mode="json")
         forged["is_realization"] = False
-        assert not verify_realization_check(RealizationCheckResult.model_validate(forged))
+        assert not verify_realization_check(
+            RealizationCheckResult.model_validate(forged)
+        )
 
     def test_constructed_graph_passes_check(self) -> None:
         """A graph constructed by Havel-Hakimi must pass the realization check."""

@@ -1,7 +1,7 @@
 """Exact finite-dimensional algebra operations."""
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.finite_dim_algebras._models import StructureConstants
+from jacobian.math.finite_dim_algebras._models import CenterResult, StructureConstants
 
 
 def _admit_center(algebra: StructureConstants) -> None:
@@ -56,4 +56,30 @@ def center_basis(algebra: StructureConstants) -> tuple[tuple[int, ...], ...]:
     )
 
 
-__all__ = ["center_basis"]
+def verify_center(claim: CenterResult) -> bool:
+    """Check independence and equality with the full center, allowing any basis.
+
+    Center admission bounds the commutator work by n^4. Two further matrices
+    have at most 2n rows and n columns, within that same elimination envelope.
+    """
+    from flint import nmod_mat
+
+    expected = center_basis(claim.algebra)
+    if len(expected) != claim.center_dimension:
+        return False
+    dimension = claim.dimension
+    prime = claim.algebra.field_order
+
+    def rank(rows: tuple[tuple[int, ...], ...]) -> int:
+        return int(
+            nmod_mat(
+                len(rows), dimension, [value for row in rows for value in row], prime
+            ).rank()
+        )
+
+    return rank(claim.center_basis) == len(expected) and rank(
+        (*expected, *claim.center_basis)
+    ) == len(expected)
+
+
+__all__ = ["center_basis", "verify_center"]

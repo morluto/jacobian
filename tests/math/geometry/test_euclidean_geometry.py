@@ -35,6 +35,13 @@ from jacobian.math.geometry.euclidean.operations import (
     angles_equal,
     squared_segment_ratio,
     triangles_similar,
+    verify_angle_equality,
+    verify_triangle_similarity,
+)
+from jacobian.math.geometry.operations import (
+    simple_polygon,
+    verify_polygon_point_classification,
+    verify_simple_polygon,
 )
 
 
@@ -109,6 +116,38 @@ def test_point_classification_rejects_non_simple_polygon_at_operation_boundary()
     )
 
 
+def test_polygon_point_claim_round_trips_and_rejects_a_forged_source() -> None:
+    result = classify_polygon_point(
+        SimplePolygonPointRequest(
+            polygon=PolygonRequest(points=(_pt(0, 0), _pt(2, 0), _pt(2, 2), _pt(0, 2))),
+            point=_pt(1, 1),
+        )
+    )
+    assert verify_polygon_point_classification(
+        type(result).model_validate_json(result.model_dump_json())
+    )
+
+    payload = result.model_dump(mode="json")
+    payload["point"] = _pt(3, 3).model_dump(mode="json")
+    assert not verify_polygon_point_classification(type(result).model_validate(payload))
+
+
+def test_simple_polygon_claim_round_trips_and_rejects_a_forged_decision() -> None:
+    result = simple_polygon((_pt(0, 0), _pt(1, 0), _pt(1, 1), _pt(0, 1)))
+    assert verify_simple_polygon(
+        type(result).model_validate_json(result.model_dump_json())
+    )
+
+    payload = result.model_dump(mode="json")
+    payload["polygon"] = [
+        _pt(0, 0).model_dump(mode="json"),
+        _pt(1, 1).model_dump(mode="json"),
+        _pt(0, 1).model_dump(mode="json"),
+        _pt(1, 0).model_dump(mode="json"),
+    ]
+    assert not verify_simple_polygon(type(result).model_validate(payload))
+
+
 class TestSegmentRatio:
     def test_equal_segments(self) -> None:
         req = SegmentRatioRequest(
@@ -116,7 +155,7 @@ class TestSegmentRatio:
             segment2=(_pt(0, 0), _pt(1, 0)),
         )
         result = compute_segment_ratio(req)
-        assert result.squared_ratio == "1"
+        assert result.as_fraction() == 1
 
     def test_double_length(self) -> None:
         req = SegmentRatioRequest(
@@ -124,7 +163,7 @@ class TestSegmentRatio:
             segment2=(_pt(0, 0), _pt(1, 0)),
         )
         result = compute_segment_ratio(req)
-        assert result.squared_ratio == "4"
+        assert result.as_fraction() == 4
 
     def test_rejects_zero_second_segment(self) -> None:
         request = SegmentRatioRequest(
@@ -140,13 +179,10 @@ class TestSegmentRatio:
         first = (_pt(0, 0), _pt(2, 0))
         second = (_pt(0, 0), _pt(0, 1))
 
-        assert squared_segment_ratio(first, second) == 4
-        assert (
-            compute_segment_ratio(
-                SegmentRatioRequest(segment1=first, segment2=second)
-            ).squared_ratio
-            == "4"
-        )
+        assert squared_segment_ratio(first, second).as_fraction() == 4
+        assert compute_segment_ratio(
+            SegmentRatioRequest(segment1=first, segment2=second)
+        ) == squared_segment_ratio(first, second)
 
 
 class TestRationalWeightTriangulation:
@@ -548,6 +584,12 @@ class TestAngleEquality:
         )
         result = compute_angle_equality(req)
         assert result.equal is True
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert verify_angle_equality(decoded)
+
+        payload = result.model_dump(mode="json")
+        payload["equal"] = False
+        assert not verify_angle_equality(type(result).model_validate(payload))
 
     def test_different_angles(self) -> None:
         req = AngleEqualityRequest(
@@ -600,6 +642,13 @@ class TestAngleEquality:
 
 
 class TestTriangleSimilarity:
+    def test_collinear_claim_decodes_but_consumer_rejects(self) -> None:
+        triangle = Triangle(a=_pt(0, 0), b=_pt(1, 1), c=_pt(2, 2))
+        decoded = Triangle.model_validate_json(triangle.model_dump_json())
+        with pytest.raises(OperationDomainValidationError) as caught:
+            triangles_similar(decoded, decoded)
+        assert caught.value.errors()[0]["type"] == "geometry.triangle_non_degenerate"
+
     def test_similar(self) -> None:
         req = TriangleSimilarityRequest(
             triangle1=Triangle(a=_pt(0, 0), b=_pt(1, 0), c=_pt(0, 1)),
@@ -607,6 +656,12 @@ class TestTriangleSimilarity:
         )
         result = compute_triangle_similarity(req)
         assert result.similar is True
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert verify_triangle_similarity(decoded)
+
+        payload = result.model_dump(mode="json")
+        payload["similar"] = False
+        assert not verify_triangle_similarity(type(result).model_validate(payload))
 
     def test_not_similar(self) -> None:
         req = TriangleSimilarityRequest(

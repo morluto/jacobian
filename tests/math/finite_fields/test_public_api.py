@@ -408,6 +408,7 @@ def test_exact_public_api_symbols() -> None:
         "projective_line",
         "projective_point",
         "restrict_scalars",
+        "verify_matrix_rank",
     )
     assert tuple(finite_fields.__all__) == expected
     assert len(finite_fields.__all__) == len(set(finite_fields.__all__))

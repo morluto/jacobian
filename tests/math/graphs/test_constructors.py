@@ -10,11 +10,16 @@ from jacobian.math.graphs.constructors import (
     compute_triangle_profile,
     construct_hypercube_graph,
     construct_keller_graph,
+    verify_hypercube_graph,
+    verify_keller_graph,
+    verify_triangle_profile,
 )
 from jacobian.math.graphs.constructors._bounds import (
     MAX_TRIANGLE_PROFILE_RETAINED_LABEL_CHARACTERS,
 )
 from jacobian.math.graphs.constructors._models import (
+    HypercubeGraphResult,
+    KellerGraphResult,
     TriangleProfileRequest,
     TriangleProfileResult,
 )
@@ -343,6 +348,53 @@ class TestTriangleProfile:
         result = compute_triangle_profile(graph)
         # Triangles: (a,b,c) and (a,c,d)
         assert result.triangle_count == 2
+
+
+class TestSerializedClaimVerifiers:
+    def test_hypercube_round_trip_and_forged_edge(self) -> None:
+        result = construct_hypercube_graph(2)
+        assert verify_hypercube_graph(
+            HypercubeGraphResult.model_validate_json(result.model_dump_json())
+        )
+        payload = result.model_dump(mode="json")
+        payload["graph"]["edges"] = [[0, 1], [0, 2], [0, 3]]
+        assert not verify_hypercube_graph(HypercubeGraphResult.model_validate(payload))
+
+    def test_keller_round_trip_and_forged_edge(self) -> None:
+        result = construct_keller_graph(1)
+        assert verify_keller_graph(
+            KellerGraphResult.model_validate_json(result.model_dump_json())
+        )
+        payload = result.model_dump(mode="json")
+        payload["graph"]["edges"] = [[0, 1]]
+        assert not verify_keller_graph(KellerGraphResult.model_validate(payload))
+
+    def test_triangle_round_trip_forged_and_dropped(self) -> None:
+        graph = SimpleUndirectedGraph(
+            vertices=("a", "b", "c", "d"),
+            edges=(("a", "b"), ("b", "c"), ("a", "c"), ("c", "d")),
+        )
+        result = compute_triangle_profile(graph)
+        assert result.triangle_count == 1
+        assert verify_triangle_profile(
+            TriangleProfileResult.model_validate_json(result.model_dump_json())
+        )
+        forged = result.model_dump(mode="json")
+        forged["triangles"] = [{"vertices": ["a", "b", "d"]}]
+        forged["triangle_count"] = 1
+        assert not verify_triangle_profile(TriangleProfileResult.model_validate(forged))
+        dropped = result.model_dump(mode="json")
+        dropped["triangles"] = []
+        dropped["triangle_count"] = 0
+        assert not verify_triangle_profile(
+            TriangleProfileResult.model_validate(dropped)
+        )
+
+    def test_dimension_bounds_are_domain_errors(self) -> None:
+        with pytest.raises(OperationDomainValidationError, match="dimension"):
+            construct_hypercube_graph(9)
+        with pytest.raises(OperationDomainValidationError, match="dimension"):
+            construct_keller_graph(5)
 
 
 def _to_word(n: int, d: int) -> tuple[int, ...]:

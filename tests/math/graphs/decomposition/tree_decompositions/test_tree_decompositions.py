@@ -6,7 +6,10 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.graphs.decomposition.tree_decompositions import TreeDecomposition
+from jacobian.math.graphs.decomposition.tree_decompositions import (
+    TreeDecomposition,
+    width,
+)
 from jacobian.math.graphs.decomposition.tree_decompositions._models import (
     AdhesionsRequest,
     BagIntersectionGraphRequest,
@@ -159,7 +162,7 @@ class TestReroot:
         assert result.children["t1"] == ("t0",)
         assert result.depth["t1"] == 0
         assert result.depth["t0"] == 1
-        assert result.paths["t0"] == ["t1", "t0"]
+        assert result.paths["t0"] == ("t1", "t0")
 
     def test_reroot_preserves_unrooted_tree(self) -> None:
         td = _path_decomposition()
@@ -266,12 +269,14 @@ class TestBagIntersectionGraph:
 
 class TestValidation:
     def test_non_tree_rejected(self) -> None:
-        with pytest.raises(ValidationError):
-            TreeDecomposition(
-                graph=_path_graph(),
-                tree_nodes=("t0", "t1"),
-                tree_edges=(),
-                bags=(("a", "b"), ("b", "c")),
+        with pytest.raises(OperationDomainValidationError):
+            width(
+                TreeDecomposition(
+                    graph=_path_graph(),
+                    tree_nodes=("t0", "t1"),
+                    tree_edges=(),
+                    bags=(("a", "b"), ("b", "c")),
+                )
             )
 
     def test_unsorted_bag_rejected(self) -> None:
@@ -285,12 +290,14 @@ class TestValidation:
 
     def test_vertex_coverage_rejected(self) -> None:
         # Missing vertex c from all bags.
-        with pytest.raises(ValidationError):
-            TreeDecomposition(
-                graph=_path_graph(),
-                tree_nodes=("t0",),
-                tree_edges=(),
-                bags=(("a", "b"),),
+        with pytest.raises(OperationDomainValidationError):
+            width(
+                TreeDecomposition(
+                    graph=_path_graph(),
+                    tree_nodes=("t0",),
+                    tree_edges=(),
+                    bags=(("a", "b"),),
+                )
             )
 
     def test_edge_coverage_rejected(self) -> None:
@@ -300,12 +307,14 @@ class TestValidation:
             vertices=("a", "b", "c", "d"),
             edges=(("a", "b"), ("c", "d")),
         )
-        with pytest.raises(ValidationError):
-            TreeDecomposition(
-                graph=graph,
-                tree_nodes=("t0", "t1"),
-                tree_edges=(("t0", "t1"),),
-                bags=(("a", "b", "c"), ("a", "b", "d")),
+        with pytest.raises(OperationDomainValidationError):
+            width(
+                TreeDecomposition(
+                    graph=graph,
+                    tree_nodes=("t0", "t1"),
+                    tree_edges=(("t0", "t1"),),
+                    bags=(("a", "b", "c"), ("a", "b", "d")),
+                )
             )
 
     def test_connectedness_rejected(self) -> None:
@@ -315,12 +324,14 @@ class TestValidation:
             vertices=("a",),
             edges=(),
         )
-        with pytest.raises(ValidationError):
-            TreeDecomposition(
-                graph=graph,
-                tree_nodes=("t0", "t1", "t2"),
-                tree_edges=(("t0", "t1"), ("t1", "t2")),
-                bags=(("a",), (), ("a",)),
+        with pytest.raises(OperationDomainValidationError):
+            width(
+                TreeDecomposition(
+                    graph=graph,
+                    tree_nodes=("t0", "t1", "t2"),
+                    tree_edges=(("t0", "t1"), ("t1", "t2")),
+                    bags=(("a",), (), ("a",)),
+                )
             )
 
     def test_undeclared_vertex_rejected(self) -> None:

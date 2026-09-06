@@ -140,9 +140,22 @@ class GaloisFactorResult(StrictModel):
         min_length=1,
         max_length=MAX_FACTOR_DEGREE,
     )
-    distinct_factor_count: int = Field(ge=1, le=MAX_FACTOR_DEGREE, strict=True)
-    factor_count: int = Field(ge=1, le=MAX_FACTOR_DEGREE, strict=True)
-    is_irreducible: bool
+
+    @property
+    def distinct_factor_count(self) -> int:
+        return len(self.factors)
+
+    @property
+    def factor_count(self) -> int:
+        return sum(factor.multiplicity for factor in self.factors)
+
+    @property
+    def is_irreducible(self) -> bool:
+        return (
+            len(self.factors) == 1
+            and self.factors[0].multiplicity == 1
+            and len(self.factors[0].coefficients) == len(self.source_coefficients)
+        )
 
     @classmethod
     def _from_kernel(
@@ -152,9 +165,6 @@ class GaloisFactorResult(StrictModel):
         source_coefficients: tuple[int, ...],
         unit: int,
         factors: tuple[FiniteFieldFactor, ...],
-        distinct_factor_count: int,
-        factor_count: int,
-        is_irreducible: bool,
     ) -> Self:
         """Construct output whose complete factorization came from the kernel."""
 
@@ -163,25 +173,11 @@ class GaloisFactorResult(StrictModel):
             source_coefficients=source_coefficients,
             unit=unit,
             factors=factors,
-            distinct_factor_count=distinct_factor_count,
-            factor_count=factor_count,
-            is_irreducible=is_irreducible,
         )
 
     @model_validator(mode="after")
     def require_structural_consistency(self) -> Self:
         _require_factor_residues(self)
-        if self.distinct_factor_count != len(self.factors):
-            raise _validation_error(
-                "distinct_factor_count_mismatch",
-                "distinct_factor_count must equal the number of factors",
-            )
-        total = sum(factor.multiplicity for factor in self.factors)
-        if self.factor_count != total:
-            raise _validation_error(
-                "factor_count_mismatch",
-                "factor_count must include factor multiplicities",
-            )
         return self
 
 
@@ -211,25 +207,21 @@ def _require_factor_residues(result: GaloisFactorResult) -> None:
 
 class FrobeniusCycleResult(StrictModel):
     cycle_type: tuple[PositiveFactorDegree, ...]
-    degree: int = Field(ge=1, le=MAX_FACTOR_DEGREE, strict=True)
-    is_irreducible: bool
+
+    @property
+    def degree(self) -> int:
+        return sum(self.cycle_type)
+
+    @property
+    def is_irreducible(self) -> bool:
+        return self.cycle_type == (self.degree,)
 
     @model_validator(mode="after")
     def require_canonical_partition(self) -> Self:
-        if sum(self.cycle_type) != self.degree:
-            raise _validation_error(
-                "cycle_type_degree_mismatch",
-                "cycle type must partition the polynomial degree",
-            )
         if self.cycle_type != tuple(sorted(self.cycle_type, reverse=True)):
             raise _validation_error(
                 "cycle_type_not_canonical",
                 "cycle type must be sorted in descending order",
-            )
-        if self.is_irreducible != (self.cycle_type == (self.degree,)):
-            raise _validation_error(
-                "cycle_type_irreducibility_mismatch",
-                "irreducibility must agree with the cycle type",
             )
         return self
 

@@ -115,33 +115,28 @@ class GraphDistanceMatrixResult(StrictModel):
     vertex_ordering: Literal["LEXICOGRAPHIC_ASCENDING"]
     pair_coverage: Literal["ALL_ORDERED_VERTEX_PAIRS"]
     unreachable_representation: Literal["JSON_NULL"]
-    vertices: tuple[GraphVertex, ...] = Field(
-        max_length=MAX_GRAPH_DISTANCE_MATRIX_ORDER
-    )
+    graph: SimpleUndirectedGraph
     rows: tuple[GraphDistanceRow, ...] = Field(
         max_length=MAX_GRAPH_DISTANCE_MATRIX_ORDER
     )
     connected: StrictBool
 
+    @property
+    def vertices(self) -> tuple[GraphVertex, ...]:
+        """Project the source labels in the declared lexicographic convention."""
+        return tuple(sorted(self.graph.vertices))
+
     @model_validator(mode="after")
     def bind_complete_metric(self) -> Self:
         order = _validate_distance_matrix_shape(self.vertices, self.rows)
         _validate_distance_matrix_diagonal_and_symmetry(self.rows, order)
-        expected_connected = order > 0 and all(
-            distance is not None for row in self.rows for distance in row.distances
-        )
-        if self.connected != expected_connected:
-            raise PydanticCustomError(
-                "graph.connected_must_match_all_pairs_finite_reachabili",
-                "connected must match all-pairs finite reachability",
-            )
         return self
 
     @classmethod
     def _from_kernel(
         cls,
         *,
-        vertices: tuple[GraphVertex, ...],
+        graph: SimpleUndirectedGraph,
         rows: tuple[GraphDistanceRow, ...],
         connected: bool,
     ) -> Self:
@@ -151,7 +146,7 @@ class GraphDistanceMatrixResult(StrictModel):
             vertex_ordering="LEXICOGRAPHIC_ASCENDING",
             pair_coverage="ALL_ORDERED_VERTEX_PAIRS",
             unreachable_representation="JSON_NULL",
-            vertices=vertices,
+            graph=graph,
             rows=rows,
             connected=connected,
         )

@@ -1,5 +1,7 @@
 """Tests for extended numerical semigroup factorization operations."""
 
+from fractions import Fraction
+
 import pytest
 from pydantic import BaseModel, ValidationError
 from tests.math.number_theory.numerical_semigroups._support import (
@@ -327,17 +329,17 @@ class TestElementElasticity:
     def test_elasticity_15_in_3_5(self) -> None:
         req = ElementElasticityRequest(generators=("3", "5"), value="15")
         result = compute_element_elasticity(req)
-        assert result.elasticity == "5/3"
+        assert result.elasticity.as_fraction() == Fraction("5/3")
 
     def test_elasticity_single_factorization(self) -> None:
         req = ElementElasticityRequest(generators=("3", "5"), value="12")
         result = compute_element_elasticity(req)
-        assert result.elasticity == "1"
+        assert result.elasticity.as_fraction() == Fraction("1")
 
     def test_elasticity_36_in_4_6_9(self) -> None:
         req = ElementElasticityRequest(generators=("4", "6", "9"), value="36")
         result = compute_element_elasticity(req)
-        assert result.elasticity == "9/4"
+        assert result.elasticity.as_fraction() == Fraction("9/4")
 
 
 class TestElementCatenaryDegree:
@@ -507,9 +509,11 @@ class TestPresentationBinomials:
     def test_binomials_reject_nonrelations(self) -> None:
         with operation_domain_error():
             compute_presentation_binomials(
-                PresentationBinomialsRequest(
-                    generators=("3", "5"),
-                    relations=({"first": (1, 0), "second": (0, 1)},),
+                PresentationBinomialsRequest.model_validate(
+                    {
+                        "generators": ("3", "5"),
+                        "relations": ({"first": (1, 0), "second": (0, 1)},),
+                    }
                 )
             )
 
@@ -536,17 +540,17 @@ class TestGlobalElasticity:
     def test_elasticity_3_5(self) -> None:
         req = ElasticityRequest(generators=("3", "5"))
         result = compute_elasticity(req)
-        assert result.elasticity == "5/3"
+        assert result.elasticity.as_fraction() == Fraction("5/3")
 
     def test_elasticity_4_6_9(self) -> None:
         req = ElasticityRequest(generators=("4", "6", "9"))
         result = compute_elasticity(req)
-        assert result.elasticity == "9/4"
+        assert result.elasticity.as_fraction() == Fraction("9/4")
 
     def test_elasticity_2_3(self) -> None:
         req = ElasticityRequest(generators=("2", "3"))
         result = compute_elasticity(req)
-        assert result.elasticity == "3/2"
+        assert result.elasticity.as_fraction() == Fraction("3/2")
 
 
 class TestGlobalCatenaryDegree:

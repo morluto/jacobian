@@ -6,9 +6,11 @@ from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.quivers._models import (
     AdjacencyMatricesRequest,
+    AdjacencyMatricesResult,
     FiniteQuiver,
     FixedLengthPathsRequest,
     VertexProfilesRequest,
+    VertexProfilesResult,
 )
 from jacobian.math.graphs.quivers._tools import TOOLS
 from jacobian.math.graphs.quivers.operations import (
@@ -33,6 +35,9 @@ def test_adjacency_matrices_kronecker() -> None:
     result = adjacency_matrices(request.quiver)
     assert result.adjacency_matrix == ((0, 2), (0, 0))
     assert result.transpose_matrix == ((0, 0), (2, 0))
+    assert (
+        AdjacencyMatricesResult.model_validate_json(result.model_dump_json()) == result
+    )
 
 
 def test_vertex_profiles_kronecker() -> None:
@@ -42,6 +47,7 @@ def test_vertex_profiles_kronecker() -> None:
     result = vertex_profiles(request.quiver)
     assert result.in_degrees == (0, 2)
     assert result.out_degrees == (2, 0)
+    assert VertexProfilesResult.model_validate_json(result.model_dump_json()) == result
 
 
 def test_fixed_length_paths_triangle() -> None:

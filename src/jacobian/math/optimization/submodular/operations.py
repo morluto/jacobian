@@ -85,13 +85,11 @@ def check_monotonicity(function: SetFunction) -> MonotonicityCheckResult:
             supersets_value = table[mask | bit]
             if value_mask > supersets_value:
                 return MonotonicityCheckResult(
+                    function=function,
                     is_monotone=False,
-                    violation=(
-                        f"f({_subset_label(mask, size)}) > "
-                        f"f({_subset_label(mask | bit, size)})"
-                    ),
+                    violation=(_subset_label(mask, size), index),
                 )
-    return MonotonicityCheckResult(is_monotone=True, violation="")
+    return MonotonicityCheckResult(function=function, is_monotone=True)
 
 
 def check_submodularity(function: SetFunction) -> SubmodularityCheckResult:
@@ -124,19 +122,33 @@ def check_submodularity(function: SetFunction) -> SubmodularityCheckResult:
             rhs = base_value + table[mask | bit_i | bit_j]
             if lhs < rhs:
                 return SubmodularityCheckResult(
+                    function=function,
                     is_submodular=False,
                     violation=(
-                        f"f({_subset_label(mask | bit_i, size)}) + "
-                        f"f({_subset_label(mask | bit_j, size)}) < "
-                        f"f({_subset_label(mask, size)}) + "
-                        f"f({_subset_label(mask | bit_i | bit_j, size)})"
+                        _subset_label(mask, size),
+                        bit_i.bit_length() - 1,
+                        bit_j.bit_length() - 1,
                     ),
                 )
-    return SubmodularityCheckResult(is_submodular=True, violation="")
+    return SubmodularityCheckResult(function=function, is_submodular=True)
+
+
+def verify_monotonicity(claim: MonotonicityCheckResult) -> bool:
+    """Check a retained monotonicity claim against its source function."""
+
+    return check_monotonicity(claim.function) == claim
+
+
+def verify_submodularity(claim: SubmodularityCheckResult) -> bool:
+    """Check a retained submodularity claim against its source function."""
+
+    return check_submodularity(claim.function) == claim
 
 
 __all__ = [
     "check_monotonicity",
     "check_submodularity",
     "evaluate_set_function",
+    "verify_monotonicity",
+    "verify_submodularity",
 ]

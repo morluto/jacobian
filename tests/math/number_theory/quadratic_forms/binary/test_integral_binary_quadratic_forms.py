@@ -525,7 +525,9 @@ class TestProperClassComposition:
         ).model_dump(mode="json")
         result["composed_form"] = {"a": 1, "b": 0, "c": 1}
 
-        with pytest.raises(ValidationError, match="share one discriminant"):
+        with pytest.raises(
+            ValidationError, match="bind the composed and product forms"
+        ):
             BinaryQuadraticFormClassCompositionResult.model_validate(result)
 
     def test_catalog_example_exercises_nontrivial_proper_class_product(self) -> None:

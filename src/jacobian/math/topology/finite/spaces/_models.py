@@ -9,6 +9,7 @@ from jacobian.math._labels import OpaqueLabel
 from jacobian.math.topology.finite.spaces.values import (
     FiniteTopologicalMap,
     FiniteTopologicalSpace,
+    FiniteTopologicalSubset,
 )
 
 
@@ -20,15 +21,27 @@ class SubsetRequest(StrictModel):
 
 
 class InteriorResult(StrictModel):
-    interior: tuple[int, ...]
+    """The interior of a retained subset as a source-bound value."""
+
+    space: FiniteTopologicalSpace
+    subset: FiniteTopologicalSubset
+    interior: FiniteTopologicalSubset
 
 
 class ClosureResult(StrictModel):
-    closure: tuple[int, ...]
+    """The closure of a retained subset as a source-bound value."""
+
+    space: FiniteTopologicalSpace
+    subset: FiniteTopologicalSubset
+    closure: FiniteTopologicalSubset
 
 
 class BoundaryResult(StrictModel):
-    boundary: tuple[int, ...]
+    """The boundary of a retained subset as a source-bound value."""
+
+    space: FiniteTopologicalSpace
+    subset: FiniteTopologicalSubset
+    boundary: FiniteTopologicalSubset
 
 
 class ContinuousCheckRequest(StrictModel):
@@ -38,6 +51,9 @@ class ContinuousCheckRequest(StrictModel):
 
 
 class ContinuousCheckResult(StrictModel):
+    """Whether a retained point map is continuous."""
+
+    point_map: FiniteTopologicalMap
     is_continuous: bool
 
 
@@ -46,9 +62,30 @@ class KolmogorovQuotientRequest(StrictModel):
 
 
 class KolmogorovQuotientResult(StrictModel):
-    quotient_points: tuple[tuple[OpaqueLabel, ...], ...]
-    quotient_preorder: tuple[tuple[int, ...], ...]
-    class_map: tuple[int, ...]
+    """The canonical quotient map; each target label is its first source representative."""
+
+    quotient_map: FiniteTopologicalMap
+
+    @property
+    def quotient_points(self) -> tuple[tuple[OpaqueLabel, ...], ...]:
+        return tuple(
+            tuple(
+                label
+                for label, image in zip(
+                    self.quotient_map.source.points, self.class_map, strict=True
+                )
+                if image == target
+            )
+            for target in range(len(self.quotient_map.target.points))
+        )
+
+    @property
+    def quotient_preorder(self) -> tuple[tuple[int, ...], ...]:
+        return self.quotient_map.target.preorder
+
+    @property
+    def class_map(self) -> tuple[int, ...]:
+        return self.quotient_map.point_map
 
 
 __all__ = [

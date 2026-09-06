@@ -7,6 +7,11 @@ from jacobian.math.analysis.majorization.operations import (
     majorization_check,
     schur_horn_check,
     t_transform_sequence,
+    verify_birkhoff,
+    verify_doubly_stochastic,
+    verify_majorization,
+    verify_schur_horn,
+    verify_weak_majorization,
     weak_majorization_check,
 )
 
@@ -17,5 +22,10 @@ __all__ = [
     "majorization_check",
     "schur_horn_check",
     "t_transform_sequence",
+    "verify_birkhoff",
+    "verify_doubly_stochastic",
+    "verify_majorization",
+    "verify_schur_horn",
+    "verify_weak_majorization",
     "weak_majorization_check",
 ]

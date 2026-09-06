@@ -18,6 +18,7 @@ def test_exact_public_api_symbols() -> None:
         "inverse_row_insertion_rsk",
         "row_insertion_rsk",
         "standard_young_tableaux_count",
+        "verify_rsk",
     )
     assert tuple(algebraic_combinatorics.__all__) == expected
     assert len(algebraic_combinatorics.__all__) == len(

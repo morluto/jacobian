@@ -90,11 +90,19 @@ class FlowEdgeValue(StrictModel):
     flow: CanonicalRational
 
 
-class MaxFlowResult(StrictModel):
+class MaxFlowResult(MaxFlowRequest):
     flow_value: CanonicalRational
     source: int = Field(ge=0, le=63)
     sink: int = Field(ge=0, le=63)
-    flow_edges: tuple[FlowEdgeValue, ...] = Field(default=())
+    flow_edges: tuple[FlowEdgeValue, ...] = Field(default=(), max_length=512)
+
+    @model_validator(mode="after")
+    def require_edge_axis(self) -> Self:
+        source_edges = {(edge.source, edge.target) for edge in self.graph.edges}
+        edges = tuple((edge.source, edge.target) for edge in self.flow_edges)
+        if len(set(edges)) != len(edges) or not set(edges) <= source_edges:
+            raise ValueError("flow edges must be distinct edges of the source network")
+        return self
 
 
 class MinCutRequest(StrictModel):
@@ -103,10 +111,20 @@ class MinCutRequest(StrictModel):
     sink: int = Field(ge=0, le=63)
 
 
-class MinCutResult(StrictModel):
+class MinCutResult(MinCutRequest):
     cut_value: CanonicalRational
     reachable: tuple[int, ...]
     unreachable: tuple[int, ...]
+
+    @model_validator(mode="after")
+    def require_partition_axis(self) -> Self:
+        if sorted((*self.reachable, *self.unreachable)) != list(
+            range(self.graph.vertex_count)
+        ):
+            raise ValueError(
+                "cut sides must partition the retained network vertex axis"
+            )
+        return self
 
 
 class EdgeDisjointPathsGraph(StrictModel):
@@ -146,11 +164,21 @@ class EdgeDisjointPathsRequest(StrictModel):
     sink: int = Field(ge=0, le=63)
 
 
-class EdgeDisjointPathsResult(StrictModel):
+class EdgeDisjointPathsResult(EdgeDisjointPathsRequest):
     path_count: int = Field(ge=0)
-    paths: tuple[tuple[int, ...], ...] = Field(default=())
+    paths: tuple[tuple[int, ...], ...] = Field(default=(), max_length=512)
     source: int = Field(ge=0, le=63)
     sink: int = Field(ge=0, le=63)
+
+    @model_validator(mode="after")
+    def require_path_axes(self) -> Self:
+        if any(
+            not 2 <= len(path) <= self.graph.vertex_count
+            or any(not 0 <= vertex < self.graph.vertex_count for vertex in path)
+            for path in self.paths
+        ):
+            raise ValueError("paths must use the retained network vertex axis")
+        return self
 
 
 class CostedFlowEdge(StrictModel):

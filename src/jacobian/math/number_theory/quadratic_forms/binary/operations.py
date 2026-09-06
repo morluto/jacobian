@@ -26,6 +26,8 @@ from jacobian.math.number_theory.quadratic_forms.binary._models import (
     PrimitivePositiveDefiniteBinaryQuadraticForm,
     ProperBinaryQuadraticFormClass,
     ProperEquivalenceResult,
+    ProperFormChangeOfVariables,
+    ReducedBinaryQuadraticFormResult,
     _require_composition_budget,
     _require_evaluated_value_bound,
     _require_reduced_class_search_budget,
@@ -202,6 +204,38 @@ def representations(
     return _representations(form, target)
 
 
+def verify_change_of_variables(claim: ProperFormChangeOfVariables) -> bool:
+    """Check determinant one and the exact binary-form substitution identity.
+
+    This uses a fixed number of arithmetic operations on the bounded form
+    coefficients and the canonical 2-by-2 integer-matrix carrier.
+    """
+    (p, q), (r, s) = claim.rows
+    if p * s - q * r != 1:
+        return False
+    a, b, c = claim.source.a, claim.source.b, claim.source.c
+    return (
+        a * p * p + b * p * r + c * r * r,
+        2 * a * p * q + b * (p * s + q * r) + 2 * c * r * s,
+        a * q * q + b * q * s + c * s * s,
+    ) == (claim.target.a, claim.target.b, claim.target.c)
+
+
+def verify_reduction(claim: ReducedBinaryQuadraticFormResult) -> bool:
+    """Check proper equivalence and the target's Gauss-reduced predicate."""
+    target = claim.reduced_form
+    return verify_change_of_variables(claim.change) and _check_reduced(
+        target.a, target.b, target.c
+    )
+
+
+def verify_proper_equivalence(claim: ProperEquivalenceResult) -> bool:
+    """Check the positive witness or the bounded negative equivalence decision."""
+    if claim.change is not None:
+        return verify_change_of_variables(claim.change)
+    return proper_equivalence(claim.first, claim.second).status == claim.status
+
+
 __all__ = [
     "check",
     "compose_classes",
@@ -210,4 +244,7 @@ __all__ = [
     "reduced_classes",
     "reduced_form",
     "representations",
+    "verify_change_of_variables",
+    "verify_proper_equivalence",
+    "verify_reduction",
 ]

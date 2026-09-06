@@ -20,6 +20,7 @@ from jacobian.math.combinatorics.exact_cover import (
     GeneralizedExactCoverRequest,
     GeneralizedExactCoverResult,
     find_generalized_exact_cover,
+    verify_generalized_exact_cover,
 )
 
 
@@ -447,6 +448,50 @@ def test_search_and_retained_output_boundaries_are_preflighted() -> None:
         search_node_limit=request.search_node_limit,
     )
     assert result.status == "FOUND"
+
+
+def test_found_claim_verifies_after_serialization() -> None:
+    result = _solve(
+        _instance(
+            primary=("p", "q"),
+            rows=(
+                ("r1", ("p",)),
+                ("r2", ("q",)),
+            ),
+        )
+    )
+    assert result.status == "FOUND"
+    assert verify_generalized_exact_cover(
+        GeneralizedExactCoverResult.model_validate_json(result.model_dump_json())
+    )
+
+
+def test_verifier_rejects_forged_rows_and_multiplicities() -> None:
+    instance = _instance(
+        primary=("p", "q"),
+        rows=(
+            ("r1", ("p",)),
+            ("r2", ("q",)),
+        ),
+    )
+    result = _solve(instance)
+    forged = result.model_dump(mode="json")
+    forged["selected_row_ids"] = ["r1"]
+    assert not verify_generalized_exact_cover(
+        GeneralizedExactCoverResult.model_validate(forged)
+    )
+    forged = result.model_dump(mode="json")
+    assert forged["item_multiplicities"] is not None
+    forged["item_multiplicities"][0]["multiplicity"] = 0
+    assert not verify_generalized_exact_cover(
+        GeneralizedExactCoverResult.model_validate(forged)
+    )
+
+
+def test_non_found_outcomes_are_producer_outcomes_not_claims() -> None:
+    uncovered = _solve(_instance(primary=("p",), rows=()))
+    assert uncovered.status == "NO_COVER"
+    assert not verify_generalized_exact_cover(uncovered)
 
 
 def test_schema_publishes_the_exact_cover_contract() -> None:

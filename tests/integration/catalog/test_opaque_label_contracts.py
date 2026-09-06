@@ -85,4 +85,7 @@ def test_kolmogorov_quotient_retains_long_labels_as_a_class() -> None:
         Catalog.open(),
     )
 
-    assert result.output["quotient_points"] == [[left, right]]
+    quotient = result.output["quotient_map"]
+    assert quotient["source"]["points"] == [left, right]
+    assert quotient["target"]["points"] == [left]
+    assert quotient["point_map"] == [0, 0]

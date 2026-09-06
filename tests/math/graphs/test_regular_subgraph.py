@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from jacobian.math.graphs.regular_subgraph._models import RegularSubgraphResult
 from jacobian.math.graphs.regular_subgraph.operations import (
     find_k_regular_subgraph,
+    verify_k_regular_subgraph,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -88,3 +90,14 @@ def test_k3_is_3_regular_in_k4() -> None:
         degree[u] = degree.get(u, 0) + 1
         degree[v] = degree.get(v, 0) + 1
     assert all(d == 3 for d in degree.values())
+
+
+def test_serialized_witness_claim_is_verified_against_its_graph() -> None:
+    graph = _graph(["a", "b", "c"], [("a", "b"), ("b", "c")])
+    result = find_k_regular_subgraph(graph, 1)
+    assert verify_k_regular_subgraph(
+        RegularSubgraphResult.model_validate_json(result.model_dump_json())
+    )
+    forged = result.model_dump(mode="json")
+    forged["edges"] = [["a", "b"], ["b", "c"]]
+    assert not verify_k_regular_subgraph(RegularSubgraphResult.model_validate(forged))

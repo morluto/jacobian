@@ -3,7 +3,7 @@
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.geometry._models import (
     CircleInversionRequest,
-    GeometryBooleanResult,
+    ConcyclicityResult,
     GeometryConvexHullResult,
     GeometryPointResult,
     GeometryRationalResult,
@@ -49,7 +49,7 @@ POINT_OPERATIONS: MathTools = (
         title="Decide concyclicity",
         description="Decide whether four rational points lie on one circle.",
         request_type=PointQuadrupleRequest,
-        result_type=GeometryBooleanResult,
+        result_type=ConcyclicityResult,
         run=concyclic,
         tags=("geometry", "circle"),
         examples=(

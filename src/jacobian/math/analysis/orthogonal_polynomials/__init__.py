@@ -8,6 +8,7 @@ from jacobian.math.analysis.orthogonal_polynomials.operations import (
     orthogonal_polynomials,
     recurrence_coefficients,
     shifted_hankel_matrix,
+    verify_definiteness,
 )
 from jacobian.math.analysis.orthogonal_polynomials.values import (
     ChristoffelDarbouxKernel,
@@ -42,4 +43,5 @@ __all__ = [
     "orthogonal_polynomials",
     "recurrence_coefficients",
     "shifted_hankel_matrix",
+    "verify_definiteness",
 ]

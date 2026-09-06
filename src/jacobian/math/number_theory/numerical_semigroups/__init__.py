@@ -14,10 +14,15 @@ from jacobian.math.number_theory.numerical_semigroups.operations import (
     factorization_lengths,
     factorizations,
     minimal_generating_system,
+    verify_elasticity,
+    verify_element_elasticity,
+    verify_summary,
 )
+from jacobian.math.number_theory.numerical_semigroups.values import NumericalSemigroup
 
 __all__ = [
     "FactorizationGraph",
+    "NumericalSemigroup",
     "apery_set",
     "belongs",
     "elasticity",
@@ -30,4 +35,7 @@ __all__ = [
     "factorization_lengths",
     "factorizations",
     "minimal_generating_system",
+    "verify_elasticity",
+    "verify_element_elasticity",
+    "verify_summary",
 ]

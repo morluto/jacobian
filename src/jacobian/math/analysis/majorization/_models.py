@@ -90,6 +90,9 @@ class MajorizationCheckRequest(StrictModel):
 class MajorizationCheckResult(StrictModel):
     """Result of a majorization check."""
 
+    x: RationalVector
+    y: RationalVector
+
     majorizes: bool
     total_sum_match: bool
     prefix_slacks: tuple[CanonicalRational, ...]
@@ -114,6 +117,9 @@ class WeakMajorizationCheckRequest(StrictModel):
 
 class WeakMajorizationCheckResult(StrictModel):
     """Result of a weak majorization check."""
+
+    x: RationalVector
+    y: RationalVector
 
     holds: bool
     direction: Literal["sub", "super"]
@@ -202,6 +208,8 @@ class DoublyStochasticCheckRequest(StrictModel):
 class DoublyStochasticCheckResult(StrictModel):
     """Result of a doubly stochastic check."""
 
+    matrix: RationalMatrix
+
     is_doubly_stochastic: bool
     row_sums: tuple[CanonicalRational, ...]
     col_sums: tuple[CanonicalRational, ...]
@@ -214,7 +222,7 @@ class BirkhoffTerm(StrictModel):
     """One term in a Birkhoff decomposition."""
 
     weight: CanonicalRational
-    permutation: tuple[int, ...]
+    permutation: tuple[int, ...] = Field(max_length=MAX_DIMENSION)
 
 
 class BirkhoffDecompositionRequest(StrictModel):
@@ -226,8 +234,25 @@ class BirkhoffDecompositionRequest(StrictModel):
 class BirkhoffDecompositionResult(StrictModel):
     """Result of a Birkhoff decomposition."""
 
-    terms: tuple[BirkhoffTerm, ...]
+    matrix: RationalMatrix
+    axis_convention: Literal["ZERO_BASED_ROW_TO_COLUMN"] = "ZERO_BASED_ROW_TO_COLUMN"
+
+    terms: tuple[BirkhoffTerm, ...] = Field(max_length=MAX_DIMENSION**2)
     weights_sum: CanonicalRational
+
+    @model_validator(mode="after")
+    def require_permutation_axes(self) -> Self:
+        dimension = len(self.matrix.entries)
+        if self.matrix.column_count != dimension:
+            raise _validation_error(
+                "decomposition_shape", "source matrix must be square"
+            )
+        for term in self.terms:
+            if tuple(sorted(term.permutation)) != tuple(range(dimension)):
+                raise _validation_error(
+                    "permutation_axis", "each term must permute the source matrix axis"
+                )
+        return self
 
 
 class SchurHornCheckRequest(StrictModel):
@@ -252,6 +277,9 @@ class SchurHornCheckRequest(StrictModel):
 
 class SchurHornCheckResult(StrictModel):
     """Result of Schur-Horn feasibility check."""
+
+    eigenvalues: tuple[CanonicalRational, ...]
+    diagonal: tuple[CanonicalRational, ...]
 
     feasible: bool
     eigenvalues_sorted: tuple[CanonicalRational, ...]

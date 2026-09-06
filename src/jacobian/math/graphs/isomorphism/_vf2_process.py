@@ -148,11 +148,54 @@ def decide_graph_isomorphism(
     _admit_graph_isomorphism(request)
     mapping = _vertex_mapping(request.graph_a, request.graph_b)
     if mapping is None:
-        return GraphIsomorphismResult(status="NOT_ISOMORPHIC", vertex_mapping=())
+        return GraphIsomorphismResult(
+            graph_a=request.graph_a,
+            graph_b=request.graph_b,
+            status="NOT_ISOMORPHIC",
+            vertex_mapping=(),
+        )
     return GraphIsomorphismResult(
+        graph_a=request.graph_a,
+        graph_b=request.graph_b,
         status="ISOMORPHIC",
         vertex_mapping=tuple(mapping),
     )
+
+
+def verify_graph_isomorphism(claim: GraphIsomorphismResult) -> bool:
+    """Check an ISOMORPHIC claim's bijection and adjacency preservation.
+
+    Only ISOMORPHIC claims are verifiable. A NOT_ISOMORPHIC outcome has no
+    checkable certificate in this carrier, so it does not verify and
+    remains a producer outcome. No VF2 search runs here.
+    """
+    try:
+        _admit_graph_isomorphism(
+            GraphIsomorphismRequest(graph_a=claim.graph_a, graph_b=claim.graph_b)
+        )
+    except OperationDomainValidationError:
+        return False
+    if claim.status != "ISOMORPHIC":
+        return False
+    mapping = tuple((item.from_vertex, item.to_vertex) for item in claim.vertex_mapping)
+    if len(mapping) != claim.graph_a.vertex_count:
+        return False
+    if {source for source, _ in mapping} != set(range(claim.graph_a.vertex_count)):
+        return False
+    if {target for _, target in mapping} != set(range(claim.graph_b.vertex_count)):
+        return False
+    forward = dict(mapping)
+    mapped_edges = {
+        (forward[source], forward[target])
+        if claim.graph_a.directed
+        else tuple(sorted((forward[source], forward[target])))
+        for source, target in claim.graph_a.edges
+    }
+    target_edges = {
+        edge if claim.graph_b.directed else tuple(sorted(edge))
+        for edge in claim.graph_b.edges
+    }
+    return mapped_edges == target_edges
 
 
 def compute_colored_graph_canonicalization(

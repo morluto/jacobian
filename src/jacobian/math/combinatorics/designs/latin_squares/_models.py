@@ -30,30 +30,8 @@ def _validate_square_matrix(
         raise _validation_error("cell_range", "cell values must be in 0..order-1")
 
 
-def _validate_latin_property(
-    order: int,
-    cells: tuple[tuple[int, ...], ...],
-) -> None:
-    """Validate that each symbol 0..order-1 appears exactly once per row and column."""
-    if order == 0:
-        return
-    expected = set(range(order))
-    for i in range(order):
-        if set(cells[i]) != expected:
-            raise _validation_error(
-                "row_symbols", f"row {i} does not contain each symbol exactly once"
-            )
-    for j in range(order):
-        if {cells[i][j] for i in range(order)} != expected:
-            raise _validation_error(
-                "column_symbols",
-                f"column {j} does not contain each symbol exactly once",
-            )
-
-
 class LatinSquare(StrictModel):
-    """A validated Latin square: an n x n matrix of symbols 0..n-1
-    where each symbol appears exactly once in every row and column."""
+    """An n x n symbol matrix whose Latin property is admitted by consumers."""
 
     order: int = Field(ge=1, le=MAX_LATIN_SQUARE_ORDER)
     cells: tuple[tuple[int, ...], ...] = Field(
@@ -63,7 +41,6 @@ class LatinSquare(StrictModel):
     @model_validator(mode="after")
     def require_valid(self) -> Self:
         _validate_square_matrix(self.order, self.cells)
-        _validate_latin_property(self.order, self.cells)
         return self
 
 
@@ -108,10 +85,17 @@ class OrthogonalityRequest(StrictModel):
 
 
 class LatinSquareCheckResult(StrictModel):
+    """A Latin-property claim bound to the candidate matrix it concerns."""
+
+    square: LatinSquareCandidate
     is_latin: bool
 
 
 class OrthogonalityResult(StrictModel):
+    """An orthogonality claim bound to its two aligned Latin-square carriers."""
+
+    square_a: LatinSquare
+    square_b: LatinSquare
     is_orthogonal: bool
     pair_count: int = Field(ge=0)
 

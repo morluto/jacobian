@@ -89,18 +89,21 @@ def test_support_polytope_value_composes_into_volume_request() -> None:
 def test_formal_series_value_composes_into_truncation_request() -> None:
     producer_request = SeriesFromPolynomialRequest.model_validate(
         {
-            "variable": "x",
-            "coefficients": [
-                {"num": "1", "den": "1"},
-                {"num": "2", "den": "1"},
-                {"num": "3", "den": "1"},
-            ],
+            "polynomial": {
+                "variables": ["x"],
+                "polynomial": {
+                    "terms": [
+                        {"coefficient": {"num": "3", "den": "1"}, "exponents": [2]},
+                        {"coefficient": {"num": "2", "den": "1"}, "exponents": [1]},
+                        {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]},
+                    ]
+                },
+            },
             "truncation_order": 3,
         }
     )
     produced = from_polynomial(
-        producer_request.variable,
-        producer_request.coefficients,
+        producer_request.polynomial,
         producer_request.truncation_order,
     )
 

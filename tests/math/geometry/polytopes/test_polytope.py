@@ -117,6 +117,20 @@ def _facet_profile(vertices: tuple[Vertex, ...]) -> FacetIncidenceResult:
     return compute_facet_incidence(FacetIncidenceRequest(vertices=vertices))
 
 
+def test_serialized_facet_incidence_checks_source_relation() -> None:
+    claim = _facet_profile((_v((0, 1), (0, 1)), _v((1, 1), (0, 1)), _v((0, 1), (1, 1))))
+    decoded = FacetIncidenceResult.model_validate_json(claim.model_dump_json())
+    assert polytope_operations.verify_facet_incidence(decoded)
+    assert all(
+        polytope_operations.verify_primitive_facet(facet) for facet in decoded.facets
+    )
+    payload = decoded.model_dump(mode="json")
+    payload["vertices"][1]["coordinates"][0] = {"num": "2", "den": "1"}
+    assert not polytope_operations.verify_facet_incidence(
+        FacetIncidenceResult.model_validate(payload)
+    )
+
+
 class TestFacetIncidence:
     def test_schema_exposes_the_single_execution_budget(self) -> None:
         schema = FacetIncidenceRequest.model_json_schema()
@@ -265,40 +279,46 @@ class TestFacetIncidence:
         )
         result = _facet_profile(vertices)
 
-        with pytest.raises(ValidationError):
-            PrimitiveFacet(
-                halfspace=_scaled_halfspace(result.facets[0].halfspace, 3),
-                source_vertex_indices=result.facets[0].source_vertex_indices,
-            )
+        claim = PrimitiveFacet(
+            halfspace=_scaled_halfspace(result.facets[0].halfspace, 3),
+            source_vertex_indices=result.facets[0].source_vertex_indices,
+        )
+
+        decoded = PrimitiveFacet.model_validate_json(claim.model_dump_json())
+        assert not polytope_operations.verify_primitive_facet(decoded)
 
     def test_non_integer_facet_inequality_is_rejected(self) -> None:
         """A rational row whose cleared form is coprime is still not the
         canonical integral supporting inequality."""
 
-        with pytest.raises(ValidationError):
-            PrimitiveFacet(
-                halfspace=Halfspace(
-                    coefficients=(CanonicalRational(num="1", den="1"),),
-                    offset=CanonicalRational(num="1", den="2"),
-                ),
-                source_vertex_indices=(0, 3),
-            )
+        claim = PrimitiveFacet(
+            halfspace=Halfspace(
+                coefficients=(CanonicalRational(num="1", den="1"),),
+                offset=CanonicalRational(num="1", den="2"),
+            ),
+            source_vertex_indices=(0, 3),
+        )
+
+        decoded = PrimitiveFacet.model_validate_json(claim.model_dump_json())
+        assert not polytope_operations.verify_primitive_facet(decoded)
 
     def test_zero_normal_facet_inequality_is_rejected(self) -> None:
         """A tautology row is not a supporting inequality even though its
         primitive form is trivially coprime (offset +/-1)."""
 
-        with pytest.raises(ValidationError):
-            PrimitiveFacet(
-                halfspace=Halfspace(
-                    coefficients=(
-                        CanonicalRational(num="0", den="1"),
-                        CanonicalRational(num="0", den="1"),
-                    ),
-                    offset=CanonicalRational(num="1", den="1"),
+        claim = PrimitiveFacet(
+            halfspace=Halfspace(
+                coefficients=(
+                    CanonicalRational(num="0", den="1"),
+                    CanonicalRational(num="0", den="1"),
                 ),
-                source_vertex_indices=(0, 3),
-            )
+                offset=CanonicalRational(num="1", den="1"),
+            ),
+            source_vertex_indices=(0, 3),
+        )
+
+        decoded = PrimitiveFacet.model_validate_json(claim.model_dump_json())
+        assert not polytope_operations.verify_primitive_facet(decoded)
 
     def test_lower_dimensional_input_and_work_overflow_reject_during_execution(
         self,
@@ -1238,12 +1258,9 @@ class TestNonzeroNormalContractPublished:
     def test_zero_normal_row_rejected_at_request_admission(self) -> None:
         """The reviewer's tautology `0*x + 0*y <= 1` fails typed validation,
         not a host exception after acceptance."""
-        with pytest.raises(ValidationError) as error:
-            Halfspace(
-                coefficients=(_cr0(), _cr0()),
-                offset=_cr0(),
-            )
-        assert error.value.errors()[0]["type"] == "polytope.halfspace_normal_zero"
+        halfspace = Halfspace(coefficients=(_cr0(), _cr0()), offset=_cr0())
+        with pytest.raises(OperationDomainValidationError):
+            _volume_via_halfspaces((halfspace,))
 
     def test_nonzero_normal_rule_is_schema_visible(self) -> None:
         schema = Halfspace.model_json_schema()

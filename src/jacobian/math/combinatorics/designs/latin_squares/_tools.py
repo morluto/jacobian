@@ -19,7 +19,10 @@ from jacobian.math.combinatorics.designs.latin_squares.operations import (
 
 
 def compute_latin_square_check(request: LatinSquareRequest) -> LatinSquareCheckResult:
-    return LatinSquareCheckResult(is_latin=is_latin_square(request.square))
+    return LatinSquareCheckResult(
+        square=request.square,
+        is_latin=is_latin_square(request.square),
+    )
 
 
 def compute_orthogonality(request: OrthogonalityRequest) -> OrthogonalityResult:
@@ -27,6 +30,8 @@ def compute_orthogonality(request: OrthogonalityRequest) -> OrthogonalityResult:
         request.square_a, request.square_b
     )
     return OrthogonalityResult(
+        square_a=request.square_a,
+        square_b=request.square_b,
         is_orthogonal=is_orthogonal,
         pair_count=pair_count,
     )

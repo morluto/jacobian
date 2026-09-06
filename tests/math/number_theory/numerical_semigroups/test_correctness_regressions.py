@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from itertools import combinations, pairwise
 from math import lcm
 
@@ -248,7 +249,7 @@ def test_global_elasticity_has_an_exact_attaining_witness() -> None:
     )
     expected_ratio = f"{max(lengths)}/{min(lengths)}"
     assert expected_ratio == "9/4"
-    assert result.elasticity == expected_ratio
+    assert result.elasticity.as_fraction() == Fraction(expected_ratio)
     assert (result.smallest_generator, result.largest_generator) == ("4", "9")
 
 

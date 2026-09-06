@@ -14,7 +14,6 @@ from jacobian.math.combinatorics.codes.nonlinear._models import (
     ExplicitProfileRequest,
     ExplicitProfileResult,
     ToSetSystemRequest,
-    ToSetSystemResult,
     WordDistanceRequest,
     WordDistanceResult,
 )
@@ -25,6 +24,7 @@ from jacobian.math.combinatorics.codes.nonlinear.operations import (
     to_set_system,
     word_distance,
 )
+from jacobian.math.combinatorics.extremal_sets.values import IndexedFiniteSetFamily
 
 
 def _constant_weight(request: ConstantWeightRequest) -> ConstantWeightResult:
@@ -45,7 +45,7 @@ def _constant_weight_profile(
     return constant_weight_profile(request.code)
 
 
-def _to_set_system(request: ToSetSystemRequest) -> ToSetSystemResult:
+def _to_set_system(request: ToSetSystemRequest) -> IndexedFiniteSetFamily:
     return to_set_system(request.code)
 
 
@@ -129,7 +129,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         title="Map codewords to support subsets",
         description="Map each canonical source codeword to its exact support block on the retained coordinate axis.",
         request_type=ToSetSystemRequest,
-        result_type=ToSetSystemResult,
+        result_type=IndexedFiniteSetFamily,
         run=_to_set_system,
         tags=("code", "set-system", "exact"),
         examples=(

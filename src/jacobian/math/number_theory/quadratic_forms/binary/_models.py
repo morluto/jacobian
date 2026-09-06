@@ -8,6 +8,8 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.math.matrices.values import IntegerMatrix
 
 MAX_COEFFICIENT = 10**6
 MAX_REPRESENTATION_TARGET = 10**12
@@ -428,12 +430,67 @@ class BinaryQuadraticFormEvaluateResult(StrictModel):
         )
 
 
+class ProperFormChangeOfVariables(StrictModel):
+    """A claimed SL2(ZZ) change with target(x,y) = source(M @ (x,y))."""
+
+    source: PrimitivePositiveDefiniteBinaryQuadraticForm
+    target: PrimitivePositiveDefiniteBinaryQuadraticForm
+    matrix: IntegerMatrix
+    convention: Literal["TARGET_EQUALS_SOURCE_AFTER_COLUMN_VARIABLE_MAP"] = (
+        "TARGET_EQUALS_SOURCE_AFTER_COLUMN_VARIABLE_MAP"
+    )
+
+    @model_validator(mode="after")
+    def require_matrix_shape(self) -> Self:
+        if self.matrix.row_count != 2 or self.matrix.column_count != 2:
+            raise ValueError("binary-form changes require a 2 by 2 integer matrix")
+        return self
+
+    @classmethod
+    def from_rows(
+        cls,
+        source: PrimitivePositiveDefiniteBinaryQuadraticForm,
+        target: PrimitivePositiveDefiniteBinaryQuadraticForm,
+        rows: tuple[tuple[int, int], tuple[int, int]],
+    ) -> Self:
+        return cls(
+            source=source,
+            target=target,
+            matrix=IntegerMatrix(
+                entries=tuple(
+                    tuple(format_canonical_integer(value) for value in row)
+                    for row in rows
+                )
+            ),
+        )
+
+    @property
+    def rows(self) -> tuple[tuple[int, int], tuple[int, int]]:
+        first, second = self.matrix.entries
+        return (
+            (parse_canonical_integer(first[0]), parse_canonical_integer(first[1])),
+            (parse_canonical_integer(second[0]), parse_canonical_integer(second[1])),
+        )
+
+
 class ReducedBinaryQuadraticFormResult(StrictModel):
     """Result of Gauss reduction."""
 
     form: PrimitivePositiveDefiniteBinaryQuadraticForm
     reduced_form: PrimitivePositiveDefiniteBinaryQuadraticForm
-    matrix: tuple[tuple[int, int], tuple[int, int]]
+    change: ProperFormChangeOfVariables
+
+    @property
+    def matrix(self) -> tuple[tuple[int, int], tuple[int, int]]:
+        return self.change.rows
+
+    @model_validator(mode="after")
+    def require_change_source(self) -> Self:
+        if self.change.source != self.form or self.change.target != self.reduced_form:
+            raise ValueError(
+                "reduction change must bind the retained source and reduced form"
+            )
+        return self
 
     @classmethod
     def _from_kernel(
@@ -444,7 +501,11 @@ class ReducedBinaryQuadraticFormResult(StrictModel):
         matrix: tuple[tuple[int, int], tuple[int, int]],
     ) -> Self:
         """Construct a trusted result from the owner-local reduction kernel."""
-        return cls.model_construct(form=form, reduced_form=reduced_form, matrix=matrix)
+        return cls.model_construct(
+            form=form,
+            reduced_form=reduced_form,
+            change=ProperFormChangeOfVariables.from_rows(form, reduced_form, matrix),
+        )
 
 
 class ProperEquivalenceResult(StrictModel):
@@ -453,7 +514,21 @@ class ProperEquivalenceResult(StrictModel):
     first: PrimitivePositiveDefiniteBinaryQuadraticForm
     second: PrimitivePositiveDefiniteBinaryQuadraticForm
     status: Literal["PROPERLY_EQUIVALENT", "NOT_PROPERLY_EQUIVALENT"]
-    matrix: tuple[tuple[int, int], tuple[int, int]] | None = None
+    change: ProperFormChangeOfVariables | None = None
+
+    @property
+    def matrix(self) -> tuple[tuple[int, int], tuple[int, int]] | None:
+        return None if self.change is None else self.change.rows
+
+    @model_validator(mode="after")
+    def require_change_branch(self) -> Self:
+        if (self.status == "PROPERLY_EQUIVALENT") != (self.change is not None):
+            raise ValueError("equivalence branch must agree with witness presence")
+        if self.change is not None and (
+            self.change.source != self.first or self.change.target != self.second
+        ):
+            raise ValueError("equivalence change must bind its two source forms")
+        return self
 
     @classmethod
     def _from_kernel(
@@ -466,7 +541,12 @@ class ProperEquivalenceResult(StrictModel):
     ) -> Self:
         """Construct a trusted result from the owner-local equivalence kernel."""
         return cls.model_construct(
-            first=first, second=second, status=status, matrix=matrix
+            first=first,
+            second=second,
+            status=status,
+            change=None
+            if matrix is None
+            else ProperFormChangeOfVariables.from_rows(first, second, matrix),
         )
 
 
@@ -501,10 +581,21 @@ class BinaryQuadraticFormClassCompositionResult(StrictModel):
     composed_form: PrimitivePositiveDefiniteBinaryQuadraticForm
     direct_composition_map: DirectBinaryQuadraticCompositionMap
     product: ProperBinaryQuadraticFormClass
-    reduction_matrix: tuple[tuple[int, int], tuple[int, int]]
+    reduction_change: ProperFormChangeOfVariables
+
+    @property
+    def reduction_matrix(self) -> tuple[tuple[int, int], tuple[int, int]]:
+        return self.reduction_change.rows
 
     @model_validator(mode="after")
     def require_one_discriminant(self) -> Self:
+        if (
+            self.reduction_change.source != self.composed_form
+            or self.reduction_change.target != self.product.representative
+        ):
+            raise ValueError(
+                "composition reduction must bind the composed and product forms"
+            )
         discriminants = {
             self.first.discriminant,
             self.second.discriminant,
@@ -535,7 +626,9 @@ class BinaryQuadraticFormClassCompositionResult(StrictModel):
             composed_form=composed_form,
             direct_composition_map=direct_composition_map,
             product=product,
-            reduction_matrix=reduction_matrix,
+            reduction_change=ProperFormChangeOfVariables.from_rows(
+                composed_form, product.representative, reduction_matrix
+            ),
         )
 
 

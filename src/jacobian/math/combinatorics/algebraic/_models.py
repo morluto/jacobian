@@ -31,16 +31,6 @@ from jacobian.math.logic.languages.words.values import FiniteWord
 MAX_RSK_PERMUTATION_LENGTH = MAX_RSK_WORD_LENGTH
 
 
-def _require_permutation(permutation: tuple[int, ...]) -> None:
-    if not permutation:
-        return
-    if sorted(permutation) != list(range(1, len(permutation) + 1)):
-        raise PydanticCustomError(
-            "algebraic_combinatorics.permutation_invalid",
-            "permutation must be a permutation of 1..n",
-        )
-
-
 class HookLengthRequest(StrictModel):
     """Compute the hook lengths of a partition."""
 
@@ -118,7 +108,6 @@ class RSKResult(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_consistency(self) -> Self:
-        _require_permutation(self.permutation)
         if self.p_tableau.shape != self.shape or self.q_tableau.shape != self.shape:
             raise PydanticCustomError(
                 "algebraic_combinatorics.rsk_shape_mismatch",
@@ -128,13 +117,6 @@ class RSKResult(StrictModel):
             raise PydanticCustomError(
                 "algebraic_combinatorics.rsk_size_mismatch",
                 "tableau shape size must equal permutation length",
-            )
-        expected_lis = self.shape.parts[0] if self.shape.parts else 0
-        expected_lds = len(self.shape.parts)
-        if self.lis_length != expected_lis or self.lds_length != expected_lds:
-            raise PydanticCustomError(
-                "algebraic_combinatorics.rsk_lengths_mismatch",
-                "LIS/LDS lengths do not match the tableau shape",
             )
         return self
 

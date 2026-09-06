@@ -8,15 +8,18 @@ from jacobian.math.finite_dim_algebras._models import (
     CenterResult,
 )
 from jacobian.math.finite_dim_algebras.operations import center_basis
+from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
 
 def compute_center(request: CenterRequest) -> CenterResult:
     basis = center_basis(request.algebra)
     return CenterResult(
         algebra=request.algebra,
-        center_basis=basis,
-        dimension=request.algebra.dimension,
-        center_dimension=len(basis),
+        basis_matrix=PrimeFieldMatrix(
+            prime=request.algebra.field_order,
+            entries=basis,
+            columns=request.algebra.dimension,
+        ),
     )
 
 

@@ -13,7 +13,7 @@ from jacobian.math.graphs.path_decomposition._models import (
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
-__all__ = ["compute_minimum_path_decomposition"]
+__all__ = ["compute_minimum_path_decomposition", "verify_path_decomposition"]
 
 MAX_SEARCH_STATES = 1_000_000
 MAX_CANDIDATE_EDGE_INCIDENCES = 1_000_000
@@ -21,8 +21,7 @@ MAX_CANDIDATE_EDGE_INCIDENCES = 1_000_000
 
 @dataclass(frozen=True, slots=True)
 class _PathSearchPlan:
-    candidates: tuple[frozenset[tuple[str, str]], ...]
-    candidate_incidences: int
+    adjacency: dict[str, set[str]]
     candidate_checks_bound: int
 
 
@@ -37,6 +36,7 @@ def _reject(code: str, message: str) -> NoReturn:
 
 
 def _admit_graph(graph: SimpleUndirectedGraph) -> _PathSearchPlan:
+    """Admit representation and estimate search work without enumerating paths."""
     if not isinstance(graph, SimpleUndirectedGraph):
         _reject("invalid_graph", "graph must be a simple undirected graph")
     vertex_count = len(graph.vertices)
@@ -46,21 +46,37 @@ def _admit_graph(graph: SimpleUndirectedGraph) -> _PathSearchPlan:
     for left, right in graph.edges:
         adjacency[left].add(right)
         adjacency[right].add(left)
-
-    candidate_sets, candidate_incidences = _find_all_simple_paths(
-        adjacency, candidate_limit=MAX_SEARCH_STATES
-    )
-    candidates = tuple(
-        sorted(
-            candidate_sets,
-            key=lambda path: (-len(path), tuple(sorted(path))),
+    # Every simple path stays in one connected component and is an ordered
+    # sequence of at least two distinct vertices. Sum permutations per
+    # component to bound the DFS before it materializes a candidate.
+    unseen = set(graph.vertices)
+    path_bound = 0
+    while unseen:
+        component = {unseen.pop()}
+        frontier = list(component)
+        while frontier:
+            vertex = frontier.pop()
+            for neighbor in adjacency[vertex] & unseen:
+                unseen.remove(neighbor)
+                component.add(neighbor)
+                frontier.append(neighbor)
+        maximum_degree = max(len(adjacency[vertex]) for vertex in component)
+        walks_at_length = len(component) * maximum_degree
+        for _length in range(2, len(component) + 1):
+            path_bound += walks_at_length
+            if path_bound > MAX_SEARCH_STATES:
+                break
+            walks_at_length *= max(maximum_degree - 1, 0)
+        if path_bound > MAX_SEARCH_STATES:
+            break
+    if path_bound > MAX_SEARCH_STATES:
+        _reject(
+            "search_work_bound",
+            "the exact path search exceeds its bounded work envelope",
         )
-    )
-    candidate_checks_bound = MAX_SEARCH_STATES
     return _PathSearchPlan(
-        candidates=candidates,
-        candidate_incidences=candidate_incidences,
-        candidate_checks_bound=candidate_checks_bound,
+        adjacency=adjacency,
+        candidate_checks_bound=MAX_SEARCH_STATES,
     )
 
 
@@ -75,13 +91,22 @@ def compute_minimum_path_decomposition(
     plan = _admit_graph(graph)
     edges = list(graph.edges)
     if not edges:
-        return PathDecompositionResult(graph=graph, path_count=0, paths=())
+        return PathDecompositionResult._from_kernel(graph=graph, path_count=0, paths=())
 
+    candidate_sets, candidate_incidences = _find_all_simple_paths(
+        plan.adjacency, candidate_limit=MAX_SEARCH_STATES
+    )
+    candidates = tuple(
+        sorted(
+            candidate_sets,
+            key=lambda path: (-len(path), tuple(sorted(path))),
+        )
+    )
     edge_set = frozenset(edges)
     best = _minimum_cover(
         edge_set,
-        plan.candidates,
-        candidate_incidences=plan.candidate_incidences,
+        candidates,
+        candidate_incidences=candidate_incidences,
         candidate_checks_bound=plan.candidate_checks_bound,
     )
 
@@ -93,11 +118,38 @@ def compute_minimum_path_decomposition(
         vertices = _path_to_vertices(path_edges)
         if vertices:
             path_vertices.append(tuple(vertices))
-    return PathDecompositionResult(
+    return PathDecompositionResult._from_kernel(
         graph=graph,
         path_count=len(best),
         paths=tuple(path_vertices),
     )
+
+
+def verify_path_decomposition(claim: PathDecompositionResult) -> bool:
+    """Check a claimed edge-path partition without any optimality search.
+
+    Verifies each path is simple, uses source vertices, and the paths
+    partition the source edge set exactly once. Minimum-count optimality
+    remains the producer's outcome and is not re-established here.
+    """
+    from itertools import pairwise
+
+    if claim.path_count != len(claim.paths):
+        return False
+    source_edges = set(claim.graph.edges)
+    used: set[tuple[str, str]] = set()
+    source_vertices = set(claim.graph.vertices)
+    for path in claim.paths:
+        if len(path) < 2 or len(path) != len(set(path)):
+            return False
+        if any(vertex not in source_vertices for vertex in path):
+            return False
+        for left, right in pairwise(path):
+            edge = (left, right) if left < right else (right, left)
+            if edge not in source_edges or edge in used:
+                return False
+            used.add(edge)
+    return used == source_edges
 
 
 def _find_all_simple_paths(

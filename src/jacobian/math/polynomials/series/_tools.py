@@ -479,13 +479,13 @@ TOOLS = (
         operation_id="formal_series.rational.from_polynomial.compute",
         title="Convert a rational polynomial to a formal power series",
         description=(
-            "Convert a dense canonical rational polynomial coefficient sequence "
-            "to an exact truncated formal power series."
+            "Project a canonical univariate QQ polynomial to an exact formal "
+            "power series modulo x^N, discarding terms of degree at least N."
         ),
         request_type=SeriesFromPolynomialRequest,
         result_type=SeriesFromPolynomialResult,
         run=lambda request: from_polynomial(
-            request.variable, request.coefficients, request.truncation_order
+            request.polynomial, request.truncation_order
         ),
         tags=("formal-series", "polynomial", "conversion", "rational", "exact"),
         examples=(
@@ -493,8 +493,15 @@ TOOLS = (
                 name="polynomial_one_plus_x",
                 description="Convert the dense polynomial 1+x to a series modulo x^3.",
                 input={
-                    "variable": "x",
-                    "coefficients": [_ONE, _ONE, _ZERO],
+                    "polynomial": {
+                        "variables": ["x"],
+                        "polynomial": {
+                            "terms": [
+                                {"coefficient": _ONE, "exponents": [1]},
+                                {"coefficient": _ONE, "exponents": [0]},
+                            ]
+                        },
+                    },
                     "truncation_order": 3,
                 },
             ),
@@ -504,7 +511,7 @@ TOOLS = (
         operation_id="formal_series.rational.to_polynomial.compute",
         title="Convert a formal power series to its polynomial representative",
         description=(
-            "Return the exact dense canonical polynomial representative of the "
+            "Return the exact sparse canonical QQ polynomial representative of the "
             "known coefficients below the truncation order."
         ),
         request_type=InputTruncatedSeries,

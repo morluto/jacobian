@@ -360,6 +360,19 @@ def _require_gram_schmidt_admission(
     _require_gram_schmidt_heights_admissible(prefix.moments, max_degree)
 
 
+def verify_definiteness(family: OrthogonalPolynomialFamily) -> bool:
+    """Check the two classification claims against the bounded retained norms.
+
+    This linear scan checks only norm classifications, not orthogonality to an
+    unspecified moment functional. Recurrence consumers admit their own
+    nonzero denominator norms independently of these flags.
+    """
+    norms = tuple(term.squared_norm.as_fraction() for term in family.polynomials)
+    return family.is_quasi_definite == all(
+        norm != 0 for norm in norms
+    ) and family.is_positive_definite == all(norm > 0 for norm in norms)
+
+
 def _require_quasi_definite_family(family: OrthogonalPolynomialFamily) -> None:
     """Recurrence ratios divide by every squared norm except the terminal
     one: ``beta_k = h_k / h_{k-1}`` for k >= 1 uses p_0..p_{n-2} as
@@ -718,4 +731,5 @@ __all__ = [
     "orthogonal_polynomials",
     "recurrence_coefficients",
     "shifted_hankel_matrix",
+    "verify_definiteness",
 ]

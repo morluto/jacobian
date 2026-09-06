@@ -125,6 +125,8 @@ def majorization_check(x: RationalVector, y: RationalVector) -> MajorizationChec
     majorizes = all_ok and total_sum_match
 
     return MajorizationCheckResult(
+        x=x,
+        y=y,
         majorizes=majorizes,
         total_sum_match=total_sum_match,
         prefix_slacks=tuple(CanonicalRational.from_fraction(s) for s in slacks),
@@ -177,6 +179,8 @@ def weak_majorization_check(
                 first_failed = k
 
     return WeakMajorizationCheckResult(
+        x=x,
+        y=y,
         holds=all_ok,
         direction=direction,
         prefix_slack=tuple(CanonicalRational.from_fraction(s) for s in slacks),
@@ -410,6 +414,7 @@ def doubly_stochastic_check(matrix: RationalMatrix) -> DoublyStochasticCheckResu
     is_ds = first_neg is None and first_bad_row is None and first_bad_col is None
 
     return DoublyStochasticCheckResult(
+        matrix=matrix,
         is_doubly_stochastic=is_ds,
         row_sums=tuple(CanonicalRational.from_fraction(s) for s in row_sums),
         col_sums=tuple(CanonicalRational.from_fraction(s) for s in col_sums),
@@ -496,6 +501,7 @@ def birkhoff_decomposition(matrix: RationalMatrix) -> BirkhoffDecompositionResul
     weights_sum = sum((t.weight.as_fraction() for t in terms), Fraction(0))
 
     return BirkhoffDecompositionResult(
+        matrix=matrix,
         terms=tuple(terms),
         weights_sum=CanonicalRational.from_fraction(weights_sum),
     )
@@ -578,6 +584,8 @@ def schur_horn_check(
     feasible = all_ok and total_sum_match
 
     return SchurHornCheckResult(
+        eigenvalues=eigenvalues,
+        diagonal=diagonal,
         feasible=feasible,
         eigenvalues_sorted=tuple(CanonicalRational.from_fraction(v) for v in e_sorted),
         diagonal_sorted=tuple(CanonicalRational.from_fraction(v) for v in d_sorted),
@@ -587,11 +595,60 @@ def schur_horn_check(
     )
 
 
+def verify_majorization(claim: MajorizationCheckResult) -> bool:
+    """Check the retained vectors' exact majorization summary."""
+    return majorization_check(claim.x, claim.y) == claim
+
+
+def verify_weak_majorization(claim: WeakMajorizationCheckResult) -> bool:
+    """Check the retained vectors in the claimed weak direction."""
+    return weak_majorization_check(claim.x, claim.y, claim.direction) == claim
+
+
+def verify_doubly_stochastic(claim: DoublyStochasticCheckResult) -> bool:
+    """Check the source matrix and all stochasticity summaries."""
+    return doubly_stochastic_check(claim.matrix) == claim
+
+
+def verify_schur_horn(claim: SchurHornCheckResult) -> bool:
+    """Check the retained eigenvalue and diagonal sequences."""
+    return schur_horn_check(claim.eigenvalues, claim.diagonal) == claim
+
+
+def verify_birkhoff(claim: BirkhoffDecompositionResult) -> bool:
+    """Check convexity and reconstruction without rerunning decomposition.
+
+    At most 400 terms on 20 coordinates are admitted. Canonical scalar bounds
+    bound each sum's denominator by the product of at most 400 denominators.
+    The empty matrix uses the producer's empty sum of weight zero.
+    """
+    _run_admission(
+        lambda: _require_majorization_matrix(claim.matrix), location=("matrix",)
+    )
+    n = len(claim.matrix.entries)
+    weights = tuple(term.weight.as_fraction() for term in claim.terms)
+    if any(weight < 0 for weight in weights):
+        return False
+    total = sum(weights, Fraction())
+    if total != claim.weights_sum.as_fraction() or total != (1 if n else 0):
+        return False
+    reconstructed = [[Fraction() for _ in range(n)] for _ in range(n)]
+    for term, weight in zip(claim.terms, weights, strict=True):
+        for row, column in enumerate(term.permutation):
+            reconstructed[row][column] += weight
+    return reconstructed == _matrix_fractions(claim.matrix)
+
+
 __all__ = [
     "birkhoff_decomposition",
     "doubly_stochastic_check",
     "majorization_check",
     "schur_horn_check",
     "t_transform_sequence",
+    "verify_birkhoff",
+    "verify_doubly_stochastic",
+    "verify_majorization",
+    "verify_schur_horn",
+    "verify_weak_majorization",
     "weak_majorization_check",
 ]

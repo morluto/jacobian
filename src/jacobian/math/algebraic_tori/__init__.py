@@ -2,6 +2,7 @@
 
 from jacobian.math.algebraic_tori.operations import (
     homogeneous_monomial_solution_subgroup,
+    verify_solution_subgroup,
 )
 from jacobian.math.algebraic_tori.values import (
     AlgebraicTorusSolutionSubgroup,
@@ -14,4 +15,5 @@ __all__ = [
     "HomogeneousMonomialSystem",
     "TorsionCharacterGroup",
     "homogeneous_monomial_solution_subgroup",
+    "verify_solution_subgroup",
 ]

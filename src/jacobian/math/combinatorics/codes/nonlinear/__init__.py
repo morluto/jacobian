@@ -5,6 +5,10 @@ from jacobian.math.combinatorics.codes.nonlinear.operations import (
     constant_weight_profile,
     explicit_profile,
     to_set_system,
+    verify_constant_weight_profile,
+    verify_distance_witness,
+    verify_explicit_profile,
+    verify_word_distance,
     word_distance,
 )
 from jacobian.math.combinatorics.codes.nonlinear.values import ExplicitBinaryCode
@@ -15,5 +19,9 @@ __all__: list[str] = [
     "constant_weight_profile",
     "explicit_profile",
     "to_set_system",
+    "verify_constant_weight_profile",
+    "verify_distance_witness",
+    "verify_explicit_profile",
+    "verify_word_distance",
     "word_distance",
 ]

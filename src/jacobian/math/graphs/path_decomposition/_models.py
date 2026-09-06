@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from itertools import pairwise
 from typing import Self
 
 from pydantic import Field, model_validator
@@ -36,21 +35,25 @@ class PathDecompositionRequest(StrictModel):
 
 
 class PathDecompositionResult(StrictModel):
-    """The minimum path decomposition of a graph."""
+    """The minimum path decomposition of a graph.
+
+    Parsing is structural only: path shape, vertex membership, and count
+    alignment. Whether paths partition the source edges is a caller-authored
+    claim checked by ``verify_path_decomposition``; minimum-count optimality
+    is the producer's outcome, not a parsing invariant.
+    """
 
     graph: SimpleUndirectedGraph
     path_count: int = Field(ge=0)
     paths: tuple[tuple[str, ...], ...]
 
     @model_validator(mode="after")
-    def require_source_edge_partition(self) -> Self:
+    def require_structural_shape(self) -> Self:
         if self.path_count != len(self.paths):
             raise PydanticCustomError(
                 "path_decomposition.path_count",
                 "path_count must equal the number of returned paths",
             )
-        source_edges = set(self.graph.edges)
-        used_edges: set[tuple[str, str]] = set()
         source_vertices = set(self.graph.vertices)
         for path in self.paths:
             if len(path) < 2 or len(path) != len(set(path)):
@@ -63,20 +66,18 @@ class PathDecompositionResult(StrictModel):
                     "path_decomposition.unknown_vertex",
                     "returned paths must use vertices from the source graph",
                 )
-            for left, right in pairwise(path):
-                edge = (left, right) if left < right else (right, left)
-                if edge not in source_edges or edge in used_edges:
-                    raise PydanticCustomError(
-                        "path_decomposition.edge_partition",
-                        "returned paths must partition the source edges exactly once",
-                    )
-                used_edges.add(edge)
-        if used_edges != source_edges:
-            raise PydanticCustomError(
-                "path_decomposition.edge_partition",
-                "returned paths must partition the source edges exactly once",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        graph: SimpleUndirectedGraph,
+        path_count: int,
+        paths: tuple[tuple[str, ...], ...],
+    ) -> Self:
+        """Construct a result after the kernel established the partition."""
+
+        return cls.model_construct(graph=graph, path_count=path_count, paths=paths)
 
 
 __all__ = [

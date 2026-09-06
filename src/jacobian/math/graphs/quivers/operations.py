@@ -24,7 +24,6 @@ def adjacency_matrices(quiver: FiniteQuiver) -> AdjacencyMatricesResult:
     return AdjacencyMatricesResult(
         adjacency_matrix=adj,
         transpose_matrix=transpose,
-        vertex_count=n,
     )
 
 
@@ -39,7 +38,6 @@ def vertex_profiles(quiver: FiniteQuiver) -> VertexProfilesResult:
     return VertexProfilesResult(
         in_degrees=tuple(in_degrees),
         out_degrees=tuple(out_degrees),
-        vertex_count=n,
     )
 
 

@@ -13,7 +13,6 @@ from jacobian.math.geometry._models import (
     GeometryConvexHullResult,
     PolygonRequest,
     RationalPoint2D,
-    _is_simple_ring,
 )
 
 if TYPE_CHECKING:
@@ -54,7 +53,7 @@ class KernelPolygon(PolygonRequest):
     )
 
     @model_validator(mode="after")
-    def require_bounded_simple_counterclockwise_polygon(self) -> Self:
+    def require_bounded_coordinates(self) -> Self:
         max_coordinate_digits = max(
             canonical_rational_component_digits(component)
             for point in self.points
@@ -67,18 +66,6 @@ class KernelPolygon(PolygonRequest):
                 f"{MAX_KERNEL_COORDINATE_DIGITS}-digit visibility-kernel bound",
             )
 
-        if not _is_simple_ring(self.points):
-            raise _validation_error(
-                "visibility_kernel_input_a_simple_polygon",
-                "visibility-kernel input must be a simple polygon",
-            )
-        from jacobian.math.geometry.polygon_kernel._kernel import polygon_signed_area
-
-        if polygon_signed_area(self.points) <= 0:
-            raise _validation_error(
-                "visibility_kernel_vertices_use_counterclockwise_cyclic",
-                "visibility-kernel vertices must use counterclockwise cyclic order",
-            )
         return self
 
 

@@ -16,7 +16,7 @@ def test_catalog_example_executes_as_a_source_bound_polynomial_profile() -> None
 
     assert example.name == "path_tree_p4"
     assert result.output["graph"] == example.input["graph"]
-    assert result.output["coefficients"] == ["1", "4", "3"]
+    assert "coefficients" not in result.output
     assert result.output["independence_number"] == 2
     assert result.output["independent_set_count"] == "8"
     assert result.output["polynomial"]["variables"] == ["x"]

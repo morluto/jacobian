@@ -58,12 +58,12 @@ class TestFDP:
         result = false_discovery_proportion(req.rejected_ids, req.true_null_ids)
         assert result.false_discoveries == 1
         assert result.total_rejections == 2
-        assert result.fdp == "1/2"
+        assert result.fdp == CanonicalRational(num="1", den="2")
 
     def test_no_rejections(self) -> None:
         req = FDPRequest(rejected_ids=(), true_null_ids=("h1",))
         result = false_discovery_proportion(req.rejected_ids, req.true_null_ids)
-        assert result.fdp == "0"
+        assert result.fdp == CanonicalRational(num="0", den="1")
 
     def test_rejects_out_of_range_p_value_and_level(self) -> None:
         import pytest

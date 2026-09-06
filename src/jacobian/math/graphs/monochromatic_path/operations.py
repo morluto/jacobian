@@ -14,7 +14,10 @@ from jacobian.math.graphs.monochromatic_path._models import (
 )
 from jacobian.math.graphs.values import ColoredUndirectedGraph
 
-__all__ = ["construct_monochromatic_path_hypergraphs"]
+__all__ = [
+    "construct_monochromatic_path_hypergraphs",
+    "verify_monochromatic_path_hypergraphs",
+]
 
 MAX_MONOCHROMATIC_PATH_WORK = 100_000_000
 
@@ -63,7 +66,7 @@ def _admit_monochromatic_path_graph(graph: ColoredUndirectedGraph) -> tuple[str,
             code="graph.monochromatic_path.edge_count_exceeds_bound",
             message="complete monochromatic path hypergraphs exceed the edge bound",
         )
-    incidence_upper_bound = vertex_count * (1 << (vertex_count - 1))
+    incidence_upper_bound = vertex_count * (1 << max(0, vertex_count - 1))
     if incidence_upper_bound > MAX_TOTAL_INCIDENCES:
         raise OperationDomainValidationError(
             location=("graph",),
@@ -111,8 +114,14 @@ def construct_monochromatic_path_hypergraphs(
 
     return MonochromaticPathResult(
         graph=graph,
-        colour_to_hypergraph=result,
+        colours=colours,
+        hypergraphs=tuple(result[colour] for colour in colours),
     )
+
+
+def verify_monochromatic_path_hypergraphs(claim: MonochromaticPathResult) -> bool:
+    """Check the bounded path-support relation against the retained graph."""
+    return construct_monochromatic_path_hypergraphs(claim.graph) == claim
 
 
 def _has_hamiltonian_path(

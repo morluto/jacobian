@@ -1061,7 +1061,20 @@ def ideal_radical_membership(
         order="grevlex",
         domain=sympy.QQ,
     )
-    return IdealRadicalMembershipResult(in_radical=len(basis) == 1 and basis[0] == 1)
+    return IdealRadicalMembershipResult(
+        ideal=ideal,
+        polynomial=polynomial,
+        in_radical=len(basis) == 1 and basis[0] == 1,
+    )
+
+
+def verify_ideal_radical_membership(claim: IdealRadicalMembershipResult) -> bool:
+    """Check the bounded Rabinowitsch decision asserted by a claim."""
+
+    return (
+        ideal_radical_membership(claim.ideal, claim.polynomial).in_radical
+        is claim.in_radical
+    )
 
 
 def ideal_quotient(

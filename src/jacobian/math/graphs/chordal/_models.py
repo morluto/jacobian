@@ -97,14 +97,6 @@ class ChordalRecognitionResult(StrictModel):
                     "graph.chordal.cycle_canonical_direction",
                     "the induced cycle must use the smaller second endpoint",
                 )
-            edge_set = {tuple(sorted(edge)) for edge in self.graph.edges}
-            for first, second in zip(cycle, cycle[1:] + cycle[:1], strict=True):
-                edge = (first, second) if first < second else (second, first)
-                if edge not in edge_set:
-                    raise _validation_error(
-                        "graph.chordal.cycle_edge_missing",
-                        "consecutive cycle vertices must be graph edges",
-                    )
         return self
 
     @classmethod

@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from fractions import Fraction
 from typing import Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import CanonicalInteger, CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.math.number_theory.numerical_semigroups._models import (
     _GENERAL_ELEMENT_ENVELOPE,
@@ -16,6 +15,7 @@ from jacobian.math.number_theory.numerical_semigroups._models import (
     _require_canonical_generator_axis,
     _validation_error,
 )
+from jacobian.math.number_theory.numerical_semigroups.values import NumericalSemigroup
 
 
 class ElementDeltaSetRequest(StrictModel):
@@ -102,12 +102,15 @@ class ElementElasticityResult(StrictModel):
     """Elasticity of one element."""
 
     value: CanonicalInteger
-    minimal_generators: tuple[CanonicalInteger, ...] = Field(
-        min_length=1, max_length=MAX_GENERATORS
-    )
+    semigroup: NumericalSemigroup
+
+    @property
+    def minimal_generators(self) -> tuple[CanonicalInteger, ...]:
+        return self.semigroup.minimal_generators
+
     minimum_length: int = Field(ge=1)
     maximum_length: int = Field(ge=1)
-    elasticity: str
+    elasticity: CanonicalRational
 
     @classmethod
     def _from_kernel(
@@ -117,28 +120,17 @@ class ElementElasticityResult(StrictModel):
         minimal_generators: tuple[CanonicalInteger, ...],
         minimum_length: int,
         maximum_length: int,
-        elasticity: str,
+        elasticity: CanonicalRational,
     ) -> Self:
         """Construct output derived from one admitted extrema kernel call."""
 
         return cls.model_construct(
             value=value,
-            minimal_generators=minimal_generators,
+            semigroup=NumericalSemigroup(minimal_generators=minimal_generators),
             minimum_length=minimum_length,
             maximum_length=maximum_length,
             elasticity=elasticity,
         )
-
-    @model_validator(mode="after")
-    def require_length_ratio(self) -> Self:
-        _require_canonical_generator_axis(self.minimal_generators)
-        if self.minimum_length > self.maximum_length:
-            raise _validation_error("minimum_length must not exceed maximum_length")
-        if Fraction(self.elasticity) != Fraction(
-            self.maximum_length, self.minimum_length
-        ):
-            raise _validation_error("elasticity does not match the length ratio")
-        return self
 
 
 class ElementCatenaryDegreeRequest(StrictModel):

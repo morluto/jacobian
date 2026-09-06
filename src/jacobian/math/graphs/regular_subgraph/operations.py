@@ -99,4 +99,28 @@ def find_k_regular_subgraph(
     return RegularSubgraphResult(graph=graph, k=k, found=False)
 
 
-__all__ = ["find_k_regular_subgraph"]
+def verify_k_regular_subgraph(claim: RegularSubgraphResult) -> bool:
+    """Return whether a retained witness or absence claim is valid."""
+    if not claim.found:
+        try:
+            return not find_k_regular_subgraph(claim.graph, claim.k).found
+        except OperationDomainValidationError:
+            return False
+    vertices = set(claim.vertices)
+    if not vertices or len(vertices) != len(claim.vertices):
+        return False
+    if not vertices <= set(claim.graph.vertices):
+        return False
+    graph_edges = {frozenset(edge) for edge in claim.graph.edges}
+    if any(frozenset(edge) not in graph_edges for edge in claim.edges):
+        return False
+    degrees = dict.fromkeys(vertices, 0)
+    for left, right in claim.edges:
+        if left not in vertices or right not in vertices:
+            return False
+        degrees[left] += 1
+        degrees[right] += 1
+    return all(degree == claim.k for degree in degrees.values())
+
+
+__all__ = ["find_k_regular_subgraph", "verify_k_regular_subgraph"]

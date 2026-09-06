@@ -26,6 +26,7 @@ class GraphMaximumMatchingRequest(StrictModel):
 
 
 class GraphGirthResult(StrictModel):
+    graph: SimpleUndirectedGraph
     girth: StrictInt = Field(ge=0, le=256)
     has_cycle: StrictBool
 
@@ -40,6 +41,7 @@ class GraphGirthResult(StrictModel):
 
 
 class GraphDiameterResult(StrictModel):
+    graph: SimpleUndirectedGraph
     status: Literal["COMPUTED", "NOT_APPLICABLE"]
     diameter: StrictInt | None = Field(default=None, ge=0, le=255)
     connected: StrictBool
@@ -62,18 +64,22 @@ class GraphDiameterResult(StrictModel):
 
 
 class GraphEdgeConnectivityResult(StrictModel):
+    graph: SimpleUndirectedGraph
     edge_connectivity: StrictInt = Field(ge=0, le=255)
 
 
 class GraphVertexConnectivityResult(StrictModel):
+    graph: SimpleUndirectedGraph
     vertex_connectivity: StrictInt = Field(ge=0, le=255)
 
 
 class GraphEulerianResult(StrictModel):
+    graph: SimpleUndirectedGraph
     is_eulerian: StrictBool
 
 
 class GraphSpanningTreeCountResult(StrictModel):
+    graph: SimpleUndirectedGraph
     spanning_tree_count: StrictInt = Field(ge=0)
     connected: StrictBool
 
@@ -128,6 +134,7 @@ class GraphMaximumMatchingResult(StrictModel):
 
 
 class GraphTriangleCountResult(StrictModel):
+    graph: SimpleUndirectedGraph
     triangle_count: StrictInt = Field(ge=0, le=2_763_520)
 
 
@@ -136,11 +143,17 @@ class GraphCoreRequest(GraphInvariantRequest):
 
 
 class GraphCoreResult(StrictModel):
+    graph: SimpleUndirectedGraph
     k: StrictInt = Field(ge=0, le=255)
     vertices: tuple[GraphVertex, ...]
 
     @model_validator(mode="after")
     def require_canonical_vertices(self) -> Self:
+        if not set(self.vertices) <= set(self.graph.vertices):
+            raise PydanticCustomError(
+                "graph.k_core_source_vertices",
+                "k-core vertices must belong to the source graph",
+            )
         if tuple(sorted(self.vertices)) != self.vertices:
             raise PydanticCustomError(
                 "graph.k_core_vertices_must_be_canonically_sorted",
@@ -154,6 +167,7 @@ class GraphCoreResult(StrictModel):
 
 
 class GraphRadiusResult(StrictModel):
+    graph: SimpleUndirectedGraph
     status: Literal["COMPUTED", "NOT_APPLICABLE"]
     radius: StrictInt | None = Field(default=None, ge=0, le=255)
     connected: StrictBool

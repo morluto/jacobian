@@ -356,35 +356,6 @@ class ReceivedWordProfileResult(StrictModel):
         )
 
 
-def _validate_prime_matrix(
-    field_order: int,
-    generator_matrix: tuple[tuple[int, ...], ...],
-) -> int:
-    from sympy import isprime
-
-    if not isprime(field_order):
-        raise _validation_error(
-            "field_order_must_be_prime", "field_order must be prime"
-        )
-    width = len(generator_matrix[0])
-    if width == 0 or width > MAX_LINEAR_CODE_LENGTH:
-        raise _validation_error(
-            "generator_rows_length",
-            f"generator rows must have between 1 and {MAX_LINEAR_CODE_LENGTH} entries",
-        )
-    if any(len(row) != width for row in generator_matrix):
-        raise _validation_error(
-            "generator_matrix_rows_must_have_equal_length",
-            "generator matrix rows must have equal length",
-        )
-    if any(not 0 <= entry < field_order for row in generator_matrix for entry in row):
-        raise _validation_error(
-            "generator_entries_must_be_canonical_field_residues",
-            "generator entries must be canonical field residues",
-        )
-    return width
-
-
 def _validate_coordinate_axis(
     coordinate_axis: tuple[OpaqueLabel, ...],
     *,

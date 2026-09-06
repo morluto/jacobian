@@ -95,6 +95,11 @@ __all__ = [
     "solve_linear_system",
     "trace",
     "trace_result",
+    "verify_adjugate",
+    "verify_inverse",
+    "verify_kronecker_product",
+    "verify_partial_trace",
+    "verify_product",
 ]
 
 
@@ -1276,7 +1281,9 @@ def _sparse_nullspace_result(matrix: SparseRationalMatrix) -> NullspaceResult:
         ambient_dimension=matrix.column_count,
         rank=len(pivot_rows),
         nullity=len(free),
-        basis_vectors=tuple(basis),
+        basis_matrix=RationalMatrix(
+            entries=tuple(basis), column_count=matrix.column_count
+        ),
         free_columns=free,
     )
 
@@ -1312,7 +1319,9 @@ def nullspace_result(matrix: RationalMatrix | SparseRationalMatrix) -> Nullspace
         ambient_dimension=matrix.column_count,
         rank=len(pivot_columns),
         nullity=len(basis),
-        basis_vectors=tuple(basis),
+        basis_matrix=RationalMatrix(
+            entries=tuple(basis), column_count=matrix.column_count
+        ),
         free_columns=free_columns,
     )
 
@@ -1404,6 +1413,7 @@ def inverse_result(matrix: IntegerMatrix) -> MatrixInverseResult:
             message="matrix is singular; inverse does not exist",
         ) from exc
     return MatrixInverseResult(
+        matrix=matrix,
         inverse=RationalMatrix(
             entries=tuple(
                 tuple(
@@ -1414,7 +1424,7 @@ def inverse_result(matrix: IntegerMatrix) -> MatrixInverseResult:
                 )
                 for row in range(order)
             )
-        )
+        ),
     )
 
 
@@ -1444,6 +1454,8 @@ def product_result(left: RationalMatrix, right: RationalMatrix) -> MatrixProduct
             tuple(tuple(value.as_fraction() for value in row) for row in right.entries),
         )
     return MatrixProductResult(
+        left=left,
+        right=right,
         product=RationalMatrix(
             row_count=left_rows,
             column_count=right_columns,
@@ -1452,9 +1464,6 @@ def product_result(left: RationalMatrix, right: RationalMatrix) -> MatrixProduct
                 for row in product
             ),
         ),
-        left_rows=left_rows,
-        inner_dimension=inner_dimension,
-        right_columns=right_columns,
     )
 
 
@@ -1491,7 +1500,9 @@ def rational_linear_solve_result(
 def adjugate_result(matrix: IntegerMatrix) -> MatrixAdjugateResult:
     _admit(_admit_square_integer, matrix)
     value = adjugate(conversions.integer_matrix_to_sympy(matrix))
-    return MatrixAdjugateResult(adjugate=conversions.integer_matrix_from_sympy(value))
+    return MatrixAdjugateResult(
+        matrix=matrix, adjugate=conversions.integer_matrix_from_sympy(value)
+    )
 
 
 def permanent_result(matrix: RationalMatrix) -> MatrixPermanentResult:
@@ -1519,11 +1530,9 @@ def kronecker_product_result(
     else:
         product = kronecker_product(left_source, right_source)
     return MatrixKroneckerProductResult(
+        left=left,
+        right=right,
         product=conversions.rational_matrix_from_sympy(product),
-        left_rows=left_source.rows,
-        left_columns=left_source.cols,
-        right_rows=right_source.rows,
-        right_columns=right_source.cols,
     )
 
 
@@ -1544,7 +1553,38 @@ def partial_trace_result(
         kept_dimension,
     )
     return MatrixPartialTraceResult(
+        matrix=matrix,
         reduced_matrix=conversions.rational_matrix_from_sympy(reduced),
         traced_dimension=traced_dimension,
         kept_dimension=kept_dimension,
+    )
+
+
+def verify_product(claim: MatrixProductResult) -> bool:
+    """Check a product relation under the existing multiply/output admission."""
+    return product_result(claim.left, claim.right).product == claim.product
+
+
+def verify_inverse(claim: MatrixInverseResult) -> bool:
+    """Check an inverse claim using the bounded exact inverse operation."""
+    return inverse_result(claim.matrix).inverse == claim.inverse
+
+
+def verify_adjugate(claim: MatrixAdjugateResult) -> bool:
+    """Check the classical adjugate, including singular source matrices."""
+    return adjugate_result(claim.matrix).adjugate == claim.adjugate
+
+
+def verify_kronecker_product(claim: MatrixKroneckerProductResult) -> bool:
+    """Check the ordered tensor product under its output-axis admission."""
+    return kronecker_product_result(claim.left, claim.right).product == claim.product
+
+
+def verify_partial_trace(claim: MatrixPartialTraceResult) -> bool:
+    """Check the declared block trace under its tensor-dimension admission."""
+    return (
+        partial_trace_result(
+            claim.matrix, claim.traced_dimension, claim.kept_dimension
+        ).reduced_matrix
+        == claim.reduced_matrix
     )

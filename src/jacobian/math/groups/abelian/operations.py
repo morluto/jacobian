@@ -5,6 +5,7 @@ from __future__ import annotations
 from math import gcd, lcm
 
 from jacobian.math.groups.abelian._models import (
+    AbelianPresentation,
     ElementEqualResult,
     ElementOrderResult,
     ElementReduceResult,
@@ -24,13 +25,8 @@ def normalize_presentation(
     smith = smith_normal_form(matrix, domain=None)
     factors = tuple(int(smith[i, i]) for i in range(min(smith.rows, smith.cols)))
     cleaned = tuple(factor for factor in factors if factor > 1)
-    order = 1
-    for factor in cleaned:
-        order *= factor
     return PresentationNormalizeResult(
-        invariant_factors=cleaned,
-        order=order,
-        rank=0,
+        presentation=AbelianPresentation(invariant_factors=cleaned),
     )
 
 
@@ -57,7 +53,25 @@ def elements_equal(
         coordinate % factor
         for coordinate, factor in zip(coordinates_b, invariant_factors, strict=True)
     )
-    return ElementEqualResult(equal=reduced_a == reduced_b)
+    return ElementEqualResult(
+        invariant_factors=invariant_factors,
+        coordinates_a=coordinates_a,
+        coordinates_b=coordinates_b,
+        equal=reduced_a == reduced_b,
+    )
+
+
+def verify_elements_equal(claim: ElementEqualResult) -> bool:
+    """Check the equality relation asserted by a serialized element claim."""
+
+    return (
+        elements_equal(
+            claim.invariant_factors,
+            claim.coordinates_a,
+            claim.coordinates_b,
+        ).equal
+        is claim.equal
+    )
 
 
 def element_order(
@@ -71,7 +85,23 @@ def element_order(
     for coordinate, factor in zip(reduced, invariant_factors, strict=True):
         if coordinate != 0:
             order = lcm(order, factor // gcd(coordinate, factor))
-    return ElementOrderResult(order=order)
+    return ElementOrderResult(
+        invariant_factors=invariant_factors,
+        coordinates=coordinates,
+        order=order,
+    )
+
+
+def verify_element_order(claim: ElementOrderResult) -> bool:
+    """Check the order relation asserted by a serialized element claim."""
+
+    return (
+        element_order(
+            claim.invariant_factors,
+            claim.coordinates,
+        ).order
+        == claim.order
+    )
 
 
 def _smith_diagonal(augmented_rows: list[list[int]]) -> list[int]:
@@ -99,7 +129,11 @@ def generated_subgroup(
     for factor in diagonal:
         if factor > 1:
             index *= factor
-    return SubgroupGeneratedResult(index=index)
+    return SubgroupGeneratedResult(
+        invariant_factors=invariant_factors,
+        generators=generators,
+        index=index,
+    )
 
 
 def quotient_group(
@@ -120,8 +154,29 @@ def quotient_group(
     for factor in quotient_factors:
         order *= factor
     return QuotientResult(
+        invariant_factors=invariant_factors,
+        subgroup_generators=subgroup_generators,
         quotient_invariant_factors=quotient_factors,
         quotient_order=order,
+    )
+
+
+def verify_generated_subgroup(claim: SubgroupGeneratedResult) -> bool:
+    """Check the index relation asserted by a serialized subgroup claim."""
+
+    return (
+        generated_subgroup(claim.invariant_factors, claim.generators).index
+        == claim.index
+    )
+
+
+def verify_quotient_group(claim: QuotientResult) -> bool:
+    """Check the quotient presentation asserted by a serialized claim."""
+
+    expected = quotient_group(claim.invariant_factors, claim.subgroup_generators)
+    return (
+        expected.quotient_invariant_factors == claim.quotient_invariant_factors
+        and expected.quotient_order == claim.quotient_order
     )
 
 
@@ -132,4 +187,8 @@ __all__ = [
     "normalize_presentation",
     "quotient_group",
     "reduce_element",
+    "verify_element_order",
+    "verify_elements_equal",
+    "verify_generated_subgroup",
+    "verify_quotient_group",
 ]

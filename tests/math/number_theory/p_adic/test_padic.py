@@ -11,6 +11,7 @@ from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.p_adic._models import (
     HenselFactorLiftRequest,
+    HenselFactorLiftResult,
     HenselRootRequest,
     HenselRootResult,
     IntegerPolynomial,
@@ -25,6 +26,8 @@ from jacobian.math.number_theory.p_adic.operations import (
     find_padic_roots,
     hensel_lift_factors,
     hensel_lift_root,
+    verify_hensel_factor_lift,
+    verify_hensel_root,
 )
 
 
@@ -56,6 +59,23 @@ class TestHenselRootLifting:
         )
         assert result.is_simple_root
         assert (parse_canonical_integer(result.lifted_root) ** 2 + 1) % 125 == 0
+        assert verify_hensel_root(
+            HenselRootResult.model_validate_json(result.model_dump_json())
+        )
+        assert not verify_hensel_root(result.model_copy(update={"root_mod_p": 1}))
+        assert not verify_hensel_root(result.model_copy(update={"prime": 4}))
+
+    def test_rejects_negative_lifted_root_claim(self) -> None:
+        poly = IntegerPolynomial(coefficients=("1", "1"))
+        payload = {
+            "polynomial": poly.model_dump(mode="json"),
+            "prime": 3,
+            "root_mod_p": 2,
+            "precision": 2,
+            "lifted_root": "-1",
+        }
+        with pytest.raises(ValueError, match=r"lifted_root must be in 0..p\^k - 1"):
+            HenselRootResult.model_validate(payload)
 
     def test_lift_mod_p_squared(self) -> None:
         """Lift root to mod p^2."""
@@ -142,9 +162,7 @@ class TestPAdicRoots:
         not_simple["is_simple_root"] = False
         with pytest.raises(ValidationError) as exc_info:
             HenselRootResult.model_validate(not_simple)
-        assert (
-            exc_info.value.errors()[0]["type"] == "padic_arithmetic.simple_flag_invalid"
-        )
+        assert exc_info.value.errors()[0]["type"] == "extra_forbidden"
 
     def test_roots_profile_rejects_out_of_range_structural_entries(self) -> None:
         result = _find_padic_roots(
@@ -213,6 +231,17 @@ class TestHenselFactorLifting:
             HenselFactorLiftRequest(
                 polynomial=f, factor_g=g, factor_h=h, prime=3, precision=2
             )
+        )
+        assert result.polynomial == f
+        assert result.factor_g == g
+        assert result.factor_h == h
+        assert (
+            HenselFactorLiftResult.model_validate_json(result.model_dump_json())
+            == result
+        )
+        assert verify_hensel_factor_lift(result)
+        assert not verify_hensel_factor_lift(
+            result.model_copy(update={"lifted_g": _wire_poly(0, 1)})
         )
         modulus = 9
         for x in range(modulus):

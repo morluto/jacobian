@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from itertools import pairwise
-from math import ceil, log10, prod
+from math import ceil, log10
 from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, StrictInt, StringConstraints, model_validator
@@ -187,9 +186,7 @@ class TorsionCharacterGroup(StrictModel):
         factors = tuple(
             parse_canonical_integer(value) for value in self.invariant_factors
         )
-        if any(value <= 1 for value in factors) or any(
-            right % left for left, right in pairwise(factors)
-        ):
+        if any(value <= 1 for value in factors):
             raise _validation_error(
                 "algebraic_torus.torsion_invariant_factors",
                 "torsion invariant factors must exceed one and form a divisibility chain",
@@ -280,39 +277,11 @@ class AlgebraicTorusSolutionSubgroup(StrictModel):
     @model_validator(mode="after")
     def require_source_bound_shapes(self) -> Self:
         coordinate_count = len(self.source.coordinate_axis)
-        rank = self.smith_certificate.rank
-        factors = self.smith_certificate.invariant_factors
-        nontrivial_factors = tuple(factor for factor in factors if factor != "1")
-        torsion_count = len(nontrivial_factors)
+        torsion_count = len(self.torsion_character_group.invariant_factors)
         if self.smith_certificate.source != self.source.exponent_matrix:
             raise _validation_error(
                 "algebraic_torus.solution_source_binding",
                 "Smith certificate source must equal the exponent matrix",
-            )
-        if self.free_rank != coordinate_count - rank:
-            raise _validation_error(
-                "algebraic_torus.solution_rank_shape",
-                "free rank must be coordinate count minus Smith rank",
-            )
-        if self.torsion_character_group.invariant_factors != nontrivial_factors:
-            raise _validation_error(
-                "algebraic_torus.solution_torsion_shape",
-                "torsion characters must follow the nontrivial Smith factors",
-            )
-        expected_component_count = prod(
-            (
-                parse_canonical_integer(value)
-                for value in self.torsion_character_group.invariant_factors
-            ),
-            start=1,
-        )
-        if (
-            parse_canonical_integer(self.connected_component_count)
-            != expected_component_count
-        ):
-            raise _validation_error(
-                "algebraic_torus.solution_component_count",
-                "connected component count must equal the product of torsion invariant factors",
             )
         if (
             len(self.torsion_parameter_axis) != torsion_count

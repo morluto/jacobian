@@ -4,6 +4,8 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.designs.latin_squares._models import (
     LatinSquare,
     LatinSquareCandidate,
+    LatinSquareCheckResult,
+    OrthogonalityResult,
 )
 
 MAX_LATIN_CHECK_CELLS = 1_048_576
@@ -23,7 +25,7 @@ def _square_cells(square: LatinSquare | LatinSquareCandidate) -> int:
     return square.order * square.order
 
 
-def is_latin_square(square: LatinSquareCandidate) -> bool:
+def is_latin_square(square: LatinSquareCandidate | LatinSquare) -> bool:
     """Return whether every row and column contains every symbol once."""
 
     cells = _square_cells(square)
@@ -59,6 +61,8 @@ def orthogonality_profile(
             "orthogonality_pair_cells_exceeded",
             "orthogonality check exceeds the distinct-pair memory budget",
         )
+    _admit_latin_square(left)
+    _admit_latin_square(right)
     # Symbols already lie in ``range(order)``, so the aligned pair has a dense
     # integer address.  A byte table keeps the complete positive-decision
     # envelope bounded without paying Python tuple/set overhead for each pair.
@@ -83,6 +87,7 @@ def transpose(square: LatinSquare) -> LatinSquare:
             "transpose_cells_exceeded",
             "Latin-square transpose exceeds the source-cell work budget",
         )
+    _admit_latin_square(square)
     # The transpose of a Latin square is Latin, so construct the canonical
     # carrier without re-running the Latin-property validator.
     return LatinSquare.model_construct(
@@ -94,4 +99,33 @@ def transpose(square: LatinSquare) -> LatinSquare:
     )
 
 
-__all__ = ["is_latin_square", "orthogonality_profile", "transpose"]
+def _admit_latin_square(square: LatinSquare) -> None:
+    """Establish the Latin claim within the existing quadratic cell envelope."""
+    if not is_latin_square(square):
+        _reject(
+            ("square", "cells"),
+            "not_latin",
+            "each row and column must contain every symbol once",
+        )
+
+
+def verify_latin_square_check(claim: LatinSquareCheckResult) -> bool:
+    """Check the Latin-property relation carried by one result."""
+
+    return claim.is_latin is is_latin_square(claim.square)
+
+
+def verify_orthogonality(claim: OrthogonalityResult) -> bool:
+    """Check the aligned-pair relation carried by one result."""
+
+    is_orthogonal, pair_count = orthogonality_profile(claim.square_a, claim.square_b)
+    return claim.is_orthogonal is is_orthogonal and claim.pair_count == pair_count
+
+
+__all__ = [
+    "is_latin_square",
+    "orthogonality_profile",
+    "transpose",
+    "verify_latin_square_check",
+    "verify_orthogonality",
+]

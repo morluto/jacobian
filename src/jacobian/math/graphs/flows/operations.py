@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from itertools import pairwise
 from typing import Any
 
 import networkx as nx
@@ -12,9 +13,13 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.flows._models import (
     CostedFlowGraph,
     EdgeDisjointPathsGraph,
+    EdgeDisjointPathsResult,
     FlowEdgeResult,
     FlowEdgeValue,
     FlowGraph,
+    MaxFlowResult,
+    MinCostFlowResult,
+    MinCutResult,
     _bounded_denominator_scale,
 )
 
@@ -23,6 +28,9 @@ __all__ = [
     "max_flow",
     "min_cost_flow",
     "min_cut",
+    "verify_edge_disjoint_paths",
+    "verify_max_flow",
+    "verify_min_cut",
 ]
 
 
@@ -180,3 +188,150 @@ def min_cost_flow(
     )
     total_cost = Fraction(int(flow_cost_int), flow_scale * cost_scale)
     return _rational(total_cost), True, flow_edges
+
+
+def _admitted_terminals(
+    graph: FlowGraph | EdgeDisjointPathsGraph, source: int, sink: int
+) -> bool:
+    """Return whether terminals satisfy the operation's admitted domain."""
+    try:
+        _admit_terminals(graph, source, sink)
+    except OperationDomainValidationError:
+        return False
+    return True
+
+
+def verify_max_flow(claim: MaxFlowResult) -> bool:
+    """Check capacities, conservation and absence of residual augmenting paths.
+
+    The network has at most 64 vertices and 512 edges; no solver is rerun.
+    """
+    if not _admitted_terminals(claim.graph, claim.source, claim.sink):
+        return False
+    flows = {
+        (edge.source, edge.target): edge.flow.as_fraction() for edge in claim.flow_edges
+    }
+    balance = [Fraction() for _ in range(claim.graph.vertex_count)]
+    residual: list[set[int]] = [set() for _ in balance]
+    for edge in claim.graph.edges:
+        u, v = edge.source, edge.target
+        amount = flows.get((u, v), Fraction())
+        capacity = edge.capacity.as_fraction()
+        if not 0 <= amount <= capacity:
+            return False
+        balance[u] -= amount
+        balance[v] += amount
+        if amount < capacity:
+            residual[u].add(v)
+        if amount > 0:
+            residual[v].add(u)
+    value = claim.flow_value.as_fraction()
+    if any(
+        amount
+        != (-value if vertex == claim.source else value if vertex == claim.sink else 0)
+        for vertex, amount in enumerate(balance)
+    ):
+        return False
+    reached = {claim.source}
+    frontier = [claim.source]
+    while frontier:
+        for vertex in residual[frontier.pop()]:
+            if vertex not in reached:
+                reached.add(vertex)
+                frontier.append(vertex)
+    return claim.sink not in reached
+
+
+def verify_min_cut(claim: MinCutResult) -> bool:
+    """Check the cut relation against the admitted source network.
+
+    Verifies s-t separation and that the claimed value equals the cut
+    capacity. Minimality is the producer's outcome: certifying it needs a
+    primal flow witness or a solver rerun, neither of which this bounded
+    relation check performs.
+    """
+    if not _admitted_terminals(claim.graph, claim.source, claim.sink):
+        return False
+    left, right = set(claim.reachable), set(claim.unreachable)
+    if claim.source not in left or claim.sink not in right:
+        return False
+    capacity = sum(
+        (
+            edge.capacity.as_fraction()
+            for edge in claim.graph.edges
+            if edge.source in left and edge.target in right
+        ),
+        Fraction(),
+    )
+    return capacity == claim.cut_value.as_fraction()
+
+
+def verify_edge_disjoint_paths(claim: EdgeDisjointPathsResult) -> bool:
+    """Check path witnesses are edge-disjoint source-to-sink paths.
+
+    Verifies endpoints, simplicity, edge membership, disjointness, and count
+    alignment. Maximality (Menger) is the producer's outcome: certifying it
+    needs a cut dual or a solver rerun, neither of which this bounded
+    relation check performs.
+    """
+    if not _admitted_terminals(claim.graph, claim.source, claim.sink):
+        return False
+    edges = set(claim.graph.edges)
+    used: set[tuple[int, int]] = set()
+    if claim.path_count != len(claim.paths):
+        return False
+    for path in claim.paths:
+        if (
+            len(path) < 2
+            or path[0] != claim.source
+            or path[-1] != claim.sink
+            or len(set(path)) != len(path)
+        ):
+            return False
+        for edge in pairwise(path):
+            if edge not in edges or edge in used:
+                return False
+            used.add(edge)
+    return True
+
+
+def verify_min_cost_flow(claim: MinCostFlowResult) -> bool:
+    """Check feasibility, conservation, capacities, and cost of a flow claim.
+
+    For the feasible branch this establishes the full feasibility relation
+    against the retained network and demands. Optimality needs dual
+    potentials, which the carrier does not retain, so it remains the
+    producer's outcome. The infeasible branch carries no witness, so it
+    does not verify and likewise remains a producer outcome.
+    """
+    try:
+        _admit_min_cost_flow(claim.graph, claim.demands)
+    except OperationDomainValidationError:
+        return False
+    if not claim.feasible:
+        return False
+    capacities: dict[tuple[int, int], Fraction] = {}
+    costs: dict[tuple[int, int], Fraction] = {}
+    for edge in claim.graph.edges:
+        capacities[(edge.source, edge.target)] = edge.capacity.as_fraction()
+        costs[(edge.source, edge.target)] = edge.cost.as_fraction()
+    seen: set[tuple[int, int]] = set()
+    net = [Fraction() for _ in range(claim.graph.vertex_count)]
+    total = Fraction()
+    for record in claim.flow_edges:
+        key = (record.source, record.target)
+        if key not in capacities or key in seen:
+            return False
+        seen.add(key)
+        amount = record.flow.as_fraction()
+        if not 0 <= amount <= capacities[key]:
+            return False
+        net[record.source] -= amount
+        net[record.target] += amount
+        total += amount * costs[key]
+    if any(
+        inflow != Fraction(demand)
+        for inflow, demand in zip(net, claim.demands, strict=True)
+    ):
+        return False
+    return total == claim.total_cost.as_fraction()

@@ -567,3 +567,29 @@ def test_catalog_execution_admits_the_parsed_request_once(
 
     assert result == expected
     assert admissions == [parsed.colored_graph]
+
+
+def test_serialized_relabeling_claim_is_verified_without_enumeration() -> None:
+    from jacobian.math.graphs.isomorphism import verify_colored_graph_canonicalization
+
+    graph = _graph(
+        ("a", "b", "c", "d"),
+        (("a", "b"), ("b", "c"), ("c", "d")),
+        vertex_colors=("endpoint", "middle", "middle", "endpoint"),
+        edge_colors=("outer", "middle", "outer"),
+    )
+    result = _canonicalize(graph)
+    assert verify_colored_graph_canonicalization(
+        ColoredGraphCanonicalizationResult.model_validate_json(result.model_dump_json())
+    )
+    forged = result.model_dump(mode="json")
+    forged["relabeling"][0]["canonical_vertex"] = forged["relabeling"][1][
+        "canonical_vertex"
+    ]
+    with pytest.raises(ValidationError):
+        ColoredGraphCanonicalizationResult.model_validate(forged)
+    recolored = result.model_dump(mode="json")
+    recolored["canonical_graph"]["edge_colors"][0] = "forged-color"
+    assert not verify_colored_graph_canonicalization(
+        ColoredGraphCanonicalizationResult.model_validate(recolored)
+    )

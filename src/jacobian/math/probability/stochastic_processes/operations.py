@@ -9,6 +9,10 @@ from jacobian.math.probability._distribution import (
     FiniteDistributionAtom,
     FiniteRationalDistribution,
 )
+from jacobian.math.probability.stochastic_processes._admission import (
+    admit_partition,
+    admit_probability_space,
+)
 from jacobian.math.probability.stochastic_processes._models import (
     MAX_STOCHASTIC_VALUE_DIGITS,
 )
@@ -78,6 +82,13 @@ def sigma_algebra_from_observation(
 
     Blocks are equal-value fibers.
     """
+    admit_probability_space(space)
+    return _sigma_from_observation(space, observation)
+
+
+def _sigma_from_observation(
+    space: FiniteProbabilitySpace, observation: tuple[str, ...]
+) -> FiniteSigmaAlgebra:
     if len(observation) != len(space.samples):
         raise ValueError("observation must have one entry per sample")
     fibers: dict[str, set[str]] = {}
@@ -97,6 +108,15 @@ def sigma_algebra_join(
     """
     if sigma1.space != sigma2.space:
         raise ValueError("sigma algebras must share the same probability space")
+    admit_probability_space(sigma1.space)
+    admit_partition(sigma1)
+    admit_partition(sigma2)
+    return _sigma_join(sigma1, sigma2)
+
+
+def _sigma_join(
+    sigma1: FiniteSigmaAlgebra, sigma2: FiniteSigmaAlgebra
+) -> FiniteSigmaAlgebra:
     blocks: list[tuple[str, ...]] = []
     for b1 in sigma1.blocks:
         for b2 in sigma2.blocks:
@@ -115,6 +135,16 @@ def conditional_expectation(
     On each block, the conditional expectation is the probability-weighted
     average of X over the samples in that block.
     """
+    if rv.space != sigma.space:
+        raise ValueError("random variable and sigma algebra must share the same space")
+    admit_probability_space(rv.space)
+    admit_partition(sigma)
+    return _conditional_expectation(rv, sigma)
+
+
+def _conditional_expectation(
+    rv: FiniteRandomVariable, sigma: FiniteSigmaAlgebra
+) -> FiniteRandomVariable:
     for value in rv.values:
         require_bounded_rational(
             value,
@@ -150,16 +180,23 @@ def filtration_natural(
     observations: tuple[tuple[str, ...], ...],
 ) -> tuple[FiniteSigmaAlgebra, ...]:
     """Return the natural filtration F_t = sigma(Y_0, ..., Y_t) for each time t."""
+    admit_probability_space(space)
+    return _filtration_natural(space, observations)
+
+
+def _filtration_natural(
+    space: FiniteProbabilitySpace, observations: tuple[tuple[str, ...], ...]
+) -> tuple[FiniteSigmaAlgebra, ...]:
     if not observations:
         return ()
     sigmas: list[FiniteSigmaAlgebra] = []
     accumulated: FiniteSigmaAlgebra | None = None
     for _t, obs in enumerate(observations):
-        current = sigma_algebra_from_observation(space, obs)
+        current = _sigma_from_observation(space, obs)
         if accumulated is None:
             accumulated = current
         else:
-            accumulated = sigma_algebra_join(accumulated, current)
+            accumulated = _sigma_join(accumulated, current)
         sigmas.append(accumulated)
     return tuple(sigmas)
 
@@ -180,10 +217,11 @@ def doob_martingale(
         )
     if len(payoff) != len(space.samples):
         raise ValueError("payoff must have one entry per sample")
-    sigmas = filtration_natural(space, observations)
+    admit_probability_space(space)
+    sigmas = _filtration_natural(space, observations)
     rv = FiniteRandomVariable(space=space, values=payoff)
     result: list[tuple[CanonicalRational, ...]] = []
     for sigma in sigmas:
-        ce = conditional_expectation(rv, sigma)
+        ce = _conditional_expectation(rv, sigma)
         result.append(ce.values)
     return tuple(result)

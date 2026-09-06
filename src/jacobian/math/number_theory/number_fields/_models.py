@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.math.number_theory.number_fields.values import (
     SimpleNumberFieldPresentation,
@@ -22,7 +23,10 @@ class NumberFieldRequest(StrictModel):
 
 
 class NumberFieldDiscriminantResult(StrictModel):
-    discriminant: str
+    """A field-discriminant claim retaining its exact field presentation."""
+
+    field: SimpleNumberFieldPresentation
+    discriminant: CanonicalInteger
 
 
 class NumberFieldEmbeddingsRequest(StrictModel):

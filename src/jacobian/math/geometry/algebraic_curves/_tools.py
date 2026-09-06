@@ -32,7 +32,16 @@ from jacobian.math.geometry.algebraic_curves.operations import (
 def compute_affine_curve_check(request: AffineCurveRequest) -> AffineCurveResult:
     """Unpack one request and project the native curve check to its wire result."""
     is_valid, degree = affine_curve_check(request.polynomial)
-    return AffineCurveResult(is_valid=is_valid, degree=degree)
+    return AffineCurveResult(request=request, is_valid=is_valid, degree=degree)
+
+
+def verify_affine_curve_check(claim: AffineCurveResult) -> bool:
+    """Check the affine-curve decision asserted by a serialized claim."""
+
+    return affine_curve_check(claim.request.polynomial) == (
+        claim.is_valid,
+        claim.degree,
+    )
 
 
 def compute_projective_closure(

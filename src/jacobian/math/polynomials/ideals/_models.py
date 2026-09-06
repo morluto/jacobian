@@ -621,6 +621,8 @@ class IdealRadicalResult(StrictModel):
 
 
 class IdealRadicalMembershipResult(StrictModel):
+    ideal: RationalPolynomialIdeal
+    polynomial: RationalPolynomial
     in_radical: bool
 
 

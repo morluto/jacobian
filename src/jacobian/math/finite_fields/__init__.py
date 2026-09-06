@@ -1,5 +1,6 @@
 """Exact finite-field values and explicit restriction-of-scalars operations."""
 
+from jacobian.math.finite_fields._matrix_rank import verify_matrix_rank
 from jacobian.math.finite_fields._matrix_rank_models import MatrixRankResult
 from jacobian.math.finite_fields.operations import (
     analyze_collisions,
@@ -86,4 +87,5 @@ __all__ = [
     "projective_line",
     "projective_point",
     "restrict_scalars",
+    "verify_matrix_rank",
 ]

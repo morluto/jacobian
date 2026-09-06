@@ -5,18 +5,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.combinatorics.codes.nonlinear._models import ToSetSystemResult
 from jacobian.math.combinatorics.extremal_sets._models import (
     BinaryUnionRelationResult,
     UnionRelationRow,
 )
 from jacobian.math.combinatorics.extremal_sets.values import (
-    MAX_FAMILY_SIZE,
     IndexedFiniteSetFamily,
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     MAX_EDGES,
     MAX_TOTAL_INCIDENCES,
+    MAX_VERTICES,
     FiniteHypergraph,
 )
 
@@ -31,11 +30,10 @@ class _UnionRelationPlan:
 
 
 def construct_binary_union_relation(
-    source: IndexedFiniteSetFamily | ToSetSystemResult,
+    source: IndexedFiniteSetFamily,
 ) -> BinaryUnionRelationResult:
     """Return every distinct-member equation ``S_i union S_j = S_k``."""
 
-    source = _canonical_source(source)
     plan = _admit_union_relation(source)
     rows = tuple(
         UnionRelationRow(
@@ -61,51 +59,13 @@ def construct_binary_union_relation(
     )
 
 
-def _canonical_source(
-    source: IndexedFiniteSetFamily | ToSetSystemResult,
-) -> IndexedFiniteSetFamily:
-    """Convert the code-support producer's value to the shared family type."""
-    if isinstance(source, ToSetSystemResult):
-        if len(source.supports) > MAX_FAMILY_SIZE:
-            raise OperationDomainValidationError(
-                location=("source",),
-                code="set_system.binary_union_relation.family_exceeds_carrier",
-                message=(
-                    f"the source family exceeds the {MAX_FAMILY_SIZE}-vertex "
-                    "relation carrier"
-                ),
-            )
-        if any(
-            support != tuple(sorted(set(support)))
-            or any(not 0 <= element < source.length for element in support)
-            for support in source.supports
-        ):
-            raise OperationDomainValidationError(
-                location=("source", "supports"),
-                code="set_system.binary_union_relation.noncanonical_supports",
-                message=(
-                    "code supports must be strictly increasing distinct coordinates "
-                    "within the declared axis"
-                ),
-            )
-        expected_supports = tuple(
-            tuple(index for index, bit in enumerate(word) if bit == 1)
-            for word in source.source.codewords
-        )
-        if source.supports != expected_supports:
-            raise OperationDomainValidationError(
-                location=("source", "supports"),
-                code="set_system.binary_union_relation.support_source_mismatch",
-                message="code supports must equal the retained codeword supports",
-            )
-        return IndexedFiniteSetFamily(
-            ground_set_size=source.length,
-            members=expected_supports,
-        )
-    return source
-
-
 def _admit_union_relation(source: IndexedFiniteSetFamily) -> _UnionRelationPlan:
+    if len(source.members) > MAX_VERTICES:
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="set_system.binary_union_relation.family_exceeds_carrier",
+            message=f"the source family exceeds the {MAX_VERTICES}-vertex relation carrier",
+        )
     member_sizes = tuple(len(member) for member in source.members)
     membership_work = (len(source.members) + 1) * sum(member_sizes)
     generated_union_work = sum(

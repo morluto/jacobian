@@ -533,6 +533,7 @@ class PolygonIntersectionWitness(StrictModel):
 
 
 class SimplePolygonDecisionResult(StrictModel):
+    polygon: tuple[RationalPoint2D, ...]
     vertex_count: StrictInt = Field(ge=3, le=128)
     is_simple: bool
     checked_edge_pairs: StrictInt = Field(ge=0, le=8128)
@@ -578,6 +579,8 @@ class SimplePolygonPointRequest(StrictModel):
 
 
 class PolygonPointClassificationResult(StrictModel):
+    polygon: tuple[RationalPoint2D, ...]
+    point: RationalPoint2D
     polygon_vertex_count: StrictInt = Field(ge=3, le=128)
     classification: Literal["INSIDE", "BOUNDARY", "OUTSIDE"]
     boundary_edge_index: StrictInt | None = Field(default=None, ge=0, le=127)
@@ -600,8 +603,23 @@ class PolygonPointClassificationResult(StrictModel):
         return self
 
 
-class GeometryBooleanResult(StrictModel):
-    holds: bool
+class CollinearityResult(StrictModel):
+    """A source-bound collinearity claim."""
+
+    first: RationalPoint2D
+    second: RationalPoint2D
+    third: RationalPoint2D
+    collinear: bool
+
+
+class ConcyclicityResult(StrictModel):
+    """A source-bound concyclicity claim."""
+
+    first: RationalPoint2D
+    second: RationalPoint2D
+    third: RationalPoint2D
+    fourth: RationalPoint2D
+    concyclic: bool
 
 
 class GeometryRationalResult(StrictModel):

@@ -1,14 +1,16 @@
 """Tests for Latin square operations."""
 
 import pytest
-from pydantic import ValidationError
 from typing_extensions import TypedDict
 
 from jacobian.canonical import encode_strict_json, loads_strict_json
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.designs.latin_squares import (
     is_latin_square,
     orthogonality_profile,
     transpose,
+    verify_latin_square_check,
+    verify_orthogonality,
 )
 from jacobian.math.combinatorics.designs.latin_squares._models import (
     LatinSquare,
@@ -70,7 +72,11 @@ def test_latin_square_check_valid() -> None:
     request = LatinSquareRequest(square=_candidate_square(2, ((0, 1), (1, 0))))
     result = compute_latin_square_check(request)
     assert result.is_latin is True
+    assert result.square == request.square
     assert is_latin_square(request.square)
+    assert verify_latin_square_check(
+        result.model_validate_json(result.model_dump_json())
+    )
 
 
 def test_orthogonality_identical_not_orthogonal() -> None:
@@ -80,6 +86,10 @@ def test_orthogonality_identical_not_orthogonal() -> None:
     )
     result = compute_orthogonality(request)
     assert result.is_orthogonal is False
+    assert result.square_a == request.square_a
+    assert result.square_b == request.square_b
+    assert verify_orthogonality(result.model_validate_json(result.model_dump_json()))
+    assert not verify_orthogonality(result.model_copy(update={"pair_count": 4}))
 
 
 def test_orthogonality_orthogonal() -> None:
@@ -114,17 +124,18 @@ def test_transpose() -> None:
 def test_orthogonality_rejects_non_latin_square() -> None:
     """Orthogonality must only be computed on actual Latin squares."""
     non_latin: _RawSquare = {"order": 2, "cells": [[0, 0], [1, 1]]}
-    with pytest.raises(ValidationError):
-        OrthogonalityRequest.model_validate({"square_a": non_latin, "square_b": Z2})
-    with pytest.raises(ValidationError):
-        OrthogonalityRequest.model_validate({"square_a": Z2, "square_b": non_latin})
+    with pytest.raises(OperationDomainValidationError):
+        orthogonality_profile(LatinSquare.model_validate(non_latin), Z2)
+    with pytest.raises(OperationDomainValidationError):
+        orthogonality_profile(Z2, LatinSquare.model_validate(non_latin))
 
 
 def test_transpose_rejects_non_latin_square() -> None:
     """Transpose must only be computed on actual Latin squares."""
     non_latin: _RawSquare = {"order": 2, "cells": [[0, 0], [1, 1]]}
-    with pytest.raises(ValidationError):
-        TransposeRequest.model_validate({"square": non_latin})
+    request = TransposeRequest.model_validate({"square": non_latin})
+    with pytest.raises(OperationDomainValidationError):
+        compute_latin_square_transpose(request)
 
 
 def test_check_accepts_non_latin_square() -> None:
@@ -132,6 +143,8 @@ def test_check_accepts_non_latin_square() -> None:
     request = LatinSquareRequest(square=_candidate_square(2, ((0, 0), (1, 1))))
     result = compute_latin_square_check(request)
     assert result.is_latin is False
+    assert verify_latin_square_check(result)
+    assert not verify_latin_square_check(result.model_copy(update={"is_latin": True}))
 
 
 def test_operations_admit_materialized_squares_beyond_order_32() -> None:

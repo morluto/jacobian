@@ -329,49 +329,6 @@ class ToSetSystemRequest(StrictModel):
     code: ExplicitBinaryCode
 
 
-class ToSetSystemResult(StrictModel):
-    """Exact source-indexed support blocks under the declared coordinate axis."""
-
-    source: ExplicitBinaryCode
-    length: ExplicitLength
-    cardinality: StrictNonnegativeInt
-    coordinate_axis: tuple[Coordinate, ...] = Field(max_length=MAX_EXPLICIT_CODE_LENGTH)
-    supports: tuple[tuple[Coordinate, ...], ...]
-
-    @model_validator(mode="after")
-    def require_structural_support_relations(self) -> Self:
-        if self.length != self.source.length:
-            raise _validation_error(
-                "nonlinear_code.length_mismatch",
-                "length must equal the retained source length",
-            )
-        if self.cardinality != len(self.source.codewords):
-            raise _validation_error(
-                "nonlinear_code.cardinality_mismatch",
-                "cardinality must equal the retained source cardinality",
-            )
-        if len(self.coordinate_axis) != self.length:
-            raise _validation_error(
-                "nonlinear_code.coordinate_axis_length",
-                "coordinate_axis must have one coordinate per source position",
-            )
-        if self.coordinate_axis != tuple(range(self.length)):
-            raise _validation_error(
-                "nonlinear_code.coordinate_axis_mismatch",
-                "coordinate_axis must equal the source's zero-based coordinate axis",
-            )
-        if len(self.supports) != self.cardinality:
-            raise _validation_error(
-                "nonlinear_code.support_count_mismatch",
-                "supports must have one block per source word",
-            )
-        return self
-
-    @classmethod
-    def _from_kernel(cls, **kwargs: Any) -> Self:
-        return cls.model_construct(**kwargs)
-
-
 __all__ = [
     "BinaryCodeDistanceWitness",
     "ConstantWeightProfileRequest",
@@ -381,7 +338,6 @@ __all__ = [
     "ExplicitProfileRequest",
     "ExplicitProfileResult",
     "ToSetSystemRequest",
-    "ToSetSystemResult",
     "WordDistanceRequest",
     "WordDistanceResult",
 ]

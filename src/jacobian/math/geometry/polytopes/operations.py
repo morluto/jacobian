@@ -33,7 +33,7 @@ from pydantic_core import PydanticCustomError
 from sympy import Matrix, Rational
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.polytopes._models import (
     COORDINATE_DIGITS,
@@ -969,9 +969,29 @@ def convex_hull_volume(
     )
 
 
+def verify_primitive_facet(claim: PrimitiveFacet) -> bool:
+    """Check nonzero primitive integer normalization of at most eight scalars."""
+    if all(value.num == "0" for value in claim.halfspace.coefficients):
+        return False
+    entries = (*claim.halfspace.coefficients, claim.halfspace.offset)
+    if any(value.den != "1" for value in entries):
+        return False
+    divisor = 0
+    for value in entries:
+        divisor = math.gcd(divisor, abs(parse_canonical_integer(value.num)))
+    return divisor == 1
+
+
+def verify_facet_incidence(claim: FacetIncidenceResult) -> bool:
+    """Check the complete normalized facet relation against its bounded source."""
+    return facet_incidence(claim.vertices, claim.dimension) == claim
+
+
 __all__ = [
     "convex_hull_volume",
     "facet_incidence",
     "polytope_support",
     "polytope_volume",
+    "verify_facet_incidence",
+    "verify_primitive_facet",
 ]

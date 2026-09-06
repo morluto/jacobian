@@ -7,6 +7,9 @@ from __future__ import annotations
 
 from collections import deque
 
+from pydantic_core import PydanticCustomError
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 from ._models import (
@@ -19,13 +22,24 @@ from ._models import (
     VertexOccurrencesResult,
     WidthResult,
 )
-from .values import TreeDecomposition
+from .values import (
+    TreeDecomposition,
+    _check_connectedness,
+    _check_edge_coverage,
+    _check_vertex_coverage,
+    _is_tree,
+)
 
 __all__ = [
     "adhesions",
     "bag_intersection_graph",
     "reroot",
     "restrict",
+    "verify_adhesions",
+    "verify_bag_intersection_graph",
+    "verify_reroot",
+    "verify_vertex_occurrences",
+    "verify_width",
     "vertex_occurrences",
     "width",
 ]
@@ -40,13 +54,32 @@ def _int_edges(td: TreeDecomposition) -> list[tuple[int, int]]:
     return [(idx[a], idx[b]) for a, b in td.tree_edges]
 
 
+def _admit_decomposition(td: TreeDecomposition) -> None:
+    """Check decomposition laws once within the finite graph/bag envelope."""
+    edges = _int_edges(td)
+    try:
+        if not _is_tree(len(td.tree_nodes), edges):
+            raise PydanticCustomError(
+                "graph.tree_edges_do_not_form_a_tree", "tree edges do not form a tree"
+            )
+        _check_vertex_coverage(td.bags, set(td.graph.vertices))
+        _check_edge_coverage(td.graph, td.bags)
+        _check_connectedness(td.graph, td.bags, edges, len(td.tree_nodes))
+    except PydanticCustomError as error:
+        raise OperationDomainValidationError(
+            location=("decomposition",), code=error.type, message=error.message()
+        ) from error
+
+
 def width(td: TreeDecomposition) -> WidthResult:
     """Return bag cardinality per tree node, maximum bag cardinality, width
     (max bag cardinality minus 1), and the maximum-bag node labels."""
+    _admit_decomposition(td)
     bag_sizes = [len(bag) for bag in td.bags]
     max_size = max(bag_sizes)
     max_nodes = [td.tree_nodes[i] for i, s in enumerate(bag_sizes) if s == max_size]
     return WidthResult(
+        decomposition=td,
         bag_sizes=tuple(bag_sizes),
         max_bag_cardinality=max_size,
         width=max_size - 1,
@@ -93,6 +126,7 @@ def vertex_occurrences(
 ) -> VertexOccurrencesResult:
     """Return per-source-vertex occurrence subtree node set, induced tree edges,
     occurrence counts, and leaf/extremal nodes."""
+    _admit_decomposition(td)
     int_edges = _int_edges(td)
     adjacency: dict[int, list[int]] = {i: [] for i in range(len(td.tree_nodes))}
     for a, b in int_edges:
@@ -109,7 +143,7 @@ def vertex_occurrences(
         per_vertex[vertex] = _occurrence_subtree(
             td, adjacency, int_edges, vertex, containing
         )
-    return VertexOccurrencesResult(per_vertex=per_vertex)
+    return VertexOccurrencesResult(decomposition=td, per_vertex=per_vertex)
 
 
 def adhesions(td: TreeDecomposition) -> AdhesionsResult:
@@ -119,6 +153,7 @@ def adhesions(td: TreeDecomposition) -> AdhesionsResult:
     Return the maximum adhesion, size profile, and exact separator sets. The
     result is a structural profile of the supplied decomposition, not a
     minimum-separator computation."""
+    _admit_decomposition(td)
     int_edges = _int_edges(td)
     bag_sets = [set(bag) for bag in td.bags]
     per_edge: list[Adhesion] = []
@@ -135,6 +170,7 @@ def adhesions(td: TreeDecomposition) -> AdhesionsResult:
         )
     max_adhesion = max((row.size for row in per_edge), default=0)
     return AdhesionsResult(
+        decomposition=td,
         edges=tuple(per_edge),
         max_adhesion=max_adhesion,
         size_profile=tuple(row.size for row in per_edge),
@@ -188,6 +224,7 @@ def reroot(td: TreeDecomposition, root: str) -> RerootResult:
     """Return the same underlying decomposition rerooted at the selected tree
     node. Changing the root does not change the width, bags, or unrooted
     tree."""
+    _admit_decomposition(td)
     idx = _index_of(td)
     if root not in idx:
         raise ValueError("root must be a declared tree node")
@@ -214,11 +251,12 @@ def reroot(td: TreeDecomposition, root: str) -> RerootResult:
             )
     paths = _root_to_node_paths(adjacency, td, parent, root_index, root)
     return RerootResult(
+        decomposition=td,
         root=root,
         parent=parent_map,
         children=children_map,
         depth={td.tree_nodes[i]: depth[i] for i in depth},
-        paths=paths,
+        paths={node: tuple(path) for node, path in paths.items()},
     )
 
 
@@ -243,6 +281,7 @@ def restrict(td: TreeDecomposition, subset: frozenset[str]) -> TreeDecomposition
     """Return the decomposition obtained by replacing every bag B_t with
     B_t ∩ S, then applying the documented deterministic cleanup of empty/
     redundant tree nodes. Bind the result to the induced source graph G[S]."""
+    _admit_decomposition(td)
     if not subset.issubset(set(td.graph.vertices)):
         raise ValueError("subset must contain only declared source vertices")
     # New source graph induced by S.
@@ -254,6 +293,13 @@ def restrict(td: TreeDecomposition, subset: frozenset[str]) -> TreeDecomposition
     )
     # New bags intersected with S.
     new_bags = [tuple(v for v in bag if v in subset) for bag in td.bags]
+    if not subset:
+        return TreeDecomposition(
+            graph=new_graph,
+            tree_nodes=(td.tree_nodes[0],),
+            tree_edges=(),
+            bags=((),),
+        )
     # Cleanup: remove empty bags, contracting through deleted internal nodes
     # to keep the tree connected.
     keep_indices = [i for i, bag in enumerate(new_bags) if bag]
@@ -312,7 +358,33 @@ def bag_intersection_graph(td: TreeDecomposition) -> BagIntersectionGraphResult:
     for i, bag in enumerate(td.bags):
         node_labels.append(BagNode(node=td.tree_nodes[i], bag_size=len(bag)))
     return BagIntersectionGraphResult(
+        decomposition=td,
         nodes=tuple(node_labels),
         edges=result.edges,
         max_adhesion=result.max_adhesion,
     )
+
+
+def verify_width(claim: WidthResult) -> bool:
+    """Check width and maxima against the admitted source decomposition."""
+    return width(claim.decomposition) == claim
+
+
+def verify_vertex_occurrences(claim: VertexOccurrencesResult) -> bool:
+    """Check source-vertex occurrence profiles in the bounded decomposition."""
+    return vertex_occurrences(claim.decomposition) == claim
+
+
+def verify_adhesions(claim: AdhesionsResult) -> bool:
+    """Check all source tree-edge intersections and their summaries."""
+    return adhesions(claim.decomposition) == claim
+
+
+def verify_reroot(claim: RerootResult) -> bool:
+    """Check the parent, child, depth and path relations from the declared root."""
+    return reroot(claim.decomposition, claim.root) == claim
+
+
+def verify_bag_intersection_graph(claim: BagIntersectionGraphResult) -> bool:
+    """Check weighted bag-tree relations against the admitted decomposition."""
+    return bag_intersection_graph(claim.decomposition) == claim

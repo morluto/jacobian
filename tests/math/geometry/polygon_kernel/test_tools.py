@@ -268,13 +268,19 @@ def test_all_kernel_dimensions_are_distinct_and_complete(
 
 def test_clockwise_orientation_trap_is_rejected_before_kernel_work() -> None:
     clockwise = [PUBLISHED_PENTAGON[0], *reversed(PUBLISHED_PENTAGON[1:])]
-    with pytest.raises(ValidationError):
-        _request(clockwise)
+    request = PolygonKernelRequest.model_validate_json(
+        _request(clockwise).model_dump_json()
+    )
+    with pytest.raises(OperationDomainValidationError):
+        compute_visibility_kernel(request)
 
 
 def test_non_simple_ring_is_rejected() -> None:
-    with pytest.raises(ValidationError):
-        _request([(0, 0), (2, 2), (0, 2), (2, 0)])
+    request = _request([(0, 0), (2, 2), (0, 2), (2, 0)])
+    with pytest.raises(OperationDomainValidationError):
+        compute_visibility_kernel(
+            PolygonKernelRequest.model_validate_json(request.model_dump_json())
+        )
 
 
 def test_cyclic_rotation_preserves_kernel_and_scalar_measures() -> None:

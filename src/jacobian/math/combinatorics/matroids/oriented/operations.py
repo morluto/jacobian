@@ -134,4 +134,41 @@ def check_chirotope(chirotope: UniformRank3Chirotope) -> ChirotopeCheckResult:
     return _compute_result(chirotope)
 
 
-__all__ = ["check_chirotope"]
+def verify_chirotope_check(claim: ChirotopeCheckResult) -> bool:
+    """Check the B2 relation relied on by one serialized checker result.
+
+    A negative result carries a local failed B2 instance, so it can be checked
+    directly from the retained chirotope table. ``VALID`` asserts that no such
+    instance exists and therefore needs the operation's bounded exhaustive
+    scan.
+    """
+
+    if claim.status is ChirotopeCheckStatus.VALID:
+        return _compute_result(claim.chirotope) == claim
+
+    obstruction = claim.obstruction
+    if obstruction is None:
+        return False
+    table = _table(claim.chirotope)
+    x1, x2, x3 = obstruction.x
+    y1, y2, y3 = obstruction.y
+    values = _alternating_value
+    premise_factors = (
+        (values(table, (y1, x2, x3)), values(table, (x1, y2, y3))),
+        (values(table, (y2, x2, x3)), values(table, (y1, x1, y3))),
+        (values(table, (y3, x2, x3)), values(table, (y1, y2, x1))),
+    )
+    conclusion_factors = (values(table, obstruction.x), values(table, obstruction.y))
+    premise_products = tuple(left * right for left, right in premise_factors)
+    conclusion_product = conclusion_factors[0] * conclusion_factors[1]
+    return (
+        obstruction.premise_factors == premise_factors
+        and obstruction.premise_products == premise_products
+        and obstruction.conclusion_factors == conclusion_factors
+        and obstruction.conclusion_product == conclusion_product
+        and all(product >= 0 for product in premise_products)
+        and conclusion_product < 0
+    )
+
+
+__all__ = ["check_chirotope", "verify_chirotope_check"]

@@ -1233,28 +1233,9 @@ class PrimitiveFacet(StrictModel):
 
     @model_validator(mode="after")
     def require_primitive_normal_and_indices(self) -> Self:
-        if all(
-            coefficient.as_fraction() == 0
-            for coefficient in self.halfspace.coefficients
-        ):
+        if any(index < 0 for index in self.source_vertex_indices):
             raise _validation_error(
-                "facet_inequality", "facet inequality must have a nonzero normal"
-            )
-        entries = [
-            Fraction(*value.as_integer_ratio())
-            for value in (*self.halfspace.coefficients, self.halfspace.offset)
-        ]
-        if any(entry.denominator != 1 for entry in entries):
-            raise _validation_error(
-                "facet_inequality", "facet inequality entries must be integers"
-            )
-        gcd = 0
-        for entry in entries:
-            gcd = math.gcd(gcd, abs(int(entry)))
-        if gcd != 1:
-            raise _validation_error(
-                "facet_inequality",
-                "facet inequality must be primitive over the integers",
+                "facet_source_indices", "facet indices must be nonnegative"
             )
         if any(
             right <= left
@@ -1298,6 +1279,13 @@ class FacetIncidenceResult(StrictModel):
             raise _validation_error(
                 "dimension_bound",
                 "every source vertex must have exactly `dimension` coordinates",
+            )
+        if any(
+            len(facet.halfspace.coefficients) != self.dimension for facet in self.facets
+        ):
+            raise _validation_error(
+                "facet_dimension",
+                "facet normals must use the retained source coordinate axis",
             )
         for vertex in self.vertices:
             for coordinate in vertex.coordinates:
@@ -2102,7 +2090,7 @@ def _validate_halfspaces(
     for halfspace in halfspaces:
         if all(c.as_fraction() == 0 for c in halfspace.coefficients):
             raise _validation_error(
-                "halfspaces", "half-space coefficients must not all be zero"
+                "halfspace_normal_zero", "half-space coefficients must not all be zero"
             )
     prepared, triangulation = _require_admissible_h_vertices(halfspaces, dim)
     return prepared, dim, triangulation

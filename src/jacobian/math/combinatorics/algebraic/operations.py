@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from math import factorial, prod
 
+from jacobian.math.combinatorics.algebraic._models import RSKResult
 from jacobian.math.combinatorics.algebraic._rsk import (
     _row_insert,
 )
@@ -28,6 +29,7 @@ __all__ = [
     "inverse_row_insertion_rsk",
     "row_insertion_rsk",
     "standard_young_tableaux_count",
+    "verify_rsk",
 ]
 
 
@@ -48,6 +50,24 @@ def _rsk_permutation(
     if sorted(permutation) != list(range(1, len(permutation) + 1)):
         raise ValueError("permutation must be a permutation of 1..n")
     return _row_insert(permutation)
+
+
+def verify_rsk(claim: RSKResult) -> bool:
+    """Check bounded permutation admission, RSK correspondence, and LIS/LDS.
+
+    The retained source has at most 500 entries. Row insertion has the same
+    quadratic search-count bound as the producing operation.
+    """
+    try:
+        insertion, recording = _rsk_permutation(claim.permutation)
+    except ValueError:
+        return False
+    return (
+        insertion == claim.p_tableau.rows
+        and recording == claim.q_tableau.rows
+        and claim.lis_length == (len(insertion[0]) if insertion else 0)
+        and claim.lds_length == len(insertion)
+    )
 
 
 def conjugate_partition(partition: IntegerPartition) -> IntegerPartition:

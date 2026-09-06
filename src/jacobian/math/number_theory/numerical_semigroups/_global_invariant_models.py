@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from fractions import Fraction
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import CanonicalInteger, CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory.numerical_semigroups._models import (
@@ -16,6 +15,7 @@ from jacobian.math.number_theory.numerical_semigroups._models import (
     _require_canonical_generator_axis,
     _validation_error,
 )
+from jacobian.math.number_theory.numerical_semigroups.values import NumericalSemigroup
 
 
 class BettiElementsRequest(StrictModel):
@@ -150,19 +150,10 @@ class ElasticityRequest(StrictModel):
 class ElasticityResult(StrictModel):
     """Global elasticity of the semigroup."""
 
-    elasticity: str
+    semigroup: NumericalSemigroup
+    elasticity: CanonicalRational
     smallest_generator: CanonicalInteger
     largest_generator: CanonicalInteger
-
-    @model_validator(mode="after")
-    def require_generator_ratio(self) -> Self:
-        smallest = parse_canonical_integer(self.smallest_generator)
-        largest = parse_canonical_integer(self.largest_generator)
-        if smallest > largest:
-            raise _validation_error("generator extrema are reversed")
-        if Fraction(self.elasticity) != Fraction(largest, smallest):
-            raise _validation_error("elasticity must equal largest/smallest generator")
-        return self
 
 
 class CatenaryDegreeRequest(StrictModel):

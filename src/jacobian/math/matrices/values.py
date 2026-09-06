@@ -35,9 +35,9 @@ MAX_EXACT_LINEAR_MATRIX_AXIS = 64
 # canonical QQ matrix value while narrower operations enforce their own
 # request envelopes.
 MAX_RATIONAL_MATRIX_ORDER = 128
-# Representation envelope includes the existing 4096-state Markov domain.
+# Representation envelope includes nullspaces of 8192-column sparse sources.
 # Computational order limits above remain operation-owned.
-MAX_RATIONAL_MATRIX_AXIS = 4096
+MAX_RATIONAL_MATRIX_AXIS = 8192
 # Exact inverse admits square integer sources through order 128. Keep that
 # complete public domain representable by the one canonical ZZ matrix value
 # while lattice reduction and the other integer operations enforce their own

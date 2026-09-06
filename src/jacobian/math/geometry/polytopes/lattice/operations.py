@@ -230,6 +230,15 @@ def _facets_and_box(  # noqa: C901
     """
     facets: list[tuple[tuple[int, ...], int]] = []
     if halfspaces is not None:
+        if any(
+            all(coefficient.num == "0" for coefficient in halfspace.coefficients)
+            for halfspace in halfspaces
+        ):
+            raise OperationDomainValidationError(
+                location=("halfspaces",),
+                code="polytope.halfspace_normal_zero",
+                message="half-space coefficients must not all be zero",
+            )
         normalized_input = [
             (
                 [c.as_fraction() for c in hs.coefficients],

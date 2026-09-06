@@ -126,8 +126,12 @@ def acyclic_order(graph: DirectedGraph) -> AcyclicOrderResult:
     _admit_directed_graph(graph)
     g = _build_digraph(graph)
     if not nx.is_directed_acyclic_graph(g):
-        return AcyclicOrderResult(acyclic=False, order=())
-    return AcyclicOrderResult(acyclic=True, order=tuple(nx.topological_sort(g)))
+        return AcyclicOrderResult(graph=graph, acyclic=False, order=())
+    return AcyclicOrderResult(
+        graph=graph,
+        acyclic=True,
+        order=tuple(nx.topological_sort(g)),
+    )
 
 
 def dag_longest_path(graph: DirectedGraph) -> DagLongestPathResult:

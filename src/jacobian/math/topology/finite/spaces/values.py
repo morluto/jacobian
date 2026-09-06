@@ -55,19 +55,33 @@ class FiniteTopologicalSpace(StrictModel):
                     raise _validation_error(
                         "preorder_index_out_of_range", "preorder index out of range"
                     )
-        for i in range(len(self.points)):
-            if i not in self.preorder[i]:
-                raise _validation_error(
-                    "preorder_not_reflexive", "preorder must be reflexive"
-                )
-        # Transitivity: j in row[i] => row[j] subset of row[i].
-        for _i, row in enumerate(self.preorder):
-            row_i = set(row)
-            for j in row:
-                if not set(self.preorder[j]).issubset(row_i):
-                    raise _validation_error(
-                        "preorder_not_transitive", "preorder must be transitive"
-                    )
+        object.__setattr__(
+            self, "preorder", tuple(tuple(sorted(set(row))) for row in self.preorder)
+        )
+        return self
+
+
+class FiniteTopologicalSubset(StrictModel):
+    """A canonical subset of a finite topological space's point axis.
+
+    Carries the parent space so the indices stay interpretable after
+    serialization. Parsing is structural only: sorted unique in-range
+    indices. Whether the subset satisfies a further property (openness,
+    closedness) is established by the owning operation, not by decoding.
+    """
+
+    space: FiniteTopologicalSpace
+    indices: tuple[int, ...] = Field(default=())
+
+    @model_validator(mode="after")
+    def require_canonical_axis(self) -> Self:
+        if tuple(sorted(set(self.indices))) != tuple(self.indices) or any(
+            not 0 <= index < len(self.space.points) for index in self.indices
+        ):
+            raise _validation_error(
+                "subset_indices_not_canonical",
+                "subset indices must be sorted unique point-axis indices",
+            )
         return self
 
 
@@ -97,4 +111,5 @@ __all__ = [
     "MAX_POINTS",
     "FiniteTopologicalMap",
     "FiniteTopologicalSpace",
+    "FiniteTopologicalSubset",
 ]

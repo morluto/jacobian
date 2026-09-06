@@ -6,9 +6,11 @@ from math import comb
 
 from jacobian._exact import canonical_rational_component_digits
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.geometry._models import _is_simple_ring
 from jacobian.math.geometry.polygon_kernel._kernel import (
     compute_kernel_data,
     oriented_half_planes,
+    polygon_signed_area,
 )
 from jacobian.math.geometry.polygon_kernel._models import (
     MAX_HALF_PLANE_COEFFICIENT_DIGITS,
@@ -44,6 +46,20 @@ def _admit_visibility_kernel(
             f"{MAX_KERNEL_COORDINATE_DIGITS}-digit visibility-kernel bound"
         )
 
+    # At most 64 squared segment pairs on 64-digit coordinates, followed by
+    # a linear area sum, before boundary intersection expansion.
+    if not _is_simple_ring(polygon.points):
+        raise OperationDomainValidationError(
+            location=("polygon",),
+            code="geometry.visibility_kernel_input_a_simple_polygon",
+            message="visibility-kernel input must be a simple polygon",
+        )
+    if polygon_signed_area(polygon.points) <= 0:
+        raise OperationDomainValidationError(
+            location=("polygon",),
+            code="geometry.visibility_kernel_vertices_use_counterclockwise_cyclic",
+            message="visibility-kernel vertices must use counterclockwise cyclic order",
+        )
     half_planes = oriented_half_planes(polygon)
     coefficient_digits = max(
         canonical_rational_component_digits(value)

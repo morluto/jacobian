@@ -7,6 +7,7 @@ from jacobian.math.combinatorics.exact_cover import (
     GeneralizedExactCoverInstance,
     GeneralizedExactCoverResult,
     find_generalized_exact_cover,
+    verify_generalized_exact_cover,
 )
 from jacobian.math.combinatorics.operations import (
     bell_number,
@@ -70,4 +71,5 @@ __all__ = [
     "recurrence_table_residuals",
     "stirling_first",
     "stirling_second",
+    "verify_generalized_exact_cover",
 ]

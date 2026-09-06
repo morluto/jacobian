@@ -14,6 +14,11 @@ from jacobian.math.matrices.operations import (
     smith_normal_form,
     solve_linear_system,
     trace,
+    verify_adjugate,
+    verify_inverse,
+    verify_kronecker_product,
+    verify_partial_trace,
+    verify_product,
 )
 from jacobian.math.matrices.values import (
     EmbeddedRealSimpleNumberFieldMatrix,
@@ -42,4 +47,9 @@ __all__ = [
     "smith_normal_form",
     "solve_linear_system",
     "trace",
+    "verify_adjugate",
+    "verify_inverse",
+    "verify_kronecker_product",
+    "verify_partial_trace",
+    "verify_product",
 ]

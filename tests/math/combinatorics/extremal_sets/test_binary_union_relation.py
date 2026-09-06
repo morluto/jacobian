@@ -6,8 +6,8 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.combinatorics.codes.nonlinear._models import ExplicitBinaryCode
 from jacobian.math.combinatorics.codes.nonlinear.operations import to_set_system
+from jacobian.math.combinatorics.codes.nonlinear.values import ExplicitBinaryCode
 from jacobian.math.combinatorics.extremal_sets._models import (
     BinaryUnionRelationRequest,
 )
@@ -171,32 +171,27 @@ def test_oversized_code_support_family_is_a_domain_rejection() -> None:
 def test_noncanonical_code_support_is_a_domain_rejection() -> None:
     code = ExplicitBinaryCode(length=2, codewords=((1, 1),))
     payload = to_set_system(code).model_dump(mode="json")
-    payload["supports"] = [[1, 0]]
-    malformed = type(to_set_system(code)).model_validate(payload)
-
-    with pytest.raises(OperationDomainValidationError, match="strictly increasing"):
-        construct_binary_union_relation(malformed)
+    payload["members"] = [[1, 0]]
+    with pytest.raises(ValidationError, match="strictly increasing"):
+        IndexedFiniteSetFamily.model_validate(payload)
 
 
-def test_code_supports_are_bound_to_the_retained_code() -> None:
+def test_support_target_is_an_ordinary_set_family() -> None:
     code = ExplicitBinaryCode(
         length=2,
         codewords=((0, 0), (0, 1), (1, 0), (1, 1)),
     )
     payload = to_set_system(code).model_dump(mode="json")
-    payload["supports"] = [[], [0], [0, 1], [1]]
-    forged = type(to_set_system(code)).model_validate(payload)
-
-    with pytest.raises(OperationDomainValidationError, match="retained codeword"):
-        construct_binary_union_relation(forged)
+    target = IndexedFiniteSetFamily.model_validate(payload)
+    assert construct_binary_union_relation(target).source == target
 
 
 def test_serialized_code_support_axis_is_bound_to_source_coordinates() -> None:
     code = ExplicitBinaryCode(length=2, codewords=((0, 0), (1, 0)))
     payload = to_set_system(code).model_dump(mode="json")
-    payload["coordinate_axis"] = [1, 0]
+    payload["ground_set_size"] = 0
 
-    with pytest.raises(ValidationError, match="zero-based coordinate axis"):
+    with pytest.raises(ValidationError, match="ground_set_size"):
         type(to_set_system(code)).model_validate(payload)
 
 
@@ -250,6 +245,8 @@ def test_ground_axis_is_independent_of_relation_vertex_count() -> None:
         {"ground_set_size": 1, "members": [[False]]},
     ],
 )
-def test_canonical_family_rejects_boolean_coordinates(payload: dict) -> None:
+def test_canonical_family_rejects_boolean_coordinates(
+    payload: dict[str, object],
+) -> None:
     with pytest.raises(ValidationError):
         IndexedFiniteSetFamily.model_validate(payload)

@@ -8,8 +8,9 @@ from typing import NoReturn
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.matrices.values import MAX_RATIONAL_MATRIX_AXIS, RationalMatrix
+from jacobian.math.matrices.values import RationalMatrix
 from jacobian.math.probability.markov_chains.eventual_hitting._models import (
+    MAX_STATES,
     EventualHittingProfileResult,
 )
 from jacobian.math.probability.markov_chains.values import (
@@ -34,7 +35,7 @@ def _admit_eventual_hitting(
     target_states: tuple[int, ...],
 ) -> tuple[set[int], set[int], tuple[int, ...]]:
     try:
-        require_transition_matrix(matrix, maximum_states=MAX_RATIONAL_MATRIX_AXIS)
+        require_transition_matrix(matrix, maximum_states=MAX_STATES)
     except TransitionMatrixAdmissionError as exc:
         _reject(exc.location, exc.reason, str(exc))
 

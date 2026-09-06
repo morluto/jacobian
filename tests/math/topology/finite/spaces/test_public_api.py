@@ -9,6 +9,7 @@ def test_exact_public_api_symbols() -> None:
     expected = (
         "FiniteTopologicalMap",
         "FiniteTopologicalSpace",
+        "FiniteTopologicalSubset",
         "boundary",
         "closure",
         "continuous_check",
@@ -17,6 +18,8 @@ def test_exact_public_api_symbols() -> None:
         "kolmogorov_quotient",
         "minimal_neighbourhoods",
         "specialization_preorder",
+        "verify_continuity",
+        "verify_kolmogorov_quotient",
     )
     assert tuple(finite_topology_spaces.__all__) == expected
     assert len(finite_topology_spaces.__all__) == len(

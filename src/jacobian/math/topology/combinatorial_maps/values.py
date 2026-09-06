@@ -114,7 +114,7 @@ def _validate_rotation(
             seen.add(dart_index)
 
 
-def _validate_facial_budgets(map_: FiniteCombinatorialMap) -> None:
+def _validate_facial_budgets(walks: list[list[int]]) -> None:
     """Reject maps whose facial structure would overflow the dual budgets.
 
     The dual of an accepted map must itself be an accepted value: it has one
@@ -123,9 +123,6 @@ def _validate_facial_budgets(map_: FiniteCombinatorialMap) -> None:
     here.  The constraint set is closed under duality (dual faces correspond
     to primal vertices and dual facial walks to primal rotation rows).
     """
-    from jacobian.math.topology.combinatorial_maps._face_orbits import face_orbit_data
-
-    walks, _, _ = face_orbit_data(map_)
     if len(walks) > MAX_FACES:
         raise _validation_error(
             "face_count_too_large", "face count exceeds the bounded dual-vertex budget"
@@ -167,10 +164,14 @@ class FiniteCombinatorialMap(StrictModel):
             )
         for dart in self.darts:
             _validate_dart(dart, self.vertex_count, len(self.darts))
-        _validate_involution(self.darts)
-        outgoing = _build_outgoing(self.darts, self.vertex_count)
-        _validate_rotation(self.rotations, outgoing, self.darts)
-        _validate_facial_budgets(self)
+        for row in self.rotations:
+            if len(row) > MAX_ROTATION_LENGTH or any(
+                not 0 <= dart < len(self.darts) for dart in row
+            ):
+                raise _validation_error(
+                    "rotation_dart_out_of_range",
+                    "rotation rows must be bounded dart indices",
+                )
         return self
 
 

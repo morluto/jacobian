@@ -50,9 +50,19 @@ def _admit_point_addition(
     second_point = second.point
     if first_point is None or second_point is None:
         try:
-            _require_group_law(curve, ())
+            _require_group_law(
+                curve,
+                tuple(
+                    point for point in (first_point, second_point) if point is not None
+                ),
+            )
         except PydanticCustomError as exc:
-            _admission_error(exc, ("curve",))
+            location = (
+                (("first",) if first_point is not None else ("second",))
+                if exc.type == "elliptic_curve.point_off_curve"
+                else ("curve",)
+            )
+            _admission_error(exc, location)
         return
     try:
         _require_group_law(curve, ())
@@ -181,7 +191,6 @@ def discriminant(curve: ShortWeierstrassCurve) -> CurveDiscriminantResult:
     return CurveDiscriminantResult._from_kernel(
         curve=curve,
         discriminant=CanonicalRational.from_fraction(disc),
-        is_nonsingular=disc != 0,
     )
 
 

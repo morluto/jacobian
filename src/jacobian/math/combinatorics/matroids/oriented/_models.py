@@ -147,8 +147,8 @@ class ChirotopeCheckResult(StrictModel):
     chirotope: UniformRank3Chirotope
     status: ChirotopeCheckStatus = Field(
         description=(
-            "VALID after every B2 ordered-triple pair passes, or the first B2 "
-            "obstruction in lexicographic order."
+            "VALID after every B2 ordered-triple pair passes, or a retained B2 "
+            "obstruction."
         )
     )
     b2_exchange_instances_checked: StrictInt = Field(

@@ -15,6 +15,8 @@ from jacobian.math.optimization.submodular.operations import (
     check_monotonicity,
     check_submodularity,
     evaluate_set_function,
+    verify_monotonicity,
+    verify_submodularity,
 )
 
 
@@ -86,6 +88,7 @@ class TestMonotonicity:
         req = MonotonicityCheckRequest(function=fn)
         result = _check_monotonicity_request(req)
         assert result.is_monotone is True
+        assert verify_monotonicity(result.model_validate_json(result.model_dump_json()))
 
     def test_rejects_incomplete_table(self) -> None:
         import pytest
@@ -112,6 +115,9 @@ class TestSubmodularity:
         req = SubmodularityCheckRequest(function=fn)
         result = _check_submodularity_request(req)
         assert result.is_submodular is True
+        assert verify_submodularity(
+            result.model_validate_json(result.model_dump_json())
+        )
 
 
 class TestKernelEquivalence:
@@ -203,7 +209,7 @@ class TestKernelEquivalence:
                 SubmodularityCheckRequest(function=function)
             ).is_submodular == self._bruteforce_submodular(function)
 
-    def test_violation_message_names_witnesses(self) -> None:
+    def test_violation_retains_a_structured_witness(self) -> None:
         # f({}) = 0 but f({0}) = -1 violates monotonicity at a covering edge.
         entries = [
             _entry((), "0"),
@@ -215,7 +221,10 @@ class TestKernelEquivalence:
             )
         )
         assert result.is_monotone is False
-        assert result.violation == "f(()) > f((0,))"
+        assert result.function == SetFunction(ground_set_size=1, entries=tuple(entries))
+        assert result.violation == ((), 0)
+        assert verify_monotonicity(result)
+        assert not verify_monotonicity(result.model_copy(update={"is_monotone": True}))
 
     def test_complete_table_admission_is_structural(self) -> None:
         n = 16

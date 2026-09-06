@@ -25,17 +25,24 @@ from jacobian.math.combinatorics.codes.nonlinear._budget import (
 from jacobian.math.combinatorics.codes.nonlinear._models import (
     BinaryCodeDistanceWitness,
     ConstantWeightProfileRequest,
+    ConstantWeightProfileResult,
     ConstantWeightRequest,
     ConstantWeightResult,
     ExplicitProfileRequest,
+    ExplicitProfileResult,
     ToSetSystemRequest,
     WordDistanceRequest,
+    WordDistanceResult,
 )
 from jacobian.math.combinatorics.codes.nonlinear._tools import TOOLS
 from jacobian.math.combinatorics.codes.nonlinear.operations import (
     constant_weight_code,
     constant_weight_profile,
     explicit_profile,
+    verify_constant_weight_profile,
+    verify_distance_witness,
+    verify_explicit_profile,
+    verify_word_distance,
     word_distance,
 )
 from jacobian.math.combinatorics.codes.nonlinear.values import (
@@ -372,27 +379,23 @@ class TestSetSystemConversion:
     def test_exact_source_bound_bijection(self) -> None:
         source = _code((1, 0, 1, 0), (0, 1, 0, 1))
         result = to_set_system(source)
-        assert result.source is source
-        assert result.length == 4
-        assert result.cardinality == 2
-        assert result.coordinate_axis == (0, 1, 2, 3)
+        assert result.ground_set_size == 4
+        assert len(result.members) == 2
         # The canonical code order, not caller list order, owns the block axis.
-        assert result.supports == ((1, 3), (0, 2))
+        assert result.members == ((1, 3), (0, 2))
         assert to_set_system(source) == result
 
     def test_empty_code_retains_coordinate_axis(self) -> None:
         result = to_set_system(ExplicitBinaryCode(length=4, codewords=()))
-        assert result.coordinate_axis == (0, 1, 2, 3)
-        assert result.supports == ()
-        assert result.cardinality == 0
+        assert result.ground_set_size == 4
+        assert result.members == ()
 
     def test_native_conversion_does_not_apply_mcp_output_bound(self) -> None:
         length = 300_000
         source = ExplicitBinaryCode(length=length, codewords=((1,) * length,))
         result = to_set_system(source)
-        assert result.source is source
-        assert result.length == length
-        assert result.supports == (tuple(range(length)),)
+        assert result.ground_set_size == length
+        assert result.members == (tuple(range(length)),)
 
     @pytest.mark.parametrize(
         ("source", "expected_supports"),
@@ -407,10 +410,9 @@ class TestSetSystemConversion:
         expected_supports: tuple[tuple[int, ...], ...],
     ) -> None:
         result = to_set_system(source)
-        assert result.length == 0
-        assert result.coordinate_axis == ()
-        assert result.supports == expected_supports
-        assert result.cardinality == len(source.codewords)
+        assert result.ground_set_size == 0
+        assert result.members == expected_supports
+        assert len(result.members) == len(source.codewords)
 
 
 class TestProducerConsumerClosure:
@@ -432,14 +434,13 @@ class TestProducerConsumerClosure:
         assert support_request.code == generated.code
         assert explicit_profile(explicit_request.code).pair_count == 15
         assert constant_weight_profile(constant_request.code).weight == 2
-        assert to_set_system(support_request.code).cardinality == 6
+        assert len(to_set_system(support_request.code).members) == 6
 
     def test_each_source_bound_result_serializes_into_every_consumer(self) -> None:
         source = _code((0, 0, 1, 1), (0, 1, 0, 1), (1, 0, 1, 0))
         results = (
             explicit_profile(source),
             constant_weight_profile(source),
-            to_set_system(source),
         )
         for result in results:
             serialized_source = result.model_dump(mode="json")["source"]
@@ -541,11 +542,11 @@ class TestDerivedAdmissionBoundaries:
         accepted = ToSetSystemRequest(
             code=_code((1,) * accepted_length, length=accepted_length)
         )
-        assert len(operation.run(accepted).coordinate_axis) == accepted_length
+        assert operation.run(accepted).ground_set_size == accepted_length
         request = ToSetSystemRequest(
             code=_code((1,) * (accepted_length + 1), length=accepted_length + 1)
         )
-        assert len(operation.run(request).coordinate_axis) == accepted_length + 1
+        assert operation.run(request).ground_set_size == accepted_length + 1
 
     @pytest.mark.parametrize(
         ("length", "weight", "expected"),
@@ -637,7 +638,53 @@ class TestCanonicalConsumers:
         explicit = explicit_profile(code)
         constant = constant_weight_profile(code)
         supports = to_set_system(code)
-        assert explicit.source == constant.source == supports.source == result.code
+        assert explicit.source == constant.source == result.code
         assert explicit.weight_distribution == (1,)
         assert constant.intersection_histogram == (0,)
-        assert supports.supports == ((),)
+        assert supports.members == ((),)
+
+
+class TestSerializedClaimVerifiers:
+    def test_word_distance_round_trip_and_forged_distance(self) -> None:
+        result = word_distance((1, 1, 0, 0), (1, 0, 1, 0))
+        assert verify_word_distance(
+            WordDistanceResult.model_validate_json(result.model_dump_json())
+        )
+        forged = result.model_dump(mode="json")
+        forged["distance"] = 1
+        assert not verify_word_distance(WordDistanceResult.model_validate(forged))
+        forged = result.model_dump(mode="json")
+        forged["support_intersection"] = 0
+        assert not verify_word_distance(WordDistanceResult.model_validate(forged))
+
+    def test_witness_bound_to_code_and_forged_binding(self) -> None:
+        code = _code((0, 0), (0, 1), (1, 1))
+        profile = explicit_profile(code)
+        assert profile.minimum_distance_witness is not None
+        assert verify_distance_witness(code, profile.minimum_distance_witness)
+        assert verify_explicit_profile(
+            ExplicitProfileResult.model_validate_json(profile.model_dump_json())
+        )
+        other = _code((0, 0), (1, 1))
+        assert not verify_distance_witness(other, profile.minimum_distance_witness)
+        forged = profile.minimum_distance_witness.model_dump(mode="json")
+        forged["distance"] = (profile.minimum_distance or 0) + 1
+        assert not verify_distance_witness(
+            code, BinaryCodeDistanceWitness.model_validate(forged)
+        )
+
+    def test_profile_extrema_without_pairs_have_no_witnesses(self) -> None:
+        code = _code(length=3)
+        profile = explicit_profile(code)
+        assert profile.pair_count == 0
+        assert verify_explicit_profile(profile)
+
+    def test_constant_weight_profile_checks_weight_and_extrema(self) -> None:
+        code = constant_weight_code(4, 2).code
+        profile = constant_weight_profile(code)
+        assert verify_constant_weight_profile(profile)
+        forged = profile.model_dump(mode="json")
+        forged["weight"] = 3
+        assert not verify_constant_weight_profile(
+            ConstantWeightProfileResult.model_validate(forged)
+        )

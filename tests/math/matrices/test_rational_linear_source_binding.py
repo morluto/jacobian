@@ -28,6 +28,10 @@ from jacobian.math.matrices.rational_linear._tools import (
     compute_rational_inconsistency,
     compute_rational_solution,
 )
+from jacobian.math.matrices.rational_linear.operations import (
+    verify_inconsistency,
+    verify_solution,
+)
 from jacobian.math.matrices.values import (
     RationalMatrix,
     SparseRationalMatrix,
@@ -744,3 +748,47 @@ def test_witness_admission_excludes_primal_solution_height() -> None:
     assert result.status == "CONSISTENT"
     with pytest.raises(OperationDomainValidationError, match="result-height bound"):
         compute_rational_solution(LinearRationalSolutionFindRequest(system=system))
+
+
+def test_solution_verifier_checks_ax_equals_b_after_serialization() -> None:
+    system = LinearRationalSystem.model_validate(_unique_system())
+    result = compute_rational_solution(LinearRationalSolutionFindRequest(system=system))
+    assert verify_solution(
+        LinearRationalSolutionResult.model_validate_json(result.model_dump_json())
+    )
+    forged = result.model_dump(mode="json")
+    assert forged["values"] is not None
+    forged["values"][0] = _q(Fraction(0))
+    assert not verify_solution(LinearRationalSolutionResult.model_validate(forged))
+    negative = compute_rational_solution(
+        LinearRationalSolutionFindRequest(
+            system=LinearRationalSystem.model_validate(_inconsistent_system())
+        )
+    )
+    assert negative.status == "INCONSISTENT"
+    assert not verify_solution(negative)
+
+
+def test_inconsistency_verifier_checks_witness_and_pairing() -> None:
+    system = LinearRationalSystem.model_validate(_inconsistent_system())
+    result = compute_rational_inconsistency(
+        LinearRationalInconsistencyFindRequest(system=system)
+    )
+    assert result.status == "INCONSISTENT"
+    assert verify_inconsistency(
+        LinearRationalInconsistencyResult.model_validate_json(result.model_dump_json())
+    )
+    forged = result.model_dump(mode="json")
+    assert forged["left_witness"] is not None
+    forged["left_witness"][0] = _q(Fraction(0))
+    forged["left_witness"][1] = _q(Fraction(0))
+    assert not verify_inconsistency(
+        LinearRationalInconsistencyResult.model_validate(forged)
+    )
+    consistent = compute_rational_inconsistency(
+        LinearRationalInconsistencyFindRequest(
+            system=LinearRationalSystem.model_validate(_unique_system())
+        )
+    )
+    assert consistent.status == "CONSISTENT"
+    assert not verify_inconsistency(consistent)

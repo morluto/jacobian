@@ -93,12 +93,12 @@ def _admit_non_coprimality_graph(
             message="integers must be distinct",
         )
 
-    sorted_pairs = sorted(zip(source, values, strict=True), key=lambda pair: pair[1])
     # The retained source owns the graph's vertex axis; preserve its order.
     vertices = tuple(source)
     edges: list[tuple[str, str]] = []
-    for left_index, (left_label, left_value) in enumerate(sorted_pairs):
-        for right_label, right_value in sorted_pairs[left_index + 1 :]:
+    source_pairs = tuple(zip(source, values, strict=True))
+    for left_index, (left_label, left_value) in enumerate(source_pairs):
+        for right_label, right_value in source_pairs[left_index + 1 :]:
             if gcd(left_value, right_value) > 1:
                 edges.append(
                     (min(left_label, right_label), max(left_label, right_label))

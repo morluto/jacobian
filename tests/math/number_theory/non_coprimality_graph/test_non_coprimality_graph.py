@@ -40,6 +40,17 @@ def test_single_vertex() -> None:
     assert len(result.graph.edges) == 0
 
 
+def test_lexical_graph_edges_follow_the_retained_source_axis() -> None:
+    """Numeric pair ordering must not replace the source's vertex ordering."""
+    result = construct_non_coprimality_graph((10, 2))
+    assert result.integers.elements == ("10", "2")
+    assert result.graph.vertices == ("10", "2")
+    assert result.graph.edges == (("10", "2"),)
+    assert verify_non_coprimality_graph(
+        type(result).model_validate_json(result.model_dump_json())
+    )
+
+
 def test_replay_gcd() -> None:
     """Every edge satisfies gcd > 1, every non-edge has gcd = 1."""
     ints = (6, 10, 15, 7, 35)

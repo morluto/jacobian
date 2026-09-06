@@ -1,6 +1,11 @@
 """Supported exact number-theory API."""
 
 from jacobian.math.number_theory._divisibility_poset import divisibility_poset
+from jacobian.math.number_theory._factorization_kernels import (
+    verify_certified_factorization,
+    verify_pratt_certificate,
+    verify_primality_certificate,
+)
 from jacobian.math.number_theory._friable_enumerate import enumerate_friable
 from jacobian.math.number_theory._friable_kernel import count_friable
 from jacobian.math.number_theory._friable_models import FriableCountResult
@@ -70,4 +75,7 @@ __all__ = [
     "primorial",
     "quadratic_residues",
     "ramanujan_sum",
+    "verify_certified_factorization",
+    "verify_pratt_certificate",
+    "verify_primality_certificate",
 ]

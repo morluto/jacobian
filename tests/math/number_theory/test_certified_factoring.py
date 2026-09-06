@@ -13,6 +13,7 @@ from jacobian.math.number_theory._certification_models import (
     CertifiedFactor,
     CertifiedFactorizationRequest,
     CertifiedFactorizationResult,
+    PrattCertificateFactor,
     PrattCertificateNode,
     PrimalityCertificateRequest,
     PrimalityCertificateResult,
@@ -20,36 +21,10 @@ from jacobian.math.number_theory._certification_models import (
 from jacobian.math.number_theory._factorization_kernels import (
     compute_pratt_certificate,
     factorize_certified,
+    verify_certified_factorization,
+    verify_pratt_certificate,
+    verify_primality_certificate,
 )
-
-# ---------------------------------------------------------------------------
-# Independent Pratt certificate verifier (mirror of the mathematical invariant)
-# ---------------------------------------------------------------------------
-
-
-def verify_pratt(node: PrattCertificateNode) -> bool:
-    """Recursively verify one Pratt certificate node without trusting SymPy."""
-    prime = parse_canonical_integer(node.prime)
-    if prime == 2:
-        return node.witness is None and not node.sub_certificates
-    if prime < 2 or node.witness is None:
-        return False
-    witness = parse_canonical_integer(node.witness)
-    if pow(witness, prime - 1, prime) != 1:
-        return False
-    sub_primes = {parse_canonical_integer(sub.prime) for sub in node.sub_certificates}
-    expected_factors = set()
-    for sub in node.sub_certificates:
-        q = parse_canonical_integer(sub.prime)
-        expected_factors.add(q)
-        if pow(witness, (prime - 1) // q, prime) == 1:
-            return False
-        if not verify_pratt(sub):
-            return False
-    from sympy import factorint
-
-    return set(factorint(prime - 1).keys()) == sub_primes
-
 
 # ---------------------------------------------------------------------------
 # Certified factorization
@@ -64,7 +39,7 @@ def test_semiprime_factors_completely_with_certificates() -> None:
         parse_canonical_integer(f.prime) ** f.exponent for f in result.factors
     )
     assert product == 10403
-    assert all(verify_pratt(f.certificate) for f in result.factors)
+    assert verify_certified_factorization(result)
 
 
 def test_large_semiprime_factors_with_subexponential_methods() -> None:
@@ -76,7 +51,7 @@ def test_large_semiprime_factors_with_subexponential_methods() -> None:
     )
     assert product == int(value)
     assert len(result.factors) == 2
-    assert all(verify_pratt(f.certificate) for f in result.factors)
+    assert verify_certified_factorization(result)
 
 
 def test_perfect_power_factors_with_certificates() -> None:
@@ -85,7 +60,7 @@ def test_perfect_power_factors_with_certificates() -> None:
     assert len(result.factors) == 1
     assert result.factors[0].prime == "2"
     assert result.factors[0].exponent == 20
-    assert verify_pratt(result.factors[0].certificate)
+    assert verify_certified_factorization(result)
 
 
 def test_digit_bound_rejects_oversized_input() -> None:
@@ -109,18 +84,18 @@ def test_result_binds_product_and_ordering() -> None:
 
 
 @pytest.mark.parametrize("value", ["6", "-2", "1"])
-def test_complete_worker_result_must_reconstruct_its_bound_value(value: str) -> None:
+def test_complete_worker_result_remains_an_unverified_claim(value: str) -> None:
     certificate = PrattCertificateNode(prime="2")
-    with pytest.raises(ValidationError, match="must reconstruct its value exactly"):
-        CertifiedFactorizationResult.model_validate(
-            {
-                "status": "COMPLETE",
-                "value": value,
-                "factors": [
-                    CertifiedFactor(prime="2", exponent=1, certificate=certificate)
-                ],
-            }
-        )
+    claim = CertifiedFactorizationResult.model_validate(
+        {
+            "status": "COMPLETE",
+            "value": value,
+            "factors": [
+                CertifiedFactor(prime="2", exponent=1, certificate=certificate)
+            ],
+        }
+    )
+    assert not verify_certified_factorization(claim)
 
 
 # ---------------------------------------------------------------------------
@@ -133,7 +108,7 @@ def test_pratt_certificate_for_known_prime() -> None:
     assert result.status == "CERTIFIED"
     assert result.certificate is not None
     assert result.certificate.prime == "101"
-    assert verify_pratt(result.certificate)
+    assert verify_primality_certificate(result)
 
 
 def test_pratt_certificate_for_base_case_prime_two() -> None:
@@ -142,14 +117,14 @@ def test_pratt_certificate_for_base_case_prime_two() -> None:
     assert result.certificate is not None
     assert result.certificate.prime == "2"
     assert result.certificate.witness is None
-    assert result.certificate.sub_certificates == ()
+    assert result.certificate.factors == ()
 
 
 def test_pratt_certificate_for_large_prime() -> None:
     result = compute_pratt_certificate(PrimalityCertificateRequest(value="1000000007"))
     assert result.status == "CERTIFIED"
     assert result.certificate is not None
-    assert verify_pratt(result.certificate)
+    assert verify_primality_certificate(result)
 
 
 def test_pratt_certificate_reports_composite() -> None:
@@ -170,43 +145,30 @@ def test_pratt_certificate_rejects_oversized_input() -> None:
         PrimalityCertificateRequest(value="1" + "0" * 80)
 
 
-def test_certified_result_rejects_non_matching_certificate() -> None:
-    with expect_validation("number_theory."):
-        PrimalityCertificateResult(
-            status="CERTIFIED",
-            value="101",
-            certificate=PrattCertificateNode(
-                prime="103",
-                witness="5",
-                sub_certificates=(
-                    PrattCertificateNode(prime="2"),
-                    PrattCertificateNode(
-                        prime="3",
-                        witness="2",
-                        sub_certificates=(PrattCertificateNode(prime="2"),),
-                    ),
-                    PrattCertificateNode(
-                        prime="17",
-                        witness="3",
-                        sub_certificates=(PrattCertificateNode(prime="2"),),
-                    ),
-                ),
-            ),
-        )
+def test_certified_result_remains_an_unverified_claim() -> None:
+    valid = compute_pratt_certificate(PrimalityCertificateRequest(value="101"))
+    assert valid.certificate is not None
+    claim = PrimalityCertificateResult(
+        status="CERTIFIED",
+        value="103",
+        certificate=valid.certificate,
+    )
+    assert not verify_primality_certificate(claim)
 
 
-def test_certified_result_rejects_certificate_without_prime() -> None:
-    with expect_validation("number_theory."):
+def test_certified_result_without_certificate_remains_an_unverified_claim() -> None:
+    assert not verify_primality_certificate(
         PrimalityCertificateResult(status="CERTIFIED", value="101")
+    )
 
 
-def test_composite_result_rejects_certificate() -> None:
-    with expect_validation("number_theory."):
-        PrimalityCertificateResult(
-            status="COMPOSITE",
-            value="9",
-            certificate=PrattCertificateNode(prime="2"),
-        )
+def test_composite_result_with_certificate_remains_an_unverified_claim() -> None:
+    claim = PrimalityCertificateResult(
+        status="COMPOSITE",
+        value="9",
+        certificate=PrattCertificateNode(prime="2"),
+    )
+    assert not verify_primality_certificate(claim)
 
 
 def test_unwitnessed_composite_status_does_not_reenter_a_primality_backend() -> None:
@@ -232,11 +194,21 @@ def test_operations_are_discoverable_via_catalog() -> None:
 
 def test_serialized_pratt_node_is_a_claim_not_a_primality_check() -> None:
     candidate = PrattCertificateNode.model_validate_json(
-        '{"prime":"9","witness":"2","sub_certificates":[{"prime":"2"}]}'
+        '{"prime":"9","witness":"2","factors":[{"prime":"2","exponent":1,"certificate":{"prime":"2"}}]}'
     )
-    assert not verify_pratt(candidate)
+    assert not verify_pratt_certificate(candidate)
+    malformed_factorization = PrattCertificateNode(
+        prime="7",
+        witness="3",
+        factors=(
+            PrattCertificateFactor(
+                prime="2", exponent=1, certificate=PrattCertificateNode(prime="2")
+            ),
+        ),
+    )
+    assert not verify_pratt_certificate(malformed_factorization)
     result = compute_pratt_certificate(PrimalityCertificateRequest(value="101"))
     assert result.certificate is not None
     decoded = PrimalityCertificateResult.model_validate_json(result.model_dump_json())
     assert decoded.certificate is not None
-    assert verify_pratt(decoded.certificate)
+    assert verify_primality_certificate(decoded)

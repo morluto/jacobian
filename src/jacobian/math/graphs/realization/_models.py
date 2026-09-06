@@ -47,9 +47,10 @@ class DegreeSequenceRequest(StrictModel):
 
 
 class DegreeSequenceResult(StrictModel):
+    """A degree sequence and its claimed graphicality."""
+
+    sequence: DegreeSequence
     is_graphical: bool
-    degree_sum: int = Field(ge=0)
-    vertex_count: int = Field(ge=1)
 
 
 # ---------------------------------------------------------------------------
@@ -62,9 +63,11 @@ class GraphRealizationRequest(StrictModel):
 
 
 class GraphRealizationResult(StrictModel):
+    """A degree sequence and its claimed indexed simple-graph realization."""
+
+    sequence: DegreeSequence
     is_graphical: bool
-    vertex_count: int = Field(ge=1)
-    edges: tuple[tuple[int, int], ...] = Field(default=())
+    graph: IndexedSimpleUndirectedGraph | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -77,9 +80,10 @@ class GraphicalityCheckRequest(StrictModel):
 
 
 class GraphicalityCheckResult(StrictModel):
+    """A degree sequence with a claimed graphicality certificate."""
+
+    sequence: DegreeSequence
     is_graphical: bool
-    degree_sum: int = Field(ge=0)
-    vertex_count: int = Field(ge=1)
     certificate: str = ""
 
 
@@ -103,9 +107,11 @@ class RealizationCheckRequest(StrictModel):
 
 
 class RealizationCheckResult(StrictModel):
+    """A graph and degree sequence with their claimed realization relation."""
+
+    sequence: DegreeSequence
+    graph: IndexedSimpleUndirectedGraph
     is_realization: bool
-    expected_degrees: tuple[int, ...]
-    actual_degrees: tuple[int, ...]
 
 
 __all__ = [

@@ -13,17 +13,16 @@ from jacobian.math.graphs.values import (
 
 @dataclass(frozen=True, slots=True)
 class OpenNeighborhoodAdmission:
-    """The canonical selected axis and exact result plan for one request."""
+    """The canonical selected axis for one admitted request."""
 
     selected_vertices: tuple[str, ...]
-    neighborhood: tuple[str, ...]
 
 
 def admit_open_neighborhood(
     graph: SimpleUndirectedGraph,
     selected_vertices: tuple[str, ...],
 ) -> OpenNeighborhoodAdmission:
-    """Normalize one selected set and admit its exact mathematical result."""
+    """Normalize one selected set and check its input-domain conditions."""
 
     if not isinstance(graph, SimpleUndirectedGraph):
         raise TypeError("open_neighborhood expects a SimpleUndirectedGraph")
@@ -51,18 +50,7 @@ def admit_open_neighborhood(
         )
 
     selected = tuple(vertex for vertex in graph.vertices if vertex in selected_set)
-    neighbors: set[str] = set()
-    for left, right in graph.edges:
-        if left in selected_set and right not in selected_set:
-            neighbors.add(right)
-        elif right in selected_set and left not in selected_set:
-            neighbors.add(left)
-    neighborhood = tuple(vertex for vertex in graph.vertices if vertex in neighbors)
-
-    return OpenNeighborhoodAdmission(
-        selected_vertices=selected,
-        neighborhood=neighborhood,
-    )
+    return OpenNeighborhoodAdmission(selected_vertices=selected)
 
 
 __all__ = [

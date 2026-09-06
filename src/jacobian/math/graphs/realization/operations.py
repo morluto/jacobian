@@ -39,9 +39,8 @@ def degree_sequence_profile(sequence: DegreeSequence) -> DegreeSequenceResult:
     """Determine if a degree sequence is graphical."""
     degrees = sequence.degrees
     return DegreeSequenceResult(
+        sequence=sequence,
         is_graphical=_is_graphical_erdos_gallai(degrees),
-        degree_sum=sum(degrees),
-        vertex_count=len(degrees),
     )
 
 
@@ -50,14 +49,33 @@ def graph_realization(sequence: DegreeSequence) -> GraphRealizationResult:
     degrees = sequence.degrees
     if not _is_graphical_erdos_gallai(degrees):
         return GraphRealizationResult(
-            is_graphical=False, vertex_count=len(degrees), edges=()
+            sequence=sequence, is_graphical=False
         )
     graph = nx.havel_hakimi_graph(list(degrees))
     return GraphRealizationResult(
+        sequence=sequence,
         is_graphical=True,
-        vertex_count=len(degrees),
-        edges=tuple(tuple(edge) for edge in graph.edges()),
+        graph=IndexedSimpleUndirectedGraph(
+            vertex_count=len(degrees),
+            edges=tuple(sorted(tuple(sorted(edge)) for edge in graph.edges())),
+        ),
     )
+
+
+def verify_graph_realization(claim: GraphRealizationResult) -> bool:
+    """Return whether a claimed graph realizes its retained degree sequence."""
+    is_graphical = _is_graphical_erdos_gallai(claim.sequence.degrees)
+    if claim.is_graphical != is_graphical:
+        return False
+    if not is_graphical:
+        return claim.graph is None
+    if claim.graph is None or claim.graph.vertex_count != len(claim.sequence.degrees):
+        return False
+    actual = [0] * claim.graph.vertex_count
+    for left, right in claim.graph.edges:
+        actual[left] += 1
+        actual[right] += 1
+    return tuple(actual) == claim.sequence.degrees
 
 
 def graphicality_check(sequence: DegreeSequence) -> GraphicalityCheckResult:
@@ -68,18 +86,16 @@ def graphicality_check(sequence: DegreeSequence) -> GraphicalityCheckResult:
     if degree_sum % 2:
         certificate = "odd-sum: the degree sum is not even"
         return GraphicalityCheckResult(
+            sequence=sequence,
             is_graphical=False,
-            degree_sum=degree_sum,
-            vertex_count=vertex_count,
             certificate=certificate,
         )
     sorted_degrees = sorted(degrees, reverse=True)
     if any(degree >= vertex_count for degree in sorted_degrees):
         bad = next(degree for degree in sorted_degrees if degree >= vertex_count)
         return GraphicalityCheckResult(
+            sequence=sequence,
             is_graphical=False,
-            degree_sum=degree_sum,
-            vertex_count=vertex_count,
             certificate=f"degree {bad} exceeds vertex count {vertex_count - 1}",
         )
     cumulative = 0
@@ -90,17 +106,15 @@ def graphicality_check(sequence: DegreeSequence) -> GraphicalityCheckResult:
         )
         if cumulative > rhs:
             return GraphicalityCheckResult(
+                sequence=sequence,
                 is_graphical=False,
-                degree_sum=degree_sum,
-                vertex_count=vertex_count,
                 certificate=(
                     f"erdos-gallai violation at k={k}: left={cumulative} > right={rhs}"
                 ),
             )
     return GraphicalityCheckResult(
+        sequence=sequence,
         is_graphical=True,
-        degree_sum=degree_sum,
-        vertex_count=vertex_count,
         certificate="ERDOS-GALLAI",
     )
 
@@ -115,10 +129,29 @@ def realization_check(
     graph.add_edges_from(graph_value.edges)
     actual = tuple(len(graph[vertex]) for vertex in range(graph_value.vertex_count))
     return RealizationCheckResult(
+        sequence=sequence,
+        graph=graph_value,
         is_realization=actual == sequence.degrees,
-        expected_degrees=sequence.degrees,
-        actual_degrees=actual,
     )
+
+
+def verify_degree_sequence_profile(claim: DegreeSequenceResult) -> bool:
+    """Return whether a graphicality claim matches its retained sequence."""
+    return claim.is_graphical == _is_graphical_erdos_gallai(claim.sequence.degrees)
+
+
+def verify_graphicality_check(claim: GraphicalityCheckResult) -> bool:
+    """Return whether a graphicality certificate is the canonical claim result."""
+    return graphicality_check(claim.sequence) == claim
+
+
+def verify_realization_check(claim: RealizationCheckResult) -> bool:
+    """Return whether a retained graph has the claimed degree sequence."""
+    actual = [0] * claim.graph.vertex_count
+    for left, right in claim.graph.edges:
+        actual[left] += 1
+        actual[right] += 1
+    return claim.is_realization == (tuple(actual) == claim.sequence.degrees)
 
 
 __all__ = [
@@ -126,4 +159,8 @@ __all__ = [
     "graph_realization",
     "graphicality_check",
     "realization_check",
+    "verify_degree_sequence_profile",
+    "verify_graph_realization",
+    "verify_graphicality_check",
+    "verify_realization_check",
 ]

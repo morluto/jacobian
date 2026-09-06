@@ -27,48 +27,17 @@ class PrattCertificateNode(StrictModel):
 
     prime: BoundedInteger
     witness: BoundedInteger | None = None
-    sub_certificates: tuple[PrattCertificateNode, ...] = Field(
+    factors: tuple[PrattCertificateFactor, ...] = Field(
         default_factory=tuple, min_length=0, max_length=256
     )
 
-    @model_validator(mode="after")
-    def require_valid_certificate(self) -> Self:
-        prime = parse_canonical_integer(self.prime)
-        if prime < 2:
-            raise _validation_error(
-                "certificate_prime_must_be_at_least_2",
-                "certificate prime must be at least 2",
-            )
-        if prime == 2:
-            if self.witness is not None:
-                raise _validation_error(
-                    "base_case_prime_2_has_no_witness",
-                    "base case prime 2 has no witness",
-                )
-            if self.sub_certificates:
-                raise _validation_error(
-                    "base_case_prime_2_has_no_sub_certificates",
-                    "base case prime 2 has no sub-certificates",
-                )
-            return self
-        if self.witness is None:
-            raise _validation_error(
-                "non_base_case_certificate_requires_a_witness",
-                "non-base-case certificate requires a witness",
-            )
-        sub_primes_str = [item.prime for item in self.sub_certificates]
-        if len(set(sub_primes_str)) != len(self.sub_certificates):
-            raise _validation_error(
-                "sub_certificate_primes_must_be_unique",
-                "sub-certificate primes must be unique",
-            )
-        witness = parse_canonical_integer(self.witness)
-        if witness < 2 or witness >= prime:
-            raise _validation_error(
-                "witness_must_be_between_2_and_p_1", "witness must be between 2 and p-1"
-            )
-        return self
 
+class PrattCertificateFactor(StrictModel):
+    """One claimed prime-power factor of a Pratt node's ``prime - 1``."""
+
+    prime: BoundedInteger
+    exponent: StrictInt = Field(ge=1, le=4096)
+    certificate: PrattCertificateNode
 
 class CertifiedFactorizationRequest(StrictModel):
     """One positive integer for bounded certified factorization."""
@@ -100,43 +69,13 @@ class CertifiedFactorizationResult(StrictModel):
     value: CertifiedFactorizationInteger
     factors: tuple[CertifiedFactor, ...] = Field(min_length=1, max_length=256)
 
-    @model_validator(mode="after")
-    def bind_decomposition(self) -> Self:
-        primes = [parse_canonical_integer(item.prime) for item in self.factors]
-        if primes != sorted(primes):
-            raise _validation_error(
-                "factor_primes_must_be_ascending", "factor primes must be ascending"
-            )
-        if len(set(primes)) != len(primes):
-            raise _validation_error(
-                "factor_primes_must_be_unique", "factor primes must be unique"
-            )
-        if any(
-            parse_canonical_integer(item.certificate.prime)
-            != parse_canonical_integer(item.prime)
-            for item in self.factors
-        ):
-            raise _validation_error(
-                "factor_certificate_prime_must_equal_the_factor_prime",
-                "factor certificate prime must equal the factor prime",
-            )
-        reconstructed = 1
-        for item in self.factors:
-            reconstructed *= parse_canonical_integer(item.prime) ** item.exponent
-        if reconstructed != parse_canonical_integer(self.value):
-            raise _validation_error(
-                "complete_factorization_must_reconstruct_value",
-                "a complete factorization must reconstruct its value exactly",
-            )
-        return self
-
     @classmethod
     def _from_kernel(
         cls,
         *,
         value: CertifiedFactorizationInteger,
         factors: tuple[CertifiedFactor, ...],
-    ) -> Self:
+    ) -> CertifiedFactorizationResult:
         return cls.model_construct(status="COMPLETE", value=value, factors=factors)
 
 
@@ -162,29 +101,6 @@ class PrimalityCertificateResult(StrictModel):
     value: CertifiedFactorizationInteger
     certificate: PrattCertificateNode | None = None
 
-    @model_validator(mode="after")
-    def bind_result(self) -> Self:
-        certificate = self.certificate
-        if self.status == "CERTIFIED":
-            if certificate is None:
-                raise _validation_error(
-                    "certified_status_requires_a_certificate",
-                    "CERTIFIED status requires a certificate",
-                )
-            if parse_canonical_integer(certificate.prime) != parse_canonical_integer(
-                self.value
-            ):
-                raise _validation_error(
-                    "certificate_prime_must_match_the_candidate_value",
-                    "certificate prime must match the candidate value",
-                )
-        elif certificate is not None:
-            raise _validation_error(
-                "composite_status_must_not_carry_a_certificate",
-                "COMPOSITE status must not carry a certificate",
-            )
-        return self
-
     @classmethod
     def _from_kernel(
         cls,
@@ -192,17 +108,19 @@ class PrimalityCertificateResult(StrictModel):
         status: Literal["CERTIFIED", "COMPOSITE"],
         value: CertifiedFactorizationInteger,
         certificate: PrattCertificateNode | None = None,
-    ) -> Self:
+    ) -> PrimalityCertificateResult:
         return cls.model_construct(status=status, value=value, certificate=certificate)
 
 
 PrattCertificateNode.model_rebuild()
+PrattCertificateFactor.model_rebuild()
 
 __all__ = [
     "CertifiedFactor",
     "CertifiedFactorizationInteger",
     "CertifiedFactorizationRequest",
     "CertifiedFactorizationResult",
+    "PrattCertificateFactor",
     "PrattCertificateNode",
     "PrimalityCertificateRequest",
     "PrimalityCertificateResult",

@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
-
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictInt
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.values import (
@@ -34,31 +32,12 @@ class CycleLengthRow(StrictModel):
     witness: tuple[str, ...] = Field(min_length=3, max_length=MAX_VERTICES)
 
     @classmethod
-    def _from_kernel(cls, cycle_length: int, witness: tuple[str, ...]) -> Self:
+    def _from_kernel(
+        cls, cycle_length: int, witness: tuple[str, ...]
+    ) -> CycleLengthRow:
         """Construct a row after the owner kernel established its invariants."""
 
         return cls.model_construct(cycle_length=cycle_length, witness=witness)
-
-    @model_validator(mode="after")
-    def require_matching_witness_length(self) -> Self:
-        if self.cycle_length != len(self.witness):
-            raise ValueError("cycle witness length must match cycle_length")
-        if len(set(self.witness)) != len(self.witness):
-            raise ValueError("cycle witnesses must have distinct vertices")
-        rotations = [
-            self.witness[index:] + self.witness[:index]
-            for index in range(len(self.witness))
-        ]
-        reversed_witness = (self.witness[0], *reversed(self.witness[1:]))
-        rotations.extend(
-            reversed_witness[index:] + reversed_witness[:index]
-            for index in range(len(self.witness))
-        )
-        if self.witness != min(rotations):
-            raise ValueError(
-                "cycle witnesses must use canonical rotation and orientation"
-            )
-        return self
 
 
 class CycleLengthProfileResult(StrictModel):
@@ -67,25 +46,12 @@ class CycleLengthProfileResult(StrictModel):
     graph: SimpleUndirectedGraph
     rows: tuple[CycleLengthRow, ...] = Field(max_length=MAX_VERTICES - 2)
 
-    @model_validator(mode="after")
-    def require_sorted_unique_lengths(self) -> Self:
-        if len(self.graph.vertices) > MAX_VERTICES:
-            raise ValueError(f"cycle profiles support at most {MAX_VERTICES} vertices")
-        lengths = tuple(row.cycle_length for row in self.rows)
-        if lengths != tuple(sorted(lengths)) or len(set(lengths)) != len(lengths):
-            raise ValueError("cycle profile rows must be sorted and unique")
-        vertices = set(self.graph.vertices)
-        for row in self.rows:
-            if not set(row.witness) <= vertices:
-                raise ValueError("cycle witnesses must use graph vertices")
-        return self
-
     @classmethod
     def _from_kernel(
         cls,
         graph: SimpleUndirectedGraph,
         rows: tuple[CycleLengthRow, ...],
-    ) -> Self:
+    ) -> CycleLengthProfileResult:
         """Construct a result after the owner admission and kernel checks."""
 
         return cls.model_construct(graph=graph, rows=rows)

@@ -12,7 +12,7 @@ from jacobian.math.graphs.cycle_length_profile._models import (
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
-__all__ = ["compute_cycle_length_profile"]
+__all__ = ["compute_cycle_length_profile", "verify_cycle_length_profile"]
 
 MAX_SEARCH_WORK = 10_000_000
 MAX_CYCLE_PROFILE_RETAINED_LABEL_CHARACTERS = 100_000_000
@@ -242,6 +242,14 @@ def compute_cycle_length_profile(
         for k, w in sorted(found.items())
     ]
     return CycleLengthProfileResult._from_kernel(graph, tuple(rows))
+
+
+def verify_cycle_length_profile(claim: CycleLengthProfileResult) -> bool:
+    """Return whether a claim has every and only the graph's cycle lengths."""
+    try:
+        return compute_cycle_length_profile(claim.graph) == claim
+    except OperationDomainValidationError:
+        return False
 
 
 def _find_cycle_of_length(

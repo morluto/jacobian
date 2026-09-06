@@ -28,6 +28,10 @@ For mathematical changes, review three things before merging:
 3. **A useful accepted boundary:** demonstrate a representative valid request
    as well as an excessive request that is rejected. Rejection tests alone do
    not establish that an operation remains usable.
+4. **Serialization and composition:** identify the one domain-owned type for
+   every reusable value, including its parent and empty axes. Check that parsing
+   is structural, mathematical admission happens once at the owning operation,
+   and every consumer explicitly checks any caller-authored claim it relies on.
 
 For an admission or scale defect, scale first: improve the estimate,
 representation, reduction, algorithm, or backend so the motivating valid

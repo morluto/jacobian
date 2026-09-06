@@ -1,16 +1,24 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.graphs.common_neighbor_profile._models import (
+    CommonNeighborProfileResult,
+)
 from jacobian.math.graphs.common_neighbor_profile.operations import (
     MAX_COMMON_NEIGHBOR_LABEL_CHARACTERS,
     compute_common_neighbor_profile,
+    verify_common_neighbor_profile,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
-def _graph(vertices, edges):
+def _graph(
+    vertices: Iterable[str], edges: Iterable[tuple[str, str]]
+) -> SimpleUndirectedGraph:
     return SimpleUndirectedGraph(
         vertices=tuple(vertices),
         edges=tuple((a, b) for a, b in edges),
@@ -90,6 +98,26 @@ def test_result_preserves_source() -> None:
     g = _graph(["a", "b"], [("a", "b")])
     result = compute_common_neighbor_profile(g)
     assert result.graph == g
+
+
+def test_serialized_profile_claim_is_verified_for_content_and_coverage() -> None:
+    g = _graph(["a", "b", "c"], [("a", "b"), ("b", "c")])
+    result = compute_common_neighbor_profile(g)
+    assert verify_common_neighbor_profile(
+        CommonNeighborProfileResult.model_validate_json(result.model_dump_json())
+    )
+
+    payload = result.model_dump(mode="json")
+    payload["rows"][0]["codegree"] = 7
+    assert not verify_common_neighbor_profile(
+        CommonNeighborProfileResult.model_validate(payload)
+    )
+
+    payload = result.model_dump(mode="json")
+    payload["rows"] = payload["rows"][1:]
+    assert not verify_common_neighbor_profile(
+        CommonNeighborProfileResult.model_validate(payload)
+    )
 
 
 def test_native_admission_rejects_unbounded_retained_labels() -> None:

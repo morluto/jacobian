@@ -51,8 +51,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="graph.realization.construct.compute",
         title="Construct a simple graph realizing a degree sequence",
         description="Construct a simple undirected graph that realizes a graphical degree "
-        "sequence using the Havel-Hakimi algorithm. Returns the edges of the "
-        "realized graph; if the sequence is not graphical, no edges are returned.",
+        "sequence using the Havel-Hakimi algorithm. The result retains the source "
+        "degree axis and, when graphical, its explicit indexed graph realization.",
         request_type=GraphRealizationRequest,
         result_type=GraphRealizationResult,
         run=_run_graph_realization,

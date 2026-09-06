@@ -20,6 +20,10 @@ from jacobian.math.graphs.realization.operations import (
     graph_realization,
     graphicality_check,
     realization_check,
+    verify_degree_sequence_profile,
+    verify_graph_realization,
+    verify_graphicality_check,
+    verify_realization_check,
 )
 
 # ---------------------------------------------------------------------------
@@ -68,8 +72,7 @@ class TestIsGraphical:
         """A single isolated vertex with degree 0 is graphical."""
         result = _is_graphical([0])
         assert result.is_graphical is True
-        assert result.vertex_count == 1
-        assert result.degree_sum == 0
+        assert result.sequence.degrees == (0,)
 
     def test_simple_path_is_graphical(self) -> None:
         result = _is_graphical([1, 2, 2, 1])
@@ -109,9 +112,9 @@ class TestIsGraphical:
         result = _is_graphical([0, 0])
         assert result.is_graphical is True
 
-    def test_degree_sum_reported(self) -> None:
+    def test_profile_retains_the_degree_axis(self) -> None:
         result = _is_graphical([2, 2, 2, 2])
-        assert result.degree_sum == 8
+        assert result.sequence.degrees == (2, 2, 2, 2)
 
     def test_contract_rejects_negative_degree(self) -> None:
         with pytest.raises(ValidationError):
@@ -137,17 +140,20 @@ class TestGraphRealization:
     def test_realizes_simple_path(self) -> None:
         result = _realize([1, 2, 2, 1])
         assert result.is_graphical is True
-        assert result.vertex_count == 4
+        assert result.sequence.degrees == (1, 2, 2, 1)
+        assert result.graph is not None
+        assert result.graph.vertex_count == 4
         # A path on 4 vertices has 3 edges
-        assert len(result.edges) == 3
+        assert len(result.graph.edges) == 3
 
     def test_realized_edges_match_degree_sequence(self) -> None:
         """The realized graph's degree sequence must match the input."""
         degrees = [2, 2, 2, 2]
         result = _realize(degrees)
         assert result.is_graphical is True
+        assert result.graph is not None
         actual = [0] * 4
-        for source, target in result.edges:
+        for source, target in result.graph.edges:
             actual[source] += 1
             actual[target] += 1
         assert actual == degrees
@@ -155,35 +161,48 @@ class TestGraphRealization:
     def test_realizes_complete_graph(self) -> None:
         result = _realize([3, 3, 3, 3])
         assert result.is_graphical is True
+        assert result.graph is not None
         # K_4 has 6 edges
-        assert len(result.edges) == 6
+        assert len(result.graph.edges) == 6
 
     def test_realizes_star(self) -> None:
         result = _realize([3, 1, 1, 1])
         assert result.is_graphical is True
-        assert len(result.edges) == 3
+        assert result.graph is not None
+        assert len(result.graph.edges) == 3
 
     def test_realizes_isolated_vertices(self) -> None:
         result = _realize([0, 0, 0])
         assert result.is_graphical is True
-        assert result.edges == ()
+        assert result.graph is not None
+        assert result.graph.edges == ()
 
-    def test_non_graphical_returns_empty_edges(self) -> None:
+    def test_non_graphical_retains_the_source_without_a_graph_claim(self) -> None:
         result = _realize([3, 3, 3])
         assert result.is_graphical is False
-        assert result.edges == ()
-        assert result.vertex_count == 3
+        assert result.sequence.degrees == (3, 3, 3)
+        assert result.graph is None
 
     def test_realized_graph_is_simple(self) -> None:
         """No self-loops or duplicate edges."""
         result = _realize([2, 2, 2, 2, 2])
         assert result.is_graphical is True
+        assert result.graph is not None
         seen: set[tuple[int, int]] = set()
-        for source, target in result.edges:
+        for source, target in result.graph.edges:
             assert source != target, "self-loop detected"
             edge = (min(source, target), max(source, target))
             assert edge not in seen, "duplicate edge detected"
             seen.add(edge)
+
+    def test_serialized_realization_claim_is_verified_against_its_source(self) -> None:
+        result = _realize([1, 2, 2, 1])
+        assert verify_graph_realization(
+            GraphRealizationResult.model_validate_json(result.model_dump_json())
+        )
+        payload = result.model_dump(mode="json")
+        payload["graph"]["edges"] = [[0, 1], [1, 2], [0, 3]]
+        assert not verify_graph_realization(GraphRealizationResult.model_validate(payload))
 
 
 # ---------------------------------------------------------------------------
@@ -228,9 +247,9 @@ class TestGraphicalityCheck:
                 _graphicality_check(degrees).is_graphical
             ), f"mismatch for {degrees}"
 
-    def test_degree_sum_reported(self) -> None:
+    def test_check_retains_the_degree_axis(self) -> None:
         result = _graphicality_check([2, 2, 2, 2])
-        assert result.degree_sum == 8
+        assert result.sequence.degrees == (2, 2, 2, 2)
 
 
 # ---------------------------------------------------------------------------
@@ -242,8 +261,8 @@ class TestRealizationCheck:
     def test_valid_realization(self) -> None:
         result = _check([1, 2, 2, 1], 4, [(0, 1), (1, 2), (2, 3)])
         assert result.is_realization is True
-        assert result.expected_degrees == (1, 2, 2, 1)
-        assert result.actual_degrees == (1, 2, 2, 1)
+        assert result.sequence.degrees == (1, 2, 2, 1)
+        assert result.graph.edges == ((0, 1), (1, 2), (2, 3))
 
     def test_invalid_realization(self) -> None:
         result = _check([2, 2, 2, 2], 4, [(0, 1), (1, 2), (2, 3)])
@@ -252,18 +271,17 @@ class TestRealizationCheck:
     def test_empty_graph_matches_zero_degrees(self) -> None:
         result = _check([0, 0, 0], 3, [])
         assert result.is_realization is True
-        assert result.actual_degrees == (0, 0, 0)
+        assert result.graph.edges == ()
 
     def test_complete_graph_matches(self) -> None:
         edges = [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
         result = _check([3, 3, 3, 3], 4, edges)
         assert result.is_realization is True
 
-    def test_actual_degrees_computed_correctly(self) -> None:
-        """The actual degrees must reflect the input edges."""
+    def test_check_retains_the_graph_used_for_degree_comparison(self) -> None:
         edges = [(0, 1), (0, 2), (1, 2)]
         result = _check([2, 2, 2], 3, edges)
-        assert result.actual_degrees == (2, 2, 2)
+        assert result.graph.edges == tuple(edges)
 
     def test_contract_rejects_length_mismatch(self) -> None:
         with pytest.raises(ValidationError):
@@ -308,12 +326,32 @@ class TestRealizationCheck:
 
 
 class TestCrossConsistency:
+    def test_serialized_claim_verifiers_replay_retained_context(self) -> None:
+        profile = _is_graphical([1, 2, 2, 1])
+        assert verify_degree_sequence_profile(
+            DegreeSequenceResult.model_validate_json(profile.model_dump_json())
+        )
+
+        certificate = _graphicality_check([3, 3, 3])
+        assert verify_graphicality_check(
+            GraphicalityCheckResult.model_validate_json(certificate.model_dump_json())
+        )
+
+        check = _check([1, 2, 2, 1], 4, [(0, 1), (1, 2), (2, 3)])
+        assert verify_realization_check(
+            RealizationCheckResult.model_validate_json(check.model_dump_json())
+        )
+        forged = check.model_dump(mode="json")
+        forged["is_realization"] = False
+        assert not verify_realization_check(RealizationCheckResult.model_validate(forged))
+
     def test_constructed_graph_passes_check(self) -> None:
         """A graph constructed by Havel-Hakimi must pass the realization check."""
         degrees = [2, 2, 2, 2, 2]
         realized = _realize(degrees)
         assert realized.is_graphical is True
-        check_result = _check(degrees, len(degrees), list(realized.edges))
+        assert realized.graph is not None
+        check_result = _check(degrees, len(degrees), list(realized.graph.edges))
         assert check_result.is_realization is True
 
     def test_constructed_complete_graph_passes_check(self) -> None:
@@ -321,7 +359,8 @@ class TestCrossConsistency:
         degrees = [n - 1] * n
         realized = _realize(degrees)
         assert realized.is_graphical is True
-        check_result = _check(degrees, n, list(realized.edges))
+        assert realized.graph is not None
+        check_result = _check(degrees, n, list(realized.graph.edges))
         assert check_result.is_realization is True
 
     def test_all_operations_agree_on_graphicality(self) -> None:

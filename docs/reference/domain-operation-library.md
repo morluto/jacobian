@@ -294,6 +294,12 @@ Validation and verification are separate responsibilities:
 | Ordinary result deserialization | Canonical structural parsing only; it does not authenticate mathematical truth |
 | Claim-checking operation or tests | Owner-specific mathematical work under that operation's admission |
 
+Claim verifiers check the smallest relation a consumer needs from the retained
+source and witness. They should not generally rerun the producer. For example,
+a Pratt certificate retains the prime-power factorization of `p - 1`, recursive
+subcertificates, and a modular witness; its verifier reconstructs that supplied
+factorization and checks the witness equations without factoring `p - 1`.
+
 No ordinary boundary may factor, isolate roots, enumerate candidates, invoke a
 solver or backend, recompute a defining relation, or trigger a nested public
 validator that performs that work. A computed result is a trusted producer
@@ -488,6 +494,25 @@ requested audit must name it and its tests must pass the producer's serialized v
 through the consumer's typed boundary. Do not introduce a generic value
 registry or universal mathematical-object base class for this purpose; reuse
 the owner domain's concrete value type.
+
+### Contract-audit red flags
+
+Review a changed public request, result, or value against these patterns before
+adding another field or validator. They are evidence to inspect the owning
+contract, not automatic rules for adding a new public operation.
+
+| Observed pattern | Required review |
+| --- | --- |
+| A result returns a raw nested tuple, list, or dictionary representing a matrix, vector family, map, partition, or indexed relation | Find the domain-owned value. It must retain its ring or field, ordered axes, parent, and empty shape; otherwise add or repair that value rather than duplicating context in sibling fields. |
+| A result has `rows`, `columns`, `dimension`, `rank`, `source`, or `axis` fields beside raw mathematical data | Determine whether those fields reconstruct context that belongs inside one canonical value. Keep only metadata that states the operation's distinct postcondition. |
+| A model validator factors, proves primality, runs elimination, computes closure/orbits, checks independence, or evaluates a defining equation | Move the semantic work to named operation admission. Migrate every consumer that relies on it and preserve only bounded structural parsing. |
+| A conversion changes a ring, field, basis, presentation, parent, or axis order | Name the source and target values and its applicability conditions in an explicit typed map. Keep extraction and formatting projections native unless they establish a reusable mathematical relation. |
+| A subtype, digest, `verified` flag, or producer-shaped payload is treated as proof after transport | Treat it as a caller-authored claim. The consumer must admit and check the precise relation it uses; producer result construction must not repeat its completed computation. |
+
+For each flagged case, add the smallest behavioral test that crosses the
+affected public boundary: an empty or degenerate producer value where relevant,
+a serialized producer-to-consumer round trip, and a forged structural claim
+that reaches the consumer without the producer.
 
 Classify public outputs before choosing their schema:
 

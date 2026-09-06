@@ -28,6 +28,7 @@ from jacobian.math.number_theory._certification_models import (
     CertifiedFactor,
     CertifiedFactorizationRequest,
     CertifiedFactorizationResult,
+    PrattCertificateFactor,
     PrattCertificateNode,
     PrimalityCertificateRequest,
     PrimalityCertificateResult,
@@ -131,13 +132,18 @@ def _build_pratt_certificate(prime: int) -> PrattCertificateNode:
     # so ``a^((prime-1)/q) ≢ 1 (mod prime)`` for every prime ``q | prime-1``.
     witness = int(primitive_root(prime))
 
-    sub_certificates = tuple(
-        _build_pratt_certificate(int(q)) for q, _ in factors_of_pmo
+    factors = tuple(
+        PrattCertificateFactor(
+            prime=format_canonical_integer(int(prime_factor)),
+            exponent=int(exponent),
+            certificate=_build_pratt_certificate(int(prime_factor)),
+        )
+        for prime_factor, exponent in factors_of_pmo
     )
     return PrattCertificateNode(
         prime=format_canonical_integer(prime),
         witness=format_canonical_integer(witness),
-        sub_certificates=sub_certificates,
+        factors=factors,
     )
 
 
@@ -159,6 +165,71 @@ def compute_pratt_certificate(
         status="CERTIFIED",
         value=request.value,
         certificate=_build_pratt_certificate(value),
+    )
+
+
+def verify_pratt_certificate(claim: PrattCertificateNode) -> bool:
+    """Return whether a Pratt node proves the primality it claims."""
+    prime = parse_canonical_integer(claim.prime)
+    if prime == _PRATT_BASE_PRIME:
+        return claim.witness is None and not claim.factors
+    if prime < 2 or claim.witness is None:
+        return False
+    witness = parse_canonical_integer(claim.witness)
+    if not 2 <= witness < prime or pow(witness, prime - 1, prime) != 1:
+        return False
+    factor_primes = tuple(
+        parse_canonical_integer(factor.prime) for factor in claim.factors
+    )
+    if factor_primes != tuple(sorted(factor_primes)) or len(set(factor_primes)) != len(
+        factor_primes
+    ):
+        return False
+    if math.prod(
+        factor_prime**factor.exponent
+        for factor_prime, factor in zip(factor_primes, claim.factors, strict=True)
+    ) != prime - 1:
+        return False
+    return all(
+        parse_canonical_integer(factor.certificate.prime) == factor_prime
+        and pow(witness, (prime - 1) // factor_prime, prime) != 1
+        and verify_pratt_certificate(factor.certificate)
+        for factor_prime, factor in zip(factor_primes, claim.factors, strict=True)
+    )
+
+
+def verify_certified_factorization(claim: CertifiedFactorizationResult) -> bool:
+    """Return whether factor claims reconstruct their source with valid proofs."""
+    value = parse_canonical_integer(claim.value)
+    primes = tuple(parse_canonical_integer(factor.prime) for factor in claim.factors)
+    if value < 2 or primes != tuple(sorted(primes)) or len(set(primes)) != len(primes):
+        return False
+    if any(
+        parse_canonical_integer(factor.certificate.prime)
+        != parse_canonical_integer(factor.prime)
+        or not verify_pratt_certificate(factor.certificate)
+        for factor in claim.factors
+    ):
+        return False
+    reconstructed = math.prod(
+        prime**factor.exponent for prime, factor in zip(primes, claim.factors, strict=True)
+    )
+    return reconstructed == value
+
+
+def verify_primality_certificate(claim: PrimalityCertificateResult) -> bool:
+    """Return whether a primality status is supported by its declared evidence."""
+    from sympy import isprime
+
+    value = parse_canonical_integer(claim.value)
+    if value < 2:
+        return False
+    if claim.status == "COMPOSITE":
+        return claim.certificate is None and not isprime(value)
+    return (
+        claim.certificate is not None
+        and parse_canonical_integer(claim.certificate.prime) == value
+        and verify_pratt_certificate(claim.certificate)
     )
 
 

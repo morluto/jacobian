@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from itertools import combinations
 
 import pytest
@@ -12,11 +13,14 @@ from jacobian.math.graphs.cycle_length_profile import (
 from jacobian.math.graphs.cycle_length_profile.operations import (
     MAX_CYCLE_PROFILE_RETAINED_LABEL_CHARACTERS,
     compute_cycle_length_profile,
+    verify_cycle_length_profile,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
-def _graph(vertices, edges):
+def _graph(
+    vertices: Iterable[str], edges: Iterable[tuple[str, ...]]
+) -> SimpleUndirectedGraph:
     return SimpleUndirectedGraph(
         vertices=tuple(vertices),
         edges=tuple((a, b) for a, b in edges),
@@ -98,6 +102,29 @@ def test_result_preserves_source() -> None:
     g = _graph(["a", "b", "c"], [("a", "b"), ("a", "c"), ("b", "c")])
     result = compute_cycle_length_profile(g)
     assert result.graph == g
+
+
+def test_serialized_profile_claim_is_verified_for_witnesses_and_completeness() -> None:
+    graph = _graph(
+        ["a", "b", "c", "d"],
+        [("a", "b"), ("b", "c"), ("c", "d"), ("a", "d")],
+    )
+    result = compute_cycle_length_profile(graph)
+    assert verify_cycle_length_profile(
+        CycleLengthProfileResult.model_validate_json(result.model_dump_json())
+    )
+
+    payload = result.model_dump(mode="json")
+    payload["rows"][0]["witness"] = ["a", "b", "d", "c"]
+    assert not verify_cycle_length_profile(
+        CycleLengthProfileResult.model_validate(payload)
+    )
+
+    payload = result.model_dump(mode="json")
+    payload["rows"] = []
+    assert not verify_cycle_length_profile(
+        CycleLengthProfileResult.model_validate(payload)
+    )
 
 
 def test_cycle_traversal_allows_descending_indices() -> None:

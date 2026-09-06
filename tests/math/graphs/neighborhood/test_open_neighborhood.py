@@ -7,9 +7,13 @@ import pytest
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.neighborhood._models import (
     NeighborhoodRequest,
+    NeighborhoodResult,
 )
 from jacobian.math.graphs.neighborhood._tools import compute_open_neighborhood
-from jacobian.math.graphs.neighborhood.operations import open_neighborhood
+from jacobian.math.graphs.neighborhood.operations import (
+    open_neighborhood,
+    verify_open_neighborhood,
+)
 from jacobian.math.graphs.values import (
     MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
     SimpleUndirectedGraph,
@@ -103,6 +107,22 @@ def test_result_retains_source() -> None:
     result = open_neighborhood(g, ("a",))
     assert result.graph == g
     assert result.selected_vertices == ("a",)
+
+
+def test_serialized_neighborhood_claim_is_verified_against_its_graph() -> None:
+    g = _graph(["a", "b", "c"], [("a", "b"), ("b", "c")])
+    result = open_neighborhood(g, ("a",))
+
+    serialized = NeighborhoodResult.model_validate_json(result.model_dump_json())
+    assert verify_open_neighborhood(serialized)
+
+    forged = NeighborhoodResult.model_validate(
+        {
+            **result.model_dump(mode="json"),
+            "neighborhood": ["c"],
+        }
+    )
+    assert not verify_open_neighborhood(forged)
 
 
 def test_native_operation_rejects_nonexistent_vertex() -> None:

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Self
-
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
@@ -46,7 +44,7 @@ class NeighborhoodResult(StrictModel):
     neighborhood: tuple[str, ...]
 
     @model_validator(mode="after")
-    def validate_result(self) -> Self:
+    def validate_result(self) -> NeighborhoodResult:
         selected = set(self.selected_vertices)
         neighborhood = set(self.neighborhood)
         if self.selected_vertices != tuple(
@@ -62,11 +60,6 @@ class NeighborhoodResult(StrictModel):
             raise PydanticCustomError(
                 "graph.neighborhood_must_be_canonical",
                 "neighbourhood vertices must be a subset in source-vertex order",
-            )
-        if selected & neighborhood:
-            raise PydanticCustomError(
-                "graph.open_neighborhood_must_exclude_selected_vertices",
-                "an open neighbourhood must exclude selected vertices",
             )
         return self
 

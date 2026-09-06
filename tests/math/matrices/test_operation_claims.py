@@ -95,9 +95,11 @@ def test_serialized_nullspace_verifier_rejects_forged_basis() -> None:
     source = RationalMatrix(entries=((_q(1), _q(2)), (_q(2), _q(4))))
     result = nullspace_result(source)
     payload = result.model_dump(mode="json")
-    assert verify_nullspace(type(result).model_validate(payload))
+    assert verify_nullspace(type(result).model_validate_json(result.model_dump_json()))
     payload["basis_matrix"]["entries"][0][0] = {"num": "1", "den": "1"}
-    assert not verify_nullspace(type(result).model_validate(payload))
+    import json
+
+    assert not verify_nullspace(type(result).model_validate_json(json.dumps(payload)))
 
 
 def test_sparse_nullspace_retains_largest_supported_column_axis() -> None:

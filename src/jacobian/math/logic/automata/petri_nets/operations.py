@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections import deque
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.math.logic.automata.petri_nets._models import (
     MAX_SIPHON_TRAP_PLACES,
     MAX_SIPHON_TRAP_WORK,
@@ -127,8 +126,7 @@ def compute_incidence_matrix(net: PetriNet) -> IncidenceMatrixResult:
             column_count=net.transition_count,
             entries=tuple(
                 tuple(
-                    format_canonical_integer(net.post[p][t] - net.pre[p][t])
-                    for t in range(net.transition_count)
+                    net.post[p][t] - net.pre[p][t] for t in range(net.transition_count)
                 )
                 for p in range(net.place_count)
             ),

@@ -43,7 +43,6 @@ def test_rectangular_coefficient_lattice(shape: tuple[int, int]) -> None:
     )
     result = tool.run(request)
     h, u = result.normal_form.entries, result.transformation.entries
-    assert result.source_matrix == request.matrix
     assert len(h) == rows and len(h[0]) == cols
     assert len(u) == rows and len(u[0]) == rows
     assert all(

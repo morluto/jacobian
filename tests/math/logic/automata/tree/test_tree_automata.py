@@ -35,6 +35,7 @@ from jacobian.math.logic.automata.tree.values import (
     BottomUpTreeAutomaton,
     RankedTree,
     TreeAutomatonTransition,
+    TreeStateChartEntry,
     _priced_saturation,
     ranked_tree_node_count,
 )
@@ -202,7 +203,7 @@ class TestRun:
         result = compute_tree_run(TreeRunRequest(automaton=automaton, tree=_leaf()))
 
         assert result.root_states == (0, 1)
-        assert result.state_chart == (((), (0, 1)),)
+        assert result.state_chart == (TreeStateChartEntry(position=(), states=(0, 1)),)
         assert result.accepted is True
         assert result.node_count == 1
 
@@ -344,8 +345,8 @@ class TestReachableStates:
         assert profile.automaton == automaton
         assert profile.reachable_states == (0,)
         assert profile.unreachable_states == (1,)
-        for state, tree in profile.witnesses:
-            assert run_tree_automaton(automaton, tree) == {state}
+        for witness in profile.witnesses:
+            assert run_tree_automaton(automaton, witness.tree) == {witness.state}
 
         result = compute_tree_automaton_reachability(
             TreeAutomatonReachabilityRequest(automaton=automaton)
@@ -391,15 +392,15 @@ class TestReachableStates:
 
         assert result.reachable_states == (0, 1, 2, 3, 4)
         assert result.unreachable_states == ()
-        assert tuple(ranked_tree_node_count(tree) for _, tree in result.witnesses) == (
+        assert tuple(ranked_tree_node_count(witness.tree) for witness in result.witnesses) == (
             1,
             1,
             3,
             4,
             9,
         )
-        for state, tree in result.witnesses:
-            assert state in run_tree_automaton(automaton, tree)
+        for witness in result.witnesses:
+            assert witness.state in run_tree_automaton(automaton, witness.tree)
 
     def test_reachability_requires_every_hyperedge_child(self) -> None:
         automaton = BottomUpTreeAutomaton(
@@ -418,7 +419,7 @@ class TestReachableStates:
 
         assert result.reachable_states == (0,)
         assert result.unreachable_states == (1, 2)
-        assert tuple(state for state, _ in result.witnesses) == (0,)
+        assert tuple(witness.state for witness in result.witnesses) == (0,)
 
     def test_profile_is_independent_of_transition_wire_order(self) -> None:
         transitions = (
@@ -461,12 +462,12 @@ class TestReachableStates:
             TreeAutomatonReachabilityRequest(automaton=automaton)
         )
 
-        assert tuple(ranked_tree_node_count(tree) for _, tree in result.witnesses) == (
+        assert tuple(ranked_tree_node_count(witness.tree) for witness in result.witnesses) == (
             1,
             1,
             1,
         )
-        assert tuple(tree.symbol for _, tree in result.witnesses) == (0, 2, 0)
+        assert tuple(witness.tree.symbol for witness in result.witnesses) == (0, 2, 0)
 
     def test_equal_node_tie_breaks_by_smallest_root_symbol(self) -> None:
         automaton = BottomUpTreeAutomaton(
@@ -484,8 +485,8 @@ class TestReachableStates:
             TreeAutomatonReachabilityRequest(automaton=automaton)
         )
 
-        assert result.witnesses[0][1] == RankedTree(symbol=0)
-        assert result.witnesses[1][1] == RankedTree(symbol=0)
+        assert result.witnesses[0].tree == RankedTree(symbol=0)
+        assert result.witnesses[1].tree == RankedTree(symbol=0)
 
         forged_payload = result.model_dump()
         forged_payload["witnesses"] = [[0, {"symbol": 1, "children": []}], [1, _leaf()]]
@@ -510,7 +511,7 @@ class TestReachableStates:
         )
 
         # Both arity-2 rows derive state 2 with three nodes; (0, 1) < (1, 0).
-        assert result.witnesses[2][1] == RankedTree(
+        assert result.witnesses[2].tree == RankedTree(
             symbol=1,
             children=(RankedTree(symbol=0), RankedTree(symbol=0)),
         )
@@ -685,7 +686,7 @@ class TestValidation:
 
         assert result.reachable_states == (0,)
         assert result.unreachable_states == tuple(range(1, 64))
-        assert tuple(ranked_tree_node_count(tree) for _, tree in result.witnesses) == (
+        assert tuple(ranked_tree_node_count(witness.tree) for witness in result.witnesses) == (
             1,
         )
         assert isinstance(profile, ReachableStateProfile)
@@ -717,7 +718,7 @@ class TestValidation:
         assert result.reachable_states == tuple(range(64))
         assert result.unreachable_states == ()
         assert (
-            tuple(ranked_tree_node_count(tree) for _, tree in result.witnesses)
+            tuple(ranked_tree_node_count(witness.tree) for witness in result.witnesses)
             == (1,) * 64
         )
 
@@ -757,7 +758,7 @@ class TestValidation:
 
         assert result.reachable_states == tuple(range(13))
         assert tuple(
-            ranked_tree_node_count(tree) for _, tree in result.witnesses
+            ranked_tree_node_count(witness.tree) for witness in result.witnesses
         ) == tuple(range(1, 14))
 
     @pytest.mark.scale
@@ -815,7 +816,7 @@ class TestValidation:
         profile = reachable_state_profile(automaton)
         assert profile.reachable_states == tuple(range(16))
         assert tuple(
-            ranked_tree_node_count(tree) for _, tree in profile.witnesses
+            ranked_tree_node_count(witness.tree) for witness in profile.witnesses
         ) == tuple(range(1, 17))
 
     @pytest.mark.scale
@@ -893,7 +894,7 @@ class TestValidation:
         assert isinstance(profile, ReachableStateProfile)
         assert profile.reachable_states == tuple(range(64))
         assert tuple(
-            ranked_tree_node_count(tree) for _, tree in profile.witnesses
+            ranked_tree_node_count(witness.tree) for witness in profile.witnesses
         ) == tuple(range(1, 65))
 
         result = compute_tree_automaton_reachability(

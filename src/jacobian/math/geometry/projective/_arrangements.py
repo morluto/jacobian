@@ -49,7 +49,7 @@ def _cross(
 
 
 def _wire_triple(values: tuple[int, int, int]) -> PrimitiveProjectiveTriple:
-    return PrimitiveProjectiveTriple(coordinates=values)
+    return PrimitiveProjectiveTriple.model_construct(coordinates=values)
 
 
 def compute_projective_line_flats(

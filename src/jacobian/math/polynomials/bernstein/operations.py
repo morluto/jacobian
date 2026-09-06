@@ -14,7 +14,7 @@ from jacobian._execution import (
     current_request_execution,
     request_checkpoint,
 )
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis.intervals import RationalBox
 from jacobian.math.polynomials.bernstein.values import (
@@ -115,9 +115,7 @@ def _admit(
         if _denominator_digits(term.coefficient.den) > MAX_COMPONENT_DIGITS:
             source_denominator_digits = MAX_COMPONENT_DIGITS + 1
             break
-        source_denominator = lcm(
-            source_denominator, parse_canonical_integer(term.coefficient.den)
-        )
+        source_denominator = lcm(source_denominator, term.coefficient.den)
         if source_denominator.bit_length() > MAX_COMPONENT_DIGITS * 4:
             source_denominator_digits = MAX_COMPONENT_DIGITS + 1
             break
@@ -385,9 +383,7 @@ def _restriction_admit(
     # multiplying unrelated reduced denominators at every interpolation.
     common_denominator = 1
     for coefficient in parent.coefficients:
-        common_denominator = lcm(
-            common_denominator, parse_canonical_integer(coefficient.den)
-        )
+        common_denominator = lcm(common_denominator, coefficient.den)
         if common_denominator.bit_length() > MAX_COMPONENT_DIGITS * 4:
             _reject(
                 "Bernstein restriction rational growth exceeds the 8192-digit envelope"

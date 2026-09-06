@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.math.logic.languages.words._fixed_point_admission import (
     require_fixed_point_prefix_budget,
 )
@@ -186,10 +185,7 @@ def incidence_matrix(morphism: WordMorphism) -> IntegerMatrix:
         row_count=len(morphism.target_alphabet),
         column_count=len(morphism.source_alphabet),
         entries=tuple(
-            tuple(
-                format_canonical_integer(image.count(target))
-                for image in morphism.images
-            )
+            tuple(image.count(target) for image in morphism.images)
             for target in morphism.target_alphabet
         ),
     )

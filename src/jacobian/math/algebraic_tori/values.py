@@ -57,8 +57,8 @@ def _raw_field(value: object, name: str) -> object:
 
 
 def _raw_integer_exceeds_bound(value: object) -> bool:
-    if type(value) is int:
-        return abs(value) >= 10**MAX_CERTIFIED_SNF_INPUT_DIGITS
+    if isinstance(value, int) and not isinstance(value, bool):
+        return len(str(value).lstrip("-")) > MAX_CERTIFIED_SNF_INPUT_DIGITS
     return (
         isinstance(value, str)
         and len(value.lstrip("-")) > MAX_CERTIFIED_SNF_INPUT_DIGITS
@@ -322,7 +322,7 @@ class AlgebraicTorusSolutionSubgroup(StrictModel):
         source: HomogeneousMonomialSystem,
         smith_certificate: SmithNormalFormCertificate,
         torsion_character_group: TorsionCharacterGroup,
-        connected_component_count: str,
+        connected_component_count: int,
         torsion_parameter_axis: tuple[str, ...],
         smith_free_parameter_axis: tuple[str, ...],
         reduced_free_parameter_axis: tuple[str, ...],

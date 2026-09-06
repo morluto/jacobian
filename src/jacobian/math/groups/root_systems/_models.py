@@ -8,7 +8,6 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.matrices.values import IntegerMatrix
 
 MAX_RANK = 8
@@ -42,9 +41,7 @@ class CartanMatrix(StrictModel):
     @classmethod
     def accept_matrix_rows_for_native_projection(cls, data: object) -> object:
         if isinstance(data, (list, tuple)):
-            rows = tuple(
-                tuple(format_canonical_integer(value) for value in row) for row in data
-            )
+            rows = tuple(tuple(value for value in row) for row in data)
             n = len(rows)
             return canonicalize_json_containers(
                 {
@@ -70,10 +67,7 @@ class CartanMatrix(StrictModel):
 
     @property
     def entries(self) -> tuple[tuple[int, ...], ...]:
-        return tuple(
-            tuple(parse_canonical_integer(value) for value in row)
-            for row in self.matrix.entries
-        )
+        return self.matrix.entries
 
     def __len__(self) -> int:
         return self.matrix.row_count

@@ -46,8 +46,8 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"affine_torus.{reason}", message)
 
 
-def _integer_digits(value: str) -> int:
-    return len(value.lstrip("-"))
+def _integer_digits(value: int | str) -> int:
+    return len(str(value).lstrip("-"))
 
 
 def _preflight_sequence(value: object, *, label: str, maximum: int) -> None:
@@ -143,9 +143,12 @@ def _preflight_affine_linear_part(value: object) -> None:
         )
         assert isinstance(row, (list, tuple))
         for entry in row:
-            if not isinstance(entry, str):
+            if not (
+                isinstance(entry, str)
+                or (isinstance(entry, int) and not isinstance(entry, bool))
+            ):
                 raise _validation_error(
-                    "raw_type", "integer matrix entries must be canonical strings"
+                    "raw_type", "integer matrix entries must be exact integers"
                 )
             if _integer_digits(entry) > MAX_AFFINE_TORUS_INPUT_DIGITS:
                 raise _validation_error(
@@ -172,9 +175,12 @@ def _preflight_rational_coordinates(
             label="rational coordinate",
         )
         for component in (coordinate.get("num"), coordinate.get("den")):
-            if not isinstance(component, str):
+            if not (
+                isinstance(component, str)
+                or (isinstance(component, int) and not isinstance(component, bool))
+            ):
                 raise _validation_error(
-                    "raw_type", "rational components must be canonical strings"
+                    "raw_type", "rational components must be exact integers"
                 )
             if _integer_digits(component) > maximum_digits:
                 raise _validation_error(

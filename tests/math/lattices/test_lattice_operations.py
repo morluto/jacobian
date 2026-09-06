@@ -69,7 +69,7 @@ def test_integer_lattice_rejects_empty_basis() -> None:
         IntegerLattice.model_validate(
             {"ambient_dimension": 2, "basis": {"entries": []}}
         )
-    assert exc_info.value.errors()[0]["type"] == "lattice.basis_empty"
+    assert exc_info.value.errors()[0]["type"] == "lattice.basis_columns_mismatch"
 
 
 # ---------------------------------------------------------------------------

@@ -203,7 +203,11 @@ def test_fibonacci_incidence_matrix_and_binding() -> None:
     assert result.orientation == "ROWS_TARGET_COLUMNS_SOURCE"
 
     payload = result.model_dump()
-    payload["matrix"] = ((1, 0), (1, 1))
+    payload["matrix"] = {
+        "row_count": 2,
+        "column_count": 2,
+        "entries": (("1", "0"), ("1", "1")),
+    }
     supplied = IncidenceMatrixResult.model_validate_json(json.dumps(payload))
     assert supplied.matrix == ((1, 0), (1, 1))
 

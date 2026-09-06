@@ -5,7 +5,6 @@ from __future__ import annotations
 from itertools import pairwise
 from math import prod
 
-from jacobian.canonical import parse_canonical_integer
 from jacobian.math.algebraic_tori.values import (
     AlgebraicTorusSolutionSubgroup,
     HomogeneousMonomialSystem,
@@ -39,9 +38,7 @@ def _matrix_value(
 def verify_torsion_character_group(group: TorsionCharacterGroup) -> bool:
     """Check the invariant-factor claim of a serialized torsion carrier."""
     try:
-        factors = tuple(
-            parse_canonical_integer(value) for value in group.invariant_factors
-        )
+        factors = group.invariant_factors
     except (TypeError, ValueError):
         return False
     return all(value > 1 for value in factors) and all(

@@ -125,7 +125,7 @@ def test_standard_real_cyclotomic_field_and_embedding_are_fixed_by_conductor() -
     result = energy((1, 1), Fraction(0), Fraction(1, 8))
     binding = result.pi_inverse_coefficient
     assert result.cyclotomic_conductor == 8
-    assert binding.element.presentation.coefficients_descending == ("1", "0", "-2")
+    assert binding.element.presentation.coefficients_descending == (1, 0, -2)
     assert tuple(
         value.as_fraction() for value in binding.element.coefficients_ascending
     ) == (Fraction(0), Fraction(1, 2))

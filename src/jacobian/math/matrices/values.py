@@ -17,7 +17,7 @@ from jacobian._exact import (
     ExactInteger,
 )
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.quadratic import RealQuadraticValue
 from jacobian.math.number_theory.number_fields.values import (
     MAX_SIMPLE_NUMBER_FIELD_DEGREE,
@@ -532,7 +532,7 @@ class IntegerMatrix(StrictModel):
 
     def __getitem__(self, index: int) -> tuple[int, ...]:
         """Project one row to native integers for bounded kernel code."""
-        return tuple(parse_canonical_integer(value) for value in self.entries[index])
+        return self.entries[index]
 
     def __len__(self) -> int:
         return self.row_count

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from fractions import Fraction
 
@@ -470,7 +471,7 @@ def test_noncyclic_components_multiply_to_minimal_not_characteristic() -> None:
 
 
 def test_serialized_canonical_claims_verify_against_retained_matrix() -> None:
-    source = _diagonal("2", "3")
+    source = _diagonal(2, 3)
 
     minimal = compute_minimal_polynomial(source)
     decoded_minimal = type(minimal).model_validate_json(minimal.model_dump_json())
@@ -482,7 +483,9 @@ def test_serialized_canonical_claims_verify_against_retained_matrix() -> None:
         "num": "99",
         "den": "1",
     }
-    assert not verify_minimal_polynomial(type(minimal).model_validate(minimal_payload))
+    assert not verify_minimal_polynomial(
+        type(minimal).model_validate_json(json.dumps(minimal_payload))
+    )
 
     canonical = compute_rational_canonical_form(source)
     decoded_canonical = type(canonical).model_validate_json(canonical.model_dump_json())
@@ -495,7 +498,7 @@ def test_serialized_canonical_claims_verify_against_retained_matrix() -> None:
         "den": "1",
     }
     assert not verify_rational_canonical_form(
-        type(canonical).model_validate(canonical_payload)
+        type(canonical).model_validate_json(json.dumps(canonical_payload))
     )
 
     primary = compute_primary_decomposition(source)
@@ -507,7 +510,7 @@ def test_serialized_canonical_claims_verify_against_retained_matrix() -> None:
         "den": "1",
     }
     assert not verify_primary_decomposition(
-        type(primary).model_validate(primary_payload)
+        type(primary).model_validate_json(json.dumps(primary_payload))
     )
 
 

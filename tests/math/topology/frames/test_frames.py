@@ -42,14 +42,14 @@ def test_gram_accepts_nonspanning_vector_family() -> None:
 
 def test_decoded_gram_rejects_shape_forgery() -> None:
     result = gram(VectorFamily(vectors=((1, 0), (0, 1))))
-    payload = result.model_dump(mode="json")
+    payload = result.model_dump()
     payload["gram"]["row_count"] = 1
     with pytest.raises(ValueError, match="shape"):
         GramResult.model_validate(payload)
     malformed = GramResult.model_construct(
         vectors=((1, 0), (0, 1)),
         dimension=2,
-        gram=IntegerMatrix(entries=(("1",),)),
+        gram=IntegerMatrix(entries=((1,),)),
     )
     assert not verify_gram(malformed)
     assert not verify_gram(result.model_copy(update={"gram": None}))  # type: ignore[arg-type]

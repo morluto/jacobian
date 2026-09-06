@@ -469,8 +469,8 @@ class TestSourceBoundResult:
 
     def test_serialized_result_revalidates(self) -> None:
         result = _run_linear_system(self._request())
-        revalidated = SymbolicLinearSystemResult.model_validate(
-            result.model_dump(mode="json")
+        revalidated = SymbolicLinearSystemResult.model_validate_json(
+            result.model_dump_json()
         )
         assert revalidated.classification == "UNIQUE"
         assert revalidated.solution == result.solution

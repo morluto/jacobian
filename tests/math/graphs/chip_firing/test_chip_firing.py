@@ -62,7 +62,7 @@ class TestLaplacian:
             LaplacianResult(
                 graph=GRAPH,
                 vertices=GRAPH.vertices,
-                laplacian=IntegerMatrix(entries=(("0",), ("0",))),
+            laplacian=IntegerMatrix(entries=((0,), (0,))),
                 degrees=(0,),
             )
 
@@ -73,7 +73,7 @@ class TestLaplacian:
                 vertices=("a", "b", "c"),
                 sink="missing",
                 reduced_laplacian=IntegerMatrix(
-                    entries=(("0", "0", "0"), ("0", "0", "0"), ("0", "0", "0"))
+                    entries=((0, 0, 0), (0, 0, 0), (0, 0, 0))
                 ),
             )
 

@@ -58,8 +58,8 @@ def test_native_operations_return_canonical_results() -> None:
     assert petri_nets.enabled_transitions(net, marking).transitions == (0,)
     assert petri_nets.fire_transition(net, marking, 0).status == "FIRED"
     assert petri_nets.compute_incidence_matrix(net).incidence.entries == (
-        ("-1", "0"),
-        ("0", "0"),
+        (-1, 0),
+        (0, 0),
     )
     assert petri_nets.reachability_graph(net, marking).states[0].marking.tokens == (
         1,
@@ -244,12 +244,12 @@ class TestIncidenceMatrix:
     def test_simple_incidence(self):
         net = _simple_net()
         result = compute_incidence(IncidenceMatrixRequest(net=net))
-        assert result.incidence.entries == (("-1", "0"), ("0", "0"))
+        assert result.incidence.entries == ((-1, 0), (0, 0))
 
     def test_cyclic_incidence(self):
         net = _token_passing_net()
         result = compute_incidence(IncidenceMatrixRequest(net=net))
-        assert result.incidence.entries == (("-1", "1"), ("1", "-1"))
+        assert result.incidence.entries == ((-1, 1), (1, -1))
 
 
 # ---------------------------------------------------------------------------

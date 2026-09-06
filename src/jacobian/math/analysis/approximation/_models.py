@@ -120,6 +120,15 @@ class LagrangeInterpolationRequest(StrictModel):
         min_length=1, max_length=MAX_INTERPOLATION_NODES
     )
 
+    @model_validator(mode="after")
+    def require_matching_axes(self) -> Self:
+        if len(self.nodes.nodes) != len(self.values):
+            raise _validation_error(
+                "interpolation_length_mismatch",
+                "values must have the same length as nodes",
+            )
+        return self
+
 
 class LagrangeInterpolationData(StrictModel):
     """The canonical node/value axes defining a Lagrange interpolant."""

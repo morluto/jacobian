@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import itertools
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import networkx as nx
@@ -25,7 +25,11 @@ from jacobian.math.dynamics.symbolic._bounds import (
 from jacobian.math.dynamics.symbolic.values import (
     MAX_ADJACENCY_ENTRY,
     MAX_ADJACENCY_STATES,
+    MAX_ALPHABET_SIZE,
+    MAX_FORBIDDEN_BLOCK_LENGTH,
+    MAX_FORBIDDEN_BLOCKS,
     MAX_PERIOD,
+    MAX_PRESENTATION_TRANSITIONS,
     MAX_SYMBOL_LENGTH,
     AdjacencyShift,
     BlockPresentation,
@@ -200,6 +204,7 @@ def _presentation_from_states_and_words(
         alphabet=shift.alphabet,
         memory=memory,
         state_blocks=states,
+        forbidden_blocks=normalize_forbidden_blocks(shift),
         transitions=tuple(transitions),
         adjacency_matrix=tuple(tuple(row) for row in adjacency),
         two_sided=shift.two_sided,
@@ -269,56 +274,126 @@ def adjacency_shift_from_presentation(
     )
 
 
+def _verify_presentation_symbols(
+    alphabet: tuple[Any, ...],
+    state_blocks: tuple[Any, ...],
+    forbidden_blocks: tuple[Any, ...],
+    memory: int,
+) -> set[str] | None:
+    """Validate exact symbol/block containers before hashing or comparison."""
+
+    if any(
+        type(symbol) is not str or not symbol or len(symbol) > MAX_SYMBOL_LENGTH
+        for symbol in alphabet
+    ):
+        return None
+    alphabet_set = set(alphabet)
+    rank = {symbol: index for index, symbol in enumerate(alphabet)}
+    for block in (*state_blocks, *forbidden_blocks):
+        if type(block) is not tuple or len(block) > MAX_FORBIDDEN_BLOCK_LENGTH:
+            return None
+        if any(
+            type(symbol) is not str
+            or not symbol
+            or len(symbol) > MAX_SYMBOL_LENGTH
+            or symbol not in alphabet_set
+            for symbol in block
+        ):
+            return None
+    ordered_forbidden = sorted(
+        forbidden_blocks,
+        key=lambda block: (len(block), tuple(rank[symbol] for symbol in block)),
+    )
+    minimal_forbidden: list[tuple[str, ...]] = []
+    for factor in ordered_forbidden:
+        if not any(_contains(factor, prior) for prior in minimal_forbidden):
+            minimal_forbidden.append(factor)
+    if forbidden_blocks != tuple(minimal_forbidden):
+        return None
+    if any(type(block) is not tuple or len(block) != memory for block in state_blocks):
+        return None
+    if len(set(state_blocks)) != len(state_blocks):
+        return None
+    if tuple(state_blocks) != tuple(
+        sorted(state_blocks, key=lambda block: tuple(rank[symbol] for symbol in block))
+    ):
+        return None
+    if any(
+        _contains(block, factor)
+        for block in state_blocks
+        for factor in forbidden_blocks
+    ):
+        return None
+    return alphabet_set
+
+
+def _verify_presentation_matrix(matrix: tuple[Any, ...], state_count: int) -> bool:
+    """Validate exact bounded adjacency rows without semantic recomputation."""
+
+    for row in matrix:
+        if type(row) is not tuple or len(row) != state_count:
+            return False
+        if any(
+            type(entry) is not int or entry < 0 or entry > MAX_ADJACENCY_ENTRY
+            for entry in row
+        ):
+            return False
+    return True
+
+
+def _verify_presentation_transitions(transitions: tuple[Any, ...]) -> bool:
+    """Validate transition records before the bounded relation scan."""
+
+    for transition in transitions:
+        if type(transition) is not LabeledTransition:
+            return False
+        if (
+            type(transition.source) is not int
+            or type(transition.target) is not int
+            or type(transition.appended_symbol) is not str
+            or not transition.appended_symbol
+            or len(transition.appended_symbol) > MAX_SYMBOL_LENGTH
+        ):
+            return False
+    return True
+
+
 def _verify_presentation_carrier(claim: BlockPresentation) -> set[str] | None:
     """Check the bounded axes and return the canonical alphabet set."""
 
     alphabet = claim.alphabet
     state_blocks = claim.state_blocks
+    forbidden_blocks = claim.forbidden_blocks
     matrix = claim.adjacency_matrix
+    transitions = claim.transitions
     if (
-        not isinstance(alphabet, tuple)
-        or not alphabet
-        or not isinstance(state_blocks, tuple)
-        or not isinstance(matrix, tuple)
-        or not isinstance(claim.transitions, tuple)
-        or not isinstance(claim.memory, int)
-        or isinstance(claim.memory, bool)
+        type(alphabet) is not tuple
+        or type(state_blocks) is not tuple
+        or type(forbidden_blocks) is not tuple
+        or type(matrix) is not tuple
+        or type(transitions) is not tuple
+        or type(claim.memory) is not int
         or claim.memory < 0
-        or not isinstance(claim.two_sided, bool)
+        or claim.memory > MAX_FORBIDDEN_BLOCK_LENGTH
+        or type(claim.two_sided) is not bool
     ):
         return None
-    try:
-        alphabet_set = set(alphabet)
-        state_set = set(state_blocks)
-    except TypeError:
-        return None
-    if len(alphabet_set) != len(alphabet) or len(state_set) != len(state_blocks):
-        return None
-    if any(
-        not isinstance(symbol, str) or not symbol or len(symbol) > MAX_SYMBOL_LENGTH
-        for symbol in alphabet
+    if (
+        not 1 <= len(alphabet) <= MAX_ALPHABET_SIZE
+        or len(state_blocks) > MAX_ADJACENCY_STATES
+        or len(forbidden_blocks) > MAX_FORBIDDEN_BLOCKS
+        or len(matrix) != len(state_blocks)
+        or len(transitions) > MAX_PRESENTATION_TRANSITIONS
     ):
         return None
-    if any(
-        not isinstance(block, tuple)
-        or len(block) != claim.memory
-        or any(symbol not in alphabet_set for symbol in block)
-        for block in state_blocks
-    ):
+    alphabet_set = _verify_presentation_symbols(
+        alphabet, state_blocks, forbidden_blocks, claim.memory
+    )
+    if alphabet_set is None:
         return None
-    size = len(state_blocks)
-    if any(
-        not isinstance(row, tuple)
-        or len(row) != size
-        or any(
-            not isinstance(entry, int)
-            or isinstance(entry, bool)
-            or entry < 0
-            or entry > MAX_ADJACENCY_ENTRY
-            for entry in row
-        )
-        for row in matrix
-    ):
+    if not _verify_presentation_matrix(matrix, len(state_blocks)):
+        return None
+    if not _verify_presentation_transitions(transitions):
         return None
     return alphabet_set
 
@@ -332,19 +407,15 @@ def _actual_presentation_edges(
     actual_edges: dict[tuple[int, int, str], int] = {}
     counts = [[0] * size for _ in range(size)]
     for transition in claim.transitions:
-        if not isinstance(transition, LabeledTransition):
-            return None
         source = transition.source
         target = transition.target
         symbol = transition.appended_symbol
         if (
-            not isinstance(source, int)
-            or isinstance(source, bool)
-            or not isinstance(target, int)
-            or isinstance(target, bool)
+            type(source) is not int
+            or type(target) is not int
             or not 0 <= source < size
             or not 0 <= target < size
-            or not isinstance(symbol, str)
+            or type(symbol) is not str
             or symbol not in alphabet_set
         ):
             return None
@@ -361,21 +432,44 @@ def _actual_presentation_edges(
     return actual_edges, counts
 
 
+def _expected_presentation_edges(
+    claim: BlockPresentation,
+) -> dict[tuple[int, int, str], int]:
+    """Derive every allowed labeled overlap from the retained source rules."""
+
+    expected_edges: dict[tuple[int, int, str], int] = {}
+    forbidden = claim.forbidden_blocks
+    for source_index, source_block in enumerate(claim.state_blocks):
+        for target_index, target_block in enumerate(claim.state_blocks):
+            if claim.memory:
+                if source_block[1:] != target_block[:-1]:
+                    continue
+                extension = (*source_block, target_block[-1])
+                if any(_contains(extension, factor) for factor in forbidden):
+                    continue
+                expected_edges[(source_index, target_index, target_block[-1])] = 1
+            else:
+                for symbol in claim.alphabet:
+                    if not any(_contains((symbol,), factor) for factor in forbidden):
+                        expected_edges[(source_index, target_index, symbol)] = 1
+    return expected_edges
+
+
 def _verify_block_presentation(claim: BlockPresentation) -> bool:
     """Check the complete serialized transition relation and its counts."""
 
-    if not isinstance(claim, BlockPresentation):
+    if type(claim) is not BlockPresentation:
         return False
     try:
-        require_bounded_presentation_verification(claim)
         alphabet_set = _verify_presentation_carrier(claim)
         if alphabet_set is None:
             return False
+        require_bounded_presentation_verification(claim)
         actual = _actual_presentation_edges(claim, alphabet_set)
         if actual is None:
             return False
         actual_edges, counts = actual
-        return all(count == 1 for count in actual_edges.values()) and (
+        return actual_edges == _expected_presentation_edges(claim) and (
             claim.adjacency_matrix == tuple(tuple(row) for row in counts)
         )
     except Exception:

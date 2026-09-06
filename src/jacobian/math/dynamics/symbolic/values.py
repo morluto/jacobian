@@ -101,6 +101,9 @@ class BlockPresentation(StrictModel):
     alphabet: tuple[Symbol, ...] = Field(min_length=1, max_length=MAX_ALPHABET_SIZE)
     memory: StrictInt = Field(ge=0, le=MAX_FORBIDDEN_BLOCK_LENGTH)
     state_blocks: tuple[_Block, ...] = Field(max_length=MAX_ADJACENCY_STATES)
+    forbidden_blocks: tuple[_Block, ...] = Field(
+        default=(), max_length=MAX_FORBIDDEN_BLOCKS
+    )
     transitions: tuple[LabeledTransition, ...] = Field(
         max_length=MAX_PRESENTATION_CELLS
     )
@@ -139,6 +142,15 @@ class BlockPresentation(StrictModel):
             raise _validation_error(
                 "presentation_state_block_symbol_outside_alphabet",
                 "presentation state blocks must use the presentation alphabet",
+            )
+        if any(
+            symbol not in self.alphabet
+            for block in self.forbidden_blocks
+            for symbol in block
+        ):
+            raise _validation_error(
+                "presentation_forbidden_symbol_outside_alphabet",
+                "presentation forbidden blocks must use the presentation alphabet",
             )
         if any(
             transition.source >= size

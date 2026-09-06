@@ -7,6 +7,7 @@ from jacobian.math.dynamics.symbolic.values import (
     MAX_ALPHABET_SIZE,
     MAX_ENUMERATED_BLOCKS,
     MAX_FORBIDDEN_BLOCK_LENGTH,
+    MAX_FORBIDDEN_BLOCKS,
     MAX_PRESENTATION_CELLS,
     MAX_PRESENTATION_TRANSITIONS,
     AdjacencyShift,
@@ -92,6 +93,10 @@ def require_bounded_presentation_verification(
         raise ValueError("presentation state axis exceeds the supported bound")
     if len(presentation.transitions) > MAX_PRESENTATION_TRANSITIONS:
         raise ValueError("presentation transition axis exceeds the supported bound")
+    if len(presentation.forbidden_blocks) > MAX_FORBIDDEN_BLOCKS:
+        raise ValueError(
+            "presentation forbidden-block axis exceeds the supported bound"
+        )
     if presentation.memory > MAX_FORBIDDEN_BLOCK_LENGTH:
         raise ValueError("presentation memory exceeds the supported bound")
     if len(presentation.alphabet) > MAX_ALPHABET_SIZE:

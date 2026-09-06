@@ -6,6 +6,7 @@ import itertools
 import random
 from collections.abc import Iterator
 from fractions import Fraction
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -15,6 +16,7 @@ from jacobian.math.dynamics.symbolic import (
     AdjacencyShift,
     BlockPresentation,
     ForbiddenBlockShift,
+    LabeledTransition,
     adjacency_shift,
     adjacency_shift_from_presentation,
     block_language,
@@ -248,6 +250,120 @@ def test_block_presentation_verifier_rejects_oversized_claim_before_scanning() -
         two_sided=True,
     )
     assert not verify_block_presentation(oversized)
+
+
+def test_block_presentation_verifier_requires_complete_allowed_overlap_relation() -> (
+    None
+):
+    unary_memory_one = BlockPresentation(
+        alphabet=("a",),
+        memory=1,
+        state_blocks=(("a",),),
+        forbidden_blocks=(),
+        transitions=(LabeledTransition(source=0, target=0, appended_symbol="a"),),
+        adjacency_matrix=((1,),),
+        two_sided=True,
+    )
+    assert verify_block_presentation(unary_memory_one)
+    assert not verify_block_presentation(
+        unary_memory_one.model_copy(update={"transitions": ()})
+    )
+
+    memory_zero = BlockPresentation(
+        alphabet=("a", "b"),
+        memory=0,
+        state_blocks=((),),
+        forbidden_blocks=(),
+        transitions=(
+            LabeledTransition(source=0, target=0, appended_symbol="a"),
+            LabeledTransition(source=0, target=0, appended_symbol="b"),
+        ),
+        adjacency_matrix=((2,),),
+        two_sided=True,
+    )
+    assert verify_block_presentation(memory_zero)
+    assert not verify_block_presentation(
+        memory_zero.model_copy(
+            update={
+                "transitions": (
+                    LabeledTransition(source=0, target=0, appended_symbol="a"),
+                )
+            }
+        )
+    )
+
+
+def test_block_presentation_verifier_rejects_hostile_subclasses_before_operations() -> (
+    None
+):
+    class HostileTuple(tuple[Any, ...]):
+        def __iter__(self) -> Iterator[Any]:
+            raise AssertionError("hostile iterator was called")
+
+        def __len__(self) -> int:
+            raise AssertionError("hostile length was called")
+
+        def __eq__(self, other: object) -> bool:
+            raise AssertionError("hostile equality was called")
+
+        def __hash__(self) -> int:
+            raise AssertionError("hostile hash was called")
+
+    presentation = finite_type_presentation(_golden_mean())
+    for field in (
+        "alphabet",
+        "state_blocks",
+        "forbidden_blocks",
+        "transitions",
+        "adjacency_matrix",
+    ):
+        forged = presentation.model_copy(
+            update={field: HostileTuple(getattr(presentation, field))}
+        )
+        assert not verify_block_presentation(forged)
+
+    forged_row = presentation.model_copy(
+        update={"adjacency_matrix": (HostileTuple(presentation.adjacency_matrix[0]),)}
+    )
+    assert not verify_block_presentation(forged_row)
+
+    class HostileString(str):
+        def __len__(self) -> int:
+            raise AssertionError("hostile string length was called")
+
+        def __eq__(self, other: object) -> bool:
+            raise AssertionError("hostile string equality was called")
+
+        def __hash__(self) -> int:
+            raise AssertionError("hostile string hash was called")
+
+    forged_symbol = presentation.model_copy(
+        update={"alphabet": (HostileString("0"), "1")}
+    )
+    assert not verify_block_presentation(forged_symbol)
+
+    class HostileInt(int):
+        def __lt__(self, other: object) -> bool:
+            raise AssertionError("hostile integer comparison was called")
+
+        def __ge__(self, other: object) -> bool:
+            raise AssertionError("hostile integer comparison was called")
+
+    forged_entry = presentation.model_copy(
+        update={"adjacency_matrix": ((HostileInt(1), 1), (1, 0))}
+    )
+    assert not verify_block_presentation(forged_entry)
+    forged_source = presentation.model_copy(
+        update={
+            "transitions": (
+                presentation.transitions[0].model_copy(
+                    update={"source": HostileInt(0)}
+                ),
+                *presentation.transitions[1:],
+            )
+        }
+    )
+    assert not verify_block_presentation(forged_source)
 
 
 def test_shorter_forbidden_factors_are_enforced_in_long_memory_presentation() -> None:

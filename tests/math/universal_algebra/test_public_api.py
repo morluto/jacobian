@@ -22,6 +22,9 @@ def test_exact_public_api_symbols() -> None:
         "homomorphism_profile",
         "quotient",
         "verify_congruence",
+        "verify_equation_profile",
+        "verify_evaluate",
+        "verify_generated_subalgebra",
     )
     assert tuple(universal_algebra.__all__) == expected
     assert len(universal_algebra.__all__) == len(set(universal_algebra.__all__))

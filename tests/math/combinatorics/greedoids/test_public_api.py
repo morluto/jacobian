@@ -20,6 +20,11 @@ def test_exact_public_api_symbols() -> None:
         "rank_profile",
         "recognize",
         "union_closed",
+        "verify_bases_profile",
+        "verify_basic_word_profile",
+        "verify_convex_geometry_profile",
+        "verify_rank_profile",
+        "verify_recognize",
     )
     assert tuple(greedoids.__all__) == expected
     assert len(greedoids.__all__) == len(set(greedoids.__all__))

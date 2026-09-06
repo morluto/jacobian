@@ -13,6 +13,7 @@ def test_exact_public_api_symbols() -> None:
         "factor_marginalize",
         "factor_multiply",
         "variable_elimination",
+        "verify_d_separation",
     )
     assert tuple(graphical_models.__all__) == expected
     assert len(graphical_models.__all__) == len(set(graphical_models.__all__))

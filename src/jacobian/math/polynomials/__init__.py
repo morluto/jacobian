@@ -50,11 +50,6 @@ def __getattr__(name: str) -> object:
         "ideal_equality",
         "ideal_membership_certificate",
         "ideal_normal_form",
-        "verify_groebner_basis",
-        "verify_ideal_containment",
-        "verify_ideal_equality",
-        "verify_ideal_membership_certificate",
-        "verify_ideal_normal_form",
     }:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     from jacobian.math.polynomials.ideals import operations
@@ -99,12 +94,7 @@ __all__ = [
     "rational_polynomial_integral",
     "resultant",
     "square_free_decomposition",
-    "verify_groebner_basis",
     "verify_hermite_reduction",
-    "verify_ideal_containment",
-    "verify_ideal_equality",
-    "verify_ideal_membership_certificate",
-    "verify_ideal_normal_form",
     "verify_polynomial_discriminant",
     "verify_polynomial_factorization",
     "verify_polynomial_gcd",

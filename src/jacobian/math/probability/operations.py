@@ -44,6 +44,7 @@ from jacobian.math.probability._gaussian import (
 )
 from jacobian.math.probability._gaussian_moments import gaussian_univariate_moment
 from jacobian.math.probability._models import (
+    MAX_INPUT_RATIONAL_DIGITS,
     MAX_RESULT_RATIONAL_DIGITS,
     _require_bounded_fraction,
     _require_strictly_increasing,

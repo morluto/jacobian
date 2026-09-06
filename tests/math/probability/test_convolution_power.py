@@ -9,6 +9,7 @@ from math import gcd, prod
 from time import perf_counter
 
 import pytest
+
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.probability._distribution import (

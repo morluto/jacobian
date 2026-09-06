@@ -249,6 +249,8 @@ class CongruenceRequest(_PartitionRequest):
 
 
 class CongruenceResult(StrictModel):
+    algebra: FiniteAlgebra
+    partition: tuple[CarrierBlock, ...]
     is_congruence: bool
     obstruction: str | None = None
     operation: int | None = Field(default=None, ge=0)

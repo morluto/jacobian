@@ -322,6 +322,7 @@ def homomorphism_profile(
 
 def _compatibility_violation(
     algebra: FiniteAlgebra,
+    partition: tuple[tuple[int, ...], ...],
     block_of: dict[int, int],
     n: int,
     op_idx: int,
@@ -341,6 +342,8 @@ def _compatibility_violation(
     if block_of[fx] == block_of[fy]:
         return None
     return CongruenceResult(
+        algebra=algebra,
+        partition=partition,
         is_congruence=False,
         obstruction="compatibility_violation",
         operation=op_idx,
@@ -351,6 +354,7 @@ def _compatibility_violation(
 
 def _check_compatibility(
     algebra: FiniteAlgebra,
+    partition: tuple[tuple[int, ...], ...],
     block_of: dict[int, int],
     n: int,
 ) -> CongruenceResult | None:
@@ -369,7 +373,7 @@ def _check_compatibility(
                     y_list[j] = y_elem
                     y: tuple[int, ...] = tuple(y_list)
                     violation = _compatibility_violation(
-                        algebra, block_of, n, op_idx, symbol, x, y
+                        algebra, partition, block_of, n, op_idx, symbol, x, y
                     )
                     if violation is not None:
                         return violation
@@ -399,11 +403,17 @@ def _congruence_check_unchecked(
             block_of[elem] = block_idx
     if len(block_of) != n:
         return CongruenceResult(
+            algebra=algebra,
+            partition=partition,
             is_congruence=False,
             obstruction="partition does not cover carrier",
         )
-    result = _check_compatibility(algebra, block_of, n)
-    return result if result is not None else CongruenceResult(is_congruence=True)
+    result = _check_compatibility(algebra, partition, block_of, n)
+    return (
+        result
+        if result is not None
+        else CongruenceResult(algebra=algebra, partition=partition, is_congruence=True)
+    )
 
 
 def quotient(

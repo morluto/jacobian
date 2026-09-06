@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import NoReturn
 
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._periodic_kernel import (
     _ExecutionPlan,
@@ -21,7 +21,10 @@ from jacobian.math.number_theory.periodic_prefix_count._models import (
     PeriodicUnionPrefixCountResult,
 )
 
-__all__ = ["compute_periodic_union_prefix_count"]
+__all__ = [
+    "compute_periodic_union_prefix_count",
+    "verify_periodic_union_prefix_count",
+]
 
 
 def _reject(
@@ -134,14 +137,25 @@ def compute_periodic_union_prefix_count(
         partial_union_count = cutoff % period - partial_union_count
     q, _remainder = divmod(cutoff, period)
     count = q * occupied_count + partial_union_count
-    cutoff_text = format_canonical_integer(cutoff)
-    period_text = format_canonical_integer(period)
-    occupied_text = format_canonical_integer(occupied_count)
-    count_text = format_canonical_integer(count)
     return PeriodicUnionPrefixCountResult(
         source=source,
-        cutoff=cutoff_text,
-        common_period=period_text,
-        occupied_count=occupied_text,
-        count=count_text,
+        cutoff=cutoff,
+        common_period=period,
+        occupied_count=occupied_count,
+        count=count,
+    )
+
+
+def verify_periodic_union_prefix_count(
+    claim: PeriodicUnionPrefixCountResult,
+) -> bool:
+    try:
+        expected = compute_periodic_union_prefix_count(claim.source, claim.cutoff)
+    except Exception:
+        return False
+    return (
+        claim.cutoff == expected.cutoff
+        and claim.common_period == expected.common_period
+        and claim.occupied_count == expected.occupied_count
+        and claim.count == expected.count
     )

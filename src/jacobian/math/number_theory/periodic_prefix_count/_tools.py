@@ -1,6 +1,5 @@
 """Periodic union prefix count operation declarations."""
 
-from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.number_theory.periodic_prefix_count._models import (
     MAX_PREFIX_CUTOFF_DIGITS,
@@ -9,6 +8,7 @@ from jacobian.math.number_theory.periodic_prefix_count._models import (
 )
 from jacobian.math.number_theory.periodic_prefix_count.operations import (
     compute_periodic_union_prefix_count,
+    verify_periodic_union_prefix_count,
 )
 
 
@@ -16,7 +16,7 @@ def compute_periodic_union_prefix_count_op(
     request: PeriodicUnionPrefixCountRequest,
 ) -> PeriodicUnionPrefixCountResult:
     return compute_periodic_union_prefix_count(
-        request.source, parse_canonical_integer(request.cutoff)
+        request.source, request.cutoff
     )
 
 
@@ -53,4 +53,4 @@ TOOLS: MathTools = (
     ),
 )
 
-__all__ = ["TOOLS"]
+__all__ = ["TOOLS", "verify_periodic_union_prefix_count"]

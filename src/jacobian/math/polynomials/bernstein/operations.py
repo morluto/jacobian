@@ -28,6 +28,27 @@ MAX_REPRESENTATION_CHARS = 4_000_000
 MAX_WEIGHTED_WORK = 20_000_000
 MAX_COMPONENT_DIGITS = 8192
 BERNSTEIN_WALL_SECONDS = 120.0
+_TRUSTED_TENSOR_TOKEN = object()
+
+
+def _mark_trusted_tensor(
+    value: RationalBernsteinPolynomial,
+) -> RationalBernsteinPolynomial:
+    """Retain native producer provenance outside the serialized value."""
+    object.__setattr__(
+        value,
+        "_jacobian_bernstein_trust",
+        (_TRUSTED_TENSOR_TOKEN, id(value)),
+    )
+    return value
+
+
+def _is_trusted_tensor(value: RationalBernsteinPolynomial) -> bool:
+    """Recognize this exact native object; copies and JSON values are untrusted."""
+    return value.__dict__.get("_jacobian_bernstein_trust") == (
+        _TRUSTED_TENSOR_TOKEN,
+        id(value),
+    )
 
 
 def _reject(message: str) -> None:
@@ -111,8 +132,11 @@ def _admit(
             + _denominator_digits(interval.upper.den)
         )
         if e:
-            binomial_denominator = lcm(*(comb(m, j) for j in range(e + 1)))
-            denominator += _integer_digits(binomial_denominator)
+            # Every denominator in comb(e,j)/comb(m,j) divides a product of
+            # at most e positive integers no larger than m.  This deliberately
+            # bounds the common denominator without constructing the LCM of a
+            # potentially huge binomial row during admission.
+            denominator += e * _integer_digits(max(1, m))
         # |a|+|b-a| < 3*10**endpoint; the binomial ratio is at most one.
         magnitude += e * (endpoint + 1)
         binomial_digits += e * len(str(max(1, m)))
@@ -146,7 +170,7 @@ def _admit(
     # so their work is proportional to the tensor size and axis widths rather
     # than to the product of tensor size and source support.
     if dense:
-        work = size * (sum(m + 1 for m in multidegree) + 1)
+        work = size * (sum(e + 1 for e in degrees) + 1)
     else:
         work = size * (len(terms) * (dimension + 1) + 1)
     # Each power-row entry performs bounded rational powers and cross-products;
@@ -261,11 +285,13 @@ def bernstein_coefficients(
             )
             for value in values
         ]
-        result = RationalBernsteinPolynomial.model_construct(
-            polynomial=polynomial,
-            box=box,
-            multidegree=multidegree,
-            coefficients=tuple(coefficients),
+        result = _mark_trusted_tensor(
+            RationalBernsteinPolynomial.model_construct(
+                polynomial=polynomial,
+                box=box,
+                multidegree=multidegree,
+                coefficients=tuple(coefficients),
+            )
         )
         _checkpoint(deadline)
         return result
@@ -285,11 +311,13 @@ def bernstein_coefficients(
                 den=format_canonical_integer(int(value.denominator)),
             )
         )
-    result = RationalBernsteinPolynomial.model_construct(
-        polynomial=polynomial,
-        box=box,
-        multidegree=multidegree,
-        coefficients=tuple(coefficients),
+    result = _mark_trusted_tensor(
+        RationalBernsteinPolynomial.model_construct(
+            polynomial=polynomial,
+            box=box,
+            multidegree=multidegree,
+            coefficients=tuple(coefficients),
+        )
     )
 
     _checkpoint(deadline)
@@ -455,11 +483,13 @@ def _restrict_trusted(
         _checkpoint(deadline)
         values = _restrict_axis(values, shape, axis, alpha, beta)
     coefficients = tuple(CanonicalRational.from_fraction(value) for value in values)
-    result = RationalBernsteinPolynomial.model_construct(
-        polynomial=parent.polynomial,
-        box=child,
-        multidegree=parent.multidegree,
-        coefficients=coefficients,
+    result = _mark_trusted_tensor(
+        RationalBernsteinPolynomial.model_construct(
+            polynomial=parent.polynomial,
+            box=child,
+            multidegree=parent.multidegree,
+            coefficients=coefficients,
+        )
     )
     _checkpoint(deadline)
     return result
@@ -470,7 +500,7 @@ def restrict_bernstein(
     child: RationalBox,
 ) -> RationalBernsteinPolynomial:
     """Restrict a source-bound Bernstein tensor to a rational subbox."""
-    if not verify_bernstein_coefficients(parent):
+    if not _is_trusted_tensor(parent) and not verify_bernstein_coefficients(parent):
         _reject("restriction parent coefficients do not match their source and box")
     return _restrict_trusted(parent, child)
 

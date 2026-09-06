@@ -194,6 +194,37 @@ def test_large_degree_elevation_uses_axis_maps_not_a_dense_global_matrix() -> No
     )
 
 
+def test_large_constant_tensor_is_charged_for_its_actual_source_degree() -> None:
+    payload = _fixture()
+    payload["multidegree"] = [4500, 0]
+    payload["polynomial"]["polynomial"]["terms"] = [
+        {"coefficient": _q(3), "exponents": [0, 0]}
+    ]
+    result = _run(payload)
+    assert len(result.coefficients) == 4501
+    assert all(coefficient.as_fraction() == 3 for coefficient in result.coefficients)
+
+
+def test_rejected_large_degree_does_not_expand_a_binomial_lcm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.polynomials.bernstein.operations as operations
+
+    payload = _fixture()
+    payload["multidegree"] = [16384, 0]
+    payload["polynomial"]["polynomial"]["terms"] = [
+        {"coefficient": _q(1), "exponents": [8192, 0]}
+    ]
+    request = BernsteinRequest.model_validate(payload)
+    monkeypatch.setattr(
+        operations,
+        "comb",
+        lambda *_args: pytest.fail("admission expanded a binomial row"),
+    )
+    with pytest.raises(OperationDomainValidationError):
+        operations._admit(request.polynomial, request.box, request.multidegree)
+
+
 def test_carrier_rejects_a_point_box() -> None:
     result = _run(_fixture())
     wire = result.model_dump(mode="json")
@@ -393,6 +424,50 @@ def test_restriction_preserves_zero_tensor_on_a_degenerate_degree_profile() -> N
     restricted = restrict_bernstein(parent, child)
     assert len(restricted.coefficients) == 12
     assert all(value.as_fraction() == 0 for value in restricted.coefficients)
+
+
+def test_native_restriction_reuses_the_trusted_tensor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.polynomials.bernstein.operations as operations
+
+    request = BernsteinRequest.model_validate(_fixture())
+    parent = bernstein_coefficients(
+        request.polynomial, request.box, request.multidegree
+    )
+    child = RationalBox.model_validate(_box([((1, 3), (2, 3)), ((1, 5), (4, 5))]))
+    monkeypatch.setattr(
+        operations,
+        "verify_bernstein_coefficients",
+        lambda _claim: pytest.fail("native tensor was recomputed"),
+    )
+    restricted = operations.restrict_bernstein(parent, child)
+    assert restricted.polynomial == parent.polynomial
+
+
+def test_copies_and_serialized_tensors_cross_the_recognition_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.polynomials.bernstein.operations as operations
+
+    request = BernsteinRequest.model_validate(_fixture())
+    parent = bernstein_coefficients(
+        request.polynomial, request.box, request.multidegree
+    )
+    child = RationalBox.model_validate(_box([((1, 3), (2, 3)), ((1, 5), (4, 5))]))
+    calls = 0
+
+    def recognize(_claim: RationalBernsteinPolynomial) -> bool:
+        nonlocal calls
+        calls += 1
+        return True
+
+    monkeypatch.setattr(operations, "verify_bernstein_coefficients", recognize)
+    operations.restrict_bernstein(parent.model_copy(), child)
+    operations.restrict_bernstein(
+        RationalBernsteinPolynomial.model_validate_json(parent.model_dump_json()), child
+    )
+    assert calls == 2
 
 
 @pytest.mark.parametrize("mutation", ["parent", "child", "outside", "axis"])

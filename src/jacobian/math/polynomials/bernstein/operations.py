@@ -14,7 +14,7 @@ from jacobian._execution import (
     current_request_execution,
     request_checkpoint,
 )
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis.intervals import RationalBox
 from jacobian.math.polynomials.bernstein.values import (
@@ -44,6 +44,14 @@ def _digits(value: str) -> int:
 
 def _denominator_digits(value: str) -> int:
     return 0 if value == "1" else len(value)
+
+
+def _integer_digits(value: int) -> int:
+    return len(format_canonical_integer(abs(value)))
+
+
+def _fraction_height(value: Fraction) -> int:
+    return max(_integer_digits(value.numerator), _integer_digits(value.denominator))
 
 
 def _admit(
@@ -86,11 +94,13 @@ def _admit(
         if _denominator_digits(term.coefficient.den) > MAX_COMPONENT_DIGITS:
             source_denominator_digits = MAX_COMPONENT_DIGITS + 1
             break
-        source_denominator = lcm(source_denominator, int(term.coefficient.den))
+        source_denominator = lcm(
+            source_denominator, parse_canonical_integer(term.coefficient.den)
+        )
         if source_denominator.bit_length() > MAX_COMPONENT_DIGITS * 4:
             source_denominator_digits = MAX_COMPONENT_DIGITS + 1
             break
-        source_denominator_digits = len(str(source_denominator))
+        source_denominator_digits = _integer_digits(source_denominator)
     denominator = source_denominator_digits
     magnitude = max((_digits(t.coefficient.num) for t in terms), default=1)
     binomial_digits = 0
@@ -102,7 +112,7 @@ def _admit(
         )
         if e:
             binomial_denominator = lcm(*(comb(m, j) for j in range(e + 1)))
-            denominator += len(str(binomial_denominator))
+            denominator += _integer_digits(binomial_denominator)
         # |a|+|b-a| < 3*10**endpoint; the binomial ratio is at most one.
         magnitude += e * (endpoint + 1)
         binomial_digits += e * len(str(max(1, m)))
@@ -304,7 +314,7 @@ def _restriction_admit(
     if child.variables != parent.box.variables:
         _reject("restriction child must follow the parent's complete ordered axes")
     ratios: list[Fraction] = []
-    max_height = 1
+    split_parameter_height = 1
     for parent_interval, child_interval in zip(
         parent.box.intervals, child.intervals, strict=True
     ):
@@ -321,29 +331,52 @@ def _restriction_admit(
         alpha = (child_lower - parent_lower) / (parent_upper - parent_lower)
         beta = (child_upper - parent_lower) / (parent_upper - parent_lower)
         ratios.extend((alpha, beta))
-        max_height = max(
-            max_height,
-            len(str(abs(alpha.numerator))),
-            len(str(alpha.denominator)),
-            len(str(abs(beta.numerator))),
-            len(str(beta.denominator)),
+        split_parameter_height = max(
+            split_parameter_height,
+            _fraction_height(alpha),
+            _fraction_height(beta),
         )
-    coefficient_height = max(
-        max(
-            len(value.num.lstrip("-")),
-            len(value.den),
+        if alpha != 0 and beta != 1:
+            split_parameter_height = max(
+                split_parameter_height,
+                _fraction_height((beta - alpha) / (1 - alpha)),
+            )
+
+    # All input coefficients can be lifted to one common denominator. Each
+    # de Casteljau pass preserves that shared denominator apart from one
+    # factor of the split-parameter denominator per level. There are at most
+    # two triangular passes on each axis. This bounds intermediates without
+    # multiplying unrelated reduced denominators at every interpolation.
+    common_denominator = 1
+    for coefficient in parent.coefficients:
+        common_denominator = lcm(
+            common_denominator, parse_canonical_integer(coefficient.den)
         )
-        for value in parent.coefficients
+        if common_denominator.bit_length() > MAX_COMPONENT_DIGITS * 4:
+            _reject(
+                "Bernstein restriction rational growth exceeds the 8192-digit envelope"
+            )
+    common_denominator_digits = _integer_digits(common_denominator)
+    lifted_numerator_digits = max(
+        _digits(coefficient.num)
+        + common_denominator_digits
+        - _denominator_digits(coefficient.den)
+        for coefficient in parent.coefficients
     )
-    # Each de Casteljau level introduces one ratio cross-product and one
-    # addition.  Account for both the ratio digits and the additions in the
-    # output-component envelope before allocating the restricted tensor.
-    degree_height = sum(m * (max_height + 1) + m for m in parent.multidegree)
-    output_height = coefficient_height + degree_height + len(parent.multidegree) + 2
+    parameter_growth = sum(
+        2 * degree * (split_parameter_height + 1) for degree in parent.multidegree
+    )
+    summation_growth = _integer_digits(prod(m + 1 for m in parent.multidegree))
+    output_height = max(
+        common_denominator_digits + parameter_growth,
+        lifted_numerator_digits + parameter_growth + summation_growth,
+    )
     if output_height > MAX_COMPONENT_DIGITS:
         _reject("Bernstein restriction rational growth exceeds the 8192-digit envelope")
     size = prod(m + 1 for m in parent.multidegree)
-    work = size * (sum(m + 1 for m in parent.multidegree) + 1)
+    # Two triangular passes per axis, each interpolation performing two
+    # multiplications and one addition.
+    work = size * (6 * sum(m + 1 for m in parent.multidegree) + 1)
     if work * (1 + output_height // 64) ** 2 > MAX_WEIGHTED_WORK:
         _reject("Bernstein restriction exceeds the height-weighted arithmetic budget")
     return tuple(ratios)

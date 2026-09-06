@@ -9,6 +9,7 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.path_decomposition._models import PathDecompositionResult
 from jacobian.math.graphs.path_decomposition.operations import (
     compute_minimum_path_decomposition,
+    verify_path_decomposition,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -154,7 +155,7 @@ def test_result_bound_charges_only_active_path_vertices() -> None:
         {"path_count": 1, "paths": [["a", "b", "a"]]},
     ],
 )
-def test_result_requires_an_exact_source_edge_partition(payload_update: dict) -> None:
+def test_result_parsing_stays_structural(payload_update: dict) -> None:
     graph = _graph(["a", "b"], [("a", "b")])
     payload = {
         "graph": graph.model_dump(mode="json"),
@@ -164,3 +165,36 @@ def test_result_requires_an_exact_source_edge_partition(payload_update: dict) ->
     }
     with pytest.raises(ValidationError):
         PathDecompositionResult.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    "bad_paths",
+    [
+        [["a", "b"], ["a", "b"]],
+        [],
+    ],
+)
+def test_verifier_rejects_non_partition_claims(bad_paths: list) -> None:
+    graph = _graph(["a", "b"], [("a", "b")])
+    claim = PathDecompositionResult.model_validate(
+        {
+            "graph": graph.model_dump(mode="json"),
+            "path_count": len(bad_paths),
+            "paths": bad_paths,
+        }
+    )
+    assert not verify_path_decomposition(claim)
+
+
+def test_serialized_partition_claim_round_trip() -> None:
+    graph = _graph(["a", "b", "c"], [("a", "b"), ("b", "c")])
+    result = compute_minimum_path_decomposition(graph)
+    assert verify_path_decomposition(
+        PathDecompositionResult.model_validate_json(result.model_dump_json())
+    )
+    payload = result.model_dump(mode="json")
+    payload["paths"] = []
+    payload["path_count"] = 0
+    assert not verify_path_decomposition(
+        PathDecompositionResult.model_validate(payload)
+    )

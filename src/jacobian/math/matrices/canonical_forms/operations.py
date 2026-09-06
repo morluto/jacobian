@@ -18,7 +18,10 @@ from jacobian.math.matrices.canonical_forms._models import (
     MAX_MATRIX_POLYNOMIAL_DIGIT_WORK,
     MAX_MATRIX_POLYNOMIAL_SCALAR_PRODUCTS,
     InvariantFactorEntry,
+    MinimalPolynomialResult,
     MonicPolynomial,
+    PrimaryDecompositionResult,
+    RationalCanonicalFormResult,
     _polynomial_degree,
     _require_matrix_polynomial_output_budget,
     _validation_error,
@@ -41,6 +44,9 @@ __all__ = [
     "invariant_factors",
     "minimal_polynomial",
     "primary_decomposition",
+    "verify_minimal_polynomial",
+    "verify_primary_decomposition",
+    "verify_rational_canonical_form",
 ]
 
 RationalEntries = Sequence[Sequence[Fraction]]
@@ -532,3 +538,51 @@ def _primary_decomposition_components(
         tuple(_to_monic_polynomial(coefficient) for coefficient in components),
         _to_monic_polynomial(minimal_coefficients),
     )
+
+
+def verify_minimal_polynomial(claim: MinimalPolynomialResult) -> bool:
+    """Verify minimal and characteristic polynomials against the matrix."""
+
+    try:
+        minimal, characteristic = _minimal_polynomial_components(claim.matrix)
+        expected = MinimalPolynomialResult._from_kernel(
+            matrix=claim.matrix,
+            minimal_polynomial=minimal,
+            characteristic_polynomial=characteristic,
+        )
+        return expected == claim
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+
+
+def verify_rational_canonical_form(claim: RationalCanonicalFormResult) -> bool:
+    """Verify invariant factors and derived polynomials against the matrix."""
+
+    try:
+        factors, characteristic, minimal = _rational_canonical_components(
+            claim.matrix
+        )
+        expected = RationalCanonicalFormResult._from_kernel(
+            matrix=claim.matrix,
+            invariant_factors=factors,
+            characteristic_polynomial=characteristic,
+            minimal_polynomial=minimal,
+        )
+        return expected == claim
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+
+
+def verify_primary_decomposition(claim: PrimaryDecompositionResult) -> bool:
+    """Verify primary components and their product against the matrix."""
+
+    try:
+        components, minimal = _primary_decomposition_components(claim.matrix)
+        expected = PrimaryDecompositionResult._from_kernel(
+            matrix=claim.matrix,
+            components=components,
+            minimal_polynomial=minimal,
+        )
+        return expected == claim
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False

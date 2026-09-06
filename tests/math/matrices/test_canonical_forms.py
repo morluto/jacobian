@@ -12,6 +12,9 @@ from jacobian.math.matrices.canonical_forms import (
     invariant_factors,
     minimal_polynomial,
     primary_decomposition,
+    verify_minimal_polynomial,
+    verify_primary_decomposition,
+    verify_rational_canonical_form,
 )
 from jacobian.math.matrices.canonical_forms import operations as canonical_operations
 from jacobian.math.matrices.canonical_forms._models import (
@@ -464,6 +467,46 @@ def test_noncyclic_components_multiply_to_minimal_not_characteristic() -> None:
     assert _coeffs(result.minimal_polynomial) == [Fraction(0), Fraction(0), Fraction(1)]
     characteristic = _coeffs(compute_minimal_polynomial(req).characteristic_polynomial)
     assert len(characteristic) == 5  # t^4: degree four, distinct from minpoly
+
+
+def test_serialized_canonical_claims_verify_against_retained_matrix() -> None:
+    source = _diagonal("2", "3")
+
+    minimal = compute_minimal_polynomial(source)
+    decoded_minimal = type(minimal).model_validate_json(minimal.model_dump_json())
+    assert verify_minimal_polynomial(decoded_minimal)
+    minimal_payload = minimal.model_dump(mode="json")
+    minimal_payload["characteristic_polynomial"]["polynomial"]["terms"][2][
+        "coefficient"
+    ] = {
+        "num": "99",
+        "den": "1",
+    }
+    assert not verify_minimal_polynomial(type(minimal).model_validate(minimal_payload))
+
+    canonical = compute_rational_canonical_form(source)
+    decoded_canonical = type(canonical).model_validate_json(canonical.model_dump_json())
+    assert verify_rational_canonical_form(decoded_canonical)
+    canonical_payload = canonical.model_dump(mode="json")
+    canonical_payload["characteristic_polynomial"]["polynomial"]["terms"][2][
+        "coefficient"
+    ] = {
+        "num": "99",
+        "den": "1",
+    }
+    assert not verify_rational_canonical_form(
+        type(canonical).model_validate(canonical_payload)
+    )
+
+    primary = compute_primary_decomposition(source)
+    decoded_primary = type(primary).model_validate_json(primary.model_dump_json())
+    assert verify_primary_decomposition(decoded_primary)
+    primary_payload = primary.model_dump(mode="json")
+    primary_payload["components"][0]["polynomial"]["terms"][-1]["coefficient"] = {
+        "num": "99",
+        "den": "1",
+    }
+    assert not verify_primary_decomposition(type(primary).model_validate(primary_payload))
 
 
 def test_rational_canonical_form_rejects_structural_mutations() -> None:

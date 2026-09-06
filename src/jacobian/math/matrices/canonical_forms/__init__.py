@@ -14,6 +14,9 @@ from jacobian.math.matrices.canonical_forms.operations import (
     invariant_factors,
     minimal_polynomial,
     primary_decomposition,
+    verify_minimal_polynomial,
+    verify_primary_decomposition,
+    verify_rational_canonical_form,
 )
 
 __all__ = [
@@ -28,4 +31,7 @@ __all__ = [
     "invariant_factors",
     "minimal_polynomial",
     "primary_decomposition",
+    "verify_minimal_polynomial",
+    "verify_primary_decomposition",
+    "verify_rational_canonical_form",
 ]

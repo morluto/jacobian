@@ -13,12 +13,13 @@ from jacobian.math.algebra.affine_map_word_collision._models import (
     MAX_COMPOSITION_WORK,
     MAX_DEPTH,
     MAX_GENERATORS,
+    AffineMapFamily,
     AffineMapSpec,
     CollisionRow,
     WordCollisionProfileResult,
 )
 
-__all__ = ["compute_word_collision_profile"]
+__all__ = ["compute_word_collision_profile", "verify_word_collision_profile"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -276,8 +277,9 @@ def compute_word_collision_profile(
             )
         )
 
+    family = AffineMapFamily(generators=tuple(gen_specs))
     return WordCollisionProfileResult._from_kernel(
-        generators=tuple(gen_specs),
+        family=family,
         depth=depth,
         rows=tuple(rows),
     )
@@ -308,6 +310,20 @@ def _composed_words(
             )
 
     yield from visit((), Fraction(1), Fraction(0))
+
+
+def verify_word_collision_profile(claim: WordCollisionProfileResult) -> bool:
+    """Verify composed maps and complete collision multiplicities from the family."""
+
+    try:
+        generators = tuple(
+            (item.slope.as_fraction(), item.intercept.as_fraction())
+            for item in claim.family.generators
+        )
+        expected = compute_word_collision_profile(generators, claim.depth)
+        return expected.rows == claim.rows
+    except (ArithmeticError, TypeError, ValueError, OperationDomainValidationError):
+        return False
 
 
 def _compose_word(

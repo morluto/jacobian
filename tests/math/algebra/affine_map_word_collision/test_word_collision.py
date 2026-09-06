@@ -9,11 +9,13 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.algebra.affine_map_word_collision._models import (
+    AffineMapFamily,
     AffineMapSpec,
     WordCollisionProfileRequest,
 )
 from jacobian.math.algebra.affine_map_word_collision.operations import (
     compute_word_collision_profile,
+    verify_word_collision_profile,
 )
 
 
@@ -116,14 +118,28 @@ def test_rational_coefficients() -> None:
 def test_rejects_depth_zero() -> None:
     with pytest.raises(ValidationError):
         WordCollisionProfileRequest(
-            generators=(
-                AffineMapSpec(
-                    slope=CanonicalRational(num="1", den="1"),
-                    intercept=CanonicalRational(num="1", den="1"),
-                ),
+            family=AffineMapFamily(
+                generators=(
+                    AffineMapSpec(
+                        slope=CanonicalRational(num="1", den="1"),
+                        intercept=CanonicalRational(num="1", den="1"),
+                    ),
+                )
             ),
             depth=0,
         )
+
+
+def test_profile_source_round_trip_and_forged_multiplicity() -> None:
+    result = compute_word_collision_profile(
+        ((Fraction(1), Fraction(1)), (Fraction(1), Fraction(1))), 2
+    )
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert decoded.family.generators == result.family.generators
+    assert verify_word_collision_profile(decoded)
+    forged = decoded.model_dump(mode="json")
+    forged["rows"][0]["multiplicity"] += 1
+    assert not verify_word_collision_profile(type(result).model_validate(forged))
 
 
 def test_non_commuting_maps() -> None:

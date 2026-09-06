@@ -15,7 +15,8 @@ def compute_word_collision_profile_op(
 ) -> WordCollisionProfileResult:
 
     generators = tuple(
-        (g.slope.as_fraction(), g.intercept.as_fraction()) for g in request.generators
+        (g.slope.as_fraction(), g.intercept.as_fraction())
+        for g in request.family.generators
     )
     return compute_word_collision_profile(generators, request.depth)
 
@@ -40,16 +41,18 @@ TOOLS: MathTools = (
                 name="two_identity_maps",
                 description="Two copies of x->x+1 at depth 1 collide into one class.",
                 input={
-                    "generators": [
-                        {
-                            "slope": {"num": "1", "den": "1"},
-                            "intercept": {"num": "1", "den": "1"},
-                        },
-                        {
-                            "slope": {"num": "1", "den": "1"},
-                            "intercept": {"num": "1", "den": "1"},
-                        },
-                    ],
+                    "family": {
+                        "generators": [
+                            {
+                                "slope": {"num": "1", "den": "1"},
+                                "intercept": {"num": "1", "den": "1"},
+                            },
+                            {
+                                "slope": {"num": "1", "den": "1"},
+                                "intercept": {"num": "1", "den": "1"},
+                            },
+                        ]
+                    },
                     "depth": 1,
                 },
             ),

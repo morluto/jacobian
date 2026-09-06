@@ -98,7 +98,13 @@ def verify_gram(claim: GramResult) -> bool:
         return claim.gram.entries == tuple(
             tuple(format_canonical_integer(entry) for entry in row) for row in expected
         )
-    except (TypeError, ValueError, OperationDomainValidationError):
+    except (
+        AttributeError,
+        IndexError,
+        TypeError,
+        ValueError,
+        OperationDomainValidationError,
+    ):
         return False
 
 

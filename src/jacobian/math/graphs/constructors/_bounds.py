@@ -85,6 +85,19 @@ def admit_triangle_profile(graph: SimpleUndirectedGraph) -> TriangleProfileAdmis
             len(adjacency[second]),
         )
     work_estimate = len(graph.vertices) + len(graph.edges) + common_neighbor_work
+    # Every retained triangle requires three edge-neighbor checks.  The degree
+    # estimate bounds those checks before the kernel constructs any result row.
+    triangle_row_upper_bound = common_neighbor_work // 3
+    if triangle_row_upper_bound > MAX_TRIANGLE_PROFILE_ROWS:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="graph.triangle_profile.row_bound",
+            message=(
+                "triangle profile can require up to "
+                f"{triangle_row_upper_bound:,} rows, exceeding the "
+                f"{MAX_TRIANGLE_PROFILE_ROWS:,}-row materialization bound"
+            ),
+        )
     if work_estimate > MAX_TRIANGLE_PROFILE_WORK_UNITS:
         raise OperationDomainValidationError(
             location=("graph",),

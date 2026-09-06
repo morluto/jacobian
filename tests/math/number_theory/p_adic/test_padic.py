@@ -65,6 +65,18 @@ class TestHenselRootLifting:
         assert not verify_hensel_root(result.model_copy(update={"root_mod_p": 1}))
         assert not verify_hensel_root(result.model_copy(update={"prime": 4}))
 
+    def test_rejects_negative_lifted_root_claim(self) -> None:
+        poly = IntegerPolynomial(coefficients=("1", "1"))
+        payload = {
+            "polynomial": poly.model_dump(mode="json"),
+            "prime": 3,
+            "root_mod_p": 2,
+            "precision": 2,
+            "lifted_root": "-1",
+        }
+        with pytest.raises(ValueError, match=r"lifted_root must be in 0..p\^k - 1"):
+            HenselRootResult.model_validate(payload)
+
     def test_lift_mod_p_squared(self) -> None:
         """Lift root to mod p^2."""
         poly = IntegerPolynomial(coefficients=("1", "0", "0", "-1"))  # x^3 - 1

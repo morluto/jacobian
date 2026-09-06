@@ -77,7 +77,8 @@ class HenselRootResult(StrictModel):
             raise _validation_error(
                 "padic_arithmetic.root_out_of_range", "root_mod_p must be in 0..p-1"
             )
-        if parse_canonical_integer(self.lifted_root) >= self.prime**self.precision:
+        lifted = parse_canonical_integer(self.lifted_root)
+        if not 0 <= lifted < self.prime**self.precision:
             raise _validation_error(
                 "padic_arithmetic.lifted_root_out_of_range",
                 "lifted_root must be in 0..p^k - 1",

@@ -214,7 +214,8 @@ def verify_hensel_root(claim: HenselRootResult) -> bool:
     lifted = parse_canonical_integer(claim.lifted_root)
     modulus = claim.prime**claim.precision
     return (
-        lifted % claim.prime == claim.root_mod_p
+        0 <= lifted < modulus
+        and lifted % claim.prime == claim.root_mod_p
         and _eval_poly(coeffs, claim.root_mod_p, claim.prime) == 0
         and _eval_deriv(coeffs, claim.root_mod_p, claim.prime) != 0
         and _eval_poly(coeffs, lifted, modulus) == 0

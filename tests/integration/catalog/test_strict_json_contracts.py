@@ -60,6 +60,14 @@ def test_petri_firing_reports_successor_outside_marking_envelope() -> None:
     )
 
     assert result.output == {
+        "net": {
+            "place_count": 1,
+            "transition_count": 1,
+            "pre": [[0]],
+            "post": [[MAX_PETRI_ARC_WEIGHT]],
+        },
+        "marking": {"tokens": [MAX_PETRI_MARKING]},
+        "transition": 0,
         "status": "ESCAPES_DECLARED_ENVELOPE",
         "new_marking": None,
         "envelope_escape": [MAX_PETRI_MARKING + MAX_PETRI_ARC_WEIGHT],

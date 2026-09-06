@@ -45,17 +45,15 @@ class GraphReliabilityEdgeProbability(StrictModel):
         return self
 
 
-class GraphConnectionProbabilityRequest(StrictModel):
+class GraphReliabilitySource(StrictModel):
+    """Canonical graph, edge-axis probabilities, and terminal event source."""
+
     graph: SimpleUndirectedGraph
     edge_probabilities: tuple[GraphReliabilityEdgeProbability, ...] = Field(
         max_length=MAX_GRAPH_RELIABILITY_EDGES
     )
     terminals: tuple[str, str]
     event: Literal["TERMINALS_CONNECTED"] = "TERMINALS_CONNECTED"
-
-
-class GraphReliabilitySource(GraphConnectionProbabilityRequest):
-    """Canonical graph, edge-axis probabilities, and terminal event source."""
 
     @model_validator(mode="after")
     def require_bound_edge_axis(self) -> Self:
@@ -74,6 +72,10 @@ class GraphReliabilitySource(GraphConnectionProbabilityRequest):
         if len(self.graph.edges) > MAX_GRAPH_RELIABILITY_EDGES:
             raise _validation_error("reliability source exceeds the edge bound")
         return self
+
+
+class GraphConnectionProbabilityRequest(GraphReliabilitySource):
+    """Transport projection for a terminal-reliability source value."""
 
 
 class GraphReliabilityState(StrictModel):
@@ -243,30 +245,31 @@ def _terminals_connected(
 
 
 def compute_graph_connection_probability(
-    request: GraphConnectionProbabilityRequest,
+    request: GraphReliabilitySource,
 ) -> GraphConnectionProbabilityResult:
     """Compute exact terminal connectivity over every undirected edge subset."""
 
     from flint import fmpq
 
-    probabilities, state_count = _admit_graph_connection_request(request)
-    edge_count = len(request.graph.edges)
+    source = GraphReliabilitySource.model_validate(request.model_dump())
+    probabilities, state_count = _admit_graph_connection_request(source)
+    edge_count = len(source.graph.edges)
     states: list[GraphReliabilityState] = []
     connection_probability = fmpq(0)
     for state_index in range(state_count):
         open_edge_indices = tuple(
             index for index in range(edge_count) if state_index & (1 << index)
         )
-        open_edges = tuple(request.graph.edges[index] for index in open_edge_indices)
+        open_edges = tuple(source.graph.edges[index] for index in open_edge_indices)
         state_probability = fmpq(1)
         for index, probability in enumerate(probabilities):
             state_probability *= (
                 probability if state_index & (1 << index) else 1 - probability
             )
         connected = _terminals_connected(
-            request.graph.vertices,
+            source.graph.vertices,
             open_edges,
-            request.terminals,
+            source.terminals,
         )
         if connected:
             connection_probability += state_probability
@@ -279,15 +282,10 @@ def compute_graph_connection_probability(
             )
         )
     return GraphConnectionProbabilityResult._from_kernel(
-        source=GraphReliabilitySource(
-            graph=request.graph,
-            edge_probabilities=request.edge_probabilities,
-            terminals=request.terminals,
-            event=request.event,
-        ),
-        terminals=request.terminals,
+        source=source,
+        terminals=source.terminals,
         connection_probability=_wire(connection_probability),
-        edge_count=len(request.graph.edges),
+        edge_count=len(source.graph.edges),
         visited_states=state_count,
         states=tuple(states),
     )
@@ -299,14 +297,7 @@ def verify_graph_connection_probability(
     """Verify the reliability ledger and aggregate claim against its source."""
 
     try:
-        expected = compute_graph_connection_probability(
-            GraphConnectionProbabilityRequest(
-                graph=claim.source.graph,
-                edge_probabilities=claim.source.edge_probabilities,
-                terminals=claim.source.terminals,
-                event=claim.source.event,
-            )
-        )
+        expected = compute_graph_connection_probability(claim.source)
         return expected == claim
     except (TypeError, ValueError):
         return False

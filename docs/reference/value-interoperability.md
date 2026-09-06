@@ -80,6 +80,51 @@ leave a consumer trusting the property that its former constructor checked.
 
 ## Schema and conversion rules
 
+### Native integers and JSON encoding
+
+Serialization makes a value transferable across a process or language boundary,
+or persistable for later use; it is not needed merely to perform arithmetic in
+Python. Decimal strings address a specific interoperability problem: ordinary
+JavaScript JSON consumers can round large JSON numbers. A decimal string keeps
+every digit until the consumer decodes it into an exact integer.
+
+This is separate from a mathematical library's internal representation.
+[SymPy uses exact `Integer` objects](https://docs.sympy.org/latest/modules/core.html#sympy.core.numbers.Integer),
+not decimal strings for arithmetic.
+[NumPy's usual integer types are fixed-width and can overflow](https://numpy.org/doc/stable/user/basics.types.html#overflow-errors);
+its standard array persistence uses the
+[binary `.npy` format](https://numpy.org/doc/stable/reference/generated/numpy.save.html).
+Neither library requires mathematical values to be stored as JSON strings.
+
+The preferred design is one domain-owned mathematical value type with:
+
+- Exact integers in Python.
+- Canonical decimal strings when serialized to JSON.
+- Explicit validation and decoding back to exact integers when reading JSON.
+
+This keeps native arithmetic, comparisons, and tests numeric while preserving
+lossless producer-consumer composition across JSON. It does not require
+parallel native and wire mathematical value classes.
+
+The current `CanonicalInteger` is string-valued, so shared models declaring
+those fields also expose strings to Python callers. This describes the current
+implementation, not the preferred end state. Matching model fields directly to
+the wire encoding simplifies serialization but shifts conversion work onto
+native callers. JSON safety alone does not justify that tradeoff. Until those
+models are migrated, use their documented native constructors and accessors
+where available, and keep conversions out of mathematical kernels.
+
+Moving to native integer fields requires a coordinated migration of producers,
+consumers, validators, serializers, worker codecs, and schemas. Preserve the
+canonical JSON encoding and test both native and serialized composition; this
+documentation does not imply that migration has already happened.
+
+Test arithmetic with native exact values wherever the native API accepts them.
+Test serialization separately for canonical spelling, malformed inputs, and
+lossless round trips, and retain producer-consumer composition tests across the
+wire boundary. String encoding adds boundary tests; it should not require every
+mathematical test to construct JSON or compare textual numbers.
+
 Generate public schemas from the actual domain-owned request and result types.
 Required fields, defaults, literals, and result branches must agree with public
 parsing. Explain constraints that JSON Schema cannot express in descriptions

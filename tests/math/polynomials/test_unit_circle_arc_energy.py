@@ -168,6 +168,19 @@ def test_dense_degree_32_and_large_exact_integer_are_admitted() -> None:
     assert verify_unit_circle_arc_energy(large)
 
 
+def test_large_unwrapped_turn_is_reduced_before_cyclotomic_recurrence() -> None:
+    integer_part = 10**1000
+    large = energy(
+        (1, 1),
+        Fraction(integer_part, 3),
+        Fraction(integer_part + 1, 3),
+    )
+    reduced = energy((1, 1), Fraction(1, 3), Fraction(2, 3))
+    assert large.rational_part == reduced.rational_part
+    assert large.pi_inverse_coefficient == reduced.pi_inverse_coefficient
+    assert verify_unit_circle_arc_energy(large)
+
+
 def test_arc_admission_rejects_excessive_conductor() -> None:
     with pytest.raises(OperationDomainValidationError, match="conductor"):
         energy((1, 1), Fraction(0), Fraction(1, 33))

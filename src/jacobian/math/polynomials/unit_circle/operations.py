@@ -225,13 +225,14 @@ def _two_cosine_coordinates(exponent: int, conductor: int) -> tuple[Fraction, ..
 def _sine_coordinates(
     turn: CanonicalRational, shift: int, conductor: int
 ) -> tuple[Fraction, ...]:
-    exponent = (
-        conductor
-        * shift
-        * parse_canonical_integer(turn.num)
-        // parse_canonical_integer(turn.den)
-        - conductor // 4
+    denominator = parse_canonical_integer(turn.den)
+    # Only the endpoint phase modulo one enters the sine term.  Reduce before
+    # multiplying so an unwrapped turn with a large integer part cannot make
+    # recurrence work depend on its decimal height.
+    phase = (parse_canonical_integer(turn.num) % denominator) * (
+        conductor // denominator
     )
+    exponent = (shift * phase - conductor // 4) % conductor
     return _coordinate_scale(
         _two_cosine_coordinates(exponent, conductor), Fraction(1, 2)
     )

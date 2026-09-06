@@ -19,7 +19,9 @@ from jacobian.math.polynomials.vector_calculus._models import (
     CurlRequest,
     DirectionalDerivativeRequest,
     ScalarFieldRequest,
+    ScalarResult,
     VectorFieldRequest,
+    VectorResult,
 )
 from jacobian.math.polynomials.vector_calculus._tools import TOOLS
 from jacobian.math.polynomials.vector_calculus.operations import (
@@ -28,6 +30,11 @@ from jacobian.math.polynomials.vector_calculus.operations import (
     divergence,
     gradient,
     laplacian,
+    verify_curl,
+    verify_directional_derivative,
+    verify_divergence,
+    verify_gradient,
+    verify_laplacian,
 )
 
 
@@ -86,6 +93,51 @@ def test_gradient_returns_composable_polynomials() -> None:
     assert result.components == (
         _polynomial(("x", "y"), {(1, 0): 2}),
         _polynomial(("x", "y"), {(0, 1): 2}),
+    )
+
+
+def test_serialized_vector_calculus_claims_verify_retained_sources() -> None:
+    scalar = _polynomial(("x", "y"), {(2, 0): 1, (0, 2): 1})
+    vector = (
+        _polynomial(("x", "y", "z"), {(1, 0, 0): 1}),
+        _polynomial(("x", "y", "z"), {(0, 1, 0): 1}),
+        _polynomial(("x", "y", "z"), {(0, 0, 1): 1}),
+    )
+    direction = (
+        CanonicalRational(num="1", den="2"),
+        CanonicalRational(num="1", den="1"),
+    )
+    gradient_claim = gradient(scalar)
+    laplacian_claim = laplacian(scalar)
+    directional_claim = directional_derivative(scalar, direction)
+    divergence_claim = divergence(vector)
+    curl_claim = curl(vector)
+
+    assert verify_gradient(
+        VectorResult.model_validate_json(gradient_claim.model_dump_json())
+    )
+    assert verify_laplacian(
+        ScalarResult.model_validate_json(laplacian_claim.model_dump_json())
+    )
+    assert verify_directional_derivative(
+        ScalarResult.model_validate_json(directional_claim.model_dump_json())
+    )
+    assert verify_divergence(
+        ScalarResult.model_validate_json(divergence_claim.model_dump_json())
+    )
+    assert verify_curl(VectorResult.model_validate_json(curl_claim.model_dump_json()))
+    assert not verify_gradient(
+        gradient_claim.model_copy(update={"source_polynomial": laplacian_claim.result})
+    )
+    assert not verify_directional_derivative(
+        directional_claim.model_copy(
+            update={
+                "direction": (
+                    direction[0],
+                    CanonicalRational(num="2", den="1"),
+                )
+            }
+        )
     )
 
 

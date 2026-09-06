@@ -108,7 +108,8 @@ def gradient(polynomial: RationalPolynomial) -> VectorResult:
     _admit_scalar_field(polynomial)
     variables = polynomial.variables
     expression = rational_polynomial_to_sympy(polynomial).as_expr()
-    return VectorResult(
+    return VectorResult._from_kernel(
+        source_polynomial=polynomial,
         components=tuple(
             _wire(sympy.diff(expression, variable), variables)
             for variable in symbols_for_variables(variables)
@@ -127,7 +128,8 @@ def divergence(components: tuple[RationalPolynomial, ...]) -> ScalarResult:
             strict=True,
         )
     )
-    return ScalarResult(
+    return ScalarResult._from_kernel(
+        source_components=components,
         result=_wire(expression, variables),
     )
 
@@ -139,7 +141,8 @@ def curl(components: tuple[RationalPolynomial, ...]) -> VectorResult:
     variables = components[0].variables
     x, y, z = symbols_for_variables(variables)
     fx, fy, fz = _expressions(components)
-    return VectorResult(
+    return VectorResult._from_kernel(
+        source_components=components,
         components=(
             _wire(sympy.diff(fz, y) - sympy.diff(fy, z), variables),
             _wire(sympy.diff(fx, z) - sympy.diff(fz, x), variables),
@@ -156,7 +159,8 @@ def laplacian(polynomial: RationalPolynomial) -> ScalarResult:
         sympy.diff(expression, variable, 2)
         for variable in symbols_for_variables(variables)
     )
-    return ScalarResult(
+    return ScalarResult._from_kernel(
+        source_polynomial=polynomial,
         result=_wire(laplacian, variables),
     )
 
@@ -188,7 +192,9 @@ def directional_derivative(
     direction_values = (
         sympy.Rational(*coordinate.as_integer_ratio()) for coordinate in direction
     )
-    return ScalarResult(
+    return ScalarResult._from_kernel(
+        source_polynomial=polynomial,
+        direction=direction,
         result=_wire(
             sum(
                 derivative * coordinate
@@ -201,10 +207,60 @@ def directional_derivative(
     )
 
 
+def verify_gradient(claim: VectorResult) -> bool:
+    try:
+        if claim.source_polynomial is None:
+            return False
+        return gradient(claim.source_polynomial) == claim
+    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+        return False
+
+
+def verify_divergence(claim: ScalarResult) -> bool:
+    try:
+        if claim.source_components is None:
+            return False
+        return divergence(claim.source_components) == claim
+    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+        return False
+
+
+def verify_curl(claim: VectorResult) -> bool:
+    try:
+        if claim.source_components is None:
+            return False
+        return curl(claim.source_components) == claim
+    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+        return False
+
+
+def verify_laplacian(claim: ScalarResult) -> bool:
+    try:
+        if claim.source_polynomial is None:
+            return False
+        return laplacian(claim.source_polynomial) == claim
+    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+        return False
+
+
+def verify_directional_derivative(claim: ScalarResult) -> bool:
+    try:
+        if claim.source_polynomial is None or claim.direction is None:
+            return False
+        return directional_derivative(claim.source_polynomial, claim.direction) == claim
+    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+        return False
+
+
 __all__ = [
     "curl",
     "directional_derivative",
     "divergence",
     "gradient",
     "laplacian",
+    "verify_curl",
+    "verify_directional_derivative",
+    "verify_divergence",
+    "verify_gradient",
+    "verify_laplacian",
 ]

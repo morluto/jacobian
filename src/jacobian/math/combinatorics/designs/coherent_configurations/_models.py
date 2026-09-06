@@ -12,7 +12,6 @@ from jacobian.math.combinatorics.designs.coherent_configurations.values import (
     MAX_COHERENT_CONFIGURATION_POINTS,
     MAX_COHERENT_CONFIGURATION_RELATIONS,
     CoherentConfigurationInput,
-    FiniteCoherentConfiguration,
     PointLabel,
     RelationId,
 )
@@ -87,7 +86,7 @@ class CoherentConfigurationAnalyzeResult(StrictModel):
 
     configuration: CoherentConfigurationInput
     status: Literal["COHERENT_CONFIGURATION", "NOT_COHERENT"]
-    coherent_configuration: FiniteCoherentConfiguration | None = None
+    coherent_configuration: CoherentConfigurationInput | None = None
     fibers: tuple[Fiber, ...] = Field(max_length=MAX_COHERENT_CONFIGURATION_POINTS)
     transpose_map: tuple[TransposeRelation, ...] = Field(
         max_length=MAX_COHERENT_CONFIGURATION_RELATIONS
@@ -172,7 +171,7 @@ class CoherentConfigurationAnalyzeResult(StrictModel):
         *,
         configuration: CoherentConfigurationInput,
         status: Literal["COHERENT_CONFIGURATION", "NOT_COHERENT"],
-        coherent_configuration: FiniteCoherentConfiguration | None,
+        coherent_configuration: CoherentConfigurationInput | None,
         fibers: tuple[Fiber, ...],
         transpose_map: tuple[TransposeRelation, ...],
         intersection_numbers: tuple[IntersectionNumber, ...],

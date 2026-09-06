@@ -12,6 +12,7 @@ from jacobian.math.combinatorics.designs.coherent_configurations._models import 
 from jacobian.math.combinatorics.designs.coherent_configurations._tools import TOOLS
 from jacobian.math.combinatorics.designs.coherent_configurations.operations import (
     analyze_configuration,
+    verify_coherent_configuration,
 )
 from jacobian.math.combinatorics.designs.coherent_configurations.values import (
     MAX_POINT_LABEL_BYTES,
@@ -131,6 +132,11 @@ def test_complete_graph_rank_two_is_a_coherent_configuration() -> None:
     ) == (("diagonal", "diagonal"), ("edge", "edge"))
     assert len(result.intersection_numbers) == 8
     assert result.obstruction is None
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_coherent_configuration(decoded)
+    payload = decoded.model_dump(mode="json")
+    payload["intersection_numbers"][0]["value"] += 1
+    assert not verify_coherent_configuration(type(result).model_validate(payload))
 
 
 def test_thin_configuration_with_four_fibers_is_coherent() -> None:

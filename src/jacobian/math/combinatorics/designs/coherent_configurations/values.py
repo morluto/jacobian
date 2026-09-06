@@ -116,27 +116,12 @@ class CoherentConfigurationInput(StrictModel):
         return self
 
 
-class FiniteCoherentConfiguration(CoherentConfigurationInput):
-    """A kernel-established coherent configuration with canonical pair data."""
-
-    @classmethod
-    def _from_kernel(cls, source: CoherentConfigurationInput) -> Self:
-        """Construct a value after the exact owner-local coherence kernel passed."""
-
-        return cls.model_construct(
-            points=source.points,
-            relation_ids=source.relation_ids,
-            relation_matrix=source.relation_matrix,
-        )
-
-
 __all__ = [
     "MAX_ANALYSIS_WORK",
     "MAX_COHERENT_CONFIGURATION_POINTS",
     "MAX_COHERENT_CONFIGURATION_RELATIONS",
     "MAX_INTERSECTION_LOOKUPS_PER_PASS",
     "CoherentConfigurationInput",
-    "FiniteCoherentConfiguration",
     "PointLabel",
     "RelationId",
 ]

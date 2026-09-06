@@ -19,7 +19,6 @@ from ._models import (
 )
 from .values import (
     CoherentConfigurationInput,
-    FiniteCoherentConfiguration,
 )
 
 
@@ -266,7 +265,7 @@ def _computed_analysis_result(
     return CoherentConfigurationAnalyzeResult._from_kernel(
         configuration=source,
         status="COHERENT_CONFIGURATION",
-        coherent_configuration=FiniteCoherentConfiguration._from_kernel(source),
+        coherent_configuration=source,
         fibers=tuple(
             Fiber(relation_id=fibre.relation_id, points=fibre.points)
             for fibre in data.fibres
@@ -307,4 +306,13 @@ def analyze_configuration(
     return _computed_analysis_result(configuration, data)
 
 
-__all__ = ["analyze_configuration"]
+def verify_coherent_configuration(claim: CoherentConfigurationAnalyzeResult) -> bool:
+    """Verify the complete coherence conclusion against its source table."""
+
+    try:
+        return analyze_configuration(claim.configuration) == claim
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+
+
+__all__ = ["analyze_configuration", "verify_coherent_configuration"]

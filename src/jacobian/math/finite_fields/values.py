@@ -220,41 +220,11 @@ class PaleyTournamentResult(StrictModel):
     """The directed Paley tournament bound to its exact field presentation."""
 
     presentation: FiniteFieldPresentation
+    vertex_axis: tuple[FiniteFieldElement, ...] = Field(min_length=2, max_length=65536)
     graph: DirectedGraph
     orientation: PaleyTournamentOrientation = (
         "ARC_X_TO_Y_IFF_Y_MINUS_X_IS_NONZERO_SQUARE"
     )
-
-    @model_validator(mode="after")
-    def bind_graph_to_presentation(self) -> Self:
-        if self.presentation.order % 4 != 3:
-            raise _validation_error(
-                "finite_field.paley_tournament_order_congruent_to_three_mod_four",
-                "Paley tournament requires field order congruent to 3 modulo 4",
-            )
-        if self.graph.vertex_count != self.presentation.order:
-            raise _validation_error(
-                "finite_field.paley_tournament_vertex_count_matches_field_order",
-                "Paley tournament vertex count must equal the field order",
-            )
-        expected_edges = self.presentation.order * (self.presentation.order - 1) // 2
-        if len(self.graph.edges) != expected_edges:
-            raise _validation_error(
-                "finite_field.paley_tournament_complete_arc_count",
-                "Paley tournament must contain one arc per unordered vertex pair",
-            )
-        if self.graph.edges != tuple(sorted(self.graph.edges)):
-            raise _validation_error(
-                "finite_field.paley_tournament_lexicographic_arcs",
-                "Paley tournament arcs must be lexicographically ordered",
-            )
-        unordered_pairs = {tuple(sorted(edge)) for edge in self.graph.edges}
-        if len(unordered_pairs) != expected_edges:
-            raise _validation_error(
-                "finite_field.paley_tournament_one_orientation_per_vertex_pair",
-                "Paley tournament must orient every unordered vertex pair exactly once",
-            )
-        return self
 
 
 class Axis(StrictModel):

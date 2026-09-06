@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields import (
@@ -12,6 +11,7 @@ from jacobian.math.finite_fields import (
     _flint,
     finite_field,
     paley_tournament,
+    verify_paley_tournament,
 )
 
 pytestmark = pytest.mark.requires_backend("flint")
@@ -56,11 +56,13 @@ def test_f3_is_the_directed_three_cycle() -> None:
     result = paley_tournament(finite_field(3, (0, 1)))
 
     assert result.graph.vertex_count == 3
+    assert tuple(value.coordinates for value in result.vertex_axis) == ((0,), (1,), (2,))
     assert result.graph.edges == ((0, 1), (1, 2), (2, 0))
     assert result.orientation == "ARC_X_TO_Y_IFF_Y_MINUS_X_IS_NONZERO_SQUARE"
     assert (
         PaleyTournamentResult.model_validate(result.model_dump(mode="json")) == result
     )
+    assert verify_paley_tournament(result)
 
 
 def test_f7_has_the_complete_quadratic_residue_orientation() -> None:
@@ -129,23 +131,24 @@ def test_presentation_metadata_is_not_charged_as_mathematical_output() -> None:
     assert result.presentation.generator == presentation.generator
 
 
-def test_result_rejects_wrong_source_binding_and_arc_order() -> None:
+def test_serialized_result_is_structural_and_publicly_verifiable() -> None:
     result = paley_tournament(finite_field(3, (0, 1)))
     payload = result.model_dump(mode="json")
     payload["graph"]["vertex_count"] = 4
-    with pytest.raises(ValidationError):
-        PaleyTournamentResult.model_validate(payload)
+    decoded = PaleyTournamentResult.model_validate(payload)
+    assert not verify_paley_tournament(decoded)
 
     payload = result.model_dump(mode="json")
     payload["graph"]["edges"] = [[0, 1], [1, 0], [2, 0]]
-    with pytest.raises(ValidationError) as error:
-        PaleyTournamentResult.model_validate(payload)
-    assert (
-        error.value.errors()[0]["type"]
-        == "finite_field.paley_tournament_one_orientation_per_vertex_pair"
-    )
+    decoded = PaleyTournamentResult.model_validate(payload)
+    assert not verify_paley_tournament(decoded)
 
     payload = result.model_dump(mode="json")
     payload["graph"]["edges"] = list(reversed(payload["graph"]["edges"]))
-    with pytest.raises(ValidationError):
-        PaleyTournamentResult.model_validate(payload)
+    decoded = PaleyTournamentResult.model_validate(payload)
+    assert not verify_paley_tournament(decoded)
+
+    payload = result.model_dump(mode="json")
+    payload["vertex_axis"][0]["coordinates"] = [1]
+    decoded = PaleyTournamentResult.model_validate(payload)
+    assert not verify_paley_tournament(decoded)

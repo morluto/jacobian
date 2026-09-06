@@ -348,9 +348,24 @@ def paley_tournament(
     )
     return PaleyTournamentResult(
         presentation=presentation,
+        vertex_axis=elements,
         graph=DirectedGraph(vertex_count=order, edges=edges),
         orientation=_PALEY_ORIENTATION,
     )
+
+
+def verify_paley_tournament(claim: PaleyTournamentResult) -> bool:
+    """Verify field-axis binding and every quadratic-residue arc."""
+
+    try:
+        expected = paley_tournament(claim.presentation)
+        return (
+            claim.vertex_axis == expected.vertex_axis
+            and claim.graph == expected.graph
+            and claim.orientation == expected.orientation
+        )
+    except Exception:
+        return False
 
 
 def _admit_restriction_shape(subspace: FiniteDimensionalSubspace) -> None:

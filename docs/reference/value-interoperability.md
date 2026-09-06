@@ -125,6 +125,52 @@ lossless round trips, and retain producer-consumer composition tests across the
 wire boundary. String encoding adds boundary tests; it should not require every
 mathematical test to construct JSON or compare textual numbers.
 
+#### Requirements for a native integer codec
+
+The following are migration requirements, not a claim that every current
+integer field or worker already implements them. Pydantic supports
+[separate Python and JSON validation](https://docs.pydantic.dev/latest/api/pydantic_core_schema/#pydantic_core.core_schema.json_or_python_schema)
+and JSON-only serialization on the same annotated native type.
+
+| Boundary | Required behavior for a migrated exact-integer field |
+| --- | --- |
+| Native construction and Python validation | Accept exact integers; reject booleans, floats, and decimal strings rather than silently coercing them. |
+| Python `model_dump()` | Retain integers for native consumers. |
+| JSON validation | Accept canonical ASCII decimal strings, validate spelling and digit bounds before conversion, and decode to integers. Reject JSON numbers for these fields even at small magnitudes. |
+| `model_dump(mode="json")` and `model_dump_json()` | Encode integers as canonical decimal strings at every magnitude. |
+
+For this split, `model_validate()` on an already-decoded wire dictionary is not
+equivalent to `model_validate_json()`: the former selects Python validation.
+Use the owning wire entry point for decoded transport payloads. Jacobian's
+`parse_operation_input()` selects JSON validation after strict JSON encoding;
+native callers should not serialize merely to construct native values. Check
+worker request and response codecs explicitly rather than assuming that the
+MCP path covers them.
+
+Publish request schemas with `mode="validation"` and result schemas with
+`mode="serialization"`; Pydantic documents these as
+[distinct schema modes](https://docs.pydantic.dev/latest/concepts/json_schema/#configuring-the-jsonschemamode).
+For migrated exact-integer fields, both describe strings even though Python
+fields hold integers. The generated schema and runtime validator must agree on
+spelling and digit limits. For example, a three-digit envelope accepts `"999"`
+and `"-999"`, but rejects `"9999"`. A four-character maximum alone does not
+express that rule: the extra character is allowed only for the minus sign.
+
+Keep three limits distinct: the interoperable JSON-number range, the structural
+cost of parsing and formatting a decimal value, and the operation's admitted
+arithmetic work. Python's
+[decimal-conversion guard](https://docs.python.org/3/library/stdtypes.html#integer-string-conversion-length-limitation)
+protects conversion cost; it is not an integer arithmetic ceiling. Using a
+conversion backend does not remove the need for bounded input and output.
+
+Before declaring a migration complete, test native and JSON round trips,
+nested and empty values, producer-consumer and worker composition, and schema
+agreement on accepted and rejected examples. Include values beyond the JSON
+safe-integer range and Python's configured decimal-conversion guard, positive
+and negative digit-boundary cases, and rejection of booleans, floats, leading
+zeros, plus signs, negative zero, whitespace, exponent notation, and non-ASCII
+digits. A standalone scalar round trip is not evidence of complete migration.
+
 Generate public schemas from the actual domain-owned request and result types.
 Required fields, defaults, literals, and result branches must agree with public
 parsing. Explain constraints that JSON Schema cannot express in descriptions

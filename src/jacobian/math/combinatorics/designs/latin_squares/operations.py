@@ -4,6 +4,8 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.designs.latin_squares._models import (
     LatinSquare,
     LatinSquareCandidate,
+    LatinSquareCheckResult,
+    OrthogonalityResult,
 )
 
 MAX_LATIN_CHECK_CELLS = 1_048_576
@@ -107,4 +109,23 @@ def _admit_latin_square(square: LatinSquare) -> None:
         )
 
 
-__all__ = ["is_latin_square", "orthogonality_profile", "transpose"]
+def verify_latin_square_check(claim: LatinSquareCheckResult) -> bool:
+    """Check the Latin-property relation carried by one result."""
+
+    return claim.is_latin is is_latin_square(claim.square)
+
+
+def verify_orthogonality(claim: OrthogonalityResult) -> bool:
+    """Check the aligned-pair relation carried by one result."""
+
+    is_orthogonal, pair_count = orthogonality_profile(claim.square_a, claim.square_b)
+    return claim.is_orthogonal is is_orthogonal and claim.pair_count == pair_count
+
+
+__all__ = [
+    "is_latin_square",
+    "orthogonality_profile",
+    "transpose",
+    "verify_latin_square_check",
+    "verify_orthogonality",
+]

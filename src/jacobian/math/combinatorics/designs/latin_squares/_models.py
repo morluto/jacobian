@@ -85,10 +85,17 @@ class OrthogonalityRequest(StrictModel):
 
 
 class LatinSquareCheckResult(StrictModel):
+    """A Latin-property claim bound to the candidate matrix it concerns."""
+
+    square: LatinSquareCandidate
     is_latin: bool
 
 
 class OrthogonalityResult(StrictModel):
+    """An orthogonality claim bound to its two aligned Latin-square carriers."""
+
+    square_a: LatinSquare
+    square_b: LatinSquare
     is_orthogonal: bool
     pair_count: int = Field(ge=0)
 

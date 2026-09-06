@@ -9,6 +9,8 @@ from jacobian.math.combinatorics.designs.latin_squares import (
     is_latin_square,
     orthogonality_profile,
     transpose,
+    verify_latin_square_check,
+    verify_orthogonality,
 )
 from jacobian.math.combinatorics.designs.latin_squares._models import (
     LatinSquare,
@@ -70,7 +72,11 @@ def test_latin_square_check_valid() -> None:
     request = LatinSquareRequest(square=_candidate_square(2, ((0, 1), (1, 0))))
     result = compute_latin_square_check(request)
     assert result.is_latin is True
+    assert result.square == request.square
     assert is_latin_square(request.square)
+    assert verify_latin_square_check(
+        result.model_validate_json(result.model_dump_json())
+    )
 
 
 def test_orthogonality_identical_not_orthogonal() -> None:
@@ -80,6 +86,10 @@ def test_orthogonality_identical_not_orthogonal() -> None:
     )
     result = compute_orthogonality(request)
     assert result.is_orthogonal is False
+    assert result.square_a == request.square_a
+    assert result.square_b == request.square_b
+    assert verify_orthogonality(result.model_validate_json(result.model_dump_json()))
+    assert not verify_orthogonality(result.model_copy(update={"pair_count": 4}))
 
 
 def test_orthogonality_orthogonal() -> None:
@@ -133,6 +143,8 @@ def test_check_accepts_non_latin_square() -> None:
     request = LatinSquareRequest(square=_candidate_square(2, ((0, 0), (1, 1))))
     result = compute_latin_square_check(request)
     assert result.is_latin is False
+    assert verify_latin_square_check(result)
+    assert not verify_latin_square_check(result.model_copy(update={"is_latin": True}))
 
 
 def test_operations_admit_materialized_squares_beyond_order_32() -> None:

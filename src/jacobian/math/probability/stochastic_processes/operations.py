@@ -277,6 +277,15 @@ def verify_doob_martingale(claim: DoobMartingaleResult) -> bool:
         if not isinstance(claim, DoobMartingaleResult):
             return False
         expected = doob_martingale(claim.space, claim.observations, claim.payoff)
+        if claim.martingale is None or any(
+            not isinstance(row, FiniteRandomVariable) for row in claim.martingale
+        ):
+            return False
+        return (
+            len(claim.martingale) == len(expected)
+            and all(row.space == claim.space for row in claim.martingale)
+            and tuple(row.values for row in claim.martingale) == expected
+        )
     except (
         AttributeError,
         ArithmeticError,
@@ -288,8 +297,3 @@ def verify_doob_martingale(claim: DoobMartingaleResult) -> bool:
         ValueError,
     ):
         return False
-    return (
-        len(claim.martingale) == len(expected)
-        and all(row.space == claim.space for row in claim.martingale)
-        and tuple(row.values for row in claim.martingale) == expected
-    )

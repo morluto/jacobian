@@ -219,6 +219,12 @@ class TestDoobMartingale:
         )
         assert not verify_doob_martingale(forged_payoff)
         assert not verify_doob_martingale(object())
+        assert not verify_doob_martingale(
+            decoded.model_copy(update={"martingale": None})
+        )
+        assert not verify_doob_martingale(
+            decoded.model_copy(update={"martingale": (object(),)})
+        )
         other_space = FiniteProbabilitySpace(samples=("H",), masses=(_q(1),))
         assert not verify_doob_martingale(
             decoded.model_copy(

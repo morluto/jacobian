@@ -71,6 +71,6 @@ def test_single_bag_empty_edge_profiles() -> None:
         type(rooted).model_validate(payload)
     occurrence = vertex_occurrences(source)
     payload = occurrence.model_dump()
-    payload["per_vertex"] = {"foreign": payload["per_vertex"]["a"]}
+    payload["occurrences"][0]["vertex"] = "foreign"
     with pytest.raises(ValidationError):
         type(occurrence).model_validate(payload)

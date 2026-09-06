@@ -49,6 +49,9 @@ class VertexOccurrencesRequest(StrictModel):
 
 
 class OccurrenceSubtree(StrictModel):
+    """Occurrence profile for one source-graph vertex."""
+
+    vertex: str
     nodes: tuple[str, ...]
     edges: tuple[tuple[str, str], ...]
     count: int = Field(ge=0)
@@ -61,14 +64,14 @@ class VertexOccurrencesResult(StrictModel):
 
     decomposition: TreeDecomposition
 
-    per_vertex: dict[str, OccurrenceSubtree]
+    occurrences: tuple[OccurrenceSubtree, ...]
 
     @model_validator(mode="after")
     def require_source_axes(self) -> Self:
-        if set(self.per_vertex) != set(self.decomposition.graph.vertices):
+        if tuple(row.vertex for row in self.occurrences) != self.decomposition.graph.vertices:
             raise ValueError("occurrences must cover the source graph vertex axis")
         nodes = set(self.decomposition.tree_nodes)
-        for row in self.per_vertex.values():
+        for row in self.occurrences:
             if (
                 not set(row.nodes) <= nodes
                 or not set(row.leaves) <= set(row.nodes)
@@ -78,6 +81,11 @@ class VertexOccurrencesResult(StrictModel):
                     "occurrence subtrees must use the source bag-node axis"
                 )
         return self
+
+    @property
+    def per_vertex(self) -> dict[str, OccurrenceSubtree]:
+        """Native mapping projection for callers that need keyed lookup."""
+        return {row.vertex: row for row in self.occurrences}
 
 
 class AdhesionsRequest(StrictModel):
@@ -116,34 +124,53 @@ class RerootRequest(StrictModel):
     root: str
 
 
+class RerootNode(StrictModel):
+    """One source-tree node's rooted profile."""
+
+    node: str
+    parent: str | None
+    children: tuple[str, ...]
+    depth: int = Field(ge=0)
+    path: tuple[str, ...]
+
+
 class RerootResult(StrictModel):
     """The rerooted decomposition with parent/children/depth/paths."""
 
     decomposition: TreeDecomposition
 
     root: str
-    parent: dict[str, str | None]
-    children: dict[str, tuple[str, ...]]
-    depth: dict[str, int]
-    paths: dict[str, tuple[str, ...]]
+    nodes: tuple[RerootNode, ...]
 
     @model_validator(mode="after")
     def require_source_axes(self) -> Self:
         nodes = set(self.decomposition.tree_nodes)
-        if self.root not in nodes or any(
-            set(mapping) != nodes
-            for mapping in (self.parent, self.children, self.depth, self.paths)
-        ):
+        if self.root not in nodes or tuple(row.node for row in self.nodes) != self.decomposition.tree_nodes:
             raise ValueError("rooted profiles must cover the source bag-node axis")
+        if any(row.parent is not None and row.parent not in nodes for row in self.nodes):
+            raise ValueError("rooted profile values must use source bag nodes")
         if any(
-            parent is not None and parent not in nodes
-            for parent in self.parent.values()
-        ) or any(
-            not set(row) <= nodes
-            for row in (*self.children.values(), *self.paths.values())
+            not set(row.children) <= nodes or not set(row.path) <= nodes
+            for row in self.nodes
         ):
             raise ValueError("rooted profile values must use source bag nodes")
         return self
+
+    @property
+    def parent(self) -> dict[str, str | None]:
+        return {row.node: row.parent for row in self.nodes}
+
+    @property
+    def children(self) -> dict[str, tuple[str, ...]]:
+        return {row.node: row.children for row in self.nodes}
+
+    @property
+    def depth(self) -> dict[str, int]:
+        return {row.node: row.depth for row in self.nodes}
+
+    @property
+    def paths(self) -> dict[str, tuple[str, ...]]:
+        return {row.node: row.path for row in self.nodes}
 
 
 class RestrictRequest(StrictModel):
@@ -199,6 +226,7 @@ __all__ = [
     "BagIntersectionGraphResult",
     "BagNode",
     "OccurrenceSubtree",
+    "RerootNode",
     "RerootRequest",
     "RerootResult",
     "RestrictRequest",

@@ -18,6 +18,7 @@ from ._models import (
     BagIntersectionGraphResult,
     BagNode,
     OccurrenceSubtree,
+    RerootNode,
     RerootResult,
     VertexOccurrencesResult,
     WidthResult,
@@ -114,6 +115,7 @@ def _occurrence_subtree(
             induced_degree[b] += 1
     leaves = tuple(td.tree_nodes[n] for n in nodes if induced_degree[n] <= 1)
     return OccurrenceSubtree(
+        vertex=vertex,
         nodes=tuple(td.tree_nodes[n] for n in nodes),
         edges=tuple(node_edges),
         count=len(nodes),
@@ -132,18 +134,17 @@ def vertex_occurrences(
     for a, b in int_edges:
         adjacency[a].append(b)
         adjacency[b].append(a)
-    per_vertex: dict[str, OccurrenceSubtree] = {}
+    occurrences: list[OccurrenceSubtree] = []
     for vertex in td.graph.vertices:
         containing = [i for i, bag in enumerate(td.bags) if vertex in bag]
         if not containing:
-            per_vertex[vertex] = OccurrenceSubtree(
+            occurrences.append(OccurrenceSubtree(
+                vertex=vertex,
                 nodes=(), edges=(), count=0, leaves=()
-            )
+            ))
             continue
-        per_vertex[vertex] = _occurrence_subtree(
-            td, adjacency, int_edges, vertex, containing
-        )
-    return VertexOccurrencesResult(decomposition=td, per_vertex=per_vertex)
+        occurrences.append(_occurrence_subtree(td, adjacency, int_edges, vertex, containing))
+    return VertexOccurrencesResult(decomposition=td, occurrences=tuple(occurrences))
 
 
 def adhesions(td: TreeDecomposition) -> AdhesionsResult:
@@ -253,10 +254,16 @@ def reroot(td: TreeDecomposition, root: str) -> RerootResult:
     return RerootResult(
         decomposition=td,
         root=root,
-        parent=parent_map,
-        children=children_map,
-        depth={td.tree_nodes[i]: depth[i] for i in depth},
-        paths={node: tuple(path) for node, path in paths.items()},
+        nodes=tuple(
+            RerootNode(
+                node=node,
+                parent=parent_map[node],
+                children=children_map[node],
+                depth=depth[node_index],
+                path=tuple(paths[node]),
+            )
+            for node_index, node in enumerate(td.tree_nodes)
+        ),
     )
 
 

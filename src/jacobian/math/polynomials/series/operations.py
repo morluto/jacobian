@@ -267,9 +267,10 @@ def verify_inverse(claim: SeriesInverseResult) -> bool:
             claim.source.truncation_order,
         )
         product[0] -= Fraction(1)
-        return all(value == 0 for value in product) and tuple(
-            _wire(value) for value in product
-        ) == claim.residual_coefficients
+        return (
+            all(value == 0 for value in product)
+            and tuple(_wire(value) for value in product) == claim.residual_coefficients
+        )
     except (TypeError, ValueError):
         return False
 
@@ -322,9 +323,11 @@ def verify_divide(claim: SeriesDivideResult) -> bool:
         differences = tuple(
             left - right for left, right in zip(residual, numerator, strict=True)
         )
-        return all(value == 0 for value in differences) and tuple(
-            _wire(value) for value in differences
-        ) == claim.residual_coefficients
+        return (
+            all(value == 0 for value in differences)
+            and tuple(_wire(value) for value in differences)
+            == claim.residual_coefficients
+        )
     except (TypeError, ValueError):
         return False
 
@@ -454,8 +457,7 @@ def verify_reversion(claim: SeriesReversionResult) -> bool:
         return (
             all(value == 0 for value in left_differences)
             and all(value == 0 for value in right_differences)
-            and tuple(_wire(value) for value in left_differences)
-            == claim.left_residual
+            and tuple(_wire(value) for value in left_differences) == claim.left_residual
             and tuple(_wire(value) for value in right_differences)
             == claim.right_residual
         )

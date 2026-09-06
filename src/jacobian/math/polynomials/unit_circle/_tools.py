@@ -10,7 +10,7 @@ from jacobian.math.polynomials.unit_circle._models import (
     UnitCircleArcEnergyResult,
 )
 from jacobian.math.polynomials.unit_circle.operations import (
-    fejer_riesz_factor,
+    real_symmetric_degree_one_fejer_riesz_factor,
     unit_circle_arc_energy,
 )
 
@@ -22,7 +22,7 @@ def _run_arc_energy(request: UnitCircleArcEnergyRequest) -> UnitCircleArcEnergyR
 
 
 def _run_fejer(source: HermitianLaurentPolynomial) -> FejerRieszFactorResult:
-    return fejer_riesz_factor(source)
+    return real_symmetric_degree_one_fejer_riesz_factor(source)
 
 
 POLYNOMIAL_ONE_PLUS_Z = {
@@ -64,25 +64,32 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
-        operation_id="polynomial.unit_circle.fejer_riesz_factor.compute",
-        title="Compute a normalized scalar Fejer-Riesz factor",
+        operation_id="polynomial.unit_circle.real_symmetric_degree_one_fejer_riesz_factor.compute",
+        title="Decide exact degree-one scalar Fejer-Riesz factorization",
         description=(
-            "Return the normalized outer factor for a bounded rational Hermitian "
-            "Laurent polynomial in the degree-one executable slice."
+            "For a real-symmetric rational Laurent polynomial supported on "
+            "{-1,0,1}, return its normalized exact outer factor, the zero "
+            "conclusion, or an exact cosine witness of negativity."
         ),
         request_type=HermitianLaurentPolynomial,
         result_type=FejerRieszFactorResult,
         run=_run_fejer,
-        tags=("polynomial", "unit-circle", "fejer-riesz", "exact"),
+        tags=(
+            "polynomial",
+            "unit-circle",
+            "fejer-riesz",
+            "degree-one",
+            "exact",
+        ),
         examples=(
             OperationExample(
                 name="boundary_zero",
                 description="The factor of 2-z-z^-1 is 1-z.",
                 input={
                     "terms": [
-                        {"exponent": 1, "coefficient": {"num": "-1", "den": "1"}},
-                        {"exponent": 0, "coefficient": {"num": "2", "den": "1"}},
                         {"exponent": -1, "coefficient": {"num": "-1", "den": "1"}},
+                        {"exponent": 0, "coefficient": {"num": "2", "den": "1"}},
+                        {"exponent": 1, "coefficient": {"num": "-1", "den": "1"}},
                     ]
                 },
             ),

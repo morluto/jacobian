@@ -10,12 +10,27 @@ import sympy
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import parse_canonical_integer
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.matrices._number_field import (
+    EmbeddedNumberFieldRecognitionError,
+    field_element_coordinates,
+    field_element_from_value,
+    field_element_sign,
+    recognize_real_simple_number_field,
+)
 from jacobian.math.number_theory.algebraic_numbers.real import (
     RationalIsolatingInterval,
     RealAlgebraicValue,
 )
 from jacobian.math.number_theory.number_fields import embeddings
+from jacobian.math.number_theory.number_fields._real_embedding_order import (
+    NumberFieldRealEmbeddingOrderError,
+    admit_real_embedding_difference,
+    recognize_real_embedding_record,
+)
 from jacobian.math.number_theory.number_fields.values import (
     RealNumberFieldEmbedding,
     RealNumberFieldEmbeddingRecord,
@@ -31,8 +46,14 @@ from jacobian.math.polynomials.unit_circle._models import (
     MAX_ARC_ENERGY_INPUT_COMPONENT_DIGITS,
     MAX_ARC_ENERGY_TERMS,
     MAX_ARC_ENERGY_TOTAL_DENOMINATOR_DIGITS,
+    MAX_FEJER_RIESZ_COMPONENT_DIGITS,
+    MAX_FEJER_RIESZ_DERIVED_DIGITS,
+    FejerRieszFactored,
     FejerRieszFactorResult,
+    FejerRieszNegative,
+    FejerRieszZero,
     HermitianLaurentPolynomial,
+    RealDegreeOnePolynomialFactor,
     UnitCircleArcEnergyResult,
 )
 from jacobian.math.polynomials.values import (
@@ -41,9 +62,9 @@ from jacobian.math.polynomials.values import (
 )
 
 __all__ = [
-    "fejer_riesz_factor",
+    "real_symmetric_degree_one_fejer_riesz_factor",
     "unit_circle_arc_energy",
-    "verify_fejer_riesz_factor",
+    "verify_real_symmetric_degree_one_fejer_riesz_factor",
     "verify_unit_circle_arc_energy",
 ]
 
@@ -310,37 +331,6 @@ def _minimal_polynomial(expr: Any) -> tuple[str, ...]:
     return coefficients
 
 
-def _embedding_record(
-    presentation: SimpleNumberFieldPresentation, expr: Any
-) -> RealNumberFieldEmbeddingRecord:
-    profile = embeddings(presentation)
-    approximation = float(sympy.N(expr, 30)) if expr != 0 else 0.0
-    for candidate in profile.records:
-        if not isinstance(candidate, RealNumberFieldEmbeddingRecord):
-            continue
-        lower = float(candidate.isolating_interval.lower.as_fraction())
-        upper = float(candidate.isolating_interval.upper.as_fraction())
-        if lower < approximation < upper:
-            return candidate
-    real_records = tuple(
-        candidate
-        for candidate in profile.records
-        if isinstance(candidate, RealNumberFieldEmbeddingRecord)
-    )
-    if not real_records:
-        raise OperationDomainValidationError(
-            location=("coefficient",),
-            code="polynomial.unit_circle.real_embedding",
-            message="the exact coefficient has no real embedding",
-        )
-    return min(
-        real_records,
-        key=lambda candidate: abs(
-            float(candidate.isolating_interval.lower.as_fraction()) - approximation
-        ),
-    )
-
-
 def _binding_in_field(
     expr: Any,
     alpha: Any,
@@ -368,13 +358,6 @@ def _binding_in_field(
         ),
         embedding_record=record,
     )
-
-
-def _binding(expr: Any) -> SimpleNumberFieldRealEmbeddingBinding:
-    coefficients = ("1", "0") if expr == 0 else _minimal_polynomial(expr)
-    presentation = SimpleNumberFieldPresentation(coefficients_descending=coefficients)
-    record = _embedding_record(presentation, expr)
-    return _binding_in_field(expr, expr, presentation, record)
 
 
 def _correlations(
@@ -459,6 +442,19 @@ def verify_unit_circle_arc_energy(claim: UnitCircleArcEnergyResult) -> bool:
 
 
 def _laurent_coefficients(source: HermitianLaurentPolynomial) -> dict[int, Fraction]:
+    for term in source.terms:
+        if (
+            len(term.coefficient.num.lstrip("-")) > MAX_FEJER_RIESZ_COMPONENT_DIGITS
+            or len(term.coefficient.den) > MAX_FEJER_RIESZ_COMPONENT_DIGITS
+        ):
+            raise OperationResourceAdmissionError(
+                location=("source", "terms"),
+                code="polynomial.unit_circle.fejer_riesz_component_bound",
+                message=(
+                    "Fejer-Riesz rational components exceed the 64-digit "
+                    "exact-growth bound"
+                ),
+            )
     values = {term.exponent: _fraction(term.coefficient) for term in source.terms}
     if any(
         values.get(-exponent, Fraction(0)) != coefficient
@@ -469,26 +465,56 @@ def _laurent_coefficients(source: HermitianLaurentPolynomial) -> dict[int, Fract
             code="polynomial.unit_circle.hermitian",
             message="Laurent coefficients must satisfy Hermitian symmetry",
         )
+    denominator = lcm(*(value.denominator for value in values.values()), 1)
+    lifted = tuple(
+        value.numerator * (denominator // value.denominator)
+        for value in values.values()
+    )
+    derived = (
+        denominator * denominator,
+        *(left * right for left in lifted for right in lifted),
+    )
+    if any(len(str(abs(value))) > MAX_FEJER_RIESZ_DERIVED_DIGITS for value in derived):
+        raise OperationResourceAdmissionError(
+            location=("source", "terms"),
+            code="polynomial.unit_circle.fejer_riesz_growth_bound",
+            message="Fejer-Riesz exact intermediate height exceeds its bound",
+        )
     return values
 
 
-def fejer_riesz_factor(source: HermitianLaurentPolynomial) -> FejerRieszFactorResult:
-    """Return the normalized scalar factor for the bounded degree-one slice."""
+def _largest_real_embedding_record(
+    presentation: SimpleNumberFieldPresentation,
+) -> RealNumberFieldEmbeddingRecord:
+    real_records = tuple(
+        record
+        for record in embeddings(presentation).records
+        if isinstance(record, RealNumberFieldEmbeddingRecord)
+    )
+    if not real_records:
+        raise RuntimeError("a positive real coefficient lost its exact embedding")
+    return max(real_records, key=lambda record: record.embedding.root.real_root_index)
+
+
+def real_symmetric_degree_one_fejer_riesz_factor(
+    source: HermitianLaurentPolynomial,
+) -> FejerRieszFactorResult:
+    """Decide and, when it exists, return the normalized degree-one factor."""
     coefficients = _laurent_coefficients(source)
     c0 = coefficients.get(0, Fraction(0))
     c1 = coefficients.get(1, Fraction(0))
     if not coefficients or (c0 == 0 and c1 == 0):
         return FejerRieszFactorResult(
             source=source,
-            factor_coefficients=(_binding(sympy.Integer(0)),),
-            field_degree=1,
-            zero_input=True,
+            conclusion=FejerRieszZero(),
         )
     if c0 < 0 or c0 * c0 < 4 * c1 * c1:
-        raise OperationDomainValidationError(
-            location=("source",),
-            code="polynomial.unit_circle.not_nonnegative",
-            message="the Laurent polynomial is negative somewhere on the unit circle",
+        witness = Fraction(0) if c1 == 0 else Fraction(-1 if c1 > 0 else 1)
+        return FejerRieszFactorResult(
+            source=source,
+            conclusion=FejerRieszNegative(
+                cosine_witness=CanonicalRational.from_fraction(witness)
+            ),
         )
     radical = (
         sympy.Rational(c0.numerator, c0.denominator) ** 2
@@ -502,22 +528,70 @@ def fejer_riesz_factor(source: HermitianLaurentPolynomial) -> FejerRieszFactorRe
     presentation = SimpleNumberFieldPresentation(
         coefficients_descending=_minimal_polynomial(alpha)
     )
-    record = _embedding_record(presentation, alpha)
+    record = _largest_real_embedding_record(presentation)
     factors = (
         _binding_in_field(alpha, alpha, presentation, record),
         _binding_in_field(sympy.simplify(b), alpha, presentation, record),
     )
     return FejerRieszFactorResult(
         source=source,
-        factor_coefficients=factors,
-        field_degree=factors[0].element.presentation.degree,
-        zero_input=False,
+        conclusion=FejerRieszFactored(
+            factor=RealDegreeOnePolynomialFactor(
+                embedding_record=record,
+                coefficients_ascending=(factors[0].element, factors[1].element),
+            )
+        ),
     )
 
 
-def verify_fejer_riesz_factor(claim: FejerRieszFactorResult) -> bool:
-    """Verify a normalized factor against its retained Laurent source."""
+def verify_real_symmetric_degree_one_fejer_riesz_factor(
+    claim: FejerRieszFactorResult,
+) -> bool:
+    """Independently verify the conclusion against its retained Laurent source."""
     try:
-        return fejer_riesz_factor(claim.source) == claim
-    except (OperationDomainValidationError, ValueError, RuntimeError):
+        coefficients = _laurent_coefficients(claim.source)
+        c0 = coefficients.get(0, Fraction(0))
+        c1 = coefficients.get(1, Fraction(0))
+        conclusion = claim.conclusion
+        if isinstance(conclusion, FejerRieszZero):
+            return not coefficients
+        if isinstance(conclusion, FejerRieszNegative):
+            witness = conclusion.cosine_witness.as_fraction()
+            return -1 <= witness <= 1 and c0 + 2 * c1 * witness < 0
+        factor = conclusion.factor
+        record = factor.embedding_record
+        if record.embedding.presentation.degree > 4:
+            return False
+        for coefficient in factor.coefficients_ascending:
+            admit_real_embedding_difference(
+                coefficient.presentation,
+                tuple(
+                    coordinate.as_fraction()
+                    for coordinate in coefficient.coefficients_ascending
+                ),
+            )
+        recognize_real_embedding_record(record)
+        recognized = recognize_real_simple_number_field(record.embedding)
+        q0 = field_element_from_value(factor.coefficients_ascending[0], recognized)
+        q1 = field_element_from_value(factor.coefficients_ascending[1], recognized)
+        rational_c0 = recognized.field.convert(sympy.QQ(c0.numerator, c0.denominator))
+        rational_c1 = recognized.field.convert(sympy.QQ(c1.numerator, c1.denominator))
+        outer_difference = q0 * q0 - q1 * q1
+        admit_real_embedding_difference(
+            record.embedding.presentation,
+            field_element_coordinates(outer_difference, recognized),
+        )
+        return (
+            q0 * q0 + q1 * q1 == rational_c0
+            and q0 * q1 == rational_c1
+            and field_element_sign(q0, recognized) > 0
+            and field_element_sign(outer_difference, recognized) >= 0
+        )
+    except (
+        EmbeddedNumberFieldRecognitionError,
+        NumberFieldRealEmbeddingOrderError,
+        OperationDomainValidationError,
+        ValueError,
+        RuntimeError,
+    ):
         return False

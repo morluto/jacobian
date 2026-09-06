@@ -5,9 +5,11 @@ from jacobian.math.graphs.regular_subgraph._models import (
 )
 from jacobian.math.graphs.regular_subgraph.operations import (
     find_k_regular_subgraph,
+    verify_k_regular_subgraph,
 )
 
 __all__ = [
     "RegularSubgraphResult",
     "find_k_regular_subgraph",
+    "verify_k_regular_subgraph",
 ]

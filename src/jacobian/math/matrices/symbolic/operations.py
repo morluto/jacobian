@@ -173,19 +173,6 @@ def _symbolic_characteristic_polynomial_kernel(
     )
 
 
-def symbolic_eigenvalues(
-    entries: tuple[tuple[RationalFunction, ...], ...],
-    variables: tuple[str, ...],
-) -> list[tuple[str, int]]:
-    """Return a list of (eigenvalue_string, multiplicity) pairs."""
-    from sympy import sstr
-
-    _admit_characteristic(entries, variables)
-    matrix = _matrix_from_values(entries)
-    eigenvalues = matrix.eigenvals()
-    return [(sstr(value), int(mult)) for value, mult in eigenvalues.items()]
-
-
 def verify_symbolic_eigenvalues(claim: SymbolicEigenvaluesResult) -> bool:
     """Check a serialized characteristic-polynomial eigenvalue claim."""
     try:

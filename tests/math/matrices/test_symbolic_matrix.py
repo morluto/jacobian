@@ -1134,7 +1134,6 @@ def test_symbolic_native_api_exports_matrix_value_and_product() -> None:
         "SymbolicMatrix",
         "symbolic_characteristic_polynomial",
         "symbolic_determinant",
-        "symbolic_eigenvalues",
         "symbolic_linear_system_solve",
         "symbolic_matrix_multiply",
         "symbolic_rank",

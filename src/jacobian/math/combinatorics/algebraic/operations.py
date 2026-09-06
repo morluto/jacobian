@@ -20,7 +20,11 @@ from jacobian.math.combinatorics.algebraic._rsk import (
     row_insertion_rsk as _row_insertion_rsk,
 )
 from jacobian.math.combinatorics.algebraic.values import RSKTableauPair
-from jacobian.math.combinatorics.symmetric_functions.values import IntegerPartition
+from jacobian.math.combinatorics.symmetric_functions.values import (
+    IntegerPartition,
+    require_semistandard,
+    require_standard,
+)
 from jacobian.math.logic.languages.words.values import FiniteWord
 
 __all__ = [
@@ -59,8 +63,10 @@ def verify_rsk(claim: RSKResult) -> bool:
     quadratic search-count bound as the producing operation.
     """
     try:
+        require_semistandard(claim.p_tableau)
+        require_standard(claim.q_tableau)
         insertion, recording = _rsk_permutation(claim.permutation)
-    except ValueError:
+    except (TypeError, ValueError):
         return False
     return (
         insertion == claim.p_tableau.rows

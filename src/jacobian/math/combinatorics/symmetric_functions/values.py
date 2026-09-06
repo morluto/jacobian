@@ -99,6 +99,38 @@ def _require_strict_columns(rows: tuple[TableauRow, ...]) -> None:
                 )
 
 
+def require_semistandard(
+    tableau: SemistandardYoungTableau | StandardYoungTableau,
+) -> None:
+    """Admit the semistandard membership claim for a tableau carrier."""
+    _shape(tableau.rows)
+    for row in tableau.rows:
+        if any(row[index] > row[index + 1] for index in range(len(row) - 1)):
+            raise _validation_error(
+                "semistandard_rows_not_weakly_increasing",
+                "semistandard tableau rows must be weakly increasing",
+            )
+    _require_strict_columns(tableau.rows)
+
+
+def require_standard(tableau: StandardYoungTableau) -> None:
+    """Admit the standard membership claim for a tableau carrier."""
+    shape = _shape(tableau.rows)
+    for row in tableau.rows:
+        if any(row[index] >= row[index + 1] for index in range(len(row) - 1)):
+            raise _validation_error(
+                "standard_rows_not_strictly_increasing",
+                "standard tableau rows must be strictly increasing",
+            )
+    _require_strict_columns(tableau.rows)
+    entries = sorted(entry for row in tableau.rows for entry in row)
+    if entries != list(range(1, sum(shape.parts) + 1)):
+        raise _validation_error(
+            "standard_entries_not_consecutive",
+            "standard tableau entries must be exactly 1 through n",
+        )
+
+
 class SemistandardYoungTableau(StrictModel):
     """A bounded semistandard tableau over positive integer entries.
 
@@ -115,18 +147,6 @@ class SemistandardYoungTableau(StrictModel):
             f"count is at most {MAX_PARTITION_SIZE}."
         ),
     )
-
-    @model_validator(mode="after")
-    def require_semistandard(self) -> Self:
-        _shape(self.rows)
-        for row in self.rows:
-            if any(row[index] > row[index + 1] for index in range(len(row) - 1)):
-                raise _validation_error(
-                    "semistandard_rows_not_weakly_increasing",
-                    "semistandard tableau rows must be weakly increasing",
-                )
-        _require_strict_columns(self.rows)
-        return self
 
     @property
     def shape(self) -> IntegerPartition:
@@ -150,24 +170,6 @@ class StandardYoungTableau(StrictModel):
         ),
     )
 
-    @model_validator(mode="after")
-    def require_standard(self) -> Self:
-        shape = _shape(self.rows)
-        for row in self.rows:
-            if any(row[index] >= row[index + 1] for index in range(len(row) - 1)):
-                raise _validation_error(
-                    "standard_rows_not_strictly_increasing",
-                    "standard tableau rows must be strictly increasing",
-                )
-        _require_strict_columns(self.rows)
-        entries = sorted(entry for row in self.rows for entry in row)
-        if entries != list(range(1, sum(shape.parts) + 1)):
-            raise _validation_error(
-                "standard_entries_not_consecutive",
-                "standard tableau entries must be exactly 1 through n",
-            )
-        return self
-
     @property
     def shape(self) -> IntegerPartition:
         """Return the tableau shape derived from its row lengths."""
@@ -183,4 +185,6 @@ __all__ = [
     "StandardYoungTableau",
     "TableauEntry",
     "TableauRow",
+    "require_semistandard",
+    "require_standard",
 ]

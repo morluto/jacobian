@@ -8,6 +8,8 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
     IntegerPartition,
     SemistandardYoungTableau,
     StandardYoungTableau,
+    require_semistandard,
+    require_standard,
 )
 
 __all__ = [
@@ -15,5 +17,7 @@ __all__ = [
     "SemistandardYoungTableau",
     "StandardYoungTableau",
     "partition_conjugate",
+    "require_semistandard",
+    "require_standard",
     "schur_evaluation",
 ]

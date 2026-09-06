@@ -39,6 +39,7 @@ from jacobian.math.combinatorics.symmetric_functions import (
     IntegerPartition,
     SemistandardYoungTableau,
     StandardYoungTableau,
+    require_standard,
 )
 from jacobian.math.combinatorics.symmetric_functions._models import PartitionRequest
 from jacobian.math.logic.languages.words import FiniteWord
@@ -262,31 +263,25 @@ def test_structurally_incompatible_pairs_fail_before_reverse_insertion() -> None
         == "algebraic_combinatorics.insertion_shape_mismatch"
     )
 
-    with pytest.raises(ValidationError) as error:
-        RSKTableauPair(
+    pair = RSKTableauPair(
             alphabet=("a",),
             insertion_tableau=SemistandardYoungTableau(rows=((2,),)),
             recording_tableau=StandardYoungTableau(rows=((1,),)),
             shape=IntegerPartition(parts=(1,)),
         )
-    assert (
-        error.value.errors()[0]["type"]
-        == "algebraic_combinatorics.insertion_entry_out_of_range"
-    )
+    with pytest.raises(ValueError, match="outside the ordered alphabet"):
+        inverse_row_insertion_rsk(pair)
 
-    with pytest.raises(ValidationError) as error:
-        RSKTableauPair.model_validate(
-            {
+    pair = RSKTableauPair.model_validate(
+        {
                 "alphabet": ["a"],
                 "insertion_tableau": {"rows": [[1, 1]]},
                 "recording_tableau": {"rows": [[1, 3]]},
                 "shape": {"parts": [2]},
-            }
-        )
-    assert (
-        error.value.errors()[0]["type"]
-        == "symmetric_function.standard_entries_not_consecutive"
+        }
     )
+    with pytest.raises(Exception, match="exactly 1 through n"):
+        require_standard(pair.recording_tableau)
 
 
 def _wide_unicode_symbols(count: int) -> tuple[str, ...]:

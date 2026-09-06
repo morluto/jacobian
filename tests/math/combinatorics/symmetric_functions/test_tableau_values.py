@@ -10,6 +10,8 @@ from jacobian.math.combinatorics.symmetric_functions import (
     IntegerPartition,
     SemistandardYoungTableau,
     StandardYoungTableau,
+    require_semistandard,
+    require_standard,
 )
 from jacobian.math.combinatorics.symmetric_functions._models import (
     IntegerPartition as RequestIntegerPartition,
@@ -23,6 +25,8 @@ def test_symmetric_function_public_values_have_one_canonical_identity() -> None:
         "SemistandardYoungTableau",
         "StandardYoungTableau",
         "partition_conjugate",
+        "require_semistandard",
+        "require_standard",
         "schur_evaluation",
     )
 
@@ -48,27 +52,23 @@ def test_semistandard_tableau_accepts_weak_rows_and_strict_columns() -> None:
 def test_semistandard_tableau_rejects_malformed_rows(
     rows: tuple[tuple[int, ...], ...], error_type: str
 ) -> None:
-    with pytest.raises(ValidationError) as error:
-        SemistandardYoungTableau(rows=rows)
-    assert error.value.errors()[0]["type"] == error_type
+    tableau = SemistandardYoungTableau(rows=rows)
+    with pytest.raises(Exception, match={
+        "symmetric_function.partition_not_weakly_decreasing": "weakly decreasing",
+        "symmetric_function.semistandard_rows_not_weakly_increasing": "weakly increasing",
+        "symmetric_function.tableau_columns_not_strict": "strictly increasing",
+    }[error_type]):
+        require_semistandard(tableau)
 
 
 def test_standard_tableau_requires_exact_labels_and_strict_rows() -> None:
     tableau = StandardYoungTableau(rows=((1, 2, 4), (3,), (5,)))
     assert tableau.shape.parts == (3, 1, 1)
 
-    with pytest.raises(ValidationError) as error:
-        StandardYoungTableau(rows=((1, 3),))
-    assert (
-        error.value.errors()[0]["type"]
-        == "symmetric_function.standard_entries_not_consecutive"
-    )
-    with pytest.raises(ValidationError) as error:
-        StandardYoungTableau(rows=((1, 1),))
-    assert (
-        error.value.errors()[0]["type"]
-        == "symmetric_function.standard_rows_not_strictly_increasing"
-    )
+    with pytest.raises(Exception, match="exactly 1 through n"):
+        require_standard(StandardYoungTableau(rows=((1, 3),)))
+    with pytest.raises(Exception, match="strictly increasing"):
+        require_standard(StandardYoungTableau(rows=((1, 1),)))
 
 
 def test_tableau_entries_are_strict_positive_integers() -> None:

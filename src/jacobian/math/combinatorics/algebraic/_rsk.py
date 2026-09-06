@@ -13,6 +13,8 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
     IntegerPartition,
     SemistandardYoungTableau,
     StandardYoungTableau,
+    require_semistandard,
+    require_standard,
 )
 from jacobian.math.logic.languages.words.values import FiniteWord
 
@@ -84,6 +86,14 @@ def _forward(word: FiniteWord) -> RSKTableauPair:
 
 
 def _inverse(pair: RSKTableauPair) -> FiniteWord:
+    require_semistandard(pair.insertion_tableau)
+    require_standard(pair.recording_tableau)
+    if any(
+        entry > len(pair.alphabet)
+        for row in pair.insertion_tableau.rows
+        for entry in row
+    ):
+        raise ValueError("insertion tableau entry is outside the ordered alphabet")
     cell_count = sum(pair.shape.parts)
     insertion = [list(row) for row in pair.insertion_tableau.rows]
     label_rows_by_entry = [0] * cell_count

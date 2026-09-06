@@ -79,15 +79,6 @@ class RSKTableauPair(StrictModel):
                 "algebraic_combinatorics.recording_shape_mismatch",
                 "recording tableau shape must equal the common shape",
             )
-        if any(
-            entry > len(self.alphabet)
-            for row in self.insertion_tableau.rows
-            for entry in row
-        ):
-            raise PydanticCustomError(
-                "algebraic_combinatorics.insertion_entry_out_of_range",
-                "insertion tableau entry is outside the ordered alphabet",
-            )
         return self
 
 

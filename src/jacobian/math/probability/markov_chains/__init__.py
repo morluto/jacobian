@@ -10,6 +10,7 @@ from jacobian.math.probability.markov_chains.operations import (
     stationary_distribution,
     stationary_distribution_extremes,
     stationary_distribution_result,
+    verify_ergodic_decision,
 )
 
 __all__ = [
@@ -22,4 +23,5 @@ __all__ = [
     "stationary_distribution",
     "stationary_distribution_extremes",
     "stationary_distribution_result",
+    "verify_ergodic_decision",
 ]

@@ -35,6 +35,7 @@ __all__ = [
     "stationary_distribution",
     "stationary_distribution_extremes",
     "stationary_distribution_result",
+    "verify_ergodic_decision",
 ]
 
 
@@ -426,10 +427,17 @@ def ergodic_decision(matrix: RationalMatrix) -> ErgodicDecisionResult:
     _admit_transition_matrix(native)
     irreducible, aperiodic = _ergodic_properties(native)
     return ErgodicDecisionResult(
+        matrix=matrix,
         is_ergodic=irreducible and aperiodic,
         is_irreducible=irreducible,
         is_aperiodic=aperiodic,
     )
+
+
+def verify_ergodic_decision(claim: ErgodicDecisionResult) -> bool:
+    """Check the decision relation against the retained transition matrix."""
+
+    return ergodic_decision(claim.matrix) == claim
 
 
 def communicating_classes(matrix: RationalMatrix) -> CommunicatingClassesResult:

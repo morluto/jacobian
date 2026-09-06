@@ -119,6 +119,7 @@ class StationaryDistributionResult(StrictModel):
 
 
 class ErgodicDecisionResult(StrictModel):
+    matrix: RationalMatrix
     is_ergodic: bool
     is_irreducible: bool
     is_aperiodic: bool

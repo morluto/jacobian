@@ -533,6 +533,7 @@ class PolygonIntersectionWitness(StrictModel):
 
 
 class SimplePolygonDecisionResult(StrictModel):
+    polygon: PolygonRequest
     vertex_count: StrictInt = Field(ge=3, le=128)
     is_simple: bool
     checked_edge_pairs: StrictInt = Field(ge=0, le=8128)

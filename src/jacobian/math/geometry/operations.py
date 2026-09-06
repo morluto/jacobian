@@ -33,6 +33,7 @@ from jacobian.math.geometry._models import (
     GeometryRationalResult,
     PolygonIntersectionWitness,
     PolygonPointClassificationResult,
+    PolygonRequest,
     RationalLine2D,
     RationalPoint2D,
     SegmentIntersectionResult,
@@ -550,6 +551,7 @@ def simple_polygon(points: tuple[RationalPoint2D, ...]) -> SimplePolygonDecision
             )
             if not valid:
                 return SimplePolygonDecisionResult(
+                    polygon=PolygonRequest(points=points),
                     vertex_count=len(points),
                     is_simple=False,
                     checked_edge_pairs=checked,
@@ -560,6 +562,7 @@ def simple_polygon(points: tuple[RationalPoint2D, ...]) -> SimplePolygonDecision
                     ),
                 )
     return SimplePolygonDecisionResult(
+        polygon=PolygonRequest(points=points),
         vertex_count=len(points),
         is_simple=True,
         checked_edge_pairs=checked,

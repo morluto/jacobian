@@ -579,6 +579,7 @@ class SimplePolygonPointRequest(StrictModel):
 
 
 class PolygonPointClassificationResult(StrictModel):
+    request: SimplePolygonPointRequest
     polygon_vertex_count: StrictInt = Field(ge=3, le=128)
     classification: Literal["INSIDE", "BOUNDARY", "OUTSIDE"]
     boundary_edge_index: StrictInt | None = Field(default=None, ge=0, le=127)

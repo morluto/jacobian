@@ -38,7 +38,11 @@ from jacobian.math.geometry.euclidean.operations import (
     verify_angle_equality,
     verify_triangle_similarity,
 )
-from jacobian.math.geometry.operations import simple_polygon, verify_simple_polygon
+from jacobian.math.geometry.operations import (
+    simple_polygon,
+    verify_polygon_point_classification,
+    verify_simple_polygon,
+)
 
 
 def _pt(x: int, y: int) -> RationalPoint2D:
@@ -110,6 +114,22 @@ def test_point_classification_rejects_non_simple_polygon_at_operation_boundary()
     assert exc_info.value.errors()[0]["type"] == (
         "geometry.point_classification_requires_a_simple_polygon"
     )
+
+
+def test_polygon_point_claim_round_trips_and_rejects_a_forged_source() -> None:
+    result = classify_polygon_point(
+        SimplePolygonPointRequest(
+            polygon=PolygonRequest(points=(_pt(0, 0), _pt(2, 0), _pt(2, 2), _pt(0, 2))),
+            point=_pt(1, 1),
+        )
+    )
+    assert verify_polygon_point_classification(
+        type(result).model_validate_json(result.model_dump_json())
+    )
+
+    payload = result.model_dump(mode="json")
+    payload["request"]["point"] = _pt(3, 3).model_dump(mode="json")
+    assert not verify_polygon_point_classification(type(result).model_validate(payload))
 
 
 def test_simple_polygon_claim_round_trips_and_rejects_a_forged_decision() -> None:

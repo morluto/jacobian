@@ -38,6 +38,7 @@ from jacobian.math.geometry._models import (
     RationalPoint2D,
     SegmentIntersectionResult,
     SimplePolygonDecisionResult,
+    SimplePolygonPointRequest,
     _inverted_components_within_bound,
     _is_simple_ring,
     _point_key,
@@ -66,6 +67,7 @@ __all__ = [
     "signed_area",
     "simple_polygon",
     "squared_distance",
+    "verify_polygon_point_classification",
     "verify_simple_polygon",
 ]
 
@@ -580,26 +582,35 @@ def verify_simple_polygon(claim: SimplePolygonDecisionResult) -> bool:
 
 
 def classify_polygon_point(
-    point_value: RationalPoint2D,
-    polygon_points: tuple[RationalPoint2D, ...],
+    request: SimplePolygonPointRequest,
 ) -> PolygonPointClassificationResult:
     from sympy.geometry import Polygon
 
-    _admit_simple_polygon_point(polygon_points)
-    point = _point(point_value)
-    points = tuple(_point(item) for item in polygon_points)
+    _admit_simple_polygon_point(request.polygon.points)
+    point = _point(request.point)
+    points = tuple(_point(item) for item in request.polygon.points)
     for index, start in enumerate(points):
         if _on_segment(point, start, points[(index + 1) % len(points)]):
             return PolygonPointClassificationResult(
+                request=request,
                 polygon_vertex_count=len(points),
                 classification="BOUNDARY",
                 boundary_edge_index=index,
             )
     polygon = Polygon(*points)
     return PolygonPointClassificationResult(
+        request=request,
         polygon_vertex_count=len(points),
         classification=("INSIDE" if polygon.encloses_point(point) else "OUTSIDE"),
     )
+
+
+def verify_polygon_point_classification(
+    claim: PolygonPointClassificationResult,
+) -> bool:
+    """Check the polygon-point relation asserted by a serialized claim."""
+
+    return classify_polygon_point(claim.request) == claim
 
 
 def convex_hull_points(

@@ -95,7 +95,7 @@ def simple_polygon(request: PolygonRequest) -> SimplePolygonDecisionResult:
 def classify_polygon_point(
     request: SimplePolygonPointRequest,
 ) -> PolygonPointClassificationResult:
-    return _native.classify_polygon_point(request.point, request.polygon.points)
+    return _native.classify_polygon_point(request)
 
 
 def convex_hull_points(request: PointSetRequest) -> GeometryConvexHullResult:

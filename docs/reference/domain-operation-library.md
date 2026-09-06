@@ -544,6 +544,23 @@ ledger when the retained source and claimed postcondition remain sufficient for
 that consumer, but scalar shape alone must not authenticate a mathematical
 conclusion.
 
+Do not add a verifier to every result. Ordinary values need canonical types,
+not producer history: arithmetic can consume a segment ratio as a rational.
+A claimed matrix rank instead needs its source matrix and an admitted check
+when a consumer relies on that claim.
+
+Repair representation and invariant ownership first. Verifiers cannot recover
+discarded parents or axes. Move mathematical proofs out of decoding into
+operation admission, migrate every dependent consumer, and avoid repeating
+completed proofs during result construction. An unused verifier does not fix
+a consumer that still trusts an unchecked claim.
+
+Distinguish certificate checking from recomputing an answer. Both can establish
+a claim under explicit work and growth bounds, but recomputation is not
+automatically an efficient certificate check. Check the advertised relation,
+allowing alternative valid witnesses rather than requiring the producer's
+particular output.
+
 Backend integration follows the reusable
 [mathematical backend contract](mathematical-backends.md).
 

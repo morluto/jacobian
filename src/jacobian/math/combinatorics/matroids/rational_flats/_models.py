@@ -815,33 +815,6 @@ class RationalFlatClassificationComplete(StrictModel):
     orbit_count: StrictInt = Field(ge=0, le=MAX_RATIONAL_FLAT_RESULT_ORBITS)
     solution_flat_count: StrictInt = Field(ge=0)
 
-    @model_validator(mode="after")
-    def require_complete_accounting(self) -> Self:
-        if self.orbit_count != len(self.representatives):
-            raise _validation_error(
-                "orbit_count",
-                "orbit_count must equal the representative count",
-            )
-        if self.solution_flat_count != sum(
-            representative.orbit_size for representative in self.representatives
-        ):
-            raise _validation_error(
-                "solution_flat_count",
-                "solution_flat_count must equal the sum of representative orbit sizes",
-            )
-        representative_keys = tuple(
-            representative.closed_candidate_indices
-            for representative in self.representatives
-        )
-        if representative_keys != tuple(sorted(set(representative_keys))):
-            raise _validation_error(
-                "representative_order",
-                "orbit representatives must use distinct keys in increasing "
-                "canonical candidate-set order",
-            )
-        return self
-
-
 RationalFlatIncompleteReason = Literal[
     "STATE_ORBIT_LIMIT",
     "SEARCH_WORK_LIMIT",
@@ -906,45 +879,6 @@ class ClauseConstrainedRationalFlatClassification(StrictModel):
         le=MAX_RATIONAL_FLAT_GROUP_ORDER,
     )
     outcome: RationalFlatClassificationOutcome
-
-    @model_validator(mode="after")
-    def bind_outcome_to_problem(self) -> Self:
-        if not isinstance(self.outcome, RationalFlatClassificationComplete):
-            return self
-        candidate_count = self.problem.candidates.vector_count
-        ambient_dimension = len(self.problem.candidates.coordinate_axis)
-        for representative in self.outcome.representatives:
-            if any(
-                index >= candidate_count
-                for index in representative.closed_candidate_indices
-            ):
-                raise _validation_error(
-                    "representative_candidate_index",
-                    "representative indices must refer to source candidates",
-                )
-            if (
-                not self.problem.minimum_rank
-                <= representative.rank
-                <= (self.problem.maximum_rank)
-            ):
-                raise _validation_error(
-                    "representative_rank",
-                    "representative rank must lie in the requested interval",
-                )
-            if representative.row_space_basis.ambient_dimension != ambient_dimension:
-                raise _validation_error(
-                    "representative_ambient_dimension",
-                    "representative bases must use the source coordinate dimension",
-                )
-            if (
-                representative.orbit_size * representative.stabilizer_order
-                != self.symmetry_group_order
-            ):
-                raise _validation_error(
-                    "orbit_stabilizer",
-                    "each orbit size times stabilizer order must equal the symmetry-group order",
-                )
-        return self
 
     @classmethod
     def _complete_from_kernel(

@@ -10,6 +10,8 @@ from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import MathTool
 from jacobian.math.combinatorics.matroids.prime_field_flats import (
     classify_clause_constrained_prime_field_flats,
+    verify_prime_field_flat_classification,
+    verify_prime_field_flat_representative,
 )
 from jacobian.math.combinatorics.matroids.prime_field_flats._kernel import (
     _admit_problem,
@@ -417,6 +419,21 @@ def test_catalog_example_request_and_result_round_trip() -> None:
         )
         == result
     )
+
+
+def test_serialized_complete_claim_and_representative_are_verifiable() -> None:
+    result = _run(((1,),), prime=3, rank_interval=(1, 1))
+    decoded = ClauseConstrainedPrimeFieldFlatClassification.model_validate_json(
+        result.model_dump_json()
+    )
+    assert verify_prime_field_flat_classification(decoded)
+    representative = decoded.outcome.representatives[0]
+    assert verify_prime_field_flat_representative(decoded, representative)
+
+    forged = result.model_dump(mode="json")
+    forged["outcome"]["representatives"][0]["orbit_size"] = 2
+    forged_result = ClauseConstrainedPrimeFieldFlatClassification.model_validate(forged)
+    assert not verify_prime_field_flat_classification(forged_result)
 
 
 def test_work_limit_returns_incomplete_not_empty_complete() -> None:

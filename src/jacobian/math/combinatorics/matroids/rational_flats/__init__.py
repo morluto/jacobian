@@ -12,6 +12,8 @@ from jacobian.math.combinatorics.matroids.rational_flats._models import (
 )
 from jacobian.math.combinatorics.matroids.rational_flats.operations import (
     classify_clause_constrained_rational_flats,
+    verify_rational_flat_classification,
+    verify_rational_flat_representative,
 )
 
 __all__ = [
@@ -24,4 +26,6 @@ __all__ = [
     "RationalFlatSymmetryGenerator",
     "RationalVectorConfiguration",
     "classify_clause_constrained_rational_flats",
+    "verify_rational_flat_classification",
+    "verify_rational_flat_representative",
 ]

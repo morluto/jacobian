@@ -30,11 +30,12 @@ from jacobian.math.combinatorics.matroids.rational_flats import (
     RationalFlatSymmetryGenerator,
     RationalVectorConfiguration,
     classify_clause_constrained_rational_flats,
+    verify_rational_flat_classification,
+    verify_rational_flat_representative,
 )
 from jacobian.math.combinatorics.matroids.rational_flats import _kernel as flat_kernel
 from jacobian.math.combinatorics.matroids.rational_flats._models import (
     ClauseConstrainedRationalFlatRequest,
-    RationalFlatClassificationComplete,
 )
 from jacobian.math.matrices.values import (
     SparseRationalMatrix,
@@ -465,6 +466,23 @@ def test_complete_family_is_deterministic_and_round_trips() -> None:
     )
 
 
+def test_serialized_complete_claim_and_representative_are_verifiable() -> None:
+    result = classify_clause_constrained_rational_flats(
+        _problem(((1,),), columns=1, rank_interval=(1, 1))
+    )
+    decoded = ClauseConstrainedRationalFlatClassification.model_validate_json(
+        result.model_dump_json()
+    )
+    assert verify_rational_flat_classification(decoded)
+    representative = decoded.outcome.representatives[0]
+    assert verify_rational_flat_representative(decoded, representative)
+
+    forged = result.model_dump(mode="json")
+    forged["outcome"]["representatives"][0]["orbit_size"] = 2
+    forged_result = ClauseConstrainedRationalFlatClassification.model_validate(forged)
+    assert not verify_rational_flat_classification(forged_result)
+
+
 def test_request_and_complete_result_round_trip_through_strict_json() -> None:
     problem = _problem(
         ((1, 0), (0, 1), (1, 1)),
@@ -507,13 +525,15 @@ def test_complete_family_requires_distinct_canonical_representative_keys() -> No
 
     assert result.outcome.status == "COMPLETE_EXACT"
     representative = result.outcome.representatives[0]
-    with pytest.raises(ValidationError, match="distinct keys"):
-        RationalFlatClassificationComplete(
-            status="COMPLETE_EXACT",
-            representatives=(representative, representative),
-            orbit_count=2,
-            solution_flat_count=2 * representative.orbit_size,
-        )
+    forged = result.model_dump(mode="json")
+    forged["outcome"]["representatives"] = [
+        forged["outcome"]["representatives"][0],
+        forged["outcome"]["representatives"][0],
+    ]
+    forged["outcome"]["orbit_count"] = 2
+    forged["outcome"]["solution_flat_count"] = 2 * representative.orbit_size
+    forged_result = ClauseConstrainedRationalFlatClassification.model_validate(forged)
+    assert not verify_rational_flat_classification(forged_result)
 
 
 @pytest.mark.parametrize("matrix_owner", ["candidate", "forbidden"])

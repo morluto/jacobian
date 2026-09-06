@@ -11,6 +11,7 @@ from jacobian.math.combinatorics.matroids.prime_field_flats._kernel import (
 from jacobian.math.combinatorics.matroids.prime_field_flats._models import (
     ClauseConstrainedPrimeFieldFlatClassification,
     ClauseConstrainedPrimeFieldFlatProblem,
+    PrimeFieldFlatOrbitRepresentative,
 )
 
 
@@ -44,4 +45,39 @@ def classify_clause_constrained_prime_field_flats(
         ) from exc
 
 
-__all__ = ["classify_clause_constrained_prime_field_flats"]
+def verify_prime_field_flat_classification(
+    claim: ClauseConstrainedPrimeFieldFlatClassification,
+) -> bool:
+    """Verify a complete serialized prime-field flat classification claim."""
+
+    if claim.outcome.status != "COMPLETE_EXACT":
+        return True
+    try:
+        return classify_clause_constrained_prime_field_flats(claim.problem) == claim
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+
+
+def verify_prime_field_flat_representative(
+    claim: ClauseConstrainedPrimeFieldFlatClassification,
+    representative: PrimeFieldFlatOrbitRepresentative,
+) -> bool:
+    """Verify one representative against the retained bounded problem."""
+
+    if claim.outcome.status != "COMPLETE_EXACT":
+        return False
+    try:
+        expected = classify_clause_constrained_prime_field_flats(claim.problem)
+        return (
+            expected.outcome.status == "COMPLETE_EXACT"
+            and representative in expected.outcome.representatives
+        )
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+
+
+__all__ = [
+    "classify_clause_constrained_prime_field_flats",
+    "verify_prime_field_flat_classification",
+    "verify_prime_field_flat_representative",
+]

@@ -25,7 +25,10 @@ from jacobian.math.matrices.quadratic_spectral.values import (
     _definiteness_from_inertia,
 )
 from jacobian.math.matrices.values import RealQuadraticMatrix
-from jacobian.math.number_theory.algebraic_numbers.quadratic import RealQuadraticValue
+from jacobian.math.number_theory.algebraic_numbers.quadratic import (
+    RealQuadraticValue,
+    require_square_free_radicand,
+)
 from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
 
 if TYPE_CHECKING:
@@ -122,7 +125,7 @@ def _trace_and_determinant(
     spectrum_kind: SpectrumKind,
 ) -> tuple[Quadratic, Quadratic]:
     entries = _matrix_entries(matrix)
-    radicand = matrix.entries[0][0].radicand
+    radicand = matrix.radicand
     if spectrum_kind == "SYMMETRIC_EIGENVALUES":
         a, b = entries[0]
         _ignored, c = entries[1]
@@ -365,8 +368,9 @@ def spectrum_rows(
         require_symmetric_spectrum_matrix(matrix)
     else:
         require_singular_spectrum_matrix(matrix)
+    require_square_free_radicand(matrix.radicand, location=("matrix", "radicand"))
     rational, radical, trace, determinant = _polynomial_parts(matrix, spectrum_kind)
-    radicand = matrix.entries[0][0].radicand
+    radicand = matrix.radicand
     discriminant = _subtract(
         _multiply(trace, trace, radicand),
         _scale(determinant, Fraction(4)),
@@ -545,7 +549,7 @@ def _eliminate_two(
 
 
 def _inertia_counts(matrix: RealQuadraticMatrix) -> tuple[int, int, int]:
-    radicand = matrix.entries[0][0].radicand
+    radicand = matrix.radicand
     reduced = _matrix_entries(matrix)
     positive = negative = zero = 0
     index = 0
@@ -581,6 +585,7 @@ def inertia_data(
     """Return exact Sylvester inertia data for an admitted matrix."""
 
     require_inertia_matrix(matrix)
+    require_square_free_radicand(matrix.radicand, location=("matrix", "radicand"))
     positive, negative, zero = _inertia_counts(matrix)
     return (
         positive,

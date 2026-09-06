@@ -74,7 +74,7 @@ def test_flint_exact_linear_operations_support_reported_46_by_21_shape() -> None
 
     rank = compute_rank(MatrixRankRequest(matrix=rational))
     rref = compute_rref(RationalMatrixRequest(matrix=rational))
-    nullspace = compute_nullspace(RationalMatrixRequest(matrix=rational))
+    nullspace = compute_nullspace(MatrixRankRequest(matrix=rational))
 
     assert rank.rank == rref.rank == 20
     assert nullspace.rank == 20
@@ -192,6 +192,8 @@ def test_rational_matrix_from_fractions_preserves_canonical_exact_entries() -> N
 
     assert matrix.model_dump(mode="json") == {
         "domain": "QQ",
+        "row_count": 2,
+        "column_count": 2,
         "entries": [
             [{"num": "-3", "den": "4"}, {"num": "5", "den": "1"}],
             [{"num": "0", "den": "1"}, {"num": "7", "den": "12"}],
@@ -218,7 +220,7 @@ def test_producer_results_replay_across_shapes() -> None:
         assert rank.matrix == matrix
         assert rank.rank == len(rank.pivot_columns)
 
-        nullspace = compute_nullspace(request)
+        nullspace = compute_nullspace(MatrixRankRequest(matrix=request.matrix))
         assert nullspace.matrix == matrix
         assert nullspace.rank + nullspace.nullity == nullspace.ambient_dimension
         assert len(nullspace.basis_vectors) == nullspace.nullity
@@ -240,7 +242,7 @@ def test_serialized_results_round_trip(rows: list[list[str]]) -> None:
     rank = compute_rank(MatrixRankRequest(matrix=matrix))
     assert MatrixRankResult.model_validate(rank.model_dump()) == rank
 
-    nullspace = compute_nullspace(RationalMatrixRequest(matrix=matrix))
+    nullspace = compute_nullspace(MatrixRankRequest(matrix=matrix))
     assert NullspaceResult.model_validate(nullspace.model_dump()) == nullspace
 
 
@@ -252,7 +254,7 @@ def test_producer_to_serialized_interoperability() -> None:
         compute_rref(RationalMatrixRequest(matrix=matrix)).model_dump()
     )
     rank = compute_rank(MatrixRankRequest(matrix=matrix))
-    nullspace = compute_nullspace(RationalMatrixRequest(matrix=matrix))
+    nullspace = compute_nullspace(MatrixRankRequest(matrix=matrix))
     assert rref.rank == rank.rank == nullspace.rank == 2
     assert list(rref.pivot_columns) == list(rank.pivot_columns)
     assert list(rref.free_columns) == list(nullspace.free_columns)

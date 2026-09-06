@@ -252,6 +252,16 @@ def _check_associativity(
                     raise _category_error("associativity", "associativity violated")
 
 
+def _check_category_laws(category: FiniteCategory) -> None:
+    """Establish the unit and associativity laws for an admitted consumer."""
+
+    by_id = _morphism_index(category.objects, category.morphisms)
+    identities = _identity_map(category.objects, by_id, category.identities)
+    composition = _composition_table(category.morphisms, by_id, category.composition)
+    _check_unit_laws(category.morphisms, identities, composition)
+    _check_associativity(category.morphisms, composition)
+
+
 class FiniteCategory(StrictModel):
     """A canonical finite category presented by complete extensional tables.
 
@@ -322,10 +332,8 @@ class FiniteCategory(StrictModel):
                 "composable_triple_budget",
                 "category exceeds the bounded composable-triple work budget",
             )
-        identity_map = _identity_map(objects, by_id, identities)
-        composition_table = _composition_table(morphisms, by_id, composition)
-        _check_unit_laws(morphisms, identity_map, composition_table)
-        _check_associativity(morphisms, composition_table)
+        _identity_map(objects, by_id, identities)
+        _composition_table(morphisms, by_id, composition)
         identifier_occurrences = sum(_identifier_shape(item)[1] for item in identifiers)
         if identifier_occurrences > MAX_CATEGORY_IDENTIFIER_OCCURRENCES:
             raise _category_error(

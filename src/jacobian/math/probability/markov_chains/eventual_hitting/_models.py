@@ -1,12 +1,13 @@
 """Typed contracts for the eventual hitting profile operation."""
 
-from typing import Annotated, Self
+from typing import Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math.matrices.values import RationalMatrix
 
 # Structural safety limit for matrix materialization. The sharper work-based
 # admission for matrix-digit height and transient-system growth lives in
@@ -17,9 +18,7 @@ MAX_STATES = 4096
 class EventualHittingProfileRequest(StrictModel):
     """Request for the eventual hitting probability profile."""
 
-    matrix: tuple[
-        Annotated[tuple[CanonicalRational, ...], Field(max_length=MAX_STATES)], ...
-    ] = Field(min_length=1, max_length=MAX_STATES)
+    matrix: RationalMatrix
     target_states: tuple[StrictInt, ...] = Field(
         min_length=1,
         max_length=MAX_STATES,
@@ -31,8 +30,8 @@ class EventualHittingProfileRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_request(self) -> Self:
-        dimension = len(self.matrix)
-        if any(len(row) != dimension for row in self.matrix):
+        dimension = self.matrix.row_count
+        if self.matrix.column_count != dimension:
             raise PydanticCustomError(
                 "markov_chain.eventual_hitting_matrix_not_square",
                 "matrix must be square",
@@ -53,7 +52,7 @@ class EventualHittingProfileRequest(StrictModel):
 class EventualHittingProfileResult(StrictModel):
     """The complete eventual hitting probability profile."""
 
-    matrix: tuple[tuple[CanonicalRational, ...], ...]
+    matrix: RationalMatrix
     target_states: tuple[int, ...]
     hitting_probabilities: tuple[CanonicalRational, ...]
     zero_states: tuple[int, ...]

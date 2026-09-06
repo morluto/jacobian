@@ -12,6 +12,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalInteger, CanonicalRational
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math._root_isolation import strict_root_count
 
 if TYPE_CHECKING:
@@ -124,26 +125,9 @@ class _RealAlgebraicValueShape(StrictModel):
 class RealAlgebraicValue(_RealAlgebraicValueShape):
     """One real algebraic number in canonical minimal-polynomial form.
 
-    Direct construction recognizes irreducibility and the selected real root.
-    Result owners may instead use the structural request view after their
-    admitted kernel has established those mathematical invariants.
+    Parsing checks the canonical encoding. Consumers establish irreducibility
+    and the selected real root within their admitted computation.
     """
-
-    @model_validator(mode="after")
-    def require_canonical_real_root(self) -> Self:
-        polynomial = _sympy_polynomial(self)
-        if polynomial.is_irreducible is not True:
-            raise _validation_error(
-                "not_irreducible",
-                "real algebraic minimal polynomial must be irreducible over QQ",
-            )
-        real_root_count = len(polynomial.intervals())
-        if self.real_root_index >= real_root_count:
-            raise _validation_error(
-                "root_index",
-                "real_root_index must select an existing real root of the minimal polynomial",
-            )
-        return self
 
     @classmethod
     def _from_admitted_polynomial(
@@ -219,10 +203,27 @@ def _interval(lower: SympyRational, upper: SympyRational) -> RationalIsolatingIn
     )
 
 
-def isolate_real_algebraic(value: RealAlgebraicValue) -> RationalIsolatingInterval:
-    """Return SymPy's deterministic exact interval for the selected real root."""
+def _admit_real_polynomial(value: RealAlgebraicValue) -> Poly:
+    polynomial = _sympy_polynomial(value)
+    if polynomial.is_irreducible is not True:
+        raise OperationDomainValidationError(
+            location=("value",),
+            code="real_algebraic.not_irreducible",
+            message="real algebraic minimal polynomial must be irreducible over QQ",
+        )
+    return polynomial
 
-    intervals = _sympy_polynomial(value).intervals()
+
+def isolate_real_algebraic(value: RealAlgebraicValue) -> RationalIsolatingInterval:
+    """Return an exact interval after admitting the selected real root."""
+
+    intervals = _admit_real_polynomial(value).intervals()
+    if value.real_root_index >= len(intervals):
+        raise OperationDomainValidationError(
+            location=("value", "real_root_index"),
+            code="real_algebraic.root_index",
+            message="real_root_index must select an existing real root",
+        )
     (lower, upper), _multiplicity = intervals[value.real_root_index]
     return _interval(lower, upper)
 
@@ -235,11 +236,16 @@ def _order_data(
     RationalIsolatingInterval,
     RationalIsolatingInterval,
 ]:
-    left_poly = _sympy_polynomial(left)
-    right_poly = _sympy_polynomial(right)
     if left.polynomial == right.polynomial:
-        left_interval = isolate_real_algebraic(left)
-        right_interval = isolate_real_algebraic(right)
+        intervals = _admit_real_polynomial(left).intervals()
+        if max(left.real_root_index, right.real_root_index) >= len(intervals):
+            raise OperationDomainValidationError(
+                location=("left", "right"),
+                code="real_algebraic.root_index",
+                message="real_root_index must select an existing real root",
+            )
+        left_interval = _interval(*intervals[left.real_root_index][0])
+        right_interval = _interval(*intervals[right.real_root_index][0])
         order: RealAlgebraicOrder = (
             "LT"
             if left.real_root_index < right.real_root_index
@@ -261,22 +267,30 @@ def _order_data(
     # Distinct canonical minimal polynomials are coprime.  Isolating the roots
     # of their square-free product gives one exact common ordered axis, avoiding
     # floating-point matching between separately isolated root lists.
+    left_poly = _admit_real_polynomial(left)
+    right_poly = _admit_real_polynomial(right)
     product_intervals = (left_poly * right_poly).intervals()
     left_seen = right_seen = 0
     selected_left: tuple[int, RationalIsolatingInterval] | None = None
     selected_right: tuple[int, RationalIsolatingInterval] | None = None
     for position, ((lower, upper), _multiplicity) in enumerate(product_intervals):
-        if strict_root_count(left_poly, lower, upper):
+        if selected_left is None and strict_root_count(left_poly, lower, upper):
             if left_seen == left.real_root_index:
                 selected_left = (position, _interval(lower, upper))
             left_seen += 1
-        if strict_root_count(right_poly, lower, upper):
+        if selected_right is None and strict_root_count(right_poly, lower, upper):
             if right_seen == right.real_root_index:
                 selected_right = (position, _interval(lower, upper))
             right_seen += 1
+        if selected_left is not None and selected_right is not None:
+            break
 
-    if selected_left is None or selected_right is None:  # pragma: no cover
-        raise RuntimeError("exact real-root isolation lost a selected root")
+    if selected_left is None or selected_right is None:
+        raise OperationDomainValidationError(
+            location=("left", "right"),
+            code="real_algebraic.root_index",
+            message="real_root_index must select an existing real root",
+        )
     left_position, left_interval = selected_left
     right_position, right_interval = selected_right
     order = "LT" if left_position < right_position else "GT"
@@ -370,6 +384,45 @@ def compare_real_algebraic(
         left_isolating_interval=left_interval,
         right_isolating_interval=right_interval,
     )
+
+
+def _compare_admitted_real_algebraic(
+    left: RealAlgebraicValue,
+    right: RealAlgebraicValue,
+    left_interval: RationalIsolatingInterval,
+    right_interval: RationalIsolatingInterval,
+) -> RealAlgebraicOrder:
+    """Order roots whose irreducibility and intervals were admitted upstream."""
+    if left.polynomial == right.polynomial:
+        if left.real_root_index == right.real_root_index:
+            return "EQ"
+        return "LT" if left.real_root_index < right.real_root_index else "GT"
+    left_lower = left_interval.lower.as_fraction()
+    left_upper = left_interval.upper.as_fraction()
+    right_lower = right_interval.lower.as_fraction()
+    right_upper = right_interval.upper.as_fraction()
+    if left_upper <= right_lower:
+        return "LT"
+    if right_upper <= left_lower:
+        return "GT"
+    left_poly = _sympy_polynomial(left)
+    right_poly = _sympy_polynomial(right)
+    left_position = right_position = None
+    left_seen = right_seen = 0
+    for position, ((lower, upper), _multiplicity) in enumerate(
+        (left_poly * right_poly).intervals()
+    ):
+        if left_position is None and strict_root_count(left_poly, lower, upper):
+            if left_seen == left.real_root_index:
+                left_position = position
+            left_seen += 1
+        if right_position is None and strict_root_count(right_poly, lower, upper):
+            if right_seen == right.real_root_index:
+                right_position = position
+            right_seen += 1
+        if left_position is not None and right_position is not None:
+            return "LT" if left_position < right_position else "GT"
+    raise ValueError("admitted root intervals do not establish an order")
 
 
 __all__ = [

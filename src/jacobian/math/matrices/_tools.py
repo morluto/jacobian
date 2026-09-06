@@ -87,7 +87,7 @@ def compute_rref(request: RationalMatrixRequest) -> RrefResult:
     return rref_result(request.matrix)
 
 
-def compute_nullspace(request: RationalMatrixRequest) -> NullspaceResult:
+def compute_nullspace(request: MatrixRankRequest) -> NullspaceResult:
     return nullspace_result(request.matrix)
 
 
@@ -435,11 +435,11 @@ TOOLS = (
         operation_id="matrix.nullspace.compute",
         title="Compute a canonical exact nullspace or relation basis",
         description=(
-            "Compute the RREF fundamental basis of the right nullspace over QQ through 64 rows and columns, subject to scalar-work and result-height bounds. "
+            "Compute the RREF fundamental basis of the right nullspace over QQ for dense matrices through 64 axes and coordinate-sparse matrices through 8192 axes, subject to component elimination, coefficient-height, and fundamental-basis output bounds. "
             "When columns are ordered vectors, the result gives their rank and "
             "every exact rational linear dependency coefficient."
         ),
-        request_type=RationalMatrixRequest,
+        request_type=MatrixRankRequest,
         result_type=NullspaceResult,
         run=compute_nullspace,
         tags=(

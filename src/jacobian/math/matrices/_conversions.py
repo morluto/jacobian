@@ -35,28 +35,29 @@ def rational_matrix_to_sympy(matrix: RationalMatrix) -> Any:
     import sympy
 
     return sympy.Matrix(
+        matrix.row_count,
+        matrix.column_count,
         [
-            [
-                sympy.Rational(
-                    parse_canonical_integer(value.num),
-                    parse_canonical_integer(value.den),
-                )
-                for value in row
-            ]
+            sympy.Rational(
+                parse_canonical_integer(value.num), parse_canonical_integer(value.den)
+            )
             for row in matrix.entries
-        ]
+            for value in row
+        ],
     )
 
 
 def rational_matrix_from_sympy(matrix: Any) -> RationalMatrix:
     return RationalMatrix(
+        row_count=matrix.rows,
+        column_count=matrix.cols,
         entries=tuple(
             tuple(
                 rational_from_sympy(matrix[row, column])
                 for column in range(matrix.cols)
             )
             for row in range(matrix.rows)
-        )
+        ),
     )
 
 
@@ -64,7 +65,9 @@ def integer_matrix_to_sympy(matrix: IntegerMatrix) -> Any:
     import sympy
 
     return sympy.Matrix(
-        [[parse_canonical_integer(value) for value in row] for row in matrix.entries]
+        matrix.row_count,
+        matrix.column_count,
+        [parse_canonical_integer(value) for row in matrix.entries for value in row],
     )
 
 
@@ -72,13 +75,15 @@ def integer_matrix_from_sympy(matrix: Any) -> IntegerMatrix:
     if any(value.is_Integer is not True for value in matrix):
         raise ValueError("SymPy result is not an exact integer matrix")
     return IntegerMatrix(
+        row_count=matrix.rows,
+        column_count=matrix.cols,
         entries=tuple(
             tuple(
                 format_canonical_integer(int(matrix[row, column]))
                 for column in range(matrix.cols)
             )
             for row in range(matrix.rows)
-        )
+        ),
     )
 
 

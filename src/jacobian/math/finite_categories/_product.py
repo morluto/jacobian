@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from pydantic_core import PydanticCustomError
+
 from jacobian.canonical import strict_json_object_size
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_categories.values import (
     MAX_CATEGORY_COMPOSABLE_PAIRS,
     MAX_CATEGORY_COMPOSABLE_TRIPLES,
@@ -18,6 +21,7 @@ from jacobian.math.finite_categories.values import (
     ProductMorphismProjection,
     ProductObjectProjection,
     _category_counts,
+    _check_category_laws,
     _identifier_character_count,
     _identifier_shape,
 )
@@ -240,6 +244,15 @@ def _product_data(
     tuple[ProductObjectProjection, ...],
     tuple[ProductMorphismProjection, ...],
 ]:
+    try:
+        _check_category_laws(left)
+        _check_category_laws(right)
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=("left", "right"),
+            code=exc.type,
+            message=exc.message(),
+        ) from exc
     _admit_product(left, right)
     objects = tuple(
         (left_object, right_object)

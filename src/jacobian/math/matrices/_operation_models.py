@@ -23,6 +23,7 @@ from jacobian.math.matrices.values import (
     integer_matrix_axis_schema,
     require_matrix_scalar_digits,
 )
+from jacobian.math.polynomials.values import MonicPolynomial
 
 MAX_INPUT_SCALAR_DIGITS = 256
 MAX_DETERMINANT_MATRIX_DIMENSION = 128
@@ -72,7 +73,9 @@ def _require_raw_matrix(value: object, *, label: str, maximum_axis: int) -> None
     """Bound raw matrix containers before converting JSON arrays to tuples."""
 
     if isinstance(value, dict):
-        unexpected = set(value).difference({"domain", "entries"})
+        unexpected = set(value).difference(
+            {"domain", "entries", "row_count", "column_count"}
+        )
         if unexpected:
             raise _validation_error(
                 "shape_mismatch", f"{label} contains unknown fields"
@@ -80,6 +83,15 @@ def _require_raw_matrix(value: object, *, label: str, maximum_axis: int) -> None
         entries = value.get("entries")
     else:
         entries = getattr(value, "entries", None)
+    for axis in ("row_count", "column_count"):
+        count = (
+            value.get(axis) if isinstance(value, dict) else getattr(value, axis, None)
+        )
+        if isinstance(count, int) and count > maximum_axis:
+            raise _validation_error(
+                "budget_exceeded",
+                f"{label} dimensions are limited to {maximum_axis} rows and columns",
+            )
     if not isinstance(entries, (list, tuple)):
         return
     if len(entries) > maximum_axis:
@@ -174,9 +186,12 @@ class _MatrixRequest(StrictModel):
 
 
 def _require_computation_dimensions(
-    entries: tuple[tuple[CanonicalRational, ...], ...],
+    matrix: RationalMatrix,
 ) -> None:
-    if len(entries) > MAX_MATRIX_DIMENSION or len(entries[0]) > MAX_MATRIX_DIMENSION:
+    if (
+        matrix.row_count > MAX_MATRIX_DIMENSION
+        or matrix.column_count > MAX_MATRIX_DIMENSION
+    ):
         raise _validation_error(
             "budget_exceeded",
             "matrix computation dimensions are limited to "
@@ -187,7 +202,7 @@ def _require_computation_dimensions(
 def _require_integer_computation_dimensions(matrix: IntegerMatrix) -> None:
     if (
         len(matrix.entries) > MAX_MATRIX_DIMENSION
-        or len(matrix.entries[0]) > MAX_MATRIX_DIMENSION
+        or matrix.column_count > MAX_MATRIX_DIMENSION
     ):
         raise _validation_error(
             "budget_exceeded",
@@ -216,7 +231,7 @@ def _require_square_system_admission(
     """
 
     rows = len(matrix.entries)
-    if len(matrix.entries[0]) != rows or len(rhs) != rows:
+    if matrix.column_count != rows or len(rhs) != rows:
         raise _validation_error(
             "budget_exceeded", "linear solve requires a square matrix and matching rhs"
         )
@@ -283,13 +298,11 @@ class MatrixRankRequest(_MatrixRequest):
             isinstance(entry, dict) and {"row", "column", "value"}.issubset(entry)
             for entry in entries
         )
-        if isinstance(value, SparseRationalMatrix) or (
-            isinstance(value, dict)
-            and (
-                "row_count" in value
-                or "column_count" in value
-                or has_coordinate_entries
-            )
+        if (
+            isinstance(value, SparseRationalMatrix)
+            or entries == []
+            or entries == ()
+            or (isinstance(value, dict) and has_coordinate_entries)
         ):
             _require_raw_sparse_matrix(value, label="matrix input")
             return
@@ -355,10 +368,10 @@ class RrefResult(StrictModel):
 
     @model_validator(mode="after")
     def require_source_bound(self) -> Self:
-        column_count = len(self.matrix.entries[0])
+        column_count = self.matrix.column_count
         if (
             len(self.reduced_matrix.entries) != len(self.matrix.entries)
-            or len(self.reduced_matrix.entries[0]) != column_count
+            or self.reduced_matrix.column_count != column_count
         ):
             raise _validation_error(
                 "shape_mismatch", "reduced matrix must have the source shape"
@@ -409,7 +422,7 @@ class MatrixRankResult(StrictModel):
             )
         if isinstance(self.matrix, RationalMatrix):
             row_count = len(self.matrix.entries)
-            column_count = len(self.matrix.entries[0])
+            column_count = self.matrix.column_count
         else:
             row_count = self.matrix.row_count
             column_count = self.matrix.column_count
@@ -434,14 +447,14 @@ class NullspaceResult(StrictModel):
     structural and does not establish an independently supplied claim.
     """
 
-    matrix: RationalMatrix
-    ambient_dimension: int = Field(ge=1, le=MAX_EXACT_LINEAR_MATRIX_AXIS)
-    rank: int = Field(ge=0, le=MAX_EXACT_LINEAR_MATRIX_AXIS)
-    nullity: int = Field(ge=0, le=MAX_EXACT_LINEAR_MATRIX_AXIS)
+    matrix: RationalMatrix | SparseRationalMatrix
+    ambient_dimension: int = Field(ge=0, le=MAX_SPARSE_RATIONAL_MATRIX_AXIS)
+    rank: int = Field(ge=0, le=MAX_SPARSE_RATIONAL_MATRIX_AXIS)
+    nullity: int = Field(ge=0, le=MAX_SPARSE_RATIONAL_MATRIX_AXIS)
     basis_vectors: tuple[tuple[CanonicalRational, ...], ...] = Field(
-        max_length=MAX_EXACT_LINEAR_MATRIX_AXIS
+        max_length=MAX_SPARSE_RATIONAL_MATRIX_AXIS
     )
-    free_columns: tuple[int, ...] = Field(max_length=MAX_EXACT_LINEAR_MATRIX_AXIS)
+    free_columns: tuple[int, ...] = Field(max_length=MAX_SPARSE_RATIONAL_MATRIX_AXIS)
     convention: Literal["RREF_FUNDAMENTAL_BASIS"] = "RREF_FUNDAMENTAL_BASIS"
 
     @classmethod
@@ -450,7 +463,7 @@ class NullspaceResult(StrictModel):
 
     @model_validator(mode="after")
     def require_basis_shape(self) -> Self:
-        if self.ambient_dimension != len(self.matrix.entries[0]):
+        if self.ambient_dimension != (self.matrix.column_count):
             raise _validation_error(
                 "shape_mismatch", "ambient dimension must equal the source column count"
             )
@@ -485,23 +498,25 @@ class NullspaceResult(StrictModel):
 
 
 class CharacteristicPolynomialResult(StrictModel):
-    variable: Literal["lambda"] = "lambda"
-    degree: int = Field(ge=1, le=MAX_CHARACTERISTIC_POLYNOMIAL_ORDER)
-    coefficients_descending: tuple[CanonicalRational, ...] = Field(
-        min_length=2,
-        max_length=MAX_CHARACTERISTIC_POLYNOMIAL_ORDER + 1,
-    )
-    convention: Literal["DET_LAMBDA_I_MINUS_A"] = "DET_LAMBDA_I_MINUS_A"
+    matrix: RationalMatrix
+    polynomial: MonicPolynomial
+    degree: int = Field(ge=0, le=MAX_CHARACTERISTIC_POLYNOMIAL_ORDER)
+    convention: Literal["DET_T_I_MINUS_A"] = "DET_T_I_MINUS_A"
+
+    @property
+    def coefficients_descending(self) -> tuple[CanonicalRational, ...]:
+        """Derived dense projection; the serialized value is the QQ polynomial."""
+        return tuple(reversed(self.polynomial.coefficients))
 
     @model_validator(mode="after")
-    def require_dense_monic_coefficients(self) -> Self:
-        if len(self.coefficients_descending) != self.degree + 1:
+    def require_source_degree(self) -> Self:
+        if (
+            self.degree != len(self.matrix.entries)
+            or self.degree != self.polynomial.polynomial.terms[0].exponents[0]
+        ):
             raise _validation_error(
-                "shape_mismatch", "dense coefficient count must be degree plus one"
-            )
-        if self.coefficients_descending[0] != CanonicalRational(num="1", den="1"):
-            raise _validation_error(
-                "budget_exceeded", "characteristic polynomial must be monic"
+                "shape_mismatch",
+                "characteristic degree must match the matrix and polynomial",
             )
         return self
 
@@ -524,9 +539,9 @@ class MatrixTraceResult(StrictModel):
 
 class MatrixProductResult(StrictModel):
     product: RationalMatrix
-    left_rows: int = Field(ge=1, le=MAX_MATRIX_PRODUCT_AXIS)
-    inner_dimension: int = Field(ge=1, le=MAX_MATRIX_PRODUCT_AXIS)
-    right_columns: int = Field(ge=1, le=MAX_MATRIX_PRODUCT_AXIS)
+    left_rows: int = Field(ge=0, le=MAX_MATRIX_PRODUCT_AXIS)
+    inner_dimension: int = Field(ge=0, le=MAX_MATRIX_PRODUCT_AXIS)
+    right_columns: int = Field(ge=0, le=MAX_MATRIX_PRODUCT_AXIS)
     convention: Literal["STANDARD_ROW_BY_COLUMN_PRODUCT_OVER_QQ"] = (
         "STANDARD_ROW_BY_COLUMN_PRODUCT_OVER_QQ"
     )
@@ -537,7 +552,7 @@ class MatrixProductResult(StrictModel):
             raise _validation_error(
                 "budget_exceeded", "product row count must equal left_rows"
             )
-        if len(self.product.entries[0]) != self.right_columns:
+        if self.product.column_count != self.right_columns:
             raise _validation_error(
                 "budget_exceeded", "product column count must equal right_columns"
             )
@@ -590,7 +605,7 @@ class RationalLinearSolveResult(StrictModel):
                 "right-hand side length must equal the source row count",
             )
 
-        columns = len(self.matrix.entries[0])
+        columns = self.matrix.column_count
         if solution is not None and len(solution) != columns:
             raise _validation_error(
                 "budget_exceeded",
@@ -621,10 +636,10 @@ class MatrixKroneckerProductResult(StrictModel):
     """The Kronecker product of two bounded matrices over QQ."""
 
     product: RationalMatrix
-    left_rows: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
-    left_columns: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
-    right_rows: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
-    right_columns: int = Field(ge=1, le=MAX_MATRIX_DIMENSION)
+    left_rows: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
+    left_columns: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
+    right_rows: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
+    right_columns: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
 
     @model_validator(mode="after")
     def require_product_shape(self) -> Self:
@@ -633,7 +648,7 @@ class MatrixKroneckerProductResult(StrictModel):
                 "shape_mismatch",
                 "Kronecker product row count must equal left_rows * right_rows",
             )
-        if len(self.product.entries[0]) != self.left_columns * self.right_columns:
+        if self.product.column_count != self.left_columns * self.right_columns:
             raise _validation_error(
                 "shape_mismatch",
                 "Kronecker product column count must equal left_columns * right_columns",
@@ -663,7 +678,7 @@ class MatrixPartialTraceResult(StrictModel):
             raise _validation_error(
                 "shape_mismatch", "reduced matrix row count must equal kept_dimension"
             )
-        if len(self.reduced_matrix.entries[0]) != self.kept_dimension:
+        if self.reduced_matrix.column_count != self.kept_dimension:
             raise _validation_error(
                 "shape_mismatch",
                 "reduced matrix must be square of order kept_dimension",

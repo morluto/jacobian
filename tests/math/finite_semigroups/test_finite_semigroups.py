@@ -1,5 +1,7 @@
 """Known-answer and adversarial tests for finite semigroup operations."""
 
+from __future__ import annotations
+
 from typing import TypedDict
 
 import pytest
@@ -8,11 +10,18 @@ from pydantic import ValidationError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_semigroups._models import (
     ElementPowerRequest,
+    ElementPowerResult,
     FiniteSemigroup,
     GeneratedSubsemigroupRequest,
+    GeneratedSubsemigroupResult,
+    GreenRelationsRequest,
+    GreenRelationsResult,
     IdempotentsRequest,
+    IdempotentsResult,
     PowerProfileRequest,
+    PowerProfileResult,
     PrincipalIdealsRequest,
+    PrincipalIdealsResult,
 )
 from jacobian.math.finite_semigroups.operations import (
     element_power,
@@ -24,27 +33,29 @@ from jacobian.math.finite_semigroups.operations import (
 )
 
 
-def compute_power_profile(request: PowerProfileRequest):
+def compute_power_profile(request: PowerProfileRequest) -> PowerProfileResult:
     return power_profile(request.semigroup, request.element)
 
 
-def compute_generated_subsemigroup(request: GeneratedSubsemigroupRequest):
+def compute_generated_subsemigroup(
+    request: GeneratedSubsemigroupRequest,
+) -> GeneratedSubsemigroupResult:
     return generated_subsemigroup(request.semigroup, request.generators)
 
 
-def compute_element_power(request: ElementPowerRequest):
+def compute_element_power(request: ElementPowerRequest) -> ElementPowerResult:
     return element_power(request.semigroup, request.element, request.exponent)
 
 
-def compute_idempotents(request: IdempotentsRequest):
+def compute_idempotents(request: IdempotentsRequest) -> IdempotentsResult:
     return idempotents(request.semigroup)
 
 
-def compute_principal_ideals(request: PrincipalIdealsRequest):
+def compute_principal_ideals(request: PrincipalIdealsRequest) -> PrincipalIdealsResult:
     return principal_ideals(request.semigroup, request.elements)
 
 
-def compute_green_relations(request):
+def compute_green_relations(request: GreenRelationsRequest) -> GreenRelationsResult:
     return green_relations(request.semigroup)
 
 
@@ -139,17 +150,18 @@ class TestFiniteSemigroup:
 
     def test_non_associative_rejected(self) -> None:
         # (a*b)*a = b*a = c, but a*(b*a) = a*c = a, so non-associative
-        with pytest.raises(ValidationError) as error:
-            FiniteSemigroup.model_validate(
-                {
-                    "elements": ["a", "b", "c"],
-                    "multiplication": [
-                        ["a", "b", "a"],
-                        ["c", "a", "b"],
-                        ["c", "b", "c"],
-                    ],
-                }
-            )
+        semigroup = FiniteSemigroup.model_validate(
+            {
+                "elements": ["a", "b", "c"],
+                "multiplication": [
+                    ["a", "b", "a"],
+                    ["c", "a", "b"],
+                    ["c", "b", "c"],
+                ],
+            }
+        )
+        with pytest.raises(OperationDomainValidationError) as error:
+            power_profile(semigroup, "a")
         assert error.value.errors()[0]["type"] == "finite_semigroup.not_associative"
 
     def test_self_loop_rejected(self) -> None:

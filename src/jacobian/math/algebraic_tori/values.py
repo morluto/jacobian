@@ -15,9 +15,9 @@ from jacobian.canonical import CanonicalizationError, parse_canonical_integer
 from jacobian.math.matrices.certified_snf.values import (
     MAX_CERTIFIED_SNF_INPUT_DIGITS,
     MAX_CERTIFIED_SNF_INPUT_DIMENSION,
-    CertifiedIntegerMatrix,
     SmithNormalFormCertificate,
 )
+from jacobian.math.matrices.values import IntegerMatrix
 
 TorusAxisLabel = Annotated[
     str,
@@ -62,7 +62,7 @@ def _integer_digits(value: str) -> int:
 class HomogeneousMonomialSystem(StrictModel):
     """An axis-bound system ``product_j x_j^A_ij = 1`` on ``(CC*)^n``."""
 
-    exponent_matrix: CertifiedIntegerMatrix
+    exponent_matrix: IntegerMatrix
     equation_axis: tuple[TorusAxisLabel, ...] = Field(
         max_length=MAX_CERTIFIED_SNF_INPUT_DIMENSION
     )
@@ -221,10 +221,10 @@ class AlgebraicTorusSolutionSubgroup(StrictModel):
     reduced_free_parameter_axis: tuple[TorusAxisLabel, ...] = Field(
         max_length=MAX_CERTIFIED_SNF_INPUT_DIMENSION
     )
-    torsion_exponent_map: CertifiedIntegerMatrix
-    smith_free_exponent_map: CertifiedIntegerMatrix
-    reduced_free_exponent_map: CertifiedIntegerMatrix
-    smith_free_parameters_from_reduced: CertifiedIntegerMatrix
+    torsion_exponent_map: IntegerMatrix
+    smith_free_exponent_map: IntegerMatrix
+    reduced_free_exponent_map: IntegerMatrix
+    smith_free_parameters_from_reduced: IntegerMatrix
     free_rank: StrictInt = Field(ge=0, le=MAX_CERTIFIED_SNF_INPUT_DIMENSION)
     parameterization_convention: Literal[
         "X_I_EQUALS_PRODUCT_OF_PARAMETERS_TO_EXPONENT_MAP_IJ"
@@ -363,10 +363,10 @@ class AlgebraicTorusSolutionSubgroup(StrictModel):
         torsion_parameter_axis: tuple[str, ...],
         smith_free_parameter_axis: tuple[str, ...],
         reduced_free_parameter_axis: tuple[str, ...],
-        torsion_exponent_map: CertifiedIntegerMatrix,
-        smith_free_exponent_map: CertifiedIntegerMatrix,
-        reduced_free_exponent_map: CertifiedIntegerMatrix,
-        smith_free_parameters_from_reduced: CertifiedIntegerMatrix,
+        torsion_exponent_map: IntegerMatrix,
+        smith_free_exponent_map: IntegerMatrix,
+        reduced_free_exponent_map: IntegerMatrix,
+        smith_free_parameters_from_reduced: IntegerMatrix,
         free_rank: int,
     ) -> Self:
         return cls.model_construct(

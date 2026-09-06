@@ -35,6 +35,9 @@ def embed_projective_point_in_finite_field(
             "finite-field axis labels must match the prime-field point axis"
         )
 
+    from jacobian.math.finite_fields._admission import require_field
+
+    require_field(presentation)
     zero_tail = (0,) * (presentation.degree - 1)
     return FiniteFieldProjectivePoint(
         presentation=presentation,

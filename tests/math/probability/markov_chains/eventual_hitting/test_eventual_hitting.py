@@ -6,16 +6,23 @@ import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.matrices.values import rational_matrix_from_fractions
+from jacobian.math.probability.markov_chains.eventual_hitting._models import (
+    EventualHittingProfileRequest,
+)
+from jacobian.math.probability.markov_chains.eventual_hitting._tools import (
+    compute_ehp_op,
+)
 from jacobian.math.probability.markov_chains.eventual_hitting.operations import (
     compute_eventual_hitting_profile,
 )
 
 
-def _cr(num, den=1):
+def _cr(num: int, den: int = 1) -> Fraction:
     return Fraction(num, den)
 
 
-def _matrix(rows):
+def _matrix(rows: list[list[int]]) -> tuple[tuple[Fraction, ...], ...]:
     return tuple(tuple(Fraction(v) for v in row) for row in rows)
 
 
@@ -31,7 +38,9 @@ def test_two_state_absorbing() -> None:
         (_cr(1, 2), _cr(1, 2)),
         (_cr(0), _cr(1)),
     )
-    result = compute_eventual_hitting_profile(matrix, (1,))
+    result = compute_eventual_hitting_profile(
+        rational_matrix_from_fractions(matrix), (1,)
+    )
     assert result.hitting_probabilities[0].as_fraction() == Fraction(1)
     assert result.hitting_probabilities[1].as_fraction() == Fraction(1)
 
@@ -42,7 +51,9 @@ def test_impossible_target() -> None:
         (_cr(1), _cr(0)),
         (_cr(0), _cr(1)),
     )
-    result = compute_eventual_hitting_profile(matrix, (1,))
+    result = compute_eventual_hitting_profile(
+        rational_matrix_from_fractions(matrix), (1,)
+    )
     assert result.hitting_probabilities[0].as_fraction() == Fraction(0)
     assert result.hitting_probabilities[1].as_fraction() == Fraction(1)
     assert 0 in result.zero_states
@@ -55,7 +66,9 @@ def test_all_target() -> None:
         (_cr(1, 2), _cr(1, 2)),
         (_cr(1, 2), _cr(1, 2)),
     )
-    result = compute_eventual_hitting_profile(matrix, (0, 1))
+    result = compute_eventual_hitting_profile(
+        rational_matrix_from_fractions(matrix), (0, 1)
+    )
     for i in range(2):
         assert result.hitting_probabilities[i].as_fraction() == Fraction(1)
 
@@ -67,7 +80,9 @@ def test_three_state_chain() -> None:
         (_cr(0), _cr(0), _cr(1)),
         (_cr(0), _cr(0), _cr(1)),
     )
-    result = compute_eventual_hitting_profile(matrix, (2,))
+    result = compute_eventual_hitting_profile(
+        rational_matrix_from_fractions(matrix), (2,)
+    )
     assert result.hitting_probabilities[0].as_fraction() == Fraction(1)
     assert result.hitting_probabilities[1].as_fraction() == Fraction(1)
     assert result.hitting_probabilities[2].as_fraction() == Fraction(1)
@@ -81,7 +96,9 @@ def test_mixed_probabilities() -> None:
         (_cr(0), _cr(1, 2), _cr(1, 2)),
         (_cr(0), _cr(0), _cr(1)),
     )
-    result = compute_eventual_hitting_profile(matrix, (2,))
+    result = compute_eventual_hitting_profile(
+        rational_matrix_from_fractions(matrix), (2,)
+    )
     h = [r.as_fraction() for r in result.hitting_probabilities]
     assert h[2] == Fraction(1)
     assert h[1] == Fraction(1)
@@ -93,8 +110,10 @@ def test_result_preserves_source() -> None:
         (_cr(1), _cr(0)),
         (_cr(0), _cr(1)),
     )
-    result = compute_eventual_hitting_profile(matrix, (0,))
-    assert result.matrix == tuple(
+    result = compute_eventual_hitting_profile(
+        rational_matrix_from_fractions(matrix), (0,)
+    )
+    assert result.matrix.entries == tuple(
         tuple(CanonicalRational.from_fraction(value) for value in row) for row in matrix
     )
     assert result.target_states == (0,)
@@ -106,7 +125,9 @@ def test_reducible_chain_uses_minimal_nonnegative_solution() -> None:
         (Fraction(1, 2), Fraction(0), Fraction(1, 2)),
         (Fraction(0), Fraction(0), Fraction(1)),
     )
-    result = compute_eventual_hitting_profile(matrix, (2,))
+    result = compute_eventual_hitting_profile(
+        rational_matrix_from_fractions(matrix), (2,)
+    )
     assert tuple(value.as_fraction() for value in result.hitting_probabilities) == (
         Fraction(0),
         Fraction(1, 2),
@@ -116,7 +137,9 @@ def test_reducible_chain_uses_minimal_nonnegative_solution() -> None:
 
 def test_rejects_non_stochastic_native_matrix() -> None:
     with pytest.raises(OperationDomainValidationError):
-        compute_eventual_hitting_profile(((Fraction(1),), (Fraction(1),)), (0,))
+        compute_eventual_hitting_profile(
+            rational_matrix_from_fractions(((Fraction(1),), (Fraction(1),))), (0,)
+        )
 
 
 def test_denominator_height_is_bounded_before_solving() -> None:
@@ -129,4 +152,42 @@ def test_denominator_height_is_bounded_before_solving() -> None:
     )
 
     with pytest.raises(OperationDomainValidationError, match="rational result bound"):
-        compute_eventual_hitting_profile(matrix, (2,))
+        compute_eventual_hitting_profile(rational_matrix_from_fractions(matrix), (2,))
+
+
+@pytest.mark.parametrize("size", [129, 256])
+def test_identity_chain_accepts_matrix_orders_above_generic_markov_limit(
+    size: int,
+) -> None:
+    matrix = rational_matrix_from_fractions(
+        [
+            [Fraction(1) if row == column else Fraction(0) for column in range(size)]
+            for row in range(size)
+        ]
+    )
+    request = EventualHittingProfileRequest(matrix=matrix, target_states=(0,))
+    result = compute_ehp_op(
+        EventualHittingProfileRequest.model_validate_json(request.model_dump_json())
+    )
+    assert result.matrix == matrix
+    assert [value.as_fraction() for value in result.hitting_probabilities] == [
+        Fraction(int(state == 0)) for state in range(size)
+    ]
+
+
+def test_empty_native_matrix_is_rejected_before_backend() -> None:
+    matrix = rational_matrix_from_fractions(())
+    with pytest.raises(OperationDomainValidationError, match="dimension"):
+        compute_eventual_hitting_profile(matrix, (0,))
+
+
+def test_native_matrix_above_eventual_axis_limit_is_rejected_before_backend() -> None:
+    from jacobian.math.probability.markov_chains.eventual_hitting.operations import (
+        _admit_eventual_hitting,
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="dimension"):
+        _admit_eventual_hitting(
+            tuple((Fraction(1),) for _ in range(4097)),
+            (0,),
+        )

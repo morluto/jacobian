@@ -33,8 +33,13 @@ def _require_lattice_matrix_envelope(matrix: IntegerMatrix, *, label: str) -> No
     """Admit one integer matrix into the lattice 32-axis computation envelope."""
 
     rows = len(matrix.entries)
-    columns = len(matrix.entries[0])
-    if rows > MAX_MATRIX_DIMENSION or columns > MAX_MATRIX_DIMENSION:
+    columns = matrix.column_count
+    if (
+        not rows
+        or not columns
+        or rows > MAX_MATRIX_DIMENSION
+        or columns > MAX_MATRIX_DIMENSION
+    ):
         raise _validation_error(
             "budget_exceeded",
             f"{label} dimensions are limited to {MAX_MATRIX_DIMENSION} rows and columns",
@@ -153,7 +158,7 @@ class LatticeReductionResult(StrictModel):
                 "lll_transformation_rows",
                 "LLL transformation must have one row per basis row",
             )
-        if len(self.transformation.entries[0]) != rows:
+        if self.transformation.column_count != rows:
             raise _validation_error(
                 "lll_transformation_square",
                 "LLL transformation must be square by basis row count",
@@ -181,7 +186,7 @@ class IntegerLattice(StrictModel):
     @model_validator(mode="after")
     def require_full_row_rank(self) -> Self:
         rows = len(self.basis.entries)
-        columns = len(self.basis.entries[0]) if rows else 0
+        columns = self.basis.column_count
         if rows == 0:
             raise _validation_error(
                 "basis_empty", "lattice basis must contain at least one row"
@@ -200,48 +205,7 @@ class IntegerLattice(StrictModel):
             maximum=_MAX_LATTICE_INPUT_SCALAR_DIGITS,
             label="lattice basis",
         )
-        _require_full_rank_qq(self.basis.entries, rows, columns)
         return self
-
-
-def _require_full_rank_qq(
-    entries: tuple[tuple[str, ...], ...],
-    rows: int,
-    columns: int,
-) -> None:
-    """Raise when the integer rows are not full row rank over ``QQ``."""
-
-    from fractions import Fraction
-
-    matrix: list[list[Fraction]] = [
-        [Fraction(entry) for entry in row] for row in entries
-    ]
-    rank = 0
-    col = 0
-    row = 0
-    work = [row[:] for row in matrix]
-    while row < rows and col < columns:
-        pivot = None
-        for r in range(row, rows):
-            if work[r][col] != 0:
-                pivot = r
-                break
-        if pivot is None:
-            col += 1
-            continue
-        work[row], work[pivot] = work[pivot], work[row]
-        for r in range(row + 1, rows):
-            if work[r][col] != 0:
-                factor = work[r][col] / work[row][col]
-                for c in range(col, columns):
-                    work[r][c] -= factor * work[row][c]
-        row += 1
-        col += 1
-        rank += 1
-    if rank != rows:
-        raise _validation_error(
-            "basis_not_full_rank", "lattice basis must have full row rank over QQ"
-        )
 
 
 class RankGramRequest(StrictModel):

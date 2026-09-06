@@ -12,12 +12,12 @@ from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
 
 def context(presentation: FiniteFieldPresentation) -> Any:
-    from flint import fmpz_mod_poly_ctx, fq_default_ctx
+    from flint import fq_default_ctx
 
-    modulus = fmpz_mod_poly_ctx(presentation.characteristic)(
-        list(presentation.modulus_coefficients)
-    )
-    result = fq_default_ctx(modulus=modulus)
+    from jacobian.math.finite_fields._admission import require_field
+
+    modulus = require_field(presentation)
+    result = fq_default_ctx(modulus=modulus, check_prime=False, check_modulus=False)
     recovered = tuple(int(value) for value in result.modulus().coeffs())
     if recovered != presentation.modulus_coefficients:
         raise ValueError("python-flint did not preserve the exact field modulus")

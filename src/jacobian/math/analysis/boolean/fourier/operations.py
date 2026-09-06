@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-import sympy
-
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.analysis.boolean._models import MAX_WALSH_VARIABLES
 from jacobian.math.analysis.boolean.fourier._models import (
     MAX_VARIABLES,
     MIN_VARIABLES,
@@ -27,7 +26,12 @@ def _rational(value: Fraction | int) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(value))
 
 
-def _admit_truth_table(truth_table: tuple[CanonicalRational, ...]) -> int:
+def _admit_truth_table(
+    truth_table: tuple[CanonicalRational, ...],
+    *,
+    minimum: int = MIN_VARIABLES,
+    maximum: int = MAX_VARIABLES,
+) -> int:
     size = len(truth_table)
     if size & (size - 1) != 0:
         raise OperationDomainValidationError(
@@ -36,13 +40,11 @@ def _admit_truth_table(truth_table: tuple[CanonicalRational, ...]) -> int:
             message="truth table length must be a power of two",
         )
     variable_count = _variable_count(size)
-    if not MIN_VARIABLES <= variable_count <= MAX_VARIABLES:
+    if not minimum <= variable_count <= maximum:
         raise OperationDomainValidationError(
             location=("truth_table",),
             code="boolean_analysis.variable_count",
-            message=(
-                f"variable count must be between {MIN_VARIABLES} and {MAX_VARIABLES}"
-            ),
+            message=(f"variable count must be between {minimum} and {maximum}"),
         )
     if any(entry.as_fraction() not in (0, 1) for entry in truth_table):
         raise OperationDomainValidationError(
@@ -64,7 +66,7 @@ def truth_table(values: tuple[CanonicalRational, ...]) -> TruthTableResult:
 
 def fourier_spectrum(values: tuple[CanonicalRational, ...]) -> FourierSpectrumResult:
     """Compute the exact Walsh-Hadamard (Fourier) spectrum via FWHT."""
-    variable_count = _admit_truth_table(values)
+    variable_count = _admit_truth_table(values, minimum=0, maximum=MAX_WALSH_VARIABLES)
     spectrum = _fast_walsh_hadamard_transform(_truth_values(values))
     return FourierSpectrumResult(
         spectrum=tuple(_rational(value) for value in spectrum),
@@ -88,19 +90,8 @@ def multilinear_extension(
     n = _admit_truth_table(values)
     coefficients = _subset_mobius_transform(_truth_values(values))
 
-    symbols = sympy.symbols(f"x0:{n}")
-    if not isinstance(symbols, tuple):
-        symbols = (symbols,)
-
-    terms = [
-        sympy.Integer(coefficient)
-        * sympy.prod(symbols[bit] for bit in range(n) if subset_mask & (1 << bit))
-        for subset_mask, coefficient in enumerate(coefficients)
-        if coefficient
-    ]
-    poly = sympy.Add(*terms)
     return MultilinearExtensionResult(
-        polynomial=str(poly),
+        coefficients=tuple(_rational(value) for value in coefficients),
         variable_count=n,
     )
 

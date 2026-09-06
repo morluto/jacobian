@@ -20,6 +20,7 @@ from jacobian._execution import (
     current_request_execution,
     request_cancelled,
 )
+from jacobian.backends import BackendUnavailableError
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -983,6 +984,8 @@ def _raise_ideal_backend_failure(
     operation: str, outcome: str, detail: str | None
 ) -> NoReturn:
     message = detail or f"ideal {operation} backend did not produce an exact result"
+    if outcome == "UNAVAILABLE":
+        raise BackendUnavailableError("singular", detail=message)
     if outcome == "TIMEOUT":
         raise OperationExecutionTimeoutError(message)
     if outcome == "CANCELLED":

@@ -20,7 +20,7 @@ def _combinatorics_validation_error(message: str) -> PydanticCustomError:
     return PydanticCustomError(code, message, {})
 
 
-MAX_EXACT_COVER_ITEMS = 256
+MAX_EXACT_COVER_ITEMS = 4_096
 MAX_EXACT_COVER_PRIMARY_ITEMS = MAX_EXACT_COVER_ITEMS
 MAX_EXACT_COVER_SECONDARY_ITEMS = MAX_EXACT_COVER_ITEMS
 MAX_EXACT_COVER_ROWS = 4_096
@@ -28,7 +28,7 @@ MAX_EXACT_COVER_INCIDENCES = 65_536
 
 # A million-node adversarial pass is too slow to repeat at the public boundary;
 # 100,000 nodes per pass is a measured conservative execution fallback,
-# independent of the broader 256-item representation bound.
+# independent of the broader 4096-item representation bound.
 MAX_EXACT_COVER_SEARCH_NODES_PER_PASS = 100_000
 
 ExactCoverSearchStatus = Literal["FOUND", "NO_COVER", "UNKNOWN"]
@@ -356,6 +356,22 @@ def find_generalized_exact_cover(
         raise _combinatorics_validation_error(
             "search_node_limit must be between 1 and "
             f"{MAX_EXACT_COVER_SEARCH_NODES_PER_PASS}"
+        )
+    # Price the widest item scan per visited node. Preserve the former
+    # 256 items * 100000 nodes * 64 words envelope while allowing deeper,
+    # cheap searches. Index and DFS storage stay below 134 million bits.
+    work = (
+        search_node_limit
+        * len(instance.primary_items)
+        * max(1, (max(len(instance.rows), len(instance.primary_items)) + 63) // 64)
+    )
+    if work > 256 * 100_000 * 64:
+        from jacobian.catalog.models import OperationDomainValidationError
+
+        raise OperationDomainValidationError(
+            location=("search_node_limit",),
+            code="combinatorics.exact_cover_work",
+            message="item-scan word work exceeds the exact-cover envelope",
         )
     return _solve_generalized_exact_cover(instance, search_node_limit)
 

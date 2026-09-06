@@ -552,8 +552,7 @@ class FiniteFieldMapResult(StrictModel):
         for coefficient in self.coefficients:
             _parse_canonical_integer(coefficient)
         self._require_complete_edges()
-        cycle_set = self._require_canonical_cycles()
-        self._require_tail_evidence(cycle_set)
+        self._require_canonical_cycles()
         return self
 
     @classmethod
@@ -586,7 +585,7 @@ class FiniteFieldMapResult(StrictModel):
         if any(length < 0 for length in self.tail_lengths):
             raise ValueError("tail lengths must be nonnegative")
 
-    def _require_canonical_cycles(self) -> set[int]:
+    def _require_canonical_cycles(self) -> None:
         if self.cycles != tuple(sorted(self.cycles)):
             raise ValueError("cycles must be canonical and sorted")
         if any(not cycle or cycle[0] != min(cycle) for cycle in self.cycles):
@@ -594,24 +593,6 @@ class FiniteFieldMapResult(StrictModel):
         cycle_nodes = [node for cycle in self.cycles for node in cycle]
         if len(cycle_nodes) != len(set(cycle_nodes)):
             raise ValueError("functional graph cycles must be disjoint")
-        targets = tuple(target for _, target in self.edges)
-        for cycle in self.cycles:
-            for index, node in enumerate(cycle):
-                if targets[node] != cycle[(index + 1) % len(cycle)]:
-                    raise ValueError("cycle must follow functional graph edges")
-        return set(cycle_nodes)
-
-    def _require_tail_evidence(self, cycle_set: set[int]) -> None:
-        if cycle_set != {
-            node for node, length in enumerate(self.tail_lengths) if length == 0
-        }:
-            raise ValueError("zero tail lengths must identify exactly the cycle nodes")
-        if any(
-            self.tail_lengths[source] != self.tail_lengths[target] + 1
-            for source, target in self.edges
-            if source not in cycle_set
-        ):
-            raise ValueError("tail lengths must decrease by one along every tail edge")
 
 
 def _parse_canonical_integer(value: str) -> int:

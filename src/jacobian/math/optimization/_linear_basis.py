@@ -75,6 +75,7 @@ def linear_execution() -> Iterator[None]:
 class LinearAdmission:
     columns: tuple[int, ...]
     result_digits: int
+    components: tuple[tuple[tuple[int, ...], tuple[int, ...]], ...] = ()
 
 
 def basis_bounds(variables: int, equations: int) -> tuple[int, int]:
@@ -100,6 +101,37 @@ def basis_bounds(variables: int, equations: int) -> tuple[int, int]:
     return candidates, updates
 
 
+def _constraint_components(
+    program: StandardFormRationalLinearProgram,
+) -> tuple[tuple[tuple[int, ...], tuple[int, ...]], ...]:
+    row_columns = [
+        tuple(j for j, value in enumerate(row) if value.num != "0")
+        for row in program.coefficients
+    ]
+    column_rows: dict[int, list[int]] = {}
+    for i, source_columns in enumerate(row_columns):
+        for j in source_columns:
+            column_rows.setdefault(j, []).append(i)
+    remaining = set(column_rows)
+    components = []
+    while remaining:
+        pending = [min(remaining)]
+        rows: set[int] = set()
+        columns: set[int] = set()
+        while pending:
+            j = pending.pop()
+            if j not in remaining:
+                continue
+            remaining.remove(j)
+            columns.add(j)
+            for i in column_rows[j]:
+                if i not in rows:
+                    rows.add(i)
+                    pending.extend(row_columns[i])
+        components.append((tuple(sorted(rows)), tuple(sorted(columns))))
+    return tuple(components)
+
+
 def admit_linear_program(program: StandardFormRationalLinearProgram) -> LinearAdmission:
     columns = tuple(
         j
@@ -108,11 +140,18 @@ def admit_linear_program(program: StandardFormRationalLinearProgram) -> LinearAd
     )
     digits = _result_digit_bound(program)
     rows = len(_active_equations(program))
-    candidates, work = (
-        (0, 0)
-        if _has_trivial_inconsistent_row(program)
-        else basis_bounds(len(columns), rows)
-    )
+    components = _constraint_components(program)
+    if _has_trivial_inconsistent_row(program):
+        candidates, work = 0, 0
+    else:
+        bounds = [basis_bounds(len(cs), len(rs)) for rs, cs in components]
+        candidates = sum(count for count, _ in bounds)
+        # Source scans, subproblem projection and certificate assembly remain
+        # in source coordinates; their dense work is charged independently.
+        work = sum(cost for _, cost in bounds) + 16 * (len(program.rhs) + 1) * (
+            len(program.variables) + 1
+        )
+
     quantities = (
         f"normalized_columns={len(program.variables)}, active_columns={len(columns)}, "
         f"normalized_rows={len(program.rhs)}, active_rows={rows}, "
@@ -131,7 +170,7 @@ def admit_linear_program(program: StandardFormRationalLinearProgram) -> LinearAd
                 code=f"optimization.linear.{reason}",
                 message=f"Exact LP {reason} exceeded: {quantities}.",
             )
-    return LinearAdmission(columns, digits)
+    return LinearAdmission(columns, digits, components)
 
 
 def independent_rows(a: Any, b: Any) -> tuple[tuple[int, ...], Any | None]:

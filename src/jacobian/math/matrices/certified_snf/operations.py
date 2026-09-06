@@ -19,15 +19,15 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.certified_snf.values import (
     MAX_CERTIFIED_SNF_INPUT_DIGITS,
     MAX_CERTIFIED_SNF_INPUT_DIMENSION,
-    CertifiedIntegerMatrix,
     SmithNormalFormCertificate,
     _integer_digits,
 )
+from jacobian.math.matrices.values import IntegerMatrix
 
 Matrix = list[list[int]]
 
 
-def _admit_certified_smith_input(matrix: CertifiedIntegerMatrix) -> None:
+def _admit_certified_smith_input(matrix: IntegerMatrix) -> None:
     if (
         not 1 <= matrix.row_count <= MAX_CERTIFIED_SNF_INPUT_DIMENSION
         or not 1 <= matrix.column_count <= MAX_CERTIFIED_SNF_INPUT_DIMENSION
@@ -57,7 +57,7 @@ def _admit_certified_smith_input(matrix: CertifiedIntegerMatrix) -> None:
 
 
 def _admit_smith_certificate_for_verification(
-    matrix: CertifiedIntegerMatrix,
+    matrix: IntegerMatrix,
 ) -> None:
     if (
         matrix.row_count > MAX_CERTIFIED_SNF_INPUT_DIMENSION
@@ -87,7 +87,7 @@ def _admit_smith_certificate_for_verification(
 
 
 def smith_normal_form_certificate(
-    matrix: CertifiedIntegerMatrix,
+    matrix: IntegerMatrix,
 ) -> SmithNormalFormCertificate:
     """Compute a transformation-certified Smith normal form."""
 
@@ -294,8 +294,8 @@ def _contract_matrix(
     *,
     rows: int,
     columns: int,
-) -> CertifiedIntegerMatrix:
-    return CertifiedIntegerMatrix(
+) -> IntegerMatrix:
+    return IntegerMatrix(
         row_count=rows,
         column_count=columns,
         entries=tuple(

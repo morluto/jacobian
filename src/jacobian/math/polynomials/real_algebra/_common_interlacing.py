@@ -18,7 +18,7 @@ from jacobian.math.number_theory.algebraic_numbers.real import (
     MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS,
     RationalIsolatingInterval,
     RealAlgebraicValue,
-    compare_real_algebraic,
+    _compare_admitted_real_algebraic,
 )
 from jacobian.math.polynomials.real_algebra._common_interlacing_models import (
     MAX_COMMON_INTERLACING_FACTOR_DEGREE,
@@ -588,7 +588,12 @@ def _common_interlacing_outcome(
         if left_key[0] == right_key[0]:
             order = "LT" if left_key[1] < right_key[1] else "GT"
         else:
-            order = compare_real_algebraic(left_root.value, right_root.value).order
+            order = _compare_admitted_real_algebraic(
+                left_root.value,
+                right_root.value,
+                left_root.isolating_interval,
+                right_root.isolating_interval,
+            )
         comparison_cache[(left_key, right_key)] = order
         comparison_cache[(right_key, left_key)] = {
             "LT": "GT",

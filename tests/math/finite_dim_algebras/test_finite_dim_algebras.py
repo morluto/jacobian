@@ -3,6 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_dim_algebras import center_basis
 from jacobian.math.finite_dim_algebras._models import (
     MAX_COMMUTATOR_ELIMINATION_WORK,
@@ -268,9 +269,12 @@ def test_structure_constants_reject_non_residue() -> None:
 
 
 def test_structure_constants_reject_non_prime_field() -> None:
-    with pytest.raises(ValueError):
-        StructureConstants(
-            dimension=1,
-            field_order=4,
-            multiplication=(((0,),),),
-        )
+    algebra = StructureConstants(
+        dimension=1,
+        field_order=4,
+        multiplication=(((0,),),),
+    )
+    with pytest.raises(
+        OperationDomainValidationError, match="field_order must be prime"
+    ):
+        center_basis(algebra)

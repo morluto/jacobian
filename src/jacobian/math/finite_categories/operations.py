@@ -1,12 +1,27 @@
 """Exact bounded native constructions for finite categories."""
 
+from pydantic_core import PydanticCustomError
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_categories._models import CategoryProfileResult
 from jacobian.math.finite_categories._product import product
 from jacobian.math.finite_categories.values import (
     CategoryIdentifier,
     FiniteCategory,
     MorphismSpec,
+    _check_category_laws,
 )
+
+
+def _require_category_laws(category: FiniteCategory) -> None:
+    """Establish the category laws once for a native operation."""
+
+    try:
+        _check_category_laws(category)
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=("category",), code=exc.type, message=exc.message()
+        ) from exc
 
 
 def _category_profile_data(
@@ -46,6 +61,7 @@ def _category_profile_data(
 def category_profile(category: FiniteCategory) -> CategoryProfileResult:
     """Compute hom-set and endomorphism counts of a finite category."""
 
+    _require_category_laws(category)
     hom_sets, endomorphisms = _category_profile_data(category)
     return CategoryProfileResult._from_kernel(category, hom_sets, endomorphisms)
 
@@ -53,6 +69,7 @@ def category_profile(category: FiniteCategory) -> CategoryProfileResult:
 def opposite_category(category: FiniteCategory) -> FiniteCategory:
     """Return the finite category with all arrows and compositions reversed."""
 
+    _require_category_laws(category)
     opposite_morphisms = tuple(
         MorphismSpec(
             morphism_id=morphism.morphism_id,

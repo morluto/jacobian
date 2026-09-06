@@ -16,7 +16,7 @@ from jacobian._exact import (
 )
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import parse_canonical_integer
-from jacobian.math.matrices.certified_snf.values import CertifiedIntegerMatrix
+from jacobian.math.matrices.values import IntegerMatrix
 
 # Conservative preflight fallback: the derived admission in
 # build_affine_torus_plan is the actual gate, checking mathematical work and
@@ -24,7 +24,7 @@ from jacobian.math.matrices.certified_snf.values import CertifiedIntegerMatrix
 # absurdly large raw input before the plan runs.
 #
 # The dimension envelope is capped by the reused integer-matrix carrier
-# (`CertifiedIntegerMatrix`, whose rows and columns are bounded at 32), so the
+# (`IntegerMatrix`, whose rows and columns are bounded at 32), so the
 # exposed affine-matrix schema and preflight stay aligned with the actual
 # parse rather than advertising a range the linear-part carrier cannot hold.
 MAX_AFFINE_TORUS_DIMENSION = 32
@@ -82,7 +82,7 @@ def _preflight_torus(value: object) -> None:
 def _preflight_affine_linear_part(value: object) -> None:
     """Reject an oversized raw linear part before nested canonical parsing."""
 
-    if isinstance(value, CertifiedIntegerMatrix):
+    if isinstance(value, IntegerMatrix):
         return
     if not isinstance(value, dict):
         raise _validation_error("raw_type", "affine linear part must be a JSON object")
@@ -292,7 +292,7 @@ class RationalTorusPoint(StrictModel):
 def _affine_linear_part_schema() -> JsonSchemaValue:
     """Project the 16-axis map envelope onto the reused matrix carrier."""
 
-    schema = CertifiedIntegerMatrix.model_json_schema()
+    schema = IntegerMatrix.model_json_schema()
     for field_name in ("row_count", "column_count"):
         schema["properties"][field_name].update(
             minimum=0,
@@ -355,7 +355,7 @@ class RationalAffineTorusMap(StrictModel):
 
     torus: StandardRealTorus
     linear_part: Annotated[
-        CertifiedIntegerMatrix,
+        IntegerMatrix,
         WithJsonSchema(_affine_linear_part_schema()),
     ]
     translation: Annotated[
@@ -471,7 +471,7 @@ class ConnectedSubtorusParameterization(StrictModel):
 
     ambient_torus: StandardRealTorus
     parameter_dimension: StrictInt = Field(ge=0, le=MAX_AFFINE_TORUS_DIMENSION)
-    embedding: CertifiedIntegerMatrix
+    embedding: IntegerMatrix
 
     @model_validator(mode="after")
     def require_embedding_shape(self) -> Self:
@@ -494,7 +494,7 @@ class FiniteTorusComponentPresentation(StrictModel):
     """A presentation ``Z^r / C Z^r`` of the finite component group."""
 
     generator_count: StrictInt = Field(ge=0, le=MAX_AFFINE_TORUS_DIMENSION)
-    relation_matrix: CertifiedIntegerMatrix
+    relation_matrix: IntegerMatrix
     generator_orders: tuple[CanonicalInteger, ...] = Field(
         max_length=MAX_AFFINE_TORUS_DIMENSION
     )

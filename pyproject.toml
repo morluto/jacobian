@@ -247,6 +247,8 @@ ignore_imports = [
     "jacobian.math.number_theory._factorization_kernels -> jacobian.process",
     # Private exact-algebra adapters share one bounded Singular process owner.
     "jacobian.math._singular -> jacobian.process",
+    # Explicit optional-runtime diagnostics use the bounded process runner.
+    "jacobian.backends -> jacobian.process",
     # General ideal radical/quotient run in a bounded one-shot Singular process.
     "jacobian.math.polynomials.ideals._singular -> jacobian.process",
     # Exact multivariate factorization runs in a bounded killable worker.

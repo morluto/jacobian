@@ -77,9 +77,9 @@ class MaxAffineEvalRequest(StrictModel):
 class MaxAffineEvalResult(StrictModel):
     """Result of max-affine evaluation: value and active pieces."""
 
-    value: str
+    value: CanonicalRational
     active_pieces: tuple[str, ...]
-    all_values: tuple[tuple[str, str], ...] = ()
+    all_values: tuple[tuple[str, CanonicalRational], ...] = ()
 
 
 class MaxAffineSubdifferentialRequest(StrictModel):

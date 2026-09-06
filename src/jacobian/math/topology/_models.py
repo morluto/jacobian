@@ -11,7 +11,6 @@ from pydantic import (
     Field,
     StrictInt,
     StringConstraints,
-    ValidationError,
     ValidationInfo,
     field_validator,
     model_validator,
@@ -89,6 +88,10 @@ def canonical_simplex(simplex: Simplex) -> Simplex:
 def face_closure(facets: tuple[Simplex, ...]) -> tuple[tuple[Simplex, ...], ...]:
     """Materialize the non-empty face closure in canonical dimension order."""
 
+    if any(not 1 <= len(facet) <= MAX_TOPOLOGY_DIMENSION + 1 for facet in facets):
+        raise ValueError(
+            f"each facet must contain between 1 and {MAX_TOPOLOGY_DIMENSION + 1} vertices"
+        )
     faces: list[set[Simplex]] = [set() for _ in range(MAX_TOPOLOGY_DIMENSION + 1)]
     for facet in facets:
         for size in range(1, len(facet) + 1):
@@ -98,13 +101,21 @@ def face_closure(facets: tuple[Simplex, ...]) -> tuple[tuple[Simplex, ...], ...]
 
 
 def canonical_complex(
-    vertices: tuple[str, ...], facets: tuple[tuple[str, ...], ...]
+    vertices: tuple[str, ...],
+    facets: tuple[tuple[str, ...], ...],
+    *,
+    closure: tuple[tuple[Simplex, ...], ...] | None = None,
 ) -> FiniteSimplicialComplex:
-    """Construct the neutral canonical value for validated facet data."""
+    """Construct the neutral canonical value for validated facet data.
+
+    Admitted producers may pass the closure they already materialized so
+    packaging the canonical value does not repeat the same bounded work.
+    """
 
     canonical_vertices = tuple(sorted(vertices))
     canonical_facets = tuple(sorted(tuple(sorted(facet)) for facet in facets))
-    closure = face_closure(canonical_facets)
+    if closure is None:
+        closure = face_closure(canonical_facets)
     faces_by_dimension = tuple(
         FacesInDimension(dimension=dimension, faces=faces)
         for dimension, faces in enumerate(closure)
@@ -144,6 +155,8 @@ def _all_faces(facets: tuple[Simplex, ...]) -> set[tuple[str, ...]]:
 def _require_request_complex(
     vertices: tuple[VertexLabel, ...],
     facets: tuple[Simplex, ...],
+    *,
+    check_closure: bool = True,
 ) -> tuple[Simplex, ...]:
     if len(vertices) != len(set(vertices)):
         raise _validation_error(
@@ -180,37 +193,21 @@ def _require_request_complex(
                 "topology.require_request_complex_6",
                 "facet input must contain only maximal simplices",
             )
-    closure = face_closure(tuple(canonical))
-    if sum(map(len, closure)) > MAX_TOPOLOGY_FACES:
-        raise _validation_error(
-            "topology.require_request_complex_7",
-            f"face closure may contain at most {MAX_TOPOLOGY_FACES} non-empty faces",
-        )
+    if check_closure:
+        closure = face_closure(tuple(canonical))
+        if sum(map(len, closure)) > MAX_TOPOLOGY_FACES:
+            raise _validation_error(
+                "topology.require_request_complex_7",
+                f"face closure may contain at most {MAX_TOPOLOGY_FACES} non-empty faces",
+            )
     return tuple(sorted(canonical))
 
 
-_CANONICAL_COMPLEX_DUMP_KEYS = frozenset(
-    {
-        "vertices",
-        "maximal_simplices",
-        "faces_by_dimension",
-        "dimension",
-        "f_vector",
-        "closure_size",
-        "orientation_convention",
-        "empty_simplex_stored",
-        "complex_digest",
-    }
-)
-
-
 class SimplicialComplexRequest(StrictModel):
-    """A bounded facet presentation for canonicalization.
+    """A bounded facet presentation or an unchanged canonical complex.
 
-    Accepts either the facet presentation (``vertices`` + ``facets``) or an
-    unchanged canonical :class:`FiniteSimplicialComplex` value, so results
-    such as ``VertexDeletionResult.remaining_complex`` can feed structural
-    requests directly.
+    Canonical input is structurally decoded and projected to its maximal facets.
+    Operations establish the face closure from those facets during admission.
     """
 
     vertices: tuple[VertexLabel, ...] = Field(
@@ -226,76 +223,35 @@ class SimplicialComplexRequest(StrictModel):
     @classmethod
     def accept_canonical_complex_value(cls, data: object) -> object:
         data = canonicalize_json_containers(data)
-        # A before-validator switches the remaining validation to python
-        # semantics, where strict tuples reject JSON arrays; normalize the
-        # accepted array shapes to tuples so strict JSON dispatch (the only
-        # transport path) keeps admitting facet presentations.
+        if isinstance(data, dict) and "maximal_simplices" in data:
+            data = FiniteSimplicialComplex.model_validate(data)
         if isinstance(data, FiniteSimplicialComplex):
-            return {
-                "vertices": tuple(data.vertices),
-                "facets": tuple(tuple(facet) for facet in data.maximal_simplices),
-            }
-        if not isinstance(data, dict):
-            return data
-        normalized = dict(data)
-        data = normalized
-        if "facets" in data and "maximal_simplices" in data:
-            raise _validation_error(
-                "topology.accept_canonical_complex_value_1",
-                "pass either facets or a canonical FiniteSimplicialComplex "
-                "value, not both",
-            )
-        if "maximal_simplices" not in data:
-            return data
-        unknown = sorted(set(data) - _CANONICAL_COMPLEX_DUMP_KEYS)
-        if unknown:
-            raise _validation_error(
-                "topology.accept_canonical_complex_value_2",
-                f"unknown fields alongside maximal_simplices: {unknown}",
-            )
-        if "vertices" not in data:
-            raise _validation_error(
-                "topology.accept_canonical_complex_value_3",
-                "canonical complex value must carry vertices",
-            )
-        try:
-            canonical = FiniteSimplicialComplex.model_validate(data)
-        except ValidationError as error:
-            raise _validation_error(
-                "topology.accept_canonical_complex_value_4",
-                "canonical complex value must be a valid "
-                f"FiniteSimplicialComplex dump: {error.error_count()} "
-                "check(s) failed",
-            ) from error
-        return {
-            "vertices": tuple(canonical.vertices),
-            "facets": tuple(tuple(facet) for facet in canonical.maximal_simplices),
-        }
+            return {"vertices": data.vertices, "facets": data.maximal_simplices}
+        return data
 
     @classmethod
     def __get_pydantic_json_schema__(
-        cls,
-        core_schema: Any,
-        handler: Any,
+        cls, core_schema: Any, handler: Any
     ) -> JsonSchemaValue:
-        """Advertise both accepted input shapes in the published schema.
-
-        The runtime accepts either the facet presentation or an unchanged
-        canonical ``FiniteSimplicialComplex`` dump (the before-validator
-        normalizes the latter), so schema-guided callers must see both
-        alternatives; otherwise a serialized canonical value could not be
-        validated against any advertised consumer schema.
-        """
         facet_presentation = handler(core_schema)
         canonical_value = handler(FiniteSimplicialComplex.__pydantic_core_schema__)
         facet_presentation.pop("title", None)
         return {
+            "type": "object",
             "anyOf": [facet_presentation, canonical_value],
-            "description": (
-                "Either the facet presentation (vertices + facets) or an "
-                "unchanged canonical FiniteSimplicialComplex value."
-            ),
+            "description": "Either vertices and facets or an unchanged canonical FiniteSimplicialComplex value.",
         }
+
+
+def simplicial_complex_request_from_value(
+    value: FiniteSimplicialComplex,
+) -> SimplicialComplexRequest:
+    """Explicitly project a canonical complex to the facet request carrier."""
+
+    return SimplicialComplexRequest(
+        vertices=value.vertices,
+        facets=value.maximal_simplices,
+    )
 
 
 class FacesInDimension(StrictModel):
@@ -431,33 +387,22 @@ class FiniteSimplicialComplex(StrictModel):
                 "complex vertices must be unique and canonical",
             )
         canonical_facets = _require_request_complex(
-            self.vertices,
-            self.maximal_simplices,
+            self.vertices, self.maximal_simplices, check_closure=False
         )
         if canonical_facets != self.maximal_simplices:
             raise _validation_error(
                 "topology.require_complete_canonical_complex_2",
                 "maximal simplices must be canonical",
             )
-        closure = face_closure(self.maximal_simplices)
-        expected_faces = tuple(
-            FacesInDimension(dimension=dimension, faces=faces)
-            for dimension, faces in enumerate(closure)
-        )
-        if self.faces_by_dimension != expected_faces:
-            raise _validation_error(
-                "topology.require_complete_canonical_complex_3",
-                "faces_by_dimension is not the complete face closure",
-            )
-        expected_f_vector = tuple(len(faces) for faces in closure)
+        expected_f_vector = tuple(len(item.faces) for item in self.faces_by_dimension)
         if (
-            self.dimension != len(closure) - 1
+            self.dimension != len(self.faces_by_dimension) - 1
             or self.f_vector != expected_f_vector
-            or self.closure_size != sum(expected_f_vector)
+            or self.closure_size != sum(self.f_vector)
         ):
             raise _validation_error(
                 "topology.require_complete_canonical_complex_4",
-                "complex dimension, f-vector, or closure size is invalid",
+                "complex dimension, f-vector, or closure size shape is invalid",
             )
         return self
 
@@ -613,7 +558,7 @@ def _validate_chain_convention_augmentation(
 
 
 class ChainComplexResult(StrictModel):
-    complex_digest: Sha256Digest
+    complex: FiniteSimplicialComplex
     coefficient_ring: ChainCoefficientRing
     prime: StrictInt | None = Field(default=None, ge=2, le=MAX_TOPOLOGY_PRIME)
     convention: HomologyConvention
@@ -689,6 +634,12 @@ class ChainComplexResult(StrictModel):
             )
         return self
 
+    @property
+    def complex_digest(self) -> Sha256Digest:
+        """Compatibility projection of the retained source complex digest."""
+
+        return self.complex.complex_digest
+
     @classmethod
     def _from_kernel(cls, **values: Any) -> Self:
         """Build after the chain kernel established all derived fields."""
@@ -721,6 +672,7 @@ __all__ = [
     "VertexLabel",
     "face_closure",
     "simplicial_complex_digest",
+    "simplicial_complex_request_from_value",
 ]
 
 

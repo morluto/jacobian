@@ -2,11 +2,11 @@
 
 from fractions import Fraction
 
-from jacobian.math.probability.markov_chains.values import TransitionMatrix
+from jacobian.math.probability.markov_chains.values import _TransitionMatrix
 
 
 def solve_stationary_class(
-    matrix: TransitionMatrix, closed_class: tuple[int, ...]
+    matrix: _TransitionMatrix, closed_class: tuple[int, ...]
 ) -> tuple[Fraction, ...]:
     """Solve the normalized stationary system on one closed class."""
 

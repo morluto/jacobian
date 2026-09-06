@@ -126,11 +126,34 @@ class TestFarkas:
         one = CanonicalRational(num="1", den="1")
         negative_one = CanonicalRational(num="-1", den="1")
         result = check_farkas_certificate_native(
-            ((one, one), (negative_one, negative_one)),
+            RationalMatrix(entries=((one, one), (negative_one, negative_one))),
             (negative_one, negative_one),
             (one, one),
         )
         assert result.valid is True
+
+    def test_negative_multipliers_retain_source_and_exact_products(self) -> None:
+        one = CanonicalRational(num="1", den="1")
+        negative = CanonicalRational(num="-1", den="2")
+        matrix = RationalMatrix(entries=((one, one),))
+        result = check_farkas_certificate_native(matrix, (one,), (negative,))
+        assert result.valid is False
+        assert result.constraint_matrix == matrix
+        assert result.rhs_vector == (one,)
+        assert result.multipliers == (negative,)
+        assert result.y_t_a == (negative, negative)
+        assert result.y_t_b == negative
+        assert type(result).model_validate_json(result.model_dump_json()) == result
+
+    def test_rejects_unrepresentable_dot_product_before_expansion(self) -> None:
+        huge = CanonicalRational(num="9" * 20000, den="1")
+        one = CanonicalRational(num="1", den="1")
+        with pytest.raises(OperationDomainValidationError, match="result envelope"):
+            check_farkas_certificate_native(
+                RationalMatrix(entries=((huge,),)),
+                (one,),
+                (huge,),
+            )
 
     def test_valid_certificate(self) -> None:
         # System: x1 + x2 <= -1, x1 + x2 >= 1 is infeasible.
@@ -138,10 +161,12 @@ class TestFarkas:
         # y = (1, 1), y^T A = (1-1, 1-1) = (0, 0), y^T b = -1 + -1 = -2 < 0 => valid
         req = FarkasCertificateRequest.model_validate(
             {
-                "constraint_matrix": [
-                    ({"num": "1", "den": "1"}, {"num": "1", "den": "1"}),
-                    ({"num": "-1", "den": "1"}, {"num": "-1", "den": "1"}),
-                ],
+                "constraint_matrix": {
+                    "entries": [
+                        ({"num": "1", "den": "1"}, {"num": "1", "den": "1"}),
+                        ({"num": "-1", "den": "1"}, {"num": "-1", "den": "1"}),
+                    ]
+                },
                 "rhs_vector": (
                     {"num": "-1", "den": "1"},
                     {"num": "-1", "den": "1"},
@@ -162,10 +187,12 @@ class TestFarkas:
         with pytest.raises(ValidationError):
             FarkasCertificateRequest.model_validate(
                 {
-                    "constraint_matrix": [
-                        ({"num": "1", "den": "1"}, {"num": "1", "den": "1"}),
-                        ({"num": "-1", "den": "1"},),
-                    ],
+                    "constraint_matrix": {
+                        "entries": [
+                            ({"num": "1", "den": "1"}, {"num": "1", "den": "1"}),
+                            ({"num": "-1", "den": "1"},),
+                        ]
+                    },
                     "rhs_vector": (
                         {"num": "-1", "den": "1"},
                         {"num": "-1", "den": "1"},
@@ -337,9 +364,11 @@ def test_inertia_canonical_request_has_one_schema_truthful_matrix_field() -> Non
     del missing_discriminator["matrix"]["domain"]
     validator = Draft202012Validator(schema)
     assert not list(validator.iter_errors(valid))
-    assert list(validator.iter_errors(missing_discriminator))
-    with pytest.raises(ValidationError):
-        SymmetricMatrixRequest.model_validate(missing_discriminator)
+    assert not list(validator.iter_errors(missing_discriminator))
+    assert (
+        SymmetricMatrixRequest.model_validate(missing_discriminator).matrix.domain
+        == "QQ"
+    )
 
 
 def test_inertia_result_schema_matches_strict_discrimination_and_labels() -> None:
@@ -352,7 +381,9 @@ def test_inertia_result_schema_matches_strict_discrimination_and_labels() -> Non
 
     validator = Draft202012Validator(InertiaResult.model_json_schema())
     assert not list(validator.iter_errors(payload))
-    for invalid in (missing_discriminator, unknown_label):
+    assert not list(validator.iter_errors(missing_discriminator))
+    assert InertiaResult.model_validate(missing_discriminator) == result
+    for invalid in (unknown_label,):
         assert list(validator.iter_errors(invalid))
         with pytest.raises(ValidationError):
             InertiaResult.model_validate(invalid)

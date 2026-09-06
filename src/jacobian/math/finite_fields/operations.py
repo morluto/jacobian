@@ -6,7 +6,7 @@ import sys
 import time
 from collections.abc import Callable
 from itertools import combinations
-from typing import Literal
+from typing import Any, Literal
 
 from jacobian._execution import (
     OperationExecutionTimeoutError,
@@ -15,6 +15,10 @@ from jacobian._execution import (
     request_checkpoint,
 )
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.finite_fields._admission import (
+    require_field,
+    require_independent_basis,
+)
 from jacobian.math.finite_fields._fixed_subspace_process import (
     run_fixed_subspace_computation,
 )
@@ -59,6 +63,7 @@ from jacobian.math.matrices.finite_fields._bounds import (
 )
 from jacobian.math.matrices.finite_fields.linear_algebra import (
     PrimeFieldMatrix,
+    _admit_prime,
 )
 
 _MAX_FINITE_MAP_WORK = 1_000_000
@@ -183,11 +188,13 @@ def finite_field(
 ) -> FiniteFieldPresentation:
     """Construct and validate an exact finite-extension presentation."""
 
-    return FiniteFieldPresentation(
+    presentation = FiniteFieldPresentation(
         characteristic=characteristic,
         modulus_coefficients=modulus_coefficients,
         generator=generator,
     )
+    require_field(presentation)
+    return presentation
 
 
 def element(
@@ -196,6 +203,7 @@ def element(
 ) -> FiniteFieldElement:
     """Construct one parent-bound element from canonical power-basis coordinates."""
 
+    require_field(presentation)
     return FiniteFieldElement(presentation=presentation, coordinates=coordinates)
 
 
@@ -244,16 +252,25 @@ def projective_line(
             code="finite_field.projective_line_exceeds_output_size_budget",
             message="projective line exceeds the output-size budget",
         )
-    zero = element(presentation, (0,) * presentation.degree)
-    one = element(presentation, (1,) + (0,) * (presentation.degree - 1))
+    require_field(presentation)
+    zero = FiniteFieldElement(
+        presentation=presentation, coordinates=(0,) * presentation.degree
+    )
+    one = FiniteFieldElement(
+        presentation=presentation, coordinates=(1,) + (0,) * (presentation.degree - 1)
+    )
     affine_elements = _field_elements(presentation)
     return ProjectiveLine(
         presentation=presentation,
         axis=axis,
         points=(
-            projective_point(presentation, axis, (zero, one)),
+            ProjectivePoint(
+                presentation=presentation, axis=axis, coordinates=(zero, one)
+            ),
             *(
-                projective_point(presentation, axis, (one, value))
+                ProjectivePoint(
+                    presentation=presentation, axis=axis, coordinates=(one, value)
+                )
                 for value in affine_elements
             ),
         ),
@@ -264,9 +281,9 @@ def _field_elements(
     presentation: FiniteFieldPresentation,
 ) -> tuple[FiniteFieldElement, ...]:
     return tuple(
-        element(
-            presentation,
-            tuple(
+        FiniteFieldElement(
+            presentation=presentation,
+            coordinates=tuple(
                 (encoded // presentation.characteristic**power)
                 % presentation.characteristic
                 for power in range(presentation.degree)
@@ -306,8 +323,8 @@ def paley_tournament(
 
     from jacobian.math.finite_fields import _flint
 
-    elements = _field_elements(presentation)
     active_context = _flint.context(presentation)
+    elements = _field_elements(presentation)
     backend_elements = tuple(
         _flint.to_backend(value, active_context=active_context) for value in elements
     )
@@ -333,6 +350,20 @@ def paley_tournament(
         graph=DirectedGraph(vertex_count=order, edges=edges),
         orientation=_PALEY_ORIENTATION,
     )
+
+
+def _admit_restriction_shape(subspace: FiniteDimensionalSubspace) -> None:
+    rows = len(subspace.column_axis.labels) * subspace.presentation.degree
+    columns = len(subspace.basis_axis.labels)
+    if (
+        rows > MAX_PRIME_FIELD_MATRIX_AXIS
+        or rows * columns > MAX_PRIME_FIELD_MATRIX_CELLS
+    ):
+        raise OperationDomainValidationError(
+            location=("subspace",),
+            code="finite_field.restriction_output_shape",
+            message="restriction output exceeds the supported matrix axis or cell bound",
+        )
 
 
 def restrict_scalars(
@@ -361,7 +392,19 @@ def restrict_scalars(
         )
     from jacobian.math.finite_fields import _flint
 
+    _admit_restriction_shape(subspace)
     active_context = _flint.context(subspace.presentation)
+    require_independent_basis(subspace)
+    return _restrict_scalars_admitted(subspace, direction, active_context)
+
+
+def _restrict_scalars_admitted(
+    subspace: FiniteDimensionalSubspace,
+    direction: ProjectivePoint,
+    active_context: Any,
+) -> FiniteLinearMap:
+    from jacobian.math.finite_fields import _flint
+
     backend_direction = tuple(
         _flint.to_backend(value, active_context=active_context)
         for value in direction.coordinates
@@ -428,6 +471,20 @@ def linear_map_rank(
     from jacobian.math.finite_fields import _flint
 
     linear_map = restrict_scalars(subspace, direction)
+    return RankResult._from_kernel(
+        subspace=subspace,
+        direction=direction,
+        linear_map=linear_map,
+        rank=_flint.matrix_rank(linear_map.matrix),
+    )
+
+
+def _linear_map_rank_admitted(
+    subspace: FiniteDimensionalSubspace, direction: ProjectivePoint, active_context: Any
+) -> RankResult:
+    from jacobian.math.finite_fields import _flint
+
+    linear_map = _restrict_scalars_admitted(subspace, direction, active_context)
     return RankResult._from_kernel(
         subspace=subspace,
         direction=direction,
@@ -535,6 +592,7 @@ def homogeneous_fixed_subspace(
 ) -> HomogeneousFixedSubspace:
     """Compute one exact homogeneous simultaneous fixed subspace over GF(p)."""
 
+    _admit_prime(action.prime)
     execution = current_request_execution()
     started_at = execution.started_at if execution is not None else time.monotonic()
     deadline = min(
@@ -653,10 +711,16 @@ def direction_rank_ledger(
             code="finite_field.direction_rank_ledger_exceeds_operation_work_budget",
             message="direction-rank ledger exceeds the operation work budget",
         )
+    from jacobian.math.finite_fields import _flint
+
+    _admit_restriction_shape(subspace)
+    active_context = _flint.context(subspace.presentation)
+    require_independent_basis(subspace)
     return DirectionRankLedger._from_kernel(
         subspace=subspace,
         entries=tuple(
-            linear_map_rank(subspace, direction) for direction in directions.points
+            _linear_map_rank_admitted(subspace, direction, active_context)
+            for direction in directions.points
         ),
     )
 
@@ -673,9 +737,16 @@ def orbit_distribution(ledger: DirectionRankLedger) -> OrbitDistribution:
             code="finite_field.orbit_ledger_exceeds_operation_work_budget",
             message="orbit ledger authentication exceeds the operation work budget",
         )
+    from jacobian.math.finite_fields import _flint
+
+    _admit_restriction_shape(ledger.subspace)
+    active_context = _flint.context(ledger.subspace.presentation)
+    require_independent_basis(ledger.subspace)
     for index, entry in enumerate(ledger.entries):
         request_checkpoint("before orbit ledger entry authentication")
-        expected = linear_map_rank(ledger.subspace, entry.direction)
+        expected = _linear_map_rank_admitted(
+            ledger.subspace, entry.direction, active_context
+        )
         if entry.linear_map != expected.linear_map or entry.rank != expected.rank:
             raise OperationDomainValidationError(
                 location=("ledger", "entries", index),
@@ -693,6 +764,7 @@ def finite_polynomial(
 ) -> FinitePolynomial:
     """Construct a canonical univariate polynomial over one exact field."""
 
+    require_field(presentation)
     if not coefficients:
         raise ValueError("finite polynomial requires coefficients")
     last = next(
@@ -713,6 +785,7 @@ def finite_polynomial(
 def finite_polynomial_map(polynomial: FinitePolynomial) -> FinitePolynomialMap:
     """Bind a polynomial as a self-map of its exact field presentation."""
 
+    require_field(polynomial.presentation)
     return FinitePolynomialMap(
         domain=polynomial.presentation,
         codomain=polynomial.presentation,
@@ -730,9 +803,9 @@ def evaluate_finite_polynomial(
         raise ValueError("polynomial and value must share their exact presentation")
     from jacobian.math.finite_fields import _flint
 
-    return element(
-        polynomial.presentation,
-        _flint.evaluate_polynomial(polynomial.coefficients, value),
+    return FiniteFieldElement(
+        presentation=polynomial.presentation,
+        coordinates=_flint.evaluate_polynomial(polynomial.coefficients, value),
     )
 
 
@@ -766,7 +839,12 @@ def finite_map_table(polynomial_map: FinitePolynomialMap) -> FiniteMapTable:
     return FiniteMapTable._from_kernel(
         polynomial_map,
         tuple(
-            (source, element(polynomial_map.codomain, coordinates))
+            (
+                source,
+                FiniteFieldElement(
+                    presentation=polynomial_map.codomain, coordinates=coordinates
+                ),
+            )
             for source, coordinates in zip(sources, targets, strict=True)
         ),
     )

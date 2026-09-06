@@ -58,6 +58,11 @@ to the native function after wire-to-domain conversion.
 
 ## Canonical native values
 
+The [interoperability contract](value-interoperability.md) distinguishes shared
+values, meaningful refinements, representation transforms, and changes of
+parent. It also defines when conversions belong only in the native API and
+what serialization does and does not establish.
+
 Each mathematical value has one owner-defined public type, normally in the
 domain's `values.py`. Producers return that type and consumers accept the same
 type directly. Operation-specific request and result models may contain a
@@ -77,6 +82,26 @@ pass through the consumer's typed boundary without the caller reconstructing
 its field presentation, axes, ambient dimension, normalization, or other
 mathematical context. Empty and degenerate values retain that context too.
 
+For example, a QQ matrix with `row_count=0`, `column_count=3`, and
+`entries=[]` is a map from a three-dimensional space to the zero space.
+Its dimensions survive dense/sparse conversion, backend conversion, and JSON
+round trips. An empty quadratic matrix additionally supplies its `radicand`;
+an embedded number-field matrix retains its `embedding`. Never infer a parent
+from an entry when there may be no entries.
+
+A carrier's structural size limit is not an operation's admission limit. The QQ
+matrix carrier supports axes through 4,096 so it can represent the eventual
+hitting operation's state space. Each consumer separately admits its work,
+intermediate growth, and result size; this does not make arbitrary dense
+4,096-by-4,096 computations admissible.
+
+Deserialization checks structure and context, not mathematical claims such as
+primality, lattice rank, an order relation, or a functional graph's cycles.
+Operations check the properties they rely on during admission. A parsed result
+is still a claim from its source; serialization does not turn it into an
+independently verified certificate. Do not add certificates unless a consumer
+needs a concrete mathematical witness or checking relation.
+
 The native surface also retains useful deterministic helpers intentionally
 excluded from `math.find`, including classical combinatorial numbers, basic
 formal-series transformations, Young-diagram projections, graph transforms and
@@ -84,3 +109,15 @@ decomposition projections, DFA complement, continued-fraction convergents, and
 finite-metric balls. Their absence from the public operation catalog is
 deliberate: native availability does not create a distinct agent discovery
 intent.
+
+## Optional native runtimes
+
+Python package dependencies install with Jacobian. Singular and QEPCAD are
+optional system runtimes for a small declared subset of operations; ordinary
+Python calls and imports do not require them. Use
+`from jacobian.backends import check_backend` and `check_backend("singular")`
+(or `"qepcad"`) to inspect the current environment. Calls that need an unavailable
+runtime raise `jacobian.backends.BackendUnavailableError`, with `backend`,
+`required_version`, `detail`, and `installation` attributes. No runtime is
+automatically installed. See [backend requirements](../how-to/backend-requirements.md)
+for versions, operation coverage, and deployment instructions.

@@ -16,6 +16,7 @@ from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from jacobian._execution import (
     OperationExecutionCancelledError,
 )
+from jacobian.backends import BackendUnavailableError
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import MathTool, OperationDomainValidationError
@@ -26,6 +27,7 @@ from jacobian.dispatch import (
 )
 from jacobian.mcp.runtime import AppState, _authorize
 from jacobian.mcp.tools import (
+    _backend_unavailable_error,
     _invalid_request_error,
     _request_cancellation,
 )
@@ -97,6 +99,8 @@ def _direct_operation_tool(
             raise ToolError("operation execution deadline expired") from exc
         except OperationExecutionCancelledError as exc:
             raise ToolError("operation cancelled") from exc
+        except BackendUnavailableError as exc:
+            raise _backend_unavailable_error(operation_id, exc) from exc
         except (MCPError, ToolError):
             raise
         except Exception as exc:

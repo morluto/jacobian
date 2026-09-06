@@ -159,6 +159,23 @@ def hochschild_homology_groups(
     Kept free of result-model construction so it remains a reusable exact
     rank computation.
     """
+    from jacobian.math.topology.cohomology.hochschild._bounds import (
+        require_algebra_admission,
+        require_hochschild_budget,
+    )
+
+    _admit(lambda: require_algebra_admission(algebra), location=("algebra",))
+    _admit(
+        lambda: require_hochschild_budget(algebra.dimension, max_degree),
+        location=("max_degree",),
+    )
+    return _hochschild_homology_groups_admitted(algebra, max_degree)
+
+
+def _hochschild_homology_groups_admitted(
+    algebra: AlgebraStructure,
+    max_degree: int,
+) -> tuple[HochschildHomologyGroup, ...]:
     n = algebra.dimension
 
     group_dims = [1]
@@ -206,7 +223,7 @@ def hochschild_homology(
     return HochschildHomologyResult._from_kernel(
         alg,
         max_degree,
-        hochschild_homology_groups(alg, max_degree),
+        _hochschild_homology_groups_admitted(alg, max_degree),
     )
 
 

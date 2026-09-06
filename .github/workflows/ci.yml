@@ -86,6 +86,7 @@ jobs:
       run_boundaries: ${{ steps.plan.outputs.run_boundaries }}
       boundary_lanes: ${{ steps.plan.outputs.boundary_lanes }}
       run_singular: ${{ steps.plan.outputs.run_singular }}
+      run_qepcad: ${{ steps.plan.outputs.run_qepcad }}
       run_wheel: ${{ steps.plan.outputs.run_wheel }}
       plan: ${{ steps.plan.outputs.plan }}
     steps:
@@ -349,7 +350,7 @@ jobs:
   singular:
     name: Exact Algebra Runtimes
     needs: plan
-    if: ${{ needs.plan.outputs.run_singular == 'true' }}
+    if: ${{ needs.plan.outputs.run_singular == 'true' || needs.plan.outputs.run_qepcad == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     container:
@@ -363,18 +364,30 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
           SINGULAR_DEBIAN_VERSION: 1:4.4.1+ds-2
           QEPCAD_DEBIAN_VERSION: 1.74+ds-5
+          RUN_SINGULAR: ${{ needs.plan.outputs.run_singular }}
+          RUN_QEPCAD: ${{ needs.plan.outputs.run_qepcad }}
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends \
-            make \
-            "singular=${SINGULAR_DEBIAN_VERSION}" \
-            "qepcad=${QEPCAD_DEBIAN_VERSION}"
-          test "$(Singular -q --execute 'system("version");quit;' \
-            | tr -d '[:space:]')" = "44100"
-          qepcad -v | grep -F "Version B 1.74,"
+          set -- make
+          if [ "$RUN_SINGULAR" = true ] || [ "$RUN_QEPCAD" = true ]; then
+            set -- "$@" "singular=${SINGULAR_DEBIAN_VERSION}"
+          fi
+          if [ "$RUN_QEPCAD" = true ]; then
+            set -- "$@" "qepcad=${QEPCAD_DEBIAN_VERSION}"
+          fi
+          apt-get install -y --no-install-recommends "$@"
+          if [ "$RUN_SINGULAR" = true ] || [ "$RUN_QEPCAD" = true ]; then
+            test "$(Singular -q --execute 'system("version");quit;' \
+              | tr -d '[:space:]')" = "44100"
+          fi
+          if [ "$RUN_QEPCAD" = true ]; then
+            qepcad -v | grep -F "Version B 1.74,"
+          fi
       - run: uv sync --locked
-      - run: make test-singular
-      - run: make test-qepcad
+      - if: ${{ needs.plan.outputs.run_singular == 'true' }}
+        run: make test-singular
+      - if: ${{ needs.plan.outputs.run_qepcad == 'true' }}
+        run: make test-qepcad
 
   wheel:
     name: wheel (Python ${{ matrix.python-version }})
@@ -491,6 +504,7 @@ jobs:
           RUN_PYTHON: ${{ needs.plan.outputs.run_python }}
           RUN_BOUNDARIES: ${{ needs.plan.outputs.run_boundaries }}
           RUN_SINGULAR: ${{ needs.plan.outputs.run_singular }}
+          RUN_QEPCAD: ${{ needs.plan.outputs.run_qepcad }}
           RUN_WHEEL: ${{ needs.plan.outputs.run_wheel }}
           STATIC_RESULT: ${{ needs.static.result }}
           MATH_RESULT: ${{ needs.math.result }}
@@ -517,7 +531,11 @@ jobs:
           selected_result "$RUN_CATALOG_EXAMPLES" "$CATALOG_EXAMPLES_RESULT"
           selected_result "$RUN_PYTHON" "$PYTHON_RESULT"
           selected_result "$RUN_BOUNDARIES" "$BOUNDARIES_RESULT"
-          selected_result "$RUN_SINGULAR" "$SINGULAR_RESULT"
+          if [ "$RUN_SINGULAR" = true ] || [ "$RUN_QEPCAD" = true ]; then
+            selected_result true "$SINGULAR_RESULT"
+          else
+            selected_result false "$SINGULAR_RESULT"
+          fi
           selected_result "$RUN_WHEEL" "$WHEEL_RESULT"
           if [ "$PR_LANE_SELECTION" = true ]; then
             test "$COVERAGE_RESULT" = skipped

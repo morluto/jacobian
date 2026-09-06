@@ -7,6 +7,7 @@ from fractions import Fraction
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.matrices.values import RationalMatrix
 from jacobian.math.probability.markov_chains._models import (
     MAX_MIXING_STEPS,
     CommunicatingClassesResult,
@@ -17,10 +18,10 @@ from jacobian.math.probability.markov_chains._models import (
 )
 from jacobian.math.probability.markov_chains.values import (
     MAX_STATIONARY_STATES,
-    TransitionMatrix,
     TransitionMatrixAdmissionError,
     _decimal_digits,
-    as_canonical_transition_matrix,
+    _TransitionMatrix,
+    as_transition_matrix,
     require_stationary_distribution_admission,
     require_transition_matrix,
 )
@@ -30,7 +31,6 @@ __all__ = [
     "communicating_classes",
     "ergodic_decision",
     "ergodic_properties",
-    "mixing_time",
     "mixing_time_result",
     "stationary_distribution",
     "stationary_distribution_extremes",
@@ -46,7 +46,7 @@ class MixingTimeSearchResult:
 
 
 def _admit_supplied_stationary(
-    matrix: TransitionMatrix,
+    matrix: _TransitionMatrix,
     stationary: tuple[Fraction, ...],
 ) -> None:
     dimension = len(matrix)
@@ -77,8 +77,8 @@ def _admit_supplied_stationary(
             )
 
 
-def mixing_time(
-    matrix: TransitionMatrix,
+def _mixing_time(
+    matrix: _TransitionMatrix,
     stationary: tuple[Fraction, ...],
     epsilon: Fraction,
     max_steps: int,
@@ -122,8 +122,19 @@ def mixing_time(
     )
 
 
+def mixing_time(
+    matrix: RationalMatrix,
+    stationary: tuple[Fraction, ...],
+    epsilon: Fraction,
+    max_steps: int,
+) -> MixingTimeSearchResult:
+    """Return the first exact worst-case mixing step for a canonical matrix."""
+
+    return _mixing_time(as_transition_matrix(matrix), stationary, epsilon, max_steps)
+
+
 def _closed_communicating_classes(
-    matrix: TransitionMatrix,
+    matrix: _TransitionMatrix,
 ) -> tuple[tuple[int, ...], ...]:
     """Decompose an admitted carrier once in bounded quadratic support work."""
 
@@ -154,7 +165,7 @@ def _closed_communicating_classes(
 
 
 def _stationary_distribution_extremes(
-    matrix: TransitionMatrix, closed_classes: tuple[tuple[int, ...], ...]
+    matrix: _TransitionMatrix, closed_classes: tuple[tuple[int, ...], ...]
 ) -> list[tuple[tuple[int, ...], tuple[Fraction, ...]]]:
     """Solve the admitted classes and embed their vectors in source order."""
 
@@ -177,21 +188,23 @@ def _stationary_distribution_extremes(
 
 
 def stationary_distribution_extremes(
-    matrix: TransitionMatrix,
+    matrix: RationalMatrix,
 ) -> list[tuple[tuple[int, ...], tuple[Fraction, ...]]]:
     """Return one normalized stationary vector for every closed class."""
 
-    closed_classes = _admit_stationary(matrix)
-    return _stationary_distribution_extremes(matrix, closed_classes)
+    native = as_transition_matrix(matrix)
+    closed_classes = _admit_stationary(native)
+    return _stationary_distribution_extremes(native, closed_classes)
 
 
 def stationary_distribution(
-    matrix: TransitionMatrix,
+    matrix: RationalMatrix,
 ) -> tuple[Fraction, ...]:
     """Return the unique stationary distribution, rejecting non-unique chains."""
 
-    closed_classes = _admit_stationary(matrix)
-    extremes = _stationary_distribution_extremes(matrix, closed_classes)
+    native = as_transition_matrix(matrix)
+    closed_classes = _admit_stationary(native)
+    extremes = _stationary_distribution_extremes(native, closed_classes)
     if len(extremes) != 1:
         raise ValueError(
             "the Markov chain does not have a unique stationary distribution"
@@ -199,7 +212,7 @@ def stationary_distribution(
     return extremes[0][1]
 
 
-def _ergodic_properties(matrix: TransitionMatrix) -> tuple[bool, bool]:
+def _ergodic_properties(matrix: _TransitionMatrix) -> tuple[bool, bool]:
     import networkx as nx
 
     graph: nx.DiGraph[int] = nx.DiGraph()
@@ -218,11 +231,12 @@ def _ergodic_properties(matrix: TransitionMatrix) -> tuple[bool, bool]:
     return irreducible, aperiodic
 
 
-def ergodic_properties(matrix: TransitionMatrix) -> tuple[bool, bool]:
+def ergodic_properties(matrix: RationalMatrix) -> tuple[bool, bool]:
     """Return whether a finite exact transition matrix is irreducible and aperiodic."""
 
-    _admit_transition_matrix(matrix)
-    return _ergodic_properties(matrix)
+    native = as_transition_matrix(matrix)
+    _admit_transition_matrix(native)
+    return _ergodic_properties(native)
 
 
 _MAX_MIXING_COMPONENT_DIGITS = 32
@@ -235,14 +249,14 @@ def _reject(location: tuple[str | int, ...], code: str, message: str) -> None:
     )
 
 
-def _admit_transition_matrix(matrix: TransitionMatrix) -> None:
+def _admit_transition_matrix(matrix: _TransitionMatrix) -> None:
     try:
         require_transition_matrix(matrix)
     except TransitionMatrixAdmissionError as exc:
         _reject(exc.location, exc.reason, str(exc))
 
 
-def _admit_stationary(matrix: TransitionMatrix) -> tuple[tuple[int, ...], ...]:
+def _admit_stationary(matrix: _TransitionMatrix) -> tuple[tuple[int, ...], ...]:
     try:
         require_transition_matrix(matrix, maximum_states=MAX_STATIONARY_STATES)
         if any(
@@ -265,7 +279,7 @@ def _admit_stationary(matrix: TransitionMatrix) -> tuple[tuple[int, ...], ...]:
 
 
 def _admit_mixing(
-    matrix: TransitionMatrix,
+    matrix: _TransitionMatrix,
     epsilon: Fraction,
     max_steps: int,
 ) -> None:
@@ -309,7 +323,7 @@ def _admit_mixing(
 
 
 def _derive_communicating_classes(
-    matrix: TransitionMatrix,
+    matrix: _TransitionMatrix,
 ) -> tuple[tuple[tuple[tuple[int, ...], bool], ...], tuple[int, ...]]:
     """Derive the canonical SCC partition in bounded quadratic graph work."""
 
@@ -343,15 +357,16 @@ def _derive_communicating_classes(
 
 
 def mixing_time_result(
-    matrix: TransitionMatrix,
+    matrix: RationalMatrix,
     epsilon: Fraction,
     max_steps: int,
 ) -> MixingTimeResult:
     """Compute a bounded exact mixing result for a canonical matrix value."""
 
-    _admit_transition_matrix(matrix)
-    _admit_mixing(matrix, epsilon, max_steps)
-    irreducible, aperiodic = _ergodic_properties(matrix)
+    native = as_transition_matrix(matrix)
+    _admit_transition_matrix(native)
+    _admit_mixing(native, epsilon, max_steps)
+    irreducible, aperiodic = _ergodic_properties(native)
     if not (irreducible and aperiodic):
         return MixingTimeResult(
             status="NOT_ERGODIC",
@@ -360,10 +375,10 @@ def mixing_time_result(
             steps_examined=0,
         )
     extremes = _stationary_distribution_extremes(
-        matrix, _closed_communicating_classes(matrix)
+        native, _closed_communicating_classes(native)
     )
     stationary = extremes[0][1]
-    outcome = mixing_time(matrix, stationary, epsilon, max_steps)
+    outcome = _mixing_time(native, stationary, epsilon, max_steps)
     distance = CanonicalRational.from_integer_ratio(
         outcome.max_total_variation_distance.numerator,
         outcome.max_total_variation_distance.denominator,
@@ -379,14 +394,15 @@ def mixing_time_result(
 
 
 def stationary_distribution_result(
-    matrix: TransitionMatrix,
+    matrix: RationalMatrix,
 ) -> StationaryDistributionResult:
     """Compute the complete stationary family for a canonical matrix value."""
 
-    closed_classes = _admit_stationary(matrix)
-    extremes = _stationary_distribution_extremes(matrix, closed_classes)
+    native = as_transition_matrix(matrix)
+    closed_classes = _admit_stationary(native)
+    extremes = _stationary_distribution_extremes(native, closed_classes)
     return StationaryDistributionResult._from_kernel(
-        transition_matrix=as_canonical_transition_matrix(matrix),
+        transition_matrix=matrix,
         extreme_distributions=tuple(
             ExtremeStationaryDistribution(
                 closed_class=closed_class,
@@ -403,11 +419,12 @@ def stationary_distribution_result(
     )
 
 
-def ergodic_decision(matrix: TransitionMatrix) -> ErgodicDecisionResult:
+def ergodic_decision(matrix: RationalMatrix) -> ErgodicDecisionResult:
     """Decide ergodicity for a canonical exact transition matrix value."""
 
-    _admit_transition_matrix(matrix)
-    irreducible, aperiodic = _ergodic_properties(matrix)
+    native = as_transition_matrix(matrix)
+    _admit_transition_matrix(native)
+    irreducible, aperiodic = _ergodic_properties(native)
     return ErgodicDecisionResult(
         is_ergodic=irreducible and aperiodic,
         is_irreducible=irreducible,
@@ -415,13 +432,14 @@ def ergodic_decision(matrix: TransitionMatrix) -> ErgodicDecisionResult:
     )
 
 
-def communicating_classes(matrix: TransitionMatrix) -> CommunicatingClassesResult:
+def communicating_classes(matrix: RationalMatrix) -> CommunicatingClassesResult:
     """Decompose a canonical Markov matrix into communicating classes."""
 
-    _admit_transition_matrix(matrix)
-    classes, state_class = _derive_communicating_classes(matrix)
+    native = as_transition_matrix(matrix)
+    _admit_transition_matrix(native)
+    classes, state_class = _derive_communicating_classes(native)
     return CommunicatingClassesResult._from_kernel(
-        transition_matrix=as_canonical_transition_matrix(matrix),
+        transition_matrix=matrix,
         classes=classes,
         state_class=state_class,
     )

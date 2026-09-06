@@ -4,6 +4,7 @@ from typing import Any, cast
 
 import pytest
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.finite_fields import (
     linear_algebra as prime_field_linear_algebra,
 )
@@ -73,8 +74,8 @@ def test_empty_shapes_remain_explicit() -> None:
 
 
 def test_input_rejects_nonprime_or_ragged_semantics() -> None:
-    with pytest.raises(ValueError, match="prime"):
-        PrimeFieldMatrix(prime=4, entries=((1,),), columns=1)
+    with pytest.raises(OperationDomainValidationError, match="prime"):
+        rank(PrimeFieldMatrix(prime=4, entries=((1,),), columns=1))
     with pytest.raises(ValueError, match="column"):
         PrimeFieldMatrix(prime=2, entries=((1,),), columns=2)
 

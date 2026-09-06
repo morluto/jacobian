@@ -14,9 +14,9 @@ from jacobian.math.matrices.certified_snf.values import (
     MAX_CERTIFIED_SNF_DIMENSION,
     MAX_CERTIFIED_SNF_INPUT_DIGITS,
     MAX_CERTIFIED_SNF_OUTPUT_DIGITS,
-    CertifiedIntegerMatrix,
     SmithNormalFormCertificate,
 )
+from jacobian.math.matrices.values import IntegerMatrix
 
 MAX_CHAIN_DEGREE = 32
 MAX_BASIS_SIZE = 64
@@ -172,24 +172,28 @@ def _require_prime_coupling(
             raise _validation_error(
                 "prime_out_of_bounds", "prime modulus exceeds the bounded prime limit"
             )
-        if prime % 2 == 0:
-            if prime != 2:
-                raise _validation_error(
-                    "prime_not_prime", f"prime {prime} is not prime"
-                )
-            return
-        divisor = 3
-        while divisor * divisor <= prime:
-            if prime % divisor == 0:
-                raise _validation_error(
-                    "prime_not_prime", f"prime {prime} is not prime"
-                )
-            divisor += 2
     elif prime is not None:
         raise _validation_error(
             "prime_forbidden",
             "QQ and ZZ coefficient rings must not have a prime modulus",
         )
+
+
+def require_prime_field_admission(
+    coefficient_ring: CoefficientRing, prime: int | None
+) -> None:
+    """Establish primality before an operation uses GF(p) arithmetic.
+
+    Value parsing keeps only the structural ring/modulus coupling.  This
+    admission helper is intentionally called by field-dependent operations.
+    """
+    _require_prime_coupling(coefficient_ring, prime)
+    if coefficient_ring is CoefficientRing.PRIME_FIELD:
+        from flint import fmpz
+
+        assert prime is not None
+        if not fmpz(prime).is_prime():
+            raise ValueError(f"prime {prime} is not prime")
 
 
 def _require_canonical_integer_spelling(entry: str, part: str) -> int:
@@ -363,7 +367,7 @@ class IntegralHomologyGroupValue(StrictModel):
         max_length=MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK
     )
     outgoing_smith_certificate: SmithNormalFormCertificate
-    boundary_in_cycle_coordinates: CertifiedIntegerMatrix
+    boundary_in_cycle_coordinates: IntegerMatrix
     incoming_smith_certificate: SmithNormalFormCertificate
     generator_basis: Literal[
         "SOURCE_CHAIN_BASIS_VIA_CERTIFIED_SMITH_TRANSFORMATIONS"

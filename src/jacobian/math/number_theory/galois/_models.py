@@ -8,6 +8,8 @@ from pydantic import Field, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.canonical import parse_canonical_integer
+from jacobian.math.polynomials.values import RationalPolynomial
 
 MAX_FACTOR_DEGREE = 12
 MAX_GALOIS_GROUP_DEGREE = 6
@@ -71,10 +73,42 @@ class FrobeniusCycleRequest(StrictModel):
 
 
 class _SupportedGaloisPolynomialRequest(StrictModel):
-    coefficients: tuple[GaloisCoefficient, ...] = Field(
-        min_length=2,
-        max_length=MAX_GALOIS_GROUP_DEGREE + 1,
+    polynomial: RationalPolynomial = Field(
+        description="Univariate polynomial over QQ with integer coefficients of magnitude at most 10^12 and degree one through six."
     )
+
+    @model_validator(mode="after")
+    def require_supported_encoding(self) -> Self:
+        terms = self.polynomial.polynomial.terms
+        if (
+            len(self.polynomial.variables) != 1
+            or not terms
+            or not 1 <= terms[0].exponents[0] <= MAX_GALOIS_GROUP_DEGREE
+        ):
+            raise _validation_error(
+                "degree_bound",
+                "Galois computation requires a univariate polynomial of degree one through six",
+            )
+        if any(
+            term.coefficient.den != "1"
+            or len(term.coefficient.num.lstrip("-")) > 13
+            or abs(parse_canonical_integer(term.coefficient.num)) > 10**12
+            for term in terms
+        ):
+            raise _validation_error(
+                "coefficient_bound",
+                "Galois coefficients must be integers of magnitude at most 10^12",
+            )
+        return self
+
+    @property
+    def coefficients(self) -> tuple[int, ...]:
+        coefficients = [0] * (self.polynomial.polynomial.terms[0].exponents[0] + 1)
+        for term in self.polynomial.polynomial.terms:
+            coefficients[term.exponents[0]] = parse_canonical_integer(
+                term.coefficient.num
+            )
+        return tuple(coefficients)
 
 
 class GaloisGroupRequest(_SupportedGaloisPolynomialRequest):
@@ -136,7 +170,6 @@ class GaloisFactorResult(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_consistency(self) -> Self:
-        _require_prime(self.field_order)
         _require_factor_residues(self)
         if self.distinct_factor_count != len(self.factors):
             raise _validation_error(

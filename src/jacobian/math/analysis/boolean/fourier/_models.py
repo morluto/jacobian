@@ -9,6 +9,10 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math.analysis.boolean._models import (
+    MAX_TRUTH_TABLE_LENGTH,
+    MAX_WALSH_VARIABLES,
+)
 
 MAX_VARIABLES = 10
 MIN_VARIABLES = 1
@@ -49,18 +53,22 @@ class TruthTableResult(StrictModel):
 
 
 class FourierSpectrumRequest(TruthTableRequest):
-    """Compute the Fourier/Walsh-Hadamard spectrum of a Boolean function."""
+    """Transform the 0/1 values, including the zero-variable Boolean cube."""
+
+    truth_table: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_TRUTH_TABLE_LENGTH
+    )
 
 
 class FourierSpectrumResult(StrictModel):
     """The exact integer Fourier/Walsh-Hadamard spectrum of a truth table."""
 
     spectrum: tuple[CanonicalRational, ...] = Field(
-        min_length=2,
-        max_length=1 << MAX_VARIABLES,
+        min_length=1,
+        max_length=MAX_TRUTH_TABLE_LENGTH,
     )
-    variable_count: int = Field(ge=1, le=MAX_VARIABLES)
-    convention: Literal["WALSH_HADAMARD"] = "WALSH_HADAMARD"
+    variable_count: int = Field(ge=0, le=MAX_WALSH_VARIABLES)
+    convention: Literal["BOOLEAN_VALUES"] = "BOOLEAN_VALUES"
 
     @model_validator(mode="after")
     def require_spectrum_shape(self) -> Self:
@@ -76,10 +84,25 @@ class MultilinearExtensionRequest(TruthTableRequest):
 
 
 class MultilinearExtensionResult(StrictModel):
-    """The multilinear extension polynomial as a SymPy string."""
+    """Exact coefficients of prod(x_i for i in S), indexed by subset mask.
 
-    polynomial: str = Field(min_length=1)
+    Bit i names coordinate x_i. Coefficients include zero entries and retain
+    every ambient coordinate, even for the zero or constant polynomial.
+    """
+
+    coefficients: tuple[CanonicalRational, ...] = Field(
+        min_length=2, max_length=1 << MAX_VARIABLES
+    )
+    convention: Literal["SUBSET_MONOMIALS"] = "SUBSET_MONOMIALS"
     variable_count: int = Field(ge=1, le=MAX_VARIABLES)
+
+    @model_validator(mode="after")
+    def require_coefficient_shape(self) -> Self:
+        if len(self.coefficients) != 1 << self.variable_count:
+            raise _validation_error(
+                "coefficient_shape", "coefficient count must equal 2 ** variable_count"
+            )
+        return self
 
 
 class ErasureNoiseRequest(StrictModel):

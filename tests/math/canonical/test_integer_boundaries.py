@@ -2,19 +2,19 @@ from __future__ import annotations
 
 from jacobian.math.geometry.projective.values import PrimitiveProjectiveTriple
 from jacobian.math.matrices.certified_snf.values import (
-    CertifiedIntegerMatrix,
     SmithNormalFormCertificate,
 )
+from jacobian.math.matrices.values import IntegerMatrix
 
 
 def test_smith_certificate_validates_large_canonical_invariant_factor() -> None:
     factor = "1" + ("0" * 5_000)
-    source = CertifiedIntegerMatrix(
+    source = IntegerMatrix(
         row_count=1,
         column_count=1,
         entries=((factor,),),
     )
-    identity = CertifiedIntegerMatrix(row_count=1, column_count=1, entries=(("1",),))
+    identity = IntegerMatrix(row_count=1, column_count=1, entries=(("1",),))
 
     certificate = SmithNormalFormCertificate(
         source=source,

@@ -42,6 +42,7 @@ from jacobian.math.graphs.optimization._models import (
     OptimizationSearchStep,
     OptimizationTermination,
 )
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.process import (
     ProcessResourceLimits,
     run_bounded_process,
@@ -163,7 +164,9 @@ def _spanning_tree_count(graph: Any) -> GraphSpanningTreeCountResult:
     )
 
 
-def _maximum_matching(graph: Any) -> GraphMaximumMatchingResult:
+def _maximum_matching(
+    graph: Any, source: SimpleUndirectedGraph
+) -> GraphMaximumMatchingResult:
     import networkx as nx
 
     raw = nx.max_weight_matching(graph, maxcardinality=True)
@@ -196,7 +199,17 @@ def _maximum_matching(graph: Any) -> GraphMaximumMatchingResult:
     odd_component_count = sum(
         len(component) % 2 for component in nx.connected_components(reduced)
     )
+    # Establish feasibility and the Tutte-Berge equality at the producing
+    # kernel boundary. odd(G-U) was computed once above, not in a validator.
+    if (
+        any(not graph.has_edge(left, right) for left, right in edges)
+        or len({vertex for edge in edges for vertex in edge}) != 2 * cardinality
+    ):
+        raise RuntimeError("matching backend returned invalid source edges")
+    if 2 * cardinality != len(graph) + len(barrier) - odd_component_count:
+        raise RuntimeError("matching and Tutte-Berge barrier disagree")
     return GraphMaximumMatchingResult(
+        graph=source,
         maximum_matching_cardinality=cardinality,
         witness_edges=edges,
         certificate=GraphTutteBergeCertificate(
@@ -211,7 +224,7 @@ def _maximum_matching_execute(
     request: GraphMaximumMatchingRequest,
 ) -> GraphMaximumMatchingResult:
     graph = cast(Any, build_simple_graph(request.graph))
-    return _maximum_matching(graph)
+    return _maximum_matching(graph, request.graph)
 
 
 def _triangle_count(graph: Any) -> GraphTriangleCountResult:
@@ -259,6 +272,7 @@ def _clique_execute_kernel(
     vertices = tuple(request.graph.vertices)
     if not vertices:
         return GraphCliqueNumberResult(
+            graph=request.graph,
             status="EXACT",
             order=0,
             optimum_value=0,
@@ -342,6 +356,7 @@ def _clique_execute_kernel(
         exact = True
 
     return GraphCliqueNumberResult(
+        graph=request.graph,
         status="EXACT" if exact else "UNKNOWN",
         order=len(vertices),
         optimum_value=len(incumbent) if exact else None,
@@ -363,6 +378,7 @@ def _clique_worker_failure(
     vertices = tuple(request.graph.vertices)
     witness = () if not vertices else (min(vertices),)
     return GraphCliqueNumberResult(
+        graph=request.graph,
         status="UNKNOWN",
         order=len(vertices),
         optimum_value=None,
@@ -436,7 +452,8 @@ def _clique_execute(
         source_vertices = set(request.graph.vertices)
         source_edges = {tuple(sorted(edge)) for edge in request.graph.edges}
         if (
-            result.order != len(request.graph.vertices)
+            result.graph != request.graph
+            or result.order != len(request.graph.vertices)
             or not set(result.witness_vertices) <= source_vertices
             or any(
                 tuple(sorted(edge)) not in source_edges
@@ -671,7 +688,7 @@ EXACT_GRAPH_INVARIANT_OPERATIONS = (
         title="Maximum matching",
         description=(
             "Compute an exact maximum-cardinality matching and a Tutte-Berge "
-            "upper-bound certificate for one simple graph of at most 64 vertices."
+            "upper-bound certificate for one simple graph of at most 256 vertices."
         ),
         request_type=GraphMaximumMatchingRequest,
         result_type=GraphMaximumMatchingResult,

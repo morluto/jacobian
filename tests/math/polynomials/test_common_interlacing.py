@@ -645,16 +645,13 @@ def test_request_result_and_endpoint_values_round_trip_and_compose() -> None:
 
 
 def test_trusted_producer_does_not_weaken_caller_authored_algebraic_values() -> None:
-    with pytest.raises(ValidationError, match="irreducible"):
-        RealAlgebraicValue(
-            polynomial=("1", "0", "-1"),
-            real_root_index=0,
-        )
-    with pytest.raises(ValidationError, match="root_index"):
-        RealAlgebraicValue(
-            polynomial=("1", "0", "1"),
-            real_root_index=0,
-        )
+    reducible = RealAlgebraicValue(polynomial=("1", "0", "-1"), real_root_index=0)
+    with pytest.raises(OperationDomainValidationError, match="irreducible"):
+        compare_real_algebraic(reducible, reducible)
+
+    no_real_root = RealAlgebraicValue(polynomial=("1", "0", "1"), real_root_index=0)
+    with pytest.raises(OperationDomainValidationError, match="existing real root"):
+        compare_real_algebraic(no_real_root, no_real_root)
 
 
 @pytest.mark.parametrize(

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Iterable
 from itertools import combinations, permutations, product
+from math import prod
 from typing import Any, Literal, Self
 
 from pydantic import Field, model_validator
@@ -82,10 +83,34 @@ def _require_determinant_family_result_budget(
         )
     term_bounds = _principal_minor_term_bounds(entries)
     relevant_bounds = term_bounds[1:] if characteristic_polynomial else term_bounds[-1:]
-    if any(bound > MAX_SYMBOLIC_RESULT_TERMS for bound in relevant_bounds):
+    # Leibniz products bound arithmetic expansion, not distinct monomials.
+    # Every k-fold product lies in the exponent box below, independently of
+    # cancellations. Constants therefore have support at most one.
+    axis_degrees = tuple(
+        max(
+            (
+                term.exponents[axis]
+                for value in values
+                for term in value.numerator.terms
+            ),
+            default=0,
+        )
+        for axis in range(len(entries[0][0].variables))
+    )
+    sizes = range(1, dimension + 1) if characteristic_polynomial else (dimension,)
+    if sum(relevant_bounds) > 65_536:
         raise _validation_error(
             "budget_exceeded",
-            "determinant-family expansion exceeds the result term budget",
+            "determinant-family raw product work exceeds the expansion budget",
+        )
+    if any(
+        min(bound, prod(size * degree + 1 for degree in axis_degrees))
+        > MAX_SYMBOLIC_RESULT_TERMS
+        for size, bound in zip(sizes, relevant_bounds, strict=True)
+    ):
+        raise _validation_error(
+            "budget_exceeded",
+            "determinant-family collected support exceeds the result term budget",
         )
     maximum_exponent = max(
         (
@@ -111,7 +136,13 @@ def _require_determinant_family_result_budget(
         default=1,
     )
     if any(
-        bound * dimension * coefficient_digits + len(str(max(bound, 1)))
+        _sum_coefficient_digit_bound(
+            term_count=bound,
+            product_coefficient_digits=dimension * coefficient_digits,
+            integral_coefficients=all(
+                _has_integral_coefficients(value) for value in values
+            ),
+        )
         > MAX_SYMBOLIC_RESULT_COEFFICIENT_DIGITS
         for bound in relevant_bounds
     ):

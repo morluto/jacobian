@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.crossed_products._budget import require_multiplication_budget
 from jacobian.math.crossed_products.values import (
     FiniteCosetCrossedProductElement,
@@ -35,14 +36,14 @@ def _integer_cocycle(
 def _multiply_admitted(
     left: FiniteCosetCrossedProductElement,
     right: FiniteCosetCrossedProductElement,
+    actions: tuple[tuple[tuple[int, ...], ...], ...],
+    cocycle: tuple[tuple[tuple[int, ...], ...], ...],
 ) -> FiniteCosetCrossedProductElement:
     presentation = left.presentation
     characteristic = presentation.characteristic
     coset_index = {
         label: position for position, label in enumerate(presentation.cosets)
     }
-    actions = _integer_actions(presentation)
-    cocycle = _integer_cocycle(presentation)
     coefficients: dict[tuple[int, tuple[int, ...]], int] = {}
 
     for left_term in left.terms:
@@ -101,7 +102,25 @@ def multiply(
     """Multiply two finite-support elements in one explicit crossed product."""
 
     require_multiplication_budget(left, right)
-    return _multiply_admitted(left, right)
+    from sympy import isprime
+
+    presentation = left.presentation
+    actions = _integer_actions(presentation)
+    cocycle = _integer_cocycle(presentation)
+    index = {label: position for position, label in enumerate(presentation.cosets)}
+    try:
+        if not isprime(presentation.characteristic):
+            raise ValueError("characteristic must be prime")
+        presentation._require_quotient_group(index)
+        presentation._require_action_laws(index, actions)
+        presentation._require_cocycle_laws(index, actions, cocycle)
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("presentation",),
+            code="crossed_product.presentation_laws",
+            message=str(exc),
+        ) from exc
+    return _multiply_admitted(left, right, actions, cocycle)
 
 
 __all__ = ["multiply"]

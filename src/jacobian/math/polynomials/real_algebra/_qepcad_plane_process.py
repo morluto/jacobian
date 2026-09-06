@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-import os
 import shutil
 import sys
 from dataclasses import dataclass
@@ -15,6 +14,7 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import ValidationError
 
 from jacobian._execution import OperationExecutionCancelledError
+from jacobian.backends import _qepcad_root
 from jacobian.math.polynomials.real_algebra._plane_component_models import (
     IsolatedRealPlanePoint,
     PlaneComponentProfileRequest,
@@ -80,19 +80,6 @@ class QepcadPlaneSampleValidationError(ValueError):
     def __init__(self, reason: str) -> None:
         super().__init__(reason)
         self.reason = reason
-
-
-def _qepcad_root(executable: str) -> str | None:
-    configured = os.environ.get("QEPCAD_ROOT")
-    candidates = (
-        Path(configured) if configured else None,
-        Path(executable).resolve().parent.parent / "lib" / "qepcad",
-        Path("/usr/lib/qepcad"),
-    )
-    for candidate in candidates:
-        if candidate is not None and (candidate / "default.qepcadrc").is_file():
-            return str(candidate.resolve())
-    return None
 
 
 def _worker_outcome(

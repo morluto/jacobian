@@ -178,6 +178,7 @@ def test_documentation_change_skips_product_evidence() -> None:
     assert plan.python_lanes == ()
     assert plan.boundary_lanes == ()
     assert plan.run_singular is False
+    assert plan.run_qepcad is False
     assert plan.run_wheel is False
 
 
@@ -213,6 +214,7 @@ def test_process_polynomial_test_selects_process_and_singular() -> None:
 
     assert plan.boundary_lanes == ("process",)
     assert plan.run_singular is True
+    assert plan.run_qepcad is False
 
 
 @pytest.mark.parametrize(
@@ -226,7 +228,23 @@ def test_process_polynomial_test_selects_process_and_singular() -> None:
 def test_qepcad_owner_change_selects_exact_algebra_runtime(path: str) -> None:
     plan = _plan([path])
 
-    assert plan.run_singular is True
+    assert plan.run_singular is False
+    assert plan.run_qepcad is True
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "src/jacobian/math/polynomials/real_algebra/_common_interlacing.py",
+        "src/jacobian/math/polynomials/real_algebra/_strict_sublevel.py",
+        "tests/math/polynomials/test_common_interlacing.py",
+        "tests/math/polynomials/test_strict_sublevel_measure.py",
+    ],
+)
+def test_independent_real_algebra_owner_skips_qepcad(path: str) -> None:
+    plan = _plan([path])
+
+    assert plan.run_qepcad is False
 
 
 def test_shared_test_support_fails_closed_to_every_ordinary_boundary() -> None:
@@ -237,6 +255,7 @@ def test_shared_test_support_fails_closed_to_every_ordinary_boundary() -> None:
     assert plan.python_lanes == ("cli", "dispatch", "integration", "tooling")
     assert plan.boundary_lanes == ("mcp", "process")
     assert plan.run_singular is True
+    assert plan.run_qepcad is True
     assert plan.run_wheel is True
 
 
@@ -257,6 +276,7 @@ def test_merge_group_always_owns_full_math_and_public_contracts() -> None:
     assert plan.python_lanes == ("dispatch", "cli", "tooling", "integration")
     assert plan.boundary_lanes == ("process", "mcp")
     assert plan.run_singular is True
+    assert plan.run_qepcad is True
     assert plan.run_wheel is True
 
 
@@ -304,3 +324,29 @@ def test_rejects_non_normalized_paths() -> None:
             changed_paths=["../tests/math/test_anything.py"],
             repository=ROOT,
         )
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "src/jacobian/math/polynomials/maps/operations.py",
+        "src/jacobian/math/polynomials/maps/_singular.py",
+        "src/jacobian/math/geometry/algebraic_curves/_singularity.py",
+        "src/jacobian/math/geometry/algebraic_curves/_tools.py",
+        "tests/math/geometry/algebraic_curves/test_projective_singularity_profile.py",
+        "tests/process/geometry/test_projective_singularity_point_worker.py",
+    ],
+)
+def test_singular_consumers_select_runtime_lane(path: str) -> None:
+    plan = _plan([path])
+
+    assert plan.run_singular is True
+    assert plan.run_qepcad is False
+
+
+def test_shared_process_change_selects_both_exact_runtime_suites() -> None:
+    plan = _plan(["src/jacobian/process.py"])
+
+    assert plan.boundary_lanes == ("process",)
+    assert plan.run_singular is True
+    assert plan.run_qepcad is True

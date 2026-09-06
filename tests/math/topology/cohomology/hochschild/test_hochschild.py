@@ -8,6 +8,7 @@ from contextlib import contextmanager
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.topology.cohomology.hochschild._models import (
     MAX_HOCHSCHILD_MATRIX_ENTRIES,
     AlgebraStructure,
@@ -148,13 +149,14 @@ class TestHochschildHomology:
 
 class TestHochschildAdmissionAndTopDegree:
     def test_composite_prime_rejected(self) -> None:
-        with _validation_error("hochschild_complex.prime"):
-            AlgebraStructure(
-                prime=4,
-                dimension=1,
-                structure_constants=(((1,),),),
-                augmentation=(1,),
-            )
+        algebra = AlgebraStructure(
+            prime=4,
+            dimension=1,
+            structure_constants=(((1,),),),
+            augmentation=(1,),
+        )
+        with pytest.raises(OperationDomainValidationError, match="prime"):
+            _run_homology(HochschildHomologyRequest(algebra=algebra, max_degree=1))
 
     def test_non_associative_rejected(self) -> None:
         """[e0,e1]=e0 style left-zero multiplication fails associativity."""

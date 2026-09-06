@@ -31,7 +31,7 @@ from jacobian.math.matrices.certified_snf.operations import (
     matrix_multiply,
     matrix_vector_multiply,
 )
-from jacobian.math.matrices.certified_snf.values import CertifiedIntegerMatrix
+from jacobian.math.matrices.values import IntegerMatrix
 from jacobian.math.topology.chain_complexes.values import (
     INTEGRAL_HOMOLOGY_WALL_SECONDS,
     MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK,
@@ -1399,10 +1399,8 @@ def _require_reduction_bound(
         )
 
 
-def _integer_matrix(
-    entries: Matrix, *, rows: int, columns: int
-) -> CertifiedIntegerMatrix:
-    return CertifiedIntegerMatrix(
+def _integer_matrix(entries: Matrix, *, rows: int, columns: int) -> IntegerMatrix:
+    return IntegerMatrix(
         row_count=rows,
         column_count=columns,
         entries=tuple(

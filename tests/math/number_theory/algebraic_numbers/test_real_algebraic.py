@@ -11,8 +11,10 @@ from tests.math.number_theory.algebraic_numbers._real_algebraic_support import (
     real_algebraic_validation_error,
 )
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.algebraic_numbers.real import (
     RealAlgebraicValue,
+    _compare_admitted_real_algebraic,
     compare_real_algebraic,
     isolate_real_algebraic,
 )
@@ -49,6 +51,18 @@ def test_order_uses_one_exact_axis_for_distinct_minimal_polynomials() -> None:
     )
 
 
+def test_admitted_order_resolves_roots_sharing_a_coarse_interval() -> None:
+    left = _value(("1", "0", "-2"), 1)
+    right = _value(("1", "0", "-3"), 1)
+    left_interval = isolate_real_algebraic(left)
+    right_interval = isolate_real_algebraic(right)
+
+    assert (
+        _compare_admitted_real_algebraic(left, right, left_interval, right_interval)
+        == "LT"
+    )
+
+
 def test_order_within_one_minimal_polynomial_uses_real_root_indices() -> None:
     negative_sqrt_two = _value(("1", "0", "-2"), 0)
     positive_sqrt_two = _value(("1", "0", "-2"), 1)
@@ -69,7 +83,6 @@ def test_order_within_one_degree_sixteen_polynomial_uses_root_indices() -> None:
     [
         (("-1", "0", "2"), "positive leading"),
         (("2", "0", "-4"), "primitive"),
-        (("1", "0", "-1"), "irreducible"),
     ],
 )
 def test_noncanonical_minimal_polynomials_are_rejected(
@@ -80,8 +93,8 @@ def test_noncanonical_minimal_polynomials_are_rejected(
 
 
 def test_value_rejects_a_nonreal_or_missing_root() -> None:
-    with real_algebraic_validation_error():
-        _value(("1", "0", "1"), 0)
+    with pytest.raises(OperationDomainValidationError, match="existing real root"):
+        isolate_real_algebraic(_value(("1", "0", "1"), 0))
     with real_algebraic_validation_error():
         _value(("1", "0", "-2"), 2)
 
@@ -152,6 +165,32 @@ def test_root_isolation_retains_its_degree_eight_work_envelope() -> None:
     ]
 
     with pytest.raises(ValidationError, match="degree at most 8"):
-        UnivariatePolynomialRequest.model_validate(
-            {"coefficients_descending": coefficients}
-        )
+        UnivariatePolynomialRequest.model_validate(_isolation_payload(coefficients))
+
+
+def _isolation_payload(coefficients: list[dict[str, str]]) -> dict[str, object]:
+    return {
+        "polynomial": {
+            "variables": ["x"],
+            "polynomial": {
+                "terms": [
+                    {"coefficient": value, "exponents": [len(coefficients) - 1 - i]}
+                    for i, value in enumerate(coefficients)
+                    if value["num"] != "0"
+                ]
+            },
+        }
+    }
+
+
+@pytest.mark.parametrize("polynomial", [("1", "0", "-1"), ("1", "0", "1")])
+def test_false_real_root_claims_parse_but_are_rejected_by_consumers(
+    polynomial: tuple[str, ...],
+) -> None:
+    candidate = _value(polynomial, 0)
+    candidate = RealAlgebraicValue.model_validate_json(candidate.model_dump_json())
+    for other in (candidate, _value(("1", "-2"), 0)):
+        with pytest.raises(OperationDomainValidationError):
+            compare_real_algebraic(candidate, other)
+    with pytest.raises(OperationDomainValidationError):
+        isolate_real_algebraic(candidate)

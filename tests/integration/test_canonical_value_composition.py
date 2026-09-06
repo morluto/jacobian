@@ -138,3 +138,127 @@ def test_tree_automaton_value_composes_into_count_request() -> None:
     )
 
     assert int(count.count) == 1
+
+
+def test_matrix_polynomial_producers_compose_without_coefficient_rewriting() -> None:
+    from jacobian.catalog.catalog import Catalog
+    from jacobian.dispatch import invoke_operation
+
+    catalog = Catalog.open()
+    matrix = {
+        "entries": [
+            [{"num": str(v), "den": "1"} for v in row] for row in [[1, 2], [3, 4]]
+        ]
+    }
+    characteristic = invoke_operation(
+        "matrix.characteristic_polynomial.compute", {"matrix": matrix}, catalog
+    ).output
+    minimal = invoke_operation(
+        "matrix.minimal_polynomial.compute", {"matrix": matrix}, catalog
+    ).output
+    assert characteristic["polynomial"] == minimal["characteristic_polynomial"]
+    for polynomial in [characteristic["polynomial"], minimal["minimal_polynomial"]]:
+        output = invoke_operation(
+            "matrix.polynomial.evaluate.compute",
+            {"matrix": matrix, "polynomial": json.loads(json.dumps(polynomial))},
+            catalog,
+        ).output
+        assert all(
+            value["num"] == "0" for row in output["value"]["entries"] for value in row
+        )
+
+
+def test_prime_field_matrix_coordinate_maps_retain_presentation_and_axes() -> None:
+    from jacobian.catalog.catalog import Catalog
+    from jacobian.dispatch import invoke_operation
+    from jacobian.math.finite_fields import Axis, AxisBoundMatrix, finite_field
+    from jacobian.math.matrices.finite_fields import PrimeFieldMatrix
+    from jacobian.math.matrices.finite_fields.presentations import (
+        bind_prime_matrix,
+        prime_matrix_coordinates,
+    )
+
+    matrix = PrimeFieldMatrix(prime=2, entries=((1, 1), (1, 1)), columns=2)
+    presented = bind_prime_matrix(
+        matrix,
+        finite_field(2, (0, 1)),
+        Axis(name="equations", labels=("second", "first")),
+        Axis(name="unknowns", labels=("v", "u")),
+    )
+    wire = presented.model_dump(mode="json")
+    assert (
+        invoke_operation(
+            "finite_field.matrix.rank.compute", {"matrix": wire}, Catalog.open()
+        ).output["rank"]
+        == 1
+    )
+    restored = prime_matrix_coordinates(AxisBoundMatrix.model_validate(wire))
+    assert restored == matrix
+    assert (
+        bind_prime_matrix(
+            restored, presented.presentation, presented.row_axis, presented.column_axis
+        )
+        == presented
+    )
+
+
+def test_smith_producers_share_the_same_normal_form_value() -> None:
+    from jacobian.catalog.catalog import Catalog
+    from jacobian.dispatch import invoke_operation
+
+    catalog = Catalog.open()
+    entries = [["2", "4"], ["0", "6"]]
+    plain = invoke_operation(
+        "matrix.normal_form.smith.compute", {"matrix": {"entries": entries}}, catalog
+    ).output
+    certified = invoke_operation(
+        "matrix.normal_form.smith.certified.compute",
+        {
+            "matrix": {
+                "domain": "ZZ",
+                "entries": entries,
+                "row_count": 2,
+                "column_count": 2,
+            }
+        },
+        catalog,
+    ).output
+    assert plain == certified["smith_form"]
+
+
+def test_rational_factor_sturm_and_isolation_share_the_same_polynomial() -> None:
+    from jacobian.catalog.catalog import Catalog
+    from jacobian.dispatch import invoke_operation
+
+    catalog = Catalog.open()
+    polynomial = {
+        "variables": ["z"],
+        "polynomial": {
+            "terms": [
+                {"coefficient": {"num": "2", "den": "1"}, "exponents": [1]},
+                {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]},
+            ]
+        },
+    }
+    factored = invoke_operation(
+        "polynomial.factor.compute", {"polynomial": polynomial}, catalog
+    ).output
+    factor = factored["factors"][0]["factor"]
+    assert factor["variables"] == ["z"]
+    chain = invoke_operation(
+        "polynomial.sturm_chain.compute", {"polynomial": factor}, catalog
+    ).output["chain"]
+    assert chain[0] == factor
+    for value in [factor, chain[0]]:
+        isolated = invoke_operation(
+            "polynomial.roots.isolate", {"polynomial": value}, catalog
+        ).output
+        assert isolated["source_polynomial"] == value
+        assert len(isolated["roots"]) == 1
+        interval = isolated["roots"][0]["isolating_interval"]
+        endpoints = [
+            Fraction(int(endpoint["num"]), int(endpoint["den"]))
+            for endpoint in interval
+        ]
+        assert endpoints[0] <= Fraction(-1, 2) <= endpoints[1]
+        assert isolated["roots"][0]["algebraic_value"]["polynomial"] == ["2", "1"]

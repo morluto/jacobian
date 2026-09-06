@@ -142,7 +142,6 @@ class PrimeTupleLocalSummary(StrictModel):
 
     @model_validator(mode="after")
     def require_internal_partition_counts(self) -> Self:
-        _require_prime(self.prime, maximum=MAX_BATCH_PRIME)
         residues = tuple(row.residue for row in self.bad_residues)
         if residues != tuple(sorted(set(residues))):
             raise _validation_error("bad residues must be distinct and sorted")

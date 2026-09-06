@@ -93,6 +93,51 @@ def test_pang_spectra_and_proof_critical_order_are_exact() -> None:
     assert comparison.right_isolating_interval.upper.as_fraction() == Fraction(3, 5)
 
 
+def test_spectral_admission_rejects_a_composite_radicand() -> None:
+    matrix = _matrix(
+        ((_q(radicand=12), _q(radicand=12)), (_q(radicand=12), _q(radicand=12)))
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="square-free"):
+        symmetric_spectrum(matrix)
+
+
+@pytest.mark.parametrize(
+    "matrix",
+    [
+        RealQuadraticMatrix(radicand=3),
+        RealQuadraticMatrix(radicand=3, row_count=0, column_count=2),
+        RealQuadraticMatrix(radicand=3, entries=((), ()), row_count=2, column_count=0),
+    ],
+)
+@pytest.mark.parametrize(
+    ("native", "tool", "request_type"),
+    [
+        (
+            symmetric_spectrum,
+            compute_symmetric_spectrum,
+            RealQuadraticSymmetricSpectrumRequest,
+        ),
+        (
+            singular_spectrum,
+            compute_singular_spectrum,
+            RealQuadraticSingularSpectrumRequest,
+        ),
+        (inertia, compute_inertia, RealQuadraticInertiaRequest),
+    ],
+)
+def test_empty_quadratic_shapes_are_rejected_after_shape_admission(
+    matrix: RealQuadraticMatrix,
+    native: object,
+    tool: object,
+    request_type: object,
+) -> None:
+    with pytest.raises(ValueError, match="quadratic"):
+        native(matrix)  # type: ignore[operator]
+    with pytest.raises(OperationDomainValidationError, match="quadratic"):
+        tool(request_type(matrix=matrix))  # type: ignore[operator]
+
+
 def test_symmetric_spectrum_can_return_quartic_values() -> None:
     source = _matrix(
         (

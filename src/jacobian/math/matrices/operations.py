@@ -378,7 +378,7 @@ def _admit[T](
 
 
 def _admit_rational_matrix(matrix: RationalMatrix) -> None:
-    _require_computation_dimensions(matrix.entries)
+    _require_computation_dimensions(matrix)
     from jacobian.math.matrices.values import require_matrix_scalar_digits
 
     require_matrix_scalar_digits(
@@ -392,6 +392,7 @@ def _admit_rational(matrix: RationalMatrix) -> None:
 
 def _admit_exact_linear_matrix(
     entries: tuple[tuple[CanonicalRational | str, ...], ...],
+    column_count: int | None = None,
 ) -> None:
     from jacobian.math.matrices.values import require_matrix_scalar_digits
 
@@ -399,13 +400,19 @@ def _admit_exact_linear_matrix(
         entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
     )
     rows = len(entries)
-    columns = len(entries[0])
+    columns = (
+        column_count
+        if column_count is not None
+        else (len(entries[0]) if entries else 0)
+    )
     if rows > MAX_EXACT_LINEAR_MATRIX_AXIS or columns > MAX_EXACT_LINEAR_MATRIX_AXIS:
         raise _validation_error(
             "budget_exceeded",
             "matrix computation dimensions are limited to "
             f"{MAX_EXACT_LINEAR_MATRIX_AXIS} rows and columns",
         )
+    if rows == 0 or columns == 0:
+        return
     rank_bound = min(rows, columns)
     scalar_digits = max(
         len(component.lstrip("-"))
@@ -692,6 +699,8 @@ def _flint_rref(
     entries = tuple(
         tuple(value.as_fraction() for value in row) for row in matrix.entries
     )
+    if matrix.row_count == 0 or matrix.column_count == 0:
+        return entries, ()
     reduced, rank_value = rational_rref(entries)
     pivots = tuple(
         next(column for column, value in enumerate(row) if value)
@@ -702,7 +711,7 @@ def _flint_rref(
 
 def _admit_square_rational(matrix: RationalMatrix) -> None:
     _admit_rational_matrix(matrix)
-    if len(matrix.entries) != len(matrix.entries[0]):
+    if len(matrix.entries) != matrix.column_count:
         raise _validation_error("budget_exceeded", "operation requires a square matrix")
 
 
@@ -716,7 +725,7 @@ def _admit_integer(matrix: IntegerMatrix) -> None:
     )
     if (
         len(matrix.entries) > MAX_MATRIX_DIMENSION
-        or len(matrix.entries[0]) > MAX_MATRIX_DIMENSION
+        or matrix.column_count > MAX_MATRIX_DIMENSION
     ):
         raise _validation_error(
             "budget_exceeded",
@@ -728,7 +737,7 @@ def _admit_integer(matrix: IntegerMatrix) -> None:
 def _admit_square_integer(matrix: IntegerMatrix) -> None:
     _admit_integer(matrix)
     rows = len(matrix.entries)
-    if rows == 0 or rows != len(matrix.entries[0]):
+    if rows == 0 or rows != matrix.column_count:
         raise _validation_error(
             "budget_exceeded", "operation requires a square integer matrix"
         )
@@ -747,9 +756,9 @@ def _admit_inverse(matrix: IntegerMatrix) -> None:
         matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
     )
     order = len(matrix.entries)
-    if order != len(matrix.entries[0]):
+    if order == 0 or order != matrix.column_count:
         raise _validation_error(
-            "budget_exceeded", "inverse requires a square integer matrix"
+            "budget_exceeded", "inverse requires a nonempty square integer matrix"
         )
     if order > MAX_INVERSE_MATRIX_ORDER:
         raise _validation_error(
@@ -854,7 +863,7 @@ def _rank_one_inverse_digit_work(
 def _admit_permanent(matrix: RationalMatrix) -> None:
     _admit_rational_matrix(matrix)
     order = len(matrix.entries)
-    if order != len(matrix.entries[0]):
+    if order != matrix.column_count:
         raise _validation_error(
             "budget_exceeded", "permanent computation requires a square matrix"
         )
@@ -903,7 +912,7 @@ def _product_cell_digit_bound(
 
 
 def _admit_product(left: RationalMatrix, right: RationalMatrix) -> None:
-    if len(left.entries[0]) != len(right.entries):
+    if left.column_count != len(right.entries):
         raise _validation_error(
             "budget_exceeded",
             "matrix multiplication requires the left column count to equal the right row count",
@@ -917,8 +926,8 @@ def _admit_product(left: RationalMatrix, right: RationalMatrix) -> None:
             label=f"{label} matrix input",
         )
     left_rows = len(left.entries)
-    inner_dimension = len(left.entries[0])
-    right_columns = len(right.entries[0])
+    inner_dimension = left.column_count
+    right_columns = right.column_count
     if (
         left_rows > MAX_MATRIX_PRODUCT_AXIS
         or inner_dimension > MAX_MATRIX_PRODUCT_AXIS
@@ -961,7 +970,7 @@ def _admit_kronecker(left: RationalMatrix, right: RationalMatrix) -> None:
     _admit_rational_matrix(right)
     if (
         len(left.entries) * len(right.entries) > MAX_KRONECKER_PRODUCT_AXIS
-        or len(left.entries[0]) * len(right.entries[0]) > MAX_KRONECKER_PRODUCT_AXIS
+        or left.column_count * right.column_count > MAX_KRONECKER_PRODUCT_AXIS
     ):
         raise _validation_error(
             "budget_exceeded",
@@ -975,7 +984,7 @@ def _admit_partial_trace(
 ) -> None:
     _admit_rational_matrix(matrix)
     total = traced_dimension * kept_dimension
-    if len(matrix.entries) != total or len(matrix.entries[0]) != total:
+    if len(matrix.entries) != total or matrix.column_count != total:
         raise _validation_error(
             "budget_exceeded",
             "composite matrix must be square of order traced_dimension * kept_dimension",
@@ -1033,7 +1042,7 @@ def _admit_determinant(
     require_matrix_scalar_digits(
         matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
     )
-    if len(matrix.entries) != len(matrix.entries[0]):
+    if len(matrix.entries) != matrix.column_count:
         raise _validation_error("budget_exceeded", "operation requires a square matrix")
     if len(matrix.entries) > MAX_DETERMINANT_MATRIX_DIMENSION:
         raise _validation_error(
@@ -1045,6 +1054,8 @@ def _admit_determinant(
         tuple(value.as_fraction() for value in row) for row in matrix.entries
     )
     order = len(entries)
+    if order == 0:
+        return entries
     input_digits = max(
         max(len(str(abs(value.numerator))), len(str(value.denominator)))
         for row in entries
@@ -1151,7 +1162,7 @@ def _admit_characteristic_polynomial(matrix: RationalMatrix) -> None:
         matrix.entries, maximum=MAX_INPUT_SCALAR_DIGITS, label="matrix input"
     )
     order = len(matrix.entries)
-    if order != len(matrix.entries[0]):
+    if order != matrix.column_count:
         raise _validation_error(
             "budget_exceeded", "characteristic polynomial requires a square matrix"
         )
@@ -1188,6 +1199,8 @@ def determinant_result(matrix: RationalMatrix) -> MatrixDeterminantResult:
 def rank_result(
     matrix: RationalMatrix | SparseRationalMatrix,
 ) -> MatrixRankResult:
+    if matrix.row_count == 0 or matrix.column_count == 0:
+        return MatrixRankResult._from_kernel(matrix=matrix, rank=0, pivot_columns=())
     if isinstance(matrix, SparseRationalMatrix):
         plan = _admit(_admit_sparse_rank, matrix)
         pivot_columns = (
@@ -1196,7 +1209,7 @@ def rank_result(
             else _flint_sparse_rank_pivots(plan)
         )
     else:
-        _admit(_admit_exact_linear_matrix, matrix.entries)
+        _admit(_admit_exact_linear_matrix, matrix.entries, matrix.column_count)
         _, pivot_columns = _flint_rref(matrix)
     return MatrixRankResult._from_kernel(
         matrix=matrix,
@@ -1206,13 +1219,15 @@ def rank_result(
 
 
 def rref_result(matrix: RationalMatrix) -> RrefResult:
-    _admit(_admit_exact_linear_matrix, matrix.entries)
+    _admit(_admit_exact_linear_matrix, matrix.entries, matrix.column_count)
     reduced, pivots = _flint_rref(matrix)
-    columns = len(reduced[0])
+    columns = matrix.column_count
     pivot_columns = tuple(int(column) for column in pivots)
     return RrefResult._from_kernel(
         matrix=matrix,
-        reduced_matrix=rational_matrix_from_fractions(reduced),
+        reduced_matrix=rational_matrix_from_fractions(
+            reduced, column_count=matrix.column_count
+        ),
         rank=len(pivot_columns),
         pivot_columns=pivot_columns,
         free_columns=tuple(
@@ -1221,26 +1236,80 @@ def rref_result(matrix: RationalMatrix) -> RrefResult:
     )
 
 
-def nullspace_result(matrix: RationalMatrix) -> NullspaceResult:
-    _admit(_admit_exact_linear_matrix, matrix.entries)
+def _sparse_nullspace_result(matrix: SparseRationalMatrix) -> NullspaceResult:
+    from jacobian.math.matrices._flint import rational_rref
+
+    plan = _admit(_admit_sparse_rank, matrix)
+    # Each nonempty support component has rank at least one. This lower
+    # bound reserves the full fundamental basis before elimination, including
+    # all inactive columns. Dense fill-in and minor heights use the rank plan.
+    nullity_bound = matrix.column_count - len(plan.components)
+    if nullity_bound * matrix.column_count > 262_144:
+        raise OperationDomainValidationError(
+            location=("matrix",),
+            code="matrix.budget_exceeded",
+            message="sparse nullspace fundamental basis exceeds the output-cell envelope",
+        )
+    pivot_rows: dict[int, dict[int, Fraction]] = {}
+    for component in plan.components:
+        positions = {column: i for i, column in enumerate(component.columns)}
+        rows = {row: i for i, row in enumerate(component.rows)}
+        dense = [[Fraction()] * len(component.columns) for _ in component.rows]
+        for source_row, source_column, value in component.entries:
+            dense[rows[source_row]][positions[source_column]] = value
+        reduced, rank = rational_rref(tuple(tuple(row) for row in dense))
+        for row in reduced[:rank]:
+            pivot = next(i for i, value in enumerate(row) if value)
+            pivot_rows[component.columns[pivot]] = {
+                column: row[i] for i, column in enumerate(component.columns) if row[i]
+            }
+    free = tuple(j for j in range(matrix.column_count) if j not in pivot_rows)
+    basis = []
+    for column in free:
+        vector = [Fraction()] * matrix.column_count
+        vector[column] = Fraction(1)
+        for pivot, coefficients in pivot_rows.items():
+            vector[pivot] = -coefficients.get(column, Fraction())
+        basis.append(tuple(CanonicalRational.from_fraction(value) for value in vector))
+    return NullspaceResult._from_kernel(
+        matrix=matrix,
+        ambient_dimension=matrix.column_count,
+        rank=len(pivot_rows),
+        nullity=len(free),
+        basis_vectors=tuple(basis),
+        free_columns=free,
+    )
+
+
+def nullspace_result(matrix: RationalMatrix | SparseRationalMatrix) -> NullspaceResult:
+    if isinstance(matrix, RationalMatrix) and (
+        matrix.row_count == 0 or matrix.column_count == 0
+    ):
+        from jacobian.math.matrices.values import sparse_rational_matrix_from_dense
+
+        result = _sparse_nullspace_result(sparse_rational_matrix_from_dense(matrix))
+        return result.model_copy(update={"matrix": matrix})
+    if isinstance(matrix, SparseRationalMatrix):
+        return _sparse_nullspace_result(matrix)
+    _admit(_admit_exact_linear_matrix, matrix.entries, matrix.column_count)
     reduced, pivots = _flint_rref(matrix)
     pivot_columns = tuple(int(column) for column in pivots)
     free_columns = tuple(
-        column for column in range(len(reduced[0])) if column not in pivot_columns
+        column for column in range(matrix.column_count) if column not in pivot_columns
     )
     pivot_row_by_column = {
         pivot_column: row for row, pivot_column in enumerate(pivot_columns)
     }
     basis: list[tuple[CanonicalRational, ...]] = []
     for free_column in free_columns:
-        vector = [Fraction(0)] * len(reduced[0])
+        vector = [Fraction(0)] * matrix.column_count
         vector[free_column] = Fraction(1)
         for pivot_column, row in pivot_row_by_column.items():
             vector[pivot_column] = -reduced[row][free_column]
         basis.append(tuple(CanonicalRational.from_fraction(value) for value in vector))
     return NullspaceResult._from_kernel(
         matrix=matrix,
-        ambient_dimension=len(reduced[0]),
+        ambient_dimension=matrix.column_count,
         rank=len(pivot_columns),
         nullity=len(basis),
         basis_vectors=tuple(basis),
@@ -1259,13 +1328,18 @@ def characteristic_polynomial_result(
         fmpq(*value.as_integer_ratio()) for row in matrix.entries for value in row
     ]
     polynomial = fmpq_mat(order, order, entries).charpoly()
+    from jacobian.math.polynomials.values import monic_polynomial_from_coefficients
+
     return CharacteristicPolynomialResult(
+        matrix=matrix,
         degree=order,
-        coefficients_descending=tuple(
-            CanonicalRational.from_integer_ratio(
-                int(polynomial[index].p), int(polynomial[index].q)
+        polynomial=monic_polynomial_from_coefficients(
+            tuple(
+                CanonicalRational.from_integer_ratio(
+                    int(polynomial[index].p), int(polynomial[index].q)
+                )
+                for index in range(order + 1)
             )
-            for index in range(order, -1, -1)
         ),
     )
 
@@ -1305,7 +1379,9 @@ def _smith_normal_form_kernel(matrix: IntegerMatrix) -> SmithNormalForm:
 
 
 def smith_normal_form_result(matrix: IntegerMatrix) -> SmithNormalForm:
-    _admit(_admit_exact_linear_matrix, matrix.entries)
+    _admit(_admit_exact_linear_matrix, matrix.entries, matrix.column_count)
+    if matrix.row_count == 0 or matrix.column_count == 0:
+        return SmithNormalForm(normal_form=matrix, rank=0, invariant_factors=())
     return _smith_normal_form_kernel(matrix)
 
 
@@ -1356,18 +1432,25 @@ def product_result(left: RationalMatrix, right: RationalMatrix) -> MatrixProduct
     from jacobian.math.matrices._flint import rational_matrix_product
 
     left_rows = len(left.entries)
-    inner_dimension = len(left.entries[0])
-    right_columns = len(right.entries[0])
-    product = rational_matrix_product(
-        tuple(tuple(value.as_fraction() for value in row) for row in left.entries),
-        tuple(tuple(value.as_fraction() for value in row) for row in right.entries),
-    )
+    inner_dimension = left.column_count
+    right_columns = right.column_count
+    if left_rows == 0 or inner_dimension == 0 or right_columns == 0:
+        product = tuple(
+            tuple(Fraction() for _ in range(right_columns)) for _ in range(left_rows)
+        )
+    else:
+        product = rational_matrix_product(
+            tuple(tuple(value.as_fraction() for value in row) for row in left.entries),
+            tuple(tuple(value.as_fraction() for value in row) for row in right.entries),
+        )
     return MatrixProductResult(
         product=RationalMatrix(
+            row_count=left_rows,
+            column_count=right_columns,
             entries=tuple(
                 tuple(CanonicalRational.from_fraction(value) for value in row)
                 for row in product
-            )
+            ),
         ),
         left_rows=left_rows,
         inner_dimension=inner_dimension,
@@ -1413,6 +1496,8 @@ def adjugate_result(matrix: IntegerMatrix) -> MatrixAdjugateResult:
 
 def permanent_result(matrix: RationalMatrix) -> MatrixPermanentResult:
     _admit(_admit_permanent, matrix)
+    if matrix.row_count == 0:
+        return MatrixPermanentResult(permanent=CanonicalRational(num="1", den="1"))
     value = permanent(conversions.rational_matrix_to_sympy(matrix))
     return MatrixPermanentResult(
         permanent=conversions.rational_from_sympy(value),
@@ -1425,7 +1510,14 @@ def kronecker_product_result(
     _admit(_admit_kronecker, left, right, location=("left", "right"))
     left_source = conversions.rational_matrix_to_sympy(left)
     right_source = conversions.rational_matrix_to_sympy(right)
-    product = kronecker_product(left_source, right_source)
+    if 0 in (left.row_count, left.column_count, right.row_count, right.column_count):
+        import sympy
+
+        product = sympy.zeros(
+            left.row_count * right.row_count, left.column_count * right.column_count
+        )
+    else:
+        product = kronecker_product(left_source, right_source)
     return MatrixKroneckerProductResult(
         product=conversions.rational_matrix_from_sympy(product),
         left_rows=left_source.rows,

@@ -57,7 +57,12 @@ def test_dispatch_accepts_hnf_above_the_lll_axis() -> None:
         {"matrix": {"entries": entries}},
         Catalog.open(),
     )
-    expected = {"domain": "ZZ", "entries": entries}
+    expected = {
+        "domain": "ZZ",
+        "row_count": len(entries),
+        "column_count": len(entries),
+        "entries": entries,
+    }
     assert result.output["normal_form"] == expected
     assert result.output["transformation"] == expected
 

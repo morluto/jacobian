@@ -1,6 +1,20 @@
 """Exact finite-dimensional algebra operations."""
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_dim_algebras._models import StructureConstants
+
+
+def _admit_center(algebra: StructureConstants) -> None:
+    """Establish the prime-field and elimination contract for native callers."""
+
+    from sympy import isprime
+
+    if not isprime(algebra.field_order):
+        raise OperationDomainValidationError(
+            location=("algebra", "field_order"),
+            code="finite_dim_algebra.field_order_not_prime",
+            message="field_order must be prime",
+        )
 
 
 def _nullspace_mod_prime(
@@ -23,6 +37,7 @@ def center_basis(algebra: StructureConstants) -> tuple[tuple[int, ...], ...]:
     ``StructureConstants``; this kernel executes the admitted algebra.
     """
 
+    _admit_center(algebra)
     dimension = algebra.dimension
     prime = algebra.field_order
     multiplication = algebra.multiplication

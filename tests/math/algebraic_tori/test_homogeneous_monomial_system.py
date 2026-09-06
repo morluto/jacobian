@@ -19,9 +19,9 @@ from jacobian.math.algebraic_tori._models import (
 )
 from jacobian.math.algebraic_tori._tools import TOOLS
 from jacobian.math.matrices.certified_snf import (
-    CertifiedIntegerMatrix,
     verify_smith_normal_form_certificate,
 )
+from jacobian.math.matrices.values import IntegerMatrix
 
 
 def _matrix(
@@ -29,10 +29,10 @@ def _matrix(
     *,
     rows: int | None = None,
     columns: int | None = None,
-) -> CertifiedIntegerMatrix:
+) -> IntegerMatrix:
     row_count = len(entries) if rows is None else rows
     column_count = (len(entries[0]) if entries else 0) if columns is None else columns
-    return CertifiedIntegerMatrix(
+    return IntegerMatrix(
         row_count=row_count,
         column_count=column_count,
         entries=tuple(tuple(str(value) for value in row) for row in entries),
@@ -53,7 +53,7 @@ def _system(
     )
 
 
-def _integers(matrix: CertifiedIntegerMatrix) -> list[list[int]]:
+def _integers(matrix: IntegerMatrix) -> list[list[int]]:
     return [[parse_canonical_integer(value) for value in row] for row in matrix.entries]
 
 

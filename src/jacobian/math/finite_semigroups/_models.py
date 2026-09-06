@@ -48,7 +48,6 @@ class FiniteSemigroup(StrictModel):
                         "product_not_declared",
                         "every product must be a declared element",
                     )
-        self._check_associativity(labels)
         return self
 
     def _check_associativity(self, labels: set[str]) -> None:

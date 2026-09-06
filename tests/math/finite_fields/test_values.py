@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields import (
     Axis,
     AxisBoundMatrix,
@@ -12,7 +13,12 @@ from jacobian.math.finite_fields import (
     FiniteLinearMap,
     ProjectivePoint,
 )
+from jacobian.math.finite_fields.operations import element, restrict_scalars
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
+from jacobian.math.matrices.finite_fields.presentations import (
+    bind_prime_matrix,
+    prime_matrix_coordinates,
+)
 
 
 def _presentation(*, generator: str = "a") -> FiniteFieldPresentation:
@@ -44,6 +50,41 @@ def test_presentation_identity_binds_modulus_generator_basis_and_encoding() -> N
     )
 
 
+@pytest.mark.parametrize(
+    ("entries", "columns", "row_labels", "column_labels"),
+    [
+        ((), 3, (), ("c0", "c1", "c2")),
+        (((), (), ()), 0, ("r0", "r1", "r2"), ()),
+        ((), 0, (), ()),
+    ],
+)
+def test_prime_matrix_axis_binding_round_trips_empty_shapes(
+    entries: tuple[tuple[int, ...], ...],
+    columns: int,
+    row_labels: tuple[str, ...],
+    column_labels: tuple[str, ...],
+) -> None:
+    presentation = FiniteFieldPresentation(
+        characteristic=3,
+        modulus_coefficients=(0, 1),
+        generator="a",
+    )
+    matrix = PrimeFieldMatrix(prime=3, entries=entries, columns=columns)
+    bound = bind_prime_matrix(
+        matrix,
+        presentation,
+        Axis(name="rows", labels=row_labels),
+        Axis(name="columns", labels=column_labels),
+    )
+
+    assert (
+        prime_matrix_coordinates(
+            AxisBoundMatrix.model_validate_json(bound.model_dump_json())
+        )
+        == matrix
+    )
+
+
 def test_prime_field_presentation_has_one_dimensional_ordered_basis() -> None:
     presentation = FiniteFieldPresentation(
         characteristic=3,
@@ -56,8 +97,12 @@ def test_prime_field_presentation_has_one_dimensional_ordered_basis() -> None:
 
 
 def test_presentation_rejects_reducible_or_noncanonical_moduli() -> None:
-    with pytest.raises(ValueError, match="irreducible"):
-        FiniteFieldPresentation(characteristic=2, modulus_coefficients=(0, 0, 1))
+    candidate = FiniteFieldPresentation(
+        characteristic=2, modulus_coefficients=(0, 0, 1)
+    )
+    candidate = FiniteFieldPresentation.model_validate_json(candidate.model_dump_json())
+    with pytest.raises(OperationDomainValidationError, match="irreducible"):
+        element(candidate, (1, 0))
     with pytest.raises(ValueError, match="canonical"):
         FiniteFieldPresentation(characteristic=2, modulus_coefficients=(1, 3, 1))
 
@@ -149,12 +194,19 @@ def test_subspace_rejects_dependent_basis_matrices() -> None:
         entries=((one, zero), (zero, zero)),
     )
 
-    with pytest.raises(ValueError, match="independent"):
-        FiniteDimensionalSubspace(
-            presentation=presentation,
-            basis_axis=basis_axis,
-            basis=(matrix, matrix),
-        )
+    candidate = FiniteDimensionalSubspace(
+        presentation=presentation,
+        basis_axis=basis_axis,
+        basis=(matrix, matrix),
+    )
+    candidate = FiniteDimensionalSubspace.model_validate_json(
+        candidate.model_dump_json()
+    )
+    direction = ProjectivePoint(
+        presentation=presentation, axis=rows, coordinates=(one, zero)
+    )
+    with pytest.raises(OperationDomainValidationError, match="independent"):
+        restrict_scalars(candidate, direction)
 
 
 def test_presentation_rejects_oversized_characteristic_before_primality() -> None:

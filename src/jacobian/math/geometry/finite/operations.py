@@ -49,6 +49,28 @@ def _domain_error(location: tuple[str | int, ...], code: str, message: str) -> N
     )
 
 
+def _admit_prime_field_space(space: PrimeFieldVectorSpace) -> None:
+    if not isprime(space.field_order):
+        _domain_error(
+            ("space", "field_order"),
+            "field_order_not_prime",
+            "field_order must be prime",
+        )
+
+
+def _admit_same_space(
+    left: PrimeFieldVectorSpace,
+    right: PrimeFieldVectorSpace,
+    *,
+    location: tuple[str | int, ...],
+    message: str,
+) -> None:
+    """Check parent identity before admitting the shared field once."""
+    if left != right:
+        _domain_error(location, "parent_mismatch", message)
+    _admit_prime_field_space(left)
+
+
 __all__ = [
     "grassmannian_count",
     "prime_field_affine_plane",
@@ -73,6 +95,7 @@ def projective_point(
     representative bound to ``space``.
     """
 
+    _admit_prime_field_space(space)
     _validate_vector(vector, space)
     scale = next((value for value in vector if value != 0), None)
     if scale is None:
@@ -150,12 +173,12 @@ def projective_point_equal(
     point_a: ProjectivePoint,
     point_b: ProjectivePoint,
 ) -> ProjectivePointEqualResult:
-    if point_a.space != point_b.space:
-        _domain_error(
-            ("point_a", "space"),
-            "projective_parent_mismatch",
-            "projective points must have the same field and axis",
-        )
+    _admit_same_space(
+        point_a.space,
+        point_b.space,
+        location=("point_a", "space"),
+        message="projective points must have the same field and axis",
+    )
     return ProjectivePointEqualResult._from_kernel(
         point_a=point_a,
         point_b=point_b,
@@ -167,6 +190,7 @@ def subspace_compute(
     space: PrimeFieldVectorSpace,
     vectors: tuple[tuple[int, ...], ...],
 ) -> SubspaceComputeResult:
+    _admit_prime_field_space(space)
     for vector in vectors:
         _validate_vector(vector, space)
     matrix = [list(row) for row in vectors]
@@ -180,6 +204,7 @@ def subspace_membership(
     subspace: LinearSubspace,
     vector: tuple[int, ...],
 ) -> SubspaceMembershipResult:
+    _admit_prime_field_space(subspace.space)
     _validate_vector(vector, subspace.space)
     matrix = [list(row) for row in subspace.basis]
     word = list(vector)
@@ -200,6 +225,7 @@ def subspace_span(
     vectors: tuple[tuple[int, ...], ...],
     subspaces: tuple[LinearSubspace, ...],
 ) -> SubspaceSpanResult:
+    _admit_prime_field_space(space)
     for vector in vectors:
         _validate_vector(vector, space)
     if any(subspace.space != space for subspace in subspaces):
@@ -224,12 +250,12 @@ def subspace_intersection(
     subspace_a: LinearSubspace,
     subspace_b: LinearSubspace,
 ) -> SubspaceIntersectionResult:
-    if subspace_a.space != subspace_b.space:
-        _domain_error(
-            ("subspace_b", "space"),
-            "intersection_parent_mismatch",
-            "subspaces must have the same field and axis",
-        )
+    _admit_same_space(
+        subspace_a.space,
+        subspace_b.space,
+        location=("subspace_b", "space"),
+        message="subspaces must have the same field and axis",
+    )
     canonical = intersection_basis(
         subspace_a.basis,
         subspace_b.basis,
@@ -273,6 +299,7 @@ def grassmannian_count(
 def projective_space_enumerate(
     space: PrimeFieldVectorSpace,
 ) -> ProjectiveSpaceEnumerateResult:
+    _admit_prime_field_space(space)
     _admit_projective_enumeration(space)
 
     q = space.field_order

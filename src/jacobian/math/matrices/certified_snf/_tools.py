@@ -29,6 +29,13 @@ TOOLS: MathTools = (
             "matrices U and V satisfying D = U A V for one integer matrix of "
             "at most 16 by 16."
         ),
+        discovery_terms=(
+            "integer column lattice membership",
+            "additive order of a vector modulo an integer lattice",
+            "cokernel torsion class free coordinates separating obstruction",
+            "least positive integer multiplier and integer multipliers witness",
+            "unimodular row and column transformations",
+        ),
         request_type=CertifiedSmithNormalFormRequest,
         result_type=CertifiedSmithNormalFormResult,
         run=_certified_smith,

@@ -7,7 +7,6 @@ from typing import Annotated, Self
 
 from pydantic import Field, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
-from sympy import isprime
 
 from jacobian._models import StrictModel
 
@@ -31,11 +30,7 @@ class PrimeFieldVectorSpace(StrictModel):
     axis: tuple[AxisLabel, ...] = Field(min_length=1, max_length=MAX_DIM)
 
     @model_validator(mode="after")
-    def require_valid(self) -> Self:
-        if not isprime(self.field_order):
-            raise _validation_error(
-                "field_order_not_prime", "field_order must be prime"
-            )
+    def require_structural(self) -> Self:
         if any(not label or not label.isidentifier() for label in self.axis):
             raise _validation_error(
                 "axis_labels_invalid", "axis labels must be nonempty identifiers"

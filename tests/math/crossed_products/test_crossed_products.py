@@ -342,45 +342,57 @@ def test_element_requires_unique_canonical_coset_and_exponent_order() -> None:
         )
 
 
+def _multiply_zero(presentation: FiniteCosetCrossedProductPresentation) -> None:
+    source = FiniteCosetCrossedProductElement(presentation=presentation, terms=())
+    source = FiniteCosetCrossedProductElement.model_validate_json(
+        source.model_dump_json()
+    )
+    multiply(source, source)
+
+
 def test_presentation_rejects_non_group_table() -> None:
     payload = _c2_presentation().model_dump(mode="json")
     payload["quotient_multiplication"][1][1] = "a"
-    with pytest.raises(ValueError, match=r"inverse|associative"):
-        FiniteCosetCrossedProductPresentation.model_validate(payload)
+    with pytest.raises(OperationDomainValidationError, match=r"inverse|associative"):
+        _multiply_zero(FiniteCosetCrossedProductPresentation.model_validate(payload))
 
 
 def test_presentation_requires_a_prime_characteristic() -> None:
-    with pytest.raises(ValueError, match="characteristic must be prime"):
-        _c2_presentation(characteristic=4)
+    with pytest.raises(
+        OperationDomainValidationError, match="characteristic must be prime"
+    ):
+        _multiply_zero(_c2_presentation(characteristic=4))
 
 
 def test_presentation_rejects_non_unimodular_action() -> None:
     payload = _c2_presentation().model_dump(mode="json")
     payload["action_matrices"][1][0][0] = "2"
-    with pytest.raises(ValueError, match="unimodular"):
-        FiniteCosetCrossedProductPresentation.model_validate(payload)
+    with pytest.raises(OperationDomainValidationError, match="unimodular"):
+        _multiply_zero(FiniteCosetCrossedProductPresentation.model_validate(payload))
 
 
 def test_presentation_rejects_unimodular_non_action() -> None:
-    with pytest.raises(ValueError, match=r"rho\(qr\)"):
-        _c2_presentation(
-            action=((1, 1), (0, 1)),
-            cocycle_square=(0, 0),
+    with pytest.raises(OperationDomainValidationError, match=r"rho\(qr\)"):
+        _multiply_zero(
+            _c2_presentation(
+                action=((1, 1), (0, 1)),
+                cocycle_square=(0, 0),
+            )
         )
 
 
 def test_presentation_rejects_non_normalized_cocycle() -> None:
     payload = _c2_presentation().model_dump(mode="json")
     payload["cocycle_table"][0][1][0] = "1"
-    with pytest.raises(ValueError, match="normalized"):
-        FiniteCosetCrossedProductPresentation.model_validate(payload)
+    with pytest.raises(OperationDomainValidationError, match="normalized"):
+        _multiply_zero(FiniteCosetCrossedProductPresentation.model_validate(payload))
 
 
 def test_presentation_rejects_cocycle_equation_failure() -> None:
     payload = _gardam_presentation().model_dump(mode="json")
     payload["cocycle_table"][1][1][0] = "2"
-    with pytest.raises(ValueError, match="cocycle must satisfy"):
-        FiniteCosetCrossedProductPresentation.model_validate(payload)
+    with pytest.raises(OperationDomainValidationError, match="cocycle must satisfy"):
+        _multiply_zero(FiniteCosetCrossedProductPresentation.model_validate(payload))
 
 
 @pytest.mark.parametrize(

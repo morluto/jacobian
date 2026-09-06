@@ -10,6 +10,7 @@ from pydantic import Field, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.backends import BackendName
 from jacobian.canonical import canonicalize_json
 
 OperationId = Annotated[
@@ -111,6 +112,7 @@ class OperationDiscoveryMatch(StrictModel):
     title: str = Field(min_length=1, max_length=128)
     description: str = Field(min_length=1)
     tags: tuple[str, ...] = ()
+    runtime_requirements: tuple[BackendName, ...] = ()
 
 
 class OperationMatchResult(StrictModel):
@@ -147,6 +149,7 @@ class OperationBrowseCard(StrictModel):
     title: str = Field(min_length=1, max_length=128)
     description: str = Field(min_length=1)
     tags: tuple[str, ...] = ()
+    runtime_requirements: tuple[BackendName, ...] = ()
 
 
 class OperationBrowseResult(StrictModel):
@@ -190,6 +193,7 @@ class OperationDescriptor(StrictModel):
     output_schema: dict[str, Any]
     read_only: bool = False
     tags: tuple[str, ...] = ()
+    runtime_requirements: tuple[BackendName, ...] = ()
     discovery_terms: tuple[str, ...] = Field(
         default=(), max_length=_MAX_DISCOVERY_TERMS
     )
@@ -198,6 +202,12 @@ class OperationDescriptor(StrictModel):
     @model_validator(mode="after")
     def require_canonical_schemas(self) -> Self:
         _validate_discovery_terms(self.discovery_terms)
+        if len(set(self.runtime_requirements)) != len(self.runtime_requirements):
+            raise ValueError("runtime requirements must be unique")
+        if any(
+            name not in ("singular", "qepcad") for name in self.runtime_requirements
+        ):
+            raise ValueError("unknown optional runtime requirement")
         if len({example.name for example in self.examples}) != len(self.examples):
             raise _validation_error(
                 "duplicate_example_name",
@@ -250,6 +260,7 @@ class MathTool[RequestT: StrictModel, ResultT: StrictModel]:
     result_type: type[ResultT]
     run: Callable[[RequestT], ResultT]
     tags: tuple[str, ...] = ()
+    runtime_requirements: tuple[BackendName, ...] = ()
     discovery_terms: tuple[str, ...] = ()
     examples: tuple[OperationExample, ...] = ()
 
@@ -263,6 +274,12 @@ class MathTool[RequestT: StrictModel, ResultT: StrictModel]:
         if any(not tag.strip() for tag in self.tags):
             raise ValueError("math tool tags must not be empty")
         _validate_discovery_terms(self.discovery_terms)
+        if len(set(self.runtime_requirements)) != len(self.runtime_requirements):
+            raise ValueError("runtime requirements must be unique")
+        if any(
+            name not in ("singular", "qepcad") for name in self.runtime_requirements
+        ):
+            raise ValueError("unknown optional runtime requirement")
         if len({example.name for example in self.examples}) != len(self.examples):
             raise ValueError("math tool example names must be unique")
 

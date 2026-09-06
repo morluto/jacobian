@@ -29,7 +29,9 @@ def test_standard_admission_reports_measured_costs(n: int, m: int, code: str) ->
         {
             "variables": [f"x{i}" for i in range(n)],
             "objective": [q(1)] * n,
-            "coefficients": [[q(int(i == j % m)) for j in range(n)] for i in range(m)],
+            "coefficients": [
+                [q(1 + int(i == j % m)) for j in range(n)] for i in range(m)
+            ],
             "rhs": [q(1)] * m,
         }
     )
@@ -37,6 +39,7 @@ def test_standard_admission_reports_measured_costs(n: int, m: int, code: str) ->
         linear_program(program)
     assert caught.value.errors()[0]["type"] == f"optimization.linear.{code}"
     count, work = basis_bounds(n, m)
+    work += 16 * (m + 1) * (n + 1)
     assert f"basis_estimate={count}" in str(caught.value)
     assert f"work_estimate={work}" in str(caught.value)
     assert "input_value" not in str(caught.value)
@@ -86,3 +89,22 @@ def test_rank_zero_maximum_shape_executes_without_empty_matrix_backend() -> None
         }
     )
     assert linear_program(program).status == "OPTIMAL"
+
+
+def test_infeasible_component_overrides_unbounded_component() -> None:
+    # The first block x0-x1=0 is unbounded for -x0; the second block x2=-1
+    # is infeasible. A local ray alone cannot establish global unboundedness.
+    program = StandardFormRationalLinearProgram.model_validate(
+        {
+            "variables": ["x0", "x1", "x2"],
+            "objective": [q(-1), q(0), q(0)],
+            "coefficients": [[q(1), q(-1), q(0)], [q(0), q(0), q(1)]],
+            "rhs": [q(0), q(-1)],
+        }
+    )
+    result = linear_program(program)
+    assert result.status == "INFEASIBLE"
+    assert result.farkas_candidate is not None
+    y = [v.as_fraction() for v in result.farkas_candidate]
+    assert -y[1] < 0
+    assert y[0] >= 0 and -y[0] >= 0 and y[1] >= 0

@@ -11,6 +11,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import parse_canonical_integer
+from jacobian.math.matrices.values import IntegerMatrix
 
 MAX_CERTIFIED_SNF_DIMENSION = 32
 MAX_CERTIFIED_SNF_INPUT_DIMENSION = 16
@@ -22,43 +23,13 @@ def _integer_digits(value: str) -> int:
     return len(value.lstrip("-"))
 
 
-class CertifiedIntegerMatrix(StrictModel):
-    """One bounded integer matrix, including matrices with a zero dimension."""
-
-    domain: Literal["ZZ"] = "ZZ"
-    row_count: StrictInt = Field(ge=0, le=MAX_CERTIFIED_SNF_DIMENSION)
-    column_count: StrictInt = Field(ge=0, le=MAX_CERTIFIED_SNF_DIMENSION)
-    entries: tuple[tuple[CanonicalInteger, ...], ...] = Field(
-        default=(),
-        max_length=MAX_CERTIFIED_SNF_DIMENSION,
-    )
-
-    @model_validator(mode="after")
-    def require_declared_shape_and_output_budget(self) -> Self:
-        if len(self.entries) != self.row_count or any(
-            len(row) != self.column_count for row in self.entries
-        ):
-            raise _validation_error(
-                "invalid", "certified integer matrix entries must match its shape"
-            )
-        if any(
-            _integer_digits(value) > MAX_CERTIFIED_SNF_OUTPUT_DIGITS
-            for row in self.entries
-            for value in row
-        ):
-            raise _validation_error(
-                "invalid", "certified integer matrix exceeds the output digit bound"
-            )
-        return self
-
-
 class SmithNormalFormCertificate(StrictModel):
     """A proposed exact relation ``D = U A V`` with unimodular ``U`` and ``V``."""
 
-    source: CertifiedIntegerMatrix
-    diagonal: CertifiedIntegerMatrix
-    left_transformation: CertifiedIntegerMatrix
-    right_transformation: CertifiedIntegerMatrix
+    source: IntegerMatrix
+    diagonal: IntegerMatrix
+    left_transformation: IntegerMatrix
+    right_transformation: IntegerMatrix
     rank: StrictInt = Field(ge=0, le=MAX_CERTIFIED_SNF_DIMENSION)
     invariant_factors: tuple[CanonicalInteger, ...] = Field(
         max_length=MAX_CERTIFIED_SNF_DIMENSION
@@ -126,10 +97,10 @@ class SmithNormalFormCertificate(StrictModel):
     def _from_kernel(
         cls,
         *,
-        source: CertifiedIntegerMatrix,
-        diagonal: CertifiedIntegerMatrix,
-        left_transformation: CertifiedIntegerMatrix,
-        right_transformation: CertifiedIntegerMatrix,
+        source: IntegerMatrix,
+        diagonal: IntegerMatrix,
+        left_transformation: IntegerMatrix,
+        right_transformation: IntegerMatrix,
         rank: int,
         invariant_factors: tuple[CanonicalInteger, ...],
         left_determinant: Literal["-1", "1"],
@@ -154,7 +125,7 @@ class SmithNormalFormCertificate(StrictModel):
         )
 
 
-__all__ = ["CertifiedIntegerMatrix", "SmithNormalFormCertificate"]
+__all__ = ["IntegerMatrix", "SmithNormalFormCertificate"]
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:

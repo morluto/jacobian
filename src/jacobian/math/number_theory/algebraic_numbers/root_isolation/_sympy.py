@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import sympy
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math._root_isolation import strict_root_count
 from jacobian.math.number_theory.algebraic_numbers.real import (
     RealAlgebraicOrderValue,
@@ -23,7 +25,12 @@ from jacobian.math.number_theory.algebraic_numbers.root_isolation._models import
 
 
 def compute_root_isolation(request: UnivariatePolynomialRequest) -> RootIsolationResult:
-    source_coefficients = request.normalized_integer_coefficients()
+    try:
+        source_coefficients = request.normalized_integer_coefficients()
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=("polynomial",), code=exc.type, message=exc.message()
+        ) from exc
     variable = sympy.Symbol("x")
     source = sympy.Poly.from_list(source_coefficients, gens=variable, domain=sympy.ZZ)
     _unit, factorization = sympy.factor_list(source.as_expr(), variable)
@@ -67,7 +74,7 @@ def compute_root_isolation(request: UnivariatePolynomialRequest) -> RootIsolatio
             )
         )
     return RootIsolationResult._from_kernel(
-        source_coefficients_descending=source_coefficients,
+        source_polynomial=request.polynomial,
         roots=tuple(roots),
     )
 

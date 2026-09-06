@@ -30,6 +30,12 @@ def require_hochschild_budget(dimension: int, max_degree: int) -> None:
 
 def require_algebra_admission(algebra: AlgebraStructure) -> None:
     """Check expensive algebra invariants at operation execution time."""
+    from sympy import isprime
+
+    if not isprime(algebra.prime):
+        raise _validation_error(
+            "hochschild_complex.prime", "prime must be a prime integer"
+        )
     structure_entries = algebra.dimension**3 + algebra.dimension
     if structure_entries > MAX_STRUCTURE_CONSTANT_ENTRIES:
         raise _validation_error(

@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix, rank
 from jacobian.math.topology.cohomology.lie_algebra._models import (
     ChevalleyEilenbergComplexRequest,
@@ -156,31 +157,31 @@ class TestLieAlgebraValidation:
     """Adversarial rejection of tensors that are not Lie brackets."""
 
     def test_composite_prime_rejected(self) -> None:
-        with pytest.raises(ValidationError) as exc_info:
-            LieAlgebra(
-                prime=4,
-                dimension=1,
-                structure_constants=(((0,),),),
-            )
-        _assert_error_type(exc_info, "lie_algebra_homology.prime_not_prime")
+        algebra = LieAlgebra(
+            prime=4,
+            dimension=1,
+            structure_constants=(((0,),),),
+        )
+        with pytest.raises(OperationDomainValidationError, match="prime"):
+            chevalley_eilenberg_complex(algebra)
 
     def test_alternation_violation_rejected(self) -> None:
         constants = (
             ((0, 0), (1, 0)),
             ((4, 0), (0, 1)),
         )  # [e_1, e_1] = e_0 != 0
-        with pytest.raises(ValidationError) as exc_info:
-            LieAlgebra(prime=5, dimension=2, structure_constants=constants)
-        _assert_error_type(exc_info, "lie_algebra_homology.alternating")
+        algebra = LieAlgebra(prime=5, dimension=2, structure_constants=constants)
+        with pytest.raises(OperationDomainValidationError, match="alternating"):
+            chevalley_eilenberg_complex(algebra)
 
     def test_antisymmetry_violation_rejected(self) -> None:
         constants = (
             ((0, 0), (1, 0)),
             ((1, 0), (0, 0)),
         )  # c[0][1] = (1,0) is not -c[1][0] mod 5
-        with pytest.raises(ValidationError) as exc_info:
-            LieAlgebra(prime=5, dimension=2, structure_constants=constants)
-        _assert_error_type(exc_info, "lie_algebra_homology.antisymmetric")
+        algebra = LieAlgebra(prime=5, dimension=2, structure_constants=constants)
+        with pytest.raises(OperationDomainValidationError, match="antisymmetric"):
+            chevalley_eilenberg_complex(algebra)
 
     def test_jacobi_violation_rejected(self) -> None:
         # [e0, e1] = e0 and [e1, e2] = e1 violate the Jacobi identity:
@@ -190,9 +191,9 @@ class TestLieAlgebraValidation:
             ((4, 0, 0), (0, 0, 0), (0, 1, 0)),
             ((0, 0, 0), (0, 4, 0), (0, 0, 0)),
         )
-        with pytest.raises(ValidationError) as exc_info:
-            LieAlgebra(prime=5, dimension=3, structure_constants=constants)
-        _assert_error_type(exc_info, "lie_algebra_homology.jacobi")
+        algebra = LieAlgebra(prime=5, dimension=3, structure_constants=constants)
+        with pytest.raises(OperationDomainValidationError, match="Jacobi"):
+            chevalley_eilenberg_complex(algebra)
 
     def test_noncanonical_diagonal_residue_rejected(self) -> None:
         # 2 mod 2 is zero, so every Lie identity holds vacuously; the entry

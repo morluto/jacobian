@@ -413,7 +413,11 @@ def quotient(
     _admit_partition(algebra, partition, quotient_request=True)
     check = _congruence_check_unchecked(algebra, partition)
     if not check.is_congruence:
-        raise ValueError("partition is not a congruence")
+        _reject(
+            location=("partition",),
+            code="partition_not_congruence",
+            message="partition is not a congruence",
+        )
     n = len(algebra.carrier)
     block_of: dict[int, int] = {}
     for block_idx, block in enumerate(partition):

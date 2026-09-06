@@ -27,6 +27,13 @@ operation's own result model.
 For the ordinary search-to-inspection-to-execution path, see
 [Discover and invoke operations](../how-to/invoke-domain-operations.md).
 
+## Schemas and mathematical witnesses
+
+The [SDK boundary and value contract](value-interoperability.md#mcp-python-sdk-v2)
+distinguishes structured-output validation from mathematical correctness.
+MCP does not require certificates. Return exact values directly; include a
+source-bound witness only when it serves the operation's mathematical purpose.
+
 ## Execution deadlines
 
 Exact mathematical operations may legitimately run for minutes or longer.
@@ -85,3 +92,17 @@ conclusion.
 
 The built-in MCP resource `operation://catalog` provides an exact bulk export;
 ordinary discovery should prefer `math.find`.
+
+## Optional backend availability
+
+Operation declarations, matches, and browse cards include `runtime_requirements`.
+These list optional system runtimes and remain independent of the server's
+installation. `math.find` inspection adds `backend_availability`: bounded, current
+diagnostics for those runtimes in the server environment. Inspection does not
+execute the mathematical operation or guarantee its completion.
+
+A missing or unsupported runtime needed during execution produces a tool error
+with `code: BACKEND_UNAVAILABLE`, `stage: backend_execution`, `operation_id`,
+`backend`, `required_version`, and an actionable `hint`. It is neither an invalid
+parameter error nor a mathematical conclusion. See
+[backend requirements](../how-to/backend-requirements.md).

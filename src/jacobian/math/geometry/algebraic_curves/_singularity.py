@@ -18,6 +18,7 @@ from jacobian._execution import (
     current_request_execution,
     request_execution,
 )
+from jacobian.backends import BackendUnavailableError
 from jacobian.math.geometry.algebraic_curves._singularity_models import (
     MAX_PROJECTIVE_SINGULAR_COMPONENTS,
     MAX_PROJECTIVE_SINGULAR_FIELD_DEGREE,
@@ -305,6 +306,8 @@ def _failure(
     backend: SingularIdealResult | SingularMinimalPrimesResult,
 ) -> NoReturn:
     detail = backend.detail or "the exact backend did not produce a complete result"
+    if backend.outcome == "UNAVAILABLE":
+        raise BackendUnavailableError("singular", detail=detail)
     if backend.outcome == "TIMEOUT":
         raise OperationExecutionTimeoutError(detail)
     if backend.outcome == "CANCELLED":

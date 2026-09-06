@@ -108,19 +108,26 @@ def test_complex_torus_axis_iterables_are_bounded_before_materialization() -> No
         )
 
 
-def test_neron_severi_schema_requires_the_exact_real_domain_discriminator() -> None:
+def test_neron_severi_schema_preserves_the_canonical_rational_domain_default() -> None:
     payload = {"torus": _elliptic_torus().model_dump(mode="json")}
     missing_discriminator = copy.deepcopy(payload)
     del missing_discriminator["torus"]["complex_structure"]["domain"]
 
     validator = Draft202012Validator(NeronSeveriLatticeRequest.model_json_schema())
     assert not list(validator.iter_errors(payload))
+    assert not list(validator.iter_errors(missing_discriminator))
+    assert NeronSeveriLatticeRequest.model_validate(
+        missing_discriminator
+    ) == NeronSeveriLatticeRequest.model_validate(payload)
+    missing_discriminator["torus"]["complex_structure"]["domain"] = "ZZ"
     assert list(validator.iter_errors(missing_discriminator))
     with pytest.raises(ValidationError):
         NeronSeveriLatticeRequest.model_validate(missing_discriminator)
 
 
-def test_riemann_profile_request_schema_requires_the_exact_real_discriminator() -> None:
+def test_riemann_profile_request_preserves_the_canonical_rational_domain_default() -> (
+    None
+):
     torus = _elliptic_torus()
     form = IntegralBilinearForm(
         coordinate_axis=torus.coordinate_axis,
@@ -136,6 +143,11 @@ def test_riemann_profile_request_schema_requires_the_exact_real_discriminator() 
 
     validator = Draft202012Validator(RiemannFormProfileRequest.model_json_schema())
     assert not list(validator.iter_errors(payload))
+    assert not list(validator.iter_errors(missing_discriminator))
+    assert RiemannFormProfileRequest.model_validate(
+        missing_discriminator
+    ) == RiemannFormProfileRequest.model_validate(payload)
+    missing_discriminator["torus"]["complex_structure"]["domain"] = "ZZ"
     assert list(validator.iter_errors(missing_discriminator))
     with pytest.raises(ValidationError):
         RiemannFormProfileRequest.model_validate(missing_discriminator)
@@ -327,7 +339,10 @@ def test_raw_neron_severi_request_rejects_allowed_key_depth_traps(
     with pytest.raises(ValidationError) as exc_info:
         NeronSeveriLatticeRequest.model_validate(payload)
 
-    assert exc_info.value.errors(include_input=False)[0]["type"] == expected_type
+    assert any(
+        error["type"] == expected_type
+        for error in exc_info.value.errors(include_input=False)
+    )
 
 
 def test_neron_severi_admits_nested_work_before_testing_j_squared() -> None:

@@ -21,6 +21,7 @@ from jacobian.math.topology._homology import (
 )
 from jacobian.math.topology._models import (
     MAX_BARYCENTRIC_SOURCE_FACES,
+    MAX_TOPOLOGY_FACES,
     MAX_TOPOLOGY_FACETS,
     BarycentricSubdivisionResult,
     BoundarySquareLedgerEntry,
@@ -37,6 +38,7 @@ from jacobian.math.topology._models import (
     _require_canonical_conversion_bounds,
     _require_request_complex,
     canonical_complex,
+    face_closure,
     is_bounded_prime,
     require_linear_algebra_bounds,
 )
@@ -44,7 +46,10 @@ from jacobian.math.topology._pseudomanifold import (
     PseudomanifoldResult,
     pseudomanifold_decision,
 )
-from jacobian.math.topology._request_admission import run_topology_admission
+from jacobian.math.topology._request_admission import (
+    require_canonical_complex_admission,
+    run_topology_admission,
+)
 from jacobian.math.topology._shelling import evaluate_shelling
 from jacobian.math.topology.chain_complexes.operations import homology_groups
 
@@ -55,6 +60,7 @@ def _admit_chain(
     prime: int | None,
     convention: HomologyConvention,
 ) -> None:
+    require_canonical_complex_admission(complex_)
     if coefficient_ring is ChainCoefficientRing.INTEGER:
         if prime is not None:
             raise ValueError("integer chain complexes must not declare a prime")
@@ -93,11 +99,22 @@ def canonicalize(
     vertices: tuple[str, ...],
     facets: tuple[tuple[str, ...], ...],
 ) -> SimplicialComplexCanonicalizationResult:
-    run_topology_admission(
-        lambda: _require_request_complex(vertices, facets), location=("facets",)
-    )
+    def admit() -> tuple[
+        tuple[tuple[str, ...], ...], tuple[tuple[tuple[str, ...], ...], ...]
+    ]:
+        canonical_facets = _require_request_complex(
+            vertices, facets, check_closure=False
+        )
+        closure = face_closure(canonical_facets)
+        if sum(map(len, closure)) > MAX_TOPOLOGY_FACES:
+            raise ValueError(
+                f"face closure may contain at most {MAX_TOPOLOGY_FACES} non-empty faces"
+            )
+        return canonical_facets, closure
+
+    canonical_facets, closure = run_topology_admission(admit, location=("facets",))
     return SimplicialComplexCanonicalizationResult(
-        complex=canonical_complex(vertices, facets)
+        complex=canonical_complex(vertices, canonical_facets, closure=closure)
     )
 
 
@@ -269,7 +286,7 @@ def chain_complex(
             )
         )
     return ChainComplexResult._from_kernel(
-        complex_digest=complex_.complex_digest,
+        complex=complex_,
         coefficient_ring=coefficient_ring,
         prime=prime,
         convention=convention,
@@ -387,7 +404,7 @@ def homology(
             )
         )
     return SimplicialHomologyResult.model_construct(
-        complex_digest=complex_.complex_digest,
+        complex=complex_,
         prime=prime,
         convention=convention,
         dimension_range=(0, complex_.dimension),
@@ -419,7 +436,7 @@ def integral_homology(
     )
     homology = homology_groups(chain_value)
     return IntegralSimplicialHomologyResult.model_construct(
-        complex_digest=complex_.complex_digest,
+        complex=complex_,
         convention=convention,
         homology=homology,
     )
@@ -429,6 +446,10 @@ def barycentric_subdivision(
     complex_: FiniteSimplicialComplex,
 ) -> BarycentricSubdivisionResult:
     """Compute the barycentric subdivision of a simplicial complex."""
+
+    run_topology_admission(
+        lambda: require_canonical_complex_admission(complex_), location=("complex",)
+    )
 
     sorted_faces = sorted(
         _all_faces(complex_.maximal_simplices), key=lambda face: (len(face), face)
@@ -464,6 +485,10 @@ def barycentric_subdivision(
 def pseudomanifold(complex_: FiniteSimplicialComplex) -> PseudomanifoldResult:
     """Decide whether a complex is a pseudomanifold."""
 
+    run_topology_admission(
+        lambda: require_canonical_complex_admission(complex_), location=("complex",)
+    )
+
     decision = pseudomanifold_decision(complex_.maximal_simplices)
     return PseudomanifoldResult._from_kernel(complex_=complex_, decision=decision)
 
@@ -473,6 +498,10 @@ def shelling_check(
     facet_order: tuple[int, ...],
 ) -> ShellingCheckResult:
     """Check whether a submitted facet order is a valid shelling order."""
+
+    run_topology_admission(
+        lambda: require_canonical_complex_admission(complex_), location=("complex",)
+    )
     if sorted(facet_order) != list(range(len(complex_.maximal_simplices))):
         raise OperationDomainValidationError(
             location=("facet_order",),

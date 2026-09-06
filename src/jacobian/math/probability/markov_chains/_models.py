@@ -9,6 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math.matrices.values import RationalMatrix
 
 MAX_MARKOV_STATES = 32
 MAX_STATIONARY_STATES = 128
@@ -25,14 +26,12 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 class TransitionMatrixRequest(StrictModel):
     """A finite stochastic transition matrix with rational entries."""
 
-    matrix: tuple[tuple[CanonicalRational, ...], ...] = Field(
-        min_length=1, max_length=MAX_MARKOV_STATES
-    )
+    matrix: RationalMatrix
 
     @model_validator(mode="after")
     def require_stochastic_square_matrix(self) -> Self:
-        dimension = len(self.matrix)
-        if any(len(row) != dimension for row in self.matrix):
+        dimension = len(self.matrix.entries)
+        if any(len(row) != dimension for row in self.matrix.entries):
             raise _validation_error(
                 "transition_matrix_not_square", "transition matrix must be square"
             )
@@ -42,9 +41,7 @@ class TransitionMatrixRequest(StrictModel):
 class StationaryDistributionRequest(TransitionMatrixRequest):
     """A transition matrix whose exact stationary solutions fit the wire contract."""
 
-    matrix: tuple[tuple[CanonicalRational, ...], ...] = Field(
-        min_length=1, max_length=MAX_STATIONARY_STATES
-    )
+    matrix: RationalMatrix
 
 
 class ExtremeStationaryDistribution(StrictModel):
@@ -57,9 +54,7 @@ class ExtremeStationaryDistribution(StrictModel):
 class StationaryDistributionResult(StrictModel):
     """Extreme points of the finite chain's stationary-distribution simplex."""
 
-    transition_matrix: tuple[tuple[CanonicalRational, ...], ...] = Field(
-        min_length=1, max_length=MAX_STATIONARY_STATES
-    )
+    transition_matrix: RationalMatrix
     """The source transition matrix whose stationary simplex was computed."""
 
     extreme_distributions: tuple[ExtremeStationaryDistribution, ...] = Field(
@@ -71,7 +66,7 @@ class StationaryDistributionResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        transition_matrix: tuple[tuple[CanonicalRational, ...], ...],
+        transition_matrix: RationalMatrix,
         extreme_distributions: tuple[ExtremeStationaryDistribution, ...],
         unique: bool,
     ) -> Self:
@@ -85,8 +80,8 @@ class StationaryDistributionResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_stationary_family(self) -> Self:
-        dimension = len(self.transition_matrix)
-        if any(len(row) != dimension for row in self.transition_matrix):
+        dimension = len(self.transition_matrix.entries)
+        if any(len(row) != dimension for row in self.transition_matrix.entries):
             raise _validation_error(
                 "stationary_matrix_not_square", "transition matrix must be square"
             )
@@ -195,9 +190,7 @@ class MixingTimeResult(StrictModel):
 class CommunicatingClassesResult(StrictModel):
     """The communicating-class decomposition of a Markov chain."""
 
-    transition_matrix: tuple[tuple[CanonicalRational, ...], ...] = Field(
-        min_length=1, max_length=MAX_MARKOV_STATES
-    )
+    transition_matrix: RationalMatrix
     """The source transition matrix whose support graph is decomposed."""
 
     classes: tuple[tuple[tuple[int, ...], bool], ...]
@@ -210,7 +203,7 @@ class CommunicatingClassesResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        transition_matrix: tuple[tuple[CanonicalRational, ...], ...],
+        transition_matrix: RationalMatrix,
         classes: tuple[tuple[tuple[int, ...], bool], ...],
         state_class: tuple[int, ...],
     ) -> Self:
@@ -224,8 +217,8 @@ class CommunicatingClassesResult(StrictModel):
 
     @model_validator(mode="after")
     def require_partition_validity(self) -> Self:
-        dimension = len(self.transition_matrix)
-        if any(len(row) != dimension for row in self.transition_matrix):
+        dimension = len(self.transition_matrix.entries)
+        if any(len(row) != dimension for row in self.transition_matrix.entries):
             raise _validation_error(
                 "decomposition_matrix_not_square", "transition matrix must be square"
             )

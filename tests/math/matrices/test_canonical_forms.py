@@ -25,6 +25,7 @@ from jacobian.math.matrices.canonical_forms._tools import (
     compute_rational_canonical_form,
 )
 from jacobian.math.matrices.values import RationalMatrix
+from jacobian.math.polynomials.values import monic_polynomial_from_coefficients
 
 R = CanonicalRational
 
@@ -59,7 +60,7 @@ def _diagonal(*values: str) -> RationalMatrix:
 
 
 def _mono(*coefficients: Fraction | int) -> MonicPolynomial:
-    return MonicPolynomial(
+    return monic_polynomial_from_coefficients(
         coefficients=tuple(
             R.from_fraction(Fraction(coefficient)) for coefficient in coefficients
         )
@@ -307,7 +308,9 @@ def test_contract_rejects_nonsquare() -> None:
 
 def test_contract_rejects_non_monic_polynomial() -> None:
     with pytest.raises(ValidationError):
-        MonicPolynomial(coefficients=(R(num="1", den="1"), R(num="2", den="1")))
+        monic_polynomial_from_coefficients(
+            coefficients=(R(num="1", den="1"), R(num="2", den="1"))
+        )
 
 
 def test_characteristic_equals_product_of_invariant_factors() -> None:

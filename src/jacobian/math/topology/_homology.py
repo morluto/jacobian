@@ -15,7 +15,6 @@ from jacobian.math.topology._models import (
     FiniteSimplicialComplex,
     HomologyConvention,
     _validation_error,
-    is_bounded_prime,
 )
 from jacobian.math.topology.chain_complexes.values import (
     CoefficientRing,
@@ -95,7 +94,7 @@ class HomologyGroupResult(StrictModel):
 
 
 class SimplicialHomologyResult(StrictModel):
-    complex_digest: Sha256Digest
+    complex: FiniteSimplicialComplex
     coefficient_field: Literal["PRIME_FIELD"] = "PRIME_FIELD"
     prime: StrictInt = Field(ge=2, le=MAX_TOPOLOGY_PRIME)
     convention: HomologyConvention
@@ -110,11 +109,6 @@ class SimplicialHomologyResult(StrictModel):
 
     @model_validator(mode="after")
     def require_complete_dimension_range(self) -> Self:
-        if not is_bounded_prime(self.prime):
-            raise _validation_error(
-                "topology.require_complete_dimension_range_1",
-                "homology result requires a bounded prime",
-            )
         dimensions = tuple(group.dimension for group in self.groups)
         if dimensions != tuple(range(len(self.groups))):
             raise _validation_error(
@@ -142,6 +136,12 @@ class SimplicialHomologyResult(StrictModel):
             )
         return self
 
+    @property
+    def complex_digest(self) -> Sha256Digest:
+        """Compatibility projection of the retained source complex digest."""
+
+        return self.complex.complex_digest
+
 
 class IntegralSimplicialHomologyRequest(StrictModel):
     complex: FiniteSimplicialComplex
@@ -149,7 +149,7 @@ class IntegralSimplicialHomologyRequest(StrictModel):
 
 
 class IntegralSimplicialHomologyResult(StrictModel):
-    complex_digest: Sha256Digest
+    complex: FiniteSimplicialComplex
     convention: HomologyConvention
     orientation_convention: Literal["LEXICOGRAPHIC_VERTEX_ORDER"] = (
         "LEXICOGRAPHIC_VERTEX_ORDER"
@@ -168,6 +168,12 @@ class IntegralSimplicialHomologyResult(StrictModel):
                 "simplicial integral homology must retain the chain-owned ZZ result under the selected convention",
             )
         return self
+
+    @property
+    def complex_digest(self) -> Sha256Digest:
+        """Compatibility projection of the retained source complex digest."""
+
+        return self.complex.complex_digest
 
 
 __all__ = [

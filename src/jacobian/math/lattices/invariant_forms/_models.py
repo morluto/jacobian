@@ -589,7 +589,9 @@ class IntegralBilinearForm(StrictModel):
         matrix = data.get("matrix")
         normalized["coordinate_axis"] = canonicalize_json_containers(axis)
         if isinstance(matrix, dict):
-            if set(matrix).difference({"domain", "entries"}):
+            if set(matrix).difference(
+                {"domain", "entries", "row_count", "column_count"}
+            ):
                 raise PydanticCustomError(
                     "matrix.shape_mismatch", "form matrix contains unknown fields"
                 )
@@ -667,7 +669,12 @@ class IntegralBilinearForm(StrictModel):
     ) -> Self:
         """Construct a form already established by the owner-local kernel."""
 
-        matrix = IntegerMatrix.model_construct(domain="ZZ", entries=entries)
+        matrix = IntegerMatrix.model_construct(
+            domain="ZZ",
+            row_count=len(entries),
+            column_count=len(coordinate_axis),
+            entries=entries,
+        )
         return cls.model_construct(
             coordinate_axis=coordinate_axis,
             kind=kind,

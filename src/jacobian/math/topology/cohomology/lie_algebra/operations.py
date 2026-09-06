@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from itertools import combinations
 
+from pydantic_core import PydanticCustomError
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.finite_fields.linear_algebra import (
     PrimeFieldMatrix,
 )
@@ -16,7 +19,42 @@ from jacobian.math.topology.cohomology.lie_algebra._models import (
     LieAlgebra,
     LieHomologyGroup,
     LieHomologyResult,
+    _require_alternating,
+    _require_antisymmetric,
+    _require_canonical_residues,
+    _require_jacobi,
+    _require_prime,
 )
+
+
+def _admit_lie_algebra(lie_algebra: LieAlgebra) -> None:
+    """Establish the field and Lie identities once for one computation."""
+    try:
+        _require_prime(lie_algebra.prime)
+        _require_canonical_residues(
+            lie_algebra.structure_constants,
+            lie_algebra.dimension,
+            lie_algebra.prime,
+        )
+        _require_alternating(
+            lie_algebra.structure_constants,
+            lie_algebra.dimension,
+            lie_algebra.prime,
+        )
+        _require_antisymmetric(
+            lie_algebra.structure_constants,
+            lie_algebra.dimension,
+            lie_algebra.prime,
+        )
+        _require_jacobi(
+            lie_algebra.structure_constants,
+            lie_algebra.dimension,
+            lie_algebra.prime,
+        )
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=("lie_algebra",), code=exc.type, message=exc.message()
+        ) from exc
 
 
 def _chain_group_dimensions(dimension: int) -> tuple[int, ...]:
@@ -104,6 +142,7 @@ def chevalley_eilenberg_complex(
     the chain complex is purely determined by the Lie bracket structure
     constants, which the request model validates as a Lie algebra.
     """
+    _admit_lie_algebra(lie_algebra)
     return ChevalleyEilenbergComplexResult._from_kernel(
         lie_algebra,
         _chain_group_dimensions(lie_algebra.dimension),
@@ -116,6 +155,7 @@ def lie_homology_groups(lie_algebra: LieAlgebra) -> tuple[LieHomologyGroup, ...]
 
     Kept free of result-model construction so the kernel remains reusable.
     """
+    _admit_lie_algebra(lie_algebra)
     n = lie_algebra.dimension
 
     group_dims = _chain_group_dimensions(n)

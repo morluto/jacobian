@@ -34,8 +34,8 @@ from jacobian.math.combinatorics.codes.linear._models import (
 from jacobian.math.combinatorics.codes.linear.values import PrimeFieldLinearEncoder
 from jacobian.math.matrices.finite_fields.linear_algebra import (
     PrimeFieldMatrix,
-    nullspace,
-    rref,
+    _nullspace_admitted,
+    _rref_admitted,
 )
 
 __all__ = [
@@ -91,11 +91,48 @@ def _admit_word(encoder: PrimeFieldLinearEncoder, word: tuple[int, ...]) -> None
         )
 
 
+def _admit_encoder(
+    encoder: PrimeFieldLinearEncoder,
+) -> tuple[list[list[int]], int]:
+    """Admit the field and full-row-rank claim owned by the encoder value."""
+    from sympy import isprime
+
+    if not isprime(encoder.field_order):
+        _fail(
+            ("encoder", "field_order"),
+            "field_order_must_be_prime",
+            "field_order must be prime",
+        )
+    reduced, pivots = _rref_admitted(
+        PrimeFieldMatrix(
+            prime=encoder.field_order,
+            entries=tuple(tuple(row) for row in encoder.generator_matrix),
+            columns=len(encoder.coordinate_axis),
+        )
+    )
+    encoder_rank = len(pivots)
+    if encoder_rank != len(encoder.generator_matrix):
+        _fail(
+            ("encoder", "generator_matrix"),
+            "generator_matrix_must_have_full_row_rank",
+            "generator matrix must have full row rank",
+        )
+    return [list(row) for row in reduced], encoder_rank
+
+
 def _admit_syndrome(
     parity_check: ParityCheckMatrix,
     coordinate_axis: tuple[str, ...],
     word: tuple[int, ...],
 ) -> None:
+    from sympy import isprime
+
+    if not isprime(parity_check.field_order):
+        _fail(
+            ("parity_check", "field_order"),
+            "field_order_must_be_prime",
+            "field_order must be prime",
+        )
     if coordinate_axis != parity_check.coordinate_axis:
         _fail(
             ("coordinate_axis",),
@@ -320,6 +357,7 @@ def received_word_profile(
     threshold: ReceivedWordThreshold | None = None,
     witness_mode: WitnessMode = "NONE",
 ) -> ReceivedWordProfileResult:
+    _admit_encoder(encoder)
     _admit_received_word_profile(encoder, received_word, threshold, witness_mode)
     execution_work = (
         2
@@ -365,7 +403,7 @@ def _rref(matrix: list[list[int]], field_order: int) -> tuple[list[list[int]], i
         entries=tuple(tuple(row) for row in matrix),
         columns=len(matrix[0]) if matrix else 0,
     )
-    reduced, pivots = rref(shared_matrix)
+    reduced, pivots = _rref_admitted(shared_matrix)
     return [list(row) for row in reduced], len(pivots)
 
 
@@ -378,7 +416,7 @@ def _nullspace(
         entries=tuple(tuple(row) for row in matrix),
         columns=columns,
     )
-    return [list(row) for row in nullspace(shared_matrix)]
+    return [list(row) for row in _nullspace_admitted(shared_matrix)]
 
 
 def _canonical_generator(matrix: list[list[int]], field_order: int) -> list[list[int]]:
@@ -450,10 +488,11 @@ def from_generator(
 
 
 def dual_code(encoder: PrimeFieldLinearEncoder) -> DualCodeResult:
+    _, encoder_rank = _admit_encoder(encoder)
     q = encoder.field_order
     length = len(encoder.coordinate_axis)
     matrix = [list(row) for row in encoder.generator_matrix]
-    _, rank = _rref(matrix, q)
+    rank = encoder_rank
     null = _canonical_generator(_nullspace(matrix, q, length), q)
     dual_encoder = _canonical_encoder(
         field_order=q,
@@ -474,10 +513,11 @@ def dual_code(encoder: PrimeFieldLinearEncoder) -> DualCodeResult:
 
 
 def parity_check(encoder: PrimeFieldLinearEncoder) -> ParityCheckResult:
+    _, encoder_rank = _admit_encoder(encoder)
     q = encoder.field_order
     length = len(encoder.coordinate_axis)
     matrix = [list(row) for row in encoder.generator_matrix]
-    _, rank = _rref(matrix, q)
+    rank = encoder_rank
     null = _nullspace(matrix, q, length)
     return ParityCheckResult(
         parity_check=ParityCheckMatrix(
@@ -494,6 +534,7 @@ def parity_check(encoder: PrimeFieldLinearEncoder) -> ParityCheckResult:
 def codeword_check(
     encoder: PrimeFieldLinearEncoder, word: tuple[int, ...]
 ) -> CodewordCheckResult:
+    _, encoder_rank = _admit_encoder(encoder)
     matrix = [list(row) for row in encoder.generator_matrix]
     _admit_word(encoder, word)
     word_values = list(word)
@@ -503,7 +544,7 @@ def codeword_check(
     # Word is a codeword iff it lies in the row space of the generator.
     # Augment the generator with the word as a new row and check
     # whether rank increases.
-    _, rank_g = _rref([list(row) for row in matrix], q)
+    rank_g = encoder_rank
     augmented = [list(row) for row in matrix] + [word_values]
     _, rank_aug = _rref(augmented, q)
     is_member = rank_aug == rank_g
@@ -558,14 +599,17 @@ def syndrome(
 
 
 def _rowspace_contains(
-    g: list[list[int]], target_rref: list[list[int]], target_rank: int, q: int
+    g: list[list[int]],
+    g_rank: int,
+    target_rref: list[list[int]],
+    target_rank: int,
+    q: int,
 ) -> bool:
     """Check whether the row space of g contains the target row space."""
     augmented = [list(row) for row in g]
     for row in target_rref[:target_rank]:
         augmented.append(list(row))
     _, aug_rank = _rref(augmented, q)
-    _, g_rank = _rref([list(r) for r in g], q)
     return aug_rank == g_rank
 
 
@@ -588,6 +632,8 @@ def _enumerate_code(
 def code_equal(
     encoder_a: PrimeFieldLinearEncoder, encoder_b: PrimeFieldLinearEncoder
 ) -> CodeEqualResult:
+    rref_a, encoder_a_rank = _admit_encoder(encoder_a)
+    rref_b, encoder_b_rank = _admit_encoder(encoder_b)
     if (
         encoder_a.codeword_count > MAX_CODEWORDS
         or encoder_b.codeword_count > MAX_CODEWORDS
@@ -602,11 +648,11 @@ def code_equal(
     mat_a = [list(row) for row in encoder_a.generator_matrix]
     mat_b = [list(row) for row in encoder_b.generator_matrix]
 
-    rref_a, rank_a = _rref([list(r) for r in mat_a], q)
-    rref_b, rank_b = _rref([list(r) for r in mat_b], q)
+    rank_a = encoder_a_rank
+    rank_b = encoder_b_rank
 
-    contain_ab = _rowspace_contains(mat_a, rref_b, rank_b, q)
-    contain_ba = _rowspace_contains(mat_b, rref_a, rank_a, q)
+    contain_ab = _rowspace_contains(mat_a, rank_a, rref_b, rank_b, q)
+    contain_ba = _rowspace_contains(mat_b, rank_b, rref_a, rank_a, q)
     equal = contain_ab and contain_ba
 
     witness = None
@@ -654,6 +700,7 @@ def macwilliams_transform(
 
 
 def puncture(encoder: PrimeFieldLinearEncoder, coordinate: int) -> PunctureResult:
+    _, _ = _admit_encoder(encoder)
     _admit_coordinate(encoder, coordinate)
     column = coordinate
     punctured = [
@@ -675,13 +722,14 @@ def puncture(encoder: PrimeFieldLinearEncoder, coordinate: int) -> PunctureResul
 
 
 def shorten(encoder: PrimeFieldLinearEncoder, coordinate: int) -> ShortenResult:
+    rref, encoder_rank = _admit_encoder(encoder)
     _admit_coordinate(encoder, coordinate)
     q = encoder.field_order
     col = coordinate
 
     # Shortening: keep codewords c with c[col] = 0, then delete col.
     # RREF the generator to get a basis, then find the subcode vanishing at col.
-    rref, rank = _rref([list(row) for row in encoder.generator_matrix], q)
+    rank = encoder_rank
     n = len(encoder.coordinate_axis)
 
     # Build the column of coordinate values from the RREF basis

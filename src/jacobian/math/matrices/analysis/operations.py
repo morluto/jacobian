@@ -15,7 +15,6 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import (
     CanonicalRational,
     canonical_rational_component_digits,
-    format_canonical_rational,
     require_bounded_rational,
 )
 from jacobian._execution import (
@@ -24,6 +23,7 @@ from jacobian._execution import (
     current_request_execution,
     request_checkpoint,
 )
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices._number_field import (
     EmbeddedNumberFieldRecognitionError,
@@ -97,8 +97,8 @@ def _admit_rational_spectrum_claim(
     matrix: RationalMatrix,
     claimed_profile: tuple[RationalSpectrumMultiplicityClaim, ...],
 ) -> None:
-    order = len(matrix.entries)
-    if order != len(matrix.entries[0]):
+    order = matrix.row_count
+    if order == 0 or order != matrix.column_count:
         raise _validation_error(
             "shape_mismatch", "rational spectrum claims require a square matrix"
         )
@@ -378,8 +378,8 @@ def _admit_inertia_from_bounds(
 
 
 def _admit_inertia(matrix: ExactRealMatrix) -> _InertiaExecutionPlan:
-    order = len(matrix.entries)
-    if order != len(matrix.entries[0]):
+    order = matrix.row_count
+    if order == 0 or order != matrix.column_count:
         raise _validation_error("shape_mismatch", "inertia requires a square matrix")
     if any(
         matrix.entries[row][column] != matrix.entries[column][row]
@@ -869,7 +869,7 @@ def compute_inertia(matrix: ExactRealMatrix) -> InertiaResult:
 
 
 def check_farkas_certificate(
-    constraint_matrix: tuple[tuple[CanonicalRational, ...], ...],
+    constraint_matrix: RationalMatrix,
     rhs_vector: tuple[CanonicalRational, ...],
     multipliers: tuple[CanonicalRational, ...],
 ) -> FarkasCertificateResult:
@@ -878,15 +878,16 @@ def check_farkas_certificate(
     Given system Ax <= b and multiplier vector y >= 0, the certificate is
     valid if y^T A = 0 and y^T b < 0.
     """
-    n_constraints = len(constraint_matrix)
-    if not n_constraints or any(not row for row in constraint_matrix):
+    entries = constraint_matrix.entries
+    n_constraints = len(entries)
+    if not n_constraints or any(not row for row in entries):
         raise OperationDomainValidationError(
             location=("constraint_matrix",),
             code="matrix.shape_mismatch",
             message="constraint matrix must have positive dimensions",
         )
-    width = len(constraint_matrix[0])
-    if any(len(row) != width for row in constraint_matrix):
+    width = len(entries[0])
+    if any(len(row) != width for row in entries):
         raise OperationDomainValidationError(
             location=("constraint_matrix",),
             code="matrix.shape_mismatch",
@@ -898,46 +899,61 @@ def check_farkas_certificate(
             code="matrix.shape_mismatch",
             message="rhs and multiplier lengths must match constraint count",
         )
+    # Each output is a dot product. Bound a common denominator and the
+    # absolute numerator before multiplying any authored rational components.
+    for column in range(width + 1):
+        active = [
+            (yi, rhs_vector[i] if column == width else entries[i][column])
+            for i, yi in enumerate(multipliers)
+            if yi.num != "0"
+            and (rhs_vector[i] if column == width else entries[i][column]).num != "0"
+        ]
+        denominator_digits = sum(
+            len(q.den) for pair in active for q in pair if q.den != "1"
+        )
+        numerator_digits = max(
+            (
+                sum(0 if q.num in ("1", "-1") else len(q.num.lstrip("-")) for q in pair)
+                for pair in active
+            ),
+            default=0,
+        )
+        sum_digits = len(str(len(active) - 1)) if len(active) > 1 else 0
+        if max(1, denominator_digits + max(1, numerator_digits) + sum_digits) > 32768:
+            raise OperationDomainValidationError(
+                location=("constraint_matrix", "rhs_vector", "multipliers"),
+                code="matrix.farkas_growth",
+                message="Farkas dot products exceed the exact rational result envelope",
+            )
     y = [multiplier.as_fraction() for multiplier in multipliers]
-    matrix_fractions = [
-        [entry.as_fraction() for entry in row] for row in constraint_matrix
-    ]
     b = [entry.as_fraction() for entry in rhs_vector]
-
-    if any(entry < 0 for entry in y):
-        ytb = sum((yi * bi for yi, bi in zip(y, b, strict=True)), Fraction(0))
-        return FarkasCertificateResult(
-            valid=False,
-            y_t_a=(),
-            y_t_b=format_canonical_rational(ytb),
-            reason="multiplier vector has a negative entry",
-        )
-
-    n_vars = len(matrix_fractions[0])
-    yta = [Fraction(0)] * n_vars
-    for i, yi in enumerate(y):
-        for j in range(n_vars):
-            yta[j] += yi * matrix_fractions[i][j]
+    yta = [
+        sum((yi * entries[i][j].as_fraction() for i, yi in enumerate(y)), Fraction(0))
+        for j in range(width)
+    ]
     ytb = sum((yi * bi for yi, bi in zip(y, b, strict=True)), Fraction(0))
-    yta_str = tuple(format_canonical_rational(value) for value in yta)
-
-    if all(value == 0 for value in yta) and ytb < 0:
-        return FarkasCertificateResult(
-            valid=True,
-            y_t_a=yta_str,
-            y_t_b=format_canonical_rational(ytb),
-            reason="y^T A = 0 and y^T b < 0",
-        )
     reasons = []
+    if any(yi < 0 for yi in y):
+        reasons.append("multiplier vector has a negative entry")
     if any(value != 0 for value in yta):
         reasons.append("y^T A != 0")
     if ytb >= 0:
         reasons.append("y^T b >= 0")
-    return FarkasCertificateResult(
-        valid=False,
-        y_t_a=yta_str,
-        y_t_b=format_canonical_rational(ytb),
-        reason="; ".join(reasons) if reasons else "unknown",
+
+    def rational(value: Fraction) -> CanonicalRational:
+        return CanonicalRational.model_construct(
+            num=format_canonical_integer(value.numerator),
+            den=format_canonical_integer(value.denominator),
+        )
+
+    return FarkasCertificateResult.model_construct(
+        constraint_matrix=constraint_matrix,
+        rhs_vector=rhs_vector,
+        multipliers=multipliers,
+        valid=not reasons,
+        y_t_a=tuple(rational(value) for value in yta),
+        y_t_b=rational(ytb),
+        reason="; ".join(reasons) if reasons else "y^T A = 0 and y^T b < 0",
     )
 
 

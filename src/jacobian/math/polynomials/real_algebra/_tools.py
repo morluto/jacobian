@@ -145,8 +145,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="polynomial.sturm_chain.compute",
         title="Compute an ordinary exact Sturm sequence",
         description="Compute SymPy's ordinary Euclidean-remainder Sturm sequence for a "
-        "non-constant univariate polynomial with integer coefficients encoded "
-        "as canonical rationals with denominator one. The current envelope is "
+        "non-constant univariate polynomial with rational coefficients encoded "
+        "canonically. Its primitive integer coefficients and input scalar components have at most 16 decimal digits. The current envelope is "
         "degree at most 32 and coefficients of at most 16 decimal digits.",
         request_type=SturmChainRequest,
         result_type=SturmChainResult,
@@ -158,12 +158,27 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 description="Sturm chain of x^3 - 2x^2 + x - 3.",
                 input={
                     "polynomial": {
-                        "terms": [
-                            {"coefficient": {"num": "1", "den": "1"}, "exponent": 3},
-                            {"coefficient": {"num": "-2", "den": "1"}, "exponent": 2},
-                            {"coefficient": {"num": "1", "den": "1"}, "exponent": 1},
-                            {"coefficient": {"num": "-3", "den": "1"}, "exponent": 0},
-                        ],
+                        "variables": ["x"],
+                        "polynomial": {
+                            "terms": [
+                                {
+                                    "coefficient": {"num": "1", "den": "1"},
+                                    "exponents": [3],
+                                },
+                                {
+                                    "coefficient": {"num": "-2", "den": "1"},
+                                    "exponents": [2],
+                                },
+                                {
+                                    "coefficient": {"num": "1", "den": "1"},
+                                    "exponents": [1],
+                                },
+                                {
+                                    "coefficient": {"num": "-3", "den": "1"},
+                                    "exponents": [0],
+                                },
+                            ]
+                        },
                     },
                 },
             ),
@@ -173,10 +188,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="polynomial.root_count.compute",
         title="Count real roots in an interval via Sturm's theorem",
         description="Count distinct real roots of a bounded univariate polynomial with "
-        "integer coefficients in the closed interval [lower, upper] using SymPy's "
+        "rational coefficients in the closed interval [lower, upper] using SymPy's "
         "ordinary exact Sturm sequence. The current envelope is degree at most "
-        "32 and coefficients of at most 16 decimal digits, encoded as canonical "
-        "rationals with denominator one.",
+        "32; primitive integer coefficients and input scalar components have at most 16 decimal digits.",
         request_type=RootCountRequest,
         result_type=RootCountResult,
         run=compute_root_count,
@@ -187,12 +201,27 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 description="Count roots of x^3 - 2x^2 + x - 3 in [-10, 10].",
                 input={
                     "polynomial": {
-                        "terms": [
-                            {"coefficient": {"num": "1", "den": "1"}, "exponent": 3},
-                            {"coefficient": {"num": "-2", "den": "1"}, "exponent": 2},
-                            {"coefficient": {"num": "1", "den": "1"}, "exponent": 1},
-                            {"coefficient": {"num": "-3", "den": "1"}, "exponent": 0},
-                        ],
+                        "variables": ["x"],
+                        "polynomial": {
+                            "terms": [
+                                {
+                                    "coefficient": {"num": "1", "den": "1"},
+                                    "exponents": [3],
+                                },
+                                {
+                                    "coefficient": {"num": "-2", "den": "1"},
+                                    "exponents": [2],
+                                },
+                                {
+                                    "coefficient": {"num": "1", "den": "1"},
+                                    "exponents": [1],
+                                },
+                                {
+                                    "coefficient": {"num": "-3", "den": "1"},
+                                    "exponents": [0],
+                                },
+                            ]
+                        },
                     },
                     "lower": {"num": "-10", "den": "1"},
                     "upper": {"num": "10", "den": "1"},
@@ -235,10 +264,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     ),
     MathTool(
         operation_id="real_algebraic.plane_semialgebraic.component_profile.compute",
+        runtime_requirements=("qepcad",),
         title="Compute exact components of a plane semialgebraic set",
         description="Return the complete connected-component partition of a bounded-size "
         "normalized sign table in R^2, one exact algebraic representative per "
-        "component, and component IDs for supplied exact points. The maintained "
+        "component, and component IDs for supplied exact points. The pinned "
         "QEPCAD 1.74 backend computes sign-invariant CAD cell closures. Inputs "
         "have at most four degree-four QQ[x,y] polynomials, 48 total terms, "
         "32-digit rational coefficients, 81 sign rows, and eight degree-sixteen "

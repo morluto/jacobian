@@ -117,8 +117,13 @@ class TestSeedMutation:
 
     def test_skew_symmetrizable(self) -> None:
         """A non-skew-symmetrizable matrix should fail."""
-        with pytest.raises(ValueError, match="skew-symmetrizability"):
-            em(2, ((str(0), str(1)), (str(1), str(0))), (str(1), str(1)))
+        matrix = em(2, ((str(0), str(1)), (str(1), str(0))), (str(1), str(1)))
+        with pytest.raises(
+            OperationDomainValidationError, match="skew-symmetrizability"
+        ):
+            compute_seed_mutation(
+                SeedMutationRequest(exchange_matrix=matrix, mutation_index=0)
+            )
 
     def test_zero_symmetrizer_rejected(self) -> None:
         """A symmetrizer with a zero entry is not an exchange matrix."""

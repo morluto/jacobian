@@ -37,3 +37,22 @@ def test_complete_divisor_declarations_do_not_claim_proper_result_postconditions
     assert "every positive divisor" in divisor_sum.description
     assert "proper-divisor" not in divisor_sum.description
     assert "aliquot" not in divisor_sum.description
+
+
+def test_prime_field_system_discovery_surfaces_applicable_primitives() -> None:
+    matches = (
+        Catalog.open()
+        .match(
+            OperationMatchRequest(
+                need="Solve Ax=b over GF(2), returning a particular solution and nullspace basis, or a left-nullspace inconsistency certificate.",
+                limit=5,
+            )
+        )
+        .matches
+    )
+    ids = [match.operation_id for match in matches]
+    assert set(ids[:2]) == {
+        "prime_field.matrix.nullspace.compute",
+        "prime_field.matrix.rref.compute",
+    }
+    assert "prime_field.matrix.rref.compute" in ids[:3]

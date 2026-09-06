@@ -3,6 +3,7 @@
 from typing import TypedDict
 
 import pytest
+from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
@@ -10,10 +11,12 @@ from jacobian.math.topology._models import (
     MAX_BARYCENTRIC_SOURCE_FACES,
     BarycentricSubdivisionRequest,
     BarycentricSubdivisionResult,
+    FiniteSimplicialComplex,
     ShellingCheckRequest,
     ShellingCheckResult,
     SimplicialComplexRequest,
     canonical_complex,
+    simplicial_complex_request_from_value,
 )
 from jacobian.math.topology._pseudomanifold import (
     PseudomanifoldRequest,
@@ -54,6 +57,8 @@ class ComplexWire(TypedDict):
 def _complex(data: object) -> SimplicialComplexRequest:
     """Validate one raw or canonical complex at the model boundary."""
 
+    if isinstance(data, FiniteSimplicialComplex):
+        return simplicial_complex_request_from_value(data)
     return SimplicialComplexRequest.model_validate(data)
 
 
@@ -305,7 +310,10 @@ class TestCanonicalComplexFeeding:
         assert deleted.remaining_complex is not None
         skeleton = compute_skeleton(
             SkeletonRequest(
-                complex=_complex(deleted.remaining_complex.model_dump(mode="json")), k=0
+                complex=simplicial_complex_request_from_value(
+                    deleted.remaining_complex
+                ),
+                k=0,
             )
         )
         assert skeleton.skeleton_facets == (("v1",), ("v2",))
@@ -317,7 +325,9 @@ class TestCanonicalComplexFeeding:
         assert subdivided.subdivision_complex is not None
         star = compute_star(
             StarRequest(
-                complex=_complex(subdivided.subdivision_complex.model_dump()),
+                complex=simplicial_complex_request_from_value(
+                    subdivided.subdivision_complex
+                ),
                 simplex=("bv0",),
             )
         )
@@ -704,11 +714,9 @@ class TestJoinBounds:
         """The published input schema shows both accepted shapes so
         schema-guided callers can pass a canonical complex unchanged."""
         schema = SimplicialComplexRequest.model_json_schema()
-        assert "anyOf" in schema
-        branches = schema["anyOf"]
-        property_sets = [frozenset(branch.get("properties", {})) for branch in branches]
-        assert any("facets" in props for props in property_sets)
-        assert any("maximal_simplices" in props for props in property_sets)
+        validator = Draft202012Validator(schema)
+        validator.validate(TRIANGLE)
+        validator.validate(_CANONICAL_CIRCLE)
 
 
 class TestSkeletonBounds:
@@ -786,7 +794,7 @@ class TestShellingSourceBinding:
         assert ShellingCheckResult.model_validate(payload) == result
 
     def test_shelling_result_parsing_is_structural(self) -> None:
-        two_edges = {
+        two_edges: ComplexWire = {
             "vertices": ["a", "b", "c", "d"],
             "facets": [["a", "b"], ["c", "d"]],
         }
@@ -891,7 +899,7 @@ class TestResultDomainMirrorsRequest:
             BarycentricSubdivisionRequest(complex=_complex(CIRCLE))
         )
         payload = result.model_dump()
-        simplex4_plus_point = {
+        simplex4_plus_point: ComplexWire = {
             "vertices": ["v0", "v1", "v2", "v3", "v4", "p"],
             "facets": [["v0", "v1", "v2", "v3", "v4"], ["p"]],
         }

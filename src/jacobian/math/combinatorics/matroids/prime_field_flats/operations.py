@@ -18,6 +18,21 @@ def classify_clause_constrained_prime_field_flats(
     problem: ClauseConstrainedPrimeFieldFlatProblem,
 ) -> ClauseConstrainedPrimeFieldFlatClassification:
     """Classify every admitted clause-constrained GF(p) flat modulo symmetry."""
+    from sympy import isprime
+
+    prime = problem.candidates.prime
+    if not isprime(prime):
+        raise OperationDomainValidationError(
+            location=("problem", "candidates", "prime"),
+            code="prime_field_flat.prime",
+            message="prime must be a prime integer",
+        )
+    if problem.forbidden_vectors.prime != prime:
+        raise OperationDomainValidationError(
+            location=("problem", "forbidden_vectors", "prime"),
+            code="prime_field_flat.matrix_prime",
+            message="forbidden vectors must use the candidate configuration prime",
+        )
 
     try:
         return classify_clause_constrained_prime_field_flats_kernel(problem)

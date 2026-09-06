@@ -10,6 +10,7 @@ from typing import Literal
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.codes import linear as code_linear
 from jacobian.math.combinatorics.codes.linear._models import (
     MAX_RECEIVED_PROFILE_CODEWORDS,
@@ -44,9 +45,11 @@ def _validation_error(code: str) -> Iterator[None]:
 
 @contextmanager
 def _operation_error(code: str) -> Iterator[None]:
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises((ValidationError, OperationDomainValidationError)) as exc_info:
         yield
-    assert exc_info.value.errors()[0]["type"] == code
+    error = exc_info.value
+    assert isinstance(error, OperationDomainValidationError)
+    assert error.errors()[0]["type"] == code
 
 
 def _encoder(
@@ -293,10 +296,12 @@ def test_small_binary_profiles_match_independent_set_enumeration() -> None:
 
 
 def test_encoder_rejects_ambiguous_or_invalid_presentations() -> None:
-    with _validation_error("full_row_rank"):
-        _encoder(((1, 1), (1, 1)))
-    with _validation_error("prime"):
-        _encoder(((1,),), field_order=4)
+    dependent = _encoder(((1, 1), (1, 1)))
+    with pytest.raises(OperationDomainValidationError, match="full row rank"):
+        compute_puncture(PunctureRequest(encoder=dependent, coordinate=0))
+    composite = _encoder(((1,),), field_order=4)
+    with pytest.raises(OperationDomainValidationError, match="must be prime"):
+        compute_puncture(PunctureRequest(encoder=composite, coordinate=0))
     with _validation_error("canonical"):
         _encoder(((2,),))
     with _validation_error("message_axis"):

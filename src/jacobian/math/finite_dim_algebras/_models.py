@@ -62,12 +62,6 @@ class StructureConstants(StrictModel):
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
-        from sympy import isprime
-
-        if not isprime(self.field_order):
-            raise _validation_error(
-                "field_order_not_prime", "field_order must be prime"
-            )
         n = self.dimension
         if n**3 > MAX_STRUCTURE_CONSTANT_ENTRIES:
             raise _validation_error(
@@ -115,12 +109,26 @@ class CenterRequest(StrictModel):
 
 
 class CenterResult(StrictModel):
+    algebra: StructureConstants
     center_basis: tuple[tuple[int, ...], ...] = Field(max_length=MAX_DIM)
     dimension: int = Field(ge=1, le=MAX_DIM)
     center_dimension: int = Field(ge=0, le=MAX_DIM)
 
     @model_validator(mode="after")
     def require_complete_basis_shape(self) -> Self:
+        if self.dimension != self.algebra.dimension:
+            raise _validation_error(
+                "center_parent_dimension", "dimension must match the source algebra"
+            )
+        if any(
+            not 0 <= value < self.algebra.field_order
+            for vector in self.center_basis
+            for value in vector
+        ):
+            raise _validation_error(
+                "center_noncanonical_residue",
+                "center coordinates must be canonical residues of the source field",
+            )
         if len(self.center_basis) != self.center_dimension:
             raise _validation_error(
                 "center_dimension_mismatch",

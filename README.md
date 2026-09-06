@@ -83,6 +83,13 @@ versions. Other systems may have compatible upstream wheels, but are not part
 of the tested release contract yet. In particular, Alpine/musl cannot install
 the complete mandatory stack from PyPI.
 
+Singular and QEPCAD are optional system runtimes for a small subset of operations.
+The Python installation does not provision them, and ordinary operations do not
+require Docker. Python callers can use `jacobian.backends.check_backend`; MCP
+inspection reports availability in the server environment. See
+[backend requirements](docs/how-to/backend-requirements.md) for exact coverage
+and setup.
+
 The Python distribution contains the mathematical kernel, CLI, and MCP server.
 The npm package deterministically maps its exact package version to the
 corresponding `uvx` invocation.

@@ -643,13 +643,15 @@ def test_request_boundaries_reject_before_expansion() -> None:
         compute_local_factor(
             PrimeTupleLocalFactorRequest(source=identity_form, prime=15)
         )
-    with pytest.raises(ValidationError):
+    assert (
         PrimeTupleLocalSummary(
             prime=15,
             bad_residues=(),
             bad_count=0,
             valid_count=15,
-        )
+        ).prime
+        == 15
+    )
     with pytest.raises(OperationDomainValidationError):
         compute_local_factors(
             PrimeTupleLocalFactorsRequest(source=identity_form, primes=(3, 2))

@@ -6,6 +6,7 @@ from typing import cast
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.finite_fields._models import (
     PrimeFieldMatrixRankResult,
     PrimeFieldMatrixRequest,
@@ -151,8 +152,8 @@ class TestRank:
 
     def test_invalid_non_prime(self) -> None:
         """Non-prime modulus should raise."""
-        with pytest.raises(ValidationError):
-            pfm(prime=4, entries=((1, 0), (0, 1)))
+        with pytest.raises(OperationDomainValidationError):
+            compute_rank(pfm(prime=4, entries=((1, 0), (0, 1))))
 
     def test_invalid_entry_out_of_range(self) -> None:
         """Entry >= prime should raise."""
@@ -307,8 +308,8 @@ class TestNullspace:
 class TestRequestValidation:
     def test_non_prime_rejected(self) -> None:
         """4 is not prime."""
-        with pytest.raises(ValidationError):
-            pfm(prime=4, entries=((1, 0), (0, 1)))
+        with pytest.raises(OperationDomainValidationError):
+            compute_rank(pfm(prime=4, entries=((1, 0), (0, 1))))
 
     def test_jagged_rows_rejected(self) -> None:
         """Rows of different lengths should raise."""

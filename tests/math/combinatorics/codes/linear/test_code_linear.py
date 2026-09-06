@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 import pytest
+import sympy
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
@@ -96,6 +97,26 @@ def test_from_generator_canonicalizes_dependent_rows() -> None:
     assert result.encoder.generator_matrix == ((1, 1),)
     assert result.encoder.message_axis == ("m0",)
     assert result.encoder.coordinate_axis == ("left", "right")
+
+
+def test_code_equal_admits_each_encoder_field_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+    original = sympy.isprime
+
+    def counted(value: int) -> bool:
+        nonlocal calls
+        calls += 1
+        return bool(original(value))
+
+    monkeypatch.setattr(sympy, "isprime", counted)
+    left = _encoder(((1, 0),), coordinate_axis=("x", "y"))
+    right = _encoder(((1, 0),), coordinate_axis=("x", "y"))
+    result = compute_code_equal(CodeEqualRequest(encoder_a=left, encoder_b=right))
+
+    assert result.equal
+    assert calls == 2
 
 
 def test_dual_of_repetition_is_parity_check() -> None:
@@ -631,10 +652,16 @@ def test_requests_reject_rank_deficient_or_ambiguous_encoders() -> None:
         "coordinate_axis": ["x0", "x1"],
         "generator_matrix": [[1, 1], [1, 1]],
     }
-    with _validation_error("full_row_rank"):
-        PunctureRequest.model_validate({"encoder": dependent, "coordinate": 0})
-    with _validation_error("full_row_rank"):
-        ShortenRequest.model_validate({"encoder": dependent, "coordinate": 1})
+    dependent_encoder = PunctureRequest.model_validate(
+        {"encoder": dependent, "coordinate": 0}
+    ).encoder
+    with _operation_error("full_row_rank"):
+        compute_puncture(PunctureRequest(encoder=dependent_encoder, coordinate=0))
+    dependent_encoder = ShortenRequest.model_validate(
+        {"encoder": dependent, "coordinate": 1}
+    ).encoder
+    with _operation_error("full_row_rank"):
+        compute_shorten(ShortenRequest(encoder=dependent_encoder, coordinate=1))
 
 
 def test_macwilliams_ternary() -> None:

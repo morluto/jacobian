@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import pytest
 from pydantic import ValidationError
 
@@ -70,7 +72,7 @@ def test_integer_lattice_rejects_empty_basis() -> None:
         IntegerLattice.model_validate(
             {"ambient_dimension": 2, "basis": {"entries": []}}
         )
-    assert exc_info.value.errors()[0]["type"] == "too_short"
+    assert exc_info.value.errors()[0]["type"] == "lattice.basis_empty"
 
 
 # ---------------------------------------------------------------------------
@@ -340,6 +342,25 @@ def test_orthogonal_sum_of_two_identity() -> None:
     )
 
 
+@pytest.mark.parametrize("operation", [compute_direct_sum, compute_orthogonal_sum])
+def test_lattice_sum_rejects_combined_dimension_before_backend(
+    operation: Callable[[IntegerLattice, IntegerLattice], object],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = _lattice(17, [[int(i == j) for j in range(17)] for i in range(17)])
+    second = _lattice(17, [[int(i == j) for j in range(17)] for i in range(17)])
+
+    import jacobian.math.lattices.operations as lattice_operations
+
+    monkeypatch.setattr(
+        lattice_operations,
+        "_direct_sum" if operation is compute_direct_sum else "_orthogonal_sum",
+        lambda *_args: pytest.fail("sum backend must not run after admission failure"),
+    )
+    with pytest.raises(OperationDomainValidationError, match="output envelope"):
+        operation(first, second)
+
+
 # ---------------------------------------------------------------------------
 # lattice.basis.reduce and lattice.hermite_normal_form.compute
 # ---------------------------------------------------------------------------
@@ -428,3 +449,17 @@ def test_all_new_operations_registered_in_catalog() -> None:
         "lattice.orthogonal_sum.compute",
     }
     assert expected <= ids
+
+
+def test_lattice_wire_parsing_does_not_prove_rank(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.lattices.operations as lattice_operations
+
+    lattice = _lattice(2, [[1, 0], [2, 0]])
+    monkeypatch.setattr(
+        lattice_operations,
+        "integer_rank",
+        lambda *_: pytest.fail("parsing must not compute rank"),
+    )
+    assert IntegerLattice.model_validate_json(lattice.model_dump_json()) == lattice

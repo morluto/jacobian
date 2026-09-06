@@ -124,7 +124,7 @@ def test_affine_torus_public_and_catalog_imports_keep_flint_worker_private() -> 
     )
 
 
-def test_sympy_finite_field_construction_and_projective_line_do_not_need_flint() -> (
+def test_finite_field_parsing_is_backend_free_and_construction_admits_the_field() -> (
     None
 ):
     completed = subprocess.run(
@@ -135,10 +135,15 @@ def test_sympy_finite_field_construction_and_projective_line_do_not_need_flint()
                 "import sys; "
                 "from jacobian.math.finite_fields import Axis, finite_field, "
                 "projective_line; "
+                "from jacobian.math.finite_fields.values import FiniteFieldPresentation; "
+                "parsed = FiniteFieldPresentation(characteristic=2, modulus_coefficients=(1, 1, 1)); "
+                "assert 'flint' not in sys.modules; "
+                "assert FiniteFieldPresentation.model_validate_json(parsed.model_dump_json()) == parsed; "
+                "assert 'flint' not in sys.modules; "
                 "field = finite_field(2, (1, 1, 1)); "
+                "assert field == parsed; "
                 "line = projective_line(field, Axis(name='p', labels=('x', 'y'))); "
-                "assert len(line.points) == 5; "
-                "assert 'flint' not in sys.modules"
+                "assert len(line.points) == 5"
             ),
         ],
         check=True,

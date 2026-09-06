@@ -473,12 +473,6 @@ class ParityCheckMatrix(StrictModel):
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
-        from sympy import isprime
-
-        if not isprime(self.field_order):
-            raise _validation_error(
-                "field_order_must_be_prime", "field_order must be prime"
-            )
         if len(set(self.coordinate_axis)) != len(self.coordinate_axis):
             raise _validation_error(
                 "coordinate_axis_labels_must_be_unique",

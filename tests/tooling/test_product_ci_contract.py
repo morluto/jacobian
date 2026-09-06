@@ -60,14 +60,17 @@ def test_singular_backend_has_a_pinned_required_ci_lane() -> None:
     assert 'system("version")' in singular
     assert "make test-singular" in singular
     assert "QEPCAD_DEBIAN_VERSION: 1.74+ds-5" in singular
+    assert "run_qepcad" in workflow
     assert '"qepcad=${QEPCAD_DEBIAN_VERSION}"' in singular
     assert 'qepcad -v | grep -F "Version B 1.74,"' in singular
     assert "make test-qepcad" in singular
+    assert "needs.plan.outputs.run_qepcad == 'true'" in singular
+    assert singular.count('RUN_SINGULAR" = true ] || [ "$RUN_QEPCAD" = true') == 2
     assert (
         "needs: [plan, static, math, scale, catalog, catalog_examples, python, boundaries, singular, wheel, coverage]"
         in required
     )
-    assert 'selected_result "$RUN_SINGULAR" "$SINGULAR_RESULT"' in required
+    assert 'selected_result true "$SINGULAR_RESULT"' in required
 
 
 def test_python_and_boundary_lanes_share_evidence_collection() -> None:

@@ -155,15 +155,11 @@ class LieAlgebra(StrictModel):
 
         p = self.prime
         c = self.structure_constants
-        _require_prime(p)
         # Canonical residues first: identities hold only modulo p, so an
         # unreduced representative (e.g. 2 over GF(2)) would otherwise define
         # the same GF(p) algebra while serializing a distinct source value,
         # and both result types would retain that noncanonical coefficient.
         _require_canonical_residues(c, n, p)
-        _require_alternating(c, n, p)
-        _require_antisymmetric(c, n, p)
-        _require_jacobi(c, n, p)
         return self
 
 

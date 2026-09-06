@@ -77,6 +77,8 @@ class PolynomialBezoutIdentity(StrictModel):
 
 
 class PolynomialGcdResult(StrictModel):
+    left: RationalPolynomial
+    right: RationalPolynomial
     gcd: RationalPolynomial
     bezout: PolynomialBezoutIdentity
     normalization: Literal["MONIC"] = "MONIC"
@@ -108,12 +110,15 @@ PolynomialInvariantValue = Annotated[
 
 
 class PolynomialResultantResult(StrictModel):
+    left: RationalPolynomial
+    right: RationalPolynomial
     elimination_variable: PolynomialVariable
     resultant: PolynomialInvariantValue
     convention: Literal["SYLVESTER_DETERMINANT"] = "SYLVESTER_DETERMINANT"
 
 
 class PolynomialDiscriminantResult(StrictModel):
+    polynomial: RationalPolynomial
     variable: PolynomialVariable
     discriminant: PolynomialInvariantValue
     convention: Literal["STANDARD_UNIVARIATE"] = "STANDARD_UNIVARIATE"

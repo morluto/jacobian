@@ -75,6 +75,11 @@ __all__ = [
     "polynomial_square_free_decomposition",
     "resultant",
     "square_free_decomposition",
+    "verify_polynomial_discriminant",
+    "verify_polynomial_factorization",
+    "verify_polynomial_gcd",
+    "verify_polynomial_resultant",
+    "verify_polynomial_square_free_decomposition",
 ]
 
 MAX_OPERATION_OUTPUT_TERMS = 1_024
@@ -460,6 +465,8 @@ def polynomial_gcd(
     left_multiplier, right_multiplier, gcd = gcdex(left_sympy, right_sympy)
     variables = left.variables
     return PolynomialGcdResult(
+        left=left,
+        right=right,
         gcd=_result_polynomial(gcd, variables),
         bezout=PolynomialBezoutIdentity(
             left_multiplier=_result_polynomial(left_multiplier, variables),
@@ -482,6 +489,8 @@ def polynomial_resultant(
         right_flint = _flint_univariate(right)
         value = left_flint.resultant(right_flint)
         return PolynomialResultantResult(
+            left=left,
+            right=right,
             elimination_variable=elimination_variable,
             resultant=PolynomialScalarValue(
                 value=_canonical_rational_from_flint(value)
@@ -498,6 +507,8 @@ def polynomial_resultant(
         variable for variable in variables if variable != elimination_variable
     )
     return PolynomialResultantResult(
+        left=left,
+        right=right,
         elimination_variable=elimination_variable,
         resultant=_invariant_value(value, remaining_variables),
     )
@@ -514,6 +525,7 @@ def polynomial_discriminant(
         flint_polynomial = _flint_univariate(polynomial)
         if flint_polynomial.is_zero():
             return PolynomialDiscriminantResult(
+                polynomial=polynomial,
                 variable=variable,
                 discriminant=PolynomialScalarValue(
                     value=CanonicalRational.from_integer_ratio(0, 1)
@@ -521,6 +533,7 @@ def polynomial_discriminant(
             )
         value = flint_polynomial.discriminant()
         return PolynomialDiscriminantResult(
+            polynomial=polynomial,
             variable=variable,
             discriminant=PolynomialScalarValue(
                 value=_canonical_rational_from_flint(value)
@@ -531,6 +544,7 @@ def polynomial_discriminant(
     value = discriminant(rational_polynomial_to_sympy(polynomial), generator)
     remaining_variables = tuple(name for name in variables if name != variable)
     return PolynomialDiscriminantResult(
+        polynomial=polynomial,
         variable=variable,
         discriminant=_invariant_value(value, remaining_variables),
     )
@@ -601,6 +615,56 @@ def polynomial_factorization(
         factors=factors,
         reconstructed=_result_polynomial(reconstructed, polynomial.variables),
     )
+
+
+def verify_polynomial_gcd(claim: PolynomialGcdResult) -> bool:
+    """Verify a GCD and Bézout identity against both retained operands."""
+
+    try:
+        return polynomial_gcd(claim.left, claim.right) == claim
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+
+
+def verify_polynomial_resultant(claim: PolynomialResultantResult) -> bool:
+    """Verify a resultant against its retained operands and elimination variable."""
+
+    try:
+        return (
+            polynomial_resultant(claim.left, claim.right, claim.elimination_variable)
+            == claim
+        )
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+
+
+def verify_polynomial_discriminant(claim: PolynomialDiscriminantResult) -> bool:
+    """Verify a discriminant against its retained polynomial and variable."""
+
+    try:
+        return polynomial_discriminant(claim.polynomial, claim.variable) == claim
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+
+
+def verify_polynomial_square_free_decomposition(
+    claim: PolynomialSquareFreeDecompositionResult,
+) -> bool:
+    """Verify square-free factors and reconstruction against their source."""
+
+    try:
+        return polynomial_square_free_decomposition(claim.polynomial) == claim
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+
+
+def verify_polynomial_factorization(claim: PolynomialFactorizationResult) -> bool:
+    """Verify factorization claims against their retained source polynomial."""
+
+    try:
+        return polynomial_factorization(claim.polynomial) == claim
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
 
 
 def polynomial_groebner_basis(

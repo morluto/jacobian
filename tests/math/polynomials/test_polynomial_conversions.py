@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from copy import deepcopy
+
 import pytest
 import sympy
 
@@ -13,8 +15,15 @@ from jacobian.math.polynomials._conversions import (
 from jacobian.math.polynomials._models import PolynomialGcdRequest
 from jacobian.math.polynomials.operations import (
     polynomial_discriminant,
+    polynomial_factorization,
     polynomial_gcd,
     polynomial_resultant,
+    polynomial_square_free_decomposition,
+    verify_polynomial_discriminant,
+    verify_polynomial_factorization,
+    verify_polynomial_gcd,
+    verify_polynomial_resultant,
+    verify_polynomial_square_free_decomposition,
 )
 from jacobian.math.polynomials.values import (
     RationalFunction,
@@ -194,6 +203,57 @@ def test_invariant_operations_accept_canonical_polynomial_values() -> None:
     assert resultant.elimination_variable == "x"
     assert resultant.resultant.kind == "SCALAR"
     assert resultant.resultant.value.num == "0"
+
+
+@pytest.mark.parametrize(
+    ("operation", "verifier", "mutation"),
+    (
+        (
+            lambda source: polynomial_gcd(source, source),
+            verify_polynomial_gcd,
+            lambda payload: payload["gcd"]["polynomial"]["terms"][0]["coefficient"].update(
+                num="2"
+            ),
+        ),
+        (
+            lambda source: polynomial_resultant(source, source, "x"),
+            verify_polynomial_resultant,
+            lambda payload: payload["resultant"]["value"].update(num="1"),
+        ),
+        (
+            lambda source: polynomial_discriminant(source, "x"),
+            verify_polynomial_discriminant,
+            lambda payload: payload["discriminant"]["value"].update(num="5"),
+        ),
+        (
+            polynomial_square_free_decomposition,
+            verify_polynomial_square_free_decomposition,
+            lambda payload: payload["reconstructed"]["polynomial"]["terms"][0][
+                "coefficient"
+            ].update(num="2"),
+        ),
+        (
+            polynomial_factorization,
+            verify_polynomial_factorization,
+            lambda payload: payload["reconstructed"]["polynomial"]["terms"][0][
+                "coefficient"
+            ].update(num="2"),
+        ),
+    ),
+)
+def test_invariant_claim_verifiers_reject_forged_serialized_results(
+    operation: object,
+    verifier: object,
+    mutation: object,
+) -> None:
+    source = _univariate_polynomial()
+    result = operation(source)  # type: ignore[operator]
+    payload = deepcopy(result.model_dump(mode="json"))
+    mutation(payload)  # type: ignore[operator]
+
+    forged = type(result).model_validate(payload)
+
+    assert not verifier(forged)  # type: ignore[operator]
 
 
 def test_zero_polynomial_has_zero_discriminant() -> None:

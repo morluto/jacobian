@@ -33,6 +33,11 @@ from jacobian.math.polynomials.operations import (
     polynomial_square_free_decomposition,
     resultant,
     square_free_decomposition,
+    verify_polynomial_discriminant,
+    verify_polynomial_factorization,
+    verify_polynomial_gcd,
+    verify_polynomial_resultant,
+    verify_polynomial_square_free_decomposition,
 )
 from jacobian.math.polynomials.rational_functions.operations import (
     verify_hermite_reduction,
@@ -88,4 +93,9 @@ __all__ = [
     "resultant",
     "square_free_decomposition",
     "verify_hermite_reduction",
+    "verify_polynomial_discriminant",
+    "verify_polynomial_factorization",
+    "verify_polynomial_gcd",
+    "verify_polynomial_resultant",
+    "verify_polynomial_square_free_decomposition",
 ]

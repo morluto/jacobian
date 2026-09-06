@@ -6,7 +6,7 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalInteger, CanonicalRational
+from jacobian._exact import CanonicalInteger, CanonicalRational, NativeInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory.numerical_semigroups._models import (
@@ -152,8 +152,8 @@ class ElasticityResult(StrictModel):
 
     semigroup: NumericalSemigroup
     elasticity: CanonicalRational
-    smallest_generator: CanonicalInteger
-    largest_generator: CanonicalInteger
+    smallest_generator: NativeInteger
+    largest_generator: NativeInteger
 
 
 class CatenaryDegreeRequest(StrictModel):

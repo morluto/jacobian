@@ -6,7 +6,7 @@ from typing import Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalInteger, CanonicalRational
+from jacobian._exact import CanonicalInteger, CanonicalRational, NativeInteger
 from jacobian._models import StrictModel
 from jacobian.math.number_theory.numerical_semigroups._models import (
     _GENERAL_ELEMENT_ENVELOPE,
@@ -101,7 +101,7 @@ class ElementElasticityRequest(StrictModel):
 class ElementElasticityResult(StrictModel):
     """Elasticity of one element."""
 
-    value: CanonicalInteger
+    value: NativeInteger
     semigroup: NumericalSemigroup
 
     @property
@@ -116,7 +116,7 @@ class ElementElasticityResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        value: CanonicalInteger,
+        value: NativeInteger,
         minimal_generators: tuple[CanonicalInteger, ...],
         minimum_length: int,
         maximum_length: int,

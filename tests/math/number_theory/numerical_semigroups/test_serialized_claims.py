@@ -19,6 +19,11 @@ from jacobian.math.number_theory.numerical_semigroups.operations import (
 @pytest.mark.parametrize("generators", [(1,), (3, 5), (4, 6, 9)])
 def test_summary_claim(generators: tuple[int, ...]) -> None:
     result = summary(generators)
+    assert type(result.frobenius_number) is int
+    assert type(result.conductor) is int
+    payload = result.model_dump(mode="json")
+    assert isinstance(payload["frobenius_number"], str)
+    assert isinstance(payload["conductor"], str)
     assert verify_summary(type(result).model_validate_json(result.model_dump_json()))
     payload = result.model_dump()
     payload["conductor"] = "100"
@@ -36,6 +41,10 @@ def test_elasticity_claims() -> None:
         (global_elasticity((3, 5)), verify_elasticity),
         (element_elasticity_profile((3, 5), 15), verify_element_elasticity),
     ):
+        if hasattr(result, "smallest_generator"):
+            assert type(result.smallest_generator) is int
+        else:
+            assert type(result.value) is int
         assert verifier(type(result).model_validate_json(result.model_dump_json()))
         payload = result.model_dump()
         payload["elasticity"] = {"num": "7", "den": "2"}

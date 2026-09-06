@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import Field
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import CanonicalInteger, NativeInteger
 from jacobian._models import StrictModel
 from jacobian.math.number_theory.numerical_semigroups._models import (
     _GENERAL_ELEMENT_ENVELOPE,
@@ -37,24 +37,24 @@ class NumericalSemigroupSummaryResult(StrictModel):
     def minimal_generators(self) -> tuple[CanonicalInteger, ...]:
         return self.semigroup.minimal_generators
 
-    multiplicity: CanonicalInteger
+    multiplicity: NativeInteger
     embedding_dimension: int = Field(ge=1)
-    frobenius_number: CanonicalInteger
-    conductor: CanonicalInteger
+    frobenius_number: NativeInteger
+    conductor: NativeInteger
     genus: int = Field(ge=0)
-    gaps: tuple[CanonicalInteger, ...]
+    gaps: tuple[NativeInteger, ...]
 
     @classmethod
     def _from_kernel(
         cls,
         *,
         minimal_generators: tuple[CanonicalInteger, ...],
-        multiplicity: CanonicalInteger,
+        multiplicity: NativeInteger,
         embedding_dimension: int,
-        frobenius_number: CanonicalInteger,
-        conductor: CanonicalInteger,
+        frobenius_number: NativeInteger,
+        conductor: NativeInteger,
         genus: int,
-        gaps: tuple[CanonicalInteger, ...],
+        gaps: tuple[NativeInteger, ...],
     ) -> NumericalSemigroupSummaryResult:
         """Construct a summary after the native kernel establishes its invariants."""
 

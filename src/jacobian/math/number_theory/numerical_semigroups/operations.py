@@ -201,10 +201,10 @@ def summary(generators: tuple[int, ...]) -> NumericalSemigroupSummaryResult:
     if multiplicity == 1:
         return NumericalSemigroupSummaryResult._from_kernel(
             minimal_generators=("1",),
-            multiplicity="1",
+            multiplicity=1,
             embedding_dimension=1,
-            frobenius_number="-1",
-            conductor="0",
+            frobenius_number=-1,
+            conductor=0,
             genus=0,
             gaps=(),
         )
@@ -235,12 +235,12 @@ def summary(generators: tuple[int, ...]) -> NumericalSemigroupSummaryResult:
     frobenius = max(gaps) if gaps else -1
     return NumericalSemigroupSummaryResult._from_kernel(
         minimal_generators=tuple(format_canonical_integer(value) for value in values),
-        multiplicity=format_canonical_integer(multiplicity),
+        multiplicity=multiplicity,
         embedding_dimension=len(values),
-        frobenius_number=format_canonical_integer(frobenius),
-        conductor=format_canonical_integer(conductor),
+        frobenius_number=frobenius,
+        conductor=conductor,
         genus=len(gaps),
-        gaps=tuple(format_canonical_integer(gap) for gap in gaps),
+        gaps=tuple(gaps),
     )
 
 
@@ -369,7 +369,7 @@ def element_elasticity_profile(
         raise ValueError("value must belong to the numerical semigroup")
     minimum, maximum = factorization_length_extrema(values, target)
     return ElementElasticityResult._from_kernel(
-        value=format_canonical_integer(target),
+        value=target,
         minimal_generators=tuple(format_canonical_integer(item) for item in values),
         minimum_length=minimum,
         maximum_length=maximum,
@@ -446,8 +446,8 @@ def global_elasticity(generators: tuple[int, ...]) -> ElasticityResult:
             minimal_generators=tuple(map(format_canonical_integer, values))
         ),
         elasticity=CanonicalRational.from_integer_ratio(values[-1], values[0]),
-        smallest_generator=format_canonical_integer(values[0]),
-        largest_generator=format_canonical_integer(values[-1]),
+        smallest_generator=values[0],
+        largest_generator=values[-1],
     )
 
 
@@ -568,7 +568,7 @@ def verify_elasticity(claim: ElasticityResult) -> bool:
 def verify_element_elasticity(claim: ElementElasticityResult) -> bool:
     """Check the element's actual length extrema, not merely their ratio."""
     values = _claim_generators(claim.semigroup)
-    value = parse_canonical_integer(claim.value)
+    value = claim.value
     if values != (1,) and value > MAX_ELEMENT:
         raise ValueError(f"element exceeds the {MAX_ELEMENT} admission bound")
     return element_elasticity_profile(values, value) == claim

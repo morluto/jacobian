@@ -15,6 +15,7 @@ from jacobian._exact import (
     CanonicalRational,
 )
 from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.optimization._arithmetic import rational_dot
 
 MAX_RATIONAL_DIGITS = 128
@@ -67,7 +68,7 @@ def _bound_raw_rational(
         if (
             isinstance(component, str)
             and len(component) - component.startswith("-") > maximum_digits
-        ):
+        ) or (type(component) is int and abs(component) >= 10**maximum_digits):
             raise ValueError(f"{label} exceeds the {maximum_digits}-digit bound")
 
 
@@ -177,10 +178,13 @@ def _cleared_row_digit_bound(
     if not values:
         return 1
     denominator_digits = sum(
-        len(denominator) for denominator in {v.den for v in values}
+        len(format_canonical_integer(denominator))
+        for denominator in {v.den for v in values}
     )
     return max(
-        len(value.num.lstrip("-")) + denominator_digits - len(value.den)
+        len(format_canonical_integer(abs(value.num)))
+        + denominator_digits
+        - len(format_canonical_integer(value.den))
         for value in values
     )
 
@@ -205,7 +209,7 @@ def _active_equations(
     return tuple(
         (row, rhs)
         for row, rhs in zip(program.coefficients, program.rhs, strict=True)
-        if any(value.num != "0" for value in row) or rhs.num != "0"
+        if any(value.num != 0 for value in row) or rhs.num != 0
     )
 
 
@@ -213,7 +217,7 @@ def _has_trivial_inconsistent_row(
     program: StandardFormRationalLinearProgram,
 ) -> bool:
     return any(
-        not any(value.num != "0" for value in row) and rhs.num != "0"
+        not any(value.num != 0 for value in row) and rhs.num != 0
         for row, rhs in zip(program.coefficients, program.rhs, strict=True)
     )
 
@@ -233,7 +237,10 @@ def _result_digit_bound(program: StandardFormRationalLinearProgram) -> int:
     if _has_trivial_inconsistent_row(program):
         return max(
             (
-                max(len(value.num.lstrip("-")), len(value.den))
+                max(
+                    len(format_canonical_integer(abs(value.num))),
+                    len(format_canonical_integer(value.den)),
+                )
                 for value in (
                     *program.objective,
                     *program.rhs,
@@ -246,8 +253,8 @@ def _result_digit_bound(program: StandardFormRationalLinearProgram) -> int:
     active_equations = _active_equations(program)
     active_coefficients = tuple(row for row, _ in active_equations)
     active_rhs = tuple(rhs for _, rhs in active_equations)
-    zero = CanonicalRational(num="0", den="1")
-    one = CanonicalRational(num="1", den="1")
+    zero = CanonicalRational(num=0, den=1)
+    one = CanonicalRational(num=1, den=1)
     objective_row = _cleared_row_digit_bound((*program.objective, zero))
     unit_primal_objective = _cleared_row_digit_bound(
         (*(one for _ in program.variables), zero)

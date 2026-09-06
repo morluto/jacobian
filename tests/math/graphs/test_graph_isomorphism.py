@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -109,7 +110,9 @@ def test_serialized_isomorphism_claim_is_verified_against_its_graphs() -> None:
     )
     payload = result.model_dump(mode="json")
     payload["vertex_mapping"][1]["to_vertex"] = 0
-    assert not verify_graph_isomorphism(GraphIsomorphismResult.model_validate(payload))
+    assert not verify_graph_isomorphism(
+        GraphIsomorphismResult.model_validate_json(json.dumps(payload))
+    )
 
 
 def test_negative_outcome_is_a_producer_outcome_not_a_claim() -> None:

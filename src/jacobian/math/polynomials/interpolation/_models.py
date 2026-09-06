@@ -14,6 +14,7 @@ from jacobian._exact import (
     require_bounded_rational,
 )
 from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.polynomials.values import (
     PolynomialVariable,
     RationalPolynomial,
@@ -197,7 +198,7 @@ def _total_multiplicity(table: OrdinaryDerivativeJetTable) -> int:
 def _factor_digits(value: int, *, exponent: int = 1) -> int:
     if exponent == 0 or abs(value) == 1:
         return 0
-    return exponent * len(str(abs(value)))
+    return exponent * len(format_canonical_integer(abs(value)))
 
 
 def _scaled_system_row_digit_bounds(

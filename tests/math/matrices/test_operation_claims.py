@@ -1,5 +1,6 @@
 """Source-bound matrix relations survive structural serialization."""
 
+import json
 from collections.abc import Callable
 from typing import Any
 
@@ -40,7 +41,7 @@ def _q(value: int) -> CanonicalRational:
     "kind", ["product", "inverse", "adjugate", "kronecker", "partial_trace"]
 )
 def test_matrix_claim_checks_its_retained_source(kind: str) -> None:
-    integer = IntegerMatrix(entries=(("2",),))
+    integer = IntegerMatrix(entries=((2,),))
     rational = RationalMatrix(entries=((_q(2),),))
     cases: dict[str, tuple[Any, Callable[..., bool], str]] = {
         "product": (product_result(rational, rational), verify_product, "product"),
@@ -59,11 +60,11 @@ def test_matrix_claim_checks_its_retained_source(kind: str) -> None:
     }
     result, verify, field = cases[kind]
     payload = result.model_dump(mode="json")
-    assert verify(type(result).model_validate(payload))
+    assert verify(type(result).model_validate_json(json.dumps(payload)))
     payload[field]["entries"] = [
         ["7" if kind == "adjugate" else {"num": "7", "den": "1"}]
     ]
-    assert not verify(type(result).model_validate(payload))
+    assert not verify(type(result).model_validate_json(json.dumps(payload)))
 
 
 def test_product_rejects_mismatched_source_axes() -> None:
@@ -74,7 +75,7 @@ def test_product_rejects_mismatched_source_axes() -> None:
         mode="json"
     )
     with pytest.raises(ValidationError, match="inner axes"):
-        type(result).model_validate(payload)
+        type(result).model_validate_json(json.dumps(payload))
 
 
 @pytest.mark.parametrize(
@@ -85,7 +86,7 @@ def test_nullspace_returns_composable_qq_matrix(source: RationalMatrix) -> None:
     result = nullspace_result(source)
     payload = result.model_dump(mode="json")
     assert "basis_vectors" not in payload
-    basis = RationalMatrix.model_validate(payload["basis_matrix"])
+    basis = RationalMatrix.model_validate_json(json.dumps(payload["basis_matrix"]))
     assert basis.column_count == source.column_count
     assert rank_result(basis).rank == result.nullity
 

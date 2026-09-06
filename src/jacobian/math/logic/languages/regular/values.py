@@ -7,9 +7,8 @@ from typing import Annotated, Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import DecimalIntegerEncoding, ExactInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -196,14 +195,15 @@ class TransitionParikhCell(StrictModel):
             "axis; the coordinate sum equals the exact path length."
         ),
     )
-    multiplicity: CanonicalInteger = Field(
-        max_length=MAX_TRANSITION_PROFILE_COUNT_DIGITS,
+    multiplicity: Annotated[
+        int, DecimalIntegerEncoding(max_digits=MAX_TRANSITION_PROFILE_COUNT_DIGITS)
+    ] = Field(
         description="Positive exact number of paths with this transition ledger.",
     )
 
     @model_validator(mode="after")
     def require_positive_multiplicity(self) -> Self:
-        if parse_canonical_integer(self.multiplicity) <= 0:
+        if self.multiplicity <= 0:
             raise _validation_error(
                 "path_multiplicity_not_positive", "path multiplicity must be positive"
             )
@@ -224,9 +224,9 @@ class TransitionParikhProfile(StrictModel):
             "count vectors to exact path multiplicities."
         ),
     )
-    total_path_count: CanonicalInteger = Field(
-        max_length=MAX_TRANSITION_PROFILE_COUNT_DIGITS
-    )
+    total_path_count: Annotated[
+        int, DecimalIntegerEncoding(max_digits=MAX_TRANSITION_PROFILE_COUNT_DIGITS)
+    ]
 
     @model_validator(mode="after")
     def require_source_and_canonical_complete_profile(self) -> Self:
@@ -260,10 +260,8 @@ class TransitionParikhProfile(StrictModel):
                     "every transition-count vector must sum to path_length",
                 )
 
-        total = sum(
-            parse_canonical_integer(entry.multiplicity) for entry in self.entries
-        )
-        if parse_canonical_integer(self.total_path_count) != total:
+        total = sum(entry.multiplicity for entry in self.entries)
+        if self.total_path_count != total:
             raise _validation_error(
                 "profile_total_mismatch",
                 "total_path_count must equal the sum of profile multiplicities",
@@ -293,7 +291,7 @@ class TransitionParikhProfile(StrictModel):
         target_state: int,
         path_length: int,
         entries: tuple[TransitionParikhCell, ...],
-        total_path_count: CanonicalInteger,
+        total_path_count: ExactInteger,
     ) -> Self:
         """Construct a profile produced by the trusted bounded recurrence."""
 

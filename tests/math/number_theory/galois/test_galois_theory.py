@@ -318,7 +318,7 @@ def _rational_polynomial(coefficients: tuple[int, ...]) -> RationalPolynomial:
             "polynomial": {
                 "terms": [
                     {
-                        "coefficient": {"num": str(value), "den": "1"},
+                        "coefficient": {"num": value, "den": 1},
                         "exponents": [index],
                     }
                     for index, value in reversed(tuple(enumerate(coefficients)))

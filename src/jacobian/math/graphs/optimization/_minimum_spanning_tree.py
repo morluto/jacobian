@@ -6,7 +6,6 @@ from fractions import Fraction
 from typing import TYPE_CHECKING
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.optimization._models import (
     CanonicalWeightedTreeEdge,
@@ -22,8 +21,8 @@ if TYPE_CHECKING:
 
 def _rational(value: Fraction) -> CanonicalRational:
     return CanonicalRational(
-        num=format_canonical_integer(value.numerator),
-        den=format_canonical_integer(value.denominator),
+        num=value.numerator,
+        den=value.denominator,
     )
 
 

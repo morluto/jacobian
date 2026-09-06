@@ -60,42 +60,42 @@ from jacobian.math.number_theory.operations import (
         (
             "integer.compute.valuation",
             {"value": "1", "prime": "4"},
-            ValuationRequest(value="1", prime="4"),
+            ValuationRequest(value=1, prime=4),
             compute_valuation,
             (),
         ),
         (
             "number_theory.binomial_valuation.compute",
             {"n": "20", "k": "7", "prime": "4"},
-            BinomialPrimeValuationRequest(n="20", k="7", prime="4"),
+            BinomialPrimeValuationRequest(n=20, k=7, prime=4),
             compute_binomial_prime_valuation,
             (),
         ),
         (
             "number_theory.compute.factorial_valuation",
             {"n": "1", "base": "1000001"},
-            FactorialValuationRequest(n="1", base="1000001"),
+            FactorialValuationRequest(n=1, base=1000001),
             compute_factorial_valuation,
             (),
         ),
         (
             "modular.compute.inverse",
             {"value": "2", "modulus": 4},
-            ModularUnitRequest(value="2", modulus=4),
+            ModularUnitRequest(value=2, modulus=4),
             modular_inverse,
-            ("2", 4),
+            (2, 4),
         ),
         (
             "number_theory.compute.jacobi_symbol",
             {"a": "1", "n": 4},
-            JacobiSymbolRequest(a="1", n=4),
+            JacobiSymbolRequest(a=1, n=4),
             jacobi_symbol,
-            ("1", 4),
+            (1, 4),
         ),
         (
             "number_theory.ramanujan_sum.compute",
             {"modulus": "-1", "frequency": "0"},
-            RamanujanSumRequest(modulus="-1", frequency="0"),
+            RamanujanSumRequest(modulus=-1, frequency=0),
             compute_ramanujan_sum,
             (),
         ),
@@ -152,7 +152,7 @@ def test_discrete_log_request_admission_is_native() -> None:
 
 
 def test_direct_factorization_admission_is_native() -> None:
-    request = FactorizationRequest(value="0")
+    request = FactorizationRequest(value=0)
     with pytest.raises(OperationDomainValidationError) as native_error:
         enumerate_divisors(request)
     with pytest.raises(OperationDomainValidationError) as dispatch_error:
@@ -172,7 +172,7 @@ def test_modular_polynomial_admission_is_native() -> None:
             ModularPolynomialVariable(name="x", residues=(0, 1)),
             ModularPolynomialVariable(name="x", residues=(0, 1)),
         ),
-        terms=(ModularPolynomialTerm(coefficient="1", exponents=(1, 1)),),
+        terms=(ModularPolynomialTerm(coefficient=1, exponents=(1, 1)),),
     )
     with pytest.raises(OperationDomainValidationError) as native_error:
         modular_polynomial_residue_image(

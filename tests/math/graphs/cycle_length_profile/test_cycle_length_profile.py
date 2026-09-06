@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
 from itertools import combinations
 
@@ -118,13 +119,13 @@ def test_serialized_profile_claim_is_verified_for_witnesses_and_completeness() -
     payload = result.model_dump(mode="json")
     payload["rows"][0]["witness"] = ["a", "b", "d", "c"]
     assert not verify_cycle_length_profile(
-        CycleLengthProfileResult.model_validate(payload)
+        CycleLengthProfileResult.model_validate_json(json.dumps(payload))
     )
 
     payload = result.model_dump(mode="json")
     payload["rows"] = []
     assert not verify_cycle_length_profile(
-        CycleLengthProfileResult.model_validate(payload)
+        CycleLengthProfileResult.model_validate_json(json.dumps(payload))
     )
 
 

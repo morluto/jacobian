@@ -54,24 +54,24 @@ def _run_elimination(request: EliminationIdealRequest) -> EliminationIdealResult
     )
 
 
-class _CanonicalRationalWire(TypedDict):
-    num: str
-    den: str
+class _NativeRationalComponents(TypedDict):
+    num: int
+    den: int
 
 
-class _RationalPolynomialTermWire(TypedDict):
-    coefficient: _CanonicalRationalWire
+class _NativePolynomialTerm(TypedDict):
+    coefficient: _NativeRationalComponents
     exponents: list[int]
 
 
-class _RationalPolynomialWire(TypedDict):
-    terms: list[_RationalPolynomialTermWire]
+class _NativePolynomialTerms(TypedDict):
+    terms: list[_NativePolynomialTerm]
 
 
 class _RationalPolynomialPayload(TypedDict):
     domain: Literal["QQ"]
     variables: list[str]
-    polynomial: _RationalPolynomialWire
+    polynomial: _NativePolynomialTerms
 
 
 def _poly(
@@ -84,7 +84,7 @@ def _poly(
         "polynomial": {
             "terms": [
                 {
-                    "coefficient": {"num": str(num), "den": str(den)},
+                    "coefficient": {"num": num, "den": den},
                     "exponents": list(exp),
                 }
                 for num, den, exp in terms

@@ -156,6 +156,4 @@ def frame_potential(value: VectorFamily) -> FramePotentialResult:
     _admit_frame(value, rank=rank)
     assert matrix is not None
     total = sum(entry**2 for row in matrix for entry in row)
-    return FramePotentialResult._from_kernel(
-        vectors=value.vectors, potential=format_canonical_integer(total)
-    )
+    return FramePotentialResult._from_kernel(vectors=value.vectors, potential=total)

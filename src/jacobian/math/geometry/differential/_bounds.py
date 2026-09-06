@@ -8,6 +8,7 @@ from itertools import product
 from math import gcd, lcm
 from typing import Literal, NoReturn
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.differential._execution import (
     begin_lie_derivative_deadline,
@@ -194,8 +195,8 @@ def _polynomial_backend_conversion_work_units(bound: PolynomialBound) -> int:
     dense_coefficients = 1 if bound.is_zero else _dense_term_bound(bound.degrees)
     coefficient_digits = (
         bound.coefficient_digits
-        + len(str(abs(bound.rational_content.numerator)))
-        + len(str(bound.rational_content.denominator))
+        + len(format_canonical_integer(abs(bound.rational_content.numerator)))
+        + len(format_canonical_integer(bound.rational_content.denominator))
     )
     coefficient_chunks = max(1, (coefficient_digits + 31) // 32)
     return bound.terms * coefficient_chunks + dense_coefficients
@@ -236,7 +237,8 @@ def _polynomial_bound(polynomial: SparseRationalPolynomial) -> PolynomialBound:
             for axis in range(variable_count)
         ),
         coefficient_digits=max(
-            len(str(abs(coefficient))) for coefficient in primitive_coefficients
+            len(format_canonical_integer(abs(coefficient)))
+            for coefficient in primitive_coefficients
         ),
         rational_content=Fraction(content_numerator, common_denominator),
     )
@@ -301,8 +303,9 @@ def _check_raw_polynomial(bound: PolynomialBound) -> None:
             f"{MAX_LIE_DERIVATIVE_RAW_POLYNOMIAL_TERMS}-term intermediate budget",
         )
     scaled_coefficient_digits = max(
-        len(str(abs(bound.rational_content.numerator))) + bound.coefficient_digits,
-        len(str(bound.rational_content.denominator)),
+        len(format_canonical_integer(abs(bound.rational_content.numerator)))
+        + bound.coefficient_digits,
+        len(format_canonical_integer(bound.rational_content.denominator)),
     )
     if scaled_coefficient_digits > MAX_LIE_DERIVATIVE_RAW_COEFFICIENT_DIGITS:
         _reject(
@@ -329,7 +332,8 @@ def _differentiate_polynomial(
         degrees=tuple(degrees),
         minimum_exponents=minimum_exponents,
         coefficient_digits=(
-            source.coefficient_digits + len(str(maximum_axis_exponent))
+            source.coefficient_digits
+            + len(format_canonical_integer(maximum_axis_exponent))
         ),
         rational_content=source.rational_content,
     )
@@ -355,7 +359,9 @@ def _multiply_polynomials(
     if collision_count == 1:
         coefficient_digits = product_digits
     else:
-        coefficient_digits = product_digits + len(str(collision_count))
+        coefficient_digits = product_digits + len(
+            format_canonical_integer(collision_count)
+        )
     result = PolynomialBound(
         terms=min(pair_count, _dense_term_bound(degrees)),
         degrees=degrees,
@@ -408,7 +414,7 @@ def _add_polynomials(
     def scaled_digits(coefficient_digits: int, multiplier: int) -> int:
         if abs(multiplier) <= 1:
             return coefficient_digits
-        return coefficient_digits + len(str(abs(multiplier)))
+        return coefficient_digits + len(format_canonical_integer(abs(multiplier)))
 
     result = PolynomialBound(
         terms=min(left.terms + right.terms, _dense_term_bound(degrees)),
@@ -546,7 +552,7 @@ def _factor_coefficient_digits(bound: PolynomialBound) -> int:
         return 1
     kronecker_degree = _dense_term_bound(bound.degrees) - 1
     binary_factor_digits = (302 * kronecker_degree + 999) // 1000
-    norm_digits = len(str(bound.terms)) + 1
+    norm_digits = len(format_canonical_integer(bound.terms)) + 1
     return bound.coefficient_digits + binary_factor_digits + norm_digits + 2
 
 
@@ -611,10 +617,10 @@ def _canonical_coefficient_digits(bound: FractionBound) -> int:
         else _factor_coefficient_digits(bound.denominator)
     )
     return max(
-        len(str(abs(content_ratio.numerator)))
+        len(format_canonical_integer(abs(content_ratio.numerator)))
         + bound.numerator.coefficient_digits
         + (0 if denominator_is_unit else numerator_factor_digits),
-        len(str(content_ratio.denominator))
+        len(format_canonical_integer(content_ratio.denominator))
         + bound.denominator.coefficient_digits
         + (0 if denominator_is_unit else denominator_factor_digits),
         denominator_factor_digits,
@@ -715,11 +721,13 @@ def _recognition_work_units(bound: FractionBound) -> int:
     )
     coefficient_digits = max(
         bound.numerator.coefficient_digits
-        + len(str(abs(bound.numerator.rational_content.numerator)))
-        + len(str(bound.numerator.rational_content.denominator)),
+        + len(format_canonical_integer(abs(bound.numerator.rational_content.numerator)))
+        + len(format_canonical_integer(bound.numerator.rational_content.denominator)),
         bound.denominator.coefficient_digits
-        + len(str(abs(bound.denominator.rational_content.numerator)))
-        + len(str(bound.denominator.rational_content.denominator)),
+        + len(
+            format_canonical_integer(abs(bound.denominator.rational_content.numerator))
+        )
+        + len(format_canonical_integer(bound.denominator.rational_content.denominator)),
     )
     coefficient_chunks = max(1, (coefficient_digits + 31) // 32)
     return (numerator_dense + denominator_dense) * degree_steps * coefficient_chunks

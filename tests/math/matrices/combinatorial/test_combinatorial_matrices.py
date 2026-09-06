@@ -8,7 +8,6 @@ from pydantic import ValidationError
 from jacobian.canonical import (
     encode_strict_json,
     loads_strict_json,
-    parse_canonical_integer,
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.combinatorial import HadamardMatrix, SignMatrix
@@ -255,8 +254,8 @@ class TestDeterminantProfile:
         h = HadamardMatrix(rows=((1, 1), (1, -1)))
         result = compute_determinant_profile(DeterminantProfileRequest(matrix=h))
         assert result.order == 2
-        assert result.determinant_magnitude == "2"  # 2^(2/2) = 2
-        assert result.gram_determinant == "4"  # 2^2
+        assert result.determinant_magnitude == 2  # 2^(2/2) = 2
+        assert result.gram_determinant == 4  # 2^2
 
     def test_hadamard_recognition_and_determinant_above_previous_boundary(self) -> None:
         order = 256
@@ -264,8 +263,8 @@ class TestDeterminantProfile:
         result = determinant_profile(matrix)
 
         assert result.order == order
-        magnitude = parse_canonical_integer(result.determinant_magnitude)
-        gram = parse_canonical_integer(result.gram_determinant)
+        magnitude = result.determinant_magnitude
+        gram = result.gram_determinant
         assert magnitude**2 == gram
         assert gram == order**order
 

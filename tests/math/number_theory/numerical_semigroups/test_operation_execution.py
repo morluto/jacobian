@@ -28,31 +28,31 @@ from jacobian.math.number_theory.numerical_semigroups._tools import (
     (
         (
             compute_element_delta_set,
-            ElementDeltaSetRequest(generators=("3", "5"), value="15"),
+            ElementDeltaSetRequest(generators=(3, 5), value=15),
             operations,
             "factorization_lengths",
         ),
         (
             compute_element_elasticity,
-            ElementElasticityRequest(generators=("3", "5"), value="15"),
+            ElementElasticityRequest(generators=(3, 5), value=15),
             operations,
             "factorization_length_extrema",
         ),
         (
             compute_element_catenary_degree,
-            ElementCatenaryDegreeRequest(generators=("3", "5"), value="15"),
+            ElementCatenaryDegreeRequest(generators=(3, 5), value=15),
             operations,
             "factorizations",
         ),
         (
             compute_betti_elements,
-            BettiElementsRequest(generators=("3", "5")),
+            BettiElementsRequest(generators=(3, 5)),
             operations,
             "betti_data",
         ),
         (
             compute_delta_set,
-            DeltaSetRequest(generators=("3", "5")),
+            DeltaSetRequest(generators=(3, 5)),
             operations,
             "delta_periodicity_bound",
         ),

@@ -10,7 +10,6 @@ import sympy
 from sympy import Poly, Symbol, expand
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.polynomials._models import (
     MAX_GRAPH_POLYNOMIAL_EDGES,
@@ -113,8 +112,8 @@ def _polynomial_from_coefficients(
             terms=tuple(
                 RationalPolynomialTerm(
                     coefficient=CanonicalRational(
-                        num=format_canonical_integer(coefficient),
-                        den="1",
+                        num=coefficient,
+                        den=1,
                     ),
                     exponents=(degree,),
                 )

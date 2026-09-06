@@ -1,5 +1,6 @@
 """Tests for plane algebraic curve operations."""
 
+import json
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -60,8 +61,8 @@ def _raises_operation_code(code: str) -> Iterator[None]:
     assert caught.value.errors()[0]["type"] == f"plane_algebraic_curve.{code}"
 
 
-def _rational(numerator: str | int, denominator: str | int = 1) -> CanonicalRational:
-    return CanonicalRational(num=str(numerator), den=str(denominator))
+def _rational(numerator: int, denominator: int = 1) -> CanonicalRational:
+    return CanonicalRational(num=numerator, den=denominator)
 
 
 def _polynomial(
@@ -84,7 +85,7 @@ def _polynomial(
 
 def _rational_polynomial(
     variables: tuple[str, ...],
-    *terms: tuple[tuple[str, str], tuple[int, ...]],
+    *terms: tuple[tuple[int, int], tuple[int, ...]],
 ) -> RationalPolynomial:
     return RationalPolynomial(
         variables=variables,
@@ -159,7 +160,9 @@ def test_linear_projective_curve_is_smooth_without_backend(
         "num": "2",
         "den": "1",
     }
-    forged_claim = ProjectivePlaneCurveSingularityProfile.model_validate(forged)
+    forged_claim = ProjectivePlaneCurveSingularityProfile.model_validate_json(
+        json.dumps(forged)
+    )
     assert verify_projective_plane_curve_singularity_profile(forged_claim) is False
 
 
@@ -197,7 +200,9 @@ def test_rational_conic_parametrization_has_canonical_known_answer() -> None:
         "num": "2",
         "den": "1",
     }
-    forged_claim = RationalConicParametrizationResult.model_validate(forged)
+    forged_claim = RationalConicParametrizationResult.model_validate_json(
+        json.dumps(forged)
+    )
     assert verify_rational_conic_parametrization(forged_claim) is False
 
 
@@ -450,22 +455,22 @@ def test_operation_rejects_mismatched_or_reordered_point_axis(
 
 
 def test_input_coefficient_boundary_is_accepted_then_rejected() -> None:
-    accepted_denominator = "1" + "0" * (MAX_CONIC_INPUT_DIGITS - 1)
+    accepted_denominator = 10 ** (MAX_CONIC_INPUT_DIGITS - 1)
     accepted = _rational_polynomial(
         ("x", "y"),
-        (("1", accepted_denominator), (2, 0)),
-        (("1", accepted_denominator), (0, 2)),
-        (("-1", accepted_denominator), (0, 0)),
+        ((1, accepted_denominator), (2, 0)),
+        ((1, accepted_denominator), (0, 2)),
+        ((-1, accepted_denominator), (0, 0)),
     )
     result = _parametrize(accepted, (_rational(1), _rational(0)))
     assert result.coordinates
 
-    rejected_denominator = "1" + "0" * MAX_CONIC_INPUT_DIGITS
+    rejected_denominator = 10**MAX_CONIC_INPUT_DIGITS
     rejected = _rational_polynomial(
         ("x", "y"),
-        (("1", rejected_denominator), (2, 0)),
-        (("1", rejected_denominator), (0, 2)),
-        (("-1", rejected_denominator), (0, 0)),
+        ((1, rejected_denominator), (2, 0)),
+        ((1, rejected_denominator), (0, 2)),
+        ((-1, rejected_denominator), (0, 0)),
     )
     with _raises_operation_code("coefficient_height_exceeded"):
         _parametrize(
@@ -556,7 +561,7 @@ def test_result_round_trips_through_the_canonical_wire_schema() -> None:
     )
     result = _parametrize(source, (_rational(1), _rational(0)))
     payload = result.model_dump(mode="json")
-    parsed = RationalConicParametrizationResult.model_validate(payload)
+    parsed = RationalConicParametrizationResult.model_validate_json(json.dumps(payload))
 
     assert parsed == result
     for value in (*parsed.coordinates, parsed.inverse_parameter):
@@ -576,9 +581,9 @@ def test_parametrization_schema_guides_cross_field_contract() -> None:
         if tool.operation_id
         == "algebraic_geometry.conic.rational_parametrization.compute"
     )
-    request = tool.request_type.model_validate(tool.examples[0].input)
+    request = tool.request_type.model_validate_json(json.dumps(tool.examples[0].input))
     output = tool.run(request)
-    assert tool.result_type.model_validate(output.model_dump(mode="json")) == output
+    assert tool.result_type.model_validate_json(output.model_dump_json()) == output
 
 
 def test_affine_curve_check_circle() -> None:
@@ -596,7 +601,9 @@ def test_affine_curve_check_circle() -> None:
 
     forged = result.model_dump(mode="json")
     forged["degree"] = 1
-    assert not verify_affine_curve_check(type(result).model_validate(forged))
+    assert not verify_affine_curve_check(
+        type(result).model_validate_json(json.dumps(forged))
+    )
 
 
 def test_native_operations_compose_canonical_values() -> None:
@@ -629,12 +636,14 @@ def test_projective_closure_circle_is_canonical_polynomial() -> None:
     forged = result.model_dump(mode="json")
     forged["polynomial"]["polynomial"]["terms"][0]["exponents"] = [1, 1, 0]
     assert (
-        verify_projective_closure(ProjectiveClosureResult.model_validate(forged))
+        verify_projective_closure(
+            ProjectiveClosureResult.model_validate_json(json.dumps(forged))
+        )
         is False
     )
     forged_axis = result.model_dump(mode="json")
     forged_axis["polynomial"]["variables"] = ["y", "x", "z"]
-    axis_claim = ProjectiveClosureResult.model_validate(forged_axis)
+    axis_claim = ProjectiveClosureResult.model_validate_json(json.dumps(forged_axis))
     assert verify_projective_closure(axis_claim) is False
 
 
@@ -654,10 +663,13 @@ def test_affine_chart_circle_is_directly_composable() -> None:
     assert verify_affine_chart(result) is True
     forged = result.model_dump(mode="json")
     forged["polynomial"]["polynomial"]["terms"][0]["exponents"] = [1, 1]
-    assert verify_affine_chart(AffineChartResult.model_validate(forged)) is False
+    assert (
+        verify_affine_chart(AffineChartResult.model_validate_json(json.dumps(forged)))
+        is False
+    )
     forged_axis = result.model_dump(mode="json")
     forged_axis["polynomial"]["variables"] = ["y", "x"]
-    axis_claim = AffineChartResult.model_validate(forged_axis)
+    axis_claim = AffineChartResult.model_validate_json(json.dumps(forged_axis))
     assert verify_affine_chart(axis_claim) is False
     AffineCurveRequest(polynomial=result.polynomial)
 
@@ -685,7 +697,7 @@ def test_expression_strings_are_not_a_public_polynomial_contract() -> None:
         "__import__('os').getcwd()",
     ):
         with pytest.raises(ValidationError) as caught:
-            AffineCurveRequest.model_validate({"polynomial": payload})
+            AffineCurveRequest.model_validate_json(json.dumps({"polynomial": payload}))
         assert caught.value.errors()[0]["type"] == "model_type"
 
 

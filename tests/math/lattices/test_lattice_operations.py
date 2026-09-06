@@ -38,14 +38,14 @@ def _lattice(ambient: int, basis: list[list[int]]) -> IntegerLattice:
     return IntegerLattice.model_validate(
         {
             "ambient_dimension": ambient,
-            "basis": {"entries": [[str(v) for v in row] for row in basis]},
+            "basis": {"entries": [list(row) for row in basis]},
         }
     )
 
 
-def _identity_entries(order: int) -> list[list[str]]:
+def _identity_entries(order: int) -> list[list[int]]:
     return [
-        ["1" if row == column else "0" for column in range(order)]
+        [int(row == column) for column in range(order)]
         for row in range(order)
     ]
 
@@ -87,7 +87,7 @@ def test_rank_gram_of_identity_is_identity() -> None:
     assert result.squared_covolume == 1
     assert result.covolume_rational is True
     gram = result.gram_matrix.entries
-    assert gram == (("1", "0"), ("0", "1"))
+    assert gram == ((1, 0), (0, 1))
 
 
 def test_rank_gram_of_scaled_lattice() -> None:
@@ -95,7 +95,7 @@ def test_rank_gram_of_scaled_lattice() -> None:
     result = compute_rank_gram(_lattice(2, [[2, 0], [0, 3]]))
     assert result.rank == 2
     gram = result.gram_matrix.entries
-    assert gram == (("4", "0"), ("0", "9"))
+    assert gram == ((4, 0), (0, 9))
     assert result.squared_covolume == 36
 
 
@@ -112,7 +112,7 @@ def test_rank_gram_rejects_dependent_basis_rows() -> None:
 def test_canonical_basis_of_identity() -> None:
     result = compute_canonical_basis(_lattice(2, [[1, 0], [0, 1]]))
     assert result.rank == 2
-    assert result.canonical_basis.entries == (("1", "0"), ("0", "1"))
+    assert result.canonical_basis.entries == ((1, 0), (0, 1))
 
 
 def test_canonical_basis_is_hnf() -> None:
@@ -145,10 +145,10 @@ def test_canonical_basis_transformation_binds() -> None:
 def test_dual_of_unimodular_is_itself() -> None:
     result = compute_dual(_lattice(2, [[1, 0], [0, 1]]))
     dual = result.dual_basis.entries
-    assert dual[0][0].num == "1" and dual[0][0].den == "1"
-    assert dual[0][1].num == "0" and dual[0][1].den == "1"
-    assert dual[1][0].num == "0" and dual[1][0].den == "1"
-    assert dual[1][1].num == "1" and dual[1][1].den == "1"
+    assert dual[0][0].num == 1 and dual[0][0].den == 1
+    assert dual[0][1].num == 0 and dual[0][1].den == 1
+    assert dual[1][0].num == 0 and dual[1][0].den == 1
+    assert dual[1][1].num == 1 and dual[1][1].den == 1
 
 
 def test_dual_pairing_is_integer() -> None:
@@ -157,8 +157,8 @@ def test_dual_pairing_is_integer() -> None:
     # B* = (B B^T)^{-1} B; B* B^T = I
     # B B^T = diag(4, 9), so B* = diag(1/2, 1/3)
     dual = result.dual_basis.entries
-    assert dual[0][0].num == "1" and dual[0][0].den == "2"
-    assert dual[1][1].num == "1" and dual[1][1].den == "3"
+    assert dual[0][0].num == 1 and dual[0][0].den == 2
+    assert dual[1][1].num == 1 and dual[1][1].den == 3
 
 
 # ---------------------------------------------------------------------------
@@ -168,44 +168,44 @@ def test_dual_pairing_is_integer() -> None:
 
 def test_saturation_of_primitive_lattice_is_identity() -> None:
     result = compute_saturation(_lattice(2, [[1, 0], [0, 1]]))
-    assert result.saturated_basis.entries == (("1", "0"), ("0", "1"))
+    assert result.saturated_basis.entries == ((1, 0), (0, 1))
     assert result.saturation_index == 1
 
 
 def test_saturation_of_2z_squared() -> None:
     """sat(2 ZZ^2) = ZZ^2 with index 4."""
     result = compute_saturation(_lattice(2, [[2, 0], [0, 2]]))
-    assert result.saturated_basis.entries == (("1", "0"), ("0", "1"))
+    assert result.saturated_basis.entries == ((1, 0), (0, 1))
     assert result.saturation_index == 4
 
 
 def test_saturation_index_2() -> None:
     result = compute_saturation(_lattice(2, [[2, 0], [0, 1]]))
-    assert result.saturated_basis.entries == (("1", "0"), ("0", "1"))
+    assert result.saturated_basis.entries == ((1, 0), (0, 1))
     assert result.saturation_index == 2
 
 
 def test_saturation_rank_deficient() -> None:
     """The saturation remains in the rational span of the source lattice."""
     result = compute_saturation(_lattice(2, [[2, 0]]))
-    assert result.saturated_basis.entries == (("1", "0"),)
-    assert result.inclusion_transform.entries == (("2",),)
+    assert result.saturated_basis.entries == ((1, 0),)
+    assert result.inclusion_transform.entries == ((2,),)
     assert result.saturation_index == 2
 
 
 def test_saturation_of_diagonal_line_is_its_primitive_line() -> None:
     result = compute_saturation(_lattice(2, [[2, 2]]))
 
-    assert result.saturated_basis.entries == (("1", "1"),)
-    assert result.inclusion_transform.entries == (("2",),)
+    assert result.saturated_basis.entries == ((1, 1),)
+    assert result.inclusion_transform.entries == ((2,),)
     assert result.saturation_index == 2
 
 
 def test_saturation_of_coordinate_plane_does_not_gain_ambient_generator() -> None:
     result = compute_saturation(_lattice(3, [[2, 0, 0], [0, 2, 0]]))
 
-    assert result.saturated_basis.entries == (("1", "0", "0"), ("0", "1", "0"))
-    assert result.inclusion_transform.entries == (("2", "0"), ("0", "2"))
+    assert result.saturated_basis.entries == ((1, 0, 0), (0, 1, 0))
+    assert result.inclusion_transform.entries == ((2, 0), (0, 2))
     assert result.saturation_index == 4
 
 
@@ -219,7 +219,7 @@ def test_sublattice_index_double() -> None:
     result = compute_sublattice_index(
         _lattice(1, [[2]]),
         _lattice(1, [[1]]),
-        IntegerMatrix.model_validate({"entries": [["2"]]}),
+        IntegerMatrix.model_validate({"entries": [[2]]}),
     )
     assert result.index == 2
     assert result.invariant_factors == (2,)
@@ -231,7 +231,7 @@ def test_sublattice_index_quadratic() -> None:
     result = compute_sublattice_index(
         _lattice(2, [[2, 0], [0, 2]]),
         _lattice(2, [[1, 0], [0, 1]]),
-        IntegerMatrix.model_validate({"entries": [["2", "0"], ["0", "2"]]}),
+        IntegerMatrix.model_validate({"entries": [[2, 0], [0, 2]]}),
     )
     assert result.index == 4
     assert result.invariant_factors == (2, 2)
@@ -244,7 +244,7 @@ def test_sublattice_index_rejects_dimension_mismatch() -> None:
             {
                 "sublattice": _lattice(1, [[1]]),
                 "parent": _lattice(2, [[1, 0], [0, 1]]),
-                "embedding": {"entries": [["1", "0"]]},
+                "embedding": {"entries": [[1, 0]]},
             }
         )
     assert exc_info.value.errors()[0]["type"] == "lattice.ambient_dimensions_mismatch"
@@ -313,10 +313,10 @@ def test_direct_sum_of_two_identity() -> None:
     )
     assert result.ambient_dimension == 4
     assert result.direct_sum_basis.entries == (
-        ("1", "0", "0", "0"),
-        ("0", "1", "0", "0"),
-        ("0", "0", "1", "0"),
-        ("0", "0", "0", "1"),
+        (1, 0, 0, 0),
+        (0, 1, 0, 0),
+        (0, 0, 1, 0),
+        (0, 0, 0, 1),
     )
 
 
@@ -326,7 +326,7 @@ def test_direct_sum_block_diagonal() -> None:
         _lattice(1, [[3]]),
     )
     assert result.ambient_dimension == 2
-    assert result.direct_sum_basis.entries == (("2", "0"), ("0", "3"))
+    assert result.direct_sum_basis.entries == ((2, 0), (0, 3))
 
 
 def test_orthogonal_sum_of_two_identity() -> None:
@@ -336,9 +336,9 @@ def test_orthogonal_sum_of_two_identity() -> None:
     )
     assert result.ambient_dimension == 3
     assert result.orthogonal_sum_basis.entries == (
-        ("1", "0", "0"),
-        ("0", "1", "0"),
-        ("0", "0", "3"),
+        (1, 0, 0),
+        (0, 1, 0),
+        (0, 0, 3),
     )
 
 
@@ -422,7 +422,7 @@ def test_hermite_accepts_order_32_identity() -> None:
 def test_lattice_reduction_rejects_order_above_32_before_backend() -> None:
     order = MAX_MATRIX_DIMENSION + 1
     entries = tuple(
-        tuple("1" if row == column else "0" for column in range(order))
+        tuple(1 if row == column else 0 for column in range(order))
         for row in range(order)
     )
     matrix = IntegerMatrix(entries=entries)

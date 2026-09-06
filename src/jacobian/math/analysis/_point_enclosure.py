@@ -100,7 +100,11 @@ def _preflight_point_check_source(data: object) -> object:
     else:
         raw_components = ()
     if any(
-        isinstance(component, str) and len(component.lstrip("-")) > MAX_RATIONAL_DIGITS
+        (
+            isinstance(component, str)
+            and len(component.lstrip("-")) > MAX_RATIONAL_DIGITS
+        )
+        or (type(component) is int and abs(component) >= 10**MAX_RATIONAL_DIGITS)
         for component in raw_components
     ):
         raise _validation_error(

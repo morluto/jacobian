@@ -1,6 +1,5 @@
 """Immutable declarations for elementary counting operations."""
 
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.combinatorics import operations as native
 from jacobian.math.combinatorics._counting_models import (
@@ -14,7 +13,7 @@ from jacobian.math.combinatorics._models import (
 
 
 def _integer_result(value: int) -> IntegerResult:
-    return IntegerResult(value=format_canonical_integer(value))
+    return IntegerResult(value=value)
 
 
 def factorial(request: NonnegativeIntegerRequest) -> IntegerResult:
@@ -30,16 +29,16 @@ def derangements(request: NonnegativeIntegerRequest) -> IntegerResult:
 
 
 def binomial(request: SparseCountingPairRequest) -> IntegerResult:
-    return IntegerResult(value=native.canonical_binomial(request.n, request.k))
+    return _integer_result(native.canonical_binomial(request.n, request.k))
 
 
 def multinomial(request: IntegerListRequest) -> IntegerResult:
-    values = tuple(parse_canonical_integer(value) for value in request.values)
+    values = request.values
     return _integer_result(native.multinomial(values))
 
 
 def permutations(request: SparseCountingPairRequest) -> IntegerResult:
-    return IntegerResult(value=native.canonical_permutations(request.n, request.k))
+    return _integer_result(native.canonical_permutations(request.n, request.k))
 
 
 def catalan(request: NonnegativeIntegerRequest) -> IntegerResult:
@@ -55,7 +54,7 @@ def central_binomial(request: NonnegativeIntegerRequest) -> IntegerResult:
 
 
 def compositions(request: SparseCountingPairRequest) -> IntegerResult:
-    return IntegerResult(value=native.canonical_compositions(request.n, request.k))
+    return _integer_result(native.canonical_compositions(request.n, request.k))
 
 
 COUNTING_OPERATIONS = (

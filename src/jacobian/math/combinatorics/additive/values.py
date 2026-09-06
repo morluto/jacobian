@@ -5,12 +5,12 @@ from __future__ import annotations
 from itertools import pairwise
 from typing import Annotated, Any, Self
 
-from pydantic import Field, StrictInt, StringConstraints, model_validator
+from pydantic import Field, StrictInt, model_validator
 from pydantic.json_schema import WithJsonSchema
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 
 MAX_SUBSET_SUM_ITEMS = 4_095
 MAX_INDEXED_INTEGER_SEQUENCE_ITEMS = 500_000
@@ -19,36 +19,22 @@ MAX_SUBSET_SUM_SUM_DIGITS = MAX_SUBSET_SUM_ITEM_DIGITS + len(str(MAX_SUBSET_SUM_
 MAX_SUBSET_SUM_MULTIPLICITY_DIGITS = len(str(1 << MAX_SUBSET_SUM_ITEMS))
 MAX_SUBSET_SUM_PROFILE_ENTRIES = 50_000
 
-_CANONICAL_INTEGER_PATTERN = r"^(?:0|-?[1-9][0-9]*)$"
-
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"additive_combinatorics.{reason}", message)
 
 
 IndexedInteger = Annotated[
-    str,
-    StringConstraints(
-        pattern=_CANONICAL_INTEGER_PATTERN,
-        max_length=MAX_SUBSET_SUM_ITEM_DIGITS + 1,
-        strict=True,
-    ),
+    int,
+    DecimalIntegerEncoding(max_digits=MAX_SUBSET_SUM_ITEM_DIGITS),
 ]
 SubsetSumInteger = Annotated[
-    str,
-    StringConstraints(
-        pattern=_CANONICAL_INTEGER_PATTERN,
-        max_length=MAX_SUBSET_SUM_SUM_DIGITS + 1,
-        strict=True,
-    ),
+    int,
+    DecimalIntegerEncoding(max_digits=MAX_SUBSET_SUM_SUM_DIGITS),
 ]
 SubsetSumMultiplicity = Annotated[
-    str,
-    StringConstraints(
-        pattern=_CANONICAL_INTEGER_PATTERN,
-        max_length=MAX_SUBSET_SUM_MULTIPLICITY_DIGITS,
-        strict=True,
-    ),
+    int,
+    DecimalIntegerEncoding(max_digits=MAX_SUBSET_SUM_MULTIPLICITY_DIGITS),
 ]
 
 
@@ -71,13 +57,13 @@ class IndexedIntegerSequence(StrictModel):
             f"integer has at most {MAX_SUBSET_SUM_ITEM_DIGITS:,} decimal "
             "digits, excluding its optional sign."
         ),
-        examples=[("1", "1", "3")],
+        examples=[(1, 1, 3)],
     )
 
     @model_validator(mode="after")
     def require_bounded_items(self) -> Self:
         for item in self.items:
-            if len(item.lstrip("-")) > MAX_SUBSET_SUM_ITEM_DIGITS:
+            if abs(item) >= 10**MAX_SUBSET_SUM_ITEM_DIGITS:
                 raise _validation_error(
                     "require_bounded_items",
                     f"indexed integer exceeds the "
@@ -88,7 +74,7 @@ class IndexedIntegerSequence(StrictModel):
     def as_int_tuple(self) -> tuple[int, ...]:
         """Return the indexed values as exact Python integers."""
 
-        return tuple(parse_canonical_integer(item) for item in self.items)
+        return self.items
 
 
 def indexed_sequence_item_ceiling(
@@ -143,12 +129,12 @@ class SubsetSumProfileEntry(StrictModel):
 
     @model_validator(mode="after")
     def require_positive_multiplicity(self) -> Self:
-        if len(self.sum.lstrip("-")) > MAX_SUBSET_SUM_SUM_DIGITS:
+        if abs(self.sum) >= 10**MAX_SUBSET_SUM_SUM_DIGITS:
             raise _validation_error(
                 "require_positive_multiplicity",
                 "subset sum exceeds the derived source-sum digit bound",
             )
-        if parse_canonical_integer(self.multiplicity) <= 0:
+        if self.multiplicity <= 0:
             raise _validation_error(
                 "require_positive_multiplicity",
                 "subset-sum multiplicity must be positive",
@@ -176,7 +162,7 @@ class SubsetSumProfile(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_profile_shape(self) -> Self:
-        sums = tuple(parse_canonical_integer(entry.sum) for entry in self.entries)
+        sums = tuple(entry.sum for entry in self.entries)
         if sums != tuple(sorted(sums)) or len(sums) != len(set(sums)):
             raise _validation_error(
                 "profile_entries",
@@ -200,8 +186,8 @@ class SubsetSumProfile(StrictModel):
 
         entries = tuple(
             SubsetSumProfileEntry(
-                sum=format_canonical_integer(subtotal),
-                multiplicity=format_canonical_integer(count),
+                sum=subtotal,
+                multiplicity=count,
             )
             for subtotal, count in sorted(counts.items())
         )
@@ -209,7 +195,7 @@ class SubsetSumProfile(StrictModel):
             source=source,
             entries=entries,
             support_size=len(entries),
-            total_subsets=format_canonical_integer(1 << len(source.items)),
+            total_subsets=1 << len(source.items),
         )
 
 

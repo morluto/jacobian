@@ -9,7 +9,6 @@ import pytest
 from pydantic import ValidationError
 from sympy import nextprime
 from tests.integration.linear._support import linear_validation_error
-from tests.support.rationals import rational_payload as q
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
@@ -19,6 +18,11 @@ from jacobian.math.optimization._general_models import (
     GeneralRationalLinearProgramResult,
 )
 
+
+def q(numerator: int, denominator: int = 1) -> CanonicalRational:
+    return CanonicalRational.from_integer_ratio(numerator, denominator)
+
+
 pytestmark = pytest.mark.requires_backend("flint")
 
 
@@ -26,7 +30,7 @@ def _program(
     *,
     variables: list[dict[str, object]],
     sense: str,
-    objective: list[dict[str, str]],
+    objective: list[CanonicalRational],
     constraints: list[dict[str, object]],
 ) -> dict[str, object]:
     return {
@@ -38,17 +42,17 @@ def _program(
 
 def _variable(
     name: str,
-    lower: dict[str, str] | None = None,
-    upper: dict[str, str] | None = None,
+    lower: CanonicalRational | dict[str, str] | None = None,
+    upper: CanonicalRational | dict[str, str] | None = None,
 ) -> dict[str, object]:
     return {"name": name, "lower_bound": lower, "upper_bound": upper}
 
 
 def _row(
     label: str,
-    coefficients: list[dict[str, str]],
+    coefficients: list[CanonicalRational],
     relation: str,
-    rhs: dict[str, str],
+    rhs: CanonicalRational,
 ) -> dict[str, object]:
     return {
         "label": label,
@@ -127,7 +131,7 @@ def test_general_lp_preserves_inactive_inequality_residuals_and_lower_shift() ->
 )
 def test_general_lp_maps_all_closed_bound_shapes(
     variable: dict[str, object],
-    objective: list[dict[str, str]],
+    objective: list[CanonicalRational],
     expected: Fraction,
 ) -> None:
     result = _run(
@@ -291,8 +295,8 @@ def test_general_lp_preflights_private_sign_split_and_slack_expansion() -> None:
     ],
 )
 def test_general_lp_returns_offset_shifted_optima_within_the_mapped_height_bound(
-    coefficients: dict[str, str],
-    lower: dict[str, str],
+    coefficients: CanonicalRational,
+    lower: CanonicalRational,
     expected_point: Fraction,
     expected_objective: Fraction,
 ) -> None:

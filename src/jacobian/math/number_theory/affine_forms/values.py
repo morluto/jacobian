@@ -6,16 +6,15 @@ from typing import Annotated, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
 
 MAX_AFFINE_COMPONENT_DIGITS = 256
 MAX_FORM_ID_LENGTH = 32
 
 AffineComponentInteger = Annotated[
-    CanonicalInteger,
-    StringConstraints(max_length=MAX_AFFINE_COMPONENT_DIGITS + 1, strict=True),
+    int,
+    DecimalIntegerEncoding(max_digits=MAX_AFFINE_COMPONENT_DIGITS),
 ]
 
 AffineFormId = Annotated[
@@ -28,8 +27,8 @@ AffineFormId = Annotated[
 ]
 
 
-def _component_digits(value: str) -> int:
-    return len(value.lstrip("-"))
+def _component_digits(value: int) -> int:
+    return len(str(abs(value)))
 
 
 class IntegerAffineForm(StrictModel):
@@ -63,19 +62,14 @@ class IntegerAffineForm(StrictModel):
                 "affine coefficient and constant must each have at most "
                 f"{MAX_AFFINE_COMPONENT_DIGITS} digits"
             )
-        if (
-            parse_canonical_integer(self.coefficient) == 0
-            and parse_canonical_integer(self.constant) == 0
-        ):
+        if self.coefficient == 0 and self.constant == 0:
             raise ValueError("integer affine form must not be identically zero")
         return self
 
     def evaluate(self, parameter: int) -> int:
         """Evaluate the form exactly at one integer parameter."""
 
-        return parse_canonical_integer(
-            self.coefficient
-        ) * parameter + parse_canonical_integer(self.constant)
+        return self.coefficient * parameter + self.constant
 
 
 __all__ = [

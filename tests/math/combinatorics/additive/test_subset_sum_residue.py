@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from itertools import product
 
 import pytest
@@ -30,13 +31,15 @@ def _request(
     include_empty_subset: bool,
     include_witnesses: bool = False,
 ) -> SubsetSumResidueProfileRequest:
-    return SubsetSumResidueProfileRequest.model_validate(
-        {
-            "source": {"items": [str(value) for value in values]},
-            "modulus": modulus,
-            "include_empty_subset": include_empty_subset,
-            "include_witnesses": include_witnesses,
-        }
+    return SubsetSumResidueProfileRequest.model_validate_json(
+        json.dumps(
+            {
+                "source": {"items": [str(value) for value in values]},
+                "modulus": modulus,
+                "include_empty_subset": include_empty_subset,
+                "include_witnesses": include_witnesses,
+            }
+        )
     )
 
 
@@ -84,7 +87,7 @@ def test_request_and_result_compose_through_strict_json_parsing() -> None:
         strict=True,
     )
 
-    assert request.source == IndexedIntegerSequence(items=("2", "3"))
+    assert request.source == IndexedIntegerSequence(items=(2, 3))
     result = _run_residue(request)
     assert (
         SubsetSumResidueProfileResult.model_validate_json(
@@ -104,7 +107,7 @@ def test_two_items_have_nonempty_zero_residue_with_canonical_witnesses() -> None
         )
     )
 
-    assert result.residue_counts == ("1", "0", "1", "1", "0")
+    assert result.residue_counts == (1, 0, 1, 1, 0)
     assert result.residue_witnesses == (
         IndexSubset(indices=(0, 1)),
         None,
@@ -116,11 +119,11 @@ def test_two_items_have_nonempty_zero_residue_with_canonical_witnesses() -> None
 
 @pytest.mark.parametrize(
     ("include_empty_subset", "expected"),
-    [(True, ("1", "0", "0", "0")), (False, ("0", "0", "0", "0"))],
+    [(True, (1, 0, 0, 0)), (False, (0, 0, 0, 0))],
 )
 def test_empty_source_has_explicit_empty_subset_convention(
     include_empty_subset: bool,
-    expected: tuple[str, ...],
+    expected: tuple[int, ...],
 ) -> None:
     result = _run_residue(_request((), 4, include_empty_subset=include_empty_subset))
     assert result.residue_counts == expected
@@ -131,7 +134,7 @@ def test_single_item_does_not_claim_nonempty_zero_residue() -> None:
     result = _run_residue(
         _request((2,), 5, include_empty_subset=False, include_witnesses=True)
     )
-    assert result.residue_counts[0] == "0"
+    assert result.residue_counts[0] == 0
     assert result.residue_witnesses is not None
     assert result.residue_witnesses[0] is None
 
@@ -159,7 +162,7 @@ def test_repeated_zeros_preserve_index_multiplicity() -> None:
     result = _run_residue(
         _request((0, 0), 3, include_empty_subset=False, include_witnesses=True)
     )
-    assert result.residue_counts == ("3", "0", "0")
+    assert result.residue_counts == (3, 0, 0)
     assert result.residue_witnesses is not None
     assert result.residue_witnesses[0] == IndexSubset(indices=(0,))
 
@@ -168,7 +171,7 @@ def test_negative_values_are_reduced_only_for_the_recurrence() -> None:
     request = _request((-7, 3), 5, include_empty_subset=True)
     result = _run_residue(request)
     assert result.source == request.source
-    assert result.residue_counts == ("1", "1", "0", "2", "0")
+    assert result.residue_counts == (1, 1, 0, 2, 0)
 
 
 def test_translation_by_modulus_multiples_preserves_profile() -> None:
@@ -231,7 +234,7 @@ def test_result_rejects_noncanonical_witness() -> None:
     payload = result.model_dump(mode="json")
     payload["residue_witnesses"][0] = {"indices": [1, 0]}
     with pytest.raises(ValidationError):
-        SubsetSumResidueProfileResult.model_validate(payload)
+        SubsetSumResidueProfileResult.model_validate_json(json.dumps(payload))
 
 
 def test_request_rejects_one_oversized_source_integer_before_parsing() -> None:
@@ -294,7 +297,7 @@ def test_schema_item_ceiling_matches_validator_at_the_boundary() -> None:
 def test_positions_beyond_legacy_source_cap_are_admitted() -> None:
     result = _run_residue(_request((0,) * 257, 1, include_empty_subset=False))
 
-    assert result.residue_counts == (str((1 << 257) - 1),)
+    assert result.residue_counts == ((1 << 257) - 1,)
 
 
 def test_single_integer_beyond_legacy_digit_cap_is_admitted() -> None:
@@ -303,7 +306,7 @@ def test_single_integer_beyond_legacy_digit_cap_is_admitted() -> None:
     result = _run_residue(_request((value,), 7, include_empty_subset=False))
 
     assert result.residue_counts == tuple(
-        "1" if residue == value % 7 else "0" for residue in range(7)
+        1 if residue == value % 7 else 0 for residue in range(7)
     )
 
 
@@ -311,16 +314,18 @@ def test_single_integer_beyond_legacy_digit_cap_is_admitted() -> None:
 def test_exact_dp_cell_boundary_is_complete_and_serializable() -> None:
     item_count = 200
     modulus = MAX_RESIDUE_PROFILE_DP_CELLS // item_count
-    request = SubsetSumResidueProfileRequest.model_validate(
-        {
-            "source": {"items": ["0"] * item_count},
-            "modulus": modulus,
-            "include_empty_subset": True,
-        }
+    request = SubsetSumResidueProfileRequest.model_validate_json(
+        json.dumps(
+            {
+                "source": {"items": ["0"] * item_count},
+                "modulus": modulus,
+                "include_empty_subset": True,
+            }
+        )
     )
     result = _run_residue(request)
-    assert result.residue_counts[0] == str(1 << item_count)
-    assert set(result.residue_counts[1:]) == {"0"}
+    assert result.residue_counts[0] == 1 << item_count
+    assert set(result.residue_counts[1:]) == {0}
 
 
 def test_request_just_above_dp_cell_boundary_is_rejected() -> None:
@@ -434,10 +439,10 @@ def test_result_bounds_raw_arrays_before_source_binding_replay() -> None:
 
 
 def test_shared_values_reject_ambiguous_index_subsets() -> None:
-    assert IndexedIntegerSequence(items=("1", "1", "0")).items == (
-        "1",
-        "1",
-        "0",
+    assert IndexedIntegerSequence(items=(1, 1, 0)).items == (
+        1,
+        1,
+        0,
     )
     with pytest.raises(ValidationError):
         IndexSubset(indices=(0, 0))

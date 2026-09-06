@@ -6,7 +6,6 @@ from fractions import Fraction
 from functools import cmp_to_key
 from typing import Any, Literal
 
-from jacobian.canonical import parse_canonical_integer
 from jacobian.math._root_isolation import strict_root_count
 from jacobian.math.number_theory.algebraic_numbers.complex import (
     ComplexAlgebraicValue,
@@ -24,12 +23,12 @@ def _backend_fraction(value: Any) -> Fraction:
     return Fraction(int(value.p), int(value.q))
 
 
-def _sympy_polynomial(coefficients: tuple[str, ...]) -> Any:
+def _sympy_polynomial(coefficients: tuple[int, ...]) -> Any:
     import sympy
 
     variable = sympy.Symbol("x")
     return sympy.Poly.from_list(
-        [parse_canonical_integer(coefficient) for coefficient in coefficients],
+        list(coefficients),
         gens=variable,
         domain=sympy.ZZ,
     )

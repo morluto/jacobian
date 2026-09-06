@@ -4,12 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from jacobian._exact import CanonicalInteger
-from jacobian.canonical import (
-    CanonicalizationError,
-    format_canonical_integer,
-    parse_canonical_integer,
-)
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.cyclic_prefix_sum._models import (
     MAX_MODULUS_DIGITS,
@@ -51,7 +46,7 @@ def _reject(location: tuple[str | int, ...], code: str, message: str) -> None:
 
 def _admit(
     sequence: IndexedIntegerSequence,
-    modulus: CanonicalInteger,
+    modulus: int,
 ) -> _AdmissionPlan:
     """Validate the complete native and MCP execution envelope once."""
     if not isinstance(sequence, IndexedIntegerSequence):
@@ -60,27 +55,20 @@ def _admit(
             "cyclic_prefix_sum.sequence_type",
             "sequence must be an indexed integer sequence",
         )
-    if type(modulus) is not str:
+    if type(modulus) is not int:
         _reject(
             ("modulus",),
             "cyclic_prefix_sum.modulus_type",
-            "modulus must be a canonical integer string",
+            "modulus must be a native integer",
         )
-    modulus_digits = len(modulus.lstrip("-"))
+    modulus_digits = len(format_canonical_integer(abs(modulus)))
     if modulus_digits > MAX_MODULUS_DIGITS:
         _reject(
             ("modulus",),
             "cyclic_prefix_sum.modulus_digits",
             f"modulus may contain at most {MAX_MODULUS_DIGITS} digits",
         )
-    try:
-        modulus_value = parse_canonical_integer(modulus)
-    except CanonicalizationError:
-        _reject(
-            ("modulus",),
-            "cyclic_prefix_sum.modulus_format",
-            "modulus must be a canonical integer string",
-        )
+    modulus_value = modulus
     if modulus_value <= 0:
         _reject(
             ("modulus",),
@@ -96,7 +84,7 @@ def _admit(
             f"sequence may contain at most {MAX_SEQUENCE_LENGTH:,} items",
         )
     maximum_item_digits = max(
-        (len(item.lstrip("-")) for item in sequence.items),
+        (len(format_canonical_integer(abs(item))) for item in sequence.items),
         default=1,
     )
     work = item_count * max(maximum_item_digits, modulus_digits)
@@ -112,7 +100,7 @@ def _admit(
 
 def compute_cyclic_prefix_sum_residue_profile(
     sequence: IndexedIntegerSequence,
-    modulus: CanonicalInteger,
+    modulus: int,
 ) -> CyclicPrefixSumResidueProfileResult:
     """Return the complete partition of prefix positions by residue.
 
@@ -129,13 +117,11 @@ def compute_cyclic_prefix_sum_residue_profile(
         residue_to_positions[running].append(k)
 
     rows = [
-        PrefixSumResidueRow(
-            residue=format_canonical_integer(res), positions=tuple(positions)
-        )
+        PrefixSumResidueRow(residue=res, positions=tuple(positions))
         for res, positions in sorted(residue_to_positions.items())
     ]
     return CyclicPrefixSumResidueProfileResult(
-        modulus=format_canonical_integer(plan.modulus),
+        modulus=plan.modulus,
         rows=tuple(rows),
     )
 

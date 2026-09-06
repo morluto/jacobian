@@ -7,7 +7,7 @@ from typing import Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger, CanonicalRational
+from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel
 from jacobian.math.number_theory._models import BoundedInteger
 
@@ -29,7 +29,7 @@ class GcdQuotientProfileRequest(StrictModel):
 class GcdQuotientProfileResult(StrictModel):
     """Complete gcd-normalized quotient profile."""
 
-    elements: tuple[CanonicalInteger, ...]
+    elements: tuple[ExactInteger, ...]
     quotients: tuple[tuple[CanonicalRational, ...], ...]
 
     @model_validator(mode="after")
@@ -60,7 +60,7 @@ class ProductDivisibilityProfileRequest(StrictModel):
 class ProductDivisibilityProfileResult(StrictModel):
     """Complete product-divisibility relation profile."""
 
-    elements: tuple[CanonicalInteger, ...]
+    elements: tuple[ExactInteger, ...]
     divisibility_matrix: tuple[tuple[bool, ...], ...]
 
     @model_validator(mode="after")

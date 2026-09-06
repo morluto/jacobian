@@ -67,8 +67,8 @@ class _ConvolutionPowerPlan:
 
 def _wire(value: Any) -> CanonicalRational:
     return CanonicalRational(
-        num=format_canonical_integer(int(value.p)),
-        den=format_canonical_integer(int(value.q)),
+        num=int(value.p),
+        den=int(value.q),
     )
 
 
@@ -513,10 +513,11 @@ def _admit_gaussian_polynomial_moment(
         for component in (term.coefficient.real, term.coefficient.imaginary)
     )
     distinct_denominator_digits = sum(
-        len(denominator) for denominator in {component.den for component in components}
+        len(format_canonical_integer(denominator))
+        for denominator in {component.den for component in components}
     )
     maximum_numerator_digits = max(
-        len(component.num.lstrip("-")) for component in components
+        len(format_canonical_integer(component.num)) for component in components
     )
     result_digit_bound = (
         order * (distinct_denominator_digits + maximum_numerator_digits)
@@ -540,8 +541,8 @@ def _distribution(values: dict[Fraction, Any]) -> FiniteRationalDistribution:
         atoms=tuple(
             FiniteDistributionAtom(
                 value=CanonicalRational(
-                    num=format_canonical_integer(value.numerator),
-                    den=format_canonical_integer(value.denominator),
+                    num=value.numerator,
+                    den=value.denominator,
                 ),
                 probability=_wire(probability),
             )
@@ -700,8 +701,8 @@ def convolution(
                     left_value=left_atom.value,
                     right_value=right_atom.value,
                     sum_value=CanonicalRational(
-                        num=format_canonical_integer(sum_value.numerator),
-                        den=format_canonical_integer(sum_value.denominator),
+                        num=sum_value.numerator,
+                        den=sum_value.denominator,
                     ),
                     probability=_wire(probability),
                 )
@@ -920,8 +921,8 @@ def gaussian_polynomial_moment(
             GaussianMomentContraction(
                 exponents=exponents,
                 expanded_coefficient=_complex_wire(coefficient),
-                variable_moment_factors=tuple(str(value) for value in variable_factors),
-                gaussian_moment_factor=str(gaussian_factor),
+                variable_moment_factors=tuple(variable_factors),
+                gaussian_moment_factor=gaussian_factor,
                 contribution=_complex_wire(contribution),
             )
         )

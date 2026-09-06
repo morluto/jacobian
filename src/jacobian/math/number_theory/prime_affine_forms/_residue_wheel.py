@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from typing import Annotated, Self
 
-from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_validator
+from pydantic import Field, StrictBool, StrictInt, model_validator
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory.affine_forms.values import (
     AffineComponentInteger,
     AffineFormId,
@@ -37,8 +36,8 @@ MAX_COMPACT_WHEEL_SCALAR_DIGITS = 4_096
 MAX_WHEEL_INTERVAL_LENGTH = 8_192
 
 CompactWheelScalar = Annotated[
-    CanonicalInteger,
-    StringConstraints(max_length=MAX_COMPACT_WHEEL_SCALAR_DIGITS, strict=True),
+    int,
+    DecimalIntegerEncoding(max_digits=MAX_COMPACT_WHEEL_SCALAR_DIGITS),
 ]
 
 
@@ -84,8 +83,8 @@ class PrimeTupleResidueWheel(StrictModel):
         request: PrimeTupleResidueWheelRequest,
         *,
         local_rows: tuple[PrimeTupleLocalSummary, ...],
-        modulus: str,
-        valid_count: str,
+        modulus: int,
+        valid_count: int,
     ) -> Self:
         return cls.model_construct(
             source=request.source,
@@ -117,17 +116,17 @@ class PrimeTupleResidueWheelEnumeration(StrictModel):
         )
         if result_cells > MAX_WHEEL_RESULT_CELLS:
             raise _validation_error("wheel rows exceed the explicit result-cell bound")
-        expected_count = parse_canonical_integer(self.wheel.valid_count)
+        expected_count = self.wheel.valid_count
         if len(self.residues) != expected_count:
             raise _validation_error(
                 "wheel rows do not satisfy the complete CRT reconstruction invariant"
             )
-        residues = tuple(parse_canonical_integer(row.residue) for row in self.residues)
+        residues = tuple(row.residue for row in self.residues)
         if residues != tuple(sorted(set(residues))):
             raise _validation_error(
                 "wheel rows do not satisfy the complete CRT reconstruction invariant"
             )
-        modulus = parse_canonical_integer(self.wheel.modulus)
+        modulus = self.wheel.modulus
         for row, residue in zip(self.residues, residues, strict=True):
             if not 0 <= residue < modulus or len(row.components) != len(
                 self.wheel.primes
@@ -187,7 +186,7 @@ class PrimeTupleWheelMembershipResult(StrictModel):
         cls,
         request: PrimeTupleWheelMembershipRequest,
         *,
-        canonical_residue: str,
+        canonical_residue: int,
         components: tuple[int, ...],
         is_permitted: bool,
         first_excluded_prime: int | None,
@@ -226,7 +225,7 @@ class PrimeTupleIntervalResidueProfileResult(StrictModel):
     @model_validator(mode="after")
     def require_survivor_profile_shape(self) -> Self:
         lower, upper, interval_size = _parse_interval(self.lower, self.upper)
-        actual = tuple(parse_canonical_integer(value) for value in self.survivors)
+        actual = self.survivors
         if actual != tuple(sorted(set(actual))) or any(
             value < lower or value > upper for value in actual
         ):
@@ -242,10 +241,10 @@ class PrimeTupleIntervalResidueProfileResult(StrictModel):
         cls,
         request: PrimeTupleIntervalResidueProfileRequest,
         *,
-        survivors: tuple[str, ...],
+        survivors: tuple[int, ...],
     ) -> Self:
-        lower = parse_canonical_integer(request.lower)
-        upper = parse_canonical_integer(request.upper)
+        lower = request.lower
+        upper = request.upper
         return cls.model_construct(
             wheel=request.wheel,
             lower=request.lower,

@@ -3,11 +3,7 @@
 from __future__ import annotations
 
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory.affine_forms.values import MAX_AFFINE_COMPONENT_DIGITS
-from jacobian.math.number_theory.prime_affine_forms._admissibility import (
-    _admit_primitive_tuple,
-)
 from jacobian.math.number_theory.prime_affine_forms._interval import (
     IntervalEndpointInteger,
     require_bounded_affine_endpoints,
@@ -31,19 +27,17 @@ class PrimeAffineTranslationRequest(StrictModel):
     shift: IntervalEndpointInteger
 
 
-def parse_translation_shift(source: PrimeAffineTuple, shift: str) -> int:
+def parse_translation_shift(source: PrimeAffineTuple, shift: int) -> int:
     """Preflight a wire shift before constructing its unbounded Python integer."""
 
     _run_admission(
         lambda: require_bounded_affine_endpoints(source, shift, label="translation")
     )
-    return parse_canonical_integer(shift)
+    return shift
 
 
 def _admit_translation(source: PrimeAffineTuple, shift: int) -> None:
-    _admit_primitive_tuple(source)
-    shift_text = str(shift)
-    require_bounded_affine_endpoints(source, shift_text, label="translation")
+    require_bounded_affine_endpoints(source, shift, label="translation")
     aggregate_digits = 0
     for form in source.forms:
         translated_constant = form.evaluate(shift)
@@ -74,9 +68,7 @@ class PrimeAffineTranslationResult(StrictModel):
     ) -> PrimeAffineTranslationResult:
         """Build after the admitted translation kernel established the tuple."""
 
-        return cls.model_construct(
-            source=source, shift=str(shift), translated=translated
-        )
+        return cls.model_construct(source=source, shift=shift, translated=translated)
 
 
 def compute_translation(

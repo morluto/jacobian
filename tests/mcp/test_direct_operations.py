@@ -206,7 +206,7 @@ def test_direct_adaptive_call_preserves_typed_arb_domain_uncertainty() -> None:
         "max_evaluations": 1,
         "wall_seconds": 30,
     }
-    request = operation.request_type.model_validate(payload)
+    request = operation.request_type.model_validate_json(json.dumps(payload))
     expected = operation.run(request).model_dump(mode="json")
 
     async def scenario() -> None:

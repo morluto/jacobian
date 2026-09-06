@@ -9,7 +9,7 @@ from functools import reduce
 from itertools import pairwise
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.sequences.core._models import (
     FrequencyEntry,
@@ -62,10 +62,12 @@ def _admit(
     return values
 
 
-def _digits(values: tuple[str, ...]) -> int:
-    """Return a decimal-width bound from canonical source strings."""
+def _digits(values: tuple[int, ...]) -> int:
+    """Return a decimal-width bound from native source integers."""
 
-    return max((len(value.lstrip("-")) for value in values), default=1)
+    return max(
+        (len(format_canonical_integer(abs(value))) for value in values), default=1
+    )
 
 
 def _multiplicative_digits(request: IntegerSequence, *, prefix: bool = False) -> int:
@@ -74,25 +76,23 @@ def _multiplicative_digits(request: IntegerSequence, *, prefix: bool = False) ->
     total = 0
     maximum = 1
     for value in request.values:
-        if value == "0":
+        if value == 0:
             return maximum if prefix else 1
-        total += len(value.lstrip("-"))
+        total += len(format_canonical_integer(abs(value)))
         maximum = max(maximum, total)
     return maximum
 
 
 def _values(request: IntegerSequence) -> list[int]:
-    return [parse_canonical_integer(value) for value in request.values]
+    return list(request.values)
 
 
 def _value_result(value: int) -> IntegerSequenceValueResult:
-    return IntegerSequenceValueResult(value=format_canonical_integer(value))
+    return IntegerSequenceValueResult(value=value)
 
 
 def _list_result(values: list[int]) -> IntegerSequenceListResult:
-    return IntegerSequenceListResult(
-        values=tuple(format_canonical_integer(value) for value in values)
-    )
+    return IntegerSequenceListResult(values=tuple(values))
 
 
 def sequence_sum(request: IntegerSequence) -> IntegerSequenceValueResult:
@@ -139,8 +139,8 @@ def sequence_mean(request: IntegerSequence) -> IntegerSequenceRationalResult:
     fraction = Fraction(sum(values), len(values))
     return IntegerSequenceRationalResult(
         value=CanonicalRational(
-            num=format_canonical_integer(fraction.numerator),
-            den=format_canonical_integer(fraction.denominator),
+            num=fraction.numerator,
+            den=fraction.denominator,
         )
     )
 
@@ -154,8 +154,8 @@ def sequence_median(request: IntegerSequence) -> IntegerSequenceRationalResult:
         fraction = Fraction(values[middle - 1] + values[middle], 2)
     return IntegerSequenceRationalResult(
         value=CanonicalRational(
-            num=format_canonical_integer(fraction.numerator),
-            den=format_canonical_integer(fraction.denominator),
+            num=fraction.numerator,
+            den=fraction.denominator,
         )
     )
 
@@ -307,8 +307,7 @@ def frequencies(request: IntegerSequence) -> IntegerSequenceFrequenciesResult:
     )
     counts = Counter(values)
     entries = tuple(
-        FrequencyEntry(value=format_canonical_integer(value), count=counts[value])
-        for value in sorted(counts)
+        FrequencyEntry(value=value, count=counts[value]) for value in sorted(counts)
     )
     return IntegerSequenceFrequenciesResult(entries=entries)
 

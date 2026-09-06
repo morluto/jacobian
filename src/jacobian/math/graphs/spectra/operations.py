@@ -64,8 +64,7 @@ def _characteristic_polynomial_coeffs(
 
     coefficients = fmpz_mat(order, order, entries).charpoly().coeffs()
     return tuple(
-        CanonicalRational(num=str(int(coefficient)), den="1")
-        for coefficient in coefficients
+        CanonicalRational(num=int(coefficient), den=1) for coefficient in coefficients
     )
 
 

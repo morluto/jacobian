@@ -9,7 +9,7 @@ from jacobian.math.matrices.values import IntegerMatrix, SmithNormalForm
 
 
 def _matrix(entries: list[list[int]]) -> IntegerMatrix:
-    return IntegerMatrix(entries=tuple(tuple(str(v) for v in row) for row in entries))
+    return IntegerMatrix(entries=tuple(tuple(v for v in row) for row in entries))
 
 
 def test_smith_normal_form_rejects_rank_exceeding_dimensions() -> None:
@@ -17,7 +17,7 @@ def test_smith_normal_form_rejects_rank_exceeding_dimensions() -> None:
         SmithNormalForm(
             normal_form=_matrix([[1, 0], [0, 0]]),
             rank=3,
-            invariant_factors=("1", "1", "1"),
+            invariant_factors=(1, 1, 1),
         )
 
 
@@ -26,7 +26,7 @@ def test_smith_normal_form_rejects_non_positive_factors() -> None:
         SmithNormalForm(
             normal_form=_matrix([[0, 0], [0, 0]]),
             rank=1,
-            invariant_factors=("0",),
+            invariant_factors=(0,),
         )
 
 
@@ -35,7 +35,7 @@ def test_smith_normal_form_rejects_non_divisibility_chain() -> None:
         SmithNormalForm(
             normal_form=_matrix([[3, 0], [0, 2]]),
             rank=2,
-            invariant_factors=("3", "2"),
+            invariant_factors=(3, 2),
         )
 
 
@@ -44,5 +44,5 @@ def test_smith_normal_form_rejects_mismatched_diagonal() -> None:
         SmithNormalForm(
             normal_form=_matrix([[4, 0], [0, 2]]),
             rank=2,
-            invariant_factors=("2", "4"),
+            invariant_factors=(2, 4),
         )

@@ -246,15 +246,16 @@ def require_evaluation_budget(
     for index, coefficient in enumerate(form.diagonal_coefficients):
         if index in nonzero_coordinates and coefficient.as_fraction() != 0:
             terms += 1
-            common_denominator_digits += len(coefficient.den)
+            common_denominator_digits += len(str(abs(coefficient.den)))
             active_coordinates.add(index)
     for term in form.cross_terms:
         if term.left in nonzero_coordinates and term.right in nonzero_coordinates:
             terms += 1
-            common_denominator_digits += len(term.coefficient.den)
+            common_denominator_digits += len(str(abs(term.coefficient.den)))
             active_coordinates.update((term.left, term.right))
     common_denominator_digits += 2 * sum(
-        len(vector.coordinates[index].den) for index in sorted(active_coordinates)
+        len(str(abs(vector.coordinates[index].den)))
+        for index in sorted(active_coordinates)
     )
     if (
         common_denominator_digits

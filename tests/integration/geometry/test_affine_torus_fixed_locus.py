@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 from typing import Any
 
@@ -25,12 +26,12 @@ def _source(
         "linear_part": {
             "row_count": dimension,
             "column_count": dimension,
-            "entries": [[str(value) for value in row] for row in linear_part],
+            "entries": linear_part,
         },
         "translation": {
             "torus": {"dimension": dimension},
             "coordinates": [
-                {"num": str(value.numerator), "den": str(value.denominator)}
+                {"num": value.numerator, "den": value.denominator}
                 for value in translation
             ],
         },
@@ -46,10 +47,12 @@ def test_empty_outcome_round_trips_through_public_dispatch() -> None:
         payload,
         Catalog.open(),
     )
-    restored = AffineTorusFixedLocusResult.model_validate(dispatched.output)
+    restored = AffineTorusFixedLocusResult.model_validate_json(
+        json.dumps(dispatched.output)
+    )
 
     assert restored.outcome.status == "EMPTY"
-    assert restored.outcome.obstruction.coefficients == ("1",)
+    assert restored.outcome.obstruction.coefficients == (1,)
     assert restored.outcome.obstruction_pairing.as_fraction() == Fraction(1, 3)
     assert restored.model_dump(mode="json") == dispatched.output
 
@@ -60,7 +63,9 @@ def test_public_tool_validates_and_executes_its_example() -> None:
         for tool in BUILTIN_TOOLS
         if tool.operation_id == "affine_torus.fixed_locus.compute"
     )
-    request = AffineTorusFixedLocusRequest.model_validate(tool.examples[0].input)
+    request = AffineTorusFixedLocusRequest.model_validate_json(
+        json.dumps(tool.examples[0].input)
+    )
     schema = tool.request_type.model_json_schema()
     linear_schema = schema["$defs"]["RationalAffineTorusMap"]["properties"][
         "linear_part"
@@ -76,4 +81,4 @@ def test_public_tool_validates_and_executes_its_example() -> None:
     assert linear_schema["properties"]["entries"]["items"]["maxItems"] == 32
     assert isinstance(result, AffineTorusFixedLocusResult)
     assert result.outcome.status == "NONEMPTY"
-    assert result.outcome.fixed_locus.finite_components.component_count == "2"
+    assert result.outcome.fixed_locus.finite_components.component_count == 2

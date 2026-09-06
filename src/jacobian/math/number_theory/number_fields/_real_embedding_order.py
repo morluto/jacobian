@@ -9,7 +9,7 @@ from typing import Any
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import current_request_execution
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.complex import (
     algebraic_root_separation_denominator_bound,
     complex_isolator_component_digit_bound,
@@ -130,8 +130,8 @@ def _element_from_fractions(
 
 def _rational_component_digits(value: Fraction) -> int:
     return max(
-        len(format_canonical_integer(value.numerator).lstrip("-")),
-        len(format_canonical_integer(value.denominator)),
+        len(format_canonical_integer(abs(value.numerator))),
+        len(format_canonical_integer(abs(value.denominator))),
     )
 
 
@@ -183,9 +183,7 @@ def _minimal_polynomial_height_bound(
     denominator, integer_coordinates = _cleared_integer_polynomial(coordinates)
     element_degree = len(integer_coordinates) - 1
     field_degree = presentation.degree
-    coefficients = tuple(
-        parse_canonical_integer(value) for value in presentation.coefficients_descending
-    )
+    coefficients = tuple(value for value in presentation.coefficients_descending)
     entry_height = max(
         denominator,
         *(abs(value) for value in integer_coordinates),
@@ -207,9 +205,7 @@ def _minimal_polynomial_height_bound_from_cleared_envelope(
     element_degree: int,
 ) -> int:
     field_degree = presentation.degree
-    coefficients = tuple(
-        parse_canonical_integer(value) for value in presentation.coefficients_descending
-    )
+    coefficients = tuple(value for value in presentation.coefficients_descending)
     entry_height = max(
         cleared_denominator_bound,
         cleared_coordinate_bound,
@@ -238,10 +234,7 @@ def _admit_image_polynomial_bound(
             "coefficient envelope",
         )
 
-    worst_coefficients = tuple(
-        format_canonical_integer(coefficient_bound)
-        for _ in range(presentation.degree + 1)
-    )
+    worst_coefficients = (coefficient_bound,) * (presentation.degree + 1)
     separation_denominator = algebraic_root_separation_denominator_bound(
         worst_coefficients
     )
@@ -324,9 +317,9 @@ def admit_real_embedding_difference_envelope(
     if coordinate_numerator_bound < 1 or coordinate_denominator_bound < 1:
         raise ValueError("coordinate component bounds must be positive")
     if (
-        len(format_canonical_integer(coordinate_numerator_bound))
+        len(format_canonical_integer(abs(coordinate_numerator_bound)))
         > MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS
-        or len(format_canonical_integer(coordinate_denominator_bound))
+        or len(format_canonical_integer(abs(coordinate_denominator_bound)))
         > MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS
     ):
         raise NumberFieldRealEmbeddingOrderError(
@@ -409,10 +402,7 @@ def recognize_real_embedding_record(
 
     alpha = sympy.Symbol("alpha")
     polynomial = sympy.Poly.from_list(
-        [
-            parse_canonical_integer(value)
-            for value in recognized.embedding.presentation.coefficients_descending
-        ],
+        list(recognized.embedding.presentation.coefficients_descending),
         gens=alpha,
         domain=sympy.QQ,
     )
@@ -560,9 +550,7 @@ def isolate_backend_real_value(
         f"{int(coefficient.numerator)}/{int(coefficient.denominator)}"
         for coefficient in descending
     )
-    coefficient_bound = format_canonical_integer(
-        admission.minimal_polynomial_coefficient_bound
-    )
+    coefficient_bound = str(admission.minimal_polynomial_coefficient_bound)
     request = SelectedImageWorkerRequest(
         field=context.record.embedding.presentation,
         real_root_index=context.record.embedding.root.real_root_index,

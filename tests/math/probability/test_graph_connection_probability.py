@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 
 import pytest
 
+from jacobian._exact import CanonicalRational
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.probability._graph_connection_probability import (
     GRAPH_CONNECTION_PROBABILITY_OPERATION,
@@ -22,9 +24,9 @@ def test_operation_preserves_the_complete_triangle_ledger() -> None:
     operation = GRAPH_CONNECTION_PROBABILITY_OPERATION
     payload = operation.examples[0].input
 
-    request = operation.request_type.model_validate(payload)
+    request = operation.request_type.model_validate_json(json.dumps(payload))
     result = operation.run(request)
-    reparsed = operation.result_type.model_validate(result.model_dump(mode="json"))
+    reparsed = operation.result_type.model_validate_json(result.model_dump_json())
 
     assert operation.operation_id == (
         "probability.graph_reliability.connection_probability.compute"
@@ -45,7 +47,7 @@ def test_probability_domain_is_admitted_at_operation_time() -> None:
         graph=graph,
         edge_probabilities=(
             GraphReliabilityEdgeProbability(
-                edge=("a", "b"), open_probability={"num": "2", "den": "1"}
+                edge=("a", "b"), open_probability=CanonicalRational(num=2, den=1)
             ),
         ),
         terminals=("a", "b"),

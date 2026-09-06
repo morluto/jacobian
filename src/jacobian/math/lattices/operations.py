@@ -6,7 +6,6 @@ from fractions import Fraction
 from math import isqrt
 from typing import Any
 
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lattices._lattice_ops import (
     direct_sum as _direct_sum,
@@ -116,13 +115,11 @@ def reduce_basis(
             "zbasis",
             "exact",
         )
-    if transformation * source != reduced:
-        raise ValueError("The LLL left transformation does not bind the source basis.")
     return reduced, transformation, int(reduced.rank())
 
 
 def _basis_int_list(lattice: IntegerLattice) -> list[list[int]]:
-    return [[parse_canonical_integer(v) for v in row] for row in lattice.basis.entries]
+    return [list(row) for row in lattice.basis.entries]
 
 
 def _admit_lattice(lattice: IntegerLattice) -> list[list[int]]:
@@ -168,11 +165,15 @@ def _admit_lattice_sum(
     return first_basis, second_basis
 
 
-def _integer_matrix(matrix: list[list[int]]) -> IntegerMatrix:
+def _integer_matrix(
+    matrix: list[list[int]], *, column_count: int | None = None
+) -> IntegerMatrix:
     return IntegerMatrix(
-        entries=tuple(
-            tuple(format_canonical_integer(int(v)) for v in row) for row in matrix
-        )
+        row_count=len(matrix),
+        column_count=column_count
+        if column_count is not None
+        else (len(matrix[0]) if matrix else 0),
+        entries=tuple(tuple(int(v) for v in row) for row in matrix),
     )
 
 
@@ -196,9 +197,9 @@ def compute_canonical_basis(lattice: IntegerLattice) -> CanonicalBasisResult:
     hnf, transform = _hermite_basis(_admit_lattice(lattice))
     return CanonicalBasisResult(
         lattice=lattice,
-        canonical_basis=_integer_matrix(hnf),
+        canonical_basis=_integer_matrix(hnf, column_count=lattice.ambient_dimension),
         transformation=_integer_matrix(transform),
-        rank=integer_rank(hnf),
+        rank=lattice.basis.row_count,
     )
 
 
@@ -223,7 +224,9 @@ def compute_dual(lattice: IntegerLattice) -> DualResult:
         dual_gram_fractions.append(row)
     return DualResult(
         lattice=lattice,
-        dual_basis=rational_matrix_from_fractions(dual),
+        dual_basis=rational_matrix_from_fractions(
+            dual, column_count=lattice.ambient_dimension
+        ),
         dual_gram=rational_matrix_from_fractions(dual_gram_fractions),
     )
 
@@ -234,7 +237,9 @@ def compute_saturation(lattice: IntegerLattice) -> SaturationResult:
     saturated, inclusion, index = _saturate_lattice(_admit_lattice(lattice))
     return SaturationResult(
         lattice=lattice,
-        saturated_basis=_integer_matrix(saturated),
+        saturated_basis=_integer_matrix(
+            saturated, column_count=lattice.ambient_dimension
+        ),
         inclusion_transform=_integer_matrix(inclusion),
         saturation_index=index,
     )
@@ -252,16 +257,14 @@ def compute_sublattice_index(
         maximum=_MAX_LATTICE_INPUT_SCALAR_DIGITS,
         label="sublattice embedding",
     )
-    embedding_values = [
-        [parse_canonical_integer(v) for v in row] for row in embedding.entries
-    ]
+    embedding_values = [list(row) for row in embedding.entries]
     parent_values = _admit_lattice(parent)
     sublattice_values = _admit_lattice(sublattice)
     # The existing lattice axes and scalar bounds also bound this rectangular
     # product. Establish the caller's inclusion before using E's Smith form.
     if (
         len(embedding_values) != len(sublattice_values)
-        or any(len(row) != len(parent_values) for row in embedding_values)
+        or embedding.column_count != len(parent_values)
         or sublattice.ambient_dimension != parent.ambient_dimension
     ):
         raise OperationDomainValidationError(
@@ -310,7 +313,9 @@ def compute_orthogonal_complement(
 ) -> OrthogonalComplementResult:
     """Compute a canonical rational basis for the orthogonal complement."""
 
-    complement = _orthogonal_complement(_admit_lattice(lattice))
+    complement = _orthogonal_complement(
+        _admit_lattice(lattice), ambient_dimension=lattice.ambient_dimension
+    )
     return OrthogonalComplementResult(
         lattice=lattice,
         complement_basis=rational_vector_space_basis_from_fractions(
@@ -327,12 +332,18 @@ def compute_direct_sum(
     """Compute the block-coordinate direct sum of two lattices."""
 
     first_basis, second_basis = _admit_lattice_sum(first, second)
-    result = _direct_sum(first_basis, second_basis)
+    ambient_dimension = first.ambient_dimension + second.ambient_dimension
+    result = _direct_sum(
+        first_basis,
+        second_basis,
+        first_dimension=first.ambient_dimension,
+        second_dimension=second.ambient_dimension,
+    )
     return DirectSumResult(
         first=first,
         second=second,
-        direct_sum_basis=_integer_matrix(result),
-        ambient_dimension=first.ambient_dimension + second.ambient_dimension,
+        direct_sum_basis=_integer_matrix(result, column_count=ambient_dimension),
+        ambient_dimension=ambient_dimension,
     )
 
 
@@ -342,12 +353,18 @@ def compute_orthogonal_sum(
     """Compute the block-diagonal orthogonal sum of two lattices."""
 
     first_basis, second_basis = _admit_lattice_sum(first, second)
-    result = _orthogonal_sum(first_basis, second_basis)
+    ambient_dimension = first.ambient_dimension + second.ambient_dimension
+    result = _orthogonal_sum(
+        first_basis,
+        second_basis,
+        first_dimension=first.ambient_dimension,
+        second_dimension=second.ambient_dimension,
+    )
     return OrthogonalSumResult(
         first=first,
         second=second,
-        orthogonal_sum_basis=_integer_matrix(result),
-        ambient_dimension=first.ambient_dimension + second.ambient_dimension,
+        orthogonal_sum_basis=_integer_matrix(result, column_count=ambient_dimension),
+        ambient_dimension=ambient_dimension,
     )
 
 

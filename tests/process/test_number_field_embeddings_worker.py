@@ -16,7 +16,7 @@ from jacobian.process import BoundedProcessResult
 
 
 def _gaussian_field() -> SimpleNumberFieldPresentation:
-    return SimpleNumberFieldPresentation(coefficients_descending=("1", "0", "1"))
+    return SimpleNumberFieldPresentation(coefficients_descending=(1, 0, 1))
 
 
 def test_embedding_worker_timeout_is_an_operational_failure(

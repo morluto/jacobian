@@ -377,8 +377,8 @@ def test_edgeless_million_vertex_request_matches_small_equivalent() -> None:
         )
         for state in small.states
     ]
-    replay = DirectedBondConnectionProbabilityResult.model_validate(
-        large.model_dump(mode="json")
+    replay = DirectedBondConnectionProbabilityResult.model_validate_json(
+        large.model_dump_json()
     )
     assert replay == large
 
@@ -400,8 +400,8 @@ def test_edgeless_source_at_the_declared_vertex_bound_stays_exact() -> None:
     assert result.arc_count == 0
     assert result.visited_states == 1
     assert tuple(state.source_reaches_target for state in result.states) == (False,)
-    replay = DirectedBondConnectionProbabilityResult.model_validate(
-        result.model_dump(mode="json")
+    replay = DirectedBondConnectionProbabilityResult.model_validate_json(
+        result.model_dump_json()
     )
     assert replay == result
 
@@ -425,8 +425,8 @@ def test_dense_source_at_the_relevant_vertex_bound_is_admitted() -> None:
     assert result.visited_states == MAX_DIRECTED_BOND_RELIABILITY_STATES
     assert all(not state.source_reaches_target for state in result.states)
     assert _probability(result) == 0
-    replay = DirectedBondConnectionProbabilityResult.model_validate(
-        result.model_dump(mode="json")
+    replay = DirectedBondConnectionProbabilityResult.model_validate_json(
+        result.model_dump_json()
     )
     assert replay == result
 

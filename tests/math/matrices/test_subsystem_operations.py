@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from fractions import Fraction
 from itertools import product
@@ -156,11 +157,13 @@ def test_axis_bound_kronecker_product_concatenates_named_factors() -> None:
         (Fraction(0), Fraction(0), Fraction(0), Fraction(8)),
     )
     reduced = compute_partial_trace(
-        SubsystemPartialTraceRequest.model_validate(
-            {
-                "matrix": wire.model_dump(mode="json"),
-                "traced_factor_labels": ["q"],
-            }
+        SubsystemPartialTraceRequest.model_validate_json(
+            json.dumps(
+                {
+                    "matrix": wire.model_dump(mode="json"),
+                    "traced_factor_labels": ["q"],
+                }
+            )
         )
     ).reduced_matrix
     assert reduced.factors == (r,)
@@ -242,8 +245,7 @@ def test_partial_trace_result_round_trips_structurally() -> None:
         )
     )
     assert (
-        SubsystemPartialTraceResult.model_validate(base.model_dump(mode="python"))
-        == base
+        SubsystemPartialTraceResult.model_validate_json(base.model_dump_json()) == base
     )
 
 
@@ -264,15 +266,14 @@ def test_partial_trace_boundary_result_components_round_trip() -> None:
     )
 
     reduced = partial_trace(boundary_source, ("q",))
-    assert len(reduced.matrix.entries[0][0].den) == 4098
+    assert len(str(reduced.matrix.entries[0][0].den)) == 4098
     wire = compute_partial_trace(
         SubsystemPartialTraceRequest(
             matrix=boundary_source, traced_factor_labels=("q",)
         )
     )
     assert (
-        SubsystemPartialTraceResult.model_validate(wire.model_dump(mode="python"))
-        == wire
+        SubsystemPartialTraceResult.model_validate_json(wire.model_dump_json()) == wire
     )
     with pytest.raises(OperationDomainValidationError):
         compute_partial_trace(
@@ -512,9 +513,7 @@ def test_partial_trace_admits_cancelling_pairs_and_rereads_its_emitted_factor() 
     wire = compute_partial_trace(
         SubsystemPartialTraceRequest(matrix=source, traced_factor_labels=("a",))
     )
-    replayed = SubsystemPartialTraceResult.model_validate(
-        wire.model_dump(mode="python")
-    )
+    replayed = SubsystemPartialTraceResult.model_validate_json(wire.model_dump_json())
     assert replayed == wire
 
     final = partial_trace(reduced, ("r",))
@@ -663,7 +662,7 @@ def test_psd_order_admits_identical_operands_before_witness_growth() -> None:
             right=scaled(right_value, r),
         )
     ).product
-    assert len(operand.matrix.entries[0][0].den) == 255
+    assert len(str(operand.matrix.entries[0][0].den)) == 255
 
     ordered = decide_psd_order(PsdOrderRequest(left=operand, right=operand))
     assert ordered.is_less_or_equal is True
@@ -673,7 +672,7 @@ def test_psd_order_admits_identical_operands_before_witness_growth() -> None:
     assert _entries(ordered.difference) == tuple(
         tuple(Fraction(0) for _ in range(16)) for _ in range(16)
     )
-    assert PsdOrderResult.model_validate(ordered.model_dump(mode="python")) == ordered
+    assert PsdOrderResult.model_validate_json(ordered.model_dump_json()) == ordered
 
 
 def test_psd_order_admits_nearly_equal_operands_with_a_tiny_reduced_difference() -> (
@@ -703,7 +702,7 @@ def test_psd_order_admits_nearly_equal_operands_with_a_tiny_reduced_difference()
         for row in range(16)
     ]
     right = _matrix(right_entries, (q,))
-    assert len(left.matrix.entries[0][0].den) == 255
+    assert len(str(left.matrix.entries[0][0].den)) == 255
 
     ordered = decide_psd_order(PsdOrderRequest(left=left, right=right))
     assert ordered.is_less_or_equal is True
@@ -718,7 +717,7 @@ def test_psd_order_admits_nearly_equal_operands_with_a_tiny_reduced_difference()
     assert (ordered.inertia.n_positive, ordered.inertia.n_negative) == (1, 0)
     assert ordered.inertia.n_zero == 15
     assert ordered.negative_witness is None
-    assert PsdOrderResult.model_validate(ordered.model_dump(mode="python")) == ordered
+    assert PsdOrderResult.model_validate_json(ordered.model_dump_json()) == ordered
 
 
 def _dense_equal_operand(digits: int) -> FactorizedHermitianMatrix:
@@ -787,7 +786,7 @@ def test_kronecker_product_admits_asymmetric_operand_digit_growth() -> None:
     compact = _matrix([[1, 0], [0, 1]], (r,))
 
     product = kronecker_product(wide, compact)
-    assert len(product.matrix.entries[0][0].den) == 200
+    assert len(str(product.matrix.entries[0][0].den)) == 200
 
     with pytest.raises(OperationDomainValidationError):
         compute_kronecker_product(
@@ -803,7 +802,7 @@ def test_psd_order_result_round_trip_does_not_replay_source_admission() -> None:
     zero = _matrix([[0, 0], [0, 0]], (q,))
     positive = _matrix([[1, 0], [0, 2]], (q,))
     accepted = psd_order(zero, positive)
-    assert PsdOrderResult.model_validate(accepted.model_dump(mode="python")) == accepted
+    assert PsdOrderResult.model_validate_json(accepted.model_dump_json()) == accepted
 
     large_first = Fraction(1, 10**257)
     large_second = Fraction(1, 10**257 + 21)
@@ -831,7 +830,7 @@ def test_kronecker_product_replays_through_trace_and_psd_order_at_derived_bound(
     product_matrix = compute_kronecker_product(
         SubsystemKroneckerProductRequest(left=left, right=right)
     ).product
-    assert len(product_matrix.matrix.entries[0][0].den) == 127
+    assert len(str(product_matrix.matrix.entries[0][0].den)) == 127
 
     traced = compute_partial_trace(
         SubsystemPartialTraceRequest(
@@ -877,7 +876,7 @@ def test_psd_order_rejects_a_large_product_before_witness_expansion() -> None:
             right=scaled(third_value, r),
         )
     ).product
-    assert len(left_product.matrix.entries[0][0].den) == 255
+    assert len(str(left_product.matrix.entries[0][0].den)) == 255
 
     with pytest.raises(OperationDomainValidationError):
         decide_psd_order(PsdOrderRequest(left=left_product, right=right_product))
@@ -899,7 +898,7 @@ def test_partial_trace_readmits_its_emitted_values_across_sequential_traces() ->
     )
 
     reduced = partial_trace(source, ("y",))
-    assert len(reduced.matrix.entries[0][0].den) == 511
+    assert len(str(reduced.matrix.entries[0][0].den)) == 511
     stepwise = partial_trace(reduced, ("z",))
     combined = partial_trace(source, ("y", "z"))
     assert stepwise == combined
@@ -923,7 +922,7 @@ def test_partial_trace_readmits_sequential_boundary_traces_of_one_coordinate() -
     )
 
     reduced = partial_trace(source, ("y",))
-    assert len(reduced.matrix.entries[0][0].den) == 4095
+    assert len(str(reduced.matrix.entries[0][0].den)) == 4095
     stepwise = partial_trace(reduced, ("z",))
     combined = partial_trace(source, ("y", "z"))
     assert stepwise == combined
@@ -942,7 +941,7 @@ def test_kronecker_product_readmits_its_emitted_product_as_an_operand() -> None:
     right = _matrix([[1, 0], [0, 1]], (s,))
 
     once = kronecker_product(left, middle)
-    assert len(once.matrix.entries[0][0].den) == 129
+    assert len(str(once.matrix.entries[0][0].den)) == 129
     twice = kronecker_product(once, right)
     expected_value = first_value * second_value
     assert twice.factors == (q, r, s)
@@ -963,7 +962,7 @@ def test_kronecker_product_composes_boundary_products_with_identity_operands() -
         _matrix([[left_value]], (q,)),
         _matrix([[right_value]], (r,)),
     )
-    assert len(product.matrix.entries[0][0].den) == 256
+    assert len(str(product.matrix.entries[0][0].den)) == 256
 
     identity = _matrix([[1]], (s,))
     scaled = kronecker_product(product, identity)

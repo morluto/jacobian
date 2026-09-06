@@ -1,5 +1,7 @@
 """Matching and unification return the substitution consumer's own carrier."""
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -27,4 +29,4 @@ def test_serialized_substitution_composes(unify: bool) -> None:
     payload = result.model_dump()
     payload["substitution"]["mapping"] = {-1: constant.model_dump()}
     with pytest.raises(ValidationError):
-        type(result).model_validate(payload)
+        type(result).model_validate_json(json.dumps(payload))

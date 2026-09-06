@@ -84,6 +84,8 @@ def _slice_a_values() -> tuple[
     )
     subspace = FiniteDimensionalSubspace(
         presentation=presentation,
+        row_axis=rows,
+        column_axis=columns,
         basis_axis=basis_axis,
         basis=basis,
     )
@@ -145,6 +147,8 @@ def test_prime_field_presentation_composes_with_scalar_restriction() -> None:
     one = element(presentation, (1,))
     subspace = FiniteDimensionalSubspace(
         presentation=presentation,
+        row_axis=row_axis,
+        column_axis=column_axis,
         basis_axis=basis_axis,
         basis=(
             AxisBoundMatrix(
@@ -593,6 +597,8 @@ def test_permuting_a_declared_row_axis_preserves_restriction_ranks() -> None:
     )
     permuted_subspace = FiniteDimensionalSubspace(
         presentation=subspace.presentation,
+        row_axis=permuted_axis,
+        column_axis=subspace.column_axis,
         basis_axis=subspace.basis_axis,
         basis=tuple(
             AxisBoundMatrix(

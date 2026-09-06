@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Annotated, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
 from jacobian.math.combinatorics.finite_structures.sets._models import FiniteIntegerSet
 
 MAX_DIVISIBILITY_EDGE_SET_SIZE = 500
@@ -44,7 +43,7 @@ class DivisibilityEdgeProfileRequest(StrictModel):
         return self
 
 
-def _extract_elements(values: object) -> tuple[str, ...]:
+def _extract_elements(values: object) -> tuple[int, ...]:
     """Extract the element tuple from a FiniteIntegerSet or raw tuple."""
     if isinstance(values, FiniteIntegerSet):
         return values.elements
@@ -55,7 +54,7 @@ def _extract_elements(values: object) -> tuple[str, ...]:
     raise TypeError("values must be a FiniteIntegerSet or tuple of canonical integers")
 
 
-def _validate_divisibility_edge_shape(values: object) -> tuple[str, ...]:
+def _validate_divisibility_edge_shape(values: object) -> tuple[int, ...]:
     elements = _extract_elements(values)
     if not elements:
         return ()
@@ -64,12 +63,14 @@ def _validate_divisibility_edge_shape(values: object) -> tuple[str, ...]:
             "divisibility_edge.values_size",
             f"values must contain at most {MAX_DIVISIBILITY_EDGE_SET_SIZE} integers",
         )
-    if any(len(value) > MAX_DIVISIBILITY_EDGE_VALUE_DIGITS for value in elements):
+    if any(
+        len(str(abs(value))) > MAX_DIVISIBILITY_EDGE_VALUE_DIGITS for value in elements
+    ):
         raise PydanticCustomError(
             "divisibility_edge.value_digits",
             "values exceed the admitted integer digit bound",
         )
-    parsed = tuple(parse_canonical_integer(value) for value in elements)
+    parsed = elements
     if any(value <= 0 for value in parsed):
         raise PydanticCustomError(
             "divisibility_edge.positive_values",
@@ -84,7 +85,7 @@ def _validate_divisibility_edge_shape(values: object) -> tuple[str, ...]:
 
 def _validate_divisibility_edge_resources(
     values: object,
-) -> tuple[tuple[str, ...], tuple[tuple[int, int, int], ...]]:
+) -> tuple[tuple[int, ...], tuple[tuple[int, int, int], ...]]:
     """Return (canonicalized elements, edge plan) for the admitted values.
 
     The elements are canonicalized (sorted by integer value) so the same
@@ -97,8 +98,8 @@ def _validate_divisibility_edge_resources(
     # Canonicalize element order so the same mathematical set produces the
     # same edge plan and retained result regardless of presentation.
     elements = tuple(sorted(elements, key=int))
-    parsed = tuple(parse_canonical_integer(value) for value in elements)
-    digits = [len(v) for v in elements]
+    parsed = elements
+    digits = [len(str(abs(v))) for v in elements]
     pair_scan_work = sum(
         digits[i] * digits[j]
         for i in range(len(elements))
@@ -141,19 +142,27 @@ def _validate_divisibility_edge_resources(
 class DivisibilityEdge(StrictModel):
     """One proper-divisibility edge with quotient and least-prime-factor data."""
 
-    source: CanonicalInteger
-    target: CanonicalInteger
-    quotient: CanonicalInteger
-    least_prime_factor: CanonicalInteger
+    source: Annotated[
+        int, DecimalIntegerEncoding(max_digits=MAX_DIVISIBILITY_EDGE_VALUE_DIGITS)
+    ]
+    target: Annotated[
+        int, DecimalIntegerEncoding(max_digits=MAX_DIVISIBILITY_EDGE_VALUE_DIGITS)
+    ]
+    quotient: Annotated[
+        int, DecimalIntegerEncoding(max_digits=MAX_DIVISIBILITY_EDGE_QUOTIENT_DIGITS)
+    ]
+    least_prime_factor: Annotated[
+        int, DecimalIntegerEncoding(max_digits=MAX_DIVISIBILITY_EDGE_QUOTIENT_DIGITS)
+    ]
 
     @model_validator(mode="after")
     def require_positive_factors(self) -> Self:
-        if parse_canonical_integer(self.quotient) <= 1:
+        if self.quotient <= 1:
             raise PydanticCustomError(
                 "divisibility_edge.quotient_positive",
                 "quotient must be greater than one",
             )
-        if parse_canonical_integer(self.least_prime_factor) <= 1:
+        if self.least_prime_factor <= 1:
             raise PydanticCustomError(
                 "divisibility_edge.least_prime_factor_positive",
                 "least prime factor must be greater than one",
@@ -173,7 +182,7 @@ class DivisibilityEdgeProfileResult(StrictModel):
     def require_canonical_edges(self) -> Self:
         _validate_divisibility_edge_shape(self.values)
         values = set(self.values.elements)
-        seen: set[tuple[str, str]] = set()
+        seen: set[tuple[int, int]] = set()
         for edge in self.edges:
             if edge.source == edge.target:
                 raise PydanticCustomError(

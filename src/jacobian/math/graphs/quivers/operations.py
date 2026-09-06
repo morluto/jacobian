@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.quivers._models import (
     AdjacencyMatricesResult,
@@ -14,31 +13,25 @@ from jacobian.math.graphs.quivers._path_bounds import fixed_length_paths_envelop
 from jacobian.math.matrices.values import IntegerMatrix
 
 
+def _integer_matrix(entries: list[list[int]]) -> IntegerMatrix:
+    return IntegerMatrix(
+        row_count=len(entries),
+        column_count=len(entries[0]) if entries else 0,
+        entries=tuple(tuple(value for value in row) for row in entries)
+    )
+
+
 def adjacency_matrices(quiver: FiniteQuiver) -> AdjacencyMatricesResult:
     """Compute the adjacency matrix and its transpose."""
     n = quiver.vertex_count
     matrix = [[0] * n for _ in range(n)]
     for source, target in quiver.arrows:
         matrix[source][target] += 1
-    adj = tuple(tuple(row) for row in matrix)
-    transpose = tuple(tuple(matrix[j][i] for j in range(n)) for i in range(n))
+    transpose = [[matrix[j][i] for j in range(n)] for i in range(n)]
     return AdjacencyMatricesResult(
         quiver=quiver,
-        adjacency_matrix=IntegerMatrix(
-            row_count=n,
-            column_count=n,
-            entries=tuple(
-                tuple(format_canonical_integer(value) for value in row) for row in adj
-            ),
-        ),
-        transpose_matrix=IntegerMatrix(
-            row_count=n,
-            column_count=n,
-            entries=tuple(
-                tuple(format_canonical_integer(value) for value in row)
-                for row in transpose
-            ),
-        ),
+        adjacency_matrix=_integer_matrix(matrix),
+        transpose_matrix=_integer_matrix(transpose),
     )
 
 
@@ -51,6 +44,7 @@ def vertex_profiles(quiver: FiniteQuiver) -> VertexProfilesResult:
         out_degrees[source] += 1
         in_degrees[target] += 1
     return VertexProfilesResult(
+        quiver=quiver,
         in_degrees=tuple(in_degrees),
         out_degrees=tuple(out_degrees),
     )
@@ -86,15 +80,8 @@ def fixed_length_paths(quiver: FiniteQuiver, length: int) -> FixedLengthPathsRes
     return FixedLengthPathsResult(
         quiver=quiver,
         length=length,
-        path_matrix=IntegerMatrix(
-            row_count=n,
-            column_count=n,
-            entries=tuple(
-                tuple(format_canonical_integer(value) for value in row)
-                for row in result
-            ),
-        ),
-        total_paths=format_canonical_integer(total),
+        path_matrix=_integer_matrix(result),
+        total_paths=total,
     )
 
 

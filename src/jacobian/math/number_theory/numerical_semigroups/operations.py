@@ -7,8 +7,7 @@ from fractions import Fraction
 from itertools import pairwise
 from math import gcd
 
-from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, CanonicalRational
 from jacobian.math.number_theory.numerical_semigroups._algorithms import (
     apery_set,
     belongs,
@@ -165,6 +164,8 @@ def elasticity(generators: tuple[int, ...]) -> Fraction:
 def _bounded_value(generators: tuple[int, ...], value: int) -> int:
     if type(value) is not int:
         raise ValueError("value must be an integer")
+    if abs(value) >= 10**MAX_CANONICAL_INTEGER_DIGITS:
+        raise ValueError("value exceeds the exact scalar output digit bound")
     if generators != (1,) and value > MAX_ELEMENT:
         raise ValueError(f"value must be at most {MAX_ELEMENT}")
     return value
@@ -200,7 +201,7 @@ def summary(generators: tuple[int, ...]) -> NumericalSemigroupSummaryResult:
     multiplicity = values[0]
     if multiplicity == 1:
         return NumericalSemigroupSummaryResult._from_kernel(
-            minimal_generators=("1",),
+            minimal_generators=(1,),
             multiplicity=1,
             embedding_dimension=1,
             frobenius_number=-1,
@@ -234,7 +235,7 @@ def summary(generators: tuple[int, ...]) -> NumericalSemigroupSummaryResult:
     ]
     frobenius = max(gaps) if gaps else -1
     return NumericalSemigroupSummaryResult._from_kernel(
-        minimal_generators=tuple(format_canonical_integer(value) for value in values),
+        minimal_generators=values,
         multiplicity=multiplicity,
         embedding_dimension=len(values),
         frobenius_number=frobenius,
@@ -249,7 +250,7 @@ def membership(generators: tuple[int, ...], value: int) -> SemigroupMembershipRe
     values = _generators(generators)
     target = _bounded_value(values, value)
     return SemigroupMembershipResult(
-        value=format_canonical_integer(target),
+        value=target,
         in_semigroup=belongs(target, apery_set(values)),
     )
 
@@ -263,8 +264,8 @@ def factorization_profile(
     _require_materializable(values, target, MAX_MATERIALIZED_FACTORIZATIONS)
     family = factorizations(values, target)
     return FactorizationComputeResult._from_kernel(
-        value=format_canonical_integer(target),
-        minimal_generators=tuple(format_canonical_integer(item) for item in values),
+        value=target,
+        minimal_generators=values,
         in_semigroup=bool(family),
         factorizations=family,
     )
@@ -278,8 +279,8 @@ def factorization_lengths_profile(
     target = _bounded_value(values, value)
     lengths = factorization_lengths(values, target)
     return FactorizationLengthsComputeResult._from_kernel(
-        value=format_canonical_integer(target),
-        minimal_generators=tuple(format_canonical_integer(item) for item in values),
+        value=target,
+        minimal_generators=values,
         in_semigroup=bool(lengths),
         lengths=lengths,
     )
@@ -313,7 +314,7 @@ def factorization_distance_profile(
     ):
         raise ValueError("both factorizations must evaluate to the declared value")
     return FactorizationDistanceResult(
-        value=format_canonical_integer(target),
+        value=target,
         distance=factorization_distance(first, second),
         first_length=sum(first),
         second_length=sum(second),
@@ -330,8 +331,8 @@ def factorization_graph_profile(
     family = factorizations(values, target)
     graph = factorization_graph(family)
     return FactorizationGraphComputeResult._from_kernel(
-        value=format_canonical_integer(target),
-        minimal_generators=tuple(format_canonical_integer(item) for item in values),
+        value=target,
+        minimal_generators=values,
         in_semigroup=bool(family),
         factorizations=family,
         edges=graph.edges,
@@ -350,8 +351,8 @@ def element_delta_set_profile(
         raise ValueError("value must belong to the numerical semigroup")
     lengths = factorization_lengths(values, target)
     return ElementDeltaSetResult._from_kernel(
-        value=format_canonical_integer(target),
-        minimal_generators=tuple(format_canonical_integer(item) for item in values),
+        value=target,
+        minimal_generators=values,
         factorization_lengths=lengths,
         delta_set=tuple(sorted({right - left for left, right in pairwise(lengths)})),
     )
@@ -370,7 +371,7 @@ def element_elasticity_profile(
     minimum, maximum = factorization_length_extrema(values, target)
     return ElementElasticityResult._from_kernel(
         value=target,
-        minimal_generators=tuple(format_canonical_integer(item) for item in values),
+        minimal_generators=values,
         minimum_length=minimum,
         maximum_length=maximum,
         elasticity=CanonicalRational.from_integer_ratio(maximum, minimum),
@@ -388,8 +389,8 @@ def element_catenary_degree_profile(
     _require_materializable(values, target, MAX_GRAPH_FACTORIZATIONS)
     family = factorizations(values, target)
     return ElementCatenaryDegreeResult._from_kernel(
-        value=format_canonical_integer(target),
-        minimal_generators=tuple(format_canonical_integer(item) for item in values),
+        value=target,
+        minimal_generators=values,
         factorization_count=len(family),
         catenary_degree=catenary_degree_from_factorizations(family),
     )
@@ -400,10 +401,10 @@ def betti_elements(generators: tuple[int, ...]) -> BettiElementsResult:
     values = _generators(generators)
     apery, candidates, disconnected = _bounded_betti_data(values)
     return BettiElementsResult._from_kernel(
-        minimal_generators=tuple(format_canonical_integer(item) for item in values),
-        apery_set=tuple(format_canonical_integer(item) for item in apery),
+        minimal_generators=values,
+        apery_set=apery,
         candidate_count=len(candidates),
-        betti_elements=tuple(format_canonical_integer(item) for item in disconnected),
+        betti_elements=tuple(disconnected),
     )
 
 
@@ -431,7 +432,7 @@ def delta_set(generators: tuple[int, ...]) -> DeltaSetResult:
         all_deltas.update(right - left for left, right in pairwise(ordered))
         length_sets[target % values[-1]] = lengths
     return DeltaSetResult._from_kernel(
-        minimal_generators=tuple(format_canonical_integer(item) for item in values),
+        minimal_generators=values,
         delta_set=tuple(sorted(all_deltas)),
         periodicity_bound=periodicity_bound,
         checked_through=checked_through,
@@ -442,9 +443,7 @@ def global_elasticity(generators: tuple[int, ...]) -> ElasticityResult:
     """Return exact global elasticity of a canonical semigroup."""
     values = _generators(generators)
     return ElasticityResult(
-        semigroup=NumericalSemigroup(
-            minimal_generators=tuple(map(format_canonical_integer, values))
-        ),
+        semigroup=NumericalSemigroup(minimal_generators=values),
         elasticity=CanonicalRational.from_integer_ratio(values[-1], values[0]),
         smallest_generator=values[0],
         largest_generator=values[-1],
@@ -461,7 +460,7 @@ def global_catenary_degree(
         _require_materializable(values, target, MAX_GRAPH_FACTORIZATIONS)
     degrees = tuple(
         BettiCatenaryDegree(
-            betti_element=format_canonical_integer(target),
+            betti_element=target,
             catenary_degree=catenary_degree_from_factorizations(
                 factorizations(values, target)
             ),
@@ -470,7 +469,7 @@ def global_catenary_degree(
     )
     maximum = max((record.catenary_degree for record in degrees), default=0)
     return CatenaryDegreeResult._from_kernel(
-        minimal_generators=tuple(format_canonical_integer(item) for item in values),
+        minimal_generators=values,
         catenary_degree=maximum,
         betti_degrees=degrees,
         witness_betti_elements=tuple(
@@ -508,8 +507,8 @@ def minimal_presentation(
                 )
             )
     return MinimalPresentationResult._from_kernel(
-        minimal_generators=tuple(format_canonical_integer(item) for item in values),
-        betti_elements=tuple(format_canonical_integer(item) for item in disconnected),
+        minimal_generators=values,
+        betti_elements=tuple(disconnected),
         relations=tuple(relations),
     )
 
@@ -538,7 +537,7 @@ def presentation_binomials(
                 "relation factorizations must have the same semigroup degree"
             )
     return PresentationBinomialsResult(
-        minimal_generators=tuple(format_canonical_integer(item) for item in values),
+        minimal_generators=values,
         binomials=tuple(
             PresentationBinomial(
                 left_exponents=tuple(relation.first),
@@ -552,14 +551,14 @@ def presentation_binomials(
 def _claim_generators(source: NumericalSemigroup) -> tuple[int, ...]:
     """Admit the same bounded generator domain before checking a source claim."""
     _require_positive_bounded_generators(source.minimal_generators)
-    return tuple(map(parse_canonical_integer, source.minimal_generators))
+    return source.minimal_generators
 
 
 def verify_summary(claim: NumericalSemigroupSummaryResult) -> bool:
     """Check a source-bound summary in the bounded semigroup domain."""
     try:
         return summary(_claim_generators(claim.semigroup)) == claim
-    except (ArithmeticError, TypeError, ValueError):
+    except (TypeError, ValueError):
         return False
 
 
@@ -567,7 +566,7 @@ def verify_elasticity(claim: ElasticityResult) -> bool:
     """Check global elasticity and its claimed extrema against the source."""
     try:
         return global_elasticity(_claim_generators(claim.semigroup)) == claim
-    except (ArithmeticError, TypeError, ValueError):
+    except (TypeError, ValueError):
         return False
 
 
@@ -576,10 +575,10 @@ def verify_element_elasticity(claim: ElementElasticityResult) -> bool:
     try:
         values = _claim_generators(claim.semigroup)
         value = claim.value
-        if value < 0 or (values != (1,) and value > MAX_ELEMENT):
-            return False
+        if values != (1,) and value > MAX_ELEMENT:
+            raise ValueError(f"element exceeds the {MAX_ELEMENT} admission bound")
         return element_elasticity_profile(values, value) == claim
-    except (ArithmeticError, TypeError, ValueError):
+    except (TypeError, ValueError):
         return False
 
 

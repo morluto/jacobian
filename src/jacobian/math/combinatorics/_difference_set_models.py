@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from functools import partial
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_validator
+from pydantic import AfterValidator, Field, StrictBool, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel
 
 MAX_CYCLIC_DIFFERENCE_SET_MODULUS = 4_096
@@ -25,21 +27,39 @@ MAX_DIFFERENCE_SET_ADDITIONAL_ELEMENTS = 3
 MAX_ADDITIVE_INTEGER_LENGTH = 128
 MAX_ADDITIVE_DIFFERENCE_INTEGER_LENGTH = MAX_ADDITIVE_INTEGER_LENGTH + 2
 
+
+def _require_signed_character_bound(value: int, maximum_characters: int) -> int:
+    """Retain the historical sign-inclusive character envelope."""
+    digit_limit = maximum_characters - int(value < 0)
+    if abs(value) >= 10**digit_limit:
+        raise PydanticCustomError(
+            "combinatorics.integer_bound",
+            f"integer exceeds the {maximum_characters}-character bound",
+        )
+    return value
+
+
 AdditiveInteger = Annotated[
-    str,
-    StringConstraints(
-        pattern=r"^(?:0|-?[1-9][0-9]*)$",
-        max_length=MAX_ADDITIVE_INTEGER_LENGTH,
-        strict=True,
+    int,
+    DecimalIntegerEncoding(max_digits=MAX_ADDITIVE_INTEGER_LENGTH),
+    AfterValidator(
+        partial(
+            _require_signed_character_bound,
+            maximum_characters=MAX_ADDITIVE_INTEGER_LENGTH,
+        )
     ),
+    Field(json_schema_extra={"maxLength": MAX_ADDITIVE_INTEGER_LENGTH}),
 ]
 AdditiveDifferenceInteger = Annotated[
-    str,
-    StringConstraints(
-        pattern=r"^(?:0|-?[1-9][0-9]*)$",
-        max_length=MAX_ADDITIVE_DIFFERENCE_INTEGER_LENGTH,
-        strict=True,
+    int,
+    DecimalIntegerEncoding(max_digits=MAX_ADDITIVE_DIFFERENCE_INTEGER_LENGTH),
+    AfterValidator(
+        partial(
+            _require_signed_character_bound,
+            maximum_characters=MAX_ADDITIVE_DIFFERENCE_INTEGER_LENGTH,
+        )
     ),
+    Field(json_schema_extra={"maxLength": MAX_ADDITIVE_DIFFERENCE_INTEGER_LENGTH}),
 ]
 
 MAX_SIDON_SET_SIZE = 435
@@ -50,29 +70,28 @@ MAX_SIDON_ORDERED_DIFFERENCES = MAX_SIDON_SET_SIZE * (MAX_SIDON_SET_SIZE - 1)
 class _IntegerSidonAdmissionPlan:
     """Request-scoped Sidon wires reused by trusted result construction."""
 
-    normalized_wires: tuple[str, ...]
-    difference_wires: tuple[tuple[str, str, str], ...]
+    normalized_elements: tuple[int, ...]
+    differences: tuple[tuple[int, int, int], ...]
     is_sidon: bool
 
 
 def _integer_sidon_profile(elements: tuple[int, ...]) -> _IntegerSidonAdmissionPlan:
     """Traverse one ordered-difference ledger and retain its canonical wires."""
 
-    normalized_wires = tuple(str(value) for value in elements)
-    difference_wires: list[tuple[str, str, str]] = []
+    normalized_elements = elements
+    differences: list[tuple[int, int, int]] = []
     seen_differences: set[int] = set()
-    for left, left_wire in zip(elements, normalized_wires, strict=True):
-        for right, right_wire in zip(elements, normalized_wires, strict=True):
+    for left in elements:
+        for right in elements:
             if left == right:
                 continue
             difference = left - right
-            difference_wire = str(difference)
-            difference_wires.append((left_wire, right_wire, difference_wire))
+            differences.append((left, right, difference))
             seen_differences.add(difference)
-    pair_count = len(difference_wires)
+    pair_count = len(differences)
     return _IntegerSidonAdmissionPlan(
-        normalized_wires=normalized_wires,
-        difference_wires=tuple(difference_wires),
+        normalized_elements=normalized_elements,
+        differences=tuple(differences),
         is_sidon=len(seen_differences) == pair_count,
     )
 
@@ -86,7 +105,9 @@ def _difference_set_validation_error(code: str, message: str) -> PydanticCustomE
 class IntegerSidonRequest(StrictModel):
     """One bounded finite integer set for an ordered-difference profile."""
 
-    elements: tuple[AdditiveInteger, ...] = Field(max_length=MAX_SIDON_SET_SIZE)
+    elements: tuple[AdditiveInteger, ...] = Field(
+        max_length=MAX_SIDON_SET_SIZE,
+    )
 
     @model_validator(mode="after")
     def require_unique_elements(self) -> Self:
@@ -103,7 +124,7 @@ class OrderedIntegerDifference(StrictModel):
     difference: AdditiveDifferenceInteger
 
     @classmethod
-    def _from_kernel(cls, minuend: str, subtrahend: str, difference: str) -> Self:
+    def _from_kernel(cls, minuend: int, subtrahend: int, difference: int) -> Self:
         return cls.model_construct(
             minuend=minuend,
             subtrahend=subtrahend,
@@ -115,7 +136,7 @@ class IntegerSidonResult(StrictModel):
     """Complete ordered-difference profile and exact Sidon decision."""
 
     normalized_elements: tuple[AdditiveInteger, ...] = Field(
-        max_length=MAX_SIDON_SET_SIZE
+        max_length=MAX_SIDON_SET_SIZE,
     )
     ordered_differences: tuple[OrderedIntegerDifference, ...] = Field(
         max_length=MAX_SIDON_ORDERED_DIFFERENCES
@@ -124,7 +145,7 @@ class IntegerSidonResult(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_profile_shape(self) -> Self:
-        values = tuple(int(value) for value in self.normalized_elements)
+        values = self.normalized_elements
         if values != tuple(sorted(set(values))):
             raise _difference_set_validation_error(
                 "combinatorics.sidon_invariant",
@@ -143,9 +164,9 @@ class IntegerSidonResult(StrictModel):
         ):
             difference = left - right
             if (
-                int(record.minuend) != left
-                or int(record.subtrahend) != right
-                or int(record.difference) != difference
+                record.minuend != left
+                or record.subtrahend != right
+                or record.difference != difference
             ):
                 raise _difference_set_validation_error(
                     "combinatorics.sidon_invariant",

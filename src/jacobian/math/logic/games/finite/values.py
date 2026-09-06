@@ -11,6 +11,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.math._labels import OpaqueLabel
 
 MAX_TERMINAL_GAME_POSITIONS = 4_096
@@ -267,7 +268,11 @@ def _require_terminal_game_envelope(game: DeterministicTerminalGame) -> None:
     threshold_count = len({(payoff.num, payoff.den) for payoff in payoffs})
     terminal_count = len(payoffs) - 1
     max_digits = max(
-        max(len(payoff.num.lstrip("-")), len(payoff.den)) for payoff in payoffs
+        max(
+            len(format_canonical_integer(payoff.num)),
+            len(format_canonical_integer(payoff.den)),
+        )
+        for payoff in payoffs
     )
     position_count = len(game.positions)
     move_count = len(game.moves)

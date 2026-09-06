@@ -22,7 +22,7 @@ from jacobian.math.geometry.projective.coordinates.operations import (
 )
 
 
-def _r(num: str, den: str = "1") -> CanonicalRational:
+def _r(num: int, den: int = 1) -> CanonicalRational:
     return CanonicalRational(num=num, den=den)
 
 
@@ -39,14 +39,14 @@ def test_catalog_contains_only_audited_operations() -> None:
 
 
 def test_rational_point_construct() -> None:
-    request = RationalPointConstructRequest(coordinates=(_r("2"), _r("4")))
+    request = RationalPointConstructRequest(coordinates=(_r(2), _r(4)))
     result = rational_projective_point(request.coordinates)
     assert result.point.coordinates[0].as_fraction() == 1
     assert result.point.coordinates[1].as_fraction() == 2
 
 
 def test_rational_point_construct_rejects_all_zero_coordinates() -> None:
-    request = RationalPointConstructRequest(coordinates=(_r("0"), _r("0")))
+    request = RationalPointConstructRequest(coordinates=(_r(0), _r(0)))
 
     with pytest.raises(OperationDomainValidationError, match="nonzero coordinate"):
         rational_projective_point(request.coordinates)
@@ -54,7 +54,7 @@ def test_rational_point_construct_rejects_all_zero_coordinates() -> None:
 
 def test_standard_chart() -> None:
     request = StandardChartRequest(
-        point=_point(_r("1"), _r("2"), _r("3")),
+        point=_point(_r(1), _r(2), _r(3)),
         chart_index=0,
     )
     result = standard_chart(request.point, request.chart_index)
@@ -64,7 +64,7 @@ def test_standard_chart() -> None:
 
 def test_chart_transition() -> None:
     request = ChartTransitionRequest(
-        point=_point(_r("1"), _r("2"), _r("3")),
+        point=_point(_r(1), _r(2), _r(3)),
         chart_i=0,
         chart_j=1,
     )
@@ -79,12 +79,12 @@ def test_chart_transition() -> None:
 
 def test_chart_transition_is_invariant_under_homogeneous_rescaling() -> None:
     original = ChartTransitionRequest(
-        point=_point(_r("1"), _r("2"), _r("3")),
+        point=_point(_r(1), _r(2), _r(3)),
         chart_i=0,
         chart_j=1,
     )
     rescaled = ChartTransitionRequest(
-        point=_point(_r("5"), _r("10"), _r("15")),
+        point=_point(_r(5), _r(10), _r(15)),
         chart_i=0,
         chart_j=1,
     )
@@ -99,7 +99,7 @@ def test_chart_transition_is_invariant_under_homogeneous_rescaling() -> None:
 
 def test_chart_transition_reports_outside_target_chart() -> None:
     request = ChartTransitionRequest(
-        point=_point(_r("1"), _r("0"), _r("3")),
+        point=_point(_r(1), _r(0), _r(3)),
         chart_i=0,
         chart_j=1,
     )
@@ -110,13 +110,13 @@ def test_chart_transition_reports_outside_target_chart() -> None:
 
 
 def test_chart_transition_rejects_unrepresentable_ratio_growth() -> None:
-    component = "1" + "0" * 16_384
+    component = 10**16_384
 
     request = ChartTransitionRequest(
         point=RationalProjectivePoint(
             coordinates=(
-                CanonicalRational(num=component, den="1"),
-                CanonicalRational(num="1", den=component),
+                CanonicalRational(num=component, den=1),
+                CanonicalRational(num=1, den=component),
             )
         ),
         chart_i=0,
@@ -127,19 +127,19 @@ def test_chart_transition_rejects_unrepresentable_ratio_growth() -> None:
 
 
 def test_chart_transition_round_trips_between_defined_charts() -> None:
-    point = _point(_r("2"), _r("3"), _r("5"))
+    point = _point(_r(2), _r(3), _r(5))
     forward = chart_transition(point, 0, 1)
     backward = chart_transition(point, 1, 0)
 
-    assert forward.transition == (_r("2", "3"), _r("5", "3"))
-    assert backward.transition == (_r("3", "2"), _r("5", "2"))
+    assert forward.transition == (_r(2, 3), _r(5, 3))
+    assert backward.transition == (_r(3, 2), _r(5, 2))
 
 
 def test_chart_transition_result_rejects_an_incomplete_target_chart() -> None:
     with pytest.raises(ValidationError):
         ChartTransitionResult(
             status="DEFINED",
-            transition=(_r("1"),),
+            transition=(_r(1),),
             chart_i=0,
             chart_j=1,
             projective_dimension=2,

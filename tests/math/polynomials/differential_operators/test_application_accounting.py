@@ -26,7 +26,7 @@ from jacobian.math.polynomials.values import (
 
 
 def _one() -> CanonicalRational:
-    return CanonicalRational(num="1", den="1")
+    return CanonicalRational(num=1, den=1)
 
 
 def _request() -> DifferentialOperatorApplyRequest:

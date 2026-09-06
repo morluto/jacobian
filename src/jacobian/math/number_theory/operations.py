@@ -9,9 +9,9 @@ from itertools import product
 from time import monotonic
 from typing import Literal, SupportsIndex, cast
 
-from jacobian._exact import CanonicalInteger, CanonicalRational
+from jacobian._exact import CanonicalRational
 from jacobian._execution import current_request_execution
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.number_theory._binomial_valuation_models import (
@@ -153,17 +153,15 @@ __all__ = [
 ]
 
 
-def _integer(value: SupportsIndex | CanonicalInteger | IntegerValue) -> int:
+def _integer(value: SupportsIndex | IntegerValue) -> int:
     if isinstance(value, IntegerValue):
-        return parse_canonical_integer(value.value)
-    if isinstance(value, str):
-        return parse_canonical_integer(value)
+        return value.value
     return operator.index(value)
 
 
 def contiguous_sum_profile(
-    lower_bound: SupportsIndex | CanonicalInteger | IntegerValue,
-    upper_bound: SupportsIndex | CanonicalInteger | IntegerValue,
+    lower_bound: SupportsIndex | IntegerValue,
+    upper_bound: SupportsIndex | IntegerValue,
 ) -> ContiguousSumProfileResult:
     """Count contiguous-sum representations on a closed positive interval."""
 
@@ -177,7 +175,7 @@ def contiguous_sum_profile(
     return run_contiguous_sum_profile(admission, profile_started=started_at)
 
 
-def is_prime(value: SupportsIndex | CanonicalInteger | IntegerValue) -> BooleanResult:
+def is_prime(value: SupportsIndex | IntegerValue) -> BooleanResult:
     """Return whether an integer is prime."""
 
     from sympy import isprime
@@ -185,70 +183,66 @@ def is_prime(value: SupportsIndex | CanonicalInteger | IntegerValue) -> BooleanR
     return BooleanResult(holds=bool(isprime(_integer(value))))
 
 
-def next_prime(value: SupportsIndex | CanonicalInteger | IntegerValue) -> IntegerValue:
+def next_prime(value: SupportsIndex | IntegerValue) -> IntegerValue:
     """Return the least prime strictly greater than an integer."""
 
     from sympy import nextprime
 
-    return IntegerValue(value=format_canonical_integer(int(nextprime(_integer(value)))))
+    return IntegerValue(value=int(nextprime(_integer(value))))
 
 
 def previous_prime(
-    value: SupportsIndex | CanonicalInteger | IntegerValue,
+    value: SupportsIndex | IntegerValue,
 ) -> IntegerValue:
     """Return the greatest prime strictly below an integer."""
 
     from sympy import prevprime
 
-    return IntegerValue(value=format_canonical_integer(int(prevprime(_integer(value)))))
+    return IntegerValue(value=int(prevprime(_integer(value))))
 
 
-def prime_count(value: SupportsIndex | CanonicalInteger | IntegerValue) -> IntegerValue:
+def prime_count(value: SupportsIndex | IntegerValue) -> IntegerValue:
     """Return the number of primes not exceeding a nonnegative integer."""
 
     from sympy import primepi
 
-    return IntegerValue(value=format_canonical_integer(int(primepi(_integer(value)))))
+    return IntegerValue(value=int(primepi(_integer(value))))
 
 
-def nth_prime(index: SupportsIndex | CanonicalInteger | IntegerValue) -> IntegerValue:
+def nth_prime(index: SupportsIndex | IntegerValue) -> IntegerValue:
     """Return the prime at one-based positive index."""
 
     from sympy import prime
 
-    return IntegerValue(value=format_canonical_integer(int(prime(_integer(index)))))
+    return IntegerValue(value=int(prime(_integer(index))))
 
 
 def primorial(
-    index: SupportsIndex | CanonicalInteger | IntegerValue,
+    index: SupportsIndex | IntegerValue,
 ) -> PrimorialResult:
     """Return the product of the first ``index`` primes."""
 
     from sympy import primorial as sympy_primorial
 
-    return PrimorialResult(
-        value=format_canonical_integer(int(sympy_primorial(_integer(index))))
-    )
+    return PrimorialResult(value=int(sympy_primorial(_integer(index))))
 
 
 def euler_totient(
-    value: SupportsIndex | CanonicalInteger | IntegerValue,
+    value: SupportsIndex | IntegerValue,
 ) -> IntegerValue:
     """Return Euler's totient of a positive integer."""
 
     from sympy import totient
 
-    return IntegerValue(value=format_canonical_integer(int(totient(_integer(value)))))
+    return IntegerValue(value=int(totient(_integer(value))))
 
 
-def mobius(value: SupportsIndex | CanonicalInteger | IntegerValue) -> IntegerValue:
+def mobius(value: SupportsIndex | IntegerValue) -> IntegerValue:
     """Return the Mobius function of a positive integer."""
 
     from sympy import mobius as sympy_mobius
 
-    return IntegerValue(
-        value=format_canonical_integer(int(sympy_mobius(_integer(value))))
-    )
+    return IntegerValue(value=int(sympy_mobius(_integer(value))))
 
 
 def _simple_sieve(limit: int) -> tuple[int, ...]:
@@ -358,11 +352,9 @@ def _factorial_valuation(
     from sympy.ntheory import multiplicity_in_factorial
 
     return FactorialValuationResult.model_construct(
-        n=format_canonical_integer(admitted.n),
-        base=format_canonical_integer(admitted.base),
-        valuation=format_canonical_integer(
-            int(multiplicity_in_factorial(admitted.base, admitted.n))
-        ),
+        n=admitted.n,
+        base=admitted.base,
+        valuation=int(multiplicity_in_factorial(admitted.base, admitted.n)),
     )
 
 
@@ -387,14 +379,14 @@ def _binomial_prime_valuation(
         carry = int(left_digit + right_digit + carry >= admitted.prime)
         carries += carry
     return BinomialPrimeValuationResult.model_construct(
-        n=format_canonical_integer(admitted.n),
-        k=format_canonical_integer(admitted.k),
-        prime=format_canonical_integer(admitted.prime),
-        valuation=format_canonical_integer(carries),
+        n=admitted.n,
+        k=admitted.k,
+        prime=admitted.prime,
+        valuation=carries,
     )
 
 
-def _modular_integer(value: SupportsIndex | CanonicalInteger | IntegerValue) -> int:
+def _modular_integer(value: SupportsIndex | IntegerValue) -> int:
     """Convert one native integer value without accepting request envelopes."""
 
     return _integer(value)
@@ -412,7 +404,7 @@ def _require_modulus(modulus: int) -> None:
 
 
 def _require_bounded_integer(value: int, *, location: tuple[str, ...]) -> None:
-    if len(str(abs(value))) > MAX_INTEGER_DIGITS:
+    if len(format_canonical_integer(abs(value))) > MAX_INTEGER_DIGITS:
         raise OperationDomainValidationError(
             location=location,
             code="number_theory.integer_exceeds_digit_bound",
@@ -421,7 +413,7 @@ def _require_bounded_integer(value: int, *, location: tuple[str, ...]) -> None:
 
 
 def jacobi_symbol(
-    a: SupportsIndex | CanonicalInteger | IntegerValue,
+    a: SupportsIndex | IntegerValue,
     n: SupportsIndex,
 ) -> JacobiSymbolResult:
     """Return the Jacobi symbol ``(a / n)`` for an odd positive denominator."""
@@ -439,7 +431,7 @@ def jacobi_symbol(
     from sympy import jacobi_symbol as sympy_jacobi_symbol
 
     return JacobiSymbolResult(
-        a=format_canonical_integer(a_value),
+        a=a_value,
         n=n_value,
         jacobi=cast(
             Literal[-1, 0, 1],
@@ -460,7 +452,7 @@ def _require_unit(value: int, modulus: int) -> None:
 
 
 def modular_inverse(
-    value: SupportsIndex | CanonicalInteger | IntegerValue,
+    value: SupportsIndex | IntegerValue,
     modulus: SupportsIndex,
 ) -> IntegerValue:
     """Return the least nonnegative inverse of a unit modulo ``modulus``."""
@@ -468,13 +460,11 @@ def modular_inverse(
     value_integer = _modular_integer(value)
     modulus_integer = operator.index(modulus)
     _require_unit(value_integer, modulus_integer)
-    return IntegerValue(
-        value=format_canonical_integer(pow(value_integer, -1, modulus_integer))
-    )
+    return IntegerValue(value=pow(value_integer, -1, modulus_integer))
 
 
 def multiplicative_order(
-    value: SupportsIndex | CanonicalInteger | IntegerValue,
+    value: SupportsIndex | IntegerValue,
     modulus: SupportsIndex,
 ) -> IntegerValue:
     """Return the multiplicative order of a unit modulo ``modulus``."""
@@ -484,9 +474,7 @@ def multiplicative_order(
     _require_unit(value_integer, modulus_integer)
     from sympy import n_order
 
-    return IntegerValue(
-        value=format_canonical_integer(int(n_order(value_integer, modulus_integer)))
-    )
+    return IntegerValue(value=int(n_order(value_integer, modulus_integer)))
 
 
 def quadratic_residues(modulus: SupportsIndex) -> QuadraticResiduesResult:
@@ -500,8 +488,7 @@ def quadratic_residues(modulus: SupportsIndex) -> QuadraticResiduesResult:
 
     return QuadraticResiduesResult(
         residues=tuple(
-            format_canonical_integer(int(value))
-            for value in sympy_quadratic_residues(modulus_integer)
+            int(value) for value in sympy_quadratic_residues(modulus_integer)
         )
     )
 
@@ -576,8 +563,8 @@ def chinese_remainder(
         raise AssertionError("admitted congruence system was not solved")
     residue, modulus = result
     return ChineseRemainderResult(
-        residue=format_canonical_integer(int(residue)),
-        modulus=format_canonical_integer(int(modulus)),
+        residue=int(residue),
+        modulus=int(modulus),
     )
 
 
@@ -639,7 +626,7 @@ def _require_residue_image_admission(
             message="every term exponent vector must match the variable count",
         )
     if any(
-        len(term.coefficient) > MAX_INTEGER_DIGITS
+        abs(term.coefficient) >= 10**MAX_INTEGER_DIGITS
         or any(
             exponent < 0 or exponent > _MAX_RESIDUE_EXPONENT
             for exponent in term.exponents
@@ -872,8 +859,8 @@ def divisibility_incidence_graph(
         if right % left == 0
     )
     return DivisibilityIncidenceGraphResult(
-        left_family=tuple(format_canonical_integer(value) for value in left_family),
-        right_family=tuple(format_canonical_integer(value) for value in right_family),
+        left_family=left_family,
+        right_family=right_family,
         graph=SimpleUndirectedGraph(vertices=vertices, edges=edges),
     )
 
@@ -895,7 +882,7 @@ def gcd_quotient_profile(
         )
         quotients.append(row)
     return GcdQuotientProfileResult(
-        elements=tuple(format_canonical_integer(value) for value in elements),
+        elements=tuple(elements),
         quotients=tuple(quotients),
     )
 
@@ -913,7 +900,7 @@ def product_divisibility_profile(
         for left in elements
     )
     return ProductDivisibilityProfileResult(
-        elements=tuple(format_canonical_integer(value) for value in elements),
+        elements=tuple(elements),
         divisibility_matrix=matrix,
     )
 
@@ -1024,10 +1011,10 @@ def _admit_periodic_source(
 def _periodic_measure_values(
     period: int,
     occupied_count: int,
-) -> tuple[str, str, CanonicalRational]:
+) -> tuple[int, int, CanonicalRational]:
     return (
-        format_canonical_integer(period),
-        format_canonical_integer(occupied_count),
+        period,
+        occupied_count,
         CanonicalRational.from_fraction(Fraction(occupied_count, period)),
     )
 
@@ -1064,9 +1051,7 @@ def periodic_congruence_union_profile(
         common_period=period,
         occupied_count=occupied_count,
         density=density,
-        occupied_residues=tuple(
-            format_canonical_integer(residue) for residue in residues
-        ),
+        occupied_residues=tuple(residues),
     )
 
 
@@ -1076,7 +1061,7 @@ def ksigma_preimage(k: int, target: int) -> KSigmaPreimageResult:
     preimages = ksigma_preimages(k, target)
     return KSigmaPreimageResult._from_kernel(
         k=k,
-        target_value=format_canonical_integer(target),
+        target_value=target,
         preimages=preimages,
     )
 
@@ -1090,13 +1075,13 @@ def p_adic_interval_profile(
 
     plan = admit_p_adic_interval_profile(start, length, prime)
     return PAdicIntervalProfileResult._from_kernel(
-        start=format_canonical_integer(start),
-        length=format_canonical_integer(length),
-        prime=format_canonical_integer(prime),
+        start=start,
+        length=length,
+        prime=prime,
         rows=tuple(
             PAdicIntervalProfileRow(
                 valuation=valuation,
-                count=format_canonical_integer(count),
+                count=count,
             )
             for valuation, count in plan.rows
         ),

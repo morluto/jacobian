@@ -22,7 +22,6 @@ from jacobian._execution import (
     current_request_execution,
 )
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory.number_fields._embeddings_process import (
     embeddings_worker_cancelled,
 )
@@ -445,9 +444,7 @@ def _power_sum_coordinate_bounds(
     )
     numerator_l1 = sum(abs(value) for value in integer_coordinates)
     field = base.presentation
-    defining = tuple(
-        parse_canonical_integer(value) for value in field.coefficients_descending
-    )
+    defining = tuple(value for value in field.coefficients_descending)
     degree = field.degree
     base_polynomial_degree = max(
         (index for index, coefficient in enumerate(integer_coordinates) if coefficient),

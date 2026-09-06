@@ -1,8 +1,10 @@
 """Tests for finite game theory operations."""
 
+import json
 from fractions import Fraction
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.logic.games.finite._models import (
@@ -22,6 +24,27 @@ def _r(value: int | Fraction) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(value))
 
 
+def test_rectangular_game_results_retain_axes_after_serialization() -> None:
+    matrix = PayoffMatrix(n_rows=1, n_cols=3, entries=(_r(3), _r(-2), _r(4)))
+    for result in (best_response(matrix), nash_equilibrium(matrix)):
+        parsed = type(result).model_validate_json(result.model_dump_json())
+        assert parsed.payoff_matrix == matrix
+        assert parsed.value.as_fraction() == -2
+
+
+def test_equilibrium_parsing_checks_axes_without_resolving_game() -> None:
+    matrix = PayoffMatrix(n_rows=1, n_cols=2, entries=(_r(1), _r(2)))
+    result = nash_equilibrium(matrix)
+    payload = result.model_dump(mode="json")
+    payload["value"] = _r(17).model_dump(mode="json")
+    assert (
+        type(result).model_validate_json(json.dumps(payload)).value.as_fraction() == 17
+    )
+    payload["col_strategy"] = [_r(1).model_dump(mode="json")]
+    with pytest.raises(ValidationError, match="row and column axes"):
+        type(result).model_validate_json(json.dumps(payload))
+
+
 class TestBestResponse:
     def test_simple(self) -> None:
         req = ZeroSumGameRequest(
@@ -37,6 +60,7 @@ class TestBestResponse:
             ),
         )
         result = best_response(req.payoff_matrix)
+        assert result.payoff_matrix == req.payoff_matrix
         assert result.best_row == 0  # Row 0 has minimum 0, Row 1 has minimum 0
         decoded = type(result).model_validate_json(result.model_dump_json())
         assert verify_best_response(decoded)
@@ -95,6 +119,7 @@ class TestNashEquilibrium:
             ),
         )
         result = nash_equilibrium(req.payoff_matrix)
+        assert result.payoff_matrix == req.payoff_matrix
         assert result.value.as_fraction() == 1  # (0,0) is the pure equilibrium
         decoded = type(result).model_validate_json(result.model_dump_json())
         assert verify_nash_equilibrium(decoded)

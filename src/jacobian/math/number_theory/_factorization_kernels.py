@@ -21,7 +21,6 @@ from jacobian.canonical import (
     encode_strict_json,
     format_canonical_integer,
     loads_strict_json,
-    parse_canonical_integer,
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._certification_models import (
@@ -120,7 +119,7 @@ def _build_pratt_certificate(prime: int) -> PrattCertificateNode:
     ``q`` is then recursively certified.
     """
     if prime == _PRATT_BASE_PRIME:
-        return PrattCertificateNode(prime="2")
+        return PrattCertificateNode(prime=2)
 
     from sympy import factorint, primitive_root
 
@@ -134,15 +133,15 @@ def _build_pratt_certificate(prime: int) -> PrattCertificateNode:
 
     factors = tuple(
         PrattCertificateFactor(
-            prime=format_canonical_integer(int(prime_factor)),
+            prime=int(prime_factor),
             exponent=int(exponent),
             certificate=_build_pratt_certificate(int(prime_factor)),
         )
         for prime_factor, exponent in factors_of_pmo
     )
     return PrattCertificateNode(
-        prime=format_canonical_integer(prime),
-        witness=format_canonical_integer(witness),
+        prime=prime,
+        witness=witness,
         factors=factors,
     )
 
@@ -156,7 +155,7 @@ def compute_pratt_certificate(
     """
     from sympy import isprime
 
-    value = parse_canonical_integer(request.value)
+    value = request.value
     if not isprime(value):
         return PrimalityCertificateResult._from_kernel(
             status="COMPOSITE", value=request.value
@@ -170,17 +169,15 @@ def compute_pratt_certificate(
 
 def verify_pratt_certificate(claim: PrattCertificateNode) -> bool:
     """Return whether a Pratt node proves the primality it claims."""
-    prime = parse_canonical_integer(claim.prime)
+    prime = claim.prime
     if prime == _PRATT_BASE_PRIME:
         return claim.witness is None and not claim.factors
     if prime < 2 or claim.witness is None:
         return False
-    witness = parse_canonical_integer(claim.witness)
+    witness = claim.witness
     if not 2 <= witness < prime or pow(witness, prime - 1, prime) != 1:
         return False
-    factor_primes = tuple(
-        parse_canonical_integer(factor.prime) for factor in claim.factors
-    )
+    factor_primes = tuple(factor.prime for factor in claim.factors)
     if factor_primes != tuple(sorted(factor_primes)) or len(set(factor_primes)) != len(
         factor_primes
     ):
@@ -194,7 +191,7 @@ def verify_pratt_certificate(claim: PrattCertificateNode) -> bool:
     ):
         return False
     return all(
-        parse_canonical_integer(factor.certificate.prime) == factor_prime
+        factor.certificate.prime == factor_prime
         and pow(witness, (prime - 1) // factor_prime, prime) != 1
         and verify_pratt_certificate(factor.certificate)
         for factor_prime, factor in zip(factor_primes, claim.factors, strict=True)
@@ -203,13 +200,12 @@ def verify_pratt_certificate(claim: PrattCertificateNode) -> bool:
 
 def verify_certified_factorization(claim: CertifiedFactorizationResult) -> bool:
     """Return whether factor claims reconstruct their source with valid proofs."""
-    value = parse_canonical_integer(claim.value)
-    primes = tuple(parse_canonical_integer(factor.prime) for factor in claim.factors)
+    value = claim.value
+    primes = tuple(factor.prime for factor in claim.factors)
     if value < 2 or primes != tuple(sorted(primes)) or len(set(primes)) != len(primes):
         return False
     if any(
-        parse_canonical_integer(factor.certificate.prime)
-        != parse_canonical_integer(factor.prime)
+        factor.certificate.prime != factor.prime
         or not verify_pratt_certificate(factor.certificate)
         for factor in claim.factors
     ):
@@ -225,14 +221,14 @@ def verify_primality_certificate(claim: PrimalityCertificateResult) -> bool:
     """Return whether a primality status is supported by its declared evidence."""
     from sympy import isprime
 
-    value = parse_canonical_integer(claim.value)
+    value = claim.value
     if value < 2:
         return False
     if claim.status == "COMPOSITE":
         return claim.certificate is None and not isprime(value)
     return (
         claim.certificate is not None
-        and parse_canonical_integer(claim.certificate.prime) == value
+        and claim.certificate.prime == value
         and verify_pratt_certificate(claim.certificate)
     )
 
@@ -253,11 +249,11 @@ def _factorize_certified_in_process(
     """
     from sympy import factorint
 
-    value = parse_canonical_integer(request.value)
+    value = request.value
     decomposition = sorted(factorint(value).items())
     factors = tuple(
         CertifiedFactor(
-            prime=format_canonical_integer(int(prime)),
+            prime=int(prime),
             exponent=int(exponent),
             certificate=_build_pratt_certificate(int(prime)),
         )
@@ -284,7 +280,9 @@ def factorize_certified(
         with TemporaryDirectory(
             prefix="jacobian-certified-factor-"
         ) as worker_directory:
-            input_bytes = encode_strict_json({"value": request.value})
+            input_bytes = encode_strict_json(
+                {"value": format_canonical_integer(request.value)}
+            )
             completed = run_bounded_process(
                 [sys.executable, str(_CERTIFIED_FACTORIZATION_WORKER)],
                 input_bytes=input_bytes,
@@ -324,7 +322,9 @@ def factorize_certified(
             raise ValueError("worker failure")
         if response["request_digest"] != hashlib.sha256(input_bytes).hexdigest():
             raise ValueError("worker response is not bound to its request")
-        return CertifiedFactorizationResult.model_validate(response["result"])
+        return CertifiedFactorizationResult.model_validate_json(
+            encode_strict_json(response["result"]), strict=True
+        )
     except (KeyError, TypeError, ValueError, CanonicalizationError) as exc:
         raise RuntimeError(
             "bounded factorization worker returned malformed output"
@@ -443,7 +443,10 @@ def _bounded_direct_factorization(  # noqa: C901
         if not isinstance(raw_factors, list):
             raise ValueError("factors must be a list")
         factors = tuple(
-            PrimePower.model_validate({"prime": pair[0], "power": pair[1]})
+            PrimePower.model_validate_json(
+                encode_strict_json({"prime": pair[0], "power": pair[1]}),
+                strict=True,
+            )
             for pair in raw_factors
         )
         if len(factors) > MAX_DIRECT_FACTOR_ENTRIES:
@@ -483,7 +486,7 @@ def _bounded_direct_factorization(  # noqa: C901
 
 def _divisors_from_factors(
     factors: tuple[PrimePower, ...], *, proper: bool
-) -> tuple[str, ...]:
+) -> tuple[int, ...]:
     divisor_count = math.prod(factor.power + 1 for factor in factors)
     output_count = divisor_count - int(proper)
     if output_count > MAX_DIRECT_DIVISORS:
@@ -495,7 +498,7 @@ def _divisors_from_factors(
         for _ in range(factor.power):
             power_values.append(power_values[-1] * prime)
         divisors = [base * power for base in divisors for power in power_values]
-    ordered = tuple(str(divisor) for divisor in sorted(divisors))
+    ordered = tuple(sorted(divisors))
     return ordered[:-1] if proper else ordered
 
 

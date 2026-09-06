@@ -2,7 +2,6 @@
 
 from typing import Any
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory.counting._models import (
     CongruenceBoxCountRequest,
@@ -22,9 +21,7 @@ def compute_floor_sum(request: FloorSumRequest) -> FloorSumResult:
         m=request.m,
         a=request.a,
         b=request.b,
-        value=format_canonical_integer(
-            floor_sum(request.n, request.m, request.a, request.b)
-        ),
+        value=floor_sum(request.n, request.m, request.a, request.b),
     )
 
 

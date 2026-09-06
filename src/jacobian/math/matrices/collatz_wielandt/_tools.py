@@ -38,12 +38,12 @@ TOOLS: MathTools = (
                     "matrix": RationalMatrix(
                         entries=(
                             (
-                                CanonicalRational(num="1", den="1"),
-                                CanonicalRational(num="0", den="1"),
+                                CanonicalRational(num=1, den=1),
+                                CanonicalRational(num=0, den=1),
                             ),
                             (
-                                CanonicalRational(num="0", den="1"),
-                                CanonicalRational(num="1", den="1"),
+                                CanonicalRational(num=0, den=1),
+                                CanonicalRational(num=1, den=1),
                             ),
                         )
                     ).model_dump(mode="json"),

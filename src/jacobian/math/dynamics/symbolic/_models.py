@@ -7,9 +7,8 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer
 from jacobian.math.dynamics.symbolic.values import (
     MAX_FORBIDDEN_BLOCK_LENGTH,
     MAX_PERIOD,
@@ -61,9 +60,9 @@ class PeriodicPointProfileRequest(StrictModel):
 
 class PeriodicPointProfileResult(PeriodicPointProfileRequest):
     periods: tuple[int, ...]
-    fixed_point_counts: tuple[CanonicalInteger, ...]
-    least_period_point_counts: tuple[CanonicalInteger, ...]
-    primitive_orbit_counts: tuple[CanonicalInteger, ...]
+    fixed_point_counts: tuple[ExactInteger, ...]
+    least_period_point_counts: tuple[ExactInteger, ...]
+    primitive_orbit_counts: tuple[ExactInteger, ...]
     complete_through_period: int = Field(ge=1, le=MAX_PERIOD)
 
     @model_validator(mode="after")
@@ -158,13 +157,9 @@ def _from_kernel_periodic_point_profile(
     return PeriodicPointProfileResult(
         **request.model_dump(),
         periods=tuple(range(1, request.max_period + 1)),
-        fixed_point_counts=tuple(format_canonical_integer(value) for value in fixed),
-        least_period_point_counts=tuple(
-            format_canonical_integer(value) for value in exact
-        ),
-        primitive_orbit_counts=tuple(
-            format_canonical_integer(value) for value in orbits
-        ),
+        fixed_point_counts=tuple(fixed),
+        least_period_point_counts=tuple(value for value in exact),
+        primitive_orbit_counts=tuple(value for value in orbits),
         complete_through_period=request.max_period,
     )
 

@@ -16,7 +16,11 @@ from pydantic import (
 )
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import (
+    CanonicalRational,
+    DecimalIntegerEncoding,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.analysis.intervals import ClosedRationalInterval
 
@@ -83,8 +87,11 @@ def _bound_raw_rational(
     else:
         return
     if any(
-        isinstance(component, str)
-        and len(component) - component.startswith("-") > max_digits
+        (
+            isinstance(component, str)
+            and len(component) - component.startswith("-") > max_digits
+        )
+        or (type(component) is int and abs(component) >= 10**max_digits)
         for component in components
     ):
         raise _validation_error(f"{label} exceeds the {max_digits}-digit bound")
@@ -572,14 +579,20 @@ class _IntervalExpressionBoxRequest(StrictModel):
 class ExactDyadic(StrictModel):
     """The exact value ``mantissa * 2**exponent``."""
 
-    mantissa: str = Field(
-        pattern=r"^-?(?:0|[1-9][0-9]*)$", max_length=MAX_DYADIC_MANTISSA_DIGITS
-    )
+    mantissa: Annotated[
+        int, DecimalIntegerEncoding(max_digits=MAX_DYADIC_MANTISSA_DIGITS)
+    ] = Field(json_schema_extra={"maxLength": MAX_DYADIC_MANTISSA_DIGITS})
     exponent: StrictInt = Field(ge=-MAX_DYADIC_EXPONENT, le=MAX_DYADIC_EXPONENT)
 
     @model_validator(mode="after")
     def require_canonical_binary_form(self) -> Self:
-        mantissa = int(self.mantissa)
+        mantissa = self.mantissa
+        # The historical string contract counted the optional sign in its
+        # character bound; retain that asymmetry after native migration.
+        if abs(mantissa) >= 10 ** (MAX_DYADIC_MANTISSA_DIGITS - int(mantissa < 0)):
+            raise _validation_error(
+                "dyadic mantissa exceeds the signed character bound"
+            )
         if mantissa == 0 and self.exponent != 0:
             raise _validation_error("canonical dyadic zero must have exponent 0")
         if mantissa != 0 and mantissa % 2 == 0:
@@ -587,7 +600,7 @@ class ExactDyadic(StrictModel):
         return self
 
     def as_fraction(self) -> Fraction:
-        mantissa = Fraction(int(self.mantissa))
+        mantissa = Fraction(self.mantissa)
         if self.exponent >= 0:
             return mantissa * Fraction(2**self.exponent, 1)
         return mantissa / Fraction(2 ** (-self.exponent), 1)
@@ -595,8 +608,8 @@ class ExactDyadic(StrictModel):
     def compare(self, other: ExactDyadic) -> int:
         """Compare two dyadics without materializing either power of two."""
 
-        left = int(self.mantissa)
-        right = int(other.mantissa)
+        left = self.mantissa
+        right = other.mantissa
         if left == 0 or right == 0 or (left < 0) != (right < 0):
             return (left > right) - (left < right)
 

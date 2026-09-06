@@ -278,7 +278,9 @@ def test_derived_matrix_composes_unchanged_with_matrix_rank_compute() -> None:
 
     profile = planar_rigidity_profile(source, source_graph)
     serialized_matrix = profile.matrix_rank.matrix.model_dump(mode="json")
-    request = MatrixRankRequest.model_validate({"matrix": serialized_matrix})
+    request = MatrixRankRequest.model_validate_json(
+        json.dumps({"matrix": serialized_matrix})
+    )
     composed = rank_result(request.matrix)
 
     assert request.matrix == profile.matrix_rank.matrix
@@ -299,7 +301,7 @@ def test_profile_round_trip_is_structural_and_source_bound() -> None:
     forged = result.model_dump(mode="json")
     forged["edge_axis"] = [["a", "c"], ["a", "b"], ["b", "c"]]
     with pytest.raises(ValidationError, match="lexicographically sorted"):
-        PlanarRigidityProfile.model_validate(forged)
+        PlanarRigidityProfile.model_validate_json(json.dumps(forged))
 
 
 def test_serialized_profile_verifier_rejects_forged_matrix_claim() -> None:
@@ -378,6 +380,7 @@ def test_rigidity_rows_replay_the_squared_length_differentials() -> None:
     positions = {label: index for index, label in enumerate(result.vertex_axis)}
     expected: dict[tuple[int, int], Fraction] = {}
     for row, (left, right) in enumerate(result.edge_axis):
+        assert isinstance(left, str) and isinstance(right, str)
         for coordinate in range(2):
             difference = (
                 point_coordinates[left][coordinate]
@@ -507,18 +510,20 @@ def test_coordinate_work_accepts_and_rejects_the_exact_edge_boundary() -> None:
         planar_rigidity_profile(source, rejected_graph)
 
     with pytest.raises(ValidationError, match="work bound"):
-        PlanarRigidityProfileRequest.model_validate(
-            {
-                "configuration": source.model_dump(mode="json"),
-                "graph": rejected_graph.model_dump(mode="json"),
-            }
+        PlanarRigidityProfileRequest.model_validate_json(
+            json.dumps(
+                {
+                    "configuration": source.model_dump(mode="json"),
+                    "graph": rejected_graph.model_dump(mode="json"),
+                }
+            )
         )
 
 
 def test_edgeless_native_call_still_enforces_source_parse_work() -> None:
     large_coordinate = CanonicalRational(
-        num="1" + "0" * (MAX_CANONICAL_RATIONAL_DIGITS - 1),
-        den="9" * MAX_CANONICAL_RATIONAL_DIGITS,
+        num=10 ** (MAX_CANONICAL_RATIONAL_DIGITS - 1),
+        den=10**MAX_CANONICAL_RATIONAL_DIGITS - 1,
     )
     source = PointConfiguration(
         points=(

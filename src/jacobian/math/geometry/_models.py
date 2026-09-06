@@ -56,10 +56,10 @@ def _require_bounded_configuration(points: tuple[RationalPoint2D, ...]) -> None:
 def _max_coordinate_digits(points: tuple[RationalPoint2D, ...]) -> int:
     return max(
         max(
-            len(p.x.num.lstrip("-")),
-            len(p.x.den),
-            len(p.y.num.lstrip("-")),
-            len(p.y.den),
+            len(format_canonical_integer(abs(p.x.num))),
+            len(format_canonical_integer(p.x.den)),
+            len(format_canonical_integer(abs(p.y.num))),
+            len(format_canonical_integer(p.y.den)),
         )
         for p in points
     )
@@ -362,8 +362,8 @@ def _inverted_components_within_bound(
 
 def _require_inversion_admission_bound(value: CanonicalRational, label: str) -> None:
     if (
-        len(value.num.lstrip("-")) > INVERSION_ADMISSION_DIGITS
-        or len(value.den.lstrip("-")) > INVERSION_ADMISSION_DIGITS
+        len(format_canonical_integer(abs(value.num))) > INVERSION_ADMISSION_DIGITS
+        or len(format_canonical_integer(abs(value.den))) > INVERSION_ADMISSION_DIGITS
     ):
         raise _validation_error(
             "label_exceeds_inversion_admission_digits_digit",

@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, cast
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices import _conversions as conversions
 from jacobian.math.matrices._operation_models import (
@@ -397,7 +397,7 @@ def _admit_rational(matrix: RationalMatrix) -> None:
 
 
 def _admit_exact_linear_matrix(
-    entries: tuple[tuple[CanonicalRational | str, ...], ...],
+    entries: tuple[tuple[CanonicalRational | str | int, ...], ...],
     column_count: int | None = None,
 ) -> None:
     from jacobian.math.matrices.values import require_matrix_scalar_digits
@@ -422,10 +422,12 @@ def _admit_exact_linear_matrix(
     rank_bound = min(rows, columns)
     scalar_digits = max(
         len(component.lstrip("-"))
+        if isinstance(component, str)
+        else len(format_canonical_integer(abs(component)))
         for row in entries
         for value in row
         for component in (
-            (value,) if isinstance(value, str) else (value.num, value.den)
+            (value,) if isinstance(value, (str, int)) else (value.num, value.den)
         )
     )
     work = rows * columns * rank_bound * scalar_digits
@@ -439,12 +441,10 @@ def _admit_exact_linear_matrix(
     row_numerator_bits: list[int] = []
     row_denominator_bits: list[int] = []
     for row in entries:
-        if isinstance(row[0], str):
-            integer_row = cast(tuple[str, ...], row)
+        if isinstance(row[0], int):
+            integer_row = cast(tuple[int, ...], row)
             row_numerator_bits.append(
-                max(
-                    parse_canonical_integer(value).bit_length() for value in integer_row
-                )
+                max(value.bit_length() for value in integer_row)
                 + (columns.bit_length() + 1) // 2
             )
             row_denominator_bits.append(1)
@@ -543,7 +543,7 @@ def _sparse_rank_components(
                     for entry in source_entries
                 ),
                 scalar_digits=max(
-                    len(component.lstrip("-"))
+                    len(format_canonical_integer(abs(component)))
                     for entry in source_entries
                     for component in (entry.value.num, entry.value.den)
                 ),
@@ -881,8 +881,8 @@ def _admit_permanent(matrix: RationalMatrix) -> None:
         )
 
 
-def _denominator_digits(denominator: str) -> int:
-    return 0 if denominator == "1" else len(denominator)
+def _denominator_digits(denominator: int) -> int:
+    return 0 if denominator == 1 else len(format_canonical_integer(abs(denominator)))
 
 
 def _product_cell_digit_bound(
@@ -891,12 +891,12 @@ def _product_cell_digit_bound(
 ) -> int:
     """Bound one output cell after combining equal-denominator terms."""
 
-    combined_numerators: dict[str, int] = {}
+    combined_numerators: dict[int, int] = {}
     for left_value, right_value in zip(left_row, right_column, strict=True):
-        if left_value.num == "0" or right_value.num == "0":
+        if left_value.num == 0 or right_value.num == 0:
             continue
         product = left_value.as_fraction() * right_value.as_fraction()
-        key = format_canonical_integer(product.denominator)
+        key = product.denominator
         combined_numerators[key] = combined_numerators.get(key, 0) + product.numerator
     remaining = tuple(
         (key, numerator)
@@ -912,7 +912,9 @@ def _product_cell_digit_bound(
         1, max(_positive_decimal_digits(numerator) for _, numerator in remaining)
     )
     return max(
-        max_numerator_digits + denominator_digits + len(str(len(remaining))),
+        max_numerator_digits
+        + denominator_digits
+        + len(format_canonical_integer(len(remaining))),
         denominator_digits,
     )
 
@@ -1063,7 +1065,10 @@ def _admit_determinant(
     if order == 0:
         return entries
     input_digits = max(
-        max(len(str(abs(value.numerator))), len(str(value.denominator)))
+        max(
+            len(format_canonical_integer(abs(value.numerator))),
+            len(format_canonical_integer(value.denominator)),
+        )
         for row in entries
         for value in row
     )
@@ -1409,10 +1414,7 @@ def _smith_normal_form_kernel(matrix: IntegerMatrix) -> SmithNormalForm:
     from jacobian.math.matrices._flint import integer_smith_normal_form
 
     raw = integer_smith_normal_form(
-        tuple(
-            tuple(parse_canonical_integer(value) for value in row)
-            for row in matrix.entries
-        )
+        tuple(tuple(value for value in row) for row in matrix.entries)
     )
     diagonal = tuple(raw[index][index] for index in range(min(len(raw), len(raw[0]))))
     rank_value = next(
@@ -1422,9 +1424,7 @@ def _smith_normal_form_kernel(matrix: IntegerMatrix) -> SmithNormalForm:
     normal_form = IntegerMatrix(
         entries=tuple(
             tuple(
-                format_canonical_integer(factors[row])
-                if row == column and row < rank_value
-                else "0"
+                factors[row] if row == column and row < rank_value else 0
                 for column in range(len(raw[0]))
             )
             for row in range(len(raw))
@@ -1433,7 +1433,7 @@ def _smith_normal_form_kernel(matrix: IntegerMatrix) -> SmithNormalForm:
     return SmithNormalForm(
         normal_form=normal_form,
         rank=rank_value,
-        invariant_factors=tuple(format_canonical_integer(value) for value in factors),
+        invariant_factors=tuple(factors),
     )
 
 
@@ -1481,9 +1481,7 @@ def inverse_result(matrix: IntegerMatrix) -> MatrixInverseResult:
 def trace_result(matrix: IntegerMatrix) -> MatrixTraceResult:
     _admit(_admit_square_integer, matrix)
     return MatrixTraceResult(
-        trace=format_canonical_integer(
-            trace(conversions.integer_matrix_to_sympy(matrix))
-        )
+        trace=int(trace(conversions.integer_matrix_to_sympy(matrix)))
     )
 
 
@@ -1558,7 +1556,7 @@ def adjugate_result(matrix: IntegerMatrix) -> MatrixAdjugateResult:
 def permanent_result(matrix: RationalMatrix) -> MatrixPermanentResult:
     _admit(_admit_permanent, matrix)
     if matrix.row_count == 0:
-        return MatrixPermanentResult(permanent=CanonicalRational(num="1", den="1"))
+        return MatrixPermanentResult(permanent=CanonicalRational(num=1, den=1))
     value = permanent(conversions.rational_matrix_to_sympy(matrix))
     return MatrixPermanentResult(
         permanent=conversions.rational_from_sympy(value),

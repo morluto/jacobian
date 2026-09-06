@@ -10,6 +10,7 @@ from sympy import Poly, Symbol, cyclotomic_poly
 from sympy.polys.domains import ZZ
 from tests.math.groups.finite_abelian._support import finite_abelian_validation_error
 
+from jacobian.canonical import encode_strict_json
 from jacobian.math.groups import finite_abelian as domain
 from jacobian.math.groups._tools import TOOLS as GROUP_TOOLS
 from jacobian.math.groups.finite_abelian import (
@@ -67,7 +68,7 @@ def test_nonorthogonal_pair_returns_first_exact_remainder() -> None:
     # The fixed inner product uses lambda - mu. Here 0 - 1 = 3 mod 4,
     # so 1 + X^3 has remainder 1 - X modulo Phi_4 = X^2 + 1.
     assert witness.difference == (3,)
-    assert witness.remainder_coefficients == ("1", "-1")
+    assert witness.remainder_coefficients == (1, -1)
 
 
 def test_failure_witness_is_first_in_canonical_pair_order() -> None:
@@ -80,7 +81,7 @@ def test_failure_witness_is_first_in_canonical_pair_order() -> None:
     assert witness is not None
     assert (witness.left_frequency, witness.right_frequency) == ((0,), (3,))
     assert witness.difference == (3,)
-    assert witness.remainder_coefficients == ("1", "0")
+    assert witness.remainder_coefficients == (1, 0)
 
 
 def test_failure_remainder_reconstructs_character_polynomial_division() -> None:
@@ -480,7 +481,7 @@ def test_nonorthogonality_witness_admits_axes_beyond_the_former_rank_cap() -> No
     assert witness.left_frequency == zero
     assert witness.right_frequency == shifted
     assert witness.difference == shifted
-    assert witness.remainder_coefficients == ("2",)
+    assert witness.remainder_coefficients == (2,)
 
 
 def test_large_singleton_source_is_admitted_by_trivial_decision() -> None:
@@ -501,7 +502,9 @@ def test_forged_witness_elements_remain_structurally_parseable() -> None:
     payload = result.model_dump(mode="json")
     payload["first_nonorthogonal_pair"]["left_frequency"] = [0] * 200
 
-    assert FiniteAbelianSpectralPairResult.model_validate(payload)
+    assert FiniteAbelianSpectralPairResult.model_validate_json(
+        encode_strict_json(payload)
+    )
 
 
 def test_singleton_beyond_the_former_modulus_ceiling_is_admitted() -> None:
@@ -548,7 +551,7 @@ def test_equal_size_pair_in_group_above_order_cap_fits_derived_budgets() -> None
     witness = result.first_nonorthogonal_pair
     assert witness is not None
     assert witness.difference == (0, 0, 1)
-    assert witness.remainder_coefficients[0] == "2"
+    assert witness.remainder_coefficients[0] == 2
 
 
 def test_coordinate_and_materialization_fallback_boundaries() -> None:
@@ -615,7 +618,7 @@ def test_result_parsing_rejects_inconsistent_branches(field: str) -> None:
     payload[field] = True if field == "is_spectral" else "SPECTRAL"
 
     with finite_abelian_validation_error():
-        FiniteAbelianSpectralPairResult.model_validate(payload)
+        FiniteAbelianSpectralPairResult.model_validate_json(encode_strict_json(payload))
 
 
 def test_result_parsing_does_not_replay_witness_or_source() -> None:
@@ -626,14 +629,16 @@ def test_result_parsing_does_not_replay_witness_or_source() -> None:
     payload["first_nonorthogonal_pair"]["remainder_coefficients"] = ["1", "1"]
     payload["source"]["points"] = [[0], [2]]
 
-    assert FiniteAbelianSpectralPairResult.model_validate(payload)
+    assert FiniteAbelianSpectralPairResult.model_validate_json(
+        encode_strict_json(payload)
+    )
 
 
 def test_canonical_source_round_trips_unchanged_through_catalog_request() -> None:
     source = _source((4,), ((6,), (0,)), ((5,), (0,)))
     source_payload = source.model_dump(mode="json")
-    request = FINITE_ABELIAN_SPECTRAL_PAIR_OPERATION.request_type.model_validate(
-        {"source": source_payload}
+    request = FINITE_ABELIAN_SPECTRAL_PAIR_OPERATION.request_type.model_validate_json(
+        encode_strict_json({"source": source_payload})
     )
 
     result = FINITE_ABELIAN_SPECTRAL_PAIR_OPERATION.run(request)

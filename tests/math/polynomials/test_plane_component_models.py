@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 from typing import Any
 
@@ -69,7 +70,7 @@ def _polynomial(
 
 def _rational_value(value: int) -> RealAlgebraicValue:
     return RealAlgebraicValue._from_admitted_polynomial(
-        polynomial=("1", str(-value)),
+        polynomial=(1, -value),
         real_root_index=0,
     )
 
@@ -87,6 +88,28 @@ def _rational_point(x: int, y: int) -> IsolatedRealPlanePoint:
             ),
         ),
     )
+
+
+def test_request_keeps_native_and_json_integer_boundaries_distinct() -> None:
+    request = PlaneComponentProfileRequest(
+        semialgebraic_set=PlaneSemialgebraicSet(
+            axis=("x", "y"),
+            polynomials=(_polynomial(((1, (1, 0)),)),),
+            sign_conditions=(PlaneSignCondition(signs=(PlaneSign.ZERO,)),),
+        ),
+        samples=(_rational_point(0, 0),),
+    )
+    assert PlaneComponentProfileRequest.model_validate(request.model_dump()) == request
+    assert (
+        PlaneComponentProfileRequest.model_validate_json(request.model_dump_json())
+        == request
+    )
+    with pytest.raises(ValidationError):
+        PlaneComponentProfileRequest.model_validate(request.model_dump(mode="json"))
+    with pytest.raises(ValidationError):
+        PlaneComponentProfileRequest.model_validate_json(
+            json.dumps(request.model_dump())
+        )
 
 
 def test_sign_table_canonicalizes_polynomial_and_row_order() -> None:
@@ -172,7 +195,7 @@ def test_plane_point_reuses_algebraic_coordinates_and_binds_box_to_one_axis() ->
 def test_plane_point_rejects_coordinates_beyond_the_result_carrier_bound() -> None:
     point = _rational_point(0, 0)
     over_degree = RealAlgebraicValue.model_construct(
-        polynomial=("1",) + ("0",) * MAX_PLANE_COMPONENT_POINT_DEGREE + ("-2",),
+        polynomial=(1,) + (0,) * MAX_PLANE_COMPONENT_POINT_DEGREE + (-2,),
         real_root_index=0,
     )
 
@@ -211,7 +234,7 @@ def _large_structural_point(index: int) -> IsolatedRealPlanePoint:
                     * 2
                     * (coefficient_base + (adjustment if degree == 15 else 0))
                 )
-            coefficients.append(str(coefficient))
+            coefficients.append(coefficient)
         return RealAlgebraicValue._from_admitted_polynomial(
             polynomial=tuple(coefficients),
             real_root_index=0,
@@ -380,7 +403,7 @@ def test_computed_components_require_unique_canonical_representative_order() -> 
 
 def test_component_identity_excludes_nonunique_isolating_boxes() -> None:
     positive_sqrt_two = RealAlgebraicValue._from_admitted_polynomial(
-        polynomial=("1", "0", "-2"),
+        polynomial=(1, 0, -2),
         real_root_index=1,
     )
     zero = _rational_value(0)
@@ -445,7 +468,7 @@ def test_request_raw_preflight_rejects_deep_malformed_scalar_without_recursing()
         "num"
     ] = nested
 
-    with pytest.raises(ValidationError, match="decimal strings"):
+    with pytest.raises(ValidationError, match="exact integers"):
         PlaneComponentProfileRequest.model_validate(raw)
 
 

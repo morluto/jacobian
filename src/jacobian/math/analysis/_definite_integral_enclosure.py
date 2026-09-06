@@ -23,7 +23,6 @@ from jacobian._execution import (
 )
 from jacobian._flint import flint_workprec
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -314,7 +313,7 @@ def _exact_dyadic(mantissa: int, exponent: int) -> ExactDyadic:
         raise _validation_error(
             "definite-integral dyadic exponent exceeds the admitted source bound"
         )
-    return ExactDyadic(mantissa=format_canonical_integer(mantissa), exponent=exponent)
+    return ExactDyadic(mantissa=mantissa, exponent=exponent)
 
 
 def _dyadic_fraction(value: ExactDyadic) -> Fraction:
@@ -347,7 +346,7 @@ def _round_fraction_outward(
     """Round one rational outward to a deterministic significant-bit dyadic."""
 
     if value == 0:
-        return ExactDyadic(mantissa="0", exponent=0)
+        return ExactDyadic(mantissa=0, exponent=0)
     exponent = _floor_log2_abs(value) - (precision_bits - 1)
     if exponent >= 0:
         scaled_numerator = value.numerator
@@ -919,8 +918,8 @@ def _finish_zero_measure_result(
     request: DefiniteIntegralEnclosureRequest, *, deadline: float
 ) -> DefiniteIntegralEnclosureResult:
     zero = DyadicClosedInterval(
-        lower=ExactDyadic(mantissa="0", exponent=0),
-        upper=ExactDyadic(mantissa="0", exponent=0),
+        lower=ExactDyadic(mantissa=0, exponent=0),
+        upper=ExactDyadic(mantissa=0, exponent=0),
     )
     result = DefiniteIntegralEnclosureResult._from_kernel(
         request,

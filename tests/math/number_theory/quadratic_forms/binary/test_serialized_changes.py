@@ -3,6 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import encode_strict_json
 from jacobian.math.number_theory.quadratic_forms.binary import (
     PrimitivePositiveDefiniteBinaryQuadraticForm,
     ProperFormChangeOfVariables,
@@ -26,7 +27,9 @@ def test_reduction_witness_round_trip_and_forgery() -> None:
     payload = decoded.model_dump(mode="json")
     payload["change"]["matrix"]["entries"] = [["1", "0"], ["0", "-1"]]
     assert not verify_reduction(
-        ReducedBinaryQuadraticFormResult.model_validate(payload)
+        ReducedBinaryQuadraticFormResult.model_validate_json(
+            encode_strict_json(payload)
+        )
     )
 
 
@@ -48,4 +51,4 @@ def test_change_checks_determinant_and_substitution_after_decode() -> None:
     payload = claim.model_dump(mode="json")
     payload["matrix"]["entries"] = [["1"]]
     with pytest.raises(ValidationError):
-        ProperFormChangeOfVariables.model_validate(payload)
+        ProperFormChangeOfVariables.model_validate_json(encode_strict_json(payload))

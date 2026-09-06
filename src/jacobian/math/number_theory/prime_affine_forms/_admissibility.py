@@ -9,7 +9,6 @@ from pydantic import Field, StrictInt, model_validator
 from sympy import primepi
 
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory.prime_affine_forms._kernel import primes_through
 from jacobian.math.number_theory.prime_affine_forms._local_factors import local_summary
 from jacobian.math.number_theory.prime_affine_forms._models import (
@@ -36,8 +35,8 @@ class PrimeTupleAdmissibilityRequest(StrictModel):
 def _admit_primitive_tuple(source: PrimeAffineTuple) -> None:
     """Admit the primitive, nonconstant domain of the prime-affine API."""
     for form in source.forms:
-        coefficient = parse_canonical_integer(form.coefficient)
-        constant = parse_canonical_integer(form.constant)
+        coefficient = form.coefficient
+        constant = form.constant
         if coefficient == 0:
             raise _validation_error("primitive affine form coefficient must be nonzero")
         if gcd(abs(coefficient), abs(constant)) != 1:

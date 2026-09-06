@@ -29,6 +29,8 @@ def _source(
     )
     subspace = FiniteDimensionalSubspace(
         presentation=field,
+        row_axis=matrix.row_axis,
+        column_axis=matrix.column_axis,
         basis_axis=Axis(name="basis", labels=("B",)),
         basis=(matrix,),
     )

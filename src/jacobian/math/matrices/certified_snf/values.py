@@ -8,9 +8,9 @@ from typing import Literal, Self
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.matrices.values import IntegerMatrix
 
 MAX_CERTIFIED_SNF_DIMENSION = 32
@@ -19,8 +19,8 @@ MAX_CERTIFIED_SNF_INPUT_DIGITS = 32
 MAX_CERTIFIED_SNF_OUTPUT_DIGITS = 32_768
 
 
-def _integer_digits(value: str) -> int:
-    return len(value.lstrip("-"))
+def _integer_digits(value: int) -> int:
+    return len(format_canonical_integer(abs(value)))
 
 
 class SmithNormalFormCertificate(StrictModel):
@@ -31,11 +31,11 @@ class SmithNormalFormCertificate(StrictModel):
     left_transformation: IntegerMatrix
     right_transformation: IntegerMatrix
     rank: StrictInt = Field(ge=0, le=MAX_CERTIFIED_SNF_DIMENSION)
-    invariant_factors: tuple[CanonicalInteger, ...] = Field(
+    invariant_factors: tuple[ExactInteger, ...] = Field(
         max_length=MAX_CERTIFIED_SNF_DIMENSION
     )
-    left_determinant: Literal["-1", "1"]
-    right_determinant: Literal["-1", "1"]
+    left_determinant: ExactInteger = Field(ge=-1, le=1)
+    right_determinant: ExactInteger = Field(ge=-1, le=1)
     relation: Literal["DIAGONAL_EQUALS_LEFT_TIMES_SOURCE_TIMES_RIGHT"] = (
         "DIAGONAL_EQUALS_LEFT_TIMES_SOURCE_TIMES_RIGHT"
     )
@@ -43,6 +43,15 @@ class SmithNormalFormCertificate(StrictModel):
     convention: Literal["POSITIVE_DIVISIBILITY_DIAGONAL"] = (
         "POSITIVE_DIVISIBILITY_DIAGONAL"
     )
+
+    @model_validator(mode="after")
+    def require_unimodular_determinants(self) -> Self:
+        if abs(self.left_determinant) != 1 or abs(self.right_determinant) != 1:
+            raise _validation_error(
+                "invalid",
+                "Smith transformations must have determinant plus or minus one",
+            )
+        return self
 
     @model_validator(mode="after")
     def require_coherent_shapes_and_canonical_diagonal(self) -> Self:
@@ -66,19 +75,16 @@ class SmithNormalFormCertificate(StrictModel):
             )
         diagonal_count = min(rows, columns)
         diagonal = tuple(
-            parse_canonical_integer(self.diagonal.entries[index][index])
-            for index in range(diagonal_count)
+            self.diagonal.entries[index][index] for index in range(diagonal_count)
         )
         if any(
-            parse_canonical_integer(self.diagonal.entries[row][column]) != 0
+            self.diagonal.entries[row][column] != 0
             for row in range(rows)
             for column in range(columns)
             if row != column
         ):
             raise _validation_error("invalid", "Smith normal form must be diagonal")
-        factors = tuple(
-            parse_canonical_integer(value) for value in self.invariant_factors
-        )
+        factors = tuple(value for value in self.invariant_factors)
         if (
             self.rank != len(factors)
             or self.rank > diagonal_count
@@ -102,9 +108,9 @@ class SmithNormalFormCertificate(StrictModel):
         left_transformation: IntegerMatrix,
         right_transformation: IntegerMatrix,
         rank: int,
-        invariant_factors: tuple[CanonicalInteger, ...],
-        left_determinant: Literal["-1", "1"],
-        right_determinant: Literal["-1", "1"],
+        invariant_factors: tuple[ExactInteger, ...],
+        left_determinant: int,
+        right_determinant: int,
     ) -> Self:
         """Construct a certificate emitted by the trusted Smith kernel.
 

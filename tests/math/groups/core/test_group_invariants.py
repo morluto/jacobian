@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -177,7 +178,10 @@ class TestLatticeResultBoundToSourceGroup:
         result = self._c4_result()
         assert result.degree == 4
         payload = result.model_dump(mode="json")
-        assert GroupSubgroupLatticeResult.model_validate(payload) == result
+        assert (
+            GroupSubgroupLatticeResult.model_validate_json(json.dumps(payload))
+            == result
+        )
 
 
 class TestLatticeWorkBound:
@@ -238,7 +242,7 @@ class TestRelayedPayloadBounds:
         payload["subgroups"] = [valid_entry] * (MAX_SUBGROUP_LATTICE_ENTRIES + 1)
         payload["subgroup_count"] = len(payload["subgroups"])
         with _group_error("group.lattice_entry_bound"):
-            GroupSubgroupLatticeResult.model_validate(payload)
+            GroupSubgroupLatticeResult.model_validate_json(json.dumps(payload))
 
     def test_generator_count_cap_restored(self) -> None:
         """Subgroup values declare a schema-visible generator-count cap."""

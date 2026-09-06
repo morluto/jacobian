@@ -2,7 +2,6 @@
 
 from pydantic_core import PydanticCustomError
 
-from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -21,8 +20,8 @@ from jacobian.math.number_theory.arithmetic.values import IntegerValue
 def compute_friable_enumerate(
     request: FriableEnumerateRequest,
 ) -> FriableEnumerateResult:
-    x_value = parse_canonical_integer(request.x)
-    y_value = parse_canonical_integer(request.y)
+    x_value = request.x
+    y_value = request.y
     try:
         family = _enumerate_friable_kernel(x_value, y_value)
     except PydanticCustomError as exc:
@@ -41,8 +40,8 @@ def enumerate_friable(
 ) -> FriableEnumerateResult:
     """Enumerate friable integers from native integer inputs."""
 
-    x_value = parse_canonical_integer(x.value) if isinstance(x, IntegerValue) else x
-    y_value = parse_canonical_integer(y.value) if isinstance(y, IntegerValue) else y
+    x_value = x.value if isinstance(x, IntegerValue) else x
+    y_value = y.value if isinstance(y, IntegerValue) else y
     try:
         family = _enumerate_friable_kernel(x_value, y_value)
     except PydanticCustomError as exc:

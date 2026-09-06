@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from math import isqrt
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.arithmetic._integer_predicates import is_square_free
 from jacobian.math.number_theory.diophantine_approximation._models import (
@@ -124,8 +123,8 @@ def convergents(discriminant: int, count: int) -> ConvergentResult:
         convergents=tuple(
             ConvergentValue(
                 index=index,
-                numerator=format_canonical_integer(numerator),
-                denominator=format_canonical_integer(denominator),
+                numerator=numerator,
+                denominator=denominator,
             )
             for index, numerator, denominator in values
         ),
@@ -151,8 +150,8 @@ def solve_pell(discriminant: int) -> PellEquationResult:
     if p_prev1**2 - discriminant * q_prev1**2 == 1:
         return PellEquationResult._from_kernel(
             discriminant=discriminant,
-            x=format_canonical_integer(p_prev1),
-            y=format_canonical_integer(q_prev1),
+            x=p_prev1,
+            y=q_prev1,
         )
 
     for index in range(1, convergents_needed):
@@ -165,8 +164,8 @@ def solve_pell(discriminant: int) -> PellEquationResult:
         if p_prev1**2 - discriminant * q_prev1**2 == 1:
             return PellEquationResult._from_kernel(
                 discriminant=discriminant,
-                x=format_canonical_integer(p_prev1),
-                y=format_canonical_integer(q_prev1),
+                x=p_prev1,
+                y=q_prev1,
             )
 
     raise ArithmeticError("Pell solution was not reached within the period bound")

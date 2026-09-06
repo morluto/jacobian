@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.product_representation._models import (
     ProductRepresentationResult,
@@ -39,10 +39,10 @@ def _admit_product_representation(
         )
 
     maximum_product_digits = max(
-        (len(value.lstrip("-")) for value in left.elements),
+        (len(format_canonical_integer(value)) for value in left.elements),
         default=1,
     ) + max(
-        (len(value.lstrip("-")) for value in right.elements),
+        (len(format_canonical_integer(value)) for value in right.elements),
         default=1,
     )
     # Decimal multiplication is quadratic in operand width for the native
@@ -72,11 +72,11 @@ def compute_product_representation_profile(
     counts: dict[int, int] = {}
     for a in left.elements:
         for b in right.elements:
-            product = parse_canonical_integer(a) * parse_canonical_integer(b)
+            product = a * b
             counts[product] = counts.get(product, 0) + 1
 
     entries = tuple(
-        RepresentationEntry(product=format_canonical_integer(p), multiplicity=m)
+        RepresentationEntry(product=p, multiplicity=m)
         for p, m in sorted(counts.items())
     )
 

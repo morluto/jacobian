@@ -9,6 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 
 PolynomialVariable = Annotated[
     str,
@@ -127,7 +128,7 @@ class MonicPolynomial(RationalPolynomial):
     @property
     def coefficients(self) -> tuple[CanonicalRational, ...]:
         """Derived increasing-degree coefficient projection for native algebra."""
-        values = [CanonicalRational(num="0", den="1")] * (
+        values = [CanonicalRational(num=0, den=1)] * (
             self.polynomial.terms[0].exponents[0] + 1
         )
         for term in self.polynomial.terms:
@@ -145,7 +146,7 @@ def monic_polynomial_from_coefficients(
             terms=tuple(
                 RationalPolynomialTerm(coefficient=value, exponents=(index,))
                 for index, value in reversed(tuple(enumerate(coefficients)))
-                if value.num != "0"
+                if value.num != 0
             )
         ),
     )
@@ -226,7 +227,7 @@ def _rational_function_one(variable_count: int) -> SparseRationalPolynomial:
     return SparseRationalPolynomial(
         terms=(
             RationalPolynomialTerm(
-                coefficient=CanonicalRational(num="1", den="1"),
+                coefficient=CanonicalRational(num=1, den=1),
                 exponents=(0,) * variable_count,
             ),
         )
@@ -396,7 +397,7 @@ def rational_evaluation_component_digit_bounds(
         term
         for term in polynomial.polynomial.terms
         if not any(
-            exponent and coordinate.num == "0"
+            exponent and coordinate.num == 0
             for coordinate, exponent in zip(point, term.exponents, strict=True)
         )
     )
@@ -407,22 +408,22 @@ def rational_evaluation_component_digit_bounds(
         max(term.exponents[axis] for term in active_terms) for axis in range(len(point))
     )
     has_nontrivial_denominator = any(
-        term.coefficient.den != "1" for term in active_terms
+        term.coefficient.den != 1 for term in active_terms
     ) or any(
-        exponent and coordinate.den != "1"
+        exponent and coordinate.den != 1
         for coordinate, exponent in zip(point, maximum_exponents, strict=True)
     )
     common_denominator_digits = max(
         1,
         sum(
-            len(term.coefficient.den)
+            len(format_canonical_integer(term.coefficient.den))
             for term in active_terms
-            if term.coefficient.den != "1"
+            if term.coefficient.den != 1
         )
         + sum(
-            exponent * len(coordinate.den)
+            exponent * len(format_canonical_integer(coordinate.den))
             for coordinate, exponent in zip(point, maximum_exponents, strict=True)
-            if coordinate.den != "1"
+            if coordinate.den != 1
         ),
     )
     maximum_term_numerator_digits = max(
@@ -430,13 +431,13 @@ def rational_evaluation_component_digit_bounds(
             1,
             (
                 0
-                if term.coefficient.num in {"1", "-1"}
-                else len(term.coefficient.num.lstrip("-"))
+                if term.coefficient.num in {1, -1}
+                else len(format_canonical_integer(abs(term.coefficient.num)))
             )
             + sum(
-                exponent * len(coordinate.num.lstrip("-"))
+                exponent * len(format_canonical_integer(abs(coordinate.num)))
                 for coordinate, exponent in zip(point, term.exponents, strict=True)
-                if coordinate.num not in {"1", "-1"}
+                if coordinate.num not in {1, -1}
             ),
         )
         for term in active_terms

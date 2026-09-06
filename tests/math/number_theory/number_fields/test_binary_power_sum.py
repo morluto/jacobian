@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from collections import defaultdict
 from fractions import Fraction
@@ -49,7 +50,9 @@ type QuadraticPair = tuple[Fraction, Fraction]
 
 
 def _field(*coefficients: str) -> SimpleNumberFieldPresentation:
-    return SimpleNumberFieldPresentation(coefficients_descending=coefficients)
+    return SimpleNumberFieldPresentation(
+        coefficients_descending=tuple(int(coefficient) for coefficient in coefficients)
+    )
 
 
 def _element(
@@ -390,7 +393,7 @@ def test_consumer_rejects_a_forged_real_embedding_record(
         "upper": {"num": "3", "den": "1"},
         "interval_type": "OPEN",
     }
-    forged = RealNumberFieldEmbeddingRecord.model_validate(forged_data)
+    forged = RealNumberFieldEmbeddingRecord.model_validate_json(json.dumps(forged_data))
 
     with pytest.raises(BinaryPowerSumAdmissionError) as caught:
         binary_power_sum_gap_profile(
@@ -457,23 +460,25 @@ def test_coordinate_growth_is_rejected_before_embedding_recognition(
 def test_structurally_admitted_profile_is_independent_of_serialized_size() -> None:
     coefficients = ("9" * 256, *("8" * 256 for _ in range(7)), "1")
     field = _field(*coefficients)
-    record = RealNumberFieldEmbeddingRecord.model_validate(
-        {
-            "kind": "REAL",
-            "embedding": {
+    record = RealNumberFieldEmbeddingRecord.model_validate_json(
+        json.dumps(
+            {
                 "kind": "REAL",
-                "presentation": field.model_dump(mode="json"),
-                "root": {
-                    "polynomial": list(coefficients),
-                    "real_root_index": 0,
+                "embedding": {
+                    "kind": "REAL",
+                    "presentation": field.model_dump(mode="json"),
+                    "root": {
+                        "polynomial": list(coefficients),
+                        "real_root_index": 0,
+                    },
                 },
-            },
-            "isolating_interval": {
-                "lower": {"num": "0", "den": "1"},
-                "upper": {"num": "1", "den": "1"},
-                "interval_type": "OPEN",
-            },
-        }
+                "isolating_interval": {
+                    "lower": {"num": "0", "den": "1"},
+                    "upper": {"num": "1", "den": "1"},
+                    "interval_type": "OPEN",
+                },
+            }
+        )
     )
     base = _binding(_element(field, Fraction(3, 2), *(0 for _ in range(7))), record)
 
@@ -489,16 +494,17 @@ def test_result_round_trip_preserves_source_partition_and_gap_reconstruction(
         _binding(_element(field, 0, 1), golden_ratio_record), 3
     )
 
-    decoded = BinaryPowerSumGapProfile.model_validate_json(
-        result.model_dump_json(), strict=True
+    assert (
+        BinaryPowerSumGapProfile.model_validate_json(
+            result.model_dump_json(), strict=True
+        )
+        == result
     )
-    assert decoded == result
-    assert verify_binary_power_sum_gap_profile(decoded)
     assert "evidence_basis" not in result.gaps[0].model_dump()
     assert "evidence_basis" not in BinaryPowerSumGap.model_json_schema()["properties"]
 
 
-def test_consumer_verifier_rejects_duplicate_sources_and_wrong_gap_difference(
+def test_result_validation_rejects_duplicate_sources_and_wrong_gap_difference(
     golden_ratio_record: RealNumberFieldEmbeddingRecord,
 ) -> None:
     field = golden_ratio_record.embedding.presentation
@@ -507,19 +513,19 @@ def test_consumer_verifier_rejects_duplicate_sources_and_wrong_gap_difference(
     )
     duplicate = result.model_dump(mode="json")
     duplicate["value_buckets"][1]["representations"] = [[0, 0, 0]]
-    duplicate_claim = BinaryPowerSumGapProfile.model_validate(duplicate)
+    duplicate_claim = BinaryPowerSumGapProfile.model_validate_json(json.dumps(duplicate))
     assert not verify_binary_power_sum_gap_profile(duplicate_claim)
 
     wrong_gap = result.model_dump(mode="json")
-    wrong_gap["gaps"][0]["difference"] = result.gaps[1].difference.model_dump(
+    wrong_gap["gaps"][0]["difference"] = result.value_buckets[0].value.model_dump(
         mode="json"
     )
-    wrong_gap_claim = BinaryPowerSumGapProfile.model_validate(wrong_gap)
+    wrong_gap_claim = BinaryPowerSumGapProfile.model_validate_json(json.dumps(wrong_gap))
     assert not verify_binary_power_sum_gap_profile(wrong_gap_claim)
 
 
 @pytest.mark.parametrize("index_field", ["least_gap_index", "largest_gap_index"])
-def test_consumer_verifier_rejects_summary_indices_outside_the_gap_family(
+def test_result_validation_rejects_out_of_range_summary_indices_as_typed_errors(
     index_field: str,
 ) -> None:
     field = _field("1", "0")
@@ -530,11 +536,11 @@ def test_consumer_verifier_rejects_summary_indices_outside_the_gap_family(
     invalid = result.model_dump(mode="json")
     invalid[index_field] = 100
 
-    claim = BinaryPowerSumGapProfile.model_validate(invalid)
+    claim = BinaryPowerSumGapProfile.model_validate_json(json.dumps(invalid))
     assert not verify_binary_power_sum_gap_profile(claim)
 
 
-def test_consumer_verifier_requires_first_exactly_matching_gap_summary() -> None:
+def test_result_validation_requires_first_exactly_matching_gap_summary() -> None:
     field = _field("1", "0")
     (record,) = _real_records(field)
     result = binary_power_sum_gap_profile(
@@ -545,7 +551,7 @@ def test_consumer_verifier_requires_first_exactly_matching_gap_summary() -> None
 
     noncanonical = result.model_dump(mode="json")
     noncanonical["largest_gap_index"] = 2
-    claim = BinaryPowerSumGapProfile.model_validate(noncanonical)
+    claim = BinaryPowerSumGapProfile.model_validate_json(json.dumps(noncanonical))
     assert not verify_binary_power_sum_gap_profile(claim)
 
 
@@ -613,8 +619,8 @@ def test_catalog_operation_runs_example_and_projects_domain_errors() -> None:
         if tool.operation_id
         == "number_field.real_embedding.binary_power_sum_gap_profile.compute"
     )
-    request = NumberFieldBinaryPowerSumGapProfileRequest.model_validate(
-        operation.examples[0].input
+    request = NumberFieldBinaryPowerSumGapProfileRequest.model_validate_json(
+        json.dumps(operation.examples[0].input)
     )
 
     result = operation.run(request)
@@ -639,8 +645,8 @@ def test_expired_request_is_rejected_before_admission() -> None:
         if tool.operation_id
         == "number_field.real_embedding.binary_power_sum_gap_profile.compute"
     )
-    request = NumberFieldBinaryPowerSumGapProfileRequest.model_validate(
-        operation.examples[0].input
+    request = NumberFieldBinaryPowerSumGapProfileRequest.model_validate_json(
+        json.dumps(operation.examples[0].input)
     )
 
     with (

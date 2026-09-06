@@ -21,7 +21,7 @@ from jacobian.math.geometry.polytopes.operations import (
 
 
 def _rational(value: int) -> CanonicalRational:
-    return CanonicalRational(num=str(value), den="1")
+    return CanonicalRational(num=value, den=1)
 
 
 def _square() -> RationalVPolytope:

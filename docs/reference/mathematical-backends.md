@@ -151,12 +151,14 @@ non-evaluating codec is sufficient. Mathematical integers that may exceed the
 interoperable JSON range use canonical decimal strings, while intrinsically
 bounded counters may remain JSON integers.
 The requirement is a canonical decimal wire encoding, not string-valued Python
-fields. Keep migrated native fields numeric and use the owning integer codec
-to validate and decode worker JSON and encode responses. Existing
-`CanonicalInteger` fields describe a string-valued representation still to be
-migrated; do not require that representation in new native value designs.
+fields. Keep native fields numeric and use the owning integer codec to validate
+and decode worker JSON and encode responses. This also applies to the integer
+numerator and denominator of a canonical rational.
 Do not narrow exact backend integers through floats or machine-sized integers.
 See [native integer codec requirements](value-interoperability.md#requirements-for-a-native-integer-codec).
+For range admission, see
+[integer representation and range migrations](value-interoperability.md#exact-integers-representation-is-not-a-work-limit)
+for the distinction between transport limits and computational admission.
 
 When a worker returns a derived projection of canonical source retained by the
 parent, it must not echo or replace that source. Bind the projection to the

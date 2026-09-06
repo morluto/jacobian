@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 from jacobian.math.number_theory.numerical_semigroups._models import (
     _GENERAL_GENERATOR_ENVELOPE,
@@ -19,7 +19,7 @@ from jacobian.math.number_theory.numerical_semigroups._models import (
 class MinimalPresentationRequest(StrictModel):
     """One minimal presentation of a numerical semigroup."""
 
-    generators: tuple[CanonicalInteger, ...] = Field(
+    generators: tuple[ExactInteger, ...] = Field(
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
@@ -50,18 +50,18 @@ class MinimalPresentationRelation(StrictModel):
 class MinimalPresentationResult(StrictModel):
     """One minimal presentation of the semigroup."""
 
-    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+    minimal_generators: tuple[ExactInteger, ...] = Field(
         min_length=1, max_length=MAX_GENERATORS
     )
-    betti_elements: tuple[CanonicalInteger, ...]
+    betti_elements: tuple[ExactInteger, ...]
     relations: tuple[MinimalPresentationRelation, ...]
 
     @classmethod
     def _from_kernel(
         cls,
         *,
-        minimal_generators: tuple[CanonicalInteger, ...],
-        betti_elements: tuple[CanonicalInteger, ...],
+        minimal_generators: tuple[ExactInteger, ...],
+        betti_elements: tuple[ExactInteger, ...],
         relations: tuple[MinimalPresentationRelation, ...],
     ) -> Self:
         """Construct a minimal presentation derived by the admitted kernel."""
@@ -100,7 +100,7 @@ class MinimalPresentationResult(StrictModel):
 class PresentationBinomialsRequest(StrictModel):
     """Convert a minimal presentation to sparse binomial form."""
 
-    generators: tuple[CanonicalInteger, ...] = Field(
+    generators: tuple[ExactInteger, ...] = Field(
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
@@ -115,16 +115,20 @@ class PresentationBinomialsRequest(StrictModel):
 class PresentationBinomial(StrictModel):
     """One sparse binomial (aX - bX) arising from a presentation relation."""
 
-    left_coefficient: Literal["1"] = "1"
+    left_coefficient: ExactInteger = Field(
+        default=1, ge=1, le=1, json_schema_extra={"const": "1"}
+    )
     left_exponents: tuple[int, ...]
-    right_coefficient: Literal["-1"] = "-1"
+    right_coefficient: ExactInteger = Field(
+        default=-1, ge=-1, le=-1, json_schema_extra={"const": "-1"}
+    )
     right_exponents: tuple[int, ...]
 
 
 class PresentationBinomialsResult(StrictModel):
     """Presentation converted to sparse binomials."""
 
-    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+    minimal_generators: tuple[ExactInteger, ...] = Field(
         min_length=1, max_length=MAX_GENERATORS
     )
     binomials: tuple[PresentationBinomial, ...]

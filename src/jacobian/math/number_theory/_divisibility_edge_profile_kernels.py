@@ -27,8 +27,8 @@ class FactorizationIncompleteError(RuntimeError):
 class DivisibilityEdgeData:
     """Private canonical data for one edge."""
 
-    source: str
-    target: str
+    source: int
+    target: int
     quotient: int
     least_prime_factor: int
 
@@ -55,7 +55,7 @@ def _least_prime_factor(n: int) -> int:
 
 
 def construct_divisibility_edge_profile(
-    values: tuple[str, ...],
+    values: tuple[int, ...],
     edge_plan: tuple[tuple[int, int, int], ...],
 ) -> list[DivisibilityEdgeData]:
     """Return the complete directed divisibility edge table.

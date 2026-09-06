@@ -1,5 +1,7 @@
 """Tests for RSK permutation operation."""
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -89,8 +91,12 @@ class TestRSK:
         result = rsk_permutation(RSKPermutationRequest(permutation=(1, 3, 2)))
         payload = result.model_dump(mode="json")
         payload["permutation"] = [2, 1, 3]
-        assert RSKResult.model_validate(payload).permutation == (2, 1, 3)
-        assert not verify_rsk(RSKResult.model_validate(payload))
+        assert RSKResult.model_validate_json(json.dumps(payload)).permutation == (
+            2,
+            1,
+            3,
+        )
+        assert not verify_rsk(RSKResult.model_validate_json(json.dumps(payload)))
         for field, value in (
             ("permutation", [1, 1, 1]),
             ("lis_length", 1),
@@ -104,12 +110,12 @@ class TestRSK:
         payload = result.model_dump(mode="json")
         payload["permutation"] = [1, 2]
         with pytest.raises(ValidationError, match="size must equal permutation"):
-            RSKResult.model_validate(payload)
+            RSKResult.model_validate_json(json.dumps(payload))
 
         payload = result.model_dump(mode="json")
         payload["shape"] = {"parts": [3]}
         with pytest.raises(ValidationError) as error:
-            RSKResult.model_validate(payload)
+            RSKResult.model_validate_json(json.dumps(payload))
         assert error.value.errors()[0]["type"] in {
             "algebraic_combinatorics.rsk_shape_mismatch",
             "algebraic_combinatorics.rsk_lengths_mismatch",

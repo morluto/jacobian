@@ -7,7 +7,6 @@ from typing import NoReturn
 
 from sympy import isprime
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.designs.incidence_structures._models import (
     IncidenceStructure,
@@ -351,7 +350,7 @@ def grassmannian_count(
         field_order=field_order,
         ambient_dimension=ambient_dimension,
         subspace_dimension=subspace_dimension,
-        count=format_canonical_integer(count),
+        count=count,
     )
 
 

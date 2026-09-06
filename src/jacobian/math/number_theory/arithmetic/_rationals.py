@@ -3,7 +3,6 @@
 from fractions import Fraction
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -30,11 +29,11 @@ def _fraction(value: CanonicalRational) -> Fraction:
 def _wire(
     value: Fraction, *, location: tuple[str | int, ...] = ("value",)
 ) -> CanonicalRational:
-    numerator = format_canonical_integer(value.numerator)
-    denominator = format_canonical_integer(value.denominator)
+    numerator = value.numerator
+    denominator = value.denominator
     if (
-        len(numerator.lstrip("-")) > MAX_CANONICAL_RATIONAL_DIGITS
-        or len(denominator) > MAX_CANONICAL_RATIONAL_DIGITS
+        abs(numerator) >= 10**MAX_CANONICAL_RATIONAL_DIGITS
+        or abs(denominator) >= 10**MAX_CANONICAL_RATIONAL_DIGITS
     ):
         raise OperationDomainValidationError(
             location=location,
@@ -115,16 +114,12 @@ def maximum(request: RationalPairRequest) -> RationalValueResult:
 
 
 def floor(request: RationalValueRequest) -> RationalIntegerResult:
-    return RationalIntegerResult(
-        value=format_canonical_integer(native.floor_rational(_fraction(request.value)))
-    )
+    return RationalIntegerResult(value=native.floor_rational(_fraction(request.value)))
 
 
 def ceiling(request: RationalValueRequest) -> RationalIntegerResult:
     return RationalIntegerResult(
-        value=format_canonical_integer(
-            native.ceiling_rational(_fraction(request.value))
-        )
+        value=native.ceiling_rational(_fraction(request.value))
     )
 
 
@@ -136,7 +131,7 @@ def continued_fraction(
     )
     return RationalContinuedFractionResult._from_kernel(
         value=request.value,
-        terms=tuple(format_canonical_integer(term) for term in terms),
+        terms=tuple(terms),
     )
 
 

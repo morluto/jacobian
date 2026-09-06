@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import NoReturn
 
-from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._periodic_kernel import (
     _ExecutionPlan,
@@ -50,9 +49,9 @@ def _union_prefix_count(source: PeriodicCongruenceUnionSource, upper: int) -> in
     """Count one union prefix from compressed generalized-CRT terms."""
     terms: dict[tuple[int, int], int] = {}
     for subset in source.subsets:
-        modulus = parse_canonical_integer(subset.modulus)
+        modulus = subset.modulus
         for residue_text in subset.residues:
-            residue = parse_canonical_integer(residue_text)
+            residue = residue_text
             deltas: dict[tuple[int, int], int] = {(residue, modulus): 1}
             for congruence, coefficient in tuple(terms.items()):
                 intersection = _merge_congruences(congruence, (residue, modulus))
@@ -151,7 +150,7 @@ def verify_periodic_union_prefix_count(
 ) -> bool:
     try:
         expected = compute_periodic_union_prefix_count(claim.source, claim.cutoff)
-    except Exception:
+    except (ArithmeticError, TypeError, ValueError):
         return False
     return (
         claim.cutoff == expected.cutoff

@@ -78,7 +78,7 @@ def test_equitable_verifier_rejects_forged_serialized_relation() -> None:
     result = decide_equitable_k_coloring(graph, 2)
     payload = result.model_dump()
     payload["coloring"]["coloring"] = (0, 0, 1, 1)
-    forged = EquitableColoringResult.model_validate(payload)
+    forged = EquitableColoringResult.model_validate_json(json.dumps(payload))
     assert not verify_equitable_coloring(
         EquitableColoringResult.model_validate_json(forged.model_dump_json())
     )
@@ -108,7 +108,7 @@ def test_symmetry_verifier_rejects_arbitrary_complete_partition() -> None:
         {"orbit_index": 0, "representative": "a", "members": ["a"]},
         {"orbit_index": 1, "representative": "b", "members": ["b", "c"]},
     ]
-    forged = type(result).model_validate(payload)
+    forged = type(result).model_validate_json(json.dumps(payload))
     assert not verify_graph_symmetry_orbits(
         type(result).model_validate_json(forged.model_dump_json())
     )

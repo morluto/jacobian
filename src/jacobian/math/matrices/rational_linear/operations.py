@@ -86,7 +86,7 @@ def _admit_system(
     }
     bounds = tuple(value.as_fraction() for value in system.rhs)
     scalar_digits = max(
-        len(component.lstrip("-"))
+        len(format_canonical_integer(abs(component)))
         for value in tuple(item.value for item in system.coefficients.entries)
         + system.rhs
         for component in (value.num, value.den)
@@ -143,8 +143,8 @@ def _admit_system(
 
 def _canonical_rational(value: Any) -> CanonicalRational:
     return CanonicalRational(
-        num=format_canonical_integer(int(value.numerator)),
-        den=format_canonical_integer(int(value.denominator)),
+        num=int(value.numerator),
+        den=int(value.denominator),
     )
 
 

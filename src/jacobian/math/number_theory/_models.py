@@ -9,18 +9,15 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from pydantic import StringConstraints
 from pydantic_core import PydanticCustomError
+
+from jacobian._exact import DecimalIntegerEncoding
 
 MAX_INTEGER_DIGITS = 256
 
 BoundedInteger = Annotated[
-    str,
-    StringConstraints(
-        pattern=r"^-?(?:0|[1-9][0-9]*)$",
-        max_length=MAX_INTEGER_DIGITS,
-        strict=True,
-    ),
+    int,
+    DecimalIntegerEncoding(max_digits=MAX_INTEGER_DIGITS),
 ]
 
 

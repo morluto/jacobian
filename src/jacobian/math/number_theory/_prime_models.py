@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Self
 
-from pydantic import Field, StrictInt, StringConstraints
+from pydantic import Field, StrictInt, WithJsonSchema, model_validator
 
+from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel
 from jacobian.math.number_theory._integer_models import MAX_SAFE_INTEGER
 from jacobian.math.number_theory._models import BoundedInteger
@@ -44,11 +45,14 @@ class PreviousPrimeRequest(StrictModel):
 
 
 PrimorialInteger = Annotated[
-    str,
-    StringConstraints(
-        pattern=r"^(?:0|[1-9][0-9]*)$",
-        max_length=_MAX_PRIMORIAL_DIGITS,
-        strict=True,
+    int,
+    DecimalIntegerEncoding(max_digits=_MAX_PRIMORIAL_DIGITS),
+    WithJsonSchema(
+        {
+            "type": "string",
+            "pattern": rf"^[1-9][0-9]{{0,{_MAX_PRIMORIAL_DIGITS - 1}}}(?![\s\S])",
+            "maxLength": _MAX_PRIMORIAL_DIGITS,
+        }
     ),
 ]
 
@@ -57,3 +61,9 @@ class PrimorialResult(StrictModel):
     """The primorial (product of the first n primes)."""
 
     value: PrimorialInteger
+
+    @model_validator(mode="after")
+    def require_positive(self) -> Self:
+        if self.value <= 0:
+            raise ValueError("primorial value must be positive")
+        return self

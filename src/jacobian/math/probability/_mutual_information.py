@@ -10,11 +10,10 @@ from pydantic import Field, StrictInt, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
-    CanonicalInteger,
     CanonicalRational,
+    ExactInteger,
 )
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -75,6 +74,9 @@ def _bound_raw_probability_cell(cell: object) -> None:
         if (
             isinstance(raw_component, str)
             and len(raw_component.lstrip("-")) > MAX_INPUT_RATIONAL_DIGITS
+        ) or (
+            type(raw_component) is int
+            and abs(raw_component) >= 10**MAX_INPUT_RATIONAL_DIGITS
         ):
             raise _validation_error(
                 "joint-table probability exceeds the "
@@ -129,7 +131,7 @@ def _bound_raw_rational(
         if (
             isinstance(raw_component, str)
             and len(raw_component.lstrip("-")) > max_digits
-        ):
+        ) or (type(raw_component) is int and abs(raw_component) >= 10**max_digits):
             raise _validation_error(f"{label} exceeds the {max_digits}-digit bound")
 
 
@@ -262,7 +264,7 @@ class FiniteJointLikelihoodRatio(StrictModel):
 class MutualInformationLogValue(StrictModel):
     """Canonical wire form of ``scale * I = log_base(product)``."""
 
-    scale: CanonicalInteger
+    scale: ExactInteger
     product: CanonicalRational
     identity: Literal["SCALE_TIMES_I_EQUALS_LOG_BASE_OF_PRODUCT"] = (
         "SCALE_TIMES_I_EQUALS_LOG_BASE_OF_PRODUCT"
@@ -270,7 +272,7 @@ class MutualInformationLogValue(StrictModel):
 
     @model_validator(mode="after")
     def require_positive_scale_and_product(self) -> Self:
-        if parse_canonical_integer(self.scale) <= 0:
+        if self.scale <= 0:
             raise _validation_error(
                 "mutual-information logarithmic value scale must be positive"
             )
@@ -399,7 +401,7 @@ class FiniteJointTableMutualInformationResult(StrictModel):
             ),
             log_base=result.log_base,
             exact_logarithmic_value=MutualInformationLogValue(
-                scale=format_canonical_integer(result.logarithmic_value.scale),
+                scale=result.logarithmic_value.scale,
                 product=CanonicalRational.from_fraction(
                     result.logarithmic_value.product
                 ),

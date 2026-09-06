@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import cProfile
+import json
 import time
 from fractions import Fraction
 from threading import Event
@@ -62,7 +63,7 @@ from jacobian.process import bounded_process_cancellation
 
 def _field(*coefficients: str) -> SimpleNumberFieldPresentation:
     return SimpleNumberFieldPresentation(
-        coefficients_descending=coefficients,
+        coefficients_descending=tuple(int(coefficient) for coefficient in coefficients),
     )
 
 
@@ -89,7 +90,7 @@ def test_rational_field_degree_one_is_the_cheapest_complete_profile() -> None:
     assert field.degree == 1
     assert result.signature.real_embedding_count == 1
     assert result.signature.complex_conjugate_pair_count == 0
-    assert result.defining_polynomial_discriminant == "1"
+    assert result.defining_polynomial_discriminant == 1
     assert result.complex_conjugate_pairs == ()
     assert isinstance(result.records[0], RealNumberFieldEmbeddingRecord)
     assert result.records[0].isolating_interval.lower.as_fraction() == 0
@@ -101,7 +102,7 @@ def test_sqrt_two_has_two_ordered_real_embeddings_and_polynomial_discriminant() 
 
     assert result.signature.real_embedding_count == 2
     assert result.signature.complex_conjugate_pair_count == 0
-    assert result.defining_polynomial_discriminant == "8"
+    assert result.defining_polynomial_discriminant == 8
     assert all(
         isinstance(record, RealNumberFieldEmbeddingRecord) for record in result.records
     )
@@ -119,7 +120,7 @@ def test_gaussian_field_distinguishes_i_from_negative_i_exactly() -> None:
 
     assert result.signature.real_embedding_count == 0
     assert result.signature.complex_conjugate_pair_count == 1
-    assert result.defining_polynomial_discriminant == "-4"
+    assert result.defining_polynomial_discriminant == -4
     assert len(result.complex_conjugate_pairs) == 1
     pair = result.complex_conjugate_pairs[0]
     assert (pair.negative_embedding_index, pair.positive_embedding_index) == (0, 1)
@@ -138,7 +139,7 @@ def test_signature_one_one_cubic_is_complete() -> None:
 
     assert result.signature.real_embedding_count == 1
     assert result.signature.complex_conjugate_pair_count == 1
-    assert result.defining_polynomial_discriminant == "-23"
+    assert result.defining_polynomial_discriminant == -23
     assert [record.kind for record in result.records] == [
         "REAL",
         "COMPLEX",
@@ -234,7 +235,7 @@ def test_malformed_overlapping_wrong_root_and_wrong_sign_evidence_are_rejected()
     wrong_sign = negative.model_dump(mode="json")
     wrong_sign["half_plane"] = "POSITIVE_IMAGINARY"
     with pytest.raises(ValidationError, match="half-plane"):
-        ComplexNumberFieldEmbeddingRecord.model_validate(wrong_sign)
+        ComplexNumberFieldEmbeddingRecord.model_validate_json(json.dumps(wrong_sign))
 
     boundary_root = RationalComplexIsolatingRectangle(
         real_lower=_rational(0),
@@ -248,9 +249,9 @@ def test_malformed_overlapping_wrong_root_and_wrong_sign_evidence_are_rejected()
     oversized = negative.model_dump(mode="json")
     oversized["isolating_rectangle"]["real_lower"]["num"] = "1" * 4_097
     with pytest.raises(ValidationError, match="4,096-digit bound"):
-        ComplexNumberFieldEmbeddingRecord.model_validate(oversized)
+        ComplexNumberFieldEmbeddingRecord.model_validate_json(json.dumps(oversized))
 
-    oversized_component = CanonicalRational(num="-1", den="9" * 4_097)
+    oversized_component = CanonicalRational(num=-1, den=10**4_096)
     with pytest.raises(ValidationError, match="4,096-digit bound"):
         RationalComplexIsolatingRectangle(
             real_lower=oversized_component,
@@ -274,9 +275,9 @@ def test_real_interval_is_bound_to_the_selected_real_root() -> None:
     oversized = negative.model_dump(mode="json")
     oversized["isolating_interval"]["lower"]["num"] = "1" * 4_097
     with pytest.raises(ValidationError, match="4,096-digit bound"):
-        RealNumberFieldEmbeddingRecord.model_validate(oversized)
+        RealNumberFieldEmbeddingRecord.model_validate_json(json.dumps(oversized))
 
-    oversized_component = CanonicalRational(num="-1", den="9" * 4_097)
+    oversized_component = CanonicalRational(num=-1, den=10**4_096)
     with pytest.raises(ValidationError, match="4,096-digit bound"):
         RealNumberFieldEmbeddingRecord(
             kind="REAL",
@@ -376,7 +377,7 @@ def test_profile_and_canonical_values_round_trip_without_backend_objects() -> No
 def test_structural_complex_root_parsing_does_not_run_sympy() -> None:
     profiler = cProfile.Profile()
     value = profiler.runcall(
-        lambda: ComplexAlgebraicValue(polynomial=("1", "0", "-1"), root_index=0)
+        lambda: ComplexAlgebraicValue(polynomial=(1, 0, -1), root_index=0)
     )
 
     assert value.root_index == 0
@@ -398,7 +399,7 @@ def test_profile_structural_validation_rejects_an_incomplete_result() -> None:
     incomplete = profile.model_dump(mode="json")
     incomplete["records"].pop()
     with pytest.raises(ValidationError, match="degree-many"):
-        NumberFieldEmbeddingProfile.model_validate(incomplete)
+        NumberFieldEmbeddingProfile.model_validate_json(json.dumps(incomplete))
 
 
 def test_degree_coefficient_isolation_and_worker_bounds_are_preflighted() -> None:
@@ -415,7 +416,9 @@ def test_degree_coefficient_isolation_and_worker_bounds_are_preflighted() -> Non
     with pytest.raises(NumberFieldEmbeddingAdmissionError) as caught:
         embeddings(degree_nine)
     assert caught.value.reason == "degree_bound"
-    with pytest.raises(ValidationError, match="256 digits"):
+    with pytest.raises(
+        ValidationError, match="integer exceeds the decimal digit bound"
+    ):
         _field("1", "0", "1" + "0" * 256)
     with pytest.raises(ValidationError, match="256 digits"):
         SimpleNumberFieldElement.model_validate(
@@ -512,13 +515,15 @@ def test_catalog_operation_exposes_and_runs_the_advertised_gaussian_example() ->
         tool for tool in TOOLS if tool.operation_id == "number_field.embeddings.compute"
     )
     example = operation.examples[0]
-    request = NumberFieldEmbeddingsRequest.model_validate(example.input)
+    request = NumberFieldEmbeddingsRequest.model_validate_json(
+        json.dumps(example.input)
+    )
 
     result = operation.run(request)
 
     assert isinstance(result, NumberFieldEmbeddingProfile)
     assert result.signature.complex_conjugate_pair_count == 1
-    assert result.defining_polynomial_discriminant == "-4"
+    assert result.defining_polynomial_discriminant == -4
 
 
 def test_reducible_presentation_is_recognized_inside_the_operation() -> None:
@@ -529,7 +534,7 @@ def test_reducible_presentation_is_recognized_inside_the_operation() -> None:
         {
             "field": {
                 "domain": "QQ",
-                "coefficients_descending": ["1", "0", "-1"],
+                "coefficients_descending": [1, 0, -1],
             }
         }
     )

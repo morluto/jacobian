@@ -104,9 +104,7 @@ def test_rational_arithmetic_work_is_admitted_separately() -> None:
     # Use two different denominators near the limit to trigger the
     # multi-denominator growth bound: width * max_digits + len(str(width)).
     weights = tuple(
-        CanonicalRational(
-            num="1", den="1" + "0" * 16_400 + ("3" if i % 2 == 0 else "7")
-        )
+        CanonicalRational(num=1, den=10**16_400 + (3 if i % 2 == 0 else 7))
         for i in range(20)
     )
     with pytest.raises(ValueError, match="rational growth exceeds"):
@@ -115,9 +113,7 @@ def test_rational_arithmetic_work_is_admitted_separately() -> None:
 
 def test_chain_growth_uses_width_not_carrier_size() -> None:
     digits = 16_384
-    weights = tuple(
-        CanonicalRational(num="1", den="1" + "0" * digits) for _ in range(2)
-    )
+    weights = tuple(CanonicalRational(num=1, den=10**digits) for _ in range(2))
     result = compute_maximum_weight_antichain(_chain_poset(["a", "b"]), weights)
     assert result.antichain in (("a",), ("b",))
 

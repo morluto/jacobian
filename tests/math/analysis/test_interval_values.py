@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -77,5 +79,5 @@ def test_box_rejects_noncanonical_axes_and_intervals(
     error_type: str,
 ) -> None:
     with pytest.raises(ValidationError) as error:
-        RationalBox.model_validate(payload)
+        RationalBox.model_validate_json(json.dumps(payload))
     assert error.value.errors()[0]["type"] == error_type

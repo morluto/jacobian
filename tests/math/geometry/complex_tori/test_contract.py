@@ -21,6 +21,7 @@ from jacobian._execution import (
     request_cancellation,
     request_execution,
 )
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.complex_tori import (
     LatticeComplexStructure,
@@ -96,7 +97,7 @@ def test_complex_torus_axis_iterables_are_bounded_before_materialization() -> No
             {
                 "coordinate_axis": repeat("e1"),
                 "complex_structure": structure,
-            }
+            },
         )
 
     with pytest.raises(ValidationError, match="NFC Unicode"):
@@ -104,7 +105,7 @@ def test_complex_torus_axis_iterables_are_bounded_before_materialization() -> No
             {
                 "coordinate_axis": deque(("e\u0301", "x")),
                 "complex_structure": structure,
-            }
+            },
         )
 
 
@@ -116,13 +117,15 @@ def test_neron_severi_schema_preserves_the_canonical_rational_domain_default() -
     validator = Draft202012Validator(NeronSeveriLatticeRequest.model_json_schema())
     assert not list(validator.iter_errors(payload))
     assert not list(validator.iter_errors(missing_discriminator))
-    assert NeronSeveriLatticeRequest.model_validate(
-        missing_discriminator
-    ) == NeronSeveriLatticeRequest.model_validate(payload)
+    assert NeronSeveriLatticeRequest.model_validate_json(
+        encode_strict_json(missing_discriminator)
+    ) == NeronSeveriLatticeRequest.model_validate_json(encode_strict_json(payload))
     missing_discriminator["torus"]["complex_structure"]["domain"] = "ZZ"
     assert list(validator.iter_errors(missing_discriminator))
     with pytest.raises(ValidationError):
-        NeronSeveriLatticeRequest.model_validate(missing_discriminator)
+        NeronSeveriLatticeRequest.model_validate_json(
+            encode_strict_json(missing_discriminator)
+        )
 
 
 def test_riemann_profile_request_preserves_the_canonical_rational_domain_default() -> (
@@ -132,7 +135,7 @@ def test_riemann_profile_request_preserves_the_canonical_rational_domain_default
     form = IntegralBilinearForm(
         coordinate_axis=torus.coordinate_axis,
         kind="ALTERNATING",
-        matrix=IntegerMatrix(entries=(("0", "1"), ("-1", "0"))),
+        matrix=IntegerMatrix(entries=((0, 1), (-1, 0))),
     )
     payload = {
         "torus": torus.model_dump(mode="json"),
@@ -144,13 +147,15 @@ def test_riemann_profile_request_preserves_the_canonical_rational_domain_default
     validator = Draft202012Validator(RiemannFormProfileRequest.model_json_schema())
     assert not list(validator.iter_errors(payload))
     assert not list(validator.iter_errors(missing_discriminator))
-    assert RiemannFormProfileRequest.model_validate(
-        missing_discriminator
-    ) == RiemannFormProfileRequest.model_validate(payload)
+    assert RiemannFormProfileRequest.model_validate_json(
+        encode_strict_json(missing_discriminator)
+    ) == RiemannFormProfileRequest.model_validate_json(encode_strict_json(payload))
     missing_discriminator["torus"]["complex_structure"]["domain"] = "ZZ"
     assert list(validator.iter_errors(missing_discriminator))
     with pytest.raises(ValidationError):
-        RiemannFormProfileRequest.model_validate(missing_discriminator)
+        RiemannFormProfileRequest.model_validate_json(
+            encode_strict_json(missing_discriminator)
+        )
 
 
 @pytest.mark.parametrize(
@@ -169,7 +174,7 @@ def test_profile_rejects_wrong_axis_or_form_kind(
     form = IntegralBilinearForm(
         coordinate_axis=axis,
         kind=kind,
-        matrix=IntegerMatrix(entries=(("0", "1"), ("-1", "0"))),
+        matrix=IntegerMatrix(entries=((0, 1), (-1, 0))),
     )
 
     with pytest.raises(OperationDomainValidationError) as exc_info:
@@ -192,7 +197,7 @@ def test_profile_observes_cancellation_after_complex_structure_products() -> Non
     form = IntegralBilinearForm(
         coordinate_axis=torus.coordinate_axis,
         kind="ALTERNATING",
-        matrix=IntegerMatrix(entries=(("0", "1"), ("-1", "0"))),
+        matrix=IntegerMatrix(entries=((0, 1), (-1, 0))),
     )
     cancellation = CancelAfterChecks(4)
     with (
@@ -236,7 +241,7 @@ def test_riemann_profile_preserves_a_stricter_deadline_through_inertia(
     form = IntegralBilinearForm(
         coordinate_axis=torus.coordinate_axis,
         kind="ALTERNATING",
-        matrix=IntegerMatrix(entries=(("0", "1"), ("-1", "0"))),
+        matrix=IntegerMatrix(entries=((0, 1), (-1, 0))),
     )
     checks = 0
 
@@ -273,7 +278,7 @@ def test_raw_torus_validation_does_not_recurse_through_a_malformed_matrix() -> N
                     "domain": "QQ",
                     "entries": [[nested]],
                 },
-            }
+            },
         )
 
 
@@ -281,7 +286,7 @@ def test_raw_torus_validation_does_not_recurse_through_a_malformed_matrix() -> N
 def test_raw_neron_severi_request_rejects_deep_rational_components(
     component: str,
 ) -> None:
-    payload = {"torus": _elliptic_torus().model_dump(mode="json")}
+    payload = {"torus": _elliptic_torus().model_dump()}
     payload["torus"]["complex_structure"]["entries"][0][0][component] = (
         _deep_rational_mapping()
     )
@@ -299,16 +304,16 @@ def test_raw_riemann_request_rejects_deep_rational_shaped_integer() -> None:
     form = IntegralBilinearForm(
         coordinate_axis=torus.coordinate_axis,
         kind="ALTERNATING",
-        matrix=IntegerMatrix(entries=(("0", "1"), ("-1", "0"))),
+        matrix=IntegerMatrix(entries=((0, 1), (-1, 0))),
     )
     payload = {
-        "torus": torus.model_dump(mode="json"),
-        "form": form.model_dump(mode="json"),
+        "torus": torus.model_dump(),
+        "form": form.model_dump(),
     }
-    payload["form"]["matrix"]["entries"][0][0] = {
-        "num": _deep_rational_mapping(),
-        "den": "1",
-    }
+    payload["form"]["matrix"]["entries"] = (
+        ({"num": _deep_rational_mapping(), "den": "1"}, 1),
+        (-1, 0),
+    )
 
     with pytest.raises(ValidationError) as exc_info:
         RiemannFormProfileRequest.model_validate(payload)
@@ -323,7 +328,7 @@ def test_raw_neron_severi_request_rejects_allowed_key_depth_traps(
     malformed_part: str,
 ) -> None:
     payload = {
-        "torus": nonmonic_quadratic_torus().model_dump(mode="json"),
+        "torus": nonmonic_quadratic_torus().model_dump(),
     }
     matrix = payload["torus"]["complex_structure"]
     if malformed_part == "row_axis":
@@ -397,11 +402,11 @@ def test_profile_admits_inertia_before_hodge_and_associated_form_products() -> N
         matrix=IntegerMatrix(
             entries=tuple(
                 tuple(
-                    "1"
+                    1
                     if row % 2 == 0 and column == row + 1
-                    else "-1"
+                    else -1
                     if row % 2 == 1 and column == row - 1
-                    else "0"
+                    else 0
                     for column in range(dimension)
                 )
                 for row in range(dimension)
@@ -421,7 +426,11 @@ def test_catalog_examples_round_trip_through_each_result_contract() -> None:
         "complex_torus.riemann_form.profile.compute",
     }
     for tool in TOOLS:
-        request = tool.request_type.model_validate(tool.examples[0].input)
+        request = tool.request_type.model_validate_json(
+            encode_strict_json(tool.examples[0].input)
+        )
         result = tool.run(request)
-        round_tripped = tool.result_type.model_validate(result.model_dump(mode="json"))
+        round_tripped = tool.result_type.model_validate_json(
+            encode_strict_json(result.model_dump(mode="json"))
+        )
         assert round_tripped == result

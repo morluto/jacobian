@@ -1,5 +1,6 @@
 """Tests for fixed-arity unordered multiset-sum profiles."""
 
+import json
 import tracemalloc
 from collections import Counter
 from itertools import combinations, combinations_with_replacement
@@ -48,16 +49,18 @@ def _request(
     arity: int,
     window: tuple[int, int] | None = None,
 ) -> MultisetSumRepresentationProfileRequest:
-    return MultisetSumRepresentationProfileRequest.model_validate(
-        {
-            "source": {"elements": [str(value) for value in source]},
-            "arity": arity,
-            "window": (
-                None
-                if window is None
-                else {"lower": str(window[0]), "upper": str(window[1])}
-            ),
-        }
+    return MultisetSumRepresentationProfileRequest.model_validate_json(
+        json.dumps(
+            {
+                "source": {"elements": [str(value) for value in source]},
+                "arity": arity,
+                "window": (
+                    None
+                    if window is None
+                    else {"lower": str(window[0]), "upper": str(window[1])}
+                ),
+            }
+        )
     )
 
 
@@ -102,7 +105,7 @@ def test_zero_arity_uses_derived_admission_not_the_legacy_source_cap() -> None:
 def test_closed_window_is_complete_only_for_its_declared_scope() -> None:
     result = _run_multiset(_request((0, 1, 2), 3, (2, 3)))
     assert result.window is not None
-    assert (result.window.lower, result.window.upper) == ("2", "3")
+    assert (result.window.lower, result.window.upper) == (2, 3)
     assert {int(entry.sum): entry.multiplicity for entry in result.entries} == {
         2: 2,
         3: 2,
@@ -170,7 +173,7 @@ def test_request_schema_exposes_collection_and_scalar_bounds() -> None:
     )
     assert schema["properties"]["arity"]["maximum"] == MAX_ARITY
     window_schema = schema["$defs"]["MultisetSumWindow"]
-    assert window_schema["properties"]["lower"]["maxLength"] == MAX_INTEGER_LENGTH
+    assert window_schema["properties"]["lower"]["maxLength"] == MAX_INTEGER_LENGTH + 1
 
 
 def test_singleton_source_admits_maximum_arity_without_tuple_expansion() -> None:
@@ -319,7 +322,7 @@ def test_dense_full_profile_uses_the_attainable_sum_range_bound() -> None:
 def test_narrow_window_admits_large_candidate_family_with_small_output() -> None:
     source = tuple(range(327))
     result = _run_multiset(_request(source, 3, (0, 0)))
-    assert [(entry.sum, entry.multiplicity) for entry in result.entries] == [("0", 1)]
+    assert [(entry.sum, entry.multiplicity) for entry in result.entries] == [(0, 1)]
 
 
 def test_request_rejects_enumeration_above_work_bound() -> None:
@@ -329,8 +332,8 @@ def test_request_rejects_enumeration_above_work_bound() -> None:
 
 
 def test_widened_source_axis_preserves_cartesian_pair_bound() -> None:
-    left = FiniteIntegerSet(elements=tuple(str(i) for i in range(257)))
-    right = FiniteIntegerSet(elements=tuple(str(i) for i in range(256)))
+    left = FiniteIntegerSet(elements=tuple(range(257)))
+    right = FiniteIntegerSet(elements=tuple(range(256)))
     request = RepresentationProfileRequest(left=left, right=right)
     with pytest.raises(ValueError):
         _run_representation(request)
@@ -360,5 +363,5 @@ def test_oeis_prime_cube_targets_have_published_multiplicities() -> None:
         complete_source = tuple(value for value in prime_cubes if value <= target)
         result = _run_multiset(_request(complete_source, 3, (target, target)))
         assert [(entry.sum, entry.multiplicity) for entry in result.entries] == [
-            (str(target), multiplicity)
+            (target, multiplicity)
         ]

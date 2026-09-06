@@ -34,7 +34,7 @@ def quartic_matrix(
     """Realize power-basis coordinates in the selected root of x^4 - 2."""
 
     presentation = SimpleNumberFieldPresentation(
-        coefficients_descending=("1", "0", "0", "0", "-2")
+        coefficients_descending=(1, 0, 0, 0, -2)
     )
     embedding = embeddings(presentation).records[root_index].embedding
     assert isinstance(embedding, RealNumberFieldEmbedding)
@@ -103,9 +103,7 @@ def quartic_rank_one_torus(*, root_index: int = 1) -> LatticeComplexStructure:
 def nonmonic_quadratic_torus() -> LatticeComplexStructure:
     """Return ``J=[[0,-a],[2a,0]]`` in ``QQ[a]/(2a^2-1)`` at ``a>0``."""
 
-    presentation = SimpleNumberFieldPresentation(
-        coefficients_descending=("2", "0", "-1")
-    )
+    presentation = SimpleNumberFieldPresentation(coefficients_descending=(2, 0, -1))
     embedding = embeddings(presentation).records[1].embedding
     assert isinstance(embedding, RealNumberFieldEmbedding)
 
@@ -133,10 +131,10 @@ def standard_alternating_form(
         kind="ALTERNATING",
         matrix=IntegerMatrix(
             entries=(
-                ("0", "0", "1", "0"),
-                ("0", "0", "0", "1"),
-                ("-1", "0", "0", "0"),
-                ("0", "-1", "0", "0"),
+                (0, 0, 1, 0),
+                (0, 0, 0, 1),
+                (-1, 0, 0, 0),
+                (0, -1, 0, 0),
             )
         ),
     )
@@ -182,10 +180,10 @@ def index_six_alternating_form(
         kind="ALTERNATING",
         matrix=IntegerMatrix(
             entries=(
-                ("0", "0", "0", "6"),
-                ("0", "0", "1", "0"),
-                ("0", "-1", "0", "0"),
-                ("-6", "0", "0", "0"),
+                (0, 0, 0, 6),
+                (0, 0, 1, 0),
+                (0, -1, 0, 0),
+                (-6, 0, 0, 0),
             )
         ),
     )

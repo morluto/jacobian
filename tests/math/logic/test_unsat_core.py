@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -1607,11 +1608,11 @@ def test_unsat_result_requires_a_nonempty_canonical_core() -> None:
     payload["core_indices"] = []
 
     with raises_logic_validation():
-        SmtUnsatCoreResult.model_validate(payload)
+        SmtUnsatCoreResult.model_validate_json(json.dumps(payload))
 
     payload["core_indices"] = [1, 0]
     with raises_logic_validation():
-        SmtUnsatCoreResult.model_validate(payload)
+        SmtUnsatCoreResult.model_validate_json(json.dumps(payload))
 
 
 def test_request_schema_explains_validator_owned_indexing() -> None:

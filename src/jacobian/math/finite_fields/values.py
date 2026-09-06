@@ -775,9 +775,15 @@ class AxisBoundMatrix(StrictModel):
 
 
 class FiniteDimensionalSubspace(StrictModel):
-    """An ordered independent matrix basis over the presentation's prime field."""
+    """A declared prime-field matrix basis with explicit ambient field and axes.
+
+    Independence is established by admitted consumers, not structural parsing.
+    The empty basis represents the zero subspace of the same ambient space.
+    """
 
     presentation: FiniteFieldPresentation
+    row_axis: Axis
+    column_axis: Axis
     basis_axis: Axis
     basis: tuple[AxisBoundMatrix, ...]
 
@@ -786,16 +792,16 @@ class FiniteDimensionalSubspace(StrictModel):
     def require_basis_axis_bound(cls, data: Any) -> Any:
         data = canonicalize_json_containers(data)
         if isinstance(data, dict):
-            axis = data.get("basis_axis")
-            labels = _raw_field(axis, "labels")
-            if (
-                isinstance(labels, (list, tuple))
-                and len(labels) > _MAX_VALUE_AXIS_LABELS
-            ):
-                raise _validation_error(
-                    "finite_field.axis_exceeds_supported_label_bound",
-                    "subspace basis axes exceed the supported label bound",
-                )
+            for field in ("row_axis", "column_axis", "basis_axis"):
+                labels = _raw_field(data.get(field), "labels")
+                if (
+                    isinstance(labels, (list, tuple))
+                    and len(labels) > _MAX_VALUE_AXIS_LABELS
+                ):
+                    raise _validation_error(
+                        "finite_field.axis_exceeds_supported_label_bound",
+                        "subspace axes exceed the supported label bound",
+                    )
         return data
 
     @model_validator(mode="after")
@@ -805,16 +811,10 @@ class FiniteDimensionalSubspace(StrictModel):
                 "finite_field.subspace_basis_match_basis_axis",
                 "subspace basis must match its basis axis",
             )
-        if not self.basis:
-            raise _validation_error(
-                "finite_field.subspace_basis_nonempty",
-                "subspace basis must be nonempty",
-            )
-        first = self.basis[0]
         if any(
             matrix.presentation != self.presentation
-            or matrix.row_axis != first.row_axis
-            or matrix.column_axis != first.column_axis
+            or matrix.row_axis != self.row_axis
+            or matrix.column_axis != self.column_axis
             for matrix in self.basis
         ):
             raise _validation_error(
@@ -822,8 +822,8 @@ class FiniteDimensionalSubspace(StrictModel):
                 "subspace matrices must share their parent and axes",
             )
         flattened_dimension = (
-            len(first.row_axis.labels)
-            * len(first.column_axis.labels)
+            len(self.row_axis.labels)
+            * len(self.column_axis.labels)
             * self.presentation.degree
         )
         if flattened_dimension * len(self.basis) > _MAX_VALUE_AXIS_LABELS**2:
@@ -834,19 +834,13 @@ class FiniteDimensionalSubspace(StrictModel):
         return self
 
     @property
-    def row_axis(self) -> Axis:
-        return self.basis[0].row_axis
-
-    @property
-    def column_axis(self) -> Axis:
-        return self.basis[0].column_axis
-
-    @property
     def digest(self) -> str:
         return _digest(
             {
                 "basis": [matrix.digest for matrix in self.basis],
                 "basis_axis": self.basis_axis.digest,
+                "row_axis": self.row_axis.digest,
+                "column_axis": self.column_axis.digest,
                 "presentation": self.presentation.digest,
                 "value_type": "finite-dimensional-subspace",
             }

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -111,7 +113,7 @@ def test_result_rejects_inconsistent_edge_count() -> None:
     )
 
     with pytest.raises(ValidationError, match="edge_count"):
-        BinaryCodeDistanceGraphResult.model_validate(payload)
+        BinaryCodeDistanceGraphResult.model_validate_json(json.dumps(payload))
 
 
 def test_result_preserves_source() -> None:

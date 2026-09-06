@@ -1,5 +1,6 @@
 """Tests for polynomial support geometry operations."""
 
+import json
 from collections.abc import Iterator
 from contextlib import contextmanager
 from fractions import Fraction
@@ -48,8 +49,8 @@ def compute_initial_form(request: InitialFormRequest) -> PolynomialFaceData:
 
 
 class _CanonicalRationalPayload(TypedDict):
-    num: str
-    den: str
+    num: int
+    den: int
 
 
 class _RationalTermPayload(TypedDict):
@@ -86,14 +87,14 @@ def _polynomial(
     )
 
 
-def _term(coeff: str, exponents: list[int]) -> _RationalTermPayload:
-    return {"coefficient": {"num": coeff, "den": "1"}, "exponents": exponents}
+def _term(coeff: int, exponents: list[int]) -> _RationalTermPayload:
+    return {"coefficient": {"num": coeff, "den": 1}, "exponents": exponents}
 
 
 _XY_TERMS = (
-    _term("1", [2, 0]),
-    _term("1", [1, 1]),
-    _term("1", [0, 2]),
+    _term(1, [2, 0]),
+    _term(1, [1, 1]),
+    _term(1, [0, 2]),
 )
 
 VARS = ("x", "y")
@@ -134,14 +135,17 @@ class TestSupport:
         assert result.polynomial is source
         assert result.polynomial.domain == "QQ"
         assert result.polynomial.variables == VARS
-        payload = result.model_dump(mode="json")
+        payload_json = result.model_dump_json()
+        payload = json.loads(payload_json)
         assert "variables" not in payload
         assert "coefficients" not in payload
-        restored = type(result).model_validate(payload)
+        restored = type(result).model_validate_json(payload_json)
         assert restored == result
         assert verify_polynomial_support(restored)
 
-        follow_up = SupportRequest.model_validate({"polynomial": payload["polynomial"]})
+        follow_up = SupportRequest.model_validate_json(
+            json.dumps({"polynomial": payload["polynomial"]})
+        )
         assert follow_up.polynomial == source
         assert compute_support(follow_up).exponents == result.exponents
 
@@ -160,7 +164,7 @@ class TestNewtonPolytope:
         assert result.affine_dimension == 1
 
     def test_triangle_support_all_vertices(self) -> None:
-        terms = (_term("1", [2, 2]), _term("1", [2, 0]), _term("1", [0, 2]))
+        terms = (_term(1, [2, 2]), _term(1, [2, 0]), _term(1, [0, 2]))
         result = compute_newton_polytope(
             NewtonPolytopeRequest(polynomial=_polynomial(terms, VARS))
         )
@@ -175,10 +179,10 @@ class TestNewtonPolytope:
 
     def test_interior_point_is_nonextreme(self) -> None:
         terms = (
-            _term("1", [4, 0]),
-            _term("1", [1, 1]),
-            _term("1", [0, 4]),
-            _term("1", [0, 0]),
+            _term(1, [4, 0]),
+            _term(1, [1, 1]),
+            _term(1, [0, 4]),
+            _term(1, [0, 0]),
         )
         result = compute_newton_polytope(
             NewtonPolytopeRequest(polynomial=_polynomial(terms, VARS))
@@ -191,10 +195,10 @@ class TestNewtonPolytope:
         no axis-aligned or small-coordinate direction exposes it; the exact
         extremality kernel must still certify it."""
         terms = (
-            _term("1", [1, 5]),
-            _term("1", [0, 2]),
-            _term("1", [0, 1]),
-            _term("1", [0, 0]),
+            _term(1, [1, 5]),
+            _term(1, [0, 2]),
+            _term(1, [0, 1]),
+            _term(1, [0, 0]),
         )
         result = compute_newton_polytope(
             NewtonPolytopeRequest(polynomial=_polynomial(terms, VARS))
@@ -206,7 +210,7 @@ class TestNewtonPolytope:
     def test_term_bound_rejects_infeasible_scan(self) -> None:
         """The Newton operation's term budget is narrower than the canonical one."""
         pairs = sorted(((i % 11, i // 11) for i in range(97)), reverse=True)
-        many = tuple(_term("1", list(pair)) for pair in pairs)
+        many = tuple(_term(1, list(pair)) for pair in pairs)
         assert len(many) == 97
         request = NewtonPolytopeRequest(polynomial=_polynomial(many, VARS))
         with raises_domain_code(
@@ -275,17 +279,17 @@ class TestInitialForm:
         assert result.initial_form.variables == VARS
         term = result.initial_form.polynomial.terms[0]
         assert tuple(term.exponents) == (0, 2)
-        assert term.coefficient.num == "1"
+        assert term.coefficient.num == 1
 
     def test_initial_form_with_coeffs(self) -> None:
-        terms = (_term("3", [2, 0]), _term("5", [0, 2]))
+        terms = (_term(3, [2, 0]), _term(5, [0, 2]))
         result = compute_initial_form(
             InitialFormRequest(polynomial=_polynomial(terms, VARS), weight=(1, 0))
         )
         # Minimum weight 0 at (0,2), initial form is 5*y^2
         term = result.initial_form.polynomial.terms[0]
         assert tuple(term.exponents) == (0, 2)
-        assert term.coefficient.num == "5"
+        assert term.coefficient.num == 5
 
     def test_initial_form_binds_to_canonical_value(self) -> None:
         """The result round-trips as a canonical value."""
@@ -324,7 +328,7 @@ class TestTransportableBounds:
         """A zero weight makes every term minimal; oversized sources are
         rejected so the doubled serialization cannot breach the envelope."""
         many = tuple(
-            _term("1", list(pair))
+            _term(1, list(pair))
             for pair in sorted(((i % 32, i // 32) for i in range(1025)), reverse=True)
         )
         request = InitialFormRequest(
@@ -429,12 +433,12 @@ class TestSupportCrossFieldValidation:
         source = _polynomial(_XY_TERMS, VARS)
         claim = compute_support(SupportRequest(polynomial=source))
 
-        source_forgery = claim.model_dump(mode="json")
+        source_forgery = claim.model_dump()
         source_forgery["polynomial"]["polynomial"]["terms"][2]["exponents"] = [0, 3]
         forged_source = type(claim).model_validate(source_forgery)
         assert not verify_polynomial_support(forged_source)
 
-        claim_forgery = claim.model_dump(mode="json")
+        claim_forgery = claim.model_dump()
         claim_forgery["coordinate_max"] = [3, 2]
         forged_claim = type(claim).model_validate(claim_forgery)
         assert not verify_polynomial_support(forged_claim)
@@ -582,7 +586,7 @@ class TestSupportCrossFieldValidation:
 
         source = _polynomial(_XY_TERMS, VARS)
         hostile_term = source.polynomial.terms[0].model_copy(
-            update={"coefficient": EvilRational(num="1", den="1")}
+            update={"coefficient": EvilRational(num=1, den=1)}
         )
         hostile_sparse = source.polynomial.model_copy(
             update={"terms": (hostile_term, *source.polynomial.terms[1:])}
@@ -639,13 +643,16 @@ class TestSupportValueInvariants:
         """A decoded support keeps its canonical polynomial source."""
         from jacobian.math.polynomials.support_geometry.values import PolynomialSupport
 
-        claim = PolynomialSupport.model_validate(
-            {
-                "polynomial": _polynomial(_XY_TERMS, VARS).model_dump(mode="json"),
-                "is_zero": True,
-                "term_count": 0,
-                "exponents": [],
-            }
+        payload = _polynomial(_XY_TERMS, VARS).model_dump(mode="json")
+        claim = PolynomialSupport.model_validate_json(
+            json.dumps(
+                {
+                    "polynomial": payload,
+                    "is_zero": True,
+                    "term_count": 0,
+                    "exponents": [],
+                }
+            )
         )
         assert not verify_polynomial_support(claim)
 
@@ -673,7 +680,7 @@ class TestSupportValueInvariants:
 
         with raises_code("exponents_not_distinct"):
             PolynomialSupport(
-                polynomial=_polynomial((_term("1", [1]), _term("2", [0])), ("x",)),
+                polynomial=_polynomial((_term(1, [1]), _term(2, [0])), ("x",)),
                 is_zero=False,
                 term_count=2,
                 exponents=((1,), (1,)),
@@ -721,7 +728,7 @@ class TestSupportValueInvariants:
         for exponent in (-1, 40000):
             with raises_code("exponents_out_of_domain"):
                 PolynomialSupport(
-                    polynomial=_polynomial((_term("1", [0]),), ("x",)),
+                    polynomial=_polynomial((_term(1, [0]),), ("x",)),
                     is_zero=False,
                     term_count=1,
                     exponents=((exponent,),),

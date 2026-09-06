@@ -143,7 +143,10 @@ def _admit_configuration(
         for index, point in enumerate(points):
             for axis, value in (("x", point.x), ("y", point.y)):
                 if (
-                    max(len(value.num.lstrip("-")), len(value.den))
+                    max(
+                        len(format_canonical_integer(abs(value.num))),
+                        len(format_canonical_integer(value.den)),
+                    )
                     > MAX_COORDINATE_DIGITS
                 ):
                     _reject_geometry_domain(
@@ -207,8 +210,8 @@ def _fraction(value: Any) -> Fraction:
 def _wire_rational(value: Any) -> CanonicalRational:
     fraction = _fraction(value)
     return CanonicalRational(
-        num=format_canonical_integer(fraction.numerator),
-        den=format_canonical_integer(fraction.denominator),
+        num=fraction.numerator,
+        den=fraction.denominator,
     )
 
 

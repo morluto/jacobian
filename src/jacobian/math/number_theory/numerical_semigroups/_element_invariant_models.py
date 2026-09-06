@@ -6,7 +6,7 @@ from typing import Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalInteger, CanonicalRational, NativeInteger
+from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel
 from jacobian.math.number_theory.numerical_semigroups._models import (
     _GENERAL_ELEMENT_ENVELOPE,
@@ -21,7 +21,7 @@ from jacobian.math.number_theory.numerical_semigroups.values import NumericalSem
 class ElementDeltaSetRequest(StrictModel):
     """Delta set of one element in a numerical semigroup."""
 
-    generators: tuple[CanonicalInteger, ...] = Field(
+    generators: tuple[ExactInteger, ...] = Field(
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
@@ -31,26 +31,26 @@ class ElementDeltaSetRequest(StrictModel):
             "lengths use its increasing minimal generator axis."
         ),
     )
-    value: CanonicalInteger
+    value: ExactInteger
 
 
 class ElementDeltaSetResult(StrictModel):
     """Delta set of one element."""
 
-    value: CanonicalInteger
-    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+    value: ExactInteger
+    minimal_generators: tuple[ExactInteger, ...] = Field(
         min_length=1, max_length=MAX_GENERATORS
     )
-    factorization_lengths: tuple[int, ...]
+    factorization_lengths: tuple[ExactInteger, ...]
     delta_set: tuple[int, ...]
 
     @classmethod
     def _from_kernel(
         cls,
         *,
-        value: CanonicalInteger,
-        minimal_generators: tuple[CanonicalInteger, ...],
-        factorization_lengths: tuple[int, ...],
+        value: ExactInteger,
+        minimal_generators: tuple[ExactInteger, ...],
+        factorization_lengths: tuple[ExactInteger, ...],
         delta_set: tuple[int, ...],
     ) -> Self:
         """Construct output derived from one admitted length-set kernel call."""
@@ -83,7 +83,7 @@ class ElementDeltaSetResult(StrictModel):
 class ElementElasticityRequest(StrictModel):
     """Elasticity of one element in a numerical semigroup."""
 
-    generators: tuple[CanonicalInteger, ...] = Field(
+    generators: tuple[ExactInteger, ...] = Field(
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
@@ -93,7 +93,7 @@ class ElementElasticityRequest(StrictModel):
             "increasing minimal generator axis."
         ),
     )
-    value: CanonicalInteger = Field(
+    value: ExactInteger = Field(
         description="Positive semigroup element. " + _GENERAL_ELEMENT_ENVELOPE
     )
 
@@ -101,25 +101,25 @@ class ElementElasticityRequest(StrictModel):
 class ElementElasticityResult(StrictModel):
     """Elasticity of one element."""
 
-    value: NativeInteger
+    value: ExactInteger
     semigroup: NumericalSemigroup
 
     @property
-    def minimal_generators(self) -> tuple[CanonicalInteger, ...]:
+    def minimal_generators(self) -> tuple[ExactInteger, ...]:
         return self.semigroup.minimal_generators
 
-    minimum_length: int = Field(ge=1)
-    maximum_length: int = Field(ge=1)
+    minimum_length: ExactInteger = Field(ge=1)
+    maximum_length: ExactInteger = Field(ge=1)
     elasticity: CanonicalRational
 
     @classmethod
     def _from_kernel(
         cls,
         *,
-        value: NativeInteger,
-        minimal_generators: tuple[CanonicalInteger, ...],
-        minimum_length: int,
-        maximum_length: int,
+        value: ExactInteger,
+        minimal_generators: tuple[ExactInteger, ...],
+        minimum_length: ExactInteger,
+        maximum_length: ExactInteger,
         elasticity: CanonicalRational,
     ) -> Self:
         """Construct output derived from one admitted extrema kernel call."""
@@ -136,7 +136,7 @@ class ElementElasticityResult(StrictModel):
 class ElementCatenaryDegreeRequest(StrictModel):
     """Catenary degree of one element in a numerical semigroup."""
 
-    generators: tuple[CanonicalInteger, ...] = Field(
+    generators: tuple[ExactInteger, ...] = Field(
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
@@ -146,14 +146,14 @@ class ElementCatenaryDegreeRequest(StrictModel):
             "coordinates use its increasing minimal generator axis."
         ),
     )
-    value: CanonicalInteger
+    value: ExactInteger
 
 
 class ElementCatenaryDegreeResult(StrictModel):
     """Catenary degree of one element."""
 
-    value: CanonicalInteger
-    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+    value: ExactInteger
+    minimal_generators: tuple[ExactInteger, ...] = Field(
         min_length=1, max_length=MAX_GENERATORS
     )
     factorization_count: int = Field(ge=1)
@@ -163,8 +163,8 @@ class ElementCatenaryDegreeResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        value: CanonicalInteger,
-        minimal_generators: tuple[CanonicalInteger, ...],
+        value: ExactInteger,
+        minimal_generators: tuple[ExactInteger, ...],
         factorization_count: int,
         catenary_degree: int,
     ) -> Self:

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials._conversions import (
     rational_from_sympy,
@@ -315,12 +316,14 @@ def _admit_discriminant(polynomial: RationalPolynomial, variable: str) -> None:
 
 def _coefficient_bounds(polynomial: RationalPolynomial) -> tuple[int, int]:
     terms = polynomial.polynomial.terms
-    denominator_digits = sum(len(term.coefficient.den) for term in terms)
+    denominator_digits = sum(
+        len(format_canonical_integer(term.coefficient.den)) for term in terms
+    )
     cleared_height_digits = max(
         (
-            len(term.coefficient.num.lstrip("-"))
+            len(format_canonical_integer(abs(term.coefficient.num)))
             + denominator_digits
-            - len(term.coefficient.den)
+            - len(format_canonical_integer(term.coefficient.den))
             for term in terms
         ),
         default=1,
@@ -583,7 +586,11 @@ def _irreducible_factor_sort_key(
             default=0,
         ),
         tuple(
-            (term.exponents, term.coefficient.num, term.coefficient.den)
+            (
+                term.exponents,
+                format_canonical_integer(term.coefficient.num),
+                format_canonical_integer(term.coefficient.den),
+            )
             for term in record.factor.polynomial.terms
         ),
     )

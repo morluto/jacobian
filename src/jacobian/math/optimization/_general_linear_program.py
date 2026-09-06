@@ -35,7 +35,7 @@ def _wire(value: Fraction, *, max_digits: int) -> CanonicalRational | None:
     denominator = format_canonical_integer(value.denominator)
     if len(numerator.lstrip("-")) > max_digits or len(denominator) > max_digits:
         return None
-    return CanonicalRational(num=numerator, den=denominator)
+    return CanonicalRational(num=value.numerator, den=value.denominator)
 
 
 def _wire_vector(

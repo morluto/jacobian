@@ -7,9 +7,8 @@ from collections.abc import Callable
 from pydantic import Field
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.numerical_semigroups._algorithms import (
     minimal_generating_system,
@@ -49,7 +48,7 @@ def _run_admission[T](
 class NumericalSemigroupRequest(StrictModel):
     """Canonical positive-generator presentation shared by semigroup owners."""
 
-    generators: tuple[CanonicalInteger, ...] = Field(
+    generators: tuple[ExactInteger, ...] = Field(
         min_length=1, max_length=MAX_GENERATORS
     )
 
@@ -123,8 +122,8 @@ def _validation_error(message: str) -> PydanticCustomError:
     )
 
 
-def _require_positive_bounded_generators(generators: tuple[str, ...]) -> None:
-    values = [parse_canonical_integer(value) for value in generators]
+def _require_positive_bounded_generators(generators: tuple[int, ...]) -> None:
+    values = generators
     if any(value <= 0 for value in values):
         raise _validation_error("generators must be positive integers")
     if 1 in values:
@@ -139,18 +138,16 @@ def _require_positive_bounded_generators(generators: tuple[str, ...]) -> None:
         raise _validation_error(f"generators must have gcd 1, got gcd {gcd}")
 
 
-def _require_minimal_generators(generators: tuple[str, ...]) -> tuple[int, ...]:
+def _require_minimal_generators(generators: tuple[int, ...]) -> tuple[int, ...]:
     _require_positive_bounded_generators(generators)
-    return minimal_generating_system(
-        tuple(sorted({parse_canonical_integer(value) for value in generators}))
-    )
+    return minimal_generating_system(tuple(sorted(set(generators))))
 
 
-def _require_canonical_generator_axis(generators: tuple[str, ...]) -> tuple[int, ...]:
+def _require_canonical_generator_axis(generators: tuple[int, ...]) -> tuple[int, ...]:
     """Validate the retained generator axis without recomputing minimality."""
 
     _require_positive_bounded_generators(generators)
-    values = tuple(parse_canonical_integer(value) for value in generators)
+    values = generators
     if values != tuple(sorted(set(values))):
         raise _validation_error(
             "minimal_generators must be strictly increasing and duplicate-free"

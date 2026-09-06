@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._periodic_kernel import (
     _inclusion_exclusion_terms,
@@ -15,26 +14,21 @@ from jacobian.math.number_theory._periodic_models import (
     PeriodicCongruenceUnionSource,
 )
 from jacobian.math.number_theory.periodic_interval_count._models import (
+    MAX_PERIODIC_INTERVAL_ENDPOINT_DIGITS,
     PeriodicIntervalCountResult,
 )
 
 __all__ = ["compute_periodic_interval_count"]
 
-MAX_PERIODIC_INTERVAL_ENDPOINT_DIGITS = 100_000
 
-
-def _integer_decimal_digit_bound(value: int) -> int:
-    if value == 0:
-        return 1
-    return (abs(value).bit_length() * 30_103) // 100_000 + 1
-
-
-def _admit_interval_result(
-    source: PeriodicCongruenceUnionSource, lower: int, upper: int
-) -> None:
-    lower_digits = _integer_decimal_digit_bound(lower)
-    upper_digits = _integer_decimal_digit_bound(upper)
-    if max(lower_digits, upper_digits) > MAX_PERIODIC_INTERVAL_ENDPOINT_DIGITS:
+def _admit_interval_result(lower: int, upper: int) -> None:
+    if type(lower) is not int or type(upper) is not int:
+        raise OperationDomainValidationError(
+            location=("lower", "upper"),
+            code="number_theory.periodic.endpoint_type",
+            message="periodic interval endpoints must be exact integers",
+        )
+    if max(abs(lower), abs(upper)) >= 10**MAX_PERIODIC_INTERVAL_ENDPOINT_DIGITS:
         raise OperationDomainValidationError(
             location=("lower", "upper"),
             code="number_theory.periodic.result_bound",
@@ -54,13 +48,13 @@ def compute_periodic_interval_count(
 
     Uses the exact one-period profile and quotient/remainder arithmetic.
     """
-    _admit_interval_result(source, lower, upper)
+    _admit_interval_result(lower, upper)
     if lower > upper:
         return PeriodicIntervalCountResult(
             source=source,
-            lower=format_canonical_integer(lower),
-            upper=format_canonical_integer(upper),
-            count="0",
+            lower=lower,
+            upper=upper,
+            count=0,
         )
 
     try:
@@ -89,7 +83,7 @@ def compute_periodic_interval_count(
 
     return PeriodicIntervalCountResult(
         source=source,
-        lower=format_canonical_integer(lower),
-        upper=format_canonical_integer(upper),
-        count=format_canonical_integer(count),
+        lower=lower,
+        upper=upper,
+        count=count,
     )

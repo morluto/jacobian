@@ -102,8 +102,8 @@ def _multiplier_polynomial(
             terms=tuple(
                 RationalPolynomialTerm(
                     coefficient=CanonicalRational(
-                        num=format_canonical_integer(coefficient.numerator),
-                        den=format_canonical_integer(coefficient.denominator),
+                        num=coefficient.numerator,
+                        den=coefficient.denominator,
                     ),
                     exponents=exponents,
                 )
@@ -362,8 +362,8 @@ def _compute_graded_jacobian_syzygy(
                 multiplier_degree=multiplier_degree,
                 coefficient_vector=tuple(
                     CanonicalRational(
-                        num=format_canonical_integer(value.numerator),
-                        den=format_canonical_integer(value.denominator),
+                        num=value.numerator,
+                        den=value.denominator,
                     )
                     for value in vector
                 ),

@@ -8,7 +8,7 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, WithJsonSchema, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import NativeInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lattices._hnf_bounds import MAX_HNF_MATRIX_ORDER
@@ -223,7 +223,7 @@ class RankGramResult(StrictModel):
 
     lattice: IntegerLattice
     gram_matrix: IntegerMatrix
-    squared_covolume: NativeInteger
+    squared_covolume: ExactInteger
     covolume_rational: bool
     relation: Literal["GRAM_EQUALS_BASIS_TIMES_BASIS_TRANSPOSE"] = (
         "GRAM_EQUALS_BASIS_TIMES_BASIS_TRANSPOSE"
@@ -288,7 +288,7 @@ class SaturationResult(StrictModel):
 
     saturated_basis: IntegerMatrix
     inclusion_transform: IntegerMatrix
-    saturation_index: NativeInteger = Field(ge=1)
+    saturation_index: ExactInteger = Field(ge=1)
     relation: Literal["SATURATED_BASIS_SPANS_PRIMITIVE_CLOSURE"] = (
         "SATURATED_BASIS_SPANS_PRIMITIVE_CLOSURE"
     )
@@ -347,8 +347,8 @@ class SublatticeIndexResult(StrictModel):
     sublattice: IntegerLattice
     parent: IntegerLattice
     embedding: IntegerMatrix
-    index: NativeInteger = Field(ge=1)
-    invariant_factors: tuple[NativeInteger, ...] = Field(
+    index: ExactInteger = Field(ge=1)
+    invariant_factors: tuple[ExactInteger, ...] = Field(
         max_length=MAX_MATRIX_DIMENSION
     )
     free_rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
@@ -367,8 +367,8 @@ class DiscriminantGroupResult(StrictModel):
     """Finite abelian group ``L^*/L`` and the discriminant order ``|det G|``."""
 
     lattice: IntegerLattice
-    discriminant_order: NativeInteger = Field(ge=1)
-    invariant_factors: tuple[NativeInteger, ...] = Field(
+    discriminant_order: ExactInteger = Field(ge=1)
+    invariant_factors: tuple[ExactInteger, ...] = Field(
         max_length=MAX_MATRIX_DIMENSION
     )
     relation: Literal["DISCRIMINANT_GROUP_EQUALS_DUAL_MOD_LATTICE"] = (

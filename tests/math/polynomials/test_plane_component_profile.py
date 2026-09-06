@@ -63,7 +63,7 @@ def _polynomial(
 
 def _real_value(value: Fraction) -> RealAlgebraicValue:
     return RealAlgebraicValue._from_admitted_polynomial(
-        polynomial=(str(value.denominator), str(-value.numerator)),
+        polynomial=(value.denominator, -value.numerator),
         real_root_index=0,
     )
 
@@ -298,10 +298,10 @@ def test_quartic_intersection_retains_degree_sixteen_representatives() -> None:
             representative.coordinates[0].real_root_index,
         )
         for representative in representatives
-    } == {(("1", "0", "0", "0", "-2"), 1)}
+    } == {((1, 0, 0, 0, -2), 1)}
     assert {
         representative.coordinates[1].polynomial for representative in representatives
-    } == {("1", *("0" for _ in range(15)), "-2")}
+    } == {(1, *(0 for _ in range(15)), -2)}
     assert {
         representative.coordinates[1].real_root_index
         for representative in representatives
@@ -357,7 +357,7 @@ def test_empty_and_whole_plane_degeneracies() -> None:
 
 def test_supplied_sample_must_select_one_root_per_coordinate() -> None:
     ambiguous_x = RealAlgebraicValue._from_admitted_polynomial(
-        polynomial=("1", "0", "-1"),
+        polynomial=(1, 0, -1),
         real_root_index=0,
     )
     sample = IsolatedRealPlanePoint(

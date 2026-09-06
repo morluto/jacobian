@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -53,7 +55,33 @@ def test_k_colorability_uses_an_exact_decision_procedure() -> None:
 
 def test_flow_preserves_large_exact_rational_capacity() -> None:
     result = compute_max_flow(
-        MaxFlowRequest.model_validate(
+        MaxFlowRequest.model_validate_json(
+            json.dumps(
+                {
+                    "graph": {
+                        "vertex_count": 2,
+                        "edges": [
+                            {
+                                "source": 0,
+                                "target": 1,
+                                "capacity": {"num": "9007199254740993", "den": "1"},
+                            }
+                        ],
+                    },
+                    "source": 0,
+                    "sink": 1,
+                }
+            )
+        )
+    )
+
+    assert result.flow_value.num == 9007199254740993
+    assert result.flow_value.den == 1
+
+
+def test_flow_contract_rejects_out_of_range_terminals() -> None:
+    request = MaxFlowRequest.model_validate_json(
+        json.dumps(
             {
                 "graph": {
                     "vertex_count": 2,
@@ -61,36 +89,14 @@ def test_flow_preserves_large_exact_rational_capacity() -> None:
                         {
                             "source": 0,
                             "target": 1,
-                            "capacity": {"num": "9007199254740993", "den": "1"},
+                            "capacity": {"num": "1", "den": "1"},
                         }
                     ],
                 },
-                "source": 0,
+                "source": 2,
                 "sink": 1,
             }
         )
-    )
-
-    assert result.flow_value.num == "9007199254740993"
-    assert result.flow_value.den == "1"
-
-
-def test_flow_contract_rejects_out_of_range_terminals() -> None:
-    request = MaxFlowRequest.model_validate(
-        {
-            "graph": {
-                "vertex_count": 2,
-                "edges": [
-                    {
-                        "source": 0,
-                        "target": 1,
-                        "capacity": {"num": "1", "den": "1"},
-                    }
-                ],
-            },
-            "source": 2,
-            "sink": 1,
-        }
     )
     with pytest.raises(OperationDomainValidationError, match="source must be in"):
         compute_max_flow(request)

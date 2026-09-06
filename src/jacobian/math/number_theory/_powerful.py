@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory._powerful_kernels import decide_powerful_data
 from jacobian.math.number_theory._powerful_models import (
@@ -14,7 +13,7 @@ from jacobian.math.number_theory._powerful_models import (
 def decide_powerful(request: PowerfulNumberRequest) -> PowerfulNumberResult:
     """Return the exact source-bound powerful-number decision."""
 
-    data = decide_powerful_data(parse_canonical_integer(request.value))
+    data = decide_powerful_data(request.value)
     return PowerfulNumberResult._from_kernel(request, data=data)
 
 

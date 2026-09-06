@@ -558,7 +558,7 @@ def test_raw_257_digit_components_are_rejected_by_the_outer_input_envelope(
 
     # The shared rational carrier can represent this value; the operation's
     # narrower error therefore demonstrates rejection in the outer raw pass.
-    assert CanonicalRational(num=oversized, den="1").num == oversized
+    assert CanonicalRational(num=10**257 - 1, den=1).num == 10**257 - 1
     with pytest.raises(ValidationError) as caught:
         ClauseConstrainedRationalFlatRequest.model_validate(raw)
     assert caught.value.errors()[0]["type"] == "rational_flat.input_component_bound"

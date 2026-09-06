@@ -1,5 +1,7 @@
 """Tests for finitely generated abelian group operations."""
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -103,8 +105,10 @@ def test_element_reduce_modular() -> None:
     decoded = type(result).model_validate_json(result.model_dump_json())
     assert verify_element_reduction(decoded)
     payload = result.model_dump(mode="json")
-    payload["reduced"]["coordinates"] = [2]
-    assert not verify_element_reduction(type(result).model_validate(payload))
+    payload["reduced"]["coordinates"] = ["2"]
+    assert not verify_element_reduction(
+        type(result).model_validate_json(json.dumps(payload))
+    )
 
 
 def test_element_equal_same() -> None:
@@ -120,7 +124,7 @@ def test_element_equal_same() -> None:
 
     payload = result.model_dump(mode="json")
     payload["equal"] = False
-    assert not verify_elements_equal(type(result).model_validate(payload))
+    assert not verify_elements_equal(type(result).model_validate_json(json.dumps(payload)))
 
 
 def test_element_equal_different() -> None:
@@ -143,8 +147,8 @@ def test_element_order_in_z6() -> None:
     assert verify_element_order(decoded)
 
     payload = result.model_dump(mode="json")
-    payload["order"] = 6
-    assert not verify_element_order(type(result).model_validate(payload))
+    payload["order"] = "6"
+    assert not verify_element_order(type(result).model_validate_json(json.dumps(payload)))
 
 
 def test_element_order_identity() -> None:
@@ -180,8 +184,10 @@ def test_presentation_normalize_z6_z4() -> None:
     decoded = type(result).model_validate_json(result.model_dump_json())
     assert verify_presentation_normalization(decoded)
     payload = result.model_dump(mode="json")
-    payload["presentation"]["invariant_factors"] = [2, 6]
-    assert not verify_presentation_normalization(type(result).model_validate(payload))
+    payload["presentation"]["invariant_factors"] = ["2", "6"]
+    assert not verify_presentation_normalization(
+        type(result).model_validate_json(json.dumps(payload))
+    )
 
 
 def test_invariant_factor_divisibility_canonical_order_accepted() -> None:
@@ -241,8 +247,10 @@ def test_subgroup_generated_z2_x_z4() -> None:
     )
 
     payload = result.model_dump(mode="json")
-    payload["index"] = 2
-    assert not verify_generated_subgroup(type(result).model_validate(payload))
+    payload["index"] = "2"
+    assert not verify_generated_subgroup(
+        type(result).model_validate_json(json.dumps(payload))
+    )
 
 
 def test_quotient_claim_round_trips_and_rejects_a_forged_order() -> None:
@@ -257,8 +265,10 @@ def test_quotient_claim_round_trips_and_rejects_a_forged_order() -> None:
     )
 
     payload = result.model_dump(mode="json")
-    payload["quotient_order"] = 3
-    assert not verify_quotient_group(type(result).model_validate(payload))
+    payload["quotient_order"] = "3"
+    assert not verify_quotient_group(
+        type(result).model_validate_json(json.dumps(payload))
+    )
 
 
 @pytest.mark.parametrize(

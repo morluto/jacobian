@@ -31,14 +31,14 @@ def _source() -> RationalAffineTorusMap:
             "linear_part": {
                 "row_count": 1,
                 "column_count": 1,
-                "entries": [["3"]],
+                "entries": [[3]],
             },
             "translation": {
                 "torus": {"dimension": 1},
                 "coordinates": [
                     {
-                        "num": str(translation.numerator),
-                        "den": str(translation.denominator),
+                        "num": translation.numerator,
+                        "den": translation.denominator,
                     }
                 ],
             },

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 from typing import cast
 
@@ -9,7 +10,6 @@ import networkx as nx
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.operations import explicit_graph
 from jacobian.math.graphs.polynomials import (
@@ -114,11 +114,9 @@ def test_known_independence_polynomials(
     assert _dense_coefficients(independence_polynomial(graph)) == expected
 
     result = _run_independence(TreeIndependencePolynomialRequest(graph=graph))
-    assert result.coefficients == tuple(
-        format_canonical_integer(coefficient) for coefficient in expected
-    )
+    assert result.coefficients == expected
     assert result.independence_number == len(expected) - 1
-    assert result.independent_set_count == format_canonical_integer(sum(expected))
+    assert result.independent_set_count == sum(expected)
 
 
 def test_all_free_trees_through_order_eight_match_subset_enumeration() -> None:
@@ -175,20 +173,22 @@ def test_serialized_polynomial_feeds_exact_evaluation_unchanged(
     graph: SimpleUndirectedGraph,
 ) -> None:
     result = _run_independence(TreeIndependencePolynomialRequest(graph=graph))
-    serialized = result.model_dump(mode="json")["polynomial"]
-    evaluation_request = RationalPolynomialEvaluationRequest.model_validate(
-        {
-            "polynomial": serialized,
-            "point": {"num": "1", "den": "1"},
-        }
+    serialized = json.loads(result.model_dump_json())["polynomial"]
+    evaluation_request = RationalPolynomialEvaluationRequest.model_validate_json(
+        json.dumps(
+            {
+                "polynomial": serialized,
+                "point": {"num": "1", "den": "1"},
+            }
+        )
     )
 
     evaluation = rational_polynomial_evaluate(
         evaluation_request.polynomial, evaluation_request.point
     )
 
-    assert evaluation.value.num == result.independent_set_count
-    assert evaluation.value.den == "1"
+    assert int(evaluation.value.num) == result.independent_set_count
+    assert evaluation.value.den == 1
 
 
 @pytest.mark.parametrize(
@@ -220,12 +220,10 @@ def test_star_beyond_the_old_consumer_degree_cap_is_admitted_exactly() -> None:
     request = TreeIndependencePolynomialRequest(graph=star)
     result = _run_independence(request)
 
-    assert result.coefficients == tuple(
-        format_canonical_integer(coefficient) for coefficient in expected
-    )
+    assert result.coefficients == expected
     assert result.independence_number == leaves
-    assert result.independent_set_count == format_canonical_integer(sum(expected))
-    assert result.independent_set_count == format_canonical_integer((1 << leaves) + 1)
+    assert result.independent_set_count == sum(expected)
+    assert result.independent_set_count == (1 << leaves) + 1
     assert len(result.polynomial.polynomial.terms) == leaves + 1
     assert _dense_coefficients(independence_polynomial(star)) == expected
 
@@ -238,9 +236,7 @@ def test_full_vertex_envelope_path_is_admitted_and_over_envelope_is_rejected() -
 
     assert result.independence_number == 128
     assert len(result.coefficients) == 129
-    assert result.coefficients[-1] == format_canonical_integer(
-        math.comb(256 - 128 + 1, 128)
-    )
+    assert result.coefficients[-1] == math.comb(256 - 128 + 1, 128)
     with pytest.raises(ValidationError):
         TreeIndependencePolynomialRequest(graph=_path(257))
 
@@ -290,7 +286,7 @@ def test_result_rejects_a_polynomial_inconsistent_with_dense_coefficients() -> N
     from jacobian.math.graphs.polynomials import verify_independence_polynomial
 
     assert not verify_independence_polynomial(
-        TreeIndependencePolynomialResult.model_validate(weaker)
+        TreeIndependencePolynomialResult.model_validate_json(json.dumps(weaker))
     )
 
 
@@ -314,7 +310,7 @@ def test_result_rejects_mutated_derived_values(
     from jacobian.math.graphs.polynomials import verify_independence_polynomial
 
     assert not verify_independence_polynomial(
-        TreeIndependencePolynomialResult.model_validate(valid)
+        TreeIndependencePolynomialResult.model_validate_json(json.dumps(valid))
     )
 
 

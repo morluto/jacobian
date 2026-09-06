@@ -18,7 +18,7 @@ from jacobian.math.number_theory.operations import divisibility_incidence_graph
 def test_basic() -> None:
     result = compute_divisibility_incidence_graph(
         DivisibilityIncidenceGraphRequest.model_validate(
-            {"left_family": ["2", "3"], "right_family": ["6", "12", "5"]}
+            {"left_family": [2, 3], "right_family": [6, 12, 5]}
         )
     )
     edges = {tuple(edge) for edge in result.graph.edges}
@@ -27,8 +27,8 @@ def test_basic() -> None:
     assert ("L1", "R0") in edges
     assert ("L1", "R1") in edges
     assert len(result.graph.edges) == 4
-    assert result.left_family == ("2", "3")
-    assert result.right_family == ("6", "12", "5")
+    assert result.left_family == (2, 3)
+    assert result.right_family == (6, 12, 5)
 
 
 def test_native_graph_accepts_canonical_values() -> None:
@@ -38,11 +38,11 @@ def test_native_graph_accepts_canonical_values() -> None:
 
 def test_request_families_are_immutable() -> None:
     request = DivisibilityIncidenceGraphRequest.model_validate(
-        {"left_family": ["2"], "right_family": ["4"]}
+        {"left_family": [2], "right_family": [4]}
     )
 
-    assert request.left_family == ("2",)
-    assert request.right_family == ("4",)
+    assert request.left_family == (2,)
+    assert request.right_family == (4,)
     with pytest.raises(AttributeError):
         cast(Any, request.left_family).append("3")
 
@@ -50,7 +50,7 @@ def test_request_families_are_immutable() -> None:
 def test_no_edges() -> None:
     result = compute_divisibility_incidence_graph(
         DivisibilityIncidenceGraphRequest.model_validate(
-            {"left_family": ["7"], "right_family": ["3"]}
+            {"left_family": [7], "right_family": [3]}
         )
     )
     assert len(result.graph.edges) == 0
@@ -59,7 +59,7 @@ def test_no_edges() -> None:
 def test_bipartite() -> None:
     result = compute_divisibility_incidence_graph(
         DivisibilityIncidenceGraphRequest.model_validate(
-            {"left_family": ["1", "2", "3"], "right_family": ["2", "3", "6"]}
+            {"left_family": [1, 2, 3], "right_family": [2, 3, 6]}
         )
     )
     for e in result.graph.edges:
@@ -74,11 +74,9 @@ def test_rejects_non_positive_canonical_integer(value: object) -> None:
         )
 
 
-@pytest.mark.parametrize("value", ["0", "-1"])
-def test_native_operation_rejects_non_positive_integer(value: str) -> None:
-    request = DivisibilityIncidenceGraphRequest(
-        left_family=(value,), right_family=("1",)
-    )
+@pytest.mark.parametrize("value", [0, -1])
+def test_native_operation_rejects_non_positive_integer(value: int) -> None:
+    request = DivisibilityIncidenceGraphRequest(left_family=(value,), right_family=(1,))
     with pytest.raises(OperationDomainValidationError, match="positive"):
         compute_divisibility_incidence_graph(request)
 
@@ -86,8 +84,8 @@ def test_native_operation_rejects_non_positive_integer(value: str) -> None:
 def test_rejects_combined_vertex_budget() -> None:
     request = DivisibilityIncidenceGraphRequest.model_validate(
         {
-            "left_family": [str(value) for value in range(1, 257)],
-            "right_family": ["1"],
+            "left_family": list(range(1, 257)),
+            "right_family": [1],
         }
     )
     with pytest.raises(OperationDomainValidationError, match="total values"):
@@ -96,10 +94,10 @@ def test_rejects_combined_vertex_budget() -> None:
 
 @pytest.mark.parametrize(
     ("left_family", "right_family"),
-    ((["2", "2"], ["4"]), (["2"], ["4", "4"])),
+    (([2, 2], [4]), ([2], [4, 4])),
 )
 def test_rejects_duplicate_family_values(
-    left_family: list[str], right_family: list[str]
+    left_family: list[int], right_family: list[int]
 ) -> None:
     request = DivisibilityIncidenceGraphRequest.model_validate(
         {"left_family": left_family, "right_family": right_family}

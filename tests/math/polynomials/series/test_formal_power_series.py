@@ -29,7 +29,7 @@ from jacobian.math.polynomials.series._models import (
 )
 
 
-def _coeff(num: str, den: str = "1") -> CanonicalRational:
+def _coeff(num: int, den: int = 1) -> CanonicalRational:
     return CanonicalRational(num=num, den=den)
 
 
@@ -37,7 +37,7 @@ def _ascending(order: int) -> TruncatedSeries:
     return TruncatedSeries(
         variable="q",
         truncation_order=order,
-        coefficients=tuple(_coeff(str(index + 1)) for index in range(order)),
+        coefficients=tuple(_coeff(index + 1) for index in range(order)),
     )
 
 
@@ -45,7 +45,7 @@ def test_derivative_of_order_one_is_zero() -> None:
     series = TruncatedSeries(
         variable="x",
         truncation_order=1,
-        coefficients=(_coeff("7"),),
+        coefficients=(_coeff(7),),
     )
     result = derivative(series)
     assert result.result.truncation_order == 1
@@ -56,7 +56,7 @@ def test_native_exports_call_the_shared_typed_kernels() -> None:
     series = TruncatedSeries(
         variable="x",
         truncation_order=2,
-        coefficients=(_coeff("1"), _coeff("2")),
+        coefficients=(_coeff(1), _coeff(2)),
     )
 
     assert derivative(series) == derivative(series)
@@ -67,7 +67,7 @@ def test_native_exports_call_the_shared_typed_kernels() -> None:
 def test_power_rejects_result_digit_overflow() -> None:
     import pytest
 
-    huge = "1" + "0" * (MAX_RATIONAL_DIGITS - 1)
+    huge = 10 ** (MAX_RATIONAL_DIGITS - 1)
     request = SeriesPowerRequest(
         series=InputTruncatedSeries(
             variable="x",
@@ -92,7 +92,7 @@ def test_reversion_rejects_nonzero_constant() -> None:
     request = SeriesReversionRequest(
         variable="x",
         truncation_order=2,
-        coefficients=(_coeff("1"), _coeff("1")),
+        coefficients=(_coeff(1), _coeff(1)),
     )
     with pytest.raises(OperationDomainValidationError) as error:
         reversion(request.as_series())
@@ -111,7 +111,7 @@ def test_integral_rejects_oversized_output_order() -> None:
         series=InputTruncatedSeries(
             variable="x",
             truncation_order=2,
-            coefficients=(_coeff("1"), _coeff("0")),
+            coefficients=(_coeff(1), _coeff(0)),
         ),
         output_order=4,
     )
@@ -131,7 +131,7 @@ def test_inverse_rejects_zero_constant() -> None:
     request = SeriesInverseRequest(
         variable="x",
         truncation_order=2,
-        coefficients=(_coeff("0"), _coeff("1")),
+        coefficients=(_coeff(0), _coeff(1)),
     )
     with pytest.raises(OperationDomainValidationError) as error:
         inverse(request.as_series())
@@ -143,14 +143,14 @@ def test_inverse_rejects_zero_constant() -> None:
 def test_inverse_rejects_result_coefficient_growth() -> None:
     import pytest
 
-    huge = "1" + "0" * (MAX_RATIONAL_DIGITS - 1)
+    huge = 10 ** (MAX_RATIONAL_DIGITS - 1)
     request = SeriesInverseRequest(
         variable="x",
         truncation_order=20,
         coefficients=(
-            _coeff("1"),
-            _coeff("-" + huge),
-            *(_coeff("0") for _ in range(18)),
+            _coeff(1),
+            _coeff(-huge),
+            *(_coeff(0) for _ in range(18)),
         ),
     )
     with pytest.raises(OperationDomainValidationError) as error:
@@ -164,7 +164,7 @@ def test_inverse_rejects_result_coefficient_growth() -> None:
 def test_input_series_rejects_oversized_coefficients() -> None:
     import pytest
 
-    huge = "1" + "0" * MAX_RATIONAL_DIGITS
+    huge = 10**MAX_RATIONAL_DIGITS
     oversized = InputTruncatedSeries(
         variable="x",
         truncation_order=1,
@@ -176,7 +176,7 @@ def test_input_series_rejects_oversized_coefficients() -> None:
 
 
 def test_product_can_exceed_input_digit_bound() -> None:
-    large = "1" + "0" * (MAX_RATIONAL_DIGITS - 1)
+    large = 10 ** (MAX_RATIONAL_DIGITS - 1)
     left = TruncatedSeries(
         variable="x",
         truncation_order=1,
@@ -189,8 +189,8 @@ def test_product_can_exceed_input_digit_bound() -> None:
     )
     result = multiply(left, right)
     value = result.result.coefficients[0]
-    assert len(value.num.lstrip("-")) > MAX_RATIONAL_DIGITS
-    assert len(value.num.lstrip("-")) <= 4096
+    assert abs(value.num) >= 10**MAX_RATIONAL_DIGITS
+    assert abs(value.num) < 10**4096
 
 
 def test_native_exports_admit_inputs_before_kernel_work() -> None:
@@ -210,7 +210,7 @@ def test_native_exports_admit_inputs_before_kernel_work() -> None:
         to_polynomial(wide)
     assert error.value.errors()[0]["type"] == "formal_power_series.input_order"
 
-    tall = "1" + "0" * MAX_RATIONAL_DIGITS
+    tall = 10**MAX_RATIONAL_DIGITS
     oversized = TruncatedSeries(
         variable="x",
         truncation_order=1,
@@ -240,17 +240,17 @@ def test_native_and_wire_operations_return_the_same_canonical_values() -> None:
     series = TruncatedSeries(
         variable="x",
         truncation_order=3,
-        coefficients=(_coeff("1"), _coeff("2"), _coeff("0")),
+        coefficients=(_coeff(1), _coeff(2), _coeff(0)),
     )
     inner = TruncatedSeries(
         variable="x",
         truncation_order=3,
-        coefficients=(_coeff("0"), _coeff("1"), _coeff("0")),
+        coefficients=(_coeff(0), _coeff(1), _coeff(0)),
     )
     reversible = TruncatedSeries(
         variable="x",
         truncation_order=3,
-        coefficients=(_coeff("0"), _coeff("1"), _coeff("1")),
+        coefficients=(_coeff(0), _coeff(1), _coeff(1)),
     )
     cases = (
         (
@@ -327,7 +327,7 @@ def test_identity_check_admits_bounded_inputs_whose_product_would_overflow() -> 
 
     from jacobian.math.polynomials.series._models import _SeriesIdentityCheckRequest
 
-    tall = tuple(_coeff("1", str(2**800)) for _ in range(20))
+    tall = tuple(_coeff(1, 2**800) for _ in range(20))
     left = TruncatedSeries(variable="x", truncation_order=20, coefficients=tall)
     right = TruncatedSeries(variable="x", truncation_order=20, coefficients=tall)
 
@@ -338,7 +338,7 @@ def test_identity_check_admits_bounded_inputs_whose_product_would_overflow() -> 
     differing = TruncatedSeries(
         variable="x",
         truncation_order=20,
-        coefficients=(*tall[:7], _coeff("3", str(2**800)), *tall[8:]),
+        coefficients=(*tall[:7], _coeff(3, 2**800), *tall[8:]),
     )
     mismatch = identity_check(left, differing)
     assert mismatch.status == "NOT_EQUAL"
@@ -462,8 +462,7 @@ def test_truncate_accepts_a_large_canonical_modular_series() -> None:
                 variable="q",
                 truncation_order=3_000,
                 coefficients=tuple(
-                    _coeff(str(term.numerator), str(term.denominator))
-                    for term in coefficients
+                    _coeff(term.numerator, term.denominator) for term in coefficients
                 ),
             ).model_dump(),
         }

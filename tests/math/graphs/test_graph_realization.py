@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -203,7 +205,7 @@ class TestGraphRealization:
         payload = result.model_dump(mode="json")
         payload["graph"]["edges"] = [[0, 1], [1, 2], [0, 3]]
         assert not verify_graph_realization(
-            GraphRealizationResult.model_validate(payload)
+            GraphRealizationResult.model_validate_json(json.dumps(payload))
         )
 
 
@@ -268,7 +270,7 @@ class TestGraphicalityCheck:
         result = _graphicality_check(degrees)
         payload = result.model_dump(mode="json")
         payload["certificate"][irrelevant_field] = 1 if irrelevant_field == "k" else 0
-        forged = GraphicalityCheckResult.model_validate(payload)
+        forged = GraphicalityCheckResult.model_validate_json(json.dumps(payload))
         assert not verify_graphicality_check(forged)
 
 

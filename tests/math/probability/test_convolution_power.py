@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections import defaultdict
 from fractions import Fraction
 from itertools import product
@@ -197,11 +198,13 @@ def test_widened_power_result_composes_into_finite_distribution_consumers() -> N
         atom.value.as_fraction(): Fraction(1)
     }
 
-    replayed = FiniteConvolutionPowerRequest.model_validate(
-        {
-            "distribution": powered.distribution.model_dump(mode="json"),
-            "exponent": 1,
-        }
+    replayed = FiniteConvolutionPowerRequest.model_validate_json(
+        json.dumps(
+            {
+                "distribution": powered.distribution.model_dump(mode="json"),
+                "exponent": 1,
+            }
+        )
     )
     assert (
         convolution_power(replayed.distribution, replayed.exponent).distribution
@@ -421,11 +424,13 @@ def test_result_deserialization_does_not_repeat_power_admission() -> None:
             (Fraction(MAX_FINITE_DISTRIBUTION_ATOMS), Fraction(1, 3)),
         )
     )
-    restored = FiniteConvolutionPowerResult.model_validate(
-        {
-            "source": source.model_dump(mode="json"),
-            "exponent": 1,
-            "distribution": source.model_dump(mode="json"),
-        }
+    restored = FiniteConvolutionPowerResult.model_validate_json(
+        json.dumps(
+            {
+                "source": source.model_dump(mode="json"),
+                "exponent": 1,
+                "distribution": source.model_dump(mode="json"),
+            }
+        )
     )
     assert restored.source == source

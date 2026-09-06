@@ -21,7 +21,7 @@ def term_is_zero_on_box(
     """Return whether one monomial vanishes identically on the whole box."""
 
     return any(
-        exponent > 0 and interval.lower.num == "0" and interval.upper.num == "0"
+        exponent > 0 and interval.lower.num == 0 and interval.upper.num == 0
         for exponent, interval in zip(term.exponents, box.intervals, strict=True)
     )
 

@@ -10,8 +10,8 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
-    CanonicalInteger,
     CanonicalRational,
+    ExactInteger,
     require_bounded_rational,
 )
 from jacobian._models import StrictModel
@@ -120,11 +120,11 @@ class GaussianMomentContraction(StrictModel):
         max_length=MAX_GAUSSIAN_VARIABLES,
     )
     expanded_coefficient: ExactComplexRational
-    variable_moment_factors: tuple[CanonicalInteger, ...] = Field(
+    variable_moment_factors: tuple[ExactInteger, ...] = Field(
         min_length=1,
         max_length=MAX_GAUSSIAN_VARIABLES,
     )
-    gaussian_moment_factor: CanonicalInteger
+    gaussian_moment_factor: ExactInteger
     contribution: ExactComplexRational
 
     @model_validator(mode="after")

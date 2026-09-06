@@ -18,6 +18,7 @@ from jacobian._execution import (
     request_cancellation,
     request_execution,
 )
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.groups import finite_abelian as domain
 from jacobian.math.groups._tools import TOOLS as GROUP_TOOLS
@@ -62,7 +63,7 @@ def _oracle_remainder(
     sequence: tuple[tuple[int, ...], ...],
     frequency: tuple[int, ...],
     interval: tuple[int, int],
-) -> tuple[tuple[str, ...], int]:
+) -> tuple[tuple[int, ...], int]:
     """Independent term-by-term accumulator for one cell."""
     from math import lcm
 
@@ -85,17 +86,13 @@ def _oracle_remainder(
         )
         counts[power] += 1
     if not counts:
-        coeffs = tuple("0" for _ in range(degree))
+        coeffs = (0,) * degree
         return coeffs, degree
     poly = Poly.from_dict(
         {(int(p),): int(c) for p, c in counts.items()}, generator, domain=ZZ
     )
     rem = poly.rem(cyclotomic, auto=False)
-    coeffs = tuple(str(int(rem.nth(k))) for k in range(degree))
-    # normalize to canonical integer strings (e.g., "0")
-    from jacobian.canonical import format_canonical_integer
-
-    coeffs = tuple(format_canonical_integer(int(c)) for c in coeffs)
+    coeffs = tuple(int(rem.nth(k)) for k in range(degree))
     return coeffs, degree
 
 
@@ -113,21 +110,23 @@ def test_z4_minimal_fixture_two_intervals() -> None:
         for cell in result.sums
     }
     # h=0 sums 4 and 2
-    assert lookup[((0,), (0, 4))] == ("4", "0")
-    assert lookup[((0,), (1, 3))] == ("2", "0")
+    assert lookup[((0,), (0, 4))] == (4, 0)
+    assert lookup[((0,), (1, 3))] == (2, 0)
     # h=1 sums 0 and -1+i
-    assert lookup[((1,), (0, 4))] == ("0", "0")
-    assert lookup[((1,), (1, 3))] == ("-1", "1")
+    assert lookup[((1,), (0, 4))] == (0, 0)
+    assert lookup[((1,), (1, 3))] == (-1, 1)
     # h=2 sums 0 and 0
-    assert lookup[((2,), (0, 4))] == ("0", "0")
-    assert lookup[((2,), (1, 3))] == ("0", "0")
+    assert lookup[((2,), (0, 4))] == (0, 0)
+    assert lookup[((2,), (1, 3))] == (0, 0)
     # Via catalog tool
     request = FiniteAbelianCharacterSumIntervalProfileRequest(source=source)
     via_tool = PROFILE_OPERATION.run(request)
     assert via_tool == result
     # Check native vs MCP parity serialization round-trip
     payload = result.model_dump(mode="json")
-    parsed = FiniteAbelianCharacterSumIntervalProfileResult.model_validate(payload)
+    parsed = FiniteAbelianCharacterSumIntervalProfileResult.model_validate_json(
+        encode_strict_json(payload)
+    )
     assert parsed == result
 
 
@@ -142,9 +141,9 @@ def test_repeated_sequence_values_retained() -> None:
     result = compute_finite_abelian_character_sum_interval_profile(source)
     # Frequency 0: sums are interval lengths
     lookup = {(c.frequency, c.interval): c for c in result.sums}
-    assert lookup[((0,), (0, 5))].remainder_coefficients[0] == "5"
-    assert lookup[((0,), (0, 2))].remainder_coefficients[0] == "2"
-    assert lookup[((0,), (2, 5))].remainder_coefficients[0] == "3"
+    assert lookup[((0,), (0, 5))].remainder_coefficients[0] == 5
+    assert lookup[((0,), (0, 2))].remainder_coefficients[0] == 2
+    assert lookup[((0,), (2, 5))].remainder_coefficients[0] == 3
     # Verify each cell matches independent oracle
     seq_canonical = source.sequence  # already canonical
     for freq in source.frequencies:
@@ -165,15 +164,15 @@ def test_empty_singleton_adjacent_overlapping_full_intervals() -> None:
     lookup = {(c.frequency, c.interval): c.remainder_coefficients for c in result.sums}
     # Empty interval gives zero for every frequency
     for freq in source.frequencies:
-        assert lookup[(freq, (0, 0))] == ("0", "0")
+        assert lookup[(freq, (0, 0))] == (0, 0)
     # Singleton [1,2) contains element 1: chi_0=1 => "1","0"; chi_1=i => "0","1"
-    assert lookup[((0,), (1, 2))] == ("1", "0")
-    assert lookup[((1,), (1, 2))] == ("0", "1")
+    assert lookup[((0,), (1, 2))] == (1, 0)
+    assert lookup[((1,), (1, 2))] == (0, 1)
     # Adjacent: [0,1) element 0 => 1 for both frequencies
-    assert lookup[((0,), (0, 1))] == ("1", "0")
-    assert lookup[((1,), (0, 1))] == ("1", "0")
+    assert lookup[((0,), (0, 1))] == (1, 0)
+    assert lookup[((1,), (0, 1))] == (1, 0)
     # Full [0,4) already tested zero for h=1
-    assert lookup[((1,), (0, 4))] == ("0", "0")
+    assert lookup[((1,), (0, 4))] == (0, 0)
     # Overlapping: [0,2) = 0,1 and [1,3)=1,2 and [2,4)=2,3 check via oracle
     for freq in source.frequencies:
         for interval in source.intervals:
@@ -188,14 +187,14 @@ def test_zero_and_nonzero_sums_preserved() -> None:
     )
     result = compute_finite_abelian_character_sum_interval_profile(source)
     for cell in result.sums:
-        is_zero = all(c == "0" for c in cell.remainder_coefficients)
+        is_zero = all(c == 0 for c in cell.remainder_coefficients)
         # Determine expected via oracle length check: sum zero vs not
         # For this sequence, (1,)(0,4) is zero, (1,)(1,2) is i nonzero, etc.
         if cell.frequency == (1,) and cell.interval == (0, 4):
             assert is_zero
         if cell.frequency == (1,) and cell.interval == (1, 2):
             assert not is_zero
-            assert cell.remainder_coefficients == ("0", "1")
+            assert cell.remainder_coefficients == (0, 1)
 
 
 def test_distinct_equivalent_integer_representatives() -> None:
@@ -249,9 +248,7 @@ def test_product_group_profile() -> None:
         lookup = {
             (c.frequency, c.interval): c.remainder_coefficients for c in result.sums
         }
-        assert lookup[(freq, (2, 2))] == tuple(
-            "0" for _ in range(result.cyclotomic_degree)
-        )
+        assert lookup[(freq, (2, 2))] == (0,) * result.cyclotomic_degree
     # Verify each cell via independent oracle
     for freq in source.frequencies:
         for interval in source.intervals:
@@ -349,13 +346,7 @@ def test_small_exhaustive_oracle_vs_direct_accumulator() -> None:
                         )
                         cycl = cyclotomic_poly(exp, gen, polys=True)
                         rem_check = poly.rem(cycl, auto=False)
-                        expected = tuple(str(int(rem_check.nth(k))) for k in range(deg))
-                        # Need canonical formatting
-                        from jacobian.canonical import format_canonical_integer
-
-                        expected = tuple(
-                            format_canonical_integer(int(c)) for c in expected
-                        )
+                        expected = tuple(int(rem_check.nth(k)) for k in range(deg))
                         assert cell.remainder_coefficients == expected
 
 
@@ -420,7 +411,7 @@ def test_cross_check_whole_sequence_vs_spectral_pair() -> None:
                         )
                     )
                     assert all(
-                        c == "0" for c in profile_result.sums[0].remainder_coefficients
+                        c == 0 for c in profile_result.sums[0].remainder_coefficients
                     )
 
 
@@ -447,7 +438,7 @@ def test_sequence_order_and_intervals_semantics() -> None:
     src_empty = _source(group, seq1, freqs, ((1, 1),))
     assert compute_finite_abelian_character_sum_interval_profile(src_empty).sums[
         0
-    ].remainder_coefficients == ("0", "0")
+    ].remainder_coefficients == (0, 0)
 
 
 def test_work_bounds_rejections() -> None:
@@ -558,25 +549,33 @@ def test_result_parsing_rejects_inconsistent_structure() -> None:
     # Alter cyclotomic_degree to mismatch
     payload["cyclotomic_degree"] = 1
     with finite_abelian_validation_error():
-        FiniteAbelianCharacterSumIntervalProfileResult.model_validate(payload)
+        FiniteAbelianCharacterSumIntervalProfileResult.model_validate_json(
+            encode_strict_json(payload)
+        )
     # Alter sums length
     payload2 = result.model_dump(mode="json")
     payload2["sums"] = payload2["sums"][:-1]
     with finite_abelian_validation_error():
-        FiniteAbelianCharacterSumIntervalProfileResult.model_validate(payload2)
+        FiniteAbelianCharacterSumIntervalProfileResult.model_validate_json(
+            encode_strict_json(payload2)
+        )
     # Alter cell order
     payload3 = result.model_dump(mode="json")
     payload3["sums"] = list(reversed(payload3["sums"]))
     # if frequencies sorted, reversed order should be invalid unless already sorted reversed case matches? For 2 freq *1 interval, reversed would swap frequencies
     with finite_abelian_validation_error():
-        FiniteAbelianCharacterSumIntervalProfileResult.model_validate(payload3)
+        FiniteAbelianCharacterSumIntervalProfileResult.model_validate_json(
+            encode_strict_json(payload3)
+        )
 
 
 def test_canonical_round_trip_through_catalog() -> None:
     source = _source((4,), ((6,), (0,), (5,)), ((5,), (0,)), ((0, 2), (1, 3)))
     # Note sequence normalization: 6 mod4=2, 5 mod4=1 etc., but we test payload round-trip
     payload = source.model_dump(mode="json")
-    request = PROFILE_OPERATION.request_type.model_validate({"source": payload})
+    request = PROFILE_OPERATION.request_type.model_validate_json(
+        encode_strict_json({"source": payload})
+    )
     result = PROFILE_OPERATION.run(request)
     assert result.source.model_dump(mode="json") == payload
     # Ensure canonicalization happened (sequence normalized, frequencies sorted etc.)
@@ -592,8 +591,10 @@ def test_native_catalog_projection_does_not_replay_kernel() -> None:
     # Change remainder to another valid length-preserving zero vector (still within digit bound)
     payload["sums"][0]["remainder_coefficients"] = ["0", "0"]
     # Should validate structurally (zero allowed) without recomputing kernel's exact sum
-    reparsed = FiniteAbelianCharacterSumIntervalProfileResult.model_validate(payload)
-    assert reparsed.sums[0].remainder_coefficients == ("0", "0")
+    reparsed = FiniteAbelianCharacterSumIntervalProfileResult.model_validate_json(
+        encode_strict_json(payload)
+    )
+    assert reparsed.sums[0].remainder_coefficients == (0, 0)
 
 
 def test_result_validation_does_not_factor_totient() -> None:
@@ -603,14 +604,16 @@ def test_result_validation_does_not_factor_totient() -> None:
     payload["cyclotomic_degree"] = 1
     for cell in payload["sums"]:
         cell["remainder_coefficients"] = cell["remainder_coefficients"][:1]
-    parsed = FiniteAbelianCharacterSumIntervalProfileResult.model_validate(payload)
+    parsed = FiniteAbelianCharacterSumIntervalProfileResult.model_validate_json(
+        encode_strict_json(payload)
+    )
     assert parsed.cyclotomic_degree == 1
     assert all(len(cell.remainder_coefficients) == 1 for cell in parsed.sums)
 
     large_prime = 2_147_483_647
     forged = {
         "source": {
-            "group": {"moduli": [large_prime]},
+            "group": {"moduli": [str(large_prime)]},
             "sequence": [[0]],
             "frequencies": [[0]],
             "intervals": [[0, 1]],
@@ -626,7 +629,9 @@ def test_result_validation_does_not_factor_totient() -> None:
             }
         ],
     }
-    parsed_large = FiniteAbelianCharacterSumIntervalProfileResult.model_validate(forged)
+    parsed_large = FiniteAbelianCharacterSumIntervalProfileResult.model_validate_json(
+        encode_strict_json(forged)
+    )
     assert parsed_large.group_exponent == large_prime
     assert parsed_large.cyclotomic_degree == 1
 
@@ -635,7 +640,7 @@ def test_oversized_result_cells_reject_before_nested_validation() -> None:
     invalid_cell = {"not": "a character-sum cell"}
     payload = {
         "source": {
-            "group": {"moduli": [4]},
+            "group": {"moduli": ["4"]},
             "sequence": [[0]],
             "frequencies": [[0]],
             "intervals": [[0, 1]],
@@ -646,7 +651,9 @@ def test_oversized_result_cells_reject_before_nested_validation() -> None:
         "sums": [invalid_cell] * (domain.MAX_CHARACTER_SUM_CELLS + 1),
     }
     with pytest.raises(ValidationError) as caught:
-        FiniteAbelianCharacterSumIntervalProfileResult.model_validate(payload)
+        FiniteAbelianCharacterSumIntervalProfileResult.model_validate_json(
+            encode_strict_json(payload)
+        )
     issue = caught.value.errors()[0]
     assert issue["type"] == "finite_abelian_group.cell_count_bound"
 
@@ -661,7 +668,7 @@ def test_z2_power_17_singleton_profile_is_admitted() -> None:
     result = compute_finite_abelian_character_sum_interval_profile(source)
     assert result.group_exponent == 2
     assert result.cyclotomic_degree == 1
-    assert result.sums[0].remainder_coefficients == ("1",)
+    assert result.sums[0].remainder_coefficients == (1,)
 
 
 def test_rank_linear_prefix_work_rejects_expensive_profiles() -> None:

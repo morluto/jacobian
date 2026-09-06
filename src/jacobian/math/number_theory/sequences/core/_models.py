@@ -5,8 +5,8 @@ from __future__ import annotations
 from pydantic import Field
 
 from jacobian._exact import (
-    CanonicalInteger,
     CanonicalRational,
+    ExactInteger,
 )
 from jacobian._models import StrictModel
 from jacobian.math.number_theory.sequences.core.values import (
@@ -17,7 +17,7 @@ from jacobian.math.number_theory.sequences.core.values import (
 class IntegerSequenceValueResult(StrictModel):
     """One canonical integer produced by a sequence aggregate."""
 
-    value: CanonicalInteger
+    value: ExactInteger
 
 
 class IntegerSequenceRationalResult(StrictModel):
@@ -29,7 +29,7 @@ class IntegerSequenceRationalResult(StrictModel):
 class IntegerSequenceListResult(StrictModel):
     """A finite list of canonical integers produced by a sequence transform."""
 
-    values: tuple[CanonicalInteger, ...] = Field(
+    values: tuple[ExactInteger, ...] = Field(
         min_length=0,
         max_length=MAX_SEQUENCE_LENGTH,
     )
@@ -50,7 +50,7 @@ class IntegerSequenceIndexListResult(StrictModel):
 class FrequencyEntry(StrictModel):
     """One distinct sequence value and its positive occurrence count."""
 
-    value: CanonicalInteger
+    value: ExactInteger
     count: int = Field(ge=1, le=MAX_SEQUENCE_LENGTH)
 
 

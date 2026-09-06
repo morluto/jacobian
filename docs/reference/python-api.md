@@ -89,6 +89,78 @@ round trips. An empty quadratic matrix additionally supplies its `radicand`;
 an embedded number-field matrix retains its `embedding`. Never infer a parent
 from an entry when there may be no entries.
 
+Likewise, `FiniteDimensionalSubspace` supplies `presentation`, `row_axis`, and
+`column_axis` independently of its `basis`. An empty `basis` and empty
+`basis_axis.labels` represent the zero subspace in that ambient matrix space;
+scalar restriction retains the target axis even when its matrix has zero
+columns. Nonempty basis matrices must match the declared parent and axes.
+Consumers establish the basis's independence at admission, not during parsing.
+
+### Integer values and JSON
+
+Migrated integer fields hold Python `int` values, not decimal text. The same
+model owns both native computation and JSON encoding:
+
+```python
+from jacobian.math.matrices.values import IntegerMatrix
+
+matrix = IntegerMatrix(entries=((2**53 + 1,),))
+assert matrix.entries[0][0] == 2**53 + 1
+assert matrix.model_dump()["entries"] == ((2**53 + 1,),)
+assert matrix.model_dump(mode="json")["entries"] == [["9007199254740993"]]
+assert IntegerMatrix.model_validate_json(matrix.model_dump_json()) == matrix
+```
+
+Use native integers in mathematical tests. Test malformed decimal strings and
+serialization separately through `model_validate_json()`. Passing a decoded
+JSON dictionary to `model_validate()` selects the native path and does not
+decode its strings. This encoding choice does not increase an operation's
+work or output limits. See the [migration requirements](value-interoperability.md#requirements-for-a-native-integer-codec)
+for the remaining legacy-field and compound-rational scope.
+
+### Finite abelian groups
+
+The abelian operations use `FiniteAbelianProductGroup(moduli=(6, 4))`, the same
+ordered cyclic-product parent used by finite-group factorization and character
+operations. Empty `moduli` denotes the trivial group. Legacy flat
+`invariant_factors` request fields and `AbelianPresentation` are removed.
+The `moduli` field contains exact Python integers. `model_dump()` preserves
+them; `model_dump(mode="json")` and `model_dump_json()` encode them as canonical
+decimal strings. `model_validate_json()` validates and decodes that encoding
+back into the same value type. Native construction does not accept numeric
+strings, and JSON decoding does not accept numbers for these fields.
+
+`reduce_element(group, coordinates)` returns a `FiniteAbelianElement` with
+`group` and canonical `coordinates`; that serialized value passes unchanged
+to `element_order(element)` or `elements_equal(left, right)`. Different ordered
+parents are not implicitly identified, even when they are isomorphic.
+`FiniteAbelianSubgroup(group=..., generators=...)` retains canonical generator
+coordinates, including empty generating sets. Both `generated_subgroup` and
+`quotient_group` consume that same value and retain it in their result.
+
+`normalize_presentation(group)` retains `source_group` and returns the
+invariant-factor `group`; quotient computation returns its abstract `quotient`
+group. Neither result supplies a coordinate isomorphism or quotient projection.
+Group order and exponent are native properties of the shared parent, not
+duplicated serialized claims. Work bounds are checked at native operation
+admission. Abelian element coordinates, subgroup generators, and element-order
+results are exact Python integers with canonical decimal-string JSON encoding.
+Reduction accepts signed decimal-string coordinates through MCP and exact
+Python integers natively, with a 32,768-digit guard in both paths.
+Moduli now serialize as canonical integer strings too, but still retain the
+previous magnitude bound while the remaining coordinate consumers are migrated.
+Element orders exceeding that scalar range remain exact in transport.
+
+The group modulus magnitude bound and the separate numeric character-operation
+coordinate fields remain limitations, not the intended mathematical domain.
+String encoding of moduli alone does not complete the range expansion.
+The abelian Smith operations also still retain a
+4,096 group-order admission cap; do not interpret the canonical element-order
+encoding as evidence that this separate scale limitation has been repaired.
+See [exact integer migrations](value-interoperability.md#exact-integers-representation-is-not-a-work-limit)
+and [large-group admission](public-operation-admission.md#large-integers-and-large-finite-groups)
+for the required repairs.
+
 A carrier's structural size limit is not an operation's admission limit. The QQ
 matrix carrier supports axes through 4,096 so it can represent the eventual
 hitting operation's state space. Each consumer separately admits its work,

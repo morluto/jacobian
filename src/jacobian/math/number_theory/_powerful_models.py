@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Annotated, Literal, Self
 
-from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_validator
+from pydantic import Field, StrictBool, StrictInt, WithJsonSchema, model_validator
 
+from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel
 from jacobian.math.number_theory._integer_models import PrimePower
 from jacobian.math.number_theory._models import _validation_error
@@ -22,11 +23,14 @@ MAX_POWERFUL_FACTOR_ENTRIES = 42
 MAX_POWERFUL_EXPONENT = 83
 
 PowerfulInteger = Annotated[
-    str,
-    StringConstraints(
-        pattern=r"^[1-9][0-9]*$",
-        max_length=MAX_POWERFUL_INTEGER_DIGITS,
-        strict=True,
+    int,
+    DecimalIntegerEncoding(max_digits=MAX_POWERFUL_INTEGER_DIGITS),
+    WithJsonSchema(
+        {
+            "type": "string",
+            "pattern": rf"^[1-9][0-9]{{0,{MAX_POWERFUL_INTEGER_DIGITS - 1}}}(?![\s\S])",
+            "maxLength": MAX_POWERFUL_INTEGER_DIGITS,
+        }
     ),
 ]
 
@@ -42,12 +46,24 @@ class PowerfulNumberRequest(StrictModel):
         examples=["12168"],
     )
 
+    @model_validator(mode="after")
+    def require_positive(self) -> Self:
+        if self.value <= 0:
+            raise _validation_error("value_not_positive", "value must be positive")
+        return self
+
 
 class ResidualPerfectPower(StrictModel):
     """An exact decomposition of the stripped residual as base**exponent."""
 
     base: PowerfulInteger
     exponent: StrictInt = Field(ge=2, le=MAX_POWERFUL_EXPONENT)
+
+    @model_validator(mode="after")
+    def require_positive(self) -> Self:
+        if self.base <= 0:
+            raise _validation_error("base_not_positive", "base must be positive")
+        return self
 
 
 class PowerfulNumberResult(StrictModel):
@@ -78,11 +94,18 @@ class PowerfulNumberResult(StrictModel):
         max_length=MAX_POWERFUL_FACTOR_ENTRIES,
     )
     residual: PowerfulInteger = Field(
+        gt=0,
         description=(
             "The positive cofactor after the reported prime powers are removed."
-        )
+        ),
     )
     residual_perfect_power: ResidualPerfectPower | None = None
+
+    @model_validator(mode="after")
+    def require_positive_values(self) -> Self:
+        if self.value <= 0 or self.residual <= 0:
+            raise _validation_error("value_not_positive", "values must be positive")
+        return self
 
     @model_validator(mode="after")
     def require_branch_consistency(self) -> Self:
@@ -102,8 +125,6 @@ class PowerfulNumberResult(StrictModel):
     ) -> Self:
         """Build one result after the admitted decision kernel established it."""
 
-        from jacobian.canonical import format_canonical_integer
-
         return cls.model_construct(
             value=request.value,
             conclusion=data.conclusion,
@@ -111,15 +132,15 @@ class PowerfulNumberResult(StrictModel):
             cutoff=data.cutoff,
             checked_through=data.checked_through,
             stripped_factors=tuple(
-                PrimePower(prime=format_canonical_integer(prime), power=exponent)
+                PrimePower(prime=prime, power=exponent)
                 for prime, exponent in data.stripped_factors
             ),
-            residual=format_canonical_integer(data.residual),
+            residual=data.residual,
             residual_perfect_power=(
                 None
                 if data.perfect_power is None
                 else ResidualPerfectPower(
-                    base=format_canonical_integer(data.perfect_power[0]),
+                    base=data.perfect_power[0],
                     exponent=data.perfect_power[1],
                 )
             ),

@@ -4,6 +4,7 @@ from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -39,7 +40,10 @@ def affine_pullback(
     )
     output_incidences = len(polynomial.terms) * affine_map.target_dimension
     digits = sum(
-        max(len(term.coefficient.num.lstrip("-")), len(term.coefficient.den))
+        max(
+            len(format_canonical_integer(term.coefficient.num)),
+            len(format_canonical_integer(term.coefficient.den)),
+        )
         for term in polynomial.terms
     )
     if work > 4_194_304 or output_incidences > 65_536 or digits > 8192:

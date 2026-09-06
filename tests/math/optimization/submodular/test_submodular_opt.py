@@ -1,5 +1,7 @@
 """Tests for submodular optimization operations."""
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -43,13 +45,11 @@ def _make_uniform_function(n: int) -> SetFunction:
     return SetFunction(ground_set_size=n, entries=tuple(entries))
 
 
-def _entry(
-    subset: tuple[int, ...], num: int | str, den: int | str = "1"
-) -> SetFunctionEntry:
+def _entry(subset: tuple[int, ...], num: int, den: int = 1) -> SetFunctionEntry:
     return SetFunctionEntry.model_validate(
         {
             "subset": subset,
-            "value": {"num": str(num), "den": str(den)},
+            "value": {"num": num, "den": den},
         }
     )
 
@@ -59,7 +59,7 @@ class TestSetFunctionEval:
         fn = _make_uniform_function(2)
         req = SetFunctionEvalRequest(function=fn, subset=(0, 1))
         result = _evaluate_request(req)
-        assert result.value == CanonicalRational(num="2", den="1")
+        assert result.value == CanonicalRational(num=2, den=1)
         assert result.function == fn
         assert result.subset == (0, 1)
         assert verify_set_function_evaluation(
@@ -67,7 +67,9 @@ class TestSetFunctionEval:
         )
         forged = result.model_dump(mode="json")
         forged["value"] = {"num": "3", "den": "1"}
-        assert not verify_set_function_evaluation(type(result).model_validate(forged))
+        assert not verify_set_function_evaluation(
+            type(result).model_validate_json(json.dumps(forged))
+        )
 
     @pytest.mark.parametrize("subset", ((2,), (0, 0)))
     def test_serialized_result_rejects_subset_outside_source(
@@ -76,7 +78,7 @@ class TestSetFunctionEval:
         result = _evaluate_request(
             SetFunctionEvalRequest(function=_make_uniform_function(1), subset=(0,))
         )
-        payload = result.model_dump(mode="json")
+        payload = result.model_dump()
         payload["subset"] = subset
         with pytest.raises(ValidationError):
             type(result).model_validate(payload)
@@ -89,12 +91,12 @@ class TestSetFunctionEval:
     def test_fractional_value_uses_the_shared_canonical_rational(self) -> None:
         function = SetFunction(
             ground_set_size=0,
-            entries=(_entry((), "1", "2"),),
+            entries=(_entry((), 1, 2),),
         )
 
         result = _evaluate_request(SetFunctionEvalRequest(function=function, subset=()))
 
-        assert result.value == CanonicalRational(num="1", den="2")
+        assert result.value == CanonicalRational(num=1, den=2)
         assert result.model_dump(mode="json")["value"] == {"num": "1", "den": "2"}
 
     def test_rejects_duplicate_eval_subset(self) -> None:
@@ -125,8 +127,8 @@ class TestMonotonicity:
             SetFunction(
                 ground_set_size=2,
                 entries=(
-                    _entry((), "0"),
-                    _entry((0, 1), "-1"),
+                    _entry((), 0),
+                    _entry((0, 1), -1),
                 ),
             )
         assert (
@@ -167,7 +169,7 @@ class TestKernelEquivalence:
                 SetFunctionEntry(
                     subset=subset,
                     value=CanonicalRational(
-                        num=str(fraction.numerator), den=str(fraction.denominator)
+                        num=fraction.numerator, den=fraction.denominator
                     ),
                 )
             )
@@ -239,8 +241,8 @@ class TestKernelEquivalence:
     def test_violation_retains_a_structured_witness(self) -> None:
         # f({}) = 0 but f({0}) = -1 violates monotonicity at a covering edge.
         entries = [
-            _entry((), "0"),
-            _entry((0,), "-1"),
+            _entry((), 0),
+            _entry((0,), -1),
         ]
         result = _check_monotonicity_request(
             MonotonicityCheckRequest(
@@ -252,8 +254,8 @@ class TestKernelEquivalence:
         assert result.violation is not None
         assert result.violation.subset == ()
         assert result.violation.added_element == 0
-        assert result.violation.lower_value == CanonicalRational(num="0", den="1")
-        assert result.violation.upper_value == CanonicalRational(num="-1", den="1")
+        assert result.violation.lower_value == CanonicalRational(num=0, den=1)
+        assert result.violation.upper_value == CanonicalRational(num=-1, den=1)
         assert verify_monotonicity(result)
         assert not verify_monotonicity(result.model_copy(update={"is_monotone": True}))
         forged = result.model_copy(
@@ -271,7 +273,7 @@ class TestKernelEquivalence:
             entries.append(
                 SetFunctionEntry(
                     subset=subset,
-                    value=CanonicalRational(num="9" * 90, den="1"),
+                    value=CanonicalRational(num=10**90 - 1, den=1),
                 )
             )
         function = SetFunction(ground_set_size=16, entries=tuple(entries))
@@ -283,10 +285,10 @@ def test_value_height_bound_keeps_scan_work_small() -> None:
     on small big-ints; the shared entry type keeps admitting them so the
     single-lookup evaluator can return any exact representable height."""
     wide_empty = SetFunctionEntry(
-        subset=(), value=CanonicalRational(num="9" * 129, den="1")
+        subset=(), value=CanonicalRational(num=10**129 - 1, den=1)
     )
     wide_full = SetFunctionEntry(
-        subset=(0,), value=CanonicalRational(num="9" * 129, den="1")
+        subset=(0,), value=CanonicalRational(num=10**129 - 1, den=1)
     )
     monotonicity_request = MonotonicityCheckRequest(
         function=SetFunction(ground_set_size=1, entries=(wide_empty, wide_full))
@@ -316,7 +318,7 @@ def test_value_height_bound_keeps_scan_work_small() -> None:
     )
 
     narrow = SetFunctionEntry(
-        subset=(0,), value=CanonicalRational(num="9" * 128, den="1")
+        subset=(0,), value=CanonicalRational(num=10**128 - 1, den=1)
     )
     # Exactly-128-digit values are admitted and the scan completes normally.
     assert (
@@ -325,7 +327,7 @@ def test_value_height_bound_keeps_scan_work_small() -> None:
                 function=SetFunction(
                     ground_set_size=1,
                     entries=(
-                        _entry((), "0"),
+                        _entry((), 0),
                         narrow,
                     ),
                 )

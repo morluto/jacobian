@@ -20,7 +20,7 @@ def test_absolute_value_and_sign_preserve_integer_invariants(value: int) -> None
     absolute = arithmetic.absolute_value(value)
 
     assert type(absolute) is arithmetic.IntegerValue
-    assert absolute == arithmetic.IntegerValue(value=str(abs(value)))
+    assert absolute == arithmetic.IntegerValue(value=abs(value))
     assert arithmetic.sign(value) * abs(value) == value
     assert arithmetic.sign(absolute) == arithmetic.sign(abs(value))
 
@@ -29,7 +29,7 @@ def test_absolute_value_and_sign_preserve_integer_invariants(value: int) -> None
 def test_absolute_value_and_sign_compose_through_canonical_integer_value(
     value: int,
 ) -> None:
-    absolute = arithmetic.absolute_value(arithmetic.IntegerValue(value=str(value)))
+    absolute = arithmetic.absolute_value(arithmetic.IntegerValue(value=value))
 
     assert type(absolute) is arithmetic.IntegerValue
     assert absolute == arithmetic.absolute_value(value)
@@ -64,8 +64,8 @@ def test_producer_chains_compose_through_the_canonical_integer_value() -> None:
 def test_rational_consumers_identify_plain_and_canonical_integers(
     left: int, right: int
 ) -> None:
-    canonical_left = arithmetic.IntegerValue(value=str(left))
-    canonical_right = arithmetic.IntegerValue(value=str(right))
+    canonical_left = arithmetic.IntegerValue(value=left)
+    canonical_right = arithmetic.IntegerValue(value=right)
 
     assert (
         arithmetic.sum_rationals(canonical_left, canonical_right)
@@ -86,7 +86,7 @@ def test_rational_consumers_identify_plain_and_canonical_integers(
 
 @pytest.mark.parametrize("operation", [arithmetic.reciprocal])
 def test_zero_canonical_integer_rejection_matches_plain_zero(operation: object) -> None:
-    zero = arithmetic.IntegerValue(value="0")
+    zero = arithmetic.IntegerValue(value=0)
 
     with pytest.raises(OperationDomainValidationError):
         operation(zero)  # type: ignore[operator]
@@ -114,7 +114,7 @@ def test_primitive_integer_vector_rejects_zero_vector() -> None:
 
 
 def test_native_integer_admission_uses_typed_domain_errors() -> None:
-    value = arithmetic.IntegerValue(value="8")
+    value = arithmetic.IntegerValue(value=8)
 
     with pytest.raises(OperationDomainValidationError, match="base must be"):
         arithmetic_operations.base_digits(value, 1)
@@ -148,11 +148,11 @@ def test_complete_native_rational_arithmetic() -> None:
 
 
 def test_published_product_rejects_unrepresentable_exact_result() -> None:
-    left_denominator = "1" + "0" * (MAX_CANONICAL_RATIONAL_DIGITS - 1)
-    right_denominator = "9" * MAX_CANONICAL_RATIONAL_DIGITS
+    left_denominator = 10 ** (MAX_CANONICAL_RATIONAL_DIGITS - 1)
+    right_denominator = 10**MAX_CANONICAL_RATIONAL_DIGITS - 1
     request = RationalPairRequest(
-        left=CanonicalRational(num="1", den=left_denominator),
-        right=CanonicalRational(num="1", den=right_denominator),
+        left=CanonicalRational(num=1, den=left_denominator),
+        right=CanonicalRational(num=1, den=right_denominator),
     )
 
     with pytest.raises(OperationDomainValidationError) as exc_info:

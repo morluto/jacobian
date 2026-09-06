@@ -139,7 +139,7 @@ def _descriptor(operation: MathTool[Any, Any]) -> OperationDescriptor:
         operation_id=operation.operation_id,
         title=operation.title,
         description=operation.description,
-        input_schema=operation.request_type.model_json_schema(),
+        input_schema=operation.request_type.model_json_schema(mode="validation"),
         output_schema=operation.result_type.model_json_schema(mode="serialization"),
         read_only=True,
         tags=operation.tags,

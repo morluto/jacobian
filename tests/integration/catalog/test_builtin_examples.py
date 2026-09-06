@@ -61,7 +61,9 @@ def test_advertised_invocation_example_executes_when_backend_is_available(
         assert public_result.operation_id == operation_id
         serialized = public_result.output
         assert serialized, f"{operation_id} example produced an empty result"
-        validated = operation.result_type.model_validate(serialized)
+        validated = operation.result_type.model_validate_json(
+            encode_strict_json(serialized)
+        )
         assert validated.model_dump(mode="json") == serialized, (
             operation_id,
             serialized,

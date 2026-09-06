@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from fractions import Fraction
 
@@ -104,8 +105,8 @@ def test_serialized_vector_calculus_claims_verify_retained_sources() -> None:
         _polynomial(("x", "y", "z"), {(0, 0, 1): 1}),
     )
     direction = (
-        CanonicalRational(num="1", den="2"),
-        CanonicalRational(num="1", den="1"),
+        CanonicalRational(num=1, den=2),
+        CanonicalRational(num=1, den=1),
     )
     gradient_claim = gradient(scalar)
     laplacian_claim = laplacian(scalar)
@@ -134,7 +135,7 @@ def test_serialized_vector_calculus_claims_verify_retained_sources() -> None:
             update={
                 "direction": (
                     direction[0],
-                    CanonicalRational(num="2", den="1"),
+                    CanonicalRational(num=2, den=1),
                 )
             }
         )
@@ -142,16 +143,20 @@ def test_serialized_vector_calculus_claims_verify_retained_sources() -> None:
 
     missing_source = gradient_claim.model_dump(mode="json")
     missing_source.pop("source_polynomial")
-    assert not verify_gradient(VectorResult.model_validate(missing_source))
+    assert not verify_gradient(
+        VectorResult.model_validate_json(json.dumps(missing_source))
+    )
 
     wrong_source_kind = gradient_claim.model_dump(mode="json")
     wrong_source_kind.pop("source_polynomial")
     wrong_source_kind["source_components"] = [scalar.model_dump(mode="json")]
-    assert not verify_gradient(VectorResult.model_validate(wrong_source_kind))
+    assert not verify_gradient(
+        VectorResult.model_validate_json(json.dumps(wrong_source_kind))
+    )
 
     wrong_axis = gradient_claim.model_dump(mode="json")
     wrong_axis["source_polynomial"]["variables"] = ["u", "v"]
-    assert not verify_gradient(VectorResult.model_validate(wrong_axis))
+    assert not verify_gradient(VectorResult.model_validate_json(json.dumps(wrong_axis)))
 
 
 def test_renaming_the_declared_axis_transports_the_gradient() -> None:
@@ -184,8 +189,8 @@ def test_directional_derivative_uses_exact_rational_coordinates() -> None:
         DirectionalDerivativeRequest(
             polynomial=source,
             direction=(
-                CanonicalRational(num="1", den="2"),
-                CanonicalRational(num="1", den="1"),
+                CanonicalRational(num=1, den=2),
+                CanonicalRational(num=1, den=1),
             ),
         )
     )
@@ -276,7 +281,7 @@ def test_direction_length_must_match_polynomial_axis() -> None:
     with pytest.raises(ValidationError) as exc_info:
         DirectionalDerivativeRequest(
             polynomial=_polynomial(("x", "y"), {(1, 0): 1}),
-            direction=(CanonicalRational(num="1", den="1"),),
+            direction=(CanonicalRational(num=1, den=1),),
         )
     assert (
         exc_info.value.errors()[0]["type"] == "polynomial_vector_calc.direction_length"

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from math import prod
 
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import parse_canonical_integer
 from jacobian.math.algebraic_tori import (
     AlgebraicTorusSolutionSubgroup,
     HomogeneousMonomialSystem,
@@ -25,7 +25,7 @@ from jacobian.math.matrices.values import IntegerMatrix
 
 
 def _matrix(
-    entries: list[list[int | str]],
+    entries: list[list[int]],
     *,
     rows: int | None = None,
     columns: int | None = None,
@@ -35,12 +35,12 @@ def _matrix(
     return IntegerMatrix(
         row_count=row_count,
         column_count=column_count,
-        entries=tuple(tuple(str(value) for value in row) for row in entries),
+        entries=tuple(tuple(value for value in row) for row in entries),
     )
 
 
 def _system(
-    entries: list[list[int | str]],
+    entries: list[list[int]],
     *,
     rows: int | None = None,
     columns: int | None = None,
@@ -54,7 +54,7 @@ def _system(
 
 
 def _integers(matrix: IntegerMatrix) -> list[list[int]]:
-    return [[parse_canonical_integer(value) for value in row] for row in matrix.entries]
+    return [list(row) for row in matrix.entries]
 
 
 def _multiply(
@@ -77,10 +77,7 @@ def _assert_defining_invariants(result: AlgebraicTorusSolutionSubgroup) -> None:
     assert _multiply(source, free, result.free_rank) == [
         [0] * result.free_rank for _ in source
     ]
-    factors = tuple(
-        parse_canonical_integer(value)
-        for value in result.torsion_character_group.invariant_factors
-    )
+    factors = result.torsion_character_group.invariant_factors
     torsion = _integers(result.torsion_exponent_map)
     torsion_relations = _multiply(source, torsion, len(factors))
     assert all(
@@ -88,19 +85,17 @@ def _assert_defining_invariants(result: AlgebraicTorusSolutionSubgroup) -> None:
         for row in torsion_relations
         for column, value in enumerate(row)
     )
-    assert parse_canonical_integer(result.connected_component_count) == prod(
-        factors, start=1
-    )
+    assert result.connected_component_count == prod(factors, start=1)
 
 
 def test_nonsymmetric_smith_basis_uses_the_right_transformation_back_map() -> None:
     result = homogeneous_monomial_solution_subgroup(_system([[1, 1]]))
 
     assert result.smith_certificate.right_transformation.entries == (
-        ("1", "-1"),
-        ("0", "1"),
+        (1, -1),
+        (0, 1),
     )
-    assert result.smith_free_exponent_map.entries == (("-1",), ("1",))
+    assert result.smith_free_exponent_map.entries == ((-1,), (1,))
     _assert_defining_invariants(result)
 
 
@@ -109,19 +104,19 @@ def test_one_power_equation_has_d_zero_dimensional_components() -> None:
 
     assert result.smith_certificate.rank == 1
     assert result.free_rank == 0
-    assert result.torsion_character_group.invariant_factors == ("7",)
-    assert result.connected_component_count == "7"
-    assert result.torsion_exponent_map.entries == (("1",),)
+    assert result.torsion_character_group.invariant_factors == (7,)
+    assert result.connected_component_count == 7
+    assert result.torsion_exponent_map.entries == ((1,),)
     _assert_defining_invariants(result)
 
 
 def test_mixed_invariant_factors_and_free_coordinate_have_a_torus_factor() -> None:
     result = homogeneous_monomial_solution_subgroup(_system([[2, 0, 0], [0, 6, 0]]))
 
-    assert result.torsion_character_group.invariant_factors == ("2", "6")
-    assert result.connected_component_count == "12"
+    assert result.torsion_character_group.invariant_factors == (2, 6)
+    assert result.connected_component_count == 12
     assert result.free_rank == 1
-    assert result.reduced_free_exponent_map.entries == (("0",), ("0",), ("1",))
+    assert result.reduced_free_exponent_map.entries == ((0,), (0,), (1,))
     assert "components" not in result.model_dump()
     assert "exactness" not in result.model_dump()
     assert "completeness" not in result.model_dump()
@@ -134,20 +129,20 @@ def test_lll_reduced_basis_retains_the_exact_parameter_transport() -> None:
     )
 
     assert result.smith_free_exponent_map.entries == (
-        ("4", "-24"),
-        ("21", "-120"),
-        ("-16", "90"),
-        ("0", "1"),
+        (4, -24),
+        (21, -120),
+        (-16, 90),
+        (0, 1),
     )
     assert result.reduced_free_exponent_map.entries == (
-        ("4", "0"),
-        ("3", "6"),
-        ("2", "-6"),
-        ("-3", "1"),
+        (4, 0),
+        (3, 6),
+        (2, -6),
+        (-3, 1),
     )
     assert result.smith_free_parameters_from_reduced.entries == (
-        ("-17", "6"),
-        ("-3", "1"),
+        (-17, 6),
+        (-3, 1),
     )
     smith_free = _integers(result.smith_free_exponent_map)
     parameter_transport = _integers(result.smith_free_parameters_from_reduced)
@@ -183,18 +178,18 @@ def test_empty_equation_and_coordinate_degeneracies_retain_ambient_axes() -> Non
 
     assert (full_torus.smith_certificate.rank, full_torus.free_rank) == (0, 3)
     assert full_torus.reduced_free_exponent_map.entries == (
-        ("1", "0", "0"),
-        ("0", "1", "0"),
-        ("0", "0", "1"),
+        (1, 0, 0),
+        (0, 1, 0),
+        (0, 0, 1),
     )
     assert (singleton.smith_certificate.rank, singleton.free_rank) == (0, 0)
-    assert singleton.connected_component_count == "1"
+    assert singleton.connected_component_count == 1
     _assert_defining_invariants(full_torus)
     _assert_defining_invariants(singleton)
 
 
 def test_large_component_family_is_compact_not_materialized() -> None:
-    factor = "9" * 32
+    factor = 10**32 - 1
     result = homogeneous_monomial_solution_subgroup(_system([[factor]]))
 
     assert result.connected_component_count == factor
@@ -202,10 +197,10 @@ def test_large_component_family_is_compact_not_materialized() -> None:
 
 
 def test_full_dimension_and_digit_boundary_returns_a_compact_exact_result() -> None:
-    factor = "9" * 32
+    factor = 10**32 - 1
     system = _system(
         [
-            [factor if row == column else "0" for column in range(16)]
+            [factor if row == column else 0 for column in range(16)]
             for row in range(16)
         ]
     )
@@ -215,7 +210,7 @@ def test_full_dimension_and_digit_boundary_returns_a_compact_exact_result() -> N
     assert result.smith_certificate.rank == 16
     assert result.free_rank == 0
     assert len(result.torsion_character_group.invariant_factors) == 16
-    assert result.connected_component_count == str(int(factor) ** 16)
+    assert result.connected_component_count == factor**16
     _assert_defining_invariants(result)
 
 
@@ -230,9 +225,9 @@ def test_result_round_trips_and_source_composes_unchanged() -> None:
     assert consumed == produced
 
 
-@pytest.mark.parametrize("factors", [("1",)])
+@pytest.mark.parametrize("factors", [(1,)])
 def test_torsion_character_group_keeps_factor_claim_out_of_decoding(
-    factors: tuple[str, ...],
+    factors: tuple[int, ...],
 ) -> None:
     from jacobian.math.algebraic_tori import verify_torsion_character_group
 
@@ -249,7 +244,7 @@ def test_result_rejects_component_count_that_contradicts_torsion_group() -> None
     from jacobian.math.algebraic_tori import verify_solution_subgroup
 
     assert not verify_solution_subgroup(
-        AlgebraicTorusSolutionSubgroup.model_validate(encoded)
+        AlgebraicTorusSolutionSubgroup.model_validate_json(json.dumps(encoded))
     )
 
 
@@ -259,7 +254,7 @@ def test_result_rejects_a_certificate_bound_to_another_source() -> None:
     forged["source"]["exponent_matrix"]["entries"][0][0] = "3"
 
     with pytest.raises(ValidationError) as error:
-        AlgebraicTorusSolutionSubgroup.model_validate(forged)
+        AlgebraicTorusSolutionSubgroup.model_validate_json(json.dumps(forged))
 
     assert error.value.errors()[0]["type"] == (
         "algebraic_torus.solution_source_binding"
@@ -273,7 +268,7 @@ def test_raw_result_rejects_map_shape_before_nested_matrix_decoding() -> None:
     forged["reduced_free_exponent_map"]["row_count"] = 16
 
     with pytest.raises(ValidationError) as error:
-        AlgebraicTorusSolutionSubgroup.model_validate(forged)
+        AlgebraicTorusSolutionSubgroup.model_validate_json(json.dumps(forged))
 
     assert error.value.errors()[0]["type"] == "algebraic_torus.solution_map_shape"
 
@@ -285,7 +280,7 @@ def test_system_bounds_nested_dimensions_and_digits_before_smith_work() -> None:
                 "exponent_matrix": {
                     "row_count": 1,
                     "column_count": 17,
-                    "entries": [["0"] * 17],
+                    "entries": [[0] * 17],
                 },
                 "equation_axis": ["e"],
                 "coordinate_axis": [f"x{i}" for i in range(17)],
@@ -297,7 +292,7 @@ def test_system_bounds_nested_dimensions_and_digits_before_smith_work() -> None:
                 "exponent_matrix": {
                     "row_count": 1,
                     "column_count": 1,
-                    "entries": [["9" * 33]],
+                    "entries": [[10**33 - 1]],
                 },
                 "equation_axis": ["e"],
                 "coordinate_axis": ["x"],
@@ -307,14 +302,14 @@ def test_system_bounds_nested_dimensions_and_digits_before_smith_work() -> None:
 
 def test_public_operation_example_crosses_the_json_request_boundary() -> None:
     operation = TOOLS[0]
-    request = HomogeneousMonomialSolutionRequest.model_validate(
-        operation.examples[0].input
+    request = HomogeneousMonomialSolutionRequest.model_validate_json(
+        json.dumps(operation.examples[0].input)
     )
 
     result = operation.run(request)
 
     assert isinstance(result, AlgebraicTorusSolutionSubgroup)
-    assert result.connected_component_count == "2"
+    assert result.connected_component_count == 2
     assert result.free_rank == 1
 
 
@@ -332,7 +327,7 @@ def test_exact_public_api_symbols() -> None:
 
 
 @pytest.mark.parametrize("entries", [[[2, 0], [0, 6]], [[2, 6, 0]], [[0, 0]]])
-def test_explicit_solution_verifier(entries: list[list[int | str]]) -> None:
+def test_explicit_solution_verifier(entries: list[list[int]]) -> None:
     from jacobian.math.algebraic_tori import verify_solution_subgroup
 
     result = homogeneous_monomial_solution_subgroup(_system(entries))
@@ -342,7 +337,7 @@ def test_explicit_solution_verifier(entries: list[list[int | str]]) -> None:
     payload = result.model_dump(mode="json")
     payload["connected_component_count"] = "97"
     assert not verify_solution_subgroup(
-        AlgebraicTorusSolutionSubgroup.model_validate(payload)
+        AlgebraicTorusSolutionSubgroup.model_validate_json(json.dumps(payload))
     )
 
 
@@ -354,5 +349,5 @@ def test_torsion_divisibility_remains_a_claim() -> None:
     payload["torsion_character_group"]["invariant_factors"] = ["2", "3"]
     payload["connected_component_count"] = "6"
     assert not verify_solution_subgroup(
-        AlgebraicTorusSolutionSubgroup.model_validate(payload)
+        AlgebraicTorusSolutionSubgroup.model_validate_json(json.dumps(payload))
     )

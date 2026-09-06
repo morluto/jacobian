@@ -1,5 +1,6 @@
 """Tests for configuration-level geometry operations (#2107, #2106)."""
 
+import json
 from fractions import Fraction
 
 import pytest
@@ -44,7 +45,7 @@ class TestGeneralPosition:
         assert result.has_concyclic_quadruple
         assert len(result.concyclic_quadruples) == 1
         assert result.concyclic_quadruples[0].indices == (0, 1, 2, 3)
-        assert type(result).model_validate(result.model_dump(mode="json")) == result
+        assert type(result).model_validate_json(result.model_dump_json()) == result
 
     def test_collinear_triple(self) -> None:
         """Three points on the x-axis are collinear."""
@@ -100,7 +101,9 @@ def test_point_predicate_claims_round_trip_and_reject_forged_sources() -> None:
 
     payload = collinear_claim.model_dump(mode="json")
     payload["third"] = _point("0", "1").model_dump(mode="json")
-    assert not verify_collinearity(type(collinear_claim).model_validate(payload))
+    assert not verify_collinearity(
+        type(collinear_claim).model_validate_json(json.dumps(payload))
+    )
 
     concyclic_claim = concyclic(
         PointQuadrupleRequest(
@@ -123,9 +126,9 @@ class TestCircumradiusProfile:
         assert result.num_points == 3
         assert len(result.entries) == 1
         assert not result.entries[0].is_degenerate
-        assert result.entries[0].radius_squared == CanonicalRational(num="1", den="2")
+        assert result.entries[0].radius_squared == CanonicalRational(num=1, den=2)
         assert result.entries[0].indices == (0, 1, 2)
-        assert type(result).model_validate(result.model_dump(mode="json")) == result
+        assert type(result).model_validate_json(result.model_dump_json()) == result
 
     def test_collinear_triple_degenerate(self) -> None:
         """Collinear triple is marked as degenerate."""

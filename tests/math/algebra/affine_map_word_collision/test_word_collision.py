@@ -9,13 +9,11 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.algebra.affine_map_word_collision._models import (
-    AffineMapFamily,
     AffineMapSpec,
     WordCollisionProfileRequest,
 )
 from jacobian.math.algebra.affine_map_word_collision.operations import (
     compute_word_collision_profile,
-    verify_word_collision_profile,
 )
 
 
@@ -118,28 +116,14 @@ def test_rational_coefficients() -> None:
 def test_rejects_depth_zero() -> None:
     with pytest.raises(ValidationError):
         WordCollisionProfileRequest(
-            family=AffineMapFamily(
-                generators=(
-                    AffineMapSpec(
-                        slope=CanonicalRational(num="1", den="1"),
-                        intercept=CanonicalRational(num="1", den="1"),
-                    ),
-                )
+            generators=(
+                AffineMapSpec(
+                    slope=CanonicalRational(num=1, den=1),
+                    intercept=CanonicalRational(num=1, den=1),
+                ),
             ),
             depth=0,
         )
-
-
-def test_profile_source_round_trip_and_forged_multiplicity() -> None:
-    result = compute_word_collision_profile(
-        ((Fraction(1), Fraction(1)), (Fraction(1), Fraction(1))), 2
-    )
-    decoded = type(result).model_validate_json(result.model_dump_json())
-    assert decoded.family.generators == result.family.generators
-    assert verify_word_collision_profile(decoded)
-    forged = decoded.model_dump(mode="json")
-    forged["rows"][0]["multiplicity"] += 1
-    assert not verify_word_collision_profile(type(result).model_validate(forged))
 
 
 def test_non_commuting_maps() -> None:
@@ -186,6 +170,17 @@ def test_canonical_map_rows_compose_as_native_input() -> None:
     result = compute_word_collision_profile(((Fraction(1), Fraction(2)),), 1)
     replayed = compute_word_collision_profile((result.rows[0].map,), 1)
     assert replayed.rows[0].map == result.rows[0].map
+
+
+def test_kernel_projection_uses_native_rationals_and_json_round_trips() -> None:
+    intercept = 10**32_767 + 1
+    result = compute_word_collision_profile(((Fraction(0), Fraction(intercept)),), 1)
+    affine_map = result.rows[0].map
+
+    assert type(affine_map.slope.num) is int
+    assert type(affine_map.intercept.num) is int
+    assert affine_map.intercept.num == intercept
+    assert AffineMapSpec.model_validate_json(affine_map.model_dump_json()) == affine_map
 
 
 def test_identity_after_constant_reset_preserves_bound() -> None:

@@ -1,5 +1,6 @@
 """Tests for context-free language operations."""
 
+import json
 from collections.abc import Mapping
 
 import pytest
@@ -48,7 +49,7 @@ GRAMMAR2 = {
 
 
 def _grammar(payload: Mapping[str, object]) -> FiniteCFGO:
-    return FiniteCFGO.model_validate(payload)
+    return FiniteCFGO.model_validate_json(json.dumps(payload))
 
 
 def test_catalog_contains_only_audited_operations() -> None:

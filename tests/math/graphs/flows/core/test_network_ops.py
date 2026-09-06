@@ -1,5 +1,6 @@
 """Tests for network optimization operations."""
 
+import json
 from collections.abc import Callable
 from fractions import Fraction
 from typing import Any, cast
@@ -35,20 +36,20 @@ def test_min_cost_flow_basic() -> None:
             CostedFlowEdge(
                 source=0,
                 target=1,
-                capacity=CanonicalRational(num="5", den="1"),
-                cost=CanonicalRational(num="1", den="1"),
+                capacity=CanonicalRational(num=5, den=1),
+                cost=CanonicalRational(num=1, den=1),
             ),
             CostedFlowEdge(
                 source=1,
                 target=2,
-                capacity=CanonicalRational(num="5", den="1"),
-                cost=CanonicalRational(num="2", den="1"),
+                capacity=CanonicalRational(num=5, den=1),
+                cost=CanonicalRational(num=2, den=1),
             ),
             CostedFlowEdge(
                 source=0,
                 target=2,
-                capacity=CanonicalRational(num="5", den="1"),
-                cost=CanonicalRational(num="4", den="1"),
+                capacity=CanonicalRational(num=5, den=1),
+                cost=CanonicalRational(num=4, den=1),
             ),
         ),
     )
@@ -66,20 +67,20 @@ def test_min_cost_flow_exact_rationals() -> None:
             CostedFlowEdge(
                 source=0,
                 target=1,
-                capacity=CanonicalRational(num="5", den="2"),
-                cost=CanonicalRational(num="1", den="3"),
+                capacity=CanonicalRational(num=5, den=2),
+                cost=CanonicalRational(num=1, den=3),
             ),
             CostedFlowEdge(
                 source=1,
                 target=2,
-                capacity=CanonicalRational(num="5", den="2"),
-                cost=CanonicalRational(num="2", den="3"),
+                capacity=CanonicalRational(num=5, den=2),
+                cost=CanonicalRational(num=2, den=3),
             ),
             CostedFlowEdge(
                 source=0,
                 target=2,
-                capacity=CanonicalRational(num="5", den="2"),
-                cost=CanonicalRational(num="4", den="3"),
+                capacity=CanonicalRational(num=5, den=2),
+                cost=CanonicalRational(num=4, den=3),
             ),
         ),
     )
@@ -99,20 +100,20 @@ def test_min_cost_flow_conservation() -> None:
             CostedFlowEdge(
                 source=0,
                 target=1,
-                capacity=CanonicalRational(num="5", den="1"),
-                cost=CanonicalRational(num="1", den="1"),
+                capacity=CanonicalRational(num=5, den=1),
+                cost=CanonicalRational(num=1, den=1),
             ),
             CostedFlowEdge(
                 source=1,
                 target=2,
-                capacity=CanonicalRational(num="5", den="1"),
-                cost=CanonicalRational(num="2", den="1"),
+                capacity=CanonicalRational(num=5, den=1),
+                cost=CanonicalRational(num=2, den=1),
             ),
             CostedFlowEdge(
                 source=0,
                 target=2,
-                capacity=CanonicalRational(num="5", den="1"),
-                cost=CanonicalRational(num="4", den="1"),
+                capacity=CanonicalRational(num=5, den=1),
+                cost=CanonicalRational(num=4, den=1),
             ),
         ),
     )
@@ -161,14 +162,14 @@ def test_min_cost_flow_infeasible() -> None:
             CostedFlowEdge(
                 source=0,
                 target=1,
-                capacity=CanonicalRational(num="1", den="1"),
-                cost=CanonicalRational(num="1", den="1"),
+                capacity=CanonicalRational(num=1, den=1),
+                cost=CanonicalRational(num=1, den=1),
             ),
             CostedFlowEdge(
                 source=1,
                 target=2,
-                capacity=CanonicalRational(num="1", den="1"),
-                cost=CanonicalRational(num="2", den="1"),
+                capacity=CanonicalRational(num=1, den=1),
+                cost=CanonicalRational(num=2, den=1),
             ),
         ),
     )
@@ -191,8 +192,8 @@ def test_min_cost_flow_fractional_capacity_below_demand_is_infeasible() -> None:
             CostedFlowEdge(
                 source=0,
                 target=1,
-                capacity=CanonicalRational(num="1", den="2"),
-                cost=CanonicalRational(num="1", den="3"),
+                capacity=CanonicalRational(num=1, den=2),
+                cost=CanonicalRational(num=1, den=3),
             ),
         ),
     )
@@ -210,8 +211,8 @@ def test_min_cost_flow_rational_flow_and_objective_use_distinct_scales() -> None
             CostedFlowEdge(
                 source=0,
                 target=1,
-                capacity=CanonicalRational(num="3", den="2"),
-                cost=CanonicalRational(num="2", den="3"),
+                capacity=CanonicalRational(num=3, den=2),
+                cost=CanonicalRational(num=2, den=3),
             ),
         ),
     )
@@ -231,14 +232,14 @@ def test_min_cost_flow_mixed_capacity_and_cost_denominators() -> None:
             CostedFlowEdge(
                 source=0,
                 target=1,
-                capacity=CanonicalRational(num="3", den="2"),
-                cost=CanonicalRational(num="2", den="3"),
+                capacity=CanonicalRational(num=3, den=2),
+                cost=CanonicalRational(num=2, den=3),
             ),
             CostedFlowEdge(
                 source=1,
                 target=2,
-                capacity=CanonicalRational(num="5", den="3"),
-                cost=CanonicalRational(num="4", den="5"),
+                capacity=CanonicalRational(num=5, den=3),
+                cost=CanonicalRational(num=4, den=5),
             ),
         ),
     )
@@ -262,20 +263,20 @@ def _two_path_graph() -> CostedFlowGraph:
             CostedFlowEdge(
                 source=0,
                 target=1,
-                capacity=CanonicalRational(num="5", den="2"),
-                cost=CanonicalRational(num="1", den="3"),
+                capacity=CanonicalRational(num=5, den=2),
+                cost=CanonicalRational(num=1, den=3),
             ),
             CostedFlowEdge(
                 source=0,
                 target=2,
-                capacity=CanonicalRational(num="5", den="1"),
-                cost=CanonicalRational(num="4", den="1"),
+                capacity=CanonicalRational(num=5, den=1),
+                cost=CanonicalRational(num=4, den=1),
             ),
             CostedFlowEdge(
                 source=2,
                 target=1,
-                capacity=CanonicalRational(num="5", den="1"),
-                cost=CanonicalRational(num="1", den="1"),
+                capacity=CanonicalRational(num=5, den=1),
+                cost=CanonicalRational(num=1, den=1),
             ),
         ),
     )
@@ -286,20 +287,20 @@ def test_min_cost_flow_parsing_is_structural() -> None:
     request = MinCostFlowRequest(graph=_two_path_graph(), demands=(-2, 2, 0))
     result = compute_min_cost_flow(request)
     assert result.feasible is True
-    dumped = result.model_dump()
-    assert MinCostFlowResult.model_validate(dumped) == result
+    dumped = json.loads(result.model_dump_json())
+    assert MinCostFlowResult.model_validate_json(json.dumps(dumped)) == result
 
-    forged_payload = result.model_dump()
+    forged_payload = json.loads(result.model_dump_json())
     forged_payload["graph"]["edges"][0]["capacity"] = {
         "num": "1",
         "den": "1",
     }
-    forged = MinCostFlowResult.model_validate(forged_payload)
+    forged = MinCostFlowResult.model_validate_json(json.dumps(forged_payload))
     assert forged.graph.edges[0].capacity != result.graph.edges[0].capacity
 
-    forged_payload = result.model_dump()
+    forged_payload = json.loads(result.model_dump_json())
     forged_payload["total_cost"] = {"num": "9999", "den": "1"}
-    forged = MinCostFlowResult.model_validate(forged_payload)
+    forged = MinCostFlowResult.model_validate_json(json.dumps(forged_payload))
     assert forged.total_cost != result.total_cost
 
 
@@ -328,12 +329,12 @@ def test_min_cost_flow_result_parser_retains_structural_checks() -> None:
     result = compute_min_cost_flow(
         MinCostFlowRequest(graph=_two_path_graph(), demands=(-2, 2, 0))
     )
-    dumped = result.model_dump()
+    dumped = json.loads(result.model_dump_json())
     shrunk = dict(dumped)
     shrunk["graph"]["edges"][0]["capacity"] = {"num": "1", "den": "1"}
-    assert MinCostFlowResult.model_validate(shrunk).graph.edges[
+    assert MinCostFlowResult.model_validate_json(json.dumps(shrunk)).graph.edges[
         0
-    ].capacity == CanonicalRational(num="1", den="1")
+    ].capacity == CanonicalRational(num=1, den=1)
 
     malformed = dict(dumped)
     malformed["demands"] = [0]
@@ -346,7 +347,7 @@ def test_min_cost_flow_infeasible_result_carries_no_claim() -> None:
         MinCostFlowResult(
             graph=_two_path_graph(),
             demands=(-2, 2, 0),
-            total_cost=CanonicalRational(num="7", den="1"),
+            total_cost=CanonicalRational(num=7, den=1),
             feasible=False,
         )
 
@@ -364,8 +365,8 @@ def test_min_cost_flow_derived_scale_admission_fails_closed() -> None:
         CostedFlowEdge(
             source=source,
             target=target,
-            capacity=CanonicalRational(num="1", den=str(prime**3)),
-            cost=CanonicalRational(num="1", den="1"),
+            capacity=CanonicalRational(num=1, den=prime**3),
+            cost=CanonicalRational(num=1, den=1),
         )
         for (source, target), prime in zip(pairs, primes, strict=True)
     )

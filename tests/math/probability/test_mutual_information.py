@@ -30,7 +30,9 @@ def test_request_accepts_json_array_wire_shapes_with_raw_bound_validator() -> No
         "log_base": 2,
     }
 
-    from_python = FiniteJointTableMutualInformationRequest.model_validate(payload)
+    from_python = FiniteJointTableMutualInformationRequest.model_validate_json(
+        json.dumps(payload)
+    )
     from_json = FiniteJointTableMutualInformationRequest.model_validate_json(
         json.dumps(payload),
         strict=True,
@@ -48,7 +50,9 @@ def test_request_rejects_oversized_outer_table_before_cell_parsing() -> None:
     }
 
     with pytest.raises(ValidationError):
-        FiniteJointTableMutualInformationRequest.model_validate(payload)
+        FiniteJointTableMutualInformationRequest.model_validate_json(
+            json.dumps(payload)
+        )
 
 
 def test_request_rejects_oversized_cell_product_before_cell_parsing() -> None:
@@ -73,7 +77,9 @@ def test_request_rejects_oversized_cell_product_before_cell_parsing() -> None:
     }
 
     with pytest.raises(ValidationError):
-        FiniteJointTableMutualInformationRequest.model_validate(payload)
+        FiniteJointTableMutualInformationRequest.model_validate_json(
+            json.dumps(payload)
+        )
 
 
 def _candidate() -> dict[str, object]:

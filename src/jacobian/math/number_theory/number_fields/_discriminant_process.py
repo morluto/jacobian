@@ -15,6 +15,7 @@ from jacobian._execution import (
 from jacobian.canonical import (
     CanonicalizationError,
     encode_strict_json,
+    format_canonical_integer,
     loads_strict_json,
     parse_canonical_integer,
 )
@@ -43,7 +44,8 @@ def compute_nf_discriminant(
     input_bytes = encode_strict_json(request.model_dump(mode="json"))
     degree = len(request.field.coefficients_descending) - 1
     coefficient_digits = max(
-        len(value.lstrip("-")) for value in request.field.coefficients_descending
+        len(format_canonical_integer(abs(value)))
+        for value in request.field.coefficients_descending
     )
     discriminant_digits = max(1, (2 * degree - 1) * coefficient_digits + 4 * degree)
     stdout_limit = len(

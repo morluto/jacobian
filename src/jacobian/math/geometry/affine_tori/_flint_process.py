@@ -68,7 +68,7 @@ def _worker_input(source: RationalAffineTorusMap) -> bytes:
     payload = {
         "protocol_version": _PROTOCOL_VERSION,
         "dimension": source.torus.dimension,
-        "linear_part": [list(row) for row in source.linear_part.entries],
+        "linear_part": source.linear_part.model_dump(mode="json")["entries"],
         "translation": [
             coordinate.model_dump(mode="json")
             for coordinate in source.translation.coordinates

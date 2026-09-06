@@ -14,6 +14,7 @@ from jacobian._execution import (
     current_request_execution,
     request_checkpoint,
 )
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.combinatorics.matroids.rational_flats._models import (
     MAX_RATIONAL_FLAT_CLAUSE_MEMBERSHIPS,
     MAX_RATIONAL_FLAT_GROUP_ORDER,
@@ -211,7 +212,8 @@ def _require_component_digits(problem: ClauseConstrainedRationalFlatProblem) -> 
     ):
         for entry in matrix.entries:
             if any(
-                len(component.lstrip("-")) > MAX_RATIONAL_FLAT_INPUT_COMPONENT_DIGITS
+                len(format_canonical_integer(component))
+                > MAX_RATIONAL_FLAT_INPUT_COMPONENT_DIGITS
                 for component in (entry.value.num, entry.value.den)
             ):
                 raise _validation_error(
@@ -231,7 +233,7 @@ def _minor_digit_bound(
         return 1
     row_digits = sorted(
         (
-            max(1, max(len(str(abs(value))) for value in row))
+            max(1, max(len(format_canonical_integer(abs(value))) for value in row))
             for row in candidate_rows
             if any(row)
         ),
@@ -243,12 +245,15 @@ def _minor_digit_bound(
     # Leibniz expansion bounds every rank minor by rank! times the product of
     # one entry bound from each selected row.  This also bounds RREF ratios of
     # adjacent maximal minors and the canonical annihilator coordinates.
-    return sum(row_digits[:rank]) + len(str(factorial(rank))) + 1
+    return sum(row_digits[:rank]) + len(format_canonical_integer(factorial(rank))) + 1
 
 
 def _largest_row_component_digits(rows: tuple[IntegerRow, ...]) -> int:
     return max(
-        (max(1, max(len(str(abs(value))) for value in row)) for row in rows),
+        (
+            max(1, max(len(format_canonical_integer(abs(value))) for value in row))
+            for row in rows
+        ),
         default=1,
     )
 
@@ -427,7 +432,7 @@ def _representative_encoding_work(
     scalar_bytes = 2 * minor_digits + 96
     return (
         4_096
-        + candidate_count * (len(str(max(candidate_count, 1))) + 3)
+        + candidate_count * (len(format_canonical_integer(max(candidate_count, 1))) + 3)
         + 2 * ambient_dimension * ambient_dimension * scalar_bytes
     )
 

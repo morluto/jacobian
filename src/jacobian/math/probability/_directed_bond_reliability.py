@@ -10,7 +10,6 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -340,8 +339,8 @@ class DirectedBondConnectionProbabilityResult(StrictModel):
 
 def _wire(value: Any) -> CanonicalRational:
     return CanonicalRational(
-        num=format_canonical_integer(int(value.p)),
-        den=format_canonical_integer(int(value.q)),
+        num=int(value.p),
+        den=int(value.q),
     )
 
 

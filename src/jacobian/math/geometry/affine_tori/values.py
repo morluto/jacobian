@@ -9,8 +9,8 @@ from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
-    CanonicalInteger,
     CanonicalRational,
+    ExactInteger,
     require_bounded_rational,
 )
 from jacobian._models import StrictModel, canonicalize_json_containers
@@ -447,7 +447,7 @@ class IntegralTorusCharacter(StrictModel):
     """
 
     torus: StandardRealTorus
-    coefficients: tuple[CanonicalInteger, ...] = Field(
+    coefficients: tuple[ExactInteger, ...] = Field(
         min_length=1, max_length=MAX_AFFINE_TORUS_DIMENSION
     )
 
@@ -489,13 +489,13 @@ class FiniteTorusComponentPresentation(StrictModel):
 
     generator_count: StrictInt = Field(ge=0, le=MAX_AFFINE_TORUS_DIMENSION)
     relation_matrix: IntegerMatrix
-    generator_orders: tuple[CanonicalInteger, ...] = Field(
+    generator_orders: tuple[ExactInteger, ...] = Field(
         max_length=MAX_AFFINE_TORUS_DIMENSION
     )
-    invariant_factors: tuple[CanonicalInteger, ...] = Field(
+    invariant_factors: tuple[ExactInteger, ...] = Field(
         max_length=MAX_AFFINE_TORUS_DIMENSION
     )
-    component_count: CanonicalInteger
+    component_count: ExactInteger
 
     @model_validator(mode="after")
     def require_finite_presentation_metadata(self) -> Self:

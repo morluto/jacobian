@@ -5,13 +5,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictBool, StringConstraints, model_validator
+from pydantic import Field, StrictBool, model_validator
 from pydantic.json_schema import WithJsonSchema
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import DecimalIntegerEncoding, ExactInteger
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive._subset_sum_target_kernel import (
     SubsetSumWorkLimitError,
@@ -30,12 +30,7 @@ MAX_SUBSET_SUM_SOURCE_CHARACTERS = 4 * 1024 * 1024
 MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS = 262
 
 _SubsetSumTargetScalar = Annotated[
-    str,
-    StringConstraints(
-        pattern=rf"^(?:0|-?[1-9][0-9]{{0,{MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS - 1}}})$",
-        strict=True,
-        max_length=MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS + 1,
-    ),
+    int, DecimalIntegerEncoding(max_digits=MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS)
 ]
 """Canonical signed integer whose magnitude carries at most 262 digits.
 
@@ -183,7 +178,7 @@ class SubsetSumTargetResult(StrictModel):
             "The canonical attaining index subset exactly when status is ATTAINED."
         ),
     )
-    reconstructed_sum: CanonicalInteger | None = Field(
+    reconstructed_sum: ExactInteger | None = Field(
         default=None,
         description="The exact sum reconstructed from an attaining witness.",
     )
@@ -273,7 +268,7 @@ class SubsetSumTargetResult(StrictModel):
     def _from_kernel(
         cls,
         source: IndexedIntegerSequence,
-        target: CanonicalInteger,
+        target: ExactInteger,
         allow_empty_subset: bool,
         indices: tuple[int, ...] | None,
     ) -> Self:
@@ -288,22 +283,20 @@ class SubsetSumTargetResult(StrictModel):
                 witness=None,
                 reconstructed_sum=None,
             )
-        values = tuple(parse_canonical_integer(value) for value in source.items)
+        values = source.items
         return cls.model_construct(
             source=source,
             target=target,
             allow_empty_subset=allow_empty_subset,
             status="ATTAINED",
             witness=IndexSubset(indices=indices),
-            reconstructed_sum=format_canonical_integer(
-                sum(values[index] for index in indices)
-            ),
+            reconstructed_sum=sum(values[index] for index in indices),
         )
 
 
 def solve_subset_sum_target(
     source: IndexedIntegerSequence,
-    target: CanonicalInteger,
+    target: ExactInteger,
     allow_empty_subset: bool,
 ) -> SubsetSumTargetResult:
     """Decide one admitted exact target and return its canonical witness."""
@@ -351,7 +344,7 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 def _admit_subset_sum_target(
     source: IndexedIntegerSequence,
-    target: CanonicalInteger,
+    target: ExactInteger,
     allow_empty_subset: bool,
 ) -> tuple[tuple[int, ...], int]:
     """Admit one native target query before invoking the subset-sum kernel."""
@@ -362,13 +355,16 @@ def _admit_subset_sum_target(
             code="additive_combinatorics.subset_sum.source_domain",
             message="subset-sum source must be an IndexedIntegerSequence",
         )
-    if type(target) is not str or type(allow_empty_subset) is not bool:
+    if type(target) is not int or type(allow_empty_subset) is not bool:
         raise OperationDomainValidationError(
             location=("target", "allow_empty_subset"),
             code="additive_combinatorics.subset_sum.argument_domain",
-            message="subset-sum target must be canonical text and the flag a boolean",
+            message="subset-sum target must be a native integer and the flag a boolean",
         )
-    source_characters = sum(map(len, source.items))
+    source_characters = sum(
+        len(format_canonical_integer(abs(value))) + (value < 0)
+        for value in source.items
+    )
     if source_characters > MAX_SUBSET_SUM_SOURCE_CHARACTERS:
         raise OperationDomainValidationError(
             location=("source",),
@@ -379,7 +375,7 @@ def _admit_subset_sum_target(
             ),
         )
     for value in source.items:
-        if len(value.lstrip("-")) > MAX_SUBSET_SUM_INTEGER_DIGITS:
+        if abs(value) >= 10**MAX_SUBSET_SUM_INTEGER_DIGITS:
             raise OperationDomainValidationError(
                 location=("source",),
                 code="additive_combinatorics.subset_sum.integer_bound",
@@ -388,6 +384,6 @@ def _admit_subset_sum_target(
                     f"{MAX_SUBSET_SUM_INTEGER_DIGITS}-digit bound"
                 ),
             )
-    values = tuple(parse_canonical_integer(value) for value in source.items)
-    target_value = parse_canonical_integer(target)
+    values = source.items
+    target_value = target
     return values, target_value

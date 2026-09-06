@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, ValidationInfo, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
@@ -56,7 +56,7 @@ class ZeroSumAtomSource(StrictModel):
 
     @model_validator(mode="before")
     @classmethod
-    def bound_raw_source(cls, value: object) -> object:
+    def bound_raw_source(cls, value: object, info: ValidationInfo) -> object:
         if not isinstance(value, Mapping):
             return value
         if any(key not in {"group", "elements"} for key in value):
@@ -79,10 +79,11 @@ class ZeroSumAtomSource(StrictModel):
                         "zero_sum_atom_source_rank",
                         "group axes exceed the raw retained-coordinate envelope",
                     )
-                if any(type(modulus) is not int for modulus in raw_moduli):
+                scalar_type = str if info.mode == "json" else int
+                if any(type(modulus) is not scalar_type for modulus in raw_moduli):
                     raise _validation_error(
                         "zero_sum_atom_source_moduli",
-                        "group moduli must be integer scalars",
+                        "group moduli must be integer scalars (canonical decimal strings in JSON)",
                     )
                 group["moduli"] = tuple(raw_moduli)
             prepared["group"] = group

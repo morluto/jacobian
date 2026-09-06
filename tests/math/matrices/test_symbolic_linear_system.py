@@ -44,7 +44,7 @@ def _rf(
             "numerator": {
                 "terms": [
                     {
-                        "coefficient": {"num": str(c), "den": "1"},
+                        "coefficient": {"num": c, "den": 1},
                         "exponents": list(e),
                     }
                     for c, e in numerator_terms
@@ -53,7 +53,7 @@ def _rf(
             "denominator": {
                 "terms": [
                     {
-                        "coefficient": {"num": "1", "den": "1"},
+                        "coefficient": {"num": 1, "den": 1},
                         "exponents": [0] * len(variables),
                     }
                 ]
@@ -142,7 +142,7 @@ class TestSymbolicLinearSystem:
         result = _run_linear_system(req)
         assert result.classification == "UNIQUE"
         assert result.solution is not None
-        assert result.solution[0].numerator.terms[0].coefficient.num == "1"
+        assert result.solution[0].numerator.terms[0].coefficient.num == 1
 
     def test_inconsistent_system(self) -> None:
         """Solve [[1], [1]] * x = [1, 2] -> INCONSISTENT."""
@@ -192,7 +192,7 @@ class TestSymbolicLinearSystem:
         assert result.solution is not None
         # Solution should be 3
         sol = result.solution[0]
-        assert sol.numerator.terms[0].coefficient.num == "3"
+        assert sol.numerator.terms[0].coefficient.num == 3
 
     def test_rational_function_rhs(self) -> None:
         """Solve [[1]] * x = [1/t] -> x = 1/t."""
@@ -207,7 +207,7 @@ class TestSymbolicLinearSystem:
                 "numerator": {
                     "terms": [
                         {
-                            "coefficient": {"num": "1", "den": "1"},
+                            "coefficient": {"num": 1, "den": 1},
                             "exponents": [0],
                         }
                     ]
@@ -215,7 +215,7 @@ class TestSymbolicLinearSystem:
                 "denominator": {
                     "terms": [
                         {
-                            "coefficient": {"num": "1", "den": "1"},
+                            "coefficient": {"num": 1, "den": 1},
                             "exponents": [1],
                         }
                     ]
@@ -237,7 +237,7 @@ class TestSymbolicLinearSystem:
                 "numerator": {
                     "terms": [
                         {
-                            "coefficient": {"num": "1", "den": "1"},
+                            "coefficient": {"num": 1, "den": 1},
                             "exponents": [1],
                         }
                     ]
@@ -245,7 +245,7 @@ class TestSymbolicLinearSystem:
                 "denominator": {
                     "terms": [
                         {
-                            "coefficient": {"num": "1", "den": "1"},
+                            "coefficient": {"num": 1, "den": 1},
                             "exponents": [1],
                         }
                     ]
@@ -271,14 +271,10 @@ class TestSolutionGrowthAdmission:
             {
                 "variables": ["t"],
                 "numerator": {
-                    "terms": [
-                        {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]}
-                    ]
+                    "terms": [{"coefficient": {"num": 1, "den": 1}, "exponents": [0]}]
                 },
                 "denominator": {
-                    "terms": [
-                        {"coefficient": {"num": "1", "den": "1"}, "exponents": [64]}
-                    ]
+                    "terms": [{"coefficient": {"num": 1, "den": 1}, "exponents": [64]}]
                 },
             }
         )
@@ -295,7 +291,7 @@ class TestSolutionGrowthAdmission:
 
         def rf(num: int, den: int) -> RationalFunction:
             terms = (
-                [{"coefficient": {"num": str(num), "den": str(den)}, "exponents": [0]}]
+                [{"coefficient": {"num": num, "den": den}, "exponents": [0]}]
                 if num != 0
                 else []
             )
@@ -305,7 +301,7 @@ class TestSolutionGrowthAdmission:
                     "numerator": {"terms": terms},
                     "denominator": {
                         "terms": [
-                            {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]}
+                            {"coefficient": {"num": 1, "den": 1}, "exponents": [0]}
                         ]
                     },
                 }
@@ -326,7 +322,7 @@ class TestSolutionGrowthAdmission:
 
         def rf(num: int, den: int) -> RationalFunction:
             terms = (
-                [{"coefficient": {"num": str(num), "den": str(den)}, "exponents": [0]}]
+                [{"coefficient": {"num": num, "den": den}, "exponents": [0]}]
                 if num != 0
                 else []
             )
@@ -336,7 +332,7 @@ class TestSolutionGrowthAdmission:
                     "numerator": {"terms": terms},
                     "denominator": {
                         "terms": [
-                            {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]}
+                            {"coefficient": {"num": 1, "den": 1}, "exponents": [0]}
                         ]
                     },
                 }
@@ -378,7 +374,7 @@ class TestAdmissionWorkBounding:
         assert result.solution is not None
         assert all(
             value.numerator.terms == ()
-            and value.denominator.terms[0].coefficient.num == "1"
+            and value.denominator.terms[0].coefficient.num == 1
             for value in result.solution
         )
         revalidated = SymbolicLinearSystemResult.model_validate(result.model_dump())
@@ -525,14 +521,10 @@ class TestNativeSystemAdmission:
             {
                 "variables": ["t"],
                 "numerator": {
-                    "terms": [
-                        {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]}
-                    ]
+                    "terms": [{"coefficient": {"num": 1, "den": 1}, "exponents": [0]}]
                 },
                 "denominator": {
-                    "terms": [
-                        {"coefficient": {"num": "1", "den": "1"}, "exponents": [64]}
-                    ]
+                    "terms": [{"coefficient": {"num": 1, "den": 1}, "exponents": [64]}]
                 },
             }
         )
@@ -560,7 +552,7 @@ class TestNonUniqueWitnessEquivalence:
     def _non_unique_result() -> SymbolicLinearSystemResult:
         def rf(num: int, den: int) -> RationalFunction:
             terms = (
-                [{"coefficient": {"num": str(num), "den": str(den)}, "exponents": [0]}]
+                [{"coefficient": {"num": num, "den": den}, "exponents": [0]}]
                 if num != 0
                 else []
             )
@@ -572,7 +564,7 @@ class TestNonUniqueWitnessEquivalence:
                     "denominator": {
                         "terms": [
                             {
-                                "coefficient": {"num": "1", "den": "1"},
+                                "coefficient": {"num": 1, "den": 1},
                                 "exponents": [0],
                             }
                         ]

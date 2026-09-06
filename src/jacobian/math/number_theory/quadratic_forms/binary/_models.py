@@ -8,7 +8,6 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.matrices.values import IntegerMatrix
 
 MAX_COEFFICIENT = 10**6
@@ -443,20 +442,15 @@ class ProperFormChangeOfVariables(StrictModel):
         return cls(
             source=source,
             target=target,
-            matrix=IntegerMatrix(
-                entries=tuple(
-                    tuple(format_canonical_integer(value) for value in row)
-                    for row in rows
-                )
-            ),
+            matrix=IntegerMatrix(entries=rows),
         )
 
     @property
     def rows(self) -> tuple[tuple[int, int], tuple[int, int]]:
         first, second = self.matrix.entries
         return (
-            (parse_canonical_integer(first[0]), parse_canonical_integer(first[1])),
-            (parse_canonical_integer(second[0]), parse_canonical_integer(second[1])),
+            (first[0], first[1]),
+            (second[0], second[1]),
         )
 
 

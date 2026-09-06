@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from itertools import pairwise
 
 import pytest
@@ -164,7 +165,7 @@ def test_result_parsing_stays_structural(payload_update: dict) -> None:
         **payload_update,
     }
     with pytest.raises(ValidationError):
-        PathDecompositionResult.model_validate(payload)
+        PathDecompositionResult.model_validate_json(json.dumps(payload))
 
 
 @pytest.mark.parametrize(
@@ -196,5 +197,5 @@ def test_serialized_partition_claim_round_trip() -> None:
     payload["paths"] = []
     payload["path_count"] = 0
     assert not verify_path_decomposition(
-        PathDecompositionResult.model_validate(payload)
+        PathDecompositionResult.model_validate_json(json.dumps(payload))
     )

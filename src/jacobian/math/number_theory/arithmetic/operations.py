@@ -5,8 +5,7 @@ from fractions import Fraction
 from math import ceil, floor, gcd, isqrt, lcm
 from typing import SupportsIndex
 
-from jacobian._exact import CanonicalInteger
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._divisibility_models import ExtendedGcdResult
 from jacobian.math.number_theory._integer_models import BooleanResult
@@ -74,13 +73,11 @@ __all__ = [
 ]
 
 
-def _as_python_integer(value: SupportsIndex | CanonicalInteger | IntegerValue) -> int:
+def _as_python_integer(value: SupportsIndex | IntegerValue) -> int:
     """Return one admitted integer input as its Python integer value."""
 
     if isinstance(value, IntegerValue):
-        return parse_canonical_integer(value.value)
-    if isinstance(value, str):
-        return parse_canonical_integer(value)
+        return value.value
     return value.__index__()
 
 
@@ -121,17 +118,17 @@ def perfect_power_profile(value: IntegerValue) -> PerfectPowerProfileResult:
 
     return PerfectPowerProfileResult(
         kind="NONUNIT",
-        base=format_canonical_integer(base),
+        base=base,
         exponent=exponent,
         is_nontrivial_perfect_power=exponent > 1,
         factors=tuple(
             PrimeExponentRow(
-                prime=format_canonical_integer(prime),
+                prime=prime,
                 power=prime_exponent,
             )
             for prime, prime_exponent in prime_exps
         ),
-        reconstruction=format_canonical_integer(integer),
+        reconstruction=integer,
     )
 
 
@@ -169,7 +166,7 @@ def k_free_decomposition(value: IntegerValue, k: int) -> KFreeDecompositionResul
             cofactor_abs *= prime**remainder
         rows.append(
             PrimeExponentRow(
-                prime=format_canonical_integer(prime),
+                prime=prime,
                 power=exponent,
             )
         )
@@ -179,10 +176,10 @@ def k_free_decomposition(value: IntegerValue, k: int) -> KFreeDecompositionResul
 
     return KFreeDecompositionResult(
         kind="NONUNIT",
-        base=format_canonical_integer(base_value),
-        cofactor=format_canonical_integer(cofactor),
+        base=base_value,
+        cofactor=cofactor,
         factors=tuple(rows),
-        reconstruction=format_canonical_integer(integer),
+        reconstruction=integer,
     )
 
 
@@ -210,7 +207,7 @@ def squarefree_decomposition(value: IntegerValue) -> SquarefreeDecompositionResu
             squarefree_abs *= prime
         rows.append(
             PrimeExponentRow(
-                prime=format_canonical_integer(prime),
+                prime=prime,
                 power=exponent,
             )
         )
@@ -220,10 +217,10 @@ def squarefree_decomposition(value: IntegerValue) -> SquarefreeDecompositionResu
 
     return SquarefreeDecompositionResult(
         kind="NONUNIT",
-        square_factor=format_canonical_integer(square_factor),
-        squarefree_part=format_canonical_integer(squarefree_part),
+        square_factor=square_factor,
+        squarefree_part=squarefree_part,
         factors=tuple(rows),
-        reconstruction=format_canonical_integer(integer),
+        reconstruction=integer,
     )
 
 
@@ -242,11 +239,11 @@ def normalized_quadratic_radical(
 
     if integer == 0:
         return NormalizedQuadraticRadicalResult(
-            kind="ZERO", coefficient="0", radicand="1", reconstruction="0"
+            kind="ZERO", coefficient=0, radicand=1, reconstruction=0
         )
     if integer == 1:
         return NormalizedQuadraticRadicalResult(
-            kind="RATIONAL_INTEGER", coefficient="1", radicand="1", reconstruction="1"
+            kind="RATIONAL_INTEGER", coefficient=1, radicand=1, reconstruction=1
         )
 
     prime_exps = _factorize_abs(integer)
@@ -262,41 +259,33 @@ def normalized_quadratic_radical(
     assert coefficient**2 * radicand == integer
     return NormalizedQuadraticRadicalResult(
         kind="RATIONAL_INTEGER" if radicand == 1 else "IRRATIONAL_QUADRATIC",
-        coefficient=format_canonical_integer(coefficient),
-        radicand=format_canonical_integer(radicand),
-        reconstruction=format_canonical_integer(integer),
+        coefficient=coefficient,
+        radicand=radicand,
+        reconstruction=integer,
     )
 
 
 def integer_gcd(
-    left: SupportsIndex | CanonicalInteger | IntegerValue,
-    right: SupportsIndex | CanonicalInteger | IntegerValue,
+    left: SupportsIndex | IntegerValue,
+    right: SupportsIndex | IntegerValue,
 ) -> IntegerValue:
     """Return the nonnegative greatest common divisor of two integers."""
 
-    return IntegerValue(
-        value=format_canonical_integer(
-            gcd(_as_python_integer(left), _as_python_integer(right))
-        )
-    )
+    return IntegerValue(value=gcd(_as_python_integer(left), _as_python_integer(right)))
 
 
 def integer_lcm(
-    left: SupportsIndex | CanonicalInteger | IntegerValue,
-    right: SupportsIndex | CanonicalInteger | IntegerValue,
+    left: SupportsIndex | IntegerValue,
+    right: SupportsIndex | IntegerValue,
 ) -> IntegerValue:
     """Return the nonnegative least common multiple of two integers."""
 
-    return IntegerValue(
-        value=format_canonical_integer(
-            lcm(_as_python_integer(left), _as_python_integer(right))
-        )
-    )
+    return IntegerValue(value=lcm(_as_python_integer(left), _as_python_integer(right)))
 
 
 def extended_gcd(
-    left: SupportsIndex | CanonicalInteger | IntegerValue,
-    right: SupportsIndex | CanonicalInteger | IntegerValue,
+    left: SupportsIndex | IntegerValue,
+    right: SupportsIndex | IntegerValue,
 ) -> ExtendedGcdResult:
     """Return a gcd and exact Bezout coefficients for two integers."""
 
@@ -306,15 +295,15 @@ def extended_gcd(
     right_value = _as_python_integer(right)
     x, y, divisor = gcdex(left_value, right_value)
     return ExtendedGcdResult(
-        gcd=format_canonical_integer(int(divisor)),
-        left_coefficient=format_canonical_integer(int(x)),
-        right_coefficient=format_canonical_integer(int(y)),
+        gcd=int(divisor),
+        left_coefficient=int(x),
+        right_coefficient=int(y),
     )
 
 
 def prime_valuation(
-    value: SupportsIndex | CanonicalInteger | IntegerValue,
-    prime: SupportsIndex | CanonicalInteger | IntegerValue,
+    value: SupportsIndex | IntegerValue,
+    prime: SupportsIndex | IntegerValue,
 ) -> IntegerValue:
     """Return the exponent of a prime in one nonzero integer."""
 
@@ -334,12 +323,10 @@ def prime_valuation(
             code="number_theory.valuation_requires_a_prime_absolute_base_2",
             message="valuation requires a prime absolute base >= 2",
         )
-    return IntegerValue(
-        value=format_canonical_integer(multiplicity(prime_value, abs(integer)))
-    )
+    return IntegerValue(value=multiplicity(prime_value, abs(integer)))
 
 
-def _positive_integer(value: SupportsIndex | CanonicalInteger | IntegerValue) -> int:
+def _positive_integer(value: SupportsIndex | IntegerValue) -> int:
     integer = _as_python_integer(value)
     if integer <= 0:
         raise OperationDomainValidationError(
@@ -351,43 +338,35 @@ def _positive_integer(value: SupportsIndex | CanonicalInteger | IntegerValue) ->
 
 
 def divisor_count(
-    value: SupportsIndex | CanonicalInteger | IntegerValue,
+    value: SupportsIndex | IntegerValue,
 ) -> IntegerValue:
     """Return the number of positive divisors of a positive integer."""
 
     from sympy import divisor_count as sympy_divisor_count
 
-    return IntegerValue(
-        value=format_canonical_integer(
-            int(sympy_divisor_count(_positive_integer(value)))
-        )
-    )
+    return IntegerValue(value=int(sympy_divisor_count(_positive_integer(value))))
 
 
-def divisor_sum(value: SupportsIndex | CanonicalInteger | IntegerValue) -> IntegerValue:
+def divisor_sum(value: SupportsIndex | IntegerValue) -> IntegerValue:
     """Return the sum of the positive divisors of a positive integer."""
 
     from sympy import divisor_sigma
 
-    return IntegerValue(
-        value=format_canonical_integer(int(divisor_sigma(_positive_integer(value))))
-    )
+    return IntegerValue(value=int(divisor_sigma(_positive_integer(value))))
 
 
-def aliquot_sum(value: SupportsIndex | CanonicalInteger | IntegerValue) -> IntegerValue:
+def aliquot_sum(value: SupportsIndex | IntegerValue) -> IntegerValue:
     """Return the sum of the proper positive divisors of a positive integer."""
 
     integer = _positive_integer(value)
     from sympy import divisor_sigma
 
-    return IntegerValue(
-        value=format_canonical_integer(int(divisor_sigma(integer)) - integer)
-    )
+    return IntegerValue(value=int(divisor_sigma(integer)) - integer)
 
 
 def are_coprime(
-    left: SupportsIndex | CanonicalInteger | IntegerValue,
-    right: SupportsIndex | CanonicalInteger | IntegerValue,
+    left: SupportsIndex | IntegerValue,
+    right: SupportsIndex | IntegerValue,
 ) -> BooleanResult:
     """Return whether two integers are coprime."""
 
@@ -397,8 +376,8 @@ def are_coprime(
 
 
 def divides(
-    divisor: SupportsIndex | CanonicalInteger | IntegerValue,
-    dividend: SupportsIndex | CanonicalInteger | IntegerValue,
+    divisor: SupportsIndex | IntegerValue,
+    dividend: SupportsIndex | IntegerValue,
 ) -> BooleanResult:
     """Return whether one nonzero integer divides another."""
 
@@ -412,19 +391,19 @@ def divides(
     return BooleanResult(holds=_as_python_integer(dividend) % divisor_value == 0)
 
 
-def is_even(value: SupportsIndex | CanonicalInteger | IntegerValue) -> BooleanResult:
+def is_even(value: SupportsIndex | IntegerValue) -> BooleanResult:
     """Return whether an integer is even."""
 
     return BooleanResult(holds=_as_python_integer(value) % 2 == 0)
 
 
-def is_odd(value: SupportsIndex | CanonicalInteger | IntegerValue) -> BooleanResult:
+def is_odd(value: SupportsIndex | IntegerValue) -> BooleanResult:
     """Return whether an integer is odd."""
 
     return BooleanResult(holds=_as_python_integer(value) % 2 != 0)
 
 
-def is_square(value: SupportsIndex | CanonicalInteger | IntegerValue) -> BooleanResult:
+def is_square(value: SupportsIndex | IntegerValue) -> BooleanResult:
     """Return whether a nonnegative integer is a square."""
 
     integer = _as_python_integer(value)
@@ -438,7 +417,7 @@ def is_square(value: SupportsIndex | CanonicalInteger | IntegerValue) -> Boolean
 
 
 def _aliquot_relation(
-    value: SupportsIndex | CanonicalInteger | IntegerValue,
+    value: SupportsIndex | IntegerValue,
 ) -> tuple[int, int]:
     from sympy import divisor_sigma
 
@@ -452,7 +431,7 @@ def _aliquot_relation(
     return integer, int(divisor_sigma(integer)) - integer
 
 
-def is_perfect(value: SupportsIndex | CanonicalInteger | IntegerValue) -> BooleanResult:
+def is_perfect(value: SupportsIndex | IntegerValue) -> BooleanResult:
     """Return whether a positive integer equals its aliquot sum."""
 
     integer, aliquot = _aliquot_relation(value)
@@ -460,7 +439,7 @@ def is_perfect(value: SupportsIndex | CanonicalInteger | IntegerValue) -> Boolea
 
 
 def is_abundant(
-    value: SupportsIndex | CanonicalInteger | IntegerValue,
+    value: SupportsIndex | IntegerValue,
 ) -> BooleanResult:
     """Return whether a positive integer is smaller than its aliquot sum."""
 
@@ -469,7 +448,7 @@ def is_abundant(
 
 
 def is_deficient(
-    value: SupportsIndex | CanonicalInteger | IntegerValue,
+    value: SupportsIndex | IntegerValue,
 ) -> BooleanResult:
     """Return whether a positive integer is larger than its aliquot sum."""
 
@@ -480,7 +459,7 @@ def is_deficient(
 def absolute_value(value: SupportsIndex | IntegerValue) -> IntegerValue:
     """Return the canonical shared integer value of the exact absolute value."""
 
-    return IntegerValue(value=format_canonical_integer(abs(_as_python_integer(value))))
+    return IntegerValue(value=abs(_as_python_integer(value)))
 
 
 def sign(value: SupportsIndex | IntegerValue) -> int:
@@ -492,16 +471,12 @@ def sign(value: SupportsIndex | IntegerValue) -> int:
 
 def decimal_digit_sum(value: IntegerValue) -> IntegerValue:
     """Return the sum of the decimal digits of an exact integer."""
-    return IntegerValue(
-        value=format_canonical_integer(
-            sum(int(digit) for digit in value.value.lstrip("-"))
-        )
-    )
+    return IntegerValue(value=sum(int(digit) for digit in str(abs(value.value))))
 
 
 def decimal_digit_count(value: IntegerValue) -> IntegerValue:
     """Return the number of decimal digits in an exact integer's magnitude."""
-    return IntegerValue(value=format_canonical_integer(len(value.value.lstrip("-"))))
+    return IntegerValue(value=len(format_canonical_integer(abs(value.value))))
 
 
 def base_digits(value: IntegerValue, base: int) -> tuple[int, int, tuple[str, ...]]:
@@ -512,11 +487,8 @@ def base_digits(value: IntegerValue, base: int) -> tuple[int, int, tuple[str, ..
             code="arithmetic.base_out_of_range",
             message="base must be between 2 and 10000",
         )
-    magnitude = value.value.lstrip("-")
-    maximum_value = format_canonical_integer(base**MAX_BASE_DIGITS)
-    if len(magnitude) > len(maximum_value) or (
-        len(magnitude) == len(maximum_value) and magnitude >= maximum_value
-    ):
+    magnitude = str(abs(value.value))
+    if len(magnitude) > MAX_BASE_DIGITS:
         raise OperationDomainValidationError(
             location=("value",),
             code="arithmetic.base_expansion_exceeds_bound",
@@ -524,7 +496,7 @@ def base_digits(value: IntegerValue, base: int) -> tuple[int, int, tuple[str, ..
         )
     from sympy.ntheory import digits as sympy_digits
 
-    integer = parse_canonical_integer(value.value)
+    integer = value.value
     signed_base, *expanded = sympy_digits(integer, base)
     sign_value = 0 if integer == 0 else (-1 if signed_base < 0 else 1)
     return sign_value, abs(signed_base), tuple(str(digit) for digit in expanded)
@@ -540,7 +512,7 @@ def nth_root(value: IntegerValue, degree: int) -> tuple[IntegerValue, bool]:
         )
     from sympy import integer_nthroot
 
-    integer = parse_canonical_integer(value.value)
+    integer = value.value
     if integer < 0 and degree % 2 == 0:
         raise OperationDomainValidationError(
             location=("value", "degree"),
@@ -550,16 +522,14 @@ def nth_root(value: IntegerValue, degree: int) -> tuple[IntegerValue, bool]:
     root, exact = integer_nthroot(abs(integer), degree)
     if integer < 0 and not exact:
         root += 1
-    return IntegerValue(
-        value=format_canonical_integer(-root if integer < 0 else root)
-    ), exact
+    return IntegerValue(value=-root if integer < 0 else root), exact
 
 
 def _as_rational(value: Fraction | int | IntegerValue) -> Fraction:
     """Return one admitted rational input as its exact Python fraction."""
 
     if isinstance(value, IntegerValue):
-        return Fraction(parse_canonical_integer(value.value))
+        return Fraction(value.value)
     return Fraction(value)
 
 
@@ -650,13 +620,13 @@ def verify_continued_fraction(claim: RationalContinuedFractionResult) -> bool:
     Euclidean remainders shrink from the bounded source integers. Comparing
     canonical quotients avoids expansion of large caller-authored terms.
     """
-    numerator = parse_canonical_integer(claim.value.num)
-    denominator = parse_canonical_integer(claim.value.den)
+    numerator = claim.value.num
+    denominator = claim.value.den
     for term in claim.terms:
         if denominator == 0:
             return False
         quotient, remainder = divmod(numerator, denominator)
-        if quotient != parse_canonical_integer(term):
+        if quotient != term:
             return False
         numerator, denominator = denominator, remainder
     return denominator == 0

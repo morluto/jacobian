@@ -7,7 +7,7 @@ from typing import Self
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.algebraic.values import (
     MAX_RSK_ROW_SEARCH_COMPARISONS,
@@ -53,13 +53,13 @@ class HookLengthResult(StrictModel):
     """Hook lengths as a flat list of row-indexed values."""
 
     hooks: tuple[tuple[int, ...], ...]
-    total_product: CanonicalInteger = Field(description="Product of all hook lengths.")
+    total_product: ExactInteger = Field(description="Product of all hook lengths.")
 
 
 class StandardYoungTableauCountResult(StrictModel):
     """The number of standard Young tableaux of a given shape."""
 
-    count: CanonicalInteger = Field(description="Number of standard Young tableaux.")
+    count: ExactInteger = Field(description="Number of standard Young tableaux.")
     n: int = Field(ge=0, le=MAX_CANONICAL_PARTITION_SIZE)
 
 

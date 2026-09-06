@@ -248,8 +248,16 @@ def _admit_gaussian_realification(
         ):
             maximum_digits = max(
                 max(
-                    len(str(abs((coefficient * comb(term.exponent, j)).numerator))),
-                    len(str((coefficient * comb(term.exponent, j)).denominator)),
+                    len(
+                        format_canonical_integer(
+                            abs((coefficient * comb(term.exponent, j)).numerator)
+                        )
+                    ),
+                    len(
+                        format_canonical_integer(
+                            (coefficient * comb(term.exponent, j)).denominator
+                        )
+                    ),
                 )
                 for j in range(term.exponent + 1)
             )
@@ -263,8 +271,8 @@ def _admit_gaussian_realification(
 
 def _fraction_to_canonical_rational(value: Fraction) -> CanonicalRational:
     return CanonicalRational(
-        num=format_canonical_integer(value.numerator),
-        den=format_canonical_integer(value.denominator),
+        num=value.numerator,
+        den=value.denominator,
     )
 
 

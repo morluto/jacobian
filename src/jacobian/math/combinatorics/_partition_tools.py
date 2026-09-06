@@ -1,6 +1,5 @@
 """Immutable declarations for integer-partition operations."""
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.combinatorics import operations as native
 from jacobian.math.combinatorics._models import (
@@ -15,7 +14,7 @@ from jacobian.math.combinatorics._partition_models import (
 
 
 def _integer_result(value: int) -> IntegerResult:
-    return IntegerResult(value=format_canonical_integer(value))
+    return IntegerResult(value=value)
 
 
 def stirling_first(request: NonnegativePairRequest) -> IntegerResult:

@@ -7,7 +7,7 @@ from typing import Annotated, Any, Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import NativeInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel, canonicalize_json_containers
 
 MAX_GROUP_DEGREE = 64
@@ -63,7 +63,7 @@ class GroupOrderResult(StrictModel):
     """The exact order of a finite permutation group."""
 
     source: PermutationGroup
-    order: NativeInteger
+    order: ExactInteger
 
 
 class GroupElementOrderRequest(StrictModel):
@@ -78,7 +78,7 @@ class GroupElementOrderResult(StrictModel):
 
     source: PermutationGroup
     element: tuple[int, ...] = Field(min_length=1, max_length=MAX_GROUP_DEGREE)
-    order: NativeInteger
+    order: ExactInteger
 
 
 class GroupOrbitRequest(StrictModel):
@@ -342,7 +342,7 @@ class SubgroupEntry(StrictModel):
     """
 
     group: PermutationGroup
-    order: NativeInteger = Field(ge=1, le=MAX_SUBGROUP_LATTICE_GROUP_ORDER)
+    order: ExactInteger = Field(ge=1, le=MAX_SUBGROUP_LATTICE_GROUP_ORDER)
 
 
 class GroupSubgroupLatticeResult(StrictModel):
@@ -350,7 +350,7 @@ class GroupSubgroupLatticeResult(StrictModel):
 
     source: PermutationGroup
     subgroups: tuple[SubgroupEntry, ...]
-    subgroup_count: NativeInteger = Field(ge=1)
+    subgroup_count: ExactInteger = Field(ge=1)
 
     @model_validator(mode="before")
     @classmethod

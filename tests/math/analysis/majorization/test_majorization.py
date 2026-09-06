@@ -26,11 +26,11 @@ from jacobian.math.analysis.majorization._tools import (
 from jacobian.math.matrices.values import RationalMatrix, rational_matrix_from_fractions
 
 
-def cr(n: str, d: str = "1") -> CanonicalRational:
+def cr(n: int, d: int = 1) -> CanonicalRational:
     return CanonicalRational(num=n, den=d)
 
 
-def rv(labels: list[str], vals: list[tuple[str, str]]) -> RationalVector:
+def rv(labels: list[str], vals: list[tuple[int, int]]) -> RationalVector:
     return RationalVector(
         labels=tuple(labels),
         values=tuple(CanonicalRational(num=n, den=d) for n, d in vals),
@@ -42,8 +42,8 @@ class TestMajorizationCheck:
         """(3,1) majorizes (2,2): 3>=2, 3+1=2+2."""
         result = _majorization_check(
             MajorizationCheckRequest(
-                x=rv(["a", "b"], [("3", "1"), ("1", "1")]),
-                y=rv(["a", "b"], [("2", "1"), ("2", "1")]),
+                x=rv(["a", "b"], [(3, 1), (1, 1)]),
+                y=rv(["a", "b"], [(2, 1), (2, 1)]),
             )
         )
         assert result.majorizes is True
@@ -54,8 +54,8 @@ class TestMajorizationCheck:
         """(3,1) does not majorize (3,2): sums don't match."""
         result = _majorization_check(
             MajorizationCheckRequest(
-                x=rv(["a", "b"], [("3", "1"), ("1", "1")]),
-                y=rv(["a", "b"], [("3", "1"), ("2", "1")]),
+                x=rv(["a", "b"], [(3, 1), (1, 1)]),
+                y=rv(["a", "b"], [(3, 1), (2, 1)]),
             )
         )
         assert result.majorizes is False
@@ -65,8 +65,8 @@ class TestMajorizationCheck:
         """(2,2) does not majorize (3,1): prefix sum 2 < 3."""
         result = _majorization_check(
             MajorizationCheckRequest(
-                x=rv(["a", "b"], [("2", "1"), ("2", "1")]),
-                y=rv(["a", "b"], [("3", "1"), ("1", "1")]),
+                x=rv(["a", "b"], [(2, 1), (2, 1)]),
+                y=rv(["a", "b"], [(3, 1), (1, 1)]),
             )
         )
         assert result.majorizes is False
@@ -76,8 +76,8 @@ class TestMajorizationCheck:
         """A vector majorizes itself."""
         result = _majorization_check(
             MajorizationCheckRequest(
-                x=rv(["a", "b"], [("5", "1"), ("3", "1")]),
-                y=rv(["a", "b"], [("5", "1"), ("3", "1")]),
+                x=rv(["a", "b"], [(5, 1), (3, 1)]),
+                y=rv(["a", "b"], [(5, 1), (3, 1)]),
             )
         )
         assert result.majorizes is True
@@ -86,8 +86,8 @@ class TestMajorizationCheck:
         """(4,2,0) majorizes (2,2,2): 4>=2, 6>=4, 6=6."""
         result = _majorization_check(
             MajorizationCheckRequest(
-                x=rv(["a", "b", "c"], [("4", "1"), ("2", "1"), ("0", "1")]),
-                y=rv(["a", "b", "c"], [("2", "1"), ("2", "1"), ("2", "1")]),
+                x=rv(["a", "b", "c"], [(4, 1), (2, 1), (0, 1)]),
+                y=rv(["a", "b", "c"], [(2, 1), (2, 1), (2, 1)]),
             )
         )
         assert result.majorizes is True
@@ -98,8 +98,8 @@ class TestWeakMajorization:
         """Weak submajorization holds when x >= y in prefix sums."""
         result = _weak_majorization_check(
             WeakMajorizationCheckRequest(
-                x=rv(["a", "b"], [("4", "1"), ("1", "1")]),
-                y=rv(["a", "b"], [("2", "1"), ("2", "1")]),
+                x=rv(["a", "b"], [(4, 1), (1, 1)]),
+                y=rv(["a", "b"], [(2, 1), (2, 1)]),
                 direction="sub",
             )
         )
@@ -109,8 +109,8 @@ class TestWeakMajorization:
         """Weak submajorization fails when prefix sum is negative."""
         result = _weak_majorization_check(
             WeakMajorizationCheckRequest(
-                x=rv(["a", "b"], [("1", "1"), ("1", "1")]),
-                y=rv(["a", "b"], [("3", "1"), ("0", "1")]),
+                x=rv(["a", "b"], [(1, 1), (1, 1)]),
+                y=rv(["a", "b"], [(3, 1), (0, 1)]),
                 direction="sub",
             )
         )
@@ -120,8 +120,8 @@ class TestWeakMajorization:
         """Weak supermajorization."""
         result = _weak_majorization_check(
             WeakMajorizationCheckRequest(
-                x=rv(["a", "b"], [("1", "1"), ("3", "1")]),
-                y=rv(["a", "b"], [("2", "1"), ("2", "1")]),
+                x=rv(["a", "b"], [(1, 1), (3, 1)]),
+                y=rv(["a", "b"], [(2, 1), (2, 1)]),
                 direction="super",
             )
         )
@@ -143,8 +143,8 @@ class TestDoublyStochastic:
             DoublyStochasticCheckRequest(
                 matrix=RationalMatrix(
                     entries=(
-                        (cr("1", "1"), cr("0", "1")),
-                        (cr("0", "1"), cr("1", "1")),
+                        (cr(1, 1), cr(0, 1)),
+                        (cr(0, 1), cr(1, 1)),
                     ),
                 )
             )
@@ -156,8 +156,8 @@ class TestDoublyStochastic:
             DoublyStochasticCheckRequest(
                 matrix=RationalMatrix(
                     entries=(
-                        (cr("2", "1"), cr("0", "1")),
-                        (cr("0", "1"), cr("1", "1")),
+                        (cr(2, 1), cr(0, 1)),
+                        (cr(0, 1), cr(1, 1)),
                     ),
                 )
             )
@@ -170,8 +170,8 @@ class TestDoublyStochastic:
             DoublyStochasticCheckRequest(
                 matrix=RationalMatrix(
                     entries=(
-                        (cr("-1", "1"), cr("2", "1")),
-                        (cr("2", "1"), cr("-1", "1")),
+                        (cr(-1, 1), cr(2, 1)),
+                        (cr(2, 1), cr(-1, 1)),
                     ),
                 )
             )
@@ -187,8 +187,8 @@ class TestBirkhoff:
             BirkhoffDecompositionRequest(
                 matrix=RationalMatrix(
                     entries=(
-                        (cr("0", "1"), cr("1", "1")),
-                        (cr("1", "1"), cr("0", "1")),
+                        (cr(0, 1), cr(1, 1)),
+                        (cr(1, 1), cr(0, 1)),
                     ),
                 )
             )
@@ -202,8 +202,8 @@ class TestBirkhoff:
             BirkhoffDecompositionRequest(
                 matrix=RationalMatrix(
                     entries=(
-                        (cr("1", "2"), cr("1", "2")),
-                        (cr("1", "2"), cr("1", "2")),
+                        (cr(1, 2), cr(1, 2)),
+                        (cr(1, 2), cr(1, 2)),
                     ),
                 )
             )
@@ -216,8 +216,8 @@ class TestBirkhoff:
         request = BirkhoffDecompositionRequest(
             matrix=RationalMatrix(
                 entries=(
-                    (cr("-1"), cr("2")),
-                    (cr("2"), cr("-1")),
+                    (cr(-1), cr(2)),
+                    (cr(2), cr(-1)),
                 ),
             )
         )
@@ -239,8 +239,8 @@ class TestSchurHorn:
         """Diagonal (1, 0) is feasible for eigenvalues (2, -1)."""
         result = _schur_horn_check(
             SchurHornCheckRequest(
-                eigenvalues=(cr("2", "1"), cr("-1", "1")),
-                diagonal=(cr("1", "1"), cr("0", "1")),
+                eigenvalues=(cr(2, 1), cr(-1, 1)),
+                diagonal=(cr(1, 1), cr(0, 1)),
             )
         )
         assert result.feasible is True
@@ -249,8 +249,8 @@ class TestSchurHorn:
         """Diagonal (2, 0) is not feasible for eigenvalues (1, 1)."""
         result = _schur_horn_check(
             SchurHornCheckRequest(
-                eigenvalues=(cr("1", "1"), cr("1", "1")),
-                diagonal=(cr("2", "1"), cr("0", "1")),
+                eigenvalues=(cr(1, 1), cr(1, 1)),
+                diagonal=(cr(2, 1), cr(0, 1)),
             )
         )
         assert result.feasible is False
@@ -259,8 +259,8 @@ class TestSchurHorn:
         """Sum mismatch makes it infeasible."""
         result = _schur_horn_check(
             SchurHornCheckRequest(
-                eigenvalues=(cr("3", "1"), cr("1", "1")),
-                diagonal=(cr("2", "1"), cr("1", "1")),
+                eigenvalues=(cr(3, 1), cr(1, 1)),
+                diagonal=(cr(2, 1), cr(1, 1)),
             )
         )
         assert result.feasible is False
@@ -272,8 +272,8 @@ class TestTTransform:
         """When x majorizes y, compute the T-transform sequence."""
         result = _t_transform_sequence(
             TTransformSequenceRequest(
-                x=rv(["a", "b"], [("4", "1"), ("0", "1")]),
-                y=rv(["a", "b"], [("2", "1"), ("2", "1")]),
+                x=rv(["a", "b"], [(4, 1), (0, 1)]),
+                y=rv(["a", "b"], [(2, 1), (2, 1)]),
             )
         )
         assert result.majorizes is True
@@ -284,8 +284,8 @@ class TestTTransform:
 
         result = _t_transform_sequence(
             TTransformSequenceRequest(
-                x=rv(["a", "b", "c"], [("0", "1"), ("1", "1"), ("2", "1")]),
-                y=rv(["a", "b", "c"], [("1", "1"), ("2", "1"), ("0", "1")]),
+                x=rv(["a", "b", "c"], [(0, 1), (1, 1), (2, 1)]),
+                y=rv(["a", "b", "c"], [(1, 1), (2, 1), (0, 1)]),
             )
         )
 
@@ -307,8 +307,8 @@ class TestTTransform:
         """When x does not majorize y, return empty result."""
         result = _t_transform_sequence(
             TTransformSequenceRequest(
-                x=rv(["a", "b"], [("1", "1"), ("1", "1")]),
-                y=rv(["a", "b"], [("3", "1"), ("0", "1")]),
+                x=rv(["a", "b"], [(1, 1), (1, 1)]),
+                y=rv(["a", "b"], [(3, 1), (0, 1)]),
             )
         )
         assert result.majorizes is False

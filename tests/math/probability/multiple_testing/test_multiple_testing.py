@@ -17,16 +17,16 @@ class TestBHStepUp:
         req = BHStepUpRequest(
             hypotheses=(
                 HypothesisSpec(
-                    hypothesis_id="h1", p_value=CanonicalRational(num="1", den="100")
+                    hypothesis_id="h1", p_value=CanonicalRational(num=1, den=100)
                 ),
                 HypothesisSpec(
-                    hypothesis_id="h2", p_value=CanonicalRational(num="1", den="25")
+                    hypothesis_id="h2", p_value=CanonicalRational(num=1, den=25)
                 ),
                 HypothesisSpec(
-                    hypothesis_id="h3", p_value=CanonicalRational(num="3", den="100")
+                    hypothesis_id="h3", p_value=CanonicalRational(num=3, den=100)
                 ),
             ),
-            level=CanonicalRational(num="1", den="20"),
+            level=CanonicalRational(num=1, den=20),
         )
         result = bh_step_up(req.hypotheses, req.level)
         assert result.critical_index == 3
@@ -36,16 +36,16 @@ class TestBHStepUp:
         req = BHStepUpRequest(
             hypotheses=(
                 HypothesisSpec(
-                    hypothesis_id="h1", p_value=CanonicalRational(num="1", den="100")
+                    hypothesis_id="h1", p_value=CanonicalRational(num=1, den=100)
                 ),
                 HypothesisSpec(
-                    hypothesis_id="h2", p_value=CanonicalRational(num="2", den="25")
+                    hypothesis_id="h2", p_value=CanonicalRational(num=2, den=25)
                 ),
                 HypothesisSpec(
-                    hypothesis_id="h3", p_value=CanonicalRational(num="9", den="100")
+                    hypothesis_id="h3", p_value=CanonicalRational(num=9, den=100)
                 ),
             ),
-            level=CanonicalRational(num="1", den="20"),
+            level=CanonicalRational(num=1, den=20),
         )
         result = bh_step_up(req.hypotheses, req.level)
         assert result.critical_index == 1
@@ -58,21 +58,19 @@ class TestFDP:
         result = false_discovery_proportion(req.rejected_ids, req.true_null_ids)
         assert result.false_discoveries == 1
         assert result.total_rejections == 2
-        assert result.fdp == CanonicalRational(num="1", den="2")
+        assert result.fdp == CanonicalRational(num=1, den=2)
 
     def test_no_rejections(self) -> None:
         req = FDPRequest(rejected_ids=(), true_null_ids=("h1",))
         result = false_discovery_proportion(req.rejected_ids, req.true_null_ids)
-        assert result.fdp == CanonicalRational(num="0", den="1")
+        assert result.fdp == CanonicalRational(num=0, den=1)
 
     def test_rejects_out_of_range_p_value_and_level(self) -> None:
         import pytest
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError) as p_value_error:
-            HypothesisSpec(
-                hypothesis_id="h1", p_value=CanonicalRational(num="-1", den="1")
-            )
+            HypothesisSpec(hypothesis_id="h1", p_value=CanonicalRational(num=-1, den=1))
         assert (
             p_value_error.value.errors()[0]["type"]
             == "multiple_testing.p_value_out_of_range"
@@ -82,10 +80,10 @@ class TestFDP:
                 hypotheses=(
                     HypothesisSpec(
                         hypothesis_id="h1",
-                        p_value=CanonicalRational(num="1", den="2"),
+                        p_value=CanonicalRational(num=1, den=2),
                     ),
                 ),
-                level=CanonicalRational(num="2", den="1"),
+                level=CanonicalRational(num=2, den=1),
             )
         assert (
             level_error.value.errors()[0]["type"]

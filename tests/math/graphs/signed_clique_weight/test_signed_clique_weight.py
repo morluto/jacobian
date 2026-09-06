@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from fractions import Fraction
 from itertools import combinations
@@ -136,19 +137,21 @@ class TestSignedCliqueWeight:
     def test_result_reparses(self) -> None:
         result = signed_clique_weight_maximum(_graph(["a", "b"], [("a", "b", 1)]))
         assert (
-            SignedCliqueWeightResult.model_validate(result.model_dump(mode="json"))
+            SignedCliqueWeightResult.model_validate_json(result.model_dump_json())
             == result
         )
 
     def test_forged_binding_rejected(self) -> None:
         graph = _graph(["a", "b"], [("a", "b", 1)])
         with pytest.raises(ValidationError):
-            SignedCliqueWeightResult.model_validate(
-                {
-                    "graph": graph.model_dump(mode="json"),
-                    "optimum_value": {"num": "1", "den": "1"},
-                    "clique": ("a",),
-                }
+            SignedCliqueWeightResult.model_validate_json(
+                json.dumps(
+                    {
+                        "graph": graph.model_dump(mode="json"),
+                        "optimum_value": {"num": "1", "den": "1"},
+                        "clique": ("a",),
+                    }
+                )
             )
 
 

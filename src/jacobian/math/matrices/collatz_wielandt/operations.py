@@ -15,6 +15,10 @@ from jacobian.math.matrices.values import RationalMatrix
 __all__ = ["compute_collatz_wielandt_profile"]
 
 
+def _decimal_digits(value: int) -> int:
+    return len(format_canonical_integer(abs(value)))
+
+
 def _admit_result_size(
     matrix: RationalMatrix,
     vector: tuple[CanonicalRational, ...],
@@ -23,11 +27,17 @@ def _admit_result_size(
     for row_index, row in enumerate(matrix.entries):
         derived_digits = (
             sum(
-                max(len(entry.num.lstrip("-")), len(entry.den))
-                + max(len(vector[column].num.lstrip("-")), len(vector[column].den))
+                max(_decimal_digits(entry.num), _decimal_digits(entry.den))
+                + max(
+                    _decimal_digits(vector[column].num),
+                    _decimal_digits(vector[column].den),
+                )
                 for column, entry in enumerate(row)
             )
-            + max(len(vector[row_index].num.lstrip("-")), len(vector[row_index].den))
+            + max(
+                _decimal_digits(vector[row_index].num),
+                _decimal_digits(vector[row_index].den),
+            )
             + 2
         )
         quotient_widths.append(derived_digits)
@@ -78,8 +88,7 @@ def compute_collatz_wielandt_profile(
         quotients.append(ax_i / vec[i])
 
     if any(
-        len(format_canonical_integer(component).lstrip("-"))
-        > MAX_CANONICAL_RATIONAL_DIGITS
+        len(format_canonical_integer(abs(component))) > MAX_CANONICAL_RATIONAL_DIGITS
         for quotient in quotients
         for component in (quotient.numerator, quotient.denominator)
     ):

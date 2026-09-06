@@ -457,7 +457,7 @@ def test_colored_graph_rejects_noncanonical_presentations(
     payload: dict[str, object], message: str
 ) -> None:
     with pytest.raises(ValidationError, match=message):
-        ColoredUndirectedGraph.model_validate(payload)
+        ColoredUndirectedGraph.model_validate_json(json.dumps(payload))
 
 
 def test_schema_explains_alignment_and_work_admission() -> None:

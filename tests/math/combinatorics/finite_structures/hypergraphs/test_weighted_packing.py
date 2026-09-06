@@ -194,7 +194,7 @@ class TestWeightedPacking:
             {"e1": 2, "e2": 3},
         )
         assert (
-            WeightedPackingResult.model_validate(result.model_dump(mode="json"))
+            WeightedPackingResult.model_validate_json(result.model_dump_json())
             == result
         )
 

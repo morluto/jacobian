@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from itertools import combinations
 
 import pytest
@@ -173,7 +174,7 @@ def test_noncanonical_code_support_is_a_domain_rejection() -> None:
     payload = to_set_system(code).model_dump(mode="json")
     payload["members"] = [[1, 0]]
     with pytest.raises(ValidationError, match="strictly increasing"):
-        IndexedFiniteSetFamily.model_validate(payload)
+        IndexedFiniteSetFamily.model_validate_json(json.dumps(payload))
 
 
 def test_support_target_is_an_ordinary_set_family() -> None:
@@ -182,7 +183,7 @@ def test_support_target_is_an_ordinary_set_family() -> None:
         codewords=((0, 0), (0, 1), (1, 0), (1, 1)),
     )
     payload = to_set_system(code).model_dump(mode="json")
-    target = IndexedFiniteSetFamily.model_validate(payload)
+    target = IndexedFiniteSetFamily.model_validate_json(json.dumps(payload))
     assert construct_binary_union_relation(target).source == target
 
 
@@ -192,7 +193,7 @@ def test_serialized_code_support_axis_is_bound_to_source_coordinates() -> None:
     payload["ground_set_size"] = 0
 
     with pytest.raises(ValidationError, match="ground_set_size"):
-        type(to_set_system(code)).model_validate(payload)
+        type(to_set_system(code)).model_validate_json(json.dumps(payload))
 
 
 def test_total_membership_work_is_bounded_before_pair_scanning() -> None:
@@ -249,4 +250,4 @@ def test_canonical_family_rejects_boolean_coordinates(
     payload: dict[str, object],
 ) -> None:
     with pytest.raises(ValidationError):
-        IndexedFiniteSetFamily.model_validate(payload)
+        IndexedFiniteSetFamily.model_validate_json(json.dumps(payload))

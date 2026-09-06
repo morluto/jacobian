@@ -3,23 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from typing import Annotated, Any, Self
+from typing import Annotated, Self
 
-from pydantic import (
-    BeforeValidator,
-    Field,
-    PlainSerializer,
-    StrictInt,
-    StringConstraints,
-    ValidationInfo,
-    model_validator,
-)
+from pydantic import Field, model_validator
 from pydantic.json_schema import WithJsonSchema
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import DecimalIntegerEncoding, ExactInteger
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.combinatorics.additive._multiset_sum import (
     MAX_ARITY,
     MAX_ARITY_DIGITS,
@@ -69,62 +61,22 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 _MAX_VECTOR_COORDINATE_LENGTH = _MAX_COORDINATE_DIGITS + 2
 
 CanonicalVectorCoordinate = Annotated[
-    str,
-    StringConstraints(
-        pattern=r"^(?:0|-?[1-9][0-9]*)$",
-        max_length=_MAX_VECTOR_COORDINATE_LENGTH,
-        strict=True,
-    ),
+    int, DecimalIntegerEncoding(max_digits=_MAX_VECTOR_COORDINATE_LENGTH - 1)
 ]
-
-
-def _parse_ordered_difference_integer(value: Any, info: ValidationInfo) -> int:
-    """Accept native Python ints while requiring decimal strings in JSON."""
-    if info.mode == "json" and not isinstance(value, str):
-        raise PydanticCustomError(
-            "canonical_integer.json_type",
-            "ordered-difference integers must be canonical decimal strings in JSON",
-        )
-    if isinstance(value, bool):
-        raise PydanticCustomError(
-            "canonical_integer.type",
-            "integer values must not be booleans",
-        )
-    if isinstance(value, int):
-        return value
-    if isinstance(value, str):
-        return parse_canonical_integer(value)
-    raise PydanticCustomError(
-        "canonical_integer.type",
-        "integer values must be Python integers or canonical strings",
-    )
-
-
-OrderedDifferenceInteger = Annotated[
-    int,
-    BeforeValidator(_parse_ordered_difference_integer),
-    PlainSerializer(format_canonical_integer, return_type=str, when_used="json"),
-]
-
 CanonicalMultisetSumBound = Annotated[
-    str,
-    StringConstraints(
-        pattern=r"^(?:0|-?[1-9][0-9]*)$",
-        max_length=MAX_INTEGER_LENGTH,
-        strict=True,
-    ),
+    int, DecimalIntegerEncoding(max_digits=MAX_INTEGER_LENGTH)
 ]
 
 
 def _sorted_canonical_integers(
-    values: Iterable[str],
-) -> tuple[str, ...]:
+    values: Iterable[int],
+) -> tuple[int, ...]:
     """Return canonical integers in numeric order."""
-    return tuple(sorted(set(values), key=parse_canonical_integer))
+    return tuple(sorted(set(values)))
 
 
-def _require_bounded_coordinate(value: str, label: str) -> None:
-    digits = len(value.lstrip("-"))
+def _require_bounded_coordinate(value: int, label: str) -> None:
+    digits = len(format_canonical_integer(abs(value)))
     if digits > _MAX_COORDINATE_DIGITS:
         raise _validation_error(
             "_require_bounded_coordinate",
@@ -154,11 +106,11 @@ class IntegerVector(StrictModel):
     )
 
     def as_int_tuple(self) -> tuple[int, ...]:
-        return tuple(parse_canonical_integer(c) for c in self.coordinates)
+        return self.coordinates
 
 
 def _vector_from_ints(values: tuple[int, ...]) -> IntegerVector:
-    return IntegerVector(coordinates=tuple(format_canonical_integer(v) for v in values))
+    return IntegerVector(coordinates=values)
 
 
 class IntegerVectorSet(StrictModel):
@@ -199,6 +151,62 @@ class IntegerVectorSet(StrictModel):
         return self
 
 
+def _check_totals(
+    entries: tuple[OrderedDifferenceEntry, ...],
+    total_ordered_pairs: int,
+    set_size: int,
+    support_size: int,
+) -> None:
+    total = sum(entry.multiplicity for entry in entries)
+    if total != total_ordered_pairs:
+        raise _validation_error(
+            "_check_totals", "total ordered pairs must match sum of multiplicities"
+        )
+    if total_ordered_pairs != set_size * (set_size - 1):
+        raise _validation_error(
+            "_check_totals", "total_ordered_pairs must equal set_size*(set_size-1)"
+        )
+    if support_size != len(entries):
+        raise _validation_error(
+            "_check_totals", "support_size must equal the number of entries"
+        )
+
+
+def _check_max_and_repeated(
+    entries: tuple[OrderedDifferenceEntry, ...],
+    max_multiplicity: int,
+    has_repeated_difference: bool,
+    first_collision: OrderedDifferencePair | None,
+) -> None:
+    if not entries:
+        if max_multiplicity != 0:
+            raise _validation_error(
+                "_check_max_and_repeated",
+                "max_multiplicity must be 0 when entries is empty",
+            )
+    elif max_multiplicity != max(e.multiplicity for e in entries):
+        raise _validation_error(
+            "_check_max_and_repeated",
+            "max_multiplicity must be the maximum entry multiplicity",
+        )
+    expected_repeated = (max_multiplicity > 1) if entries else False
+    if has_repeated_difference != expected_repeated:
+        raise _validation_error(
+            "_check_max_and_repeated",
+            "has_repeated_difference must match max_multiplicity > 1",
+        )
+    if has_repeated_difference and first_collision is None:
+        raise _validation_error(
+            "_check_max_and_repeated",
+            "first_collision must be present when has_repeated_difference",
+        )
+    if not has_repeated_difference and first_collision is not None:
+        raise _validation_error(
+            "_check_max_and_repeated",
+            "first_collision must be null when has_repeated_difference is false",
+        )
+
+
 def _check_entries_sorted(entries: tuple[OrderedDifferenceEntry, ...]) -> None:
     diffs = [entry.difference.as_int_tuple() for entry in entries]
     if diffs != sorted(diffs):
@@ -211,12 +219,42 @@ def _check_entries_sorted(entries: tuple[OrderedDifferenceEntry, ...]) -> None:
         )
 
 
+def _check_first_collision(
+    entries: tuple[OrderedDifferenceEntry, ...],
+    has_repeated_difference: bool,
+    first_collision: OrderedDifferencePair | None,
+) -> None:
+    if entries and has_repeated_difference:
+        # Pair order is canonically lexicographic (checked in
+        # the entry model), so pairs[0] is independently determined as its
+        # minimum pair; the witness must be exactly that pair of the first
+        # sorted repeated-difference entry.
+        expected_entry = next((e for e in entries if e.multiplicity > 1), None)
+        if expected_entry is None:
+            raise _validation_error(
+                "_check_first_collision",
+                "has_repeated_difference requires a repeated difference entry",
+            )
+        if first_collision != expected_entry.pairs[0]:
+            raise _validation_error(
+                "_check_first_collision",
+                "first_collision must be the designated pair of the first "
+                "repeated-difference entry",
+            )
+    elif not entries and first_collision is not None:
+        raise _validation_error(
+            "_check_first_collision",
+            "first_collision must be null when entries is empty",
+        )
+
+
 def _require_bounded_cartesian_product(
     left: FiniteIntegerSet,
     right: FiniteIntegerSet,
 ) -> None:
     source_digits = sum(
-        len(element.lstrip("-")) for element in (*left.elements, *right.elements)
+        len(format_canonical_integer(abs(element)))
+        for element in (*left.elements, *right.elements)
     )
     if source_digits > MAX_CARTESIAN_SOURCE_DIGITS:
         raise _validation_error(
@@ -264,7 +302,7 @@ class RepresentationProfileRequest(StrictModel):
 class RepresentationProfileEntry(StrictModel):
     """One sum and its representation multiplicity."""
 
-    sum: CanonicalInteger
+    sum: ExactInteger
     multiplicity: int = Field(gt=0)
 
 
@@ -278,7 +316,7 @@ class RepresentationProfileResult(StrictModel):
     @model_validator(mode="after")
     def require_canonical_entries(self) -> Self:
         sums = tuple(entry.sum for entry in self.entries)
-        if tuple(sums) != _sorted_canonical_integers(sums):
+        if tuple(sums) != tuple(sorted(set(sums))):
             raise _validation_error(
                 "require_canonical_entries",
                 "representation profile sums must be sorted and unique",
@@ -318,7 +356,7 @@ class MultisetSumWindow(StrictModel):
     @model_validator(mode="after")
     def require_nondecreasing_endpoints(self) -> Self:
         if any(
-            len(endpoint.lstrip("-")) > MAX_RESULT_DIGITS
+            abs(endpoint) >= 10**MAX_RESULT_DIGITS
             for endpoint in (self.lower, self.upper)
         ):
             raise _validation_error(
@@ -335,20 +373,20 @@ class MultisetSumWindow(StrictModel):
 
     def as_integer_bounds(self) -> tuple[int, int]:
         return (
-            parse_canonical_integer(self.lower),
-            parse_canonical_integer(self.upper),
+            self.lower,
+            self.upper,
         )
 
 
 def _multiset_sum_source_values(source: FiniteIntegerSet) -> tuple[int, ...]:
     for element in source.elements:
-        if len(element.lstrip("-")) > MAX_ELEMENT_DIGITS:
+        if abs(element) >= 10**MAX_ELEMENT_DIGITS:
             raise _validation_error(
                 "_multiset_sum_source_values",
                 "multiset-sum source elements must carry at most "
                 f"{MAX_ELEMENT_DIGITS} digits",
             )
-    values = tuple(parse_canonical_integer(element) for element in source.elements)
+    values = tuple(source.elements)
     if values != tuple(sorted(values)):
         raise _validation_error(
             "_multiset_sum_source_values",
@@ -420,7 +458,7 @@ class MultisetSumRepresentationProfileResult(StrictModel):
     @model_validator(mode="after")
     def require_canonical_entries(self) -> Self:
         sums = tuple(entry.sum for entry in self.entries)
-        if sums != _sorted_canonical_integers(sums):
+        if sums != tuple(sorted(set(sums))):
             raise _validation_error(
                 "multiset_sum_profile_entries",
                 "multiset-sum entries must be sorted and unique",
@@ -547,7 +585,7 @@ class AdditiveEnergyResult(StrictModel):
     @model_validator(mode="after")
     def require_canonical_decomposition(self) -> Self:
         sums = tuple(entry.sum for entry in self.decomposition)
-        if tuple(sums) != _sorted_canonical_integers(sums):
+        if tuple(sums) != tuple(sorted(set(sums))):
             raise _validation_error(
                 "require_canonical_decomposition",
                 "additive energy sums must be sorted and unique",
@@ -598,7 +636,7 @@ class SumsetCardinalityResult(StrictModel):
     @model_validator(mode="after")
     def require_canonical_support(self) -> Self:
         sums = list(self.support.elements)
-        if tuple(sums) != _sorted_canonical_integers(sums):
+        if tuple(sums) != tuple(sorted(set(sums))):
             raise _validation_error(
                 "require_canonical_support", "sumset support must be sorted and unique"
             )
@@ -639,14 +677,14 @@ class DirectSumPredicateResult(StrictModel):
     right: FiniteIntegerSet
     holds: bool
     modulus: int = Field(gt=1)
-    representatives: tuple[CanonicalInteger, ...] = Field(default=())
-    collisions: tuple[CanonicalInteger, ...] = Field(default=())
-    missing: tuple[CanonicalInteger, ...] = Field(default=())
+    representatives: tuple[ExactInteger, ...] = Field(default=())
+    collisions: tuple[ExactInteger, ...] = Field(default=())
+    missing: tuple[ExactInteger, ...] = Field(default=())
 
     @model_validator(mode="after")
     def require_canonical_diagnostics(self) -> Self:
         for name in ("collisions", "missing"):
-            values = [parse_canonical_integer(value) for value in getattr(self, name)]
+            values = list(getattr(self, name))
             if values != sorted(set(values)):
                 raise _validation_error(
                     "require_canonical_diagnostics",
@@ -662,9 +700,9 @@ class DirectSumPredicateResult(StrictModel):
         right: FiniteIntegerSet,
         holds: bool,
         modulus: int,
-        representatives: tuple[CanonicalInteger, ...],
-        collisions: tuple[CanonicalInteger, ...],
-        missing: tuple[CanonicalInteger, ...],
+        representatives: tuple[ExactInteger, ...],
+        collisions: tuple[ExactInteger, ...],
+        missing: tuple[ExactInteger, ...],
     ) -> Self:
         return cls.model_construct(
             holds=holds,
@@ -721,8 +759,8 @@ class OrderedDifferenceProfileRequest(StrictModel):
 class OrderedDifferencePair(StrictModel):
     """One ordered source pair (i, j) with i != j."""
 
-    left_index: StrictInt = Field(ge=0, le=_MAX_VECTOR_SET_SIZE - 1)
-    right_index: StrictInt = Field(ge=0, le=_MAX_VECTOR_SET_SIZE - 1)
+    left_index: int = Field(ge=0)
+    right_index: int = Field(ge=0)
 
 
 class OrderedDifferenceEntry(StrictModel):
@@ -735,30 +773,20 @@ class OrderedDifferenceEntry(StrictModel):
     """
 
     difference: IntegerVector
-    multiplicity: OrderedDifferenceInteger = Field(
-        gt=0,
-        le=_MAX_TOTAL_ORDERED_PAIRS,
-        description="Claimed positive multiplicity of this difference.",
-    )
-    pairs: tuple[OrderedDifferencePair, ...] = Field(
-        default=(), max_length=_MAX_TOTAL_ORDERED_PAIRS
-    )
+    multiplicity: int = Field(gt=0)
+    pairs: tuple[OrderedDifferencePair, ...] = Field(default=())
 
     @model_validator(mode="after")
     def require_canonical(self) -> Self:
+        if self.multiplicity != len(self.pairs):
+            raise _validation_error(
+                "require_canonical", "multiplicity must equal the number of pairs"
+            )
         for pair in self.pairs:
             if pair.left_index == pair.right_index:
                 raise _validation_error(
                     "require_canonical", "pair indices must be distinct"
                 )
-        if self.pairs != tuple(
-            sorted(self.pairs, key=lambda pair: (pair.left_index, pair.right_index))
-        ):
-            raise _validation_error(
-                "require_canonical", "pair indices must be lexicographically ordered"
-            )
-        if len(set(self.pairs)) != len(self.pairs):
-            raise _validation_error("require_canonical", "pair indices must be unique")
         return self
 
 
@@ -768,16 +796,10 @@ class OrderedDifferenceProfileResult(StrictModel):
     vectors: IntegerVectorSet
     dimension: int = Field(ge=1, le=_MAX_DIMENSION)
     set_size: int = Field(ge=1, le=_MAX_VECTOR_SET_SIZE)
-    total_ordered_pairs: OrderedDifferenceInteger = Field(
-        ge=0, le=_MAX_TOTAL_ORDERED_PAIRS
-    )
-    support_size: OrderedDifferenceInteger = Field(ge=0, le=_MAX_TOTAL_ORDERED_PAIRS)
-    max_multiplicity: OrderedDifferenceInteger = Field(
-        ge=0, le=_MAX_TOTAL_ORDERED_PAIRS
-    )
-    entries: tuple[OrderedDifferenceEntry, ...] = Field(
-        default=(), max_length=_MAX_TOTAL_ORDERED_PAIRS
-    )
+    total_ordered_pairs: int = Field(ge=0, le=_MAX_TOTAL_ORDERED_PAIRS)
+    support_size: int = Field(ge=0, le=_MAX_TOTAL_ORDERED_PAIRS)
+    max_multiplicity: int = Field(ge=0, le=_MAX_TOTAL_ORDERED_PAIRS)
+    entries: tuple[OrderedDifferenceEntry, ...] = Field(default=())
     has_repeated_difference: bool = False
     first_collision: OrderedDifferencePair | None = None
 
@@ -794,25 +816,33 @@ class OrderedDifferenceProfileResult(StrictModel):
         return self
 
     @model_validator(mode="after")
+    def require_totals(self) -> Self:
+        _check_totals(
+            self.entries, self.total_ordered_pairs, self.set_size, self.support_size
+        )
+        return self
+
+    @model_validator(mode="after")
+    def require_max_and_repeated(self) -> Self:
+        _check_max_and_repeated(
+            self.entries,
+            self.max_multiplicity,
+            self.has_repeated_difference,
+            self.first_collision,
+        )
+        return self
+
+    @model_validator(mode="after")
     def require_entries(self) -> Self:
         if self.entries:
             _check_entries_sorted(self.entries)
-            if any(
-                len(entry.difference.coordinates) != self.dimension
-                for entry in self.entries
-            ):
-                raise _validation_error(
-                    "require_entries",
-                    "difference vectors must match the source dimension",
-                )
-            if any(
-                pair.left_index >= self.set_size or pair.right_index >= self.set_size
-                for entry in self.entries
-                for pair in entry.pairs
-            ):
-                raise _validation_error(
-                    "require_entries", "pair indices must belong to the source set"
-                )
+            _check_first_collision(
+                self.entries, self.has_repeated_difference, self.first_collision
+            )
+        elif self.first_collision is not None:
+            raise _validation_error(
+                "require_entries", "first_collision must be null when entries is empty"
+            )
         return self
 
     @classmethod

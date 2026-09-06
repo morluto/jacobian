@@ -19,7 +19,7 @@ from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import (
     encode_strict_json,
-    parse_canonical_integer,
+    format_canonical_integer,
 )
 from jacobian.math.analysis.intervals import ClosedRationalInterval, RationalBox
 from jacobian.math.number_theory.algebraic_numbers.real import (
@@ -285,8 +285,7 @@ class IsolatedRealPlanePoint(StrictModel):
                     "plane algebraic point coordinate exceeds the degree-sixteen bound",
                 )
             if any(
-                len(coefficient.lstrip("-"))
-                > MAX_PLANE_COMPONENT_POINT_COEFFICIENT_DIGITS
+                abs(coefficient) >= 10**MAX_PLANE_COMPONENT_POINT_COEFFICIENT_DIGITS
                 for coefficient in coordinate.polynomial
             ):
                 raise _validation_error(
@@ -320,7 +319,7 @@ class IsolatedRealPlanePoint(StrictModel):
             degree = len(coordinate.polynomial) - 1
             terms: list[RationalPolynomialTerm] = []
             for offset, encoded_coefficient in enumerate(coordinate.polynomial):
-                coefficient = parse_canonical_integer(encoded_coefficient)
+                coefficient = encoded_coefficient
                 if coefficient == 0:
                     continue
                 exponents = [0, 0]
@@ -356,7 +355,12 @@ def _plane_point_identity_key(
     return (
         point.axis,
         tuple(
-            (coordinate.polynomial, coordinate.real_root_index)
+            (
+                tuple(
+                    format_canonical_integer(value) for value in coordinate.polynomial
+                ),
+                coordinate.real_root_index,
+            )
             for coordinate in point.coordinates
         ),
     )
@@ -477,7 +481,13 @@ def _raw_optional_string(value: object, *, label: str) -> None:
 
 def _raw_rational_limit(value: object, *, maximum_digits: int, label: str) -> None:
     if isinstance(value, CanonicalRational):
-        if max(len(value.num.lstrip("-")), len(value.den)) > maximum_digits:
+        if (
+            max(
+                len(format_canonical_integer(abs(value.num))),
+                len(format_canonical_integer(value.den)),
+            )
+            > maximum_digits
+        ):
             raise _validation_error(
                 "coefficient_digits",
                 f"{label} admits at most {maximum_digits} decimal digits",
@@ -499,13 +509,17 @@ def _raw_rational_limit(value: object, *, maximum_digits: int, label: str) -> No
         component = value.get(part)
         if component is None:
             continue
-        if not isinstance(component, str):
+        if type(component) not in (int, str):
             raise _validation_error(
                 "rational_shape",
-                f"{label} numerator and denominator must be decimal strings",
+                f"{label} numerator and denominator must be exact integers",
             )
-        digits = component.removeprefix("-")
-        if len(digits) > maximum_digits:
+        exceeds_bound = (
+            abs(component) >= 10**maximum_digits
+            if isinstance(component, int)
+            else len(component.removeprefix("-")) > maximum_digits
+        )
+        if exceeds_bound:
             raise _validation_error(
                 "coefficient_digits",
                 f"{label} admits at most {maximum_digits} decimal digits",
@@ -779,13 +793,18 @@ def _raw_algebraic_coordinate_envelope(coordinate: object) -> None:
         label="plane sample coordinate polynomial",
     )
     if isinstance(polynomial, (list, tuple)):
-        if any(not isinstance(coefficient, str) for coefficient in polynomial):
+        if any(type(coefficient) not in (int, str) for coefficient in polynomial):
             raise _validation_error(
                 "sample_coordinate_shape",
-                "plane sample coordinate coefficients must be decimal strings",
+                "plane sample coordinate coefficients must be exact integers",
             )
         if any(
-            len(coefficient.lstrip("-")) > MAX_PLANE_COMPONENT_SAMPLE_COEFFICIENT_DIGITS
+            (
+                abs(coefficient) >= 10**MAX_PLANE_COMPONENT_SAMPLE_COEFFICIENT_DIGITS
+                if isinstance(coefficient, int)
+                else len(coefficient.lstrip("-"))
+                > MAX_PLANE_COMPONENT_SAMPLE_COEFFICIENT_DIGITS
+            )
             for coefficient in polynomial
         ):
             raise _validation_error(

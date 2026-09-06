@@ -11,7 +11,6 @@ from sympy.polys.domains import AlgebraicField
 from sympy.polys.matrices import DomainMatrix
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import parse_canonical_integer
 from jacobian.math._root_isolation import strict_root_count
 from jacobian.math.matrices.values import EmbeddedRealSimpleNumberFieldMatrix
 from jacobian.math.number_theory.number_fields.values import (
@@ -47,10 +46,7 @@ def recognize_real_simple_number_field(
 
     x = Symbol("x")
     polynomial = Poly.from_list(
-        [
-            parse_canonical_integer(coefficient)
-            for coefficient in embedding.presentation.coefficients_descending
-        ],
+        list(embedding.presentation.coefficients_descending),
         gens=x,
         domain=QQ,
     )
@@ -77,8 +73,8 @@ def field_element_from_value(
 
     coefficients_descending = [
         QQ(
-            parse_canonical_integer(coefficient.num),
-            parse_canonical_integer(coefficient.den),
+            coefficient.num,
+            coefficient.den,
         )
         for coefficient in reversed(value.coefficients_ascending)
     ]
@@ -121,10 +117,7 @@ def field_element_sign(
         return 0
     x = Symbol("x")
     defining = Poly.from_list(
-        [
-            parse_canonical_integer(coefficient)
-            for coefficient in recognized.embedding.presentation.coefficients_descending
-        ],
+        list(recognized.embedding.presentation.coefficients_descending),
         gens=x,
         domain=QQ,
     )
@@ -175,7 +168,7 @@ def domain_matrix_from_embedded(
     ]
     return DomainMatrix(
         rows,
-        (len(rows), len(rows[0])),
+        (matrix.row_count, matrix.column_count),
         recognized.field,
     )
 
@@ -204,6 +197,8 @@ def embedded_matrix_from_domain(
     dense = matrix.to_dense().rep.to_ddm()
     return EmbeddedRealSimpleNumberFieldMatrix(
         embedding=recognized.embedding,
+        row_count=matrix.shape[0],
+        column_count=matrix.shape[1],
         entries=tuple(
             tuple(
                 simple_number_field_element_from_field(value, recognized)

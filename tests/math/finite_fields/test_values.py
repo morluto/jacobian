@@ -196,6 +196,8 @@ def test_subspace_rejects_dependent_basis_matrices() -> None:
 
     candidate = FiniteDimensionalSubspace(
         presentation=presentation,
+        row_axis=rows,
+        column_axis=columns,
         basis_axis=basis_axis,
         basis=(matrix, matrix),
     )
@@ -253,6 +255,8 @@ def test_subspace_rejects_oversized_rank_matrix_before_allocation() -> None:
     with pytest.raises(ValueError, match="rank matrix"):
         FiniteDimensionalSubspace(
             presentation=presentation,
+            row_axis=row_axis,
+            column_axis=column_axis,
             basis_axis=Axis(
                 name="basis",
                 labels=tuple(f"b{i}" for i in range(86)),

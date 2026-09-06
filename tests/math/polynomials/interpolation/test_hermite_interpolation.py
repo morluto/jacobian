@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 from math import prod
 
@@ -34,8 +35,8 @@ from jacobian.math.polynomials.interpolation._models import (
 def _q(numerator: int, denominator: int = 1) -> CanonicalRational:
     value = Fraction(numerator, denominator)
     return CanonicalRational(
-        num=str(value.numerator),
-        den=str(value.denominator),
+        num=value.numerator,
+        den=value.denominator,
     )
 
 
@@ -263,8 +264,10 @@ def test_native_polynomial_value_composes_with_existing_evaluation() -> None:
         _table(_jet(0, (0, 1), (0, 1)), _jet(1, (1, 1), (2, 1)))
     )
     serialized_polynomial = result.polynomial.model_dump(mode="json")
-    request = RationalPolynomialEvaluationRequest.model_validate(
-        {"polynomial": serialized_polynomial, "point": {"num": "3", "den": "1"}}
+    request = RationalPolynomialEvaluationRequest.model_validate_json(
+        json.dumps(
+            {"polynomial": serialized_polynomial, "point": {"num": "3", "den": "1"}}
+        )
     )
 
     evaluated = rational_polynomial_evaluate(request.polynomial, request.point)
@@ -292,22 +295,24 @@ def test_duplicate_nodes_and_incomplete_prefixes_are_rejected() -> None:
 def test_total_multiplicity_and_linear_work_boundaries() -> None:
     assert MAX_HERMITE_SYSTEM_CELLS == 32 * 33
     assert MAX_HERMITE_CUBIC_WORK_CELLS == 32**3
-    boundary = OrdinaryDerivativeJetTable.model_validate(
-        {
-            "variable": "x",
-            "jets": [
-                {
-                    "node": {"num": "0", "den": "1"},
-                    "derivatives": [
-                        {
-                            "derivative_order": order,
-                            "value": {"num": "0", "den": "1"},
-                        }
-                        for order in range(32)
-                    ],
-                }
-            ],
-        }
+    boundary = OrdinaryDerivativeJetTable.model_validate_json(
+        json.dumps(
+            {
+                "variable": "x",
+                "jets": [
+                    {
+                        "node": {"num": "0", "den": "1"},
+                        "derivatives": [
+                            {
+                                "derivative_order": order,
+                                "value": {"num": "0", "den": "1"},
+                            }
+                            for order in range(32)
+                        ],
+                    }
+                ],
+            }
+        )
     )
 
     assert sum(len(jet.derivatives) for jet in boundary.jets) == 32
@@ -318,39 +323,41 @@ def test_total_multiplicity_and_linear_work_boundaries() -> None:
         {"derivative_order": 31, "value": {"num": "0", "den": "1"}}
     )
     with pytest.raises(ValidationError):
-        OrdinaryDerivativeJetTable.model_validate(above)
+        OrdinaryDerivativeJetTable.model_validate_json(json.dumps(above))
 
 
 def test_input_rational_digit_boundary_is_documented_and_enforced() -> None:
     at_limit = "9" * 256
     denominator_at_limit = "1" + "0" * 255
-    table = OrdinaryDerivativeJetTable.model_validate(
-        {
-            "variable": "x",
-            "jets": [
-                {
-                    "node": {"num": "1", "den": denominator_at_limit},
-                    "derivatives": [
-                        {
-                            "derivative_order": 0,
-                            "value": {"num": at_limit, "den": "1"},
-                        }
-                    ],
-                }
-            ],
-        }
+    table = OrdinaryDerivativeJetTable.model_validate_json(
+        json.dumps(
+            {
+                "variable": "x",
+                "jets": [
+                    {
+                        "node": {"num": "1", "den": denominator_at_limit},
+                        "derivatives": [
+                            {
+                                "derivative_order": 0,
+                                "value": {"num": at_limit, "den": "1"},
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
     )
-    assert hermite_interpolation(table).leading_coefficient.num == at_limit
+    assert hermite_interpolation(table).leading_coefficient.num == 10**256 - 1
 
     above_limit = table.model_dump(mode="json")
     above_limit["jets"][0]["derivatives"][0]["value"]["num"] = "9" * 257
     with pytest.raises(ValidationError):
-        OrdinaryDerivativeJetTable.model_validate(above_limit)
+        OrdinaryDerivativeJetTable.model_validate_json(json.dumps(above_limit))
 
     above_denominator = table.model_dump(mode="json")
     above_denominator["jets"][0]["node"]["den"] = "1" + "0" * 256
     with pytest.raises(ValidationError):
-        OrdinaryDerivativeJetTable.model_validate(above_denominator)
+        OrdinaryDerivativeJetTable.model_validate_json(json.dumps(above_denominator))
 
     schema = OrdinaryDerivativeJetTable.model_json_schema()
     jet_properties = schema["$defs"]["OrdinaryDerivativeJet"]["properties"]
@@ -368,21 +375,25 @@ def test_input_rational_digit_boundary_is_documented_and_enforced() -> None:
 def test_intermediate_growth_boundary_rejects_before_matrix_construction() -> None:
     # At M=32 these adjacent node heights straddle the 32,768-digit
     # fraction-free-minor envelope while every raw rational remains admissible.
-    accepted = OrdinaryDerivativeJetTable.model_validate(_full_multiplicity_payload(64))
+    accepted = OrdinaryDerivativeJetTable.model_validate_json(
+        json.dumps(_full_multiplicity_payload(64))
+    )
     assert hermite_interpolation(accepted).polynomial.polynomial.terms == ()
-    rejected = OrdinaryDerivativeJetTable.model_validate(_full_multiplicity_payload(65))
+    rejected = OrdinaryDerivativeJetTable.model_validate_json(
+        json.dumps(_full_multiplicity_payload(65))
+    )
     with pytest.raises(OperationDomainValidationError):
         hermite_interpolation(rejected)
 
 
 def test_request_preflight_is_not_derived_from_serialized_result_size() -> None:
-    accepted = OrdinaryDerivativeJetTable.model_validate(
-        _full_multiplicity_payload(61, last_value_digits=256)
+    accepted = OrdinaryDerivativeJetTable.model_validate_json(
+        json.dumps(_full_multiplicity_payload(61, last_value_digits=256))
     )
     result = hermite_interpolation(accepted)
     assert result.polynomial.polynomial.terms
-    larger = OrdinaryDerivativeJetTable.model_validate(
-        _full_multiplicity_payload(62, last_value_digits=256)
+    larger = OrdinaryDerivativeJetTable.model_validate_json(
+        json.dumps(_full_multiplicity_payload(62, last_value_digits=256))
     )
     assert hermite_interpolation(larger).polynomial.polynomial.terms
 
@@ -393,16 +404,20 @@ def test_result_round_trips() -> None:
     )
     serialized = result.model_dump(mode="json")
 
-    assert HermiteInterpolationResult.model_validate(serialized) == result
+    assert (
+        HermiteInterpolationResult.model_validate_json(json.dumps(serialized)) == result
+    )
     assert (
         verify_hermite_interpolation(
-            HermiteInterpolationResult.model_validate(serialized)
+            HermiteInterpolationResult.model_validate_json(json.dumps(serialized))
         )
         is True
     )
     forged = result.model_dump(mode="json")
     forged["leading_coefficient"] = {"num": "9", "den": "1"}
     assert (
-        verify_hermite_interpolation(HermiteInterpolationResult.model_validate(forged))
+        verify_hermite_interpolation(
+            HermiteInterpolationResult.model_validate_json(json.dumps(forged))
+        )
         is False
     )

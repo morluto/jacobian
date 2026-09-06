@@ -9,14 +9,14 @@ from jacobian.math.lattices._models import IntegerLattice
 
 
 def _truth_table(values: list[int]) -> tuple[CanonicalRational, ...]:
-    return tuple(CanonicalRational(num=str(v), den="1") for v in values)
+    return tuple(CanonicalRational(num=v, den=1) for v in values)
 
 
 def _lattice(ambient: int, basis: list[list[int]]) -> IntegerLattice:
     return IntegerLattice.model_validate(
         {
             "ambient_dimension": ambient,
-            "basis": {"entries": [[str(v) for v in row] for row in basis]},
+            "basis": {"entries": basis},
         }
     )
 

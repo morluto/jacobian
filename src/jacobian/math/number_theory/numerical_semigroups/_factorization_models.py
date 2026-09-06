@@ -6,7 +6,7 @@ from typing import Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 from jacobian.math.number_theory.numerical_semigroups._models import (
     _GENERAL_GENERATOR_ENVELOPE,
@@ -19,7 +19,7 @@ from jacobian.math.number_theory.numerical_semigroups._models import (
 class FactorizationComputeRequest(StrictModel):
     """Compute the complete factorization family Z(s) for one element."""
 
-    generators: tuple[CanonicalInteger, ...] = Field(
+    generators: tuple[ExactInteger, ...] = Field(
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
@@ -28,27 +28,27 @@ class FactorizationComputeRequest(StrictModel):
             + "The presentation may be reordered or redundant; returned coordinates use its increasing minimal generator axis."
         ),
     )
-    value: CanonicalInteger
+    value: ExactInteger
 
 
 class FactorizationComputeResult(StrictModel):
     """Complete factorization family Z(s) for one element."""
 
-    value: CanonicalInteger
-    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+    value: ExactInteger
+    minimal_generators: tuple[ExactInteger, ...] = Field(
         min_length=1, max_length=MAX_GENERATORS
     )
     in_semigroup: bool
-    factorizations: tuple[tuple[int, ...], ...]
+    factorizations: tuple[tuple[ExactInteger, ...], ...]
 
     @classmethod
     def _from_kernel(
         cls,
         *,
-        value: CanonicalInteger,
-        minimal_generators: tuple[CanonicalInteger, ...],
+        value: ExactInteger,
+        minimal_generators: tuple[ExactInteger, ...],
         in_semigroup: bool,
-        factorizations: tuple[tuple[int, ...], ...],
+        factorizations: tuple[tuple[ExactInteger, ...], ...],
     ) -> Self:
         """Construct a complete family materialized by the admitted kernel."""
 
@@ -72,7 +72,7 @@ class FactorizationComputeResult(StrictModel):
 class FactorizationLengthsComputeRequest(StrictModel):
     """Compute the complete sorted length set of one element."""
 
-    generators: tuple[CanonicalInteger, ...] = Field(
+    generators: tuple[ExactInteger, ...] = Field(
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
@@ -81,27 +81,27 @@ class FactorizationLengthsComputeRequest(StrictModel):
             + "The presentation may be reordered or redundant; factorization lengths use its increasing minimal generator axis."
         ),
     )
-    value: CanonicalInteger
+    value: ExactInteger
 
 
 class FactorizationLengthsComputeResult(StrictModel):
     """Sorted length set of one element."""
 
-    value: CanonicalInteger
-    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+    value: ExactInteger
+    minimal_generators: tuple[ExactInteger, ...] = Field(
         min_length=1, max_length=MAX_GENERATORS
     )
     in_semigroup: bool
-    lengths: tuple[int, ...]
+    lengths: tuple[ExactInteger, ...]
 
     @classmethod
     def _from_kernel(
         cls,
         *,
-        value: CanonicalInteger,
-        minimal_generators: tuple[CanonicalInteger, ...],
+        value: ExactInteger,
+        minimal_generators: tuple[ExactInteger, ...],
         in_semigroup: bool,
-        lengths: tuple[int, ...],
+        lengths: tuple[ExactInteger, ...],
     ) -> Self:
         """Construct a length set derived by the admitted kernel."""
 
@@ -131,7 +131,7 @@ class FactorizationLengthsComputeResult(StrictModel):
 class FactorizationDistanceRequest(StrictModel):
     """Distance between two factorizations of the same element."""
 
-    generators: tuple[CanonicalInteger, ...] = Field(
+    generators: tuple[ExactInteger, ...] = Field(
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
@@ -140,24 +140,24 @@ class FactorizationDistanceRequest(StrictModel):
             + "The presentation may be reordered or redundant, but both factorization coordinate tuples must use its increasing minimal generator axis."
         ),
     )
-    value: CanonicalInteger
-    first: tuple[int, ...] = Field(min_length=1)
-    second: tuple[int, ...] = Field(min_length=1)
+    value: ExactInteger
+    first: tuple[ExactInteger, ...] = Field(min_length=1)
+    second: tuple[ExactInteger, ...] = Field(min_length=1)
 
 
 class FactorizationDistanceResult(StrictModel):
     """Distance between two factorizations."""
 
-    value: CanonicalInteger
+    value: ExactInteger
     distance: int = Field(ge=0)
-    first_length: int = Field(ge=0)
-    second_length: int = Field(ge=0)
+    first_length: ExactInteger = Field(ge=0)
+    second_length: ExactInteger = Field(ge=0)
 
 
 class FactorizationGraphComputeRequest(StrictModel):
     """Compute the standard factorization graph of one element."""
 
-    generators: tuple[CanonicalInteger, ...] = Field(
+    generators: tuple[ExactInteger, ...] = Field(
         min_length=1,
         max_length=MAX_GENERATORS,
         description=(
@@ -166,18 +166,18 @@ class FactorizationGraphComputeRequest(StrictModel):
             + "The presentation may be reordered or redundant; graph vertices use its increasing minimal generator axis."
         ),
     )
-    value: CanonicalInteger
+    value: ExactInteger
 
 
 class FactorizationGraphComputeResult(StrictModel):
     """Standard factorization graph with connected components."""
 
-    value: CanonicalInteger
-    minimal_generators: tuple[CanonicalInteger, ...] = Field(
+    value: ExactInteger
+    minimal_generators: tuple[ExactInteger, ...] = Field(
         min_length=1, max_length=MAX_GENERATORS
     )
     in_semigroup: bool
-    factorizations: tuple[tuple[int, ...], ...]
+    factorizations: tuple[tuple[ExactInteger, ...], ...]
     edges: tuple[tuple[int, int], ...]
     connected_components: tuple[tuple[int, ...], ...]
     is_connected: bool
@@ -186,10 +186,10 @@ class FactorizationGraphComputeResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        value: CanonicalInteger,
-        minimal_generators: tuple[CanonicalInteger, ...],
+        value: ExactInteger,
+        minimal_generators: tuple[ExactInteger, ...],
         in_semigroup: bool,
-        factorizations: tuple[tuple[int, ...], ...],
+        factorizations: tuple[tuple[ExactInteger, ...], ...],
         edges: tuple[tuple[int, int], ...],
         connected_components: tuple[tuple[int, ...], ...],
         is_connected: bool,

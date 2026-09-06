@@ -183,8 +183,9 @@ SUBLATTICE_INDEX_OPERATION: MathTool[Any, Any] = MathTool(
     operation_id="lattice.sublattice_index.compute",
     title="Compute sublattice index and quotient invariant factors",
     description=(
-        "For a supplied sublattice inclusion, return the finite index and the "
-        "Smith invariant factors of the quotient parent / sublattice."
+        "For a supplied sublattice inclusion, return its index (INFINITE for "
+        "positive quotient free rank), the torsion Smith invariant factors, "
+        "and the free rank of parent / sublattice."
     ),
     request_type=SublatticeIndexRequest,
     result_type=SublatticeIndexResult,

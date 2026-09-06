@@ -35,8 +35,8 @@ def test_inverse_native_mcp_parity_after_growth_rejection() -> None:
                 {
                     "variable": "x",
                     "truncation_order": 6,
-                    "coefficients": [{"num": "1", "den": "1"}] * 2
-                    + [{"num": "0", "den": "1"}] * 4,
+                    "coefficients": [{"num": 1, "den": 1}] * 2
+                    + [{"num": 0, "den": 1}] * 4,
                 }
             )
             result = await client.call_tool(

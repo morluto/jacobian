@@ -113,6 +113,12 @@ def test_empty_determinant_and_characteristic_polynomial_are_units() -> None:
 
 @pytest.mark.parametrize(("rows", "columns"), [(0, 3), (3, 0), (0, 0)])
 def test_empty_extension_field_matrices_retain_parent(rows: int, columns: int) -> None:
+    from jacobian.math.matrices._number_field import (
+        domain_matrix_from_embedded,
+        embedded_matrix_from_domain,
+        recognize_real_simple_number_field,
+    )
+
     entries = tuple(() for _ in range(rows))
     quadratic = RealQuadraticMatrix(
         radicand=2, row_count=rows, column_count=columns, entries=entries
@@ -122,9 +128,7 @@ def test_empty_extension_field_matrices_retain_parent(rows: int, columns: int) -
         == quadratic
     )
     assert quadratic.radicand == 2
-    presentation = SimpleNumberFieldPresentation(
-        coefficients_descending=("1", "0", "-2")
-    )
+    presentation = SimpleNumberFieldPresentation(coefficients_descending=(1, 0, -2))
     embedding = embeddings(presentation).records[1].embedding
     assert isinstance(embedding, RealNumberFieldEmbedding)
     value = EmbeddedRealSimpleNumberFieldMatrix(
@@ -135,6 +139,10 @@ def test_empty_extension_field_matrices_retain_parent(rows: int, columns: int) -
         == value
     )
     assert value.embedding == embedding
+    recognized = recognize_real_simple_number_field(embedding)
+    backend = domain_matrix_from_embedded(value, recognized)
+    assert backend.shape == (rows, columns)
+    assert embedded_matrix_from_domain(backend, recognized) == value
 
 
 def test_empty_quadratic_matrix_requires_field_context() -> None:

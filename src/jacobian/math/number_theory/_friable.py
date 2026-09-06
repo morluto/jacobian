@@ -2,7 +2,6 @@
 
 from pydantic_core import PydanticCustomError
 
-from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -18,8 +17,8 @@ from jacobian.math.number_theory._friable_models import (
 def compute_friable_count(request: FriableCountRequest) -> FriableCountResult:
     try:
         count = count_friable(
-            parse_canonical_integer(request.x),
-            parse_canonical_integer(request.y),
+            request.x,
+            request.y,
         )
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(

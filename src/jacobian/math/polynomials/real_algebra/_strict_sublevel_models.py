@@ -11,6 +11,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialTerm,
@@ -76,7 +77,7 @@ def _bound_raw_rational(
         if (
             isinstance(component, str)
             and len(component) - component.startswith("-") > max_digits
-        ):
+        ) or (type(component) is int and abs(component) >= 10**max_digits):
             raise _validation_error(
                 "rational_height", f"{label} exceeds the {max_digits}-digit bound"
             )
@@ -198,7 +199,7 @@ def _level_polynomial_height_digits(
     for integer_coefficient in integer_coefficients:
         content = gcd(content, abs(integer_coefficient))
     return max(
-        len(str(abs(integer_coefficient // content)))
+        len(format_canonical_integer(abs(integer_coefficient // content)))
         for integer_coefficient in integer_coefficients
     )
 

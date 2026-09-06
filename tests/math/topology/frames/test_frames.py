@@ -77,13 +77,13 @@ def test_frame_operations_admit_shape_sensitive_vector_count() -> None:
 
     result = _frame_potential(FiniteFrameRequest(vectors=vectors))
 
-    assert result.potential == str(1_025**2)
+    assert result.potential == 1_025**2
 
 
 def test_frame_operations_admit_coefficient_beyond_the_old_value_cap() -> None:
     result = _frame_potential(FiniteFrameRequest(vectors=((1_001,),)))
 
-    assert result.potential == "1004006004001"
+    assert result.potential == 1004006004001
 
 
 def test_frame_requires_full_ambient_span() -> None:
@@ -120,7 +120,7 @@ def test_potential_remains_exact_above_json_safe_integer() -> None:
         for left in result.vectors
         for right in result.vectors
     )
-    assert result.potential == str(expected)
+    assert result.potential == expected
 
 
 def test_flint_gram_reconstructs_dot_products_and_quadratic_form() -> None:
@@ -158,7 +158,7 @@ def test_result_sensitive_operations_diverge_at_full_carrier_boundary() -> None:
     coherence = _coherence(CoherenceRequest(vectors=vectors))
     assert len(gram_result.gram) == MAX_VECTOR_CELLS // dimension
     assert gram_result.gram[0][dimension] == 1
-    assert potential.potential == str(2 * (MAX_VECTOR_CELLS // dimension))
+    assert potential.potential == 2 * (MAX_VECTOR_CELLS // dimension)
     assert coherence.coherence_squared.as_integer_ratio() == (1, 1)
     assert coherence.maximizing_pair == (
         dimension - 1,
@@ -208,7 +208,7 @@ def test_dense_high_height_gram_uses_the_structural_work_bound() -> None:
     off_diagonal = 2 * 1_000 * 999 + (dimension - 2) * 999**2
     expected = 4 * dimension * (diagonal**2 + (dimension - 1) * off_diagonal**2)
     assert result.gram[0][0] == diagonal
-    assert potential.potential == str(expected)
+    assert potential.potential == expected
 
 
 def test_high_coefficients_remain_exact_within_the_cell_bound() -> None:

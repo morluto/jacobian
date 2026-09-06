@@ -13,6 +13,7 @@ from jacobian._execution import (
     OperationExecutionTimeoutError,
 )
 from jacobian.backends import BackendUnavailableError
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials._conversions import (
     rational_from_sympy,
@@ -153,9 +154,10 @@ def _admit_generic_degree(polynomial_map: RationalPolynomialMap) -> None:
             )
         for term in polynomial.polynomial.terms:
             if (
-                len(term.coefficient.num.lstrip("-"))
+                len(format_canonical_integer(abs(term.coefficient.num)))
                 > MAX_GENERIC_DEGREE_COEFFICIENT_DIGITS
-                or len(term.coefficient.den) > MAX_GENERIC_DEGREE_COEFFICIENT_DIGITS
+                or len(format_canonical_integer(term.coefficient.den))
+                > MAX_GENERIC_DEGREE_COEFFICIENT_DIGITS
             ):
                 raise _validation_error(
                     "generic-degree coefficient exceeds the "

@@ -19,6 +19,7 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian.backends import BackendUnavailableError
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.geometry.algebraic_curves._singularity_models import (
     MAX_PROJECTIVE_SINGULAR_COMPONENTS,
     MAX_PROJECTIVE_SINGULAR_FIELD_DEGREE,
@@ -136,7 +137,7 @@ def _admit_singularity(source: sympy.Poly) -> _SingularityAdmission:
     degree = int(source.total_degree())
     source_terms = len(source.terms())
     coefficient_height = max(abs(int(coefficient)) for coefficient in source.coeffs())
-    coefficient_digits = len(str(coefficient_height))
+    coefficient_digits = len(format_canonical_integer(coefficient_height))
     if coefficient_digits > _MAX_NORMALIZED_SOURCE_COEFFICIENT_DIGITS:
         raise _SingularityAdmissionError(
             "primitive source coefficients exceed the derived 8-digit elimination envelope"
@@ -156,7 +157,7 @@ def _admit_singularity(source: sympy.Poly) -> _SingularityAdmission:
         * 2**MAX_PROJECTIVE_SINGULAR_FIELD_DEGREE
         * minor_bound
     )
-    minor_digits = len(str(factor_bound))
+    minor_digits = len(format_canonical_integer(factor_bound))
     if minor_digits > _MAX_POINT_COORDINATE_DIGITS:
         raise _SingularityAdmissionError(
             "the derived elimination minors exceed the 256-digit point-carrier bound"
@@ -207,7 +208,7 @@ def _variable_polynomial(
         polynomial=SparseRationalPolynomial(
             terms=(
                 RationalPolynomialTerm(
-                    coefficient=CanonicalRational(num="1", den="1"),
+                    coefficient=CanonicalRational(num=1, den=1),
                     exponents=tuple(1 if slot == index else 0 for slot in range(3)),
                 ),
             )
@@ -290,9 +291,9 @@ def _ideal_projection_limit_failure(
                         "an exact ideal generator exceeds the admitted degree bound",
                     )
                 if (
-                    len(term.coefficient.num.lstrip("-"))
+                    len(format_canonical_integer(abs(term.coefficient.num)))
                     > admission.macaulay_minor_component_digits
-                    or len(term.coefficient.den)
+                    or len(format_canonical_integer(term.coefficient.den))
                     > admission.macaulay_minor_component_digits
                 ):
                     _limit_failure(
@@ -416,8 +417,7 @@ def _records_from_worker_seeds(
         zero = SimpleNumberFieldElement(
             presentation=seed.presentation,
             coefficients_ascending=tuple(
-                CanonicalRational(num="0", den="1")
-                for _ in range(seed.presentation.degree)
+                CanonicalRational(num=0, den=1) for _ in range(seed.presentation.degree)
             ),
         )
         presentation_key = seed.presentation.model_dump_json()

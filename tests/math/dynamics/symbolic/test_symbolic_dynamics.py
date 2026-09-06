@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+import json
 import random
 from collections.abc import Iterator
 from fractions import Fraction
@@ -84,7 +85,7 @@ def test_golden_mean_artin_mazur_zeta_is_bound_to_periodic_traces() -> None:
         == expected_denominator_terms
     )
     assert result.zeta_function.numerator.terms[0].coefficient.as_fraction() == -1
-    parsed = ArtinMazurZetaResult.model_validate(result.model_dump(mode="json"))
+    parsed = ArtinMazurZetaResult.model_validate_json(result.model_dump_json())
     assert parsed == result
     assert (
         require_canonical_rational_function(parsed.zeta_function)
@@ -185,14 +186,14 @@ def test_empty_adjacency_shift_round_trips_and_projects_from_presentation() -> N
     assert presentation.state_blocks == ()
     assert carrier.matrix == ()
     assert carrier.two_sided is True
-    assert AdjacencyShift.model_validate(carrier.model_dump(mode="json")) == carrier
+    assert AdjacencyShift.model_validate_json(carrier.model_dump_json()) == carrier
 
     profile = compute_periodic_point_profile(
         PeriodicPointProfileRequest(shift=carrier, max_period=3)
     )
-    assert profile.fixed_point_counts == ("0", "0", "0")
-    assert profile.least_period_point_counts == ("0", "0", "0")
-    assert profile.primitive_orbit_counts == ("0", "0", "0")
+    assert profile.fixed_point_counts == (0, 0, 0)
+    assert profile.least_period_point_counts == (0, 0, 0)
+    assert profile.primitive_orbit_counts == (0, 0, 0)
 
     zeta = compute_artin_mazur_zeta(ArtinMazurZetaRequest(shift=carrier))
     assert zeta.determinant_polynomial.variables == ("t",)
@@ -508,7 +509,7 @@ def test_complete_block_language_includes_empty_word_convention() -> None:
     payload = result.model_dump()
     payload["count"] = 4
     with pytest.raises(ValidationError) as exc_info:
-        BlockLanguageResult.model_validate(payload)
+        BlockLanguageResult.model_validate_json(json.dumps(payload))
     assert (
         exc_info.value.errors()[0]["type"] == "symbolic_dynamics.block_language_count"
     )
@@ -601,9 +602,9 @@ def test_periodic_profile_handles_square_mobius_factor() -> None:
         shift=AdjacencyShift(matrix=((2,),)), max_period=4
     )
     result = compute_periodic_point_profile(request)
-    assert result.fixed_point_counts == ("2", "4", "8", "16")
-    assert result.least_period_point_counts == ("2", "2", "6", "12")
-    assert result.primitive_orbit_counts == ("2", "1", "2", "3")
+    assert result.fixed_point_counts == (2, 4, 8, 16)
+    assert result.least_period_point_counts == (2, 2, 6, 12)
+    assert result.primitive_orbit_counts == (2, 1, 2, 3)
     assert result.complete_through_period == 4
 
 
@@ -763,4 +764,4 @@ def test_periodic_profile_returns_large_counts_as_canonical_integers() -> None:
             shift=AdjacencyShift(matrix=((1_000_000,),)), max_period=3
         )
     )
-    assert result.fixed_point_counts[-1] == "1000000000000000000"
+    assert result.fixed_point_counts[-1] == 1000000000000000000

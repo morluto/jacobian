@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import networkx as nx
 import pytest
 from pydantic import ValidationError
@@ -293,7 +295,9 @@ def test_sparse_triangle_free_family_native_mcp_replay() -> None:
             assert native == mcp
             # replay via serialization
             payload = native.model_dump(mode="json")
-            reparsed = TriangleFreeDiameterAugmentationResult.model_validate(payload)
+            reparsed = TriangleFreeDiameterAugmentationResult.model_validate_json(
+                json.dumps(payload)
+            )
             assert reparsed == native
             if native.status == "EXACT":
                 aug2 = nx.Graph()
@@ -327,7 +331,7 @@ def test_result_rejects_forged_ledger() -> None:
     payload["added_edges"].append(["0", "2"])
     payload["added_edge_count"] = 2
     with pytest.raises(ValidationError):
-        TriangleFreeDiameterAugmentationResult.model_validate(payload)
+        TriangleFreeDiameterAugmentationResult.model_validate_json(json.dumps(payload))
 
     # Result deserialization validates structural claims only; the kernel owns
     # the semantic diameter computation.

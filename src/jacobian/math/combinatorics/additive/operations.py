@@ -10,8 +10,6 @@ from pydantic_core import PydanticCustomError
 
 from jacobian.canonical import (
     CanonicalLimits,
-    format_canonical_integer,
-    parse_canonical_integer,
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive import _multiset_sum
@@ -78,7 +76,7 @@ def subset_sum_profile(source: IndexedIntegerSequence) -> SubsetSumProfile:
 
 def _parse_set(spec: FiniteIntegerSet) -> frozenset[int]:
     if any(
-        len(element.lstrip("-")) > CanonicalLimits().max_integer_digits
+        abs(element) >= 10 ** CanonicalLimits().max_integer_digits
         for element in spec.elements
     ):
         raise OperationDomainValidationError(
@@ -86,7 +84,7 @@ def _parse_set(spec: FiniteIntegerSet) -> frozenset[int]:
             code="additive_combinatorics.integer_digit_bound",
             message="finite-set operands exceed the canonical integer digit bound",
         )
-    return frozenset(parse_canonical_integer(element) for element in spec.elements)
+    return frozenset(spec.elements)
 
 
 def _representation_function(
@@ -142,9 +140,7 @@ def representation_profile(
         ) from None
     counts = _representation_function(_parse_set(left), _parse_set(right))
     entries = tuple(
-        RepresentationProfileEntry(
-            sum=format_canonical_integer(value), multiplicity=counts[value]
-        )
+        RepresentationProfileEntry(sum=value, multiplicity=counts[value])
         for value in _sorted_sums(counts)
     )
     return RepresentationProfileResult(left=left, right=right, entries=entries)
@@ -197,9 +193,7 @@ def multiset_sum_representation_profile(
     bounds = window.as_integer_bounds() if window is not None else None
     counts = count_sums(values, arity, bounds)
     entries = tuple(
-        RepresentationProfileEntry(
-            sum=format_canonical_integer(value), multiplicity=counts[value]
-        )
+        RepresentationProfileEntry(sum=value, multiplicity=counts[value])
         for value in sorted(counts)
     )
     return MultisetSumRepresentationProfileResult._from_kernel(
@@ -214,9 +208,7 @@ def additive_energy(
     _require_bounded_cartesian_product(left, right)
     counts = _representation_function(_parse_set(left), _parse_set(right))
     decomposition = tuple(
-        RepresentationProfileEntry(
-            sum=format_canonical_integer(value), multiplicity=counts[value]
-        )
+        RepresentationProfileEntry(sum=value, multiplicity=counts[value])
         for value in _sorted_sums(counts)
     )
     return AdditiveEnergyResult._from_kernel(
@@ -235,9 +227,7 @@ def sumset_cardinality(
     counts = _representation_function(_parse_set(left), _parse_set(right))
     support_values = _sorted_sums(counts)
     try:
-        support = FiniteIntegerSet(
-            elements=tuple(format_canonical_integer(value) for value in support_values)
-        )
+        support = FiniteIntegerSet(elements=tuple(support_values))
     except ValidationError as exc:
         raise OperationDomainValidationError(
             location=("left", "right"),
@@ -270,13 +260,9 @@ def direct_sum_predicate(
         right=right,
         holds=not (collisions_sorted or missing),
         modulus=modulus,
-        representatives=tuple(
-            format_canonical_integer(value) for value in representatives_sorted
-        ),
-        collisions=tuple(
-            format_canonical_integer(value) for value in collisions_sorted
-        ),
-        missing=tuple(format_canonical_integer(value) for value in missing),
+        representatives=tuple(value for value in representatives_sorted),
+        collisions=tuple(value for value in collisions_sorted),
+        missing=tuple(missing),
     )
 
 

@@ -29,7 +29,7 @@ from jacobian.math.number_theory.arithmetic._real_quadratic import (
 def _value(rational: int) -> RealQuadraticValue:
     return RealQuadraticValue(
         rational_part=CanonicalRational.from_fraction(Fraction(rational)),
-        radical_coefficient=CanonicalRational(num="0", den="1"),
+        radical_coefficient=CanonicalRational(num=0, den=1),
         radicand=2,
     )
 
@@ -60,8 +60,8 @@ def test_native_order_api_accepts_canonical_values_without_a_wire_request() -> N
         (
             "difference",
             {
-                "rational_part": {"num": "1", "den": "1"},
-                "radical_coefficient": {"num": "0", "den": "1"},
+                "rational_part": {"num": 1, "den": 1},
+                "radical_coefficient": {"num": 0, "den": 1},
                 "radicand": 2,
             },
         ),
@@ -70,8 +70,8 @@ def test_native_order_api_accepts_canonical_values_without_a_wire_request() -> N
         (
             "sign_certificate",
             {
-                "rational_part_squared": {"num": "1", "den": "1"},
-                "radical_part_squared": {"num": "0", "den": "1"},
+                "rational_part_squared": {"num": 1, "den": 1},
+                "radical_part_squared": {"num": 0, "den": 1},
                 "magnitude_order": "GT",
             },
         ),
@@ -81,7 +81,7 @@ def test_order_result_parsing_retains_structural_source_context_only(
     field: str, forged_value: object
 ) -> None:
     result = real_quadratic_order(_value(3), _value(1))
-    payload = result.model_dump(mode="json")
+    payload = result.model_dump()
 
     parsed = RealQuadraticOrderValue.model_validate({**payload, field: forged_value})
     assert parsed.left.radicand == parsed.right.radicand == parsed.difference.radicand
@@ -94,8 +94,8 @@ def test_native_order_api_retains_shared_field_admission() -> None:
         real_quadratic_order(
             _value(1),
             RealQuadraticValue(
-                rational_part=CanonicalRational(num="0", den="1"),
-                radical_coefficient=CanonicalRational(num="0", den="1"),
+                rational_part=CanonicalRational(num=0, den=1),
+                radical_coefficient=CanonicalRational(num=0, den=1),
                 radicand=3,
             ),
         )
@@ -119,8 +119,8 @@ def test_declarations_project_wire_requests_to_native_kernels() -> None:
     assert result == real_quadratic_order(left, right)
 
     element = RealQuadraticValue(
-        rational_part=CanonicalRational(num="1", den="1"),
-        radical_coefficient=CanonicalRational(num="1", den="1"),
+        rational_part=CanonicalRational(num=1, den=1),
+        radical_coefficient=CanonicalRational(num=1, den=1),
         radicand=2,
     )
     embedding_tool = cast(

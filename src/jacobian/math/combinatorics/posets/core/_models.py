@@ -10,12 +10,10 @@ from pydantic import Field, StrictInt, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._digest import Sha256Digest
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import (
     canonicalize_json,
-    format_canonical_integer,
-    parse_canonical_integer,
 )
 
 
@@ -514,11 +512,11 @@ class LinearExtensionRequest(StrictModel):
 
 
 class LinearExtensionCountResult(StrictModel):
-    count: CanonicalInteger
+    count: ExactInteger
 
     @model_validator(mode="after")
     def require_positive_count(self) -> Self:
-        if parse_canonical_integer(self.count) < 1:
+        if self.count < 1:
             raise _validation_error(
                 "linear_extension_count_positive",
                 "linear-extension count must be positive",
@@ -527,7 +525,7 @@ class LinearExtensionCountResult(StrictModel):
 
     @classmethod
     def _from_kernel(cls, count: int) -> Self:
-        return cls.model_construct(count=format_canonical_integer(count))
+        return cls.model_construct(count=count)
 
 
 class PosetInterval(StrictModel):

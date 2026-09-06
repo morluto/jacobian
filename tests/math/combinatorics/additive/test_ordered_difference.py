@@ -20,12 +20,16 @@ from jacobian.math.combinatorics.additive.operations import (
 
 
 def _request(*vectors: tuple[int, ...]) -> OrderedDifferenceProfileRequest:
-    return OrderedDifferenceProfileRequest.model_validate(
-        {
-            "vectors": {
-                "vectors": [{"coordinates": [str(c) for c in vec]} for vec in vectors]
+    return OrderedDifferenceProfileRequest.model_validate_json(
+        json.dumps(
+            {
+                "vectors": {
+                    "vectors": [
+                        {"coordinates": [str(c) for c in vec]} for vec in vectors
+                    ]
+                }
             }
-        }
+        )
     )
 
 
@@ -195,9 +199,8 @@ class TestOrderedDifferenceProfile:
         repeated = [e for e in payload["entries"] if int(e["multiplicity"]) > 1]
         assert len(repeated) >= 2
         payload["first_collision"] = repeated[-1]["pairs"][0]
-        assert not verify_ordered_difference_profile(
-            OrderedDifferenceProfileResult.model_validate(payload)
-        )
+        with pytest.raises(ValidationError):
+            OrderedDifferenceProfileResult.model_validate_json(json.dumps(payload))
 
     def test_result_rejects_nondesignated_pair_from_first_entry(self) -> None:
         """Swapping in a different valid pair of the same first repeated
@@ -215,7 +218,7 @@ class TestOrderedDifferenceProfile:
             first_repeated["pairs"][0],
         )
         with pytest.raises(ValidationError):
-            OrderedDifferenceProfileResult.model_validate(payload)
+            OrderedDifferenceProfileResult.model_validate_json(json.dumps(payload))
 
     def test_verifier_rejects_boolean_first_collision_index_from_model_copy(
         self,
@@ -259,7 +262,7 @@ class TestOrderedDifferenceProfile:
             )
         with pytest.raises(ValidationError) as schema_error:
             IntegerVector.model_validate({"coordinates": ["9" * 100_000]})
-        assert schema_error.value.errors()[0]["type"] == "string_too_long"
+        assert schema_error.value.errors()[0]["type"] == "int_type"
 
     def test_difference_coordinates_may_carry_one_extra_digit(self) -> None:
         """Exact differences of maximally bounded sources stay representable."""

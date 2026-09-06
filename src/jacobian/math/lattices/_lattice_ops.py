@@ -11,17 +11,7 @@ canonical wire types.
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import Any
-
-from jacobian.canonical import parse_canonical_integer
-
-
-def _to_int(value: str | int) -> int:
-    """Coerce a canonical-string or plain int into a Python int."""
-    if isinstance(value, int):
-        return value
-    return parse_canonical_integer(value)
-
+from typing import Any, Literal
 
 __all__ = [
     "direct_sum",
@@ -54,8 +44,7 @@ def integer_rank(entries: list[list[int]]) -> int:
     """Return the exact rank over ``QQ`` of an integer entry matrix."""
     from sympy import Matrix
 
-    parsed = [[_to_int(v) for v in row] for row in entries]
-    return int(Matrix(parsed).rank())
+    return int(Matrix(entries).rank())
 
 
 def integer_determinant(entries: list[list[int]]) -> int:
@@ -149,12 +138,16 @@ def dual_basis(entries: list[list[int]]) -> list[list[Fraction]]:
 def saturate_lattice(
     entries: list[list[int]],
 ) -> tuple[list[list[int]], list[list[int]], int]:
-    """Return ``(saturated_basis, inclusion, index)`` for the lattice.
+    """Return ``(saturated_basis, inclusion, index)`` for an admitted lattice.
 
+    The caller establishes full row rank before entering this private kernel.
     ``saturated_basis`` spans ``sat(L) = span_Q(L) cap ZZ^n`` in HNF canonical
     form.  ``inclusion`` is the integer matrix ``C`` with ``B = C @ sat``.
     ``index`` is the finite index ``[sat(L) : L]``.
     """
+    if not entries:
+        return [], [], 1
+
     from sympy import ZZ, Matrix
     from sympy.matrices.normalforms import hermite_normal_form
     from sympy.polys.matrices import DomainMatrix
@@ -162,9 +155,6 @@ def saturate_lattice(
 
     basis = Matrix(entries)
     rows = basis.rows
-    if basis.rank() != rows:
-        raise ValueError("lattice basis must be full row rank for saturation")
-
     # If S B T = D is a Smith decomposition, the first r rows of T^{-1}
     # form a primitive integer basis of span_Q(B) cap ZZ^n.  Row HNF makes
     # that basis canonical without changing its lattice.
@@ -209,12 +199,12 @@ def saturate_lattice(
 def sublattice_index(
     embedding: list[list[int]],
     parent_rank: int,
-) -> tuple[int, list[int], int]:
-    """Return ``(index, invariant_factors, free_rank)`` for an inclusion.
+) -> tuple[int | Literal["INFINITE"], list[int], int]:
+    """Return ``(index, torsion_invariant_factors, free_rank)`` for an inclusion.
 
     ``embedding`` is the integer matrix ``E`` with ``sublattice = E @ parent``.
     The quotient ``parent / sublattice`` is computed from the Smith normal form
-    of ``E``.
+    of ``E``. Positive free rank means infinite index, independently of torsion.
     """
     factors = smith_invariant_factors(embedding)
     # The quotient Z^parent_rank / <rows of E> is a direct sum of the cyclic
@@ -225,7 +215,7 @@ def sublattice_index(
     for f in finite:
         index *= f
     free_rank = parent_rank - len(factors)
-    return index, finite, free_rank
+    return "INFINITE" if free_rank else index, finite, free_rank
 
 
 def discriminant_group(entries: list[list[int]]) -> tuple[int, list[int]]:
@@ -246,12 +236,20 @@ def discriminant_group(entries: list[list[int]]) -> tuple[int, list[int]]:
     return det, finite
 
 
-def orthogonal_complement(entries: list[list[int]]) -> list[list[Fraction]]:
+def orthogonal_complement(
+    entries: list[list[int]], *, ambient_dimension: int
+) -> list[list[Fraction]]:
     """Return a rational basis for the orthogonal complement in ``QQ^n``.
 
     The orthogonal complement of the row space of ``B`` is the right nullspace
     of ``B`` (vectors ``x`` with ``B x = 0``).
     """
+    if not entries:
+        return [
+            [Fraction(int(i == j)) for j in range(ambient_dimension)]
+            for i in range(ambient_dimension)
+        ]
+
     from sympy import Matrix
 
     basis = Matrix(entries)
@@ -271,12 +269,18 @@ def orthogonal_complement(entries: list[list[int]]) -> list[list[Fraction]]:
     return rows
 
 
-def direct_sum(first: list[list[int]], second: list[list[int]]) -> list[list[int]]:
+def direct_sum(
+    first: list[list[int]],
+    second: list[list[int]],
+    *,
+    first_dimension: int,
+    second_dimension: int,
+) -> list[list[int]]:
     """Return the block-diagonal direct-sum basis."""
     rows_first = len(first)
-    cols_first = len(first[0]) if rows_first else 0
+    cols_first = first_dimension
     rows_second = len(second)
-    cols_second = len(second[0]) if rows_second else 0
+    cols_second = second_dimension
     result: list[list[int]] = []
     for i in range(rows_first):
         row = [0] * cols_first + [0] * cols_second
@@ -291,14 +295,25 @@ def direct_sum(first: list[list[int]], second: list[list[int]]) -> list[list[int
     return result
 
 
-def orthogonal_sum(first: list[list[int]], second: list[list[int]]) -> list[list[int]]:
+def orthogonal_sum(
+    first: list[list[int]],
+    second: list[list[int]],
+    *,
+    first_dimension: int,
+    second_dimension: int,
+) -> list[list[int]]:
     """Return the orthogonal-sum basis (block-diagonal under standard form).
 
     For the standard bilinear form the orthogonal sum embedding is the same
     block-diagonal construction as the direct sum; the distinction is semantic
     and recorded in the result relation.
     """
-    return direct_sum(first, second)
+    return direct_sum(
+        first,
+        second,
+        first_dimension=first_dimension,
+        second_dimension=second_dimension,
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -5,7 +5,7 @@ from __future__ import annotations
 from itertools import pairwise
 from math import prod
 
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import parse_canonical_integer
 from jacobian.math.algebraic_tori.values import (
     AlgebraicTorusSolutionSubgroup,
     HomogeneousMonomialSystem,
@@ -32,9 +32,7 @@ def _matrix_value(
     return IntegerMatrix(
         row_count=rows,
         column_count=columns,
-        entries=tuple(
-            tuple(format_canonical_integer(value) for value in row) for row in entries
-        ),
+        entries=tuple(tuple(row) for row in entries),
     )
 
 
@@ -119,7 +117,7 @@ def _admit_monomial_system(system: HomogeneousMonomialSystem) -> None:
             f"dimension bound of {MAX_CERTIFIED_SNF_INPUT_DIMENSION}"
         )
     if any(
-        len(value.lstrip("-")) > MAX_CERTIFIED_SNF_INPUT_DIGITS
+        abs(value) >= 10**MAX_CERTIFIED_SNF_INPUT_DIGITS
         for row in matrix.entries
         for value in row
     ):
@@ -134,10 +132,7 @@ def homogeneous_monomial_solution_subgroup(
     """Return the exact torsion-by-free-torus subgroup solving ``x^A = 1``."""
 
     _admit_monomial_system(system)
-    source = [
-        [parse_canonical_integer(value) for value in row]
-        for row in system.exponent_matrix.entries
-    ]
+    source = [list(row) for row in system.exponent_matrix.entries]
     equation_count = system.exponent_matrix.row_count
     coordinate_count = system.exponent_matrix.column_count
     reduction = smith_reduce(
@@ -197,13 +192,9 @@ def homogeneous_monomial_solution_subgroup(
         source=system,
         smith_certificate=certificate,
         torsion_character_group=TorsionCharacterGroup(
-            invariant_factors=tuple(
-                format_canonical_integer(value) for value in torsion_factors
-            ),
+            invariant_factors=torsion_factors,
         ),
-        connected_component_count=format_canonical_integer(
-            prod(torsion_factors, start=1)
-        ),
+        connected_component_count=prod(torsion_factors, start=1),
         torsion_parameter_axis=tuple(
             f"zeta_{index}" for index in range(len(torsion_factors))
         ),
@@ -249,23 +240,16 @@ def verify_solution_subgroup(claim: AlgebraicTorusSolutionSubgroup) -> bool:
     rank = certificate.rank
     if claim.free_rank != len(claim.source.coordinate_axis) - rank:
         return False
-    factors = tuple(map(parse_canonical_integer, certificate.invariant_factors))
+    factors = certificate.invariant_factors
     torsion_positions = tuple(i for i, factor in enumerate(factors) if factor > 1)
     torsion = tuple(factors[i] for i in torsion_positions)
-    if (
-        tuple(
-            map(
-                parse_canonical_integer, claim.torsion_character_group.invariant_factors
-            )
-        )
-        != torsion
-    ):
+    if claim.torsion_character_group.invariant_factors != torsion:
         return False
-    if parse_canonical_integer(claim.connected_component_count) != prod(torsion):
+    if claim.connected_component_count != prod(torsion):
         return False
 
     def entries(matrix: IntegerMatrix) -> Matrix:
-        return [list(map(parse_canonical_integer, row)) for row in matrix.entries]
+        return [list(row) for row in matrix.entries]
 
     right = entries(certificate.right_transformation)
     if entries(claim.torsion_exponent_map) != [

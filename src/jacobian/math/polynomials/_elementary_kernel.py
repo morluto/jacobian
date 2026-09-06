@@ -9,10 +9,8 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
-    CanonicalInteger,
     CanonicalRational,
 )
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math import polynomials
 from jacobian.math.polynomials._conversions import (
@@ -68,7 +66,7 @@ def _admit_integer(polynomial: IntegerPolynomial) -> None:
             f"integer polynomial exceeds the degree-{_MAX_ELEMENTARY_DEGREE} operation budget"
         )
     if any(
-        len(coefficient.lstrip("-")) > _MAX_INTEGER_COEFFICIENT_DIGITS
+        abs(coefficient) >= 10**_MAX_INTEGER_COEFFICIENT_DIGITS
         for coefficient in polynomial.coefficients
     ):
         raise _validation_error("integer coefficient exceeds the decimal-digit budget")
@@ -79,11 +77,9 @@ def _admit_integer_pair(left: IntegerPolynomial, right: IntegerPolynomial) -> No
     _admit_integer(right)
 
 
-def _admit_integer_evaluation(
-    polynomial: IntegerPolynomial, point: CanonicalInteger
-) -> None:
+def _admit_integer_evaluation(polynomial: IntegerPolynomial, point: int) -> None:
     _admit_integer(polynomial)
-    if len(point.lstrip("-")) > _MAX_INTEGER_COEFFICIENT_DIGITS:
+    if type(point) is not int or abs(point) >= 10**_MAX_INTEGER_COEFFICIENT_DIGITS:
         raise _validation_error("evaluation point exceeds the decimal-digit budget")
 
 
@@ -175,21 +171,15 @@ def _integer_poly(polynomial: IntegerPolynomial) -> Any:
     from sympy import Poly
 
     return Poly.from_list(
-        [
-            parse_canonical_integer(coefficient)
-            for coefficient in polynomial.coefficients
-        ],
+        list(polynomial.coefficients),
         _x(),
         domain="ZZ",
     )
 
 
-def _integer_wire(polynomial: Any) -> IntegerPolynomial:
+def _integer_value(polynomial: Any) -> IntegerPolynomial:
     return IntegerPolynomial(
-        coefficients=tuple(
-            format_canonical_integer(int(coefficient))
-            for coefficient in polynomial.all_coeffs()
-        )
+        coefficients=tuple(int(coefficient) for coefficient in polynomial.all_coeffs())
     )
 
 
@@ -203,10 +193,10 @@ def integer_polynomial_gcd(
     right_backend = _integer_poly(right)
     gcd = left_backend.gcd(right_backend)
     return IntegerPolynomialGcdResult(
-        gcd=_integer_wire(gcd),
-        left_content=format_canonical_integer(int(left_backend.content())),
-        right_content=format_canonical_integer(int(right_backend.content())),
-        gcd_content=format_canonical_integer(int(gcd.content())),
+        gcd=_integer_value(gcd),
+        left_content=int(left_backend.content()),
+        right_content=int(right_backend.content()),
+        gcd_content=int(gcd.content()),
     )
 
 
@@ -217,7 +207,7 @@ def integer_polynomial_content(
 
     _run_admission(lambda: _admit_integer(polynomial))
     return IntegerPolynomialContentResult(
-        content=format_canonical_integer(int(_integer_poly(polynomial).content()))
+        content=int(_integer_poly(polynomial).content())
     )
 
 
@@ -231,23 +221,22 @@ def integer_polynomial_primitive_part(
     content, primitive = source.primitive()
     reconstructed = primitive.mul_ground(content)
     return IntegerPolynomialPrimitivePartResult(
-        content=format_canonical_integer(int(content)),
-        primitive_part=_integer_wire(primitive),
-        reconstruction=_integer_wire(reconstructed),
+        content=int(content),
+        primitive_part=_integer_value(primitive),
+        reconstruction=_integer_value(reconstructed),
     )
 
 
 def integer_polynomial_evaluate(
-    polynomial: IntegerPolynomial, point: CanonicalInteger
+    polynomial: IntegerPolynomial, point: int
 ) -> IntegerPolynomialEvaluationResult:
     """Evaluate a canonical integer polynomial at one integer point."""
 
     _run_admission(lambda: _admit_integer_evaluation(polynomial, point))
-    parsed_point = parse_canonical_integer(point)
-    value = _integer_poly(polynomial).eval(parsed_point)
+    value = _integer_poly(polynomial).eval(point)
     return IntegerPolynomialEvaluationResult(
         point=point,
-        value=format_canonical_integer(int(value)),
+        value=int(value),
     )
 
 
@@ -258,7 +247,7 @@ def integer_polynomial_compose(
 
     _run_admission(lambda: _admit_integer_composition(outer, inner))
     composition = _integer_poly(outer).compose(_integer_poly(inner))
-    return IntegerPolynomialCompositionResult(composition=_integer_wire(composition))
+    return IntegerPolynomialCompositionResult(composition=_integer_value(composition))
 
 
 def integer_polynomial_shift(
@@ -269,7 +258,7 @@ def integer_polynomial_shift(
     shifted = _integer_poly(polynomial).shift(shift)
     return IntegerPolynomialShiftResult(
         shift=shift,
-        shifted=_integer_wire(shifted),
+        shifted=_integer_value(shifted),
     )
 
 

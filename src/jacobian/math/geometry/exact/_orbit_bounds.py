@@ -5,6 +5,7 @@ from __future__ import annotations
 from math import factorial
 from typing import NoReturn
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.exact._models import PointConfiguration
 
@@ -20,8 +21,8 @@ def _reject(message: str) -> NoReturn:
     )
 
 
-def _rational_digits(value: str) -> int:
-    return len(value.lstrip("-"))
+def _rational_digits(value: int) -> int:
+    return len(format_canonical_integer(abs(value)))
 
 
 def admit_orbit_profile(configuration: PointConfiguration) -> None:

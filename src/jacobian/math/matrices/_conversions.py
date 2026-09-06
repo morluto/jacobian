@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.matrices.values import IntegerMatrix, RationalMatrix, SmithNormalForm
 
 __all__ = [
@@ -26,8 +25,8 @@ def rational_from_sympy(value: Any) -> CanonicalRational:
     if not isinstance(value, sympy.Rational):
         raise ValueError("SymPy result is not an exact rational scalar")
     return CanonicalRational(
-        num=format_canonical_integer(int(value.p)),
-        den=format_canonical_integer(int(value.q)),
+        num=int(value.p),
+        den=int(value.q),
     )
 
 
@@ -38,9 +37,7 @@ def rational_matrix_to_sympy(matrix: RationalMatrix) -> Any:
         matrix.row_count,
         matrix.column_count,
         [
-            sympy.Rational(
-                parse_canonical_integer(value.num), parse_canonical_integer(value.den)
-            )
+            sympy.Rational(value.num, value.den)
             for row in matrix.entries
             for value in row
         ],
@@ -67,7 +64,7 @@ def integer_matrix_to_sympy(matrix: IntegerMatrix) -> Any:
     return sympy.Matrix(
         matrix.row_count,
         matrix.column_count,
-        [parse_canonical_integer(value) for row in matrix.entries for value in row],
+        [value for row in matrix.entries for value in row],
     )
 
 
@@ -78,10 +75,7 @@ def integer_matrix_from_sympy(matrix: Any) -> IntegerMatrix:
         row_count=matrix.rows,
         column_count=matrix.cols,
         entries=tuple(
-            tuple(
-                format_canonical_integer(int(matrix[row, column]))
-                for column in range(matrix.cols)
-            )
+            tuple(int(matrix[row, column]) for column in range(matrix.cols))
             for row in range(matrix.rows)
         ),
     )
@@ -109,7 +103,5 @@ def smith_normal_form_from_sympy(matrix: Any) -> SmithNormalForm:
     return SmithNormalForm(
         normal_form=integer_matrix_from_sympy(canonical),
         rank=rank,
-        invariant_factors=tuple(
-            format_canonical_integer(value) for value in invariant_factors
-        ),
+        invariant_factors=tuple(value for value in invariant_factors),
     )

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
+
 import pytest
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.math.probability._gaussian import (
     MAX_GAUSSIAN_EXPANSION_PATHS,
     ExactComplexRational,
@@ -18,7 +21,9 @@ from jacobian.math.probability._gaussian_inputs import (
 from jacobian.math.probability._tools import finite_probability_operations
 
 
-def _operation():
+def _operation() -> MathTool[
+    CanonicalGaussianPolynomialMomentRequest, GaussianPolynomialMomentResult
+]:
     return next(
         operation
         for operation in finite_probability_operations()
@@ -29,8 +34,8 @@ def _operation():
 def _term(exponents: tuple[int, ...]) -> GaussianPolynomialTerm:
     return GaussianPolynomialTerm(
         coefficient=ExactComplexRational(
-            real={"num": "1", "den": "1"},
-            imaginary={"num": "0", "den": "1"},
+            real=CanonicalRational(num=1, den=1),
+            imaginary=CanonicalRational(num=0, den=1),
         ),
         exponents=exponents,
     )
@@ -38,11 +43,20 @@ def _term(exponents: tuple[int, ...]) -> GaussianPolynomialTerm:
 
 def test_gaussian_moment_example_round_trips_as_trusted_result() -> None:
     operation = _operation()
-    request = operation.request_type.model_validate(operation.examples[0].input)
+    request = CanonicalGaussianPolynomialMomentRequest(
+        polynomial=GaussianPolynomial(
+            variable_count=2,
+            terms=(_term((0, 1)), _term((1, 0))),
+        ),
+        order=2,
+    )
     result = operation.run(request)
 
-    assert result.moment.as_fractions() == (2, 0)
-    assert GaussianPolynomialMomentResult.model_validate(result.model_dump()) == result
+    assert result.moment.as_fractions() == (Fraction(2), Fraction(0))
+    assert (
+        GaussianPolynomialMomentResult.model_validate_json(result.model_dump_json())
+        == result
+    )
 
 
 def test_expansion_bound_is_admitted_at_operation_time() -> None:

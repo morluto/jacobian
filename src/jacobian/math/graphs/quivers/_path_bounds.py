@@ -29,6 +29,8 @@ def fixed_length_paths_envelope(
     the operation's explicit work ledger.
     """
 
+    if type(length) is not int or not 0 <= length <= 32:
+        raise ValueError("path length must be an integer from 0 through 32")
     path_count_bound = vertex_count if length == 0 else pow(arrow_count, length)
     entry_digits = len(str(path_count_bound))
     matrix_scalar_products = max(length - 1, 0) * vertex_count**3

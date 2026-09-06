@@ -31,14 +31,14 @@ def decide_integer_sidon(request: IntegerSidonRequest) -> IntegerSidonResult:
     elements = tuple(sorted(int(value) for value in request.elements))
     plan = _require_integer_sidon_result_admission(elements)
     return IntegerSidonResult._from_kernel(
-        normalized_elements=plan.normalized_wires,
+        normalized_elements=plan.normalized_elements,
         ordered_differences=tuple(
             OrderedIntegerDifference._from_kernel(
                 minuend=minuend,
                 subtrahend=subtrahend,
                 difference=difference,
             )
-            for minuend, subtrahend, difference in plan.difference_wires
+            for minuend, subtrahend, difference in plan.differences
         ),
         is_sidon=plan.is_sidon,
     )

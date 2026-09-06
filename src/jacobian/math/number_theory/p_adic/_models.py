@@ -7,12 +7,8 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import (
-    format_canonical_integer,
-    parse_canonical_integer,
-)
 from jacobian.math.polynomials._models import IntegerPolynomial
 
 
@@ -23,15 +19,12 @@ def _validation_error(code: str, message: str) -> PydanticCustomError:
 def _kernel_coefficients(polynomial: IntegerPolynomial) -> tuple[int, ...]:
     """Convert the canonical descending ``ZZ[x]`` value to ascending ints.
 
-    The canonical integer-polynomial value stores decimal-string
-    coefficients highest degree first; every kernel indexes
+    The canonical integer-polynomial value stores coefficients highest degree
+    first; every kernel indexes
     indexes coefficient ``i`` as the degree-``i`` term, so the explicit
     order conversion happens exactly here and nowhere else.
     """
-    return tuple(
-        parse_canonical_integer(coefficient)
-        for coefficient in reversed(polynomial.coefficients)
-    )
+    return tuple(coefficient for coefficient in reversed(polynomial.coefficients))
 
 
 MAX_PRIME = 10_000
@@ -62,7 +55,7 @@ class HenselRootResult(StrictModel):
     """
 
     polynomial: IntegerPolynomial
-    lifted_root: CanonicalInteger
+    lifted_root: ExactInteger
     prime: int = Field(ge=2, le=MAX_PRIME)
     root_mod_p: int = Field(ge=0)
     precision: int = Field(ge=1, le=MAX_PRECISION)
@@ -77,7 +70,7 @@ class HenselRootResult(StrictModel):
             raise _validation_error(
                 "padic_arithmetic.root_out_of_range", "root_mod_p must be in 0..p-1"
             )
-        lifted = parse_canonical_integer(self.lifted_root)
+        lifted = self.lifted_root
         if not 0 <= lifted < self.prime**self.precision:
             raise _validation_error(
                 "padic_arithmetic.lifted_root_out_of_range",
@@ -96,7 +89,7 @@ class HenselRootResult(StrictModel):
     ) -> Self:
         return cls.model_construct(
             polynomial=polynomial,
-            lifted_root=format_canonical_integer(lifted_root),
+            lifted_root=lifted_root,
             prime=prime,
             root_mod_p=root_mod_p,
             precision=precision,
@@ -142,14 +135,12 @@ class PAdicRootsRequest(StrictModel):
 class PAdicRootEntry(StrictModel):
     """One exact root of f mod p^k lifted from a simple root mod p."""
 
-    root: CanonicalInteger
+    root: ExactInteger
     root_type: Literal["SIMPLE"] = "SIMPLE"
 
     @classmethod
     def _from_kernel(cls, root: int) -> Self:
-        return cls.model_construct(
-            root=format_canonical_integer(root), root_type="SIMPLE"
-        )
+        return cls.model_construct(root=root, root_type="SIMPLE")
 
 
 class PAdicRootsResult(StrictModel):
@@ -184,7 +175,7 @@ class PAdicRootsResult(StrictModel):
                 "multiple residues must lie in 0..p-1",
             )
         modulus = self.prime**self.precision
-        roots = tuple(parse_canonical_integer(entry.root) for entry in self.roots)
+        roots = tuple(entry.root for entry in self.roots)
         if any(root >= modulus for root in roots):
             raise _validation_error(
                 "padic_arithmetic.root_out_of_range", "roots must lie in 0..p^k - 1"

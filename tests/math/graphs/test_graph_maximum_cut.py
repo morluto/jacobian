@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from itertools import combinations
 from typing import Any
@@ -211,7 +212,7 @@ def test_complementary_side_orientation_revalidates() -> None:
         payload["left_vertices"],
     )
 
-    complemented = GraphMaximumCutResult.model_validate(payload)
+    complemented = GraphMaximumCutResult.model_validate_json(json.dumps(payload))
 
     assert complemented.cut_value == result.cut_value
     assert complemented.crossing_edges == result.crossing_edges
@@ -249,7 +250,7 @@ def test_result_rejects_forged_ledger_values_and_bounds(
     mutate(payload)
 
     with pytest.raises(ValidationError, match=message):
-        GraphMaximumCutResult.model_validate(payload)
+        GraphMaximumCutResult.model_validate_json(json.dumps(payload))
 
 
 def test_result_rejects_mutated_partition_and_source_graph() -> None:
@@ -259,13 +260,13 @@ def test_result_rejects_mutated_partition_and_source_graph() -> None:
     source_order = payload["graph"]["vertices"]
     payload["right_vertices"].sort(key=source_order.index)
     with pytest.raises(ValidationError):
-        GraphMaximumCutResult.model_validate(payload)
+        GraphMaximumCutResult.model_validate_json(json.dumps(payload))
 
     payload = _validated_result(_cycle(5)).model_dump(mode="json")
     removed = payload["crossing_edges"][0]
     payload["graph"]["edges"].remove(removed)
     with pytest.raises(ValidationError):
-        GraphMaximumCutResult.model_validate(payload)
+        GraphMaximumCutResult.model_validate_json(json.dumps(payload))
 
 
 def test_approximate_upper_bound_and_lower_valued_cut_cannot_claim_exactness() -> None:

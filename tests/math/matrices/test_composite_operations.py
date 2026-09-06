@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from tests.support.rationals import rational_payload as q
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
@@ -31,6 +30,10 @@ def _cr(num: int, den: int = 1) -> CanonicalRational:
     return CanonicalRational.from_integer_ratio(num, den)
 
 
+def q(num: int, den: int = 1) -> CanonicalRational:
+    return _cr(num, den)
+
+
 def _identity_entries(size: int) -> tuple[tuple[CanonicalRational, ...], ...]:
     return tuple(
         tuple(_cr(1) if index == column else _cr(0) for column in range(size))
@@ -38,11 +41,15 @@ def _identity_entries(size: int) -> tuple[tuple[CanonicalRational, ...], ...]:
     )
 
 
-def _matrix(entries: list[list[dict[str, str]]]) -> RationalMatrix:
-    return RationalMatrix.model_validate({"entries": entries})
+def _matrix(entries: list[list[CanonicalRational]]) -> RationalMatrix:
+    return RationalMatrix(
+        entries=tuple(tuple(value for value in row) for row in entries)
+    )
 
 
-def _permanent_request(entries: list[list[dict[str, str]]]) -> MatrixPermanentRequest:
+def _permanent_request(
+    entries: list[list[CanonicalRational]],
+) -> MatrixPermanentRequest:
     return MatrixPermanentRequest(matrix=_matrix(entries))
 
 

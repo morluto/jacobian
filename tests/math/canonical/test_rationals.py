@@ -26,7 +26,7 @@ _LARGE_DENOMINATOR = 10**5000 + 7  # 5,001-digit value, coprime to numerator
 
 
 def test_as_integer_ratio_round_trips_small_values() -> None:
-    value = CanonicalRational(num="3", den="7")
+    value = CanonicalRational(num=3, den=7)
     numerator, denominator = value.as_integer_ratio()
 
     assert numerator == 3
@@ -37,15 +37,15 @@ def test_as_integer_ratio_round_trips_small_values() -> None:
 def test_from_integer_ratio_constructs_reduced_rational() -> None:
     value = CanonicalRational.from_integer_ratio(6, 4)
 
-    assert value.num == "3"
-    assert value.den == "2"
+    assert value.num == 3
+    assert value.den == 2
 
 
 def test_from_fraction_constructs_reduced_rational() -> None:
     value = CanonicalRational.from_fraction(Fraction(6, 4))
 
-    assert value.num == "3"
-    assert value.den == "2"
+    assert value.num == 3
+    assert value.den == 2
 
 
 @pytest.mark.parametrize(
@@ -61,23 +61,21 @@ def test_format_canonical_rational(value: Fraction, expected: str) -> None:
 
 
 def test_canonical_rational_component_digits_uses_canonical_components() -> None:
-    assert (
-        canonical_rational_component_digits(CanonicalRational(num="-4", den="115")) == 3
-    )
+    assert canonical_rational_component_digits(CanonicalRational(num=-4, den=115)) == 3
 
 
 def test_from_integer_ratio_preserves_negative_numerator() -> None:
     value = CanonicalRational.from_integer_ratio(-9, 3)
 
-    assert value.num == "-3"
-    assert value.den == "1"
+    assert value.num == -3
+    assert value.den == 1
 
 
 def test_from_integer_ratio_normalizes_negative_denominator() -> None:
     value = CanonicalRational.from_integer_ratio(5, -3)
 
-    assert value.num == "-5"
-    assert value.den == "3"
+    assert value.num == -5
+    assert value.den == 3
 
 
 def test_from_integer_ratio_rejects_zero_denominator() -> None:
@@ -87,8 +85,8 @@ def test_from_integer_ratio_rejects_zero_denominator() -> None:
 
 def test_as_integer_ratio_above_digit_limit() -> None:
     value = CanonicalRational(
-        num="1" + "0" * 5000,
-        den="1",
+        num=10**5000,
+        den=1,
     )
     numerator, denominator = value.as_integer_ratio()
 
@@ -99,8 +97,8 @@ def test_as_integer_ratio_above_digit_limit() -> None:
 def test_from_integer_ratio_above_digit_limit() -> None:
     value = CanonicalRational.from_integer_ratio(_LARGE_NUMERATOR, 1)
 
-    assert len(value.num.lstrip("-")) > 4300
-    assert value.den == "1"
+    assert abs(value.num) >= 10**4300
+    assert value.den == 1
     assert value.as_integer_ratio() == (_LARGE_NUMERATOR, 1)
 
 
@@ -108,8 +106,8 @@ def test_from_fraction_above_digit_limit() -> None:
     fraction = Fraction(_LARGE_NUMERATOR, _LARGE_DENOMINATOR)
     value = CanonicalRational.from_fraction(fraction)
 
-    assert len(value.num.lstrip("-")) > 4300
-    assert len(value.den.lstrip("-")) > 4300
+    assert abs(value.num) >= 10**4300
+    assert value.den >= 10**4300
     assert value.as_fraction() == fraction
 
 
@@ -119,6 +117,40 @@ def test_round_trip_above_digit_limit() -> None:
 
     assert CanonicalRational.from_fraction(value.as_fraction()) == value
     assert value.as_integer_ratio() == (fraction.numerator, fraction.denominator)
+    assert CanonicalRational.model_validate_json(value.model_dump_json()) == value
+    assert value.model_dump() == {
+        "num": fraction.numerator,
+        "den": fraction.denominator,
+    }
+
+
+@pytest.mark.parametrize("component", ["3", True, 3.0])
+def test_native_rational_rejects_noninteger_components(component: object) -> None:
+    with pytest.raises(ValidationError):
+        CanonicalRational.model_validate({"num": component, "den": 7})
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        '{"num":3,"den":"7"}',
+        '{"num":"3","den":7}',
+        '{"num":"03","den":"7"}',
+        '{"num":"-0","den":"1"}',
+        '{"num":"2","den":"4"}',
+        '{"num":"1","den":"-2"}',
+        '{"num":"0","den":"2"}',
+    ],
+)
+def test_rational_json_requires_canonical_reduced_components(payload: str) -> None:
+    with pytest.raises(ValidationError):
+        CanonicalRational.model_validate_json(payload)
+
+
+def test_rational_json_uses_strings_at_every_magnitude() -> None:
+    value = CanonicalRational(num=3, den=7)
+    assert value.model_dump(mode="json") == {"num": "3", "den": "7"}
+    assert CanonicalRational.model_validate_json(value.model_dump_json()) == value
 
 
 def test_from_integer_ratio_rejects_above_contract_digit_limit() -> None:
@@ -126,7 +158,7 @@ def test_from_integer_ratio_rejects_above_contract_digit_limit() -> None:
 
     with pytest.raises(ValidationError) as error:
         CanonicalRational.from_integer_ratio(too_large, 1)
-    assert error.value.errors()[0]["type"] == "canonical_rational.component_digits"
+    assert error.value.errors()[0]["type"] == "exact_integer.digit_bound"
 
 
 def test_from_fraction_rejects_above_contract_digit_limit() -> None:
@@ -134,4 +166,4 @@ def test_from_fraction_rejects_above_contract_digit_limit() -> None:
 
     with pytest.raises(ValidationError) as error:
         CanonicalRational.from_fraction(too_large)
-    assert error.value.errors()[0]["type"] == "canonical_rational.component_digits"
+    assert error.value.errors()[0]["type"] == "exact_integer.digit_bound"

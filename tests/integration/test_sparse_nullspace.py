@@ -1,5 +1,7 @@
 """Sparse nullspace preserves source axes and exact fundamental vectors."""
 
+import json
+
 import pytest
 
 from jacobian.catalog.catalog import Catalog
@@ -20,14 +22,14 @@ def test_sparse_nullspace_roundtrip_and_defining_identity(free_column: int) -> N
     output = invoke_operation(
         "matrix.nullspace.compute", {"matrix": matrix}, Catalog.open()
     ).output
-    result = NullspaceResult.model_validate(output)
+    result = NullspaceResult.model_validate_json(json.dumps(output))
     assert result.rank == n - 1 and result.nullity == 1
     assert result.free_columns == (free_column,)
     assert [value.as_fraction() for value in result.basis_vectors[0]] == [
         int(j == free_column) for j in range(n)
     ]
     assert all(
-        result.basis_vectors[0][j].num == "0" for j in range(n) if j != free_column
+        result.basis_vectors[0][j].num == 0 for j in range(n) if j != free_column
     )
 
 

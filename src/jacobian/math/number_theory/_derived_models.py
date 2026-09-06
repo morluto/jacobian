@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import isqrt
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import DecimalIntegerEncoding, ExactInteger
 from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._integer_models import MAX_SAFE_INTEGER
@@ -51,31 +51,29 @@ class FactorialValuationRequest(StrictModel):
     ``base`` lies in ``[2, 1000000]``.
     """
 
-    n: CanonicalInteger = Field(
-        max_length=MAX_VALUATION_ARGUMENT_DIGITS,
+    n: Annotated[
+        int, DecimalIntegerEncoding(max_digits=MAX_VALUATION_ARGUMENT_DIGITS)
+    ] = Field(
         description=(
             f"Nonnegative integer n with at most {MAX_VALUATION_ARGUMENT_DIGITS} "
             "decimal digits."
         ),
     )
-    base: CanonicalInteger = Field(
-        max_length=len(str(MAX_FACTORIAL_BASE)),
+    base: Annotated[
+        int, DecimalIntegerEncoding(max_digits=len(str(MAX_FACTORIAL_BASE)))
+    ] = Field(
         description=f"Integer base in [2, {MAX_FACTORIAL_BASE}].",
     )
 
 
 class FactorialValuationResult(StrictModel):
-    n: CanonicalInteger = Field(max_length=MAX_VALUATION_ARGUMENT_DIGITS)
-    base: CanonicalInteger = Field(max_length=len(str(MAX_FACTORIAL_BASE)))
-    valuation: CanonicalInteger = Field(max_length=MAX_VALUATION_ARGUMENT_DIGITS)
+    n: ExactInteger = Field()
+    base: ExactInteger = Field()
+    valuation: ExactInteger = Field()
 
     @model_validator(mode="after")
     def require_domain(self) -> Self:
-        if (
-            self.n.startswith("-")
-            or self.base.startswith("-")
-            or self.valuation.startswith("-")
-        ):
+        if self.n < 0 or self.base < 0 or self.valuation < 0:
             raise PydanticCustomError(
                 "number_theory.factorial_valuation.result",
                 "valuation must be nonnegative",
@@ -91,22 +89,25 @@ class BinomialPrimeValuationRequest(StrictModel):
     ceiling).
     """
 
-    n: CanonicalInteger = Field(
-        max_length=MAX_VALUATION_ARGUMENT_DIGITS,
+    n: Annotated[
+        int, DecimalIntegerEncoding(max_digits=MAX_VALUATION_ARGUMENT_DIGITS)
+    ] = Field(
         description=(
             f"Nonnegative upper index n with at most {MAX_VALUATION_ARGUMENT_DIGITS} "
             "decimal digits; must satisfy 0 <= k <= n."
         ),
     )
-    k: CanonicalInteger = Field(
-        max_length=MAX_VALUATION_ARGUMENT_DIGITS,
+    k: Annotated[
+        int, DecimalIntegerEncoding(max_digits=MAX_VALUATION_ARGUMENT_DIGITS)
+    ] = Field(
         description=(
             f"Nonnegative lower index k with at most {MAX_VALUATION_ARGUMENT_DIGITS} "
             "decimal digits; must satisfy 0 <= k <= n."
         ),
     )
-    prime: CanonicalInteger = Field(
-        max_length=len(str(MAX_BINOMIAL_VALUATION_PRIME)),
+    prime: Annotated[
+        int, DecimalIntegerEncoding(max_digits=len(str(MAX_BINOMIAL_VALUATION_PRIME)))
+    ] = Field(
         description=(
             f"Ordinary prime p in [2, {MAX_BINOMIAL_VALUATION_PRIME}] "
             "(deterministic SymPy primality range)."
@@ -115,17 +116,14 @@ class BinomialPrimeValuationRequest(StrictModel):
 
 
 class BinomialPrimeValuationResult(StrictModel):
-    n: CanonicalInteger = Field(max_length=MAX_VALUATION_ARGUMENT_DIGITS)
-    k: CanonicalInteger = Field(max_length=MAX_VALUATION_ARGUMENT_DIGITS)
-    prime: CanonicalInteger = Field(max_length=len(str(MAX_BINOMIAL_VALUATION_PRIME)))
-    valuation: CanonicalInteger = Field(max_length=MAX_VALUATION_ARGUMENT_DIGITS)
+    n: ExactInteger = Field()
+    k: ExactInteger = Field()
+    prime: ExactInteger = Field()
+    valuation: ExactInteger = Field()
 
     @model_validator(mode="after")
     def require_domain(self) -> Self:
-        if any(
-            value.startswith("-")
-            for value in (self.n, self.k, self.prime, self.valuation)
-        ):
+        if any(value < 0 for value in (self.n, self.k, self.prime, self.valuation)):
             raise PydanticCustomError(
                 "number_theory.binomial_valuation.result",
                 "valuation must be nonnegative",

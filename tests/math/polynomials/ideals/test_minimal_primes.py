@@ -47,7 +47,7 @@ def _poly(
             "polynomial": {
                 "terms": [
                     {
-                        "coefficient": {"num": str(numerator), "den": str(denominator)},
+                        "coefficient": {"num": (numerator), "den": (denominator)},
                         "exponents": list(exponents),
                     }
                     for numerator, denominator, exponents in terms
@@ -232,10 +232,8 @@ def test_external_family_must_respect_the_generator_and_term_envelopes() -> None
     ):
         IdealMinimalPrimesResult.model_validate(
             {
-                "ideal": request.ideal.model_dump(mode="json"),
-                "components": [
-                    component.model_dump(mode="json") for component in over_generators
-                ],
+                "ideal": request.ideal.model_dump(),
+                "components": [component.model_dump() for component in over_generators],
             }
         )
 

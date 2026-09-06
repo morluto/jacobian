@@ -8,9 +8,8 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
-    MAX_CANONICAL_RATIONAL_DIGITS,
-    CanonicalInteger,
     CanonicalRational,
+    ExactInteger,
 )
 from jacobian._models import StrictModel
 from jacobian.math.polynomials.values import (
@@ -346,22 +345,15 @@ class IntegerPolynomial(StrictModel):
     """Canonical dense polynomial in ``ZZ[x]``, highest degree first."""
 
     coefficient_order: Literal["DESCENDING_DEGREE"] = "DESCENDING_DEGREE"
-    coefficients: tuple[CanonicalInteger, ...] = Field(
+    coefficients: tuple[ExactInteger, ...] = Field(
         min_length=1,
         max_length=MAX_POLYNOMIAL_TERMS,
     )
 
     @model_validator(mode="after")
     def require_canonical_coefficients(self) -> Self:
-        if len(self.coefficients) > 1 and self.coefficients[0] == "0":
+        if len(self.coefficients) > 1 and self.coefficients[0] == 0:
             raise _validation_error("leading zero coefficients must be omitted")
-        if any(
-            len(coefficient.lstrip("-")) > MAX_CANONICAL_RATIONAL_DIGITS
-            for coefficient in self.coefficients
-        ):
-            raise _validation_error(
-                "integer coefficient exceeds the shared representation limit"
-            )
         return self
 
 
@@ -386,33 +378,33 @@ class IntegerPolynomialPairRequest(StrictModel):
 
 class IntegerPolynomialGcdResult(StrictModel):
     gcd: IntegerPolynomial
-    left_content: CanonicalInteger
-    right_content: CanonicalInteger
-    gcd_content: CanonicalInteger
+    left_content: ExactInteger
+    right_content: ExactInteger
+    gcd_content: ExactInteger
     normalization: Literal["NONNEGATIVE_LEADING_COEFFICIENT"] = (
         "NONNEGATIVE_LEADING_COEFFICIENT"
     )
 
 
 class IntegerPolynomialContentResult(StrictModel):
-    content: CanonicalInteger
+    content: ExactInteger
     convention: Literal["NONNEGATIVE_COEFFICIENT_GCD"] = "NONNEGATIVE_COEFFICIENT_GCD"
 
 
 class IntegerPolynomialPrimitivePartResult(StrictModel):
-    content: CanonicalInteger
+    content: ExactInteger
     primitive_part: IntegerPolynomial
     reconstruction: IntegerPolynomial
     convention: Literal["NONNEGATIVE_CONTENT"] = "NONNEGATIVE_CONTENT"
 
 
 class IntegerPolynomialEvaluationRequest(IntegerPolynomialRequest):
-    point: CanonicalInteger
+    point: ExactInteger
 
 
 class IntegerPolynomialEvaluationResult(StrictModel):
-    point: CanonicalInteger
-    value: CanonicalInteger
+    point: ExactInteger
+    value: ExactInteger
 
 
 class IntegerPolynomialCompositionRequest(StrictModel):

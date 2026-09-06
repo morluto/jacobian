@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import cProfile
+import json
 from types import CodeType
 
 import pytest
@@ -62,8 +63,8 @@ def test_direct_sdk_result_validation_does_not_replay_proofs(
 ) -> None:
     operation = Catalog.open().operation(operation_id)
     assert operation is not None
-    request = operation.request_type.model_validate(
-        operation.examples[0].input if payload is None else payload
+    request = operation.request_type.model_validate_json(
+        json.dumps(operation.examples[0].input if payload is None else payload)
     )
     result = operation.run(request)
     wire = CallToolResult(content=[], structured_content=result.model_dump(mode="json"))
@@ -71,7 +72,12 @@ def test_direct_sdk_result_validation_does_not_replay_proofs(
     profiler = cProfile.Profile()
     projected = profiler.runcall(tool.fn_metadata.convert_result, wire)
     assert projected == wire
-    assert operation.result_type.model_validate(projected.structured_content) == result
+    assert (
+        operation.result_type.model_validate_json(
+            json.dumps(projected.structured_content)
+        )
+        == result
+    )
     calls = [
         entry.code
         for entry in profiler.getstats()

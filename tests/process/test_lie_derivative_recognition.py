@@ -25,7 +25,7 @@ def _polynomial(*terms: tuple[int, tuple[int, ...]]) -> SparseRationalPolynomial
     return SparseRationalPolynomial(
         terms=tuple(
             RationalPolynomialTerm(
-                coefficient=CanonicalRational(num=str(coefficient), den="1"),
+                coefficient=CanonicalRational(num=coefficient, den=1),
                 exponents=exponents,
             )
             for coefficient, exponents in terms

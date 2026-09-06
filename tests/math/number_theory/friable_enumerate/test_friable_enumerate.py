@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 
 import pytest
@@ -171,15 +172,15 @@ def test_operation_request_rejects_negative_sources() -> None:
     from jacobian.catalog.models import OperationDomainValidationError
 
     with pytest.raises(OperationDomainValidationError, match="must be nonnegative"):
-        compute_friable_enumerate(FriableEnumerateRequest(x="-1", y="2"))
+        compute_friable_enumerate(FriableEnumerateRequest(x=-1, y=2))
 
 
 def test_operation_rejects_unbounded_generated_prime_cutoff() -> None:
     with pytest.raises(ValueError, match="exceeds the admitted prime cutoff"):
         compute_friable_enumerate(
             FriableEnumerateRequest(
-                x=str(MAX_FRIABLE_ENUMERATE_MATERIALIZED_X + 1),
-                y=str(MAX_FRIABLE_ENUMERATE_GENERATED_CUTOFF + 1),
+                x=MAX_FRIABLE_ENUMERATE_MATERIALIZED_X + 1,
+                y=MAX_FRIABLE_ENUMERATE_GENERATED_CUTOFF + 1,
             )
         )
 
@@ -188,40 +189,40 @@ def test_operation_rejects_family_above_result_size_budget() -> None:
     with pytest.raises(ValueError, match="result-size budget"):
         compute_friable_enumerate(
             FriableEnumerateRequest(
-                x="10000000",
-                y="100",
+                x=10000000,
+                y=100,
             )
         )
 
 
 def test_operation_example_executes() -> None:
-    result = compute_friable_enumerate(FriableEnumerateRequest(x="20", y="5"))
-    assert result.family.elements == tuple(str(v) for v in FIVE_SMOOTH_THROUGH_20)
-    assert result.x == "20"
-    assert result.y == "5"
+    result = compute_friable_enumerate(FriableEnumerateRequest(x=20, y=5))
+    assert result.family.elements == FIVE_SMOOTH_THROUGH_20
+    assert result.x == 20
+    assert result.y == 5
 
 
 def test_result_rejects_impossible_degenerate_families() -> None:
     with pytest.raises(ValueError, match="must be empty when x is zero"):
         FriableEnumerateResult.model_validate(
-            {"x": "0", "y": "5", "family": {"elements": ["1"]}}
+            {"x": 0, "y": 5, "family": {"elements": [1]}}
         )
 
     with pytest.raises(ValueError, match=r"must have family \{1\}"):
         FriableEnumerateResult.model_validate(
-            {"x": "5", "y": "0", "family": {"elements": ["2"]}}
+            {"x": 5, "y": 0, "family": {"elements": [2]}}
         )
 
 
 def test_result_binds_zero_sources_by_value_and_requires_increasing_family() -> None:
     result = FriableEnumerateResult.model_validate(
-        {"x": "-0", "y": "5", "family": {"elements": []}}
+        {"x": 0, "y": 5, "family": {"elements": []}}
     )
-    assert result.x == "-0"
+    assert result.x == 0
 
     with pytest.raises(ValueError, match="strictly increasing order"):
         FriableEnumerateResult.model_validate(
-            {"x": "5", "y": "5", "family": {"elements": ["2", "1"]}}
+            {"x": 5, "y": 5, "family": {"elements": [2, 1]}}
         )
 
 
@@ -235,6 +236,8 @@ def test_operation_is_discoverable_with_one_executable_example() -> None:
     )
     assert len(operation.examples) == 1
     example = operation.examples[0]
-    request = operation.request_type.model_validate(example.input)
+    request = operation.request_type.model_validate_json(
+        json.dumps(example.input), strict=True
+    )
     result = operation.run(request)
-    assert result.family.elements == tuple(str(v) for v in FIVE_SMOOTH_THROUGH_20)
+    assert result.family.elements == FIVE_SMOOTH_THROUGH_20

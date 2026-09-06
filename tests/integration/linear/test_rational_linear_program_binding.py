@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import copy
+import json
 from fractions import Fraction
 
 import pytest
 from tests.integration.linear._support import linear_validation_error
-from tests.support.rationals import rational_payload as q
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.optimization._models import (
@@ -16,6 +16,11 @@ from jacobian.math.optimization._models import (
     StandardFormRationalLinearProgram,
 )
 from jacobian.math.optimization.operations import linear_program
+
+
+def q(numerator: int, denominator: int = 1) -> CanonicalRational:
+    return CanonicalRational.from_integer_ratio(numerator, denominator)
+
 
 pytestmark = pytest.mark.requires_backend("sympy")
 
@@ -230,9 +235,7 @@ def test_feasible_point_without_dual_remains_only_primal_feasible() -> None:
 def test_valid_farkas_certificate_round_trips_through_serialization() -> None:
     result = _solve(INFEASIBLE_PROGRAM)
 
-    restored = RationalLinearProgramResult.model_validate(
-        result.model_dump(mode="json")
-    )
+    restored = RationalLinearProgramResult.model_validate_json(result.model_dump_json())
     assert restored == result
     assert restored.program.variables == ("x", "y")
 
@@ -247,7 +250,7 @@ def test_serialization_round_trip_preserves_binding_and_replay() -> None:
     for solve_program in (BOUND_PROGRAM, INFEASIBLE_PROGRAM, UNBOUNDED_PROGRAM):
         result = _solve(solve_program)
         dumped = result.model_dump(mode="json")
-        restored = RationalLinearProgramResult.model_validate(dumped)
+        restored = RationalLinearProgramResult.model_validate_json(json.dumps(dumped))
 
         assert restored == result
         assert restored.program.model_dump(mode="json") == dumped["program"]

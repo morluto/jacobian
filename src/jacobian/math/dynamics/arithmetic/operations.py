@@ -9,6 +9,7 @@ from fractions import Fraction
 from typing import Any, Literal
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import format_canonical_integer
 from jacobian.math._rational_height import RationalHeight
 from jacobian.math.dynamics.arithmetic._models import (
     MAX_COEFFICIENT_DIGITS,
@@ -300,7 +301,7 @@ def finite_field_functional_graph(
         raise ValueError(
             f"polynomial must have between 1 and {MAX_DEGREE + 1} coefficients"
         )
-    if any(len(str(abs(value))) > MAX_COEFFICIENT_DIGITS for value in values):
+    if any(abs(value) >= 10**MAX_COEFFICIENT_DIGITS for value in values):
         raise ValueError("polynomial coefficient exceeds the input digit bound")
     normalized = tuple(value % prime for value in values)
     if len(normalized) > 1 and normalized[-1] == 0:
@@ -396,7 +397,10 @@ def _require_input_polynomial(polynomial: RationalPolynomial) -> Any:
 
 
 def _fraction_digits(value: Fraction) -> int:
-    return max(len(str(abs(value.numerator))), len(str(value.denominator)))
+    return max(
+        len(format_canonical_integer(abs(value.numerator))),
+        len(format_canonical_integer(value.denominator)),
+    )
 
 
 def _require_bounded_output_coefficients(polynomial: Any) -> None:

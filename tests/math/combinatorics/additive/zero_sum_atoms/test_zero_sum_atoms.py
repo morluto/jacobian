@@ -8,6 +8,7 @@ from typing import cast
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import MathTool
 from jacobian.math.combinatorics.additive.zero_sum_atoms import (
     construct_zero_sum_atom_hypergraph,
@@ -34,6 +35,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs.operations import
     maximum_edge_matching,
     minimum_transversal,
 )
+from jacobian.math.groups.finite_abelian import FiniteAbelianProductGroup
 
 
 def _operation() -> MathTool[ZeroSumAtomHypergraphRequest, ZeroSumAtomHypergraphResult]:
@@ -51,11 +53,8 @@ def _source(
     elements: tuple[tuple[int, ...], ...],
     moduli: tuple[int, ...],
 ) -> ZeroSumAtomSource:
-    return ZeroSumAtomSource.model_validate(
-        {
-            "group": {"moduli": list(moduli)},
-            "elements": [list(element) for element in elements],
-        }
+    return ZeroSumAtomSource(
+        group=FiniteAbelianProductGroup(moduli=moduli), elements=elements
     )
 
 
@@ -75,7 +74,10 @@ def _zero_sum(
         running = tuple(
             (left + right) % modulus
             for left, right, modulus in zip(
-                running, source.elements[index], source.group.moduli, strict=True
+                running,
+                source.elements[index],
+                source.group.moduli,
+                strict=True,
             )
         )
     return running == tuple(0 for _ in source.group.moduli)
@@ -181,11 +183,13 @@ def test_source_reduces_rows_and_rejects_duplicates_after_reduction() -> None:
     assert source.elements == ((0,), (2,))
 
     with pytest.raises(ValidationError, match="distinct and sorted"):
-        ZeroSumAtomSource.model_validate(
-            {
-                "group": {"moduli": [7]},
-                "elements": [[7], [0]],
-            }
+        ZeroSumAtomSource.model_validate_json(
+            encode_strict_json(
+                {
+                    "group": {"moduli": ["7"]},
+                    "elements": [[7], [0]],
+                }
+            )
         )
 
 
@@ -193,18 +197,18 @@ def test_source_reduces_rows_and_rejects_duplicates_after_reduction() -> None:
     "source",
     (
         {"group": {"moduli": [[7]]}, "elements": []},
-        {"group": {"moduli": [7]}, "elements": [[[1]]]},
+        {"group": {"moduli": ["7"]}, "elements": [[[1]]]},
     ),
 )
 def test_source_rejects_nested_raw_scalars(source: dict[str, object]) -> None:
-    with pytest.raises(ValidationError, match="integer scalars"):
-        ZeroSumAtomSource.model_validate(source)
+    with pytest.raises(ValidationError, match=r"integer scalars|decimal strings"):
+        ZeroSumAtomSource.model_validate_json(encode_strict_json(source))
 
 
 @pytest.mark.parametrize(
     "source",
     (
-        {"group": {"moduli": [7]}, "elements": [], "extra": [[0] * 100]},
+        {"group": {"moduli": ["7"]}, "elements": [], "extra": [[0] * 100]},
         {"group": {"moduli": [7], "extra": [[0] * 100]}, "elements": []},
     ),
 )
@@ -212,7 +216,7 @@ def test_source_rejects_unknown_fields_before_canonicalization(
     source: dict[str, object],
 ) -> None:
     with pytest.raises(ValidationError, match="unknown fields"):
-        ZeroSumAtomSource.model_validate(source)
+        ZeroSumAtomSource.model_validate_json(encode_strict_json(source))
 
 
 def test_exhaustive_small_sources_match_independent_oracle() -> None:
@@ -248,13 +252,17 @@ def test_every_edge_replays_zero_sum_and_minimality() -> None:
 
 def test_result_round_trip_and_catalog_example_execute() -> None:
     operation = _operation()
-    request = ZeroSumAtomHypergraphRequest.model_validate(operation.examples[0].input)
+    request = ZeroSumAtomHypergraphRequest.model_validate_json(
+        encode_strict_json(operation.examples[0].input)
+    )
     result = operation.run(request)
 
-    decoded = ZeroSumAtomHypergraphResult.model_validate(result.model_dump(mode="json"))
+    decoded = ZeroSumAtomHypergraphResult.model_validate_json(
+        encode_strict_json(result.model_dump(mode="json"))
+    )
     assert decoded == result
-    assert decoded.hypergraph == FiniteHypergraph.model_validate(
-        decoded.hypergraph.model_dump(mode="json")
+    assert decoded.hypergraph == FiniteHypergraph.model_validate_json(
+        encode_strict_json(decoded.hypergraph.model_dump(mode="json"))
     )
 
 
@@ -262,13 +270,17 @@ def test_projection_composes_with_transversal_and_matching_consumers() -> None:
     result = _run(((1,), (2,), (3,), (4,), (5,), (6,)), (7,))
 
     transversal = minimum_transversal(
-        MinimumTransversalRequest.model_validate(
-            {"hypergraph": result.hypergraph.model_dump(mode="json")}
+        MinimumTransversalRequest.model_validate_json(
+            encode_strict_json(
+                {"hypergraph": result.hypergraph.model_dump(mode="json")}
+            )
         ).hypergraph
     )
     matching = maximum_edge_matching(
-        MaximumEdgeMatchingRequest.model_validate(
-            {"hypergraph": result.hypergraph.model_dump(mode="json")}
+        MaximumEdgeMatchingRequest.model_validate_json(
+            encode_strict_json(
+                {"hypergraph": result.hypergraph.model_dump(mode="json")}
+            )
         ).hypergraph
     )
 
@@ -280,11 +292,13 @@ def test_admission_accepts_cheap_large_group_sources_and_result_boundaries() -> 
     assert _run((), (4097,)).atom_count == 0
 
     with pytest.raises(ValidationError, match="at most 24 items"):
-        ZeroSumAtomSource.model_validate(
-            {
-                "group": {"moduli": [7]},
-                "elements": [[value] for value in range(25)],
-            }
+        ZeroSumAtomSource.model_validate_json(
+            encode_strict_json(
+                {
+                    "group": {"moduli": ["7"]},
+                    "elements": [[value] for value in range(25)],
+                }
+            )
         )
 
     # The 24-element source ceiling is exactly the largest complete subset
@@ -303,20 +317,24 @@ def test_result_rejects_forged_projection_and_counts() -> None:
     payload = result.model_dump(mode="json")
 
     with pytest.raises(ValidationError):
-        ZeroSumAtomHypergraphResult.model_validate(
-            {**payload, "atom_count": result.atom_count + 1}
+        ZeroSumAtomHypergraphResult.model_validate_json(
+            encode_strict_json({**payload, "atom_count": result.atom_count + 1})
         )
     with pytest.raises(ValidationError):
-        ZeroSumAtomHypergraphResult.model_validate(
-            {**payload, "total_incidences": result.total_incidences + 1}
+        ZeroSumAtomHypergraphResult.model_validate_json(
+            encode_strict_json(
+                {**payload, "total_incidences": result.total_incidences + 1}
+            )
         )
     with pytest.raises(ValidationError):
-        ZeroSumAtomHypergraphResult.model_validate(
-            {
-                **payload,
-                "hypergraph": {
-                    **payload["hypergraph"],
-                    "vertices": ["1", "0"],
-                },
-            }
+        ZeroSumAtomHypergraphResult.model_validate_json(
+            encode_strict_json(
+                {
+                    **payload,
+                    "hypergraph": {
+                        **payload["hypergraph"],
+                        "vertices": ["1", "0"],
+                    },
+                }
+            )
         )

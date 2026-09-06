@@ -2,7 +2,7 @@
 
 from pydantic import Field
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.finite_structures.sets._models import FiniteIntegerSet
 
@@ -17,7 +17,7 @@ class ProductRepresentationRequest(StrictModel):
 class RepresentationEntry(StrictModel):
     """One product value and its representation multiplicity."""
 
-    product: CanonicalInteger
+    product: ExactInteger
     multiplicity: int = Field(ge=1, le=100_000)
 
 

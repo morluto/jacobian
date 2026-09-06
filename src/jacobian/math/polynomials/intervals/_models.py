@@ -67,9 +67,9 @@ def _integer_digits(value: int) -> int:
     return len(format_canonical_integer(abs(value)))
 
 
-def _component_contribution(value: str) -> int:
-    magnitude = value.lstrip("-")
-    return 0 if magnitude in {"0", "1"} else len(magnitude)
+def _component_contribution(value: int) -> int:
+    magnitude = abs(value)
+    return 0 if magnitude <= 1 else len(format_canonical_integer(magnitude))
 
 
 def _product_digit_bound(contributions: list[int]) -> int:

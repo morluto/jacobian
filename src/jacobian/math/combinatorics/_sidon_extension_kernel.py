@@ -16,8 +16,8 @@ from jacobian.math.combinatorics._sidon_extension_models import (
 
 
 def _sidon_extension_admission_plan(
-    source_elements: tuple[str, ...],
-    candidate_elements: tuple[str, ...],
+    source_elements: tuple[int, ...],
+    candidate_elements: tuple[int, ...],
 ) -> _SidonExtensionAdmissionPlan:
     """Admit one profile request and prepare reusable kernel data."""
 
@@ -29,8 +29,8 @@ def _sidon_extension_admission_plan(
 
 
 def compute_sidon_extension_profile(
-    source_elements: tuple[str, ...],
-    candidate_elements: tuple[str, ...],
+    source_elements: tuple[int, ...],
+    candidate_elements: tuple[int, ...],
 ) -> SidonExtensionProfileResult:
     """Partition candidates into admissible and rejected.
 
@@ -46,7 +46,7 @@ def compute_sidon_extension_profile(
     )
     source_diffs = admission_plan.source_differences
 
-    admissible: list[str] = []
+    admissible: list[int] = []
     rejected: list[SidonExtensionCandidateResult] = []
 
     for x in candidates:
@@ -63,9 +63,9 @@ def compute_sidon_extension_profile(
                     is_admissible=False,
                     obstruction=SidonExtensionObstruction(
                         candidate=x,
-                        repeated_difference=str(difference),
-                        pair_a=(str(pair_a[0]), str(pair_a[1])),
-                        pair_b=(str(pair_b[0]), str(pair_b[1])),
+                        repeated_difference=difference,
+                        pair_a=pair_a,
+                        pair_b=pair_b,
                     ),
                 )
             )

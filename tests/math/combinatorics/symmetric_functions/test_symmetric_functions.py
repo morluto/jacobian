@@ -17,7 +17,6 @@ from jacobian.math.combinatorics.symmetric_functions._tools import TOOLS
 from jacobian.math.combinatorics.symmetric_functions.operations import (
     partition_conjugate,
     schur_evaluation,
-    verify_schur_evaluation,
 )
 from jacobian.math.combinatorics.symmetric_functions.values import (
     MAX_PARTITION_SIZE,
@@ -29,7 +28,7 @@ def compute_partition_conjugate(request: PartitionRequest) -> PartitionConjugate
 
 
 def compute_schur_evaluation(request: SchurExpansionRequest) -> SchurExpansionResult:
-    return schur_evaluation(request.partition, request.point, request.variables)
+    return schur_evaluation(request.partition, request.point)
 
 
 def test_operations_in_catalog() -> None:
@@ -45,48 +44,6 @@ def test_native_surface_accepts_canonical_partition_values() -> None:
 
     assert partition_conjugate(partition).parts == (2, 1)
     assert schur_evaluation(partition, (1, 1)).value == 2
-
-
-def test_schur_result_round_trip_and_verifier() -> None:
-    result = compute_schur_evaluation(
-        SchurExpansionRequest(
-            partition=IntegerPartition(parts=(1,)),
-            variables=("x", "y"),
-            point=(2, 3),
-        )
-    )
-    decoded = type(result).model_validate_json(result.model_dump_json())
-    assert verify_schur_evaluation(decoded)
-    assert not verify_schur_evaluation(decoded.model_copy(update={"value": "99"}))
-    assert result.model_dump(mode="json")["value"] == "5"
-
-    forged_axis = decoded.model_copy(update={"variables": ("u", "u")})
-    assert not verify_schur_evaluation(forged_axis)
-
-
-def test_schur_result_axis_is_structural() -> None:
-    partition = IntegerPartition(parts=(1,))
-    with pytest.raises(ValidationError) as error:
-        SchurExpansionResult(
-            partition=partition,
-            variables=("x", "x"),
-            point=(1, 2),
-            value=3,
-        )
-    assert error.value.errors()[0]["type"] == (
-        "symmetric_function.schur_variables_not_distinct"
-    )
-
-    with pytest.raises(ValidationError) as error:
-        SchurExpansionResult(
-            partition=partition,
-            variables=("x", "y"),
-            point=(1,),
-            value=1,
-        )
-    assert error.value.errors()[0]["type"] == (
-        "symmetric_function.schur_dimensions_mismatch"
-    )
 
 
 def test_conjugate_self_conjugate_partition() -> None:

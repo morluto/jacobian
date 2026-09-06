@@ -26,7 +26,7 @@ class WalshTerm(StrictModel):
             raise ValueError(
                 "character coordinates must be distinct, increasing nonnegative indices"
             )
-        if self.coefficient.num == "0":
+        if self.coefficient.num == 0:
             raise ValueError("zero character terms must be omitted")
         return self
 

@@ -26,7 +26,7 @@ def test_summary_claim(generators: tuple[int, ...]) -> None:
     assert isinstance(payload["conductor"], str)
     assert verify_summary(type(result).model_validate_json(result.model_dump_json()))
     payload = result.model_dump()
-    payload["conductor"] = "100"
+    payload["conductor"] = 100
     assert not verify_summary(type(result).model_validate(payload))
     for malformed in ("+1", "01", "x", "-0"):
         payload["frobenius_number"] = malformed
@@ -47,9 +47,9 @@ def test_elasticity_claims() -> None:
             assert type(result.value) is int
         assert verifier(type(result).model_validate_json(result.model_dump_json()))
         payload = result.model_dump()
-        payload["elasticity"] = {"num": "7", "den": "2"}
+        payload["elasticity"] = {"num": 7, "den": 2}
         assert not verifier(type(result).model_validate(payload))
-        payload["elasticity"] = {"num": "1", "den": "0"}
+        payload["elasticity"] = {"num": 1, "den": 0}
         with pytest.raises(ValidationError):
             type(result).model_validate(payload)
 

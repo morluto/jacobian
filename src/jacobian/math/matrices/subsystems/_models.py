@@ -355,7 +355,7 @@ class NegativeQuadraticWitness(StrictModel):
 
     @model_validator(mode="after")
     def require_nonzero_negative_claim(self) -> Self:
-        if not any(value.num != "0" for value in self.vector):
+        if not any(value.num != 0 for value in self.vector):
             raise _validation_error(
                 "field_mismatch", "negative quadratic witness vector must be nonzero"
             )

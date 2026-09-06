@@ -1,5 +1,6 @@
 """Map admission and source-target relations survive serialization."""
 
+import json
 from collections.abc import Callable
 from typing import Any
 
@@ -75,7 +76,9 @@ def test_map_relation_round_trips_and_forgeries() -> None:
     )
     payload = incidence.model_dump(mode="json")
     payload["multiplicity"]["entries"][0]["value"] = {"num": "2", "den": "1"}
-    assert not verify_vertex_face_incidence(type(incidence).model_validate(payload))
+    assert not verify_vertex_face_incidence(
+        type(incidence).model_validate_json(json.dumps(payload))
+    )
 
 
 def test_incidence_preserves_full_map_axes() -> None:

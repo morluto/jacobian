@@ -5,11 +5,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictInt, StringConstraints, model_validator
+from pydantic import Field, StrictInt, model_validator
 from pydantic.json_schema import WithJsonSchema
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.combinatorics.additive.values import (
     IndexedIntegerSequence,
@@ -34,10 +34,7 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"additive_combinatorics.{reason}", message)
 
 
-BoundedModulus = Annotated[
-    CanonicalInteger,
-    StringConstraints(max_length=MAX_MODULUS_DIGITS, strict=True),
-]
+BoundedModulus = Annotated[int, DecimalIntegerEncoding(max_digits=MAX_MODULUS_DIGITS)]
 
 
 class CyclicPrefixSumResidueProfileRequest(StrictModel):
@@ -53,7 +50,7 @@ class CyclicPrefixSumResidueProfileRequest(StrictModel):
 class PrefixSumResidueRow(StrictModel):
     """One row of the residue profile."""
 
-    residue: CanonicalInteger
+    residue: BoundedModulus
     positions: tuple[StrictInt, ...] = Field(min_length=1)
 
 

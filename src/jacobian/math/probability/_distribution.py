@@ -38,17 +38,13 @@ def _bounded_fraction_sum(
         common = gcd(total.denominator, value.denominator)
         left_denominator = total.denominator // common
         right_denominator = value.denominator // common
-        left_numerator_digits = len(str(abs(total.numerator))) + len(
-            str(right_denominator)
-        )
-        right_numerator_digits = len(str(abs(value.numerator))) + len(
-            str(left_denominator)
-        )
+        left_numerator = abs(total.numerator) * right_denominator
+        right_numerator = abs(value.numerator) * left_denominator
+        common_denominator = left_denominator * value.denominator
         if (
-            len(str(left_denominator)) + len(str(value.denominator))
-            > MAX_FINITE_DISTRIBUTION_SUM_DIGITS
-            or max(left_numerator_digits, right_numerator_digits) + 1
-            > MAX_FINITE_DISTRIBUTION_SUM_DIGITS
+            common_denominator >= 10**MAX_FINITE_DISTRIBUTION_SUM_DIGITS
+            or left_numerator + right_numerator
+            >= 10**MAX_FINITE_DISTRIBUTION_SUM_DIGITS
         ):
             raise _validation_error(
                 f"{label} normalization exceeds the "

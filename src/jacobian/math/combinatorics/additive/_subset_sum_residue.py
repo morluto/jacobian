@@ -5,12 +5,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Annotated, Self
 
-from pydantic import Field, StrictBool, StringConstraints, model_validator
+from pydantic import Field, StrictBool, model_validator
 from pydantic.json_schema import WithJsonSchema
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.values import (
     IndexedIntegerSequence,
@@ -41,12 +42,7 @@ MAX_RESIDUE_PROFILE_MULTIPLICITY_DIGITS = (
 ) * 30_103 // 100_000 + 1
 
 ResidueMultiplicity = Annotated[
-    str,
-    StringConstraints(
-        pattern=r"^(?:0|[1-9][0-9]*)$",
-        max_length=MAX_RESIDUE_PROFILE_MULTIPLICITY_DIGITS,
-        strict=True,
-    ),
+    int, DecimalIntegerEncoding(max_digits=MAX_RESIDUE_PROFILE_MULTIPLICITY_DIGITS)
 ]
 
 
@@ -403,7 +399,7 @@ def _compute_residue_profile(
             witness_masks[0] = 0
 
     for index, raw_value in enumerate(source.items):
-        residue = parse_canonical_integer(raw_value) % modulus
+        residue = int(raw_value) % modulus
         next_counts = counts.copy()
         next_witness_masks = witness_masks.copy() if witness_masks is not None else None
         bit = 1 << index
@@ -432,7 +428,7 @@ def _compute_residue_profile(
         counts = next_counts
         witness_masks = next_witness_masks
 
-    residue_counts = tuple(format_canonical_integer(count) for count in counts)
+    residue_counts = tuple(counts)
     if witness_masks is None:
         return residue_counts, None
     residue_witnesses = tuple(
@@ -501,7 +497,7 @@ def _admit_subset_sum_residue_profile(
         (
             index
             for index, value in enumerate(source.items)
-            if len(value.lstrip("-")) > MAX_RESIDUE_PROFILE_INPUT_INTEGER_DIGITS
+            if abs(value) >= 10**MAX_RESIDUE_PROFILE_INPUT_INTEGER_DIGITS
         ),
         None,
     )
@@ -511,7 +507,9 @@ def _admit_subset_sum_residue_profile(
             code="additive_combinatorics.subset_sum_residue.integer_bound",
             message=f"source value at index {oversized} exceeds the 32,768-digit input bound",
         )
-    total_input_digits = sum(len(value.lstrip("-")) for value in source.items)
+    total_input_digits = sum(
+        len(format_canonical_integer(abs(value))) for value in source.items
+    )
     if total_input_digits > MAX_RESIDUE_PROFILE_TOTAL_INPUT_DIGITS:
         raise OperationDomainValidationError(
             location=("source",),

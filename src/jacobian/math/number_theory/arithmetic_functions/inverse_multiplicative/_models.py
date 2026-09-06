@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import Field
 
-from jacobian._exact import NativeInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 
 MAX_N = 100000
@@ -34,18 +34,18 @@ class EulerPhiPowerSumRequest(StrictModel):
 
 
 class EulerPhiPreimageResult(StrictModel):
-    target: NativeInteger = Field(ge=1, le=MAX_N)
-    preimage: tuple[NativeInteger, ...]
-    count: NativeInteger = Field(ge=0)
+    target: ExactInteger = Field(ge=1, le=MAX_N)
+    preimage: tuple[ExactInteger, ...]
+    count: ExactInteger = Field(ge=0)
 
 
 class EulerPhiPreimageCountResult(StrictModel):
-    target: NativeInteger = Field(ge=1, le=MAX_N)
-    count: NativeInteger = Field(ge=0)
+    target: ExactInteger = Field(ge=1, le=MAX_N)
+    count: ExactInteger = Field(ge=0)
 
 
 class EulerPhiPowerSumResult(StrictModel):
-    target: NativeInteger = Field(ge=1, le=MAX_N)
-    exponent: NativeInteger = Field(ge=1, le=MAX_POWER_SUM_EXPONENT)
-    power_sum: NativeInteger = Field(ge=0)
-    count: NativeInteger = Field(ge=0)
+    target: ExactInteger = Field(ge=1, le=MAX_N)
+    exponent: ExactInteger = Field(ge=1, le=MAX_POWER_SUM_EXPONENT)
+    power_sum: ExactInteger = Field(ge=0)
+    count: ExactInteger = Field(ge=0)

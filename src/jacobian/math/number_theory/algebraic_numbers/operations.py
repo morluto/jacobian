@@ -3,6 +3,7 @@
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.algebraic_numbers._models import _MAX_RESULT_DIGITS
 from jacobian.math.number_theory.algebraic_numbers.quadratic import (
@@ -13,8 +14,8 @@ from jacobian.math.number_theory.algebraic_numbers.quadratic import (
 
 def _fits(value: Fraction) -> bool:
     return (
-        len(str(abs(value.numerator))) <= _MAX_RESULT_DIGITS
-        and len(str(value.denominator)) <= _MAX_RESULT_DIGITS
+        len(format_canonical_integer(abs(value.numerator))) <= _MAX_RESULT_DIGITS
+        and len(format_canonical_integer(value.denominator)) <= _MAX_RESULT_DIGITS
     )
 
 

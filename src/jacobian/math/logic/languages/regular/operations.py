@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.languages.regular._models import CountResult, RunResult
 from jacobian.math.logic.languages.regular._profile_admission import (
@@ -291,11 +290,11 @@ def transition_parikh_profile(
         entries=tuple(
             TransitionParikhCell(
                 transition_counts=vector,
-                multiplicity=format_canonical_integer(multiplicity),
+                multiplicity=multiplicity,
             )
             for vector, multiplicity in target_entries
         ),
-        total_path_count=format_canonical_integer(total_path_count),
+        total_path_count=total_path_count,
     )
 
 
@@ -324,10 +323,7 @@ def verify_accepted_word_count(claim: CountResult) -> bool:
     """Verify an exact accepted-word count for the retained DFA and length."""
 
     try:
-        return (
-            format_canonical_integer(count_accepted_words(claim.dfa, claim.word_length))
-            == claim.count
-        )
+        return count_accepted_words(claim.dfa, claim.word_length) == claim.count
     except (OperationDomainValidationError, ValueError, TypeError):
         return False
 

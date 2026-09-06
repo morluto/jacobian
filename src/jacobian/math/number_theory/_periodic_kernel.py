@@ -8,7 +8,6 @@ from typing import Literal
 
 from jacobian.canonical import (
     format_canonical_integer,
-    parse_canonical_integer,
 )
 from jacobian.math.number_theory._periodic_models import (
     MAX_INTERSECTION_MERGES,
@@ -34,7 +33,7 @@ def common_period(source: PeriodicCongruenceUnionSource) -> int:
 
     period = 1
     for subset in source.subsets:
-        period = math.lcm(period, parse_canonical_integer(subset.modulus))
+        period = math.lcm(period, subset.modulus)
         if len(format_canonical_integer(period)) > MAX_PERIODIC_INTEGER_DIGITS:
             raise ValueError("common period exceeds the 256-digit exact-result bound")
     return period
@@ -42,16 +41,12 @@ def common_period(source: PeriodicCongruenceUnionSource) -> int:
 
 def _lift_work(source: PeriodicCongruenceUnionSource, period: int) -> int:
     return sum(
-        len(subset.residues) * (period // parse_canonical_integer(subset.modulus))
-        for subset in source.subsets
+        len(subset.residues) * (period // subset.modulus) for subset in source.subsets
     )
 
 
 def _contains_full_subset(source: PeriodicCongruenceUnionSource) -> bool:
-    return any(
-        len(subset.residues) == parse_canonical_integer(subset.modulus)
-        for subset in source.subsets
-    )
+    return any(len(subset.residues) == subset.modulus for subset in source.subsets)
 
 
 def _intersection_bounds(
@@ -161,9 +156,9 @@ def require_materializable_periodic_source(
 def _union_mask(source: PeriodicCongruenceUnionSource, period: int) -> bytearray:
     mask = bytearray(period)
     for subset in source.subsets:
-        modulus = parse_canonical_integer(subset.modulus)
+        modulus = subset.modulus
         for residue_text in subset.residues:
-            residue = parse_canonical_integer(residue_text)
+            residue = residue_text
             for value in range(residue, period, modulus):
                 mask[value] = 1
     return mask
@@ -174,9 +169,9 @@ def _sparse_union(source: PeriodicCongruenceUnionSource, period: int) -> set[int
 
     occupied: set[int] = set()
     for subset in source.subsets:
-        modulus = parse_canonical_integer(subset.modulus)
+        modulus = subset.modulus
         for residue_text in subset.residues:
-            residue = parse_canonical_integer(residue_text)
+            residue = residue_text
             occupied.update(range(residue, period, modulus))
     return occupied
 
@@ -213,9 +208,9 @@ def _inclusion_exclusion_terms(
 ) -> dict[tuple[int, int], int]:
     terms: dict[tuple[int, int], int] = {}
     for subset in source.subsets:
-        modulus = parse_canonical_integer(subset.modulus)
+        modulus = subset.modulus
         for residue_text in subset.residues:
-            residue = parse_canonical_integer(residue_text)
+            residue = residue_text
             deltas: dict[tuple[int, int], int] = {(residue, modulus): 1}
             for congruence, coefficient in tuple(terms.items()):
                 intersection = _merge_congruences(congruence, (residue, modulus))

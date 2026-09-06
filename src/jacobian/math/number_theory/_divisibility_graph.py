@@ -1,6 +1,5 @@
 """Declarations for divisibility-incidence graph construction."""
 
-from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.number_theory._divisibility_graph_models import (
     DivisibilityIncidenceGraphRequest,
@@ -14,8 +13,8 @@ def compute_divisibility_incidence_graph(
 ) -> DivisibilityIncidenceGraphResult:
     """Project a wire request into the canonical graph operation."""
     return divisibility_incidence_graph(
-        tuple(parse_canonical_integer(value) for value in request.left_family),
-        tuple(parse_canonical_integer(value) for value in request.right_family),
+        request.left_family,
+        request.right_family,
     )
 
 

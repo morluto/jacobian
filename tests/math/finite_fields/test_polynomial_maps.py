@@ -75,6 +75,21 @@ def test_frobenius_map_is_a_permutation() -> None:
     assert type(result).model_validate(result.model_dump(mode="json")) == result
 
 
+def test_polynomial_normalization_checks_parent_of_discarded_zero() -> None:
+    field = finite_field(2, (1, 1, 1))
+    other = finite_field(3, (0, 1))
+    one = element(field, (1, 0))
+    foreign_zero = element(other, (0,))
+    with pytest.raises(ValueError, match="coefficients must share their parent"):
+        finite_polynomial(field, (one, foreign_zero))
+    zero = element(field, (0, 0))
+    polynomial = finite_polynomial(field, (one, zero, zero))
+    assert polynomial.coefficients == (one,)
+    assert (
+        type(polynomial).model_validate_json(polynomial.model_dump_json()) == polynomial
+    )
+
+
 def test_slice_b_values_reject_wrong_parent_and_incomplete_table() -> None:
     polynomial_map = _map(3)
     table = finite_map_table(polynomial_map)

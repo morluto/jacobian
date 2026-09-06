@@ -2,7 +2,6 @@
 
 from typing import Any
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -29,7 +28,7 @@ def hook_lengths(request: HookLengthRequest) -> HookLengthResult:
     hooks = native.hook_lengths(request.partition)
     return HookLengthResult(
         hooks=hooks,
-        total_product=format_canonical_integer(native._hook_length_product(hooks)),
+        total_product=native._hook_length_product(hooks),
     )
 
 
@@ -38,7 +37,7 @@ def syt_count(
 ) -> StandardYoungTableauCountResult:
     count = native.standard_young_tableaux_count(request.partition)
     n = sum(request.partition.parts)
-    return StandardYoungTableauCountResult(count=format_canonical_integer(count), n=n)
+    return StandardYoungTableauCountResult(count=count, n=n)
 
 
 def conjugate_partition(

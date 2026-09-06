@@ -6,9 +6,8 @@ from typing import Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
 from jacobian.math.combinatorics._models import _combinatorics_validation_error
 from jacobian.math.combinatorics.operations import (
     MAX_MULTINOMIAL_PARTS,
@@ -27,13 +26,13 @@ class SparseCountingPairRequest(StrictModel):
 class IntegerListRequest(StrictModel):
     """A bounded list of nonnegative parts for multinomial counting."""
 
-    values: tuple[CanonicalInteger, ...] = Field(
+    values: tuple[ExactInteger, ...] = Field(
         min_length=1, max_length=MAX_MULTINOMIAL_PARTS
     )
 
     @model_validator(mode="after")
     def require_nonnegative_parts(self) -> Self:
-        parts = tuple(parse_canonical_integer(value) for value in self.values)
+        parts = self.values
         if any(value < 0 for value in parts):
             raise _combinatorics_validation_error(
                 "integer list values must be nonnegative"

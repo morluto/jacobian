@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Sequence
 from fractions import Fraction
@@ -40,11 +41,11 @@ from jacobian.math.lattices.invariant_forms._tools import (
 from jacobian.math.matrices.values import IntegerMatrix
 
 
-def _rational(value: int | Fraction) -> dict[str, str]:
+def _rational(value: int | Fraction) -> dict[str, int]:
     fraction = Fraction(value)
     return {
-        "num": str(fraction.numerator),
-        "den": str(fraction.denominator),
+        "num": fraction.numerator,
+        "den": fraction.denominator,
     }
 
 
@@ -139,10 +140,10 @@ def test_source_paper_alternating_lattice_recovers_q_zero() -> None:
     assert result.constraint_rank == 5
     assert result.rank == 1
     assert result.basis_forms[0].matrix.entries == (
-        ("0", "0", "0", "1"),
-        ("0", "0", "6", "0"),
-        ("0", "-6", "0", "0"),
-        ("-1", "0", "0", "0"),
+        (0, 0, 0, 1),
+        (0, 0, 6, 0),
+        (0, -6, 0, 0),
+        (-1, 0, 0, 0),
     )
     _assert_every_basis_form_is_invariant(result)
 
@@ -155,12 +156,12 @@ def test_source_paper_all_bilinear_forms_include_delta_square() -> None:
     assert result.rank == 2
     assert result.constraint_rank == 14
     assert result.basis_forms[0].matrix.entries == (
-        ("0", "0", "0", "1"),
-        ("0", "0", "6", "0"),
-        ("0", "-6", "0", "0"),
-        ("-1", "0", "0", "0"),
+        (0, 0, 0, 1),
+        (0, 0, 6, 0),
+        (0, -6, 0, 0),
+        (-1, 0, 0, 0),
     )
-    assert result.basis_forms[1].matrix.entries[-1][-1] == "1"
+    assert result.basis_forms[1].matrix.entries[-1][-1] == 1
     _assert_every_basis_form_is_invariant(result)
 
 
@@ -410,7 +411,7 @@ def test_form_materializes_axis_before_validating_a_typed_matrix() -> None:
         {
             "coordinate_axis": iter(("x",)),
             "kind": "BILINEAR",
-            "matrix": IntegerMatrix(entries=(("1",),)),
+            "matrix": IntegerMatrix(entries=((1,),)),
         }
     )
 
@@ -441,8 +442,8 @@ def test_result_round_trip_retains_source_and_exact_empty_lattice() -> None:
     action = _action([("twice", [[2, 0], [0, 2]])])
     result = compute_invariant_bilinear_form_lattice(action, "SYMMETRIC")
 
-    replayed = InvariantBilinearFormLattice.model_validate(
-        result.model_dump(mode="json")
+    replayed = InvariantBilinearFormLattice.model_validate_json(
+        json.dumps(result.model_dump(mode="json"))
     )
 
     assert replayed == result
@@ -523,9 +524,9 @@ def test_source_height_is_coupled_to_constraint_expansion_work(
     import jacobian.math.lattices.invariant_forms._kernel as kernel
 
     dimension = 8
-    large = {"num": "1" + "0" * 10_000, "den": "1"}
-    zero = {"num": "0", "den": "1"}
-    one = {"num": "1", "den": "1"}
+    large = {"num": 10**10_000, "den": 1}
+    zero = {"num": 0, "den": 1}
+    one = {"num": 1, "den": 1}
     entries = [
         [
             large if row == column == 0 else one if row == column else zero
@@ -570,9 +571,7 @@ def test_catalog_publishes_typed_operation_and_valid_example() -> None:
         encode_strict_json(operation.examples[0].input), strict=True
     )
     result = operation.run(request)
-    assert (
-        operation.result_type.model_validate(result.model_dump(mode="json")) == result
-    )
+    assert operation.result_type.model_validate_json(result.model_dump_json()) == result
 
 
 def test_oversized_generator_matrices_are_rejected_before_nested_parsing() -> None:

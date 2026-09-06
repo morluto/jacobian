@@ -55,18 +55,23 @@ def _poly(
 ) -> RationalPolynomial:
     """Build a ``RationalPolynomial`` from ``"num/den", (exponents,)`` tuples."""
 
-    return RationalPolynomial.model_validate(
-        {
-            "domain": "QQ",
-            "variables": list(variables),
-            "polynomial": {
-                "terms": [
-                    {"coefficient": {"num": num, "den": den}, "exponents": list(exp)}
-                    for coeff, exp in terms
-                    for num, den in [coeff.split("/")]
-                ]
-            },
-        }
+    return RationalPolynomial.model_validate_json(
+        json.dumps(
+            {
+                "domain": "QQ",
+                "variables": list(variables),
+                "polynomial": {
+                    "terms": [
+                        {
+                            "coefficient": {"num": num, "den": den},
+                            "exponents": list(exp),
+                        }
+                        for coeff, exp in terms
+                        for num, den in [coeff.split("/")]
+                    ]
+                },
+            }
+        )
     )
 
 
@@ -177,8 +182,8 @@ class TestMultivariateGcd:
         assert gcd.variables == ("x", "y")
         assert len(gcd.polynomial.terms) == 1
         term = gcd.polynomial.terms[0]
-        assert term.coefficient.num == "1"
-        assert term.coefficient.den == "1"
+        assert term.coefficient.num == 1
+        assert term.coefficient.den == 1
         assert term.exponents == (1, 1)
 
     def test_gcd_of_coprime_pair(self) -> None:
@@ -190,8 +195,8 @@ class TestMultivariateGcd:
         gcd = result.gcd
         assert len(gcd.polynomial.terms) == 1
         term = gcd.polynomial.terms[0]
-        assert term.coefficient.num == "1"
-        assert term.coefficient.den == "1"
+        assert term.coefficient.num == 1
+        assert term.coefficient.den == 1
         assert term.exponents == (0, 0)
 
     def test_gcd_is_monic(self) -> None:
@@ -204,8 +209,8 @@ class TestMultivariateGcd:
         gcd = result.gcd
         assert len(gcd.polynomial.terms) == 1
         term = gcd.polynomial.terms[0]
-        assert term.coefficient.num == "1"
-        assert term.coefficient.den == "1"
+        assert term.coefficient.num == 1
+        assert term.coefficient.den == 1
 
     def test_gcd_with_rational_coefficients(self) -> None:
         """GCD works over QQ with non-integer coefficients."""
@@ -217,8 +222,8 @@ class TestMultivariateGcd:
         # gcd(x^2*y, x*y) = x*y, monic
         assert len(gcd.polynomial.terms) == 1
         term = gcd.polynomial.terms[0]
-        assert term.coefficient.num == "1"
-        assert term.coefficient.den == "1"
+        assert term.coefficient.num == 1
+        assert term.coefficient.den == 1
 
     def test_gcd_rejects_univariate(self) -> None:
         """Univariate polynomials are rejected for multivariate operations."""
@@ -278,7 +283,7 @@ class TestMultivariateDivision:
         quotient = result.quotient
         assert len(quotient.polynomial.terms) == 1
         assert quotient.polynomial.terms[0].exponents == (1, 0)
-        assert quotient.polynomial.terms[0].coefficient.num == "1"
+        assert quotient.polynomial.terms[0].coefficient.num == 1
 
     def test_division_with_remainder(self) -> None:
         """Divide x^2*y + x by x*y - 1: quotient = x, remainder = 2*x."""
@@ -292,10 +297,10 @@ class TestMultivariateDivision:
         remainder = result.remainder
         assert len(quotient.polynomial.terms) == 1
         assert quotient.polynomial.terms[0].exponents == (1, 0)
-        assert quotient.polynomial.terms[0].coefficient.num == "1"
+        assert quotient.polynomial.terms[0].coefficient.num == 1
         assert len(remainder.polynomial.terms) == 1
         assert remainder.polynomial.terms[0].exponents == (1, 0)
-        assert remainder.polynomial.terms[0].coefficient.num == "2"
+        assert remainder.polynomial.terms[0].coefficient.num == 2
 
     def test_division_grlex_order(self) -> None:
         """Division under grlex order should be a valid reconstruction."""
@@ -383,8 +388,8 @@ class TestMultivariateResultant:
             t.exponents[0]: (t.coefficient.num, t.coefficient.den)
             for t in value.polynomial.terms
         }
-        assert terms.get(2) == ("-1", "1")
-        assert terms.get(0) == ("1", "1")
+        assert terms.get(2) == (-1, 1)
+        assert terms.get(0) == (1, 1)
 
     def test_resultant_eliminating_different_variable(self) -> None:
         """res(x*y - 1, y^2 - x, y) = 1 - x^3 (a polynomial in x)."""
@@ -794,8 +799,8 @@ class TestMultivariateSubresultantSequence:
         )
         assert result.resultant == _poly(("y",), (("4/1", (2,)),))
         assert (
-            MultivariateSubresultantSequenceResult.model_validate(
-                result.model_dump(mode="json")
+            MultivariateSubresultantSequenceResult.model_validate_json(
+                result.model_dump_json()
             )
             == result
         )
@@ -1266,8 +1271,8 @@ class TestMultivariateSubresultantSequence:
             ),
         )
         assert (
-            MultivariateSubresultantSequenceResult.model_validate(
-                result.model_dump(mode="json")
+            MultivariateSubresultantSequenceResult.model_validate_json(
+                result.model_dump_json()
             )
             == result
         )

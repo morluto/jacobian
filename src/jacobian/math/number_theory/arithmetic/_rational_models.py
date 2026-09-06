@@ -7,7 +7,7 @@ from typing import Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger, CanonicalRational
+from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel
 
 MAX_RATIONAL_CONTINUED_FRACTION_TERMS = 1_024
@@ -64,7 +64,7 @@ class RationalValueResult(StrictModel):
 class RationalIntegerResult(StrictModel):
     """One canonical integer produced by rounding a rational."""
 
-    value: CanonicalInteger
+    value: ExactInteger
 
 
 class RationalComparisonResult(StrictModel):
@@ -86,16 +86,14 @@ class RationalContinuedFractionResult(StrictModel):
     """
 
     value: CanonicalRational
-    terms: tuple[CanonicalInteger, ...] = Field(
+    terms: tuple[ExactInteger, ...] = Field(
         min_length=1,
         max_length=MAX_RATIONAL_CONTINUED_FRACTION_TERMS,
     )
 
     @model_validator(mode="after")
     def require_canonical_terms(self) -> Self:
-        from jacobian.canonical import parse_canonical_integer
-
-        quotients = [parse_canonical_integer(term) for term in self.terms]
+        quotients = list(self.terms)
         if any(quotient < 1 for quotient in quotients[1:]):
             raise _validation_error(
                 "continued_fraction_nonpositive_term",
@@ -113,6 +111,6 @@ class RationalContinuedFractionResult(StrictModel):
         cls,
         *,
         value: CanonicalRational,
-        terms: tuple[CanonicalInteger, ...],
+        terms: tuple[ExactInteger, ...],
     ) -> Self:
         return cls.model_construct(value=value, terms=terms)

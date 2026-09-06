@@ -7,7 +7,7 @@ from typing import Self
 from pydantic import Field, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 from jacobian.math.logic.automata.tree.values import (
     MAX_REACHABILITY_WITNESS_NODES,
@@ -105,7 +105,7 @@ class AcceptedTreeCountResult(AcceptedTreeCountRequest):
     """Exact count of accepted trees."""
 
     tree_size: int = Field(ge=1, le=100)
-    count: CanonicalInteger
+    count: ExactInteger
     estimated_work_bound: int = Field(ge=0, le=2_000_000)
 
     @model_validator(mode="after")
@@ -119,7 +119,7 @@ class AcceptedTreeCountResult(AcceptedTreeCountRequest):
         cls,
         request: AcceptedTreeCountRequest,
         *,
-        count: CanonicalInteger,
+        count: ExactInteger,
         estimated_work_bound: int,
     ) -> Self:
         """Construct a result emitted by the trusted subset-DP kernel."""

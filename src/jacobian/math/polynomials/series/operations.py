@@ -14,7 +14,6 @@ from fractions import Fraction
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.series._models import (
     MAX_TRUNCATION_ORDER,
@@ -95,8 +94,8 @@ def _run_admission(admission: Callable[[], None]) -> None:
 
 def _wire(value: Fraction) -> CanonicalRational:
     return CanonicalRational(
-        num=format_canonical_integer(value.numerator),
-        den=format_canonical_integer(value.denominator),
+        num=value.numerator,
+        den=value.denominator,
     )
 
 
@@ -570,7 +569,7 @@ def from_polynomial(
         raise ValueError(
             f"truncation_order must be between 1 and {MAX_TRUNCATION_ORDER}"
         )
-    coefficients = [CanonicalRational(num="0", den="1")] * truncation_order
+    coefficients = [CanonicalRational(num=0, den=1)] * truncation_order
     for term in polynomial.polynomial.terms:
         if term.exponents[0] < truncation_order:
             coefficients[term.exponents[0]] = term.coefficient
@@ -592,7 +591,7 @@ def to_polynomial(series: TruncatedSeries) -> SeriesToPolynomialResult:
             terms=tuple(
                 RationalPolynomialTerm(coefficient=value, exponents=(degree,))
                 for degree, value in reversed(tuple(enumerate(series.coefficients)))
-                if value.num != "0"
+                if value.num != 0
             )
         ),
     )

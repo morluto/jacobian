@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 
 import pytest
@@ -30,7 +31,9 @@ from jacobian.math.number_theory.number_fields.values import (
 
 
 def _field(*coefficients: str) -> SimpleNumberFieldPresentation:
-    return SimpleNumberFieldPresentation(coefficients_descending=coefficients)
+    return SimpleNumberFieldPresentation(
+        coefficients_descending=tuple(int(coefficient) for coefficient in coefficients)
+    )
 
 
 def _element(
@@ -139,7 +142,7 @@ def test_binding_is_structural_but_consumer_rejects_a_forged_record(
         "upper": {"num": "3", "den": "1"},
         "interval_type": "OPEN",
     }
-    forged = RealNumberFieldEmbeddingRecord.model_validate(forged_data)
+    forged = RealNumberFieldEmbeddingRecord.model_validate_json(json.dumps(forged_data))
     binding = _binding(_element(record.embedding.presentation, 0, 1), forged)
 
     with pytest.raises(NumberFieldRealEmbeddingOrderError) as caught:
@@ -150,23 +153,25 @@ def test_binding_is_structural_but_consumer_rejects_a_forged_record(
 
 def test_consumer_rejects_a_structurally_valid_reducible_presentation() -> None:
     field = _field("1", "0", "-1")
-    record = RealNumberFieldEmbeddingRecord.model_validate(
-        {
-            "kind": "REAL",
-            "embedding": {
+    record = RealNumberFieldEmbeddingRecord.model_validate_json(
+        json.dumps(
+            {
                 "kind": "REAL",
-                "presentation": field.model_dump(mode="json"),
-                "root": {
-                    "polynomial": ["1", "0", "-1"],
-                    "real_root_index": 0,
+                "embedding": {
+                    "kind": "REAL",
+                    "presentation": field.model_dump(mode="json"),
+                    "root": {
+                        "polynomial": ["1", "0", "-1"],
+                        "real_root_index": 0,
+                    },
                 },
-            },
-            "isolating_interval": {
-                "lower": {"num": "-2", "den": "1"},
-                "upper": {"num": "0", "den": "1"},
-                "interval_type": "OPEN",
-            },
-        }
+                "isolating_interval": {
+                    "lower": {"num": "-2", "den": "1"},
+                    "upper": {"num": "0", "den": "1"},
+                    "interval_type": "OPEN",
+                },
+            }
+        )
     )
     binding = _binding(_element(field, 0, 1), record)
 
@@ -236,8 +241,8 @@ def test_catalog_operation_runs_its_declared_example() -> None:
         for tool in TOOLS
         if tool.operation_id == "number_field.real_embedding.element_order.compare"
     )
-    request = NumberFieldRealEmbeddingOrderRequest.model_validate(
-        operation.examples[0].input
+    request = NumberFieldRealEmbeddingOrderRequest.model_validate_json(
+        json.dumps(operation.examples[0].input)
     )
 
     result = operation.run(request)
@@ -258,7 +263,7 @@ def test_catalog_operation_projects_unrecognized_record_as_a_typed_error(
         "upper": {"num": "-2", "den": "1"},
         "interval_type": "OPEN",
     }
-    forged = RealNumberFieldEmbeddingRecord.model_validate(forged_data)
+    forged = RealNumberFieldEmbeddingRecord.model_validate_json(json.dumps(forged_data))
     binding = _binding(_element(record.embedding.presentation, 0, 1), forged)
     request = NumberFieldRealEmbeddingOrderRequest(left=binding, right=binding)
     operation = next(

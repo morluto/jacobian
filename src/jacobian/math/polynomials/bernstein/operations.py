@@ -59,12 +59,12 @@ def _reject(message: str) -> None:
     )
 
 
-def _digits(value: str) -> int:
-    return len(value.lstrip("-"))
+def _digits(value: int) -> int:
+    return len(format_canonical_integer(abs(value)))
 
 
-def _denominator_digits(value: str) -> int:
-    return 0 if value == "1" else len(value)
+def _denominator_digits(value: int) -> int:
+    return 0 if value == 1 else len(format_canonical_integer(value))
 
 
 def _integer_digits(value: int) -> int:
@@ -152,10 +152,13 @@ def _admit(
         len(es) * (m + 1) for es, m in zip(exponents, multidegree, strict=True)
     )
     source_chars = sum(
-        _digits(t.coefficient.num) + len(t.coefficient.den) + 128 for t in terms
+        _digits(t.coefficient.num)
+        + len(format_canonical_integer(t.coefficient.den))
+        + 128
+        for t in terms
     )
     source_chars += sum(
-        _digits(q.num) + len(q.den) + 128
+        _digits(q.num) + len(format_canonical_integer(q.den)) + 128
         for i in box.intervals
         for q in (i.lower, i.upper)
     )
@@ -307,8 +310,8 @@ def bernstein_coefficients(
         # FLINT already returns a reduced rational. Do not repeat gcd work.
         coefficients.append(
             CanonicalRational.model_construct(
-                num=format_canonical_integer(int(value.numerator)),
-                den=format_canonical_integer(int(value.denominator)),
+                num=int(value.numerator),
+                den=int(value.denominator),
             )
         )
     result = _mark_trusted_tensor(

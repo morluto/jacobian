@@ -19,7 +19,7 @@ from jacobian.math.number_theory.sequences.recurrence_solving.operations import 
 
 
 def _q(numerator: int, denominator: int = 1) -> CanonicalRational:
-    return CanonicalRational(num=str(numerator), den=str(denominator))
+    return CanonicalRational(num=numerator, den=denominator)
 
 
 def test_find_recurrence_accepts_exact_rational_sequence() -> None:

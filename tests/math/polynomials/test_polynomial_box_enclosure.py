@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from fractions import Fraction
 from itertools import product
@@ -29,7 +30,6 @@ from jacobian.math.polynomials.intervals._models import (
 from jacobian.math.polynomials.intervals._tools import (
     TOOLS,
     compute_polynomial_box_enclosure,
-    verify_polynomial_box_enclosure,
 )
 from jacobian.math.polynomials.maps.operations import jacobian_matrix
 from jacobian.math.polynomials.maps.values import RationalPolynomialMap
@@ -224,11 +224,11 @@ def test_jacobian_entry_is_consumed_without_parent_or_axis_conversion() -> None:
     )
 
     result = _enclose(
-        jacobian.matrix.entries[0][0],
+        jacobian.entries[0],
         _box(("x", "y"), ((1, 2), (3, 4))),
     )
 
-    assert result.polynomial == jacobian.matrix.entries[0][0]
+    assert result.polynomial == jacobian.entries[0]
     assert result.enclosure == _interval(5, 8)
 
 
@@ -268,7 +268,7 @@ def test_reversed_coordinate_interval_is_rejected_before_execution() -> None:
 
 @pytest.mark.parametrize(
     "mutation",
-    ("enclosure",),
+    ("polynomial", "box", "source_digest", "enclosure"),
 )
 def test_source_bound_result_rejects_invalid_source_binding(mutation: str) -> None:
     result = _enclose(
@@ -276,10 +276,50 @@ def test_source_bound_result_rejects_invalid_source_binding(mutation: str) -> No
         _box(("x",), ((1, 2),)),
     )
     payload = result.model_dump(mode="json")
-    payload["enclosure"]["upper"] = {"num": "3", "den": "1"}
+    if mutation == "polynomial":
+        payload["polynomial"]["polynomial"]["terms"][0]["coefficient"] = {
+            "num": "2",
+            "den": "1",
+        }
+    elif mutation == "box":
+        payload["box"]["intervals"][0]["upper"] = {"num": "3", "den": "1"}
+    elif mutation == "source_digest":
+        payload["source_digest"] = "sha256:" + "0" * 64
+    elif mutation == "enclosure":
+        payload["enclosure"]["upper"] = {"num": "3", "den": "1"}
 
-    claim = PolynomialBoxEnclosureResult.model_validate(payload)
-    assert not verify_polynomial_box_enclosure(claim)
+    if mutation == "enclosure":
+        PolynomialBoxEnclosureResult.model_validate_json(json.dumps(payload))
+    else:
+        with polynomial_validation_error():
+            PolynomialBoxEnclosureResult.model_validate_json(json.dumps(payload))
+
+
+def test_digest_rejects_a_different_polynomial_with_the_same_interval() -> None:
+    result = _enclose(
+        _polynomial(("x",), {(1,): 1}),
+        _box(("x",), ((0, 1),)),
+    )
+    payload = result.model_dump(mode="json")
+    payload["polynomial"]["polynomial"]["terms"] = [
+        {"coefficient": {"num": "-1", "den": "1"}, "exponents": [1]},
+        {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]},
+    ]
+
+    with polynomial_validation_error():
+        PolynomialBoxEnclosureResult.model_validate_json(json.dumps(payload))
+
+
+def test_digest_rejects_a_different_box_when_the_polynomial_is_constant() -> None:
+    result = _enclose(
+        _polynomial(("x",), {}),
+        _box(("x",), ((0, 1),)),
+    )
+    payload = result.model_dump(mode="json")
+    payload["box"]["intervals"][0]["upper"] = {"num": "2", "den": "1"}
+
+    with polynomial_validation_error():
+        PolynomialBoxEnclosureResult.model_validate_json(json.dumps(payload))
 
 
 def test_produced_result_round_trips_after_strict_serialization() -> None:
@@ -295,12 +335,6 @@ def test_produced_result_round_trips_after_strict_serialization() -> None:
         )
         == result
     )
-    restored = PolynomialBoxEnclosureResult.model_validate_json(
-        result.model_dump_json()
-    )
-    assert restored.polynomial == result.polynomial
-    assert restored.box == result.box
-    assert verify_polynomial_box_enclosure(restored)
 
 
 def test_variable_count_boundary_preserves_axis_identity() -> None:
@@ -397,8 +431,8 @@ def test_coefficient_and_endpoint_digit_boundaries() -> None:
         == MAX_CANONICAL_RATIONAL_DIGITS
     )
     coefficient_at_limit = CanonicalRational(
-        num="9" * MAX_BOX_ENCLOSURE_COEFFICIENT_DIGITS,
-        den="1",
+        num=10**MAX_BOX_ENCLOSURE_COEFFICIENT_DIGITS - 1,
+        den=1,
     )
     polynomial = RationalPolynomial(
         variables=("x",),
@@ -417,13 +451,13 @@ def test_coefficient_and_endpoint_digit_boundaries() -> None:
     )
     with polynomial_validation_error():
         CanonicalRational(
-            num="9" * (MAX_BOX_ENCLOSURE_COEFFICIENT_DIGITS + 1),
-            den="1",
+            num=10 ** (MAX_BOX_ENCLOSURE_COEFFICIENT_DIGITS + 1) - 1,
+            den=1,
         )
 
     endpoint_at_limit = CanonicalRational(
-        num="9" * MAX_BOX_ENCLOSURE_ENDPOINT_DIGITS,
-        den="1",
+        num=10**MAX_BOX_ENCLOSURE_ENDPOINT_DIGITS - 1,
+        den=1,
     )
     PolynomialBoxEnclosureRequest(
         polynomial=_polynomial(("x",), {}),
@@ -434,8 +468,8 @@ def test_coefficient_and_endpoint_digit_boundaries() -> None:
     )
     with polynomial_validation_error():
         CanonicalRational(
-            num="9" * (MAX_BOX_ENCLOSURE_ENDPOINT_DIGITS + 1),
-            den="1",
+            num=10 ** (MAX_BOX_ENCLOSURE_ENDPOINT_DIGITS + 1) - 1,
+            den=1,
         )
 
 
@@ -451,28 +485,32 @@ def _maximum_canonical_interval_payload() -> dict[str, dict[str, str]]:
 def test_interval_ordering_at_the_canonical_boundary_is_admitted() -> None:
     assert MAX_BOX_ENCLOSURE_INTERMEDIATE_DIGITS == 2 * MAX_CANONICAL_RATIONAL_DIGITS
     polynomial_payload = _polynomial(("x",), {}).model_dump(mode="json")
-    request = PolynomialBoxEnclosureRequest.model_validate(
-        {
-            "polynomial": polynomial_payload,
-            "box": {
-                "variables": ["x"],
-                "intervals": [_maximum_canonical_interval_payload()],
-            },
-        }
+    request = PolynomialBoxEnclosureRequest.model_validate_json(
+        json.dumps(
+            {
+                "polynomial": polynomial_payload,
+                "box": {
+                    "variables": ["x"],
+                    "intervals": [_maximum_canonical_interval_payload()],
+                },
+            }
+        )
     )
     assert not request.polynomial.polynomial.terms
 
     oversized_interval = _maximum_canonical_interval_payload()
     oversized_interval["upper"]["num"] = "1" + "0" * MAX_CANONICAL_RATIONAL_DIGITS
     with polynomial_validation_error():
-        PolynomialBoxEnclosureRequest.model_validate(
-            {
-                "polynomial": polynomial_payload,
-                "box": {
-                    "variables": ["x"],
-                    "intervals": [oversized_interval],
-                },
-            }
+        PolynomialBoxEnclosureRequest.model_validate_json(
+            json.dumps(
+                {
+                    "polynomial": polynomial_payload,
+                    "box": {
+                        "variables": ["x"],
+                        "intervals": [oversized_interval],
+                    },
+                }
+            )
         )
 
 
@@ -484,7 +522,7 @@ def test_structural_result_parse_accepts_canonical_forged_enclosure() -> None:
     payload = result.model_dump(mode="json")
     payload["enclosure"] = _maximum_canonical_interval_payload()
 
-    parsed = PolynomialBoxEnclosureResult.model_validate(payload)
+    parsed = PolynomialBoxEnclosureResult.model_validate_json(json.dumps(payload))
     assert parsed.model_dump(mode="json") == payload
 
 
@@ -492,8 +530,8 @@ def _digit_rational(
     numerator_digits: int, denominator_digits: int
 ) -> CanonicalRational:
     return CanonicalRational(
-        num="9" * numerator_digits,
-        den="1" + "0" * (denominator_digits - 1),
+        num=10**numerator_digits - 1,
+        den=10 ** (denominator_digits - 1),
     )
 
 
@@ -501,7 +539,7 @@ def _growth_boundary_request(
     *,
     second_endpoint_numerator_digits: int,
     second_endpoint_denominator_digits: int,
-    coefficient_numerator: str,
+    coefficient_numerator: int,
     coefficient_denominator_digits: int,
 ) -> PolynomialBoxEnclosureRequest:
     variables = ("x", "y")
@@ -517,7 +555,7 @@ def _growth_boundary_request(
     )
     coefficient = CanonicalRational(
         num=coefficient_numerator,
-        den="1" + "0" * (coefficient_denominator_digits - 1),
+        den=10 ** (coefficient_denominator_digits - 1),
     )
     polynomial = RationalPolynomial(
         variables=variables,
@@ -548,7 +586,7 @@ def test_exact_result_digit_growth_boundary() -> None:
     at_limit = _growth_boundary_request(
         second_endpoint_numerator_digits=128,
         second_endpoint_denominator_digits=127,
-        coefficient_numerator="1",
+        coefficient_numerator=1,
         coefficient_denominator_digits=63,
     )
     assert MAX_BOX_ENCLOSURE_RESULT_DIGITS == 32_768
@@ -557,7 +595,7 @@ def test_exact_result_digit_growth_boundary() -> None:
     above_limit = _growth_boundary_request(
         second_endpoint_numerator_digits=128,
         second_endpoint_denominator_digits=127,
-        coefficient_numerator="1",
+        coefficient_numerator=1,
         coefficient_denominator_digits=64,
     )
     with pytest.raises(OperationDomainValidationError):
@@ -568,7 +606,7 @@ def test_intermediate_digit_growth_boundary() -> None:
     legacy_limit = _growth_boundary_request(
         second_endpoint_numerator_digits=127,
         second_endpoint_denominator_digits=127,
-        coefficient_numerator="9" * 62,
+        coefficient_numerator=10**62 - 1,
         coefficient_denominator_digits=64,
     )
     assert (
@@ -580,7 +618,7 @@ def test_intermediate_digit_growth_boundary() -> None:
     above_legacy_limit = _growth_boundary_request(
         second_endpoint_numerator_digits=127,
         second_endpoint_denominator_digits=127,
-        coefficient_numerator="9" * 63,
+        coefficient_numerator=10**63 - 1,
         coefficient_denominator_digits=64,
     )
     growth = _estimate_growth(
@@ -637,7 +675,7 @@ def test_numeric_admission_limits_are_discoverable() -> None:
 
 def test_catalog_example_executes_the_declared_enclosure() -> None:
     tool = TOOLS[0]
-    request = tool.request_type.model_validate(tool.examples[0].input)
+    request = tool.request_type.model_validate_json(json.dumps(tool.examples[0].input))
     result = tool.run(request)
 
     assert tool.operation_id == "polynomial.box.enclosure.compute"

@@ -6,7 +6,6 @@ from fractions import Fraction
 from typing import Any
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
-from jacobian.canonical import format_canonical_integer
 from jacobian.math.polynomials.differential_operators._bounds import (
     MAX_APPLICATION_OUTPUT_COEFFICIENT_DIGITS,
     MAX_APPLICATION_OUTPUT_TERMS,
@@ -94,8 +93,8 @@ def _polynomial_from_backend(
     wire_terms: list[RationalPolynomialTerm] = []
     for exponents, coefficient in sorted(terms, reverse=True):
         rational = CanonicalRational(
-            num=format_canonical_integer(int(coefficient.numerator)),
-            den=format_canonical_integer(int(coefficient.denominator)),
+            num=int(coefficient.numerator),
+            den=int(coefficient.denominator),
         )
         require_bounded_rational(
             rational,
@@ -141,8 +140,8 @@ def _rescaled_source(
         if value == 0:
             continue
         rational = CanonicalRational(
-            num=format_canonical_integer(value.numerator),
-            den=format_canonical_integer(value.denominator),
+            num=value.numerator,
+            den=value.denominator,
         )
         require_bounded_rational(
             rational,

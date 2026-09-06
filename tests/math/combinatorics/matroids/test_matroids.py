@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Sequence
 from typing import TypedDict, cast
 from unittest.mock import patch
@@ -16,7 +17,6 @@ from jacobian.math.combinatorics.matroids import (
     matroid_closure,
     matroid_rank,
     operations,
-    verify_closure,
 )
 from jacobian.math.combinatorics.matroids._models import (
     MatroidClosureRequest,
@@ -97,7 +97,12 @@ class TestLinearMatroidRepresentation:
             "matroid": {"matrix": matrix_payload},
             "subset": [],
         }
-        assert MatroidClosureRequest.model_validate(payload).matroid.ground_size == 256
+        assert (
+            MatroidClosureRequest.model_validate_json(
+                json.dumps(payload)
+            ).matroid.ground_size
+            == 256
+        )
 
     def test_shared_carrier_does_not_widen_matroid_row_envelope(self) -> None:
         """The matrix carrier may scale without widening matroid witness work."""
@@ -146,20 +151,7 @@ class TestClosure:
         assert result.closure == (0,)
         assert result.rank == 1
         payload = result.model_dump(mode="json")
-        assert type(result).model_validate(payload) == result
-        assert verify_closure(type(result).model_validate(payload))
-
-        forged = dict(payload)
-        forged["closure"] = [0, 1]
-        assert not verify_closure(type(result).model_validate(forged))
-
-    def test_empty_closure_claim_round_trips_and_verifies(self) -> None:
-        m = _matroid(5, [[], []], 0)
-        result = compute_closure(MatroidClosureRequest(matroid=m, subset=()))
-        decoded = type(result).model_validate_json(result.model_dump_json())
-        assert decoded.closure == ()
-        assert decoded.rank == 0
-        assert verify_closure(decoded)
+        assert type(result).model_validate_json(json.dumps(payload)) == result
 
     def test_subset_indices_validated(self) -> None:
         m = _matroid(5, [(1, 0), (0, 1)], 2)

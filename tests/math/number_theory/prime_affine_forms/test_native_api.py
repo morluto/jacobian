@@ -56,8 +56,8 @@ from jacobian.math.number_theory.prime_affine_forms._translation import (
 def _form(form_id: str, coefficient: int, constant: int) -> PrimitiveIntegerAffineForm:
     return PrimitiveIntegerAffineForm(
         form_id=form_id,
-        coefficient=str(coefficient),
-        constant=str(constant),
+        coefficient=coefficient,
+        constant=constant,
     )
 
 
@@ -79,17 +79,17 @@ def test_native_surface_composes_without_private_imports() -> None:
     assert admissibility.checked_primes == (2,)
 
     wheel = residue_wheel(TWIN_PRIMES, (2, 3))
-    assert wheel.modulus == "6"
-    assert wheel.valid_count == "1"
+    assert wheel.modulus == 6
+    assert wheel.valid_count == 1
 
     enumeration = enumerate_residue_wheel(wheel)
     assert tuple((row.residue, row.components) for row in enumeration.residues) == (
-        ("5", (1, 2)),
+        (5, (1, 2)),
     )
 
     member = wheel_membership(wheel, 5)
     excluded = wheel_membership(wheel, 1)
-    assert member.is_permitted and member.canonical_residue == "5"
+    assert member.is_permitted and member.canonical_residue == 5
     assert not excluded.is_permitted
     assert (excluded.first_excluded_prime, excluded.vanishing_form_ids) == (
         3,
@@ -99,17 +99,17 @@ def test_native_surface_composes_without_private_imports() -> None:
     count = interval_count(TWIN_PRIMES, 0, 12)
     matches = interval_enumerate(TWIN_PRIMES, 0, 12)
     assert count.match_count == 3
-    assert (count.first_match, count.last_match) == ("3", "11")
+    assert (count.first_match, count.last_match) == (3, 11)
     assert tuple(
         (match.parameter, match.prime_values) for match in matches.matches
-    ) == (("3", ("3", "5")), ("5", ("5", "7")), ("11", ("11", "13")))
+    ) == ((3, (3, 5)), (5, (5, 7)), (11, (11, 13)))
 
     identity_wheel = residue_wheel(PrimeAffineTuple(forms=(_form("n", 1, 0),)), (2,))
     profile = interval_residue_profile(identity_wheel, 24, 26)
-    assert profile.survivors == ("25",)
+    assert profile.survivors == (25,)
 
     translated = translate_tuple(TWIN_PRIMES, 1)
-    assert tuple(form.constant for form in translated.translated.forms) == ("1", "3")
+    assert tuple(form.constant for form in translated.translated.forms) == (1, 3)
 
 
 def test_native_results_equal_the_wire_request_path() -> None:
@@ -134,19 +134,19 @@ def test_native_results_equal_the_wire_request_path() -> None:
         PrimeTupleResidueWheelEnumerationRequest(wheel=wheel)
     )
     assert wheel_membership(wheel, -7) == compute_wheel_membership(
-        PrimeTupleWheelMembershipRequest(wheel=wheel, value="-7")
+        PrimeTupleWheelMembershipRequest(wheel=wheel, value=-7)
     )
     assert interval_count(TWIN_PRIMES, 4, 8) == compute_interval_count(
-        PrimeAffineIntervalCountRequest(source=TWIN_PRIMES, lower="4", upper="8")
+        PrimeAffineIntervalCountRequest(source=TWIN_PRIMES, lower=4, upper=8)
     )
     assert interval_enumerate(TWIN_PRIMES, 4, 8) == compute_interval_enumerate(
-        PrimeAffineIntervalEnumerateRequest(source=TWIN_PRIMES, lower="4", upper="8")
+        PrimeAffineIntervalEnumerateRequest(source=TWIN_PRIMES, lower=4, upper=8)
     )
     assert interval_residue_profile(wheel, 0, 6) == compute_interval_residue_profile(
-        PrimeTupleIntervalResidueProfileRequest(wheel=wheel, lower="0", upper="6")
+        PrimeTupleIntervalResidueProfileRequest(wheel=wheel, lower=0, upper=6)
     )
     assert translate_tuple(TWIN_PRIMES, -5) == compute_translation(
-        PrimeAffineTranslationRequest(source=TWIN_PRIMES, shift="-5")
+        PrimeAffineTranslationRequest(source=TWIN_PRIMES, shift=-5)
     )
 
 

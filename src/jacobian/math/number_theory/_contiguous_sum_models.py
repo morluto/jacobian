@@ -6,9 +6,8 @@ from typing import TYPE_CHECKING, Annotated, Literal, Self
 
 from pydantic import ConfigDict, Field, StrictInt, StringConstraints, model_validator
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 
 if TYPE_CHECKING:
     from jacobian.math.number_theory._contiguous_sum_admission import (
@@ -26,8 +25,8 @@ MAX_SEGMENTED_SIEVE_UPPER: int = 10**12
 MAX_FACTORING_WORK_SECONDS: int = 60
 
 ContiguousSumInteger = Annotated[
-    CanonicalInteger,
-    StringConstraints(max_length=MAX_PROFILE_INTEGER_DIGITS, strict=True),
+    int,
+    DecimalIntegerEncoding(max_digits=MAX_PROFILE_INTEGER_DIGITS),
 ]
 
 ContiguousSumFailureKind = Literal[
@@ -145,8 +144,8 @@ class ContiguousSumProfileResult(StrictModel):
 
         return cls.model_construct(
             status="UNKNOWN",
-            lower_bound=format_canonical_integer(admission.lower_bound),
-            upper_bound=format_canonical_integer(admission.upper_bound),
+            lower_bound=admission.lower_bound,
+            upper_bound=admission.upper_bound,
             rows=(),
             detail=detail,
             diagnostic=diagnostic,
@@ -164,9 +163,7 @@ class ContiguousSumProfileResult(StrictModel):
         if len(counts) != admission.width:
             raise RuntimeError("contiguous-sum kernel returned the wrong row count")
         rows = tuple(
-            ContiguousSumProfileRow(
-                n=format_canonical_integer(n), representation_count=count
-            )
+            ContiguousSumProfileRow(n=n, representation_count=count)
             for n, count in zip(
                 range(admission.lower_bound, admission.upper_bound + 1),
                 counts,
@@ -175,8 +172,8 @@ class ContiguousSumProfileResult(StrictModel):
         )
         return cls.model_construct(
             status="COMPLETE",
-            lower_bound=format_canonical_integer(admission.lower_bound),
-            upper_bound=format_canonical_integer(admission.upper_bound),
+            lower_bound=admission.lower_bound,
+            upper_bound=admission.upper_bound,
             rows=rows,
             detail=None,
             diagnostic=None,
@@ -184,8 +181,8 @@ class ContiguousSumProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def require_ordered_interval_rows(self) -> Self:
-        lower = parse_canonical_integer(self.lower_bound)
-        upper = parse_canonical_integer(self.upper_bound)
+        lower = self.lower_bound
+        upper = self.upper_bound
         if lower < 1 or upper < lower:
             raise ValueError("result endpoints must form a positive interval")
         if self.status == "UNKNOWN":
@@ -200,7 +197,7 @@ class ContiguousSumProfileResult(StrictModel):
         if len(self.rows) != expected_width:
             raise ValueError("a complete profile has one row per interval integer")
         for expected, row in zip(range(lower, upper + 1), self.rows, strict=True):
-            if parse_canonical_integer(row.n) != expected:
+            if row.n != expected:
                 raise ValueError("profile rows must be ordered over the interval")
         return self
 

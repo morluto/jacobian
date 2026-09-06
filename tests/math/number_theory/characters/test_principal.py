@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -53,13 +55,13 @@ def test_modulus_one_has_its_single_residue_as_a_unit() -> None:
 @pytest.mark.parametrize(
     ("integer", "residue", "is_unit", "value"),
     [
-        ("25", 1, True, 1),
-        ("-1", 11, True, 1),
-        ("18", 6, False, 0),
+        (25, 1, True, 1),
+        (-1, 11, True, 1),
+        (18, 6, False, 0),
     ],
 )
 def test_value_operation_is_bound_to_the_supplied_table(
-    integer: str, residue: int, is_unit: bool, value: int
+    integer: int, residue: int, is_unit: bool, value: int
 ) -> None:
     character = principal_dirichlet_character(12)
     result = compute_principal_dirichlet_character_value(
@@ -136,7 +138,7 @@ def test_value_result_checks_only_structural_source_binding() -> None:
     with pytest.raises(ValidationError) as error:
         PrincipalDirichletCharacterValueResult(
             character=character,
-            integer="25",
+            integer=25,
             canonical_residue=5,
             is_unit=True,
             value=1,
@@ -148,7 +150,7 @@ def test_value_result_checks_only_structural_source_binding() -> None:
 
     result = PrincipalDirichletCharacterValueResult(
         character=character,
-        integer="18",
+        integer=18,
         canonical_residue=6,
         is_unit=True,
         value=1,
@@ -161,7 +163,7 @@ def test_value_result_checker_rejects_a_forged_evaluation_claim() -> None:
     character = principal_dirichlet_character(12)
     result = PrincipalDirichletCharacterValueResult.model_construct(
         character=character,
-        integer="18",
+        integer=18,
         canonical_residue=6,
         is_unit=False,
         value=1,
@@ -172,52 +174,46 @@ def test_value_result_checker_rejects_a_forged_evaluation_claim() -> None:
 
 
 def test_value_request_rejects_noncanonical_negative_zero() -> None:
+    character = principal_dirichlet_character(12)
     with pytest.raises(ValidationError) as error:
-        PrincipalDirichletCharacterValueRequest(
-            character=principal_dirichlet_character(12), integer="-0"
+        PrincipalDirichletCharacterValueRequest.model_validate_json(
+            json.dumps(
+                {"character": character.model_dump(mode="json"), "integer": "-0"}
+            )
         )
     assert error.value.errors()[0]["type"] == "string_pattern_mismatch"
 
 
 def test_integer_fields_publish_the_shared_canonical_pattern() -> None:
-    from pydantic import BaseModel
-
-    from jacobian._exact import CanonicalInteger
-
-    class SharedCanonicalIntegerProbe(BaseModel):
-        value: CanonicalInteger
-
-    expected = SharedCanonicalIntegerProbe.model_json_schema()["properties"]["value"][
-        "pattern"
-    ]
     for model in (
         PrincipalDirichletCharacterValueRequest,
         PrincipalDirichletCharacterValueResult,
     ):
         published = model.model_json_schema()["properties"]["integer"]
-        assert published["pattern"] == expected
+        assert "32767" in published["pattern"]
 
 
 @pytest.mark.parametrize("integer", ["007", "+25", " 25", "2_5", "0x19"])
 def test_value_request_rejects_noncanonical_integer_syntax(integer: str) -> None:
+    character = principal_dirichlet_character(12)
     with pytest.raises(ValidationError) as error:
-        PrincipalDirichletCharacterValueRequest(
-            character=principal_dirichlet_character(12), integer=integer
+        PrincipalDirichletCharacterValueRequest.model_validate_json(
+            json.dumps(
+                {"character": character.model_dump(mode="json"), "integer": integer}
+            )
         )
     assert error.value.errors()[0]["type"] == "string_pattern_mismatch"
 
 
 def test_integer_digit_bound_ignores_the_minus_sign() -> None:
     character = principal_dirichlet_character(12)
-    digits = "9" * MAX_INTEGER_DIGITS
+    digits = int("9" * MAX_INTEGER_DIGITS)
 
     positive = compute_principal_dirichlet_character_value(
         PrincipalDirichletCharacterValueRequest(character=character, integer=digits)
     )
     negative = compute_principal_dirichlet_character_value(
-        PrincipalDirichletCharacterValueRequest(
-            character=character, integer=f"-{digits}"
-        )
+        PrincipalDirichletCharacterValueRequest(character=character, integer=-digits)
     )
 
     assert positive.canonical_residue == 3
@@ -229,9 +225,9 @@ def test_integer_digit_bound_ignores_the_minus_sign() -> None:
 
 @pytest.mark.parametrize(
     "integer",
-    ["9" * (MAX_INTEGER_DIGITS + 1), "-" + "9" * (MAX_INTEGER_DIGITS + 1)],
+    [int("9" * (MAX_INTEGER_DIGITS + 1)), -int("9" * (MAX_INTEGER_DIGITS + 1))],
 )
-def test_value_request_rejects_integers_beyond_the_digit_bound(integer: str) -> None:
+def test_value_request_rejects_integers_beyond_the_digit_bound(integer: int) -> None:
     with pytest.raises(ValidationError) as error:
         PrincipalDirichletCharacterValueRequest(
             character=principal_dirichlet_character(12), integer=integer

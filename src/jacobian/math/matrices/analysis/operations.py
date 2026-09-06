@@ -13,6 +13,7 @@ from typing import Any, Literal
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalRational,
     canonical_rational_component_digits,
     require_bounded_rational,
@@ -120,7 +121,7 @@ def _admit_rational_spectrum_claim(
         maximum=MAX_RATIONAL_SPECTRUM_INPUT_DIGITS,
         label="rational spectrum matrix",
     )
-    nonzero_entries = sum(entry.num != "0" for row in matrix.entries for entry in row)
+    nonzero_entries = sum(entry.num != 0 for row in matrix.entries for entry in row)
     if nonzero_entries > MAX_RATIONAL_SPECTRUM_NONZERO_ENTRIES:
         raise _validation_error(
             "budget_exceeded",
@@ -156,7 +157,11 @@ def _admit_rational_spectrum_claim(
             "budget_exceeded",
             "shifted-rank computations exceed the aggregate work budget",
         )
-    minor_digits = order * order * shifted_digits + len(str(factorial(order))) + 1
+    minor_digits = (
+        order * order * shifted_digits
+        + len(format_canonical_integer(factorial(order)))
+        + 1
+    )
     if minor_digits > MAX_RATIONAL_SPECTRUM_MINOR_DIGITS:
         raise _validation_error(
             "budget_exceeded", "exact shifted-rank minors exceed the digit budget"
@@ -168,7 +173,7 @@ def _is_diagonal(matrix: ExactRealMatrix) -> bool:
     if isinstance(matrix, EmbeddedRealSimpleNumberFieldMatrix):
         return all(
             all(
-                coordinate.num == "0"
+                coordinate.num == 0
                 for coordinate in matrix.entries[row][column].coefficients_ascending
             )
             for row in range(order)
@@ -176,17 +181,32 @@ def _is_diagonal(matrix: ExactRealMatrix) -> bool:
             if row != column
         )
     return all(
-        matrix.entries[row][column].num == "0"
+        matrix.entries[row][column].num == 0
         for row in range(order)
         for column in range(order)
         if row != column
     )
 
 
-def _denominator_product_digit_bound(denominators: tuple[str, ...]) -> int:
+def _integer_digits(value: int) -> int:
+    if value == 0:
+        return 1
+    if value.bit_length() <= 14_000:
+        return len(format_canonical_integer(abs(value)))
+    return MAX_CANONICAL_RATIONAL_DIGITS + 1
+
+
+def _denominator_product_digit_bound(denominators: tuple[int, ...]) -> int:
     """Bound product width without charging harmless unit denominators."""
 
-    return max(1, sum(len(value) for value in denominators if value != "1"))
+    return max(
+        1,
+        sum(
+            len(format_canonical_integer(abs(value)))
+            for value in denominators
+            if value != 1
+        ),
+    )
 
 
 def _rational_general_inertia_work(matrix: RationalMatrix) -> int:
@@ -208,7 +228,7 @@ def _rational_general_inertia_work(matrix: RationalMatrix) -> int:
         for row in matrix.entries
     )
     scaled_component_digits = max(
-        len(value.num.lstrip("-"))
+        len(format_canonical_integer(abs(value.num)))
         + row_denominator_digits[row]
         + row_denominator_digits[column]
         + 2
@@ -217,7 +237,7 @@ def _rational_general_inertia_work(matrix: RationalMatrix) -> int:
     )
     minor_digits = (
         order * scaled_component_digits
-        + len(str(factorial(order)))
+        + len(format_canonical_integer(factorial(order)))
         + ceil(order * 0.5 * log10(max(order, 1)))
         + 2
     )
@@ -241,7 +261,7 @@ def _algebraic_source_height(
         for row in matrix.entries
     )
     scaled_component_digits = max(
-        len(coordinate.num.lstrip("-"))
+        len(format_canonical_integer(abs(coordinate.num)))
         + row_denominator_digits[row]
         + row_denominator_digits[column]
         + 2
@@ -250,11 +270,11 @@ def _algebraic_source_height(
         for coordinate in value.coefficients_ascending
     )
     field_digits = max(
-        len(coefficient.lstrip("-"))
+        len(format_canonical_integer(abs(coefficient)))
         for coefficient in matrix.embedding.presentation.coefficients_descending
     )
     leading_digits = len(
-        matrix.embedding.presentation.coefficients_descending[0].lstrip("-")
+        str(matrix.embedding.presentation.coefficients_descending[0]).lstrip("-")
     )
     reduction_digits = degree * (
         field_digits + leading_digits + ceil(log10(degree + 1)) + 2
@@ -274,7 +294,7 @@ def _algebraic_inertia_work(
     conversion_work = order**2 * degree * (source_digits + reduction_digits)
     if diagonal:
         nonzero_diagonal = sum(
-            any(coordinate.num != "0" for coordinate in value.coefficients_ascending)
+            any(coordinate.num != 0 for coordinate in value.coefficients_ascending)
             for value in (matrix.entries[index][index] for index in range(order))
         )
         # A nonzero reduced polynomial p has degree < d and is coprime to the
@@ -285,7 +305,9 @@ def _algebraic_inertia_work(
         return conversion_work + order**2 * degree + sign_work
 
     minor_digits = (
-        order * (source_digits + reduction_digits) + len(str(factorial(order))) + 2
+        order * (source_digits + reduction_digits)
+        + len(format_canonical_integer(factorial(order)))
+        + 2
     )
     # A Schur entry is a ratio of field-valued minors. Inverting the
     # denominator element is a degree-d rational linear solve; Cramer's rule
@@ -299,7 +321,7 @@ def _algebraic_inertia_work(
 def _diagonal_rational_inertia_work(matrix: RationalMatrix) -> int:
     order = len(matrix.entries)
     scalar_digits = max(
-        len(component.lstrip("-"))
+        len(format_canonical_integer(abs(component)))
         for index in range(order)
         for component in (
             matrix.entries[index][index].num,
@@ -345,7 +367,7 @@ def _admit_inertia_from_bounds(
         scaled_component_digits = numerator_digits + 2 * row_denominator_digits + 2
         minor_digits = (
             order * scaled_component_digits
-            + len(str(factorial(order)))
+            + len(format_canonical_integer(factorial(order)))
             + ceil(order * 0.5 * log10(max(order, 1)))
             + 2
         )
@@ -361,7 +383,9 @@ def _admit_inertia_from_bounds(
             order**2 * algebraic_degree * (source_digits + reduction_digits)
         )
         minor_digits = (
-            order * (source_digits + reduction_digits) + len(str(factorial(order))) + 2
+            order * (source_digits + reduction_digits)
+            + len(format_canonical_integer(factorial(order)))
+            + 2
         )
         ratio_digits = (2 * algebraic_degree + 3) * (minor_digits + reduction_digits)
         congruence_work = 4 * order**3 * algebraic_degree**2 * ratio_digits
@@ -913,20 +937,25 @@ def check_farkas_certificate(
         active = [
             (yi, rhs_vector[i] if column == width else entries[i][column])
             for i, yi in enumerate(multipliers)
-            if yi.num != "0"
-            and (rhs_vector[i] if column == width else entries[i][column]).num != "0"
+            if yi.num != 0
+            and (rhs_vector[i] if column == width else entries[i][column]).num != 0
         ]
         denominator_digits = sum(
-            len(q.den) for pair in active for q in pair if q.den != "1"
+            len(format_canonical_integer(q.den))
+            for pair in active
+            for q in pair
+            if q.den != 1
         )
         numerator_digits = max(
             (
-                sum(0 if q.num in ("1", "-1") else len(q.num.lstrip("-")) for q in pair)
+                sum(0 if abs(q.num) == 1 else _integer_digits(q.num) for q in pair)
                 for pair in active
             ),
             default=0,
         )
-        sum_digits = len(str(len(active) - 1)) if len(active) > 1 else 0
+        sum_digits = (
+            len(format_canonical_integer(len(active) - 1)) if len(active) > 1 else 0
+        )
         if max(1, denominator_digits + max(1, numerator_digits) + sum_digits) > 32768:
             raise OperationDomainValidationError(
                 location=("constraint_matrix", "rhs_vector", "multipliers"),
@@ -950,8 +979,8 @@ def check_farkas_certificate(
 
     def rational(value: Fraction) -> CanonicalRational:
         return CanonicalRational.model_construct(
-            num=format_canonical_integer(value.numerator),
-            den=format_canonical_integer(value.denominator),
+            num=value.numerator,
+            den=value.denominator,
         )
 
     return FarkasCertificateResult.model_construct(

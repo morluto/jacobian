@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
-from tests.support.rationals import rational_payload as q
 
+from jacobian._exact import CanonicalRational
 from jacobian.math.matrices.rational_linear._models import (
     LinearRationalInconsistencyFindRequest,
     LinearRationalSolutionFindRequest,
@@ -23,7 +24,11 @@ from jacobian.math.optimization._models import (
 from jacobian.math.optimization.operations import linear_program
 
 
-def _system(rhs: list[dict[str, str]]) -> dict[str, object]:
+def q(numerator: int, denominator: int = 1) -> CanonicalRational:
+    return CanonicalRational.from_integer_ratio(numerator, denominator)
+
+
+def _system(rhs: list[CanonicalRational]) -> dict[str, object]:
     return {
         "variables": ["x"],
         "coefficients": {
@@ -61,7 +66,9 @@ def test_rational_linear_operations_return_mathematical_outcomes() -> None:
 
     assert solution.status == "SOLUTION"
     assert solution.values is not None
-    assert [v.model_dump(mode="json") for v in solution.values] == [q(1)]
+    assert [v.model_dump(mode="json") for v in solution.values] == [
+        q(1).model_dump(mode="json")
+    ]
     assert no_solution.status == "INCONSISTENT"
     assert consistency.status == "CONSISTENT"
     assert contradiction.status == "INCONSISTENT"
@@ -74,7 +81,9 @@ def test_rational_linear_operations_return_mathematical_outcomes() -> None:
         coordinate * value
         for coordinate, value in zip(witness, (Fraction(1), Fraction(2)), strict=True)
     ) == Fraction(1)
-    assert contradiction.rhs_pairing.model_dump(mode="json") == q(1)
+    assert contradiction.rhs_pairing.model_dump(mode="json") == q(1).model_dump(
+        mode="json"
+    )
 
 
 def test_rational_linear_program_returns_a_source_bound_optimum() -> None:
@@ -124,12 +133,22 @@ def test_rational_linear_program_returns_a_source_bound_optimum() -> None:
     assert result.dual_objective is not None
     assert result.primal_residuals is not None
     assert result.dual_slacks is not None
-    assert [v.model_dump(mode="json") for v in result.primal_candidate] == [q(1)]
-    assert [v.model_dump(mode="json") for v in result.dual_candidate] == [q(1)]
-    assert result.primal_objective.model_dump(mode="json") == q(1)
-    assert result.dual_objective.model_dump(mode="json") == q(1)
-    assert [v.model_dump(mode="json") for v in result.primal_residuals] == [q(0)]
-    assert [v.model_dump(mode="json") for v in result.dual_slacks] == [q(0)]
+    assert [v.model_dump(mode="json") for v in result.primal_candidate] == [
+        q(1).model_dump(mode="json")
+    ]
+    assert [v.model_dump(mode="json") for v in result.dual_candidate] == [
+        q(1).model_dump(mode="json")
+    ]
+    assert result.primal_objective.model_dump(mode="json") == q(1).model_dump(
+        mode="json"
+    )
+    assert result.dual_objective.model_dump(mode="json") == q(1).model_dump(mode="json")
+    assert [v.model_dump(mode="json") for v in result.primal_residuals] == [
+        q(0).model_dump(mode="json")
+    ]
+    assert [v.model_dump(mode="json") for v in result.dual_slacks] == [
+        q(0).model_dump(mode="json")
+    ]
 
 
 def test_rational_linear_program_handles_multiple_equalities() -> None:
@@ -148,8 +167,14 @@ def test_rational_linear_program_handles_multiple_equalities() -> None:
     assert result.status == "OPTIMAL"
     assert result.primal_candidate is not None
     assert result.primal_residuals is not None
-    assert [v.model_dump(mode="json") for v in result.primal_candidate] == [q(1), q(2)]
-    assert [v.model_dump(mode="json") for v in result.primal_residuals] == [q(0), q(0)]
+    assert [v.model_dump(mode="json") for v in result.primal_candidate] == [
+        q(1).model_dump(mode="json"),
+        q(2).model_dump(mode="json"),
+    ]
+    assert [v.model_dump(mode="json") for v in result.primal_residuals] == [
+        q(0).model_dump(mode="json"),
+        q(0).model_dump(mode="json"),
+    ]
 
 
 def test_rational_linear_program_returns_a_replayable_farkas_witness() -> None:
@@ -208,7 +233,11 @@ def test_zero_equalities_are_pruned_from_farkas_backend_work() -> None:
         }
     ).program
 
-    result = _run_linear_program(program.model_dump(mode="json"))
+    result = linear_program(
+        StandardFormRationalLinearProgram.model_validate_json(
+            json.dumps(program.model_dump(mode="json"))
+        )
+    )
     assert result.status == "INFEASIBLE"
     assert result.farkas_candidate is not None
     assert len(result.farkas_candidate) == 64
@@ -303,7 +332,7 @@ def test_source_derived_result_height_exceeds_input_scalar_limit() -> None:
 
     assert result.status == "OPTIMAL"
     assert result.primal_candidate is not None
-    assert max(len(value.num.lstrip("-")) for value in result.primal_candidate) > 128
+    assert max(len(str(abs(value.num))) for value in result.primal_candidate) > 128
     assert (
         RationalLinearProgramResult.model_validate_json(
             result.model_dump_json(), strict=True

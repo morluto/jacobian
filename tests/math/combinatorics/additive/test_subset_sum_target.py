@@ -7,6 +7,7 @@ from typing import cast
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
+from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import MathTool
 from jacobian.math.combinatorics.additive import (
     IndexedIntegerSequence,
@@ -15,6 +16,7 @@ from jacobian.math.combinatorics.additive import (
 )
 from jacobian.math.combinatorics.additive._subset_sum_residue import (
     SubsetSumResidueProfileRequest,
+    SubsetSumResidueProfileResult,
     subset_sum_residue_profile,
 )
 from jacobian.math.combinatorics.additive._subset_sum_target import (
@@ -48,7 +50,9 @@ def _operation() -> MathTool[SubsetSumTargetRequest, SubsetSumTargetResult]:
     )
 
 
-def _run_residue(request: SubsetSumResidueProfileRequest):
+def _run_residue(
+    request: SubsetSumResidueProfileRequest,
+) -> SubsetSumResidueProfileResult:
     return subset_sum_residue_profile(
         request.source,
         request.modulus,
@@ -64,8 +68,8 @@ def _request(
     allow_empty_subset: bool,
 ) -> SubsetSumTargetRequest:
     return SubsetSumTargetRequest(
-        source=IndexedIntegerSequence(items=tuple(str(value) for value in values)),
-        target=str(target),
+        source=IndexedIntegerSequence(items=values),
+        target=target,
         allow_empty_subset=allow_empty_subset,
     )
 
@@ -91,7 +95,7 @@ def test_request_and_result_compose_through_strict_json_parsing() -> None:
         strict=True,
     )
 
-    assert request.source == IndexedIntegerSequence(items=("2", "3"))
+    assert request.source == IndexedIntegerSequence(items=(2, 3))
     result = _operation().run(request)
     assert (
         SubsetSumTargetResult.model_validate_json(result.model_dump_json(), strict=True)
@@ -134,18 +138,18 @@ def test_target_kernel_known_answers(
 def test_operation_reports_attained_and_not_attained() -> None:
     attained = _operation().run(_request((2, 3), 5, allow_empty_subset=False))
     assert attained == SubsetSumTargetResult(
-        source=IndexedIntegerSequence(items=("2", "3")),
-        target="5",
+        source=IndexedIntegerSequence(items=(2, 3)),
+        target=5,
         allow_empty_subset=False,
         status="ATTAINED",
         witness=IndexSubset(indices=(0, 1)),
-        reconstructed_sum="5",
+        reconstructed_sum=5,
     )
 
     not_attained = _operation().run(_request((2, 3), 4, allow_empty_subset=False))
     assert not_attained == SubsetSumTargetResult(
-        source=IndexedIntegerSequence(items=("2", "3")),
-        target="4",
+        source=IndexedIntegerSequence(items=(2, 3)),
+        target=4,
         allow_empty_subset=False,
         status="NOT_ATTAINED",
     )
@@ -212,7 +216,7 @@ def test_request_admits_large_low_state_and_exact_digit_and_state_boundaries() -
     many_zeros = _operation().run(_request((0,) * 256, 0, allow_empty_subset=True))
     assert many_zeros.witness == IndexSubset(indices=())
 
-    widest = "9" * MAX_SUBSET_SUM_INTEGER_DIGITS
+    widest = 10**MAX_SUBSET_SUM_INTEGER_DIGITS - 1
     wide_result = _operation().run(
         SubsetSumTargetRequest(
             source=IndexedIntegerSequence(items=(widest,)),
@@ -234,23 +238,25 @@ def test_request_rejects_immediately_above_each_search_bound() -> None:
         _operation().run(
             SubsetSumTargetRequest(
                 source={"items": ["1" + "0" * MAX_SUBSET_SUM_INTEGER_DIGITS]},  # type: ignore[arg-type]
-                target="0",
+                target=0,
                 allow_empty_subset=False,
             )
         )
     with pytest.raises(ValidationError):
         SubsetSumTargetRequest(
             source={"items": ["-" + "9" * MAX_SUBSET_SUM_INTEGER_DIGITS]},  # type: ignore[arg-type]
-            target="-" + "9" * (MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS + 1),
+            target=parse_canonical_integer(
+                "-" + "9" * (MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS + 1)
+            ),
             allow_empty_subset=True,
         )
-    with pytest.raises(ValueError):
-        _operation().run(
-            SubsetSumTargetRequest(
-                source={"items": ["-" + "9" * MAX_SUBSET_SUM_INTEGER_DIGITS]},  # type: ignore[arg-type]
-                target="9" * (MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS + 1),
-                allow_empty_subset=True,
-            )
+    with pytest.raises(ValidationError):
+        SubsetSumTargetRequest(
+            source={"items": ["-" + "9" * MAX_SUBSET_SUM_INTEGER_DIGITS]},  # type: ignore[arg-type]
+            target=parse_canonical_integer(
+                "9" * (MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS + 1)
+            ),
+            allow_empty_subset=True,
         )
 
     widest = "9" * MAX_SUBSET_SUM_INTEGER_DIGITS
@@ -258,7 +264,7 @@ def test_request_rejects_immediately_above_each_search_bound() -> None:
     with pytest.raises(ValidationError):
         SubsetSumTargetRequest(
             source={"items": [widest] * above_wire_count},  # type: ignore[arg-type]
-            target="0",
+            target=0,
             allow_empty_subset=True,
         )
 
@@ -283,7 +289,7 @@ def test_request_rejects_immediately_above_each_search_bound() -> None:
                 source={  # type: ignore[arg-type]
                     "items": [str(1 << exponent) for exponent in range(16)] + ["131072"]
                 },
-                target="100000",
+                target=100000,
                 allow_empty_subset=True,
             )
         )
@@ -319,14 +325,14 @@ def test_zero_targets_resolve_before_expansion_without_the_empty_subset() -> Non
     zero_item = _operation().run(_request((3, 0, 5), 0, allow_empty_subset=False))
     assert zero_item.status == "ATTAINED"
     assert zero_item.witness == IndexSubset(indices=(1,))
-    assert zero_item.reconstructed_sum == "0"
+    assert zero_item.reconstructed_sum == 0
 
     # The empty subset remains admissible here, so the same request resolves
     # to it instead of expanding.
     empty_witness = _operation().run(_request(powers, 0, allow_empty_subset=True))
     assert empty_witness.status == "ATTAINED"
     assert empty_witness.witness == IndexSubset(indices=())
-    assert empty_witness.reconstructed_sum == "0"
+    assert empty_witness.reconstructed_sum == 0
 
 
 def test_out_of_range_targets_resolve_before_state_expansion() -> None:
@@ -378,31 +384,31 @@ def test_kernel_enforces_the_transition_bound_in_one_pass() -> None:
 
 
 def test_request_admits_sources_at_the_profile_item_ceiling() -> None:
-    wide_source = IndexedIntegerSequence(items=("0",) * MAX_SUBSET_SUM_ITEMS)
+    wide_source = IndexedIntegerSequence(items=(0,) * MAX_SUBSET_SUM_ITEMS)
     assert len(wide_source.items) == MAX_SUBSET_SUM_ITEMS
 
     zeros = _operation().run(
         SubsetSumTargetRequest(
             source=wide_source,
-            target="0",
+            target=0,
             allow_empty_subset=False,
         )
     )
     assert zeros.status == "ATTAINED"
     assert zeros.witness == IndexSubset(indices=(0,))
-    assert zeros.reconstructed_sum == "0"
+    assert zeros.reconstructed_sum == 0
 
     dense = 512
     ones = _operation().run(_request((1,) * dense, dense - 1, allow_empty_subset=True))
     assert ones.status == "ATTAINED"
     assert ones.witness == IndexSubset(indices=tuple(range(dense - 1)))
-    assert ones.reconstructed_sum == str(dense - 1)
+    assert ones.reconstructed_sum == dense - 1
 
 
 def test_request_accepts_targets_at_the_derived_subset_sum_width() -> None:
-    widest = "9" * MAX_SUBSET_SUM_INTEGER_DIGITS
-    attained_total = str(2 * int(widest))
-    assert len(attained_total) == MAX_SUBSET_SUM_INTEGER_DIGITS + 1
+    widest = 10**MAX_SUBSET_SUM_INTEGER_DIGITS - 1
+    attained_total = 2 * widest
+    assert len(str(attained_total)) == MAX_SUBSET_SUM_INTEGER_DIGITS + 1
 
     attained = _operation().run(
         SubsetSumTargetRequest(
@@ -418,7 +424,7 @@ def test_request_accepts_targets_at_the_derived_subset_sum_width() -> None:
     negative_width = _operation().run(
         SubsetSumTargetRequest(
             source=IndexedIntegerSequence(items=(widest, widest)),
-            target="-" + attained_total,
+            target=-attained_total,
             allow_empty_subset=True,
         )
     )
@@ -426,8 +432,8 @@ def test_request_accepts_targets_at_the_derived_subset_sum_width() -> None:
 
     same_width = _operation().run(
         SubsetSumTargetRequest(
-            source=IndexedIntegerSequence(items=("5", "5")),
-            target="99",
+            source=IndexedIntegerSequence(items=(5, 5)),
+            target=99,
             allow_empty_subset=True,
         )
     )
@@ -452,7 +458,7 @@ def test_request_resolves_targets_beyond_the_derived_subset_sum_width() -> None:
     wide = _operation().run(
         SubsetSumTargetRequest(
             source={"items": []},  # type: ignore[arg-type]
-            target="1" + "0" * MAX_SUBSET_SUM_INTEGER_DIGITS,
+            target=parse_canonical_integer("1" + "0" * MAX_SUBSET_SUM_INTEGER_DIGITS),
             allow_empty_subset=False,
         )
     )
@@ -469,7 +475,7 @@ def test_resolved_empty_witness_skips_state_expansion_admission() -> None:
     )
     assert resolved.status == "ATTAINED"
     assert resolved.witness == IndexSubset(indices=())
-    assert resolved.reconstructed_sum == "0"
+    assert resolved.reconstructed_sum == 0
 
     replayed = SubsetSumTargetResult.model_validate_json(resolved.model_dump_json())
     assert replayed == resolved
@@ -487,7 +493,7 @@ def test_request_admits_targets_attained_by_an_early_source_prefix() -> None:
     singleton = _operation().run(_request(powers, 1, allow_empty_subset=False))
     assert singleton.status == "ATTAINED"
     assert singleton.witness == IndexSubset(indices=(0,))
-    assert singleton.reconstructed_sum == "1"
+    assert singleton.reconstructed_sum == 1
 
     second_item = _operation().run(_request(powers, 2, allow_empty_subset=True))
     assert second_item.witness == IndexSubset(indices=(1,))
@@ -514,25 +520,25 @@ def test_request_admits_sources_beyond_the_profile_item_ceiling() -> None:
 
     zeros = _operation().run(
         SubsetSumTargetRequest(
-            source=IndexedIntegerSequence(items=("0",) * beyond_profile),
-            target="0",
+            source=IndexedIntegerSequence(items=(0,) * beyond_profile),
+            target=0,
             allow_empty_subset=False,
         )
     )
     assert zeros.status == "ATTAINED"
     assert zeros.witness == IndexSubset(indices=(0,))
-    assert zeros.reconstructed_sum == "0"
+    assert zeros.reconstructed_sum == 0
 
     replayed = SubsetSumTargetResult.model_validate_json(zeros.model_dump_json())
     assert replayed == zeros
 
 
 def test_request_admits_low_state_sources_with_wide_lattice_spans() -> None:
-    huge = "1" + "0" * 100
+    huge = 10**100
     wide = _operation().run(
         SubsetSumTargetRequest(
-            source=IndexedIntegerSequence(items=(huge, "-" + huge)),
-            target="5",
+            source=IndexedIntegerSequence(items=(huge, -huge)),
+            target=5,
             allow_empty_subset=False,
         )
     )
@@ -549,7 +555,7 @@ def test_resolving_scan_is_charged_against_the_transition_bound() -> None:
     )
     assert admitted.status == "ATTAINED"
     assert admitted.witness == IndexSubset(indices=(*range(16), 21))
-    assert admitted.reconstructed_sum == target
+    assert admitted.reconstructed_sum == int(target)
 
     replayed = SubsetSumTargetResult.model_validate_json(admitted.model_dump_json())
     assert replayed == admitted
@@ -560,16 +566,16 @@ def test_resolving_scan_is_charged_against_the_transition_bound() -> None:
                 source={  # type: ignore[arg-type]
                     "items": [str(value) for value in powers + (0,) * 6 + (1,)]
                 },
-                target=target,
+                target=int(target),
                 allow_empty_subset=True,
             )
         )
 
 
 def test_target_sources_compose_across_indexed_sequence_operations() -> None:
-    sequence = IndexedIntegerSequence(items=("2", "3"))
+    sequence = IndexedIntegerSequence(items=(2, 3))
     attained = _operation().run(
-        SubsetSumTargetRequest(source=sequence, target="5", allow_empty_subset=False)
+        SubsetSumTargetRequest(source=sequence, target=5, allow_empty_subset=False)
     )
     assert type(attained.source) is IndexedIntegerSequence
     assert attained.source == sequence
@@ -593,8 +599,8 @@ def test_schema_publishes_enforced_target_and_source_bounds() -> None:
 
     target_schema = schema["properties"]["target"]
     assert target_schema["maxLength"] == MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS + 1
-    assert target_schema["pattern"] == (
-        rf"^(?:0|-?[1-9][0-9]{{0,{MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS - 1}}})$"
+    assert target_schema["pattern"].startswith(
+        rf"^(?:0|-?[1-9][0-9]{{0,{MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS - 1}}})"
     )
 
     items_schema = schema["properties"]["source"]["properties"]["items"]
@@ -643,9 +649,9 @@ def test_target_scalar_pattern_encodes_the_absolute_digit_ceiling() -> None:
     adapter = TypeAdapter(_SubsetSumTargetScalar)
 
     ceiling = "9" * MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS
-    assert adapter.validate_python(ceiling) == ceiling
+    assert adapter.validate_json('"' + ceiling + '"') == int(ceiling)
     # Only a negative ceiling-width value needs the extra sign character.
-    assert adapter.validate_python("-" + ceiling) == "-" + ceiling
+    assert adapter.validate_json('"-' + ceiling + '"') == -int(ceiling)
 
     with pytest.raises(ValidationError):
         adapter.validate_python("9" * (MAX_SUBSET_SUM_RECONSTRUCTED_DIGITS + 1))

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 import threading
 from fractions import Fraction
@@ -186,7 +187,7 @@ def test_conjugate_nonrational_singularities_keep_distinct_embedding_identity() 
     for record in result.outcome.points:
         point = record.point
         assert isinstance(point.embedding, ComplexNumberFieldEmbedding)
-        assert point.embedding.presentation.coefficients_descending == ("1", "0", "1")
+        assert point.embedding.presentation.coefficients_descending == (1, 0, 1)
         roots.append(point.embedding.root.root_index)
         assert tuple(
             tuple(
@@ -204,7 +205,12 @@ def test_conjugate_nonrational_singularities_keep_distinct_embedding_identity() 
     _assert_singular_point_defining_identities(result)
 
     payload = result.model_dump(mode="json")
-    assert ProjectivePlaneCurveSingularityProfile.model_validate(payload) == result
+    assert (
+        ProjectivePlaneCurveSingularityProfile.model_validate_json(
+            encode_strict_json(payload)
+        )
+        == result
+    )
 
 
 def test_geometrically_split_cubic_keeps_its_complete_galois_orbit() -> None:
@@ -227,7 +233,7 @@ def test_geometrically_split_cubic_keeps_its_complete_galois_orbit() -> None:
     assert len(presentations) == 1
     (presentation,) = presentations
     assert presentation.degree == 3
-    assert presentation.coefficients_descending[0] != "1"
+    assert presentation.coefficients_descending[0] != 1
 
     real_embeddings = [
         record.point.embedding
@@ -465,8 +471,8 @@ def test_decoded_ideal_cannot_exceed_the_admitted_coefficient_bound() -> None:
     )
     admission = _admit_singularity(source)
     over_bound = CanonicalRational(
-        num="1" + "0" * admission.macaulay_minor_component_digits,
-        den="1",
+        num=10**admission.macaulay_minor_component_digits,
+        den=1,
     )
     ideal = _ideal_with_shape(
         coefficient=over_bound,
@@ -510,8 +516,8 @@ def test_derived_result_bound_covers_the_maximal_admitted_ideal_shape() -> None:
 
     saturation = _ideal_with_shape(
         coefficient=CanonicalRational(
-            num=str(numerator),
-            den=str(denominator_base - 1),
+            num=numerator,
+            den=denominator_base - 1,
         ),
         generator_count=64,
         terms_per_generator=16,
@@ -520,8 +526,8 @@ def test_derived_result_bound_covers_the_maximal_admitted_ideal_shape() -> None:
     components = tuple(
         _ideal_with_shape(
             coefficient=CanonicalRational(
-                num=str(numerator),
-                den=str(denominator_base - (10 * index + 1)),
+                num=numerator,
+                den=denominator_base - (10 * index + 1),
             ),
             generator_count=4,
             terms_per_generator=16,
@@ -586,10 +592,10 @@ def test_catalog_contract_and_example_round_trip() -> None:
         == "algebraic_geometry.projective_plane_curve.singularity_profile.compute"
     )
 
-    request = tool.request_type.model_validate(tool.examples[0].input)
+    request = tool.request_type.model_validate_json(json.dumps(tool.examples[0].input))
     result = tool.run(request)
     assert result.outcome.status == "SMOOTH_OVER_ALGEBRAIC_CLOSURE"
-    assert tool.result_type.model_validate(result.model_dump(mode="json")) == result
+    assert tool.result_type.model_validate_json(result.model_dump_json()) == result
 
 
 def test_cancelled_saturation_is_not_a_mathematical_outcome() -> None:

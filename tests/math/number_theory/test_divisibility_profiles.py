@@ -21,7 +21,7 @@ from jacobian.math.number_theory.operations import (
 
 def test_gcd_quotient_basic() -> None:
     result = compute_gcd_quotient_profile(
-        GcdQuotientProfileRequest(elements=("6", "10", "15"))
+        GcdQuotientProfileRequest(elements=(6, 10, 15))
     )
     vals = [int(e) for e in result.elements]
     assert vals == [6, 10, 15]
@@ -32,7 +32,7 @@ def test_gcd_quotient_basic() -> None:
 
 
 def test_native_profiles_accept_canonical_values() -> None:
-    assert gcd_quotient_profile((6, 10)).elements == ("6", "10")
+    assert gcd_quotient_profile((6, 10)).elements == (6, 10)
     assert product_divisibility_profile((2, 3)).divisibility_matrix == (
         (False, True),
         (True, False),
@@ -41,7 +41,7 @@ def test_native_profiles_accept_canonical_values() -> None:
 
 def test_gcd_quotient_symmetric() -> None:
     result = compute_gcd_quotient_profile(
-        GcdQuotientProfileRequest(elements=("12", "18", "24"))
+        GcdQuotientProfileRequest(elements=(12, 18, 24))
     )
     for i in range(3):
         for j in range(3):
@@ -50,17 +50,17 @@ def test_gcd_quotient_symmetric() -> None:
 
 def test_product_divisibility_basic() -> None:
     result = compute_product_divisibility_profile(
-        ProductDivisibilityProfileRequest(elements=("2", "3"))
+        ProductDivisibilityProfileRequest(elements=(2, 3))
     )
     assert result.divisibility_matrix == ((False, True), (True, False))
 
 
 def test_profile_requests_reject_nonpositive_elements() -> None:
     with pytest.raises(OperationDomainValidationError, match="must be positive"):
-        compute_gcd_quotient_profile(GcdQuotientProfileRequest(elements=("0",)))
+        compute_gcd_quotient_profile(GcdQuotientProfileRequest(elements=(0,)))
     with pytest.raises(OperationDomainValidationError, match="must be positive"):
         compute_product_divisibility_profile(
-            ProductDivisibilityProfileRequest(elements=("-2",))
+            ProductDivisibilityProfileRequest(elements=(-2,))
         )
 
 

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from math import gcd
 from typing import Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.number_theory.affine_forms.values import IntegerAffineForm
 
 MAX_AFFINE_FORMS = 512
@@ -30,17 +32,22 @@ def _validation_error(message: str) -> PydanticCustomError:
     return PydanticCustomError(f"prime_affine_form.{suffix}", message)
 
 
-def _component_digits(value: str) -> int:
-    return len(value.lstrip("-"))
+def _component_digits(value: int) -> int:
+    return len(format_canonical_integer(abs(value)))
 
 
 class PrimitiveIntegerAffineForm(IntegerAffineForm):
-    """One labelled affine form ``a*n+b`` over the integers.
+    """One labelled primitive nonconstant form ``a*n+b`` over the integers."""
 
-    The historical name is retained as the carrier used by the prime-affine
-    API.  Primitivity and nonconstancy are operation-domain claims, so this
-    value only decodes the bounded exact expression structurally.
-    """
+    @model_validator(mode="after")
+    def require_primitive_nonconstant_form(self) -> Self:
+        coefficient = self.coefficient
+        constant = self.constant
+        if coefficient == 0:
+            raise _validation_error("primitive affine form coefficient must be nonzero")
+        if gcd(abs(coefficient), abs(constant)) != 1:
+            raise _validation_error("affine coefficient and constant must be coprime")
+        return self
 
 
 class PrimeAffineTuple(StrictModel):

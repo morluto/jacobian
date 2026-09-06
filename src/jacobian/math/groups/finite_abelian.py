@@ -13,20 +13,19 @@ from pydantic import (
     Field,
     StrictBool,
     StrictInt,
-    StringConstraints,
     field_validator,
     model_validator,
 )
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import DecimalIntegerEncoding
 from jacobian._execution import (
     bind_request_deadline,
     current_request_execution,
     request_checkpoint,
     request_execution,
 )
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 
@@ -78,8 +77,8 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 GroupElement = tuple[StrictInt, ...]
 FiniteGroupModulus = Annotated[
-    StrictInt,
-    Field(ge=2, le=MAX_FINITE_GROUP_MODULUS),
+    int,
+    DecimalIntegerEncoding(max_digits=16),
 ]
 BoundedGroupCoordinate = Annotated[
     StrictInt,
@@ -95,23 +94,32 @@ CanonicalGroupCoordinate = Annotated[
 ]
 CanonicalGroupElement = tuple[CanonicalGroupCoordinate, ...]
 BoundedRemainderInteger = Annotated[
-    CanonicalInteger,
-    StringConstraints(max_length=MAX_SPECTRAL_REMAINDER_COEFFICIENT_DIGITS + 1),
+    int,
+    DecimalIntegerEncoding(max_digits=MAX_SPECTRAL_REMAINDER_COEFFICIENT_DIGITS),
 ]
 
 
 class FiniteAbelianProductGroup(StrictModel):
     """An ordered product of cyclic moduli between 2 and the safe integer 2**53 - 1.
 
-    Moduli and canonical residues serialize as raw JSON integers inside exact
-    results, so this reusable value is bounded by the interoperable
-    safe-integer range rather than any operation's work envelope. The axis
+    Moduli serialize as canonical decimal strings. The existing magnitude
+    bound remains until every coordinate consumer admits larger arithmetic
+    and exact outputs; it is distinct from the wire encoding. The axis
     count carries no ceiling of its own: consuming operations derive their
     execution envelope from the supplied rows, group exponent, and retained
     coordinate cardinality.
     """
 
-    moduli: tuple[FiniteGroupModulus, ...] = Field(min_length=1)
+    moduli: tuple[FiniteGroupModulus, ...]
+
+    @model_validator(mode="after")
+    def require_modulus_range(self) -> Self:
+        if any(not 2 <= value <= MAX_FINITE_GROUP_MODULUS for value in self.moduli):
+            raise _validation_error(
+                "modulus_range",
+                "cyclic moduli must be between 2 and the current supported modulus bound",
+            )
+        return self
 
     @property
     def order(self) -> int:
@@ -135,7 +143,7 @@ class FiniteAbelianGroupFactorizationRequest(StrictModel):
     """
 
     moduli: tuple[StrictInt, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_FINITE_GROUP_RANK,
     )
     left: tuple[GroupElement, ...] = Field(
@@ -293,9 +301,9 @@ class FiniteAbelianNonorthogonalityWitness(StrictModel):
     cyclotomic polynomial. The tuple is dense and has length ``phi(N)``.
     """
 
-    left_frequency: CanonicalGroupElement = Field(min_length=1)
-    right_frequency: CanonicalGroupElement = Field(min_length=1)
-    difference: CanonicalGroupElement = Field(min_length=1)
+    left_frequency: CanonicalGroupElement = Field(min_length=0)
+    right_frequency: CanonicalGroupElement = Field(min_length=0)
+    difference: CanonicalGroupElement = Field(min_length=0)
     remainder_coefficients: tuple[BoundedRemainderInteger, ...] = Field(
         min_length=1,
         max_length=MAX_SPECTRAL_CYCLOTOMIC_DEGREE,
@@ -304,14 +312,15 @@ class FiniteAbelianNonorthogonalityWitness(StrictModel):
     @model_validator(mode="after")
     def require_bounded_nonzero_remainder(self) -> Self:
         if any(
-            len(coefficient.lstrip("-")) > MAX_SPECTRAL_REMAINDER_COEFFICIENT_DIGITS
+            len(format_canonical_integer(coefficient))
+            > MAX_SPECTRAL_REMAINDER_COEFFICIENT_DIGITS
             for coefficient in self.remainder_coefficients
         ):
             raise _validation_error(
                 "remainder_digit_bound",
                 "cyclotomic remainder coefficient exceeds its digit bound",
             )
-        if all(coefficient == "0" for coefficient in self.remainder_coefficients):
+        if all(coefficient == 0 for coefficient in self.remainder_coefficients):
             raise _validation_error(
                 "zero_remainder",
                 "a nonorthogonality witness must have nonzero remainder",
@@ -513,7 +522,7 @@ def _character_sum_remainder(
     generator: Symbol,
     cyclotomic: Poly,
     cyclotomic_degree: int,
-) -> tuple[tuple[int, ...], tuple[str, ...]]:
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
     """Reduce one exact character sum modulo the exponent cyclotomic."""
 
     from sympy import Poly
@@ -551,8 +560,7 @@ def _character_sum_remainder(
     )
     remainder = polynomial.rem(cyclotomic, auto=False)
     coefficients = tuple(
-        format_canonical_integer(int(remainder.nth(power)))
-        for power in range(cyclotomic_degree)
+        int(remainder.nth(power)) for power in range(cyclotomic_degree)
     )
     return difference, coefficients
 
@@ -598,7 +606,7 @@ def _finite_abelian_spectral_pair_decision_data(
                 cyclotomic=cyclotomic,
                 cyclotomic_degree=degree,
             )
-            if any(coefficient != "0" for coefficient in coefficients):
+            if any(coefficient != 0 for coefficient in coefficients):
                 return _SpectralPairDecisionData(
                     is_spectral=False,
                     reason="NONORTHOGONAL_FREQUENCIES",
@@ -738,7 +746,7 @@ class FiniteAbelianCharacterSumCell(StrictModel):
     ``N = lcm(m_j)`` and ``chi_lambda(x_t) = zeta_N^{sum (N/m_j) lambda_j x_{t,j}}``.
     """
 
-    frequency: CanonicalGroupElement = Field(min_length=1)
+    frequency: CanonicalGroupElement = Field(min_length=0)
     interval: tuple[StrictInt, StrictInt]
     remainder_coefficients: tuple[BoundedRemainderInteger, ...] = Field(
         min_length=1,
@@ -748,7 +756,7 @@ class FiniteAbelianCharacterSumCell(StrictModel):
     @model_validator(mode="after")
     def require_bounded_remainder(self) -> Self:
         if any(
-            len(coefficient.lstrip("-"))
+            len(format_canonical_integer(coefficient))
             > MAX_CHARACTER_SUM_REMAINDER_COEFFICIENT_DIGITS
             for coefficient in self.remainder_coefficients
         ):
@@ -773,7 +781,7 @@ class FiniteAbelianCharacterSumIntervalProfileResult(StrictModel):
     """
 
     source: FiniteAbelianCharacterSumIntervalProfileSource
-    group_exponent: StrictInt = Field(ge=2)
+    group_exponent: StrictInt = Field(ge=1)
     cyclotomic_degree: StrictInt = Field(ge=1, le=MAX_CHARACTER_SUM_CYCLOTOMIC_DEGREE)
     character_convention: Literal["POSITIVE_PRODUCT_DUAL_PAIRING"] = (
         "POSITIVE_PRODUCT_DUAL_PAIRING"
@@ -791,7 +799,7 @@ class FiniteAbelianCharacterSumIntervalProfileResult(StrictModel):
                 "cell_count_bound",
                 "character-sum profile has at most 4,096 cells",
             )
-        return tuple(value) if isinstance(value, list) else value
+        return canonicalize_json_containers(value)
 
     @model_validator(mode="after")
     def bind_profile(self) -> Self:
@@ -804,10 +812,10 @@ class FiniteAbelianCharacterSumIntervalProfileResult(StrictModel):
         # Bind the kernel-declared degree structurally. Totient factorization
         # belongs to admission, not result parsing of untrusted payloads.
         degree = self.cyclotomic_degree
-        if degree >= exponent:
+        if (exponent == 1 and degree != 1) or (exponent > 1 and degree >= exponent):
             raise _validation_error(
                 "cyclotomic_degree_bound",
-                "cyclotomic_degree must be strictly less than group_exponent",
+                "cyclotomic_degree must be 1 for exponent 1 and smaller than larger exponents",
             )
         expected_cells = len(self.source.frequencies) * len(self.source.intervals)
         if len(self.sums) != expected_cells:
@@ -1031,7 +1039,7 @@ def _finite_abelian_character_sum_interval_profile_data(
             b_int = int(b)
             interval_powers = powers[a_int:b_int]
             if not interval_powers:
-                coefficients = tuple(format_canonical_integer(0) for _ in range(degree))
+                coefficients = (0,) * degree
             else:
                 counts: Counter[int] = Counter(interval_powers)
                 polynomial = Poly.from_dict(
@@ -1041,8 +1049,7 @@ def _finite_abelian_character_sum_interval_profile_data(
                 )
                 remainder = polynomial.rem(cyclotomic, auto=False)
                 coefficients = tuple(
-                    format_canonical_integer(int(remainder.nth(power)))
-                    for power in range(degree)
+                    int(remainder.nth(power)) for power in range(degree)
                 )
             cells.append(
                 FiniteAbelianCharacterSumCell(
@@ -1092,18 +1099,18 @@ class FiniteAbelianRepresentationCount(StrictModel):
 class FiniteAbelianRepresentationWitness(StrictModel):
     """The first element with two distinct displayed representations."""
 
-    element: GroupElement = Field(min_length=1, max_length=MAX_FINITE_GROUP_RANK)
-    left: GroupElement = Field(min_length=1, max_length=MAX_FINITE_GROUP_RANK)
-    right: GroupElement = Field(min_length=1, max_length=MAX_FINITE_GROUP_RANK)
-    other_left: GroupElement = Field(min_length=1, max_length=MAX_FINITE_GROUP_RANK)
-    other_right: GroupElement = Field(min_length=1, max_length=MAX_FINITE_GROUP_RANK)
+    element: GroupElement = Field(min_length=0, max_length=MAX_FINITE_GROUP_RANK)
+    left: GroupElement = Field(min_length=0, max_length=MAX_FINITE_GROUP_RANK)
+    right: GroupElement = Field(min_length=0, max_length=MAX_FINITE_GROUP_RANK)
+    other_left: GroupElement = Field(min_length=0, max_length=MAX_FINITE_GROUP_RANK)
+    other_right: GroupElement = Field(min_length=0, max_length=MAX_FINITE_GROUP_RANK)
 
 
 class FiniteAbelianGroupFactorizationResult(StrictModel):
     """Complete unique-representation summary for ``G = left + right``."""
 
     moduli: tuple[StrictInt, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_FINITE_GROUP_RANK,
     )
     normalized_left: tuple[GroupElement, ...] = Field(
@@ -1114,7 +1121,7 @@ class FiniteAbelianGroupFactorizationResult(StrictModel):
         min_length=1,
         max_length=MAX_FINITE_GROUP_FACTOR_SIZE,
     )
-    group_order: StrictInt = Field(ge=2, le=MAX_FINITE_GROUP_ORDER)
+    group_order: StrictInt = Field(ge=1, le=MAX_FINITE_GROUP_ORDER)
     pair_count: StrictInt = Field(ge=1, le=MAX_FINITE_GROUP_ORDER)
     distinct_sum_count: StrictInt = Field(ge=1, le=MAX_FINITE_GROUP_ORDER)
     representation_histogram: tuple[FiniteAbelianRepresentationCount, ...] = Field(
@@ -1124,7 +1131,7 @@ class FiniteAbelianGroupFactorizationResult(StrictModel):
     is_exact_factorization: StrictBool
     first_missing: GroupElement | None = Field(
         default=None,
-        min_length=1,
+        min_length=0,
         max_length=MAX_FINITE_GROUP_RANK,
     )
     first_duplicate: FiniteAbelianRepresentationWitness | None = None

@@ -11,10 +11,10 @@ from jacobian.math.polynomials.values import RationalPolynomial
     "terms",
     [
         [],
-        [{"coefficient": {"num": "3", "den": "2"}, "exponents": [0]}],
+        [{"coefficient": {"num": 3, "den": 2}, "exponents": [0]}],
         [
-            {"coefficient": {"num": "1", "den": "1"}, "exponents": [32768]},
-            {"coefficient": {"num": "1", "den": "1"}, "exponents": [1]},
+            {"coefficient": {"num": 1, "den": 1}, "exponents": [32768]},
+            {"coefficient": {"num": 1, "den": 1}, "exponents": [1]},
         ],
     ],
 )
@@ -43,9 +43,7 @@ def test_degree_zero_series_keeps_its_order() -> None:
         {"variables": ["x"], "polynomial": {"terms": []}}
     )
     projection = from_polynomial(polynomial, 512)
-    assert (
-        projection.result.coefficients == (CanonicalRational(num="0", den="1"),) * 512
-    )
+    assert projection.result.coefficients == (CanonicalRational(num=0, den=1),) * 512
     assert to_polynomial(projection.result).source.truncation_order == 512
 
 

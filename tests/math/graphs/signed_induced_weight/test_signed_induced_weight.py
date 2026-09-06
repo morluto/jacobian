@@ -26,8 +26,8 @@ from jacobian.math.graphs.signed_induced_weight.operations import (
 )
 
 
-def _edge(a: str, b: str, w: int | str) -> RationalWeightedEdge:
-    frac = Fraction(w, 1) if isinstance(w, int) else Fraction(w)
+def _edge(a: str, b: str, w: int | Fraction) -> RationalWeightedEdge:
+    frac = Fraction(w, 1) if isinstance(w, int) else w
     return RationalWeightedEdge(
         endpoints=(a, b) if a < b else (b, a),
         weight=CanonicalRational.from_fraction(frac),
@@ -111,7 +111,7 @@ def test_edgeless_graph() -> None:
 
 def test_rational_weights() -> None:
     """Test with non-integer rational weights."""
-    g = _simple_graph(["a", "b"], [("a", "b", "1/2")])
+    g = _simple_graph(["a", "b"], [("a", "b", Fraction(1, 2))])
     result = signed_induced_weight_extrema(g)
     assert result.maximum.value.as_fraction() == Fraction(1, 2)
 
@@ -287,7 +287,7 @@ def test_rejects_unrepresentable_rational_height_before_search() -> None:
         edges.append(
             RationalWeightedEdge(
                 endpoints=(left, right),
-                weight=CanonicalRational(num="1", den=str(prime**exponent)),
+                weight=CanonicalRational(num=1, den=prime**exponent),
             )
         )
     graph = _graph(vertices, edges)

@@ -86,7 +86,7 @@ def _sparse_polynomial(
         polynomial=SparseRationalPolynomial(
             terms=tuple(
                 RationalPolynomialTerm(
-                    coefficient=CanonicalRational(num=str(coefficient), den="1"),
+                    coefficient=CanonicalRational(num=coefficient, den=1),
                     exponents=exponents,
                 )
                 for exponents, coefficient in sorted(terms.items(), reverse=True)
@@ -206,7 +206,9 @@ def test_zero_labelled_factor_is_rejected_at_projective_admission() -> None:
 
 def test_three_variable_certificate_payload_retains_degree_maps() -> None:
     result = compute_graded_jacobian_syzygy(
-        GradedJacobianSyzygyRequest.model_validate(THREE_VARIABLE_CERTIFICATE_PAYLOAD)
+        GradedJacobianSyzygyRequest.model_validate_json(
+            json.dumps(THREE_VARIABLE_CERTIFICATE_PAYLOAD)
+        )
     )
 
     assert result.coefficient_map_detail == "CERTIFICATES"
@@ -223,11 +225,11 @@ def test_detail_mode_is_part_of_each_operation_request_contract() -> None:
         "coefficient_map_detail": "SPARSE_ENTRIES",
     }
     with polynomial_validation_error():
-        GradedJacobianSyzygyRequest.model_validate(sparse_payload)
+        GradedJacobianSyzygyRequest.model_validate_json(json.dumps(sparse_payload))
 
     with polynomial_validation_error():
-        GradedJacobianSyzygyCoefficientRequest.model_validate(
-            THREE_VARIABLE_CERTIFICATE_PAYLOAD
+        GradedJacobianSyzygyCoefficientRequest.model_validate_json(
+            json.dumps(THREE_VARIABLE_CERTIFICATE_PAYLOAD)
         )
 
 
@@ -276,7 +278,7 @@ def test_result_rejects_negative_rank_minor_indices() -> None:
         ]
     assert tampered
     with polynomial_validation_error():
-        GradedJacobianSyzygyResult.model_validate(payload)
+        GradedJacobianSyzygyResult.model_validate_json(json.dumps(payload))
 
 
 def test_dimension_specific_basis_boundary_rejects_before_backend_execution() -> None:
@@ -392,8 +394,11 @@ def test_result_rejects_labelled_provenance_off_three_variables() -> None:
             )
         )
         payload = json.loads(produced.model_dump_json())
-        assert GradedJacobianSyzygyResult.model_validate(payload) == produced
+        assert (
+            GradedJacobianSyzygyResult.model_validate_json(json.dumps(payload))
+            == produced
+        )
 
         payload["source_kind"] = "LABELLED_LINEAR_FACTOR_PRODUCT"
         with polynomial_validation_error():
-            GradedJacobianSyzygyResult.model_validate(payload)
+            GradedJacobianSyzygyResult.model_validate_json(json.dumps(payload))

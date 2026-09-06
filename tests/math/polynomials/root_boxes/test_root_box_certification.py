@@ -14,10 +14,7 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis.intervals import ClosedRationalInterval, RationalBox
 from jacobian.math.matrices.operations import determinant_result
 from jacobian.math.polynomials.maps.values import RationalPolynomialMap
-from jacobian.math.polynomials.root_boxes import (
-    certify_real_root_box,
-    verify_real_root_box,
-)
+from jacobian.math.polynomials.root_boxes import certify_real_root_box
 from jacobian.math.polynomials.root_boxes._models import (
     MAX_ROOT_BOX_DIMENSION,
     PolynomialSystemRootBoxRequest,
@@ -420,6 +417,7 @@ def test_permuting_the_complete_axis_preserves_the_geometric_root() -> None:
         interval.lower.as_fraction()
         for interval in transported.conclusion.evidence.krawczyk_image.intervals
     ) == (Fraction(1), Fraction(2))
+    assert source.source_digest != transported.source_digest
 
 
 def test_non_square_system_and_mismatched_axis_are_domain_rejections() -> None:
@@ -485,8 +483,8 @@ def test_record_digest_rejects_independent_source_or_evidence_mutation(
             "den": "2",
         }
 
-    claim = PolynomialSystemRootBoxResult.model_validate(payload)
-    assert not verify_real_root_box(claim)
+    with pytest.raises(ValidationError, match="digest"):
+        PolynomialSystemRootBoxResult.model_validate_json(json.dumps(payload))
 
 
 def test_produced_result_round_trips_and_schema_discriminates_every_branch() -> None:
@@ -515,7 +513,7 @@ def test_conclusion_union_rejects_cross_branch_field_combinations() -> None:
     ).model_dump(mode="json")
     certified["conclusion"]["status"] = "UNKNOWN"
     with pytest.raises(ValidationError):
-        PolynomialSystemRootBoxResult.model_validate(certified)
+        PolynomialSystemRootBoxResult.model_validate_json(json.dumps(certified))
 
     unknown = _certify(
         _map(("x",), ({(2,): 1},)),
@@ -523,7 +521,7 @@ def test_conclusion_union_rejects_cross_branch_field_combinations() -> None:
     ).model_dump(mode="json")
     unknown["conclusion"]["status"] = "CERTIFIED_UNIQUE_NONSINGULAR"
     with pytest.raises(ValidationError):
-        PolynomialSystemRootBoxResult.model_validate(unknown)
+        PolynomialSystemRootBoxResult.model_validate_json(json.dumps(unknown))
 
 
 def test_public_declaration_has_one_executable_square_system_example() -> None:
@@ -533,7 +531,7 @@ def test_public_declaration_has_one_executable_square_system_example() -> None:
     assert tool.request_type is PolynomialSystemRootBoxRequest
     assert tool.result_type is PolynomialSystemRootBoxResult
     assert len(tool.examples) == 1
-    request = tool.request_type.model_validate(tool.examples[0].input)
+    request = tool.request_type.model_validate_json(json.dumps(tool.examples[0].input))
     result = tool.run(request)
     assert isinstance(result.conclusion, RootBoxCertifiedUniqueNonsingular)
 

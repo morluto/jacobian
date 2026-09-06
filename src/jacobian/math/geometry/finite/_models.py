@@ -6,7 +6,7 @@ from typing import Self
 
 from pydantic import ConfigDict, Field, model_validator
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.designs.incidence_structures._models import (
     IncidenceStructure,
@@ -308,7 +308,7 @@ class GrassmannianCountResult(StrictModel):
     field_order: int
     ambient_dimension: int
     subspace_dimension: int
-    count: CanonicalInteger = Field(
+    count: ExactInteger = Field(
         description="Exact Gaussian-binomial count encoded as a canonical decimal integer."
     )
 
@@ -319,7 +319,7 @@ class GrassmannianCountResult(StrictModel):
         field_order: int,
         ambient_dimension: int,
         subspace_dimension: int,
-        count: CanonicalInteger,
+        count: ExactInteger,
     ) -> Self:
         return cls.model_construct(
             field_order=field_order,

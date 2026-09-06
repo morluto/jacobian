@@ -42,14 +42,14 @@ def test_preimage_of_1() -> None:
     }
 
 
-def test_inverse_totient_results_accept_large_canonical_integer_strings() -> None:
-    large = "1" + "0" * 5_000
+def test_inverse_totient_results_accept_large_native_integers() -> None:
+    large = 10**5_000
     result = EulerPhiPreimageCountResult(target=1, count=large)
-    assert format_canonical_integer(result.count) == large
-    assert result.model_dump(mode="json")["count"] == large
-    power = EulerPhiPowerSumResult(target="1", exponent="1", power_sum=large, count="2")
-    assert format_canonical_integer(power.power_sum) == large
-    assert power.model_dump(mode="json")["power_sum"] == large
+    assert result.count == large
+    assert result.model_dump(mode="json")["count"] == format_canonical_integer(large)
+    power = EulerPhiPowerSumResult(target=1, exponent=1, power_sum=large, count=2)
+    assert power.power_sum == large
+    assert power.model_dump(mode="json")["power_sum"] == format_canonical_integer(large)
 
 
 def test_preimage_count_of_1() -> None:

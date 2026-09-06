@@ -148,7 +148,7 @@ class TestConditionalExpectation:
             ConditionalExpectationRequest(rv=rv, sigma=sigma)
         )
 
-        assert len(result.values[0].den) > 256
+        assert len(str(result.values[0].den)) > 256
 
 
 # ---------------------------------------------------------------------------

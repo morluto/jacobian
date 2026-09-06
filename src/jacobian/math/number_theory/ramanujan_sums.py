@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import SupportsIndex
 
-from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory._models import MAX_INTEGER_DIGITS
 from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
@@ -22,7 +21,7 @@ def _as_python_integer(value: SupportsIndex | IntegerValue) -> int:
     """Return one admitted integer input as its Python integer value."""
 
     if isinstance(value, IntegerValue):
-        return parse_canonical_integer(value.value)
+        return value.value
     return value.__index__()
 
 

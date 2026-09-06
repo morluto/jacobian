@@ -29,7 +29,7 @@ def _monomial_ideal(
                         "polynomial": {
                             "terms": [
                                 {
-                                    "coefficient": {"num": "1", "den": "1"},
+                                    "coefficient": {"num": 1, "den": 1},
                                     "exponents": list(generator),
                                 }
                             ]
@@ -237,11 +237,11 @@ def test_generator_and_exponent_boundaries_reject_before_kernel_work() -> None:
                             "polynomial": {
                                 "terms": [
                                     {
-                                        "coefficient": {"num": "1", "den": "1"},
+                                        "coefficient": {"num": 1, "den": 1},
                                         "exponents": [2],
                                     },
                                     {
-                                        "coefficient": {"num": "1", "den": "1"},
+                                        "coefficient": {"num": 1, "den": 1},
                                         "exponents": [0],
                                     },
                                 ]

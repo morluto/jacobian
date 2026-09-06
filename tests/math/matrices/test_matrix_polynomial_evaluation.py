@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import random
 from copy import deepcopy
 from fractions import Fraction
@@ -53,19 +54,17 @@ from jacobian.math.polynomials.values import (
     SparseRationalPolynomial,
 )
 
-RationalInput = int | str | CanonicalRational | tuple[int | str, int | str]
+RationalInput = int | CanonicalRational | tuple[int, int]
 
 
-def _rational(
-    numerator: RationalInput, denominator: int | str = 1
-) -> CanonicalRational:
+def _rational(numerator: RationalInput, denominator: int = 1) -> CanonicalRational:
     if isinstance(numerator, CanonicalRational):
         assert denominator == 1
         return numerator
     if isinstance(numerator, tuple):
         assert denominator == 1
         numerator, denominator = numerator
-    return CanonicalRational(num=str(numerator), den=str(denominator))
+    return CanonicalRational(num=numerator, den=denominator)
 
 
 def _matrix(*rows: tuple[RationalInput, ...]) -> RationalMatrix:
@@ -160,7 +159,7 @@ def _matrix_polynomial_component_bounds(
     degree = _polynomial_degree(request.polynomial)
     coefficients = _coefficient_ratios(request.polynomial)
     matrix_is_zero = all(
-        entry.num == "0" for row in request.matrix.entries for entry in row
+        entry.num == 0 for row in request.matrix.entries for entry in row
     )
     if degree <= 1 or matrix_is_zero:
         return _linear_result_component_bounds(request.matrix, coefficients)
@@ -191,7 +190,10 @@ def _assert_matrix_polynomial_envelope_conformance(
 
     assert _fractions(result.value) == measured_value
     actual_component_bounds = tuple(
-        (len(entry.num.lstrip("-")), len(entry.den))
+        (
+            len(format_canonical_integer(abs(entry.num))),
+            len(format_canonical_integer(entry.den)),
+        )
         for row in result.value.entries
         for entry in row
     )
@@ -293,7 +295,7 @@ def test_cancelled_horner_products_are_recorded_before_the_scalar_addition() -> 
     )
 
     assert measured_value == ((Fraction(0),),)
-    assert metrics.maximum_component_digits == len(str(height))
+    assert metrics.maximum_component_digits == len(format_canonical_integer(height))
     assert metrics.stored_states == 1 + 2 * (2 * 1**3 + 2)
 
     estimated_work_digits = _require_matrix_polynomial_output_budget(
@@ -301,7 +303,7 @@ def test_cancelled_horner_products_are_recorded_before_the_scalar_addition() -> 
         request.polynomial,
         _polynomial_degree(request.polynomial),
     )
-    assert len(str(height)) <= estimated_work_digits
+    assert len(format_canonical_integer(height)) <= estimated_work_digits
     assert metrics.maximum_component_digits <= estimated_work_digits
     _assert_matrix_polynomial_envelope_conformance(request)
 
@@ -331,7 +333,7 @@ def test_canceling_dot_product_terms_are_observed_inside_each_product() -> None:
         (Fraction(0), Fraction(0)),
         (Fraction(0), Fraction(0)),
     )
-    assert metrics.maximum_component_digits == len(str(height**2))
+    assert metrics.maximum_component_digits == len(format_canonical_integer(height**2))
     assert metrics.stored_states == 1 + 2 * (2 * 2**3 + 2)
 
     estimated_work_digits = _require_matrix_polynomial_output_budget(
@@ -339,7 +341,7 @@ def test_canceling_dot_product_terms_are_observed_inside_each_product() -> None:
         request.polynomial,
         _polynomial_degree(request.polynomial),
     )
-    assert len(str(height**2)) <= estimated_work_digits
+    assert len(format_canonical_integer(height**2)) <= estimated_work_digits
     _assert_matrix_polynomial_envelope_conformance(request)
 
 
@@ -370,7 +372,10 @@ def _plain_sympy_horner_trace(
         widest = max(
             widest,
             max(
-                max(len(str(abs(int(entry.p)))), len(str(int(entry.q))))
+                max(
+                    len(format_canonical_integer(abs(int(entry.p)))),
+                    len(format_canonical_integer(int(entry.q))),
+                )
                 for entry in state
             ),
         )
@@ -695,7 +700,7 @@ def test_characteristic_polynomial_rejects_coprime_denominator_lcm_growth() -> N
     source = RationalMatrix(
         entries=tuple(
             tuple(
-                CanonicalRational(num="1", den=str(denominators[row * order + column]))
+                CanonicalRational(num=1, den=denominators[row * order + column])
                 for column in range(order)
             )
             for row in range(order)
@@ -826,7 +831,7 @@ def test_native_characteristic_polynomial_shares_widened_flint_kernel() -> None:
 
 
 def test_adapter_preserves_canonical_coefficients_above_python_digit_limit() -> None:
-    numerator = "1" * 5_000
+    numerator = (10**5_000 - 1) // 9
     result = _evaluate(
         MatrixPolynomialEvaluationRequest(
             matrix=_matrix((1,)),
@@ -835,7 +840,7 @@ def test_adapter_preserves_canonical_coefficients_above_python_digit_limit() -> 
     )
 
     assert result.value.entries[0][0].num == numerator
-    assert result.value.entries[0][0].den == "1"
+    assert result.value.entries[0][0].den == 1
 
 
 @pytest.mark.parametrize(
@@ -870,9 +875,9 @@ def test_result_rejects_independent_source_value_and_work_mutations(
 
     if mutation in {"degree", "matrix_work", "scalar_work"}:
         with pytest.raises(ValidationError):
-            MatrixPolynomialEvaluationResult.model_validate(wire)
+            MatrixPolynomialEvaluationResult.model_validate_json(json.dumps(wire))
     else:
-        MatrixPolynomialEvaluationResult.model_validate(wire)
+        MatrixPolynomialEvaluationResult.model_validate_json(json.dumps(wire))
 
 
 def test_request_rejects_non_square_and_multivariate_sources() -> None:
@@ -957,8 +962,8 @@ def test_result_sensitive_admission_accepts_maximum_sparse_exponent_at_one_by_on
 
 
 def test_zero_matrix_admission_does_not_combine_irrelevant_denominators() -> None:
-    first_denominator = "1" + "0" * 20_000
-    second_denominator = format_canonical_integer(3**42_000)
+    first_denominator = 10**20_000
+    second_denominator = 3**42_000
 
     request = MatrixPolynomialEvaluationRequest(
         matrix=_matrix((0,)),
@@ -979,11 +984,11 @@ def test_zero_matrix_admission_does_not_combine_irrelevant_denominators() -> Non
         ),
     )
 
-    assert request.matrix.entries[0][0].num == "0"
+    assert request.matrix.entries[0][0].num == 0
 
 
 def test_request_rejects_predicted_scalar_but_not_encoded_size() -> None:
-    denominator = "1" + "0" * 100
+    denominator = 10**100
     overflowing_exponent = MAX_CANONICAL_RATIONAL_DIGITS // 100 + 1
     _assert_admission_rejected(
         MatrixPolynomialEvaluationRequest(
@@ -993,7 +998,7 @@ def test_request_rejects_predicted_scalar_but_not_encoded_size() -> None:
     )
 
     overflowing_entry_digits = 12_000
-    huge_coefficient = "1" * overflowing_entry_digits
+    huge_coefficient = (10**overflowing_entry_digits - 1) // 9
     dense = RationalMatrix(
         entries=tuple(tuple(_rational(1) for _ in range(32)) for _ in range(32))
     )
@@ -1006,7 +1011,7 @@ def test_request_rejects_predicted_scalar_but_not_encoded_size() -> None:
 
 
 def test_structurally_nilpotent_powers_are_admitted_and_evaluate_to_zero() -> None:
-    height = "1" + "0" * 20_000
+    height = 10**20_000
     request = MatrixPolynomialEvaluationRequest(
         matrix=RationalMatrix(
             entries=(
@@ -1034,7 +1039,7 @@ def test_height_maximum_is_not_cancelled_from_the_result_bound() -> None:
     # second diagonal entry is 1/q^2 with compounded denominator digits.
     # The squared output must be predicted and rejected during request
     # validation instead of passing admission and failing result conversion.
-    denominator = "1" + "0" * 17_000
+    denominator = 10**17_000
     _assert_admission_rejected(
         MatrixPolynomialEvaluationRequest(
             matrix=RationalMatrix(
@@ -1052,8 +1057,8 @@ def test_dead_powers_do_not_demand_a_global_clearing_denominator() -> None:
     # A square-zero matrix whose only entries carry coprime 17,000-digit
     # denominators: t^2 is structurally zero, so no global LCM of entry
     # denominators may be required before the support analysis runs.
-    first_denominator = "1" + "0" * 17_000
-    second_denominator = format_canonical_integer(7**20_118)
+    first_denominator = 10**17_000
+    second_denominator = 7**20_118
     request = MatrixPolynomialEvaluationRequest(
         matrix=RationalMatrix(
             entries=(
@@ -1084,7 +1089,7 @@ def test_proven_cancellations_survive_with_compounded_denominators() -> None:
     # row: h = q^2. With a matching lifted coefficient the proven factor
     # cancels q^2 exactly, so both requests stay admitted while the bounds
     # still charge the compounded denominators honestly.
-    base = format_canonical_integer(2**12_000)
+    base = 2**12_000
     swap = RationalMatrix(
         entries=(
             (_rational(0), _rational(base)),
@@ -1103,12 +1108,12 @@ def test_proven_cancellations_survive_with_compounded_denominators() -> None:
     scaled_result = _evaluate(
         MatrixPolynomialEvaluationRequest(
             matrix=swap,
-            polynomial=_polynomial((format_canonical_integer(2**24_000), 2)),
+            polynomial=_polynomial((2**24_000, 2)),
         )
     )
-    assert scaled_result.value.entries[0][0].num == format_canonical_integer(2**24_000)
-    assert scaled_result.value.entries[1][1].num == format_canonical_integer(2**24_000)
-    assert scaled_result.value.entries[0][1].num == "0"
+    assert scaled_result.value.entries[0][0].num == 2**24_000
+    assert scaled_result.value.entries[1][1].num == 2**24_000
+    assert scaled_result.value.entries[0][1].num == 0
 
 
 def test_unprovable_height_growth_is_rejected_during_request_validation() -> None:
@@ -1117,7 +1122,7 @@ def test_unprovable_height_growth_is_rejected_during_request_validation() -> Non
     # cap even though the exact value would be the identity. Admission cannot
     # establish the tighter claim, so the request must be rejected here rather
     # than admitted and rescued by result conversion.
-    base = format_canonical_integer(2**40_000)
+    base = 2**40_000
     _assert_admission_rejected(
         MatrixPolynomialEvaluationRequest(
             matrix=RationalMatrix(
@@ -1132,7 +1137,7 @@ def test_unprovable_height_growth_is_rejected_during_request_validation() -> Non
 
 
 def test_structural_zero_reduces_to_surviving_terms_exactly() -> None:
-    height = format_canonical_integer(7**18_000)
+    height = 7**18_000
     nilpotent = RationalMatrix(
         entries=(
             (_rational(0), _rational(height)),
@@ -1171,11 +1176,11 @@ def test_structural_zero_reduces_to_surviving_terms_exactly() -> None:
         )
     )
     assert surviving_power.value.entries[0][1].num == height
-    assert surviving_power.value.entries[1][0].num == "0"
+    assert surviving_power.value.entries[1][0].num == 0
 
 
 def test_admission_still_charges_live_structural_growth() -> None:
-    height = "1" + "0" * 20_000
+    height = 10**20_000
     cyclic = RationalMatrix(
         entries=(
             (_rational(0), _rational(height)),
@@ -1237,11 +1242,11 @@ def _rational_polynomial(
 def test_degree_two_admission_cross_cancels_coefficient_and_matrix_power_factors() -> (
     None
 ):
-    base_two = format_canonical_integer(2**53_179)
-    base_three = format_canonical_integer(3**33_558)
+    base_two = 2**53_179
+    base_three = 3**33_558
     coefficient = _rational(
-        format_canonical_integer(2**106_358),
-        format_canonical_integer(3**67_116),
+        2**106_358,
+        3**67_116,
     )
 
     request = MatrixPolynomialEvaluationRequest(
@@ -1251,17 +1256,17 @@ def test_degree_two_admission_cross_cancels_coefficient_and_matrix_power_factors
     result = _evaluate(request)
 
     assert request.polynomial.polynomial.terms[0].exponents == (2,)
-    assert result.value.entries[0][0].num == "1"
-    assert result.value.entries[0][0].den == "1"
+    assert result.value.entries[0][0].num == 1
+    assert result.value.entries[0][0].den == 1
     assert result.polynomial_degree == 2
     assert result.matrix_multiplications == 2
 
 
 def test_degree_two_admission_still_rejects_uncancellable_power_growth() -> None:
-    entry_numerator = format_canonical_integer(7**24_048)
-    entry_denominator = format_canonical_integer(5**28_072)
-    coefficient_numerator = format_canonical_integer(11**18_900)
-    coefficient_denominator = format_canonical_integer(13**17_400)
+    entry_numerator = 7**24_048
+    entry_denominator = 5**28_072
+    coefficient_numerator = 11**18_900
+    coefficient_denominator = 13**17_400
 
     _assert_admission_rejected(
         MatrixPolynomialEvaluationRequest(
@@ -1279,7 +1284,7 @@ def test_degree_two_admission_still_rejects_uncancellable_power_growth() -> None
 
 
 def test_admission_falls_back_to_dense_bound_beyond_materialization_ceiling() -> None:
-    height = "1" + "0" * 20_000
+    height = 10**20_000
     _assert_admission_rejected(
         MatrixPolynomialEvaluationRequest(
             matrix=RationalMatrix(entries=((_rational(height),),)),
@@ -1287,7 +1292,7 @@ def test_admission_falls_back_to_dense_bound_beyond_materialization_ceiling() ->
         )
     )
 
-    moderate = "1" + "0" * 15_000
+    moderate = 10**15_000
     request = MatrixPolynomialEvaluationRequest(
         matrix=RationalMatrix(entries=((_rational(moderate),),)),
         polynomial=_polynomial((1, 2)),
@@ -1305,7 +1310,7 @@ def test_constant_result_work_estimates_are_not_clipped_at_the_component_cap() -
     # unclipped work estimate must reject this request during validation
     # while the same shape at heights whose compounded shifts fit the
     # coupled budget stays admitted.
-    height = "1" + "0" * 32_767
+    height = 10**32_767
     chain = RationalMatrix(
         entries=tuple(
             tuple(
@@ -1320,7 +1325,7 @@ def test_constant_result_work_estimates_are_not_clipped_at_the_component_cap() -
         MatrixPolynomialEvaluationRequest(matrix=chain, polynomial=_polynomial((1, 4)))
     )
 
-    moderate_height = "1" + "0" * 13_999
+    moderate_height = 10**13_999
     admitted = _evaluate(
         MatrixPolynomialEvaluationRequest(
             matrix=RationalMatrix(
@@ -1357,7 +1362,7 @@ def test_constant_result_work_estimates_are_not_clipped_at_the_component_cap() -
 
 
 def test_structurally_dead_powers_are_excluded_from_digit_work_estimate() -> None:
-    height = "1" + "0" * 20_000
+    height = 10**20_000
     request = MatrixPolynomialEvaluationRequest(
         matrix=RationalMatrix(
             entries=(
@@ -1388,7 +1393,7 @@ def test_horner_charges_shifted_dead_leading_terms_during_their_ride() -> None:
     # request on a 20,001-digit prediction while execution constructs a
     # 40,000-digit product, so honest charging must reject it here while the
     # same shape at smaller heights stays admitted and evaluates exactly.
-    height = "1" + "0" * 20_000
+    height = 10**20_000
     _assert_admission_rejected(
         MatrixPolynomialEvaluationRequest(
             matrix=RationalMatrix(
@@ -1397,11 +1402,11 @@ def test_horner_charges_shifted_dead_leading_terms_during_their_ride() -> None:
                     (_rational(0), _rational(0)),
                 )
             ),
-            polynomial=_polynomial(("1" + "0" * 20_000, 50), (1, 1)),
+            polynomial=_polynomial((10**20_000, 50), (1, 1)),
         )
     )
 
-    moderate_height = "1" + "0" * 14_999
+    moderate_height = 10**14_999
     admitted = _evaluate(
         MatrixPolynomialEvaluationRequest(
             matrix=RationalMatrix(
@@ -1410,12 +1415,12 @@ def test_horner_charges_shifted_dead_leading_terms_during_their_ride() -> None:
                     (_rational(0), _rational(0)),
                 )
             ),
-            polynomial=_polynomial(("1" + "0" * 14_999, 50), (1, 1)),
+            polynomial=_polynomial((10**14_999, 50), (1, 1)),
         )
     )
 
     assert admitted.value.entries[0][1].num == moderate_height
-    assert admitted.value.entries[0][0].num == "0"
+    assert admitted.value.entries[0][0].num == 0
     assert admitted.polynomial_degree == 50
     assert admitted.matrix_multiplications == 50
 
@@ -1429,7 +1434,7 @@ def test_clearing_denominator_growth_is_bounded_by_live_horner_shifts() -> None:
     # documented proxy 1600 * 20001^2 stays below the coupled budget;
     # bounding denominator growth by the maximum live Horner shift admits
     # it, and f(A) equals A exactly.
-    denominator = "1" + "0" * 20_000
+    denominator = 10**20_000
     request = MatrixPolynomialEvaluationRequest(
         matrix=RationalMatrix(
             entries=(
@@ -1442,10 +1447,10 @@ def test_clearing_denominator_growth_is_bounded_by_live_horner_shifts() -> None:
 
     result = _evaluate(request)
 
-    assert result.value.entries[0][0].num == "0"
-    assert result.value.entries[1][0].num == "0"
-    assert result.value.entries[1][1].num == "0"
-    assert result.value.entries[0][1].num == "1"
+    assert result.value.entries[0][0].num == 0
+    assert result.value.entries[1][0].num == 0
+    assert result.value.entries[1][1].num == 0
+    assert result.value.entries[0][1].num == 1
     assert result.value.entries[0][1].den == denominator
     assert result.polynomial_degree == 100
     assert result.matrix_multiplications == 100
@@ -1462,8 +1467,8 @@ def test_overlapping_dead_denominators_are_charged_at_shared_entries() -> None:
     # resolved per-entry charge must reject this request while the same
     # shape at denominators whose compounded width fits the coupled budget
     # stays admitted and evaluates to the exact zero matrix.
-    first_denominator = "1" + "0" * 32_767
-    second_denominator = format_canonical_integer(11**31_400)
+    first_denominator = 10**32_767
+    second_denominator = 11**31_400
     chain = _matrix((0, 1, 1), (0, 0, 1), (0, 0, 0))
 
     _assert_admission_rejected(
@@ -1476,8 +1481,8 @@ def test_overlapping_dead_denominators_are_charged_at_shared_entries() -> None:
         )
     )
 
-    moderate_first = "1" + "0" * 16_383
-    moderate_second = format_canonical_integer(11**15_700)
+    moderate_first = 10**16_383
+    moderate_second = 11**15_700
     admitted = _evaluate(
         MatrixPolynomialEvaluationRequest(
             matrix=chain,
@@ -1503,8 +1508,8 @@ def test_disjoint_dead_denominators_never_compound_across_entries() -> None:
     # global dead-term lcm would exceed the canonical cap and reject this
     # safely bounded request; resolved coexistence must admit it with
     # f(A) = A exactly.
-    first_denominator = "1" + "0" * 17_000
-    second_denominator = format_canonical_integer(11**16_325)
+    first_denominator = 10**17_000
+    second_denominator = 11**16_325
     request = MatrixPolynomialEvaluationRequest(
         matrix=_matrix((0, 1), (0, 0)),
         polynomial=RationalPolynomial(
@@ -1545,8 +1550,8 @@ def test_mixed_overlap_of_dead_denominators_is_still_charged() -> None:
     # coprime 31,000-digit denominators compound past the digit-work budget
     # and must be rejected, while the smaller honest twin stays admitted
     # with its exact value preserved.
-    first_denominator = "1" + "0" * 31_000
-    second_denominator = format_canonical_integer(11**29_800)
+    first_denominator = 10**31_000
+    second_denominator = 11**29_800
     chain = _matrix((0, 1, 1), (0, 0, 1), (0, 0, 0))
 
     _assert_admission_rejected(
@@ -1560,8 +1565,8 @@ def test_mixed_overlap_of_dead_denominators_is_still_charged() -> None:
         )
     )
 
-    moderate_first = "1" + "0" * 8_000
-    moderate_second = format_canonical_integer(11**7_700)
+    moderate_first = 10**8_000
+    moderate_second = 11**7_700
     admitted = _evaluate(
         MatrixPolynomialEvaluationRequest(
             matrix=chain,
@@ -1590,10 +1595,10 @@ def test_converging_matrix_paths_compound_shared_cell_denominators() -> None:
     # check while the true intermediate exceeds it, so the walk-denominator
     # resolution must reject this request; the same shape at smaller
     # denominators stays admitted and evaluates exactly to zero.
-    first = "1" + "0" * 24_999
-    second = format_canonical_integer(3**52_408)
-    third = format_canonical_integer(7**29_586)
-    fourth = format_canonical_integer(11**24_007)
+    first = 10**24_999
+    second = 3**52_408
+    third = 7**29_586
+    fourth = 11**24_007
     diamond = RationalMatrix(
         entries=(
             (_rational(0), _rational(1, first), _rational(1, second), _rational(0)),
@@ -1610,10 +1615,10 @@ def test_converging_matrix_paths_compound_shared_cell_denominators() -> None:
         )
     )
 
-    small_first = format_canonical_integer(3**12_578)
-    small_second = format_canonical_integer(7**7_117)
-    small_third = format_canonical_integer(11**5_834)
-    small_fourth = format_canonical_integer(13**5_332)
+    small_first = 3**12_578
+    small_second = 7**7_117
+    small_third = 11**5_834
+    small_fourth = 13**5_332
     admitted = _evaluate(
         MatrixPolynomialEvaluationRequest(
             matrix=RationalMatrix(
@@ -1658,8 +1663,8 @@ def test_disjoint_rational_entries_never_demand_a_global_clearing_denominator() 
     # would reject this request although every input, intermediate, output,
     # and digit-work bound holds; resolved coexistence admits it with
     # f(A) = A exactly.
-    first_denominator = "1" + "0" * 17_000
-    second_denominator = format_canonical_integer(11**16_325)
+    first_denominator = 10**17_000
+    second_denominator = 11**16_325
     request = MatrixPolynomialEvaluationRequest(
         matrix=RationalMatrix(
             entries=(
@@ -1677,10 +1682,10 @@ def test_disjoint_rational_entries_never_demand_a_global_clearing_denominator() 
 
     result = _evaluate(request)
 
-    assert result.value.entries[0][1].num == "1"
+    assert result.value.entries[0][1].num == 1
     assert result.value.entries[0][1].den == first_denominator
-    assert result.value.entries[0][2].den == second_denominator
-    assert result.value.entries[1][0].num == "0"
+    assert result.value.entries[0][2].den == int(second_denominator)
+    assert result.value.entries[1][0].num == 0
     assert result.polynomial_degree == 2
     assert result.matrix_multiplications == 2
 
@@ -1691,8 +1696,8 @@ def test_dead_coefficient_powers_are_classified_before_the_coefficient_lcm() -> 
     # and the exact value is zero, so forming lcm(a, b) before support
     # classification would reject a request whose every Horner intermediate
     # stays within a single input denominator.
-    first_denominator = "1" + "0" * 17_000
-    second_denominator = format_canonical_integer(11**16_325)
+    first_denominator = 10**17_000
+    second_denominator = 11**16_325
     request = MatrixPolynomialEvaluationRequest(
         matrix=_matrix((0, 1), (0, 0)),
         polynomial=RationalPolynomial(
@@ -1729,8 +1734,8 @@ def test_surviving_coefficient_denominators_still_demand_a_common_denominator() 
     # the diagonal, and the general degree-2 case clears its surviving
     # coefficients through lcm(a, b). Both compounded predictions exceed the
     # canonical cap, so admission must still reject during validation.
-    first_denominator = "1" + "0" * 17_000
-    second_denominator = format_canonical_integer(11**16_325)
+    first_denominator = 10**17_000
+    second_denominator = 11**16_325
 
     _assert_admission_rejected(
         MatrixPolynomialEvaluationRequest(
@@ -1776,8 +1781,8 @@ def test_surviving_coefficient_denominators_still_demand_a_common_denominator() 
 
 
 def test_linear_admission_cross_cancels_rational_product_factors() -> None:
-    numerator = format_canonical_integer(2**66_037)
-    denominator = format_canonical_integer(3**42_017)
+    numerator = 2**66_037
+    denominator = 3**42_017
     matrix = RationalMatrix(entries=((_rational(denominator, numerator),),))
     coefficient = _rational(numerator, denominator)
 
@@ -1788,8 +1793,8 @@ def test_linear_admission_cross_cancels_rational_product_factors() -> None:
     result = _evaluate(request)
 
     assert request.polynomial.polynomial.terms[0].exponents == (1,)
-    assert result.value.entries[0][0].num == "1"
-    assert result.value.entries[0][0].den == "1"
+    assert result.value.entries[0][0].num == 1
+    assert result.value.entries[0][0].den == 1
 
     cancelled_with_constant = MatrixPolynomialEvaluationRequest(
         matrix=matrix,
@@ -1801,10 +1806,10 @@ def test_linear_admission_cross_cancels_rational_product_factors() -> None:
 
 
 def test_linear_admission_still_rejects_uncancellable_product_growth() -> None:
-    coefficient_numerator = format_canonical_integer(2**66_037)
-    coefficient_denominator = format_canonical_integer(3**42_017)
-    entry_numerator = format_canonical_integer(7**24_048)
-    entry_denominator = format_canonical_integer(5**28_072)
+    coefficient_numerator = 2**66_037
+    coefficient_denominator = 3**42_017
+    entry_numerator = 7**24_048
+    entry_denominator = 5**28_072
 
     _assert_admission_rejected(
         MatrixPolynomialEvaluationRequest(
@@ -1823,12 +1828,10 @@ def test_linear_output_bounds_preserve_additive_cancellation() -> None:
     # exact sum is zero, so magnitude-only addition charges 2H and rejects a
     # request whose digit work and exact value are small. Sign-preserving
     # reduction must admit the exact zero instead.
-    height = "9" + "0" * 32_767
+    height = 9 * 10**32_767
     request = MatrixPolynomialEvaluationRequest(
         matrix=RationalMatrix(entries=((_rational(height),),)),
-        polynomial=_rational_polynomial(
-            (_rational(1), 1), (_rational("-" + height), 0)
-        ),
+        polynomial=_rational_polynomial((_rational(1), 1), (_rational(-height), 0)),
     )
 
     result = _evaluate(request)
@@ -1843,7 +1846,7 @@ def test_linear_output_bounds_still_reject_uncancellable_additive_growth() -> No
     # The additive twin without cancellation: f = t + H genuinely evaluates
     # to 2H, whose 32,769 digits exceed the canonical component cap, so the
     # reduced exact bound still rejects during request validation.
-    height = "9" + "0" * 32_767
+    height = 9 * 10**32_767
     _assert_admission_rejected(
         MatrixPolynomialEvaluationRequest(
             matrix=RationalMatrix(entries=((_rational(height),),)),

@@ -7,7 +7,7 @@ from collections.abc import Sequence
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import parse_canonical_integer
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.cluster_algebras._models import (
     ExchangeMatrix,
@@ -35,21 +35,14 @@ def compute_g_vectors(request: GVectorRequest) -> GVectorResult:
 
 def em(
     n: int,
-    entries: Sequence[Sequence[int | str]],
-    symmetrizer: Sequence[int | str],
+    entries: Sequence[Sequence[int]],
+    symmetrizer: Sequence[int],
 ) -> ExchangeMatrix:
-    """Build an ExchangeMatrix from raw integers using canonical strings."""
+    """Build an ExchangeMatrix from native integers."""
     return ExchangeMatrix(
         n=n,
-        entries=tuple(tuple(str(v) for v in row) for row in entries),
-        symmetrizer=tuple(str(d) for d in symmetrizer),
-    )
-
-
-def ientries(matrix: ExchangeMatrix) -> tuple[tuple[int, ...], ...]:
-    """Parsed integer view of an ExchangeMatrix's entries."""
-    return tuple(
-        tuple(parse_canonical_integer(v) for v in row) for row in matrix.entries
+        entries=tuple(tuple(row) for row in entries),
+        symmetrizer=tuple(symmetrizer),
     )
 
 
@@ -58,25 +51,25 @@ class TestSeedMutation:
 
     def test_a2_mutation_at_0(self) -> None:
         """Mutate the A2 seed at index 0."""
-        b = em(2, ((str(0), str(1)), (str(-1), str(0))), (str(1), str(1)))
+        b = em(2, ((0, 1), (-1, 0)), (1, 1))
         result = compute_seed_mutation(
             SeedMutationRequest(exchange_matrix=b, mutation_index=0)
         )
-        assert result.exchange_matrix.entries[0][1] == "-1"
-        assert result.exchange_matrix.entries[1][0] == "1"
+        assert result.exchange_matrix.entries[0][1] == -1
+        assert result.exchange_matrix.entries[1][0] == 1
 
     def test_a2_mutation_at_1(self) -> None:
         """Mutate the A2 seed at index 1."""
-        b = em(2, ((str(0), str(1)), (str(-1), str(0))), (str(1), str(1)))
+        b = em(2, ((0, 1), (-1, 0)), (1, 1))
         result = compute_seed_mutation(
             SeedMutationRequest(exchange_matrix=b, mutation_index=1)
         )
-        assert result.exchange_matrix.entries[0][1] == "-1"
-        assert result.exchange_matrix.entries[1][0] == "1"
+        assert result.exchange_matrix.entries[0][1] == -1
+        assert result.exchange_matrix.entries[1][0] == 1
 
     def test_mutation_involutive(self) -> None:
         """Double mutation at the same index returns to the original."""
-        b = em(2, ((str(0), str(1)), (str(-1), str(0))), (str(1), str(1)))
+        b = em(2, ((0, 1), (-1, 0)), (1, 1))
         result1 = compute_seed_mutation(
             SeedMutationRequest(exchange_matrix=b, mutation_index=0)
         )
@@ -85,30 +78,30 @@ class TestSeedMutation:
                 exchange_matrix=result1.exchange_matrix, mutation_index=0
             )
         )
-        assert ientries(result2.exchange_matrix) == ientries(b)
+        assert result2.exchange_matrix.entries == b.entries
 
     def test_3x3_mutation(self) -> None:
         """Mutate a 3x3 skew-symmetric matrix."""
         b = em(
             3,
             (
-                (str(0), str(1), str(0)),
-                (str(-1), str(0), str(0)),
-                (str(0), str(0), str(0)),
+                (0, 1, 0),
+                (-1, 0, 0),
+                (0, 0, 0),
             ),
-            (str(1), str(1), str(1)),
+            (1, 1, 1),
         )
         result = compute_seed_mutation(
             SeedMutationRequest(exchange_matrix=b, mutation_index=1)
         )
         # The mutated matrix should still be skew-symmetric
-        new = ientries(result.exchange_matrix)
+        new = result.exchange_matrix.entries
         for i in range(3):
             assert new[i][i] == 0
 
     def test_invalid_mutation_index(self) -> None:
         """Mutation index out of range should fail."""
-        b = em(2, ((str(0), str(1)), (str(-1), str(0))), (str(1), str(1)))
+        b = em(2, ((0, 1), (-1, 0)), (1, 1))
         request = SeedMutationRequest(exchange_matrix=b, mutation_index=2)
         with pytest.raises(OperationDomainValidationError) as caught:
             compute_seed_mutation(request)
@@ -117,7 +110,7 @@ class TestSeedMutation:
 
     def test_skew_symmetrizable(self) -> None:
         """A non-skew-symmetrizable matrix should fail."""
-        matrix = em(2, ((str(0), str(1)), (str(1), str(0))), (str(1), str(1)))
+        matrix = em(2, ((0, 1), (1, 0)), (1, 1))
         with pytest.raises(
             OperationDomainValidationError, match="skew-symmetrizability"
         ):
@@ -128,20 +121,20 @@ class TestSeedMutation:
     def test_zero_symmetrizer_rejected(self) -> None:
         """A symmetrizer with a zero entry is not an exchange matrix."""
         with pytest.raises(ValueError, match="strictly positive"):
-            em(2, ((str(0), str(1)), (str(-1), str(0))), (str(0), str(2)))
+            em(2, ((0, 1), (-1, 0)), (0, 2))
 
     def test_negative_symmetrizer_rejected(self) -> None:
         """A symmetrizer with a negative entry is rejected."""
         with pytest.raises(ValueError, match="strictly positive"):
-            em(2, ((str(0), str(1)), (str(-1), str(0))), (str(1), str(-1)))
+            em(2, ((0, 1), (-1, 0)), (1, -1))
 
 
 def test_native_surface_accepts_exchange_matrix_value() -> None:
     matrix = em(2, ((0, 1), (-1, 0)), (1, 1))
 
     assert native_mutate_seed(matrix, 0).exchange_matrix.entries == (
-        ("0", "-1"),
-        ("1", "0"),
+        (0, -1),
+        (1, 0),
     )
     assert g_vectors(matrix).g_matrix == ((1, 0), (0, 1))
 
@@ -155,23 +148,20 @@ class TestCoefficientBounds:
         b = em(
             3,
             (
-                (str(0), str(edge), str(0)),
-                (str(-edge), str(0), str(edge)),
-                (str(0), str(-edge), str(0)),
+                (0, edge, 0),
+                (-edge, 0, edge),
+                (0, -edge, 0),
             ),
-            (str(1), str(1), str(1)),
+            (1, 1, 1),
         )
         result = compute_seed_mutation(
             SeedMutationRequest(exchange_matrix=b, mutation_index=1)
         )
-        assert (
-            abs(parse_canonical_integer(result.exchange_matrix.entries[0][2]))
-            == edge * edge
-        )
+        assert abs(result.exchange_matrix.entries[0][2]) == edge * edge
         composed = SeedMutationRequest(
             exchange_matrix=result.exchange_matrix, mutation_index=1
         )
-        assert ientries(compute_seed_mutation(composed).exchange_matrix) == ientries(b)
+        assert compute_seed_mutation(composed).exchange_matrix.entries == b.entries
 
     def test_involutive_mutation_near_ceiling_admitted(self) -> None:
         # b01=10**64, b12=6*10**64, b02=10**128 mutates to b'02=7*10**128;
@@ -181,33 +171,31 @@ class TestCoefficientBounds:
         b = em(
             3,
             (
-                (str(0), str(e), str(10**128)),
-                (str(-e), str(0), str(6 * e)),
-                (str(-(10**128)), str(-6 * e), str(0)),
+                (0, e, 10**128),
+                (-e, 0, 6 * e),
+                (-(10**128), -6 * e, 0),
             ),
-            (str(1), str(1), str(1)),
+            (1, 1, 1),
         )
         once = compute_seed_mutation(
             SeedMutationRequest(exchange_matrix=b, mutation_index=1)
         )
-        assert (
-            parse_canonical_integer(once.exchange_matrix.entries[0][2]) == 7 * 10**128
-        )
+        assert once.exchange_matrix.entries[0][2] == 7 * 10**128
         involuted = compute_seed_mutation(
             SeedMutationRequest(exchange_matrix=once.exchange_matrix, mutation_index=1)
         )
-        assert ientries(involuted.exchange_matrix) == ientries(b)
+        assert involuted.exchange_matrix.entries == b.entries
 
     def test_request_rejects_mutation_exceeding_representation_ceiling(self) -> None:
         edge = 10**100
         b = em(
             3,
             (
-                (str(0), str(edge), str(0)),
-                (str(-edge), str(0), str(edge)),
-                (str(0), str(-edge), str(0)),
+                (0, edge, 0),
+                (-edge, 0, edge),
+                (0, -edge, 0),
             ),
-            (str(1), str(1), str(1)),
+            (1, 1, 1),
         )
         request = SeedMutationRequest(exchange_matrix=b, mutation_index=1)
         with pytest.raises(OperationDomainValidationError) as caught:
@@ -217,11 +205,11 @@ class TestCoefficientBounds:
 
     def test_request_accepts_large_entries_under_negation_only_mutation(self) -> None:
         edge = 10**129 - 1
-        b = em(2, ((str(0), str(edge)), (str(-edge), str(0))), (str(1), str(1)))
+        b = em(2, ((0, edge), (-edge, 0)), (1, 1))
         result = compute_seed_mutation(
             SeedMutationRequest(exchange_matrix=b, mutation_index=0)
         )
-        assert ientries(result.exchange_matrix) == ((0, -edge), (edge, 0))
+        assert result.exchange_matrix.entries == ((0, -edge), (edge, 0))
 
     def test_mutation_near_bound_stays_within_result_ceiling(self) -> None:
         # Mutating a path matrix at the middle index forms an entry of
@@ -230,43 +218,36 @@ class TestCoefficientBounds:
         b = em(
             3,
             (
-                (str(0), str(edge), str(0)),
-                (str(-edge), str(0), str(edge)),
-                (str(0), str(-edge), str(0)),
+                (0, edge, 0),
+                (-edge, 0, edge),
+                (0, -edge, 0),
             ),
-            (str(1), str(1), str(1)),
+            (1, 1, 1),
         )
         result = compute_seed_mutation(
             SeedMutationRequest(exchange_matrix=b, mutation_index=1)
         )
-        mutated = parse_canonical_integer(result.exchange_matrix.entries[0][2])
+        mutated = result.exchange_matrix.entries[0][2]
         assert abs(mutated) == edge * edge
-        assert len(str(abs(mutated))) <= 129
+        assert abs(mutated) < 10**129
 
     def test_rejects_symmetrizer_beyond_bound(self) -> None:
         # A zero row-pair keeps the matrix skew-symmetrizable so the
         # symmetrizer bound is what rejects the seed.
         with pytest.raises(ValidationError) as exc_info:
-            em(2, ((str(0), str(0)), (str(0), str(0))), (str(1), str(10**64)))
-        assert (
-            exc_info.value.errors()[0]["type"] == "cluster_algebra.symmetrizer_bounded"
-        )
+            em(2, ((0, 0), (0, 0)), (1, 10**64))
+        assert exc_info.value.errors()[0]["type"] == "exact_integer.digit_bound"
 
     def test_result_ceiling_rejects_oversized_entries(self) -> None:
         # Even skew-symmetrizable matrices cannot carry unbounded integers.
-        # Enforcement precedes integer conversion: the schema caps canonical
-        # string length, and the digit-bound validator rejects values the
-        # string cap alone admits (a 130-character positive value).
-        beyond_schema = "9" * 500
+        # The native integer boundary enforces the same digit ceiling as JSON.
+        beyond_schema = 10**500 - 1
         with pytest.raises(ValidationError):
-            em(2, ((str(0), beyond_schema), (str(-1), str(0))), (str(1), str(1)))
-        at_schema_cap = "1" + "0" * 129
+            em(2, ((0, beyond_schema), (-1, 0)), (1, 1))
+        at_schema_cap = 10**129
         with pytest.raises(ValidationError) as exc_info:
-            em(2, ((str(0), at_schema_cap), (str(-1), str(0))), (str(1), str(1)))
-        assert (
-            exc_info.value.errors()[0]["type"]
-            == "cluster_algebra.exchange_entries_bounded"
-        )
+            em(2, ((0, at_schema_cap), (-1, 0)), (1, 1))
+        assert exc_info.value.errors()[0]["type"] == "exact_integer.digit_bound"
 
     def test_seventeen_by_seventeen_zero_matrix_is_admitted(self) -> None:
         # Work and output derive from cells times coefficient heights, not a
@@ -276,7 +257,7 @@ class TestCoefficientBounds:
         result = compute_seed_mutation(
             SeedMutationRequest(exchange_matrix=b, mutation_index=0)
         )
-        assert ientries(result.exchange_matrix) == tuple((0,) * n for _ in range(n))
+        assert result.exchange_matrix.entries == tuple((0,) * n for _ in range(n))
 
     def test_zero_matrix_beyond_cell_budget_rejected(self) -> None:
         n = 65  # 65**2 > MAX_EXCHANGE_CELLS even for an all-zero matrix
@@ -287,8 +268,8 @@ class TestCoefficientBounds:
         # The g-vector result is the identity, so any representable seed works.
         b = em(
             2,
-            ((str(0), str(10**64 + 1)), (str(-(10**64 + 1)), str(0))),
-            (str(1), str(1)),
+            ((0, 10**64 + 1), (-(10**64 + 1), 0)),
+            (1, 1),
         )
         result = compute_g_vectors(GVectorRequest(exchange_matrix=b))
         assert result.g_matrix == ((1, 0), (0, 1))
@@ -301,11 +282,11 @@ class TestGVectorBinding:
         b = em(
             3,
             (
-                (str(0), str(1), str(0)),
-                (str(-1), str(0), str(1)),
-                (str(0), str(-1), str(0)),
+                (0, 1, 0),
+                (-1, 0, 1),
+                (0, -1, 0),
             ),
-            (str(1), str(1), str(1)),
+            (1, 1, 1),
         )
         result = compute_g_vectors(GVectorRequest(exchange_matrix=b))
         assert result.exchange_matrix == b
@@ -314,7 +295,7 @@ class TestGVectorBinding:
         GVectorResult.model_validate(result.model_dump())
 
     def test_result_rejects_dimension_mismatch(self) -> None:
-        b = em(2, ((str(0), str(1)), (str(-1), str(0))), (str(1), str(1)))
+        b = em(2, ((0, 1), (-1, 0)), (1, 1))
         with pytest.raises(ValidationError) as exc_info:
             GVectorResult(
                 exchange_matrix=b,
@@ -326,7 +307,7 @@ class TestGVectorBinding:
         assert exc_info.value.errors()[0]["type"] == "cluster_algebra.g_matrix_shape"
 
     def test_result_rejects_arbitrary_convention(self) -> None:
-        b = em(2, ((str(0), str(1)), (str(-1), str(0))), (str(1), str(1)))
+        b = em(2, ((0, 1), (-1, 0)), (1, 1))
         with pytest.raises(ValidationError):
             GVectorResult.model_validate(
                 {
@@ -340,11 +321,11 @@ class TestGVectorBinding:
         b = em(
             3,
             (
-                (str(0), str(1), str(0)),
-                (str(-1), str(0), str(1)),
-                (str(0), str(-1), str(0)),
+                (0, 1, 0),
+                (-1, 0, 1),
+                (0, -1, 0),
             ),
-            (str(1), str(1), str(1)),
+            (1, 1, 1),
         )
         with pytest.raises(ValidationError):
             GVectorResult.model_validate(
@@ -357,7 +338,7 @@ class TestGVector:
 
     def test_initial_g_vectors(self) -> None:
         """Initial g-vectors should be the identity."""
-        b = em(2, ((str(0), str(1)), (str(-1), str(0))), (str(1), str(1)))
+        b = em(2, ((0, 1), (-1, 0)), (1, 1))
         result = compute_g_vectors(GVectorRequest(exchange_matrix=b))
         assert result.g_matrix == ((1, 0), (0, 1))
 
@@ -366,11 +347,11 @@ class TestGVector:
         b = em(
             3,
             (
-                (str(0), str(1), str(0)),
-                (str(-1), str(0), str(0)),
-                (str(0), str(0), str(0)),
+                (0, 1, 0),
+                (-1, 0, 0),
+                (0, 0, 0),
             ),
-            (str(1), str(1), str(1)),
+            (1, 1, 1),
         )
         result = compute_g_vectors(GVectorRequest(exchange_matrix=b))
         assert result.g_matrix == ((1, 0, 0), (0, 1, 0), (0, 0, 1))
@@ -391,15 +372,18 @@ class TestCanonicalIntegers:
         result = compute_seed_mutation(
             SeedMutationRequest(exchange_matrix=b, mutation_index=1)
         )
-        payload = result.model_dump()
+        payload = result.model_dump(mode="json")
         assert payload["exchange_matrix"]["entries"][0][2] == str(n * n)
-        assert SeedMutationResult.model_validate(payload) == result
+        assert (
+            SeedMutationResult.model_validate_json(encode_strict_json(payload))
+            == result
+        )
 
     def test_entries_are_canonical_integer_strings(self) -> None:
         b = ExchangeMatrix(
             n=2,
-            entries=(("0", "1"), ("-1", "0")),
-            symmetrizer=("1", "1"),
+            entries=((0, 1), (-1, 0)),
+            symmetrizer=(1, 1),
         )
-        assert ientries(b) == ((0, 1), (-1, 0))
-        assert b.model_dump()["entries"] == (("0", "1"), ("-1", "0"))
+        assert b.entries == ((0, 1), (-1, 0))
+        assert b.model_dump()["entries"] == ((0, 1), (-1, 0))

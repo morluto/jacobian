@@ -69,6 +69,8 @@ _ZERO = _element(0, 0)
 _ONE = _element(1, 0)
 _SUBSPACE: dict[str, object] = {
     "presentation": _FIELD,
+    "row_axis": _ROWS,
+    "column_axis": _IMAGE,
     "basis_axis": _BASIS_AXIS,
     "basis": [
         {

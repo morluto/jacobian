@@ -135,6 +135,8 @@ def test_direction_rank_ledger_refuses_excessive_aggregate_work() -> None:
     request = DirectionRankLedgerRequest(
         subspace=FiniteDimensionalSubspace(
             presentation=presentation,
+            row_axis=row_axis,
+            column_axis=column_axis,
             basis_axis=basis_axis,
             basis=basis,
         ),

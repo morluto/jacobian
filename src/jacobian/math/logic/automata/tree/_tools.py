@@ -2,7 +2,6 @@
 
 from typing import Any
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -67,9 +66,7 @@ def compute_accepted_tree_count(
         ) from exc
     return AcceptedTreeCountResult._from_kernel(
         request,
-        count=format_canonical_integer(
-            accepted_tree_count(request.automaton, request.tree_size)
-        ),
+        count=accepted_tree_count(request.automaton, request.tree_size),
         estimated_work_bound=estimated_work_bound,
     )
 

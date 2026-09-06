@@ -7,7 +7,7 @@ from typing import Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational, NativeInteger
+from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel
 
 MAX_HYPERPLANES = 16
@@ -80,7 +80,7 @@ class HyperplaneArrangementResult(StrictModel):
 class CharacteristicPolynomialResult(StrictModel):
     ambient_dimension: int = Field(ge=1, le=MAX_GENERIC_FORMULA_INDEX)
     hyperplane_count: int = Field(ge=1, le=MAX_GENERIC_FORMULA_INDEX)
-    coefficients: tuple[NativeInteger, ...]
+    coefficients: tuple[ExactInteger, ...]
     degree: int = Field(ge=0)
 
     @model_validator(mode="after")
@@ -96,7 +96,7 @@ class CharacteristicPolynomialResult(StrictModel):
 class ChamberCountResult(StrictModel):
     ambient_dimension: int = Field(ge=1, le=MAX_GENERIC_FORMULA_INDEX)
     hyperplane_count: int = Field(ge=1, le=MAX_GENERIC_FORMULA_INDEX)
-    chamber_count: NativeInteger
+    chamber_count: ExactInteger
 
     @model_validator(mode="after")
     def require_positive_count(self) -> Self:

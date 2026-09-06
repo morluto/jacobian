@@ -62,7 +62,9 @@ def test_quartic_complex_torus_has_exact_rank_zero_neron_severi_lattice() -> Non
     forged["action"]["generators"][0]["matrix"]["entries"][0][0][
         "coefficients_ascending"
     ][0] = {"num": "1", "den": "1"}
-    forged_claim = InvariantBilinearFormLattice.model_validate(forged)
+    forged_claim = InvariantBilinearFormLattice.model_validate_json(
+        encode_strict_json(forged)
+    )
     assert verify_neron_severi_lattice(forged_claim) is False
 
 
@@ -112,23 +114,23 @@ def test_nonmonic_public_torus_composes_neron_severi_with_riemann_profile() -> N
     positive_form = IntegralBilinearForm(
         coordinate_axis=torus.coordinate_axis,
         kind="ALTERNATING",
-        matrix=IntegerMatrix(entries=(("0", "-1"), ("1", "0"))),
+        matrix=IntegerMatrix(entries=((0, -1), (1, 0))),
     )
     profile = compute_riemann_form_profile(torus, positive_form)
 
     assert lattice.rank == 1
     assert lattice.action.generators[0].matrix == torus.complex_structure
     assert profile.outcome.status == "RIEMANN_FORM"
-    assert profile.outcome.polarization_type == ("1",)
+    assert profile.outcome.polarization_type == (1,)
     associated = profile.outcome.associated_form_inertia.matrix
     complex_structure = torus.complex_structure
     assert isinstance(associated, EmbeddedRealSimpleNumberFieldMatrix)
     assert isinstance(complex_structure, EmbeddedRealSimpleNumberFieldMatrix)
     assert associated.embedding == complex_structure.embedding
     assert associated.embedding.presentation.coefficients_descending == (
-        "2",
-        "0",
-        "-1",
+        2,
+        0,
+        -1,
     )
     assert associated.entries[0][0].coefficients_ascending == (
         rational(0),
@@ -163,7 +165,7 @@ def test_nonmonic_algebraic_profiles_are_invariant_under_gl2z_coordinates() -> N
             kind="ALTERNATING",
             matrix=IntegerMatrix(
                 entries=tuple(
-                    tuple(str(int(matrix[row, column])) for column in range(2))
+                    tuple(int(matrix[row, column]) for column in range(2))
                     for row in range(2)
                 )
             ),

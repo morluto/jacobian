@@ -13,6 +13,7 @@ from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
 )
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.matrices.values import (
     MAX_MATRIX_DIMENSION,
     RationalMatrix,
@@ -1243,7 +1244,7 @@ def _require_matrix_polynomial_output_budget(
     degree: int,
 ) -> int:
     coefficients = _coefficient_ratios(polynomial)
-    matrix_is_zero = all(entry.num == "0" for row in matrix.entries for entry in row)
+    matrix_is_zero = all(entry.num == 0 for row in matrix.entries for entry in row)
     if degree <= 1 or matrix_is_zero:
         component_bounds, maximum_arithmetic_digits = _linear_result_component_bounds(
             matrix, coefficients
@@ -1264,13 +1265,13 @@ def _require_matrix_polynomial_output_budget(
         )
 
     arithmetic_component_digits = [
-        len(component.lstrip("-"))
+        len(format_canonical_integer(abs(component)))
         for row in matrix.entries
         for entry in row
         for component in (entry.num, entry.den)
     ]
     arithmetic_component_digits.extend(
-        len(component.lstrip("-"))
+        len(format_canonical_integer(abs(component)))
         for term in polynomial.polynomial.terms
         for component in (term.coefficient.num, term.coefficient.den)
     )

@@ -28,7 +28,10 @@ def _admit_triangle_area_result(configuration: PointConfiguration) -> None:
         return
     coordinate_widths = sorted(
         (
-            max(len(coord.num.lstrip("-")), len(coord.den))
+            max(
+                len(format_canonical_integer(abs(coord.num))),
+                len(format_canonical_integer(coord.den)),
+            )
             for point in points
             for coord in point.coordinates
         ),

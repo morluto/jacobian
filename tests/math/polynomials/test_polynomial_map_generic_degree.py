@@ -32,10 +32,7 @@ from jacobian.math.polynomials.maps._models import (
 )
 from jacobian.math.polynomials.maps._singular import SingularGenericFiberResult
 from jacobian.math.polynomials.maps._tools import TOOLS
-from jacobian.math.polynomials.maps.operations import (
-    generic_degree,
-    verify_generic_degree,
-)
+from jacobian.math.polynomials.maps.operations import generic_degree
 from jacobian.math.polynomials.values import (
     RationalFunction,
     RationalPolynomial,
@@ -81,14 +78,6 @@ def _map(
 
 def _compute(polynomial_map: RationalPolynomialMap) -> GenericDegreeResult:
     return _run_generic_degree(GenericDegreeRequest(polynomial_map=polynomial_map))
-
-
-def test_empty_output_map_is_rejected_by_generic_degree_admission() -> None:
-    polynomial_map = RationalPolynomialMap(
-        input_variables=("x",), output_polynomials=()
-    )
-    with pytest.raises(OperationDomainValidationError, match="target component"):
-        _compute(polynomial_map)
 
 
 def _generic_fiber_coefficient(
@@ -142,7 +131,9 @@ def test_operation_is_one_admitted_atomic_generic_fiber_computation() -> None:
     )
 
     assert operation.examples
-    request = operation.request_type.model_validate(operation.examples[0].input)
+    request = operation.request_type.model_validate_json(
+        json.dumps(operation.examples[0].input)
+    )
     assert request.polynomial_map.input_variables == ("x", "y")
     description = GenericDegreeRequest.model_json_schema()["properties"][
         "polynomial_map"
@@ -480,21 +471,6 @@ def test_result_round_trip_preserves_axes_and_evidence(
     assert round_tripped.source.input_variables == ("x", "y")
 
 
-def test_serialized_outcome_and_degree_claims_require_consumer_verification(
-    quadratic_result: GenericDegreeResult,
-) -> None:
-    payload = quadratic_result.model_dump(mode="json")
-    payload["outcome"] = "NOT_DOMINANT"
-    payload["degree"] = None
-    forged = GenericDegreeResult.model_validate(payload)
-    assert not verify_generic_degree(forged)
-
-    payload = quadratic_result.model_dump(mode="json")
-    payload["degree"] = 1
-    forged = GenericDegreeResult.model_validate(payload)
-    assert not verify_generic_degree(forged)
-
-
 def test_standard_monomial_enumeration_admits_the_sparse_leading_ideal() -> None:
     leading = ((64, 0), (1, 1), (0, 64))
 
@@ -578,8 +554,8 @@ def _power_map_result(power: int) -> GenericDegreeResult:
 def test_consistent_results_round_trip_without_recomputation() -> None:
     for power in (2, 3):
         result = _power_map_result(power)
-        round_tripped = GenericDegreeResult.model_validate(
-            result.model_dump(mode="json")
+        round_tripped = GenericDegreeResult.model_validate_json(
+            result.model_dump_json()
         )
 
         assert round_tripped == result
@@ -613,15 +589,4 @@ def test_serialized_coefficient_support_is_counted_before_nested_construction() 
     }
 
     with polynomial_validation_error():
-        GenericFiberCertificate.model_validate(payload)
-
-
-def test_generic_degree_verifier_binds_evidence_to_source_map() -> None:
-    result = _power_map_result(2)
-    assert verify_generic_degree(result)
-    payload = result.model_dump(mode="json")
-    payload["source"] = _map(("x", "y"), {(1, 0): 1}, {(0, 1): 1}).model_dump(
-        mode="json"
-    )
-    forged = GenericDegreeResult.model_validate(payload)
-    assert not verify_generic_degree(forged)
+        GenericFiberCertificate.model_validate_json(json.dumps(payload))

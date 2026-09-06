@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 from itertools import product
 from math import gcd, lcm, prod
@@ -63,10 +64,10 @@ def _sparse(*terms: PolynomialTerm) -> dict[str, Any]:
         "terms": [
             {
                 "coefficient": {
-                    "num": str(
+                    "num": (
                         coefficient if isinstance(coefficient, int) else coefficient[0]
                     ),
-                    "den": str(1 if isinstance(coefficient, int) else coefficient[1]),
+                    "den": (1 if isinstance(coefficient, int) else coefficient[1]),
                 },
                 "exponents": list(exponents),
             }
@@ -110,9 +111,7 @@ def _tensor(
         {
             "coordinate_axis": list(variables),
             "variance": list(variance),
-            "components": [
-                component.model_dump(mode="json") for component in components
-            ],
+            "components": [component.model_dump() for component in components],
             "retained_nonzero_denominators": list(guards),
         }
     )
@@ -191,7 +190,7 @@ def test_fractional_degree_two_inputs_use_content_aware_height_admission() -> No
     _assert_expression(result, expected)
     assert (
         max(
-            len(component.lstrip("-"))
+            len(str(abs(component)))
             for polynomial in (result.numerator, result.denominator)
             for term in polynomial.terms
             for component in (term.coefficient.num, term.coefficient.den)
@@ -382,7 +381,7 @@ def test_cancellation_retains_the_source_nonvanishing_locus_through_composition(
     serialized = first.lie_derivative.model_dump(mode="json")
     second = lie_derivative(
         polynomial_vector,
-        RationalCoordinateTensor.model_validate(serialized),
+        RationalCoordinateTensor.model_validate_json(json.dumps(serialized)),
     )
     assert _expressions(second.lie_derivative) == (0,)
     assert second.lie_derivative.retained_nonzero_denominators == (
@@ -519,7 +518,7 @@ def test_nonvector_signature_precedes_nested_coprimality_recognition() -> None:
         "numerator": _sparse((1, (2,)), (-1, (0,))),
         "denominator": _sparse((1, (1,)), (-1, (0,))),
     }
-    scalar = _function(("x",), (1, (1,))).model_dump(mode="json")
+    scalar = _function(("x",), (1, (1,))).model_dump()
     request = RationalLieDerivativeRequest.model_validate(
         {
             "vector_field": {
@@ -1052,13 +1051,13 @@ def test_locus_guard_rejection_precedes_coprimality_recognition(
         variables,
         ("CONTRAVARIANT",),
         (one, one),
-        guards=tuple(guard.model_dump(mode="json") for guard in guards[:385]),
+        guards=tuple(guard.model_dump() for guard in guards[:385]),
     )
     scalar = _tensor(
         variables,
         (),
         (one,),
-        guards=tuple(guard.model_dump(mode="json") for guard in guards[385:]),
+        guards=tuple(guard.model_dump() for guard in guards[385:]),
     )
 
     def forbidden_recognition(*args: Any, **kwargs: Any) -> Any:
@@ -1193,7 +1192,7 @@ def test_profile_round_trip_and_catalog_execution_use_the_same_contract() -> Non
     )
 
     result = tool.run(request)
-    parsed = RationalLieDerivativeProfile.model_validate(result.model_dump(mode="json"))
+    parsed = RationalLieDerivativeProfile.model_validate_json(result.model_dump_json())
 
     assert parsed == result
     assert verify_lie_derivative(parsed) is True
@@ -1201,7 +1200,7 @@ def test_profile_round_trip_and_catalog_execution_use_the_same_contract() -> Non
     forged["lie_derivative"]["components"][0]["numerator"]["terms"][0][
         "coefficient"
     ] = {"num": "3", "den": "1"}
-    forged_claim = RationalLieDerivativeProfile.model_validate(forged)
+    forged_claim = RationalLieDerivativeProfile.model_validate_json(json.dumps(forged))
     assert verify_lie_derivative(forged_claim) is False
     assert _expressions(result.lie_derivative) == (2 * sympy.Symbol("x") ** 2,)
 

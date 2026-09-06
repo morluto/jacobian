@@ -6,13 +6,12 @@ from collections.abc import Mapping
 from fractions import Fraction
 from typing import Annotated, Self
 
-from pydantic import ConfigDict, Field, StrictBool, StringConstraints, model_validator
+from pydantic import ConfigDict, Field, StrictBool, model_validator
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, DecimalIntegerEncoding
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import parse_canonical_integer
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -112,29 +111,27 @@ def _periodic_request_schema_extra(*, profile: bool) -> JsonSchemaValue:
 
 
 PeriodicSignedInteger = Annotated[
-    str,
-    StringConstraints(
-        # The digit budget is derived from the owning constant; max_length only
-        # grants the one extra character for a leading minus sign.
-        pattern=f"^(?:0|-?[1-9][0-9]{{0,{MAX_PERIODIC_INTEGER_DIGITS - 1}}})$",
-        max_length=MAX_PERIODIC_INTEGER_DIGITS + 1,
-        strict=True,
-    ),
+    int,
+    DecimalIntegerEncoding(max_digits=MAX_PERIODIC_INTEGER_DIGITS),
 ]
 PeriodicNonnegativeInteger = Annotated[
-    str,
-    StringConstraints(
-        pattern=f"^(?:0|[1-9][0-9]{{0,{MAX_PERIODIC_INTEGER_DIGITS - 1}}})$",
-        max_length=MAX_PERIODIC_INTEGER_DIGITS,
-        strict=True,
+    PeriodicSignedInteger,
+    Field(
+        ge=0,
+        json_schema_extra={
+            "pattern": rf"^(?:0|[1-9][0-9]{{0,{MAX_PERIODIC_INTEGER_DIGITS - 1}}})(?![\s\S])",
+            "maxLength": MAX_PERIODIC_INTEGER_DIGITS,
+        },
     ),
 ]
 PeriodicPositiveInteger = Annotated[
-    str,
-    StringConstraints(
-        pattern=f"^[1-9][0-9]{{0,{MAX_PERIODIC_INTEGER_DIGITS - 1}}}$",
-        max_length=MAX_PERIODIC_INTEGER_DIGITS,
-        strict=True,
+    PeriodicSignedInteger,
+    Field(
+        gt=0,
+        json_schema_extra={
+            "pattern": rf"^[1-9][0-9]{{0,{MAX_PERIODIC_INTEGER_DIGITS - 1}}}(?![\s\S])",
+            "maxLength": MAX_PERIODIC_INTEGER_DIGITS,
+        },
     ),
 ]
 
@@ -177,8 +174,8 @@ class PeriodicCongruenceSubset(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_residues(self) -> Self:
-        modulus = parse_canonical_integer(self.modulus)
-        residues = tuple(map(parse_canonical_integer, self.residues))
+        modulus = self.modulus
+        residues = self.residues
         if residues != tuple(sorted(set(residues))):
             raise _validation_error(
                 "canonical_residues_must_be_strictly_increasing",
@@ -202,9 +199,7 @@ class PeriodicCongruenceUnionSource(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_family(self) -> Self:
-        moduli = tuple(
-            parse_canonical_integer(subset.modulus) for subset in self.subsets
-        )
+        moduli = tuple(subset.modulus for subset in self.subsets)
         if moduli != tuple(sorted(set(moduli))):
             raise _validation_error(
                 "canonical_source_moduli_must_be_strictly_increasing",
@@ -326,8 +321,8 @@ class PeriodicCongruenceUnionMeasureResult(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_measure(self) -> Self:
-        period = parse_canonical_integer(self.common_period)
-        occupied_count = parse_canonical_integer(self.occupied_count)
+        period = self.common_period
+        occupied_count = self.occupied_count
         if occupied_count > period:
             raise _validation_error(
                 "occupied_count_exceeds_common_period",
@@ -347,8 +342,8 @@ class PeriodicCongruenceUnionMeasureResult(StrictModel):
         cls,
         *,
         source: PeriodicCongruenceUnionSource,
-        common_period: str,
-        occupied_count: str,
+        common_period: int,
+        occupied_count: int,
         density: CanonicalRational,
     ) -> Self:
         return cls.model_construct(
@@ -371,9 +366,9 @@ class PeriodicCongruenceUnionProfileResult(PeriodicCongruenceUnionMeasureResult)
 
     @model_validator(mode="after")
     def require_structural_profile(self) -> Self:
-        period = parse_canonical_integer(self.common_period)
-        occupied_count = parse_canonical_integer(self.occupied_count)
-        residues = tuple(map(parse_canonical_integer, self.occupied_residues))
+        period = self.common_period
+        occupied_count = self.occupied_count
+        residues = self.occupied_residues
         if residues != tuple(sorted(set(residues))):
             raise _validation_error(
                 "occupied_residues_must_be_in_canonical_order",
@@ -403,10 +398,10 @@ class PeriodicCongruenceUnionProfileResult(PeriodicCongruenceUnionMeasureResult)
         cls,
         *,
         source: PeriodicCongruenceUnionSource,
-        common_period: str,
-        occupied_count: str,
+        common_period: int,
+        occupied_count: int,
         density: CanonicalRational,
-        occupied_residues: tuple[str, ...],
+        occupied_residues: tuple[int, ...],
     ) -> Self:
         return cls.model_construct(
             source=source,

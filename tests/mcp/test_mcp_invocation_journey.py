@@ -401,6 +401,8 @@ def test_mcp_composes_public_finite_field_values_with_native_projections() -> No
             basis_axis = Axis(name="basis", labels=("B1",))
             subspace = FiniteDimensionalSubspace(
                 presentation=presentation,
+                row_axis=rows,
+                column_axis=columns,
                 basis_axis=basis_axis,
                 basis=(
                     AxisBoundMatrix(

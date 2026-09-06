@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from fractions import Fraction
 from importlib import import_module
@@ -135,7 +136,7 @@ def test_all_terminal_event_differs_from_two_terminal_connectivity() -> None:
         ("a", "b", "c"),
         (("a", "b"), ("a", "c"), ("b", "c")),
     )
-    half = CanonicalRational(num="1", den="2")
+    half = CanonicalRational(num=1, den=2)
     two_terminal = compute_graph_connection_probability(
         GraphConnectionProbabilityRequest(
             graph=graph,
@@ -242,7 +243,7 @@ def test_successful_compute_enumerates_each_edge_subset_once(
         compute_all_terminal_reliability(
             AllTerminalReliabilityRequest(
                 graph=graph,
-                open_probability=CanonicalRational(num="1", den="2"),
+                open_probability=CanonicalRational(num=1, den=2),
             )
         )
     else:
@@ -298,7 +299,7 @@ def test_request_rejects_outside_complete_domain(
     message: str,
 ) -> None:
     try:
-        request = AllTerminalReliabilityRequest.model_validate(payload)
+        request = AllTerminalReliabilityRequest.model_validate_json(json.dumps(payload))
     except ValidationError:
         return
     with pytest.raises(OperationDomainValidationError, match=message):
@@ -312,14 +313,14 @@ def test_operation_executes_the_twenty_edge_enumeration_boundary() -> None:
             vertices,
             tuple((vertices[index], vertices[index + 1]) for index in range(20)),
         ),
-        open_probability=CanonicalRational(num="1", den="2"),
+        open_probability=CanonicalRational(num=1, den=2),
     )
 
     result = compute_all_terminal_reliability(request)
 
     assert result.connected_spanning_subgraph_counts == (
-        *("0" for _ in range(MAX_ALL_TERMINAL_RELIABILITY_EDGES)),
-        "1",
+        *(0 for _ in range(MAX_ALL_TERMINAL_RELIABILITY_EDGES)),
+        1,
     )
     assert result.reliability_probability.as_fraction() == Fraction(1, 1 << 20)
     assert result.visited_states == 1 << 20
@@ -330,12 +331,12 @@ def test_request_allows_more_vertices_when_the_state_space_is_small() -> None:
 
     request = AllTerminalReliabilityRequest(
         graph=graph,
-        open_probability=CanonicalRational(num="1", den="2"),
+        open_probability=CanonicalRational(num=1, den=2),
     )
     result = compute_all_terminal_reliability(request)
 
     assert len(request.graph.vertices) == 256
-    assert result.connected_spanning_subgraph_counts == ("0",)
+    assert result.connected_spanning_subgraph_counts == (0,)
     assert result.reliability_probability.as_fraction() == 0
 
 
@@ -361,7 +362,7 @@ def test_request_schema_exposes_the_retained_result_limit() -> None:
 def test_operation_declares_and_executes_copyable_example() -> None:
     operation = ALL_TERMINAL_RELIABILITY_OPERATION
     payload = operation.examples[0].input
-    request = operation.request_type.model_validate(payload)
+    request = operation.request_type.model_validate_json(json.dumps(payload))
     result = operation.run(request)
 
     assert operation.operation_id == (

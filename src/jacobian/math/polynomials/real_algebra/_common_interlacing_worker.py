@@ -113,7 +113,8 @@ def main() -> int:
         if not isinstance(raw_family, list) or not isinstance(raw_primitives, list):
             raise ValueError("worker payload is missing admitted sources")
         family = tuple(
-            LabelledRationalPolynomial.model_validate(source) for source in raw_family
+            LabelledRationalPolynomial.model_validate_json(json.dumps(source))
+            for source in raw_family
         )
         primitive_sources = tuple(
             _primitive_source_from_worker(item) for item in raw_primitives
@@ -142,7 +143,10 @@ def main() -> int:
         for source_index, source_plan in enumerate(plan.sources):
             factors = [
                 [
-                    list(factor_plan.canonical_coefficients),
+                    [
+                        format_canonical_integer(value)
+                        for value in factor_plan.canonical_coefficients
+                    ],
                     factor_plan.multiplicity,
                 ]
                 for factor_plan in source_plan.factors

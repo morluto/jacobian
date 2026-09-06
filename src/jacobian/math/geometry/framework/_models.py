@@ -54,10 +54,10 @@ def _raw_field(value: object, name: str) -> object:
     return getattr(value, name, None)
 
 
-def _raw_rational_components(value: object) -> tuple[str, str] | None:
+def _raw_rational_components(value: object) -> tuple[int | str, int | str] | None:
     numerator = _raw_field(value, "num")
     denominator = _raw_field(value, "den")
-    if not isinstance(numerator, str) or not isinstance(denominator, str):
+    if not isinstance(numerator, (int, str)) or not isinstance(denominator, (int, str)):
         return None
     return numerator, denominator
 
@@ -65,10 +65,12 @@ def _raw_rational_components(value: object) -> tuple[str, str] | None:
 def _raw_coordinate_map(
     raw_points: list[object] | tuple[object, ...],
 ) -> tuple[
-    dict[str, tuple[tuple[str, str], tuple[str, str]]],
+    dict[str, tuple[tuple[int | str, int | str], tuple[int | str, int | str]]],
     int,
 ]:
-    coordinates: dict[str, tuple[tuple[str, str], tuple[str, str]]] = {}
+    coordinates: dict[
+        str, tuple[tuple[int | str, int | str], tuple[int | str, int | str]]
+    ] = {}
     source_parse_work = 0
     for raw_point in raw_points:
         label = _raw_field(raw_point, "label")
@@ -188,7 +190,7 @@ class PlanarRigidityProfile(StrictModel):
     configuration: PointConfiguration
     graph: SimpleUndirectedGraph
     vertex_axis: tuple[str, ...] = Field(min_length=2, max_length=MAX_POINTS)
-    edge_axis: tuple[tuple[str, str], ...] = Field(max_length=MAX_PAIRS)
+    edge_axis: tuple[tuple[int | str, int | str], ...] = Field(max_length=MAX_PAIRS)
     matrix_rank: MatrixRankResult
     maximal_infinitesimal_rigidity_rank: int = Field(ge=1, le=2 * MAX_POINTS - 3)
     is_infinitesimally_rigid: bool

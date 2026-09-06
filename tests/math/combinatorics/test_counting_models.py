@@ -9,6 +9,7 @@ from collections.abc import Callable
 import pytest
 from pydantic import ValidationError
 
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics._counting_models import (
     IntegerListRequest,
@@ -49,20 +50,20 @@ def test_sparse_counting_request_publishes_the_wider_exact_bound() -> None:
 @pytest.mark.parametrize(
     ("operation", "k", "expected"),
     (
-        (compute_binomial, 0, "1"),
-        (compute_binomial, 1, "1000000000000"),
-        (compute_binomial, 2, "499999999999500000000000"),
-        (compute_permutations, 0, "1"),
-        (compute_permutations, 1, "1000000000000"),
-        (compute_permutations, 2, "999999999999000000000000"),
-        (compute_compositions, 1, "1"),
-        (compute_compositions, 2, "999999999999"),
+        (compute_binomial, 0, 1),
+        (compute_binomial, 1, 1000000000000),
+        (compute_binomial, 2, 499999999999500000000000),
+        (compute_permutations, 0, 1),
+        (compute_permutations, 1, 1000000000000),
+        (compute_permutations, 2, 999999999999000000000000),
+        (compute_compositions, 1, 1),
+        (compute_compositions, 2, 999999999999),
     ),
 )
 def test_sparse_large_counts_are_admitted(
     operation: Callable[[SparseCountingPairRequest], IntegerResult],
     k: int,
-    expected: str,
+    expected: int,
 ) -> None:
     request = SparseCountingPairRequest(n=10**12, k=k)
     assert operation(request).value == expected
@@ -75,12 +76,12 @@ def test_large_zero_cases_skip_coefficient_construction(
     operation: Callable[[SparseCountingPairRequest], IntegerResult],
 ) -> None:
     request = SparseCountingPairRequest(n=10**12, k=10**12 + 1)
-    assert operation(request).value == "0"
+    assert operation(request).value == 0
 
 
 def test_composition_zero_endpoint_conventions_are_preserved() -> None:
-    assert compute_compositions(SparseCountingPairRequest(n=0, k=0)).value == "1"
-    assert compute_compositions(SparseCountingPairRequest(n=10**12, k=0)).value == "0"
+    assert compute_compositions(SparseCountingPairRequest(n=0, k=0)).value == 1
+    assert compute_compositions(SparseCountingPairRequest(n=10**12, k=0)).value == 0
 
 
 @pytest.mark.parametrize(
@@ -101,12 +102,12 @@ def test_long_multiplicative_profiles_reject_before_kernel(
 
 def test_central_binomial_admission_accounts_for_cancellation() -> None:
     result = compute_binomial(SparseCountingPairRequest(n=100_000, k=50_000))
-    assert len(result.value) == 30_101
+    assert len(format_canonical_integer(result.value)) == 30_101
 
 
 def test_off_center_binomial_admission_accounts_for_cancellation() -> None:
     result = compute_binomial(SparseCountingPairRequest(n=1_000_000, k=80_000))
-    assert len(result.value) == 121_066
+    assert len(format_canonical_integer(result.value)) == 121_066
 
 
 @pytest.mark.parametrize("operation", (compute_binomial, compute_compositions))
@@ -128,7 +129,7 @@ def test_oversized_binomial_steps_reject_before_digit_bound_iteration(
 
 def test_long_permutation_uses_the_actual_string_transport_envelope() -> None:
     result = compute_permutations(SparseCountingPairRequest(n=20_000, k=20_000))
-    assert len(result.value) == 77_338
+    assert len(format_canonical_integer(result.value)) == 77_338
 
 
 def test_decimal_result_construction_is_included_in_work_admission() -> None:
@@ -163,24 +164,24 @@ def test_permutation_falling_product_admission_fits_the_stated_ledger() -> None:
 
 def test_medium_counts_retain_defining_identities() -> None:
     n, k = 200, 37
-    assert compute_binomial(SparseCountingPairRequest(n=n, k=k)).value == str(
-        math.comb(n, n - k)
+    assert compute_binomial(SparseCountingPairRequest(n=n, k=k)).value == math.comb(
+        n, n - k
     )
-    assert compute_permutations(SparseCountingPairRequest(n=n, k=k)).value == str(
-        math.factorial(n) // math.factorial(n - k)
-    )
+    assert compute_permutations(
+        SparseCountingPairRequest(n=n, k=k)
+    ).value == math.factorial(n) // math.factorial(n - k)
 
 
 def test_integer_list_accepts_canonical_values_beyond_python_limit() -> None:
     value = "1" + ("0" * 5_000)
 
-    request = IntegerListRequest(values=(value,))
+    request = IntegerListRequest.model_validate_json('{"values":["' + value + '"]}')
 
-    assert request.values == (value,)
+    assert request.values == (parse_canonical_integer(value),)
 
 
 def test_integer_list_retains_the_nonnegative_parts_contract() -> None:
     with pytest.raises(ValidationError) as exc_info:
-        IntegerListRequest(values=("-1",))
+        IntegerListRequest(values=(-1,))
 
     assert exc_info.value.errors()[0]["type"] == "combinatorics.invariant"

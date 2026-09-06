@@ -18,7 +18,6 @@ from jacobian._execution import (
 from jacobian.backends import BackendUnavailableError
 from jacobian.canonical import (
     encode_strict_json,
-    format_canonical_integer,
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis.intervals import ClosedRationalInterval, RationalBox
@@ -202,8 +201,8 @@ def _rational_point(
         values.append(
             RealAlgebraicValue._from_admitted_polynomial(
                 polynomial=(
-                    format_canonical_integer(coordinate.denominator),
-                    format_canonical_integer(-coordinate.numerator),
+                    coordinate.denominator,
+                    -coordinate.numerator,
                 ),
                 real_root_index=0,
             )

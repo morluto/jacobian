@@ -8,7 +8,6 @@ from typing import Self
 from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer
 from jacobian.math.combinatorics.finite_structures.sets._models import (
     MAX_FINITE_INTEGER_SET_ELEMENTS,
     FiniteIntegerSet,
@@ -129,12 +128,12 @@ class FriableEnumerateResult(StrictModel):
                 "friable_enumerate_family_must_be_increasing",
                 "friable-enumerate family must be in strictly increasing order",
             )
-        if x != 0 and y <= 1 and self.family.elements != ("1",):
+        if x != 0 and y <= 1 and self.family.elements != (1,):
             raise _validation_error(
                 "friable_enumerate_small_cutoff_is_singleton",
                 "positive x with y at most one must have family {1}",
             )
-        if x > 0 and y > 1 and "1" not in self.family.elements:
+        if x > 0 and y > 1 and 1 not in self.family.elements:
             raise _validation_error(
                 "friable_enumerate_family_must_contain_one",
                 "every positive friable family with y greater than one must contain 1",
@@ -164,7 +163,7 @@ class FriableEnumerateResult(StrictModel):
             x=request.x,
             y=request.y,
             family=FiniteIntegerSet(
-                elements=tuple(str(value) for value in family),
+                elements=family,
             ),
         )
 
@@ -179,10 +178,10 @@ class FriableEnumerateResult(StrictModel):
         """Build a result directly from the native kernel's integer values."""
 
         return cls.model_construct(
-            x=format_canonical_integer(x),
-            y=format_canonical_integer(y),
+            x=x,
+            y=y,
             family=FiniteIntegerSet(
-                elements=tuple(str(value) for value in family),
+                elements=family,
             ),
         )
 

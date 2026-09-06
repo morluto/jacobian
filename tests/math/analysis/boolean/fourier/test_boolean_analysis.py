@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import random
 
 import pytest
@@ -49,11 +50,11 @@ def compute_erasure_noise(request: ErasureNoiseRequest) -> ErasureNoiseResult:
 
 
 def _zero() -> CanonicalRational:
-    return CanonicalRational(num="0", den="1")
+    return CanonicalRational(num=0, den=1)
 
 
 def _one() -> CanonicalRational:
-    return CanonicalRational(num="1", den="1")
+    return CanonicalRational(num=1, den=1)
 
 
 def _truth_table(values: list[int]) -> tuple[CanonicalRational, ...]:
@@ -69,7 +70,9 @@ def test_serialized_boolean_claims_retain_sources_and_reject_forgeries() -> None
     assert verify_fourier_spectrum(decoded_spectrum)
     spectrum_payload = spectrum.model_dump(mode="json")
     spectrum_payload["spectrum"]["values"][0] = {"num": "99", "den": "1"}
-    assert not verify_fourier_spectrum(type(spectrum).model_validate(spectrum_payload))
+    assert not verify_fourier_spectrum(
+        type(spectrum).model_validate_json(json.dumps(spectrum_payload))
+    )
 
     extension = multilinear_extension(values)
     decoded_extension = type(extension).model_validate_json(extension.model_dump_json())
@@ -77,7 +80,7 @@ def test_serialized_boolean_claims_retain_sources_and_reject_forgeries() -> None
     extension_payload = extension.model_dump(mode="json")
     extension_payload["coefficients"]["values"][0] = {"num": "99", "den": "1"}
     assert not verify_multilinear_extension(
-        type(extension).model_validate(extension_payload)
+        type(extension).model_validate_json(json.dumps(extension_payload))
     )
 
     noise = erasure_noise(values, _rational(1, 2), (0, 1))
@@ -86,11 +89,13 @@ def test_serialized_boolean_claims_retain_sources_and_reject_forgeries() -> None
     assert verify_erasure_noise(decoded_noise)
     noise_payload = noise.model_dump(mode="json")
     noise_payload["base_input"] = [1, 1]
-    assert not verify_erasure_noise(type(noise).model_validate(noise_payload))
+    assert not verify_erasure_noise(
+        type(noise).model_validate_json(json.dumps(noise_payload))
+    )
 
 
 def _rational(num: int, den: int = 1) -> CanonicalRational:
-    return CanonicalRational(num=str(num), den=str(den))
+    return CanonicalRational(num=num, den=den)
 
 
 # ---------------------------------------------------------------------------
@@ -128,8 +133,10 @@ def test_truth_table_rejects_empty() -> None:
 
 
 def test_truth_table_rejects_non_boolean_values() -> None:
-    request = TruthTableRequest.model_validate(
-        {"truth_table": [{"num": "2", "den": "1"}, {"num": "1", "den": "1"}]}
+    request = TruthTableRequest.model_validate_json(
+        __import__("json").dumps(
+            {"truth_table": [{"num": "2", "den": "1"}, {"num": "1", "den": "1"}]}
+        )
     )
     with pytest.raises(OperationDomainValidationError) as error:
         compute_truth_table(request)
@@ -353,16 +360,18 @@ def test_erasure_noise_rejects_negative_probability() -> None:
 
 
 def test_erasure_noise_rejects_non_power_of_two() -> None:
-    request = ErasureNoiseRequest.model_validate(
-        {
-            "truth_table": [
-                {"num": "0", "den": "1"},
-                {"num": "1", "den": "1"},
-                {"num": "1", "den": "1"},
-            ],
-            "probability": {"num": "1", "den": "2"},
-            "base_input": [0, 0, 0],
-        }
+    request = ErasureNoiseRequest.model_validate_json(
+        __import__("json").dumps(
+            {
+                "truth_table": [
+                    {"num": "0", "den": "1"},
+                    {"num": "1", "den": "1"},
+                    {"num": "1", "den": "1"},
+                ],
+                "probability": {"num": "1", "den": "2"},
+                "base_input": [0, 0, 0],
+            }
+        )
     )
     with pytest.raises(OperationDomainValidationError) as error:
         compute_erasure_noise(request)

@@ -1,5 +1,6 @@
 """Native and wire parity for P-recursive table residuals."""
 
+import json
 from fractions import Fraction
 
 import pytest
@@ -20,21 +21,24 @@ def test_native_recurrence_table_residuals_accepts_canonical_rationals() -> None
 
     native = recurrence_table_residuals(coefficients, values)
     wire = _compute_recurrence_table_residuals(
-        PolynomialCoefficientRecurrenceTableRequest.model_validate(
-            {
-                "coefficient_polynomials": [
-                    [{"num": "1", "den": "1"}],
-                    [{"num": "0", "den": "1"}, {"num": "-1", "den": "1"}],
-                ],
-                "values": [
-                    {"num": str(value), "den": "1"} for value in (1, 1, 2, 6, 24, 120)
-                ],
-                "coefficient_convention": (
-                    "SUM_P_J_OF_N_TIMES_A_N_MINUS_J_EQUALS_ZERO_FOR_J_FROM_0"
-                ),
-                "polynomial_convention": "ASCENDING_POWERS_OF_N",
-                "table_convention": "VALUES_A_0_THROUGH_A_N_IN_ORDER",
-            }
+        PolynomialCoefficientRecurrenceTableRequest.model_validate_json(
+            json.dumps(
+                {
+                    "coefficient_polynomials": [
+                        [{"num": "1", "den": "1"}],
+                        [{"num": "0", "den": "1"}, {"num": "-1", "den": "1"}],
+                    ],
+                    "values": [
+                        {"num": str(value), "den": "1"}
+                        for value in (1, 1, 2, 6, 24, 120)
+                    ],
+                    "coefficient_convention": (
+                        "SUM_P_J_OF_N_TIMES_A_N_MINUS_J_EQUALS_ZERO_FOR_J_FROM_0"
+                    ),
+                    "polynomial_convention": "ASCENDING_POWERS_OF_N",
+                    "table_convention": "VALUES_A_0_THROUGH_A_N_IN_ORDER",
+                }
+            )
         )
     )
 

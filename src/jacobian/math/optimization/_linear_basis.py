@@ -105,7 +105,7 @@ def _constraint_components(
     program: StandardFormRationalLinearProgram,
 ) -> tuple[tuple[tuple[int, ...], tuple[int, ...]], ...]:
     row_columns = [
-        tuple(j for j, value in enumerate(row) if value.num != "0")
+        tuple(j for j, value in enumerate(row) if value.num != 0)
         for row in program.coefficients
     ]
     column_rows: dict[int, list[int]] = {}
@@ -136,7 +136,7 @@ def admit_linear_program(program: StandardFormRationalLinearProgram) -> LinearAd
     columns = tuple(
         j
         for j in range(len(program.variables))
-        if any(row[j].num != "0" for row in program.coefficients)
+        if any(row[j].num != 0 for row in program.coefficients)
     )
     digits = _result_digit_bound(program)
     rows = len(_active_equations(program))

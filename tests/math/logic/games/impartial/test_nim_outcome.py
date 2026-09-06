@@ -1,5 +1,7 @@
 """Known-answer tests for nim sum and outcome profile operations."""
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -67,7 +69,7 @@ class TestNimSum:
         payload = result.model_dump(mode="json")
         payload["is_p_position"] = True
         with pytest.raises(ValidationError):
-            type(result).model_validate(payload)
+            type(result).model_validate_json(json.dumps(payload))
 
 
 class TestOutcomeProfile:

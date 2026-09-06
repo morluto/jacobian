@@ -4,6 +4,7 @@ import json
 from fractions import Fraction
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
@@ -26,15 +27,15 @@ from jacobian.math.polynomials.series._models import (
 )
 from jacobian.math.polynomials.series.operations import truncate
 
-ONE = CanonicalRational(num="1", den="1")
-MINUS_ONE = CanonicalRational(num="-1", den="1")
+ONE = CanonicalRational(num=1, den=1)
+MINUS_ONE = CanonicalRational(num=-1, den=1)
 
 
 def _expand(
     denominator: tuple[CanonicalRational, ...], order: int
 ) -> RationalGeneratingFunctionCoefficientsResult:
     return rational_generating_function_coefficients(
-        (ONE,), denominator, "ASCENDING_POWERS_OF_X", "0", order
+        (ONE,), denominator, "ASCENDING_POWERS_OF_X", 0, order
     )
 
 
@@ -45,7 +46,7 @@ def test_degree_32_recurrence_returns_a_bound_canonical_series() -> None:
         numerator=(ONE,),
         denominator=denominator,
         coefficient_convention="ASCENDING_POWERS_OF_X",
-        expansion_point="0",
+        expansion_point=0,
         truncation_order=order,
     )
 
@@ -72,6 +73,15 @@ def test_degree_32_recurrence_returns_a_bound_canonical_series() -> None:
         )
         == result
     )
+    wire = result.model_dump_json()
+    assert '"expansion_point":"0"' in wire
+    assert (
+        RationalGeneratingFunctionCoefficientsResult.model_validate_json(wire) == result
+    )
+    with pytest.raises(ValidationError):
+        RationalGeneratingFunctionCoefficientsRequest.model_validate_json(
+            request.model_dump_json().replace('"0"', "0")
+        )
 
     forged = result.model_dump(mode="json")
     forged["series"]["coefficients"][0] = {"num": "2", "den": "1"}

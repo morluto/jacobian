@@ -1,5 +1,6 @@
 """Independent coefficient reconstruction and public boundary evidence."""
 
+import json
 from copy import deepcopy
 from fractions import Fraction
 from itertools import product
@@ -53,8 +54,8 @@ def _fixture() -> dict[str, Any]:
 
 def _run(payload: dict[str, Any]) -> RationalBernsteinPolynomial:
     output = invoke_operation(ID, payload, Catalog.open()).output
-    result = RationalBernsteinPolynomial.model_validate(output)
-    request = BernsteinRequest.model_validate(payload)
+    result = RationalBernsteinPolynomial.model_validate_json(json.dumps(output))
+    request = BernsteinRequest.model_validate_json(json.dumps(payload))
     assert result == bernstein_coefficients(
         request.polynomial, request.box, request.multidegree
     )
@@ -157,7 +158,7 @@ def test_serialized_coefficients_are_claims_with_complete_source_context() -> No
     )
     wire = deepcopy(result.model_dump(mode="json"))
     wire["coefficients"][0] = _q(999)
-    claim = RationalBernsteinPolynomial.model_validate(wire)
+    claim = RationalBernsteinPolynomial.model_validate_json(json.dumps(wire))
     assert claim.polynomial == result.polynomial
     assert claim.box == result.box
     assert not verify_bernstein_coefficients(claim)
@@ -229,7 +230,7 @@ def test_carrier_rejects_a_point_box() -> None:
     result = _run(_fixture())
     wire = result.model_dump(mode="json")
     wire["box"]["intervals"][0]["upper"] = _q(0)
-    claim = RationalBernsteinPolynomial.model_validate(wire)
+    claim = RationalBernsteinPolynomial.model_validate_json(json.dumps(wire))
     assert not verify_bernstein_coefficients(claim)
 
 
@@ -248,7 +249,7 @@ def test_inactive_axes_do_not_expand_large_endpoint_rationals(
         "lower": _q(1, 10**1000),
         "upper": _q(1, 10**1000 - 1),
     }
-    request = BernsteinRequest.model_validate(payload)
+    request = BernsteinRequest.model_validate_json(json.dumps(payload))
     from flint import fmpq as original
 
     operands: list[Any] = []
@@ -270,7 +271,7 @@ def test_expired_request_deadline_is_not_restarted() -> None:
 
     from jacobian._execution import OperationExecutionTimeoutError, request_execution
 
-    request = BernsteinRequest.model_validate(_fixture())
+    request = BernsteinRequest.model_validate_json(json.dumps(_fixture()))
     with (
         request_execution(monotonic() - 121),
         pytest.raises(OperationExecutionTimeoutError),

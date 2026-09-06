@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from itertools import combinations, product
 
@@ -343,7 +344,7 @@ def test_result_preflights_oversized_forged_derived_rationals() -> None:
     payload = deepcopy(_accepted_edge_result().model_dump(mode="json"))
     payload["weight_sum"] = oversized
     with pytest.raises(ValidationError):
-        ChromaticNumberCertificateCheckResult.model_validate(payload)
+        ChromaticNumberCertificateCheckResult.model_validate_json(json.dumps(payload))
 
     rejected = _check(
         _graph(("a", "b"), ()),
@@ -354,14 +355,14 @@ def test_result_preflights_oversized_forged_derived_rationals() -> None:
     payload = deepcopy(rejected.model_dump(mode="json"))
     payload["blocking_independent_set_weight"] = oversized
     with pytest.raises(ValidationError):
-        ChromaticNumberCertificateCheckResult.model_validate(payload)
+        ChromaticNumberCertificateCheckResult.model_validate_json(json.dumps(payload))
 
 
 def test_result_retains_graph_axis_shape_without_replaying_certificate() -> None:
     payload = deepcopy(_accepted_edge_result().model_dump(mode="json"))
     payload["coloring"] = [0]
     with pytest.raises(ValidationError, match="one color per graph vertex"):
-        ChromaticNumberCertificateCheckResult.model_validate(payload)
+        ChromaticNumberCertificateCheckResult.model_validate_json(json.dumps(payload))
 
     payload = deepcopy(_accepted_edge_result().model_dump(mode="json"))
     payload["graph"] = {
@@ -371,7 +372,7 @@ def test_result_retains_graph_axis_shape_without_replaying_certificate() -> None
     payload["coloring"] = [0] * 20
     payload["weights"] = [{"num": "1", "den": "1"}] * 20
     with pytest.raises(ValidationError, match="supports at most"):
-        ChromaticNumberCertificateCheckResult.model_validate(payload)
+        ChromaticNumberCertificateCheckResult.model_validate_json(json.dumps(payload))
 
 
 def test_vertex_and_subset_enumeration_boundaries() -> None:
@@ -427,8 +428,8 @@ def test_rational_digit_and_total_work_boundaries() -> None:
                 "coloring": [0],
                 "weights": [
                     {
-                        "num": "1",
-                        "den": str(maximum_denominator * 10),
+                        "num": 1,
+                        "den": maximum_denominator * 10,
                     }
                 ],
             }
@@ -510,7 +511,7 @@ def test_schema_and_tool_expose_bounds_axis_and_example() -> None:
     )
     assert len(tool.description) <= 512
     assert tool.examples
-    request = tool.request_type.model_validate(tool.examples[0].input)
+    request = tool.request_type.model_validate_json(json.dumps(tool.examples[0].input))
     result = tool.run(request)
     assert result.verdict == "ACCEPTED"
 

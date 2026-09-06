@@ -22,9 +22,9 @@ def test_graph_connection_probability_rejects_unbound_edge_probabilities() -> No
                 "edges": [],
             },
             "edge_probabilities": [
-                {"edge": ["a", "b"], "open_probability": {"num": "1", "den": "2"}},
-                {"edge": ["a", "c"], "open_probability": {"num": "1", "den": "2"}},
-                {"edge": ["b", "c"], "open_probability": {"num": "1", "den": "2"}},
+                {"edge": ["a", "b"], "open_probability": {"num": 1, "den": 2}},
+                {"edge": ["a", "c"], "open_probability": {"num": 1, "den": 2}},
+                {"edge": ["b", "c"], "open_probability": {"num": 1, "den": 2}},
             ],
             "terminals": ["a", "c"],
         }

@@ -8,6 +8,7 @@ from random import Random
 import pytest
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.optimization import general_linear_program, linear_program
 from jacobian.math.optimization._general_models import (
     GeneralFormRationalLinearProgram,
@@ -86,7 +87,7 @@ def test_exact_certificate_exceeds_interpreter_digit_limit(
     assert result.status == "OPTIMAL"
     assert result.primal_candidate is not None and dual is not None
     assert (
-        max(len(v.num.lstrip("-")) for v in result.primal_candidate)
+        max(len(format_canonical_integer(abs(v.num))) for v in result.primal_candidate)
         > default_integer_string_limit
     )
     x = tuple(v.as_fraction() for v in result.primal_candidate)
@@ -139,11 +140,11 @@ def test_general_lp_normalized_rhs_and_source_point_exceed_interpreter_limit(
     shifted = CanonicalRational.from_fraction(
         Fraction(1) - sum(c * v for c, v in zip(coefficients, lower, strict=True))
     )
-    assert len(shifted.den) > default_integer_string_limit
+    assert len(format_canonical_integer(shifted.den)) > default_integer_string_limit
     result = general_linear_program(program)
     assert result.status == "OPTIMAL" and result.primal_candidate is not None
     assert (
-        max(len(v.num.lstrip("-")) for v in result.primal_candidate)
+        max(len(format_canonical_integer(abs(v.num))) for v in result.primal_candidate)
         > default_integer_string_limit
     )
     x = tuple(v.as_fraction() for v in result.primal_candidate)

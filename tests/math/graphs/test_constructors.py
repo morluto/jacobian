@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -358,7 +360,9 @@ class TestSerializedClaimVerifiers:
         )
         payload = result.model_dump(mode="json")
         payload["graph"]["edges"] = [[0, 1], [0, 2], [0, 3]]
-        assert not verify_hypercube_graph(HypercubeGraphResult.model_validate(payload))
+        assert not verify_hypercube_graph(
+            HypercubeGraphResult.model_validate_json(json.dumps(payload))
+        )
 
     def test_keller_round_trip_and_forged_edge(self) -> None:
         result = construct_keller_graph(1)
@@ -367,7 +371,9 @@ class TestSerializedClaimVerifiers:
         )
         payload = result.model_dump(mode="json")
         payload["graph"]["edges"] = [[0, 1]]
-        assert not verify_keller_graph(KellerGraphResult.model_validate(payload))
+        assert not verify_keller_graph(
+            KellerGraphResult.model_validate_json(json.dumps(payload))
+        )
 
     def test_triangle_round_trip_forged_and_dropped(self) -> None:
         graph = SimpleUndirectedGraph(

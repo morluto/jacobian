@@ -23,14 +23,14 @@ from jacobian.math.geometry.algebraic_curves._tools import TOOLS
 from jacobian.math.probability import ExactComplexRational
 
 
-def _cr(real: str, imag: str = "0") -> GaussianComplexCoefficient:
+def _cr(real: int, imag: int = 0) -> GaussianComplexCoefficient:
     return GaussianComplexCoefficient(
-        real=CanonicalRational(num=real, den="1"),
-        imaginary=CanonicalRational(num=imag, den="1"),
+        real=CanonicalRational(num=real, den=1),
+        imaginary=CanonicalRational(num=imag, den=1),
     )
 
 
-def _term(real: str, imag: str, exp: int) -> UnivariateGaussianPolynomialTerm:
+def _term(real: int, imag: int, exp: int) -> UnivariateGaussianPolynomialTerm:
     return UnivariateGaussianPolynomialTerm(coefficient=_cr(real, imag), exponent=exp)
 
 
@@ -42,8 +42,8 @@ def test_catalog_contains_gaussian_realification():
 
 def test_native_api_and_gaussian_scalar_compose():
     coefficient = ExactComplexRational(
-        real=CanonicalRational(num="1", den="1"),
-        imaginary=CanonicalRational(num="2", den="1"),
+        real=CanonicalRational(num=1, den=1),
+        imaginary=CanonicalRational(num=2, den=1),
     )
     polynomial = UnivariateGaussianPolynomial(
         variable="z",
@@ -58,7 +58,7 @@ def test_native_api_and_gaussian_scalar_compose():
 def test_quadratic_gaussian_realification():
     poly = UnivariateGaussianPolynomial(
         variable="z",
-        terms=(_term("1", "0", 2), _term("-1", "-1", 0)),
+        terms=(_term(1, 0, 2), _term(-1, -1, 0)),
     )
     result = gaussian_realification(poly, ("x", "y"))
     # Expected u = x^2 - y^2 -1, v = 2xy -1
@@ -73,17 +73,17 @@ def test_quadratic_gaussian_realification():
         (t.exponents, t.coefficient.num, t.coefficient.den)
         for t in result.imag_part.polynomial.terms
     }
-    assert ((2, 0), "1", "1") in real_terms
-    assert ((0, 2), "-1", "1") in real_terms
-    assert ((0, 0), "-1", "1") in real_terms
-    assert ((1, 1), "2", "1") in imag_terms
-    assert ((0, 0), "-1", "1") in imag_terms
+    assert ((2, 0), 1, 1) in real_terms
+    assert ((0, 2), -1, 1) in real_terms
+    assert ((0, 0), -1, 1) in real_terms
+    assert ((1, 1), 2, 1) in imag_terms
+    assert ((0, 0), -1, 1) in imag_terms
 
 
 def test_real_coefficient_cubic():
     poly = UnivariateGaussianPolynomial(
         variable="z",
-        terms=(_term("1", "0", 3), _term("-2", "0", 1), _term("1", "0", 0)),
+        terms=(_term(1, 0, 3), _term(-2, 0, 1), _term(1, 0, 0)),
     )
     result = gaussian_realification(poly, ("x", "y"))
     real_exps = {
@@ -110,16 +110,16 @@ def test_zero_polynomial():
 
 
 def test_purely_imaginary_constant():
-    poly = UnivariateGaussianPolynomial(variable="z", terms=(_term("0", "1", 0),))
+    poly = UnivariateGaussianPolynomial(variable="z", terms=(_term(0, 1, 0),))
     result = gaussian_realification(poly, ("x", "y"))
     assert result.real_part.polynomial.terms == ()
     assert len(result.imag_part.polynomial.terms) == 1
     assert result.imag_part.polynomial.terms[0].exponents == (0, 0)
-    assert result.imag_part.polynomial.terms[0].coefficient.num == "1"
+    assert result.imag_part.polynomial.terms[0].coefficient.num == 1
 
 
 def test_monomial_i_z_squared():
-    poly = UnivariateGaussianPolynomial(variable="z", terms=(_term("0", "1", 2),))
+    poly = UnivariateGaussianPolynomial(variable="z", terms=(_term(0, 1, 2),))
     result = gaussian_realification(poly, ("x", "y"))
     # i*z^2 => i*(x^2 - y^2 +2i xy)= i(x^2 - y^2) -2xy => real -2xy, imag x^2 - y^2
     real = {
@@ -134,7 +134,7 @@ def test_monomial_i_z_squared():
 
 
 def test_target_labels_change_only_axis():
-    poly = UnivariateGaussianPolynomial(variable="z", terms=(_term("1", "0", 1),))
+    poly = UnivariateGaussianPolynomial(variable="z", terms=(_term(1, 0, 1),))
     result_xy = gaussian_realification(poly, ("x", "y"))
     result_uv = gaussian_realification(poly, ("u", "v"))
     assert result_xy.real_part.polynomial.terms[0].exponents == (1, 0)
@@ -145,7 +145,7 @@ def test_target_labels_change_only_axis():
 
 
 def test_rejects_target_collision_with_source():
-    poly = UnivariateGaussianPolynomial(variable="z", terms=(_term("1", "0", 1),))
+    poly = UnivariateGaussianPolynomial(variable="z", terms=(_term(1, 0, 1),))
     with pytest.raises(ValidationError, match="distinct from the source"):
         GaussianRealificationRequest(polynomial=poly, target_variables=("z", "y"))
     with pytest.raises(ValidationError, match="distinct"):
@@ -158,7 +158,7 @@ def test_defining_invariant_reconstruction():
 
     poly = UnivariateGaussianPolynomial(
         variable="z",
-        terms=(_term("2", "1", 2), _term("-1", "0", 1), _term("3", "-2", 0)),
+        terms=(_term(2, 1, 2), _term(-1, 0, 1), _term(3, -2, 0)),
     )
     result = gaussian_realification(poly, ("x", "y"))
     # Replay expansion independently and compare dictionaries
@@ -203,7 +203,7 @@ def test_defining_invariant_reconstruction():
 
 
 def test_json_round_trip():
-    poly = UnivariateGaussianPolynomial(variable="z", terms=(_term("1", "0", 1),))
+    poly = UnivariateGaussianPolynomial(variable="z", terms=(_term(1, 0, 1),))
     result = gaussian_realification(poly, ("x", "y"))
     json_val = result.model_dump_json()
     replay = type(result).model_validate_json(json_val, strict=True)
@@ -224,16 +224,14 @@ def test_admission_rejects_excessive_degree():
     with pytest.raises(ValidationError, match=r"64|less_than_equal|degree"):
         UnivariateGaussianPolynomial(
             variable="z",
-            terms=(
-                UnivariateGaussianPolynomialTerm(coefficient=_cr("1"), exponent=65),
-            ),
+            terms=(UnivariateGaussianPolynomialTerm(coefficient=_cr(1), exponent=65),),
         )
 
 
 def test_admission_bounds_each_component_before_expansion():
     polynomial = UnivariateGaussianPolynomial(
         variable="z",
-        terms=tuple(_term("1", "1", degree) for degree in range(64, 59, -1)),
+        terms=tuple(_term(1, 1, degree) for degree in range(64, 59, -1)),
     )
     with pytest.raises(Exception, match="realification component"):
         gaussian_realification(polynomial, ("x", "y"))
@@ -242,7 +240,7 @@ def test_admission_bounds_each_component_before_expansion():
 def test_admission_reserves_binomial_coefficient_digits():
     polynomial = UnivariateGaussianPolynomial(
         variable="z",
-        terms=(_term("9" * 256, "0", 64),),
+        terms=(_term(10**256 - 1, 0, 64),),
     )
     with pytest.raises(Exception, match="Gaussian coefficient"):
         gaussian_realification(polynomial, ("x", "y"))

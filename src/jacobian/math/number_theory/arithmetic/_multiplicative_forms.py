@@ -7,9 +7,8 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
 
 # Public bounds
 MAX_K_VALUE = 1_000
@@ -24,7 +23,7 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 class IntegerRequest(StrictModel):
     """One canonical integer for a multiplicative normal-form operation."""
 
-    value: CanonicalInteger
+    value: ExactInteger
 
 
 class IntegerKRequest(IntegerRequest):
@@ -38,7 +37,7 @@ class NonnegativeIntegerRequest(IntegerRequest):
 
     @model_validator(mode="after")
     def require_nonnegative(self) -> Self:
-        if parse_canonical_integer(self.value) < 0:
+        if self.value < 0:
             raise _validation_error(
                 "value_must_be_nonnegative", "value must be nonnegative"
             )
@@ -48,7 +47,7 @@ class NonnegativeIntegerRequest(IntegerRequest):
 class PrimeExponentRow(StrictModel):
     """One prime base and its exponent in a prime factorization."""
 
-    prime: CanonicalInteger
+    prime: ExactInteger
     power: int = Field(ge=0)
 
 
@@ -56,11 +55,11 @@ class PerfectPowerProfileResult(StrictModel):
     """The maximal perfect-power profile of one integer."""
 
     kind: Literal["ZERO", "POSITIVE_UNIT", "NEGATIVE_UNIT", "NONUNIT"]
-    base: CanonicalInteger | None = None
+    base: ExactInteger | None = None
     exponent: int | None = None
     is_nontrivial_perfect_power: bool = False
     factors: tuple[PrimeExponentRow, ...] = ()
-    reconstruction: CanonicalInteger | None = None
+    reconstruction: ExactInteger | None = None
 
     @model_validator(mode="after")
     def require_consistent_fields(self) -> Self:
@@ -102,10 +101,10 @@ class KFreeDecompositionResult(StrictModel):
     """The unique decomposition n = a^k * c with c k-th-power-free."""
 
     kind: Literal["ZERO", "UNIT", "NONUNIT"]
-    base: CanonicalInteger | None = None
-    cofactor: CanonicalInteger | None = None
+    base: ExactInteger | None = None
+    cofactor: ExactInteger | None = None
     factors: tuple[PrimeExponentRow, ...] = ()
-    reconstruction: CanonicalInteger | None = None
+    reconstruction: ExactInteger | None = None
 
     @model_validator(mode="after")
     def require_consistent_fields(self) -> Self:
@@ -146,10 +145,10 @@ class SquarefreeDecompositionResult(StrictModel):
     """The unique decomposition n = s^2 * d with |d| squarefree."""
 
     kind: Literal["ZERO", "UNIT", "NONUNIT"]
-    square_factor: CanonicalInteger | None = None
-    squarefree_part: CanonicalInteger | None = None
+    square_factor: ExactInteger | None = None
+    squarefree_part: ExactInteger | None = None
     factors: tuple[PrimeExponentRow, ...] = ()
-    reconstruction: CanonicalInteger | None = None
+    reconstruction: ExactInteger | None = None
 
     @model_validator(mode="after")
     def require_consistent_fields(self) -> Self:
@@ -190,6 +189,6 @@ class NormalizedQuadraticRadicalResult(StrictModel):
     """The canonical positive sqrt(n) = s * sqrt(d) with d squarefree."""
 
     kind: Literal["ZERO", "RATIONAL_INTEGER", "IRRATIONAL_QUADRATIC"]
-    coefficient: CanonicalInteger
-    radicand: CanonicalInteger
-    reconstruction: CanonicalInteger
+    coefficient: ExactInteger
+    radicand: ExactInteger
+    reconstruction: ExactInteger

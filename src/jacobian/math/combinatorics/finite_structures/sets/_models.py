@@ -7,9 +7,8 @@ from typing import Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
 
 MAX_FINITE_SET_OPERAND_ELEMENTS = 50_000
 MAX_FINITE_INTEGER_SET_ELEMENTS = 2 * MAX_FINITE_SET_OPERAND_ELEMENTS
@@ -23,7 +22,7 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 class FiniteIntegerSet(StrictModel):
     """One finite set of canonical integers, possibly empty."""
 
-    elements: tuple[CanonicalInteger, ...] = Field(
+    elements: tuple[ExactInteger, ...] = Field(
         max_length=MAX_FINITE_INTEGER_SET_ELEMENTS
     )
 
@@ -47,29 +46,25 @@ class FiniteSetCoverageRequest(StrictModel):
     """A finite integer scope and a bounded sequence intended to cover it once."""
 
     scope: FiniteIntegerSet
-    values: tuple[CanonicalInteger, ...] = Field(
-        max_length=MAX_FINITE_SET_COVERAGE_VALUES
-    )
+    values: tuple[ExactInteger, ...] = Field(max_length=MAX_FINITE_SET_COVERAGE_VALUES)
 
 
 class FiniteSetCoverageResult(StrictModel):
     """Exact diagnostics for a bounded exactly-once finite-set cover."""
 
     holds: bool
-    missing: tuple[CanonicalInteger, ...] = Field(
+    missing: tuple[ExactInteger, ...] = Field(
         max_length=MAX_FINITE_INTEGER_SET_ELEMENTS
     )
-    duplicates: tuple[CanonicalInteger, ...] = Field(
+    duplicates: tuple[ExactInteger, ...] = Field(
         max_length=MAX_FINITE_SET_COVERAGE_VALUES
     )
-    outside: tuple[CanonicalInteger, ...] = Field(
-        max_length=MAX_FINITE_SET_COVERAGE_VALUES
-    )
+    outside: tuple[ExactInteger, ...] = Field(max_length=MAX_FINITE_SET_COVERAGE_VALUES)
 
     @model_validator(mode="after")
     def require_canonical_diagnostics(self) -> Self:
         for name in ("missing", "duplicates", "outside"):
-            values = [parse_canonical_integer(value) for value in getattr(self, name)]
+            values = list(getattr(self, name))
             if values != sorted(set(values)):
                 raise _validation_error(
                     "coverage_values_invalid",
@@ -86,13 +81,13 @@ class FiniteSetCoverageResult(StrictModel):
 class FiniteSetElementListResult(StrictModel):
     """Sorted distinct integers produced by a binary set operation."""
 
-    elements: tuple[CanonicalInteger, ...] = Field(
+    elements: tuple[ExactInteger, ...] = Field(
         max_length=MAX_FINITE_INTEGER_SET_ELEMENTS
     )
 
     @model_validator(mode="after")
     def require_sorted_unique(self) -> Self:
-        values = [parse_canonical_integer(element) for element in self.elements]
+        values = list(self.elements)
         if values != sorted(values):
             raise _validation_error(
                 "elements_not_sorted", "set element list must be sorted"

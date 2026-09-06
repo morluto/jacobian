@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pytest
 from tests.integration.linear._support import linear_validation_error
-from tests.support.rationals import rational_payload as _q
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.matrices.rational_linear._models import (
@@ -18,7 +17,11 @@ from jacobian.math.optimization._models import (
 
 
 def _canonical(numerator: int, denominator: int = 1) -> CanonicalRational:
-    return CanonicalRational.model_validate(_q(numerator, denominator))
+    return CanonicalRational.from_integer_ratio(numerator, denominator)
+
+
+def _q(numerator: int, denominator: int = 1) -> CanonicalRational:
+    return CanonicalRational.from_integer_ratio(numerator, denominator)
 
 
 def _system() -> dict[str, object]:

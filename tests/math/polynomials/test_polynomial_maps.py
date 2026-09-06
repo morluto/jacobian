@@ -66,12 +66,12 @@ def test_evaluation_returns_a_canonical_rational() -> None:
         point=VariablePoint(
             variables=("x", "y"),
             values=(
-                CanonicalRational(num="3", den="1"),
-                CanonicalRational(num="1", den="1"),
+                CanonicalRational(num=3, den=1),
+                CanonicalRational(num=1, den=1),
             ),
         ),
     )
-    assert _evaluate(request).value == CanonicalRational(num="11", den="1")
+    assert _evaluate(request).value == CanonicalRational(num=11, den=1)
 
 
 def test_evaluation_requires_the_complete_ordered_axis() -> None:
@@ -79,7 +79,7 @@ def test_evaluation_requires_the_complete_ordered_axis() -> None:
         polynomial=_polynomial(("x", "y"), {(1, 0): 1}),
         point=VariablePoint(
             variables=("x",),
-            values=(CanonicalRational(num="1", den="1"),),
+            values=(CanonicalRational(num=1, den=1),),
         ),
     )
     with pytest.raises(OperationDomainValidationError):
@@ -91,7 +91,7 @@ def test_evaluation_rejects_a_point_whose_exact_value_exceeds_result_bound() -> 
         polynomial=_polynomial(("x",), {(64,): 1}),
         point=VariablePoint(
             variables=("x",),
-            values=(CanonicalRational(num="1" + "0" * 600, den="1"),),
+            values=(CanonicalRational(num=10**600, den=1),),
         ),
     )
     with pytest.raises(OperationDomainValidationError):

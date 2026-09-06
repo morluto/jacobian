@@ -13,11 +13,11 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
-    CanonicalInteger,
     CanonicalRational,
+    ExactInteger,
 )
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import parse_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.quadratic import RealQuadraticValue
 from jacobian.math.number_theory.number_fields.values import (
     MAX_SIMPLE_NUMBER_FIELD_DEGREE,
@@ -51,8 +51,16 @@ MAX_SPARSE_RATIONAL_MATRIX_NONZEROS = 32_768
 MAX_MATRIX_SCALAR_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
 
 
+def _decimal_digits(value: int | str) -> int:
+    """Count digits without invoking CPython's small-int string limit."""
+
+    if isinstance(value, str):
+        return len(value.lstrip("-"))
+    return len(format_canonical_integer(abs(value)))
+
+
 def require_matrix_scalar_digits(
-    entries: tuple[tuple[str | CanonicalRational, ...], ...],
+    entries: tuple[tuple[str | int | CanonicalRational, ...], ...],
     *,
     maximum: int,
     label: str,
@@ -61,8 +69,10 @@ def require_matrix_scalar_digits(
 
     for row in entries:
         for value in row:
-            components = (value,) if isinstance(value, str) else (value.num, value.den)
-            if any(len(component.lstrip("-")) > maximum for component in components):
+            components = (
+                (value,) if isinstance(value, (str, int)) else (value.num, value.den)
+            )
+            if any(_decimal_digits(component) > maximum for component in components):
                 raise _validation_error(
                     "budget_exceeded",
                     f"{label} scalars are limited to {maximum} decimal digits",
@@ -150,10 +160,10 @@ def _require_raw_matrix_envelope(  # noqa: C901
             if isinstance(scalar, dict):
                 for _key in ("num", "den"):
                     _val = scalar.get(_key)
-                    if _val is not None and not isinstance(_val, str):
+                    if _val is not None and type(_val) not in (int, str):
                         raise _validation_error(
                             "shape_mismatch",
-                            f"{label} rational {_key} must be a string"
+                            f"{label} rational {_key} must be an integer or string"
                             f", not {type(_val).__name__}",
                         )
             components = (
@@ -172,7 +182,7 @@ def _require_raw_matrix_envelope(  # noqa: C901
                         for sub in component:
                             if (
                                 isinstance(sub, (str, int))
-                                and len(str(sub).lstrip("-")) > MAX_MATRIX_SCALAR_DIGITS
+                                and _decimal_digits(sub) > MAX_MATRIX_SCALAR_DIGITS
                             ):
                                 raise _validation_error(
                                     "budget_exceeded",
@@ -186,7 +196,7 @@ def _require_raw_matrix_envelope(  # noqa: C901
                     )
                 if (
                     isinstance(component, (str, int))
-                    and len(str(component).lstrip("-")) > MAX_MATRIX_SCALAR_DIGITS
+                    and _decimal_digits(component) > MAX_MATRIX_SCALAR_DIGITS
                 ):
                     raise _validation_error(
                         "budget_exceeded",
@@ -364,7 +374,7 @@ def dense_rational_matrix_from_sparse(matrix: SparseRationalMatrix) -> RationalM
         or matrix.column_count > MAX_RATIONAL_MATRIX_AXIS
     ):
         raise ValueError("sparse matrix axes exceed the canonical dense matrix")
-    zero = CanonicalRational(num="0", den="1")
+    zero = CanonicalRational(num=0, den=1)
     coordinates = {(entry.row, entry.column): entry.value for entry in matrix.entries}
     return RationalMatrix(
         row_count=matrix.row_count,
@@ -387,7 +397,7 @@ class RationalVectorSpaceBasis(StrictModel):
     """
 
     domain: Literal["QQ"] = "QQ"
-    ambient_dimension: int = Field(ge=1, le=MAX_RATIONAL_MATRIX_ORDER)
+    ambient_dimension: int = Field(ge=0, le=MAX_RATIONAL_MATRIX_ORDER)
     vectors: tuple[tuple[CanonicalRational, ...], ...] = Field(
         default=(), max_length=MAX_RATIONAL_MATRIX_ORDER
     )
@@ -515,7 +525,7 @@ class IntegerMatrix(StrictModel):
         le=MAX_INTEGER_MATRIX_ORDER,
         description="Column count; inferred from the first row when omitted, or zero for no rows.",
     )
-    entries: tuple[tuple[CanonicalInteger, ...], ...] = Field(
+    entries: tuple[tuple[ExactInteger, ...], ...] = Field(
         default=(),
         max_length=MAX_INTEGER_MATRIX_ORDER,
     )
@@ -604,7 +614,7 @@ class SmithNormalForm(StrictModel):
 
     normal_form: IntegerMatrix
     rank: int = Field(ge=0, le=MAX_EXACT_LINEAR_MATRIX_AXIS)
-    invariant_factors: tuple[CanonicalInteger, ...] = Field(
+    invariant_factors: tuple[ExactInteger, ...] = Field(
         max_length=MAX_EXACT_LINEAR_MATRIX_AXIS
     )
     convention: Literal["POSITIVE_DIVISIBILITY_DIAGONAL"] = (
@@ -623,9 +633,7 @@ class SmithNormalForm(StrictModel):
             raise _validation_error(
                 "shape_mismatch", "Smith rank cannot exceed the matrix dimensions"
             )
-        factors = tuple(
-            parse_canonical_integer(value) for value in self.invariant_factors
-        )
+        factors = tuple(self.invariant_factors)
         if any(value <= 0 for value in factors):
             raise _validation_error(
                 "shape_mismatch", "Smith invariant factors must be positive"
@@ -637,7 +645,7 @@ class SmithNormalForm(StrictModel):
         for row, entries in enumerate(self.normal_form.entries):
             for column, value in enumerate(entries):
                 expected = factors[row] if row == column and row < self.rank else 0
-                if parse_canonical_integer(value) != expected:
+                if value != expected:
                     raise _validation_error(
                         "budget_exceeded",
                         "Smith normal form must contain its positive invariant "
@@ -648,10 +656,10 @@ class SmithNormalForm(StrictModel):
     @field_validator("invariant_factors")
     @classmethod
     def require_bounded_invariant_factors(
-        cls, values: tuple[CanonicalInteger, ...]
-    ) -> tuple[CanonicalInteger, ...]:
+        cls, values: tuple[ExactInteger, ...]
+    ) -> tuple[ExactInteger, ...]:
         for value in values:
-            if len(value.lstrip("-")) > MAX_MATRIX_SCALAR_DIGITS:
+            if _decimal_digits(value) > MAX_MATRIX_SCALAR_DIGITS:
                 raise _validation_error(
                     "budget_exceeded",
                     f"matrix scalars are limited to {MAX_MATRIX_SCALAR_DIGITS} decimal digits",

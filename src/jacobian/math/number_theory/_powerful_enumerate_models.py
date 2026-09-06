@@ -8,9 +8,8 @@ from typing import Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer
 
 # Admission: enumerate squarefree b with b^3 <= cutoff, then a with a^2*b^3 <= cutoff.
 # The total number of powerful integers up to X is at most 3*sqrt(X).
@@ -49,7 +48,7 @@ class PowerfulEnumerateResult(StrictModel):
 
     cutoff: int = Field(gt=0)
     count: int = Field(ge=0)
-    family: tuple[CanonicalInteger, ...] = Field(default=())
+    family: tuple[ExactInteger, ...] = Field(default=())
 
     @model_validator(mode="after")
     def require_canonical_family(self) -> Self:
@@ -58,7 +57,7 @@ class PowerfulEnumerateResult(StrictModel):
                 "powerful_enumerate.count_mismatch",
                 "count must equal the family length",
             )
-        values = [int(v) for v in self.family]
+        values = list(self.family)
         if any(v < 1 for v in values):
             raise PydanticCustomError(
                 "powerful_enumerate.positive_only",
@@ -80,7 +79,7 @@ class PowerfulEnumerateResult(StrictModel):
     def _from_kernel(
         cls, cutoff: int, raw_family: list[int]
     ) -> PowerfulEnumerateResult:
-        family = tuple(format_canonical_integer(v) for v in sorted(raw_family))
+        family = tuple(sorted(raw_family))
         return cls.model_construct(
             cutoff=cutoff,
             count=len(family),

@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from collections import Counter
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import ExactInteger
 from jacobian.canonical import (
     CanonicalLimits,
     format_canonical_integer,
-    parse_canonical_integer,
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.sets._models import (
@@ -22,33 +21,35 @@ MAX_FINITE_SET_TOTAL_DIGITS = 10_000_000
 
 
 def _parse_integers(
-    elements: tuple[CanonicalInteger, ...], *, location: tuple[str, ...]
+    elements: tuple[ExactInteger, ...], *, location: tuple[str, ...]
 ) -> tuple[int, ...]:
+    def digits(element: ExactInteger) -> int:
+        return len(format_canonical_integer(element))
+
     if any(
-        len(element.lstrip("-")) > CanonicalLimits().max_integer_digits
-        for element in elements
+        digits(element) > CanonicalLimits().max_integer_digits for element in elements
     ):
         raise OperationDomainValidationError(
             location=location,
             code="finite_set.integer_digit_bound",
             message="finite-set elements exceed the canonical integer digit bound",
         )
-    total_digits = sum(len(element.lstrip("-")) for element in elements)
+    total_digits = sum(digits(element) for element in elements)
     if total_digits > MAX_FINITE_SET_TOTAL_DIGITS:
         raise OperationDomainValidationError(
             location=location,
             code="finite_set.aggregate_digit_bound",
             message="finite-set aggregate digits exceed the admitted parsing budget",
         )
-    return tuple(parse_canonical_integer(element) for element in elements)
+    return elements
 
 
 def _integers(value: FiniteIntegerSet) -> set[int]:
     return set(_parse_integers(value.elements, location=("value",)))
 
 
-def _canonical(values: set[int]) -> tuple[CanonicalInteger, ...]:
-    return tuple(format_canonical_integer(value) for value in sorted(values))
+def _canonical(values: set[int]) -> tuple[ExactInteger, ...]:
+    return tuple(sorted(values))
 
 
 def _require_bounded_result(values: set[int]) -> None:
@@ -70,7 +71,7 @@ def _bounded_result(values: set[int]) -> FiniteIntegerSet:
 
 def exact_cover(
     scope: FiniteIntegerSet,
-    values: tuple[CanonicalInteger, ...],
+    values: tuple[ExactInteger, ...],
 ) -> FiniteSetCoverageResult:
     """Diagnose whether ``values`` covers every scope element exactly once."""
 

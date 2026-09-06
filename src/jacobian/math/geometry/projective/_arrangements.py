@@ -8,7 +8,6 @@ from typing import cast
 
 from pydantic_core import PydanticCustomError
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -50,13 +49,7 @@ def _cross(
 
 
 def _wire_triple(values: tuple[int, int, int]) -> PrimitiveProjectiveTriple:
-    return PrimitiveProjectiveTriple(
-        coordinates=(
-            format_canonical_integer(values[0]),
-            format_canonical_integer(values[1]),
-            format_canonical_integer(values[2]),
-        )
-    )
+    return PrimitiveProjectiveTriple(coordinates=values)
 
 
 def compute_projective_line_flats(

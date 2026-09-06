@@ -1,5 +1,6 @@
 """Tests for exact Poisson-binomial count distributions."""
 
+import json
 from fractions import Fraction
 
 import pytest
@@ -97,9 +98,9 @@ def test_operation_admission_uses_the_typed_domain_error() -> None:
 
 
 def test_native_admission_rejects_result_digit_growth_before_execution() -> None:
-    denominator = str(10**97 + 3)
+    denominator = 10**97 + 3
     with pytest.raises(ValueError, match="exact result digit budget"):
-        poisson_binomial((CanonicalRational(num="1", den=denominator),) * 45)
+        poisson_binomial((CanonicalRational(num=1, den=denominator),) * 45)
 
 
 def test_native_result_probabilities_compose_into_request() -> None:
@@ -127,7 +128,7 @@ def test_serialized_result_probabilities_compose_into_request() -> None:
     )
     payload = {"probabilities": result.model_dump(mode="json")["probabilities"]}
 
-    request = PoissonBinomialRequest.model_validate(payload)
+    request = PoissonBinomialRequest.model_validate_json(json.dumps(payload))
 
     assert request.probabilities == result.probabilities
 

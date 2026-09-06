@@ -11,6 +11,7 @@ from math import lcm
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.games.finite._models import (
     MAX_EXACT_EQUILIBRIUM_WORK,
@@ -290,7 +291,9 @@ def best_response(payoff_matrix: PayoffMatrix) -> BestResponseResult:
             best_value = row_min
             best_row = row_index
     return BestResponseResult._from_kernel(
-        payoff_matrix=payoff_matrix, value=_wire_rational(best_value), best_row=best_row
+        payoff_matrix=payoff_matrix,
+        value=_wire_rational(best_value),
+        best_row=best_row,
     )
 
 
@@ -298,8 +301,12 @@ def nash_equilibrium(payoff_matrix: PayoffMatrix) -> NashEquilibriumResult:
     """Compute one exact saddle point of a finite 2-player zero-sum game."""
 
     matrix_value = payoff_matrix
-    denominator_digits = sum(len(value.den) for value in matrix_value.entries)
-    numerator_digits = max(len(value.num.lstrip("-")) for value in matrix_value.entries)
+    denominator_digits = sum(
+        len(format_canonical_integer(value.den)) for value in matrix_value.entries
+    )
+    numerator_digits = max(
+        len(format_canonical_integer(value.num)) for value in matrix_value.entries
+    )
     elimination_dimension = max(matrix_value.n_rows, matrix_value.n_cols) + 2
     work = elimination_dimension * (denominator_digits + numerator_digits)
     if work > MAX_EXACT_EQUILIBRIUM_WORK:
@@ -383,7 +390,6 @@ def nash_equilibrium(payoff_matrix: PayoffMatrix) -> NashEquilibriumResult:
 
 
 def verify_best_response(claim: BestResponseResult) -> bool:
-    """Verify a best-response claim against its retained payoff matrix."""
     try:
         return best_response(claim.payoff_matrix) == claim
     except (OperationDomainValidationError, TypeError, ValueError):
@@ -391,7 +397,6 @@ def verify_best_response(claim: BestResponseResult) -> bool:
 
 
 def verify_nash_equilibrium(claim: NashEquilibriumResult) -> bool:
-    """Verify an equilibrium claim against its retained payoff matrix."""
     try:
         return nash_equilibrium(claim.payoff_matrix) == claim
     except (OperationDomainValidationError, TypeError, ValueError, RuntimeError):

@@ -99,6 +99,25 @@ def test_deleted_python_path_is_not_offered_to_scoped_static_tools() -> None:
     assert commands == (("make", "test-math"),)
 
 
+def test_qepcad_owner_selects_qepcad_without_singular_replay() -> None:
+    runner = _load()
+    path = "src/jacobian/math/polynomials/real_algebra/_plane_components.py"
+    plan = runner.build_plan(
+        event="pull_request",
+        base_revision="a" * 40,
+        head_revision="b" * 40,
+        changed_paths=[path],
+        repository=ROOT,
+    )
+
+    commands = runner.commands_for_plan(plan, paths=[path], repository=ROOT)
+
+    assert plan.run_singular is False
+    assert plan.run_qepcad is True
+    assert ("make", "test-qepcad") in commands
+    assert ("make", "test-singular") not in commands
+
+
 def test_changed_paths_include_worktree_and_untracked_files(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

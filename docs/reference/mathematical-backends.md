@@ -207,10 +207,13 @@ property tests carry the required evidence.
 
 ## QEPCAD
 
-The plane real-algebraic owner uses
+Only `real_algebraic.plane_semialgebraic.component_profile.compute` uses
 [QEPCAD B 1.74](https://www.usna.edu/Users/cs/wcbrown/qepcad/B/QEPCAD.html)
 as a private child-process backend for exact connected components of bounded-size
-sign tables in two variables. The required CI lane installs Debian's pinned
+sign tables in two variables. It returns one exact representative per component
+and assigns supplied points to those components. Univariate root isolation,
+Sturm operations, and ordinary polynomial arithmetic do not depend on QEPCAD.
+The required CI lane installs Debian's pinned
 `qepcad=1.74+ds-5` package and checks the backend version before running the
 owner and process tests.
 
@@ -264,3 +267,30 @@ representative/component-ID projection, binds its axes and sample count back to
 that request, and constructs the public result. Worker timeout, output or cell
 exhaustion, unsupported version, malformed output, and execution failure remain
 distinct operational non-completions and never imply a topological conclusion.
+
+### Maintenance and replacement
+
+QEPCAD is a legacy dependency, not an actively developed backend claim. As of
+2026-09-06, the latest commit on its upstream default branch is
+[0f570797, dated 2021-03-09](https://github.com/chriswestbrown/qepcad/commit/0f57079731afb850d0960f2265f00de8b9e213a0).
+The version pin identifies the protocol tested by this adapter; it is not
+evidence of upstream maintenance. Missing QEPCAD remains an explicit execution
+failure for nondegenerate requests, rather than an approximate topology result.
+
+Replacement must supply complete connectivity, including lower-dimensional
+cells, strict inequalities, singular contacts, unbounded components, and exact
+sample classification. A satisfiability witness or a CAD without the necessary
+incidence information does not establish that postcondition.
+
+| Candidate | Fit and remaining work |
+| --- | --- |
+| [CGAL algebraic-curve arrangements](https://doc.cgal.org/latest/Arrangement_on_surface_2/classCGAL_1_1Arr__algebraic__segment__traits__2.html) | A candidate foundation for a replacement: exact plane-curve geometry and arrangement incidence. Requires a C++ adapter, sign evaluation on all cell dimensions, connectivity extraction, exact representative conversion, and new admission bounds. This is an architectural assessment, not a validated replacement. |
+| [Tarski](https://github.com/chriswestbrown/tarski) | Its source includes and builds QEPCAD and SACLIB. Switching to Tarski would not remove the underlying dependency. |
+| [Z3 NLSat](https://z3prover.github.io/papers/programmingz3.html#sec-nlsat) | Provides nonlinear-real satisfiability machinery. Its solver result alone does not supply this operation's complete component partition. |
+| [Wolfram SemialgebraicComponentInstances](https://reference.wolfram.com/language/ref/SemialgebraicComponentInstances.html) | Supplies component instances and is a candidate independent reference. Integrating it requires a separately provisioned runtime and evaluation of representative and sample-classification semantics. |
+
+Retain the existing exact plane-component regressions when evaluating a
+replacement: annulus complements, disjoint disks, strict versus closed
+boundaries, touching lemniscate lobes, degree-sixteen intersection coordinates,
+and invariance under reordered atoms and added samples. Do not remove QEPCAD
+until a replacement satisfies the same accepted mathematical contract.

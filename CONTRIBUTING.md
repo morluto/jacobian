@@ -75,6 +75,10 @@ Jacobian uses Python 3.12 and the uv release pinned in [`.uv-version`](.uv-versi
 make setup          # locked dev environment and Python backends
 ```
 
+Install the separate Singular and QEPCAD system executables using the
+[backend requirements](docs/how-to/backend-requirements.md). `make setup` does
+not install operating-system packages; the service image includes both.
+
 For command syntax, lanes, focused debugging, and the exceptional full-suite
 path, use the [testing strategy](docs/reference/testing-strategy.md). `make
 help` lists common commands; `make help-all` includes diagnostic plumbing.

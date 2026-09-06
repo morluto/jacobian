@@ -12,11 +12,14 @@ ENV JACOBIAN_REVISION=$JACOBIAN_REVISION
 WORKDIR /app
 
 ARG SINGULAR_DEBIAN_VERSION=1:4.4.1+ds-2
+ARG QEPCAD_DEBIAN_VERSION=1.74+ds-5
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
       "singular=${SINGULAR_DEBIAN_VERSION}" \
+      "qepcad=${QEPCAD_DEBIAN_VERSION}" \
     && rm -rf /var/lib/apt/lists/* \
-    && test "$(Singular -q --execute 'system("version");quit;' | tr -d '[:space:]')" = "44100"
+    && test "$(Singular -q --execute 'system("version");quit;' | tr -d '[:space:]')" = "44100" \
+    && qepcad -v | grep -F "Version B 1.74,"
 
 COPY pyproject.toml uv.lock README.md ./
 COPY src ./src

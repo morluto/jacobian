@@ -77,6 +77,7 @@ class TestPlan:
     python_lanes: tuple[str, ...]
     boundary_lanes: tuple[str, ...]
     run_singular: bool
+    run_qepcad: bool
     run_wheel: bool
     reasons: tuple[str, ...]
 
@@ -93,6 +94,7 @@ class PathDecision:
     python_lanes: tuple[str, ...] = ()
     boundary_lanes: tuple[str, ...] = ()
     run_singular: bool = False
+    run_qepcad: bool = False
     run_wheel: bool = False
     full_math_reason: str | None = None
 
@@ -159,9 +161,27 @@ def _is_public_math_path(path: str) -> bool:
     return filename in _PUBLIC_MATH_FILES or filename.endswith("_operations.py")
 
 
-def _requires_exact_algebra_runtime(path: str) -> bool:
-    return "/polynomials/real_algebra/" in path or path.endswith(
-        "/test_plane_component_profile.py"
+def _requires_qepcad_runtime(path: str) -> bool:
+    if path.endswith(
+        ("/test_plane_component_profile.py", "/test_qepcad_plane_components.py")
+    ):
+        return True
+    marker = "/polynomials/real_algebra/"
+    if marker not in path:
+        return False
+    filename = PurePosixPath(path).name
+    # The real-algebra package also owns Sturm/interlacing and sublevel
+    # operations. Keep those independent lanes from paying for QEPCAD.
+    return not filename.startswith(("_common_interlacing", "_strict_sublevel"))
+
+
+def _requires_singular_runtime(path: str) -> bool:
+    return (
+        "/polynomials/ideals/" in path
+        or "/polynomial_maps/" in path
+        or path.endswith(
+            ("/test_ideals.py", "/test_generic_degree_singular_process.py")
+        )
     )
 
 
@@ -173,6 +193,7 @@ def _complete_decision(reason: str) -> PathDecision:
         python_lanes=_PYTHON_LANES,
         boundary_lanes=_BOUNDARY_LANES,
         run_singular=True,
+        run_qepcad=True,
         run_wheel=True,
         full_math_reason=reason,
     )
@@ -196,7 +217,8 @@ def _classify_math_path(path: str, repository: Path) -> PathDecision:
             run_catalog=public_contract,
             run_catalog_examples=public_contract,
             run_scale=_includes_scale_tests(selected),
-            run_singular=_requires_exact_algebra_runtime(path),
+            run_singular=_requires_singular_runtime(path),
+            run_qepcad=_requires_qepcad_runtime(path),
         )
     return PathDecision()
 
@@ -211,7 +233,8 @@ def _classify_test_path(path: str) -> PathDecision | None:
         return PathDecision(
             math_tests=selected,
             run_scale=_includes_scale_tests((path,)),
-            run_singular=_requires_exact_algebra_runtime(path),
+            run_singular=_requires_singular_runtime(path),
+            run_qepcad=_requires_qepcad_runtime(path),
         )
     if path.startswith("tests/catalog/"):
         return PathDecision(run_catalog=True)
@@ -228,7 +251,8 @@ def _classify_test_path(path: str) -> PathDecision | None:
     if path.startswith("tests/process/"):
         return PathDecision(
             boundary_lanes=("process",),
-            run_singular="/polynomials/" in path,
+            run_singular=_requires_singular_runtime(path),
+            run_qepcad=_requires_qepcad_runtime(path),
         )
     if path.startswith("tests/mcp/"):
         return PathDecision(boundary_lanes=("mcp",))
@@ -284,6 +308,7 @@ def _pull_request_plan(
     python_lanes: set[str] = set()
     boundary_lanes: set[str] = set()
     run_singular = False
+    run_qepcad = False
     run_wheel = False
     full_math_reason: str | None = None
     reasons: list[str] = []
@@ -296,6 +321,7 @@ def _pull_request_plan(
         python_lanes.update(decision.python_lanes)
         boundary_lanes.update(decision.boundary_lanes)
         run_singular = run_singular or decision.run_singular
+        run_qepcad = run_qepcad or decision.run_qepcad
         run_wheel = run_wheel or decision.run_wheel
         if decision.full_math_reason:
             full_math_reason = decision.full_math_reason
@@ -325,6 +351,8 @@ def _pull_request_plan(
             )
         if run_singular:
             reasons.append("pinned Singular boundary changed")
+        if run_qepcad:
+            reasons.append("pinned QEPCAD boundary changed")
         if run_wheel:
             reasons.append("installed-wheel boundary changed")
         if not reasons:
@@ -347,6 +375,7 @@ def _pull_request_plan(
         python_lanes=tuple(sorted(python_lanes)),
         boundary_lanes=tuple(sorted(boundary_lanes)),
         run_singular=run_singular,
+        run_qepcad=run_qepcad,
         run_wheel=run_wheel,
         reasons=tuple(reasons),
     )
@@ -389,6 +418,7 @@ def build_plan(
             python_lanes=_PYTHON_LANES,
             boundary_lanes=_BOUNDARY_LANES,
             run_singular=True,
+            run_qepcad=True,
             run_wheel=True,
             reasons=(
                 f"{event} owns the complete ordinary suite"
@@ -419,6 +449,7 @@ def _write_github_output(plan: TestPlan, output: Path) -> None:
         "run_boundaries": str(bool(plan.boundary_lanes)).lower(),
         "boundary_lanes": json.dumps(plan.boundary_lanes),
         "run_singular": str(plan.run_singular).lower(),
+        "run_qepcad": str(plan.run_qepcad).lower(),
         "run_wheel": str(plan.run_wheel).lower(),
     }
     with output.open("a", encoding="utf-8") as stream:

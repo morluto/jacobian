@@ -178,6 +178,7 @@ def test_documentation_change_skips_product_evidence() -> None:
     assert plan.python_lanes == ()
     assert plan.boundary_lanes == ()
     assert plan.run_singular is False
+    assert plan.run_qepcad is False
     assert plan.run_wheel is False
 
 
@@ -213,6 +214,7 @@ def test_process_polynomial_test_selects_process_and_singular() -> None:
 
     assert plan.boundary_lanes == ("process",)
     assert plan.run_singular is True
+    assert plan.run_qepcad is False
 
 
 @pytest.mark.parametrize(
@@ -226,7 +228,23 @@ def test_process_polynomial_test_selects_process_and_singular() -> None:
 def test_qepcad_owner_change_selects_exact_algebra_runtime(path: str) -> None:
     plan = _plan([path])
 
-    assert plan.run_singular is True
+    assert plan.run_singular is False
+    assert plan.run_qepcad is True
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "src/jacobian/math/polynomials/real_algebra/_common_interlacing.py",
+        "src/jacobian/math/polynomials/real_algebra/_strict_sublevel.py",
+        "tests/math/polynomials/test_common_interlacing.py",
+        "tests/math/polynomials/test_strict_sublevel_measure.py",
+    ],
+)
+def test_independent_real_algebra_owner_skips_qepcad(path: str) -> None:
+    plan = _plan([path])
+
+    assert plan.run_qepcad is False
 
 
 def test_shared_test_support_fails_closed_to_every_ordinary_boundary() -> None:
@@ -237,6 +255,7 @@ def test_shared_test_support_fails_closed_to_every_ordinary_boundary() -> None:
     assert plan.python_lanes == ("cli", "dispatch", "integration", "tooling")
     assert plan.boundary_lanes == ("mcp", "process")
     assert plan.run_singular is True
+    assert plan.run_qepcad is True
     assert plan.run_wheel is True
 
 
@@ -257,6 +276,7 @@ def test_merge_group_always_owns_full_math_and_public_contracts() -> None:
     assert plan.python_lanes == ("dispatch", "cli", "tooling", "integration")
     assert plan.boundary_lanes == ("process", "mcp")
     assert plan.run_singular is True
+    assert plan.run_qepcad is True
     assert plan.run_wheel is True
 
 

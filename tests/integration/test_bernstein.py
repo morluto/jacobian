@@ -337,9 +337,7 @@ def test_restriction_reuses_exact_tensor_and_matches_direct_conversion() -> None
     payload["multidegree"] = [2, 0]
     payload["box"] = _box([((0, 1), (1, 1)), ((0, 1), (1, 1))])
     parent = _run(payload)
-    child = RationalBox.model_validate(
-        _box([((1, 4), (3, 4)), ((0, 1), (1, 1))])
-    )
+    child = RationalBox.model_validate(_box([((1, 4), (3, 4)), ((0, 1), (1, 1))]))
     restricted = restrict_bernstein(parent, child)
     direct = bernstein_coefficients(parent.polynomial, child, parent.multidegree)
     assert [value.as_fraction() for value in restricted.coefficients] == [
@@ -380,9 +378,7 @@ def test_restriction_handles_a_realistic_dense_289_entry_tensor() -> None:
     ]
     payload["multidegree"] = [16, 16]
     parent = _run(payload)
-    child = RationalBox.model_validate(
-        _box([((1, 3), (2, 3)), ((1, 5), (4, 5))])
-    )
+    child = RationalBox.model_validate(_box([((1, 3), (2, 3)), ((1, 5), (4, 5))]))
     restricted = restrict_bernstein(parent, child)
     direct = bernstein_coefficients(parent.polynomial, child, parent.multidegree)
     assert restricted.coefficients == direct.coefficients
@@ -393,9 +389,7 @@ def test_restriction_preserves_zero_tensor_on_a_degenerate_degree_profile() -> N
     payload["polynomial"]["polynomial"]["terms"] = []
     payload["multidegree"] = [3, 2]
     parent = _run(payload)
-    child = RationalBox.model_validate(
-        _box([((1, 3), (2, 3)), ((1, 5), (4, 5))])
-    )
+    child = RationalBox.model_validate(_box([((1, 3), (2, 3)), ((1, 5), (4, 5))]))
     restricted = restrict_bernstein(parent, child)
     assert len(restricted.coefficients) == 12
     assert all(value.as_fraction() == 0 for value in restricted.coefficients)
@@ -404,9 +398,7 @@ def test_restriction_preserves_zero_tensor_on_a_degenerate_degree_profile() -> N
 @pytest.mark.parametrize("mutation", ["parent", "child", "outside", "axis"])
 def test_restriction_rejects_forged_claims_and_invalid_children(mutation: str) -> None:
     parent = _run(_fixture())
-    child_box = RationalBox.model_validate(
-        _box([((1, 4), (3, 4)), ((1, 4), (3, 4))])
-    )
+    child_box = RationalBox.model_validate(_box([((1, 4), (3, 4)), ((1, 4), (3, 4))]))
     if mutation == "parent":
         wire = parent.model_dump(mode="json")
         wire["coefficients"][0] = _q(999)
@@ -420,9 +412,7 @@ def test_restriction_rejects_forged_claims_and_invalid_children(mutation: str) -
         forged = RationalBernsteinPolynomial.model_validate(wire)
         assert not verify_bernstein_restriction(parent, forged)
     elif mutation == "outside":
-        outside = RationalBox.model_validate(
-            _box([((0, 1), (2, 1)), ((1, 4), (3, 4))])
-        )
+        outside = RationalBox.model_validate(_box([((0, 1), (2, 1)), ((1, 4), (3, 4))]))
         with pytest.raises(OperationDomainValidationError):
             restrict_bernstein(parent, outside)
     else:
@@ -438,7 +428,5 @@ def test_restriction_rejects_degenerate_parent_and_child() -> None:
     point = RationalBox.model_validate(_box([((1, 2), (1, 2)), ((0, 1), (1, 1))]))
     with pytest.raises(OperationDomainValidationError):
         restrict_bernstein(parent, point)
-    parent_point = parent.model_copy(
-        update={"box": point}
-    )
+    parent_point = parent.model_copy(update={"box": point})
     assert not verify_bernstein_restriction(parent_point, parent)

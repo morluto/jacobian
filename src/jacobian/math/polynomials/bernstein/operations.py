@@ -168,7 +168,10 @@ def _contract_axis(
             for suffix in range(after):
                 value = fmpq(0)
                 for source in range(source_degree + 1):
-                    value += values[(prefix * (source_degree + 1) + source) * after + suffix] * rows[source][target]
+                    value += (
+                        values[(prefix * (source_degree + 1) + source) * after + suffix]
+                        * rows[source][target]
+                    )
                 output.append(value)
     return output, target_shape
 
@@ -224,11 +227,18 @@ def bernstein_coefficients(
         for t in polynomial.polynomial.terms
     )
     if dense:
-        source_shape = tuple(e + 1 for e in tuple(max(es, default=0) for es in exponents))
-        source_strides = tuple(prod(source_shape[i + 1 :]) for i in range(len(source_shape)))
+        source_shape = tuple(
+            e + 1 for e in tuple(max(es, default=0) for es in exponents)
+        )
+        source_strides = tuple(
+            prod(source_shape[i + 1 :]) for i in range(len(source_shape))
+        )
         values = [fmpq(0)] * prod(source_shape)
         for coefficient, powers in terms:
-            offset = sum(power * stride for power, stride in zip(powers, source_strides, strict=True))
+            offset = sum(
+                power * stride
+                for power, stride in zip(powers, source_strides, strict=True)
+            )
             values[offset] = coefficient
         shape = source_shape
         for axis, rows in enumerate(axis_maps):
@@ -328,14 +338,10 @@ def _restriction_admit(
     # Each de Casteljau level introduces one ratio cross-product and one
     # addition.  Account for both the ratio digits and the additions in the
     # output-component envelope before allocating the restricted tensor.
-    degree_height = sum(
-        m * (max_height + 1) + m for m in parent.multidegree
-    )
+    degree_height = sum(m * (max_height + 1) + m for m in parent.multidegree)
     output_height = coefficient_height + degree_height + len(parent.multidegree) + 2
     if output_height > MAX_COMPONENT_DIGITS:
-        _reject(
-            "Bernstein restriction rational growth exceeds the 8192-digit envelope"
-        )
+        _reject("Bernstein restriction rational growth exceeds the 8192-digit envelope")
     size = prod(m + 1 for m in parent.multidegree)
     work = size * (sum(m + 1 for m in parent.multidegree) + 1)
     if work * (1 + output_height // 64) ** 2 > MAX_WEIGHTED_WORK:

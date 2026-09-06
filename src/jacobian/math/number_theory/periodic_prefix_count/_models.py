@@ -43,7 +43,9 @@ def _parse_native_integer(value: Any, *, max_digits: int) -> int:
 
 PeriodicNativeInteger = Annotated[
     int,
-    BeforeValidator(lambda value: _parse_native_integer(value, max_digits=MAX_PREFIX_CUTOFF_DIGITS)),
+    BeforeValidator(
+        lambda value: _parse_native_integer(value, max_digits=MAX_PREFIX_CUTOFF_DIGITS)
+    ),
     PlainSerializer(format_canonical_integer, return_type=str, when_used="json"),
 ]
 

@@ -395,7 +395,9 @@ def test_serialized_results_retain_sources_and_reject_forgery() -> None:
     assert verify_arrangement(restored_arrangement)
     forged_arrangement = deepcopy(restored_arrangement.model_dump(mode="json"))
     forged_arrangement["is_central"] = True
-    assert not verify_arrangement(type(arrangement_result).model_validate(forged_arrangement))
+    assert not verify_arrangement(
+        type(arrangement_result).model_validate(forged_arrangement)
+    )
 
     characteristic = compute_characteristic_polynomial(
         CharacteristicPolynomialRequest(ambient_dimension=2, hyperplane_count=3)

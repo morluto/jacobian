@@ -58,7 +58,10 @@ def _p(*values: CanonicalRational):
 
 
 def _coefficients(polynomial):
-    return tuple(CanonicalRational.from_fraction(value) for value in polynomial_coefficients(polynomial))
+    return tuple(
+        CanonicalRational.from_fraction(value)
+        for value in polynomial_coefficients(polynomial)
+    )
 
 
 def _fm(prime: int, *values: int):
@@ -69,7 +72,9 @@ def _fm(prime: int, *values: int):
         FiniteFieldElement(presentation=presentation, coordinates=(value % prime,))
         for value in values
     )
-    return finite_polynomial_map(finite_polynomial(presentation, coefficients, variable="x"))
+    return finite_polynomial_map(
+        finite_polynomial(presentation, coefficients, variable="x")
+    )
 
 
 class TestMapIterate:
@@ -90,7 +95,14 @@ class TestMapIterate:
         assert result.degree == 4
 
     def test_zero_polynomial_iterates_without_backend_degree_coercion(self) -> None:
-        result = compute_map_iterate(MapIterateRequest(polynomial=_p(_r(0),), n=3))
+        result = compute_map_iterate(
+            MapIterateRequest(
+                polynomial=_p(
+                    _r(0),
+                ),
+                n=3,
+            )
+        )
 
         assert _coefficients(result.polynomial) == (_r(0),)
         assert result.degree == 0
@@ -268,9 +280,7 @@ class TestFiniteFieldFunctionalGraph:
         self, prime: int, coefficients: tuple[int, ...]
     ) -> None:
         result = compute_finite_field_map(
-            FiniteFieldMapRequest(
-                polynomial_map=_fm(prime, *coefficients)
-            )
+            FiniteFieldMapRequest(polynomial_map=_fm(prime, *coefficients))
         )
         targets = dict(result.edges)
         cycle_nodes = {node for cycle in result.cycles for node in cycle}
@@ -308,7 +318,9 @@ class TestFiniteFieldFunctionalGraph:
             tail_lengths=(0, 0),
         )
 
-        assert FiniteFieldMapResult.model_validate_json(result.model_dump_json()) == result
+        assert (
+            FiniteFieldMapResult.model_validate_json(result.model_dump_json()) == result
+        )
         assert not verify_finite_field_map(result)
         restored = FiniteFieldMapResult.model_validate_json(result.model_dump_json())
         assert restored.polynomial_map == result.polynomial_map

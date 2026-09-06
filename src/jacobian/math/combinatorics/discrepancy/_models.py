@@ -408,6 +408,7 @@ class DiscrepancyEvalRequest(StrictModel):
     set_system: FiniteSetSystem
     coloring: tuple[int, ...]
 
+
 class DiscrepancyEvalResult(StrictModel):
     """The signed sum on every set and the maximum absolute imbalance."""
 

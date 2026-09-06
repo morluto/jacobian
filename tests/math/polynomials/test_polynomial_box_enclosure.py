@@ -295,7 +295,9 @@ def test_produced_result_round_trips_after_strict_serialization() -> None:
         )
         == result
     )
-    restored = PolynomialBoxEnclosureResult.model_validate_json(result.model_dump_json())
+    restored = PolynomialBoxEnclosureResult.model_validate_json(
+        result.model_dump_json()
+    )
     assert restored.polynomial == result.polynomial
     assert restored.box == result.box
     assert verify_polynomial_box_enclosure(restored)

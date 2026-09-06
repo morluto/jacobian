@@ -236,9 +236,10 @@ def verify_characteristic_polynomial(
     """Verify generic characteristic coefficients against their source axes."""
 
     try:
-        return characteristic_polynomial(
-            claim.ambient_dimension, claim.hyperplane_count
-        ) == claim
+        return (
+            characteristic_polynomial(claim.ambient_dimension, claim.hyperplane_count)
+            == claim
+        )
     except Exception:
         return False
 

@@ -18,6 +18,7 @@ def _integer(value: str) -> CanonicalRational:
 
 def _p(*values: CanonicalRational):
     from jacobian.math.dynamics.arithmetic import polynomial_from_coefficients
+
     return polynomial_from_coefficients(tuple(value.as_fraction() for value in values))
 
 
@@ -49,7 +50,9 @@ def test_dense_polynomial_additive_growth_is_propagated() -> None:
     with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_map_iterate(
             MapIterateRequest(
-                polynomial=_p(_integer(coefficient), _integer(coefficient), _integer(coefficient)),
+                polynomial=_p(
+                    _integer(coefficient), _integer(coefficient), _integer(coefficient)
+                ),
                 n=9,
             )
         )

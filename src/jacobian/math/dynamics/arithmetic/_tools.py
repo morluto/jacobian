@@ -68,9 +68,7 @@ def _polynomial_example(coefficients: tuple[int, ...]) -> dict[str, Any]:
     return polynomial_from_coefficients(coefficients).model_dump(mode="json")
 
 
-def _finite_map_example(
-    prime: int, coefficients: tuple[int, ...]
-) -> dict[str, Any]:
+def _finite_map_example(prime: int, coefficients: tuple[int, ...]) -> dict[str, Any]:
     presentation = FiniteFieldPresentation(
         characteristic=prime, modulus_coefficients=(0, 1), generator="x"
     )

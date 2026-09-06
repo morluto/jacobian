@@ -299,11 +299,13 @@ class MapIterateResult(StrictModel):
             degree=degree,
         )
 
+
 class OrbitRepeatEvidence(StrictModel):
     first_seen_index: int = Field(ge=0)
     repeated_at_index: int = Field(ge=1)
     preperiod: int = Field(ge=0)
     period: int = Field(ge=1)
+
 
 class OrbitPrefixResult(StrictModel):
     source_polynomial: RationalPolynomial
@@ -344,6 +346,7 @@ class OrbitPrefixResult(StrictModel):
             truncated=not found_repeat,
         )
 
+
 class DynatomicPolynomialResult(StrictModel):
     source_polynomial: RationalPolynomial
     polynomial: RationalPolynomial
@@ -365,6 +368,7 @@ class DynatomicPolynomialResult(StrictModel):
             degree=degree,
             n=n,
         )
+
 
 class CycleMultiplierResult(StrictModel):
     source_polynomial: RationalPolynomial
@@ -420,6 +424,7 @@ class FiniteFieldMapResult(StrictModel):
             cycles=cycles,
             tail_lengths=tail_lengths,
         )
+
 
 __all__ = [
     "CycleMultiplierRequest",

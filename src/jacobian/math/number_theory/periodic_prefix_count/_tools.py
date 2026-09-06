@@ -15,9 +15,7 @@ from jacobian.math.number_theory.periodic_prefix_count.operations import (
 def compute_periodic_union_prefix_count_op(
     request: PeriodicUnionPrefixCountRequest,
 ) -> PeriodicUnionPrefixCountResult:
-    return compute_periodic_union_prefix_count(
-        request.source, request.cutoff
-    )
+    return compute_periodic_union_prefix_count(request.source, request.cutoff)
 
 
 TOOLS: MathTools = (

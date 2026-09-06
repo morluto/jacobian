@@ -23,6 +23,8 @@ from jacobian.math.polynomials.unit_circle._models import (
     MAX_ARC_ENERGY_FIELD_COEFFICIENT_DIGITS,
     MAX_ARC_ENERGY_FIELD_DEGREE,
     MAX_ARC_ENERGY_TERMS,
+    FejerRieszFactorResult,
+    HermitianLaurentPolynomial,
     UnitCircleArcEnergyRequest,
     UnitCircleArcEnergyResult,
 )
@@ -32,7 +34,9 @@ from jacobian.math.polynomials.values import (
 )
 
 __all__ = [
+    "fejer_riesz_factor",
     "unit_circle_arc_energy",
+    "verify_fejer_riesz_factor",
     "verify_unit_circle_arc_energy",
 ]
 
@@ -247,5 +251,70 @@ def verify_unit_circle_arc_energy(claim: UnitCircleArcEnergyResult) -> bool:
             )
             == claim
         )
+    except (OperationDomainValidationError, ValueError, RuntimeError):
+        return False
+
+
+def _laurent_coefficients(source: HermitianLaurentPolynomial) -> dict[int, Fraction]:
+    values = {term.exponent: _fraction(term.coefficient) for term in source.terms}
+    if any(
+        values.get(-exponent, Fraction(0)) != coefficient
+        for exponent, coefficient in values.items()
+    ):
+        raise OperationDomainValidationError(
+            location=("source", "terms"),
+            code="polynomial.unit_circle.hermitian",
+            message="Laurent coefficients must satisfy Hermitian symmetry",
+        )
+    return values
+
+
+def fejer_riesz_factor(source: HermitianLaurentPolynomial) -> FejerRieszFactorResult:
+    """Return the normalized scalar factor for the bounded degree-one slice."""
+    coefficients = _laurent_coefficients(source)
+    c0 = coefficients.get(0, Fraction(0))
+    c1 = coefficients.get(1, Fraction(0))
+    if not coefficients or (c0 == 0 and c1 == 0):
+        return FejerRieszFactorResult(
+            source=source,
+            factor_coefficients=(_binding(sympy.Integer(0)),),
+            field_degree=1,
+            zero_input=True,
+        )
+    if c0 < 0 or c0 * c0 < 4 * c1 * c1:
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="polynomial.unit_circle.not_nonnegative",
+            message="the Laurent polynomial is negative somewhere on the unit circle",
+        )
+    radical = (
+        sympy.Rational(c0.numerator, c0.denominator) ** 2
+        - 4 * sympy.Rational(c1.numerator, c1.denominator) ** 2
+    )
+    a = sympy.sqrt(
+        (sympy.Rational(c0.numerator, c0.denominator) + sympy.sqrt(radical)) / 2
+    )
+    b = sympy.Rational(c1.numerator, c1.denominator) / a
+    alpha = sympy.simplify(a)
+    presentation = SimpleNumberFieldPresentation(
+        coefficients_descending=_minimal_polynomial(alpha)
+    )
+    record = _embedding_record(presentation, alpha)
+    factors = (
+        _binding_in_field(alpha, alpha, presentation, record),
+        _binding_in_field(sympy.simplify(b), alpha, presentation, record),
+    )
+    return FejerRieszFactorResult(
+        source=source,
+        factor_coefficients=factors,
+        field_degree=factors[0].element.presentation.degree,
+        zero_input=False,
+    )
+
+
+def verify_fejer_riesz_factor(claim: FejerRieszFactorResult) -> bool:
+    """Verify a normalized factor against its retained Laurent source."""
+    try:
+        return fejer_riesz_factor(claim.source) == claim
     except (OperationDomainValidationError, ValueError, RuntimeError):
         return False

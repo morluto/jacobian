@@ -43,9 +43,14 @@ from jacobian.math.polynomials.rational_functions.operations import (
     verify_hermite_reduction,
 )
 from jacobian.math.polynomials.unit_circle import (
+    FejerRieszFactorResult,
+    HermitianLaurentPolynomial,
+    HermitianLaurentTerm,
     UnitCircleArcEnergyRequest,
     UnitCircleArcEnergyResult,
+    fejer_riesz_factor,
     unit_circle_arc_energy,
+    verify_fejer_riesz_factor,
     verify_unit_circle_arc_energy,
 )
 
@@ -66,6 +71,9 @@ def __getattr__(name: str) -> object:
 
 
 __all__ = [
+    "FejerRieszFactorResult",
+    "HermitianLaurentPolynomial",
+    "HermitianLaurentTerm",
     "UnitCircleArcEnergyRequest",
     "UnitCircleArcEnergyResult",
     "derivative",
@@ -73,6 +81,7 @@ __all__ = [
     "divide",
     "evaluate",
     "factorization",
+    "fejer_riesz_factor",
     "gcdex",
     "groebner_basis",
     "hermite_reduction",
@@ -103,6 +112,7 @@ __all__ = [
     "resultant",
     "square_free_decomposition",
     "unit_circle_arc_energy",
+    "verify_fejer_riesz_factor",
     "verify_hermite_reduction",
     "verify_unit_circle_arc_energy",
     "verify_polynomial_discriminant",

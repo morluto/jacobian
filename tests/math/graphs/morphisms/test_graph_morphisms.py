@@ -21,6 +21,8 @@ from jacobian.math.graphs.morphisms.operations import (
     fixed_length_cycle,
     homomorphism_check,
     subgraph_pattern_find,
+    verify_fixed_length_cycle,
+    verify_subgraph_pattern_find,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -342,27 +344,23 @@ class TestFixedLengthCycle:
     def test_oversized_length_is_rejected_before_exponentiating(self) -> None:
         import time
 
-        import pytest
-
         from jacobian.math.graphs.morphisms._models import FixedLengthCycleResult
 
         # Result parsing keeps the negative request envelope bounded before
         # raising d_max to an untrusted exponent.
         triangle = self._g(["a", "b", "c"], [["a", "b"], ["b", "c"], ["a", "c"]])
         start = time.monotonic()
-        with pytest.raises(ValueError):
-            FixedLengthCycleResult(
-                graph=triangle,
-                decision="DOES_NOT_EXIST",
-                length=10_000_000_000,
-                cycle=(),
-            )
+        forged = FixedLengthCycleResult(
+            graph=triangle,
+            decision="DOES_NOT_EXIST",
+            length=10_000_000_000,
+            cycle=(),
+        )
+        assert not verify_fixed_length_cycle(forged)
         assert time.monotonic() - start < 1.0
 
     def test_negative_decision_is_structural_inside_request_domain(self) -> None:
         from itertools import combinations
-
-        import pytest
 
         from jacobian.math.graphs.morphisms._models import (
             MORPHISM_MAX_VERTICES,
@@ -390,8 +388,8 @@ class TestFixedLengthCycle:
         # to lean on.
         labels = [f"v{i}" for i in range(MORPHISM_MAX_VERTICES + 1)]
         big = self._g(labels, [list(e) for e in combinations(labels, 2)][:10])
-        with pytest.raises(ValueError):
-            FixedLengthCycleResult(graph=big, decision="DOES_NOT_EXIST", length=3)
+        forged = FixedLengthCycleResult(graph=big, decision="DOES_NOT_EXIST", length=3)
+        assert not verify_fixed_length_cycle(forged)
 
     def test_positive_witness_still_validates_beyond_search_domain(self) -> None:
         from jacobian.math.graphs.morphisms._models import FixedLengthCycleResult
@@ -546,8 +544,6 @@ class TestSubgraphPatternFind:
             _compute_fixed_length_cycle(request)
 
     def test_negative_decision_is_structural_inside_request_domain(self) -> None:
-        import pytest
-
         from jacobian.math.graphs.morphisms._models import (
             MAX_CYCLE_SEARCH_PATHS,
             MORPHISM_MAX_VERTICES,
@@ -583,10 +579,10 @@ class TestSubgraphPatternFind:
             host_labels,
             [[f"h{i:02d}", f"h{i + 1:02d}"] for i in range(MORPHISM_MAX_VERTICES)],
         )
-        with pytest.raises(ValueError):
-            SubgraphPatternFindResult(
-                pattern=big_pat, host=big_host, decision="DOES_NOT_EXIST", vertex_map=()
-            )
+        forged = SubgraphPatternFindResult(
+            pattern=big_pat, host=big_host, decision="DOES_NOT_EXIST", vertex_map=()
+        )
+        assert not verify_subgraph_pattern_find(forged)
         assert MAX_CYCLE_SEARCH_PATHS > 0
 
 

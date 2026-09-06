@@ -131,6 +131,12 @@ near-envelope case to `scale`.
 
 ## Adversarial closure
 
+For representation or admission changes, pair an expensive-case rejection test
+with a structurally simple, larger accepted case. Exercise the public operation
+and verify both the result and retained mathematical context, such as ambient
+axes or source-coordinate mappings. Larger input size alone must not imply
+greater computational cost.
+
 A review finding is closed only when the behavior is fixed at the public
 boundary and a behavioral regression proves the failure can no longer recur.
 For findings about malformed or over-sized input, cover the smallest valid

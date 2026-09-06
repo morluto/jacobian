@@ -61,6 +61,11 @@ global geometry or PDE workflow is not thereby defined.
 
 ## Execution-envelope review
 
+Preserve mathematical structure before estimating cost. Bound the active
+computation and its output, not the size of the surrounding space. Consider
+sparse representations, independent components, and forced reductions before
+imposing limits derived from dense expansion or recursion.
+
 Keep the public mathematical postcondition as broad as its semantics permit.
 An implementation or backend limit describes the current admitted execution
 envelope; it does not redefine the mathematical objects to which the operation

@@ -480,7 +480,7 @@ def _canonical_variable_axis(variables: object) -> tuple[str, ...] | None:
 
 
 def _canonical_coefficient(value: object) -> Fraction | None:
-    if not isinstance(value, CanonicalRational):
+    if type(value) is not CanonicalRational:
         return None
     try:
         fraction = value.as_fraction()

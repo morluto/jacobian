@@ -2,6 +2,7 @@
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+from fractions import Fraction
 from typing import TypedDict
 
 import pytest
@@ -569,6 +570,27 @@ class TestSupportCrossFieldValidation:
                     )
                 }
             )
+        )
+
+    def test_verifier_rejects_hostile_rational_subclasses(self) -> None:
+        """Verifier scalar checks do not invoke subclass-overridden methods."""
+        from jacobian._exact import CanonicalRational
+
+        class EvilRational(CanonicalRational):
+            def as_fraction(self) -> Fraction:
+                raise RuntimeError("hostile rational method")
+
+        source = _polynomial(_XY_TERMS, VARS)
+        hostile_term = source.polynomial.terms[0].model_copy(
+            update={"coefficient": EvilRational(num="1", den="1")}
+        )
+        hostile_sparse = source.polynomial.model_copy(
+            update={"terms": (hostile_term, *source.polynomial.terms[1:])}
+        )
+        claim = compute_support(SupportRequest(polynomial=source))
+        hostile_source = source.model_copy(update={"polynomial": hostile_sparse})
+        assert not verify_polynomial_support(
+            claim.model_copy(update={"polynomial": hostile_source})
         )
 
 

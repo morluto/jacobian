@@ -29,6 +29,7 @@ from jacobian.math.finite_fields._models import (
     _MAX_PROJECTIVE_POINTS,
 )
 from jacobian.math.finite_fields.values import (
+    _MAX_FIELD_ORDER,
     MAX_ORBIT_DISTRIBUTION_COUNT_DIGITS,
     MAX_ORBIT_DISTRIBUTION_TOTAL_DIGITS,
     Axis,
@@ -803,11 +804,44 @@ def _require_orbit_ledger_structure(ledger: DirectionRankLedger) -> None:
             code="finite_field.direction_rank_ledger_entries_tuple",
             message="direction-rank ledger entries must be an exact tuple",
         )
+    subspace = getattr(ledger, "subspace", None)
+    if type(subspace) is not FiniteDimensionalSubspace:
+        raise OperationDomainValidationError(
+            location=("ledger", "subspace"),
+            code="finite_field.direction_rank_ledger_direction_shape",
+            message="direction-rank ledger must contain a finite-dimensional subspace",
+        )
+    row_axis = getattr(subspace, "row_axis", None)
+    labels = getattr(row_axis, "labels", None)
+    if (
+        type(row_axis) is not Axis
+        or type(labels) is not tuple
+        or not 1 <= len(labels) <= MAX_PRIME_FIELD_MATRIX_AXIS
+    ):
+        raise OperationDomainValidationError(
+            location=("ledger", "subspace", "row_axis"),
+            code="finite_field.direction_rank_ledger_direction_axis_bound",
+            message="ledger directions must use a bounded tuple row axis",
+        )
+    presentation = getattr(subspace, "presentation", None)
+    modulus_coefficients = getattr(presentation, "modulus_coefficients", None)
+    characteristic = getattr(presentation, "characteristic", None)
+    if (
+        type(presentation) is not FiniteFieldPresentation
+        or type(modulus_coefficients) is not tuple
+        or not 2 <= len(modulus_coefficients) <= 17
+        or type(characteristic) is not int
+        or not 2 <= characteristic <= _MAX_FIELD_ORDER
+        or characteristic ** (len(modulus_coefficients) - 1) > _MAX_FIELD_ORDER
+    ):
+        raise OperationDomainValidationError(
+            location=("ledger", "subspace", "presentation"),
+            code="finite_field.direction_rank_ledger_presentation_order_bound",
+            message="ledger presentation order exceeds its admitted bound",
+        )
+    field_order = characteristic ** (len(modulus_coefficients) - 1)
     try:
-        expected_directions = (
-            ledger.subspace.presentation.order ** len(ledger.subspace.row_axis.labels)
-            - 1
-        ) // (ledger.subspace.presentation.order - 1)
+        expected_directions = (field_order ** len(labels) - 1) // (field_order - 1)
     except Exception as exc:
         raise OperationDomainValidationError(
             location=("ledger", "entries"),

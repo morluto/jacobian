@@ -14,6 +14,7 @@ from jacobian.math.finite_fields import (
     DirectionRankLedger,
     FiniteDimensionalSubspace,
     FiniteFieldElement,
+    FiniteFieldPresentation,
     ProjectiveLine,
     direction_rank_ledger,
     element,
@@ -403,6 +404,27 @@ def test_orbit_verifier_rejects_list_ledger_entries() -> None:
     claim = orbit_distribution(ledger).model_copy(update={"ledger": forged_ledger})
 
     assert not verify_orbit_distribution(claim)
+
+
+def test_orbit_verifier_rejects_huge_row_axis_before_projective_exponentiation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    subspace, directions = _slice_a_values()
+    ledger = direction_rank_ledger(subspace, directions)
+    distribution = orbit_distribution(ledger)
+    oversized_axis = subspace.row_axis.model_copy(update={"labels": range(1_000_000)})
+    oversized_first = subspace.basis[0].model_copy(update={"row_axis": oversized_axis})
+    oversized_subspace = subspace.model_copy(
+        update={"basis": (oversized_first, *subspace.basis[1:])}
+    )
+    forged_ledger = ledger.model_copy(update={"subspace": oversized_subspace})
+    forged_claim = distribution.model_copy(update={"ledger": forged_ledger})
+
+    def fail(_presentation: FiniteFieldPresentation) -> int:
+        raise AssertionError("presentation order was exponentiated")
+
+    monkeypatch.setattr(FiniteFieldPresentation, "order", property(fail))
+    assert not verify_orbit_distribution(forged_claim)
 
 
 def test_orbit_verifier_rejects_oversized_count_before_decimal_materialization() -> (

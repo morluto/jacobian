@@ -525,6 +525,7 @@ class PrimeFieldFlatClassificationComplete(StrictModel):
     orbit_count: StrictInt = Field(ge=0, le=MAX_PRIME_FIELD_FLAT_RESULT_ORBITS)
     solution_flat_count: StrictInt = Field(ge=0)
 
+
 PrimeFieldFlatIncompleteReason = Literal[
     "STATE_ORBIT_LIMIT", "SEARCH_WORK_LIMIT", "RESULT_ORBIT_LIMIT"
 ]

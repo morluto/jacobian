@@ -815,6 +815,7 @@ class RationalFlatClassificationComplete(StrictModel):
     orbit_count: StrictInt = Field(ge=0, le=MAX_RATIONAL_FLAT_RESULT_ORBITS)
     solution_flat_count: StrictInt = Field(ge=0)
 
+
 RationalFlatIncompleteReason = Literal[
     "STATE_ORBIT_LIMIT",
     "SEARCH_WORK_LIMIT",

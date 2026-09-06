@@ -109,9 +109,7 @@ def test_result_preserves_source() -> None:
 
 def test_serialized_profile_is_verifiable_and_rejects_forgery() -> None:
     hg = _hg(["a", "b", "c"], [("e0", ("a", "b", "c"))])
-    result = compute_edge_pattern_profile(
-        hg, {"a": "red", "b": "red", "c": "blue"}
-    )
+    result = compute_edge_pattern_profile(hg, {"a": "red", "b": "red", "c": "blue"})
     decoded = type(result).model_validate_json(result.model_dump_json())
     assert verify_edge_pattern_profile(decoded)
 

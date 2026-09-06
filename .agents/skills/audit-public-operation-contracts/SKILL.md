@@ -31,6 +31,7 @@ description; do not create a universal review form.
 Use small deterministic reproductions to test the suspected mechanism:
 
 - accepted requests beyond the backend domain or admitted work/growth bounds;
+- useful structured requests rejected by an ambient-size or expansion-based limit;
 - repeated admission or computation during validation and result construction;
 - lost units, multiplicities, axes, parents, witnesses, or reconstruction data;
 - independently supplied claims accepted without establishing the needed property;
@@ -43,9 +44,11 @@ proof belongs in tests or an admitted caller-claim operation, not replay during
 ordinary result construction. Use current official backend documentation and the
 pinned implementation for consequential backend claims.
 
-For a performance, admission-limit, or backend-selection investigation, read
-[scale and backends](references/scale-and-backends.md). Preserve the motivating
-request and exact invariant; a fast but weaker result is not a scale improvement.
+For a representation, performance, admission-limit, or backend-selection
+investigation, read [scale and backends](references/scale-and-backends.md).
+Audit what the contract unnecessarily excludes as well as what it unsafely
+accepts. Preserve the motivating request and exact invariant; a fast but weaker
+result is not a scale improvement.
 
 ## Establish the finding and finish
 

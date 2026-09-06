@@ -17,6 +17,39 @@ work, intermediates, memory, and exact output are small. When no sharper safe
 envelope is established, classify and document the fixed cap as a conservative
 fallback and state what evidence could raise it.
 
+## Detect lost mathematical structure
+
+Trace where useful input structure disappears before cost is estimated. A
+documented limit or a truthful rejection does not establish that the contract
+is appropriately designed. Use these warning signs to select a focused probe:
+
+| Warning sign | Discriminating probe |
+| --- | --- |
+| A complete table is required for a compact expression. | Compare a sparse Walsh polynomial with its small truth-table oracle; grow the ambient dimension while keeping character support small. |
+| Independent components are priced as one coupled search. | Compare a direct sum of small LPs with its components, then add a coupling row to check that the shortcut no longer applies. |
+| A local operation is limited by its entire ambient domain. | Add inactive variables to a factor model while holding the active scopes and tables fixed; require the same local values with the enlarged domain retained. |
+| A carrier ceiling reflects private recursion or dense storage. | Compare forced exact-cover instances across the ceiling with instances that actually branch; inspect stack, bitset, and output costs separately. |
+
+These are diagnostic families, not mandatory new operations or universal fast
+paths. First check existing representations and reasonable public compositions.
+Missing canonical input structure is a representation gap; unnecessarily narrow
+admission for an existing postcondition is a scale/backend gap. Caller-owned
+proof strategy is neither. Keep shared-value consumers in scope when a carrier
+limit, rather than one kernel, owns the restriction.
+
+Pair an expensive-case rejection test with a structurally simple, larger
+accepted case through the public operation. Verify the defining result and
+retained axes or source-coordinate mappings. Where relevant, permute labels,
+combine colliding terms, or introduce a dependency that defeats the proposed
+reduction; this guards against a fixture-specific repair.
+
+Do not infer tractability from sparsity or a compact answer alone. Account for
+presolve, fill-in, coefficient growth, certificate assembly, and serialization.
+A private-kernel probe can establish that a rejected case is useful to pursue,
+but is not public acceptance or a sound bound for every input in that family.
+
+## Compare execution regimes
+
 Freeze the workload before comparing implementations. Record the operation ID,
 repository revision, canonical request or input digest, coefficient domain and
 parent, relevant mathematical size quantities, current backend and version,

@@ -14,6 +14,11 @@ def test_native_group_api_exports_the_canonical_group_value() -> None:
         "group_order",
         "group_stabilizer",
         "subgroup_lattice",
+        "verify_element_order",
+        "verify_group_conjugacy_classes",
+        "verify_group_orbit",
+        "verify_group_order",
+        "verify_subgroup_lattice",
     )
     assert all(not name.endswith(("Request", "Input")) for name in group.__all__)
 

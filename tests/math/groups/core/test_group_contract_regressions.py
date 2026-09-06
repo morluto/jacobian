@@ -239,6 +239,7 @@ def test_group_conjugacy_classes_result_round_trips_through_model_dump() -> None
 
 def test_group_claim_verifiers_reject_forged_serialized_values() -> None:
     from jacobian.math.groups import (
+        verify_element_order,
         verify_group_conjugacy_classes,
         verify_group_orbit,
         verify_group_order,
@@ -270,6 +271,19 @@ def test_group_claim_verifiers_reject_forged_serialized_values() -> None:
     classes_payload = classes.model_dump(mode="json")
     classes_payload["classes"] = classes_payload["classes"][:-1]
     assert not verify_group_conjugacy_classes(type(classes).model_validate(classes_payload))
+
+    from jacobian.math.groups._models import GroupElementOrderRequest
+    from jacobian.math.groups._tools import compute_element_order
+
+    element = compute_element_order(
+        GroupElementOrderRequest(degree=3, generator=(1, 2, 0))
+    )
+    assert verify_element_order(
+        type(element).model_validate_json(element.model_dump_json())
+    )
+    element_payload = element.model_dump(mode="json")
+    element_payload["order"] = "2"
+    assert not verify_element_order(type(element).model_validate(element_payload))
 
 
 def test_group_stabilizer_request_takes_the_canonical_group_value() -> None:

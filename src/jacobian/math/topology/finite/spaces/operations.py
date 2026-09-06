@@ -213,7 +213,11 @@ def verify_interior(claim: InteriorResult) -> bool:
         expected = _interior(claim.space, frozenset(claim.subset.indices))
     except (OperationDomainValidationError, ValueError, TypeError):
         return False
-    return tuple(sorted(expected)) == claim.interior.indices
+    return (
+        claim.subset.space == claim.space
+        and claim.interior.space == claim.space
+        and tuple(sorted(expected)) == claim.interior.indices
+    )
 
 
 def verify_closure(claim: ClosureResult) -> bool:
@@ -223,7 +227,11 @@ def verify_closure(claim: ClosureResult) -> bool:
         expected = _closure(claim.space, frozenset(claim.subset.indices))
     except (OperationDomainValidationError, ValueError, TypeError):
         return False
-    return tuple(sorted(expected)) == claim.closure.indices
+    return (
+        claim.subset.space == claim.space
+        and claim.closure.space == claim.space
+        and tuple(sorted(expected)) == claim.closure.indices
+    )
 
 
 def verify_boundary(claim: BoundaryResult) -> bool:
@@ -233,7 +241,11 @@ def verify_boundary(claim: BoundaryResult) -> bool:
         expected = boundary(claim.space, frozenset(claim.subset.indices))
     except (OperationDomainValidationError, ValueError, TypeError):
         return False
-    return tuple(sorted(expected)) == claim.boundary.indices
+    return (
+        claim.subset.space == claim.space
+        and claim.boundary.space == claim.space
+        and tuple(sorted(expected)) == claim.boundary.indices
+    )
 
 
 def verify_kolmogorov_quotient(claim: KolmogorovQuotientResult) -> bool:

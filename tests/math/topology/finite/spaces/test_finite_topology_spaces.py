@@ -272,6 +272,16 @@ class TestSerializedSubsetClaims:
             update={"interior": decoded.interior.model_copy(update={"indices": ()})}
         )
         assert not verify_interior(forged)
+        other_space = _discrete_2()
+        assert not verify_interior(
+            decoded.model_copy(
+                update={
+                    "interior": decoded.interior.model_copy(
+                        update={"space": other_space}
+                    )
+                }
+            )
+        )
 
     def test_closure_and_boundary_verifiers_reject_forgery(self) -> None:
         space = _sierpinski()

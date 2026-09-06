@@ -262,4 +262,8 @@ def verify_doob_martingale(claim: DoobMartingaleResult) -> bool:
         expected = doob_martingale(claim.space, claim.observations, claim.payoff)
     except (TypeError, ValueError, RuntimeError):
         return False
-    return tuple(row.values for row in claim.martingale) == expected
+    return (
+        len(claim.martingale) == len(expected)
+        and all(row.space == claim.space for row in claim.martingale)
+        and tuple(row.values for row in claim.martingale) == expected
+    )

@@ -15,8 +15,6 @@ from jacobian.math.graphs.morphisms._models import (
     _canonical_max_degree,
     _cycle_source_edges,
     _first_homomorphism_obstruction,
-    _require_negative_cycle_domain,
-    _require_negative_embedding_domain,
     _validate_cycle_witness,
     _validate_embedding_witness,
 )
@@ -27,6 +25,7 @@ __all__ = [
     "homomorphism_check",
     "subgraph_pattern_find",
     "verify_fixed_length_cycle",
+    "verify_homomorphism_check",
     "verify_subgraph_pattern_find",
 ]
 
@@ -160,6 +159,22 @@ def homomorphism_check(vertex_map: GraphVertexMap) -> HomomorphismCheckResult:
     )
 
 
+def verify_homomorphism_check(claim: HomomorphismCheckResult) -> bool:
+    """Verify a serialized homomorphism decision against its retained map."""
+    try:
+        if claim.status == "HOMOMORPHISM":
+            if claim.homomorphism is None:
+                return False
+            vertex_map = claim.homomorphism.vertex_map
+        else:
+            if claim.obstruction is None:
+                return False
+            vertex_map = claim.obstruction.vertex_map
+        return homomorphism_check(vertex_map) == claim
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+
+
 def _canonical_label_adjacency(
     vertices: tuple[str, ...], edges: tuple[tuple[str, str], ...]
 ) -> tuple[dict[str, int], list[set[int]]]:
@@ -252,7 +267,7 @@ def verify_fixed_length_cycle(claim: FixedLengthCycleResult) -> bool:
             return True
         if claim.cycle:
             return False
-        _require_negative_cycle_domain(claim.graph, claim.length)
+        _admit_cycle_request(claim.graph, claim.length)
         return (
             _find_cycle_of_length(claim.graph.vertices, claim.graph.edges, claim.length)
             is None
@@ -445,7 +460,7 @@ def verify_subgraph_pattern_find(claim: SubgraphPatternFindResult) -> bool:
             return True
         if claim.vertex_map:
             return False
-        _require_negative_embedding_domain(claim.pattern, claim.host)
+        _admit_subgraph_request(claim.pattern, claim.host)
         return (
             _find_subgraph_embedding(
                 claim.pattern.vertices,

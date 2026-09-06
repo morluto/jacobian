@@ -228,7 +228,10 @@ def group_cohomology(
 
 def verify_cohomology(claim: GroupCohomologyResult) -> bool:
     """Check order, cochain dimensions and Betti claims after bar admission."""
-    return group_cohomology(claim.group, claim.prime, claim.max_degree) == claim
+    try:
+        return group_cohomology(claim.group, claim.prime, claim.max_degree) == claim
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
 
 
 __all__ = ["group_cohomology", "verify_cohomology"]

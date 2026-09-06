@@ -22,6 +22,7 @@ from jacobian.math.graphs.morphisms.operations import (
     homomorphism_check,
     subgraph_pattern_find,
     verify_fixed_length_cycle,
+    verify_homomorphism_check,
     verify_subgraph_pattern_find,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -124,6 +125,42 @@ def test_homomorphism_check_returns_first_edge_image_nonedge() -> None:
         source_edge=("a", "b"),
         image_vertices=("x", "x"),
     )
+
+
+def test_homomorphism_verifier_round_trips_and_rejects_forged_claims() -> None:
+    vertex_map = _vertex_map(
+        ("a", "b"),
+        (("a", "b"),),
+        ("x", "y"),
+        (("x", "y"),),
+        (("a", "x"), ("b", "y")),
+    )
+    result = homomorphism_check(vertex_map)
+    decoded = HomomorphismCheckResult.model_validate_json(result.model_dump_json())
+    assert verify_homomorphism_check(decoded)
+
+    payload = result.model_dump(mode="json")
+    payload["homomorphism"]["vertex_map"]["target_graph"]["edges"] = []
+    forged = HomomorphismCheckResult.model_validate(payload)
+    assert forged.homomorphism is not None
+    assert not verify_homomorphism_check(forged)
+
+    obstruction_map = _vertex_map(
+        ("a", "b"),
+        (("a", "b"),),
+        ("x",),
+        (),
+        (("a", "x"), ("b", "x")),
+    )
+    obstruction = homomorphism_check(obstruction_map)
+    decoded_obstruction = HomomorphismCheckResult.model_validate_json(
+        obstruction.model_dump_json()
+    )
+    assert verify_homomorphism_check(decoded_obstruction)
+    obstruction_payload = obstruction.model_dump(mode="json")
+    obstruction_payload["obstruction"]["source_edge"] = ["b", "a"]
+    forged_obstruction = HomomorphismCheckResult.model_validate(obstruction_payload)
+    assert not verify_homomorphism_check(forged_obstruction)
 
 
 def test_homomorphism_check_accepts_edgeless_noninjective_map() -> None:
@@ -534,7 +571,10 @@ class TestSubgraphPatternFind:
         assert SubgraphPatternFindRequest(pattern=pat, host=host).pattern == pat
 
     def test_cycle_result_rejects_unbounded_retained_labels(self) -> None:
-        from jacobian.math.graphs.morphisms._models import FixedLengthCycleRequest
+        from jacobian.math.graphs.morphisms._models import (
+            FixedLengthCycleRequest,
+            FixedLengthCycleResult,
+        )
         from jacobian.math.graphs.morphisms._tools import (
             _compute_fixed_length_cycle,
         )
@@ -548,6 +588,10 @@ class TestSubgraphPatternFind:
         request = FixedLengthCycleRequest(graph=g, length=3)
         with pytest.raises(OperationDomainValidationError, match="label-character"):
             _compute_fixed_length_cycle(request)
+        forged = FixedLengthCycleResult(
+            graph=g, decision="DOES_NOT_EXIST", length=3, cycle=()
+        )
+        assert not verify_fixed_length_cycle(forged)
 
     def test_negative_decision_is_structural_inside_request_domain(self) -> None:
         from jacobian.math.graphs.morphisms._models import (
@@ -580,6 +624,21 @@ class TestSubgraphPatternFind:
             vertex_map=(),
         )
         assert not verify_subgraph_pattern_find(forged_existing)
+
+        huge = "v" * (6 * 1024 * 1024)
+        oversized_host = self._g(
+            [huge, "w0", "w1"], [[huge, "w0"], ["w0", "w1"]]
+        )
+        oversized_pattern = self._g(
+            ["p", "q", "r"], [["p", "q"], ["p", "r"], ["q", "r"]]
+        )
+        forged_oversized = SubgraphPatternFindResult(
+            pattern=oversized_pattern,
+            host=oversized_host,
+            decision="DOES_NOT_EXIST",
+            vertex_map=(),
+        )
+        assert not verify_subgraph_pattern_find(forged_oversized)
 
         # Outside the bounded request domain (pattern over the vertex cap)
         # a negative conclusion is not exact and must be rejected.

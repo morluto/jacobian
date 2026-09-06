@@ -260,31 +260,6 @@ def _validate_cycle_witness(
             )
 
 
-def _require_negative_cycle_domain(graph: SimpleUndirectedGraph, length: int) -> None:
-    n = len(graph.vertices)
-    if length > n:
-        raise PydanticCustomError(
-            "graph.cycle_length_must_not_exceed_the_vertex_count",
-            "cycle length must not exceed the vertex count",
-        )
-    if length > MORPHISM_MAX_VERTICES or n > MORPHISM_MAX_VERTICES:
-        raise PydanticCustomError(
-            "graph.does_exist_decision_requires_retained_source_satisfy",
-            "a DOES_NOT_EXIST decision requires the retained source "
-            f"to satisfy the {MORPHISM_MAX_VERTICES}-vertex "
-            f"{MAX_CYCLE_SEARCH_PATHS}-path request budget",
-        )
-    d_max = _canonical_max_degree(graph)
-    work = n * (d_max ** (length - 1))
-    if work > MAX_CYCLE_SEARCH_PATHS:
-        raise PydanticCustomError(
-            "graph.does_exist_decision_requires_retained_source_satisfy",
-            "a DOES_NOT_EXIST decision requires the retained source "
-            f"to satisfy the {MORPHISM_MAX_VERTICES}-vertex "
-            f"{MAX_CYCLE_SEARCH_PATHS}-path request budget",
-        )
-
-
 class FixedLengthCycleResult(StrictModel):
     """Whether a simple ``k``-cycle exists, with one ordered witness.
 
@@ -400,26 +375,6 @@ def _validate_embedding_witness(
                 "graph.an_embedding_must_preserve_every_pattern_edge",
                 "an embedding must preserve every pattern edge",
             )
-
-
-def _require_negative_embedding_domain(
-    pattern: SimpleUndirectedGraph,
-    host: SimpleUndirectedGraph,
-) -> None:
-    p_n = len(pattern.vertices)
-    h_n = len(host.vertices)
-    assignments = 1
-    for step in range(p_n):
-        assignments *= h_n - step
-        if assignments > MAX_CYCLE_SEARCH_PATHS:
-            break
-    if p_n > MORPHISM_MAX_VERTICES or p_n > h_n or assignments > MAX_CYCLE_SEARCH_PATHS:
-        raise PydanticCustomError(
-            "graph.does_exist_decision_requires_retained_sources_satisfy",
-            "a DOES_NOT_EXIST decision requires the retained sources "
-            f"to satisfy the {MORPHISM_MAX_VERTICES}-vertex "
-            f"{MAX_CYCLE_SEARCH_PATHS}-assignment request budget",
-        )
 
 
 class SubgraphPatternFindResult(StrictModel):

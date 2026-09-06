@@ -5,6 +5,7 @@ from jacobian.math.graphs.morphisms.operations import (
     homomorphism_check,
     subgraph_pattern_find,
     verify_fixed_length_cycle,
+    verify_homomorphism_check,
     verify_subgraph_pattern_find,
 )
 
@@ -13,5 +14,6 @@ __all__ = [
     "homomorphism_check",
     "subgraph_pattern_find",
     "verify_fixed_length_cycle",
+    "verify_homomorphism_check",
     "verify_subgraph_pattern_find",
 ]

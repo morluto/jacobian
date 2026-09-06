@@ -374,6 +374,17 @@ class TestResultBinding:
         )
         assert result.prime == 4
 
+    def test_verifier_rejects_domain_invalid_serialized_claim_without_raising(
+        self,
+    ) -> None:
+        result = compute_group_cohomology(self._request())
+        payload = json.loads(result.model_dump_json())
+        payload["prime"] = 4
+        forged = GroupCohomologyResult.model_validate_json(
+            json.dumps(payload), strict=True
+        )
+        assert not verify_cohomology(forged)
+
     def test_serialized_claim_forgery_is_structural_but_fails_verification(
         self,
     ) -> None:

@@ -19,6 +19,7 @@ from jacobian.math.number_theory.modular_polynomials import (
     ModularPolynomialTerm,
     NormalizedModularPolynomialTerm,
     modular_polynomial_identity,
+    verify_modular_polynomial_identity,
 )
 from jacobian.math.number_theory.operations import (
     modular_polynomial_residue_assignments,
@@ -87,7 +88,7 @@ def test_identity_native_api_exposes_values_and_semantic_scalars() -> None:
     )
 
 
-def test_identity_result_rejects_a_forged_residual() -> None:
+def test_identity_result_verifier_rejects_a_forged_residual() -> None:
     identity = modular_polynomial_identity(
         5,
         ("x",),
@@ -97,8 +98,67 @@ def test_identity_result_rejects_a_forged_residual() -> None:
     payload["residual"] = []
     payload["identical"] = True
 
-    with pytest.raises(ValidationError, match="residual must equal"):
-        type(identity).model_validate(payload)
+    decoded = type(identity).model_validate(payload)
+    assert not verify_modular_polynomial_identity(decoded)
+
+
+def test_identity_result_round_trips_through_canonical_json() -> None:
+    identity = modular_polynomial_identity(
+        5,
+        ("x",),
+        (ModularPolynomialTerm(coefficient="1", exponents=(1,)),),
+        (ModularPolynomialTerm(coefficient="1", exponents=(1,)),),
+    )
+
+    decoded = type(identity).model_validate_json(identity.model_dump_json())
+
+    assert decoded == identity
+    assert verify_modular_polynomial_identity(decoded)
+
+
+def test_identity_result_decoding_does_not_replay_subtraction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    identity = modular_polynomial_identity(
+        5,
+        ("x",),
+        (ModularPolynomialTerm(coefficient="1", exponents=(1,)),),
+    )
+    payload = identity.model_dump(mode="json")
+    payload["residual"] = []
+    payload["identical"] = True
+
+    def fail(*args: object, **kwargs: object) -> object:
+        raise AssertionError("deserialization must not replay subtraction")
+
+    monkeypatch.setattr(modular_polynomials, "_subtract_normalized", fail)
+    decoded = type(identity).model_validate(payload)
+
+    assert decoded.residual == ()
+    assert decoded.identical is True
+
+
+def test_identity_verifier_accepts_the_bounded_maximum_sparse_claim() -> None:
+    terms_left = tuple(
+        ModularPolynomialTerm(
+            coefficient="1", exponents=(index // 257, index % 257)
+        )
+        for index in range(512)
+    )
+    terms_right = tuple(
+        ModularPolynomialTerm(
+            coefficient="1",
+            exponents=(index // 257 + 2, index % 257),
+        )
+        for index in range(512)
+    )
+
+    identity = modular_polynomial_identity(7, ("x", "y"), terms_left, terms_right)
+
+    assert len(identity.normalized_left) == 512
+    assert len(identity.normalized_right) == 512
+    assert len(identity.residual) == 1024
+    assert verify_modular_polynomial_identity(identity)
 
 
 def test_residue_image_keeps_its_narrower_exponent_admission() -> None:

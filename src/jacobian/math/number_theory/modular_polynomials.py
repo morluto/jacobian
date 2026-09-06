@@ -57,6 +57,13 @@ class NormalizedModularPolynomialTerm(StrictModel):
 
 
 class ModularPolynomialIdentityValue(StrictModel):
+    """Source-bound formal-polynomial identity claims.
+
+    Deserialization checks only the canonical bounded representation.  The
+    residual relation and identity decision are producer claims; consumers
+    establish them with :func:`verify_modular_polynomial_identity`.
+    """
+
     modulus: StrictInt = Field(ge=2, le=_MAX_MODULUS)
     variable_order: tuple[StrictStr, ...] = Field(
         min_length=1, max_length=_MAX_VARIABLES
@@ -76,25 +83,8 @@ class ModularPolynomialIdentityValue(StrictModel):
     )
 
     @model_validator(mode="after")
-    def bind_residual(self) -> Self:
-        if self.identical != (not self.residual):
-            raise ValueError("identity decision must match residual")
-        for terms in (self.normalized_left, self.normalized_right, self.residual):
-            exponents = [term.exponents for term in terms]
-            if exponents != sorted(set(exponents)):
-                raise ValueError("normalized terms must be unique and sorted")
-            if any(
-                len(term.exponents) != len(self.variable_order)
-                or term.coefficient >= self.modulus
-                for term in terms
-            ):
-                raise ValueError("normalized term is outside result scope")
-        if self.residual != _subtract_normalized(
-            self.normalized_left, self.normalized_right, self.modulus
-        ):
-            raise ValueError(
-                "residual must equal normalized_left - normalized_right modulo modulus"
-            )
+    def require_structural_shape(self) -> Self:
+        _validate_identity_value_shape(self)
         return self
 
     @classmethod
@@ -116,6 +106,48 @@ class ModularPolynomialIdentityValue(StrictModel):
             identical=not residual,
             comparison_scope="FORMAL_COEFFICIENTWISE_IDENTITY",
         )
+
+
+def _validate_identity_value_shape(
+    value: ModularPolynomialIdentityValue,
+) -> None:
+    """Validate the bounded canonical representation of an identity claim."""
+
+    if not 2 <= value.modulus <= _MAX_MODULUS:
+        raise ValueError("identity modulus is outside result scope")
+    if not 1 <= len(value.variable_order) <= _MAX_VARIABLES:
+        raise ValueError("identity variable axes are outside result scope")
+    if len(set(value.variable_order)) != len(value.variable_order) or any(
+        type(name) is not str or _VARIABLE.fullmatch(name) is None
+        for name in value.variable_order
+    ):
+        raise ValueError("identity variable axes must be unique canonical names")
+    if len(value.normalized_left) > _MAX_TERMS:
+        raise ValueError("normalized_left exceeds the bounded term count")
+    if len(value.normalized_right) > _MAX_TERMS:
+        raise ValueError("normalized_right exceeds the bounded term count")
+    if len(value.residual) > _MAX_TERMS * 2:
+        raise ValueError("residual exceeds the bounded term count")
+
+    for terms in (value.normalized_left, value.normalized_right, value.residual):
+        if any(type(term) is not NormalizedModularPolynomialTerm for term in terms):
+            raise ValueError("identity terms must use the canonical normalized type")
+        exponents = [term.exponents for term in terms]
+        if exponents != sorted(set(exponents)):
+            raise ValueError("normalized terms must be unique and sorted")
+        if any(
+            len(term.exponents) != len(value.variable_order)
+            or any(
+                type(exponent) is not int
+                or exponent < 0
+                or exponent > _MAX_EXPONENT
+                for exponent in term.exponents
+            )
+            or type(term.coefficient) is not int
+            or not 1 <= term.coefficient < value.modulus
+            for term in terms
+        ):
+            raise ValueError("normalized term is outside result scope")
 
 
 def _normalize(
@@ -227,9 +259,32 @@ def modular_polynomial_identity(
     return _compute_modular_polynomial_identity(modulus, variables, left, right)
 
 
+def verify_modular_polynomial_identity(
+    claim: ModularPolynomialIdentityValue,
+) -> bool:
+    """Check a supplied residual and identity decision against their sources.
+
+    Structural admission bounds subtraction work to the two source term lists
+    and its output to ``2 * _MAX_TERMS`` terms; no producer operation is
+    replayed.
+    """
+
+    if not isinstance(claim, ModularPolynomialIdentityValue):
+        return False
+    try:
+        _validate_identity_value_shape(claim)
+        residual = _subtract_normalized(
+            claim.normalized_left, claim.normalized_right, claim.modulus
+        )
+        return claim.residual == residual and claim.identical == (not residual)
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError):
+        return False
+
+
 __all__ = [
     "ModularPolynomialIdentityValue",
     "ModularPolynomialTerm",
     "NormalizedModularPolynomialTerm",
     "modular_polynomial_identity",
+    "verify_modular_polynomial_identity",
 ]

@@ -202,4 +202,15 @@ def bernstein_coefficients(
     return result
 
 
-__all__ = ["bernstein_coefficients"]
+def verify_bernstein_coefficients(claim: RationalBernsteinPolynomial) -> bool:
+    """Verify tensor coefficients against the retained polynomial and box."""
+    try:
+        expected = bernstein_coefficients(
+            claim.polynomial, claim.box, claim.multidegree
+        )
+        return expected.coefficients == claim.coefficients
+    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+        return False
+
+
+__all__ = ["bernstein_coefficients", "verify_bernstein_coefficients"]

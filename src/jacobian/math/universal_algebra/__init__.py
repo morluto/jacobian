@@ -8,6 +8,9 @@ from jacobian.math.universal_algebra.operations import (
     homomorphism_profile,
     quotient,
     verify_congruence,
+    verify_equation_profile,
+    verify_evaluate,
+    verify_generated_subalgebra,
 )
 from jacobian.math.universal_algebra.values import (
     ApplicationTerm,
@@ -36,4 +39,7 @@ __all__ = [
     "homomorphism_profile",
     "quotient",
     "verify_congruence",
+    "verify_equation_profile",
+    "verify_evaluate",
+    "verify_generated_subalgebra",
 ]

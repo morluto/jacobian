@@ -68,6 +68,9 @@ class EvaluateRequest(StrictModel):
 
 
 class EvaluateResult(StrictModel):
+    algebra: FiniteAlgebra
+    term: FlatTerm
+    assignment: tuple[int, ...] = Field(max_length=256)
     value: int = Field(ge=0)
 
 
@@ -85,6 +88,10 @@ class EquationCounterexample(StrictModel):
 
 
 class EquationProfileResult(StrictModel):
+    algebra: FiniteAlgebra
+    left: FlatTerm
+    right: FlatTerm
+    variable_count: int = Field(ge=1, le=8, strict=True)
     status: Literal["HOLDS", "FAILS"]
     satisfying_count: int = Field(ge=0, le=MAX_ENUMERATION_WORK)
     first_counterassignment: EquationCounterexample | None = None
@@ -108,9 +115,22 @@ class SubalgebraRequest(StrictModel):
 
 
 class SubalgebraResult(StrictModel):
+    algebra: FiniteAlgebra
+    generators: tuple[int, ...]
     generated_carrier: tuple[int, ...]
     rounds: int = Field(ge=1)
     is_closed: bool
+
+
+class CongruenceObstruction(StrictModel):
+    """Typed operation witness for a failed congruence compatibility check."""
+
+    kind: Literal["compatibility_violation"] = "compatibility_violation"
+    operation: int = Field(ge=0, le=MAX_SIGNATURE_SIZE - 1)
+    left_arguments: tuple[int, ...] = Field(max_length=MAX_ARITY)
+    right_arguments: tuple[int, ...] = Field(max_length=MAX_ARITY)
+    left_output: int = Field(ge=0, le=MAX_CARRIER_SIZE - 1)
+    right_output: int = Field(ge=0, le=MAX_CARRIER_SIZE - 1)
 
 
 class HomomorphismProfileRequest(StrictModel):
@@ -252,18 +272,12 @@ class CongruenceResult(StrictModel):
     algebra: FiniteAlgebra
     partition: tuple[CarrierBlock, ...]
     is_congruence: bool
-    obstruction: str | None = None
-    operation: int | None = Field(default=None, ge=0)
-    x: tuple[int, ...] | None = None
-    y: tuple[int, ...] | None = None
+    obstruction: CongruenceObstruction | None = None
 
     @model_validator(mode="after")
     def bind_obstruction(self) -> Self:
-        witness = (self.operation, self.x, self.y)
         if self.is_congruence:
-            if self.obstruction is not None or any(
-                item is not None for item in witness
-            ):
+            if self.obstruction is not None:
                 raise _validation_error(
                     "congruence_has_obstruction",
                     "a congruence result cannot carry obstruction data",
@@ -274,13 +288,6 @@ class CongruenceResult(StrictModel):
                 "noncongruence_missing_obstruction",
                 "a noncongruence result must identify its obstruction",
             )
-        if self.obstruction == "compatibility_violation" and any(
-            item is None for item in witness
-        ):
-            raise _validation_error(
-                "compatibility_witness_incomplete",
-                "a compatibility violation must retain its operation and arguments",
-            )
         return self
 
 
@@ -289,6 +296,7 @@ class QuotientRequest(_PartitionRequest):
 
 
 __all__ = [
+    "CongruenceObstruction",
     "CongruenceRequest",
     "CongruenceResult",
     "EquationCounterexample",

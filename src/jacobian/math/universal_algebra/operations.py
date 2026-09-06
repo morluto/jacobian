@@ -8,9 +8,11 @@ from jacobian.catalog.models import OperationDomainValidationError
 
 from ._models import (
     MAX_ENUMERATION_WORK,
+    CongruenceObstruction,
     CongruenceResult,
     EquationCounterexample,
     EquationProfileResult,
+    EvaluateResult,
     HomomorphismObstruction,
     HomomorphismProfileResult,
     SubalgebraResult,
@@ -38,6 +40,9 @@ __all__ = [
     "homomorphism_profile",
     "quotient",
     "verify_congruence",
+    "verify_equation_profile",
+    "verify_evaluate",
+    "verify_generated_subalgebra",
 ]
 
 
@@ -193,6 +198,20 @@ def evaluate_term(
     return _evaluate_term_unchecked(algebra, term, assignment)
 
 
+def verify_evaluate(claim: EvaluateResult) -> bool:
+    """Verify a serialized term-evaluation result against its sources."""
+
+    try:
+        return (
+            evaluate_term(
+                claim.algebra, claim.term, dict(enumerate(claim.assignment))
+            )
+            == claim.value
+        )
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+
+
 def equation_profile(
     algebra: FiniteAlgebra, left: FlatTerm, right: FlatTerm, variable_count: int
 ) -> EquationProfileResult:
@@ -203,6 +222,17 @@ def equation_profile(
     """
     _admit_equation_profile(algebra, left, right, variable_count)
     return _equation_profile_unchecked(algebra, left, right, variable_count)
+
+
+def verify_equation_profile(claim: EquationProfileResult) -> bool:
+    """Verify an equation profile against its algebra and both terms."""
+
+    try:
+        return equation_profile(
+            claim.algebra, claim.left, claim.right, claim.variable_count
+        ) == claim
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
 
 
 def _equation_profile_unchecked(
@@ -227,9 +257,20 @@ def _equation_profile_unchecked(
                     right_value=rv,
                 )
     if satisfying == n**variable_count:
-        return EquationProfileResult(status="HOLDS", satisfying_count=satisfying)
+        return EquationProfileResult(
+            algebra=algebra,
+            left=left,
+            right=right,
+            variable_count=variable_count,
+            status="HOLDS",
+            satisfying_count=satisfying,
+        )
     assert first_counterassignment is not None
     return EquationProfileResult(
+        algebra=algebra,
+        left=left,
+        right=right,
+        variable_count=variable_count,
         status="FAILS",
         satisfying_count=satisfying,
         first_counterassignment=first_counterassignment,
@@ -266,10 +307,21 @@ def generated_subalgebra(
                     changed = True
     sorted_carrier = sorted(carrier_set)
     return SubalgebraResult(
+        algebra=algebra,
+        generators=generators,
         generated_carrier=tuple(sorted_carrier),
         rounds=rounds,
         is_closed=set(generators) == carrier_set if generators else True,
     )
+
+
+def verify_generated_subalgebra(claim: SubalgebraResult) -> bool:
+    """Verify a generated-subalgebra result against its sources."""
+
+    try:
+        return generated_subalgebra(claim.algebra, claim.generators) == claim
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
 
 
 def homomorphism_profile(
@@ -346,10 +398,13 @@ def _compatibility_violation(
         algebra=algebra,
         partition=partition,
         is_congruence=False,
-        obstruction="compatibility_violation",
-        operation=op_idx,
-        x=x,
-        y=y,
+        obstruction=CongruenceObstruction(
+            operation=op_idx,
+            left_arguments=x,
+            right_arguments=y,
+            left_output=fx,
+            right_output=fy,
+        ),
     )
 
 
@@ -397,7 +452,10 @@ def congruence_check(
 def verify_congruence(claim: CongruenceResult) -> bool:
     """Check a serialized congruence verdict against its retained relation."""
 
-    return congruence_check(claim.algebra, claim.partition) == claim
+    try:
+        return congruence_check(claim.algebra, claim.partition) == claim
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
 
 
 def _congruence_check_unchecked(
@@ -409,12 +467,7 @@ def _congruence_check_unchecked(
         for elem in block:
             block_of[elem] = block_idx
     if len(block_of) != n:
-        return CongruenceResult(
-            algebra=algebra,
-            partition=partition,
-            is_congruence=False,
-            obstruction="partition does not cover carrier",
-        )
+        raise AssertionError("admitted partition must cover the carrier")
     result = _check_compatibility(algebra, partition, block_of, n)
     return (
         result

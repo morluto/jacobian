@@ -31,6 +31,12 @@ from jacobian.math.universal_algebra._tools import (
     compute_homomorphism_profile,
     compute_quotient,
 )
+from jacobian.math.universal_algebra.operations import (
+    verify_congruence,
+    verify_equation_profile,
+    verify_evaluate,
+    verify_generated_subalgebra,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -116,6 +122,8 @@ class TestEvaluate:
             )
         )
         assert result.value == 0
+        assert result.algebra == _boolean_algebra()
+        assert verify_evaluate(result)
 
     def test_and_11(self) -> None:
         result = compute_evaluate(
@@ -124,6 +132,7 @@ class TestEvaluate:
             )
         )
         assert result.value == 1
+        assert verify_evaluate(result)
 
 
 # ---------------------------------------------------------------------------
@@ -150,6 +159,8 @@ class TestEquationProfile:
         )
         assert result.status == "HOLDS"
         assert result.satisfying_count == 2
+        assert result.algebra == _boolean_algebra()
+        assert verify_equation_profile(result)
 
     def test_fails(self) -> None:
         # AND(x, y) = x: this does NOT hold in general (AND(0, 1) = 0, but
@@ -164,6 +175,7 @@ class TestEquationProfile:
         assert result.status == "FAILS"
         assert result.satisfying_count < 4
         assert result.first_counterassignment is not None
+        assert verify_equation_profile(result)
 
 
 # ---------------------------------------------------------------------------
@@ -177,13 +189,17 @@ class TestGeneratedSubalgebra:
             SubalgebraRequest(algebra=_boolean_algebra(), generators=(0,))
         )
         assert result.generated_carrier == (0,)
+        assert result.algebra == _boolean_algebra()
+        assert result.generators == (0,)
         assert result.is_closed is True
+        assert verify_generated_subalgebra(result)
 
     def test_generated_by_both(self) -> None:
         result = compute_generated_subalgebra(
             SubalgebraRequest(algebra=_boolean_algebra(), generators=(0, 1))
         )
         assert result.generated_carrier == (0, 1)
+        assert verify_generated_subalgebra(result)
 
 
 # ---------------------------------------------------------------------------
@@ -368,8 +384,6 @@ class TestCongruence:
             CongruenceRequest(algebra=_boolean_algebra(), partition=((0, 1),))
         )
         assert result.is_congruence is True
-        from jacobian.math.universal_algebra import verify_congruence
-
         assert verify_congruence(result)
 
     def test_equality_partition_is_congruence(self) -> None:
@@ -387,10 +401,41 @@ class TestCongruence:
         )
 
         assert result.is_congruence is False
-        assert result.obstruction == "compatibility_violation"
-        assert result.operation == 0
-        assert result.x is not None
-        assert result.y is not None
+        assert result.obstruction is not None
+        assert result.obstruction.kind == "compatibility_violation"
+        assert result.obstruction.operation == 0
+        assert result.obstruction.left_arguments == (0, 1)
+        assert result.obstruction.right_arguments == (1, 1)
+        assert verify_congruence(result)
+
+    def test_serialized_claims_retain_sources_and_reject_forgery(self) -> None:
+        evaluation = compute_evaluate(
+            EvaluateRequest(
+                algebra=_boolean_algebra(), term=_and_term(), assignment=(1, 1)
+            )
+        )
+        decoded_evaluation = type(evaluation).model_validate_json(
+            evaluation.model_dump_json()
+        )
+        assert verify_evaluate(decoded_evaluation)
+        forged_evaluation = type(evaluation).model_validate(
+            {**evaluation.model_dump(mode="json"), "value": 0}
+        )
+        assert not verify_evaluate(forged_evaluation)
+
+        congruence = compute_congruence(
+            CongruenceRequest(
+                algebra=_cyclic_addition_algebra(3), partition=((0, 1), (2,))
+            )
+        )
+        decoded_congruence = type(congruence).model_validate_json(
+            congruence.model_dump_json()
+        )
+        assert verify_congruence(decoded_congruence)
+        congruence_payload = congruence.model_dump(mode="json")
+        congruence_payload["obstruction"]["left_output"] = 2
+        forged_congruence = type(congruence).model_validate(congruence_payload)
+        assert not verify_congruence(forged_congruence)
 
 
 # ---------------------------------------------------------------------------

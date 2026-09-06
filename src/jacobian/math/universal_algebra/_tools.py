@@ -22,6 +22,9 @@ from jacobian.math.universal_algebra.values import FiniteAlgebraHomomorphism
 
 def compute_evaluate(request: EvaluateRequest) -> EvaluateResult:
     return EvaluateResult(
+        algebra=request.algebra,
+        term=request.term,
+        assignment=request.assignment,
         value=native.evaluate_term(
             request.algebra,
             request.term,

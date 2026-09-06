@@ -77,10 +77,19 @@ def test_distance_graph_retain_target_and_source() -> None:
     decoded = DistanceGraphResult.model_validate_json(result.model_dump_json())
     assert verify_distance_graph(decoded)
 
-    forged = DistanceGraphResult.model_validate(
-        _forged_json(result, ("target_squared_distance", "num"), "2")
+    forged_target = DistanceGraphResult.model_validate_json(
+        json.dumps(
+            _forged_json(result, ("target_squared_distance", "num"), "-1")
+        ),
+        strict=True,
     )
-    assert not verify_distance_graph(forged)
+    assert not verify_distance_graph(forged_target)
+
+    forged_axis = DistanceGraphResult.model_validate_json(
+        json.dumps(_forged_json(result, ("graph", "vertex_count"), 4)),
+        strict=True,
+    )
+    assert not verify_distance_graph(forged_axis)
 
 
 def test_orbit_and_pinned_line_claims_reject_serialized_forgery() -> None:

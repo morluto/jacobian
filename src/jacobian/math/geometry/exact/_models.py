@@ -179,20 +179,6 @@ class DistanceGraphResult(StrictModel):
     target_squared_distance: CanonicalRational
     graph: IndexedSimpleUndirectedGraph
 
-    @model_validator(mode="after")
-    def require_graph_source_shape(self) -> Self:
-        if self.target_squared_distance.as_fraction() < 0:
-            raise _validation_error(
-                "squared_distance_target_nonnegative",
-                "squared distance target must be nonnegative",
-            )
-        if self.graph.vertex_count != len(self.configuration.points):
-            raise _validation_error(
-                "distance_graph_vertex_axis",
-                "distance graph vertex count must match the source point axis",
-            )
-        return self
-
 
 __all__ = [
     "DistanceGraphRequest",

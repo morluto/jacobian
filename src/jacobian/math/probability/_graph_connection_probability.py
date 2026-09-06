@@ -54,6 +54,10 @@ class GraphConnectionProbabilityRequest(StrictModel):
     event: Literal["TERMINALS_CONNECTED"] = "TERMINALS_CONNECTED"
 
 
+class GraphReliabilitySource(GraphConnectionProbabilityRequest):
+    """Canonical graph, edge-axis probabilities, and terminal event source."""
+
+
 class GraphReliabilityState(StrictModel):
     state_index: StrictInt = Field(ge=0, lt=MAX_GRAPH_RELIABILITY_STATES)
     open_edges: tuple[tuple[str, str], ...] = Field(
@@ -72,6 +76,7 @@ class GraphReliabilityState(StrictModel):
 
 
 class GraphConnectionProbabilityResult(StrictModel):
+    source: GraphReliabilitySource
     terminals: tuple[str, str]
     connection_probability: CanonicalRational
     edge_count: StrictInt = Field(ge=0, le=MAX_GRAPH_RELIABILITY_EDGES)
@@ -228,12 +233,37 @@ def compute_graph_connection_probability(
             )
         )
     return GraphConnectionProbabilityResult._from_kernel(
+        source=GraphReliabilitySource(
+            graph=request.graph,
+            edge_probabilities=request.edge_probabilities,
+            terminals=request.terminals,
+            event=request.event,
+        ),
         terminals=request.terminals,
         connection_probability=_wire(connection_probability),
         edge_count=len(request.graph.edges),
         visited_states=state_count,
         states=tuple(states),
     )
+
+
+def verify_graph_connection_probability(
+    claim: GraphConnectionProbabilityResult,
+) -> bool:
+    """Verify the reliability ledger and aggregate claim against its source."""
+
+    try:
+        expected = compute_graph_connection_probability(
+            GraphConnectionProbabilityRequest(
+                graph=claim.source.graph,
+                edge_probabilities=claim.source.edge_probabilities,
+                terminals=claim.source.terminals,
+                event=claim.source.event,
+            )
+        )
+        return expected == claim
+    except (TypeError, ValueError):
+        return False
 
 
 _SQUARE_GRAPH = {
@@ -316,6 +346,8 @@ __all__ = [
     "GraphConnectionProbabilityRequest",
     "GraphConnectionProbabilityResult",
     "GraphReliabilityEdgeProbability",
+    "GraphReliabilitySource",
     "GraphReliabilityState",
     "compute_graph_connection_probability",
+    "verify_graph_connection_probability",
 ]

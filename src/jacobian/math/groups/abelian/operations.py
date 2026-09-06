@@ -70,14 +70,18 @@ def elements_equal(
             group=group,
             coordinates=tuple(
                 coordinate % factor
-                for coordinate, factor in zip(coordinates_a, invariant_factors, strict=True)
+                for coordinate, factor in zip(
+                    coordinates_a, invariant_factors, strict=True
+                )
             ),
         ),
         elements_b=AbelianElement(
             group=group,
             coordinates=tuple(
                 coordinate % factor
-                for coordinate, factor in zip(coordinates_b, invariant_factors, strict=True)
+                for coordinate, factor in zip(
+                    coordinates_b, invariant_factors, strict=True
+                )
             ),
         ),
         equal=reduced_a == reduced_b,
@@ -125,7 +129,9 @@ def element_order(
             group=group,
             coordinates=tuple(
                 coordinate % factor
-                for coordinate, factor in zip(coordinates, invariant_factors, strict=True)
+                for coordinate, factor in zip(
+                    coordinates, invariant_factors, strict=True
+                )
             ),
         ),
         order=order,
@@ -138,7 +144,8 @@ def verify_element_order(claim: ElementOrderResult) -> bool:
     try:
         return (
             claim.element.group == claim.group
-            and element_order(claim.group, claim.element.coordinates).order == claim.order
+            and element_order(claim.group, claim.element.coordinates).order
+            == claim.order
         )
     except (TypeError, ValueError):
         return False
@@ -177,7 +184,9 @@ def generated_subgroup(
                 group=group,
                 coordinates=tuple(
                     coordinate % factor
-                    for coordinate, factor in zip(generator, invariant_factors, strict=True)
+                    for coordinate, factor in zip(
+                        generator, invariant_factors, strict=True
+                    )
                 ),
             )
             for generator in generators
@@ -214,7 +223,9 @@ def quotient_group(
                 group=group,
                 coordinates=tuple(
                     coordinate % factor
-                    for coordinate, factor in zip(generator, invariant_factors, strict=True)
+                    for coordinate, factor in zip(
+                        generator, invariant_factors, strict=True
+                    )
                 ),
             )
             for generator in subgroup_generators
@@ -251,7 +262,9 @@ def verify_quotient_group(claim: QuotientResult) -> bool:
     try:
         expected = quotient_group(
             claim.quotient.group,
-            tuple(element.coordinates for element in claim.quotient.subgroup.generators),
+            tuple(
+                element.coordinates for element in claim.quotient.subgroup.generators
+            ),
         )
         return (
             expected.quotient.invariant_factors == claim.quotient.invariant_factors

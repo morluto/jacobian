@@ -160,7 +160,7 @@ def test_group_conjugacy_classes_result_accepts_trivial_and_abelian_partitions()
             ((1, 2, 3, 0),),
             ((2, 3, 0, 1),),
             ((3, 0, 1, 2),),
-        )
+        ),
     )
     assert len(cyclic_c4.classes) == 4
 
@@ -249,9 +249,7 @@ def test_group_claim_verifiers_reject_forged_serialized_values() -> None:
 
     group = PermutationGroup(degree=3, generators=S3_GENERATORS)
     order = compute_group_order(group)
-    assert verify_group_order(
-        type(order).model_validate_json(order.model_dump_json())
-    )
+    assert verify_group_order(type(order).model_validate_json(order.model_dump_json()))
     order_payload = order.model_dump(mode="json")
     order_payload["order"] = "7"
     assert not verify_group_order(type(order).model_validate(order_payload))
@@ -270,7 +268,9 @@ def test_group_claim_verifiers_reject_forged_serialized_values() -> None:
     )
     classes_payload = classes.model_dump(mode="json")
     classes_payload["classes"] = classes_payload["classes"][:-1]
-    assert not verify_group_conjugacy_classes(type(classes).model_validate(classes_payload))
+    assert not verify_group_conjugacy_classes(
+        type(classes).model_validate(classes_payload)
+    )
 
     from jacobian.math.groups._models import GroupElementOrderRequest
     from jacobian.math.groups._tools import compute_element_order

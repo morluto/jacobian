@@ -132,9 +132,7 @@ def lagrange_interpolation(
             code="approximation.interpolation_invalid_domain",
             message=str(exc),
         ) from exc
-    return LagrangeInterpolationResult._from_kernel(
-        source=data, polynomial=polynomial
-    )
+    return LagrangeInterpolationResult._from_kernel(source=data, polynomial=polynomial)
 
 
 def _evaluate_polynomial(polynomial: RationalPolynomial, point: Fraction) -> Fraction:
@@ -199,7 +197,8 @@ def verify_lagrange_interpolation(claim: LagrangeInterpolationResult) -> bool:
         if lagrange_interpolation(claim.source) != claim:
             return False
         return all(
-            _evaluate_polynomial(claim.polynomial, node.as_fraction()) == value.as_fraction()
+            _evaluate_polynomial(claim.polynomial, node.as_fraction())
+            == value.as_fraction()
             for node, value in zip(
                 claim.source.nodes.nodes, claim.source.values, strict=True
             )

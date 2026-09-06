@@ -84,12 +84,16 @@ def compute_group_order(request: PermutationGroup) -> GroupOrderResult:
 def compute_element_order(request: GroupElementOrderRequest) -> GroupElementOrderResult:
     order = native.element_order(request.degree, list(request.generator))
     source = PermutationGroup(degree=request.degree, generators=(request.generator,))
-    return GroupElementOrderResult(source=source, element=request.generator, order=order)
+    return GroupElementOrderResult(
+        source=source, element=request.generator, order=order
+    )
 
 
 def compute_group_orbit(request: GroupOrbitRequest) -> GroupOrbitResult:
     orbit = native.group_orbit(request.group, request.point)
-    return GroupOrbitResult(source=request.group, orbit=tuple(orbit), point=request.point)
+    return GroupOrbitResult(
+        source=request.group, orbit=tuple(orbit), point=request.point
+    )
 
 
 def compute_group_conjugacy_classes(

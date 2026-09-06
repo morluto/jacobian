@@ -38,9 +38,7 @@ def _run_element_reduce(request: ElementReduceRequest) -> ElementReduceResult:
 
 
 def _run_element_equal(request: ElementEqualRequest) -> ElementEqualResult:
-    return elements_equal(
-        request.group, request.coordinates_a, request.coordinates_b
-    )
+    return elements_equal(request.group, request.coordinates_a, request.coordinates_b)
 
 
 def _run_element_order(request: ElementOrderRequest) -> ElementOrderResult:

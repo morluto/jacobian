@@ -38,9 +38,7 @@ def compute_element_reduce(request: ElementReduceRequest):
 
 
 def compute_element_equal(request: ElementEqualRequest):
-    return elements_equal(
-        request.group, request.coordinates_a, request.coordinates_b
-    )
+    return elements_equal(request.group, request.coordinates_a, request.coordinates_b)
 
 
 def compute_element_order(request: ElementOrderRequest):
@@ -67,7 +65,9 @@ def test_catalog_contains_only_audited_operations() -> None:
 
 
 def test_element_reduce_modular() -> None:
-    request = ElementReduceRequest(group=AbelianPresentation(invariant_factors=(6,)), coordinates=(7,))
+    request = ElementReduceRequest(
+        group=AbelianPresentation(invariant_factors=(6,)), coordinates=(7,)
+    )
     result = compute_element_reduce(request)
     assert result.reduced.coordinates == (1,)
     decoded = type(result).model_validate_json(result.model_dump_json())
@@ -79,7 +79,9 @@ def test_element_reduce_modular() -> None:
 
 def test_element_equal_same() -> None:
     request = ElementEqualRequest(
-        group=AbelianPresentation(invariant_factors=(6,)), coordinates_a=(1,), coordinates_b=(7,)
+        group=AbelianPresentation(invariant_factors=(6,)),
+        coordinates_a=(1,),
+        coordinates_b=(7,),
     )
     result = compute_element_equal(request)
     assert result.equal is True
@@ -93,14 +95,18 @@ def test_element_equal_same() -> None:
 
 def test_element_equal_different() -> None:
     request = ElementEqualRequest(
-        group=AbelianPresentation(invariant_factors=(6,)), coordinates_a=(1,), coordinates_b=(2,)
+        group=AbelianPresentation(invariant_factors=(6,)),
+        coordinates_a=(1,),
+        coordinates_b=(2,),
     )
     result = compute_element_equal(request)
     assert result.equal is False
 
 
 def test_element_order_in_z6() -> None:
-    request = ElementOrderRequest(group=AbelianPresentation(invariant_factors=(6,)), coordinates=(2,))
+    request = ElementOrderRequest(
+        group=AbelianPresentation(invariant_factors=(6,)), coordinates=(2,)
+    )
     result = compute_element_order(request)
     assert result.order == 3
     decoded = type(result).model_validate_json(result.model_dump_json())
@@ -112,19 +118,25 @@ def test_element_order_in_z6() -> None:
 
 
 def test_element_order_identity() -> None:
-    request = ElementOrderRequest(group=AbelianPresentation(invariant_factors=(6,)), coordinates=(0,))
+    request = ElementOrderRequest(
+        group=AbelianPresentation(invariant_factors=(6,)), coordinates=(0,)
+    )
     result = compute_element_order(request)
     assert result.order == 1
 
 
 def test_subgroup_generated_index() -> None:
-    request = SubgroupGeneratedRequest(group=AbelianPresentation(invariant_factors=(6,)), generators=((2,),))
+    request = SubgroupGeneratedRequest(
+        group=AbelianPresentation(invariant_factors=(6,)), generators=((2,),)
+    )
     result = compute_subgroup_generated(request)
     assert result.index == 2
 
 
 def test_quotient_z6_by_2z() -> None:
-    request = QuotientRequest(group=AbelianPresentation(invariant_factors=(6,)), subgroup_generators=((2,),))
+    request = QuotientRequest(
+        group=AbelianPresentation(invariant_factors=(6,)), subgroup_generators=((2,),)
+    )
     result = compute_quotient(request)
     assert result.quotient_order == 2
 
@@ -172,19 +184,26 @@ def test_invariant_factor_rejects_trivial_one() -> None:
 def test_subgroup_generated_rejects_unbounded_group() -> None:
     """A single large cyclic factor that exceeds the bound must be rejected."""
     with pytest.raises(ValidationError) as error:
-        SubgroupGeneratedRequest(group=AbelianPresentation(invariant_factors=(4_097,)), generators=((1,),))
+        SubgroupGeneratedRequest(
+            group=AbelianPresentation(invariant_factors=(4_097,)), generators=((1,),)
+        )
     assert error.value.errors()[0]["type"] == "abelian_presentation.group_order_bound"
 
 
 def test_quotient_rejects_unbounded_group() -> None:
     with pytest.raises(ValidationError) as error:
-        QuotientRequest(group=AbelianPresentation(invariant_factors=(4_097,)), subgroup_generators=((1,),))
+        QuotientRequest(
+            group=AbelianPresentation(invariant_factors=(4_097,)),
+            subgroup_generators=((1,),),
+        )
     assert error.value.errors()[0]["type"] == "abelian_presentation.group_order_bound"
 
 
 def test_subgroup_generated_z2_x_z4() -> None:
     """Subgroup <(1,0)> in Z/2 x Z/4 has index 4."""
-    request = SubgroupGeneratedRequest(group=AbelianPresentation(invariant_factors=(2, 4)), generators=((1, 0),))
+    request = SubgroupGeneratedRequest(
+        group=AbelianPresentation(invariant_factors=(2, 4)), generators=((1, 0),)
+    )
     result = compute_subgroup_generated(request)
     assert result.index == 4
     assert verify_generated_subgroup(
@@ -198,7 +217,10 @@ def test_subgroup_generated_z2_x_z4() -> None:
 
 def test_quotient_claim_round_trips_and_rejects_a_forged_order() -> None:
     result = compute_quotient(
-        QuotientRequest(group=AbelianPresentation(invariant_factors=(6,)), subgroup_generators=((2,),))
+        QuotientRequest(
+            group=AbelianPresentation(invariant_factors=(6,)),
+            subgroup_generators=((2,),),
+        )
     )
     assert verify_quotient_group(
         type(result).model_validate_json(result.model_dump_json())

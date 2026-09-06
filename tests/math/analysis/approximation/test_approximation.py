@@ -41,7 +41,7 @@ def compute_lagrange_interpolation(
 ) -> LagrangeInterpolationResult:
     return LagrangeInterpolationResult(
         source=LagrangeInterpolationData(nodes=request.nodes, values=request.values),
-        polynomial=lagrange_interpolate(request.nodes.nodes, request.values)
+        polynomial=lagrange_interpolate(request.nodes.nodes, request.values),
     )
 
 

@@ -378,7 +378,9 @@ class GroupSubgroupLatticeResult(StrictModel):
         """Construct a complete lattice result emitted by the owner kernel."""
 
         return cls(
-            source=PermutationGroup(degree=request.degree, generators=request.generators),
+            source=PermutationGroup(
+                degree=request.degree, generators=request.generators
+            ),
             subgroups=subgroups,
             subgroup_count=len(subgroups),
         )

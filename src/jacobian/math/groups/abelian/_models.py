@@ -21,7 +21,9 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 class AbelianPresentation(StrictModel):
     """An invariant-factor decomposition of a finitely generated abelian group."""
 
-    invariant_factors: tuple[NativeInteger, ...] = Field(min_length=0, max_length=MAX_ORDERS)
+    invariant_factors: tuple[NativeInteger, ...] = Field(
+        min_length=0, max_length=MAX_ORDERS
+    )
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
@@ -104,8 +106,12 @@ class ElementReduceRequest(StrictModel):
 
 class ElementEqualRequest(StrictModel):
     group: AbelianPresentation
-    coordinates_a: tuple[NativeInteger, ...] = Field(min_length=1, max_length=MAX_ORDERS)
-    coordinates_b: tuple[NativeInteger, ...] = Field(min_length=1, max_length=MAX_ORDERS)
+    coordinates_a: tuple[NativeInteger, ...] = Field(
+        min_length=1, max_length=MAX_ORDERS
+    )
+    coordinates_b: tuple[NativeInteger, ...] = Field(
+        min_length=1, max_length=MAX_ORDERS
+    )
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
@@ -137,7 +143,9 @@ class ElementOrderRequest(StrictModel):
 
 class SubgroupGeneratedRequest(StrictModel):
     group: AbelianPresentation
-    generators: tuple[tuple[NativeInteger, ...], ...] = Field(min_length=1, max_length=MAX_ORDERS)
+    generators: tuple[tuple[NativeInteger, ...], ...] = Field(
+        min_length=1, max_length=MAX_ORDERS
+    )
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
@@ -164,7 +172,10 @@ class QuotientRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
-        if any(len(g) != len(self.group.invariant_factors) for g in self.subgroup_generators):
+        if any(
+            len(g) != len(self.group.invariant_factors)
+            for g in self.subgroup_generators
+        ):
             raise _validation_error(
                 "generator_length", "each generator must match invariant_factors length"
             )
@@ -186,9 +197,7 @@ class AbelianElement(StrictModel):
     """A canonical coordinate value in one finite abelian group."""
 
     group: AbelianPresentation
-    coordinates: tuple[NativeInteger, ...] = Field(
-        min_length=0, max_length=MAX_ORDERS
-    )
+    coordinates: tuple[NativeInteger, ...] = Field(min_length=0, max_length=MAX_ORDERS)
 
     @model_validator(mode="after")
     def require_canonical_coordinates(self) -> Self:
@@ -220,7 +229,8 @@ class AbelianSubgroup(StrictModel):
     def require_parent_bound_generators(self) -> Self:
         if any(generator.group != self.group for generator in self.generators):
             raise _validation_error(
-                "subgroup_parent_mismatch", "subgroup generators must share the parent group"
+                "subgroup_parent_mismatch",
+                "subgroup generators must share the parent group",
             )
         return self
 
@@ -236,7 +246,8 @@ class AbelianQuotient(StrictModel):
     def require_parent_bound_subgroup(self) -> Self:
         if self.subgroup.group != self.group:
             raise _validation_error(
-                "quotient_parent_mismatch", "quotient subgroup must use the parent group"
+                "quotient_parent_mismatch",
+                "quotient subgroup must use the parent group",
             )
         return self
 

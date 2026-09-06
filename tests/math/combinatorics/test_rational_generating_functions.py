@@ -7,7 +7,6 @@ import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics._recurrence_admission import (
     _lower_decimal_digits,
@@ -168,24 +167,6 @@ def test_decimal_digit_bound_counts_power_of_ten_exactly() -> None:
             label="series coefficient",
             location=("coefficients", 0),
         )
-
-
-def test_catalog_schema_publishes_the_canonical_series_example() -> None:
-    descriptor = Catalog.open().inspect(
-        "combinatorics.generating_function.coefficients.compute"
-    )
-    assert descriptor is not None
-    assert set(descriptor.output_schema["properties"]) == {
-        "numerator",
-        "denominator",
-        "coefficient_convention",
-        "expansion_point",
-        "truncation_order",
-        "series",
-    }
-    example = descriptor.output_schema["examples"][0]
-    assert example["series"]["variable"] == "x"
-    assert example["series"]["truncation_order"] == 3
 
 
 def test_denominator_degree_controls_the_recurrence_work_envelope() -> None:

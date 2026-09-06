@@ -184,16 +184,14 @@ def _wire_group(
     )
 
 
-def galois_group(
-    coefficients: tuple[int, ...], *, polynomial: RationalPolynomial | None = None
-) -> GaloisGroupResult:
+def galois_group(coefficients: tuple[int, ...]) -> GaloisGroupResult:
     """Compute the Galois group of a polynomial over Q."""
     _admit(
         lambda: _supported_galois_polynomial(coefficients),
         location=("coefficients",),
     )
     perm_group = _galois_group_from_coeffs(coefficients)
-    source = polynomial or _polynomial_from_coefficients(coefficients)
+    source = _polynomial_from_coefficients(coefficients)
     group_name = str(perm_group)
     order = int(perm_group.order())
     is_solvable = bool(perm_group.is_solvable)
@@ -207,9 +205,7 @@ def galois_group(
     )
 
 
-def solvable(
-    coefficients: tuple[int, ...], *, polynomial: RationalPolynomial | None = None
-) -> SolvableResult:
+def solvable(coefficients: tuple[int, ...]) -> SolvableResult:
     """Determine if a polynomial is solvable by radicals.
 
     A polynomial is solvable by radicals iff its Galois group is solvable.
@@ -220,7 +216,7 @@ def solvable(
         location=("coefficients",),
     )
     perm_group = _galois_group_from_coeffs(coefficients)
-    source = polynomial or _polynomial_from_coefficients(coefficients)
+    source = _polynomial_from_coefficients(coefficients)
     is_solvable = bool(perm_group.is_solvable)
     return SolvableResult._from_kernel(
         solvable_by_radicals=is_solvable,
@@ -233,20 +229,19 @@ def verify_galois_group(claim: GaloisGroupResult) -> bool:
 
     try:
         coefficients = _coefficients_from_polynomial(claim.polynomial)
+        _supported_galois_polynomial(coefficients)
         perm_group = _galois_group_from_coeffs(coefficients)
-        expected_generators = tuple(
-            tuple(int(generator(index)) for index in range(claim.degree))
-            for generator in perm_group.generators
+        expected_group = _wire_group(
+            perm_group, len(coefficients) - 1, claim.polynomial
         )
         return (
-            claim.group.root_axis.indices == tuple(range(claim.degree))
-            and claim.degree == len(coefficients) - 1
+            claim.degree == len(coefficients) - 1
             and claim.order == int(perm_group.order())
             and claim.group_name == str(perm_group)
             and claim.is_solvable == bool(perm_group.is_solvable)
-            and claim.group.generators == expected_generators
+            and claim.group == expected_group
         )
-    except (ArithmeticError, IndexError, TypeError, ValueError):
+    except (ArithmeticError, IndexError, PydanticCustomError, TypeError, ValueError):
         return False
 
 
@@ -255,9 +250,16 @@ def verify_solvable(claim: SolvableResult) -> bool:
 
     try:
         coefficients = _coefficients_from_polynomial(claim.polynomial)
+        _supported_galois_polynomial(coefficients)
         perm_group = _galois_group_from_coeffs(coefficients)
-        return claim.solvable_by_radicals == bool(perm_group.is_solvable)
-    except (ArithmeticError, IndexError, TypeError, ValueError):
+        expected_group = _wire_group(
+            perm_group, len(coefficients) - 1, claim.polynomial
+        )
+        return (
+            claim.solvable_by_radicals == bool(perm_group.is_solvable)
+            and claim.group == expected_group
+        )
+    except (ArithmeticError, IndexError, PydanticCustomError, TypeError, ValueError):
         return False
 
 

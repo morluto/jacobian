@@ -281,6 +281,19 @@ def test_galois_claims_retain_source_through_json_and_reject_forgery() -> None:
         solvable_decoded.model_copy(update={"solvable_by_radicals": False})
     )
 
+    forged_group_payload = solvable_decoded.model_dump(mode="json")
+    degree = len(forged_group_payload["group"]["root_axis"]["indices"])
+    forged_group_payload["group"]["generators"] = [list(range(degree))]
+    forged_group = SolvableResult.model_validate(forged_group_payload)
+    assert not verify_solvable(forged_group)
+
+    reducible_payload = decoded.model_dump(mode="json")
+    reducible_payload["group"]["root_axis"]["polynomial"] = _rational_polynomial(
+        (0, 0, 0, 0, 0, 1)
+    ).model_dump(mode="json")
+    unadmitted = GaloisGroupResult.model_validate(reducible_payload)
+    assert not verify_galois_group(unadmitted)
+
 
 def test_solvable_quintic_returns_the_group_certificate() -> None:
     result = _solvable(

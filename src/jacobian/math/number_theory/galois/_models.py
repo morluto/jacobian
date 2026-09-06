@@ -35,6 +35,19 @@ def _require_prime(value: int) -> None:
 def _supported_galois_polynomial(coefficients: tuple[int, ...]) -> None:
     from sympy import Poly, Symbol
 
+    if not 2 <= len(coefficients) <= MAX_GALOIS_GROUP_DEGREE + 1:
+        raise _validation_error(
+            "degree_bound",
+            "Galois computation requires degree one through six",
+        )
+    if any(
+        type(coefficient) is not int or abs(coefficient) > 10**12
+        for coefficient in coefficients
+    ):
+        raise _validation_error(
+            "coefficient_bound",
+            "Galois coefficients must be integers of magnitude at most 10^12",
+        )
     if coefficients[-1] == 0:
         raise _validation_error(
             "leading_coefficient_zero", "leading coefficient must be nonzero"

@@ -8,6 +8,7 @@ from jacobian.math.matrices.analysis.operations import (
     check_farkas_certificate,
     check_rational_spectrum_claim,
     compute_inertia,
+    verify_inertia,
 )
 from jacobian.math.matrices.values import RationalMatrix
 
@@ -18,4 +19,5 @@ __all__ = [
     "check_farkas_certificate",
     "check_rational_spectrum_claim",
     "compute_inertia",
+    "verify_inertia",
 ]

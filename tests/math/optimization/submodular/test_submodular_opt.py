@@ -16,6 +16,7 @@ from jacobian.math.optimization.submodular.operations import (
     check_submodularity,
     evaluate_set_function,
     verify_monotonicity,
+    verify_set_function_evaluation,
     verify_submodularity,
 )
 
@@ -58,6 +59,14 @@ class TestSetFunctionEval:
         req = SetFunctionEvalRequest(function=fn, subset=(0, 1))
         result = _evaluate_request(req)
         assert result.value == CanonicalRational(num="2", den="1")
+        assert result.function == fn
+        assert result.subset == (0, 1)
+        assert verify_set_function_evaluation(
+            type(result).model_validate_json(result.model_dump_json())
+        )
+        forged = result.model_dump(mode="json")
+        forged["value"] = {"num": "3", "den": "1"}
+        assert not verify_set_function_evaluation(type(result).model_validate(forged))
 
     def test_fractional_value_uses_the_shared_canonical_rational(self) -> None:
         function = SetFunction(
@@ -222,9 +231,17 @@ class TestKernelEquivalence:
         )
         assert result.is_monotone is False
         assert result.function == SetFunction(ground_set_size=1, entries=tuple(entries))
-        assert result.violation == ((), 0)
+        assert result.violation is not None
+        assert result.violation.subset == ()
+        assert result.violation.added_element == 0
+        assert result.violation.lower_value == CanonicalRational(num="0", den="1")
+        assert result.violation.upper_value == CanonicalRational(num="-1", den="1")
         assert verify_monotonicity(result)
         assert not verify_monotonicity(result.model_copy(update={"is_monotone": True}))
+        forged = result.model_copy(
+            update={"violation": result.violation.model_copy(update={"added_element": 1})}
+        )
+        assert not verify_monotonicity(forged)
 
     def test_complete_table_admission_is_structural(self) -> None:
         n = 16

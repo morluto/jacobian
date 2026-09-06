@@ -9,9 +9,11 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.optimization.submodular._models import (
     MAX_SUBMODULAR_SCAN_VALUE_DIGITS,
     MonotonicityCheckResult,
+    MonotonicityViolation,
     SetFunction,
     SetFunctionEvalResult,
     SubmodularityCheckResult,
+    SubmodularityViolation,
 )
 
 
@@ -50,7 +52,11 @@ def evaluate_set_function(
     subset: tuple[int, ...],
 ) -> SetFunctionEvalResult:
     """Evaluate f(S) by table lookup."""
-    return SetFunctionEvalResult(value=_lookup(function, subset))
+    return SetFunctionEvalResult(
+        function=function,
+        subset=subset,
+        value=_lookup(function, subset),
+    )
 
 
 def _lookup(
@@ -87,7 +93,21 @@ def check_monotonicity(function: SetFunction) -> MonotonicityCheckResult:
                 return MonotonicityCheckResult(
                     function=function,
                     is_monotone=False,
-                    violation=(_subset_label(mask, size), index),
+                    violation=MonotonicityViolation(
+                        subset=_subset_label(mask, size),
+                        added_element=index,
+                        lower_value=next(
+                            entry.value
+                            for entry in function.entries
+                            if tuple(sorted(entry.subset)) == _subset_label(mask, size)
+                        ),
+                        upper_value=next(
+                            entry.value
+                            for entry in function.entries
+                            if tuple(sorted(entry.subset))
+                            == _subset_label(mask | bit, size)
+                        ),
+                    ),
                 )
     return MonotonicityCheckResult(function=function, is_monotone=True)
 
@@ -124,10 +144,12 @@ def check_submodularity(function: SetFunction) -> SubmodularityCheckResult:
                 return SubmodularityCheckResult(
                     function=function,
                     is_submodular=False,
-                    violation=(
-                        _subset_label(mask, size),
-                        bit_i.bit_length() - 1,
-                        bit_j.bit_length() - 1,
+                    violation=SubmodularityViolation(
+                        subset=_subset_label(mask, size),
+                        first_element=bit_i.bit_length() - 1,
+                        second_element=bit_j.bit_length() - 1,
+                        left_sum=CanonicalRational.from_fraction(lhs),
+                        right_sum=CanonicalRational.from_fraction(rhs),
                     ),
                 )
     return SubmodularityCheckResult(function=function, is_submodular=True)
@@ -137,6 +159,12 @@ def verify_monotonicity(claim: MonotonicityCheckResult) -> bool:
     """Check a retained monotonicity claim against its source function."""
 
     return check_monotonicity(claim.function) == claim
+
+
+def verify_set_function_evaluation(claim: SetFunctionEvalResult) -> bool:
+    """Verify a source-bound table lookup claim."""
+
+    return _lookup(claim.function, claim.subset) == claim.value
 
 
 def verify_submodularity(claim: SubmodularityCheckResult) -> bool:
@@ -150,5 +178,6 @@ __all__ = [
     "check_submodularity",
     "evaluate_set_function",
     "verify_monotonicity",
+    "verify_set_function_evaluation",
     "verify_submodularity",
 ]

@@ -101,9 +101,20 @@ class SetFunctionEvalRequest(StrictModel):
 
 
 class SetFunctionEvalResult(StrictModel):
-    """Exact canonical value of f(S)."""
+    """Exact canonical value of ``f(S)`` bound to its source and query."""
 
+    function: SetFunction
+    subset: tuple[int, ...] = Field(default=())
     value: CanonicalRational
+
+
+class MonotonicityViolation(StrictModel):
+    """One source-bound covering inequality that fails monotonicity."""
+
+    subset: tuple[int, ...] = Field(default=())
+    added_element: int = Field(ge=0, le=MAX_GROUND_SET - 1)
+    lower_value: CanonicalRational
+    upper_value: CanonicalRational
 
 
 class MonotonicityCheckRequest(StrictModel):
@@ -112,12 +123,22 @@ class MonotonicityCheckRequest(StrictModel):
     function: SetFunction
 
 
+class SubmodularityViolation(StrictModel):
+    """One source-bound local submodular inequality that fails."""
+
+    subset: tuple[int, ...] = Field(default=())
+    first_element: int = Field(ge=0, le=MAX_GROUND_SET - 1)
+    second_element: int = Field(ge=0, le=MAX_GROUND_SET - 1)
+    left_sum: CanonicalRational
+    right_sum: CanonicalRational
+
+
 class MonotonicityCheckResult(StrictModel):
     """Whether the function is monotone non-decreasing."""
 
     function: SetFunction
     is_monotone: bool
-    violation: tuple[tuple[int, ...], int] | None = None
+    violation: MonotonicityViolation | None = None
 
 
 class SubmodularityCheckRequest(StrictModel):
@@ -131,16 +152,18 @@ class SubmodularityCheckResult(StrictModel):
 
     function: SetFunction
     is_submodular: bool
-    violation: tuple[tuple[int, ...], int, int] | None = None
+    violation: SubmodularityViolation | None = None
 
 
 __all__ = [
     "MonotonicityCheckRequest",
     "MonotonicityCheckResult",
+    "MonotonicityViolation",
     "SetFunction",
     "SetFunctionEntry",
     "SetFunctionEvalRequest",
     "SetFunctionEvalResult",
     "SubmodularityCheckRequest",
     "SubmodularityCheckResult",
+    "SubmodularityViolation",
 ]

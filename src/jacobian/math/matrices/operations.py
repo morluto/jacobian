@@ -98,6 +98,7 @@ __all__ = [
     "verify_adjugate",
     "verify_inverse",
     "verify_kronecker_product",
+    "verify_nullspace",
     "verify_partial_trace",
     "verify_product",
 ]
@@ -1324,6 +1325,57 @@ def nullspace_result(matrix: RationalMatrix | SparseRationalMatrix) -> Nullspace
         ),
         free_columns=free_columns,
     )
+
+
+def verify_nullspace(claim: NullspaceResult) -> bool:
+    """Check a serialized fundamental nullspace claim against its source."""
+    try:
+        source_rank = rank_result(claim.matrix)
+        if source_rank.rank != claim.rank:
+            return False
+        expected_free = tuple(
+            column
+            for column in range(claim.matrix.column_count)
+            if column not in source_rank.pivot_columns
+        )
+        if claim.free_columns != expected_free:
+            return False
+        if len(claim.basis_matrix.entries) != claim.nullity:
+            return False
+        source_rows: tuple[tuple[tuple[Fraction, int], ...], ...]
+        if isinstance(claim.matrix, RationalMatrix):
+            source_rows = tuple(
+                tuple((value.as_fraction(), column) for column, value in enumerate(row))
+                for row in claim.matrix.entries
+            )
+        else:
+            sparse_rows: dict[int, list[tuple[Fraction, int]]] = {}
+            for entry in claim.matrix.entries:
+                sparse_rows.setdefault(entry.row, []).append(
+                    (entry.value.as_fraction(), entry.column)
+                )
+            source_rows = tuple(
+                tuple(sparse_rows.get(row, ()))
+                for row in range(claim.matrix.row_count)
+            )
+        for index, vector in enumerate(claim.basis_matrix.entries):
+            components = tuple(value.as_fraction() for value in vector)
+            if any(
+                sum(value * components[column] for value, column in row)
+                != 0
+                for row in source_rows
+            ):
+                return False
+            own = claim.free_columns[index]
+            if components[own] != 1 or any(
+                components[column] != 0
+                for column in claim.free_columns
+                if column != own
+            ):
+                return False
+        return True
+    except (AttributeError, IndexError, OperationDomainValidationError, ValueError):
+        return False
 
 
 def characteristic_polynomial_result(

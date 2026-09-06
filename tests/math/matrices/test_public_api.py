@@ -267,6 +267,7 @@ def test_exact_public_api_symbols() -> None:
         "verify_adjugate",
         "verify_inverse",
         "verify_kronecker_product",
+        "verify_nullspace",
         "verify_partial_trace",
         "verify_product",
     )

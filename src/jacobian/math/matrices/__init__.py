@@ -17,6 +17,7 @@ from jacobian.math.matrices.operations import (
     verify_adjugate,
     verify_inverse,
     verify_kronecker_product,
+    verify_nullspace,
     verify_partial_trace,
     verify_product,
 )
@@ -50,6 +51,7 @@ __all__ = [
     "verify_adjugate",
     "verify_inverse",
     "verify_kronecker_product",
+    "verify_nullspace",
     "verify_partial_trace",
     "verify_product",
 ]

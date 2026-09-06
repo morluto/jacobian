@@ -11,6 +11,7 @@ from jacobian.math.matrices import (
     verify_adjugate,
     verify_inverse,
     verify_kronecker_product,
+    verify_nullspace,
     verify_partial_trace,
     verify_product,
 )
@@ -87,6 +88,15 @@ def test_nullspace_returns_composable_qq_matrix(source: RationalMatrix) -> None:
     basis = RationalMatrix.model_validate(payload["basis_matrix"])
     assert basis.column_count == source.column_count
     assert rank_result(basis).rank == result.nullity
+
+
+def test_serialized_nullspace_verifier_rejects_forged_basis() -> None:
+    source = RationalMatrix(entries=((_q(1), _q(2)), (_q(2), _q(4))))
+    result = nullspace_result(source)
+    payload = result.model_dump(mode="json")
+    assert verify_nullspace(type(result).model_validate(payload))
+    payload["basis_matrix"]["entries"][0][0] = {"num": "1", "den": "1"}
+    assert not verify_nullspace(type(result).model_validate(payload))
 
 
 def test_sparse_nullspace_retains_largest_supported_column_axis() -> None:

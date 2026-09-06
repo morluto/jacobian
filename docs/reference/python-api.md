@@ -58,6 +58,11 @@ to the native function after wire-to-domain conversion.
 
 ## Canonical native values
 
+The [interoperability contract](value-interoperability.md) distinguishes shared
+values, meaningful refinements, representation transforms, and changes of
+parent. It also defines when conversions belong only in the native API and
+what serialization does and does not establish.
+
 Each mathematical value has one owner-defined public type, normally in the
 domain's `values.py`. Producers return that type and consumers accept the same
 type directly. Operation-specific request and result models may contain a

@@ -27,6 +27,13 @@ operation's own result model.
 For the ordinary search-to-inspection-to-execution path, see
 [Discover and invoke operations](../how-to/invoke-domain-operations.md).
 
+## Schemas and mathematical witnesses
+
+The [SDK boundary and value contract](value-interoperability.md#mcp-python-sdk-v2)
+distinguishes structured-output validation from mathematical correctness.
+MCP does not require certificates. Return exact values directly; include a
+source-bound witness only when it serves the operation's mathematical purpose.
+
 ## Execution deadlines
 
 Exact mathematical operations may legitimately run for minutes or longer.

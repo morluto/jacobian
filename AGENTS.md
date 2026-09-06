@@ -14,6 +14,10 @@ state. Use “operation” or “math tool,” not “product” or “provider,
   Return mathematical values directly, without generic assurance, verification,
   obligation, or completeness wrappers. Operational non-completion never
   establishes a mathematical conclusion.
+- Return ordinary exact values without certificates, source digests, or
+  `verified` flags by default. Include a witness only for the operation's
+  mathematical purpose. A consumer checks an authored relation only when its
+  result relies on it; it does not verify a value's entire producer history.
 - Built-ins are immutable `MathTool` tuples in owner-local `_tools.py` manifests
   under `jacobian.math`. Manifest presence is publication; catalog construction
   fails closed on malformed declarations and duplicate IDs.
@@ -24,7 +28,9 @@ state. Use “operation” or “math tool,” not “product” or “provider,
 - Admit mathematical work, intermediate growth, and exact output before backend
   expansion. Compute semantic admission once after canonicalization. Validators,
   result construction, worker decoding, and transport must not replay computed
-  mathematics. Caller-supplied claims require their own admitted domain check.
+  mathematics. Caller-supplied claims require their own admitted domain check
+  when a consumer relies on them. Moving checks out of constructors requires
+  migrating every dependent consumer, not deleting the checks.
 - **Scale first:** probe a motivating rejected request, improve the estimate,
   representation, algorithm, or backend, and retain cheaply executable cases as
   accepted regressions. Measurements do not replace a sound bound. A remaining
@@ -50,7 +56,7 @@ Use the relevant sections; these links are not a prerequisite reading stack.
 | Product scope, ownership, execution path | [Product model](docs/explanation/product-blueprint.md), [architecture](docs/explanation/architecture.md) |
 | Operation implementation or contract | [Operation library](docs/reference/domain-operation-library.md) |
 | New public operation | [Public operation admission](docs/reference/public-operation-admission.md) |
-| Native functions or mathematical values | [Python API](docs/reference/python-api.md) |
+| Native functions or mathematical values | [Python API](docs/reference/python-api.md), [schemas and interoperability](docs/reference/value-interoperability.md) |
 | Backend adapter or child worker | [Backend contract](docs/reference/mathematical-backends.md) |
 | MCP projection or transport | [Tool reference](docs/reference/tools.md) |
 | Authentication, health, or deployment | [Remote deployment](docs/how-to/deploy-remote-mcp.md) |

@@ -84,6 +84,10 @@ directly. `smt.solve` accepts one bounded QF SMT-LIB query.
 
 ## Codomain closure
 
+Start with the [default value contract](value-interoperability.md#default-return-the-value).
+Correcting an incomplete value representation does not call for a certificate
+wrapper. Return the mathematical value with its required interpretation.
+
 Before admitting an exact operation, verify that canonical public value types
 can represent every value in its advertised codomain. Each returned value must
 have a backend-independent identity, an explicit mathematical parent and
@@ -214,23 +218,26 @@ conclusion remains caller composition.
 ### Validated mathematical subtypes and exact-success states
 
 A structurally valid candidate is not a theorem-bearing value. A raw set
-system, matrix, graph, polynomial, or similar carrier establishes only the
-invariants its canonical type actually validates. An operation whose result
-depends on a stronger property—such as the greedoid axioms, antimatroid union
-closure, irreducibility, or stochasticity—must either:
+system, matrix, graph, polynomial, or similar carrier establishes only its
+canonical representation and cheap intrinsic consistency. A meaningful
+structural refinement, such as a monic polynomial, can preserve the shared
+encoding while checking that intrinsic constraint.
 
-- consume a canonical subtype whose public construction establishes that
-  property within the admitted bound; or
-- perform recognition as part of its own postcondition and return a typed
-  negative or non-applicable outcome when recognition fails.
+An operation that depends on a stronger mathematical property—such as greedoid
+axioms, antimatroid union closure, irreducibility, or independence of a proposed
+basis—must establish that property under its own admitted contract. It may
+consume a proposed witness or perform recognition and return a typed negative
+or non-applicable outcome. A positive recognizer retains the source and the
+mathematical conclusion so consumers can accept its value unchanged. A later
+consumer checks that conclusion only when it relies on the authored claim;
+ordinary use of the value does not require verifying its history.
 
-Do not let a structurally valid candidate flow into a theorem-dependent
-consumer merely because its fields have the expected shape. A positive
-recognizer should return a source-bound canonical validated value that
-downstream consumers accept unchanged. If an operation intentionally computes
-a property of arbitrary candidates, name the result in set-system-, matrix-,
-graph-, or polynomial-neutral terms rather than attaching theorem-only
-semantics.
+Do not invoke mathematical backends in a public value constructor to make its
+name theorem-bearing. Reuse domain-owned recognition helpers at the admitted
+boundary. Within one trusted admitted execution, reuse established facts when
+constructing the result instead of proving them again. If an operation
+intentionally computes a property of arbitrary candidates, name that scope
+rather than attaching theorem-only semantics.
 
 Serialization does not preserve trusted provenance. Every value reconstructed
 from a public payload is caller-authored, even when its bytes are identical to
@@ -240,9 +247,10 @@ subtype name, `validated` boolean, digest, or claim that a producer ran earlier
 is not evidence. Test native composition and serialized public composition
 separately when they cross different trust boundaries.
 
-Likewise, an exact-success result must make failure of its defining invariant
-unrepresentable. When result branches change the presence or mathematical
-meaning of a witness, certificate, diagnostic, or derived value, use a
+Likewise, a computed exact-success result must satisfy its defining invariant
+and exclude structurally contradictory status and witness combinations. When
+result branches change the presence or mathematical meaning of a witness,
+certificate, diagnostic, or derived value, use a
 discriminated result such as `CONSTRUCTED`, `NOT_APPLICABLE`, or `UNKNOWN`.
 The generated public schema must expose those branches and exclude their
 contradictory field combinations; do not replace that contract with one model
@@ -433,6 +441,17 @@ semantics.
 
 ### Canonical-value ownership check
 
+Return ordinary exact values directly. Certificates are not a universal result
+requirement: include a witness when it is requested, supports construction, or
+has a distinct independent-checking purpose. See
+[when a witness or certificate is useful](value-interoperability.md#values-witnesses-and-source-binding).
+A consumer of a value need not verify its producer's history; it checks an
+authored relation only when its own result relies on that relation.
+
+See [schemas, mathematical values, and conversions](value-interoperability.md)
+for the representation decision table, schema/parser agreement, conversion
+publication rules, and serialized trust boundary.
+
 Before adding a mathematical value, search the existing `values.py`,
 `_models.py`, and native exports by semantic meaning and fields, not only by
 class name. Reuse the existing owner across requests, results, producers, and
@@ -460,7 +479,7 @@ Classify public outputs before choosing their schema:
 | Output kind | Contract |
 | --- | --- |
 | Canonical value | A complete reusable mathematical object accepted by its downstream consumers. |
-| Source-bound result | A source value plus a conclusion or certificate whose defining relation is validated. |
+| Source-bound result | A source value plus a conclusion or certificate whose defining relation the producer establishes. Publicly supplied claims require admitted consumer checking. |
 | Display projection | A human-readable summary that is not accepted as a composable mathematical value. |
 
 For every producer or materially changed consumer, record the applicable

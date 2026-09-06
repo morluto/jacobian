@@ -176,7 +176,10 @@ A public operation must satisfy every gate:
 7. It supplies material computation or reliability leverage over ordinary
    model-authored Python.
 8. It is not merely a cheap deterministic projection of another public result.
-   Useful projections normally belong only in the native API.
+   Useful projections normally belong only in the native API. A typed
+   conversion is not an automatic exception; distinguish a material
+   representation transform from a field projection using the
+   [interoperability contract](value-interoperability.md).
 9. Its schema contains no benchmark constants, theorem-specific answer shape,
    or frozen research workflow.
 10. It has a distinct discovery intent and does not create a near-duplicate
@@ -219,8 +222,11 @@ For a catalog-changing pull request:
 4. For bounded search, test both a complete result and the applicable
    incomplete or truncated path. Missing witnesses and exhausted budgets are
    never negative mathematical conclusions.
-5. Regenerate the schema snapshot and run the catalog, native-API, and owning
-   mathematical tests.
+5. Inspect the generated request and result schemas, update any owner-maintained
+   schema fixtures that exist, and run the catalog, native-API, and owning
+   mathematical tests. Include schema/parser agreement and serialized
+   producer-consumer tests when those contracts change; do not introduce a
+   parallel hand-maintained schema inventory.
 
 Publication review is not a runtime recommendation or execution-planning
 layer. Request admission remains inside the native operation and is computed

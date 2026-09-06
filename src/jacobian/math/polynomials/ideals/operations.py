@@ -1294,6 +1294,20 @@ def verify_ideal_membership_certificate(
             )
         if claim.multiplier is None or claim.cofactors is None:
             return False
+        cofactor_terms = 0
+        for cofactor in claim.cofactors:
+            require_polynomial_budget(
+                cofactor,
+                maximum_terms=MAX_CERTIFICATE_INPUT_TERMS,
+                maximum_exponent=MAX_INPUT_EXPONENT,
+                maximum_coefficient_digits=MAX_COEFFICIENT_DIGITS,
+                label="certificate cofactor",
+            )
+            cofactor_terms += len(cofactor.polynomial.terms)
+        if cofactor_terms * sum(
+            len(generator.polynomial.terms) for generator in claim.ideal.generators
+        ) > _MAX_CERTIFICATE_NONZEROS:
+            return False
         if any(
             sum(term.exponents) > claim.cofactor_degree_bound
             for cofactor in claim.cofactors

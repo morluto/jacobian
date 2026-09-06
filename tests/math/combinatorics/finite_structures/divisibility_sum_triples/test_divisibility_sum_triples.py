@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -8,6 +10,7 @@ from jacobian.math.combinatorics.finite_structures.divisibility_sum_triples._mod
 )
 from jacobian.math.combinatorics.finite_structures.divisibility_sum_triples.operations import (
     construct_divisibility_sum_triples_hypergraph,
+    verify_divisibility_sum_triples,
 )
 
 
@@ -106,3 +109,14 @@ def test_rejects_actual_hypergraph_envelope() -> None:
 def test_native_rejects_reversed_interval() -> None:
     with pytest.raises(ValueError, match="must not exceed"):
         construct_divisibility_sum_triples_hypergraph(4, 1)
+
+
+def test_serialized_divisibility_claim_is_verifiable_and_forgery_is_structural() -> None:
+    result = construct_divisibility_sum_triples_hypergraph(1, 4)
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_divisibility_sum_triples(decoded)
+
+    forged = result.model_dump(mode="json")
+    forged["hypergraph"]["edges"][0][1] = ["1", "2", "4"]
+    forged_decoded = type(result).model_validate_json(json.dumps(forged))
+    assert not verify_divisibility_sum_triples(forged_decoded)

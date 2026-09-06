@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.axis_aligned_square_grid.operations import (
     construct_axis_aligned_square_grid,
+    verify_axis_aligned_square_grid,
 )
 
 
@@ -97,3 +100,14 @@ def test_n16_is_admitted_by_carrier_bounds() -> None:
 def test_native_admission_rejects_n17_before_enumeration() -> None:
     with pytest.raises(OperationDomainValidationError, match="between 1 and 16"):
         construct_axis_aligned_square_grid(17)
+
+
+def test_serialized_grid_claim_is_verifiable_and_forgery_is_structural() -> None:
+    result = construct_axis_aligned_square_grid(2)
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_axis_aligned_square_grid(decoded)
+
+    forged = result.model_dump(mode="json")
+    forged["hypergraph"]["edges"][0][0] = "wrong_square"
+    forged_decoded = type(result).model_validate_json(json.dumps(forged))
+    assert not verify_axis_aligned_square_grid(forged_decoded)

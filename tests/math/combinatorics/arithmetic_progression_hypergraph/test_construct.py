@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
@@ -11,6 +13,7 @@ from jacobian.math.combinatorics.arithmetic_progression_hypergraph._models impor
 )
 from jacobian.math.combinatorics.arithmetic_progression_hypergraph.operations import (
     construct_arithmetic_progression_hypergraph,
+    verify_arithmetic_progression_hypergraph,
 )
 
 # ---------------------------------------------------------------------------
@@ -236,6 +239,17 @@ def test_no_duplicate_edges() -> None:
     result = construct_arithmetic_progression_hypergraph(1, 20, 3)
     edge_sets = [frozenset(members) for _, members in result.hypergraph.edges]
     assert len(edge_sets) == len(set(edge_sets))
+
+
+def test_serialized_ap_claim_is_verifiable_and_forgery_is_structural() -> None:
+    result = construct_arithmetic_progression_hypergraph(1, 5, 3)
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_arithmetic_progression_hypergraph(decoded)
+
+    forged = result.model_dump(mode="json")
+    forged["hypergraph"]["edges"][0][0] = "(forged,1)"
+    forged_decoded = type(result).model_validate_json(json.dumps(forged))
+    assert not verify_arithmetic_progression_hypergraph(forged_decoded)
 
 
 # ---------------------------------------------------------------------------

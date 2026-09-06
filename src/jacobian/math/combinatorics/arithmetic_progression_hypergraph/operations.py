@@ -57,4 +57,21 @@ def construct_arithmetic_progression_hypergraph(
     )
 
 
-__all__ = ["construct_arithmetic_progression_hypergraph"]
+def verify_arithmetic_progression_hypergraph(
+    claim: ArithmeticProgressionHypergraphResult,
+) -> bool:
+    """Verify interval vertices and every ``(a, d)`` progression edge."""
+
+    try:
+        expected = construct_arithmetic_progression_hypergraph(
+            claim.lower, claim.upper, claim.k
+        )
+        return claim.hypergraph == expected.hypergraph
+    except Exception:
+        return False
+
+
+__all__ = [
+    "construct_arithmetic_progression_hypergraph",
+    "verify_arithmetic_progression_hypergraph",
+]

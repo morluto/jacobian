@@ -5,9 +5,11 @@ from jacobian.math.combinatorics.arithmetic_progression_hypergraph._models impor
 )
 from jacobian.math.combinatorics.arithmetic_progression_hypergraph.operations import (
     construct_arithmetic_progression_hypergraph,
+    verify_arithmetic_progression_hypergraph,
 )
 
 __all__ = [
     "ArithmeticProgressionHypergraphResult",
     "construct_arithmetic_progression_hypergraph",
+    "verify_arithmetic_progression_hypergraph",
 ]

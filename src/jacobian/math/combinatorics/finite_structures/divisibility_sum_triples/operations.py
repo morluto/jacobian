@@ -19,7 +19,10 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
 
-__all__ = ["construct_divisibility_sum_triples_hypergraph"]
+__all__ = [
+    "construct_divisibility_sum_triples_hypergraph",
+    "verify_divisibility_sum_triples",
+]
 
 MAX_TRIPLE_ENUMERATION = 1_000_000
 
@@ -113,3 +116,15 @@ def construct_divisibility_sum_triples_hypergraph(
         upper_bound=upper_bound,
         hypergraph=hypergraph,
     )
+
+
+def verify_divisibility_sum_triples(claim: DivisibilitySumTriplesResult) -> bool:
+    """Verify the complete interval-bound divisibility-triple claim."""
+
+    try:
+        expected = construct_divisibility_sum_triples_hypergraph(
+            claim.lower_bound, claim.upper_bound
+        )
+        return claim.hypergraph == expected.hypergraph
+    except Exception:
+        return False

@@ -13,7 +13,10 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
 
-__all__ = ["construct_axis_aligned_square_grid"]
+__all__ = [
+    "construct_axis_aligned_square_grid",
+    "verify_axis_aligned_square_grid",
+]
 
 
 def _admit_side_length(side_length: int) -> int:
@@ -90,3 +93,13 @@ def construct_axis_aligned_square_grid(
         side_length=n,
         hypergraph=hypergraph,
     )
+
+
+def verify_axis_aligned_square_grid(claim: AxisAlignedSquareGridResult) -> bool:
+    """Verify the complete square-grid vertex and edge construction claim."""
+
+    try:
+        expected = construct_axis_aligned_square_grid(claim.side_length)
+        return claim.hypergraph == expected.hypergraph
+    except Exception:
+        return False

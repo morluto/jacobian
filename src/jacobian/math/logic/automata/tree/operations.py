@@ -17,6 +17,7 @@ from jacobian.math.logic.automata.tree.values import (
     RankedTree,
     ReachableStateProfile,
     TreeAutomatonTransition,
+    TreeStateChartEntry,
     _build_reachable_state_profile,
     accepted_tree_count_work_bound,
     validate_ranked_tree,
@@ -187,8 +188,12 @@ def verify_tree_run(claim: TreeRunResult) -> bool:
         chart = tree_state_chart(claim.automaton, claim.tree)
         roots = chart[-1][1]
         accepted = bool(set(roots) & set(claim.automaton.final_states))
+        typed_chart = tuple(
+            TreeStateChartEntry(position=position, states=states)
+            for position, states in chart
+        )
         return (
-            claim.state_chart == chart
+            claim.state_chart == typed_chart
             and claim.root_states == roots
             and claim.accepted == accepted
             and claim.node_count == len(chart)

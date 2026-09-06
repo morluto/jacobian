@@ -57,8 +57,14 @@ def test_native_operations_return_canonical_results() -> None:
 
     assert petri_nets.enabled_transitions(net, marking).transitions == (0,)
     assert petri_nets.fire_transition(net, marking, 0).status == "FIRED"
-    assert petri_nets.compute_incidence_matrix(net).incidence == ((-1, 0), (0, 0))
-    assert petri_nets.reachability_graph(net, marking).states[0] == (1, 0)
+    assert petri_nets.compute_incidence_matrix(net).incidence.entries == (
+        (-1, 0),
+        (0, 0),
+    )
+    assert petri_nets.reachability_graph(net, marking).states[0].marking.tokens == (
+        1,
+        0,
+    )
 
 
 def test_empty_net_preserves_empty_axes_across_json() -> None:
@@ -155,6 +161,10 @@ def test_serialized_claims_retain_sources_and_reject_forgery() -> None:
     assert not petri_nets.verify_siphon_trap(
         siphon_decoded.model_copy(update={"siphons": ()})
     )
+    forged_payload = siphon.model_dump(mode="json")
+    forged_payload["siphons"] = [{"places": [-1]}]
+    with pytest.raises(ValidationError):
+        type(siphon).model_validate(forged_payload)
 
 
 # ---------------------------------------------------------------------------
@@ -234,12 +244,12 @@ class TestIncidenceMatrix:
     def test_simple_incidence(self):
         net = _simple_net()
         result = compute_incidence(IncidenceMatrixRequest(net=net))
-        assert result.incidence == ((-1, 0), (0, 0))
+        assert result.incidence.entries == ((-1, 0), (0, 0))
 
     def test_cyclic_incidence(self):
         net = _token_passing_net()
         result = compute_incidence(IncidenceMatrixRequest(net=net))
-        assert result.incidence == ((-1, 1), (1, -1))
+        assert result.incidence.entries == ((-1, 1), (1, -1))
 
 
 # ---------------------------------------------------------------------------
@@ -255,7 +265,7 @@ class TestReachability:
             ReachabilityRequest(net=net, initial_marking=marking, max_states=100)
         )
         # From (2,0): fire t0 -> (1,0), fire t0 again -> (0,0)
-        assert (2, 0) in result.states
+        assert (2, 0) in tuple(state.marking.tokens for state in result.states)
         assert not result.truncated
 
     def test_cyclic_reachability(self):
@@ -266,8 +276,8 @@ class TestReachability:
         )
         # Cyclic: (1,0) -> t0 -> (0,1) -> t1 -> (1,0)
         assert len(result.states) == 2
-        assert (1, 0) in result.states
-        assert (0, 1) in result.states
+        assert (1, 0) in tuple(state.marking.tokens for state in result.states)
+        assert (0, 1) in tuple(state.marking.tokens for state in result.states)
         assert not result.truncated
 
     def test_truncation(self):
@@ -418,25 +428,25 @@ class TestSiphonTrapAdapter:
         assert len(result.siphons) >= 1
         assert len(result.traps) >= 1
         for s in result.siphons:
-            assert all(0 <= p < 2 for p in s)
+            assert all(0 <= p < 2 for p in s.places)
         for t in result.traps:
-            assert all(0 <= p < 2 for p in t)
+            assert all(0 <= p < 2 for p in t.places)
 
     def test_siphon_trap_sorted(self):
         """Siphons and traps should be sorted tuples."""
         net = _cyclic_net()
         result = compute_siphon_trap(SiphonTrapRequest(net=net))
         for s in result.siphons:
-            assert list(s) == sorted(s)
+            assert list(s.places) == sorted(s.places)
         for t in result.traps:
-            assert list(t) == sorted(t)
+            assert list(t.places) == sorted(t.places)
 
     def test_siphon_trap_one_way(self):
         """One-way net: {0} is a siphon (not a trap), {1} is a trap."""
         net = _one_way_net()
         result = compute_siphon_trap(SiphonTrapRequest(net=net))
-        siphon_sets = [frozenset(s) for s in result.siphons]
-        trap_sets = [frozenset(t) for t in result.traps]
+        siphon_sets = [frozenset(s.places) for s in result.siphons]
+        trap_sets = [frozenset(t.places) for t in result.traps]
         assert frozenset({0}) in siphon_sets
         assert frozenset({0}) not in trap_sets
         assert frozenset({1}) in trap_sets

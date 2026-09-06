@@ -15,12 +15,17 @@ def test_exact_public_api_symbols() -> None:
         "AsymmetricLocalLemmaWitnessCheckResult",
         "ExactComplexRational",
         "FiniteJointTable",
+        "GraphConnectionProbabilityResult",
+        "GraphReliabilityEdgeProbability",
+        "GraphReliabilitySource",
+        "GraphReliabilityState",
         "MutualInformationLogRepresentation",
         "MutualInformationResult",
         "MutualInformationTerm",
         "all_terminal_reliability",
         "check_asymmetric_local_lemma_witness",
         "condition",
+        "compute_graph_connection_probability",
         "convolution",
         "convolution_peak",
         "convolution_power",
@@ -29,6 +34,7 @@ def test_exact_public_api_symbols() -> None:
         "mutual_information",
         "pushforward",
         "raw_moment",
+        "verify_graph_connection_probability",
     )
     assert tuple(probability.__all__) == expected
     assert len(probability.__all__) == len(set(probability.__all__))

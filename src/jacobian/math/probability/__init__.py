@@ -1,6 +1,14 @@
 """Supported native exact finite-probability APIs."""
 
 from jacobian.math.probability._gaussian import ExactComplexRational
+from jacobian.math.probability._graph_connection_probability import (
+    GraphConnectionProbabilityResult,
+    GraphReliabilityEdgeProbability,
+    GraphReliabilitySource,
+    GraphReliabilityState,
+    compute_graph_connection_probability,
+    verify_graph_connection_probability,
+)
 from jacobian.math.probability.all_terminal_reliability import (
     AllTerminalReliabilityResult,
     all_terminal_reliability,
@@ -36,12 +44,17 @@ __all__ = [
     "AsymmetricLocalLemmaWitnessCheckResult",
     "ExactComplexRational",
     "FiniteJointTable",
+    "GraphConnectionProbabilityResult",
+    "GraphReliabilityEdgeProbability",
+    "GraphReliabilitySource",
+    "GraphReliabilityState",
     "MutualInformationLogRepresentation",
     "MutualInformationResult",
     "MutualInformationTerm",
     "all_terminal_reliability",
     "check_asymmetric_local_lemma_witness",
     "condition",
+    "compute_graph_connection_probability",
     "convolution",
     "convolution_peak",
     "convolution_power",
@@ -50,4 +63,5 @@ __all__ = [
     "mutual_information",
     "pushforward",
     "raw_moment",
+    "verify_graph_connection_probability",
 ]

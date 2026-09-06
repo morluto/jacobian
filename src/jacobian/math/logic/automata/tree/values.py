@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Iterator
 from dataclasses import dataclass
 from math import comb
-from typing import Annotated, Any, Self
+from typing import Annotated, Self
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_core import PydanticCustomError
@@ -77,36 +76,12 @@ class TreeStateChartEntry(StrictModel):
             )
         return self
 
-    def __iter__(  # type: ignore[override]
-        self,
-    ) -> Iterator[Any]:
-        return iter((self.position, self.states))
-
-    def __getitem__(self, index: int) -> object:
-        return (self.position, self.states)[index]
-
-    def __eq__(self, other: object) -> bool:
-        if isinstance(other, tuple):
-            return (self.position, self.states) == other
-        return super().__eq__(other)
-
 
 class TreeStateWitness(StrictModel):
     """A state-indexed canonical ground-tree witness."""
 
     state: int = Field(ge=0, lt=MAX_TA_STATES)
     tree: RankedTree
-
-    def __iter__(self) -> Iterator[Any]:  # type: ignore[override]
-        return iter((self.state, self.tree))
-
-    def __getitem__(self, index: int) -> object:
-        return (self.state, self.tree)[index]
-
-    def __eq__(self, other: object) -> bool:
-        if isinstance(other, tuple):
-            return (self.state, self.tree) == other
-        return super().__eq__(other)
 
 
 class BottomUpTreeAutomaton(StrictModel):
@@ -283,14 +258,16 @@ class ReachableStateProfile(StrictModel):
                 "states_do_not_partition",
                 "reachable and unreachable states must partition the automaton states",
             )
-        if tuple(state for state, _ in self.witnesses) != self.reachable_states:
+        if tuple(witness.state for witness in self.witnesses) != self.reachable_states:
             raise _validation_error(
                 "witnesses_not_aligned",
                 "witnesses must carry exactly one entry per reachable state in order",
             )
         total_nodes = 0
-        for _, tree in self.witnesses:
-            total_nodes = _ranked_witness_nodes(tree, self.automaton, total_nodes)
+        for witness in self.witnesses:
+            total_nodes = _ranked_witness_nodes(
+                witness.tree, self.automaton, total_nodes
+            )
         if total_nodes > MAX_REACHABILITY_WITNESS_NODES:
             raise _validation_error(
                 "witness_output_bound",

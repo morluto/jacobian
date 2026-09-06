@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
-from typing import Any, Self
+from typing import Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -110,11 +109,6 @@ class PetriMarkingState(StrictModel):
             )
         return self
 
-    def __eq__(self, other: object) -> bool:
-        if isinstance(other, tuple):
-            return self.marking.tokens == other
-        return super().__eq__(other)
-
 
 class PetriReachabilityEdge(StrictModel):
     """One transition edge between indexed markings."""
@@ -145,11 +139,6 @@ class PetriIncidenceMatrix(StrictModel):
             raise _validation_error("incidence_shape", "entries must match both axes")
         return self
 
-    def __eq__(self, other: object) -> bool:
-        if isinstance(other, tuple):
-            return self.entries == other
-        return super().__eq__(other)
-
 
 class PetriPlaceSubset(StrictModel):
     """A canonical subset of the net's place axis."""
@@ -158,14 +147,15 @@ class PetriPlaceSubset(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_places(self) -> Self:
+        if any(place < 0 for place in self.places):
+            raise _validation_error(
+                "place_subset_negative", "place subset indices must be nonnegative"
+            )
         if self.places != tuple(sorted(set(self.places))):
             raise _validation_error(
                 "place_subset", "place subsets must be increasing and unique"
             )
         return self
-
-    def __iter__(self) -> Iterator[Any]:  # type: ignore[override]
-        return iter(self.places)
 
 
 class FiringSequence(StrictModel):

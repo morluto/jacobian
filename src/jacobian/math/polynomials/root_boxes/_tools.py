@@ -9,7 +9,7 @@ from ._models import (
     PolynomialSystemRootBoxRequest,
     PolynomialSystemRootBoxResult,
 )
-from .operations import certify_real_root_box
+from .operations import certify_real_root_box, verify_real_root_box
 
 
 def compute_polynomial_system_root_box(
@@ -90,4 +90,4 @@ TOOLS: MathTools = (
     ),
 )
 
-__all__ = ["TOOLS"]
+__all__ = ["TOOLS", "verify_real_root_box"]

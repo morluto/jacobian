@@ -493,4 +493,14 @@ def certify_real_root_box(
     )
 
 
-__all__ = ["certify_real_root_box"]
+def verify_real_root_box(claim: PolynomialSystemRootBoxResult) -> bool:
+    """Recompute and verify the retained root-box conclusion."""
+
+    try:
+        expected = certify_real_root_box(claim.polynomial_map, claim.box)
+    except Exception:
+        return False
+    return claim.conclusion == expected.conclusion
+
+
+__all__ = ["certify_real_root_box", "verify_real_root_box"]

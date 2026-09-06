@@ -7,10 +7,8 @@ from typing import Annotated, Literal, Self
 from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._digest import Sha256Digest
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.canonical import encode_strict_json, sha256_digest
 from jacobian.math.analysis.intervals import ClosedRationalInterval, RationalBox
 from jacobian.math.matrices.values import RationalMatrix
 from jacobian.math.polynomials.maps._models import VariablePoint
@@ -40,25 +38,6 @@ ROOT_BOX_ADMISSION_SUMMARY = (
 
 def _validation_error(message: str) -> PydanticCustomError:
     return PydanticCustomError("polynomial.root_box_invariant", message)
-
-
-def _source_payload(
-    polynomial_map: RationalPolynomialMap,
-    box: RationalBox,
-) -> dict[str, object]:
-    return {
-        "polynomial_map": polynomial_map.model_dump(mode="json"),
-        "box": box.model_dump(mode="json"),
-    }
-
-
-def root_box_source_digest(
-    polynomial_map: RationalPolynomialMap,
-    box: RationalBox,
-) -> Sha256Digest:
-    """Bind one ordered polynomial system to one exact rational box."""
-
-    return sha256_digest(encode_strict_json(_source_payload(polynomial_map, box)))
 
 
 class PolynomialSystemRootBoxRequest(StrictModel):
@@ -240,22 +219,6 @@ type RootBoxConclusion = Annotated[
 ]
 
 
-def root_box_record_digest(
-    source_digest: Sha256Digest,
-    conclusion: RootBoxConclusion,
-) -> Sha256Digest:
-    """Bind the exact returned evidence to its already-bound source."""
-
-    return sha256_digest(
-        encode_strict_json(
-            {
-                "source_digest": source_digest,
-                "conclusion": conclusion.model_dump(mode="json"),
-            }
-        )
-    )
-
-
 def _midpoint_data(conclusion: RootBoxConclusion) -> RootBoxMidpointData | None:
     if isinstance(conclusion, RootBoxCertifiedUniqueNonsingular):
         return conclusion.evidence
@@ -273,27 +236,10 @@ class PolynomialSystemRootBoxResult(StrictModel):
 
     polynomial_map: RationalPolynomialMap
     box: RationalBox
-    source_digest: Sha256Digest
     conclusion: RootBoxConclusion
-    record_digest: Sha256Digest = Field(
-        description=(
-            "Canonical integrity binding for the retained source and evidence. "
-            "It is not an independently supplied proof-verification API."
-        )
-    )
 
     @model_validator(mode="after")
     def require_source_and_evidence_binding(self) -> Self:
-        if self.source_digest != root_box_source_digest(self.polynomial_map, self.box):
-            raise _validation_error(
-                "source digest does not bind the polynomial system and box"
-            )
-        if self.record_digest != root_box_record_digest(
-            self.source_digest, self.conclusion
-        ):
-            raise _validation_error(
-                "record digest does not bind the returned exact evidence"
-            )
         order = len(self.polynomial_map.input_variables)
         if order > MAX_ROOT_BOX_DIMENSION:
             raise _validation_error(
@@ -333,13 +279,10 @@ class PolynomialSystemRootBoxResult(StrictModel):
     ) -> Self:
         """Build a result after the admitted kernel established its outcome."""
 
-        source_digest = root_box_source_digest(polynomial_map, box)
-        return cls(
+        return cls.model_construct(
             polynomial_map=polynomial_map,
             box=box,
-            source_digest=source_digest,
             conclusion=conclusion,
-            record_digest=root_box_record_digest(source_digest, conclusion),
         )
 
 
@@ -367,6 +310,4 @@ __all__ = [
     "RootBoxNoRoot",
     "RootBoxSingularMidpointAttempt",
     "RootBoxUnknown",
-    "root_box_record_digest",
-    "root_box_source_digest",
 ]

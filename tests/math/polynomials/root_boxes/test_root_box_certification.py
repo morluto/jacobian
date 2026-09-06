@@ -14,7 +14,10 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.analysis.intervals import ClosedRationalInterval, RationalBox
 from jacobian.math.matrices.operations import determinant_result
 from jacobian.math.polynomials.maps.values import RationalPolynomialMap
-from jacobian.math.polynomials.root_boxes import certify_real_root_box
+from jacobian.math.polynomials.root_boxes import (
+    certify_real_root_box,
+    verify_real_root_box,
+)
 from jacobian.math.polynomials.root_boxes._models import (
     MAX_ROOT_BOX_DIMENSION,
     PolynomialSystemRootBoxRequest,
@@ -417,7 +420,6 @@ def test_permuting_the_complete_axis_preserves_the_geometric_root() -> None:
         interval.lower.as_fraction()
         for interval in transported.conclusion.evidence.krawczyk_image.intervals
     ) == (Fraction(1), Fraction(2))
-    assert source.source_digest != transported.source_digest
 
 
 def test_non_square_system_and_mismatched_axis_are_domain_rejections() -> None:
@@ -483,8 +485,8 @@ def test_record_digest_rejects_independent_source_or_evidence_mutation(
             "den": "2",
         }
 
-    with pytest.raises(ValidationError, match="digest"):
-        PolynomialSystemRootBoxResult.model_validate(payload)
+    claim = PolynomialSystemRootBoxResult.model_validate(payload)
+    assert not verify_real_root_box(claim)
 
 
 def test_produced_result_round_trips_and_schema_discriminates_every_branch() -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -20,6 +21,8 @@ from jacobian.math.topology.cohomology.hochschild._models import (
 from jacobian.math.topology.cohomology.hochschild.operations import (
     hochschild_chain_complex,
     hochschild_homology,
+    verify_hochschild_chain_complex,
+    verify_hochschild_homology,
 )
 
 
@@ -388,6 +391,41 @@ class TestHomologySourceBinding:
         payload["prime"] = 7
         with _validation_error("hochschild_complex.prime_binding"):
             HochschildHomologyResult.model_validate(payload)
+
+    def test_serialized_chain_claim_is_verifiable_and_forgery_is_structural(self) -> None:
+        result = _run_chain_complex(
+            HochschildChainComplexRequest(algebra=_dual_numbers(5), max_degree=2)
+        )
+        decoded = HochschildChainComplexResult.model_validate_json(
+            result.model_dump_json()
+        )
+        assert verify_hochschild_chain_complex(decoded)
+
+        forged = result.model_dump(mode="json")
+        entry = forged["differentials"][1]["matrix"]["entries"][0][0]
+        forged["differentials"][1]["matrix"]["entries"][0][0] = (entry + 1) % 5
+        forged_decoded = HochschildChainComplexResult.model_validate_json(
+            json.dumps(forged)
+        )
+        assert not verify_hochschild_chain_complex(forged_decoded)
+
+    def test_serialized_homology_claim_is_verifiable_and_forgery_is_structural(
+        self,
+    ) -> None:
+        result = _run_homology(
+            HochschildHomologyRequest(algebra=_dual_numbers(5), max_degree=2)
+        )
+        decoded = HochschildHomologyResult.model_validate_json(
+            result.model_dump_json()
+        )
+        assert verify_hochschild_homology(decoded)
+
+        forged = result.model_dump(mode="json")
+        forged["groups"][0]["betti"] = 0
+        forged_decoded = HochschildHomologyResult.model_validate_json(
+            json.dumps(forged)
+        )
+        assert not verify_hochschild_homology(forged_decoded)
 
 
 def _dual_numbers(prime: int) -> AlgebraStructure:

@@ -227,8 +227,32 @@ def hochschild_homology(
     )
 
 
+def verify_hochschild_chain_complex(claim: HochschildChainComplexResult) -> bool:
+    """Verify serialized boundary matrices against their retained algebra."""
+
+    try:
+        expected = hochschild_chain_complex(
+            claim.algebra, len(claim.group_dimensions) - 1
+        )
+        return claim == expected
+    except Exception:
+        return False
+
+
+def verify_hochschild_homology(claim: HochschildHomologyResult) -> bool:
+    """Verify serialized Betti numbers against the retained algebra."""
+
+    try:
+        expected = hochschild_homology(claim.algebra, claim.max_degree)
+        return claim == expected
+    except Exception:
+        return False
+
+
 __all__ = [
     "hochschild_chain_complex",
     "hochschild_homology",
     "hochschild_homology_groups",
+    "verify_hochschild_chain_complex",
+    "verify_hochschild_homology",
 ]

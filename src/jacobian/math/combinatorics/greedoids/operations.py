@@ -369,16 +369,19 @@ def rank_profile(
 ) -> RankResult:
     """Return the exact rank outcome, including a non-greedoid obstruction."""
     _admit_subset(system, subset)
+    canonical_subset = None if subset is None else tuple(sorted(subset))
     recognized = _recognized(system)
     if recognized.status != "GREEDOID":
         return RankResult(
             system=system,
             status="NOT_A_GREEDOID",
             obstruction=recognized.obstruction,
-            subset=subset,
+            subset=canonical_subset,
         )
-    subset_set = None if subset is None else frozenset(subset)
-    return RankResult(system=system, rank=_rank_unchecked(system, subset_set), subset=subset)
+    subset_set = None if canonical_subset is None else frozenset(canonical_subset)
+    return RankResult(
+        system=system, rank=_rank_unchecked(system, subset_set), subset=canonical_subset
+    )
 
 
 def bases_profile(
@@ -386,18 +389,19 @@ def bases_profile(
 ) -> BasesResult:
     """Return every subset basis, or the first non-greedoid obstruction."""
     _admit_subset(system, subset)
+    canonical_subset = None if subset is None else tuple(sorted(subset))
     recognized = _recognized(system)
     if recognized.status != "GREEDOID":
         return BasesResult(
             system=system,
-            subset=subset,
+            subset=canonical_subset,
             status="NOT_A_GREEDOID", bases=(), obstruction=recognized.obstruction
         )
-    subset_set = None if subset is None else frozenset(subset)
+    subset_set = None if canonical_subset is None else frozenset(canonical_subset)
     rank_value, basis_list = _bases_unchecked(system, subset_set)
     return BasesResult(
         system=system,
-        subset=subset,
+        subset=canonical_subset,
         rank=rank_value,
         bases=tuple(tuple(sorted(basis)) for basis in basis_list),
     )

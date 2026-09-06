@@ -59,9 +59,7 @@ class CubicalComplex(StrictModel):
     """
 
     ambient_dimension: int = Field(ge=1, le=MAX_DIM)
-    cells: tuple[CubicalCell, ...] = Field(
-        min_length=1, max_length=MAX_CELLS
-    )
+    cells: tuple[CubicalCell, ...] = Field(min_length=1, max_length=MAX_CELLS)
 
     @model_validator(mode="after")
     def require_structural_cells(self) -> Self:

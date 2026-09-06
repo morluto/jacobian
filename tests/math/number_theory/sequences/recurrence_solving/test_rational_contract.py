@@ -36,9 +36,7 @@ def test_find_recurrence_accepts_exact_rational_sequence() -> None:
     assert decoded.sequence == result.sequence
     assert verify_recurrence(decoded)
 
-    forged = result.model_copy(
-        update={"coefficients": (_q(3),), "order": 1}
-    )
+    forged = result.model_copy(update={"coefficients": (_q(3),), "order": 1})
     assert not verify_recurrence(forged)
 
 

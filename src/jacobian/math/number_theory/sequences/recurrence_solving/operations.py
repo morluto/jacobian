@@ -182,9 +182,7 @@ def verify_recurrence(claim: RecurrenceFindResult) -> bool:
 def verify_closed_form(claim: ClosedFormResult) -> bool:
     """Verify the displayed closed form against its retained recurrence source."""
     try:
-        expected = closed_form(
-            claim.characteristic_coefficients, claim.initial_values
-        )
+        expected = closed_form(claim.characteristic_coefficients, claim.initial_values)
     except (TypeError, ValueError, RuntimeError):
         return False
     return claim.expression.value == expected.expression
@@ -193,9 +191,7 @@ def verify_closed_form(claim: ClosedFormResult) -> bool:
 def verify_prime_field_recurrence(claim: PrimeFieldRecurrenceFindResult) -> bool:
     """Verify a prime-field recurrence against its retained source sequence."""
     try:
-        expected = berlekamp_massey(
-            list(claim.sequence), claim.recurrence.prime
-        )
+        expected = berlekamp_massey(list(claim.sequence), claim.recurrence.prime)
     except (TypeError, ValueError, RuntimeError):
         return False
     return claim.recurrence == expected

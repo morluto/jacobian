@@ -31,9 +31,9 @@ def _face_cells(cells: tuple[CubicalCell, ...]) -> tuple[CubicalCell, ...]:
     return tuple(CubicalCell(intervals=intervals) for intervals in sorted(all_cells))
 
 
-def _canonical_complex(cells: tuple[CubicalCell, ...]) -> tuple[
-    CubicalComplex, tuple[CubicalCell, ...]
-]:
+def _canonical_complex(
+    cells: tuple[CubicalCell, ...],
+) -> tuple[CubicalComplex, tuple[CubicalCell, ...]]:
     if not cells:
         raise ValueError("at least one cell is required")
     ambient_dimension = len(cells[0].intervals)

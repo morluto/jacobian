@@ -106,7 +106,10 @@ class ClosedFormExpression(StrictModel):
             raise _validation_error(
                 "expression_grammar", "closed-form expression contains invalid syntax"
             )
-        if any(token.startswith("__") for token in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", self.value)):
+        if any(
+            token.startswith("__")
+            for token in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", self.value)
+        ):
             raise _validation_error(
                 "expression_grammar", "closed-form expression contains a forbidden name"
             )

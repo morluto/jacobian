@@ -113,6 +113,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         request_type=ProjectivePlaneCurveSingularityRequest,
         result_type=ProjectivePlaneCurveSingularityProfile,
         run=compute_projective_plane_curve_singularity_profile,
+        runtime_requirements=("singular",),
         tags=("algebraic-geometry", "projective-curve", "singular-locus", "exact"),
         examples=(
             OperationExample(

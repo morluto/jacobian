@@ -31,9 +31,9 @@ numeric capability version with:
 Singular -q --execute 'system("version");quit;'
 ```
 
-Jacobian invokes Singular once per accepted request through the shared bounded
-process runner. The commutative-algebra domain owns the strict polynomial and
-ideal codec; callers never submit Singular source or receive Singular values.
+Jacobian invokes Singular through the shared bounded process runner. An operation
+may require several backend phases within its request deadline. The
+commutative-algebra domain owns the strict polynomial and ideal codec; callers never submit Singular source or receive Singular values.
 An unavailable backend, timeout, process-limit failure, or invalid backend
 output is an execution outcome and does not establish a mathematical ideal.
 
@@ -71,13 +71,17 @@ Optional system runtimes currently serve these operations:
 
 | Runtime | Operations |
 | --- | --- |
-| Singular 4.4.x | `polynomial.ideal.minimal_primes.compute`, `polynomial.ideal.radical.compute`, `polynomial.ideal.quotient.compute`, `polynomial.ideal.saturation.compute`, `polynomial.map.generic_degree.compute` |
+| Singular 4.4.x | `polynomial.ideal.minimal_primes.compute`, `polynomial.ideal.radical.compute`, `polynomial.ideal.quotient.compute`, `polynomial.ideal.saturation.compute`, `polynomial.map.generic_degree.compute`, `algebraic_geometry.projective_plane_curve.singularity_profile.compute` |
 | QEPCAD B 1.74 | `real_algebraic.plane_semialgebraic.component_profile.compute` |
 
 Declarations expose `runtime_requirements`. These are stable requirements, not
 live availability claims. An operation can handle a degenerate request without
 starting its declared backend. Missing runtimes do not remove operations from the
 catalog or prevent unrelated operations from running.
+
+The projective plane-curve singularity profile requires Singular for degree-two
+and degree-three inputs. Degree-one inputs use a native smoothness shortcut.
+Its runtime declaration records the possible requirement for the operation.
 
 Python callers can explicitly check the execution environment:
 

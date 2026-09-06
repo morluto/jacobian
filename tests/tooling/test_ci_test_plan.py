@@ -324,3 +324,21 @@ def test_rejects_non_normalized_paths() -> None:
             changed_paths=["../tests/math/test_anything.py"],
             repository=ROOT,
         )
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "src/jacobian/math/polynomials/maps/operations.py",
+        "src/jacobian/math/polynomials/maps/_singular.py",
+        "src/jacobian/math/geometry/algebraic_curves/_singularity.py",
+        "src/jacobian/math/geometry/algebraic_curves/_tools.py",
+        "tests/math/geometry/algebraic_curves/test_projective_singularity_profile.py",
+        "tests/process/geometry/test_projective_singularity_point_worker.py",
+    ],
+)
+def test_singular_consumers_select_runtime_lane(path: str) -> None:
+    plan = _plan([path])
+
+    assert plan.run_singular is True
+    assert plan.run_qepcad is False

@@ -126,6 +126,8 @@ test-singular: ## Pinned Singular exact-algebra backend (serial, 120s, kill-safe
 		tests/math/polynomials/test_polynomial_map_generic_degree.py \
 		tests/process/polynomials/ideals \
 		tests/process/polynomial_maps \
+		tests/math/geometry/algebraic_curves/test_projective_singularity_profile.py \
+		tests/process/geometry/test_projective_singularity_point_worker.py \
 		tests/integration/catalog/test_builtin_examples.py \
 		tests/integration/catalog/test_mcp_builtin_examples.py \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)

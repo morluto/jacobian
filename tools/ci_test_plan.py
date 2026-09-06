@@ -179,6 +179,9 @@ def _requires_singular_runtime(path: str) -> bool:
     return (
         "/polynomials/ideals/" in path
         or "/polynomial_maps/" in path
+        or "/polynomials/maps/" in path
+        or "/geometry/algebraic_curves/" in path
+        or PurePosixPath(path).name.startswith("test_projective_singularity")
         or path.endswith(
             ("/test_ideals.py", "/test_generic_degree_singular_process.py")
         )

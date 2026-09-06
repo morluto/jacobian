@@ -18,6 +18,7 @@ SINGULAR_OPERATIONS = (
     "polynomial.ideal.quotient.compute",
     "polynomial.ideal.saturation.compute",
     "polynomial.map.generic_degree.compute",
+    "algebraic_geometry.projective_plane_curve.singularity_profile.compute",
 )
 
 
@@ -61,6 +62,13 @@ def test_native_calls_raise_actionable_error(operation_id: str) -> None:
     operation = catalog.operation(operation_id)
     assert operation is not None
     payload = copy.deepcopy(operation.examples[0].input)
+    if operation_id == SINGULAR_OPERATIONS[-1]:
+        smooth = operation.run(operation.request_type.model_validate(payload))
+        assert smooth.model_dump(mode="json")["outcome"]["status"] == (
+            "SMOOTH_OVER_ALGEBRAIC_CLOSURE"
+        )
+        for term in payload["polynomial"]["polynomial"]["terms"]:
+            term["exponents"] = [2 * exponent for exponent in term["exponents"]]
     if operation_id not in SINGULAR_OPERATIONS:
         empty = operation.run(operation.request_type.model_validate(payload))
         assert empty.model_dump(mode="json")["outcome"]["components"] == []

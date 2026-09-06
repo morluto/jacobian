@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import shutil
 
@@ -16,17 +17,28 @@ from mcp import Client
 
 
 @pytest.mark.parametrize("direct", [False, True])
+@pytest.mark.parametrize(
+    "operation_id",
+    [
+        "polynomial.ideal.radical.compute",
+        "algebraic_geometry.projective_plane_curve.singularity_profile.compute",
+    ],
+)
 def test_missing_singular_is_inspectable_and_actionable(
     monkeypatch: pytest.MonkeyPatch,
     direct: bool,
+    operation_id: str,
 ) -> None:
     original = shutil.which
     monkeypatch.setattr(
         shutil, "which", lambda name: None if name == "Singular" else original(name)
     )
-    operation_id = "polynomial.ideal.radical.compute"
     operation = Catalog.open().operation(operation_id)
     assert operation is not None
+    payload = copy.deepcopy(operation.examples[0].input)
+    if operation_id.startswith("algebraic_geometry."):
+        for term in payload["polynomial"]["polynomial"]["terms"]:
+            term["exponents"] = [2 * exponent for exponent in term["exponents"]]
     catalog = Catalog((operation,))
     server = _build_server(
         state=AppState(operation_catalog=catalog),
@@ -52,11 +64,11 @@ def test_missing_singular_is_inspectable_and_actionable(
             assert availability[0]["status"] == "MISSING"
             result = await client.call_tool(
                 operation_id if direct else "math.run",
-                operation.examples[0].input
+                payload
                 if direct
                 else {
                     "operation_id": operation_id,
-                    "payload": operation.examples[0].input,
+                    "payload": payload,
                 },
             )
             assert result.is_error

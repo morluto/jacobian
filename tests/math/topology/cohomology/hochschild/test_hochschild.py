@@ -392,7 +392,9 @@ class TestHomologySourceBinding:
         with _validation_error("hochschild_complex.prime_binding"):
             HochschildHomologyResult.model_validate(payload)
 
-    def test_serialized_chain_claim_is_verifiable_and_forgery_is_structural(self) -> None:
+    def test_serialized_chain_claim_is_verifiable_and_forgery_is_structural(
+        self,
+    ) -> None:
         result = _run_chain_complex(
             HochschildChainComplexRequest(algebra=_dual_numbers(5), max_degree=2)
         )
@@ -415,9 +417,7 @@ class TestHomologySourceBinding:
         result = _run_homology(
             HochschildHomologyRequest(algebra=_dual_numbers(5), max_degree=2)
         )
-        decoded = HochschildHomologyResult.model_validate_json(
-            result.model_dump_json()
-        )
+        decoded = HochschildHomologyResult.model_validate_json(result.model_dump_json())
         assert verify_hochschild_homology(decoded)
 
         forged = result.model_dump(mode="json")

@@ -56,7 +56,11 @@ def test_f3_is_the_directed_three_cycle() -> None:
     result = paley_tournament(finite_field(3, (0, 1)))
 
     assert result.graph.vertex_count == 3
-    assert tuple(value.coordinates for value in result.vertex_axis) == ((0,), (1,), (2,))
+    assert tuple(value.coordinates for value in result.vertex_axis) == (
+        (0,),
+        (1,),
+        (2,),
+    )
     assert result.graph.edges == ((0, 1), (1, 2), (2, 0))
     assert result.orientation == "ARC_X_TO_Y_IFF_Y_MINUS_X_IS_NONZERO_SQUARE"
     assert (

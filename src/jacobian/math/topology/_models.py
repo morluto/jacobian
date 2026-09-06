@@ -292,6 +292,7 @@ class FiniteSimplicialComplex(StrictModel):
         "LEXICOGRAPHIC_VERTEX_ORDER"
     )
     empty_simplex_stored: Literal[False] = False
+
     @model_validator(mode="after")
     def require_complete_canonical_complex(self) -> Self:
         if tuple(sorted(set(self.vertices))) != self.vertices:

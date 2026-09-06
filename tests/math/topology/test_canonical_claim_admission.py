@@ -38,9 +38,7 @@ def test_native_consumers_reject_fabricated_canonical_closure(
         "f_vector": (size,),
         "closure_size": size,
     }
-    claim = FiniteSimplicialComplex(
-        **authored
-    )
+    claim = FiniteSimplicialComplex(**authored)
     claim = FiniteSimplicialComplex.model_validate_json(claim.model_dump_json())
     with pytest.raises(OperationDomainValidationError):
         if consumer == "shelling_check":

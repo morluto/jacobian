@@ -7,6 +7,11 @@ from collections.abc import Iterator
 from itertools import product
 from math import prod
 
+from jacobian.canonical import format_canonical_integer
+from jacobian.math.logic.automata.tree._models import (
+    AcceptedTreeCountResult,
+    TreeRunResult,
+)
 from jacobian.math.logic.automata.tree.values import (
     BottomUpTreeAutomaton,
     RankedTree,
@@ -23,6 +28,9 @@ __all__ = [
     "reachable_state_profile",
     "run_tree_automaton",
     "tree_state_chart",
+    "verify_accepted_tree_count",
+    "verify_reachable_state_profile",
+    "verify_tree_run",
 ]
 
 
@@ -170,3 +178,43 @@ def _positive_compositions(total: int, parts: int) -> Iterator[tuple[int, ...]]:
     for first in range(1, total - parts + 2):
         for remainder in _positive_compositions(total - first, parts - 1):
             yield (first, *remainder)
+
+
+def verify_tree_run(claim: TreeRunResult) -> bool:
+    """Verify a serialized run chart and root claim against its sources."""
+
+    try:
+        chart = tree_state_chart(claim.automaton, claim.tree)
+        roots = chart[-1][1]
+        accepted = bool(set(roots) & set(claim.automaton.final_states))
+        return (
+            claim.state_chart == chart
+            and claim.root_states == roots
+            and claim.accepted == accepted
+            and claim.node_count == len(chart)
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def verify_reachable_state_profile(claim: ReachableStateProfile) -> bool:
+    """Verify reachable states and each claimed witness against the automaton."""
+
+    try:
+        return reachable_state_profile(claim.automaton) == claim
+    except (TypeError, ValueError):
+        return False
+
+
+def verify_accepted_tree_count(claim: AcceptedTreeCountResult) -> bool:
+    """Verify an accepted-tree count against its bounded source automaton."""
+
+    try:
+        return (
+            format_canonical_integer(
+                accepted_tree_count(claim.automaton, claim.tree_size)
+            )
+            == claim.count
+        )
+    except (TypeError, ValueError):
+        return False

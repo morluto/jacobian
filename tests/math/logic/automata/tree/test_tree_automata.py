@@ -9,6 +9,9 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.automata.tree import (
     ReachableStateProfile,
     reachable_state_profile,
+    verify_accepted_tree_count,
+    verify_reachable_state_profile,
+    verify_tree_run,
 )
 from jacobian.math.logic.automata.tree._models import (
     AcceptedTreeCountRequest,
@@ -164,6 +167,15 @@ class TestRun:
         assert result.accepted is True
         assert result.root_states == (0,)
 
+    def test_serialized_run_verifier_rejects_forged_chart(self) -> None:
+        result = compute_tree_run(
+            TreeRunRequest(automaton=_simple_automaton(), tree=_node(_leaf(), _leaf()))
+        )
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert verify_tree_run(decoded)
+        forged = decoded.model_copy(update={"root_states": ()})
+        assert not verify_tree_run(forged)
+
     def test_run_request_rejects(self) -> None:
         # Use automaton where state 1 is final but not state 0
         automaton = BottomUpTreeAutomaton(
@@ -256,6 +268,9 @@ class TestAcceptedTreeCount:
             AcceptedTreeCountRequest(automaton=automaton, tree_size=1)
         )
         assert result.count == "1"
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert verify_accepted_tree_count(decoded)
+        assert not verify_accepted_tree_count(decoded.model_copy(update={"count": "2"}))
 
     def test_count_size_3(self) -> None:
         automaton = _simple_automaton()
@@ -351,6 +366,13 @@ class TestReachableStates:
         )
         assert isinstance(result, ReachableStateProfile)
         assert result == profile
+
+        decoded = type(profile).model_validate_json(profile.model_dump_json())
+        assert verify_reachable_state_profile(decoded)
+        forged = decoded.model_copy(
+            update={"witnesses": ((0, _leaf()), (1, _leaf()))}
+        )
+        assert not verify_reachable_state_profile(forged)
 
     def test_no_nullary_seed_has_an_empty_reachable_profile(self) -> None:
         automaton = BottomUpTreeAutomaton(

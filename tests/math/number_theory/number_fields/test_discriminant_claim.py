@@ -36,3 +36,12 @@ def test_field_discriminant_claim_round_trip() -> None:
     )
     forged = NumberFieldDiscriminantResult(field=field, discriminant="20")
     assert not verify_discriminant(forged)
+
+
+def test_reducible_transport_is_rejected_by_verifier() -> None:
+    claim = NumberFieldDiscriminantResult(
+        field=SimpleNumberFieldPresentation(coefficients_descending=("1", "0", "-1")),
+        discriminant=1,
+    )
+
+    assert not verify_discriminant(claim)

@@ -360,10 +360,11 @@ def verify_discriminant(claim: NumberFieldDiscriminantResult) -> bool:
     )
     from jacobian.math.number_theory.number_fields._models import NumberFieldRequest
 
-    return (
-        compute_nf_discriminant(NumberFieldRequest(field=claim.field)).discriminant
-        == claim.discriminant
-    )
+    try:
+        expected = compute_nf_discriminant(NumberFieldRequest(field=claim.field))
+    except (ArithmeticError, TypeError, ValueError):
+        return False
+    return expected.discriminant == claim.discriminant
 
 
 def verify_binary_power_sum_gap_profile(claim: BinaryPowerSumGapProfile) -> bool:

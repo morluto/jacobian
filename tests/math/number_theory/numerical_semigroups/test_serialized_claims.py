@@ -59,3 +59,23 @@ def test_ratio_alone_does_not_prove_length_extrema() -> None:
     payload = result.model_dump()
     payload.update(minimum_length=6, maximum_length=10)
     assert not verify_element_elasticity(type(result).model_validate(payload))
+
+
+def test_verifiers_reject_unadmitted_transported_sources() -> None:
+    summary_result = summary((3, 5))
+    malformed_source = summary_result.semigroup.model_copy(
+        update={"minimal_generators": ("4", "6")}
+    )
+    assert not verify_summary(
+        summary_result.model_copy(update={"semigroup": malformed_source})
+    )
+
+    elasticity_result = global_elasticity((3, 5))
+    assert not verify_elasticity(
+        elasticity_result.model_copy(update={"semigroup": malformed_source})
+    )
+
+    element_result = element_elasticity_profile((3, 5), 15)
+    assert not verify_element_elasticity(
+        element_result.model_copy(update={"value": -1})
+    )

@@ -557,21 +557,30 @@ def _claim_generators(source: NumericalSemigroup) -> tuple[int, ...]:
 
 def verify_summary(claim: NumericalSemigroupSummaryResult) -> bool:
     """Check a source-bound summary in the bounded semigroup domain."""
-    return summary(_claim_generators(claim.semigroup)) == claim
+    try:
+        return summary(_claim_generators(claim.semigroup)) == claim
+    except (ArithmeticError, TypeError, ValueError):
+        return False
 
 
 def verify_elasticity(claim: ElasticityResult) -> bool:
     """Check global elasticity and its claimed extrema against the source."""
-    return global_elasticity(_claim_generators(claim.semigroup)) == claim
+    try:
+        return global_elasticity(_claim_generators(claim.semigroup)) == claim
+    except (ArithmeticError, TypeError, ValueError):
+        return False
 
 
 def verify_element_elasticity(claim: ElementElasticityResult) -> bool:
     """Check the element's actual length extrema, not merely their ratio."""
-    values = _claim_generators(claim.semigroup)
-    value = claim.value
-    if values != (1,) and value > MAX_ELEMENT:
-        raise ValueError(f"element exceeds the {MAX_ELEMENT} admission bound")
-    return element_elasticity_profile(values, value) == claim
+    try:
+        values = _claim_generators(claim.semigroup)
+        value = claim.value
+        if value < 0 or (values != (1,) and value > MAX_ELEMENT):
+            return False
+        return element_elasticity_profile(values, value) == claim
+    except (ArithmeticError, TypeError, ValueError):
+        return False
 
 
 __all__ = [

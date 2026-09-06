@@ -285,7 +285,7 @@ class SaturationResult(StrictModel):
 
     saturated_basis: IntegerMatrix
     inclusion_transform: IntegerMatrix
-    saturation_index: int = Field(ge=1)
+    saturation_index: NativeInteger = Field(ge=1)
     relation: Literal["SATURATED_BASIS_SPANS_PRIMITIVE_CLOSURE"] = (
         "SATURATED_BASIS_SPANS_PRIMITIVE_CLOSURE"
     )
@@ -344,7 +344,7 @@ class SublatticeIndexResult(StrictModel):
     sublattice: IntegerLattice
     parent: IntegerLattice
     embedding: IntegerMatrix
-    index: int = Field(ge=1)
+    index: NativeInteger = Field(ge=1)
     invariant_factors: tuple[NativeInteger, ...] = Field(
         max_length=MAX_MATRIX_DIMENSION
     )
@@ -364,7 +364,7 @@ class DiscriminantGroupResult(StrictModel):
     """Finite abelian group ``L^*/L`` and the discriminant order ``|det G|``."""
 
     lattice: IntegerLattice
-    discriminant_order: int = Field(ge=1)
+    discriminant_order: NativeInteger = Field(ge=1)
     invariant_factors: tuple[NativeInteger, ...] = Field(
         max_length=MAX_MATRIX_DIMENSION
     )

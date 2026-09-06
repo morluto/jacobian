@@ -218,10 +218,12 @@ class ElementOrderResult(StrictModel):
 
 
 class SubgroupGeneratedResult(StrictModel):
+    request: SubgroupGeneratedRequest
     index: int = Field(ge=1)
     coset_representatives: tuple[tuple[int, ...], ...] = ()
 
 
 class QuotientResult(StrictModel):
+    request: QuotientRequest
     quotient_invariant_factors: tuple[int, ...] = ()
     quotient_order: int = Field(ge=1)

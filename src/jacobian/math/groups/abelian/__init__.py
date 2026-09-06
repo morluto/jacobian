@@ -9,6 +9,8 @@ from jacobian.math.groups.abelian.operations import (
     reduce_element,
     verify_element_order,
     verify_elements_equal,
+    verify_generated_subgroup,
+    verify_quotient_group,
 )
 
 __all__ = [
@@ -20,4 +22,6 @@ __all__ = [
     "reduce_element",
     "verify_element_order",
     "verify_elements_equal",
+    "verify_generated_subgroup",
+    "verify_quotient_group",
 ]

@@ -11,7 +11,9 @@ from jacobian.math.groups.abelian._models import (
     ElementOrderResult,
     ElementReduceResult,
     PresentationNormalizeResult,
+    QuotientRequest,
     QuotientResult,
+    SubgroupGeneratedRequest,
     SubgroupGeneratedResult,
 )
 
@@ -139,7 +141,12 @@ def generated_subgroup(
     for factor in diagonal:
         if factor > 1:
             index *= factor
-    return SubgroupGeneratedResult(index=index)
+    return SubgroupGeneratedResult(
+        request=SubgroupGeneratedRequest(
+            invariant_factors=invariant_factors, generators=generators
+        ),
+        index=index,
+    )
 
 
 def quotient_group(
@@ -160,8 +167,35 @@ def quotient_group(
     for factor in quotient_factors:
         order *= factor
     return QuotientResult(
+        request=QuotientRequest(
+            invariant_factors=invariant_factors,
+            subgroup_generators=subgroup_generators,
+        ),
         quotient_invariant_factors=quotient_factors,
         quotient_order=order,
+    )
+
+
+def verify_generated_subgroup(claim: SubgroupGeneratedResult) -> bool:
+    """Check the index relation asserted by a serialized subgroup claim."""
+
+    return (
+        generated_subgroup(
+            claim.request.invariant_factors, claim.request.generators
+        ).index
+        == claim.index
+    )
+
+
+def verify_quotient_group(claim: QuotientResult) -> bool:
+    """Check the quotient presentation asserted by a serialized claim."""
+
+    expected = quotient_group(
+        claim.request.invariant_factors, claim.request.subgroup_generators
+    )
+    return (
+        expected.quotient_invariant_factors == claim.quotient_invariant_factors
+        and expected.quotient_order == claim.quotient_order
     )
 
 
@@ -174,4 +208,6 @@ __all__ = [
     "reduce_element",
     "verify_element_order",
     "verify_elements_equal",
+    "verify_generated_subgroup",
+    "verify_quotient_group",
 ]

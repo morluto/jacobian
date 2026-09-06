@@ -32,7 +32,10 @@ from jacobian.math.polynomials.maps._models import (
 )
 from jacobian.math.polynomials.maps._singular import SingularGenericFiberResult
 from jacobian.math.polynomials.maps._tools import TOOLS
-from jacobian.math.polynomials.maps.operations import generic_degree
+from jacobian.math.polynomials.maps.operations import (
+    generic_degree,
+    verify_generic_degree,
+)
 from jacobian.math.polynomials.values import (
     RationalFunction,
     RationalPolynomial,
@@ -467,6 +470,21 @@ def test_result_round_trip_preserves_axes_and_evidence(
 
     assert round_tripped == quadratic_result
     assert round_tripped.source.input_variables == ("x", "y")
+
+
+def test_serialized_outcome_and_degree_claims_require_consumer_verification(
+    quadratic_result: GenericDegreeResult,
+) -> None:
+    payload = quadratic_result.model_dump(mode="json")
+    payload["outcome"] = "NOT_DOMINANT"
+    payload["degree"] = None
+    forged = GenericDegreeResult.model_validate(payload)
+    assert not verify_generic_degree(forged)
+
+    payload = quadratic_result.model_dump(mode="json")
+    payload["degree"] = 1
+    forged = GenericDegreeResult.model_validate(payload)
+    assert not verify_generic_degree(forged)
 
 
 def test_standard_monomial_enumeration_admits_the_sparse_leading_ideal() -> None:

@@ -435,37 +435,6 @@ class GenericDegreeResult(StrictModel):
     degree: int | None = Field(default=None, ge=1, le=MAX_GENERIC_DEGREE_BEZOUT_BOUND)
     evidence: GenericFiberCertificate | None = None
 
-    @model_validator(mode="after")
-    def require_source_bound_outcome(self) -> Self:
-        if self.evidence is None:
-            raise _validation_error("generic-degree outcomes require exact evidence")
-        unit_basis = _is_unit_generic_fiber_basis(self.evidence)
-        if self.outcome == "GENERICALLY_FINITE":
-            if (
-                unit_basis
-                or not self.evidence.standard_monomials
-                or self.degree is None
-                or self.degree != len(self.evidence.standard_monomials)
-            ):
-                raise _validation_error(
-                    "claimed degree does not match the standard-monomial evidence"
-                )
-        else:
-            if self.degree is not None:
-                raise _validation_error(
-                    "non-finite generic-degree outcomes carry no degree"
-                )
-            if self.outcome == "NOT_DOMINANT":
-                if not unit_basis or self.evidence.standard_monomials:
-                    raise _validation_error(
-                        "not-dominant outcomes carry the unit generic-fiber basis"
-                    )
-            elif unit_basis or self.evidence.standard_monomials:
-                raise _validation_error(
-                    "positive-dimensional outcomes carry a non-unit generic-fiber basis"
-                )
-        return self
-
     @classmethod
     def _from_kernel(
         cls,

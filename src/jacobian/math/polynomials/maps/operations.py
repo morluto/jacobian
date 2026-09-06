@@ -36,6 +36,7 @@ from jacobian.math.polynomials.maps._models import (
     GenericDegreeResult,
     JacobianResult,
     VariablePoint,
+    _is_unit_generic_fiber_basis,
     _total_degree,
     _validation_error,
 )
@@ -210,6 +211,25 @@ def generic_degree(
     )
 
 
+def verify_generic_degree(claim: GenericDegreeResult) -> bool:
+    """Verify the retained generic-fiber evidence and declared outcome."""
+    evidence = claim.evidence
+    if evidence is None:
+        return False
+    unit_basis = _is_unit_generic_fiber_basis(evidence)
+    if claim.outcome == "GENERICALLY_FINITE":
+        return (
+            not unit_basis
+            and bool(evidence.standard_monomials)
+            and claim.degree == len(evidence.standard_monomials)
+        )
+    if claim.degree is not None:
+        return False
+    if claim.outcome == "NOT_DOMINANT":
+        return unit_basis and not evidence.standard_monomials
+    return not unit_basis and bool(evidence.standard_monomials)
+
+
 def evaluate_polynomial(
     polynomial: RationalPolynomial, point: VariablePoint
 ) -> EvalResult:
@@ -287,4 +307,5 @@ __all__ = [
     "evaluate_polynomial",
     "generic_degree",
     "jacobian_matrix",
+    "verify_generic_degree",
 ]

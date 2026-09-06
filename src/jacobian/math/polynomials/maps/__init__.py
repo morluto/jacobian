@@ -5,6 +5,7 @@ from jacobian.math.polynomials.maps.operations import (
     evaluate_polynomial,
     generic_degree,
     jacobian_matrix,
+    verify_generic_degree,
 )
 from jacobian.math.polynomials.maps.values import RationalPolynomialMap
 
@@ -14,4 +15,5 @@ __all__ = [
     "evaluate_polynomial",
     "generic_degree",
     "jacobian_matrix",
+    "verify_generic_degree",
 ]

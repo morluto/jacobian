@@ -408,34 +408,28 @@ class DiscrepancyEvalRequest(StrictModel):
     set_system: FiniteSetSystem
     coloring: tuple[int, ...]
 
-    @model_validator(mode="after")
-    def require_valid_coloring(self) -> Self:
-        if len(self.coloring) != self.set_system.ground_set_size:
-            raise _validation_error(
-                "coloring_length_mismatch",
-                "coloring length must equal ground_set_size",
-            )
-        for value in self.coloring:
-            if value not in (-1, 1):
-                raise _validation_error(
-                    "coloring_not_signed_binary", "coloring values must be +1 or -1"
-                )
-        return self
-
-
 class DiscrepancyEvalResult(StrictModel):
     """The signed sum on every set and the maximum absolute imbalance."""
 
+    set_system: FiniteSetSystem
+    coloring: tuple[int, ...]
     signed_sums: tuple[int, ...]
     max_absolute_imbalance: int = Field(ge=0, strict=True)
 
     @classmethod
     def _from_kernel(
-        cls, *, signed_sums: tuple[int, ...], max_absolute_imbalance: int
+        cls,
+        *,
+        set_system: FiniteSetSystem,
+        coloring: tuple[int, ...],
+        signed_sums: tuple[int, ...],
+        max_absolute_imbalance: int,
     ) -> Self:
         """Build the exact evaluator result after native computation."""
 
         return cls.model_construct(
+            set_system=set_system,
+            coloring=coloring,
             signed_sums=signed_sums,
             max_absolute_imbalance=max_absolute_imbalance,
         )

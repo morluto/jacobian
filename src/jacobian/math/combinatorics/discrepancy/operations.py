@@ -232,6 +232,8 @@ def compute_discrepancy(
         sum(coloring[element] for element in subset) for subset in set_system.sets
     )
     return DiscrepancyEvalResult._from_kernel(
+        set_system=set_system,
+        coloring=coloring,
         signed_sums=signed_sums,
         max_absolute_imbalance=_max_absolute_imbalance(signed_sums),
     )

@@ -4,6 +4,7 @@ from jacobian.math.combinatorics.discrepancy._models import (
     FiniteSetSystem,
     HardConstraintRoundingSource,
 )
+from jacobian.math.combinatorics.discrepancy._tools import verify_discrepancy
 from jacobian.math.combinatorics.discrepancy.operations import (
     compute_discrepancy,
     compute_hard_constraint_rounding,
@@ -16,4 +17,5 @@ __all__ = [
     "compute_discrepancy",
     "compute_hard_constraint_rounding",
     "compute_optimal_discrepancy",
+    "verify_discrepancy",
 ]

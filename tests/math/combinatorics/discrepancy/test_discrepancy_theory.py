@@ -6,6 +6,7 @@ import itertools
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
+from copy import deepcopy
 from fractions import Fraction
 
 import pytest
@@ -34,6 +35,7 @@ from jacobian.math.combinatorics.discrepancy._tools import (
     compute_hard_constraint_rounding,
     compute_optimal_discrepancy,
     compute_optimal_discrepancy_isolated,
+    verify_discrepancy,
 )
 from jacobian.process import BoundedProcessResult
 
@@ -525,6 +527,21 @@ class TestDiscrepancyEval:
         result = compute_discrepancy(req)
         assert result.signed_sums == (0,)
         assert result.max_absolute_imbalance == 0
+
+    def test_serialized_result_retains_source_and_rejects_forgery(self) -> None:
+        result = compute_discrepancy(
+            DiscrepancyEvalRequest(
+                set_system=FiniteSetSystem(ground_set_size=2, sets=((0,), (1,))),
+                coloring=(1, -1),
+            )
+        )
+        restored = type(result).model_validate_json(result.model_dump_json())
+        assert restored.set_system == result.set_system
+        assert restored.coloring == result.coloring
+        assert verify_discrepancy(restored)
+        forged = deepcopy(restored.model_dump(mode="json"))
+        forged["signed_sums"][0] = 2
+        assert not verify_discrepancy(type(result).model_validate(forged))
 
 
 class TestDiscrepancyOptimum:

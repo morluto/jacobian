@@ -39,6 +39,22 @@ def compute_discrepancy(request: DiscrepancyEvalRequest) -> DiscrepancyEvalResul
     return _compute_discrepancy_native(request.set_system, request.coloring)
 
 
+def verify_discrepancy(claim: DiscrepancyEvalResult) -> bool:
+    try:
+        expected = compute_discrepancy(
+            DiscrepancyEvalRequest(
+                set_system=claim.set_system,
+                coloring=claim.coloring,
+            )
+        )
+    except Exception:
+        return False
+    return (
+        claim.signed_sums == expected.signed_sums
+        and claim.max_absolute_imbalance == expected.max_absolute_imbalance
+    )
+
+
 def compute_optimal_discrepancy(
     request: DiscrepancyOptimumRequest,
 ) -> DiscrepancyOptimumResult:
@@ -146,4 +162,4 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
 )
 
 
-__all__ = ["TOOLS"]
+__all__ = ["TOOLS", "verify_discrepancy"]

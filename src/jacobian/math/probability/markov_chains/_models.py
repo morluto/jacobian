@@ -79,7 +79,7 @@ class StationaryDistributionResult(StrictModel):
         )
 
     @model_validator(mode="after")
-    def bind_stationary_family(self) -> Self:
+    def require_stationary_family_shape(self) -> Self:
         dimension = len(self.transition_matrix.entries)
         if any(len(row) != dimension for row in self.transition_matrix.entries):
             raise _validation_error(
@@ -97,23 +97,18 @@ class StationaryDistributionResult(StrictModel):
                 "closed_classes_not_canonical",
                 "closed classes must be unique and sorted",
             )
-        if self.unique != (len(self.extreme_distributions) == 1):
-            raise _validation_error(
-                "stationary_unique_mismatch",
-                "unique must match the number of extreme distributions",
-            )
         for item in self.extreme_distributions:
-            values = tuple(value.as_fraction() for value in item.distribution)
-            if any(value < 0 for value in values) or sum(values) != 1:
+            if any(
+                index < 0 or index >= dimension for index in item.closed_class
+            ):
                 raise _validation_error(
-                    "stationary_distribution_invalid",
-                    "each stationary distribution must be nonnegative and normalized",
+                    "closed_class_index",
+                    "closed-class indices must lie on the transition-state axis",
                 )
-            support = tuple(index for index, value in enumerate(values) if value > 0)
-            if support != item.closed_class:
+            if tuple(sorted(set(item.closed_class))) != item.closed_class:
                 raise _validation_error(
-                    "stationary_support_mismatch",
-                    "each extreme distribution must be supported on its closed class",
+                    "closed_class_order",
+                    "closed-class indices must be unique and sorted",
                 )
         return self
 

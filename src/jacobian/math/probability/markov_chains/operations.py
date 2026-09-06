@@ -36,6 +36,7 @@ __all__ = [
     "stationary_distribution_extremes",
     "stationary_distribution_result",
     "verify_ergodic_decision",
+    "verify_stationary_distribution_result",
 ]
 
 
@@ -438,6 +439,16 @@ def verify_ergodic_decision(claim: ErgodicDecisionResult) -> bool:
     """Check the decision relation against the retained transition matrix."""
 
     return ergodic_decision(claim.matrix) == claim
+
+
+def verify_stationary_distribution_result(
+    claim: StationaryDistributionResult,
+) -> bool:
+    """Check stationary vectors and closed classes against their source matrix."""
+    try:
+        return stationary_distribution_result(claim.transition_matrix) == claim
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
 
 
 def communicating_classes(matrix: RationalMatrix) -> CommunicatingClassesResult:

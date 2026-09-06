@@ -14,6 +14,7 @@ from jacobian.math.probability.markov_chains import (
     ergodic_properties,
     stationary_distribution,
     stationary_distribution_result,
+    verify_stationary_distribution_result,
 )
 from jacobian.math.probability.markov_chains._models import (
     StationaryDistributionRequest,
@@ -32,6 +33,24 @@ def test_native_namespace_exposes_values_and_kernels_not_wire_requests() -> None
     assert "TransitionMatrixRequest" not in markov_chain.__all__
     assert "TransitionMatrix" not in markov_chain.__all__
     assert markov_chain.stationary_distribution is stationary_distribution
+
+
+def test_serialized_stationary_claim_is_checked_by_consumer() -> None:
+    result = stationary_distribution_result(
+        rational_matrix_from_fractions(
+            ((Fraction(1), Fraction(0)), (Fraction(0), Fraction(1)))
+        )
+    )
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_stationary_distribution_result(decoded)
+
+    forged = result.model_dump(mode="json")
+    forged["extreme_distributions"][0]["distribution"][0] = {
+        "num": "2",
+        "den": "1",
+    }
+    claim = type(result).model_validate(forged)
+    assert not verify_stationary_distribution_result(claim)
 
 
 def test_markov_matrix_round_trips_through_shared_rational_matrix_wire() -> None:

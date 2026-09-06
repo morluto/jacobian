@@ -5,6 +5,9 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.catalog import Catalog
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.dispatch import invoke_operation
 from jacobian.math.number_theory.characters import (
     principal_dirichlet_character,
     principal_dirichlet_character_value,
@@ -113,11 +116,41 @@ def test_character_checker_rejects_a_structurally_valid_forged_claim() -> None:
         }
     )
 
-    with pytest.raises(ValueError, match="complete canonical unit group"):
+    with pytest.raises(OperationDomainValidationError) as error:
         require_complete_principal_dirichlet_character(character)
+    assert error.value.errors()[0] == {
+        "loc": ("character", "unit_residues"),
+        "type": "dirichlet_character.unit_residues_mismatch",
+        "msg": (
+            "unit residues must be the complete canonical unit group modulo modulus"
+        ),
+    }
 
-    with pytest.raises(ValueError, match="complete canonical unit group"):
+    with pytest.raises(OperationDomainValidationError) as error:
         principal_dirichlet_character_value(character, 1)
+    assert error.value.errors()[0]["type"] == (
+        "dirichlet_character.unit_residues_mismatch"
+    )
+
+
+def test_dispatch_projects_forged_character_as_domain_validation_error() -> None:
+    with pytest.raises(OperationDomainValidationError) as error:
+        invoke_operation(
+            "dirichlet_character.principal.value.compute",
+            {
+                "character": {
+                    "modulus": 4,
+                    "unit_residues": [1],
+                    "values": [0, 1, 0, 0],
+                },
+                "integer": "1",
+            },
+            Catalog.open(),
+        )
+
+    assert error.value.errors()[0]["type"] == (
+        "dirichlet_character.unit_residues_mismatch"
+    )
 
 
 def test_value_result_checks_only_structural_source_binding() -> None:

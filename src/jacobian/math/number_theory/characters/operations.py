@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.characters._models import (
     PrincipalDirichletCharacterValueResult,
 )
@@ -31,16 +32,24 @@ def require_complete_principal_dirichlet_character(
         if math.gcd(residue, character.modulus) == 1
     )
     if character.unit_residues != expected_units:
-        raise ValueError(
-            "unit residues must be the complete canonical unit group modulo modulus"
+        raise OperationDomainValidationError(
+            location=("character", "unit_residues"),
+            code="dirichlet_character.unit_residues_mismatch",
+            message=(
+                "unit residues must be the complete canonical unit group modulo modulus"
+            ),
         )
     units = frozenset(expected_units)
     expected_values = tuple(
         1 if residue in units else 0 for residue in range(character.modulus)
     )
     if character.values != expected_values:
-        raise ValueError(
-            "values must be the complete extension-by-zero principal character table"
+        raise OperationDomainValidationError(
+            location=("character", "values"),
+            code="dirichlet_character.values_table_mismatch",
+            message=(
+                "values must be the complete extension-by-zero principal character table"
+            ),
         )
 
 

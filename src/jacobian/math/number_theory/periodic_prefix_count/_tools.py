@@ -46,7 +46,7 @@ TOOLS: MathTools = (
                         ],
                         "complement": False,
                     },
-                    "cutoff": "6",
+                    "cutoff": 6,
                 },
             ),
         ),

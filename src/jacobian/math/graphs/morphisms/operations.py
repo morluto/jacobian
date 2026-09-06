@@ -13,11 +13,22 @@ from jacobian.math.graphs.morphisms._models import (
     HomomorphismCheckResult,
     SubgraphPatternFindResult,
     _canonical_max_degree,
+    _cycle_source_edges,
     _first_homomorphism_obstruction,
+    _require_negative_cycle_domain,
+    _require_negative_embedding_domain,
+    _validate_cycle_witness,
+    _validate_embedding_witness,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
-__all__ = ["fixed_length_cycle", "homomorphism_check", "subgraph_pattern_find"]
+__all__ = [
+    "fixed_length_cycle",
+    "homomorphism_check",
+    "subgraph_pattern_find",
+    "verify_fixed_length_cycle",
+    "verify_subgraph_pattern_find",
+]
 
 MAX_MORPHISM_RETAINED_LABEL_CHARACTERS = 10_000_000
 
@@ -232,6 +243,21 @@ def fixed_length_cycle(
     )
 
 
+def verify_fixed_length_cycle(claim: FixedLengthCycleResult) -> bool:
+    """Verify a serialized cycle decision and its optional witness."""
+    try:
+        vertex_set, edge_set = _cycle_source_edges(claim.graph)
+        if claim.decision == "EXISTS":
+            _validate_cycle_witness(claim.cycle, claim.length, vertex_set, edge_set)
+            return True
+        if claim.cycle:
+            return False
+        _require_negative_cycle_domain(claim.graph, claim.length)
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
 class SearchBudgetExceededError(RuntimeError):
     """The bounded search exhausted its candidate-check budget.
 
@@ -406,3 +432,17 @@ def subgraph_pattern_find(
         decision="DOES_NOT_EXIST",
         vertex_map=(),
     )
+
+
+def verify_subgraph_pattern_find(claim: SubgraphPatternFindResult) -> bool:
+    """Verify a serialized embedding decision and its optional witness."""
+    try:
+        if claim.decision == "EXISTS":
+            _validate_embedding_witness(claim.pattern, claim.host, claim.vertex_map)
+            return True
+        if claim.vertex_map:
+            return False
+        _require_negative_embedding_domain(claim.pattern, claim.host)
+        return True
+    except (TypeError, ValueError):
+        return False

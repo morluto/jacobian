@@ -310,20 +310,6 @@ class FixedLengthCycleResult(StrictModel):
     length: int = Field(ge=3)
     cycle: tuple[str, ...] = Field(default=())
 
-    @model_validator(mode="after")
-    def require_consistent_witness(self) -> Self:
-        vertex_set, edge_set = _cycle_source_edges(self.graph)
-        if self.decision == "EXISTS":
-            _validate_cycle_witness(self.cycle, self.length, vertex_set, edge_set)
-        else:
-            if self.cycle:
-                raise PydanticCustomError(
-                    "graph.a_does_not_exist_result_must_not_carry_a_witness",
-                    "a DOES_NOT_EXIST result must not carry a witness",
-                )
-            _require_negative_cycle_domain(self.graph, self.length)
-        return self
-
     @classmethod
     def _from_kernel(
         cls,
@@ -461,19 +447,6 @@ class SubgraphPatternFindResult(StrictModel):
     host: SimpleUndirectedGraph
     decision: Literal["EXISTS", "DOES_NOT_EXIST"]
     vertex_map: tuple[str, ...] = Field(default=())
-
-    @model_validator(mode="after")
-    def require_consistent_pattern_witness(self) -> Self:
-        if self.decision == "EXISTS":
-            _validate_embedding_witness(self.pattern, self.host, self.vertex_map)
-        else:
-            if self.vertex_map:
-                raise PydanticCustomError(
-                    "graph.a_does_not_exist_result_must_not_carry_a_vertex_",
-                    "a DOES_NOT_EXIST result must not carry a vertex map",
-                )
-            _require_negative_embedding_domain(self.pattern, self.host)
-        return self
 
     @classmethod
     def _from_kernel(

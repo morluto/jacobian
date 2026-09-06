@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+import pytest
+
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.probability._distribution import (
     FiniteDistributionAtom,
     FinitePushforwardMapEntry,
@@ -90,3 +93,14 @@ def test_convolution_producer_builds_the_complete_product_measure() -> None:
         for item in result.contributions
     )
     assert len(result.contributions) == len(source.atoms) ** 2
+
+
+def test_normalization_is_admitted_by_consuming_operations() -> None:
+    malformed = FiniteRationalDistribution(
+        atoms=(
+            FiniteDistributionAtom(value=_q(0), probability=_q(1, 2)),
+            FiniteDistributionAtom(value=_q(2), probability=_q(1, 3)),
+        )
+    )
+    with pytest.raises(OperationDomainValidationError):
+        condition(malformed, (_q(0),))

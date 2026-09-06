@@ -93,16 +93,6 @@ class FiniteRationalDistribution(StrictModel):
             tuple(atom.value for atom in self.atoms),
             label="finite-distribution support values",
         )
-        if (
-            _bounded_fraction_sum(
-                tuple(atom.probability.as_fraction() for atom in self.atoms),
-                label="finite-distribution probability",
-            )
-            != 1
-        ):
-            raise _validation_error(
-                "finite-distribution probabilities must sum exactly to 1"
-            )
         return self
 
 

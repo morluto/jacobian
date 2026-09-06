@@ -123,6 +123,7 @@ def _admit_event(
     *,
     require_positive: bool,
 ) -> None:
+    _admit_distribution(distribution.atoms, require_canonical=True)
     _require_atom_envelope(
         len(event_values),
         limit=MAX_FINITE_INPUT_ATOMS,
@@ -172,6 +173,7 @@ def _admit_pushforward(
     distribution: FiniteRationalDistribution,
     mapping: tuple[FinitePushforwardMapEntry, ...],
 ) -> None:
+    _admit_distribution(distribution.atoms, require_canonical=True)
     _require_atom_envelope(
         len(distribution.atoms),
         limit=MAX_FINITE_INPUT_ATOMS,
@@ -228,6 +230,8 @@ def _admit_convolution(
     left: FiniteRationalDistribution,
     right: FiniteRationalDistribution,
 ) -> None:
+    _admit_distribution(left.atoms, require_canonical=True)
+    _admit_distribution(right.atoms, require_canonical=True)
     if len(left.atoms) * len(right.atoms) > MAX_FINITE_CONVOLUTION_PAIRS:
         raise OperationDomainValidationError(
             location=("left", "right"),
@@ -339,6 +343,7 @@ def _plan_convolution_power(
     *,
     validate_profile_values: bool = True,
 ) -> _ConvolutionPowerPlan:
+    _admit_distribution(distribution.atoms, require_canonical=True)
     if type(exponent) is not int or not 1 <= exponent <= MAX_FINITE_CONVOLUTION_POWER:
         raise OperationDomainValidationError(
             location=("exponent",),
@@ -744,6 +749,7 @@ def convolution_power(
 ) -> FiniteConvolutionPowerResult:
     """Return the complete exact law of a positive i.i.d. convolution power."""
 
+    _admit_distribution(distribution.atoms, require_canonical=True)
     if type(exponent) is int and exponent == 1:
         return FiniteConvolutionPowerResult._from_kernel(
             source=distribution,
@@ -778,6 +784,7 @@ def convolution_peak(
 ) -> FiniteConvolutionPeakResult:
     """Return the exact largest atom mass and all values attaining it."""
 
+    _admit_distribution(distribution.atoms, require_canonical=True)
     if type(exponent) is int and exponent == 1:
         maximum = max(atom.probability.as_fraction() for atom in distribution.atoms)
         return FiniteConvolutionPeakResult._from_kernel(

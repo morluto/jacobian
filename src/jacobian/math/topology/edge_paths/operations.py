@@ -136,12 +136,15 @@ def concatenate_edge_paths(
 def verify_edge_path_word(claim: EdgePathWordResult) -> bool:
     """Verify generator encoding against the retained graph and source path."""
     try:
-        return edge_path_word(
-            claim.graph.vertex_count,
-            claim.graph.edges,
-            claim.start_vertex,
-            claim.path,
-        ) == claim
+        return (
+            edge_path_word(
+                claim.graph.vertex_count,
+                claim.graph.edges,
+                claim.start_vertex,
+                claim.path,
+            )
+            == claim
+        )
     except (OperationDomainValidationError, TypeError, ValueError):
         return False
 
@@ -149,9 +152,10 @@ def verify_edge_path_word(claim: EdgePathWordResult) -> bool:
 def verify_edge_path_concatenation(claim: EdgePathConcatenateResult) -> bool:
     """Verify concatenation against the retained vertex axis and input paths."""
     try:
-        return concatenate_edge_paths(
-            claim.vertex_count, claim.path_a, claim.path_b
-        ) == claim
+        return (
+            concatenate_edge_paths(claim.vertex_count, claim.path_a, claim.path_b)
+            == claim
+        )
     except (OperationDomainValidationError, TypeError, ValueError):
         return False
 

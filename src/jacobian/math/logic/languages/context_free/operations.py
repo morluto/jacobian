@@ -80,10 +80,9 @@ def first_sets(grammar: FiniteCFGO) -> tuple[tuple[str, ...], ...]:
 def verify_symbol_profiles(claim: SymbolProfilesResult) -> bool:
     """Verify nullable flags against the retained grammar and symbol axis."""
     try:
-        return (
-            tuple(nullable_nonterminals(claim.grammar)) == claim.nullable
-            and len(claim.nullable) == len(claim.grammar.nonterminals)
-        )
+        return tuple(nullable_nonterminals(claim.grammar)) == claim.nullable and len(
+            claim.nullable
+        ) == len(claim.grammar.nonterminals)
     except (TypeError, ValueError, RuntimeError):
         return False
 

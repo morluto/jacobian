@@ -298,7 +298,9 @@ class TestSerializedSubsetClaims:
         assert not verify_closure(
             closure_decoded.model_copy(
                 update={
-                    "closure": closure_decoded.closure.model_copy(update={"indices": ()})
+                    "closure": closure_decoded.closure.model_copy(
+                        update={"indices": ()}
+                    )
                 }
             )
         )

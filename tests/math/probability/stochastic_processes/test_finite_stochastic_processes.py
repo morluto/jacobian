@@ -194,16 +194,12 @@ class TestDoobMartingale:
                 }
             )
         )
-        other_space = FiniteProbabilitySpace(
-            samples=("H",), masses=(_q(1),)
-        )
+        other_space = FiniteProbabilitySpace(samples=("H",), masses=(_q(1),))
         assert not verify_doob_martingale(
             decoded.model_copy(
                 update={
                     "martingale": (
-                        decoded.martingale[0].model_copy(
-                            update={"space": other_space}
-                        ),
+                        decoded.martingale[0].model_copy(update={"space": other_space}),
                     )
                 }
             )

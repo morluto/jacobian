@@ -98,9 +98,7 @@ class TestNashEquilibrium:
         assert result.value.as_fraction() == 1  # (0,0) is the pure equilibrium
         decoded = type(result).model_validate_json(result.model_dump_json())
         assert verify_nash_equilibrium(decoded)
-        assert not verify_nash_equilibrium(
-            decoded.model_copy(update={"value": _r(2)})
-        )
+        assert not verify_nash_equilibrium(decoded.model_copy(update={"value": _r(2)}))
 
     def test_mixed_equilibrium(self) -> None:
         req = NashEquilibriumRequest(

@@ -62,7 +62,7 @@ def compute_filtration(request: FiltrationRequest) -> FiltrationResult:
     return FiltrationResult(
         space=request.space,
         observations=request.observations,
-        sigmas=native.filtration_natural(request.space, request.observations)
+        sigmas=native.filtration_natural(request.space, request.observations),
     )
 
 

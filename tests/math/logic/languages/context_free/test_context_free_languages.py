@@ -66,7 +66,9 @@ def test_symbol_profiles_nullable() -> None:
     assert verify_symbol_profiles(
         type(result).model_validate_json(result.model_dump_json())
     )
-    assert not verify_symbol_profiles(result.model_copy(update={"nullable": (True, False)}))
+    assert not verify_symbol_profiles(
+        result.model_copy(update={"nullable": (True, False)})
+    )
     assert nullable_nonterminals(request.grammar) == result.nullable
 
 

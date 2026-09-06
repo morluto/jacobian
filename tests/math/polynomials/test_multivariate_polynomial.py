@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 from typing import Any
 
@@ -13,6 +14,7 @@ from jacobian.math.polynomials.multivariate._division import (
 )
 from jacobian.math.polynomials.multivariate._factor_models import (
     MultivariateFactorRequest,
+    MultivariateFactorResult,
 )
 from jacobian.math.polynomials.multivariate._gcd import MultivariateGcdRequest
 from jacobian.math.polynomials.multivariate._models import (
@@ -127,6 +129,17 @@ def test_serialized_multivariate_claims_are_source_bound_and_verifiable() -> Non
     assert not verify_multivariate_factor(
         factor.model_copy(update={"polynomial": right})
     )
+    forged_wire = factor.model_dump(mode="json")
+    forged_wire["factors"] = [
+        {
+            "factor": left.model_dump(mode="json"),
+            "multiplicity": 1,
+        }
+    ]
+    forged_factor = MultivariateFactorResult.model_validate_json(
+        json.dumps(forged_wire)
+    )
+    assert not verify_multivariate_factor(forged_factor)
     assert not verify_multivariate_resultant(
         resultant.model_copy(update={"left": unrelated})
     )

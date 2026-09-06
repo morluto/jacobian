@@ -510,7 +510,7 @@ def verify_multivariate_gcd(claim: MultivariateGcdResult) -> bool:
             claim.left.variables,
         )
         return expected == claim.gcd
-    except (AttributeError, TypeError, ValueError):
+    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
         return False
 
 
@@ -528,20 +528,15 @@ def verify_multivariate_division(claim: MultivariateDivisionResult) -> bool:
 
 
 def verify_multivariate_factor(claim: MultivariateFactorResult) -> bool:
-    """Verify source binding and exact content-and-factor product reconstruction."""
+    """Verify the complete canonical factorization for the retained source."""
     try:
-        if claim.polynomial != claim.reconstructed:
-            return False
-        value = rational_polynomial_to_sympy(claim.polynomial)
-        product = rational_polynomial_to_sympy(claim.polynomial).domain.convert(
-            claim.coefficient.as_fraction()
-        )
-        for record in claim.factors:
-            product *= (
-                rational_polynomial_to_sympy(record.factor) ** record.multiplicity
-            )
-        return bool(product == value)
-    except (AttributeError, TypeError, ValueError):
+        return multivariate_factor(claim.polynomial) == claim
+    except (
+        AttributeError,
+        TypeError,
+        ValueError,
+        OperationDomainValidationError,
+    ):
         return False
 
 

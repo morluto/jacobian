@@ -211,6 +211,9 @@ class ElementEqualResult(StrictModel):
 
 
 class ElementOrderResult(StrictModel):
+    """A source-bound order claim for a finite abelian group element."""
+
+    request: ElementOrderRequest
     order: int = Field(ge=1)
 
 

@@ -20,6 +20,7 @@ from jacobian.math.groups.abelian.operations import (
     normalize_presentation,
     quotient_group,
     reduce_element,
+    verify_element_order,
     verify_elements_equal,
 )
 
@@ -93,6 +94,12 @@ def test_element_order_in_z6() -> None:
     request = ElementOrderRequest(invariant_factors=(6,), coordinates=(2,))
     result = compute_element_order(request)
     assert result.order == 3
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_element_order(decoded)
+
+    payload = result.model_dump(mode="json")
+    payload["order"] = 6
+    assert not verify_element_order(type(result).model_validate(payload))
 
 
 def test_element_order_identity() -> None:

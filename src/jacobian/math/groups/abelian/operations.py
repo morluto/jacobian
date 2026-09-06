@@ -7,6 +7,7 @@ from math import gcd, lcm
 from jacobian.math.groups.abelian._models import (
     ElementEqualRequest,
     ElementEqualResult,
+    ElementOrderRequest,
     ElementOrderResult,
     ElementReduceResult,
     PresentationNormalizeResult,
@@ -92,7 +93,25 @@ def element_order(
     for coordinate, factor in zip(reduced, invariant_factors, strict=True):
         if coordinate != 0:
             order = lcm(order, factor // gcd(coordinate, factor))
-    return ElementOrderResult(order=order)
+    return ElementOrderResult(
+        request=ElementOrderRequest(
+            invariant_factors=invariant_factors,
+            coordinates=coordinates,
+        ),
+        order=order,
+    )
+
+
+def verify_element_order(claim: ElementOrderResult) -> bool:
+    """Check the order relation asserted by a serialized element claim."""
+
+    return (
+        element_order(
+            claim.request.invariant_factors,
+            claim.request.coordinates,
+        ).order
+        == claim.order
+    )
 
 
 def _smith_diagonal(augmented_rows: list[list[int]]) -> list[int]:
@@ -153,5 +172,6 @@ __all__ = [
     "normalize_presentation",
     "quotient_group",
     "reduce_element",
+    "verify_element_order",
     "verify_elements_equal",
 ]

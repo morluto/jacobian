@@ -15,13 +15,16 @@ from jacobian.math.polynomials.support_geometry._models import (
     _require_transportable_weight,
 )
 from jacobian.math.polynomials.support_geometry.values import (
+    MAX_NEWTON_DIMENSION,
     MAX_NEWTON_TERMS,
+    MAX_SUPPORT_TERMS,
     NewtonPolytope,
     PolynomialFaceData,
     PolynomialSupport,
     PolynomialWeightProfile,
 )
 from jacobian.math.polynomials.values import (
+    MAX_POLYNOMIAL_EXPONENT,
     RationalPolynomial,
     RationalPolynomialTerm,
     SparseRationalPolynomial,
@@ -31,6 +34,7 @@ __all__ = [
     "exponent_support",
     "initial_form",
     "newton_polytope",
+    "verify_polynomial_support",
     "weight_profile",
 ]
 
@@ -368,26 +372,23 @@ def support_from_polynomial(polynomial: RationalPolynomial) -> PolynomialSupport
 
     if not terms:
         return PolynomialSupport._from_kernel(
+            polynomial=polynomial,
             is_zero=True,
             term_count=0,
             exponents=(),
-            coefficients=(),
-            variables=polynomial.variables,
         )
 
     exponents = [t[1] for t in terms]
-    coefficients = [t[0] for t in terms]
 
     n = len(polynomial.variables)
     coord_min = tuple(min(e[i] for _, e in terms) for i in range(n))
     coord_max = tuple(max(e[i] for _, e in terms) for i in range(n))
 
     return PolynomialSupport._from_kernel(
+        polynomial=polynomial,
         is_zero=False,
         term_count=len(terms),
         exponents=tuple(exponents),
-        coefficients=tuple(CanonicalRational.from_fraction(c) for c in coefficients),
-        variables=polynomial.variables,
         coordinate_min=coord_min,
         coordinate_max=coord_max,
         total_degree_min=min(sum(e) for _, e in terms),
@@ -461,6 +462,105 @@ def exponent_support(polynomial: RationalPolynomial) -> PolynomialSupport:
     """Return the exponent support of one canonical polynomial."""
 
     return support_from_polynomial(polynomial)
+
+
+def _bounded_support_terms(
+    polynomial: RationalPolynomial,
+) -> tuple[tuple[Fraction, tuple[int, ...]], ...] | None:
+    """Read a source polynomial within the support verifier's fixed envelope.
+
+    Normal callers already hold a structurally validated canonical value.  A
+    verifier also has to handle values made with ``model_construct`` or a
+    malformed deserialized claim, so it checks the finite work envelope before
+    iterating source terms.  This keeps verification total and prevents a
+    caller-authored claim from turning verification into an unbounded scan.
+    """
+    try:
+        variables = polynomial.variables
+        if not 1 <= len(variables) <= MAX_NEWTON_DIMENSION:
+            return None
+        raw_terms = polynomial.polynomial.terms
+        if len(raw_terms) > MAX_SUPPORT_TERMS:
+            return None
+        terms: list[tuple[Fraction, tuple[int, ...]]] = []
+        for term in raw_terms:
+            exponents = tuple(term.exponents)
+            if len(exponents) != len(variables) or any(
+                type(exponent) is not int
+                or exponent < 0
+                or exponent > MAX_POLYNOMIAL_EXPONENT
+                for exponent in exponents
+            ):
+                return None
+            coefficient = term.coefficient.as_fraction()
+            if coefficient == 0:
+                return None
+            terms.append((coefficient, exponents))
+        support_exponents = tuple(exponent for _coefficient, exponent in terms)
+        if len(set(support_exponents)) != len(support_exponents):
+            return None
+        return tuple(terms)
+    except (AttributeError, IndexError, TypeError, ValueError, ZeroDivisionError):
+        return None
+
+
+def verify_polynomial_support(claim: PolynomialSupport) -> bool:
+    """Verify support and extrema claims against the retained source.
+
+    Decoding a result remains structural; this explicit native verifier is the
+    source-relation boundary for independently supplied claims.  Every source
+    term is visited at most once, within the canonical polynomial term bound,
+    and all arithmetic stays exact Python integer/Fraction arithmetic.
+    """
+    try:
+        if type(claim.is_zero) is not bool or type(claim.term_count) is not int:
+            return False
+        if not isinstance(claim.exponents, tuple) or not all(
+            isinstance(exponents, tuple)
+            and all(type(exponent) is int for exponent in exponents)
+            for exponents in claim.exponents
+        ):
+            return False
+        if not all(
+            isinstance(extrema, tuple) and all(type(value) is int for value in extrema)
+            for extrema in (claim.coordinate_min, claim.coordinate_max)
+        ):
+            return False
+        if any(
+            value is not None and type(value) is not int
+            for value in (claim.total_degree_min, claim.total_degree_max)
+        ):
+            return False
+        if len(claim.exponents) > MAX_SUPPORT_TERMS:
+            return False
+        terms = _bounded_support_terms(claim.polynomial)
+        if terms is None:
+            return False
+        exponents = tuple(exponent for _coefficient, exponent in terms)
+        if not terms:
+            return (
+                claim.is_zero
+                and claim.term_count == 0
+                and claim.exponents == ()
+                and claim.coordinate_min == ()
+                and claim.coordinate_max == ()
+                and claim.total_degree_min is None
+                and claim.total_degree_max is None
+            )
+        width = len(claim.polynomial.variables)
+        coordinate_min = tuple(min(exp[i] for exp in exponents) for i in range(width))
+        coordinate_max = tuple(max(exp[i] for exp in exponents) for i in range(width))
+        return (
+            not claim.is_zero
+            and claim.term_count == len(terms)
+            and claim.exponents == exponents
+            and claim.coordinate_min == coordinate_min
+            and claim.coordinate_max == coordinate_max
+            and claim.total_degree_min == min(sum(exp) for exp in exponents)
+            and claim.total_degree_max == max(sum(exp) for exp in exponents)
+        )
+    except (AttributeError, IndexError, TypeError, ValueError, ZeroDivisionError):
+        return False
 
 
 def newton_polytope(polynomial: RationalPolynomial) -> NewtonPolytope:

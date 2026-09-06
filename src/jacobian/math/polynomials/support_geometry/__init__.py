@@ -4,6 +4,7 @@ from jacobian.math.polynomials.support_geometry.operations import (
     exponent_support,
     initial_form,
     newton_polytope,
+    verify_polynomial_support,
     weight_profile,
 )
 from jacobian.math.polynomials.support_geometry.values import (
@@ -25,5 +26,6 @@ __all__ = [
     "exponent_support",
     "initial_form",
     "newton_polytope",
+    "verify_polynomial_support",
     "weight_profile",
 ]

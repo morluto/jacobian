@@ -57,8 +57,9 @@ TOOLS: MathTools = (
         operation_id="polynomial.support.compute",
         title="Compute polynomial exponent support",
         description=(
-            "Extract the exponent support of an exact sparse polynomial: "
-            "exponent set, term count, coordinatewise min/max, and total degree profile."
+            "Extract the exponent support of an exact sparse polynomial while "
+            "retaining the canonical QQ polynomial source: exponent set, term "
+            "count, coordinatewise min/max, and total degree profile."
         ),
         request_type=SupportRequest,
         result_type=PolynomialSupport,

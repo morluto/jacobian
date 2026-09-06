@@ -7,7 +7,6 @@ from typing import TypedDict
 import pytest
 from pydantic import ValidationError
 
-from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.support_geometry._models import (
     InitialFormRequest,
@@ -19,24 +18,31 @@ from jacobian.math.polynomials.support_geometry.operations import (
     exponent_support,
     initial_form,
     newton_polytope,
+    verify_polynomial_support,
     weight_profile,
+)
+from jacobian.math.polynomials.support_geometry.values import (
+    NewtonPolytope,
+    PolynomialFaceData,
+    PolynomialSupport,
+    PolynomialWeightProfile,
 )
 from jacobian.math.polynomials.values import RationalPolynomial
 
 
-def compute_support(request: SupportRequest):
+def compute_support(request: SupportRequest) -> PolynomialSupport:
     return exponent_support(request.polynomial)
 
 
-def compute_newton_polytope(request: NewtonPolytopeRequest):
+def compute_newton_polytope(request: NewtonPolytopeRequest) -> NewtonPolytope:
     return newton_polytope(request.polynomial)
 
 
-def compute_weight_profile(request: WeightProfileRequest):
+def compute_weight_profile(request: WeightProfileRequest) -> PolynomialWeightProfile:
     return weight_profile(request.polynomial, request.weight)
 
 
-def compute_initial_form(request: InitialFormRequest):
+def compute_initial_form(request: InitialFormRequest) -> PolynomialFaceData:
     return initial_form(request.polynomial, request.weight)
 
 
@@ -105,15 +111,38 @@ class TestSupport:
         assert result.total_degree_max == 2
 
     def test_zero_support(self) -> None:
-        result = compute_support(SupportRequest(polynomial=_polynomial((), VARS)))
+        source = _polynomial((), VARS)
+        result = compute_support(SupportRequest(polynomial=source))
         assert result.is_zero
         assert result.term_count == 0
+        assert result.polynomial is source
+        assert result.polynomial.domain == "QQ"
+        assert result.polynomial.variables == VARS
 
     def test_accepts_canonical_polynomial_value(self) -> None:
         """A serialized producer result validates unchanged as request input."""
         request = SupportRequest(polynomial=_polynomial(_XY_TERMS, VARS))
         revalidated = SupportRequest.model_validate(request.model_dump())
         assert revalidated.polynomial == request.polynomial
+
+    def test_result_retains_source_for_json_composition(self) -> None:
+        """Support output carries one canonical source into another operation."""
+        source = _polynomial(_XY_TERMS, VARS)
+        result = compute_support(SupportRequest(polynomial=source))
+
+        assert result.polynomial is source
+        assert result.polynomial.domain == "QQ"
+        assert result.polynomial.variables == VARS
+        payload = result.model_dump(mode="json")
+        assert "variables" not in payload
+        assert "coefficients" not in payload
+        restored = type(result).model_validate(payload)
+        assert restored == result
+        assert verify_polynomial_support(restored)
+
+        follow_up = SupportRequest.model_validate({"polynomial": payload["polynomial"]})
+        assert follow_up.polynomial == source
+        assert compute_support(follow_up).exponents == result.exponents
 
 
 class TestNewtonPolytope:
@@ -386,17 +415,53 @@ class TestSupportCrossFieldValidation:
 
         with raises_code("term_count_mismatch"):
             PolynomialSupport(
+                polynomial=_polynomial(_XY_TERMS, VARS),
                 is_zero=False,
                 term_count=1,
                 exponents=((2, 0), (0, 2)),
-                coefficients=(
-                    CanonicalRational(num="1", den="1"),
-                    CanonicalRational(num="1", den="1"),
-                ),
-                variables=VARS,
                 total_degree_min=2,
                 total_degree_max=2,
             )
+
+    def test_source_and_claim_forgery_are_rejected(self) -> None:
+        """The explicit verifier checks source and derived fields together."""
+        source = _polynomial(_XY_TERMS, VARS)
+        claim = compute_support(SupportRequest(polynomial=source))
+
+        source_forgery = claim.model_dump(mode="json")
+        source_forgery["polynomial"]["polynomial"]["terms"][2]["exponents"] = [0, 3]
+        forged_source = type(claim).model_validate(source_forgery)
+        assert not verify_polynomial_support(forged_source)
+
+        claim_forgery = claim.model_dump(mode="json")
+        claim_forgery["coordinate_max"] = [3, 2]
+        forged_claim = type(claim).model_validate(claim_forgery)
+        assert not verify_polynomial_support(forged_claim)
+
+    def test_verifier_rejects_oversized_constructed_source(self) -> None:
+        """Verification has a fixed source scan bound even for trusted bypasses."""
+        from jacobian.math.polynomials.support_geometry.values import PolynomialSupport
+        from jacobian.math.polynomials.values import SparseRationalPolynomial
+
+        source = _polynomial(_XY_TERMS, VARS)
+        oversized = RationalPolynomial.model_construct(
+            domain="QQ",
+            variables=VARS,
+            polynomial=SparseRationalPolynomial.model_construct(
+                terms=source.polynomial.terms * 1366
+            ),
+        )
+        claim = PolynomialSupport.model_construct(
+            polynomial=oversized,
+            is_zero=True,
+            term_count=0,
+            exponents=(),
+            coordinate_min=(),
+            coordinate_max=(),
+            total_degree_min=None,
+            total_degree_max=None,
+        )
+        assert not verify_polynomial_support(claim)
 
 
 class TestNewtonReplay:
@@ -440,22 +505,19 @@ class TestNewtonReplay:
 
 
 class TestSupportValueInvariants:
-    def test_zero_coefficient_rejected_in_claimed_support(self) -> None:
-        """A nonzero support cannot retain a zero-coefficient exponent."""
-        from jacobian.math.polynomials.support_geometry.values import (
-            PolynomialSupport,
-        )
+    def test_forged_support_claim_is_checked_against_source(self) -> None:
+        """A decoded support keeps its canonical polynomial source."""
+        from jacobian.math.polynomials.support_geometry.values import PolynomialSupport
 
-        with raises_code("zero_support_coefficient"):
-            PolynomialSupport(
-                is_zero=False,
-                term_count=1,
-                exponents=((1, 0),),
-                coefficients=(CanonicalRational(num="0", den="1"),),
-                variables=VARS,
-                total_degree_min=1,
-                total_degree_max=1,
-            )
+        claim = PolynomialSupport.model_validate(
+            {
+                "polynomial": _polynomial(_XY_TERMS, VARS).model_dump(mode="json"),
+                "is_zero": True,
+                "term_count": 0,
+                "exponents": [],
+            }
+        )
+        assert not verify_polynomial_support(claim)
 
     def test_nonzero_newton_result_must_retain_support(self) -> None:
         from jacobian.math.polynomials.support_geometry.values import NewtonPolytope
@@ -470,22 +532,6 @@ class TestSupportValueInvariants:
                 }
             )
 
-    def test_duplicate_or_invalid_variables_rejected(self) -> None:
-        from jacobian.math.polynomials.support_geometry.values import (
-            PolynomialSupport,
-        )
-
-        with pytest.raises(ValidationError):
-            PolynomialSupport(
-                is_zero=False,
-                term_count=1,
-                exponents=((1, 0),),
-                coefficients=(CanonicalRational(num="1", den="1"),),
-                variables=("x", "x"),
-                total_degree_min=1,
-                total_degree_max=1,
-            )
-
     def test_native_export_list_excludes_wire_handlers(self) -> None:
         import jacobian.math.polynomials.support_geometry as package
 
@@ -497,14 +543,10 @@ class TestSupportValueInvariants:
 
         with raises_code("exponents_not_distinct"):
             PolynomialSupport(
+                polynomial=_polynomial((_term("1", [1]), _term("2", [0])), ("x",)),
                 is_zero=False,
                 term_count=2,
                 exponents=((1,), (1,)),
-                coefficients=(
-                    CanonicalRational(num="1", den="1"),
-                    CanonicalRational(num="2", den="1"),
-                ),
-                variables=("x",),
                 total_degree_min=1,
                 total_degree_max=1,
             )
@@ -514,9 +556,9 @@ class TestSupportValueInvariants:
 
         with raises_code("zero_support_coordinate_extrema"):
             PolynomialSupport(
+                polynomial=_polynomial((), ("x",)),
                 is_zero=True,
                 term_count=0,
-                variables=("x",),
                 coordinate_min=(3,),
                 coordinate_max=(5,),
             )
@@ -544,18 +586,15 @@ class TestSupportValueInvariants:
         """Support points outside the canonical polynomial exponent domain
         cannot revalidate: the source type rejects negative exponents and
         anything above the shared representation limit."""
-        from jacobian._exact import CanonicalRational
         from jacobian.math.polynomials.support_geometry.values import PolynomialSupport
 
-        unit = CanonicalRational(num="1", den="1")
         for exponent in (-1, 40000):
             with raises_code("exponents_out_of_domain"):
                 PolynomialSupport(
+                    polynomial=_polynomial((_term("1", [0]),), ("x",)),
                     is_zero=False,
                     term_count=1,
                     exponents=((exponent,),),
-                    coefficients=(unit,),
-                    variables=("x",),
                     coordinate_min=(exponent,),
                     coordinate_max=(exponent,),
                     total_degree_min=exponent,
@@ -581,22 +620,8 @@ class TestSupportValueInvariants:
 
     def test_empty_variable_axis_rejected(self) -> None:
         """Every canonical polynomial ring names at least one variable."""
-        from jacobian.math.polynomials.support_geometry.values import PolynomialSupport
-
         with raises_pydantic_code("too_short"):
-            PolynomialSupport(is_zero=True, term_count=0, variables=())
-        from jacobian._exact import CanonicalRational
-
-        with raises_pydantic_code("too_short"):
-            PolynomialSupport(
-                is_zero=False,
-                term_count=1,
-                exponents=((),),
-                coefficients=(CanonicalRational(num="5", den="1"),),
-                variables=(),
-                total_degree_min=0,
-                total_degree_max=0,
-            )
+            _polynomial((), ())
 
     def test_duplicate_newton_points_rejected(self) -> None:
         """Retained vertices, nonextreme points, and support are sets of

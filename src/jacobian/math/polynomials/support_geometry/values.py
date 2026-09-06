@@ -7,7 +7,6 @@ from typing import Any, Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_EXPONENT,
@@ -44,28 +43,12 @@ def _require_canonical_exponents(exponents: tuple[tuple[int, ...], ...]) -> None
         )
 
 
-def _require_nonzero_support(value: PolynomialSupport) -> None:
-    """A claimed nonzero support carries only nonzero coefficients."""
-    # An exponent with a zero coefficient is not part of a support.
-    if any(coefficient.as_fraction() == 0 for coefficient in value.coefficients):
-        raise _validation_error(
-            "zero_support_coefficient",
-            "support coefficients must be nonzero; zero terms are omitted",
-        )
-
-
 def _require_shape_consistency(value: PolynomialSupport, width: int) -> None:
     """Term count, distinctness, and axis shape are structural invariants."""
-    if len(value.exponents) != len(value.coefficients) or value.term_count != len(
-        value.exponents
-    ):
+    if value.term_count != len(value.exponents):
         raise _validation_error(
             "term_count_mismatch",
-            "term count must match the number of exponents and coefficients",
-        )
-    if len(set(value.variables)) != width:
-        raise _validation_error(
-            "variables_not_unique", "variables must be unique and canonically named"
+            "term count must match the number of support exponents",
         )
     # An exponent set cannot contain duplicates: a canonical polynomial
     # has unique exponent tuples, so duplicated support entries would
@@ -80,26 +63,22 @@ def _require_shape_consistency(value: PolynomialSupport, width: int) -> None:
             "exponent tuples must use the declared variable axis",
         )
     _require_canonical_exponents(value.exponents)
-    if value.coordinate_min and len(value.coordinate_min) != width:
-        raise _validation_error(
-            "coordinate_extrema_dimension_mismatch",
-            "coordinate extrema must use the declared variable axis",
-        )
+    for extrema in (value.coordinate_min, value.coordinate_max):
+        if extrema and len(extrema) != width:
+            raise _validation_error(
+                "coordinate_extrema_dimension_mismatch",
+                "coordinate extrema must use the declared variable axis",
+            )
 
 
 class PolynomialSupport(StrictModel):
-    """The exponent support of a nonzero polynomial."""
+    """A polynomial's support and derived extrema, bound to its source."""
 
+    polynomial: RationalPolynomial
     is_zero: bool
     term_count: int = Field(ge=0)
     exponents: tuple[tuple[int, ...], ...] = Field(
         default=(), max_length=MAX_SUPPORT_TERMS
-    )
-    coefficients: tuple[CanonicalRational, ...] = Field(
-        default=(), max_length=MAX_SUPPORT_TERMS
-    )
-    variables: tuple[PolynomialVariable, ...] = Field(
-        min_length=1, max_length=MAX_NEWTON_DIMENSION
     )
     coordinate_min: tuple[int, ...] = Field(default=(), max_length=MAX_NEWTON_DIMENSION)
     coordinate_max: tuple[int, ...] = Field(default=(), max_length=MAX_NEWTON_DIMENSION)
@@ -112,7 +91,7 @@ class PolynomialSupport(StrictModel):
     def bind_extrema_to_support(self) -> Self:
         # Parsing checks the self-contained canonical shape only so
         # deserializing a result never re-enters an operation kernel.
-        width = len(self.variables)
+        width = len(self.polynomial.variables)
         _require_shape_consistency(self, width)
         if self.is_zero:
             if self.total_degree_min is not None or self.total_degree_max is not None:
@@ -125,12 +104,11 @@ class PolynomialSupport(StrictModel):
                     "zero_support_coordinate_extrema",
                     "an empty support carries no coordinate extrema",
                 )
-            if self.exponents or self.coefficients:
+            if self.exponents:
                 raise _validation_error(
                     "zero_support_has_terms", "a zero support carries no terms"
                 )
             return self
-        _require_nonzero_support(self)
         if self.total_degree_min is None or self.total_degree_max is None:
             raise _validation_error(
                 "nonzero_support_missing_degree_extrema",

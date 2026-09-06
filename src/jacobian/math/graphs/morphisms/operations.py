@@ -77,6 +77,11 @@ def _admit_cycle_request(graph: SimpleUndirectedGraph, length: int) -> None:
                 f"{MAX_CYCLE_SEARCH_PATHS}-path work budget"
             ),
         )
+    _admit_cycle_retained(graph, length)
+
+
+def _admit_cycle_retained(graph: SimpleUndirectedGraph, length: int) -> None:
+    """Admit the source and witness representation without replaying search work."""
     largest_label = max((len(vertex) for vertex in graph.vertices), default=0)
     if (
         _graph_label_characters(graph) + length * largest_label
@@ -130,6 +135,14 @@ def _admit_subgraph_request(
                     f"{MAX_CYCLE_SEARCH_PATHS}-assignment work budget"
                 ),
             )
+    _admit_subgraph_retained(pattern, host)
+
+
+def _admit_subgraph_retained(
+    pattern: SimpleUndirectedGraph, host: SimpleUndirectedGraph
+) -> None:
+    """Admit the source and embedding representation without replaying search work."""
+    pattern_size = len(pattern.vertices)
     largest_host_label = max((len(vertex) for vertex in host.vertices), default=0)
     retained = (
         _graph_label_characters(pattern)
@@ -263,6 +276,7 @@ def verify_fixed_length_cycle(claim: FixedLengthCycleResult) -> bool:
     try:
         vertex_set, edge_set = _cycle_source_edges(claim.graph)
         if claim.decision == "EXISTS":
+            _admit_cycle_retained(claim.graph, claim.length)
             _validate_cycle_witness(claim.cycle, claim.length, vertex_set, edge_set)
             return True
         if claim.cycle:
@@ -456,6 +470,7 @@ def verify_subgraph_pattern_find(claim: SubgraphPatternFindResult) -> bool:
     """Verify a serialized embedding decision and its optional witness."""
     try:
         if claim.decision == "EXISTS":
+            _admit_subgraph_retained(claim.pattern, claim.host)
             _validate_embedding_witness(claim.pattern, claim.host, claim.vertex_map)
             return True
         if claim.vertex_map:

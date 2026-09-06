@@ -450,6 +450,19 @@ class TestFixedLengthCycle:
             cycle=tuple(labels),
         )
         assert result.decision == "EXISTS"
+        assert verify_fixed_length_cycle(result)
+
+        huge = "v" * (6 * 1024 * 1024)
+        oversized = self._g(
+            [huge, "w0", "w1"], [[huge, "w0"], ["w0", "w1"], [huge, "w1"]]
+        )
+        forged_oversized = FixedLengthCycleResult(
+            graph=oversized,
+            decision="EXISTS",
+            length=3,
+            cycle=(huge, "w0", "w1"),
+        )
+        assert not verify_fixed_length_cycle(forged_oversized)
 
 
 class TestSubgraphPatternFind:
@@ -639,6 +652,15 @@ class TestSubgraphPatternFind:
             vertex_map=(),
         )
         assert not verify_subgraph_pattern_find(forged_oversized)
+
+        edge_pattern = self._g(["p", "q"], [["p", "q"]])
+        forged_positive = SubgraphPatternFindResult(
+            pattern=edge_pattern,
+            host=oversized_host,
+            decision="EXISTS",
+            vertex_map=(huge, "w0"),
+        )
+        assert not verify_subgraph_pattern_find(forged_positive)
 
         # Outside the bounded request domain (pattern over the vertex cap)
         # a negative conclusion is not exact and must be rejected.

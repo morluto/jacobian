@@ -194,9 +194,30 @@ class QuotientRequest(StrictModel):
 
 
 class PresentationNormalizeResult(StrictModel):
-    invariant_factors: tuple[int, ...]
-    order: int = Field(ge=1)
-    rank: int = Field(ge=0)
+    """The canonical finite abelian-group presentation."""
+
+    presentation: AbelianPresentation
+
+    @property
+    def invariant_factors(self) -> tuple[int, ...]:
+        """Project the canonical invariant factors."""
+
+        return self.presentation.invariant_factors
+
+    @property
+    def order(self) -> int:
+        """Return the order of the presented finite group."""
+
+        order = 1
+        for factor in self.presentation.invariant_factors:
+            order *= factor
+        return order
+
+    @property
+    def rank(self) -> int:
+        """The finite-only contract admits no free summands."""
+
+        return 0
 
 
 class ElementReduceResult(StrictModel):

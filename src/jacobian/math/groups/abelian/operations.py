@@ -5,6 +5,7 @@ from __future__ import annotations
 from math import gcd, lcm
 
 from jacobian.math.groups.abelian._models import (
+    AbelianPresentation,
     ElementEqualRequest,
     ElementEqualResult,
     ElementOrderRequest,
@@ -28,13 +29,8 @@ def normalize_presentation(
     smith = smith_normal_form(matrix, domain=None)
     factors = tuple(int(smith[i, i]) for i in range(min(smith.rows, smith.cols)))
     cleaned = tuple(factor for factor in factors if factor > 1)
-    order = 1
-    for factor in cleaned:
-        order *= factor
     return PresentationNormalizeResult(
-        invariant_factors=cleaned,
-        order=order,
-        rank=0,
+        presentation=AbelianPresentation(invariant_factors=cleaned),
     )
 
 

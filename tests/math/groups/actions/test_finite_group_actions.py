@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.groups.actions._models import (
+    MAX_COLORS,
     BurnsideCountRequest,
     CycleIndexRequest,
     ElementCyclesRequest,
@@ -499,6 +500,23 @@ class TestBounds:
     def test_colors_zero_rejected(self) -> None:
         with pytest.raises(ValidationError):
             PolyaInventoryRequest(action=_cyclic_c3(), colors=0)
+
+    def test_colors_above_bound_rejected_by_native_operation(self) -> None:
+        with pytest.raises(
+            OperationDomainValidationError, match="between 1 and"
+        ) as error:
+            polya_inventory(_cyclic_c3(), MAX_COLORS + 1)
+        assert error.value.errors()[0]["type"] == "finite_group_action.colors_out_of_range"
+
+    def test_polya_term_output_bound_is_admitted_before_completion(self) -> None:
+        # Five fixed points with twenty colours have more than MAX_TERMS
+        # distinct colour-multiplicity monomials. The bounded kernel rejects
+        # this before constructing an unbounded result.
+        with pytest.raises(
+            OperationDomainValidationError, match="more than the bounded maximum"
+        ) as error:
+            polya_inventory(_trivial(5), 20)
+        assert error.value.errors()[0]["type"] == "finite_group_action.polya_terms_exceeded"
 
     def test_group_order_bound_exceeded(self) -> None:
         # S_8 has order 40320 > 10000 and acts on only 8 points, so it fits

@@ -435,7 +435,7 @@ class ElementCyclesRequest(_ActionRequest):
 
 
 class ElementCyclesResult(StrictModel):
-    """Cycle decomposition of one group element acting on the domain.
+    """Source-bound cycle decomposition of one group element.
 
     Each ``cycle`` is a tuple of 0-based position indices in the domain.  The
     canonical representative starts with the smallest index and cycles are
@@ -443,17 +443,23 @@ class ElementCyclesResult(StrictModel):
     of cycle lengths; ``cycle_type`` is the integer partition of ``|X|`` given
     by the cycle lengths in non-increasing order.  ``fixed_points`` lists the
     domain indices fixed by the element.
+    The relation between ``permutation`` and the cycle rows, and all derived
+    profile fields, are claims established by the producing operation.  They
+    are checked by ``verify_element_cycles`` when a consumer relies on them;
+    ordinary deserialization only checks their bounded representation.
     """
 
     action: FinitePermutationAction
     element: int
-    permutation: tuple[int, ...]
-    cycles: tuple[tuple[int, ...], ...]
-    cycle_lengths: tuple[int, ...]
-    cycle_type: tuple[int, ...]
-    fixed_points: tuple[int, ...]
-    fixed_point_count: int
-    support: tuple[int, ...]
+    permutation: tuple[DomainPosition, ...] = Field(max_length=MAX_DOMAIN_SIZE)
+    cycles: tuple[tuple[DomainPosition, ...], ...] = Field(
+        max_length=MAX_DOMAIN_SIZE
+    )
+    cycle_lengths: tuple[int, ...] = Field(max_length=MAX_DOMAIN_SIZE)
+    cycle_type: tuple[int, ...] = Field(max_length=MAX_DOMAIN_SIZE)
+    fixed_points: tuple[DomainPosition, ...] = Field(max_length=MAX_DOMAIN_SIZE)
+    fixed_point_count: int = Field(ge=0, le=MAX_DOMAIN_SIZE)
+    support: tuple[DomainPosition, ...] = Field(max_length=MAX_DOMAIN_SIZE)
 
     @model_validator(mode="after")
     def bind_element_cycles(self) -> Self:
@@ -525,18 +531,22 @@ class CycleIndexRequest(_ActionRequest):
 
 
 class CycleIndexResult(StrictModel):
-    """The cycle-index polynomial Z(G) as sparse coefficient data.
+    """Source-bound cycle-index polynomial ``Z(G)`` as sparse data.
 
     ``cycle_type -> coefficient`` maps a cycle-type tuple (an integer partition
     of ``|X|`` given by cycle counts) to the number of group elements with
     that cycle type.  ``group_order`` is ``|G|`` and ``degree`` is ``|X|``.
-    Each coefficient is exact; the cycle index is ``coeff / group_order``.
+    Each coefficient is exact; the cycle index is ``coeff / group_order``.  The
+    multiplicity total is established by the producing operation and checked
+    by ``verify_cycle_index`` when a consumer relies on this claim.
     """
 
     action: FinitePermutationAction
     group_order: int
     degree: int
-    cycle_type_counts: tuple[tuple[tuple[int, ...], int], ...]
+    cycle_type_counts: tuple[tuple[tuple[int, ...], int], ...] = Field(
+        min_length=1, max_length=MAX_GROUP_ORDER
+    )
 
     @model_validator(mode="after")
     def bind_cycle_index(self) -> Self:
@@ -600,18 +610,21 @@ class BurnsideCountRequest(_ActionRequest):
 
 
 class BurnsideCountResult(StrictModel):
-    """The number of point-orbits under the action.
+    """Source-bound Burnside point-orbit count under the action.
 
     ``orbit_count`` is the exact integer ``|G\\X| = (1/|G|) sum_g |Fix(g)|``.
     ``fixed_point_contributions`` lists, for each group element, its
-    ``|Fix(g)|`` value in enumerated order.  ``group_order`` is ``|G|``.
+    ``|Fix(g)|`` value in enumerated order.  ``group_order`` is ``|G|``.  The
+    fixed-point sum and quotient are claims established by the producing
+    operation and checked by ``verify_burnside_count`` when a consumer relies
+    on them.
     """
 
     action: FinitePermutationAction
     group_order: int
     fixed_point_sum: int = Field(ge=0, le=MAX_GROUP_ORDER * MAX_DOMAIN_SIZE)
     orbit_count: int = Field(ge=0, le=MAX_DOMAIN_SIZE)
-    fixed_point_contributions: tuple[int, ...]
+    fixed_point_contributions: tuple[int, ...] = Field(max_length=MAX_GROUP_ORDER)
 
     @model_validator(mode="after")
     def bind_burnside(self) -> Self:
@@ -665,19 +678,22 @@ class PolyaInventoryRequest(_ActionRequest):
 
 
 class PolyaInventoryResult(StrictModel):
-    """The Pólya enumeration inventory polynomial as sparse data.
+    """Source-bound Pólya enumeration inventory polynomial as sparse data.
 
     ``terms`` maps each monomial exponent tuple (a ``k``-tuple of non-negative
     integers summing to ``degree``) to its integer coefficient.  ``colors`` is
     the number of colours and ``degree`` is ``|X|``.  The coefficient sum is
     ``k^|X| / |G| * |G| = k^|X|`` only when the action is trivial; in general
     the coefficients are the Pólya inventory coefficients.
+    The degree and coefficient identities are established by the producing
+    operation and checked by ``verify_polya_inventory`` when a consumer relies
+    on this claim.  Deserialization checks only the bounded sparse shape.
     """
 
     action: FinitePermutationAction
     colors: int = Field(ge=1, le=MAX_COLORS)
     degree: int
-    terms: tuple[tuple[tuple[int, ...], int], ...]
+    terms: tuple[tuple[tuple[int, ...], int], ...] = Field(max_length=MAX_TERMS)
 
     @model_validator(mode="after")
     def bind_polya(self) -> Self:

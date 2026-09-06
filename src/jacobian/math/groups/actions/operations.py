@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+from itertools import product as iproduct
+
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.groups.actions._models import (
+    MAX_COLORS,
     MAX_FAMILY_MEMBERS,
     MAX_GROUP_ORDER,
     MAX_ORBIT_PROFILE_IMAGES,
     MAX_ORBIT_PROFILE_INCIDENCES,
     MAX_ORBIT_PROFILE_TRANSPORTERS,
+    MAX_TERMS,
     ActionBoundSubset,
     BurnsideCountResult,
     CycleIndexResult,
@@ -179,11 +183,27 @@ def _element_cycles_data(
     return perm, cycles, lengths, cycle_type, fixed, support
 
 
+def _permutation_cycle_type(permutation: tuple[int, ...]) -> tuple[int, ...]:
+    """Return only a permutation's cycle type for aggregate claim checking."""
+    visited = [False] * len(permutation)
+    lengths: list[int] = []
+    for start in range(len(permutation)):
+        if visited[start]:
+            continue
+        current = start
+        length = 0
+        while not visited[current]:
+            visited[current] = True
+            current = permutation[current]
+            length += 1
+        lengths.append(length)
+    return tuple(sorted(lengths, reverse=True))
+
+
 def _cycle_type_counts(
-    action: FinitePermutationAction,
+    group: tuple[tuple[int, ...], ...],
 ) -> tuple[CycleTypeCount, ...]:
     """Return the cycle-type multiplicity table as a sorted tuple of (type, count)."""
-    group = _enumerate_group(action)
     counts: dict[tuple[int, ...], int] = {}
     for perm in group:
         _, _, cycle_type, _ = _cycle_decomposition(perm)
@@ -197,7 +217,7 @@ def _cycle_index_data(
     """Return ``(group_order, degree, cycle_type_counts)``."""
     group = _enumerate_group(action)
     degree = len(action.domain)
-    counts = _cycle_type_counts(action)
+    counts = _cycle_type_counts(group)
     return len(group), degree, counts
 
 
@@ -218,6 +238,62 @@ def _burnside_data(
     return group_order, tuple(contributions), orbit_count
 
 
+def _polya_terms_from_group(
+    group: tuple[tuple[int, ...], ...], colors: int
+) -> tuple[tuple[tuple[int, ...], int], ...]:
+    """Expand the cycle-index substitution for an already admitted group."""
+    if type(colors) is not int or not 1 <= colors <= MAX_COLORS:
+        raise OperationDomainValidationError(
+            location=("colors",),
+            code="finite_group_action.colors_out_of_range",
+            message=(
+                "colors must be an integer between 1 and "
+                f"{MAX_COLORS}"
+            ),
+        )
+    orbit_count: dict[tuple[int, ...], int] = {}
+    for perm in group:
+        cycle_lengths = _permutation_cycle_type(perm)
+        # Build the monomial exponent-tuple contribution of this element.
+        # cycle of length i contributes sum_c y_c^i, so for each monomial we
+        # choose one term per cycle.  Accumulate the product over cycles.
+        # Each cycle of length L contributes (y_c)^L for some colour c.
+        # We represent each cycle's choice as an exponent vector of length
+        # colors, where entry c is L if that colour is chosen.
+        cycle_choices: list[list[tuple[int, ...]]] = []
+        for length in cycle_lengths:
+            choices = []
+            for c in range(colors):
+                exponents = [0] * colors
+                exponents[c] = length
+                choices.append(tuple(exponents))
+            cycle_choices.append(choices)
+        # Cartesian product over cycles.
+        for assignment in iproduct(*cycle_choices):
+            monomial = tuple(
+                sum(assignment[j][c] for j in range(len(assignment)))
+                for c in range(colors)
+            )
+            orbit_count[monomial] = orbit_count.get(monomial, 0) + 1
+            if len(orbit_count) > MAX_TERMS:
+                raise OperationDomainValidationError(
+                    location=("colors",),
+                    code="finite_group_action.polya_terms_exceeded",
+                    message=(
+                        "Pólya inventory has more than the bounded maximum "
+                        f"of {MAX_TERMS} sparse terms"
+                    ),
+                )
+    group_order = len(group)
+    terms: list[tuple[tuple[int, ...], int]] = []
+    for monomial, count in orbit_count.items():
+        if count % group_order != 0:
+            raise ValueError("Pólya inventory coefficient is not an integer")
+        terms.append((monomial, count // group_order))
+    terms.sort(key=lambda t: t[0])
+    return tuple(terms)
+
+
 def _polya_inventory_data(
     action: FinitePermutationAction,
     colors: int,
@@ -231,48 +307,7 @@ def _polya_inventory_data(
     colouring orbits by colour multiplicity.
     """
     group = _enumerate_group(action)
-    degree = len(action.domain)
-    if colors < 1:
-        raise OperationDomainValidationError(
-            location=("colors",),
-            code="finite_group_action.colors_out_of_range",
-            message="colors must be at least 1",
-        )
-    orbit_count: dict[tuple[int, ...], int] = {}
-    for perm in group:
-        cycles, _, _, _ = _cycle_decomposition(perm)
-        # Build the monomial exponent-tuple contribution of this element.
-        # cycle of length i contributes sum_c y_c^i, so for each monomial we
-        # choose one term per cycle.  Accumulate the product over cycles.
-        # Each cycle of length L contributes (y_c)^L for some colour c.
-        # We represent each cycle's choice as an exponent vector of length
-        # colors, where entry c is L if that colour is chosen.
-        cycle_choices: list[list[tuple[int, ...]]] = []
-        for cycle in cycles:
-            length = len(cycle)
-            choices = []
-            for c in range(colors):
-                exponents = [0] * colors
-                exponents[c] = length
-                choices.append(tuple(exponents))
-            cycle_choices.append(choices)
-        # Cartesian product over cycles
-        from itertools import product as _product
-
-        for assignment in _product(*cycle_choices):
-            monomial = tuple(
-                sum(assignment[j][c] for j in range(len(assignment)))
-                for c in range(colors)
-            )
-            orbit_count[monomial] = orbit_count.get(monomial, 0) + 1
-    group_order = len(group)
-    terms: list[tuple[tuple[int, ...], int]] = []
-    for monomial, count in orbit_count.items():
-        if count % group_order != 0:
-            raise ValueError("Pólya inventory coefficient is not an integer")
-        terms.append((monomial, count // group_order))
-    terms.sort(key=lambda t: t[0])
-    return degree, tuple(terms)
+    return len(action.domain), _polya_terms_from_group(group, colors)
 
 
 def subset_family_orbit_profile(
@@ -454,34 +489,98 @@ def polya_inventory(
 
 
 def verify_element_cycles(claim: ElementCyclesResult) -> bool:
-    """Check the enumerated element and every cycle-derived field once."""
+    """Check one supplied cycle-decomposition claim at its consumer boundary."""
+    if not isinstance(claim, ElementCyclesResult):
+        return False
     try:
-        return element_cycles(claim.action, claim.element) == claim
-    except (OperationDomainValidationError, ValueError, TypeError):
+        group = _enumerate_group(claim.action)
+        if not 0 <= claim.element < len(group):
+            return False
+        permutation = group[claim.element]
+        if claim.permutation != permutation:
+            return False
+        n = len(permutation)
+        if not claim.cycles or sorted(
+            position for cycle in claim.cycles for position in cycle
+        ) != list(range(n)):
+            return False
+        if claim.cycles != tuple(sorted(claim.cycles, key=min)):
+            return False
+        for cycle in claim.cycles:
+            if cycle[0] != min(cycle) or any(
+                permutation[position] != cycle[(index + 1) % len(cycle)]
+                for index, position in enumerate(cycle)
+            ):
+                return False
+        lengths = tuple(sorted((len(cycle) for cycle in claim.cycles), reverse=True))
+        fixed_points = tuple(
+            position for position in range(n) if permutation[position] == position
+        )
+        support = tuple(
+            position for position in range(n) if permutation[position] != position
+        )
+        return (
+            claim.cycle_lengths == lengths
+            and claim.cycle_type == lengths
+            and claim.fixed_points == fixed_points
+            and claim.fixed_point_count == len(fixed_points)
+            and claim.support == support
+        )
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError):
         return False
 
 
 def verify_cycle_index(claim: CycleIndexResult) -> bool:
-    """Check cycle counts against the bounded generated action."""
+    """Check a supplied cycle-index multiplicity claim against its action."""
+    if not isinstance(claim, CycleIndexResult):
+        return False
     try:
-        return cycle_index(claim.action) == claim
-    except (OperationDomainValidationError, ValueError, TypeError):
+        group = _enumerate_group(claim.action)
+        if claim.group_order != len(group) or claim.degree != len(claim.action.domain):
+            return False
+        counts: dict[tuple[int, ...], int] = {}
+        for permutation in group:
+            cycle_type = _permutation_cycle_type(permutation)
+            counts[cycle_type] = counts.get(cycle_type, 0) + 1
+        return claim.cycle_type_counts == tuple(sorted(counts.items()))
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError):
         return False
 
 
 def verify_burnside_count(claim: BurnsideCountResult) -> bool:
-    """Check fixed-point contributions and their orbit count."""
+    """Check a supplied Burnside sum and quotient against its action."""
+    if not isinstance(claim, BurnsideCountResult):
+        return False
     try:
-        return burnside_count(claim.action) == claim
-    except (OperationDomainValidationError, ValueError, TypeError):
+        group = _enumerate_group(claim.action)
+        if claim.group_order != len(group):
+            return False
+        contributions = tuple(
+            sum(permutation[position] == position for position in range(len(permutation)))
+            for permutation in group
+        )
+        total = sum(contributions)
+        return (
+            claim.fixed_point_contributions == contributions
+            and claim.fixed_point_sum == total
+            and total % len(group) == 0
+            and claim.orbit_count == total // len(group)
+        )
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError):
         return False
 
 
 def verify_polya_inventory(claim: PolyaInventoryResult) -> bool:
-    """Check inventory coefficients in the admitted coloring domain."""
+    """Check a supplied Pólya inventory claim against its bounded action."""
+    if not isinstance(claim, PolyaInventoryResult):
+        return False
     try:
-        return polya_inventory(claim.action, claim.colors) == claim
-    except (OperationDomainValidationError, ValueError, TypeError):
+        group = _enumerate_group(claim.action)
+        if claim.degree != len(claim.action.domain):
+            return False
+        expected_terms = _polya_terms_from_group(group, claim.colors)
+        return claim.terms == expected_terms
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError):
         return False
 
 
@@ -489,9 +588,11 @@ def verify_subset_family_orbit_profile(
     claim: SubsetFamilyOrbitProfileResult,
 ) -> bool:
     """Check every orbit-profile summary against its retained source family."""
+    if not isinstance(claim, SubsetFamilyOrbitProfileResult):
+        return False
     try:
         return subset_family_orbit_profile(claim.action, claim.subsets) == claim
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError):
         return False
 
 

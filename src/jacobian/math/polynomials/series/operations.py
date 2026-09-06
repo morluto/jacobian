@@ -17,6 +17,7 @@ from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.series._models import (
+    MAX_TRUNCATION_ORDER,
     SeriesArithmeticResult,
     SeriesComposeResult,
     SeriesDerivativeResult,
@@ -44,6 +45,11 @@ from jacobian.math.polynomials.series._models import (
     admit_native_reversion,
     admit_native_scalar_multiply,
     admit_native_truncate,
+)
+from jacobian.math.polynomials.values import (
+    RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
 )
 
 __all__ = [
@@ -464,30 +470,43 @@ def identity_check(
 
 
 def from_polynomial(
-    variable: str,
-    coefficients: Sequence[CanonicalRational],
+    polynomial: RationalPolynomial,
     truncation_order: int,
 ) -> SeriesFromPolynomialResult:
-    """Convert a dense rational coefficient tuple into a truncated series."""
+    """Project QQ[x] to the order-N series, explicitly discarding higher terms."""
+    if len(polynomial.variables) != 1:
+        raise ValueError("series conversion requires a univariate rational polynomial")
+    if (
+        type(truncation_order) is not int
+        or not 1 <= truncation_order <= MAX_TRUNCATION_ORDER
+    ):
+        raise ValueError(
+            f"truncation_order must be between 1 and {MAX_TRUNCATION_ORDER}"
+        )
+    coefficients = [CanonicalRational(num="0", den="1")] * truncation_order
+    for term in polynomial.polynomial.terms:
+        if term.exponents[0] < truncation_order:
+            coefficients[term.exponents[0]] = term.coefficient
     series = TruncatedSeries(
-        variable=variable,
+        variable=polynomial.variables[0],
         truncation_order=truncation_order,
         coefficients=tuple(coefficients),
     )
     _run_admission(lambda: admit_native_from_polynomial(series))
-    coeffs = [coefficient.as_fraction() for coefficient in coefficients]
-    return SeriesFromPolynomialResult(
-        result=_series_result(variable, truncation_order, coeffs)
-    )
+    return SeriesFromPolynomialResult(source=polynomial, result=series)
 
 
 def to_polynomial(series: TruncatedSeries) -> SeriesToPolynomialResult:
-    """Return the canonical truncated polynomial representative of the series."""
+    """Lift a series to its unique polynomial representative of degree below N."""
     _run_admission(lambda: admit_native_from_polynomial(series))
-    return SeriesToPolynomialResult(
-        result=TruncatedSeries(
-            variable=series.variable,
-            truncation_order=series.truncation_order,
-            coefficients=series.coefficients,
-        )
+    polynomial = RationalPolynomial(
+        variables=(series.variable,),
+        polynomial=SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(coefficient=value, exponents=(degree,))
+                for degree, value in reversed(tuple(enumerate(series.coefficients)))
+                if value.num != "0"
+            )
+        ),
     )
+    return SeriesToPolynomialResult(source=series, result=polynomial)

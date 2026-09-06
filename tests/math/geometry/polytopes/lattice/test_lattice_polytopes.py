@@ -80,7 +80,7 @@ def test_canonical_polytope_values_feed_lattice_requests_directly() -> None:
 class TestEnumerate:
     def test_unit_square_vertices(self) -> None:
         result = enumerate_lattice_points(
-            LatticePolytopeRequest(vertices=UNIT_SQUARE_V)
+            EnumerateLatticePointsRequest(vertices=UNIT_SQUARE_V)
         )
         assert result.point_count == 4
         assert result.representation == "vertices"
@@ -94,7 +94,7 @@ class TestEnumerate:
 
     def test_unit_square_halfspaces(self) -> None:
         result = enumerate_lattice_points(
-            LatticePolytopeRequest(halfspaces=UNIT_SQUARE_H)
+            EnumerateLatticePointsRequest(halfspaces=UNIT_SQUARE_H)
         )
         assert result.point_count == 4
         assert result.representation == "halfspaces"
@@ -109,7 +109,7 @@ class TestEnumerate:
     def test_simplex_two_by_two(self) -> None:
         # conv((0,0),(2,0),(0,2)) contains 6 lattice points.
         result = enumerate_lattice_points(
-            LatticePolytopeRequest(
+            EnumerateLatticePointsRequest(
                 vertices=(
                     _v(("0", "1"), ("0", "1")),
                     _v(("2", "1"), ("0", "1")),
@@ -131,7 +131,7 @@ class TestEnumerate:
     def test_three_dimensional_tetrahedron(self) -> None:
         # conv(0, e1, e2, e3) has exactly its 4 vertices as lattice points.
         result = enumerate_lattice_points(
-            LatticePolytopeRequest(
+            EnumerateLatticePointsRequest(
                 vertices=(
                     _v(("0", "1"), ("0", "1"), ("0", "1")),
                     _v(("1", "1"), ("0", "1"), ("0", "1")),
@@ -145,7 +145,7 @@ class TestEnumerate:
 
     def test_one_dimensional_interval(self) -> None:
         result = enumerate_lattice_points(
-            LatticePolytopeRequest(
+            EnumerateLatticePointsRequest(
                 vertices=(
                     _v(("0", "1")),
                     _v(("3", "1")),
@@ -165,7 +165,7 @@ class TestEnumerate:
         # A square with a non-integer vertex span still scans inclusively.
         # vertices (0,0), (3/2, 0), (3/2, 3/2), (0, 3/2): box [0,2]x[0,2].
         result = enumerate_lattice_points(
-            LatticePolytopeRequest(
+            EnumerateLatticePointsRequest(
                 vertices=(
                     _v(("0", "1"), ("0", "1")),
                     _v(("3", "2"), ("0", "1")),
@@ -210,7 +210,9 @@ class TestCount:
             for c in (0, 1)
         )
         request = LatticePolytopeRequest(vertices=cube)
-        enumerated = enumerate_lattice_points(request).point_count
+        enumerated = enumerate_lattice_points(
+            EnumerateLatticePointsRequest.model_validate(request.model_dump())
+        ).point_count
         request2 = LatticePolytopeRequest(vertices=cube)
         counted = count_lattice_points(request2).point_count
         assert enumerated == 8
@@ -268,12 +270,9 @@ class TestRejection:
             LatticePolytopeRequest()
 
     def test_all_zero_halfspace_normal_rejected(self) -> None:
-        with pytest.raises(ValidationError) as error:
-            Halfspace(
-                coefficients=(_cr("0"), _cr("0")),
-                offset=_cr("1"),
-            )
-        assert error.value.errors()[0]["type"] == "polytope.halfspace_normal_zero"
+        halfspace = Halfspace(coefficients=(_cr("0"), _cr("0")), offset=_cr("1"))
+        with pytest.raises(OperationDomainValidationError):
+            count_lattice_points(LatticePolytopeRequest(halfspaces=(halfspace,)))
 
 
 class TestBudgets:
@@ -304,7 +303,9 @@ class TestBudgets:
         # Enumeration materializes the points, so it fails closed with a
         # typed budget outcome (the point cap or the output-size estimate).
         with pytest.raises(LatticePointBudgetError):
-            enumerate_lattice_points(request)
+            enumerate_lattice_points(
+                EnumerateLatticePointsRequest.model_validate(request.model_dump())
+            )
 
 
 class TestMembershipWorkBudget:
@@ -504,7 +505,7 @@ class TestLargeCoordinateBounds:
         # not trip CPython's default 4,300-digit int-to-str limit.
         huge = format_canonical_integer(10**5000)
         result = enumerate_lattice_points(
-            LatticePolytopeRequest(vertices=(_v((huge, "1")),))
+            EnumerateLatticePointsRequest(vertices=(_v((huge, "1")),))
         )
         assert result.point_count == 1
         assert result.points[0].coordinates == (huge,)
@@ -522,7 +523,9 @@ class TestEnumerateRequestBoundary:
                 _v(("0", "1"), (far, "1")),
             )
         )
-        result = enumerate_lattice_points(request)
+        result = enumerate_lattice_points(
+            EnumerateLatticePointsRequest.model_validate(request.model_dump())
+        )
 
         assert result.point_count == 360_000
 
@@ -641,7 +644,7 @@ class TestOneDimensionalSingletonException:
 
     def test_singleton_roundtrip_unchanged(self) -> None:
         result = enumerate_lattice_points(
-            LatticePolytopeRequest(vertices=(_v(("3", "1")),))
+            EnumerateLatticePointsRequest(vertices=(_v(("3", "1")),))
         )
         assert result.point_count == 1
 
@@ -685,7 +688,9 @@ class TestFacetGeometryComputedOnce:
             vertices=self.SQUARE_WITH_EDGE_MIDPOINTS
         )
         assert len(passes) == 0
-        result = enumerate_lattice_points(request)
+        result = enumerate_lattice_points(
+            EnumerateLatticePointsRequest.model_validate(request.model_dump())
+        )
         assert result.point_count == 9
         assert len(passes) == 1
 
@@ -784,7 +789,9 @@ class TestBoundedEmptyHalfspacePolytopes:
 
     def test_reviewer_bounded_empty_interval_enumerates_no_points(self) -> None:
         request = EnumerateLatticePointsRequest(halfspaces=self.EMPTY_INTERVAL)
-        result = enumerate_lattice_points(request)
+        result = enumerate_lattice_points(
+            EnumerateLatticePointsRequest.model_validate(request.model_dump())
+        )
         assert result.point_count == 0
         assert result.points == ()
         assert result.dimension == 1
@@ -864,7 +871,7 @@ class TestEnumerationResultPointCap:
         from jacobian.math.geometry.polytopes.lattice._models import MAX_LATTICE_POINTS
 
         result = enumerate_lattice_points(
-            LatticePolytopeRequest(vertices=UNIT_SQUARE_V)
+            EnumerateLatticePointsRequest(vertices=UNIT_SQUARE_V)
         )
         assert 0 <= result.point_count <= MAX_LATTICE_POINTS
         assert len(result.points) <= MAX_LATTICE_POINTS
@@ -1032,7 +1039,9 @@ class TestDerivedCoordinateSignBoundary:
             halfspaces=_singleton_halfspaces(negative=False)
         )
         assert count_lattice_points(request).point_count == 1
-        enumerated = enumerate_lattice_points(request)
+        enumerated = enumerate_lattice_points(
+            EnumerateLatticePointsRequest.model_validate(request.model_dump())
+        )
         assert enumerated.points[0].coordinates == (BOUNDARY_COORDINATE,)
 
     @pytest.mark.scale

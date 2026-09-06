@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.topology.combinatorial_maps import FiniteCombinatorialMap
 from jacobian.math.topology.combinatorial_maps._models import (
     ConnectedComponentsRequest,
@@ -356,12 +357,9 @@ class TestOrientationReverse:
         result = compute_orientation_reverse(
             OrientationReverseRequest(map=_four_cycle())
         )
-        claimed = OrientationReverseResult.model_validate(
-            {
-                **result.model_dump(mode="json"),
-                "face_bijection": {"0": 0, "1": 1},
-            }
-        )
+        payload = result.model_dump(mode="json")
+        payload["bijection"]["images"] = [0, 1]
+        claimed = OrientationReverseResult.model_validate(payload)
         assert claimed.face_bijection != result.face_bijection
 
 
@@ -459,10 +457,10 @@ class TestVertexFaceIncidence:
         for vertex in range(4):
             assert set(result.boolean_incidence[vertex]) == {0, 1}
         # Each vertex appears once per face -> 8 multiplicity entries.
-        assert sum(len(row) for row in result.multiplicity.values()) == 8
-        for row in result.multiplicity.values():
-            for value in row.values():
-                assert value == 1
+        assert len(result.multiplicity.entries) == 8
+        assert all(
+            entry.value.as_fraction() == 1 for entry in result.multiplicity.entries
+        )
 
     def test_torus_incidence(self) -> None:
         m = _torus()
@@ -478,20 +476,24 @@ class TestVertexFaceIncidence:
 class TestValidation:
     def test_wrong_rotation_length_rejected(self) -> None:
         # Vertex 0 has one outgoing dart (dart 0) but its rotation lists two.
-        with pytest.raises(ValidationError) as exc_info:
-            FiniteCombinatorialMap(
-                vertex_count=2,
-                darts=((0, 1, 1), (1, 0, 0)),
-                rotations=((0, 1), (1,)),
+        with pytest.raises(OperationDomainValidationError) as exc_info:
+            face_orbits(
+                FiniteCombinatorialMap(
+                    vertex_count=2,
+                    darts=((0, 1, 1), (1, 0, 0)),
+                    rotations=((0, 1), (1,)),
+                )
             )
         assert exc_info.value.errors()[0]["type"] == "combinatorial_map.rotation_length"
 
     def test_reverse_not_involution_rejected(self) -> None:
-        with pytest.raises(ValidationError) as exc_info:
-            FiniteCombinatorialMap(
-                vertex_count=2,
-                darts=((0, 1, 1), (1, 0, 1)),
-                rotations=((0,), (1,)),
+        with pytest.raises(OperationDomainValidationError) as exc_info:
+            face_orbits(
+                FiniteCombinatorialMap(
+                    vertex_count=2,
+                    darts=((0, 1, 1), (1, 0, 1)),
+                    rotations=((0,), (1,)),
+                )
             )
         assert (
             exc_info.value.errors()[0]["type"]
@@ -499,11 +501,13 @@ class TestValidation:
         )
 
     def test_fixed_point_reverse_rejected(self) -> None:
-        with pytest.raises(ValidationError) as exc_info:
-            FiniteCombinatorialMap(
-                vertex_count=1,
-                darts=((0, 0, 0),),
-                rotations=((0,),),
+        with pytest.raises(OperationDomainValidationError) as exc_info:
+            face_orbits(
+                FiniteCombinatorialMap(
+                    vertex_count=1,
+                    darts=((0, 0, 0),),
+                    rotations=((0,),),
+                )
             )
         assert (
             exc_info.value.errors()[0]["type"]
@@ -511,11 +515,13 @@ class TestValidation:
         )
 
     def test_foreign_dart_in_rotation_rejected(self) -> None:
-        with pytest.raises(ValidationError) as exc_info:
-            FiniteCombinatorialMap(
-                vertex_count=2,
-                darts=((0, 1, 1), (1, 0, 0)),
-                rotations=((1,), (0,)),
+        with pytest.raises(OperationDomainValidationError) as exc_info:
+            face_orbits(
+                FiniteCombinatorialMap(
+                    vertex_count=2,
+                    darts=((0, 1, 1), (1, 0, 0)),
+                    rotations=((1,), (0,)),
+                )
             )
         assert (
             exc_info.value.errors()[0]["type"]
@@ -557,11 +563,13 @@ class TestValidation:
         )
 
     def test_isolated_vertex_rejected(self) -> None:
-        with pytest.raises(ValidationError) as exc_info:
-            FiniteCombinatorialMap(
-                vertex_count=2,
-                darts=((0, 0, 1), (0, 0, 0)),
-                rotations=((0, 1), ()),
+        with pytest.raises(OperationDomainValidationError) as exc_info:
+            face_orbits(
+                FiniteCombinatorialMap(
+                    vertex_count=2,
+                    darts=((0, 0, 1), (0, 0, 0)),
+                    rotations=((0, 1), ()),
+                )
             )
         assert (
             exc_info.value.errors()[0]["type"]
@@ -579,11 +587,13 @@ class TestValidation:
             darts.append((i, j, 2 * i + 1))
             darts.append((j, i, 2 * i))
             rotations.append((2 * i, 2 * ((i - 1) % size) + 1))
-        with pytest.raises(ValidationError) as exc_info:
-            FiniteCombinatorialMap(
-                vertex_count=size,
-                darts=tuple(darts),
-                rotations=tuple(rotations),
+        with pytest.raises(OperationDomainValidationError) as exc_info:
+            face_orbits(
+                FiniteCombinatorialMap(
+                    vertex_count=size,
+                    darts=tuple(darts),
+                    rotations=tuple(rotations),
+                )
             )
         assert (
             exc_info.value.errors()[0]["type"]

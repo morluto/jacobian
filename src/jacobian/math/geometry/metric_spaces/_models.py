@@ -31,7 +31,6 @@ class FiniteMetricSpace(StrictModel):
     @model_validator(mode="after")
     def require_valid_distances(self) -> Self:
         self._require_square()
-        self._require_metric_properties()
         return self
 
     def _require_square(self) -> None:
@@ -45,43 +44,6 @@ class FiniteMetricSpace(StrictModel):
                 raise _validation_error(
                     "distance_matrix_not_square", "distance matrix must be square"
                 )
-
-    def _require_metric_properties(self) -> None:
-        for i in range(self.point_count):
-            if self.distances[i][i] != 0:
-                raise _validation_error(
-                    "distance_diagonal_nonzero", "diagonal distances must be zero"
-                )
-            for j in range(self.point_count):
-                if self.distances[i][j] != self.distances[j][i]:
-                    raise _validation_error(
-                        "distance_matrix_asymmetric",
-                        "distance matrix must be symmetric",
-                    )
-        self._require_positive_separation()
-        self._require_triangle_inequality()
-
-    def _require_positive_separation(self) -> None:
-        for i in range(self.point_count):
-            for j in range(self.point_count):
-                if i != j and self.distances[i][j] == 0:
-                    raise _validation_error(
-                        "distance_nonpositive_between_distinct_points",
-                        "distinct points must have positive distance",
-                    )
-
-    def _require_triangle_inequality(self) -> None:
-        for i in range(self.point_count):
-            for j in range(self.point_count):
-                for k in range(self.point_count):
-                    if (
-                        self.distances[i][j]
-                        > self.distances[i][k] + self.distances[k][j]
-                    ):
-                        raise _validation_error(
-                            "distance_triangle_inequality_violation",
-                            "distances must satisfy the triangle inequality",
-                        )
 
 
 class MetricProfileRequest(StrictModel):

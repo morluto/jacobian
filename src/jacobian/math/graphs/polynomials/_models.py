@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import ConfigDict, Field, StrictInt, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.graphs.values import (
     IndexedSimpleUndirectedGraph,
     SimpleUndirectedGraph,
@@ -204,14 +204,6 @@ class TreeIndependencePolynomialResult(StrictModel):
     """
 
     graph: SimpleUndirectedGraph
-    coefficients: tuple[_NonnegativeCanonicalInteger, ...] = Field(
-        min_length=2,
-        max_length=MAX_INDEPENDENCE_POLYNOMIAL_TERMS,
-        description=(
-            "Dense coefficients i_0, ..., i_alpha as canonical decimal "
-            "nonnegative integers."
-        ),
-    )
     polynomial: RationalPolynomial
     independence_number: StrictInt = Field(
         ge=1,
@@ -221,6 +213,18 @@ class TreeIndependencePolynomialResult(StrictModel):
     independent_set_count: _NonnegativeCanonicalInteger = Field(
         description="The total I_T(1) as a canonical decimal integer."
     )
+
+    @property
+    def coefficients(self) -> tuple[str, ...]:
+        """Native dense integer projection; no duplicate polynomial is serialized."""
+        terms = self.polynomial.polynomial.terms
+        if any(term.coefficient.den != "1" for term in terms):
+            raise ValueError(
+                "integer coefficient projection requires integral coefficients"
+            )
+        degree = max((term.exponents[0] for term in terms), default=0)
+        values = {term.exponents[0]: term.coefficient.num for term in terms}
+        return tuple(values.get(i, "0") for i in range(degree + 1))
 
     @model_validator(mode="after")
     def require_structural_shape(self) -> Self:
@@ -236,16 +240,6 @@ class TreeIndependencePolynomialResult(StrictModel):
             maximum_coefficient_digits=MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS,
             label="independence polynomial",
         )
-        if any(
-            len(coefficient.lstrip("-"))
-            > MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS
-            for coefficient in self.coefficients
-        ):
-            raise PydanticCustomError(
-                "graph.independence_coefficient_exceeds_max_independence_polynomial_coefficie",
-                "independence coefficient exceeds the "
-                f"{MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS}-digit bound",
-            )
         if (
             len(self.independent_set_count.lstrip("-"))
             > MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS
@@ -254,34 +248,6 @@ class TreeIndependencePolynomialResult(StrictModel):
                 "graph.independent_set_count_exceeds_max_independence_polynomial",
                 "independent-set count exceeds the "
                 f"{MAX_INDEPENDENCE_POLYNOMIAL_COEFFICIENT_DIGITS}-digit bound",
-            )
-        coefficients = tuple(
-            parse_canonical_integer(coefficient) for coefficient in self.coefficients
-        )
-        if self.coefficients[0] != "1":
-            raise PydanticCustomError(
-                "graph.independence_coefficients_must_begin_with_one",
-                "independence coefficients must begin with the empty-set count 1",
-            )
-        if self.coefficients[1] != format_canonical_integer(len(self.graph.vertices)):
-            raise PydanticCustomError(
-                "graph.independence_linear_coefficient_must_equal_vertex_count",
-                "independence polynomial linear coefficient must equal vertex count",
-            )
-        if self.independence_number != len(coefficients) - 1:
-            raise PydanticCustomError(
-                "graph.independence_number_must_equal_coefficient_degree",
-                "independence number must equal the dense coefficient degree",
-            )
-        if self.independent_set_count != format_canonical_integer(sum(coefficients)):
-            raise PydanticCustomError(
-                "graph.independent_set_count_must_equal_coefficient_sum",
-                "independent-set count must equal the dense coefficient sum",
-            )
-        if self.polynomial != _polynomial_from_dense_coefficients(coefficients):
-            raise PydanticCustomError(
-                "graph.independence_polynomial_must_match_dense_coefficients",
-                "independence polynomial must match its dense coefficients",
             )
         return self
 
@@ -296,9 +262,6 @@ class TreeIndependencePolynomialResult(StrictModel):
 
         return cls.model_construct(
             graph=graph,
-            coefficients=tuple(
-                format_canonical_integer(coefficient) for coefficient in coefficients
-            ),
             polynomial=_polynomial_from_dense_coefficients(coefficients),
             independence_number=len(coefficients) - 1,
             independent_set_count=format_canonical_integer(sum(coefficients)),
@@ -336,27 +299,25 @@ class PolynomialTerm(StrictModel):
 
 
 class GraphPolynomialResult(StrictModel):
-    """A sparse polynomial represented as a list of (coefficient, degree) terms."""
+    """A graph polynomial over QQ with its source and variable convention."""
 
-    terms: tuple[PolynomialTerm, ...]
+    graph: IndexedSimpleUndirectedGraph
+    kind: Literal["CHROMATIC", "FLOW", "MATCHING", "TUTTE"]
+    polynomial: RationalPolynomial
 
     @model_validator(mode="after")
-    def require_canonical(self) -> Self:
-        degrees = [term.degree for term in self.terms]
-        if degrees != sorted(degrees):
+    def require_variable_convention(self) -> Self:
+        variables = (
+            ("x", "y")
+            if self.kind == "TUTTE"
+            else ("flow_x",)
+            if self.kind == "FLOW"
+            else ("x",)
+        )
+        if self.polynomial.variables != variables:
             raise PydanticCustomError(
-                "graph.polynomial_terms_must_be_sorted_by_degree",
-                "polynomial terms must be sorted by degree",
-            )
-        if len(set(degrees)) != len(degrees):
-            raise PydanticCustomError(
-                "graph.polynomial_degrees_must_be_unique",
-                "polynomial degrees must be unique",
-            )
-        if any(term.coefficient == 0 for term in self.terms):
-            raise PydanticCustomError(
-                "graph.polynomial_terms_must_have_nonzero_coefficients",
-                "polynomial terms must have nonzero coefficients",
+                "graph.polynomial_variable_convention",
+                "polynomial axes must match the graph-polynomial convention",
             )
         return self
 

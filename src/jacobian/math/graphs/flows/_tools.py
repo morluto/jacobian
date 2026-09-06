@@ -24,6 +24,7 @@ from jacobian.math.graphs.flows.operations import (
 def compute_max_flow(request: MaxFlowRequest) -> MaxFlowResult:
     flow_value, flow_edges = max_flow(request.graph, request.source, request.sink)
     return MaxFlowResult(
+        graph=request.graph,
         flow_value=flow_value,
         source=request.source,
         sink=request.sink,
@@ -36,6 +37,9 @@ def compute_min_cut(request: MinCutRequest) -> MinCutResult:
         request.graph, request.source, request.sink
     )
     return MinCutResult(
+        graph=request.graph,
+        source=request.source,
+        sink=request.sink,
         cut_value=cut_value,
         reachable=reachable,
         unreachable=unreachable,
@@ -47,6 +51,7 @@ def compute_edge_disjoint_paths(
 ) -> EdgeDisjointPathsResult:
     paths = edge_disjoint_paths(request.graph, request.source, request.sink)
     return EdgeDisjointPathsResult(
+        graph=request.graph,
         path_count=len(paths),
         paths=paths,
         source=request.source,

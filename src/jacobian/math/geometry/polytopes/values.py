@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
-
-from pydantic import Field, model_validator
+from pydantic import Field
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
@@ -38,14 +36,6 @@ class Halfspace(StrictModel):
         ),
     )
     offset: CanonicalRational
-
-    @model_validator(mode="after")
-    def require_nonzero_normal(self) -> Self:
-        if all(coefficient.as_fraction() == 0 for coefficient in self.coefficients):
-            raise _validation_error(
-                "halfspace_normal_zero", "half-space coefficients must not all be zero"
-            )
-        return self
 
 
 __all__ = [

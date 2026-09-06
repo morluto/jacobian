@@ -5,6 +5,11 @@ from jacobian.math.graphs.decomposition.tree_decompositions.operations import (
     bag_intersection_graph,
     reroot,
     restrict,
+    verify_adhesions,
+    verify_bag_intersection_graph,
+    verify_reroot,
+    verify_vertex_occurrences,
+    verify_width,
     vertex_occurrences,
     width,
 )
@@ -18,6 +23,11 @@ __all__ = [
     "bag_intersection_graph",
     "reroot",
     "restrict",
+    "verify_adhesions",
+    "verify_bag_intersection_graph",
+    "verify_reroot",
+    "verify_vertex_occurrences",
+    "verify_width",
     "vertex_occurrences",
     "width",
 ]

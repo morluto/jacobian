@@ -236,16 +236,6 @@ class EllipticCurvePointResult(StrictModel):
                 "elliptic_curve.point_missing",
                 "must carry a finite point or indicate infinity",
             )
-        if self.point is not None:
-            x = self.point.x.as_fraction()
-            y = self.point.y.as_fraction()
-            a = self.curve.coefficient_a.as_fraction()
-            b = self.curve.coefficient_b.as_fraction()
-            if y * y != x**3 + a * x + b:
-                raise PydanticCustomError(
-                    "elliptic_curve.result_point_off_curve",
-                    "result point must lie on the retained curve",
-                )
         return self
 
     @classmethod
@@ -292,7 +282,7 @@ class ScalarMultiplicationResult(EllipticCurvePointResult):
     """
 
 
-# Membership replay is inherited from EllipticCurvePointResult's validator.
+# Inherit structural point/parent parsing; group-law consumers admit membership.
 ScalarMultiplicationResult.model_rebuild()
 
 

@@ -8,6 +8,7 @@ from jacobian.math.matrices.finite_fields.linear_algebra import (
     rank,
     rref,
 )
+from jacobian.math.matrices.finite_fields.operations import verify_rank, verify_rref
 
 __all__ = [
     "PrimeFieldMatrix",
@@ -16,4 +17,6 @@ __all__ = [
     "quotient_basis",
     "rank",
     "rref",
+    "verify_rank",
+    "verify_rref",
 ]

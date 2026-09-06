@@ -12,6 +12,11 @@ def test_exact_public_api_symbols() -> None:
         "bag_intersection_graph",
         "reroot",
         "restrict",
+        "verify_adhesions",
+        "verify_bag_intersection_graph",
+        "verify_reroot",
+        "verify_vertex_occurrences",
+        "verify_width",
         "vertex_occurrences",
         "width",
     )

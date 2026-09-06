@@ -230,7 +230,7 @@ def test_result_round_trips_and_source_composes_unchanged() -> None:
     assert consumed == produced
 
 
-@pytest.mark.parametrize("factors", [("1",), ("6", "2"), ("2", "3")])
+@pytest.mark.parametrize("factors", [("1",)])
 def test_torsion_character_group_rejects_noncanonical_factors(
     factors: tuple[str, ...],
 ) -> None:
@@ -244,8 +244,11 @@ def test_result_rejects_component_count_that_contradicts_torsion_group() -> None
     ).model_dump(mode="json")
     encoded["connected_component_count"] = "11"
 
-    with pytest.raises(ValidationError, match="product of torsion invariant factors"):
+    from jacobian.math.algebraic_tori import verify_solution_subgroup
+
+    assert not verify_solution_subgroup(
         AlgebraicTorusSolutionSubgroup.model_validate(encoded)
+    )
 
 
 def test_result_rejects_a_certificate_bound_to_another_source() -> None:
@@ -321,4 +324,32 @@ def test_exact_public_api_symbols() -> None:
         "HomogeneousMonomialSystem",
         "TorsionCharacterGroup",
         "homogeneous_monomial_solution_subgroup",
+        "verify_solution_subgroup",
+    )
+
+
+@pytest.mark.parametrize("entries", [[[2, 0], [0, 6]], [[2, 6, 0]], [[0, 0]]])
+def test_explicit_solution_verifier(entries: list[list[int | str]]) -> None:
+    from jacobian.math.algebraic_tori import verify_solution_subgroup
+
+    result = homogeneous_monomial_solution_subgroup(_system(entries))
+    assert verify_solution_subgroup(
+        AlgebraicTorusSolutionSubgroup.model_validate_json(result.model_dump_json())
+    )
+    payload = result.model_dump(mode="json")
+    payload["connected_component_count"] = "97"
+    assert not verify_solution_subgroup(
+        AlgebraicTorusSolutionSubgroup.model_validate(payload)
+    )
+
+
+def test_torsion_divisibility_remains_a_claim() -> None:
+    from jacobian.math.algebraic_tori import verify_solution_subgroup
+
+    result = homogeneous_monomial_solution_subgroup(_system([[2, 0], [0, 6]]))
+    payload = result.model_dump(mode="json")
+    payload["torsion_character_group"]["invariant_factors"] = ["2", "3"]
+    payload["connected_component_count"] = "6"
+    assert not verify_solution_subgroup(
+        AlgebraicTorusSolutionSubgroup.model_validate(payload)
     )

@@ -116,7 +116,7 @@ class TestSegmentRatio:
             segment2=(_pt(0, 0), _pt(1, 0)),
         )
         result = compute_segment_ratio(req)
-        assert result.squared_ratio == "1"
+        assert result.as_fraction() == 1
 
     def test_double_length(self) -> None:
         req = SegmentRatioRequest(
@@ -124,7 +124,7 @@ class TestSegmentRatio:
             segment2=(_pt(0, 0), _pt(1, 0)),
         )
         result = compute_segment_ratio(req)
-        assert result.squared_ratio == "4"
+        assert result.as_fraction() == 4
 
     def test_rejects_zero_second_segment(self) -> None:
         request = SegmentRatioRequest(
@@ -140,13 +140,10 @@ class TestSegmentRatio:
         first = (_pt(0, 0), _pt(2, 0))
         second = (_pt(0, 0), _pt(0, 1))
 
-        assert squared_segment_ratio(first, second) == 4
-        assert (
-            compute_segment_ratio(
-                SegmentRatioRequest(segment1=first, segment2=second)
-            ).squared_ratio
-            == "4"
-        )
+        assert squared_segment_ratio(first, second).as_fraction() == 4
+        assert compute_segment_ratio(
+            SegmentRatioRequest(segment1=first, segment2=second)
+        ) == squared_segment_ratio(first, second)
 
 
 class TestRationalWeightTriangulation:
@@ -600,6 +597,13 @@ class TestAngleEquality:
 
 
 class TestTriangleSimilarity:
+    def test_collinear_claim_decodes_but_consumer_rejects(self) -> None:
+        triangle = Triangle(a=_pt(0, 0), b=_pt(1, 1), c=_pt(2, 2))
+        decoded = Triangle.model_validate_json(triangle.model_dump_json())
+        with pytest.raises(OperationDomainValidationError) as caught:
+            triangles_similar(decoded, decoded)
+        assert caught.value.errors()[0]["type"] == "geometry.triangle_non_degenerate"
+
     def test_similar(self) -> None:
         req = TriangleSimilarityRequest(
             triangle1=Triangle(a=_pt(0, 0), b=_pt(1, 0), c=_pt(0, 1)),

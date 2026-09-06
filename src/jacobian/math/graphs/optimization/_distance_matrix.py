@@ -41,7 +41,7 @@ def compute_distance_matrix(
         distance is not None for row in rows for distance in row.distances
     )
     return GraphDistanceMatrixResult._from_kernel(
-        vertices=vertices,
+        graph=request.graph,
         rows=rows,
         connected=connected,
     )
@@ -73,4 +73,19 @@ DISTANCE_MATRIX_OPERATION = MathTool(
     ),
 )
 
-__all__ = ["DISTANCE_MATRIX_OPERATION", "compute_distance_matrix"]
+
+def verify_distance_matrix(claim: GraphDistanceMatrixResult) -> bool:
+    """Check all shortest paths and connectivity in O(n(n+m)) work.
+
+    The source carrier bounds n by 256 and m by 32640; the same complete
+    all-pairs operation establishes the precise relation for this claim.
+    """
+    actual = compute_distance_matrix(GraphDistanceMatrixRequest(graph=claim.graph))
+    return actual.rows == claim.rows and actual.connected == claim.connected
+
+
+__all__ = [
+    "DISTANCE_MATRIX_OPERATION",
+    "compute_distance_matrix",
+    "verify_distance_matrix",
+]

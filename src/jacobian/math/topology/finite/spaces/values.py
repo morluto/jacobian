@@ -55,19 +55,9 @@ class FiniteTopologicalSpace(StrictModel):
                     raise _validation_error(
                         "preorder_index_out_of_range", "preorder index out of range"
                     )
-        for i in range(len(self.points)):
-            if i not in self.preorder[i]:
-                raise _validation_error(
-                    "preorder_not_reflexive", "preorder must be reflexive"
-                )
-        # Transitivity: j in row[i] => row[j] subset of row[i].
-        for _i, row in enumerate(self.preorder):
-            row_i = set(row)
-            for j in row:
-                if not set(self.preorder[j]).issubset(row_i):
-                    raise _validation_error(
-                        "preorder_not_transitive", "preorder must be transitive"
-                    )
+        object.__setattr__(
+            self, "preorder", tuple(tuple(sorted(set(row))) for row in self.preorder)
+        )
         return self
 
 

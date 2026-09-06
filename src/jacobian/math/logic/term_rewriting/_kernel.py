@@ -15,6 +15,7 @@ from jacobian.math.logic.term_rewriting.values import (
     RankedSignature,
     RewriteApplication,
     RewriteRule,
+    Substitution,
     Term,
     _variable_symbols,
 )
@@ -671,7 +672,7 @@ def _critical_pairs(
                         candidate_index=candidate_index,
                         outer_variable_renaming=outer_renaming,
                         inner_variable_renaming=inner_renaming,
-                        substitution=substitution,
+                        substitution=Substitution(mapping=substitution),
                         inner_reduct=inner_reduct,
                         outer_reduct=outer_reduct,
                     )
@@ -696,7 +697,7 @@ def selected_rewrite_step(
     return RewriteApplication(
         position=position,
         rule_index=rule_index,
-        substitution=substitution,
+        substitution=Substitution(mapping=substitution),
         term=_replace_at_position(term, position, replacement),
     )
 

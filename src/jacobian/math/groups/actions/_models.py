@@ -530,45 +530,29 @@ class ElementCyclesResult(StrictModel):
                 "permutation_not_permutation",
                 "permutation must be a permutation of the action domain",
             )
-        flattened = tuple(position for cycle in self.cycles for position in cycle)
-        if (
-            not self.cycles
-            or any(not cycle for cycle in self.cycles)
-            or sorted(flattened) != list(range(n))
-        ):
-            raise _validation_error(
-                "cycles_not_partition", "cycles must partition the action domain"
-            )
-        if any(
-            self.permutation[position] != cycle[(index + 1) % len(cycle)]
+        if len(self.cycles) > n or any(
+            not cycle or len(cycle) > n or any(not 0 <= index < n for index in cycle)
             for cycle in self.cycles
-            for index, position in enumerate(cycle)
         ):
             raise _validation_error(
-                "cycles_not_permutation_cycles",
-                "cycles must describe the claimed permutation",
+                "cycle_shape", "cycle rows must be bounded nonempty domain indices"
             )
-        lengths = tuple(sorted((len(cycle) for cycle in self.cycles), reverse=True))
-        if self.cycle_lengths != lengths or self.cycle_type != lengths:
+        for positions in (self.fixed_points, self.support):
+            if tuple(sorted(set(positions))) != positions or any(
+                not 0 <= index < n for index in positions
+            ):
+                raise _validation_error(
+                    "profile_axis", "profile positions must be canonical domain subsets"
+                )
+        if not 0 <= self.fixed_point_count <= n:
             raise _validation_error(
-                "cycle_type_mismatch",
-                "cycle lengths and cycle type must match the cycle decomposition",
+                "profile_bound", "fixed-point count must be bounded by the domain"
             )
-        fixed = tuple(
-            position for position in range(n) if self.permutation[position] == position
-        )
-        if self.fixed_points != fixed or self.fixed_point_count != len(fixed):
-            raise _validation_error(
-                "fixed_point_count_mismatch",
-                "fixed-point fields must match the claimed permutation",
-            )
-        support = tuple(
-            position for position in range(n) if self.permutation[position] != position
-        )
-        if self.support != support:
-            raise _validation_error(
-                "support_mismatch", "support must match the claimed permutation"
-            )
+        for lengths in (self.cycle_lengths, self.cycle_type):
+            if len(lengths) > n or any(not 1 <= length <= n for length in lengths):
+                raise _validation_error(
+                    "cycle_length_bound", "cycle lengths must fit the domain"
+                )
         return self
 
     @classmethod
@@ -653,10 +637,6 @@ class CycleIndexResult(StrictModel):
                 "cycle_type_counts_invalid",
                 "each cycle type must partition degree with positive count",
             )
-        if sum(count for _, count in self.cycle_type_counts) != self.group_order:
-            raise _validation_error(
-                "cycle_type_counts_total", "cycle-type counts must total group_order"
-            )
         return self
 
     @classmethod
@@ -694,8 +674,8 @@ class BurnsideCountResult(StrictModel):
 
     action: FinitePermutationAction
     group_order: int
-    fixed_point_sum: int
-    orbit_count: int
+    fixed_point_sum: int = Field(ge=0, le=MAX_GROUP_ORDER * MAX_DOMAIN_SIZE)
+    orbit_count: int = Field(ge=0, le=MAX_DOMAIN_SIZE)
     fixed_point_contributions: tuple[int, ...]
 
     @model_validator(mode="after")
@@ -712,19 +692,6 @@ class BurnsideCountResult(StrictModel):
             raise _validation_error(
                 "fixed_point_contributions_invalid",
                 "fixed-point contributions must be bounded and one per group element",
-            )
-        if self.fixed_point_sum != sum(self.fixed_point_contributions):
-            raise _validation_error(
-                "fixed_point_sum_mismatch",
-                "fixed_point_sum must equal the sum of contributions",
-            )
-        if (
-            self.fixed_point_sum % self.group_order != 0
-            or self.orbit_count != self.fixed_point_sum // self.group_order
-        ):
-            raise _validation_error(
-                "orbit_count_mismatch",
-                "orbit_count must be the integral Burnside average",
             )
         return self
 
@@ -790,7 +757,6 @@ class PolyaInventoryResult(StrictModel):
         if any(
             len(monomial) != self.colors
             or any(exponent < 0 for exponent in monomial)
-            or sum(monomial) != self.degree
             or coefficient < 1
             for monomial, coefficient in self.terms
         ):

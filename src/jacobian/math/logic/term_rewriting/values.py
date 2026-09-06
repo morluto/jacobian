@@ -121,12 +121,27 @@ class RewriteRule(StrictModel):
         return self
 
 
+class Substitution(StrictModel):
+    """A variable substitution mapping variable IDs to terms."""
+
+    mapping: dict[int, Term] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def require_bounded_labels(self) -> Self:
+        if any(not 0 <= key <= MAX_VARIABLE_LABEL for key in self.mapping):
+            raise _validation_error(
+                "substitution_labels",
+                "substitution variable labels must be within the supported bound",
+            )
+        return self
+
+
 class RewriteApplication(StrictModel):
     """One fully witnessed one-step rewrite derivation."""
 
     position: tuple[int, ...]
     rule_index: int = Field(ge=0)
-    substitution: dict[int, Term]
+    substitution: Substitution
     term: Term
 
 
@@ -143,7 +158,7 @@ class CriticalPair(StrictModel):
     candidate_index: int = Field(ge=0)
     outer_variable_renaming: dict[int, int]
     inner_variable_renaming: dict[int, int]
-    substitution: dict[int, Term]
+    substitution: Substitution
     inner_reduct: Term
     outer_reduct: Term
 
@@ -182,21 +197,6 @@ def _require_term_depth(*terms: Term) -> None:
                 f"root-to-leaf path carries at most {MAX_TERM_DEPTH} nodes",
             )
         stack.extend((child, depth + 1) for child in current.children)
-
-
-class Substitution(StrictModel):
-    """A variable substitution mapping variable IDs to terms."""
-
-    mapping: dict[int, Term] = Field(default_factory=dict)
-
-    @model_validator(mode="after")
-    def require_bounded_labels(self) -> Self:
-        if any(not 0 <= key <= MAX_VARIABLE_LABEL for key in self.mapping):
-            raise _validation_error(
-                "substitution_labels",
-                "substitution variable labels must be within the supported bound",
-            )
-        return self
 
 
 __all__ = [

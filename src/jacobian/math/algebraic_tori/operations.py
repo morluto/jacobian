@@ -17,6 +17,7 @@ from jacobian.math.matrices.certified_snf.operations import (
     matrix_determinant,
     matrix_multiply,
     smith_reduce,
+    verify_smith_normal_form_certificate,
 )
 from jacobian.math.matrices.values import IntegerMatrix
 
@@ -220,4 +221,50 @@ def homogeneous_monomial_solution_subgroup(
     )
 
 
-__all__ = ["homogeneous_monomial_solution_subgroup"]
+def verify_solution_subgroup(claim: AlgebraicTorusSolutionSubgroup) -> bool:
+    """Check the complete subgroup parameterization, not LLL reducedness.
+
+    The source and all transformation axes have at most 16 entries. Exact
+    scalar bounds come from the canonical Smith and integer-matrix carriers.
+    A different unimodular choice of free parameters remains valid.
+    """
+    _admit_monomial_system(claim.source)
+    certificate = claim.smith_certificate
+    if not verify_smith_normal_form_certificate(certificate):
+        return False
+    rank = certificate.rank
+    if claim.free_rank != len(claim.source.coordinate_axis) - rank:
+        return False
+    factors = tuple(map(parse_canonical_integer, certificate.invariant_factors))
+    torsion_positions = tuple(i for i, factor in enumerate(factors) if factor > 1)
+    torsion = tuple(factors[i] for i in torsion_positions)
+    if (
+        tuple(
+            map(
+                parse_canonical_integer, claim.torsion_character_group.invariant_factors
+            )
+        )
+        != torsion
+    ):
+        return False
+    if parse_canonical_integer(claim.connected_component_count) != prod(torsion):
+        return False
+
+    def entries(matrix: IntegerMatrix) -> Matrix:
+        return [list(map(parse_canonical_integer, row)) for row in matrix.entries]
+
+    right = entries(certificate.right_transformation)
+    if entries(claim.torsion_exponent_map) != [
+        [row[i] % factors[i] for i in torsion_positions] for row in right
+    ]:
+        return False
+    free = [row[rank:] for row in right]
+    if entries(claim.smith_free_exponent_map) != free:
+        return False
+    change = entries(claim.smith_free_parameters_from_reduced)
+    return abs(matrix_determinant(change)) == 1 and matrix_multiply(
+        free, change, right_columns_if_empty=claim.free_rank
+    ) == entries(claim.reduced_free_exponent_map)
+
+
+__all__ = ["homogeneous_monomial_solution_subgroup", "verify_solution_subgroup"]

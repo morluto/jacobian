@@ -9,6 +9,9 @@ from jacobian.math.topology.combinatorial_maps.operations import (
     orientable_genus,
     orientation_reverse,
     rotation_successor,
+    verify_dual,
+    verify_orientation_reverse,
+    verify_vertex_face_incidence,
     vertex_face_incidence,
 )
 from jacobian.math.topology.combinatorial_maps.values import (
@@ -27,5 +30,8 @@ __all__ = [
     "orientable_genus",
     "orientation_reverse",
     "rotation_successor",
+    "verify_dual",
+    "verify_orientation_reverse",
+    "verify_vertex_face_incidence",
     "vertex_face_incidence",
 ]

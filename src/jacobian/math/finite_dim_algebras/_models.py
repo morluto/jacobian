@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
 # Bound dense structure-tensor materialization before Pydantic validation.
 # Dimension 137 retains 2,571,353 scalar cells; the next dimension crosses the
@@ -109,39 +110,36 @@ class CenterRequest(StrictModel):
 
 
 class CenterResult(StrictModel):
+    """A claimed center basis on the retained algebra's prime-field coordinates."""
+
     algebra: StructureConstants
-    center_basis: tuple[tuple[int, ...], ...] = Field(max_length=MAX_DIM)
-    dimension: int = Field(ge=1, le=MAX_DIM)
-    center_dimension: int = Field(ge=0, le=MAX_DIM)
+    basis_matrix: PrimeFieldMatrix
+
+    @property
+    def dimension(self) -> int:
+        return self.algebra.dimension
+
+    @property
+    def center_dimension(self) -> int:
+        return len(self.basis_matrix.entries)
+
+    @property
+    def center_basis(self) -> tuple[tuple[int, ...], ...]:
+        return self.basis_matrix.entries
 
     @model_validator(mode="after")
     def require_complete_basis_shape(self) -> Self:
-        if self.dimension != self.algebra.dimension:
-            raise _validation_error(
-                "center_parent_dimension", "dimension must match the source algebra"
-            )
-        if any(
-            not 0 <= value < self.algebra.field_order
-            for vector in self.center_basis
-            for value in vector
+        if (
+            self.basis_matrix.prime != self.algebra.field_order
+            or self.basis_matrix.columns != self.algebra.dimension
         ):
             raise _validation_error(
-                "center_noncanonical_residue",
-                "center coordinates must be canonical residues of the source field",
+                "center_parent_axis",
+                "center basis must retain the algebra field and coordinate axis",
             )
-        if len(self.center_basis) != self.center_dimension:
-            raise _validation_error(
-                "center_dimension_mismatch",
-                "center_dimension must equal the number of basis vectors",
-            )
-        if any(len(vector) != self.dimension for vector in self.center_basis):
-            raise _validation_error(
-                "center_basis_shape",
-                "every center basis vector must match the algebra dimension",
-            )
-        if self.center_dimension * self.dimension > MAX_CENTER_BASIS_ENTRIES:
+        if self.center_dimension > self.dimension:
             raise _validation_error(
                 "center_basis_budget",
-                "center basis exceeds the exact output budget",
+                "center basis cannot exceed the ambient dimension",
             )
         return self

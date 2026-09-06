@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationMatchRequest
@@ -23,9 +24,12 @@ def test_each_tool_contract_and_function_have_one_math_owner() -> None:
     for operation in BUILTIN_TOOLS:
         modules = {
             operation.request_type.__module__,
-            operation.result_type.__module__,
             operation.run.__module__,
         }
+        # Exact scalars have a shared canonical owner rather than an
+        # operation-specific wrapper under jacobian.math.
+        if operation.result_type is not CanonicalRational:
+            modules.add(operation.result_type.__module__)
         non_math_modules = {
             module for module in modules if not module.startswith("jacobian.math.")
         }

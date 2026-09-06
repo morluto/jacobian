@@ -8,8 +8,18 @@ dart IDs; no backend embedding object crosses the boundary.
 
 from __future__ import annotations
 
+from pydantic_core import PydanticCustomError
+
+from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.matrices.values import (
+    SparseRationalMatrix,
+    SparseRationalMatrixEntry,
+)
+
 from ._face_orbits import face_orbit_data
 from ._models import (
+    CombinatorialMapBijection,
     ConnectedComponentsResult,
     DualResult,
     EulerCharacteristicCounts,
@@ -19,7 +29,13 @@ from ._models import (
     OrientationReverseResult,
     VertexFaceIncidenceResult,
 )
-from .values import FiniteCombinatorialMap
+from .values import (
+    FiniteCombinatorialMap,
+    _build_outgoing,
+    _validate_facial_budgets,
+    _validate_involution,
+    _validate_rotation,
+)
 
 __all__ = [
     "connected_components",
@@ -30,13 +46,37 @@ __all__ = [
     "orientable_genus",
     "orientation_reverse",
     "rotation_successor",
+    "verify_dual",
+    "verify_orientation_reverse",
+    "verify_vertex_face_incidence",
     "vertex_face_incidence",
 ]
+
+
+def _admit_map(
+    map_: FiniteCombinatorialMap,
+) -> tuple[list[list[int]], dict[int, int], list[int]]:
+    """Admit map laws and compute bounded facial data once for the request."""
+    try:
+        _validate_involution(map_.darts)
+        _validate_rotation(
+            map_.rotations, _build_outgoing(map_.darts, map_.vertex_count), map_.darts
+        )
+        data = face_orbit_data(map_)
+        _validate_facial_budgets(data[0])
+        return data
+    except PydanticCustomError as error:
+        raise OperationDomainValidationError(
+            location=("map",), code=error.type, message=error.message()
+        ) from error
 
 
 def rotation_successor(map_: FiniteCombinatorialMap, dart: int) -> int:
     """Return the dart following ``dart`` in its local rotation."""
 
+    _admit_map(map_)
+    if type(dart) is not int or not 0 <= dart < len(map_.darts):
+        raise ValueError("dart must index the source map")
     tail = map_.darts[dart][0]
     row = map_.rotations[tail]
     index = row.index(dart)
@@ -58,8 +98,8 @@ def _face_orbits(
     - ``successor``: the dart-successor permutation (``dart -> next dart``)
     - per-component face partition: ``component index -> face indices``
     """
-    walks, face_of_dart, successor = face_orbit_data(map_)
-    comp_of_vertex = connected_components_vertices(map_)
+    walks, face_of_dart, successor = _admit_map(map_)
+    comp_of_vertex = _connected_components_vertices(map_)
     comp_of_face: dict[int, list[int]] = {}
     for face_index, walk in enumerate(walks):
         representative = walk[0]
@@ -81,7 +121,7 @@ def face_orbits(map_: FiniteCombinatorialMap) -> FacesResult:
     )
 
 
-def connected_components_vertices(
+def _connected_components_vertices(
     map_: FiniteCombinatorialMap,
 ) -> dict[int, int]:
     """Return ``vertex -> component index`` for the underlying graph."""
@@ -112,13 +152,19 @@ def connected_components_vertices(
     return result
 
 
+def connected_components_vertices(map_: FiniteCombinatorialMap) -> dict[int, int]:
+    """Admit a map before returning its vertex component partition."""
+    _admit_map(map_)
+    return _connected_components_vertices(map_)
+
+
 def connected_components(
     map_: FiniteCombinatorialMap,
 ) -> ConnectedComponentsResult:
     """Return the component partition of vertices, darts, and faces."""
 
-    vertex_component = connected_components_vertices(map_)
     walks, _, _, _ = _face_orbits(map_)
+    vertex_component = _connected_components_vertices(map_)
     face_component: dict[int, int] = {}
     for face_index, walk in enumerate(walks):
         representative = walk[0]
@@ -146,7 +192,7 @@ def euler_characteristic(
     total is the sum of component characteristics.
     """
     walks, _, _, _ = _face_orbits(map_)
-    vertex_component = connected_components_vertices(map_)
+    vertex_component = _connected_components_vertices(map_)
     component_vertices: dict[int, set[int]] = {}
     component_edges: dict[int, int] = {}
     for v in range(map_.vertex_count):
@@ -230,14 +276,14 @@ def orientation_reverse(
     Returns the resulting combinatorial map together with the induced bijection
     on faces (``old face index -> new face index``).
     """
+    old_walks, old_face_of_dart, _, _ = _face_orbits(map_)
     reversed_rotations = tuple(tuple(reversed(row)) for row in map_.rotations)
     reversed_map = FiniteCombinatorialMap(
         vertex_count=map_.vertex_count,
         darts=map_.darts,
         rotations=reversed_rotations,
     )
-    old_walks, old_face_of_dart, _, _ = _face_orbits(map_)
-    new_walks, new_face_of_dart, _, _ = _face_orbits(reversed_map)
+    new_walks, new_face_of_dart, _ = face_orbit_data(reversed_map)
     # The reversed face permutation is phi' = alpha . phi^-1 . alpha, so the
     # new orbit of a dart is the reversal image of the old orbit: old face O
     # corresponds to the new face containing the reversed darts of O.  Match
@@ -255,9 +301,14 @@ def orientation_reverse(
     ) != len(new_walks):
         raise ValueError("orientation reversal did not induce a face bijection")
     return OrientationReverseResult.model_construct(
-        map=map_,
-        reversed_map=reversed_map,
-        face_bijection=face_bijection,
+        bijection=CombinatorialMapBijection(
+            source=map_,
+            target=reversed_map,
+            kind="FACE",
+            source_axis=tuple(range(len(old_walks))),
+            target_axis=tuple(range(len(new_walks))),
+            images=tuple(face_bijection[i] for i in range(len(old_walks))),
+        ),
     )
 
 
@@ -311,8 +362,16 @@ def dual_map(
         darts=tuple(dual_darts),
         rotations=tuple(dual_rotations),
     )
-    primal_to_dual = {i: i for i in range(n)}
-    return DualResult.model_construct(dual=dual, primal_to_dual=primal_to_dual)
+    return DualResult.model_construct(
+        bijection=CombinatorialMapBijection(
+            source=map_,
+            target=dual,
+            kind="DART",
+            source_axis=tuple(range(n)),
+            target_axis=tuple(range(n)),
+            images=tuple(range(n)),
+        )
+    )
 
 
 def vertex_face_incidence(
@@ -325,21 +384,41 @@ def vertex_face_incidence(
       number of times the vertex occurs on the facial boundary.
     - ``boolean_incidence``: ``vertex -> set of incident face indices``
     """
-    walks, _, _, _ = _face_orbits(map_)
+    source = face_orbits(map_)
+    walks = source.face_walks
     multiplicity: dict[tuple[int, int], int] = {}
-    boolean: dict[int, set[int]] = {v: set() for v in range(map_.vertex_count)}
     for face_index, walk in enumerate(walks):
         for dart in walk:
             vertex = map_.darts[dart][0]
             key = (vertex, face_index)
             multiplicity[key] = multiplicity.get(key, 0) + 1
-            boolean[vertex].add(face_index)
-    nested: dict[int, dict[int, int]] = {}
-    for (vertex, face), count in multiplicity.items():
-        nested.setdefault(vertex, {})[face] = count
     return VertexFaceIncidenceResult.model_construct(
-        multiplicity=nested,
-        boolean_incidence={
-            vertex: tuple(sorted(boolean[vertex])) for vertex in sorted(boolean)
-        },
+        source=source,
+        multiplicity=SparseRationalMatrix(
+            row_count=map_.vertex_count,
+            entries=tuple(
+                SparseRationalMatrixEntry(
+                    row=vertex,
+                    column=face,
+                    value=CanonicalRational.from_integer_ratio(count, 1),
+                )
+                for (vertex, face), count in sorted(multiplicity.items())
+            ),
+            column_count=len(walks),
+        ),
     )
+
+
+def verify_dual(claim: DualResult) -> bool:
+    """Check embedded duality and its declared canonical dart bijection."""
+    return dual_map(claim.bijection.source) == claim
+
+
+def verify_orientation_reverse(claim: OrientationReverseResult) -> bool:
+    """Check reversal and the induced face bijection after map admission."""
+    return orientation_reverse(claim.bijection.source) == claim
+
+
+def verify_vertex_face_incidence(claim: VertexFaceIncidenceResult) -> bool:
+    """Check the face axis and its incidence multiplicities against the map."""
+    return vertex_face_incidence(claim.source.map) == claim

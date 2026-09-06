@@ -15,7 +15,7 @@ from jacobian.math.finite_fields._matrix_rank_models import (
     MatrixRankRequest,
     MatrixRankResult,
 )
-from jacobian.math.finite_fields.values import AxisBoundMatrix
+from jacobian.math.finite_fields.values import Axis, AxisBoundMatrix
 
 _MATRIX_RANK_WALL_SECONDS = 600.0
 
@@ -73,4 +73,44 @@ def compute_rank(request: MatrixRankRequest) -> MatrixRankResult:
     return compute_matrix_rank(request.matrix)
 
 
-__all__ = ["compute_matrix_rank", "compute_rank"]
+def verify_matrix_rank(claim: MatrixRankResult) -> bool:
+    """Check rank equality and nonsingularity of the declared pivot minor.
+
+    The native axis carrier bounds each axis by 1024 and the field order by
+    65536. Two eliminations cost at most twice 1024 cubed field operations.
+    They share one field admission and one execution deadline. Any full-rank
+    minor is accepted, independently of the producer's pivot selection.
+    """
+    from jacobian.math.finite_fields._flint import context
+    from jacobian.math.finite_fields._matrix_rank_kernels import (
+        compute_matrix_rank as kernel_rank,
+    )
+
+    checkpoint = partial(_require_deadline, _execution_deadline())
+    checkpoint("before rank claim admission")
+    matrix = claim.matrix
+    active_context = context(matrix.presentation)
+    actual = kernel_rank(
+        matrix, execution_checkpoint=checkpoint, active_context=active_context
+    )
+    if actual.rank != claim.rank:
+        return False
+    rows = {label: i for i, label in enumerate(matrix.row_axis.labels)}
+    columns = {label: i for i, label in enumerate(matrix.column_axis.labels)}
+    minor = AxisBoundMatrix(
+        presentation=matrix.presentation,
+        row_axis=Axis(name=matrix.row_axis.name, labels=claim.pivot_rows),
+        column_axis=Axis(name=matrix.column_axis.name, labels=claim.pivot_columns),
+        entries=tuple(
+            tuple(matrix.entries[rows[r]][columns[c]] for c in claim.pivot_columns)
+            for r in claim.pivot_rows
+        ),
+    )
+    minor_rank = kernel_rank(
+        minor, execution_checkpoint=checkpoint, active_context=active_context
+    )
+    checkpoint("after rank claim verification")
+    return minor_rank.rank == claim.rank
+
+
+__all__ = ["compute_matrix_rank", "compute_rank", "verify_matrix_rank"]

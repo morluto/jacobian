@@ -38,6 +38,28 @@ def _pt(num: str, den: str = "1") -> CanonicalRational:
     return CanonicalRational(num=num, den=den)
 
 
+@pytest.mark.parametrize(
+    "operation", ["add", "add_infinity", "infinity_add", "multiply"]
+)
+def test_serialized_off_curve_point_is_rejected_by_consumers(operation: str) -> None:
+    curve = ShortWeierstrassCurve(coefficient_a=_pt("1"), coefficient_b=_pt("0"))
+    forged = EllipticCurvePointResult(
+        curve=curve, point=RationalAffinePoint(x=_pt("0"), y=_pt("1"))
+    )
+    point = EllipticCurvePointResult.model_validate_json(forged.model_dump_json())
+    infinity = EllipticCurvePointResult(curve=curve, at_infinity=True)
+    with pytest.raises(OperationDomainValidationError) as caught:
+        if operation == "multiply":
+            scalar_multiply(curve, point, 0)
+        elif operation == "add_infinity":
+            add_points(curve, point, infinity)
+        elif operation == "infinity_add":
+            add_points(curve, infinity, point)
+        else:
+            add_points(curve, point, point)
+    assert caught.value.errors()[0]["type"] == "elliptic_curve.point_off_curve"
+
+
 class TestDiscriminant:
     def test_native_surface_accepts_canonical_curve_value(self) -> None:
         curve = ShortWeierstrassCurve(coefficient_a=_pt("1"), coefficient_b=_pt("0"))

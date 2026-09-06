@@ -63,7 +63,7 @@ def _computed[
     title: str,
     description: str,
     result_model: type[ResultT],
-    operation: Callable[[Any], ResultT],
+    operation: Callable[[Any, SimpleUndirectedGraph], ResultT],
     *tags: str,
     examples: tuple[OperationExample, ...] = (),
 ) -> MathTool[GraphInvariantRequest, ResultT]:
@@ -71,7 +71,7 @@ def _computed[
         request: GraphInvariantRequest,
     ) -> ResultT:
         graph = cast(Any, build_simple_graph(request.graph))
-        return operation(graph)
+        return operation(graph, request.graph)
 
     return MathTool(
         operation_id=operation_id,
@@ -85,66 +85,76 @@ def _computed[
     )
 
 
-def _girth(graph: Any) -> GraphGirthResult:
+def _girth(graph: Any, source: SimpleUndirectedGraph) -> GraphGirthResult:
     import networkx as nx
 
     value = nx.girth(graph)
     girth = 0 if math.isinf(value) else int(value)
-    return GraphGirthResult(girth=girth, has_cycle=girth > 0)
+    return GraphGirthResult(graph=source, girth=girth, has_cycle=girth > 0)
 
 
-def _diameter(graph: Any) -> GraphDiameterResult:
+def _diameter(graph: Any, source: SimpleUndirectedGraph) -> GraphDiameterResult:
     import networkx as nx
 
     from jacobian.math.graphs import diameter
 
     if not graph or not nx.is_connected(graph):
         return GraphDiameterResult(
+            graph=source,
             status="NOT_APPLICABLE",
             connected=False,
             detail="diameter requires a nonempty connected graph",
         )
     return GraphDiameterResult(
-        status="COMPUTED", diameter=diameter(graph), connected=True
+        graph=source, status="COMPUTED", diameter=diameter(graph), connected=True
     )
 
 
-def _edge_connectivity(graph: Any) -> GraphEdgeConnectivityResult:
+def _edge_connectivity(
+    graph: Any, source: SimpleUndirectedGraph
+) -> GraphEdgeConnectivityResult:
     import networkx as nx
 
     value = 0 if len(graph) <= 1 else int(nx.edge_connectivity(graph))
-    return GraphEdgeConnectivityResult(edge_connectivity=value)
+    return GraphEdgeConnectivityResult(graph=source, edge_connectivity=value)
 
 
-def _vertex_connectivity(graph: Any) -> GraphVertexConnectivityResult:
+def _vertex_connectivity(
+    graph: Any, source: SimpleUndirectedGraph
+) -> GraphVertexConnectivityResult:
     import networkx as nx
 
     value = 0 if len(graph) <= 1 else int(nx.node_connectivity(graph))
-    return GraphVertexConnectivityResult(vertex_connectivity=value)
+    return GraphVertexConnectivityResult(graph=source, vertex_connectivity=value)
 
 
-def _eulerian(graph: Any) -> GraphEulerianResult:
+def _eulerian(graph: Any, source: SimpleUndirectedGraph) -> GraphEulerianResult:
     from jacobian.math.graphs import is_eulerian
 
-    return GraphEulerianResult(is_eulerian=is_eulerian(graph))
+    return GraphEulerianResult(graph=source, is_eulerian=is_eulerian(graph))
 
 
-def _spanning_tree_count(graph: Any) -> GraphSpanningTreeCountResult:
+def _spanning_tree_count(
+    graph: Any, source: SimpleUndirectedGraph
+) -> GraphSpanningTreeCountResult:
     import networkx as nx
     import sympy
 
     if not graph:
         return GraphSpanningTreeCountResult(
+            graph=source,
             spanning_tree_count=0,
             connected=False,
         )
     if not nx.is_connected(graph):
         return GraphSpanningTreeCountResult(
+            graph=source,
             spanning_tree_count=0,
             connected=False,
         )
     if len(graph) == 1:
         return GraphSpanningTreeCountResult(
+            graph=source,
             spanning_tree_count=1,
             connected=True,
         )
@@ -159,6 +169,7 @@ def _spanning_tree_count(graph: Any) -> GraphSpanningTreeCountResult:
         laplacian[left_index, right_index] -= 1
         laplacian[right_index, left_index] -= 1
     return GraphSpanningTreeCountResult(
+        graph=source,
         spanning_tree_count=int(laplacian[:-1, :-1].det()),
         connected=True,
     )
@@ -227,23 +238,26 @@ def _maximum_matching_execute(
     return _maximum_matching(graph, request.graph)
 
 
-def _triangle_count(graph: Any) -> GraphTriangleCountResult:
+def _triangle_count(
+    graph: Any, source: SimpleUndirectedGraph
+) -> GraphTriangleCountResult:
     from jacobian.math.graphs import triangle_count
 
-    return GraphTriangleCountResult(triangle_count=triangle_count(graph))
+    return GraphTriangleCountResult(graph=source, triangle_count=triangle_count(graph))
 
 
-def _radius(graph: Any) -> GraphRadiusResult:
+def _radius(graph: Any, source: SimpleUndirectedGraph) -> GraphRadiusResult:
     import networkx as nx
 
     if not graph or not nx.is_connected(graph):
         return GraphRadiusResult(
+            graph=source,
             status="NOT_APPLICABLE",
             connected=False,
             detail="radius requires a nonempty connected graph",
         )
     return GraphRadiusResult(
-        status="COMPUTED", radius=int(nx.radius(graph)), connected=True
+        graph=source, status="COMPUTED", radius=int(nx.radius(graph)), connected=True
     )
 
 
@@ -255,6 +269,7 @@ def _k_core_execute(
     graph = cast(Any, build_simple_graph(request.graph))
     core = nx.k_core(graph, k=request.k)
     return GraphCoreResult(
+        graph=request.graph,
         k=request.k,
         vertices=tuple(sorted(str(vertex) for vertex in core.nodes)),
     )

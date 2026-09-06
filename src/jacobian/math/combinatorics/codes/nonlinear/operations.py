@@ -16,13 +16,13 @@ from jacobian.math.combinatorics.codes.nonlinear._models import (
     ConstantWeightProfileResult,
     ConstantWeightResult,
     ExplicitProfileResult,
-    ToSetSystemResult,
     WordDistanceResult,
 )
 from jacobian.math.combinatorics.codes.nonlinear.values import (
     BinaryWord,
     ExplicitBinaryCode,
 )
+from jacobian.math.combinatorics.extremal_sets.values import IndexedFiniteSetFamily
 
 
 @dataclass(frozen=True, slots=True)
@@ -294,14 +294,15 @@ def constant_weight_profile(code: ExplicitBinaryCode) -> ConstantWeightProfileRe
     )
 
 
-def to_set_system(code: ExplicitBinaryCode) -> ToSetSystemResult:
-    """Native support conversion for one canonical explicit binary code."""
-    return ToSetSystemResult._from_kernel(
-        source=code,
-        length=code.length,
-        cardinality=len(code.codewords),
-        coordinate_axis=tuple(range(code.length)),
-        supports=tuple(
+def to_set_system(code: ExplicitBinaryCode) -> IndexedFiniteSetFamily:
+    """Map binary words to subsets of the retained coordinate axis [length].
+
+    The source's bounded bit table admits a single support scan. Word order
+    becomes the target member index; empty words and codes retain [length].
+    """
+    return IndexedFiniteSetFamily(
+        ground_set_size=code.length,
+        members=tuple(
             tuple(i for i, bit in enumerate(word) if bit) for word in code.codewords
         ),
     )

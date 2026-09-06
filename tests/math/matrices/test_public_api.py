@@ -264,6 +264,11 @@ def test_exact_public_api_symbols() -> None:
         "smith_normal_form",
         "solve_linear_system",
         "trace",
+        "verify_adjugate",
+        "verify_inverse",
+        "verify_kronecker_product",
+        "verify_partial_trace",
+        "verify_product",
     )
     assert tuple(matrices.__all__) == expected
     assert len(matrices.__all__) == len(set(matrices.__all__))

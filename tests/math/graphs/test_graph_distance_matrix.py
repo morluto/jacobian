@@ -13,6 +13,7 @@ from typing import cast
 import pytest
 from pydantic import ValidationError
 
+from jacobian.math.graphs.optimization import verify_distance_matrix
 from jacobian.math.graphs.optimization._distance_matrix import (
     DISTANCE_MATRIX_OPERATION,
     compute_distance_matrix,
@@ -22,6 +23,7 @@ from jacobian.math.graphs.optimization._distance_models import (
     GraphDistanceMatrixResult,
     GraphDistanceRow,
 )
+from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
 def _request(vertices: list[str], edges: list[list[str]]) -> GraphDistanceMatrixRequest:
@@ -155,7 +157,7 @@ def test_result_rejects_rows_reordered_away_from_the_canonical_axis() -> None:
             vertex_ordering="LEXICOGRAPHIC_ASCENDING",
             pair_coverage="ALL_ORDERED_VERTEX_PAIRS",
             unreachable_representation="JSON_NULL",
-            vertices=("1", "10", "2"),
+            graph=SimpleUndirectedGraph(vertices=("1", "10", "2"), edges=()),
             rows=(
                 _row("1", [0, 1, 1]),
                 _row("2", [1, 0, 1]),
@@ -173,7 +175,7 @@ def test_result_rejects_relabelled_rows_over_the_same_positions() -> None:
             vertex_ordering="LEXICOGRAPHIC_ASCENDING",
             pair_coverage="ALL_ORDERED_VERTEX_PAIRS",
             unreachable_representation="JSON_NULL",
-            vertices=("1", "10", "2"),
+            graph=SimpleUndirectedGraph(vertices=("1", "10", "2"), edges=()),
             rows=(
                 _row("10", [0, 1, 1]),
                 _row("1", [1, 0, 1]),
@@ -186,8 +188,8 @@ def test_result_rejects_relabelled_rows_over_the_same_positions() -> None:
 @pytest.mark.parametrize(
     ("vertices", "message"),
     [
-        (("2", "10", "1"), "unique and sorted"),
-        (("1", "1", "2"), "unique and sorted"),
+        (("2", "10", "1"), "canonical vertex"),
+        (("1", "1", "2"), "unique"),
     ],
 )
 def test_result_rejects_unsorted_or_duplicate_vertices(
@@ -199,7 +201,7 @@ def test_result_rejects_unsorted_or_duplicate_vertices(
             vertex_ordering="LEXICOGRAPHIC_ASCENDING",
             pair_coverage="ALL_ORDERED_VERTEX_PAIRS",
             unreachable_representation="JSON_NULL",
-            vertices=vertices,
+            graph=SimpleUndirectedGraph(vertices=vertices, edges=()),
             rows=tuple(_complete_rows(list(vertices))),
             connected=True,
         )
@@ -212,7 +214,7 @@ def test_result_rejects_missing_rows_and_nonsquare_rows() -> None:
             vertex_ordering="LEXICOGRAPHIC_ASCENDING",
             pair_coverage="ALL_ORDERED_VERTEX_PAIRS",
             unreachable_representation="JSON_NULL",
-            vertices=vertices,
+            graph=SimpleUndirectedGraph(vertices=vertices, edges=()),
             rows=tuple(_complete_rows(list(vertices))[:2]),
             connected=True,
         )
@@ -221,7 +223,7 @@ def test_result_rejects_missing_rows_and_nonsquare_rows() -> None:
             vertex_ordering="LEXICOGRAPHIC_ASCENDING",
             pair_coverage="ALL_ORDERED_VERTEX_PAIRS",
             unreachable_representation="JSON_NULL",
-            vertices=vertices,
+            graph=SimpleUndirectedGraph(vertices=vertices, edges=()),
             rows=(
                 _row("1", [0, 1]),
                 _row("10", [1, 0]),
@@ -269,19 +271,21 @@ def test_result_rejects_broken_metric_invariants(
             vertex_ordering="LEXICOGRAPHIC_ASCENDING",
             pair_coverage="ALL_ORDERED_VERTEX_PAIRS",
             unreachable_representation="JSON_NULL",
-            vertices=("1", "10", "2"),
+            graph=SimpleUndirectedGraph(vertices=("1", "10", "2"), edges=()),
             rows=rows,
             connected=True,
         )
 
 
 def test_result_rejects_connected_mismatch() -> None:
-    with pytest.raises(ValidationError):
-        GraphDistanceMatrixResult(
-            vertex_ordering="LEXICOGRAPHIC_ASCENDING",
-            pair_coverage="ALL_ORDERED_VERTEX_PAIRS",
-            unreachable_representation="JSON_NULL",
-            vertices=("1", "10", "2"),
-            rows=tuple(_complete_rows(["1", "10", "2"])),
-            connected=False,
-        )
+    claim = GraphDistanceMatrixResult(
+        vertex_ordering="LEXICOGRAPHIC_ASCENDING",
+        pair_coverage="ALL_ORDERED_VERTEX_PAIRS",
+        unreachable_representation="JSON_NULL",
+        graph=SimpleUndirectedGraph(vertices=("1", "10", "2"), edges=()),
+        rows=tuple(_complete_rows(["1", "10", "2"])),
+        connected=False,
+    )
+    assert not verify_distance_matrix(
+        GraphDistanceMatrixResult.model_validate_json(claim.model_dump_json())
+    )

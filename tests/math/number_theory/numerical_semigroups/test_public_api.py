@@ -49,6 +49,7 @@ def test_exact_public_api_symbols() -> None:
     """Exact owner-local contract for the numerical_semigroups public API."""
     expected = (
         "FactorizationGraph",
+        "NumericalSemigroup",
         "apery_set",
         "belongs",
         "elasticity",
@@ -61,6 +62,9 @@ def test_exact_public_api_symbols() -> None:
         "factorization_lengths",
         "factorizations",
         "minimal_generating_system",
+        "verify_elasticity",
+        "verify_element_elasticity",
+        "verify_summary",
     )
     assert tuple(numerical_semigroups.__all__) == expected
     assert len(numerical_semigroups.__all__) == len(set(numerical_semigroups.__all__))

@@ -924,13 +924,17 @@ class TestFamilyDefinitenessFlags:
             coefficients=(CanonicalRational(num="1", den="1"),),
             squared_norm=CanonicalRational(num="-1", den="1"),
         )
-        with pytest.raises(ValidationError):
-            OrthogonalPolynomialFamily(
-                polynomials=(term,),
-                variable="x",
-                is_quasi_definite=True,
-                is_positive_definite=True,
-            )
+        from jacobian.math.analysis.orthogonal_polynomials import verify_definiteness
+
+        family = OrthogonalPolynomialFamily(
+            polynomials=(term,),
+            variable="x",
+            is_quasi_definite=True,
+            is_positive_definite=True,
+        )
+        assert not verify_definiteness(
+            OrthogonalPolynomialFamily.model_validate_json(family.model_dump_json())
+        )
 
 
 class TestQuadratureVariableBinding:

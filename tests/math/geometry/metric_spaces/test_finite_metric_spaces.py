@@ -5,6 +5,7 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.metric_spaces._models import (
     MAX_DISTANCE,
     BallRequest,
@@ -119,10 +120,12 @@ def test_gromov_hyperbolicity_cycle_c5_half_integer() -> None:
 
 
 def test_contract_rejects_nonsymmetric() -> None:
-    with pytest.raises(ValidationError) as error:
-        FiniteMetricSpace(
-            point_count=2,
-            distances=((0, 1), (2, 0)),
+    with pytest.raises(OperationDomainValidationError) as error:
+        metric_profile(
+            FiniteMetricSpace(
+                point_count=2,
+                distances=((0, 1), (2, 0)),
+            )
         )
     assert (
         error.value.errors()[0]["type"]
@@ -131,10 +134,12 @@ def test_contract_rejects_nonsymmetric() -> None:
 
 
 def test_contract_rejects_nonzero_diagonal() -> None:
-    with pytest.raises(ValidationError) as error:
-        FiniteMetricSpace(
-            point_count=2,
-            distances=((1, 1), (1, 0)),
+    with pytest.raises(OperationDomainValidationError) as error:
+        metric_profile(
+            FiniteMetricSpace(
+                point_count=2,
+                distances=((1, 1), (1, 0)),
+            )
         )
     assert (
         error.value.errors()[0]["type"]
@@ -143,10 +148,12 @@ def test_contract_rejects_nonzero_diagonal() -> None:
 
 
 def test_contract_rejects_triangle_inequality() -> None:
-    with pytest.raises(ValidationError) as error:
-        FiniteMetricSpace(
-            point_count=3,
-            distances=((0, 1, 3), (1, 0, 1), (3, 1, 0)),
+    with pytest.raises(OperationDomainValidationError) as error:
+        metric_profile(
+            FiniteMetricSpace(
+                point_count=3,
+                distances=((0, 1, 3), (1, 0, 1), (3, 1, 0)),
+            )
         )
     assert (
         error.value.errors()[0]["type"]
@@ -155,10 +162,12 @@ def test_contract_rejects_triangle_inequality() -> None:
 
 
 def test_contract_rejects_zero_distance() -> None:
-    with pytest.raises(ValidationError) as error:
-        FiniteMetricSpace(
-            point_count=3,
-            distances=((0, 0, 1), (0, 0, 1), (1, 1, 0)),
+    with pytest.raises(OperationDomainValidationError) as error:
+        metric_profile(
+            FiniteMetricSpace(
+                point_count=3,
+                distances=((0, 0, 1), (0, 0, 1), (1, 1, 0)),
+            )
         )
     assert (
         error.value.errors()[0]["type"]

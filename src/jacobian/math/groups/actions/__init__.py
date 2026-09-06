@@ -7,6 +7,10 @@ from jacobian.math.groups.actions.operations import (
     polya_inventory,
     subset_canonicalization,
     subset_family_orbit_profile,
+    verify_burnside_count,
+    verify_cycle_index,
+    verify_element_cycles,
+    verify_polya_inventory,
 )
 
 __all__ = [
@@ -16,4 +20,8 @@ __all__ = [
     "polya_inventory",
     "subset_canonicalization",
     "subset_family_orbit_profile",
+    "verify_burnside_count",
+    "verify_cycle_index",
+    "verify_element_cycles",
+    "verify_polya_inventory",
 ]

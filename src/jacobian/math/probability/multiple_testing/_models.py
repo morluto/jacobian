@@ -58,25 +58,44 @@ class BHStepUpRequest(StrictModel):
 class BHStepUpResult(StrictModel):
     """BH step-up rejection set."""
 
-    critical_index: int = Field(ge=0)
-    cutoff_threshold: str
-    rejected: tuple[OpaqueLabel, ...]
-    total_hypotheses: int = Field(ge=1)
+    source: BHStepUpRequest
+    critical_index: int = Field(ge=0, le=MAX_HYPOTHESES)
+    cutoff_threshold: CanonicalRational
+    rejected: tuple[OpaqueLabel, ...] = Field(max_length=MAX_HYPOTHESES)
+
+    @property
+    def total_hypotheses(self) -> int:
+        return len(self.source.hypotheses)
+
+    @model_validator(mode="after")
+    def require_rejection_axis(self) -> Self:
+        ids = {hyp.hypothesis_id for hyp in self.source.hypotheses}
+        if (
+            len(set(self.rejected)) != len(self.rejected)
+            or not set(self.rejected) <= ids
+        ):
+            raise _validation_error(
+                "rejection_axis", "rejections must be distinct source hypotheses"
+            )
+        return self
 
 
 class FDPRequest(StrictModel):
     """False discovery proportion computation."""
 
-    rejected_ids: tuple[OpaqueLabel, ...] = Field(default=())
-    true_null_ids: tuple[OpaqueLabel, ...] = Field(default=())
+    rejected_ids: tuple[OpaqueLabel, ...] = Field(default=(), max_length=MAX_HYPOTHESES)
+    true_null_ids: tuple[OpaqueLabel, ...] = Field(
+        default=(), max_length=MAX_HYPOTHESES
+    )
 
 
 class FDPResult(StrictModel):
     """Exact false discovery proportion."""
 
+    source: FDPRequest
     false_discoveries: int = Field(ge=0)
     total_rejections: int = Field(ge=0)
-    fdp: str
+    fdp: CanonicalRational
 
 
 __all__ = [

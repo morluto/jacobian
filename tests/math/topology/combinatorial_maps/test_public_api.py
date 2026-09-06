@@ -18,6 +18,9 @@ def test_exact_public_api_symbols() -> None:
         "orientable_genus",
         "orientation_reverse",
         "rotation_successor",
+        "verify_dual",
+        "verify_orientation_reverse",
+        "verify_vertex_face_incidence",
         "vertex_face_incidence",
     )
     assert tuple(combinatorial_maps.__all__) == expected

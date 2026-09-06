@@ -8,12 +8,11 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
-    MAX_VERTICES,
-)
 
 MAX_GROUND_SET_SIZE = (1 << 53) - 1
-MAX_FAMILY_SIZE = MAX_VERTICES
+# Representation includes the bounded explicit-code support map. Operations
+# producing hypergraphs admit their own smaller vertex envelope before work.
+MAX_FAMILY_SIZE = 1 << 19
 
 
 def _value_error(reason: str, message: str) -> PydanticCustomError:

@@ -7,6 +7,8 @@ from collections.abc import Sequence
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.finite_fields import MatrixRankResult, verify_matrix_rank
 from jacobian.math.finite_fields._matrix_rank import compute_rank
 from jacobian.math.finite_fields._matrix_rank_models import MatrixRankRequest
 from jacobian.math.finite_fields.operations import matrix_rank
@@ -156,6 +158,57 @@ def test_pivot_columns_follow_source_axis_order() -> None:
             pivot_rows=("r0", "r1"),
             pivot_columns=("c1", "c0"),
         )
+
+
+@pytest.mark.parametrize(
+    ("rows", "row_labels", "column_labels"),
+    [([], [], ["c"]), ([[]], ["r"], []), ([], [], []), ([[[0, 1]]], ["r"], ["c"])],
+)
+def test_rank_claim_round_trip(
+    rows: list[list[list[int]]], row_labels: list[str], column_labels: list[str]
+) -> None:
+    source = _matrix(_f4(), rows, row_labels, column_labels)
+    claim = MatrixRankResult.model_validate_json(matrix_rank(source).model_dump_json())
+    assert verify_matrix_rank(claim)
+
+
+def test_rank_claim_checks_upper_bound_and_selected_minor() -> None:
+    source = _matrix(_f2(), [[[0], [0]], [[0], [1]]], ["r0", "r1"], ["c0", "c1"])
+    payload = matrix_rank(source).model_dump(mode="json")
+    payload.update(rank=0, pivot_rows=[], pivot_columns=[])
+    assert not verify_matrix_rank(MatrixRankResult.model_validate(payload))
+    payload.update(rank=1, pivot_rows=["r0"], pivot_columns=["c0"])
+    assert not verify_matrix_rank(MatrixRankResult.model_validate(payload))
+
+    zero = _matrix(_f2(), [[[0]]], ["r"], ["c"])
+    forged = MatrixRankResult(
+        matrix=zero, rank=1, pivot_rows=("r",), pivot_columns=("c",)
+    )
+    assert not verify_matrix_rank(
+        MatrixRankResult.model_validate_json(forged.model_dump_json())
+    )
+
+
+def test_rank_claim_accepts_an_alternative_nonsingular_minor() -> None:
+    source = _matrix(_f2(), [[[1], [1]], [[1], [1]]], ["r0", "r1"], ["c0", "c1"])
+    claim = MatrixRankResult(
+        matrix=source, rank=1, pivot_rows=("r1",), pivot_columns=("c1",)
+    )
+    assert verify_matrix_rank(claim)
+
+
+@pytest.mark.parametrize("empty", [True, False])
+def test_rank_claim_admits_field_even_for_empty_axes(empty: bool) -> None:
+    reducible = FiniteFieldPresentation(
+        characteristic=2, modulus_coefficients=(1, 0, 1)
+    )
+    matrix = _matrix(
+        reducible, [] if empty else [[[0, 0]]], [] if empty else ["r"], ["c"]
+    )
+    claim = MatrixRankResult(matrix=matrix, rank=0)
+    decoded = MatrixRankResult.model_validate_json(claim.model_dump_json())
+    with pytest.raises(OperationDomainValidationError, match="irreducible"):
+        verify_matrix_rank(decoded)
 
 
 def test_rank_invariance_under_row_ops() -> None:

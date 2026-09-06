@@ -35,7 +35,7 @@ class PrimeFieldMatrixRequest(StrictModel):
 
     The matrix is carried as the domain-owned ``PrimeFieldMatrix`` canonical
     value so it composes unchanged with the other GF(p) producers and
-    consumers. Shape rules (schema-visible): 0..1024 rows, 1..1024 columns,
+    consumers. Shape rules (schema-visible): 0..1024 rows, 0..1024 columns,
     rectangular rows, and every entry a canonical residue in ``[0, prime)``.
     Zero rows carry an explicit column axis, matching the canonical empty
     matrix that full-rank nullspace producers return. The characteristic is
@@ -49,7 +49,7 @@ class PrimeFieldMatrixRequest(StrictModel):
                 "A bounded integer matrix over an explicit prime field GF(p), "
                 "as the canonical `PrimeFieldMatrix` value: `prime` must be a "
                 "prime integer in [2, 2147483647], `entries` must have at "
-                "most 1024 rows, each row 1..1024 columns, all rows the same "
+                "most 1024 rows, each row 0..1024 columns, all rows the same "
                 "length matching the declared `columns`, and every entry a "
                 "canonical residue in [0, prime). The dense matrix carries "
                 "at most 1048576 cells. Zero rows are permitted and carry "
@@ -88,7 +88,7 @@ class PrimeFieldMatrixRequest(StrictModel):
             raise _validation_error(
                 "request.rows_bound", f"matrix has at most {MAX_ROWS} rows"
             )
-        if not 1 <= self.matrix.columns <= MAX_COLUMNS:
+        if not 0 <= self.matrix.columns <= MAX_COLUMNS:
             raise _validation_error(
                 "request.columns_bound", f"matrix has at most {MAX_COLUMNS} columns"
             )

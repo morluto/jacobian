@@ -7,13 +7,12 @@ from jacobian.math.graphs.polynomials._models import (
     GraphPolynomialRequest,
     GraphPolynomialResult,
     MatchingPolynomialRequest,
-    SparseMultivariatePolynomial,
 )
-from jacobian.math.graphs.polynomials.operations import (
-    chromatic_polynomial,
-    flow_polynomial,
-    matching_polynomial,
-    tutte_polynomial,
+from jacobian.math.graphs.polynomials._tools import (
+    _run_chromatic,
+    _run_flow,
+    _run_matching,
+    _run_tutte,
 )
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
@@ -29,25 +28,10 @@ def _path_graph(n: int) -> IndexedSimpleUndirectedGraph:
 
 
 def _terms_to_dict(result: GraphPolynomialResult) -> dict[int, int]:
-    return {t.degree: t.coefficient for t in result.terms}
-
-
-def _run_tutte(request: GraphPolynomialRequest) -> SparseMultivariatePolynomial:
-    return SparseMultivariatePolynomial(
-        variables=("x", "y"), terms=tutte_polynomial(request.graph)
-    )
-
-
-def _run_chromatic(request: GraphPolynomialRequest) -> GraphPolynomialResult:
-    return GraphPolynomialResult(terms=chromatic_polynomial(request.graph))
-
-
-def _run_flow(request: GraphPolynomialRequest) -> GraphPolynomialResult:
-    return GraphPolynomialResult(terms=flow_polynomial(request.graph))
-
-
-def _run_matching(request: MatchingPolynomialRequest) -> GraphPolynomialResult:
-    return GraphPolynomialResult(terms=matching_polynomial(request.graph))
+    return {
+        t.exponents[0]: int(t.coefficient.num)
+        for t in result.polynomial.polynomial.terms
+    }
 
 
 class TestTuttePolynomial:
@@ -55,8 +39,11 @@ class TestTuttePolynomial:
         req = GraphPolynomialRequest(graph=_cycle_graph(4))
         result = _run_tutte(req)
         # T(C4, x, y) = x^3 + x^2 + x + y
-        d = {term.exponents: term.coefficient for term in result.terms}
-        assert result.variables == ("x", "y")
+        d = {
+            term.exponents: int(term.coefficient.num)
+            for term in result.polynomial.polynomial.terms
+        }
+        assert result.polynomial.variables == ("x", "y")
         assert d == {(0, 1): 1, (1, 0): 1, (2, 0): 1, (3, 0): 1}
 
     def test_single_edge(self) -> None:
@@ -65,7 +52,10 @@ class TestTuttePolynomial:
         )
         result = _run_tutte(req)
         # T(K2) = x
-        d = {term.exponents: term.coefficient for term in result.terms}
+        d = {
+            term.exponents: int(term.coefficient.num)
+            for term in result.polynomial.polynomial.terms
+        }
         assert d == {(1, 0): 1}
 
 
@@ -113,7 +103,7 @@ class TestFlowPolynomial:
             graph=IndexedSimpleUndirectedGraph(vertex_count=2, edges=((0, 1),))
         )
         result = _run_flow(req)
-        assert result.terms == ()
+        assert result.polynomial.polynomial.terms == ()
 
 
 class TestMatchingPolynomial:

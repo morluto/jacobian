@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import pytest
 from pydantic import ValidationError
 
@@ -168,7 +170,9 @@ class TestValidation:
         "operation",
         (_interior, _closure, _boundary),
     )
-    def test_subset_admission_rejects_out_of_range_indices(self, operation) -> None:
+    def test_subset_admission_rejects_out_of_range_indices(
+        self, operation: Callable[[SubsetRequest], object]
+    ) -> None:
         request = SubsetRequest(space=_sierpinski(), subset=(2,))
 
         with pytest.raises(OperationDomainValidationError) as error:
@@ -192,8 +196,11 @@ class TestValidation:
         )
 
     def test_non_reflexive_preorder_rejected(self) -> None:
-        with pytest.raises(ValidationError) as error:
-            FiniteTopologicalSpace(
+        from jacobian.catalog.models import OperationDomainValidationError
+        from jacobian.math.topology.finite.spaces import from_preorder
+
+        with pytest.raises(OperationDomainValidationError) as error:
+            from_preorder(
                 points=("a", "b"),
                 preorder=((1,), (0, 1)),
             )

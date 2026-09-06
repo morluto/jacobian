@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 from math import lcm
-from typing import Annotated, Literal, Self
+from typing import Literal, Self
 
-from pydantic import Field, StrictInt, StringConstraints, model_validator
+from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math._rational_height import RationalHeight, sum_heights
+from jacobian.math.polynomials.values import PolynomialVariable, RationalPolynomial
 
 # ---------------------------------------------------------------------------
 # Public bounds
@@ -222,14 +223,7 @@ def _inverse_height(series: TruncatedSeries) -> tuple[int, int, int, int]:
     return numerator, inverse_denominator, source_norm, source_denominator
 
 
-Variable = Annotated[
-    str,
-    StringConstraints(
-        pattern=r"^[a-z][a-z0-9]*$",
-        max_length=16,
-        strict=True,
-    ),
-]
+Variable = PolynomialVariable
 
 
 # ---------------------------------------------------------------------------
@@ -913,30 +907,36 @@ class SeriesIdentityCheckResult(StrictModel):
 
 
 class SeriesFromPolynomialRequest(StrictModel):
-    """Convert a dense rational polynomial coefficient prefix into a series."""
+    """The explicit QQ[x] to QQ[[x]]/(x^N) projection."""
 
-    variable: Variable
-    coefficients: tuple[CanonicalRational, ...] = Field(
-        min_length=1,
-    )
+    polynomial: RationalPolynomial
     truncation_order: StrictInt = Field(ge=1)
 
+
+class SeriesFromPolynomialResult(StrictModel):
+    source: RationalPolynomial
+    result: TruncatedSeries
+
     @model_validator(mode="after")
-    def require_dense_tuple(self) -> Self:
-        if len(self.coefficients) != self.truncation_order:
+    def require_same_variable(self) -> Self:
+        if self.source.variables != (self.result.variable,):
             raise _validation_error(
-                "input_coefficient_count_mismatch",
-                "input coefficients must match truncation_order exactly",
+                "conversion_variable", "projection must retain the polynomial variable"
             )
         return self
 
 
-class SeriesFromPolynomialResult(StrictModel):
-    result: TruncatedSeries
-
-
 class SeriesToPolynomialResult(StrictModel):
-    result: TruncatedSeries
+    source: TruncatedSeries
+    result: RationalPolynomial
     polynomial_label: Literal["TRUNCATED_POLYNOMIAL_REPRESENTATIVE"] = (
         "TRUNCATED_POLYNOMIAL_REPRESENTATIVE"
     )
+
+    @model_validator(mode="after")
+    def require_same_variable(self) -> Self:
+        if self.result.variables != (self.source.variable,):
+            raise _validation_error(
+                "conversion_variable", "representative must retain the series variable"
+            )
+        return self

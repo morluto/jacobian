@@ -46,9 +46,30 @@ class KolmogorovQuotientRequest(StrictModel):
 
 
 class KolmogorovQuotientResult(StrictModel):
-    quotient_points: tuple[tuple[OpaqueLabel, ...], ...]
-    quotient_preorder: tuple[tuple[int, ...], ...]
-    class_map: tuple[int, ...]
+    """The canonical quotient map; each target label is its first source representative."""
+
+    quotient_map: FiniteTopologicalMap
+
+    @property
+    def quotient_points(self) -> tuple[tuple[OpaqueLabel, ...], ...]:
+        return tuple(
+            tuple(
+                label
+                for label, image in zip(
+                    self.quotient_map.source.points, self.class_map, strict=True
+                )
+                if image == target
+            )
+            for target in range(len(self.quotient_map.target.points))
+        )
+
+    @property
+    def quotient_preorder(self) -> tuple[tuple[int, ...], ...]:
+        return self.quotient_map.target.preorder
+
+    @property
+    def class_map(self) -> tuple[int, ...]:
+        return self.quotient_map.point_map
 
 
 __all__ = [

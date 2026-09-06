@@ -34,6 +34,7 @@ from jacobian.math.number_theory.arithmetic.operations import (
     reciprocal,
     sign,
     sum_rationals,
+    verify_continued_fraction,
 )
 from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
@@ -72,4 +73,5 @@ __all__ = [
     "reciprocal",
     "sign",
     "sum_rationals",
+    "verify_continued_fraction",
 ]

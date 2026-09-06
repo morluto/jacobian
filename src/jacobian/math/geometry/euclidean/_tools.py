@@ -1,12 +1,11 @@
 """Euclidean-geometry operation declarations."""
 
-from jacobian._exact import format_canonical_rational
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.geometry.euclidean._models import (
     AngleEqualityRequest,
     AngleEqualityResult,
     SegmentRatioRequest,
-    SegmentRatioResult,
     TriangleSimilarityRequest,
     TriangleSimilarityResult,
 )
@@ -17,17 +16,13 @@ from jacobian.math.geometry.euclidean.operations import (
 )
 
 
-def compute_segment_ratio(request: SegmentRatioRequest) -> SegmentRatioResult:
-    numerator, denominator, ratio = _squared_segment_ratio_data(
+def compute_segment_ratio(request: SegmentRatioRequest) -> CanonicalRational:
+    _, _, ratio = _squared_segment_ratio_data(
         request.segment1,
         request.segment2,
         denominator_location=("segment2",),
     )
-    return SegmentRatioResult(
-        squared_ratio=format_canonical_rational(ratio),
-        ratio_numerator=format_canonical_rational(numerator),
-        ratio_denominator=format_canonical_rational(denominator),
-    )
+    return CanonicalRational.from_fraction(ratio)
 
 
 def compute_angle_equality(request: AngleEqualityRequest) -> AngleEqualityResult:
@@ -62,7 +57,7 @@ TOOLS: MathTools = (
         description="Return |A-B|^2 / |C-D|^2 exactly for two rational planar segments; "
         "the denominator segment must be nonzero.",
         request_type=SegmentRatioRequest,
-        result_type=SegmentRatioResult,
+        result_type=CanonicalRational,
         run=compute_segment_ratio,
         tags=("geometry", "euclidean", "segment", "ratio"),
         examples=(

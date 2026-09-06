@@ -106,7 +106,9 @@ def compute_nf_discriminant(
             discriminant = format_canonical_integer(
                 parse_canonical_integer(response["discriminant"])
             )
-            return NumberFieldDiscriminantResult(discriminant=discriminant)
+            return NumberFieldDiscriminantResult(
+                field=request.field, discriminant=discriminant
+            )
     except (KeyError, TypeError, ValueError, CanonicalizationError):
         response = None
     if (

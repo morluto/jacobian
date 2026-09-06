@@ -7,8 +7,8 @@ from fractions import Fraction
 from itertools import pairwise
 from math import gcd
 
-from jacobian._exact import format_canonical_rational
-from jacobian.canonical import format_canonical_integer
+from jacobian._exact import CanonicalRational
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.number_theory.numerical_semigroups._algorithms import (
     apery_set,
     belongs,
@@ -47,6 +47,7 @@ from jacobian.math.number_theory.numerical_semigroups._models import (
     MAX_GLOBAL_DELTA_CHECK,
     MAX_GRAPH_FACTORIZATIONS,
     MAX_MATERIALIZED_FACTORIZATIONS,
+    _require_positive_bounded_generators,
 )
 from jacobian.math.number_theory.numerical_semigroups._presentation_models import (
     MinimalPresentationRelation,
@@ -58,6 +59,7 @@ from jacobian.math.number_theory.numerical_semigroups._summary_models import (
     NumericalSemigroupSummaryResult,
     SemigroupMembershipResult,
 )
+from jacobian.math.number_theory.numerical_semigroups.values import NumericalSemigroup
 
 
 @dataclass(frozen=True)
@@ -371,7 +373,7 @@ def element_elasticity_profile(
         minimal_generators=tuple(format_canonical_integer(item) for item in values),
         minimum_length=minimum,
         maximum_length=maximum,
-        elasticity=format_canonical_rational(Fraction(maximum, minimum)),
+        elasticity=CanonicalRational.from_integer_ratio(maximum, minimum),
     )
 
 
@@ -440,7 +442,10 @@ def global_elasticity(generators: tuple[int, ...]) -> ElasticityResult:
     """Return exact global elasticity of a canonical semigroup."""
     values = _generators(generators)
     return ElasticityResult(
-        elasticity=format_canonical_rational(Fraction(values[-1], values[0])),
+        semigroup=NumericalSemigroup(
+            minimal_generators=tuple(map(format_canonical_integer, values))
+        ),
+        elasticity=CanonicalRational.from_integer_ratio(values[-1], values[0]),
         smallest_generator=format_canonical_integer(values[0]),
         largest_generator=format_canonical_integer(values[-1]),
     )
@@ -544,6 +549,31 @@ def presentation_binomials(
     )
 
 
+def _claim_generators(source: NumericalSemigroup) -> tuple[int, ...]:
+    """Admit the same bounded generator domain before checking a source claim."""
+    _require_positive_bounded_generators(source.minimal_generators)
+    return tuple(map(parse_canonical_integer, source.minimal_generators))
+
+
+def verify_summary(claim: NumericalSemigroupSummaryResult) -> bool:
+    """Check a source-bound summary in the bounded semigroup domain."""
+    return summary(_claim_generators(claim.semigroup)) == claim
+
+
+def verify_elasticity(claim: ElasticityResult) -> bool:
+    """Check global elasticity and its claimed extrema against the source."""
+    return global_elasticity(_claim_generators(claim.semigroup)) == claim
+
+
+def verify_element_elasticity(claim: ElementElasticityResult) -> bool:
+    """Check the element's actual length extrema, not merely their ratio."""
+    values = _claim_generators(claim.semigroup)
+    value = parse_canonical_integer(claim.value)
+    if values != (1,) and value > MAX_ELEMENT:
+        raise ValueError(f"element exceeds the {MAX_ELEMENT} admission bound")
+    return element_elasticity_profile(values, value) == claim
+
+
 __all__ = [
     "FactorizationGraph",
     "apery_set",
@@ -574,4 +604,7 @@ __all__ = [
     "minimal_presentation",
     "presentation_binomials",
     "summary",
+    "verify_elasticity",
+    "verify_element_elasticity",
+    "verify_summary",
 ]

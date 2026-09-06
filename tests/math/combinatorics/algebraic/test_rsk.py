@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.combinatorics.algebraic import verify_rsk
 from jacobian.math.combinatorics.algebraic._models import (
     RSKPermutationRequest,
     RSKResult,
@@ -89,6 +90,16 @@ class TestRSK:
         payload = result.model_dump(mode="json")
         payload["permutation"] = [2, 1, 3]
         assert RSKResult.model_validate(payload).permutation == (2, 1, 3)
+        assert not verify_rsk(RSKResult.model_validate(payload))
+        for field, value in (
+            ("permutation", [1, 1, 1]),
+            ("lis_length", 1),
+            ("lds_length", 1),
+        ):
+            forged = result.model_dump(mode="json")
+            forged[field] = value
+            assert not verify_rsk(RSKResult.model_validate(forged))
+        assert verify_rsk(RSKResult.model_validate_json(result.model_dump_json()))
 
         payload = result.model_dump(mode="json")
         payload["permutation"] = [1, 2]

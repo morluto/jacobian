@@ -5,6 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 
 from ._models import (
     BallResult,
@@ -17,10 +18,43 @@ from ._models import (
 __all__ = ["ball", "gromov_hyperbolicity", "metric_profile"]
 
 
+def _admit_metric_space(space: FiniteMetricSpace) -> None:
+    """Check metric axioms in at most 64 cubed comparisons of 54-bit sums."""
+
+    def reject(reason: str, message: str) -> None:
+        raise OperationDomainValidationError(
+            location=("metric_space", "distances"),
+            code=f"finite_metric_space.{reason}",
+            message=message,
+        )
+
+    distances = space.distances
+    for i in range(space.point_count):
+        if distances[i][i] != 0:
+            reject("distance_diagonal_nonzero", "diagonal distances must be zero")
+        for j in range(space.point_count):
+            if distances[i][j] != distances[j][i]:
+                reject(
+                    "distance_matrix_asymmetric", "distance matrix must be symmetric"
+                )
+            if i != j and distances[i][j] == 0:
+                reject(
+                    "distance_nonpositive_between_distinct_points",
+                    "distinct points must have positive distance",
+                )
+            for k in range(space.point_count):
+                if distances[i][j] > distances[i][k] + distances[k][j]:
+                    reject(
+                        "distance_triangle_inequality_violation",
+                        "distances must satisfy the triangle inequality",
+                    )
+
+
 def metric_profile(
     metric_space: FiniteMetricSpace,
 ) -> MetricProfileResult:
     """Compute diameter, radius, eccentricities, centers, and periphery."""
+    _admit_metric_space(metric_space)
     distances = metric_space.distances
     n = len(distances)
     eccentricities = [max(distances[i]) for i in range(n)]
@@ -42,6 +76,7 @@ def metric_profile(
 
 def ball(metric_space: FiniteMetricSpace, center: int, radius: int) -> BallResult:
     """Return the list of points within radius of center."""
+    _admit_metric_space(metric_space)
     if not 0 <= center < metric_space.point_count:
         raise ValueError("center index must be within the metric space")
     if radius < 0:
@@ -66,6 +101,7 @@ def gromov_hyperbolicity(
     the hyperbolicity is the maximum delta over all quadruples. Since that
     gap can be odd, the result is an exact ``Fraction`` (possibly half-integer).
     """
+    _admit_metric_space(metric_space)
     distances = metric_space.distances
     n = len(distances)
     max_delta = Fraction(0)

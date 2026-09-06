@@ -29,6 +29,7 @@ def compute_matrix_rank(
     matrix: AxisBoundMatrix,
     *,
     execution_checkpoint: Callable[[str], None] | None = None,
+    active_context: Any = None,
 ) -> MatrixRankData:
     """Compute exact rank and pivot labels over the presented finite field.
 
@@ -42,10 +43,12 @@ def compute_matrix_rank(
     rows = len(matrix.row_axis.labels)
     cols = len(matrix.column_axis.labels)
 
+    if active_context is None:
+        active_context = _backend_context(presentation)
+
     if rows == 0 or cols == 0:
         return MatrixRankData(rank=0, pivot_rows=(), pivot_columns=())
 
-    active_context = _backend_context(presentation)
     zero = active_context.zero()
 
     # Convert entries to maintained backend elements once.

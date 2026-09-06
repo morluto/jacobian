@@ -7,13 +7,14 @@ from dataclasses import dataclass
 from math import factorial
 from typing import Any
 
+from jacobian._exact import CanonicalInteger
 from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     bind_request_deadline,
     current_request_execution,
 )
-from jacobian.canonical import parse_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.complex import (
     ComplexAlgebraicValue,
     algebraic_root_separation_denominator_bound,
@@ -40,6 +41,9 @@ from jacobian.math.number_theory.number_fields._embeddings_process import (
 )
 from jacobian.math.number_theory.number_fields._integral_basis import (
     recognized_integral_basis,
+)
+from jacobian.math.number_theory.number_fields._models import (
+    NumberFieldDiscriminantResult,
 )
 from jacobian.math.number_theory.number_fields._real_embedding_order import (
     compare_real_embedding_elements,
@@ -343,9 +347,22 @@ def _integral_basis(
     return integral_basis
 
 
-def discriminant(field: SimpleNumberFieldPresentation) -> str:
+def discriminant(field: SimpleNumberFieldPresentation) -> CanonicalInteger:
     _ring_of_integers, field_discriminant, _alpha, _leading = _integral_basis(field)
-    return str(field_discriminant)
+    return format_canonical_integer(int(field_discriminant))
+
+
+def verify_discriminant(claim: NumberFieldDiscriminantResult) -> bool:
+    """Check a field-discriminant claim under the bounded worker's admission."""
+    from jacobian.math.number_theory.number_fields._discriminant_process import (
+        compute_nf_discriminant,
+    )
+    from jacobian.math.number_theory.number_fields._models import NumberFieldRequest
+
+    return (
+        compute_nf_discriminant(NumberFieldRequest(field=claim.field)).discriminant
+        == claim.discriminant
+    )
 
 
 def ring_of_integers(field: SimpleNumberFieldPresentation) -> list[str]:
@@ -363,4 +380,5 @@ __all__ = [
     "discriminant",
     "embeddings",
     "ring_of_integers",
+    "verify_discriminant",
 ]

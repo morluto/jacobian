@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from functools import cache
+from typing import Literal
 
 import networkx as nx
 import sympy
@@ -16,9 +17,11 @@ from jacobian.math.graphs.polynomials._models import (
     MAX_GRAPH_POLYNOMIAL_VERTICES,
     MAX_MATCHING_EDGES,
     MAX_MATCHING_VERTICES,
+    GraphPolynomialResult,
     MultivariatePolynomialTerm,
     PolynomialTerm,
     TreeIndependencePolynomialAdmissionError,
+    TreeIndependencePolynomialResult,
     _admitted_tree_profile,
     _TreeProfile,
 )
@@ -262,6 +265,65 @@ def matching_polynomial(
     return terms
 
 
+def _graph_polynomial_result(
+    graph: IndexedSimpleUndirectedGraph,
+    kind: Literal["CHROMATIC", "FLOW", "MATCHING", "TUTTE"],
+) -> GraphPolynomialResult:
+    variables: tuple[str, ...]
+    if kind == "TUTTE":
+        variables = ("x", "y")
+        terms = tuple(
+            RationalPolynomialTerm(
+                coefficient=CanonicalRational.from_integer_ratio(term.coefficient, 1),
+                exponents=term.exponents,
+            )
+            for term in reversed(tutte_polynomial(graph))
+        )
+    else:
+        variables = ("flow_x",) if kind == "FLOW" else ("x",)
+        rows = (
+            chromatic_polynomial(graph)
+            if kind == "CHROMATIC"
+            else flow_polynomial(graph)
+            if kind == "FLOW"
+            else matching_polynomial(graph)
+        )
+        terms = tuple(
+            RationalPolynomialTerm(
+                coefficient=CanonicalRational.from_integer_ratio(term.coefficient, 1),
+                exponents=(term.degree,),
+            )
+            for term in reversed(rows)
+        )
+    return GraphPolynomialResult(
+        graph=graph,
+        kind=kind,
+        polynomial=RationalPolynomial(
+            variables=variables, polynomial=SparseRationalPolynomial(terms=terms)
+        ),
+    )
+
+
+def verify_graph_polynomial(claim: GraphPolynomialResult) -> bool:
+    """Check the selected graph polynomial using its existing graph/work admission."""
+    return (
+        _graph_polynomial_result(claim.graph, claim.kind).polynomial == claim.polynomial
+    )
+
+
+def verify_independence_polynomial(claim: TreeIndependencePolynomialResult) -> bool:
+    """Check a tree polynomial and its summaries under the tree DP admission."""
+    coefficients = independence_polynomial_coefficients(claim.graph)
+    actual = TreeIndependencePolynomialResult._from_kernel(
+        graph=claim.graph, coefficients=coefficients
+    )
+    return (
+        actual.polynomial == claim.polynomial
+        and actual.independence_number == claim.independence_number
+        and actual.independent_set_count == claim.independent_set_count
+    )
+
+
 __all__ = [
     "MAX_TREE_POLYNOMIAL_RETAINED_LABEL_CHARACTERS",
     "chromatic_polynomial",
@@ -270,4 +332,6 @@ __all__ = [
     "independence_polynomial_coefficients",
     "matching_polynomial",
     "tutte_polynomial",
+    "verify_graph_polynomial",
+    "verify_independence_polynomial",
 ]

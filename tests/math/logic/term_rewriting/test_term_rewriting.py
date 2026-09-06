@@ -106,7 +106,9 @@ def _validation_error(code: str) -> Iterator[None]:
 
     with pytest.raises((ValidationError, OperationDomainValidationError)) as caught:
         yield
-    assert caught.value.errors()[0]["type"] == code
+    error = caught.value
+    assert isinstance(error, (ValidationError, OperationDomainValidationError))
+    assert error.errors()[0]["type"] == code
 
 
 def _signature(*arities: int) -> RankedSignature:
@@ -373,7 +375,7 @@ class TestUnification:
             UnificationRequest(signature=_signature(2, 0, 0), left=left, right=right)
         )
         assert wire_result.unified
-        assert wire_result.substitution == result
+        assert wire_result.substitution.mapping == result
 
 
 class TestRewriteStep:
@@ -385,7 +387,7 @@ class TestRewriteStep:
         assert len(applications) == 1
         assert applications[0].position == ()
         assert applications[0].rule_index == 0
-        assert applications[0].substitution == {0: _app(2)}
+        assert applications[0].substitution.mapping == {0: _app(2)}
         assert applications[0].term == _app(1, _app(2))
 
     def test_rewrite_in_child(self) -> None:
@@ -541,7 +543,7 @@ class TestCriticalPairs:
         assert pair.candidate_index == 2
         assert pair.outer_variable_renaming == {7: 0}
         assert pair.inner_variable_renaming == {99: 1}
-        assert pair.substitution == {0: _var(1)}
+        assert pair.substitution.mapping == {0: _var(1)}
         assert pair.inner_reduct == _app(0, _var(1))
         assert pair.outer_reduct == _var(1)
         assert (
@@ -591,7 +593,7 @@ class TestCriticalPairs:
         assert tuple(
             (
                 pair.candidate_index,
-                pair.substitution,
+                pair.substitution.mapping,
                 pair.inner_reduct,
                 pair.outer_reduct,
             )
@@ -599,7 +601,7 @@ class TestCriticalPairs:
         ) == tuple(
             (
                 pair.candidate_index,
-                pair.substitution,
+                pair.substitution.mapping,
                 pair.inner_reduct,
                 pair.outer_reduct,
             )
@@ -741,7 +743,7 @@ class TestCriticalPairs:
         assert len(result.profile.candidates) == 15
         assert len(result.profile.pairs) == 15
         assert all(candidate.unifiable for candidate in result.profile.candidates)
-        assert all(pair.substitution for pair in result.profile.pairs)
+        assert all(pair.substitution.mapping for pair in result.profile.pairs)
         assert (
             CriticalPairsResult.model_validate_json(result.model_dump_json()) == result
         )
@@ -951,7 +953,7 @@ class TestCriticalPairs:
             _term_node_count(term)
             for pair in result.profile.pairs
             for term in (
-                *pair.substitution.values(),
+                *pair.substitution.mapping.values(),
                 pair.inner_reduct,
                 pair.outer_reduct,
             )
@@ -970,7 +972,7 @@ class TestCriticalPairs:
                 term_at_position(standardized_outer.lhs, candidate.position),
             )
             assert substitution is not None
-            assert pair.substitution == substitution
+            assert pair.substitution.mapping == substitution
             spliced = _replace_at_position(
                 standardized_outer.lhs, candidate.position, standardized_inner.rhs
             )
@@ -1485,12 +1487,12 @@ class TestDeepTermTraversal:
             UnificationRequest(signature=_signature(2, 1, 0), left=left, right=right)
         )
         assert result.unified
-        assert result.substitution[1] == _chain_unary(1, 15, _app(2))
-        assert _term_depth(result.substitution[1]) == MAX_TERM_DEPTH - 15
-        assert _term_depth(result.substitution[0]) == MAX_TERM_DEPTH
-        assert apply_substitution(left, result.substitution) == apply_substitution(
-            right, result.substitution
-        )
+        assert result.substitution.mapping[1] == _chain_unary(1, 15, _app(2))
+        assert _term_depth(result.substitution.mapping[1]) == MAX_TERM_DEPTH - 15
+        assert _term_depth(result.substitution.mapping[0]) == MAX_TERM_DEPTH
+        assert apply_substitution(
+            left, result.substitution.mapping
+        ) == apply_substitution(right, result.substitution.mapping)
         assert UnificationResult.model_validate_json(result.model_dump_json()) == (
             result
         )

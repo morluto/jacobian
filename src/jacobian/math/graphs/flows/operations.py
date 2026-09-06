@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from itertools import pairwise
 from typing import Any
 
 import networkx as nx
@@ -12,9 +13,12 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.flows._models import (
     CostedFlowGraph,
     EdgeDisjointPathsGraph,
+    EdgeDisjointPathsResult,
     FlowEdgeResult,
     FlowEdgeValue,
     FlowGraph,
+    MaxFlowResult,
+    MinCutResult,
     _bounded_denominator_scale,
 )
 
@@ -23,6 +27,9 @@ __all__ = [
     "max_flow",
     "min_cost_flow",
     "min_cut",
+    "verify_edge_disjoint_paths",
+    "verify_max_flow",
+    "verify_min_cut",
 ]
 
 
@@ -180,3 +187,86 @@ def min_cost_flow(
     )
     total_cost = Fraction(int(flow_cost_int), flow_scale * cost_scale)
     return _rational(total_cost), True, flow_edges
+
+
+def verify_max_flow(claim: MaxFlowResult) -> bool:
+    """Check capacities, conservation and absence of residual augmenting paths.
+
+    The network has at most 64 vertices and 512 edges; no solver is rerun.
+    """
+    _admit_terminals(claim.graph, claim.source, claim.sink)
+    flows = {
+        (edge.source, edge.target): edge.flow.as_fraction() for edge in claim.flow_edges
+    }
+    balance = [Fraction() for _ in range(claim.graph.vertex_count)]
+    residual: list[set[int]] = [set() for _ in balance]
+    for edge in claim.graph.edges:
+        u, v = edge.source, edge.target
+        amount = flows.get((u, v), Fraction())
+        capacity = edge.capacity.as_fraction()
+        if not 0 <= amount <= capacity:
+            return False
+        balance[u] -= amount
+        balance[v] += amount
+        if amount < capacity:
+            residual[u].add(v)
+        if amount > 0:
+            residual[v].add(u)
+    value = claim.flow_value.as_fraction()
+    if any(
+        amount
+        != (-value if vertex == claim.source else value if vertex == claim.sink else 0)
+        for vertex, amount in enumerate(balance)
+    ):
+        return False
+    reached = {claim.source}
+    frontier = [claim.source]
+    while frontier:
+        for vertex in residual[frontier.pop()]:
+            if vertex not in reached:
+                reached.add(vertex)
+                frontier.append(vertex)
+    return claim.sink not in reached
+
+
+def verify_min_cut(claim: MinCutResult) -> bool:
+    """Check cut capacity and optimality against the admitted source network."""
+    _admit_terminals(claim.graph, claim.source, claim.sink)
+    left, right = set(claim.reachable), set(claim.unreachable)
+    if claim.source not in left or claim.sink not in right:
+        return False
+    capacity = sum(
+        (
+            edge.capacity.as_fraction()
+            for edge in claim.graph.edges
+            if edge.source in left and edge.target in right
+        ),
+        Fraction(),
+    )
+    return (
+        capacity == claim.cut_value.as_fraction()
+        and min_cut(claim.graph, claim.source, claim.sink)[0] == claim.cut_value
+    )
+
+
+def verify_edge_disjoint_paths(claim: EdgeDisjointPathsResult) -> bool:
+    """Check path witnesses and the maximum cardinality in the bounded graph."""
+    _admit_terminals(claim.graph, claim.source, claim.sink)
+    edges = set(claim.graph.edges)
+    used: set[tuple[int, int]] = set()
+    if claim.path_count != len(claim.paths):
+        return False
+    for path in claim.paths:
+        if (
+            path[0] != claim.source
+            or path[-1] != claim.sink
+            or len(set(path)) != len(path)
+        ):
+            return False
+        for edge in pairwise(path):
+            if edge not in edges or edge in used:
+                return False
+            used.add(edge)
+    return claim.path_count == len(
+        edge_disjoint_paths(claim.graph, claim.source, claim.sink)
+    )

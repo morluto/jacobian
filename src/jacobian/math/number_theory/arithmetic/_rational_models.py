@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from fractions import Fraction
 from typing import Self
 
 from pydantic import Field, model_validator
@@ -93,7 +92,7 @@ class RationalContinuedFractionResult(StrictModel):
     )
 
     @model_validator(mode="after")
-    def require_canonical_reconstruction(self) -> Self:
+    def require_canonical_terms(self) -> Self:
         from jacobian.canonical import parse_canonical_integer
 
         quotients = [parse_canonical_integer(term) for term in self.terms]
@@ -106,14 +105,6 @@ class RationalContinuedFractionResult(StrictModel):
             raise _validation_error(
                 "continued_fraction_trailing_one",
                 "a multi-term simple continued fraction must not end in 1",
-            )
-        reconstructed = Fraction(quotients[-1])
-        for quotient in reversed(quotients[:-1]):
-            reconstructed = quotient + Fraction(1, reconstructed)
-        if reconstructed != self.value.as_fraction():
-            raise _validation_error(
-                "continued_fraction_reconstruction",
-                "continued fraction terms must reconstruct the retained rational",
             )
         return self
 

@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.number_theory.arithmetic import verify_continued_fraction
 from jacobian.math.number_theory.arithmetic._rational_models import (
     MAX_RATIONAL_CONTINUED_FRACTION_TERMS,
     RationalContinuedFractionResult,
@@ -38,6 +39,9 @@ def test_producer_emits_canonical_expansions(
     assert result.terms == expected
     assert result.value == CanonicalRational(num=num, den=den)
     assert RationalContinuedFractionResult.model_validate(result.model_dump()) == result
+    assert verify_continued_fraction(
+        RationalContinuedFractionResult.model_validate_json(result.model_dump_json())
+    )
 
 
 def test_two_representation_boundary_is_canonical() -> None:
@@ -68,16 +72,11 @@ def test_result_rejects_nonpositive_tail_term() -> None:
     )
 
 
-def test_result_rejects_terms_for_a_different_rational() -> None:
-    with pytest.raises(ValidationError) as exc_info:
-        RationalContinuedFractionResult(
-            value=CanonicalRational(num="7", den="3"),
-            terms=("2", "2"),
-        )
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "arithmetic.continued_fraction_reconstruction"
+def test_consumer_rejects_terms_for_a_different_rational() -> None:
+    claim = RationalContinuedFractionResult.model_validate(
+        {"value": {"num": "7", "den": "3"}, "terms": ["2", "2"]}
     )
+    assert not verify_continued_fraction(claim)
 
 
 def test_producer_rejects_expansion_beyond_result_term_bound() -> None:

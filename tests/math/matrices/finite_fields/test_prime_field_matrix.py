@@ -7,6 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.matrices.finite_fields import verify_rank, verify_rref
 from jacobian.math.matrices.finite_fields._models import (
     PrimeFieldMatrixRankResult,
     PrimeFieldMatrixRequest,
@@ -19,6 +20,52 @@ from jacobian.math.matrices.finite_fields._tools import (
     compute_rref,
 )
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
+
+
+@pytest.mark.parametrize(
+    ("entries", "columns"),
+    [((), 3), (((), ()), 0), ((), 0), (((0,),), 1), (((1, 2), (2, 4)), 2)],
+)
+def test_serialized_rank_and_rref_claims(
+    entries: tuple[tuple[int, ...], ...], columns: int
+) -> None:
+    request = PrimeFieldMatrixRequest(
+        matrix=PrimeFieldMatrix(prime=5, entries=entries, columns=columns)
+    )
+    rank_claim = PrimeFieldMatrixRankResult.model_validate_json(
+        compute_rank(request).model_dump_json()
+    )
+    reduced_claim = PrimeFieldRrefResult.model_validate_json(
+        compute_rref(request).model_dump_json()
+    )
+    assert verify_rank(rank_claim)
+    assert verify_rref(reduced_claim)
+
+
+def test_forged_rank_and_rref_claims_are_checked_explicitly() -> None:
+    request = pfm(prime=2, entries=((0, 0),))
+    rank_payload = compute_rank(request).model_dump(mode="json")
+    rank_payload["rank"] = 1
+    assert not verify_rank(PrimeFieldMatrixRankResult.model_validate(rank_payload))
+
+    payload = compute_rref(request).model_dump(mode="json")
+    payload.update(rank=1, pivot_columns=[0])
+    payload["rref_matrix"]["entries"] = [[1, 0]]
+    assert not verify_rref(PrimeFieldRrefResult.model_validate(payload))
+
+    source = pfm(prime=2, entries=((1, 0),))
+    payload = compute_rref(source).model_dump(mode="json")
+    payload["pivot_columns"] = [1]
+    assert not verify_rref(PrimeFieldRrefResult.model_validate(payload))
+
+
+def test_rank_and_rref_decoding_does_not_admit_composite_field() -> None:
+    request = pfm(prime=4, entries=((0,),))
+    claim = PrimeFieldMatrixRankResult.model_validate_json(
+        PrimeFieldMatrixRankResult(prime=4, source=request, rank=0).model_dump_json()
+    )
+    with pytest.raises(OperationDomainValidationError):
+        verify_rank(claim)
 
 
 def pfm(prime: int, entries: tuple[tuple[int, ...], ...]) -> PrimeFieldMatrixRequest:

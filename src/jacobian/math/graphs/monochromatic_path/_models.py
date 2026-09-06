@@ -1,8 +1,8 @@
 """Typed contracts for the monochromatic path hypergraph operation."""
 
-from typing import Annotated
+from typing import Annotated, Self
 
-from pydantic import WithJsonSchema
+from pydantic import Field, WithJsonSchema, model_validator
 from pydantic.json_schema import JsonSchemaValue
 
 from jacobian._models import StrictModel
@@ -49,10 +49,29 @@ class MonochromaticPathRequest(StrictModel):
 
 
 class MonochromaticPathResult(StrictModel):
-    """The monochromatic path hypergraphs of a coloured graph."""
+    """One source-bound colour-indexed family on the graph's vertex axis."""
 
     graph: ColoredUndirectedGraph
-    colour_to_hypergraph: dict[str, FiniteHypergraph]
+    colours: tuple[str, ...] = Field(max_length=MAX_VERTICES * (MAX_VERTICES - 1) // 2)
+    hypergraphs: tuple[FiniteHypergraph, ...] = Field(
+        max_length=MAX_VERTICES * (MAX_VERTICES - 1) // 2
+    )
+
+    @model_validator(mode="after")
+    def require_source_axes(self) -> Self:
+        expected = tuple(sorted(set(self.graph.edge_colors))) or ("uncolored",)
+        if self.colours != expected or len(self.hypergraphs) != len(self.colours):
+            raise ValueError("family must use exactly the ordered source colour axis")
+        if any(
+            hypergraph.vertices != self.graph.graph.vertices
+            for hypergraph in self.hypergraphs
+        ):
+            raise ValueError("every hypergraph must retain the source vertex axis")
+        return self
+
+    @property
+    def colour_to_hypergraph(self) -> dict[str, FiniteHypergraph]:
+        return dict(zip(self.colours, self.hypergraphs, strict=True))
 
 
 __all__ = [

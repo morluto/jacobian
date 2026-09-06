@@ -115,20 +115,6 @@ class OrthogonalPolynomialFamily(StrictModel):
                 raise _validation_error(
                     "value_invariant", f"p_{term.degree} must be monic"
                 )
-        # Definiteness classifications are derived from the retained norms,
-        # never free labels: quasi-definite means every norm nonzero, and
-        # positive-definite means every norm positive.
-        norms = [term.squared_norm.as_fraction() for term in self.polynomials]
-        if self.is_quasi_definite != all(norm != 0 for norm in norms):
-            raise _validation_error(
-                "value_invariant",
-                "is_quasi_definite must equal every squared norm being nonzero",
-            )
-        if self.is_positive_definite != all(norm > 0 for norm in norms):
-            raise _validation_error(
-                "value_invariant",
-                "is_positive_definite must equal every squared norm being positive",
-            )
         return self
 
     @classmethod

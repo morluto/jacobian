@@ -11,33 +11,26 @@ from jacobian.math.graphs.polynomials._models import (
     GraphPolynomialRequest,
     GraphPolynomialResult,
     MatchingPolynomialRequest,
-    SparseMultivariatePolynomial,
     TreeIndependencePolynomialAdmissionError,
     TreeIndependencePolynomialRequest,
     TreeIndependencePolynomialResult,
 )
 from jacobian.math.graphs.polynomials.operations import (
-    chromatic_polynomial,
-    flow_polynomial,
+    _graph_polynomial_result,
     independence_polynomial_coefficients,
-    matching_polynomial,
-    tutte_polynomial,
 )
 
 
-def _run_tutte(request: GraphPolynomialRequest) -> SparseMultivariatePolynomial:
-    return SparseMultivariatePolynomial(
-        variables=("x", "y"),
-        terms=tutte_polynomial(request.graph),
-    )
+def _run_tutte(request: GraphPolynomialRequest) -> GraphPolynomialResult:
+    return _graph_polynomial_result(request.graph, "TUTTE")
 
 
 def _run_chromatic(request: GraphPolynomialRequest) -> GraphPolynomialResult:
-    return GraphPolynomialResult(terms=chromatic_polynomial(request.graph))
+    return _graph_polynomial_result(request.graph, "CHROMATIC")
 
 
 def _run_flow(request: GraphPolynomialRequest) -> GraphPolynomialResult:
-    return GraphPolynomialResult(terms=flow_polynomial(request.graph))
+    return _graph_polynomial_result(request.graph, "FLOW")
 
 
 def _run_independence(
@@ -58,7 +51,7 @@ def _run_independence(
 
 
 def _run_matching(request: MatchingPolynomialRequest) -> GraphPolynomialResult:
-    return GraphPolynomialResult(terms=matching_polynomial(request.graph))
+    return _graph_polynomial_result(request.graph, "MATCHING")
 
 
 _CYCLE_GRAPH_EXAMPLE: dict[str, Any] = {
@@ -99,7 +92,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "graph using NetworkX, with structural exponent pairs on the ordered "
         "variable axis (x, y).",
         request_type=GraphPolynomialRequest,
-        result_type=SparseMultivariatePolynomial,
+        result_type=GraphPolynomialResult,
         run=_run_tutte,
         tags=("graph", "polynomial", "tutte", "exact"),
         examples=(

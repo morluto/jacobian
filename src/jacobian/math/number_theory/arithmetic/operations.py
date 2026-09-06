@@ -23,6 +23,9 @@ from jacobian.math.number_theory.arithmetic._multiplicative_forms import (
     PrimeExponentRow,
     SquarefreeDecompositionResult,
 )
+from jacobian.math.number_theory.arithmetic._rational_models import (
+    RationalContinuedFractionResult,
+)
 from jacobian.math.number_theory.arithmetic.values import IntegerValue
 
 __all__ = [
@@ -67,6 +70,7 @@ __all__ = [
     "sign",
     "squarefree_decomposition",
     "sum_rationals",
+    "verify_continued_fraction",
 ]
 
 
@@ -638,6 +642,24 @@ def ceiling_rational(value: Fraction | int | IntegerValue) -> int:
     """Return the least integer not below an exact rational."""
 
     return ceil(_as_rational(value))
+
+
+def verify_continued_fraction(claim: RationalContinuedFractionResult) -> bool:
+    """Check the source expansion with at most the declared number of divisions.
+
+    Euclidean remainders shrink from the bounded source integers. Comparing
+    canonical quotients avoids expansion of large caller-authored terms.
+    """
+    numerator = parse_canonical_integer(claim.value.num)
+    denominator = parse_canonical_integer(claim.value.den)
+    for term in claim.terms:
+        if denominator == 0:
+            return False
+        quotient, remainder = divmod(numerator, denominator)
+        if quotient != parse_canonical_integer(term):
+            return False
+        numerator, denominator = denominator, remainder
+    return denominator == 0
 
 
 def continued_fraction(

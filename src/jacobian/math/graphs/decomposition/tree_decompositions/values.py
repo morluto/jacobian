@@ -10,8 +10,8 @@ A *tree decomposition* of a finite simple undirected graph ``G`` is a pair
 4. for each source vertex, the tree nodes whose bags contain it form a
    connected subtree (the *connectedness* axiom).
 
-These are value-construction invariants. They are **not** exposed as a
-public ``.check`` operation.
+These laws are admitted by consuming operations; value decoding retains only
+structural source and bag axes.
 """
 
 from __future__ import annotations
@@ -163,17 +163,7 @@ class TreeDecomposition(StrictModel):
             raise PydanticCustomError(
                 "graph.tree_edges_must_be_unique", "tree edges must be unique"
             )
-        index_of = {label: i for i, label in enumerate(self.tree_nodes)}
-        int_edges = [(index_of[a], index_of[b]) for a, b in edge_pairs]
-        if not _is_tree(len(self.tree_nodes), int_edges):
-            raise PydanticCustomError(
-                "graph.tree_edges_do_not_form_a_tree", "tree edges do not form a tree"
-            )
-        vertex_set = set(self.graph.vertices)
-        _validate_bags(self.bags, vertex_set)
-        _check_vertex_coverage(self.bags, vertex_set)
-        _check_edge_coverage(self.graph, self.bags)
-        _check_connectedness(self.graph, self.bags, int_edges, len(self.tree_nodes))
+        _validate_bags(self.bags, set(self.graph.vertices))
         return self
 
 

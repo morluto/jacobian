@@ -13,6 +13,9 @@ from jacobian.math.lattices.operations import (
     compute_sublattice_index,
     hermite_normal_form,
     reduce_basis,
+    verify_discriminant_group,
+    verify_rank_gram,
+    verify_sublattice_index,
 )
 
 __all__ = [
@@ -28,4 +31,7 @@ __all__ = [
     "compute_sublattice_index",
     "hermite_normal_form",
     "reduce_basis",
+    "verify_discriminant_group",
+    "verify_rank_gram",
+    "verify_sublattice_index",
 ]

@@ -114,8 +114,8 @@ def test_center_retains_parent_and_rejects_noncanonical_residue() -> None:
     assert output["algebra"] == algebra
     parsed = CenterResult.model_validate(output)
     assert parsed.algebra.field_order == 3
-    output["center_basis"] = [[3]]
-    with pytest.raises(ValueError, match="canonical residues"):
+    output["basis_matrix"]["entries"] = [[3]]
+    with pytest.raises(ValueError, match="canonical"):
         CenterResult.model_validate(output)
 
 

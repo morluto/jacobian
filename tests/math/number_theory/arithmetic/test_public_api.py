@@ -205,6 +205,7 @@ def test_exact_public_api_symbols() -> None:
         "reciprocal",
         "sign",
         "sum_rationals",
+        "verify_continued_fraction",
     )
     assert tuple(arithmetic.__all__) == expected
     assert len(arithmetic.__all__) == len(set(arithmetic.__all__))

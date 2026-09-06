@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from jacobian.catalog.models import OperationDomainValidationError
+
 from ._models import KolmogorovQuotientResult
 from .values import FiniteTopologicalMap, FiniteTopologicalSpace
 
@@ -14,7 +16,26 @@ __all__ = [
     "kolmogorov_quotient",
     "minimal_neighbourhoods",
     "specialization_preorder",
+    "verify_kolmogorov_quotient",
 ]
+
+
+def _admit_space(space: FiniteTopologicalSpace) -> None:
+    """Establish the preorder laws within the 64-point carrier."""
+    rows = tuple(set(row) for row in space.preorder)
+    for i, row in enumerate(rows):
+        if i not in row:
+            raise OperationDomainValidationError(
+                location=("space",),
+                code="finite_topology_space.preorder_not_reflexive",
+                message="preorder must be reflexive",
+            )
+        if any(not rows[j] <= row for j in row):
+            raise OperationDomainValidationError(
+                location=("space",),
+                code="finite_topology_space.preorder_not_transitive",
+                message="preorder must be transitive",
+            )
 
 
 def from_preorder(
@@ -22,13 +43,16 @@ def from_preorder(
     preorder: tuple[tuple[int, ...], ...],
 ) -> FiniteTopologicalSpace:
     """Construct a finite topological space from a preorder."""
-    return FiniteTopologicalSpace(points=points, preorder=preorder)
+    space = FiniteTopologicalSpace(points=points, preorder=preorder)
+    _admit_space(space)
+    return space
 
 
 def specialization_preorder(
     space: FiniteTopologicalSpace,
 ) -> tuple[tuple[int, ...], ...]:
     """Return the specialization preorder rows."""
+    _admit_space(space)
     return space.preorder
 
 
@@ -41,6 +65,13 @@ def minimal_neighbourhoods(
     closure of {y}). The minimal open neighbourhood of x is the up-set
     ``{y : x in preorder[y]}``.
     """
+    _admit_space(space)
+    return _minimal_neighbourhoods(space)
+
+
+def _minimal_neighbourhoods(
+    space: FiniteTopologicalSpace,
+) -> tuple[tuple[int, ...], ...]:
     count = len(space.points)
     return tuple(
         tuple(sorted(y for y in range(count) if x in space.preorder[y]))
@@ -50,7 +81,12 @@ def minimal_neighbourhoods(
 
 def interior(space: FiniteTopologicalSpace, subset: frozenset[int]) -> frozenset[int]:
     """Return the interior of a subset (largest open set contained in it)."""
-    neighbourhoods = minimal_neighbourhoods(space)
+    _admit_space(space)
+    return _interior(space, subset)
+
+
+def _interior(space: FiniteTopologicalSpace, subset: frozenset[int]) -> frozenset[int]:
+    neighbourhoods = _minimal_neighbourhoods(space)
     result: set[int] = set()
     for i in range(len(space.points)):
         if set(neighbourhoods[i]).issubset(subset):
@@ -60,6 +96,11 @@ def interior(space: FiniteTopologicalSpace, subset: frozenset[int]) -> frozenset
 
 def closure(space: FiniteTopologicalSpace, subset: frozenset[int]) -> frozenset[int]:
     """Return the closure of a subset (smallest closed set containing it)."""
+    _admit_space(space)
+    return _closure(space, subset)
+
+
+def _closure(space: FiniteTopologicalSpace, subset: frozenset[int]) -> frozenset[int]:
     result: set[int] = set()
     for i in subset:
         if not 0 <= i < len(space.points):
@@ -70,8 +111,9 @@ def closure(space: FiniteTopologicalSpace, subset: frozenset[int]) -> frozenset[
 
 def boundary(space: FiniteTopologicalSpace, subset: frozenset[int]) -> frozenset[int]:
     """Return the boundary of a subset: closure minus interior."""
-    cl = closure(space, subset)
-    inter = interior(space, subset)
+    _admit_space(space)
+    cl = _closure(space, subset)
+    inter = _interior(space, subset)
     return frozenset(cl - inter)
 
 
@@ -85,6 +127,8 @@ def continuous_check(map_: FiniteTopologicalMap) -> bool:
     """
     src = map_.source
     tgt = map_.target
+    _admit_space(src)
+    _admit_space(tgt)
     for i in range(len(src.points)):
         fi = map_.point_map[i]
         for j in src.preorder[i]:
@@ -96,14 +140,12 @@ def continuous_check(map_: FiniteTopologicalMap) -> bool:
 def kolmogorov_quotient(space: FiniteTopologicalSpace) -> KolmogorovQuotientResult:
     """Return the T0 (Kolmogorov) quotient: identify points with the same
     minimal open neighbourhood."""
+    _admit_space(space)
     nbhd_to_class: dict[tuple[int, ...], list[int]] = {}
     for i, row in enumerate(space.preorder):
         key = tuple(sorted(row))
         nbhd_to_class.setdefault(key, []).append(i)
     classes = list(nbhd_to_class.values())
-    quotient_points = tuple(
-        tuple(space.points[idx] for idx in sorted(cls)) for cls in classes
-    )
     class_map: dict[int, int] = {}
     for class_idx, cls in enumerate(classes):
         for idx in cls:
@@ -115,8 +157,19 @@ def kolmogorov_quotient(space: FiniteTopologicalSpace) -> KolmogorovQuotientResu
         for j in space.preorder[representative]:
             row_set.add(class_map[j])
         quotient_preorder.append(tuple(sorted(row_set)))
-    return KolmogorovQuotientResult(
-        quotient_points=quotient_points,
-        quotient_preorder=tuple(quotient_preorder),
-        class_map=tuple(class_map[index] for index in range(len(space.points))),
+    target = FiniteTopologicalSpace(
+        points=tuple(space.points[cls[0]] for cls in classes),
+        preorder=tuple(quotient_preorder),
     )
+    return KolmogorovQuotientResult(
+        quotient_map=FiniteTopologicalMap(
+            source=space,
+            target=target,
+            point_map=tuple(class_map[index] for index in range(len(space.points))),
+        )
+    )
+
+
+def verify_kolmogorov_quotient(claim: KolmogorovQuotientResult) -> bool:
+    """Check the bounded quotient relation and its canonical representative labels."""
+    return kolmogorov_quotient(claim.quotient_map.source) == claim

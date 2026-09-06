@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Annotated, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -41,17 +41,12 @@ class FiniteProbabilitySpace(StrictModel):
             )
         if len(set(self.samples)) != len(self.samples):
             raise _validation_error("sample_duplicate", "sample labels must be unique")
-        total = sum((mass.as_fraction() for mass in self.masses), start=0)
         for mass in self.masses:
             require_bounded_rational(
                 mass,
                 max_digits=256,
                 label="probability mass",
             )
-            if mass.as_fraction() <= 0:
-                raise _validation_error("mass_nonpositive", "masses must be positive")
-        if total != 1:
-            raise _validation_error("mass_sum_invalid", "masses must sum to exactly 1")
         return self
 
 
@@ -86,33 +81,19 @@ class FiniteSigmaAlgebra(StrictModel):
     """
 
     space: FiniteProbabilitySpace
-    blocks: tuple[tuple[str, ...], ...] = Field(min_length=1)
+    blocks: tuple[
+        Annotated[tuple[str, ...], Field(min_length=1, max_length=MAX_SAMPLES)], ...
+    ] = Field(min_length=1, max_length=MAX_SAMPLES)
 
     @model_validator(mode="after")
-    def require_valid_partition(self) -> Self:
-        all_samples = set()
-        seen: set[str] = set()
+    def require_source_membership(self) -> Self:
         for block in self.blocks:
-            if not block:
-                raise _validation_error(
-                    "partition_block_empty", "partition blocks must be nonempty"
-                )
             for s in block:
-                if s in seen:
-                    raise _validation_error(
-                        "partition_blocks_overlap", "partition blocks must be disjoint"
-                    )
                 if s not in self.space.samples:
                     raise _validation_error(
                         "partition_element_outside_space",
                         "block element not in sample space",
                     )
-                seen.add(s)
-                all_samples.add(s)
-        if all_samples != set(self.space.samples):
-            raise _validation_error(
-                "partition_incomplete", "blocks must partition the entire sample space"
-            )
         return self
 
 

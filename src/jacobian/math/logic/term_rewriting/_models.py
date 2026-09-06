@@ -70,11 +70,11 @@ class MatchingResult(MatchingRequest):
     """Result of one-way matching."""
 
     matched: bool
-    substitution: dict[int, Term] = Field(default_factory=dict)
+    substitution: Substitution = Field(default_factory=Substitution)
 
     @model_validator(mode="after")
     def bind_matching(self) -> Self:
-        if not self.matched and self.substitution:
+        if not self.matched and self.substitution.mapping:
             raise _validation_error(
                 "matching_result", "an unmatched result cannot include a substitution"
             )
@@ -95,7 +95,7 @@ class MatchingResult(MatchingRequest):
             pattern=pattern,
             subject=subject,
             matched=matched,
-            substitution=substitution,
+            substitution=Substitution(mapping=substitution),
         )
 
 
@@ -111,11 +111,11 @@ class UnificationResult(UnificationRequest):
     """Result of unification."""
 
     unified: bool
-    substitution: dict[int, Term] = Field(default_factory=dict)
+    substitution: Substitution = Field(default_factory=Substitution)
 
     @model_validator(mode="after")
     def require_exact_unifier(self) -> Self:
-        if not self.unified and self.substitution:
+        if not self.unified and self.substitution.mapping:
             raise _validation_error(
                 "failed_unification", "failed unification must not claim a substitution"
             )
@@ -136,7 +136,7 @@ class UnificationResult(UnificationRequest):
             left=left,
             right=right,
             unified=unified,
-            substitution=substitution,
+            substitution=Substitution(mapping=substitution),
         )
 
 

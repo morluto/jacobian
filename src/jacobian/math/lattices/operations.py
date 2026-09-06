@@ -50,6 +50,7 @@ from jacobian.math.lattices._models import (
     OrthogonalSumResult,
     RankGramResult,
     SaturationResult,
+    SublatticeIndexRequest,
     SublatticeIndexResult,
 )
 from jacobian.math.matrices.values import (
@@ -72,6 +73,9 @@ __all__ = [
     "compute_sublattice_index",
     "hermite_normal_form",
     "reduce_basis",
+    "verify_discriminant_group",
+    "verify_rank_gram",
+    "verify_sublattice_index",
 ]
 
 
@@ -177,12 +181,10 @@ def compute_rank_gram(lattice: IntegerLattice) -> RankGramResult:
     """Compute exact rank, Gram matrix, and squared covolume."""
 
     basis = _admit_lattice(lattice)
-    rank = len(basis)
     gram = _gram_matrix(basis)
     det = integer_determinant(gram)
     return RankGramResult(
-        rank=rank,
-        ambient_dimension=lattice.ambient_dimension,
+        lattice=lattice,
         gram_matrix=_integer_matrix(gram),
         squared_covolume=format_canonical_integer(det),
         covolume_rational=isqrt(det) ** 2 == det,
@@ -194,6 +196,7 @@ def compute_canonical_basis(lattice: IntegerLattice) -> CanonicalBasisResult:
 
     hnf, transform = _hermite_basis(_admit_lattice(lattice))
     return CanonicalBasisResult(
+        lattice=lattice,
         canonical_basis=_integer_matrix(hnf),
         transformation=_integer_matrix(transform),
         rank=integer_rank(hnf),
@@ -220,6 +223,7 @@ def compute_dual(lattice: IntegerLattice) -> DualResult:
                 row.append(Fraction(int(entry), 1))
         dual_gram_fractions.append(row)
     return DualResult(
+        lattice=lattice,
         dual_basis=rational_matrix_from_fractions(dual),
         dual_gram=rational_matrix_from_fractions(dual_gram_fractions),
     )
@@ -230,6 +234,7 @@ def compute_saturation(lattice: IntegerLattice) -> SaturationResult:
 
     saturated, inclusion, index = _saturate_lattice(_admit_lattice(lattice))
     return SaturationResult(
+        lattice=lattice,
         saturated_basis=_integer_matrix(saturated),
         inclusion_transform=_integer_matrix(inclusion),
         saturation_index=index,
@@ -281,6 +286,9 @@ def compute_sublattice_index(
         parent_rank=len(parent.basis.entries),
     )
     return SublatticeIndexResult(
+        inclusion=SublatticeIndexRequest(
+            sublattice=sublattice, parent=parent, embedding=embedding
+        ),
         index=index,
         invariant_factors=tuple(format_canonical_integer(f) for f in factors),
         free_rank=free_rank,
@@ -292,6 +300,7 @@ def compute_discriminant_group(lattice: IntegerLattice) -> DiscriminantGroupResu
 
     order, factors = _discriminant_group(_admit_lattice(lattice))
     return DiscriminantGroupResult(
+        lattice=lattice,
         discriminant_order=order,
         invariant_factors=tuple(format_canonical_integer(f) for f in factors),
     )
@@ -304,6 +313,7 @@ def compute_orthogonal_complement(
 
     complement = _orthogonal_complement(_admit_lattice(lattice))
     return OrthogonalComplementResult(
+        lattice=lattice,
         complement_basis=rational_vector_space_basis_from_fractions(
             complement,
             ambient_dimension=lattice.ambient_dimension,
@@ -320,6 +330,8 @@ def compute_direct_sum(
     first_basis, second_basis = _admit_lattice_sum(first, second)
     result = _direct_sum(first_basis, second_basis)
     return DirectSumResult(
+        first=first,
+        second=second,
         direct_sum_basis=_integer_matrix(result),
         ambient_dimension=first.ambient_dimension + second.ambient_dimension,
     )
@@ -333,6 +345,27 @@ def compute_orthogonal_sum(
     first_basis, second_basis = _admit_lattice_sum(first, second)
     result = _orthogonal_sum(first_basis, second_basis)
     return OrthogonalSumResult(
+        first=first,
+        second=second,
         orthogonal_sum_basis=_integer_matrix(result),
         ambient_dimension=first.ambient_dimension + second.ambient_dimension,
     )
+
+
+def verify_rank_gram(claim: RankGramResult) -> bool:
+    """Check Gram entries, covolume and square claim after lattice admission."""
+    return compute_rank_gram(claim.lattice) == claim
+
+
+def verify_sublattice_index(claim: SublatticeIndexResult) -> bool:
+    """Check the retained inclusion and its bounded Smith quotient invariants."""
+    source = claim.inclusion
+    return (
+        compute_sublattice_index(source.sublattice, source.parent, source.embedding)
+        == claim
+    )
+
+
+def verify_discriminant_group(claim: DiscriminantGroupResult) -> bool:
+    """Check discriminant order and factors against the retained lattice."""
+    return compute_discriminant_group(claim.lattice) == claim

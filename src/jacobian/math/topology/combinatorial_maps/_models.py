@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.matrices.values import SparseRationalMatrix
 from jacobian.math.topology.combinatorial_maps.values import (
     FiniteCombinatorialMap,
 )
@@ -118,16 +119,61 @@ class OrientationReverseRequest(StrictModel):
     map: FiniteCombinatorialMap
 
 
+class CombinatorialMapBijection(StrictModel):
+    """A bijection of explicitly declared dart or face axes of two maps."""
+
+    source: FiniteCombinatorialMap
+    target: FiniteCombinatorialMap
+    kind: Literal["DART", "FACE"]
+    source_axis: tuple[int, ...] = Field(max_length=1024)
+    target_axis: tuple[int, ...] = Field(max_length=1024)
+    images: tuple[int, ...] = Field(max_length=1024)
+
+    @model_validator(mode="after")
+    def require_bijection_shape(self) -> Self:
+        size = len(self.source_axis)
+        if (
+            self.source_axis != tuple(range(size))
+            or self.target_axis != tuple(range(size))
+            or tuple(sorted(self.images)) != self.target_axis
+        ):
+            raise _validation_error(
+                "bijection_axis", "images must biject the declared canonical axes"
+            )
+        if self.kind == "DART" and (
+            size != len(self.source.darts) or size != len(self.target.darts)
+        ):
+            raise _validation_error(
+                "bijection_darts",
+                "dart axes must equal their source and target map axes",
+            )
+        return self
+
+
 class OrientationReverseResult(StrictModel):
-    """The orientation-reversed map and the induced face bijection.
+    """The reversal relation, with a source-target face-axis bijection."""
 
-    The retained map binds the carrier. The exact reversal and induced face
-    bijection are established by the defining operation.
-    """
+    bijection: CombinatorialMapBijection
 
-    map: FiniteCombinatorialMap
-    reversed_map: FiniteCombinatorialMap
-    face_bijection: dict[int, int]
+    @model_validator(mode="after")
+    def require_face_kind(self) -> Self:
+        if self.bijection.kind != "FACE":
+            raise _validation_error(
+                "bijection_kind", "orientation reversal carries a face bijection"
+            )
+        return self
+
+    @property
+    def map(self) -> FiniteCombinatorialMap:
+        return self.bijection.source
+
+    @property
+    def reversed_map(self) -> FiniteCombinatorialMap:
+        return self.bijection.target
+
+    @property
+    def face_bijection(self) -> dict[int, int]:
+        return dict(zip(self.bijection.source_axis, self.bijection.images, strict=True))
 
 
 class ConnectedComponentsRequest(StrictModel):
@@ -151,10 +197,25 @@ class DualRequest(StrictModel):
 
 
 class DualResult(StrictModel):
-    """The dual combinatorial map and the primal-dart -> dual-dart bijection."""
+    """A source-target dart-axis bijection for the embedded dual."""
 
-    dual: FiniteCombinatorialMap
-    primal_to_dual: dict[int, int]
+    bijection: CombinatorialMapBijection
+
+    @model_validator(mode="after")
+    def require_dart_kind(self) -> Self:
+        if self.bijection.kind != "DART":
+            raise _validation_error(
+                "bijection_kind", "duality carries a dart bijection"
+            )
+        return self
+
+    @property
+    def dual(self) -> FiniteCombinatorialMap:
+        return self.bijection.target
+
+    @property
+    def primal_to_dual(self) -> dict[int, int]:
+        return dict(zip(self.bijection.source_axis, self.bijection.images, strict=True))
 
 
 class VertexFaceIncidenceRequest(StrictModel):
@@ -164,17 +225,37 @@ class VertexFaceIncidenceRequest(StrictModel):
 
 
 class VertexFaceIncidenceResult(StrictModel):
-    """Per-(vertex, face) multiplicity and per-vertex face set.
+    """Exact sparse multiplicities on source vertices by the retained face axis."""
 
-    ``multiplicity`` maps each vertex to its per-face occurrence counts;
-    the nested shape keeps the wire representation JSON-safe.
-    """
+    source: FacesResult
+    multiplicity: SparseRationalMatrix
 
-    multiplicity: dict[int, dict[int, int]]
-    boolean_incidence: dict[int, tuple[int, ...]]
+    @model_validator(mode="after")
+    def require_incidence_axes(self) -> Self:
+        if (
+            self.multiplicity.row_count != self.source.map.vertex_count
+            or self.multiplicity.column_count != len(self.source.face_walks)
+        ):
+            raise _validation_error(
+                "incidence_shape", "incidence must use the source vertex and face axes"
+            )
+        return self
+
+    @property
+    def boolean_incidence(self) -> dict[int, tuple[int, ...]]:
+        """Project nonzero multiplicities to incident face indices on the same axes."""
+        return {
+            vertex: tuple(
+                entry.column
+                for entry in self.multiplicity.entries
+                if entry.row == vertex
+            )
+            for vertex in range(self.multiplicity.row_count)
+        }
 
 
 __all__ = [
+    "CombinatorialMapBijection",
     "ConnectedComponentsRequest",
     "ConnectedComponentsResult",
     "DualRequest",

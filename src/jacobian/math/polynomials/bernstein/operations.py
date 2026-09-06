@@ -100,8 +100,9 @@ def _admit(
             _denominator_digits(interval.lower.den)
             + _denominator_digits(interval.upper.den)
         )
-        binomial_denominator = lcm(*(comb(m, j) for j in range(e + 1)))
-        denominator += len(str(binomial_denominator))
+        if e:
+            binomial_denominator = lcm(*(comb(m, j) for j in range(e + 1)))
+            denominator += len(str(binomial_denominator))
         # |a|+|b-a| < 3*10**endpoint; the binomial ratio is at most one.
         magnitude += e * (endpoint + 1)
         binomial_digits += e * len(str(max(1, m)))

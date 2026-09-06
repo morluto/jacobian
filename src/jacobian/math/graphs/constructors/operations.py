@@ -208,7 +208,7 @@ def verify_triangle_profile(claim: TriangleProfileResult) -> bool:
         return False
     # Completeness: enumerate once in the verifier and compare as sets.
     complete: set[frozenset[str]] = set()
-    vertices = claim.source.vertices
+    source_vertices = claim.source.vertices
     for left, right in claim.source.edges:
         first, second = sorted(
             (admission.vertex_index[left], admission.vertex_index[right])
@@ -216,7 +216,13 @@ def verify_triangle_profile(claim: TriangleProfileResult) -> bool:
         for third in admission.adjacency[first] & admission.adjacency[second]:
             if third > second:
                 complete.add(
-                    frozenset((vertices[first], vertices[second], vertices[third]))
+                    frozenset(
+                        (
+                            source_vertices[first],
+                            source_vertices[second],
+                            source_vertices[third],
+                        )
+                    )
                 )
     return seen == complete
 

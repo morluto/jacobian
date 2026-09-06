@@ -218,7 +218,7 @@ def verify_certified_factorization(claim: CertifiedFactorizationResult) -> bool:
         prime**factor.exponent
         for prime, factor in zip(primes, claim.factors, strict=True)
     )
-    return reconstructed == value
+    return bool(reconstructed == value)
 
 
 def verify_primality_certificate(claim: PrimalityCertificateResult) -> bool:

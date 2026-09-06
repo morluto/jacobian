@@ -24,6 +24,9 @@ def test_exact_public_api_symbols() -> None:
         "subtract",
         "to_polynomial",
         "truncate",
+        "verify_divide",
+        "verify_inverse",
+        "verify_reversion",
     )
     assert tuple(formal_power_series.__all__) == expected
     assert len(formal_power_series.__all__) == len(set(formal_power_series.__all__))

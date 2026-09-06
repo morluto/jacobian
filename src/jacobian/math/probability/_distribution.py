@@ -100,6 +100,7 @@ def require_input_distribution(
     atoms: tuple[FiniteDistributionAtom, ...],
     *,
     require_canonical: bool,
+    max_digits: int | None = MAX_INPUT_RATIONAL_DIGITS,
 ) -> tuple[Fraction, ...]:
     values = tuple(atom.value.as_fraction() for atom in atoms)
     if len(values) != len(set(values)):
@@ -108,17 +109,18 @@ def require_input_distribution(
         raise _validation_error(
             "finite-distribution support values must be strictly increasing"
         )
-    for atom in atoms:
-        require_bounded_rational(
-            atom.value,
-            max_digits=MAX_INPUT_RATIONAL_DIGITS,
-            label="finite-distribution input atom",
-        )
-        require_bounded_rational(
-            atom.probability,
-            max_digits=MAX_INPUT_RATIONAL_DIGITS,
-            label="finite-distribution input probability",
-        )
+    if max_digits is not None:
+        for atom in atoms:
+            require_bounded_rational(
+                atom.value,
+                max_digits=max_digits,
+                label="finite-distribution input atom",
+            )
+            require_bounded_rational(
+                atom.probability,
+                max_digits=max_digits,
+                label="finite-distribution input probability",
+            )
     if (
         _bounded_fraction_sum(
             tuple(atom.probability.as_fraction() for atom in atoms),

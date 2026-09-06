@@ -9,8 +9,6 @@ from math import gcd, prod
 from time import perf_counter
 
 import pytest
-from pydantic import ValidationError
-
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.probability._distribution import (
@@ -409,8 +407,9 @@ def test_distribution_normalization_bounds_intermediate_denominators() -> None:
         )
     )
 
-    with pytest.raises(ValidationError, match="intermediate bound"):
-        FiniteRationalDistribution(atoms=atoms)
+    distribution = FiniteRationalDistribution(atoms=atoms)
+    with pytest.raises(OperationDomainValidationError, match="intermediate bound"):
+        event_probability(distribution, (atoms[0].value,))
 
 
 def test_result_deserialization_does_not_repeat_power_admission() -> None:

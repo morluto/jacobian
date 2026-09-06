@@ -105,10 +105,17 @@ def _require_atom_envelope(
 
 
 def _admit_distribution(
-    atoms: tuple[FiniteDistributionAtom, ...], *, require_canonical: bool
+    atoms: tuple[FiniteDistributionAtom, ...],
+    *,
+    require_canonical: bool,
+    enforce_input_bounds: bool = False,
 ) -> tuple[Fraction, ...]:
     try:
-        return require_input_distribution(atoms, require_canonical=require_canonical)
+        return require_input_distribution(
+            atoms,
+            require_canonical=require_canonical,
+            max_digits=MAX_INPUT_RATIONAL_DIGITS if enforce_input_bounds else None,
+        )
     except ValueError as exc:
         raise OperationDomainValidationError(
             location=("atoms",),
@@ -558,7 +565,7 @@ def raw_moment(
             f"finite raw moments accept at most {MAX_FINITE_INPUT_ATOMS} source atoms"
         ),
     )
-    _admit_distribution(atoms, require_canonical=False)
+    _admit_distribution(atoms, require_canonical=False, enforce_input_bounds=True)
     contributions: list[FiniteRawMomentContribution] = []
     total = fmpq(0)
     for atom in atoms:
@@ -749,7 +756,6 @@ def convolution_power(
 ) -> FiniteConvolutionPowerResult:
     """Return the complete exact law of a positive i.i.d. convolution power."""
 
-    _admit_distribution(distribution.atoms, require_canonical=True)
     if type(exponent) is int and exponent == 1:
         return FiniteConvolutionPowerResult._from_kernel(
             source=distribution,
@@ -784,7 +790,6 @@ def convolution_peak(
 ) -> FiniteConvolutionPeakResult:
     """Return the exact largest atom mass and all values attaining it."""
 
-    _admit_distribution(distribution.atoms, require_canonical=True)
     if type(exponent) is int and exponent == 1:
         maximum = max(atom.probability.as_fraction() for atom in distribution.atoms)
         return FiniteConvolutionPeakResult._from_kernel(

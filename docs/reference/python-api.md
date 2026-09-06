@@ -89,3 +89,15 @@ decomposition projections, DFA complement, continued-fraction convergents, and
 finite-metric balls. Their absence from the public operation catalog is
 deliberate: native availability does not create a distinct agent discovery
 intent.
+
+## Optional native runtimes
+
+Python package dependencies install with Jacobian. Singular and QEPCAD are
+optional system runtimes for a small declared subset of operations; ordinary
+Python calls and imports do not require them. Use
+`from jacobian.backends import check_backend` and `check_backend("singular")`
+(or `"qepcad"`) to inspect the current environment. Calls that need an unavailable
+runtime raise `jacobian.backends.BackendUnavailableError`, with `backend`,
+`required_version`, `detail`, and `installation` attributes. No runtime is
+automatically installed. See [backend requirements](../how-to/backend-requirements.md)
+for versions, operation coverage, and deployment instructions.

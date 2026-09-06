@@ -76,6 +76,7 @@ def _bivariate_polynomial(*terms: tuple[int, tuple[int, int]]) -> dict[str, Any]
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="polynomial.map.generic_degree.compute",
+        runtime_requirements=("singular",),
         title="Compute the exact generic degree of a polynomial map",
         description="Classify the generic scheme-theoretic fiber of a bounded polynomial "
         "map over QQ and, when it is finite, return its exact quotient dimension "

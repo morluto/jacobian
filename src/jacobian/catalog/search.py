@@ -10,6 +10,7 @@ from hashlib import sha256
 from math import log
 from typing import Protocol
 
+from jacobian.backends import BackendName
 from jacobian.catalog.models import (
     OperationBrowseCard,
     OperationBrowseResult,
@@ -80,6 +81,9 @@ class SearchableOperation(Protocol):
 
     @property
     def discovery_terms(self) -> tuple[str, ...]: ...
+
+    @property
+    def runtime_requirements(self) -> tuple[BackendName, ...]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,6 +172,7 @@ def _match_corpus(
                         title=descriptor.title,
                         description=descriptor.description,
                         tags=descriptor.tags,
+                        runtime_requirements=descriptor.runtime_requirements,
                     ),
                 )
             )
@@ -237,6 +242,7 @@ def browse_operations(
             title=descriptor.title,
             description=descriptor.description,
             tags=descriptor.tags,
+            runtime_requirements=descriptor.runtime_requirements,
         )
         for descriptor in sorted(
             searchable_operations, key=lambda operation: operation.operation_id

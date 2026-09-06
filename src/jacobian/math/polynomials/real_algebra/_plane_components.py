@@ -15,6 +15,7 @@ from jacobian._execution import (
     current_request_execution,
     request_checkpoint,
 )
+from jacobian.backends import BackendUnavailableError
 from jacobian.canonical import (
     encode_strict_json,
     format_canonical_integer,
@@ -223,6 +224,8 @@ def _rational_point(
 def _raise_backend_failure(outcome: QepcadPlaneProcessOutcome) -> NoReturn:
     if outcome.status == "COMPUTED" or outcome.reason is None:
         raise RuntimeError("computed QEPCAD result cannot become a backend failure")
+    if outcome.status == "BACKEND_UNAVAILABLE":
+        raise BackendUnavailableError("qepcad", detail=outcome.reason)
     if outcome.status == "TIMEOUT":
         raise OperationExecutionTimeoutError("plane-component backend timed out")
     raise RuntimeError(f"plane-component backend failed: {outcome.reason}")

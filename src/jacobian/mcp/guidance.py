@@ -28,7 +28,9 @@ Forms:
   supplied named property only with its expanded definition, translate the need into
   catalog tags, or submit the surrounding proof goal.
 - `request.op="inspect"`: pass one exact `operation_id` to receive its authoritative
-  input and output schemas plus operator-authored examples.
+  input and output schemas, operator-authored examples, and current optional
+  backend availability. Matches expose static `runtime_requirements`; inspection
+  checks these runtimes in the server environment.
 
 For matching, use `namespace` only when the primary operation-ID namespace is already
 known with high confidence. Matching returns 10 candidates by default; request up to

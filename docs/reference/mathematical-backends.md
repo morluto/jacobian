@@ -294,3 +294,13 @@ replacement: annulus complements, disjoint disks, strict versus closed
 boundaries, touching lemniscate lobes, degree-sixteen intersection coordinates,
 and invariance under reordered atoms and added samples. Do not remove QEPCAD
 until a replacement satisfies the same accepted mathematical contract.
+
+## Runtime availability and installation
+
+System-runtime requirements belong to operation declarations as
+`runtime_requirements`. Environment diagnostics belong to
+`jacobian.backends.check_backend` and MCP inspection, outside mathematical
+values. Adapters translate unavailable runtimes to `BackendUnavailableError`;
+transport presents the recovery hint without changing result schemas.
+See [backend requirements](../how-to/backend-requirements.md) for the default
+Python dependencies, optional system installations, and supported versions.

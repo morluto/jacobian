@@ -246,6 +246,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     ),
     MathTool(
         operation_id="polynomial.ideal.minimal_primes.compute",
+        runtime_requirements=("singular",),
         title="Compute minimal primes of a rational polynomial ideal",
         description="Compute the complete minimal-prime family of a bounded ideal in "
         "QQ[x_1, ..., x_n] using Singular's minAssGTZ kernel. Components "
@@ -277,6 +278,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     ),
     MathTool(
         operation_id="polynomial.ideal.radical.compute",
+        runtime_requirements=("singular",),
         title="Compute the radical of an ideal",
         description="Compute the exact radical sqrt(I) of a bounded polynomial ideal over "
         "QQ using the private Singular backend.",
@@ -323,6 +325,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     ),
     MathTool(
         operation_id="polynomial.ideal.quotient.compute",
+        runtime_requirements=("singular",),
         title="Compute the ideal quotient (I : J)",
         description="Compute the exact colon ideal (I : J) = {f : f*J subseteq I} over QQ "
         "using the private Singular backend.",
@@ -351,6 +354,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     ),
     MathTool(
         operation_id="polynomial.ideal.saturation.compute",
+        runtime_requirements=("singular",),
         title="Compute ideal saturation I : <d>^infinity",
         description="Compute the exact saturation I : <d>^infinity of a bounded "
         "polynomial ideal I by a single nonzero polynomial d over QQ using "

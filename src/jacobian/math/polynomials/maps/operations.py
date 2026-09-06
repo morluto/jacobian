@@ -12,6 +12,7 @@ from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
 )
+from jacobian.backends import BackendUnavailableError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials._conversions import (
     rational_from_sympy,
@@ -178,6 +179,8 @@ def generic_degree(
     )
     if backend.outcome != "COMPUTED":
         detail = backend.detail or "generic-degree backend did not produce a result"
+        if backend.outcome == "UNAVAILABLE":
+            raise BackendUnavailableError("singular", detail=detail)
         if backend.outcome == "TIMEOUT":
             raise OperationExecutionTimeoutError(detail)
         if backend.outcome == "CANCELLED":

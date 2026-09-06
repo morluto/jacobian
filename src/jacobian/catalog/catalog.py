@@ -143,6 +143,7 @@ def _descriptor(operation: MathTool[Any, Any]) -> OperationDescriptor:
         output_schema=operation.result_type.model_json_schema(),
         read_only=True,
         tags=operation.tags,
+        runtime_requirements=operation.runtime_requirements,
         discovery_terms=operation.discovery_terms,
         examples=tuple(
             OperationExample(

@@ -264,6 +264,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     ),
     MathTool(
         operation_id="real_algebraic.plane_semialgebraic.component_profile.compute",
+        runtime_requirements=("qepcad",),
         title="Compute exact components of a plane semialgebraic set",
         description="Return the complete connected-component partition of a bounded-size "
         "normalized sign table in R^2, one exact algebraic representative per "

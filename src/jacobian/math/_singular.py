@@ -8,6 +8,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from jacobian.backends import SINGULAR_VERSION_MAX, SINGULAR_VERSION_MIN
 from jacobian.process import (
     BoundedProcessResult,
     ProcessPlatformTools,
@@ -15,9 +16,6 @@ from jacobian.process import (
     run_bounded_process,
     worker_environment,
 )
-
-SINGULAR_VERSION_MIN = 44_000
-SINGULAR_VERSION_MAX = 45_000
 
 _STDOUT_LIMIT = 512 * 1024
 _STDERR_LIMIT = 64 * 1024

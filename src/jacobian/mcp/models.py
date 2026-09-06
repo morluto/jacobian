@@ -7,6 +7,7 @@ from typing import Annotated, Literal
 from pydantic import AfterValidator, ConfigDict, Field, RootModel, StrictInt
 
 from jacobian._models import StrictModel
+from jacobian.backends import BackendAvailability
 from jacobian.catalog.models import (
     OperationDescriptor,
     OperationDiscoveryMatch,
@@ -103,6 +104,7 @@ class OperationFindResult(StrictModel):
 class OperationInspectionResult(StrictModel):
     kind: Literal["operation"]
     operation: OperationDescriptor
+    backend_availability: tuple[BackendAvailability, ...] = ()
 
 
 class OperationValidationIssue(StrictModel):

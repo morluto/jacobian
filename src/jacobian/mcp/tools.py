@@ -20,6 +20,7 @@ from jacobian._execution import (
     OperationExecutionCancelledError,
     RequestCancellationSignal,
 )
+from jacobian.backends import BackendUnavailableError, check_backend
 from jacobian.catalog.models import (
     OperationId,
     OperationResourceAdmissionError,
@@ -100,7 +101,13 @@ def math_find(
             )
         )
     return OperationFindResponse(
-        OperationInspectionResult(kind="operation", operation=descriptor)
+        OperationInspectionResult(
+            kind="operation",
+            operation=descriptor,
+            backend_availability=tuple(
+                check_backend(name) for name in descriptor.runtime_requirements
+            ),
+        )
     )
 
 
@@ -139,6 +146,8 @@ def math_run(
         raise _execution_tool_error(
             code="OPERATION_CANCELLED", operation_id=operation_id, stage=exc.stage
         ) from exc
+    except BackendUnavailableError as exc:
+        raise _backend_unavailable_error(operation_id, exc) from exc
     except (MCPError, ToolError):
         raise
     except Exception as exc:
@@ -166,6 +175,27 @@ def _invalid_request_error(
         code=INVALID_PARAMS,
         message=message,
         data=data.model_dump(mode="json"),
+    )
+
+
+def _backend_unavailable_error(
+    operation_id: str, error: BackendUnavailableError
+) -> ToolError:
+    """Expose backend recovery without changing a mathematical result schema."""
+
+    return ToolError(
+        json.dumps(
+            {
+                "code": "BACKEND_UNAVAILABLE",
+                "stage": "backend_execution",
+                "operation_id": operation_id,
+                "backend": error.backend,
+                "required_version": error.required_version,
+                "hint": error.installation,
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        )
     )
 
 

@@ -25,6 +25,8 @@ _EXTERNAL_OPERATION_OWNER_SUFFIXES = (
 )
 _REGISTERED_EXTERNAL_OPERATION_OWNERS = frozenset(
     {
+        # Explicit version-only diagnostics for Singular and QEPCAD.
+        PurePosixPath("src/jacobian/backends.py"),
         PurePosixPath("src/jacobian/math/graphs/optimization/_chromatic_number.py"),
         PurePosixPath("src/jacobian/math/graphs/optimization/_finite_optimization.py"),
         PurePosixPath("src/jacobian/math/graphs/optimization/_invariants.py"),

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from itertools import combinations, permutations, product
 from math import prod
 from typing import Any, Literal, Self
@@ -152,26 +152,55 @@ def _require_determinant_family_result_budget(
         )
 
 
+def _bounded_raw_sequence(value: Any, *, maximum: int, label: str) -> Any:
+    """Materialize a raw iterable only through the first forbidden item."""
+    if isinstance(value, (str, bytes, Mapping)) or hasattr(value, "model_dump"):
+        return value
+    if isinstance(value, (list, tuple)):
+        if len(value) > maximum:
+            raise _validation_error(
+                "budget_exceeded", f"{label} has at most {maximum} items"
+            )
+        return tuple(value)
+    try:
+        iterator = iter(value)
+    except TypeError:
+        return value
+    items: list[Any] = []
+    for _index in range(maximum + 1):
+        try:
+            items.append(next(iterator))
+        except StopIteration:
+            return tuple(items)
+    raise _validation_error("budget_exceeded", f"{label} has at most {maximum} items")
+
+
 def _require_raw_rational_function_matrix(data: Any) -> Any:
     """Bound raw matrix axes before nested rational functions are parsed."""
-    if not isinstance(data, dict):
+    if not isinstance(data, Mapping):
         return data
+    data = dict(data)
     allowed = {"variables", "row_count", "column_count", "entries"}
     if set(data).difference(allowed):
         raise _validation_error("shape_mismatch", "symbolic matrix contains unknown fields")
-    entries = data.get("entries")
-    if isinstance(entries, (list, tuple)):
-        if len(entries) > MAX_SYMBOLIC_MATRIX_DIMENSION:
-            raise _validation_error(
-                "budget_exceeded",
-                "symbolic matrix has at most 8 rows",
+    data["variables"] = _bounded_raw_sequence(
+        data.get("variables", ()), maximum=MAX_SYMBOLIC_VARIABLES, label="symbolic variables"
+    )
+    entries = _bounded_raw_sequence(
+        data.get("entries", ()),
+        maximum=MAX_SYMBOLIC_MATRIX_DIMENSION,
+        label="symbolic matrix rows",
+    )
+    if isinstance(entries, tuple):
+        entries = tuple(
+            _bounded_raw_sequence(
+                row,
+                maximum=MAX_SYMBOLIC_MATRIX_DIMENSION,
+                label="symbolic matrix row",
             )
-        for row in entries:
-            if isinstance(row, (list, tuple)) and len(row) > MAX_SYMBOLIC_MATRIX_DIMENSION:
-                raise _validation_error(
-                    "budget_exceeded",
-                    "symbolic matrix has at most 8 columns",
-                )
+            for row in entries
+        )
+    data["entries"] = entries
     return canonicalize_json_containers(data)
 
 
@@ -268,18 +297,23 @@ class RationalFunctionVector(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def infer_dimension_for_native_construction(cls, data: Any) -> Any:
-        if isinstance(data, dict):
+        if isinstance(data, Mapping):
+            data = dict(data)
             if set(data).difference({"variables", "dimension", "entries"}):
                 raise _validation_error(
                     "shape_mismatch", "rational-function vector contains unknown fields"
                 )
-            entries = data.get("entries")
-            if isinstance(entries, (list, tuple)):
-                if len(entries) > MAX_SYMBOLIC_MATRIX_DIMENSION:
-                    raise _validation_error(
-                        "budget_exceeded", "rational-function vector has at most 8 entries"
-                    )
-                data = canonicalize_json_containers(data)
+            data["variables"] = _bounded_raw_sequence(
+                data.get("variables", ()),
+                maximum=MAX_SYMBOLIC_VARIABLES,
+                label="rational-function vector variables",
+            )
+            data["entries"] = _bounded_raw_sequence(
+                data.get("entries", ()),
+                maximum=MAX_SYMBOLIC_MATRIX_DIMENSION,
+                label="rational-function vector entries",
+            )
+            data = canonicalize_json_containers(data)
         if isinstance(data, dict) and "dimension" not in data:
             entries = data.get("entries")
             if isinstance(entries, (list, tuple)):
@@ -305,6 +339,28 @@ class RationalFunctionVector(StrictModel):
         return iter(self.entries)
 
 
+def _bounded_raw_vector(value: Any) -> Any:
+    """Bound one raw vector before its rational-function entries are parsed."""
+    if not isinstance(value, Mapping):
+        return _bounded_raw_sequence(
+            value,
+            maximum=MAX_SYMBOLIC_MATRIX_DIMENSION,
+            label="basis vector entries",
+        )
+    value = dict(value)
+    value["variables"] = _bounded_raw_sequence(
+        value.get("variables", ()),
+        maximum=MAX_SYMBOLIC_VARIABLES,
+        label="basis vector variables",
+    )
+    value["entries"] = _bounded_raw_sequence(
+        value.get("entries", ()),
+        maximum=MAX_SYMBOLIC_MATRIX_DIMENSION,
+        label="basis vector entries",
+    )
+    return value
+
+
 class RationalFunctionVectorBasis(StrictModel):
     """A finite family of vectors sharing one ordered coordinate axis.
 
@@ -324,21 +380,24 @@ class RationalFunctionVectorBasis(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def require_bounded_raw_basis(cls, data: Any) -> Any:
-        if not isinstance(data, dict):
+        if not isinstance(data, Mapping):
             return data
-        vectors = data.get("vectors")
-        if isinstance(vectors, (list, tuple)):
-            if len(vectors) > MAX_SYMBOLIC_MATRIX_DIMENSION:
-                raise _validation_error(
-                    "budget_exceeded", "vector basis has at most 8 basis vectors"
-                )
-            for vector in vectors:
-                entries = vector.get("entries") if isinstance(vector, dict) else vector
-                if isinstance(entries, (list, tuple)) and len(entries) > MAX_SYMBOLIC_MATRIX_DIMENSION:
-                    raise _validation_error(
-                        "budget_exceeded",
-                        "basis vectors have at most 8 coordinates",
-                    )
+        data = dict(data)
+        data["variables"] = _bounded_raw_sequence(
+            data.get("variables", ()),
+            maximum=MAX_SYMBOLIC_VARIABLES,
+            label="vector basis variables",
+        )
+        vectors = _bounded_raw_sequence(
+            data.get("vectors", ()),
+            maximum=MAX_SYMBOLIC_MATRIX_DIMENSION,
+            label="vector basis vectors",
+        )
+        if isinstance(vectors, tuple):
+            vectors = tuple(
+                _bounded_raw_vector(vector) for vector in vectors
+            )
+        data["vectors"] = vectors
         return canonicalize_json_containers(data)
 
     @model_validator(mode="after")

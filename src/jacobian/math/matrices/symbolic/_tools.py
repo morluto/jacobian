@@ -17,6 +17,8 @@ from jacobian.math.matrices.symbolic._models import (
     SymbolicRankResult,
 )
 from jacobian.math.matrices.symbolic.operations import (
+    _domain_call,
+    _validate_matrix_carrier,
     symbolic_characteristic_polynomial,
     symbolic_determinant,
     symbolic_linear_system_solve,
@@ -35,11 +37,12 @@ def _run_determinant(request: SymbolicDeterminantRequest) -> SymbolicDeterminant
 
 
 def _run_rank(request: RationalFunctionMatrixRequest) -> SymbolicRankResult:
-    if request.matrix.row_count == 0 or request.matrix.column_count == 0:
+    matrix = _domain_call(_validate_matrix_carrier, request.matrix)
+    if matrix.row_count == 0 or matrix.column_count == 0:
         return SymbolicRankResult(rank=0, pivot_columns=())
     rank, pivot_columns = symbolic_rank(
-        request.matrix.entries,
-        request.matrix.variables,
+        matrix.entries,
+        matrix.variables,
     )
     return SymbolicRankResult(rank=rank, pivot_columns=pivot_columns)
 
@@ -78,13 +81,14 @@ def _run_eigenvalues(
 def _run_linear_system(
     request: SymbolicLinearSystemRequest,
 ) -> SymbolicLinearSystemResult:
+    matrix = _domain_call(_validate_matrix_carrier, request.matrix)
     classification, solution, particular, nullspace = symbolic_linear_system_solve(
-        request.matrix.entries,
+        matrix.entries,
         request.rhs,
-        request.matrix.variables,
+        matrix.variables,
     )
     return SymbolicLinearSystemResult._from_kernel(
-        matrix=request.matrix,
+        matrix=matrix,
         rhs=request.rhs,
         classification=classification,
         solution=solution,
@@ -125,6 +129,8 @@ def _generic_two_by_two() -> dict[str, Any]:
     variables = ("a", "b", "c", "d")
     return {
         "variables": list(variables),
+        "row_count": 2,
+        "column_count": 2,
         "entries": [
             [
                 _rational_function(variables, (1, (1, 0, 0, 0))),
@@ -144,6 +150,8 @@ _LINEAR_SYSTEM_EXAMPLE = OperationExample(
     input={
         "matrix": {
             "variables": ["t"],
+            "row_count": 2,
+            "column_count": 2,
             "entries": [
                 [
                     _rational_function(("t",), (1, (0,))),
@@ -169,6 +177,8 @@ _SYMBOLIC_PRODUCT_EXAMPLE = OperationExample(
     input={
         "left": {
             "variables": ["a", "b"],
+            "row_count": 1,
+            "column_count": 2,
             "entries": [
                 [
                     _rational_function(("a", "b"), (1, (1, 0))),
@@ -178,6 +188,8 @@ _SYMBOLIC_PRODUCT_EXAMPLE = OperationExample(
         },
         "right": {
             "variables": ["a", "b"],
+            "row_count": 2,
+            "column_count": 1,
             "entries": [
                 [_rational_function(("a", "b"), (1, (0, 0)))],
                 [_rational_function(("a", "b"), (1, (0, 0)))],
@@ -292,6 +304,8 @@ TOOLS = (
                 input={
                     "matrix": {
                         "variables": [],
+                        "row_count": 2,
+                        "column_count": 2,
                         "entries": [
                             [
                                 _rational_function((), (1, ())),

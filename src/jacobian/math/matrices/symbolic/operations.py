@@ -40,6 +40,21 @@ __all__ = [
 ]
 
 
+def _validate_matrix_carrier(value: object) -> RationalFunctionMatrix:
+    """Revalidate a carrier before trusting axes or entries.
+
+    ``model_copy(update=...)`` intentionally bypasses Pydantic validation, so
+    typed annotations alone do not establish the matrix invariant at a native
+    consumer boundary.
+    """
+    if not isinstance(value, RationalFunctionMatrix):
+        raise ValueError("symbolic matrix must be a RationalFunctionMatrix carrier")
+    try:
+        return RationalFunctionMatrix.model_validate(value.model_dump())
+    except Exception as exc:
+        raise ValueError("symbolic matrix carrier failed structural validation") from exc
+
+
 def _matrix_from_values(
     entries: tuple[tuple[RationalFunction, ...], ...],
 ) -> Any:
@@ -136,6 +151,8 @@ def symbolic_matrix_multiply(
     admits complete work and result size before private SymPy multiplication.
     """
 
+    left = _domain_call(_validate_matrix_carrier, left)
+    right = _domain_call(_validate_matrix_carrier, right)
     _domain_call(_require_symbolic_product_admission, left, right)
     # SymPy does not preserve a zero-row or zero-column dense matrix's second
     # axis.  The carrier owns those axes, so construct the zero product
@@ -201,13 +218,20 @@ def _symbolic_characteristic_polynomial_kernel(
 def verify_symbolic_eigenvalues(claim: SymbolicEigenvaluesResult) -> bool:
     """Check a serialized characteristic-polynomial eigenvalue claim."""
     try:
+        if not isinstance(claim, SymbolicEigenvaluesResult):
+            return False
+        normalized = SymbolicEigenvaluesResult.model_validate(claim.model_dump())
+        matrix = _validate_matrix_carrier(normalized.matrix)
         degree, coefficients = symbolic_characteristic_polynomial(
-            claim.matrix.entries,
-            claim.matrix.variables,
+            matrix.entries,
+            matrix.variables,
         )
-    except (OperationDomainValidationError, TypeError, ValueError):
+    except Exception:
         return False
-    return degree == claim.degree and coefficients == claim.characteristic_polynomial
+    return (
+        degree == normalized.degree
+        and coefficients == normalized.characteristic_polynomial
+    )
 
 
 def _require_native_system(

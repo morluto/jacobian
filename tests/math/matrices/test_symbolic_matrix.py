@@ -1187,6 +1187,59 @@ def test_empty_rational_function_product_retains_result_axes() -> None:
     assert product.entries == ((zero, zero, zero), (zero, zero, zero))
 
 
+def test_native_consumers_revalidate_forged_carrier_models() -> None:
+    matrix = SymbolicMatrix(
+        variables=("t",), entries=((_rf(("t",), (1, 1, (0,))),),)
+    )
+    forged = matrix.model_copy(update={"column_count": 0})
+    with pytest.raises(OperationDomainValidationError):
+        symbolic_matrix_multiply(forged, matrix)
+    from jacobian.math.matrices.symbolic._tools import _run_rank
+
+    with pytest.raises(OperationDomainValidationError):
+        _run_rank(SymbolicMatrixRequest(matrix=matrix).model_copy(update={"matrix": forged}))
+    system = SymbolicLinearSystemRequest(matrix=matrix, rhs=(matrix.entries[0][0],))
+    from jacobian.math.matrices.symbolic._tools import _run_linear_system
+
+    with pytest.raises(OperationDomainValidationError):
+        _run_linear_system(system.model_copy(update={"matrix": forged}))
+
+
+def test_symbolic_carrier_boundaries_stop_on_unbounded_iterables() -> None:
+    from jacobian.math.matrices.symbolic import (
+        RationalFunctionVector,
+        RationalFunctionVectorBasis,
+    )
+
+    def infinite() -> object:
+        while True:
+            yield ()
+
+    with pytest.raises(ValidationError):
+        SymbolicMatrix.model_validate(
+            {"variables": (), "row_count": 0, "column_count": 0, "entries": infinite()}
+        )
+    with pytest.raises(ValidationError):
+        RationalFunctionVector.model_validate(
+            {"variables": (), "dimension": 0, "entries": infinite()}
+        )
+    with pytest.raises(ValidationError):
+        RationalFunctionVectorBasis.model_validate(
+            {"variables": (), "vector_dimension": 0, "vectors": infinite()}
+        )
+
+
+def test_eigenvalue_verifier_is_total_for_forged_source_axes() -> None:
+    request = _characteristic_request(
+        ((_constant(1), _constant(2)), (_constant(3), _constant(4))), ()
+    )
+    result = _run_eigenvalues(request)
+    forged_matrix = result.matrix.model_copy(update={"column_count": 1})
+    forged = result.model_copy(update={"matrix": forged_matrix})
+    assert not verify_symbolic_eigenvalues(forged)
+    assert not verify_symbolic_eigenvalues(None)  # type: ignore[arg-type]
+
+
 def test_matrix_rejects_nonrectangular_mismatched_and_invalid_axes() -> None:
     a = _variable(("a",), 0)
     with pytest.raises(ValidationError):

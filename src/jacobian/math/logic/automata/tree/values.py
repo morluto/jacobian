@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Iterator
 from dataclasses import dataclass
 from math import comb
-from typing import Annotated, Self
+from typing import Annotated, Any, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -52,6 +53,60 @@ class RankedTree(StrictModel):
 
 
 RankedTree.model_rebuild()
+
+
+class TreeStateChartEntry(StrictModel):
+    """One postorder chart row with an explicit node position and states."""
+
+    position: tuple[int, ...]
+    states: tuple[int, ...]
+
+    @model_validator(mode="after")
+    def require_canonical_states(self) -> Self:
+        if any(state < 0 or state >= MAX_TA_STATES for state in self.states):
+            raise _validation_error(
+                "chart_state_out_of_range", "chart state out of range"
+            )
+        if self.states != tuple(sorted(set(self.states))):
+            raise _validation_error(
+                "chart_states_not_canonical", "chart states must be sorted and unique"
+            )
+        if any(position < 0 for position in self.position):
+            raise _validation_error(
+                "chart_position_negative", "chart positions must be nonnegative"
+            )
+        return self
+
+    def __iter__(  # type: ignore[override]
+        self,
+    ) -> Iterator[Any]:
+        return iter((self.position, self.states))
+
+    def __getitem__(self, index: int) -> object:
+        return (self.position, self.states)[index]
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, tuple):
+            return (self.position, self.states) == other
+        return super().__eq__(other)
+
+
+class TreeStateWitness(StrictModel):
+    """A state-indexed canonical ground-tree witness."""
+
+    state: int = Field(ge=0, lt=MAX_TA_STATES)
+    tree: RankedTree
+
+    def __iter__(self) -> Iterator[Any]:  # type: ignore[override]
+        return iter((self.state, self.tree))
+
+    def __getitem__(self, index: int) -> object:
+        return (self.state, self.tree)[index]
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, tuple):
+            return (self.state, self.tree) == other
+        return super().__eq__(other)
 
 
 class BottomUpTreeAutomaton(StrictModel):
@@ -174,7 +229,7 @@ class ReachableStateProfile(StrictModel):
     automaton: BottomUpTreeAutomaton
     reachable_states: tuple[int, ...] = Field(max_length=MAX_TA_STATES)
     unreachable_states: tuple[int, ...] = Field(max_length=MAX_TA_STATES)
-    witnesses: tuple[tuple[int, RankedTree], ...] = Field(
+    witnesses: tuple[TreeStateWitness, ...] = Field(
         max_length=MAX_TA_STATES,
         description=(
             f"one canonical minimum-node (state, tree) witness per reachable "
@@ -188,6 +243,20 @@ class ReachableStateProfile(StrictModel):
             f"reachable states)"
         ),
     )
+
+    @field_validator("witnesses", mode="before")
+    @classmethod
+    def decode_legacy_witness_pairs(cls, value: object) -> object:
+        """Accept tuple pairs at the structural JSON boundary."""
+        if not isinstance(value, (list, tuple)):
+            return value
+        converted: list[object] = []
+        for item in value:
+            if isinstance(item, (list, tuple)) and len(item) == 2:
+                converted.append({"state": item[0], "tree": item[1]})
+            else:
+                converted.append(item)
+        return converted
 
     @model_validator(mode="after")
     def require_canonical_profile_shape(self) -> Self:
@@ -236,7 +305,7 @@ class ReachableStateProfile(StrictModel):
         *,
         reachable_states: tuple[int, ...],
         unreachable_states: tuple[int, ...],
-        witnesses: tuple[tuple[int, RankedTree], ...],
+        witnesses: tuple[TreeStateWitness, ...],
     ) -> Self:
         """Construct the canonical profile emitted by the trusted kernel."""
 
@@ -314,7 +383,8 @@ def _build_reachable_state_profile(
             state for state, choice in enumerate(choices) if choice is None
         ),
         witnesses=tuple(
-            (state, _materialize_witness(state, choices)) for state in reachable_states
+            TreeStateWitness(state=state, tree=_materialize_witness(state, choices))
+            for state in reachable_states
         ),
     )
 
@@ -432,6 +502,8 @@ __all__ = [
     "RankedTree",
     "ReachableStateProfile",
     "TreeAutomatonTransition",
+    "TreeStateChartEntry",
+    "TreeStateWitness",
     "accepted_tree_count_work_bound",
     "ranked_tree_node_count",
     "validate_ranked_tree",

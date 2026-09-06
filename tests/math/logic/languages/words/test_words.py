@@ -327,6 +327,34 @@ def test_primitivity_profile_distinguishes_positive_reducible_and_periodic() -> 
     )
 
 
+def test_primitivity_verifier_binds_profile_to_the_dependency_graph() -> None:
+    substitution = _substitution((("0", "1"), ("0",)))
+    graph = substitution_dependency_graph(substitution)
+    profile = compute_substitution_primitivity_profile(
+        SubstitutionPrimitivityProfileRequest(dependency_graph=graph)
+    )
+
+    forged_graph = SubstitutionDependencyGraph(
+        substitution=substitution,
+        edges=tuple(edge for edge in graph.edges if edge.source != "1"),
+    )
+    forged_analysis = substitution_primitivity_profile(forged_graph)
+    forged = profile.model_copy(
+        update={
+            "dependency_graph": forged_graph,
+            "strongly_connected_components": forged_analysis.strongly_connected_components,
+            "irreducible": forged_analysis.irreducible,
+            "aperiodic": forged_analysis.aperiodic,
+            "primitive": forged_analysis.primitive,
+            "least_positive_power": forged_analysis.least_positive_power,
+            "exponent_upper_bound": forged_analysis.exponent_upper_bound,
+            "obstruction": forged_analysis.obstruction,
+        }
+    )
+
+    assert not verify_substitution_primitivity_profile(forged)
+
+
 def test_fixed_point_prefix_uses_the_least_sufficient_iterate() -> None:
     fibonacci = ProlongableSubstitution(
         substitution=_substitution((("0", "1"), ("0",))), seed="0"

@@ -37,6 +37,8 @@ from jacobian.math.logic.automata.tree.values import (
     BottomUpTreeAutomaton,
     RankedTree,
     TreeAutomatonTransition,
+    TreeStateChartEntry,
+    TreeStateWitness,
     _priced_saturation,
     ranked_tree_node_count,
 )
@@ -166,6 +168,11 @@ class TestRun:
         result = compute_tree_run(TreeRunRequest(automaton=automaton, tree=tree))
         assert result.accepted is True
         assert result.root_states == (0,)
+
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert isinstance(decoded.state_chart[0], TreeStateChartEntry)
+        assert decoded == result
+        assert verify_tree_run(decoded)
 
     def test_serialized_run_verifier_rejects_forged_chart(self) -> None:
         result = compute_tree_run(
@@ -505,6 +512,9 @@ class TestReachableStates:
 
         assert result.witnesses[0][1] == RankedTree(symbol=0)
         assert result.witnesses[1][1] == RankedTree(symbol=0)
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert isinstance(decoded.witnesses[0], TreeStateWitness)
+        assert verify_reachable_state_profile(decoded)
 
         forged_payload = result.model_dump()
         forged_payload["witnesses"] = [[0, {"symbol": 1, "children": []}], [1, _leaf()]]

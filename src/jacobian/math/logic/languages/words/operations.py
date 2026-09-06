@@ -403,6 +403,14 @@ def verify_substitution_primitivity_profile(
     """Verify a substitution primitivity claim against its dependency graph."""
 
     try:
+        # The profile is mathematically a property of the substitution's
+        # dependency graph.  Verify that retained graph before trusting its
+        # edges; a structurally valid graph may omit an occurrence edge.
+        expected_graph = substitution_dependency_graph(
+            claim.dependency_graph.substitution
+        )
+        if expected_graph != claim.dependency_graph:
+            return False
         analysis = substitution_primitivity_profile(claim.dependency_graph)
         return (
             claim.strongly_connected_components

@@ -22,6 +22,7 @@ from jacobian.math.logic.automata.tree.operations import (
 )
 from jacobian.math.logic.automata.tree.values import (
     ReachableStateProfile,
+    TreeStateChartEntry,
     accepted_tree_count_work_bound,
     validate_ranked_tree,
 )
@@ -43,7 +44,10 @@ def compute_tree_run(request: TreeRunRequest) -> TreeRunResult:
         request,
         accepted=bool(accepting),
         root_states=tuple(sorted(states)),
-        state_chart=chart,
+        state_chart=tuple(
+            TreeStateChartEntry(position=position, states=states)
+            for position, states in chart
+        ),
         node_count=node_count,
     )
 

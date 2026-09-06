@@ -57,10 +57,28 @@ class GraphConnectionProbabilityRequest(StrictModel):
 class GraphReliabilitySource(GraphConnectionProbabilityRequest):
     """Canonical graph, edge-axis probabilities, and terminal event source."""
 
+    @model_validator(mode="after")
+    def require_bound_edge_axis(self) -> Self:
+        if tuple(item.edge for item in self.edge_probabilities) != self.graph.edges:
+            raise _validation_error(
+                "reliability source edge probabilities must follow the graph edge axis"
+            )
+        if (
+            len(self.terminals) != 2
+            or self.terminals[0] == self.terminals[1]
+            or any(vertex not in self.graph.vertices for vertex in self.terminals)
+        ):
+            raise _validation_error(
+                "reliability source terminals must be graph vertices"
+            )
+        if len(self.graph.edges) > MAX_GRAPH_RELIABILITY_EDGES:
+            raise _validation_error("reliability source exceeds the edge bound")
+        return self
+
 
 class GraphReliabilityState(StrictModel):
     state_index: StrictInt = Field(ge=0, lt=MAX_GRAPH_RELIABILITY_STATES)
-    open_edges: tuple[tuple[str, str], ...] = Field(
+    open_edge_indices: tuple[StrictInt, ...] = Field(
         max_length=MAX_GRAPH_RELIABILITY_EDGES
     )
     terminals_connected: bool
@@ -72,6 +90,16 @@ class GraphReliabilityState(StrictModel):
             raise _validation_error(
                 "graph reliability state probability must lie in [0, 1]"
             )
+        return self
+
+    @model_validator(mode="after")
+    def require_canonical_edge_indices(self) -> Self:
+        if any(index < 0 for index in self.open_edge_indices):
+            raise _validation_error(
+                "reliability state edge indices must be nonnegative"
+            )
+        if self.open_edge_indices != tuple(sorted(set(self.open_edge_indices))):
+            raise _validation_error("reliability state edge indices must be canonical")
         return self
 
 
@@ -91,6 +119,14 @@ class GraphConnectionProbabilityResult(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_state_ledger(self) -> Self:
+        if not 0 <= self.connection_probability.as_fraction() <= 1:
+            raise _validation_error(
+                "reliability connection probability must lie in [0, 1]"
+            )
+        if self.terminals != self.source.terminals or self.event != self.source.event:
+            raise _validation_error("reliability result must retain its source event")
+        if self.edge_count != len(self.source.graph.edges):
+            raise _validation_error("reliability result edge axis mismatch")
         if self.visited_states != 1 << self.edge_count:
             raise _validation_error("visited state count is not the full edge powerset")
         if len(self.states) != self.visited_states:
@@ -101,6 +137,16 @@ class GraphConnectionProbabilityResult(StrictModel):
             raise _validation_error(
                 "state ledger indices must be complete and canonical"
             )
+        if any(
+            any(index >= self.edge_count for index in state.open_edge_indices)
+            for state in self.states
+        ):
+            raise _validation_error("reliability state edge axis mismatch")
+        if any(
+            state.state_index != sum(1 << index for index in state.open_edge_indices)
+            for state in self.states
+        ):
+            raise _validation_error("reliability state index does not encode its edges")
         return self
 
     @classmethod
@@ -204,14 +250,14 @@ def compute_graph_connection_probability(
     from flint import fmpq
 
     probabilities, state_count = _admit_graph_connection_request(request)
+    edge_count = len(request.graph.edges)
     states: list[GraphReliabilityState] = []
     connection_probability = fmpq(0)
     for state_index in range(state_count):
-        open_edges = tuple(
-            edge
-            for index, edge in enumerate(request.graph.edges)
-            if state_index & (1 << index)
+        open_edge_indices = tuple(
+            index for index in range(edge_count) if state_index & (1 << index)
         )
+        open_edges = tuple(request.graph.edges[index] for index in open_edge_indices)
         state_probability = fmpq(1)
         for index, probability in enumerate(probabilities):
             state_probability *= (
@@ -227,7 +273,7 @@ def compute_graph_connection_probability(
         states.append(
             GraphReliabilityState(
                 state_index=state_index,
-                open_edges=open_edges,
+                open_edge_indices=open_edge_indices,
                 terminals_connected=connected,
                 state_probability=_wire(state_probability),
             )

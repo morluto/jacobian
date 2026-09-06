@@ -12,7 +12,11 @@ from jacobian.math.logic.automata.petri_nets.values import (
     MAX_PETRI_MARKING,
     MAX_REACHABILITY_STATES,
     Marking,
+    PetriIncidenceMatrix,
+    PetriMarkingState,
     PetriNet,
+    PetriPlaceSubset,
+    PetriReachabilityEdge,
 )
 
 MAX_SIPHON_TRAP_WORK = 20_000_000
@@ -45,6 +49,19 @@ class EnabledTransitionsResult(StrictModel):
     marking: Marking
     transitions: tuple[int, ...]
 
+    @model_validator(mode="after")
+    def require_source_shape(self) -> Self:
+        if len(self.marking.tokens) != self.net.place_count:
+            raise _validation_error(
+                "marking_length", "marking length must match place_count"
+            )
+        if self.transitions != tuple(sorted(set(self.transitions))) or any(
+            not 0 <= transition < self.net.transition_count
+            for transition in self.transitions
+        ):
+            raise _validation_error("transition_axis", "transitions must be canonical")
+        return self
+
 
 class FireTransitionRequest(StrictModel):
     """Fire one transition at a marking."""
@@ -76,6 +93,12 @@ class FireTransitionResult(StrictModel):
 
     @model_validator(mode="after")
     def require_consistent_outcome(self) -> Self:
+        if len(self.marking.tokens) != self.net.place_count:
+            raise _validation_error(
+                "marking_length", "marking length must match place_count"
+            )
+        if not 0 <= self.transition < self.net.transition_count:
+            raise _validation_error("transition_index", "transition index out of range")
         if self.status == "ESCAPES_DECLARED_ENVELOPE":
             if self.new_marking is not None or self.envelope_escape is None:
                 raise _validation_error(
@@ -88,6 +111,20 @@ class FireTransitionResult(StrictModel):
         elif self.new_marking is None or self.envelope_escape is not None:
             raise _validation_error(
                 "ordinary_payload", "ordinary firing outcomes must carry only a marking"
+            )
+        if (
+            self.new_marking is not None
+            and len(self.new_marking.tokens) != self.net.place_count
+        ):
+            raise _validation_error(
+                "new_marking_length", "new marking length must match place_count"
+            )
+        if (
+            self.envelope_escape is not None
+            and len(self.envelope_escape) != self.net.place_count
+        ):
+            raise _validation_error(
+                "escape_length", "envelope escape length must match place_count"
             )
         return self
 
@@ -102,7 +139,17 @@ class IncidenceMatrixResult(StrictModel):
     """The incidence matrix bound to its net's place/transition axes."""
 
     net: PetriNet
-    incidence: tuple[tuple[int, ...], ...]
+    incidence: PetriIncidenceMatrix
+
+    @model_validator(mode="after")
+    def require_source_axes(self) -> Self:
+        if self.incidence.place_axis != tuple(
+            range(self.net.place_count)
+        ) or self.incidence.transition_axis != tuple(range(self.net.transition_count)):
+            raise _validation_error(
+                "incidence_axes", "incidence axes must match the net"
+            )
+        return self
 
 
 class ReachabilityRequest(StrictModel):
@@ -134,9 +181,40 @@ class ReachabilityResult(StrictModel):
     net: PetriNet
     initial_marking: Marking
     max_states: int = Field(ge=1, le=MAX_REACHABILITY_STATES)
-    states: tuple[tuple[int, ...], ...]
-    edges: tuple[tuple[int, int, int], ...]
+    states: tuple[PetriMarkingState, ...]
+    edges: tuple[PetriReachabilityEdge, ...]
     truncated: bool
+
+    @model_validator(mode="after")
+    def require_source_axes(self) -> Self:
+        if len(self.initial_marking.tokens) != self.net.place_count:
+            raise _validation_error(
+                "marking_length", "marking length must match place_count"
+            )
+        if tuple(state.state_index for state in self.states) != tuple(
+            range(len(self.states))
+        ):
+            raise _validation_error(
+                "state_axis", "states must use a complete index axis"
+            )
+        if any(
+            state.place_axis != tuple(range(self.net.place_count))
+            or len(state.marking.tokens) != self.net.place_count
+            for state in self.states
+        ):
+            raise _validation_error(
+                "state_marking_length", "state markings must match place_count"
+            )
+        if any(
+            edge.source_state >= len(self.states)
+            or edge.target_state >= len(self.states)
+            or edge.transition >= self.net.transition_count
+            for edge in self.edges
+        ):
+            raise _validation_error(
+                "edge_axis", "reachability edges must use declared axes"
+            )
+        return self
 
 
 class SiphonTrapRequest(StrictModel):
@@ -152,8 +230,18 @@ class SiphonTrapResult(StrictModel):
     """
 
     net: PetriNet
-    siphons: tuple[tuple[int, ...], ...]
-    traps: tuple[tuple[int, ...], ...]
+    siphons: tuple[PetriPlaceSubset, ...]
+    traps: tuple[PetriPlaceSubset, ...]
+
+    @model_validator(mode="after")
+    def require_place_axes(self) -> Self:
+        if any(
+            place >= self.net.place_count
+            for subset in (*self.siphons, *self.traps)
+            for place in subset.places
+        ):
+            raise _validation_error("place_axis", "subsets must use the net place axis")
+        return self
 
 
 __all__ = [
@@ -164,6 +252,10 @@ __all__ = [
     "FireTransitionResult",
     "IncidenceMatrixRequest",
     "IncidenceMatrixResult",
+    "PetriIncidenceMatrix",
+    "PetriMarkingState",
+    "PetriPlaceSubset",
+    "PetriReachabilityEdge",
     "ReachabilityRequest",
     "ReachabilityResult",
     "SiphonTrapRequest",

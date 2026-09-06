@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Self
+from collections.abc import Iterator
+from typing import Any, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -31,8 +32,8 @@ class PetriNet(StrictModel):
     (post-condition) non-negative integer matrices.
     """
 
-    place_count: int = Field(ge=1, le=MAX_PETRI_PLACES)
-    transition_count: int = Field(ge=1, le=MAX_PETRI_TRANSITIONS)
+    place_count: int = Field(ge=0, le=MAX_PETRI_PLACES)
+    transition_count: int = Field(ge=0, le=MAX_PETRI_TRANSITIONS)
     pre: tuple[tuple[int, ...], ...]
     post: tuple[tuple[int, ...], ...]
 
@@ -92,6 +93,81 @@ class Marking(StrictModel):
         return self
 
 
+class PetriMarkingState(StrictModel):
+    """A reachability vertex with its stable state and place axes."""
+
+    state_index: int = Field(ge=0)
+    place_axis: tuple[int, ...]
+    marking: Marking
+
+    @model_validator(mode="after")
+    def require_canonical_place_axis(self) -> Self:
+        if self.place_axis != tuple(range(len(self.place_axis))):
+            raise _validation_error("place_axis", "place axis must be canonical")
+        if len(self.marking.tokens) != len(self.place_axis):
+            raise _validation_error(
+                "state_marking_length", "marking must match the place axis"
+            )
+        return self
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, tuple):
+            return self.marking.tokens == other
+        return super().__eq__(other)
+
+
+class PetriReachabilityEdge(StrictModel):
+    """One transition edge between indexed markings."""
+
+    source_state: int = Field(ge=0)
+    transition: int = Field(ge=0)
+    target_state: int = Field(ge=0)
+
+
+class PetriIncidenceMatrix(StrictModel):
+    """Incidence entries aligned with explicit place and transition axes."""
+
+    place_axis: tuple[int, ...]
+    transition_axis: tuple[int, ...]
+    entries: tuple[tuple[int, ...], ...]
+
+    @model_validator(mode="after")
+    def require_axes_and_shape(self) -> Self:
+        if self.place_axis != tuple(range(len(self.place_axis))):
+            raise _validation_error("place_axis", "place axis must be canonical")
+        if self.transition_axis != tuple(range(len(self.transition_axis))):
+            raise _validation_error(
+                "transition_axis", "transition axis must be canonical"
+            )
+        if len(self.entries) != len(self.place_axis) or any(
+            len(row) != len(self.transition_axis) for row in self.entries
+        ):
+            raise _validation_error("incidence_shape", "entries must match both axes")
+        return self
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, tuple):
+            return self.entries == other
+        return super().__eq__(other)
+
+
+class PetriPlaceSubset(StrictModel):
+    """A canonical subset of the net's place axis."""
+
+    places: tuple[int, ...] = Field(default=(), max_length=MAX_PETRI_PLACES)
+
+    @model_validator(mode="after")
+    def require_canonical_places(self) -> Self:
+        if self.places != tuple(sorted(set(self.places))):
+            raise _validation_error(
+                "place_subset", "place subsets must be increasing and unique"
+            )
+        return self
+
+    def __iter__(self) -> Iterator[Any]:  # type: ignore[override]
+        return iter(self.places)
+
+
 class FiringSequence(StrictModel):
     """A sequence of transition firings."""
 
@@ -122,6 +198,10 @@ __all__ = [
     "MAX_REACHABILITY_STATE_TOKEN_CELLS",
     "FiringSequence",
     "Marking",
+    "PetriIncidenceMatrix",
+    "PetriMarkingState",
     "PetriNet",
+    "PetriPlaceSubset",
+    "PetriReachabilityEdge",
     "require_reachability_bounds",
 ]

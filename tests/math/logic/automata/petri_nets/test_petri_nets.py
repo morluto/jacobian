@@ -61,6 +61,39 @@ def test_native_operations_return_canonical_results() -> None:
     assert petri_nets.reachability_graph(net, marking).states[0] == (1, 0)
 
 
+def test_empty_net_preserves_empty_axes_across_json() -> None:
+    net = PetriNet(place_count=0, transition_count=0, pre=(), post=())
+    marking = Marking(tokens=())
+
+    enabled = petri_nets.enabled_transitions(net, marking)
+    incidence = petri_nets.compute_incidence_matrix(net)
+    reachability = petri_nets.reachability_graph(net, marking, max_states=1)
+    siphons = petri_nets.find_minimal_siphons(net)
+    traps = petri_nets.find_minimal_traps(net)
+
+    assert enabled.transitions == ()
+    assert incidence.incidence.place_axis == ()
+    assert incidence.incidence.transition_axis == ()
+    assert incidence.incidence.entries == ()
+    assert reachability.states[0].place_axis == ()
+    assert reachability.states[0].marking.tokens == ()
+    assert reachability.edges == ()
+    assert siphons == []
+    assert traps == []
+    decoded = type(reachability).model_validate_json(reachability.model_dump_json())
+    assert decoded == reachability
+    assert petri_nets.verify_reachability_graph(decoded)
+
+
+def test_typed_petri_state_axes_reject_forged_serialized_claim() -> None:
+    net = _token_passing_net()
+    result = petri_nets.reachability_graph(net, Marking(tokens=(1, 0)), max_states=10)
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    forged_state = decoded.states[0].model_copy(update={"place_axis": (1, 0)})
+    forged = decoded.model_copy(update={"states": (forged_state, *decoded.states[1:])})
+    assert not petri_nets.verify_reachability_graph(forged)
+
+
 def test_native_operations_reject_mismatched_markings() -> None:
     net = _simple_net()
     marking = Marking(tokens=(1,))

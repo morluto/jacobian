@@ -11,6 +11,7 @@ from jacobian.math.probability._graph_connection_probability import (
     GRAPH_CONNECTION_PROBABILITY_OPERATION,
     GraphConnectionProbabilityRequest,
     GraphReliabilityEdgeProbability,
+    compute_graph_connection_probability,
     verify_graph_connection_probability,
 )
 
@@ -52,3 +53,37 @@ def test_probability_domain_is_admitted_at_operation_time() -> None:
 
     with pytest.raises(ValueError, match=r"lie in \[0, 1\]"):
         GRAPH_CONNECTION_PROBABILITY_OPERATION.run(request)
+
+
+def test_empty_edge_axis_is_retained_and_verifiable() -> None:
+    request = GraphConnectionProbabilityRequest(
+        graph=SimpleUndirectedGraph(vertices=("a", "b"), edges=()),
+        edge_probabilities=(),
+        terminals=("a", "b"),
+    )
+    result = compute_graph_connection_probability(request)
+
+    assert result.connection_probability.as_fraction() == Fraction(0)
+    assert result.edge_count == 0
+    assert result.states[0].open_edge_indices == ()
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert decoded == result
+    assert verify_graph_connection_probability(decoded)
+
+
+def test_reliability_verifier_rejects_state_with_forged_edge_axis() -> None:
+    request = GraphConnectionProbabilityRequest(
+        graph=SimpleUndirectedGraph(vertices=("a", "b"), edges=(("a", "b"),)),
+        edge_probabilities=(
+            GraphReliabilityEdgeProbability(
+                edge=("a", "b"), open_probability={"num": "1", "den": "2"}
+            ),
+        ),
+        terminals=("a", "b"),
+    )
+    result = compute_graph_connection_probability(request)
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    forged_state = decoded.states[0].model_copy(update={"open_edge_indices": (0,)})
+    forged = decoded.model_copy(update={"states": (forged_state, decoded.states[1])})
+
+    assert not verify_graph_connection_probability(forged)

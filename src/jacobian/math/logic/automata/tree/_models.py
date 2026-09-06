@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
@@ -17,6 +17,8 @@ from jacobian.math.logic.automata.tree.values import (
     MAX_TREE_AUTOMATON_REACHABILITY_WORK,
     BottomUpTreeAutomaton,
     RankedTree,
+    TreeStateChartEntry,
+    TreeStateWitness,
 )
 
 
@@ -39,8 +41,22 @@ class TreeRunResult(TreeRunRequest):
 
     accepted: bool
     root_states: tuple[int, ...] = Field(max_length=64)
-    state_chart: tuple[tuple[tuple[int, ...], tuple[int, ...]], ...]
+    state_chart: tuple[TreeStateChartEntry, ...]
     node_count: int = Field(ge=1, le=4096)
+
+    @field_validator("state_chart", mode="before")
+    @classmethod
+    def decode_legacy_chart_rows(cls, value: object) -> object:
+        """Accept tuple rows while keeping the canonical Python value typed."""
+        if not isinstance(value, (list, tuple)):
+            return value
+        converted: list[object] = []
+        for item in value:
+            if isinstance(item, (list, tuple)) and len(item) == 2:
+                converted.append({"position": item[0], "states": item[1]})
+            else:
+                converted.append(item)
+        return converted
 
     @model_validator(mode="after")
     def require_canonical_root_states(self) -> Self:
@@ -63,7 +79,7 @@ class TreeRunResult(TreeRunRequest):
         *,
         accepted: bool,
         root_states: tuple[int, ...],
-        state_chart: tuple[tuple[tuple[int, ...], tuple[int, ...]], ...],
+        state_chart: tuple[TreeStateChartEntry, ...],
         node_count: int,
     ) -> Self:
         """Construct a result emitted by the trusted tree-run kernel."""
@@ -158,4 +174,6 @@ __all__ = [
     "TreeAutomatonReachabilityRequest",
     "TreeRunRequest",
     "TreeRunResult",
+    "TreeStateChartEntry",
+    "TreeStateWitness",
 ]

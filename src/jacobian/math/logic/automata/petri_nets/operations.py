@@ -10,6 +10,10 @@ from jacobian.math.logic.automata.petri_nets._models import (
     EnabledTransitionsResult,
     FireTransitionResult,
     IncidenceMatrixResult,
+    PetriIncidenceMatrix,
+    PetriMarkingState,
+    PetriPlaceSubset,
+    PetriReachabilityEdge,
     ReachabilityResult,
     SiphonTrapResult,
 )
@@ -117,9 +121,15 @@ def compute_incidence_matrix(net: PetriNet) -> IncidenceMatrixResult:
     """Compute C = Post - Pre."""
     return IncidenceMatrixResult(
         net=net,
-        incidence=tuple(
-            tuple(net.post[p][t] - net.pre[p][t] for t in range(net.transition_count))
-            for p in range(net.place_count)
+        incidence=PetriIncidenceMatrix(
+            place_axis=tuple(range(net.place_count)),
+            transition_axis=tuple(range(net.transition_count)),
+            entries=tuple(
+                tuple(
+                    net.post[p][t] - net.pre[p][t] for t in range(net.transition_count)
+                )
+                for p in range(net.place_count)
+            ),
         ),
     )
 
@@ -165,8 +175,20 @@ def reachability_graph(
         net=net,
         initial_marking=initial_marking,
         max_states=max_states,
-        states=tuple(state_list),
-        edges=tuple(edges),
+        states=tuple(
+            PetriMarkingState(
+                state_index=index,
+                place_axis=tuple(range(net.place_count)),
+                marking=Marking(tokens=tokens),
+            )
+            for index, tokens in enumerate(state_list)
+        ),
+        edges=tuple(
+            PetriReachabilityEdge(
+                source_state=source, transition=transition, target_state=target
+            )
+            for source, transition, target in edges
+        ),
         truncated=truncated,
     )
 
@@ -281,8 +303,12 @@ def siphon_trap(net: PetriNet) -> SiphonTrapResult:
         )
     return SiphonTrapResult(
         net=net,
-        siphons=tuple(tuple(sorted(s)) for s in find_minimal_siphons(net)),
-        traps=tuple(tuple(sorted(t)) for t in find_minimal_traps(net)),
+        siphons=tuple(
+            PetriPlaceSubset(places=tuple(sorted(s))) for s in find_minimal_siphons(net)
+        ),
+        traps=tuple(
+            PetriPlaceSubset(places=tuple(sorted(t))) for t in find_minimal_traps(net)
+        ),
     )
 
 

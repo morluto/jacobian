@@ -42,6 +42,12 @@ def test_source_bound_lattice_claims() -> None:
             3,
         ),
     ):
+        for key, value in result.model_dump(mode="json").items():
+            if key in {"squared_covolume", "invariant_factors"}:
+                if key == "invariant_factors":
+                    assert all(isinstance(item, str) for item in value)
+                else:
+                    assert isinstance(value, str)
         assert verifier(type(result).model_validate_json(result.model_dump_json()))
         payload = result.model_dump()
         payload[field] = forged
@@ -53,6 +59,8 @@ def test_covolume_is_canonical_and_bound_to_source() -> None:
         ambient_dimension=1, basis=IntegerMatrix(entries=(("2",),))
     )
     result = compute_rank_gram(lattice)
+    assert result.squared_covolume == 4
+    assert result.model_dump(mode="json")["squared_covolume"] == "4"
     payload = result.model_dump()
     payload["lattice"]["basis"]["entries"] = [["3"]]
     assert not verify_rank_gram(type(result).model_validate(payload))

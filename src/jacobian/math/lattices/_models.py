@@ -8,7 +8,7 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, WithJsonSchema, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import NativeInteger
 from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.values import (
@@ -220,7 +220,7 @@ class RankGramResult(StrictModel):
 
     lattice: IntegerLattice
     gram_matrix: IntegerMatrix
-    squared_covolume: CanonicalInteger
+    squared_covolume: NativeInteger
     covolume_rational: bool
     relation: Literal["GRAM_EQUALS_BASIS_TIMES_BASIS_TRANSPOSE"] = (
         "GRAM_EQUALS_BASIS_TIMES_BASIS_TRANSPOSE"
@@ -345,7 +345,7 @@ class SublatticeIndexResult(StrictModel):
     parent: IntegerLattice
     embedding: IntegerMatrix
     index: int = Field(ge=1)
-    invariant_factors: tuple[CanonicalInteger, ...] = Field(
+    invariant_factors: tuple[NativeInteger, ...] = Field(
         max_length=MAX_MATRIX_DIMENSION
     )
     free_rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
@@ -365,7 +365,7 @@ class DiscriminantGroupResult(StrictModel):
 
     lattice: IntegerLattice
     discriminant_order: int = Field(ge=1)
-    invariant_factors: tuple[CanonicalInteger, ...] = Field(
+    invariant_factors: tuple[NativeInteger, ...] = Field(
         max_length=MAX_MATRIX_DIMENSION
     )
     relation: Literal["DISCRIMINANT_GROUP_EQUALS_DUAL_MOD_LATTICE"] = (

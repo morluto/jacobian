@@ -185,7 +185,7 @@ def compute_rank_gram(lattice: IntegerLattice) -> RankGramResult:
     return RankGramResult(
         lattice=lattice,
         gram_matrix=_integer_matrix(gram),
-        squared_covolume=format_canonical_integer(det),
+        squared_covolume=det,
         covolume_rational=isqrt(det) ** 2 == det,
     )
 
@@ -289,7 +289,7 @@ def compute_sublattice_index(
         parent=parent,
         embedding=embedding,
         index=index,
-        invariant_factors=tuple(format_canonical_integer(f) for f in factors),
+        invariant_factors=tuple(factors),
         free_rank=free_rank,
     )
 
@@ -301,7 +301,7 @@ def compute_discriminant_group(lattice: IntegerLattice) -> DiscriminantGroupResu
     return DiscriminantGroupResult(
         lattice=lattice,
         discriminant_order=order,
-        invariant_factors=tuple(format_canonical_integer(f) for f in factors),
+        invariant_factors=tuple(factors),
     )
 
 

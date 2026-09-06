@@ -6,7 +6,6 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian._digest import Sha256Digest
 from jacobian._models import StrictModel
 from jacobian.math.topology._models import (
     MAX_TOPOLOGY_CHAIN_GROUP,
@@ -136,12 +135,6 @@ class SimplicialHomologyResult(StrictModel):
             )
         return self
 
-    @property
-    def complex_digest(self) -> Sha256Digest:
-        """Compatibility projection of the retained source complex digest."""
-
-        return self.complex.complex_digest
-
 
 class IntegralSimplicialHomologyRequest(StrictModel):
     complex: FiniteSimplicialComplex
@@ -168,12 +161,6 @@ class IntegralSimplicialHomologyResult(StrictModel):
                 "simplicial integral homology must retain the chain-owned ZZ result under the selected convention",
             )
         return self
-
-    @property
-    def complex_digest(self) -> Sha256Digest:
-        """Compatibility projection of the retained source complex digest."""
-
-        return self.complex.complex_digest
 
 
 __all__ = [

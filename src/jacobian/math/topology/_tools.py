@@ -181,7 +181,6 @@ TOPOLOGY_OPERATIONS: MathTools = (
                         "dimension": 1,
                         "f_vector": [3, 3],
                         "closure_size": 6,
-                        "complex_digest": "sha256:0cfbfd8d7c8d23a25d567cd58726d913d44d1e2c7302f86dbe78a6e9e46f1647",
                     },
                     "coefficient_ring": "INTEGER",
                     "convention": "UNREDUCED",
@@ -225,7 +224,6 @@ TOPOLOGY_OPERATIONS: MathTools = (
                         "dimension": 1,
                         "f_vector": [3, 3],
                         "closure_size": 6,
-                        "complex_digest": "sha256:0cfbfd8d7c8d23a25d567cd58726d913d44d1e2c7302f86dbe78a6e9e46f1647",
                     },
                     "prime": 2,
                     "convention": "UNREDUCED",
@@ -275,7 +273,6 @@ TOPOLOGY_OPERATIONS: MathTools = (
                         "dimension": 1,
                         "f_vector": [3, 3],
                         "closure_size": 6,
-                        "complex_digest": "sha256:0cfbfd8d7c8d23a25d567cd58726d913d44d1e2c7302f86dbe78a6e9e46f1647",
                     }
                 },
             ),
@@ -298,9 +295,6 @@ _CANONICAL_CIRCLE = {
     "dimension": 1,
     "f_vector": [3, 3],
     "closure_size": 6,
-    "complex_digest": (
-        "sha256:0cfbfd8d7c8d23a25d567cd58726d913d44d1e2c7302f86dbe78a6e9e46f1647"
-    ),
 }
 
 _f_vector_tool = MathTool(

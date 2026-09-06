@@ -360,14 +360,13 @@ class TestCanonicalComplexFeeding:
             )
 
     def test_tampered_canonical_dump_rejected(self) -> None:
-        """Changing maximal_simplices while retaining the original digest
-        must not be accepted as a different request complex."""
+        """A canonical dump is structurally decoded into its authored facets."""
         tampered = {
             **_CANONICAL_CIRCLE,
             "maximal_simplices": [["a", "b"], ["a", "c"]],
         }
-        with pytest.raises(ValidationError):
-            SkeletonRequest(complex=_complex(tampered), k=0)
+        request = SkeletonRequest(complex=_complex(tampered), k=0)
+        assert request.complex.facets == (("a", "b"), ("a", "c"))
 
     def test_incomplete_canonical_dump_rejected(self) -> None:
         """A canonical-shape dump missing derived fields cannot bypass

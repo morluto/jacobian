@@ -10,7 +10,6 @@ from jacobian.math.topology._models import (
     ChainCoefficientRing,
     FiniteSimplicialComplex,
     HomologyConvention,
-    simplicial_complex_digest,
 )
 
 
@@ -40,7 +39,7 @@ def test_native_consumers_reject_fabricated_canonical_closure(
         "closure_size": size,
     }
     claim = FiniteSimplicialComplex(
-        **authored, complex_digest=simplicial_complex_digest(**authored)
+        **authored
     )
     claim = FiniteSimplicialComplex.model_validate_json(claim.model_dump_json())
     with pytest.raises(OperationDomainValidationError):

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 from enum import StrEnum
 from itertools import combinations, pairwise
 from typing import Annotated, Any, Literal, Self
@@ -11,16 +10,12 @@ from pydantic import (
     Field,
     StrictInt,
     StringConstraints,
-    ValidationInfo,
-    field_validator,
     model_validator,
 )
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
-from jacobian._digest import Sha256Digest
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import canonicalize_json
 from jacobian.math.topology.chain_complexes.values import (
     ChainComplexValue,
     CoefficientRing,
@@ -130,14 +125,6 @@ def canonical_complex(
         dimension=dimension,
         f_vector=f_vector,
         closure_size=closure_size,
-        complex_digest=simplicial_complex_digest(
-            vertices=canonical_vertices,
-            maximal_simplices=canonical_facets,
-            faces_by_dimension=faces_by_dimension,
-            dimension=dimension,
-            f_vector=f_vector,
-            closure_size=closure_size,
-        ),
     )
 
 
@@ -280,34 +267,6 @@ class FacesInDimension(StrictModel):
         return self
 
 
-def simplicial_complex_digest(
-    *,
-    vertices: tuple[VertexLabel, ...],
-    maximal_simplices: tuple[Simplex, ...],
-    faces_by_dimension: tuple[FacesInDimension, ...],
-    dimension: int,
-    f_vector: tuple[int, ...],
-    closure_size: int,
-) -> str:
-    payload = {
-        "vertices": list(vertices),
-        "maximal_simplices": [list(simplex) for simplex in maximal_simplices],
-        "faces_by_dimension": [
-            {
-                "dimension": item.dimension,
-                "faces": [list(face) for face in item.faces],
-            }
-            for item in faces_by_dimension
-        ],
-        "dimension": dimension,
-        "f_vector": list(f_vector),
-        "closure_size": closure_size,
-        "orientation_convention": "LEXICOGRAPHIC_VERTEX_ORDER",
-        "empty_simplex_stored": False,
-    }
-    return "sha256:" + hashlib.sha256(canonicalize_json(payload)).hexdigest()
-
-
 class FiniteSimplicialComplex(StrictModel):
     """Canonical non-empty faces of one finite abstract simplicial complex."""
 
@@ -333,52 +292,6 @@ class FiniteSimplicialComplex(StrictModel):
         "LEXICOGRAPHIC_VERTEX_ORDER"
     )
     empty_simplex_stored: Literal[False] = False
-    complex_digest: Sha256Digest
-
-    @field_validator("complex_digest", mode="after")
-    @classmethod
-    def require_digest_binds_canonical_complex(
-        cls, value: str, info: ValidationInfo
-    ) -> str:
-        """Bind ``complex_digest`` to the canonical complex derived from the
-        other fields.  Runs as a field validator so Pydantic reports the
-        error location as ``complex_digest`` (nested inside the parent
-        model's ``loc``), not as a model-level error.
-        """
-
-        required = (
-            "vertices",
-            "maximal_simplices",
-            "faces_by_dimension",
-            "dimension",
-            "f_vector",
-            "closure_size",
-        )
-        if not all(key in info.data for key in required):
-            return value
-        vertices: tuple[str, ...] = info.data["vertices"]
-        maximal_simplices: tuple[tuple[str, ...], ...] = info.data["maximal_simplices"]
-        faces_by_dimension: tuple[FacesInDimension, ...] = info.data[
-            "faces_by_dimension"
-        ]
-        dimension: int = info.data["dimension"]
-        f_vector: tuple[int, ...] = info.data["f_vector"]
-        closure_size: int = info.data["closure_size"]
-        expected_digest = simplicial_complex_digest(
-            vertices=vertices,
-            maximal_simplices=maximal_simplices,
-            faces_by_dimension=faces_by_dimension,
-            dimension=dimension,
-            f_vector=f_vector,
-            closure_size=closure_size,
-        )
-        if value != expected_digest:
-            raise _validation_error(
-                "topology.require_digest_binds_canonical_complex_1",
-                "complex_digest does not bind the canonical complex",
-            )
-        return value
-
     @model_validator(mode="after")
     def require_complete_canonical_complex(self) -> Self:
         if tuple(sorted(set(self.vertices))) != self.vertices:
@@ -634,12 +547,6 @@ class ChainComplexResult(StrictModel):
             )
         return self
 
-    @property
-    def complex_digest(self) -> Sha256Digest:
-        """Compatibility projection of the retained source complex digest."""
-
-        return self.complex.complex_digest
-
     @classmethod
     def _from_kernel(cls, **values: Any) -> Self:
         """Build after the chain kernel established all derived fields."""
@@ -671,7 +578,6 @@ __all__ = [
     "SparseMatrixEntry",
     "VertexLabel",
     "face_closure",
-    "simplicial_complex_digest",
     "simplicial_complex_request_from_value",
 ]
 

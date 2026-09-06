@@ -4,7 +4,6 @@ from fractions import Fraction
 from typing import Any, Literal, cast, overload
 
 import pytest
-from pydantic import ValidationError
 
 from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.math.topology._homology import (
@@ -20,7 +19,6 @@ from jacobian.math.topology._models import (
     FiniteSimplicialComplex,
     SimplicialComplexCanonicalizationResult,
     SimplicialComplexRequest,
-    simplicial_complex_digest,
 )
 from jacobian.math.topology._tools import TOOLS
 from jacobian.math.topology.chain_complexes.values import (
@@ -188,17 +186,6 @@ def test_false_face_closure_is_rejected_at_native_admission() -> None:
     )
     payload["f_vector"] = (3, 2, 1)
     payload["closure_size"] = 6
-    payload["complex_digest"] = simplicial_complex_digest(
-        vertices=payload["vertices"],
-        maximal_simplices=payload["maximal_simplices"],
-        faces_by_dimension=tuple(
-            type(source.faces_by_dimension[index]).model_validate(item)
-            for index, item in enumerate(payload["faces_by_dimension"])
-        ),
-        dimension=payload["dimension"],
-        f_vector=payload["f_vector"],
-        closure_size=payload["closure_size"],
-    )
     malformed = FiniteSimplicialComplex.model_validate(payload)
     with pytest.raises(OperationDomainValidationError):
         _operation("topology.simplicial_complex.chain_complex.compute").run(
@@ -228,8 +215,8 @@ def test_canonical_complex_composes_as_the_authoritative_object() -> None:
         SimplicialHomologyRequest(complex=complex_, prime=2)
     )
 
-    assert chain.complex_digest == complex_.complex_digest
-    assert homology.complex_digest == complex_.complex_digest
+    assert chain.complex == complex_
+    assert homology.complex == complex_
     assert tuple(group.betti_number for group in homology.groups) == (1, 1)
 
 
@@ -239,7 +226,7 @@ def test_integral_homology_runs_through_the_public_operation() -> None:
 
     result = operation.run(IntegralSimplicialHomologyRequest(complex=complex_))
 
-    assert result.complex_digest == complex_.complex_digest
+    assert result.complex == complex_
     assert result.homology.coefficient_ring is CoefficientRing.INTEGER
     assert tuple(group.free_rank for group in _integral_groups(result.homology)) == (
         1,
@@ -337,21 +324,3 @@ def test_integral_homology_certificate_boundary_runs_the_public_operation() -> N
     group = _integral_groups(result.homology)[0]
     assert group.free_rank == 32
     assert len(group.free_generators) == 32
-
-
-def test_stale_complex_digest_reports_field_level_loc() -> None:
-    """A stale ``complex_digest`` must produce a Pydantic error whose ``loc``
-    targets the ``complex_digest`` field (not a model-level ``()``), so the
-    enrichment helper can surface ``complex/complex_digest`` to the agent.
-    """
-
-    good = _canonical_complex(("a", "b", "c"), (("a", "b"), ("b", "c")))
-    bad_payload = good.model_dump(mode="python")
-    bad_payload["complex_digest"] = "sha256:" + "0" * 64
-    with pytest.raises(ValidationError) as exc_info:
-        FiniteSimplicialComplex.model_validate(bad_payload)
-    errors = exc_info.value.errors()
-    assert len(errors) == 1
-    assert errors[0]["loc"] == ("complex_digest",)
-    assert errors[0]["type"] == "topology.require_digest_binds_canonical_complex_1"
-    assert "complex_digest" in errors[0]["msg"]

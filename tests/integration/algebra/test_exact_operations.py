@@ -331,7 +331,7 @@ def test_native_integral_basis_consumers_preserve_degree_31_envelope(
     result = consumer(field)
 
     if consumer is discriminant:
-        assert result == "-18327886165296381817380980351835033630345588173537542144"
+        assert result == -18327886165296381817380980351835033630345588173537542144
     else:
         assert result == [
             "1",
@@ -351,7 +351,7 @@ def test_native_integral_basis_consumers_accept_degree_nine_field(
     result = consumer(field)
 
     if consumer is discriminant:
-        assert result == "99179645184"
+        assert result == 99179645184
     else:
         assert result == [
             "1",

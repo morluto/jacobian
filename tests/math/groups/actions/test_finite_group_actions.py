@@ -6,8 +6,10 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.groups.actions import operations as action_operations
 from jacobian.math.groups.actions._models import (
     MAX_COLORS,
+    MAX_POLYA_WORK,
     BurnsideCountRequest,
     CycleIndexRequest,
     ElementCyclesRequest,
@@ -80,6 +82,24 @@ def _symmetric_s3() -> FinitePermutationAction:
     return FinitePermutationAction(
         domain=("p0", "p1", "p2"),
         generators=((1, 2, 0), (1, 0, 2)),
+    )
+
+
+def _order_5184_action() -> FinitePermutationAction:
+    """A 50-point action of S_3^4 x C_4, of order 5,184."""
+    n = 50
+    generators: list[tuple[int, ...]] = []
+    for start in range(0, 12, 3):
+        for local in ((1, 0, 2), (1, 2, 0)):
+            permutation = list(range(n))
+            permutation[start : start + 3] = tuple(start + i for i in local)
+            generators.append(tuple(permutation))
+    permutation = list(range(n))
+    permutation[12:16] = (13, 14, 15, 12)
+    generators.append(tuple(permutation))
+    return FinitePermutationAction(
+        domain=tuple(f"p{i}" for i in range(n)),
+        generators=tuple(generators),
     )
 
 
@@ -523,6 +543,33 @@ class TestBounds:
         # dynamic program retains only the 51 possible content vectors.
         result = polya_inventory(_trivial(50), 2)
         assert len(result.terms) == 51
+
+    def test_polya_weighted_preflight_rejects_order_5184_action(self, monkeypatch) -> None:
+        action = _order_5184_action()
+        group = _enumerate_group(action)
+        assert len(group) == 5_184
+        work = action_operations._polya_work_upper_bound(group, 2)
+        assert work > MAX_POLYA_WORK
+
+        calls = 0
+        original = action_operations._permutation_cycle_type
+
+        def counting_cycle_type(permutation):
+            nonlocal calls
+            calls += 1
+            return original(permutation)
+
+        monkeypatch.setattr(
+            action_operations, "_permutation_cycle_type", counting_cycle_type
+        )
+        with pytest.raises(
+            OperationDomainValidationError, match="dynamic-programming work"
+        ) as error:
+            polya_inventory(action, 2)
+        assert error.value.errors()[0]["type"] == "finite_group_action.polya_work_exceeded"
+        # One cycle-type pass is the preflight; a second pass would mean DP
+        # started after the bound had already rejected the request.
+        assert calls == len(group)
 
     def test_group_order_bound_exceeded(self) -> None:
         # S_8 has order 40320 > 10000 and acts on only 8 points, so it fits

@@ -252,26 +252,16 @@ def _polya_terms_from_group(
                 f"{MAX_COLORS}"
             ),
         )
-    # The state space after k cycle factors is bounded by the number of
-    # colour-count vectors of length k.  Charge this upper bound once before
-    # expanding so the dynamic program cannot start an admitted request whose
-    # transition budget is already too large.
-    estimated_work = 0
-    for permutation in group:
-        cycle_count = len(_permutation_cycle_type(permutation))
-        for prefix_length in range(cycle_count):
-            estimated_work += colors * min(
-                MAX_TERMS, comb(prefix_length + colors - 1, colors - 1)
-            )
-            if estimated_work > MAX_POLYA_WORK:
-                raise OperationDomainValidationError(
-                    location=("colors",),
-                    code="finite_group_action.polya_work_exceeded",
-                    message=(
-                        "Pólya inventory dynamic-programming work exceeds the "
-                        f"bounded maximum of {MAX_POLYA_WORK} transitions"
-                    ),
-                )
+    estimated_work = _polya_work_upper_bound(group, colors)
+    if estimated_work > MAX_POLYA_WORK:
+        raise OperationDomainValidationError(
+            location=("colors",),
+            code="finite_group_action.polya_work_exceeded",
+            message=(
+                "Pólya inventory dynamic-programming work exceeds the "
+                f"bounded maximum of {MAX_POLYA_WORK} transitions"
+            ),
+        )
 
     orbit_count: dict[tuple[int, ...], int] = {}
     for perm in group:
@@ -316,6 +306,22 @@ def _polya_terms_from_group(
         terms.append((monomial, count // group_order))
     terms.sort(key=lambda t: t[0])
     return tuple(terms)
+
+
+def _polya_work_upper_bound(
+    group: tuple[tuple[int, ...], ...], colors: int
+) -> int:
+    """Return a conservative transition count for weighted cycle DP states."""
+    estimated_work = 0
+    for permutation in group:
+        cycle_lengths = _permutation_cycle_type(permutation)
+        processed_degree = 0
+        for cycle_length in cycle_lengths:
+            processed_degree += cycle_length
+            estimated_work += colors * min(
+                MAX_TERMS, comb(processed_degree + colors - 1, colors - 1)
+            )
+    return estimated_work
 
 
 def _polya_inventory_data(

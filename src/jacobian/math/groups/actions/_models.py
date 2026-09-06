@@ -562,7 +562,7 @@ class CycleIndexResult(StrictModel):
     """
 
     action: FinitePermutationAction
-    group_order: int
+    group_order: int = Field(ge=1, le=MAX_GROUP_ORDER)
     degree: int = Field(ge=1, le=MAX_DOMAIN_SIZE)
     cycle_type_counts: tuple[CycleTypeCount, ...] = Field(
         min_length=1, max_length=MAX_GROUP_ORDER
@@ -641,7 +641,7 @@ class BurnsideCountResult(StrictModel):
     """
 
     action: FinitePermutationAction
-    group_order: int
+    group_order: int = Field(ge=1, le=MAX_GROUP_ORDER)
     fixed_point_sum: int = Field(ge=0, le=MAX_GROUP_ORDER * MAX_DOMAIN_SIZE)
     orbit_count: int = Field(ge=0, le=MAX_DOMAIN_SIZE)
     fixed_point_contributions: tuple[int, ...] = Field(max_length=MAX_GROUP_ORDER)

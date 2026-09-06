@@ -13,7 +13,15 @@ def test_exact_public_api_symbols() -> None:
         "IndexedIntegerSequence",
         "SubsetSumProfile",
         "SubsetSumProfileEntry",
+        "additive_energy",
+        "direct_sum_predicate",
+        "representation_profile",
         "subset_sum_profile",
+        "sumset_cardinality",
+        "verify_additive_energy",
+        "verify_direct_sum_predicate",
+        "verify_representation_profile",
+        "verify_sumset_cardinality",
     )
     assert tuple(additive_combinatorics.__all__) == expected
     assert len(additive_combinatorics.__all__) == len(

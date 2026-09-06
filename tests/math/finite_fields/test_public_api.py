@@ -313,6 +313,37 @@ def test_orbit_count_digit_bound_rejects_just_over_boundary_before_formatting(
         type(distribution).model_validate(payload)
 
 
+def _orbit_counts_at_aggregate_digit_boundary(
+    extra_digit: bool,
+) -> tuple[tuple[int, int], ...]:
+    large = 10**32_767
+    remainder_exponent = 19_263 if extra_digit else 19_262
+    rows = [(1, 10**remainder_exponent)]
+    rows.extend((large + offset, large) for offset in range(76))
+    return tuple(rows)
+
+
+def test_orbit_counts_accept_exact_aggregate_digit_boundary() -> None:
+    subspace, directions = _slice_a_values()
+    distribution = orbit_distribution(direction_rank_ledger(subspace, directions))
+    payload = distribution.model_dump(mode="json")
+    payload["counts"] = _orbit_counts_at_aggregate_digit_boundary(False)
+
+    decoded = type(distribution).model_validate(payload)
+
+    assert len(decoded.counts) == 77
+
+
+def test_orbit_counts_reject_just_over_aggregate_digit_boundary() -> None:
+    subspace, directions = _slice_a_values()
+    distribution = orbit_distribution(direction_rank_ledger(subspace, directions))
+    payload = distribution.model_dump(mode="json")
+    payload["counts"] = _orbit_counts_at_aggregate_digit_boundary(True)
+
+    with pytest.raises(ValidationError):
+        type(distribution).model_validate(payload)
+
+
 @pytest.mark.parametrize(
     "mutation", ["subspace", "presentation", "axis", "source_axis"]
 )

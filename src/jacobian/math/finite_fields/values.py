@@ -74,6 +74,20 @@ def _orbit_count_within_digit_bound(value: int) -> bool:
     return value < _MAX_ORBIT_DISTRIBUTION_COUNT
 
 
+def _decimal_digit_length(value: int, thresholds: dict[int, int]) -> int:
+    """Return exact decimal length using a bounded bit estimate and thresholds."""
+
+    if value == 0:
+        return 1
+    estimate = _decimal_digit_upper_bound(value)
+    threshold_exponent = estimate - 1
+    threshold = thresholds.get(threshold_exponent)
+    if threshold is None:
+        threshold = 10**threshold_exponent
+        thresholds[threshold_exponent] = threshold
+    return estimate if value >= threshold else estimate - 1
+
+
 def _parse_orbit_count_integer(value: Any, info: ValidationInfo) -> int:
     """Decode one bounded nonnegative native integer from Python or JSON."""
 
@@ -147,22 +161,18 @@ def _orbit_counts_structurally_valid(counts: object) -> bool:
         return False
     if counts != tuple(sorted(counts)):
         return False
-    digit_upper_bounds = []
+    decimal_thresholds = {
+        MAX_ORBIT_DISTRIBUTION_COUNT_DIGITS: _MAX_ORBIT_DISTRIBUTION_COUNT
+    }
+    total_digits = 0
     for row in counts:
         for value in row:
             if not _orbit_count_within_digit_bound(value):
                 return False
-            digit_bound = _decimal_digit_upper_bound(value)
-            digit_upper_bounds.append(digit_bound)
-    if sum(digit_upper_bounds) > MAX_ORBIT_DISTRIBUTION_TOTAL_DIGITS:
-        return False
-    try:
-        total_digits = sum(
-            len(format_canonical_integer(value)) for row in counts for value in row
-        )
-    except Exception:
-        return False
-    return total_digits <= MAX_ORBIT_DISTRIBUTION_TOTAL_DIGITS
+            total_digits += _decimal_digit_length(value, decimal_thresholds)
+            if total_digits > MAX_ORBIT_DISTRIBUTION_TOTAL_DIGITS:
+                return False
+    return True
 
 
 def _homogeneous_monomial_count(variable_count: int, degree: int) -> int:

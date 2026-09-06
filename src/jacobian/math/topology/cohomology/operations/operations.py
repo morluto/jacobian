@@ -547,4 +547,6 @@ __all__ = [
     "bockstein_fields",
     "steenrod_square",
     "steenrod_square_fields",
+    "verify_bockstein",
+    "verify_steenrod_square",
 ]

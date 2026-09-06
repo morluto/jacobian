@@ -110,7 +110,16 @@ def test_result_round_trips_without_replaying_its_retained_source() -> None:
 
     forged = result.model_dump(mode="json")
     forged["source"]["ground"][0] = "changed"
-    assert DeltaMatroidRecognitionResult.model_validate(forged)
+    claim = DeltaMatroidRecognitionResult.model_validate(forged)
+    assert claim
+    assert not delta_matroids.verify_from_feasible_sets(claim)
+
+
+def test_serialized_recognition_claim_is_verified_against_its_source() -> None:
+    result = delta_matroids.from_feasible_sets(_two_element_delta_matroid())
+    assert delta_matroids.verify_from_feasible_sets(
+        DeltaMatroidRecognitionResult.model_validate_json(result.model_dump_json())
+    )
 
 
 def test_delta_matroid_value_deserialization_does_not_replay_exchange() -> None:

@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import Annotated, Self
 
-from pydantic import Field, model_validator
+from pydantic import AfterValidator, Field, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import NativeInteger
 from jacobian._models import StrictModel
 
 MAX_DOMAIN_SIZE = 50
@@ -42,7 +43,21 @@ CycleType = Annotated[
 ]
 CycleTypeCount = tuple[CycleType, CycleTypeMultiplicity]
 PolyaExponent = Annotated[int, Field(ge=0, le=MAX_DOMAIN_SIZE)]
-PolyaCoefficient = Annotated[int, Field(ge=1, le=MAX_POLYA_COEFFICIENT)]
+
+
+def _require_polya_coefficient(value: int) -> int:
+    if value < 1 or value > MAX_POLYA_COEFFICIENT:
+        raise _validation_error(
+            "polya_coefficient_out_of_range",
+            "Pólya coefficients must be positive and stay within the admitted bound",
+        )
+    return value
+
+
+PolyaCoefficient = Annotated[
+    NativeInteger,
+    AfterValidator(_require_polya_coefficient),
+]
 PolyaMonomial = Annotated[
     tuple[PolyaExponent, ...], Field(min_length=1, max_length=MAX_COLORS)
 ]

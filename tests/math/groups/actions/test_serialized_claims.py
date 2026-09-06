@@ -1,5 +1,6 @@
 """Action relations are checked explicitly after structural decoding."""
 
+import json
 from collections.abc import Callable
 from typing import Any
 
@@ -100,6 +101,15 @@ def test_polya_claim_scalar_bounds_are_structural() -> None:
         payload["terms"] = terms
         with pytest.raises(ValidationError):
             PolyaInventoryResult.model_validate(payload)
+
+
+def test_polya_coefficients_are_native_integers_with_canonical_json() -> None:
+    action = FinitePermutationAction(domain=("a", "b"), generators=((1, 0),))
+    result = polya_inventory(action, 2)
+    assert all(isinstance(coefficient, int) for _, coefficient in result.terms)
+    payload = json.loads(result.model_dump_json())
+    assert all(isinstance(term[1], str) for term in payload["terms"])
+    assert PolyaInventoryResult.model_validate_json(result.model_dump_json()) == result
 
 
 def test_cycle_index_claim_multiplicity_bound_is_structural() -> None:

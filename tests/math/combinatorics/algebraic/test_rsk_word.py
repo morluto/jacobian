@@ -274,9 +274,9 @@ def test_structurally_incompatible_pairs_fail_before_reverse_insertion() -> None
         inverse_row_insertion_rsk(pair)
 
     transported = RSKInverseWordRequest(pair=pair.model_copy(update={"alphabet": ()}))
-    with pytest.raises(OperationDomainValidationError) as error:
+    with pytest.raises(OperationDomainValidationError) as domain_error:
         inverse_rsk_word(transported)
-    assert error.value.errors()[0]["type"] == (
+    assert domain_error.value.errors()[0]["type"] == (
         "algebraic_combinatorics.rsk_pair_incompatible"
     )
 

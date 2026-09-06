@@ -21,6 +21,7 @@ from jacobian.math.combinatorics.matroids.oriented._models import (
 from jacobian.math.combinatorics.matroids.oriented._tools import TOOLS
 from jacobian.math.combinatorics.matroids.oriented.operations import (
     _alternating_value,
+    verify_chirotope_check,
 )
 from jacobian.math.combinatorics.matroids.oriented.operations import (
     check_chirotope as native_check_chirotope,
@@ -216,6 +217,26 @@ class TestChirotopeCheck:
             first.obstruction.conclusion_factors[0]
             * first.obstruction.conclusion_factors[1]
             == first.obstruction.conclusion_product
+        )
+        decoded = ChirotopeCheckResult.model_validate_json(first.model_dump_json())
+        assert verify_chirotope_check(decoded)
+        forged = decoded.model_copy(update={"b2_exchange_instances_checked": 0})
+        assert verify_chirotope_check(forged)
+        forged = decoded.model_copy(
+            update={
+                "obstruction": decoded.obstruction.model_copy(
+                    update={"conclusion_product": 0}
+                )
+            }
+        )
+        assert not verify_chirotope_check(forged)
+
+    def test_verifier_replays_the_complete_positive_claim(self) -> None:
+        result = check_chirotope(
+            ChirotopeCheckRequest.model_validate({"chirotope": _alternating_table(4)})
+        )
+        assert verify_chirotope_check(
+            ChirotopeCheckResult.model_validate_json(result.model_dump_json())
         )
 
     def test_reorientation_and_relabelling_preserve_validity(self) -> None:

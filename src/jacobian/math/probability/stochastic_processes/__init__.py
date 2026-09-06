@@ -7,6 +7,8 @@ from jacobian.math.probability.stochastic_processes.operations import (
     poisson_binomial,
     sigma_algebra_from_observation,
     sigma_algebra_join,
+    verify_doob_martingale,
+    verify_filtration,
     verify_poisson_binomial,
 )
 from jacobian.math.probability.stochastic_processes.values import (
@@ -25,5 +27,7 @@ __all__ = [
     "poisson_binomial",
     "sigma_algebra_from_observation",
     "sigma_algebra_join",
+    "verify_doob_martingale",
+    "verify_filtration",
     "verify_poisson_binomial",
 ]

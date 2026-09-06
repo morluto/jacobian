@@ -15,6 +15,8 @@ from jacobian.math.probability.stochastic_processes._admission import (
 )
 from jacobian.math.probability.stochastic_processes._models import (
     MAX_STOCHASTIC_VALUE_DIGITS,
+    DoobMartingaleResult,
+    FiltrationResult,
 )
 from jacobian.math.probability.stochastic_processes._poisson_binomial_models import (
     PoissonBinomialResult,
@@ -30,6 +32,8 @@ __all__ = [
     "poisson_binomial",
     "sigma_algebra_from_observation",
     "sigma_algebra_join",
+    "verify_doob_martingale",
+    "verify_filtration",
     "verify_poisson_binomial",
 ]
 
@@ -241,3 +245,21 @@ def doob_martingale(
         ce = _conditional_expectation(rv, sigma)
         result.append(ce.values)
     return tuple(result)
+
+
+def verify_filtration(claim: FiltrationResult) -> bool:
+    """Verify filtration steps against the retained observations and space."""
+    try:
+        expected = filtration_natural(claim.space, claim.observations)
+    except (TypeError, ValueError, RuntimeError):
+        return False
+    return expected == claim.sigmas
+
+
+def verify_doob_martingale(claim: DoobMartingaleResult) -> bool:
+    """Verify conditional-expectation rows against retained process sources."""
+    try:
+        expected = doob_martingale(claim.space, claim.observations, claim.payoff)
+    except (TypeError, ValueError, RuntimeError):
+        return False
+    return tuple(row.values for row in claim.martingale) == expected

@@ -60,6 +60,8 @@ def compute_conditional_expectation(
 
 def compute_filtration(request: FiltrationRequest) -> FiltrationResult:
     return FiltrationResult(
+        space=request.space,
+        observations=request.observations,
         sigmas=native.filtration_natural(request.space, request.observations)
     )
 
@@ -68,9 +70,15 @@ def compute_doob_martingale(
     request: DoobMartingaleRequest,
 ) -> DoobMartingaleResult:
     return DoobMartingaleResult(
-        martingale=native.doob_martingale(
-            request.space, request.observations, request.payoff
-        )
+        space=request.space,
+        observations=request.observations,
+        payoff=request.payoff,
+        martingale=tuple(
+            FiniteRandomVariable(space=request.space, values=values)
+            for values in native.doob_martingale(
+                request.space, request.observations, request.payoff
+            )
+        ),
     )
 
 

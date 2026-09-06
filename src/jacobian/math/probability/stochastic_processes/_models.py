@@ -114,13 +114,18 @@ class DoobMartingaleRequest(StrictModel):
 class FiltrationResult(StrictModel):
     """The natural filtration as a tuple of sigma algebras."""
 
+    space: FiniteProbabilitySpace
+    observations: tuple[tuple[str, ...], ...] = Field(default=())
     sigmas: tuple[FiniteSigmaAlgebra, ...] = Field(default=())
 
 
 class DoobMartingaleResult(StrictModel):
     """The Doob martingale as canonical rational value vectors."""
 
-    martingale: tuple[tuple[CanonicalRational, ...], ...] = Field(default=())
+    space: FiniteProbabilitySpace
+    observations: tuple[tuple[str, ...], ...] = Field(default=())
+    payoff: tuple[CanonicalRational, ...] = Field(min_length=1)
+    martingale: tuple[FiniteRandomVariable, ...] = Field(default=())
 
 
 __all__ = [

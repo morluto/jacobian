@@ -29,6 +29,8 @@ from jacobian.math.probability.stochastic_processes.operations import (
     conditional_expectation,
     sigma_algebra_from_observation,
     sigma_algebra_join,
+    verify_doob_martingale,
+    verify_filtration,
 )
 
 # ---------------------------------------------------------------------------
@@ -158,6 +160,9 @@ class TestFiltration:
             )
         )
         assert len(result.sigmas) == 1
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert verify_filtration(decoded)
+        assert not verify_filtration(decoded.model_copy(update={"sigmas": ()}))
 
 
 # ---------------------------------------------------------------------------
@@ -175,7 +180,31 @@ class TestDoobMartingale:
             )
         )
         assert len(result.martingale) == 1
-        assert result.martingale[0] == (_q(1), _q(0))
+        assert result.martingale[0].values == (_q(1), _q(0))
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert verify_doob_martingale(decoded)
+        assert not verify_doob_martingale(
+            decoded.model_copy(
+                update={
+                    "martingale": (
+                        decoded.martingale[0].model_copy(
+                            update={"values": (_q(0), _q(0))}
+                        ),
+                    )
+                }
+            )
+        )
+
+    def test_empty_observation_history_round_trips(self) -> None:
+        result = compute_doob_martingale(
+            DoobMartingaleRequest(
+                space=_coin_space(), observations=(), payoff=(_q(1), _q(0))
+            )
+        )
+        assert result.martingale == ()
+        assert verify_doob_martingale(
+            type(result).model_validate_json(result.model_dump_json())
+        )
 
 
 # ---------------------------------------------------------------------------

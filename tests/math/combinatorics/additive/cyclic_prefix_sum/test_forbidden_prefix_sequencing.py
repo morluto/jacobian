@@ -112,6 +112,9 @@ def test_positive_fixed_start_avoids_one_target() -> None:
 
     assert result.status == "FOUND"
     assert result.first_element == (2,)
+    assert not verify_forbidden_prefix_cyclic_ordering(
+        result.model_copy(update={"first_element": (1,)})
+    )
     assert result.forbidden_values == ((1,),)
     _replay(result, request)
     decoded = type(result).model_validate_json(result.model_dump_json())

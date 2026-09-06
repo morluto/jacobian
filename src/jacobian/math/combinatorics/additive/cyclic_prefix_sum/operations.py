@@ -396,6 +396,10 @@ def verify_forbidden_prefix_cyclic_ordering(
     try:
         if len(claim.ordering) != len(claim.source.elements):
             return False
+        if claim.first_element is not None and (
+            not claim.ordering or claim.ordering[0].element != claim.first_element
+        ):
+            return False
         forbidden = set(claim.forbidden_values)
         running = tuple(0 for _ in claim.source.group.moduli)
         seen: set[tuple[int, ...]] = set()

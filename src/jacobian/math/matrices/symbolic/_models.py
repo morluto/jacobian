@@ -980,68 +980,29 @@ class SymbolicCharacteristicPolynomialResult(StrictModel):
 
 
 class SymbolicEigenvaluesResult(StrictModel):
-    """The exact eigenvalues with algebraic multiplicities.
+    """Eigenvalue roots represented by one source-bound characteristic polynomial.
 
-    The representation discriminates between:
-    - EXPLICIT_ROOTS: individual eigenvalue expressions are returned
-    - ROOTS_BY_POLYNOMIAL: eigenvalues are the roots of the returned
-      characteristic polynomial over QQ(t_1, ..., t_n); individual root
-      expressions are not materialized because the backend cannot
-      represent them in radicals.
+    Individual algebraic roots are not serialized as backend expression text.
+    Consumers needing a root relation explicitly verify this polynomial against
+    the retained symbolic matrix.
     """
 
-    representation: Literal["EXPLICIT_ROOTS", "ROOTS_BY_POLYNOMIAL"] = "EXPLICIT_ROOTS"
-    eigenvalues: tuple[str, ...] | None = Field(
-        default=None,
-        min_length=1,
-        max_length=MAX_SYMBOLIC_MATRIX_DIMENSION,
-    )
-    multiplicities: tuple[int, ...] | None = Field(
-        default=None,
-        min_length=1,
-        max_length=MAX_SYMBOLIC_MATRIX_DIMENSION,
-    )
-    characteristic_polynomial: tuple[RationalFunction, ...] | None = Field(
-        default=None,
+    matrix: SymbolicMatrix
+    characteristic_polynomial: tuple[RationalFunction, ...] = Field(
         min_length=2,
         max_length=MAX_SYMBOLIC_MATRIX_DIMENSION + 1,
     )
-    degree: int | None = Field(default=None, ge=1, le=MAX_SYMBOLIC_MATRIX_DIMENSION)
+    degree: int = Field(ge=1, le=MAX_SYMBOLIC_MATRIX_DIMENSION)
+    convention: Literal["DET_LAMBDA_I_MINUS_A"] = "DET_LAMBDA_I_MINUS_A"
 
     @model_validator(mode="after")
-    def require_representation_consistency(self) -> Self:
-        if self.representation == "EXPLICIT_ROOTS":
-            if self.eigenvalues is None or self.multiplicities is None:
-                raise _validation_error(
-                    "shape_mismatch",
-                    "EXPLICIT_ROOTS must populate eigenvalues and multiplicities",
-                )
-            if len(self.eigenvalues) != len(self.multiplicities):
-                raise _validation_error(
-                    "shape_mismatch",
-                    "eigenvalues and multiplicities must have the same length",
-                )
-            if self.characteristic_polynomial is not None or self.degree is not None:
-                raise _validation_error(
-                    "field_mismatch",
-                    "EXPLICIT_ROOTS must not populate characteristic_polynomial or degree",
-                )
-        else:  # ROOTS_BY_POLYNOMIAL
-            if self.eigenvalues is not None or self.multiplicities is not None:
-                raise _validation_error(
-                    "field_mismatch",
-                    "ROOTS_BY_POLYNOMIAL must not populate eigenvalues or multiplicities",
-                )
-            if self.characteristic_polynomial is None or self.degree is None:
-                raise _validation_error(
-                    "invariant_mismatch",
-                    "ROOTS_BY_POLYNOMIAL must populate characteristic_polynomial and degree",
-                )
-            if len(self.characteristic_polynomial) != self.degree + 1:
-                raise _validation_error(
-                    "budget_exceeded",
-                    "characteristic polynomial coefficients must equal degree plus one",
-                )
+    def require_square_source_and_polynomial_shape(self) -> Self:
+        entries = self.matrix.entries
+        if len(entries) != len(entries[0]) or len(self.characteristic_polynomial) != self.degree + 1:
+            raise _validation_error(
+                "shape_mismatch",
+                "eigenvalue claims require a square source and degree-sized polynomial",
+            )
         return self
 
 

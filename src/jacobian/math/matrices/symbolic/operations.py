@@ -14,6 +14,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.symbolic._models import (
+    SymbolicEigenvaluesResult,
     SymbolicMatrix,
     _require_canonical_symbolic_values,
     _require_determinant_family_result_budget,
@@ -33,6 +34,7 @@ __all__ = [
     "symbolic_linear_system_solve",
     "symbolic_matrix_multiply",
     "symbolic_rank",
+    "verify_symbolic_eigenvalues",
 ]
 
 
@@ -182,6 +184,18 @@ def symbolic_eigenvalues(
     matrix = _matrix_from_values(entries)
     eigenvalues = matrix.eigenvals()
     return [(sstr(value), int(mult)) for value, mult in eigenvalues.items()]
+
+
+def verify_symbolic_eigenvalues(claim: SymbolicEigenvaluesResult) -> bool:
+    """Check a serialized characteristic-polynomial eigenvalue claim."""
+    try:
+        degree, coefficients = symbolic_characteristic_polynomial(
+            claim.matrix.entries,
+            claim.matrix.variables,
+        )
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+    return degree == claim.degree and coefficients == claim.characteristic_polynomial
 
 
 def _require_native_system(

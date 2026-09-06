@@ -2,8 +2,6 @@
 
 from typing import Any
 
-from sympy.matrices.exceptions import MatrixError
-
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.matrices.symbolic._models import (
     SymbolicCharacteristicPolynomialRequest,
@@ -19,10 +17,8 @@ from jacobian.math.matrices.symbolic._models import (
     SymbolicRankResult,
 )
 from jacobian.math.matrices.symbolic.operations import (
-    _symbolic_characteristic_polynomial_kernel,
     symbolic_characteristic_polynomial,
     symbolic_determinant,
-    symbolic_eigenvalues,
     symbolic_linear_system_solve,
     symbolic_matrix_multiply,
     symbolic_rank,
@@ -66,25 +62,14 @@ def _run_characteristic(
 def _run_eigenvalues(
     request: SymbolicCharacteristicPolynomialRequest,
 ) -> SymbolicEigenvaluesResult:
-    try:
-        eigenvalues = symbolic_eigenvalues(
-            request.matrix.entries,
-            request.matrix.variables,
-        )
-    except MatrixError:
-        degree, coefficients = _symbolic_characteristic_polynomial_kernel(
-            request.matrix.entries,
-            request.matrix.variables,
-        )
-        return SymbolicEigenvaluesResult(
-            representation="ROOTS_BY_POLYNOMIAL",
-            characteristic_polynomial=coefficients,
-            degree=degree,
-        )
+    degree, coefficients = symbolic_characteristic_polynomial(
+        request.matrix.entries,
+        request.matrix.variables,
+    )
     return SymbolicEigenvaluesResult(
-        representation="EXPLICIT_ROOTS",
-        eigenvalues=tuple(value for value, _ in eigenvalues),
-        multiplicities=tuple(mult for _, mult in eigenvalues),
+        matrix=request.matrix,
+        characteristic_polynomial=coefficients,
+        degree=degree,
     )
 
 
@@ -288,7 +273,12 @@ TOOLS = (
     MathTool(
         operation_id="matrix.symbolic.eigenvalues.compute",
         title="Compute exact symbolic eigenvalues",
-        description="Compute the exact eigenvalues with algebraic multiplicities of a square symbolic matrix using SymPy's eigenvals. Entries may be rational functions in declared algebraically independent variables; eigenvalues are returned as canonical SymPy expression strings.",
+        description=(
+            "Compute the exact eigenvalue claim as the characteristic polynomial "
+            "of a square symbolic matrix over its declared rational-function "
+            "field. Individual algebraic roots remain represented by this typed "
+            "polynomial rather than backend expression strings."
+        ),
         request_type=SymbolicCharacteristicPolynomialRequest,
         result_type=SymbolicEigenvaluesResult,
         run=_run_eigenvalues,

@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
-from sympy.matrices.exceptions import MatrixError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
@@ -28,9 +27,9 @@ from jacobian.math.matrices.symbolic._tools import TOOLS
 from jacobian.math.matrices.symbolic.operations import (
     symbolic_characteristic_polynomial,
     symbolic_determinant,
-    symbolic_eigenvalues,
     symbolic_matrix_multiply,
     symbolic_rank,
+    verify_symbolic_eigenvalues,
 )
 from jacobian.math.polynomials.values import (
     RationalFunction,
@@ -166,25 +165,14 @@ def _run_characteristic(
 def _run_eigenvalues(
     request: SymbolicCharacteristicPolynomialRequest,
 ) -> SymbolicEigenvaluesResult:
-    try:
-        values = symbolic_eigenvalues(
-            request.matrix.entries,
-            request.matrix.variables,
-        )
-    except MatrixError:
-        degree, coefficients = symbolic_characteristic_polynomial(
-            request.matrix.entries,
-            request.matrix.variables,
-        )
-        return SymbolicEigenvaluesResult(
-            representation="ROOTS_BY_POLYNOMIAL",
-            characteristic_polynomial=coefficients,
-            degree=degree,
-        )
+    degree, coefficients = symbolic_characteristic_polynomial(
+        request.matrix.entries,
+        request.matrix.variables,
+    )
     return SymbolicEigenvaluesResult(
-        representation="EXPLICIT_ROOTS",
-        eigenvalues=tuple(value for value, _ in values),
-        multiplicities=tuple(mult for _, mult in values),
+        matrix=request.matrix,
+        characteristic_polynomial=coefficients,
+        degree=degree,
     )
 
 
@@ -1088,8 +1076,10 @@ def test_symbolic_eigenvalues_of_constant_matrix() -> None:
     )
     result = _run_eigenvalues(request)
     assert isinstance(result, SymbolicEigenvaluesResult)
-    assert len(result.eigenvalues or ()) == 2
-    assert result.multiplicities == (1, 1)
+    assert result.matrix == request.matrix
+    assert result.degree == 2
+    assert len(result.characteristic_polynomial) == 3
+    assert verify_symbolic_eigenvalues(result)
 
 
 @pytest.mark.parametrize(
@@ -1148,6 +1138,7 @@ def test_symbolic_native_api_exports_matrix_value_and_product() -> None:
         "symbolic_linear_system_solve",
         "symbolic_matrix_multiply",
         "symbolic_rank",
+        "verify_symbolic_eigenvalues",
     )
 
 
@@ -1229,17 +1220,40 @@ def test_symbolic_eigenvalues_returns_polynomial_for_unrepresentable_roots() -> 
         variables,
     )
     result = _run_eigenvalues(request)
-    assert result.representation == "ROOTS_BY_POLYNOMIAL"
+    assert result.matrix == request.matrix
     assert result.degree == 5
-    assert result.characteristic_polynomial is not None
-    assert result.eigenvalues is None
+    assert len(result.characteristic_polynomial) == 6
+    assert verify_symbolic_eigenvalues(result)
 
 
-def test_symbolic_eigenvalues_explicit_for_representable_roots() -> None:
+def test_symbolic_eigenvalues_retain_typed_polynomial_for_representable_roots() -> None:
     request = _characteristic_request(
         ((_constant(1), _constant(2)), (_constant(3), _constant(4))), ()
     )
     result = _run_eigenvalues(request)
-    assert result.representation == "EXPLICIT_ROOTS"
-    assert result.eigenvalues is not None
-    assert result.characteristic_polynomial is None
+    assert result.matrix == request.matrix
+    assert result.degree == 2
+    assert verify_symbolic_eigenvalues(result)
+
+
+def test_symbolic_eigenvalue_forgery_reaches_consumer_verifier() -> None:
+    request = _characteristic_request(
+        ((_constant(1), _constant(2)), (_constant(3), _constant(4))), ()
+    )
+    result = _run_eigenvalues(request)
+    payload = result.model_dump(mode="json")
+    payload["characteristic_polynomial"][0]["numerator"]["terms"][0][
+        "coefficient"
+    ]["num"] = "2"
+    forged = SymbolicEigenvaluesResult.model_validate(payload)
+    assert not verify_symbolic_eigenvalues(forged)
+
+
+def test_symbolic_eigenvalue_arbitrary_text_is_not_a_result_value() -> None:
+    with pytest.raises(ValidationError):
+        SymbolicEigenvaluesResult.model_validate(
+            {
+                "eigenvalues": ["not a symbolic value"],
+                "multiplicities": [1],
+            }
+        )

@@ -8,6 +8,7 @@ from jacobian.math.matrices.symbolic.operations import (
     symbolic_linear_system_solve,
     symbolic_matrix_multiply,
     symbolic_rank,
+    verify_symbolic_eigenvalues,
 )
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "symbolic_linear_system_solve",
     "symbolic_matrix_multiply",
     "symbolic_rank",
+    "verify_symbolic_eigenvalues",
 ]

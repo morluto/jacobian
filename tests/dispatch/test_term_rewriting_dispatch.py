@@ -136,7 +136,7 @@ def test_boundary_composed_mgu_returns_a_typed_result() -> None:
         "term_rewriting.unification.compute", payload, Catalog.open()
     )
     assert result.output["unified"] is True
-    substitution = result.output["substitution"]
+    substitution = result.output["substitution"]["mapping"]
     assert set(substitution) == {"0", "1"}
     assert substitution["1"] == unary_chain(15, _app(2)).model_dump(mode="json")
     assert substitution["0"] == unary_chain(30, _app(2)).model_dump(mode="json")

@@ -11,7 +11,9 @@ from jacobian.math.graphs.chip_firing._models import (
     CriticalGroupResult,
     FireVectorRequest,
     FiringRequest,
+    LaplacianResult,
     ReducedLaplacianRequest,
+    ReducedLaplacianResult,
     SinkConfiguration,
 )
 from jacobian.math.graphs.chip_firing._tools import compute_critical_group
@@ -29,6 +31,7 @@ from jacobian.math.graphs.chip_firing.operations import (
     stabilize,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.matrices.values import IntegerMatrix
 
 
 class GraphWire(TypedDict):
@@ -54,6 +57,26 @@ C3 = _graph(C3_WIRE)
 
 
 class TestLaplacian:
+    def test_result_requires_degree_axis(self) -> None:
+        with pytest.raises(ValidationError, match="vertex axis"):
+            LaplacianResult(
+                graph=GRAPH,
+                vertices=GRAPH.vertices,
+                laplacian=IntegerMatrix(entries=(("0",), ("0",))),
+                degrees=(0,),
+            )
+
+    def test_reduced_result_requires_sink_membership(self) -> None:
+        with pytest.raises(ValidationError, match="sink vertex"):
+            ReducedLaplacianResult(
+                graph=GRAPH,
+                vertices=("a", "b", "c"),
+                sink="missing",
+                reduced_laplacian=IntegerMatrix(
+                    entries=(("0", "0", "0"), ("0", "0", "0"), ("0", "0", "0"))
+                ),
+            )
+
     def test_path_graph(self) -> None:
         result = laplacian(GRAPH)
         assert result.vertices == ("a", "b", "c")

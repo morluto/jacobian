@@ -42,7 +42,10 @@ MAX_RATIONAL_MATRIX_AXIS = 8192
 # complete public domain representable by the one canonical ZZ matrix value
 # while lattice reduction and the other integer operations enforce their own
 # request envelopes.
-MAX_INTEGER_MATRIX_ORDER = 128
+# Gram matrices retain up to 1,448 vector axes; keep the shared dense ZZ
+# carrier large enough for that admitted result while owner-local operations
+# continue to enforce their own work bounds.
+MAX_INTEGER_MATRIX_ORDER = 2_048
 MAX_SPARSE_RATIONAL_MATRIX_AXIS = 8_192
 MAX_SPARSE_RATIONAL_MATRIX_NONZEROS = 32_768
 MAX_MATRIX_SCALAR_DIGITS = MAX_CANONICAL_RATIONAL_DIGITS
@@ -516,6 +519,31 @@ class IntegerMatrix(StrictModel):
         default=(),
         max_length=MAX_INTEGER_MATRIX_ORDER,
     )
+
+    def __getitem__(self, index: int) -> tuple[int, ...]:
+        """Project one row to native integers for bounded kernel code."""
+        return tuple(parse_canonical_integer(value) for value in self.entries[index])
+
+    def __len__(self) -> int:
+        return self.row_count
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, IntegerMatrix):
+            return (
+                self.domain == other.domain
+                and self.row_count == other.row_count
+                and self.column_count == other.column_count
+                and self.entries == other.entries
+            )
+        if isinstance(other, (list, tuple)):
+            try:
+                rows = tuple(tuple(int(value) for value in row) for row in other)
+            except (TypeError, ValueError):
+                return False
+            return rows == tuple(
+                tuple(int(value) for value in row) for row in self.entries
+            )
+        return NotImplemented
 
     @model_validator(mode="before")
     @classmethod

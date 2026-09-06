@@ -12,6 +12,8 @@ from jacobian.math.graphs.chip_firing.operations import (
     q_reduced,
     reduced_laplacian,
     stabilize,
+    verify_laplacian,
+    verify_reduced_laplacian,
 )
 
 __all__ = [
@@ -26,4 +28,6 @@ __all__ = [
     "q_reduced",
     "reduced_laplacian",
     "stabilize",
+    "verify_laplacian",
+    "verify_reduced_laplacian",
 ]

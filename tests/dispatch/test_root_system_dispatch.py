@@ -21,8 +21,11 @@ def test_simple_reflection_catalog_contract_matches_dispatch() -> None:
     descriptor = catalog.inspect("root_system.simple_reflection.compute")
     assert descriptor is not None
     properties = descriptor.input_schema["properties"]
-    assert properties["matrix"]["minItems"] == 1
-    assert properties["matrix"]["maxItems"] == MAX_RANK
+    assert properties["matrix"]["$ref"].endswith("CartanMatrix")
+    cartan_schema = descriptor.input_schema["$defs"]["CartanMatrix"]
+    axis_schema = cartan_schema["properties"]["simple_root_axis"]
+    assert axis_schema["minItems"] == 1
+    assert axis_schema["maxItems"] == MAX_RANK
     assert f"rank 1 through {MAX_RANK}" in properties["matrix"]["description"]
     assert (
         "finite-type generalized cartan matrix"

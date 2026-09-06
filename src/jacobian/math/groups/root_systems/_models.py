@@ -7,7 +7,9 @@ from typing import Annotated, Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.math.matrices.values import IntegerMatrix
 
 MAX_RANK = 8
 MAX_REFLECTION_COORDINATE = ((1 << 53) - 1) // (1 + 3 * MAX_RANK)
@@ -25,10 +27,74 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"root_system.{reason}", message)
 
 
+class CartanMatrix(StrictModel):
+    """A canonical ZZ matrix on an ordered simple-root axis.
+
+    Finite-type recognition belongs to root-system operation admission; this
+    carrier only establishes the square dimensions and preserves the matrix
+    context through serialization.
+    """
+
+    matrix: IntegerMatrix
+    simple_root_axis: tuple[int, ...] = Field(min_length=1, max_length=MAX_RANK)
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_matrix_rows_for_native_projection(cls, data: object) -> object:
+        if isinstance(data, (list, tuple)):
+            rows = tuple(
+                tuple(format_canonical_integer(value) for value in row) for row in data
+            )
+            n = len(rows)
+            return canonicalize_json_containers(
+                {
+                    "matrix": IntegerMatrix(
+                        row_count=n,
+                        column_count=len(rows[0]) if rows else 0,
+                        entries=rows,
+                    ),
+                    "simple_root_axis": tuple(range(n)),
+                }
+            )
+        return canonicalize_json_containers(data)
+
+    @model_validator(mode="after")
+    def require_square_simple_root_axis(self) -> Self:
+        n = self.matrix.row_count
+        if self.matrix.column_count != n or self.simple_root_axis != tuple(range(n)):
+            raise _validation_error(
+                "cartan_matrix_shape",
+                "Cartan matrix must be square on its simple-root axis",
+            )
+        return self
+
+    @property
+    def entries(self) -> tuple[tuple[int, ...], ...]:
+        return tuple(
+            tuple(parse_canonical_integer(value) for value in row)
+            for row in self.matrix.entries
+        )
+
+    def __len__(self) -> int:
+        return self.matrix.row_count
+
+    def __getitem__(self, index: int) -> tuple[int, ...]:
+        return self.entries[index]
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, CartanMatrix):
+            return self.matrix == other.matrix
+        if isinstance(other, (list, tuple)):
+            return self.entries == tuple(
+                tuple(int(value) for value in row) for row in other
+            )
+        return NotImplemented
+
+
 class CartanMatrixRequest(StrictModel):
     """A bounded finite-type Cartan matrix."""
 
-    matrix: tuple[tuple[int, ...], ...] = Field(
+    matrix: CartanMatrix = Field(
         description=(
             "Finite-type generalized Cartan matrix of rank 1 through "
             f"{MAX_RANK}: square, diagonal entries 2, non-positive "
@@ -74,7 +140,7 @@ class PositiveRootsResult(CartanMatrixRequest):
     @classmethod
     def _from_kernel(
         cls,
-        matrix: tuple[tuple[int, ...], ...],
+        matrix: CartanMatrix,
         positive_roots: tuple[tuple[int, ...], ...],
     ) -> Self:
         return cls.model_construct(
@@ -97,7 +163,7 @@ class RootSystemDataResult(StrictModel):
     """Complete root system data from a Cartan matrix."""
 
     rank: int
-    cartan_matrix: tuple[tuple[int, ...], ...]
+    cartan_matrix: CartanMatrix
     positive_roots: tuple[tuple[int, ...], ...]
     negative_roots: tuple[tuple[int, ...], ...]
     simple_roots: tuple[tuple[int, ...], ...]
@@ -178,7 +244,7 @@ class RootSystemDataResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        matrix: tuple[tuple[int, ...], ...],
+        matrix: CartanMatrix,
         *,
         positive_roots: tuple[tuple[int, ...], ...],
         negative_roots: tuple[tuple[int, ...], ...],
@@ -199,7 +265,7 @@ class RootSystemDataResult(StrictModel):
 class SimpleReflectionRequest(StrictModel):
     """One bounded simple reflection on a finite-type root lattice."""
 
-    matrix: tuple[tuple[int, ...], ...] = Field(
+    matrix: CartanMatrix = Field(
         min_length=1,
         max_length=MAX_RANK,
         description=(
@@ -238,7 +304,7 @@ class SimpleReflectionRequest(StrictModel):
 class SimpleReflectionResult(StrictModel):
     """Result of applying a simple reflection to a vector."""
 
-    matrix: tuple[tuple[int, ...], ...]
+    matrix: CartanMatrix
     vector: tuple[int, ...]
     simple_index: int
     reflected_vector: tuple[int, ...]
@@ -258,7 +324,7 @@ class SimpleReflectionResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        matrix: tuple[tuple[int, ...], ...],
+        matrix: CartanMatrix,
         vector: tuple[int, ...],
         simple_index: int,
         reflected_vector: tuple[int, ...],
@@ -274,13 +340,11 @@ class SimpleReflectionResult(StrictModel):
 class WeylGroupOrderResult(StrictModel):
     """The exact order of the Weyl group generated by one Cartan matrix."""
 
-    matrix: tuple[tuple[int, ...], ...]
+    matrix: CartanMatrix
     group_order: int = Field(ge=1, le=MAX_WEYL_GROUP_ORDER)
 
     @classmethod
-    def _from_kernel(
-        cls, matrix: tuple[tuple[int, ...], ...], group_order: int
-    ) -> Self:
+    def _from_kernel(cls, matrix: CartanMatrix, group_order: int) -> Self:
         return cls.model_construct(
             matrix=matrix,
             group_order=group_order,

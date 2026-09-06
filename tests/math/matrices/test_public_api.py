@@ -248,6 +248,8 @@ def test_exact_public_api_symbols() -> None:
     expected = (
         "EmbeddedRealSimpleNumberFieldMatrix",
         "ExactRealMatrix",
+        "IntegerMatrix",
+        "RationalMatrix",
         "SmithNormalForm",
         "SparseRationalMatrix",
         "SparseRationalMatrixEntry",

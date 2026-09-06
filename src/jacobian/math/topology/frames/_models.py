@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import Field
+from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger, CanonicalRational
+from jacobian.math.matrices.values import IntegerMatrix
 from jacobian.math.topology.frames.values import (
     MAX_DIM,
     MAX_VECTOR_CELLS,
@@ -27,15 +29,28 @@ class CoherenceRequest(FiniteFrameRequest):
 
 
 class GramResult(VectorFamilyRequest):
-    gram: tuple[tuple[int, ...], ...]
+    gram: IntegerMatrix
     dimension: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def require_source_shape(self) -> Self:
+        if (
+            self.gram.row_count != len(self.vectors)
+            or self.gram.column_count != len(self.vectors)
+            or self.dimension != len(self.vectors[0])
+        ):
+            raise PydanticCustomError(
+                "frames.gram_shape",
+                "Gram matrix must align with the retained vector-family axes",
+            )
+        return self
 
     @classmethod
     def _from_kernel(
         cls,
         *,
         vectors: tuple[tuple[int, ...], ...],
-        gram: tuple[tuple[int, ...], ...],
+        gram: IntegerMatrix,
     ) -> Self:
         return cls.model_construct(
             vectors=vectors,

@@ -318,7 +318,9 @@ class TestGVectorBinding:
         with pytest.raises(ValidationError) as exc_info:
             GVectorResult(
                 exchange_matrix=b,
-                g_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)),
+                g_matrix={
+                    "entries": [["1", "0", "0"], ["0", "1", "0"], ["0", "0", "1"]],
+                },
                 convention="FOMIN_ZELEVINSKY",
             )
         assert exc_info.value.errors()[0]["type"] == "cluster_algebra.g_matrix_shape"

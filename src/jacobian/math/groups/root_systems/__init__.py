@@ -1,5 +1,6 @@
 """Root system operations."""
 
+from jacobian.math.groups.root_systems._models import CartanMatrix
 from jacobian.math.groups.root_systems.operations import (
     positive_roots,
     root_system_data,
@@ -8,6 +9,7 @@ from jacobian.math.groups.root_systems.operations import (
 )
 
 __all__ = [
+    "CartanMatrix",
     "positive_roots",
     "root_system_data",
     "simple_reflection",

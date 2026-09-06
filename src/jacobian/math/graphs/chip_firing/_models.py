@@ -9,6 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.matrices.values import IntegerMatrix
 
 MAX_VERTICES = 50
 MAX_CRITICAL_GROUP_VERTICES = 128
@@ -77,9 +78,24 @@ class LaplacianRequest(StrictModel):
 class LaplacianResult(StrictModel):
     """The graph Laplacian matrix with degree vector."""
 
+    graph: SimpleUndirectedGraph
     vertices: tuple[str, ...]
-    laplacian: tuple[tuple[int, ...], ...]
+    laplacian: IntegerMatrix
     degrees: tuple[int, ...]
+
+    @model_validator(mode="after")
+    def require_source_shape(self) -> Self:
+        if (
+            self.vertices != self.graph.vertices
+            or self.laplacian.row_count != len(self.vertices)
+            or self.laplacian.column_count != len(self.vertices)
+            or len(self.degrees) != len(self.vertices)
+        ):
+            raise _validation_error(
+                "chip_firing.laplacian_shape",
+                "Laplacian must use the graph vertex axis",
+            )
+        return self
 
 
 class ReducedLaplacianRequest(StrictModel):
@@ -97,9 +113,30 @@ class ReducedLaplacianRequest(StrictModel):
 class ReducedLaplacianResult(StrictModel):
     """The reduced Laplacian with nonsink vertex labels."""
 
+    graph: SimpleUndirectedGraph
     vertices: tuple[str, ...]
     sink: str
-    reduced_laplacian: tuple[tuple[int, ...], ...]
+    reduced_laplacian: IntegerMatrix
+
+    @model_validator(mode="after")
+    def require_source_shape(self) -> Self:
+        if self.sink not in self.graph.vertices:
+            raise _validation_error(
+                "chip_firing.sink_not_in_graph", "sink vertex must be in the graph"
+            )
+        expected = tuple(
+            vertex for vertex in self.graph.vertices if vertex != self.sink
+        )
+        if (
+            self.vertices != expected
+            or self.reduced_laplacian.row_count != len(expected)
+            or self.reduced_laplacian.column_count != len(expected)
+        ):
+            raise _validation_error(
+                "chip_firing.reduced_laplacian_shape",
+                "reduced Laplacian must use the nonsink vertex axis",
+            )
+        return self
 
 
 class FiringRequest(StrictModel):

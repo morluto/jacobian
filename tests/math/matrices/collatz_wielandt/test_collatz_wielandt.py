@@ -9,14 +9,19 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.collatz_wielandt.operations import (
     compute_collatz_wielandt_profile,
 )
+from jacobian.math.matrices.values import RationalMatrix
 
 
 def _cr(num: int, den: int = 1) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(num, den))
 
 
+def _rm(rows: tuple[tuple[CanonicalRational, ...], ...]) -> RationalMatrix:
+    return RationalMatrix(entries=rows)
+
+
 def test_identity() -> None:
-    matrix = ((_cr(1), _cr(0)), (_cr(0), _cr(1)))
+    matrix = _rm(((_cr(1), _cr(0)), (_cr(0), _cr(1))))
     vector = (_cr(1), _cr(1))
     result = compute_collatz_wielandt_profile(matrix, vector)
     assert result.quotients[0].as_fraction() == Fraction(1)
@@ -24,8 +29,13 @@ def test_identity() -> None:
     assert result.max_quotient.as_fraction() == Fraction(1)
 
 
+def test_native_operation_requires_canonical_matrix_value() -> None:
+    with pytest.raises(TypeError, match="RationalMatrix"):
+        compute_collatz_wielandt_profile(((_cr(1),),), (_cr(1),))  # type: ignore[arg-type]
+
+
 def test_2x2() -> None:
-    matrix = ((_cr(2), _cr(1)), (_cr(0), _cr(3)))
+    matrix = _rm(((_cr(2), _cr(1)), (_cr(0), _cr(3))))
     vector = (_cr(1), _cr(1))
     result = compute_collatz_wielandt_profile(matrix, vector)
     assert result.quotients[0].as_fraction() == Fraction(3)
@@ -33,7 +43,7 @@ def test_2x2() -> None:
 
 
 def test_non_uniform_vector() -> None:
-    matrix = ((_cr(1), _cr(2)), (_cr(3), _cr(4)))
+    matrix = _rm(((_cr(1), _cr(2)), (_cr(3), _cr(4))))
     vector = (_cr(1), _cr(2))
     result = compute_collatz_wielandt_profile(matrix, vector)
     assert result.quotients[0].as_fraction() == Fraction(5)
@@ -42,7 +52,7 @@ def test_non_uniform_vector() -> None:
 
 
 def test_result_preserves_source() -> None:
-    matrix = ((_cr(1),),)
+    matrix = _rm(((_cr(1),),))
     vector = (_cr(1),)
     result = compute_collatz_wielandt_profile(matrix, vector)
     assert result.matrix == matrix
@@ -51,19 +61,21 @@ def test_result_preserves_source() -> None:
 
 def test_negative_matrix_entry_is_rejected_before_quotients() -> None:
     with pytest.raises(OperationDomainValidationError, match="nonnegative matrix"):
-        compute_collatz_wielandt_profile(((_cr(-1),),), (_cr(1),))
+        compute_collatz_wielandt_profile(_rm(((_cr(-1),),)), (_cr(1),))
 
 
 def test_nonpositive_vector_is_rejected_through_the_domain_boundary() -> None:
     with pytest.raises(OperationDomainValidationError, match="positive vector"):
-        compute_collatz_wielandt_profile(((_cr(1),),), (_cr(0),))
+        compute_collatz_wielandt_profile(_rm(((_cr(1),),)), (_cr(0),))
 
 
 def test_derived_quotient_must_fit_the_rational_carrier() -> None:
     denominator = 10**20_000
-    matrix = (
-        (_cr(1, denominator), _cr(1, denominator - 1)),
-        (_cr(0), _cr(0)),
+    matrix = _rm(
+        (
+            (_cr(1, denominator), _cr(1, denominator - 1)),
+            (_cr(0), _cr(0)),
+        )
     )
     vector = (_cr(1), _cr(1))
 
@@ -74,7 +86,7 @@ def test_derived_quotient_must_fit_the_rational_carrier() -> None:
 def test_quotient_height_is_checked_before_arithmetic() -> None:
     denominator = "1" + "0" * 32_767
     value = CanonicalRational(num="1", den=denominator)
-    matrix = tuple(tuple(value for _ in range(17)) for _ in range(17))
+    matrix = _rm(tuple(tuple(value for _ in range(17)) for _ in range(17)))
     vector = tuple(value for _ in range(17))
     with pytest.raises(OperationDomainValidationError, match="quotient rational"):
         compute_collatz_wielandt_profile(matrix, vector)
@@ -83,7 +95,7 @@ def test_quotient_height_is_checked_before_arithmetic() -> None:
 def test_derived_denominator_growth_is_checked_before_arithmetic() -> None:
     denominator = "1" + "0" * 5_000
     value = CanonicalRational(num="1", den=denominator)
-    matrix = tuple(tuple(value for _ in range(4)) for _ in range(4))
+    matrix = _rm(tuple(tuple(value for _ in range(4)) for _ in range(4)))
     vector = tuple(value for _ in range(4))
 
     with pytest.raises(OperationDomainValidationError, match="rational arithmetic"):

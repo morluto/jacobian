@@ -1,5 +1,6 @@
 """Typed declarations for the Collatz-Wielandt quotient profile operation."""
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.matrices.collatz_wielandt._models import (
     CollatzWielandtRequest,
@@ -8,6 +9,7 @@ from jacobian.math.matrices.collatz_wielandt._models import (
 from jacobian.math.matrices.collatz_wielandt.operations import (
     compute_collatz_wielandt_profile,
 )
+from jacobian.math.matrices.values import RationalMatrix
 
 
 def _compute(request: CollatzWielandtRequest) -> CollatzWielandtResult:
@@ -33,10 +35,18 @@ TOOLS: MathTools = (
                 name="identity",
                 description="Identity matrix with uniform vector.",
                 input={
-                    "matrix": [
-                        [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}],
-                        [{"num": "0", "den": "1"}, {"num": "1", "den": "1"}],
-                    ],
+                    "matrix": RationalMatrix(
+                        entries=(
+                            (
+                                CanonicalRational(num="1", den="1"),
+                                CanonicalRational(num="0", den="1"),
+                            ),
+                            (
+                                CanonicalRational(num="0", den="1"),
+                                CanonicalRational(num="1", den="1"),
+                            ),
+                        )
+                    ).model_dump(mode="json"),
                     "vector": [
                         {"num": "1", "den": "1"},
                         {"num": "1", "den": "1"},

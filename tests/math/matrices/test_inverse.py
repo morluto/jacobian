@@ -20,6 +20,7 @@ from jacobian.math.matrices._tools import TOOLS
 from jacobian.math.matrices.operations import inverse_result
 from jacobian.math.matrices.values import (
     MAX_EXACT_LINEAR_MATRIX_AXIS,
+    MAX_INTEGER_MATRIX_ORDER,
     MAX_MATRIX_DIMENSION,
     IntegerMatrix,
 )
@@ -348,4 +349,7 @@ def test_integer_requests_keep_operation_specific_envelopes() -> None:
     assert _entry_axis_limit(integer_schema, "matrix") == MAX_EXACT_LINEAR_MATRIX_AXIS
     assert _entry_axis_limit(lattice_schema, "basis") == 32
     assert _entry_axis_limit(hermite_schema, "matrix") == 128
-    assert IntegerMatrix.model_json_schema()["properties"]["entries"]["maxItems"] == 128
+    assert (
+        IntegerMatrix.model_json_schema()["properties"]["entries"]["maxItems"]
+        == MAX_INTEGER_MATRIX_ORDER
+    )

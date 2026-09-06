@@ -13,6 +13,7 @@ from jacobian.math.combinatorics.designs.incidence_structures._models import (
     DualRequest,
     GramRequest,
     IncidenceMatrixRequest,
+    IncidenceMatrixResult,
     IncidenceStructure,
     IntersectionsRequest,
     LeviGraphRequest,
@@ -70,6 +71,21 @@ class TestIncidenceMatrix:
         assert result.matrix == ((1, 0), (1, 1), (0, 1))
         assert result.points == ("p1", "p2", "p3")
         assert result.block_ids == ("b1", "b2")
+
+    def test_matrix_shape_is_bound_to_label_axes(self) -> None:
+        with pytest.raises(ValidationError, match="dimensions"):
+            IncidenceMatrixResult.model_validate(
+                {
+                    "points": ["p1", "p2"],
+                    "block_ids": ["b1"],
+                    "matrix": {
+                        "domain": "ZZ",
+                        "row_count": 1,
+                        "column_count": 1,
+                        "entries": [["1"]],
+                    },
+                }
+            )
 
     def test_duplicate_points_rejected(self) -> None:
         with pytest.raises(ValidationError):

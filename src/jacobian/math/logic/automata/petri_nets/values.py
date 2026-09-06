@@ -118,28 +118,6 @@ class PetriReachabilityEdge(StrictModel):
     target_state: int = Field(ge=0)
 
 
-class PetriIncidenceMatrix(StrictModel):
-    """Incidence entries aligned with explicit place and transition axes."""
-
-    place_axis: tuple[int, ...]
-    transition_axis: tuple[int, ...]
-    entries: tuple[tuple[int, ...], ...]
-
-    @model_validator(mode="after")
-    def require_axes_and_shape(self) -> Self:
-        if self.place_axis != tuple(range(len(self.place_axis))):
-            raise _validation_error("place_axis", "place axis must be canonical")
-        if self.transition_axis != tuple(range(len(self.transition_axis))):
-            raise _validation_error(
-                "transition_axis", "transition axis must be canonical"
-            )
-        if len(self.entries) != len(self.place_axis) or any(
-            len(row) != len(self.transition_axis) for row in self.entries
-        ):
-            raise _validation_error("incidence_shape", "entries must match both axes")
-        return self
-
-
 class PetriPlaceSubset(StrictModel):
     """A canonical subset of the net's place axis."""
 
@@ -188,7 +166,6 @@ __all__ = [
     "MAX_REACHABILITY_STATE_TOKEN_CELLS",
     "FiringSequence",
     "Marking",
-    "PetriIncidenceMatrix",
     "PetriMarkingState",
     "PetriNet",
     "PetriPlaceSubset",

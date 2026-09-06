@@ -10,16 +10,17 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.collatz_wielandt._models import (
     CollatzWielandtResult,
 )
+from jacobian.math.matrices.values import RationalMatrix
 
 __all__ = ["compute_collatz_wielandt_profile"]
 
 
 def _admit_result_size(
-    matrix: tuple[tuple[CanonicalRational, ...], ...],
+    matrix: RationalMatrix,
     vector: tuple[CanonicalRational, ...],
 ) -> None:
     quotient_widths: list[int] = []
-    for row_index, row in enumerate(matrix):
+    for row_index, row in enumerate(matrix.entries):
         derived_digits = (
             sum(
                 max(len(entry.num.lstrip("-")), len(entry.den))
@@ -42,18 +43,20 @@ def _admit_result_size(
 
 
 def compute_collatz_wielandt_profile(
-    matrix: tuple[tuple[CanonicalRational, ...], ...],
+    matrix: RationalMatrix,
     vector: tuple[CanonicalRational, ...],
 ) -> CollatzWielandtResult:
     """Return the componentwise quotient profile (Ax)_i / x_i."""
+    if not isinstance(matrix, RationalMatrix):
+        raise TypeError("matrix must be a RationalMatrix")
     n = len(vector)
-    if n == 0 or len(matrix) != n or any(len(row) != n for row in matrix):
+    if n == 0 or matrix.row_count != n or matrix.column_count != n:
         raise OperationDomainValidationError(
             location=("matrix", "vector"),
             code="collatz_wielandt.square_matrix",
             message="matrix must be nonempty, square, and aligned with the vector",
         )
-    if any(value.as_fraction() < 0 for row in matrix for value in row):
+    if any(value.as_fraction() < 0 for row in matrix.entries for value in row):
         raise OperationDomainValidationError(
             location=("matrix",),
             code="collatz_wielandt.nonnegative_matrix",
@@ -66,7 +69,7 @@ def compute_collatz_wielandt_profile(
             message="Collatz-Wielandt requires a strictly positive vector",
         )
     _admit_result_size(matrix, vector)
-    mat = [[matrix[i][j].as_fraction() for j in range(n)] for i in range(n)]
+    mat = [[matrix.entries[i][j].as_fraction() for j in range(n)] for i in range(n)]
     vec = [v.as_fraction() for v in vector]
 
     quotients: list[Fraction] = []

@@ -8,12 +8,10 @@ no time measurement or output-height proxy stands in for intermediate work.
 from dataclasses import dataclass
 
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.matrices.values import (
-    MAX_INTEGER_MATRIX_ORDER,
-    MAX_MATRIX_SCALAR_DIGITS,
-)
+from jacobian.math.matrices.values import MAX_MATRIX_SCALAR_DIGITS
 
 MAX_HNF_INPUT_DIGITS = 256
+MAX_HNF_MATRIX_ORDER = 128
 MAX_HNF_WORK_UNITS = 250_000_000
 # W has two non-modular transformation passes, each with bounded coefficient
 # growth. These ceilings reserve both passes while retaining the established
@@ -80,13 +78,13 @@ def admit_hermite_normal_form(entries: list[list[int]]) -> HNFAdmission:
     rows = len(entries)
     columns = len(entries[0]) if rows else 0
     if (
-        not 1 <= rows <= MAX_INTEGER_MATRIX_ORDER
-        or not 1 <= columns <= MAX_INTEGER_MATRIX_ORDER
+        not 1 <= rows <= MAX_HNF_MATRIX_ORDER
+        or not 1 <= columns <= MAX_HNF_MATRIX_ORDER
         or any(len(row) != columns for row in entries)
     ):
         _reject(
             "HNF requires a nonempty rectangular matrix with axes at most "
-            f"{MAX_INTEGER_MATRIX_ORDER}"
+            f"{MAX_HNF_MATRIX_ORDER}"
         )
     if any(type(value) is not int for row in entries for value in row):
         raise TypeError("Hermite normal form entries must be integers")

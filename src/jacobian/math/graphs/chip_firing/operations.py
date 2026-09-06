@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import deque
 
 from jacobian._execution import request_checkpoint
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.chip_firing._models import (
     MAX_COEFFICIENT_DIGITS,
@@ -24,6 +25,7 @@ from jacobian.math.graphs.chip_firing._models import (
     StabilizeResult,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.matrices.values import IntegerMatrix
 
 
 def _admit_connected(graph: SimpleUndirectedGraph) -> None:
@@ -156,8 +158,16 @@ def laplacian(graph: SimpleUndirectedGraph) -> LaplacianResult:
         laplacian.append(tuple(row))
 
     return LaplacianResult(
+        graph=graph,
         vertices=vertices,
-        laplacian=tuple(laplacian),
+        laplacian=IntegerMatrix(
+            row_count=n,
+            column_count=n,
+            entries=tuple(
+                tuple(format_canonical_integer(int(value)) for value in row)
+                for row in laplacian
+            ),
+        ),
         degrees=tuple(degrees),
     )
 
@@ -170,14 +180,22 @@ def reduced_laplacian(
     vertices = graph.vertices
     n = len(vertices)
     full = laplacian(graph)
-    lap = full.laplacian
+    lap = full.laplacian.entries
     sink_idx = vertices.index(sink)
     nonsink = [i for i in range(n) if i != sink_idx]
     reduced = tuple(tuple(lap[i][j] for j in nonsink) for i in nonsink)
     return ReducedLaplacianResult(
-        vertices=vertices,
+        graph=graph,
+        vertices=tuple(vertices[i] for i in nonsink),
         sink=sink,
-        reduced_laplacian=reduced,
+        reduced_laplacian=IntegerMatrix(
+            row_count=len(reduced),
+            column_count=len(reduced[0]) if reduced else 0,
+            entries=tuple(
+                tuple(format_canonical_integer(int(value)) for value in row)
+                for row in reduced
+            ),
+        ),
     )
 
 
@@ -238,7 +256,9 @@ def fire_vector(
         )
     vertices = graph.vertices
     n = len(vertices)
-    lap = laplacian(graph).laplacian
+    lap = tuple(
+        tuple(int(value) for value in row) for row in laplacian(graph).laplacian.entries
+    )
     divisor_values = list(divisor)
     f = firing_vector
     result = []
@@ -584,7 +604,10 @@ def abel_jacobi(
     nonsink = [i for i in range(n) if i != sink_idx]
     from jacobian.math.graphs.chip_firing._snf_process import smith_coordinates
 
-    matrix = [list(row) for row in reduced_laplacian(graph, sink).reduced_laplacian]
+    matrix = [
+        [int(value) for value in row]
+        for row in reduced_laplacian(graph, sink).reduced_laplacian.entries
+    ]
     invariant, coords = smith_coordinates(matrix, [divisor[i] for i in nonsink])
     request_checkpoint("after Abel-Jacobi coordinates")
     return AbelJacobiResult(
@@ -593,6 +616,22 @@ def abel_jacobi(
         coordinates=tuple(coords),
         invariant_factors=invariant,
     )
+
+
+def verify_laplacian(claim: LaplacianResult) -> bool:
+    """Verify a labelled Laplacian claim against its retained graph."""
+    try:
+        return laplacian(claim.graph) == claim
+    except (TypeError, ValueError, OperationDomainValidationError):
+        return False
+
+
+def verify_reduced_laplacian(claim: ReducedLaplacianResult) -> bool:
+    """Verify a reduced Laplacian claim against its graph and sink."""
+    try:
+        return reduced_laplacian(claim.graph, claim.sink) == claim
+    except (TypeError, ValueError, OperationDomainValidationError):
+        return False
 
 
 __all__ = [
@@ -607,4 +646,6 @@ __all__ = [
     "q_reduced",
     "reduced_laplacian",
     "stabilize",
+    "verify_laplacian",
+    "verify_reduced_laplacian",
 ]

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Literal
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.designs.incidence_structures._kernel import (
     containment_profile_data,
@@ -28,6 +29,7 @@ from jacobian.math.combinatorics.designs.incidence_structures._models import (
     _require_containment_profile_admitted,
     _require_incidence_trade_admitted,
 )
+from jacobian.math.matrices.values import IntegerMatrix
 
 
 def containment_profile(
@@ -133,9 +135,16 @@ def _point_sort_key(points: tuple[str, ...]) -> Callable[[str], int]:
 
 def incidence_matrix(incidence: IncidenceStructure) -> IncidenceMatrixResult:
     """Compute the exact 0/1 incidence matrix."""
-    matrix = tuple(
-        tuple(int(point in block) for block in incidence.blocks)
-        for point in incidence.points
+    matrix = IntegerMatrix(
+        row_count=len(incidence.points),
+        column_count=len(incidence.block_ids),
+        entries=tuple(
+            tuple(
+                format_canonical_integer(int(point in block))
+                for block in incidence.blocks
+            )
+            for point in incidence.points
+        ),
     )
     return IncidenceMatrixResult(
         points=incidence.points,
@@ -349,4 +358,15 @@ def gram(incidence: IncidenceStructure, axis: Literal["point", "block"]) -> Gram
             )
             for left in range(len(incidence.blocks))
         )
-    return GramResult(axis=axis, labels=labels, matrix=matrix)
+    return GramResult(
+        axis=axis,
+        labels=labels,
+        matrix=IntegerMatrix(
+            row_count=len(labels),
+            column_count=len(labels),
+            entries=tuple(
+                tuple(format_canonical_integer(value) for value in row)
+                for row in matrix
+            ),
+        ),
+    )

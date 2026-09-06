@@ -15,6 +15,7 @@ from pydantic import (
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.matrices.values import IntegerMatrix
 
 MAX_POINTS = 100
 MAX_BLOCKS = 100
@@ -190,7 +191,18 @@ class IncidenceMatrixRequest(StrictModel):
 class IncidenceMatrixResult(StrictModel):
     points: tuple[str, ...]
     block_ids: tuple[str, ...]
-    matrix: tuple[tuple[int, ...], ...]
+    matrix: IntegerMatrix
+
+    @model_validator(mode="after")
+    def require_matrix_shape(self) -> Self:
+        if self.matrix.row_count != len(self.points) or self.matrix.column_count != len(
+            self.block_ids
+        ):
+            raise _validation_error(
+                "incidence_matrix_shape",
+                "matrix dimensions must match point and block axes",
+            )
+        return self
 
 
 class DegreeProfileResult(StrictModel):
@@ -655,6 +667,16 @@ class GramRequest(StrictModel):
 
 
 class GramResult(StrictModel):
-    axis: str
+    axis: Literal["point", "block"]
     labels: tuple[str, ...]
-    matrix: tuple[tuple[int, ...], ...]
+    matrix: IntegerMatrix
+
+    @model_validator(mode="after")
+    def require_matrix_shape(self) -> Self:
+        if self.matrix.row_count != len(self.labels) or self.matrix.column_count != len(
+            self.labels
+        ):
+            raise _validation_error(
+                "gram_matrix_shape", "Gram matrix must be square on its labelled axis"
+            )
+        return self

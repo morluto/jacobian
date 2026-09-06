@@ -16,6 +16,7 @@ from jacobian.math.groups.root_systems._models import (
     MAX_POSITIVE_ROOTS,
     MAX_RANK,
     MAX_REFLECTION_REPRESENTABLE,
+    CartanMatrix,
     PositiveRootsResult,
     RootComponentData,
     RootSystemDataResult,
@@ -24,6 +25,14 @@ from jacobian.math.groups.root_systems._models import (
 )
 
 MAX_SIGNED_ROOT_ACTION_DEGREE = 2 * MAX_POSITIVE_ROOTS
+
+
+def _as_cartan(matrix: CartanMatrix | tuple[tuple[int, ...], ...]) -> CartanMatrix:
+    return (
+        matrix
+        if isinstance(matrix, CartanMatrix)
+        else CartanMatrix.model_validate(matrix)
+    )
 
 
 def _admit_cartan_finite_type(matrix: tuple[tuple[int, ...], ...]) -> None:
@@ -84,14 +93,18 @@ def _admit_cartan_finite_type(matrix: tuple[tuple[int, ...], ...]) -> None:
         ) from error
 
 
-def root_system_data(matrix: tuple[tuple[int, ...], ...]) -> RootSystemDataResult:
+def root_system_data(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+) -> RootSystemDataResult:
     """Compute complete root-system data from a canonical Cartan matrix."""
-    _admit_cartan_finite_type(matrix)
-    n = len(matrix)
+    cartan = _as_cartan(matrix)
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+    n = len(rows)
     simple_roots = tuple(tuple(int(i == j) for j in range(n)) for i in range(n))
-    roots = enumerate_positive_roots(matrix)
+    roots = enumerate_positive_roots(rows)
     components: list[RootComponentData] = []
-    for indices in connected_components(matrix):
+    for indices in connected_components(rows):
         component_roots = tuple(
             root
             for root in roots
@@ -111,7 +124,7 @@ def root_system_data(matrix: tuple[tuple[int, ...], ...]) -> RootSystemDataResul
         )
 
     return RootSystemDataResult._from_kernel(
-        matrix,
+        cartan,
         positive_roots=roots,
         negative_roots=tuple(tuple(-value for value in root) for root in roots),
         simple_roots=simple_roots,
@@ -119,11 +132,15 @@ def root_system_data(matrix: tuple[tuple[int, ...], ...]) -> RootSystemDataResul
     )
 
 
-def positive_roots(matrix: tuple[tuple[int, ...], ...]) -> PositiveRootsResult:
+def positive_roots(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+) -> PositiveRootsResult:
     """Compute all positive roots of a root system from its Cartan matrix."""
-    _admit_cartan_finite_type(matrix)
-    all_positive = enumerate_positive_roots(matrix)
-    return PositiveRootsResult._from_kernel(matrix, all_positive)
+    cartan = _as_cartan(matrix)
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+    all_positive = enumerate_positive_roots(rows)
+    return PositiveRootsResult._from_kernel(cartan, all_positive)
 
 
 def _apply_reflection(
@@ -169,13 +186,15 @@ def _weyl_group_order(matrix: tuple[tuple[int, ...], ...]) -> int:
 
 
 def simple_reflection(
-    matrix: tuple[tuple[int, ...], ...],
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
     vector: tuple[int, ...],
     simple_index: int,
 ) -> SimpleReflectionResult:
     """Apply a simple reflection to a root lattice vector."""
-    _admit_cartan_finite_type(matrix)
-    rank = len(matrix)
+    cartan = _as_cartan(matrix)
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+    rank = len(rows)
     if type(simple_index) is not int or simple_index < 0 or simple_index >= rank:
         raise OperationDomainValidationError(
             location=("simple_index",),
@@ -199,7 +218,7 @@ def simple_reflection(
         )
     reflected = tuple(
         _apply_reflection(
-            [list(row) for row in matrix],
+            [list(row) for row in rows],
             list(vector),
             simple_index,
         )
@@ -210,13 +229,17 @@ def simple_reflection(
             code="root_system.reflected_vector_out_of_range",
             message="reflection image exceeds the interoperable root-lattice axis",
         )
-    return SimpleReflectionResult._from_kernel(matrix, vector, simple_index, reflected)
+    return SimpleReflectionResult._from_kernel(cartan, vector, simple_index, reflected)
 
 
-def weyl_group_order(matrix: tuple[tuple[int, ...], ...]) -> WeylGroupOrderResult:
+def weyl_group_order(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+) -> WeylGroupOrderResult:
     """Compute the exact order of a finite Weyl group without enumeration."""
-    _admit_cartan_finite_type(matrix)
-    return WeylGroupOrderResult._from_kernel(matrix, _weyl_group_order(matrix))
+    cartan = _as_cartan(matrix)
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+    return WeylGroupOrderResult._from_kernel(cartan, _weyl_group_order(rows))
 
 
 __all__ = [

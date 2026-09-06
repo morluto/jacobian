@@ -12,12 +12,12 @@ from jacobian.math.logic.automata.petri_nets.values import (
     MAX_PETRI_MARKING,
     MAX_REACHABILITY_STATES,
     Marking,
-    PetriIncidenceMatrix,
     PetriMarkingState,
     PetriNet,
     PetriPlaceSubset,
     PetriReachabilityEdge,
 )
+from jacobian.math.matrices.values import IntegerMatrix
 
 MAX_SIPHON_TRAP_WORK = 20_000_000
 MAX_SIPHON_TRAP_PLACES = 20
@@ -139,13 +139,14 @@ class IncidenceMatrixResult(StrictModel):
     """The incidence matrix bound to its net's place/transition axes."""
 
     net: PetriNet
-    incidence: PetriIncidenceMatrix
+    incidence: IntegerMatrix
 
     @model_validator(mode="after")
     def require_source_axes(self) -> Self:
-        if self.incidence.place_axis != tuple(
-            range(self.net.place_count)
-        ) or self.incidence.transition_axis != tuple(range(self.net.transition_count)):
+        if (
+            self.incidence.row_count != self.net.place_count
+            or self.incidence.column_count != self.net.transition_count
+        ):
             raise _validation_error(
                 "incidence_axes", "incidence axes must match the net"
             )
@@ -252,7 +253,6 @@ __all__ = [
     "FireTransitionResult",
     "IncidenceMatrixRequest",
     "IncidenceMatrixResult",
-    "PetriIncidenceMatrix",
     "PetriMarkingState",
     "PetriPlaceSubset",
     "PetriReachabilityEdge",

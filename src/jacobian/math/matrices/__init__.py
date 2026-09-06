@@ -24,6 +24,8 @@ from jacobian.math.matrices.operations import (
 from jacobian.math.matrices.values import (
     EmbeddedRealSimpleNumberFieldMatrix,
     ExactRealMatrix,
+    IntegerMatrix,
+    RationalMatrix,
     SmithNormalForm,
     SparseRationalMatrix,
     SparseRationalMatrixEntry,
@@ -32,6 +34,8 @@ from jacobian.math.matrices.values import (
 __all__ = [
     "EmbeddedRealSimpleNumberFieldMatrix",
     "ExactRealMatrix",
+    "IntegerMatrix",
+    "RationalMatrix",
     "SmithNormalForm",
     "SparseRationalMatrix",
     "SparseRationalMatrixEntry",

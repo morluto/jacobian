@@ -9,6 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
+from jacobian.math.matrices.values import IntegerMatrix
 
 MAX_VERTICES = 128
 MAX_ARROWS = 1024
@@ -60,10 +61,21 @@ class FixedLengthPathsRequest(StrictModel):
 
 
 class AdjacencyMatricesResult(StrictModel):
-    """Two square matrix values on the shared implicit vertex axis."""
+    """Two canonical matrix values on the retained vertex axis."""
 
-    adjacency_matrix: tuple[tuple[int, ...], ...]
-    transpose_matrix: tuple[tuple[int, ...], ...]
+    quiver: FiniteQuiver
+    adjacency_matrix: IntegerMatrix
+    transpose_matrix: IntegerMatrix
+
+    @model_validator(mode="after")
+    def require_matrix_shapes(self) -> Self:
+        n = self.quiver.vertex_count
+        for matrix in (self.adjacency_matrix, self.transpose_matrix):
+            if matrix.row_count != n or matrix.column_count != n:
+                raise _validation_error(
+                    "matrix_shape", "quiver matrices must be square on the vertex axis"
+                )
+        return self
 
 
 class VertexProfilesResult(StrictModel):
@@ -74,5 +86,16 @@ class VertexProfilesResult(StrictModel):
 
 
 class FixedLengthPathsResult(StrictModel):
-    path_matrix: tuple[tuple[CanonicalInteger, ...], ...]
+    quiver: FiniteQuiver
+    length: int = Field(ge=0, le=32)
+    path_matrix: IntegerMatrix
     total_paths: CanonicalInteger
+
+    @model_validator(mode="after")
+    def require_matrix_shape(self) -> Self:
+        n = self.quiver.vertex_count
+        if self.path_matrix.row_count != n or self.path_matrix.column_count != n:
+            raise _validation_error(
+                "path_matrix_shape", "path matrix must be square on the vertex axis"
+            )
+        return self

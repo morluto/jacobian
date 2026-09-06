@@ -6,13 +6,15 @@ import pytest
 
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.matrices.values import IntegerMatrix
 from jacobian.math.topology.frames._models import (
     CoherenceRequest,
     FiniteFrameRequest,
+    GramResult,
     VectorFamilyRequest,
 )
 from jacobian.math.topology.frames._tools import _coherence, _frame_potential, _gram
-from jacobian.math.topology.frames.operations import gram
+from jacobian.math.topology.frames.operations import gram, verify_gram
 from jacobian.math.topology.frames.values import (
     MAX_VECTOR_CELLS,
     VectorFamily,
@@ -36,6 +38,20 @@ def test_gram_accepts_nonspanning_vector_family() -> None:
         (1, 2),
         (2, 4),
     )
+
+
+def test_decoded_gram_rejects_shape_forgery() -> None:
+    result = gram(VectorFamily(vectors=((1, 0), (0, 1))))
+    payload = result.model_dump(mode="json")
+    payload["gram"]["row_count"] = 1
+    with pytest.raises(ValueError, match="shape"):
+        GramResult.model_validate(payload)
+    malformed = GramResult.model_construct(
+        vectors=((1, 0), (0, 1)),
+        dimension=2,
+        gram=IntegerMatrix(entries=(("1",),)),
+    )
+    assert not verify_gram(malformed)
 
 
 def test_vector_family_schema_advertises_cell_budget() -> None:

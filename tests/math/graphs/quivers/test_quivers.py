@@ -40,6 +40,14 @@ def test_adjacency_matrices_kronecker() -> None:
     )
 
 
+def test_adjacency_result_rejects_matrix_shape_forgery() -> None:
+    result = adjacency_matrices(FiniteQuiver(vertex_count=2, arrows=((0, 1),)))
+    payload = result.model_dump(mode="json")
+    payload["adjacency_matrix"]["row_count"] = 1
+    with pytest.raises(ValueError, match="shape"):
+        AdjacencyMatricesResult.model_validate(payload)
+
+
 def test_vertex_profiles_kronecker() -> None:
     request = VertexProfilesRequest(
         quiver=FiniteQuiver(vertex_count=2, arrows=((0, 1), (0, 1)))

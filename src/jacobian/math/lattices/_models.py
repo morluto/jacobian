@@ -11,8 +11,8 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import NativeInteger
 from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.lattices._hnf_bounds import MAX_HNF_MATRIX_ORDER
 from jacobian.math.matrices.values import (
-    MAX_INTEGER_MATRIX_ORDER,
     MAX_MATRIX_DIMENSION,
     IntegerMatrix,
     RationalMatrix,
@@ -70,9 +70,12 @@ class HermiteNormalFormRequest(StrictModel):
     including coefficient growth and the square transformation.
     """
 
-    matrix: IntegerMatrix = Field(
+    matrix: Annotated[
+        IntegerMatrix,
+        WithJsonSchema(integer_matrix_axis_schema(MAX_HNF_MATRIX_ORDER)),
+    ] = Field(
         description=(
-            f"Nonempty integer matrix with axes at most {MAX_INTEGER_MATRIX_ORDER} "
+            f"Nonempty integer matrix with axes at most {MAX_HNF_MATRIX_ORDER} "
             "and at most 256 digits per scalar. HNF admission bounds the "
             "fraction-free elimination, modular reduction and the square "
             "transformation using row-norm minor bounds. At most 250,000,000 "

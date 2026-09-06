@@ -9,6 +9,7 @@ from jacobian.math.cluster_algebras._models import (
     ExchangeMatrix,
     GVectorResult,
     SeedMutationResult,
+    _identity_matrix,
     _require_mutatable,
     encoded_entries,
     parsed_entries,
@@ -110,4 +111,12 @@ def g_vectors(exchange_matrix: ExchangeMatrix) -> GVectorResult:
     return GVectorResult._from_kernel(exchange_matrix)
 
 
-__all__ = ["g_vectors", "mutate_seed"]
+def verify_g_vectors(claim: GVectorResult) -> bool:
+    """Verify the initial g-vector identity on its retained seed."""
+    try:
+        return claim.g_matrix == _identity_matrix(claim.exchange_matrix.n)
+    except (TypeError, ValueError):
+        return False
+
+
+__all__ = ["g_vectors", "mutate_seed", "verify_g_vectors"]

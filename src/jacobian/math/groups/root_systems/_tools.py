@@ -30,7 +30,17 @@ def _run_weyl_group_order(request: CartanMatrixRequest) -> WeylGroupOrderResult:
     return weyl_group_order(request.matrix)
 
 
-_A2 = {"matrix": [[2, -1], [-1, 2]]}
+_A2 = {
+    "matrix": {
+        "matrix": {
+            "domain": "ZZ",
+            "row_count": 2,
+            "column_count": 2,
+            "entries": [["2", "-1"], ["-1", "2"]],
+        },
+        "simple_root_axis": [0, 1],
+    }
+}
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(

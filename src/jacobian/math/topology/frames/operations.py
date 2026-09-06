@@ -7,6 +7,7 @@ from fractions import Fraction
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.matrices.values import IntegerMatrix
 from jacobian.math.topology.frames._flint import integer_gram, integer_gram_and_rank
 from jacobian.math.topology.frames._models import (
     CoherenceResult,
@@ -15,7 +16,7 @@ from jacobian.math.topology.frames._models import (
 )
 from jacobian.math.topology.frames.values import VectorFamily
 
-__all__ = ["coherence", "frame_potential", "gram"]
+__all__ = ["coherence", "frame_potential", "gram", "verify_gram"]
 
 
 MAX_FRAME_GRAM_ENTRIES = 2_097_152
@@ -46,7 +47,17 @@ def _require_gram_work_budget(value: VectorFamily) -> None:
 
 def _gram_result(value: VectorFamily) -> GramResult:
     matrix = integer_gram(value.vectors)
-    return GramResult._from_kernel(vectors=value.vectors, gram=matrix)
+    return GramResult._from_kernel(
+        vectors=value.vectors,
+        gram=IntegerMatrix(
+            row_count=len(matrix),
+            column_count=len(matrix[0]) if matrix else len(value.vectors),
+            entries=tuple(
+                tuple(format_canonical_integer(entry) for entry in row)
+                for row in matrix
+            ),
+        ),
+    )
 
 
 def _admit_frame(value: VectorFamily, *, rank: int) -> None:
@@ -71,6 +82,24 @@ def gram(value: VectorFamily) -> GramResult:
     """Compute the exact Gram matrix of a vector family."""
     _require_gram_work_budget(value)
     return _gram_result(value)
+
+
+def verify_gram(claim: GramResult) -> bool:
+    """Verify the retained vector-family Gram relation for a decoded claim."""
+    try:
+        if (
+            claim.gram.row_count != len(claim.vectors)
+            or claim.gram.column_count != len(claim.vectors)
+            or claim.dimension != len(claim.vectors[0])
+        ):
+            return False
+        _require_gram_work_budget(claim)
+        expected = integer_gram(claim.vectors)
+        return claim.gram.entries == tuple(
+            tuple(format_canonical_integer(entry) for entry in row) for row in expected
+        )
+    except (TypeError, ValueError, OperationDomainValidationError):
+        return False
 
 
 def coherence(value: VectorFamily) -> CoherenceResult:

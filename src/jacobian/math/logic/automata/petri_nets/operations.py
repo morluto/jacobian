@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from collections import deque
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.logic.automata.petri_nets._models import (
     MAX_SIPHON_TRAP_PLACES,
     MAX_SIPHON_TRAP_WORK,
     EnabledTransitionsResult,
     FireTransitionResult,
     IncidenceMatrixResult,
-    PetriIncidenceMatrix,
     PetriMarkingState,
     PetriPlaceSubset,
     PetriReachabilityEdge,
@@ -23,6 +23,7 @@ from jacobian.math.logic.automata.petri_nets.values import (
     PetriNet,
     require_reachability_bounds,
 )
+from jacobian.math.matrices.values import IntegerMatrix
 
 __all__ = [
     "compute_incidence_matrix",
@@ -121,12 +122,13 @@ def compute_incidence_matrix(net: PetriNet) -> IncidenceMatrixResult:
     """Compute C = Post - Pre."""
     return IncidenceMatrixResult(
         net=net,
-        incidence=PetriIncidenceMatrix(
-            place_axis=tuple(range(net.place_count)),
-            transition_axis=tuple(range(net.transition_count)),
+        incidence=IntegerMatrix(
+            row_count=net.place_count,
+            column_count=net.transition_count,
             entries=tuple(
                 tuple(
-                    net.post[p][t] - net.pre[p][t] for t in range(net.transition_count)
+                    format_canonical_integer(net.post[p][t] - net.pre[p][t])
+                    for t in range(net.transition_count)
                 )
                 for p in range(net.place_count)
             ),

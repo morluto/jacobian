@@ -11,7 +11,6 @@ from jacobian._exact import CanonicalInteger, CanonicalRational
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.matrices.values import (
     MAX_EXACT_LINEAR_MATRIX_AXIS,
-    MAX_INTEGER_MATRIX_ORDER,
     MAX_MATRIX_DIMENSION,
     MAX_MATRIX_SCALAR_DIGITS,
     MAX_RATIONAL_MATRIX_ORDER,
@@ -32,7 +31,7 @@ MAX_CHARACTERISTIC_POLYNOMIAL_ORDER = 128
 MAX_MATRIX_PRODUCT_AXIS = 128
 MAX_MATRIX_PRODUCT_MULTIPLY_ADDS = 2_500_000
 MAX_MATRIX_PRODUCT_OUTPUT_DIGIT_WORK = 3_000_000
-MAX_INVERSE_MATRIX_ORDER = MAX_INTEGER_MATRIX_ORDER
+MAX_INVERSE_MATRIX_ORDER = 128
 MAX_INVERSE_OUTPUT_DIGIT_WORK = 3_000_000
 MAX_PERMANENT_RYSER_SUBSETS = 4_096
 MAX_PERMANENT_MATRIX_ORDER = MAX_PERMANENT_RYSER_SUBSETS.bit_length() - 1
@@ -326,7 +325,10 @@ class IntegerMatrixRequest(_MatrixRequest):
 class NonsingularIntegerMatrixRequest(_MatrixRequest):
     """One bounded square integer matrix for the exact inverse kernel."""
 
-    matrix: IntegerMatrix
+    matrix: Annotated[
+        IntegerMatrix,
+        WithJsonSchema(integer_matrix_axis_schema(MAX_INVERSE_MATRIX_ORDER)),
+    ]
     _raw_matrix_axis_limit: ClassVar[int] = MAX_INVERSE_MATRIX_ORDER
 
 

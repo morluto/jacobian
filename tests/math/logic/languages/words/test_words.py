@@ -210,11 +210,16 @@ def test_fibonacci_incidence_matrix_and_binding() -> None:
         images=(("a", "b"), ("a",)),
     )
     result = compute_incidence_matrix(IncidenceMatrixRequest(morphism=morphism))
-    assert result.matrix == ((1, 1), (1, 0))
+    assert result.matrix.entries == (("1", "1"), ("1", "0"))
     assert result.orientation == "ROWS_TARGET_COLUMNS_SOURCE"
 
     payload = result.model_dump()
-    payload["matrix"] = ((1, 0), (1, 1))
+    payload["matrix"] = {
+        "domain": "ZZ",
+        "row_count": 2,
+        "column_count": 2,
+        "entries": [["1", "0"], ["1", "1"]],
+    }
     supplied = IncidenceMatrixResult.model_validate(payload)
     assert supplied.matrix == ((1, 0), (1, 1))
 

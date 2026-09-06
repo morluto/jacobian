@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.logic.languages.words._fixed_point_admission import (
     require_fixed_point_prefix_budget,
 )
@@ -26,6 +27,7 @@ from jacobian.math.logic.languages.words.values import (
     WordMorphism,
     _require_dependency_occurrence_bound,
 )
+from jacobian.math.matrices.values import IntegerMatrix
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,10 +180,18 @@ def compose_morphisms(first: WordMorphism, second: WordMorphism) -> WordMorphism
     )
 
 
-def incidence_matrix(morphism: WordMorphism) -> tuple[tuple[int, ...], ...]:
-    return tuple(
-        tuple(image.count(target) for image in morphism.images)
-        for target in morphism.target_alphabet
+def incidence_matrix(morphism: WordMorphism) -> IntegerMatrix:
+    """Return target-by-source counts in the canonical ZZ matrix carrier."""
+    return IntegerMatrix(
+        row_count=len(morphism.target_alphabet),
+        column_count=len(morphism.source_alphabet),
+        entries=tuple(
+            tuple(
+                format_canonical_integer(image.count(target))
+                for image in morphism.images
+            )
+            for target in morphism.target_alphabet
+        ),
     )
 
 

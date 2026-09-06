@@ -11,6 +11,7 @@ from jacobian.math.graphs.quivers._models import (
     VertexProfilesResult,
 )
 from jacobian.math.graphs.quivers._path_bounds import fixed_length_paths_envelope
+from jacobian.math.matrices.values import IntegerMatrix
 
 
 def adjacency_matrices(quiver: FiniteQuiver) -> AdjacencyMatricesResult:
@@ -22,8 +23,22 @@ def adjacency_matrices(quiver: FiniteQuiver) -> AdjacencyMatricesResult:
     adj = tuple(tuple(row) for row in matrix)
     transpose = tuple(tuple(matrix[j][i] for j in range(n)) for i in range(n))
     return AdjacencyMatricesResult(
-        adjacency_matrix=adj,
-        transpose_matrix=transpose,
+        quiver=quiver,
+        adjacency_matrix=IntegerMatrix(
+            row_count=n,
+            column_count=n,
+            entries=tuple(
+                tuple(format_canonical_integer(value) for value in row) for row in adj
+            ),
+        ),
+        transpose_matrix=IntegerMatrix(
+            row_count=n,
+            column_count=n,
+            entries=tuple(
+                tuple(format_canonical_integer(value) for value in row)
+                for row in transpose
+            ),
+        ),
     )
 
 
@@ -69,8 +84,15 @@ def fixed_length_paths(quiver: FiniteQuiver, length: int) -> FixedLengthPathsRes
 
     total = sum(sum(row) for row in result)
     return FixedLengthPathsResult(
-        path_matrix=tuple(
-            tuple(format_canonical_integer(value) for value in row) for row in result
+        quiver=quiver,
+        length=length,
+        path_matrix=IntegerMatrix(
+            row_count=n,
+            column_count=n,
+            entries=tuple(
+                tuple(format_canonical_integer(value) for value in row)
+                for row in result
+            ),
         ),
         total_paths=format_canonical_integer(total),
     )
@@ -88,4 +110,38 @@ def _matrix_multiply(a: list[list[int]], b: list[list[int]]) -> list[list[int]]:
     return result
 
 
-__all__ = ["adjacency_matrices", "fixed_length_paths", "vertex_profiles"]
+def verify_adjacency_matrices(claim: AdjacencyMatricesResult) -> bool:
+    """Verify both retained adjacency relations against the source quiver."""
+    try:
+        expected = adjacency_matrices(claim.quiver)
+        return (
+            claim.adjacency_matrix == expected.adjacency_matrix
+            and claim.transpose_matrix == expected.transpose_matrix
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def verify_fixed_length_paths(
+    claim: FixedLengthPathsResult, length: int | None = None
+) -> bool:
+    """Verify a path-count matrix against its source quiver and length."""
+    try:
+        expected = fixed_length_paths(
+            claim.quiver, claim.length if length is None else length
+        )
+        return (
+            claim.path_matrix == expected.path_matrix
+            and claim.total_paths == expected.total_paths
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+__all__ = [
+    "adjacency_matrices",
+    "fixed_length_paths",
+    "verify_adjacency_matrices",
+    "verify_fixed_length_paths",
+    "vertex_profiles",
+]

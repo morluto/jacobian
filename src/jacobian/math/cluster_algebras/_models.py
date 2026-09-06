@@ -12,6 +12,7 @@ from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
 from jacobian.canonical import parse_canonical_integer as _parse_int
+from jacobian.math.matrices.values import IntegerMatrix
 
 # Exchange-matrix values carry bounded integers so every skew-symmetrizability
 # product stays bounded work: symmetrizer entries stay below
@@ -241,8 +242,15 @@ class GVectorRequest(StrictModel):
     exchange_matrix: ExchangeMatrix
 
 
-def _identity_matrix(n: int) -> tuple[tuple[int, ...], ...]:
-    return tuple(tuple(1 if i == j else 0 for j in range(n)) for i in range(n))
+def _identity_matrix(n: int) -> IntegerMatrix:
+    return IntegerMatrix(
+        row_count=n,
+        column_count=n,
+        entries=tuple(
+            tuple(format_canonical_integer(int(i == j)) for j in range(n))
+            for i in range(n)
+        ),
+    )
 
 
 class GVectorResult(StrictModel):
@@ -253,13 +261,13 @@ class GVectorResult(StrictModel):
     """
 
     exchange_matrix: ExchangeMatrix
-    g_matrix: tuple[tuple[int, ...], ...]
+    g_matrix: IntegerMatrix
     convention: Literal["FOMIN_ZELEVINSKY"] = "FOMIN_ZELEVINSKY"
 
     @model_validator(mode="after")
     def require_g_matrix_shape(self) -> Self:
         n = self.exchange_matrix.n
-        if len(self.g_matrix) != n or any(len(row) != n for row in self.g_matrix):
+        if self.g_matrix.row_count != n or self.g_matrix.column_count != n:
             raise _validation_error(
                 "cluster_algebra.g_matrix_shape",
                 "g_matrix must be an n x n matrix for the source exchange matrix",

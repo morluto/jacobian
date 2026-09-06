@@ -16,6 +16,7 @@ from jacobian.math.logic.languages.words.values import (
     SubstitutionDependencyGraph,
     WordMorphism,
 )
+from jacobian.math.matrices.values import IntegerMatrix
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -156,15 +157,15 @@ class IncidenceMatrixRequest(StrictModel):
 class IncidenceMatrixResult(IncidenceMatrixRequest):
     """Exact target-by-source incidence matrix."""
 
-    matrix: tuple[tuple[int, ...], ...]
+    matrix: IntegerMatrix
     orientation: Literal["ROWS_TARGET_COLUMNS_SOURCE"] = "ROWS_TARGET_COLUMNS_SOURCE"
 
     @model_validator(mode="after")
     def require_matrix_shape(self) -> Self:
-        if len(self.matrix) != len(self.morphism.target_alphabet) or any(
-            len(row) != len(self.morphism.source_alphabet)
-            or any(entry < 0 for entry in row)
-            for row in self.matrix
+        if (
+            self.matrix.row_count != len(self.morphism.target_alphabet)
+            or self.matrix.column_count != len(self.morphism.source_alphabet)
+            or any(int(entry) < 0 for row in self.matrix.entries for entry in row)
         ):
             raise _validation_error(
                 "incidence_matrix_shape",
@@ -174,7 +175,7 @@ class IncidenceMatrixResult(IncidenceMatrixRequest):
 
     @classmethod
     def _from_kernel(
-        cls, request: IncidenceMatrixRequest, matrix: tuple[tuple[int, ...], ...]
+        cls, request: IncidenceMatrixRequest, matrix: IntegerMatrix
     ) -> Self:
         return cls.model_construct(morphism=request.morphism, matrix=matrix)
 

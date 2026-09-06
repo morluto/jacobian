@@ -8,9 +8,18 @@ from typing import Any, Literal
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationResourceAdmissionError
-from jacobian.math.matrices.rational_linear._models import LinearRationalSystem
+from jacobian.math.matrices.rational_linear._models import (
+    LinearRationalInconsistencyResult,
+    LinearRationalSolutionResult,
+    LinearRationalSystem,
+)
 
-__all__ = ["inconsistency_witness", "solve"]
+__all__ = [
+    "inconsistency_witness",
+    "solve",
+    "verify_inconsistency",
+    "verify_solution",
+]
 
 MAX_LINEAR_SCALAR_WORK = 100_000_000
 MAX_FLINT_LINEAR_SCALAR_WORK = 500_000_000
@@ -219,6 +228,70 @@ def _solve_admitted(plan: _LinearPlan) -> tuple[CanonicalRational, ...] | None:
     if values is None:
         return None
     return tuple(_canonical_rational(value) for value in values)
+
+
+def _system_rows(
+    system: LinearRationalSystem,
+) -> tuple[dict[int, Fraction], ...]:
+    """Expand the sparse rows of a retained system as exact fractions."""
+    rows: tuple[dict[int, Fraction], ...] = tuple(
+        {} for _ in range(system.coefficients.row_count)
+    )
+    for item in system.coefficients.entries:
+        rows[item.row][item.column] = item.value.as_fraction()
+    return rows
+
+
+def verify_solution(claim: LinearRationalSolutionResult) -> bool:
+    """Check ``A x = b`` for a retained solution claim without resolving.
+
+    Only SOLUTION claims are verifiable; an INCONSISTENT solution outcome
+    carries no vector, so it does not verify and remains a producer outcome.
+    """
+    if claim.status != "SOLUTION" or claim.values is None:
+        return False
+    if len(claim.values) != len(claim.system.variables):
+        return False
+    point = tuple(value.as_fraction() for value in claim.values)
+    rows = _system_rows(claim.system)
+    return all(
+        (sum(coefficient * point[column] for column, coefficient in row.items()))
+        == bound.as_fraction()
+        for row, bound in zip(rows, claim.system.rhs, strict=True)
+    )
+
+
+def verify_inconsistency(claim: LinearRationalInconsistencyResult) -> bool:
+    """Check ``y^T A = 0`` and the recorded nonzero ``y^T b`` pairing.
+
+    Only INCONSISTENT claims are verifiable; a CONSISTENT outcome carries
+    no witness, so it does not verify and remains a producer outcome.
+    """
+    if claim.status != "INCONSISTENT":
+        return False
+    if claim.left_witness is None or claim.rhs_pairing is None:
+        return False
+    if len(claim.left_witness) != len(claim.system.rhs):
+        return False
+    witness = tuple(value.as_fraction() for value in claim.left_witness)
+    rows = _system_rows(claim.system)
+    for column in range(len(claim.system.variables)):
+        if (
+            sum(
+                witness[row] * row_map.get(column, Fraction(0))
+                for row, row_map in enumerate(rows)
+            )
+            != 0
+        ):
+            return False
+    pairing = sum(
+        (
+            coordinate * bound.as_fraction()
+            for coordinate, bound in zip(witness, claim.system.rhs, strict=True)
+        ),
+        Fraction(0),
+    )
+    return pairing != 0 and pairing == claim.rhs_pairing.as_fraction()
 
 
 def inconsistency_witness(

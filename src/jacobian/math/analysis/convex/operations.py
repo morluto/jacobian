@@ -60,6 +60,8 @@ def max_affine_evaluation(
     all_values = tuple((pid, CanonicalRational.from_fraction(v)) for pid, v in values)
     assert max_value is not None
     return MaxAffineEvalResult(
+        function=function,
+        point=point,
         value=CanonicalRational.from_fraction(max_value),
         active_pieces=tuple(active_pieces),
         all_values=all_values,
@@ -90,10 +92,36 @@ def max_affine_subdifferential(
             active_gradients.append(piece)
 
     active_grads = tuple(piece.coefficients for piece in active_gradients)
-    return MaxAffineSubdifferentialResult(active_gradients=active_grads)
+    return MaxAffineSubdifferentialResult(
+        function=function,
+        point=point,
+        active_gradients=active_grads,
+    )
+
+
+def verify_max_affine_evaluation(claim: MaxAffineEvalResult) -> bool:
+    """Verify value, active-piece IDs, and per-piece values against the source."""
+
+    try:
+        return max_affine_evaluation(claim.function, claim.point) == claim
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+
+
+def verify_max_affine_subdifferential(
+    claim: MaxAffineSubdifferentialResult,
+) -> bool:
+    """Verify active gradients against the retained function and point."""
+
+    try:
+        return max_affine_subdifferential(claim.function, claim.point) == claim
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
 
 
 __all__ = [
     "max_affine_evaluation",
     "max_affine_subdifferential",
+    "verify_max_affine_evaluation",
+    "verify_max_affine_subdifferential",
 ]

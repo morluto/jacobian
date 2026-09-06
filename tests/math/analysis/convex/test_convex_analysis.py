@@ -16,6 +16,8 @@ from jacobian.math.analysis.convex._models import (
 from jacobian.math.analysis.convex.operations import (
     max_affine_evaluation,
     max_affine_subdifferential,
+    verify_max_affine_evaluation,
+    verify_max_affine_subdifferential,
 )
 
 
@@ -147,6 +149,42 @@ class TestSubdifferential:
         result = compute_subdifferential(req)
         assert len(result.active_gradients) == 2
         assert result.active_gradients[0][0].as_fraction() in {1, -1}
+
+
+def test_max_affine_claims_retain_sources_and_reject_forgery() -> None:
+    function = MaxAffineFunction(
+        pieces=(
+            AffinePiece(
+                piece_id="p1",
+                coefficients=(_rational("1"),),
+                intercept=_rational("0"),
+            ),
+            AffinePiece(
+                piece_id="p2",
+                coefficients=(_rational("-1"),),
+                intercept=_rational("0"),
+            ),
+        )
+    )
+    point = RationalPoint(coordinates=(_rational("2"),))
+
+    evaluation = max_affine_evaluation(function, point)
+    decoded = type(evaluation).model_validate_json(evaluation.model_dump_json())
+    assert verify_max_affine_evaluation(decoded)
+    payload = evaluation.model_dump(mode="json")
+    payload["active_pieces"] = ["p2"]
+    assert not verify_max_affine_evaluation(type(evaluation).model_validate(payload))
+
+    subdifferential = max_affine_subdifferential(function, point)
+    decoded_subdifferential = type(subdifferential).model_validate_json(
+        subdifferential.model_dump_json()
+    )
+    assert verify_max_affine_subdifferential(decoded_subdifferential)
+    payload = subdifferential.model_dump(mode="json")
+    payload["active_gradients"] = [[{"num": "-1", "den": "1"}]]
+    assert not verify_max_affine_subdifferential(
+        type(subdifferential).model_validate(payload)
+    )
 
     def test_rejects_mismatched_point_dimension(self) -> None:
         request = MaxAffineSubdifferentialRequest.model_validate(

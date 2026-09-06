@@ -112,6 +112,15 @@ def test_serialized_isomorphism_claim_is_verified_against_its_graphs() -> None:
     assert not verify_graph_isomorphism(GraphIsomorphismResult.model_validate(payload))
 
 
+def test_negative_outcome_is_a_producer_outcome_not_a_claim() -> None:
+    result = _decide(
+        {"vertex_count": 3, "edges": [(0, 1), (1, 2)]},
+        {"vertex_count": 3, "edges": []},
+    )
+    assert result.status == "NOT_ISOMORPHIC"
+    assert not verify_graph_isomorphism(result)
+
+
 # ---------------------------------------------------------------------------
 # Path graphs
 # ---------------------------------------------------------------------------

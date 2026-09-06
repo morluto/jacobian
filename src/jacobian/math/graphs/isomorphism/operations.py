@@ -54,4 +54,60 @@ def canonicalize_colored_graph(
         ) from error
 
 
-__all__ = ["canonicalize_colored_graph"]
+def verify_colored_graph_canonicalization(
+    claim: ColoredGraphCanonicalizationResult,
+) -> bool:
+    """Check a relabeling preserves vertex colors, edges, and edge colors.
+
+    That the target is the canonical minimum needs enumeration and stays
+    the producer's outcome; this bounded check covers only the relabeling
+    relation against the retained source and canonical graphs.
+    """
+    source = claim.source_graph
+    canonical = claim.canonical_graph
+    forward: dict[str, str] = {}
+    for pair in claim.relabeling:
+        if pair.source_vertex in forward:
+            return False
+        forward[pair.source_vertex] = pair.canonical_vertex
+    if set(forward) != set(source.graph.vertices):
+        return False
+    if set(forward.values()) != set(canonical.graph.vertices):
+        return False
+    if bool(source.vertex_colors) != bool(canonical.vertex_colors):
+        return False
+    if source.vertex_colors:
+        source_color = dict(
+            zip(source.graph.vertices, source.vertex_colors, strict=True)
+        )
+        canonical_color = dict(
+            zip(canonical.graph.vertices, canonical.vertex_colors, strict=True)
+        )
+        if any(
+            canonical_color[target] != source_color[source_vertex]
+            for source_vertex, target in forward.items()
+        ):
+            return False
+    source_edge_index = {edge: index for index, edge in enumerate(source.graph.edges)}
+    canonical_edge_index = {
+        edge: index for index, edge in enumerate(canonical.graph.edges)
+    }
+    if bool(source.edge_colors) != bool(canonical.edge_colors):
+        return False
+    mapped: set[tuple[str, str]] = set()
+    for edge in source.graph.edges:
+        left, right = edge
+        first, second = forward[left], forward[right]
+        image = (first, second) if first < second else (second, first)
+        if image not in canonical_edge_index or image in mapped:
+            return False
+        mapped.add(image)
+        if source.edge_colors and (
+            canonical.edge_colors[canonical_edge_index[image]]
+            != source.edge_colors[source_edge_index[edge]]
+        ):
+            return False
+    return mapped == set(canonical.graph.edges)
+
+
+__all__ = ["canonicalize_colored_graph", "verify_colored_graph_canonicalization"]

@@ -163,17 +163,20 @@ def decide_graph_isomorphism(
 
 
 def verify_graph_isomorphism(claim: GraphIsomorphismResult) -> bool:
-    """Return whether a graph-isomorphism claim matches its retained graphs."""
+    """Check an ISOMORPHIC claim's bijection and adjacency preservation.
+
+    Only ISOMORPHIC claims are verifiable. A NOT_ISOMORPHIC outcome has no
+    checkable certificate in this carrier, so it does not verify and
+    remains a producer outcome. No VF2 search runs here.
+    """
     try:
         _admit_graph_isomorphism(
             GraphIsomorphismRequest(graph_a=claim.graph_a, graph_b=claim.graph_b)
         )
     except OperationDomainValidationError:
         return False
-    if claim.status == "NOT_ISOMORPHIC":
-        return not claim.vertex_mapping and _vertex_mapping(
-            claim.graph_a, claim.graph_b
-        ) is None
+    if claim.status != "ISOMORPHIC":
+        return False
     mapping = tuple((item.from_vertex, item.to_vertex) for item in claim.vertex_mapping)
     if len(mapping) != claim.graph_a.vertex_count:
         return False

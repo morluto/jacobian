@@ -9,6 +9,7 @@ from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.rational_subset_sum.operations import (
     compute_rational_subset_sum_profile,
+    verify_rational_subset_sum_profile,
 )
 
 
@@ -109,3 +110,11 @@ def test_uncancellable_rational_growth_is_rejected_before_enumeration() -> None:
 
     with pytest.raises(OperationDomainValidationError, match="rational"):
         compute_rational_subset_sum_profile(values)
+
+
+def test_serialized_forged_profile_is_rejected_by_verifier() -> None:
+    result = compute_rational_subset_sum_profile((_cr(1),))
+    payload = result.model_dump(mode="json")
+    payload["rows"][1]["multiplicity"] += 1
+    decoded = result.model_validate(payload)
+    assert not verify_rational_subset_sum_profile(decoded)

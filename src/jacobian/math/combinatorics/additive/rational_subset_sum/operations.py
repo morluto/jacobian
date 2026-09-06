@@ -18,7 +18,10 @@ from jacobian.math.combinatorics.additive.rational_subset_sum._models import (
     SubsetSumRow,
 )
 
-__all__ = ["compute_rational_subset_sum_profile"]
+__all__ = [
+    "compute_rational_subset_sum_profile",
+    "verify_rational_subset_sum_profile",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,3 +186,12 @@ def compute_rational_subset_sum_profile(
         values=values,
         rows=tuple(rows),
     )
+
+
+def verify_rational_subset_sum_profile(result: RationalSubsetSumResult) -> bool:
+    """Verify the complete subset-sum profile against its retained sequence."""
+    try:
+        expected = compute_rational_subset_sum_profile(result.values)
+        return expected.rows == result.rows
+    except Exception:
+        return False

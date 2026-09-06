@@ -9,6 +9,7 @@ from jacobian.math.combinatorics.additive.cyclic_sumset_profile._models import (
 )
 from jacobian.math.combinatorics.additive.cyclic_sumset_profile.operations import (
     compute_cyclic_sumset_profile,
+    verify_cyclic_sumset_profile,
 )
 
 
@@ -88,3 +89,11 @@ def test_large_modulus_with_small_profile_is_admitted() -> None:
 
     assert result.modulus == modulus
     assert result.entries[0].residue == 0
+
+
+def test_serialized_forged_profile_is_rejected_by_verifier() -> None:
+    result = compute_cyclic_sumset_profile(5, (1,), (2,))
+    payload = result.model_dump(mode="json")
+    payload["entries"][0]["residue"] = 4
+    decoded = result.model_validate(payload)
+    assert not verify_cyclic_sumset_profile(decoded)

@@ -8,6 +8,7 @@ import pytest
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.gowers_cube_profile.operations import (
     compute_gowers_cube_profile,
+    verify_gowers_cube_profile,
 )
 
 
@@ -88,3 +89,11 @@ def test_full_binary_set_reaches_recurrence_vertex_boundary() -> None:
 
     with pytest.raises(OperationDomainValidationError, match="vertex-check bound"):
         compute_gowers_cube_profile(2, (0, 1), 10)
+
+
+def test_serialized_forged_profile_is_rejected_by_verifier() -> None:
+    result = compute_gowers_cube_profile(3, (0, 1), 1)
+    payload = result.model_dump(mode="json")
+    payload["cube_count"] += 1
+    decoded = result.model_validate(payload)
+    assert not verify_gowers_cube_profile(decoded)

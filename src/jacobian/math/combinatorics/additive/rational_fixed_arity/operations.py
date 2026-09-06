@@ -15,7 +15,10 @@ from jacobian.math.combinatorics.additive.rational_fixed_arity._models import (
     SumProfileRow,
 )
 
-__all__ = ["compute_rational_fixed_arity_sum_profile"]
+__all__ = [
+    "compute_rational_fixed_arity_sum_profile",
+    "verify_rational_fixed_arity_sum_profile",
+]
 
 MAX_ENUMERATION_WORK = 20_000_000
 MAX_SAFE_JSON_INTEGER = (1 << 53) - 1
@@ -398,3 +401,14 @@ def compute_rational_fixed_arity_sum_profile(
         arity=arity,
         rows=tuple(rows),
     )
+
+
+def verify_rational_fixed_arity_sum_profile(
+    result: RationalFixedAritySumResult,
+) -> bool:
+    """Verify fixed-arity sums and multiplicities against source values."""
+    try:
+        expected = compute_rational_fixed_arity_sum_profile(result.values, result.arity)
+        return expected.rows == result.rows
+    except Exception:
+        return False

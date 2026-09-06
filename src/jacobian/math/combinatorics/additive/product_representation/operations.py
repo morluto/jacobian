@@ -10,7 +10,10 @@ from jacobian.math.combinatorics.additive.product_representation._models import 
 )
 from jacobian.math.combinatorics.finite_structures.sets._models import FiniteIntegerSet
 
-__all__ = ["compute_product_representation_profile"]
+__all__ = [
+    "compute_product_representation_profile",
+    "verify_product_representation_profile",
+]
 
 MAX_PRODUCT_REPRESENTATION_PAIRS = 100_000
 # Parsing and multiplying decimal integers is work proportional to their
@@ -83,3 +86,12 @@ def compute_product_representation_profile(
         entries=entries,
         support_cardinality=len(counts),
     )
+
+
+def verify_product_representation_profile(result: ProductRepresentationResult) -> bool:
+    """Verify every product multiplicity against the retained source sets."""
+    try:
+        expected = compute_product_representation_profile(result.left, result.right)
+        return expected.entries == result.entries and expected.support_cardinality == result.support_cardinality
+    except Exception:
+        return False

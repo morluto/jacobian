@@ -9,7 +9,7 @@ from jacobian.math.combinatorics.additive.cyclic_sumset_profile._models import (
     CyclicSumsetResult,
 )
 
-__all__ = ["compute_cyclic_sumset_profile"]
+__all__ = ["compute_cyclic_sumset_profile", "verify_cyclic_sumset_profile"]
 
 
 def compute_cyclic_sumset_profile(
@@ -59,3 +59,17 @@ def compute_cyclic_sumset_profile(
         entries=entries,
         support_cardinality=len(counts),
     )
+
+
+def verify_cyclic_sumset_profile(result: CyclicSumsetResult) -> bool:
+    """Verify cyclic representation counts against modulus and source sets."""
+    try:
+        expected = compute_cyclic_sumset_profile(
+            result.modulus, result.left, result.right
+        )
+        return (
+            expected.entries == result.entries
+            and expected.support_cardinality == result.support_cardinality
+        )
+    except Exception:
+        return False

@@ -2,6 +2,10 @@
 
 from jacobian.math.combinatorics.additive.rational_subset_sum.operations import (
     compute_rational_subset_sum_profile,
+    verify_rational_subset_sum_profile,
 )
 
-__all__ = ["compute_rational_subset_sum_profile"]
+__all__ = [
+    "compute_rational_subset_sum_profile",
+    "verify_rational_subset_sum_profile",
+]

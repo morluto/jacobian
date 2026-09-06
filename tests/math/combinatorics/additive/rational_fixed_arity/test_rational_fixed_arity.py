@@ -7,6 +7,7 @@ from math import comb
 from jacobian._exact import CanonicalRational
 from jacobian.math.combinatorics.additive.rational_fixed_arity.operations import (
     compute_rational_fixed_arity_sum_profile,
+    verify_rational_fixed_arity_sum_profile,
 )
 
 
@@ -108,6 +109,14 @@ def test_native_admission_rejects_rational_growth() -> None:
     )
     with pytest.raises(ValueError, match="rational digit bound"):
         compute_rational_fixed_arity_sum_profile(values, 2)
+
+
+def test_serialized_forged_profile_is_rejected_by_verifier() -> None:
+    result = compute_rational_fixed_arity_sum_profile((_cr(1), _cr(2)), 1)
+    payload = result.model_dump(mode="json")
+    payload["rows"][0]["multiplicity"] += 1
+    decoded = result.model_validate(payload)
+    assert not verify_rational_fixed_arity_sum_profile(decoded)
 
 
 def test_native_admission_rejects_negative_arity() -> None:

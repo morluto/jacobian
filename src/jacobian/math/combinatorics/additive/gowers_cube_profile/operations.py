@@ -14,7 +14,7 @@ from jacobian.math.combinatorics.additive.gowers_cube_profile._models import (
     gowers_cube_work,
 )
 
-__all__ = ["compute_gowers_cube_profile"]
+__all__ = ["compute_gowers_cube_profile", "verify_gowers_cube_profile"]
 
 
 def compute_gowers_cube_profile(
@@ -111,3 +111,17 @@ def compute_gowers_cube_profile(
         cube_count=cube_count,
         normalized_count=normalized,
     )
+
+
+def verify_gowers_cube_profile(result: GowersCubeResult) -> bool:
+    """Verify cube counts and normalization against the retained source."""
+    try:
+        expected = compute_gowers_cube_profile(
+            result.modulus, result.subset, result.order
+        )
+        return (
+            expected.cube_count == result.cube_count
+            and expected.normalized_count == result.normalized_count
+        )
+    except Exception:
+        return False

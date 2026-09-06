@@ -319,6 +319,8 @@ class RepresentationProfileEntry(StrictModel):
 class RepresentationProfileResult(StrictModel):
     """Support and multiplicities of the representation function ``r_{A+B}``."""
 
+    left: FiniteIntegerSet
+    right: FiniteIntegerSet
     entries: tuple[RepresentationProfileEntry, ...] = Field(default=())
 
     @model_validator(mode="after")
@@ -585,6 +587,8 @@ class AdditiveEnergyRequest(StrictModel):
 class AdditiveEnergyResult(StrictModel):
     """Exact additive energy and its decomposition by sum."""
 
+    left: FiniteIntegerSet
+    right: FiniteIntegerSet
     energy: int = Field(ge=0)
     decomposition: tuple[RepresentationProfileEntry, ...] = Field(default=())
 
@@ -601,18 +605,19 @@ class AdditiveEnergyResult(StrictModel):
                 "require_canonical_decomposition",
                 "additive energy multiplicities must be positive",
             )
-        if self.energy != sum(entry.multiplicity**2 for entry in self.decomposition):
-            raise _validation_error(
-                "require_canonical_decomposition",
-                "additive energy must equal the sum of squared multiplicities",
-            )
         return self
 
     @classmethod
     def _from_kernel(
-        cls, energy: int, decomposition: tuple[RepresentationProfileEntry, ...]
+        cls,
+        left: FiniteIntegerSet,
+        right: FiniteIntegerSet,
+        energy: int,
+        decomposition: tuple[RepresentationProfileEntry, ...],
     ) -> Self:
-        return cls.model_construct(energy=energy, decomposition=decomposition)
+        return cls.model_construct(
+            left=left, right=right, energy=energy, decomposition=decomposition
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -633,6 +638,8 @@ class SumsetCardinalityRequest(StrictModel):
 class SumsetCardinalityResult(StrictModel):
     """Cardinality of the sumset and its canonical finite-set support."""
 
+    left: FiniteIntegerSet
+    right: FiniteIntegerSet
     cardinality: int = Field(ge=0)
     support: FiniteIntegerSet
 
@@ -643,15 +650,18 @@ class SumsetCardinalityResult(StrictModel):
             raise _validation_error(
                 "require_canonical_support", "sumset support must be sorted and unique"
             )
-        if self.cardinality != len(self.support.elements):
-            raise _validation_error(
-                "require_canonical_support", "cardinality must equal the support length"
-            )
         return self
 
     @classmethod
-    def _from_kernel(cls, support: FiniteIntegerSet) -> Self:
-        return cls.model_construct(cardinality=len(support.elements), support=support)
+    def _from_kernel(
+        cls, left: FiniteIntegerSet, right: FiniteIntegerSet, support: FiniteIntegerSet
+    ) -> Self:
+        return cls.model_construct(
+            left=left,
+            right=right,
+            cardinality=len(support.elements),
+            support=support,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -673,6 +683,8 @@ class DirectSumPredicateRequest(StrictModel):
 class DirectSumPredicateResult(StrictModel):
     """Whether the direct sum tiles ``Z_n`` and witnesses/counterexamples."""
 
+    left: FiniteIntegerSet
+    right: FiniteIntegerSet
     holds: bool
     modulus: int = Field(gt=1)
     representatives: tuple[CanonicalInteger, ...] = Field(default=())
@@ -694,6 +706,8 @@ class DirectSumPredicateResult(StrictModel):
     def _from_kernel(
         cls,
         *,
+        left: FiniteIntegerSet,
+        right: FiniteIntegerSet,
         holds: bool,
         modulus: int,
         representatives: tuple[CanonicalInteger, ...],
@@ -703,6 +717,8 @@ class DirectSumPredicateResult(StrictModel):
         return cls.model_construct(
             holds=holds,
             modulus=modulus,
+            left=left,
+            right=right,
             representatives=representatives,
             collisions=collisions,
             missing=missing,

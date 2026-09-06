@@ -21,6 +21,10 @@ from jacobian.math.combinatorics.additive.operations import (
     direct_sum_predicate,
     representation_profile,
     sumset_cardinality,
+    verify_additive_energy,
+    verify_direct_sum_predicate,
+    verify_representation_profile,
+    verify_sumset_cardinality,
 )
 from jacobian.math.combinatorics.finite_structures.sets._models import (
     FiniteIntegerSet as CanonicalFiniteIntegerSet,
@@ -231,21 +235,54 @@ class TestSumsetCardinality:
         assert result.cardinality == 64
         assert result.support.elements[0] == large
 
-    def test_result_rejects_cardinality_that_disagrees_with_canonical_support(
-        self,
-    ) -> None:
-        with pytest.raises(ValidationError, match="cardinality must equal"):
-            SumsetCardinalityResult(
-                cardinality=1,
-                support=FiniteIntegerSet(elements=("0", "1")),
-            )
+    def test_verifier_rejects_cardinality_that_disagrees_with_support(self) -> None:
+        claim = SumsetCardinalityResult(
+            cardinality=1,
+            support=FiniteIntegerSet(elements=("0", "1")),
+            left=FiniteIntegerSet(elements=("0",)),
+            right=FiniteIntegerSet(elements=("0",)),
+        )
+        assert not verify_sumset_cardinality(claim)
 
     def test_result_rejects_noncanonical_support_order(self) -> None:
         with pytest.raises(ValidationError, match="support must be sorted"):
             SumsetCardinalityResult(
                 cardinality=2,
                 support=FiniteIntegerSet(elements=("1", "0")),
+                left=FiniteIntegerSet(elements=("0",)),
+                right=FiniteIntegerSet(elements=("0",)),
             )
+
+
+def test_serialized_claim_verifiers_reject_forged_values() -> None:
+    left = FiniteIntegerSet(elements=("0", "1"))
+    right = FiniteIntegerSet(elements=("0", "2"))
+
+    representation = representation_profile(left, right)
+    representation_payload = representation.model_dump(mode="json")
+    representation_payload["entries"][0]["multiplicity"] += 1
+    assert not verify_representation_profile(
+        RepresentationProfileResult.model_validate(representation_payload)
+    )
+
+    energy = additive_energy(left, right)
+    energy_payload = energy.model_dump(mode="json")
+    energy_payload["energy"] += 1
+    assert not verify_additive_energy(AdditiveEnergyResult.model_validate(energy_payload))
+
+    sumset = sumset_cardinality(left, right)
+    sumset_payload = sumset.model_dump(mode="json")
+    sumset_payload["cardinality"] += 1
+    assert not verify_sumset_cardinality(
+        SumsetCardinalityResult.model_validate(sumset_payload)
+    )
+
+    direct = direct_sum_predicate(4, left, right)
+    direct_payload = direct.model_dump(mode="json")
+    direct_payload["holds"] = not direct_payload["holds"]
+    assert not verify_direct_sum_predicate(
+        DirectSumPredicateResult.model_validate(direct_payload)
+    )
 
 
 class TestDirectSumPredicate:

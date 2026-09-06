@@ -7,6 +7,7 @@ import pytest
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive.product_representation.operations import (
     compute_product_representation_profile,
+    verify_product_representation_profile,
 )
 from jacobian.math.combinatorics.finite_structures.sets._models import FiniteIntegerSet
 
@@ -100,3 +101,11 @@ def test_large_operands_are_rejected_before_integer_parsing() -> None:
 
     with pytest.raises(OperationDomainValidationError, match="digit work bound"):
         compute_product_representation_profile(_set([operand]), _set([operand]))
+
+
+def test_serialized_forged_profile_is_rejected_by_verifier() -> None:
+    result = compute_product_representation_profile(_set([2]), _set([3]))
+    payload = result.model_dump(mode="json")
+    payload["entries"][0]["product"] = "7"
+    decoded = result.model_validate(payload)
+    assert not verify_product_representation_profile(decoded)

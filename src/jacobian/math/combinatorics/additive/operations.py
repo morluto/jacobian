@@ -136,7 +136,7 @@ def representation_profile(
         )
         for value in _sorted_sums(counts)
     )
-    return RepresentationProfileResult(entries=entries)
+    return RepresentationProfileResult(left=left, right=right, entries=entries)
 
 
 def _admit_multiset_sum_profile(
@@ -209,7 +209,10 @@ def additive_energy(
         for value in _sorted_sums(counts)
     )
     return AdditiveEnergyResult._from_kernel(
-        sum(count * count for count in counts.values()), decomposition
+        left,
+        right,
+        sum(count * count for count in counts.values()),
+        decomposition,
     )
 
 
@@ -230,7 +233,7 @@ def sumset_cardinality(
             code="additive_combinatorics.sumset_support_not_composable",
             message="the produced support exceeds the canonical finite-set envelope",
         ) from exc
-    return SumsetCardinalityResult._from_kernel(support)
+    return SumsetCardinalityResult._from_kernel(left, right, support)
 
 
 def direct_sum_predicate(
@@ -252,6 +255,8 @@ def direct_sum_predicate(
     collisions_sorted = sorted(collisions)
     representatives_sorted = sorted(representatives)
     return DirectSumPredicateResult._from_kernel(
+        left=left,
+        right=right,
         holds=not (collisions_sorted or missing),
         modulus=modulus,
         representatives=tuple(
@@ -262,6 +267,48 @@ def direct_sum_predicate(
         ),
         missing=tuple(format_canonical_integer(value) for value in missing),
     )
+
+
+def verify_representation_profile(result: RepresentationProfileResult) -> bool:
+    """Verify a serialized representation profile against its source sets."""
+    try:
+        expected = representation_profile(result.left, result.right)
+        return expected.entries == result.entries
+    except Exception:
+        return False
+
+
+def verify_additive_energy(result: AdditiveEnergyResult) -> bool:
+    """Verify additive energy and its decomposition against source sets."""
+    try:
+        expected = additive_energy(result.left, result.right)
+        return (
+            expected.energy == result.energy
+            and expected.decomposition == result.decomposition
+        )
+    except Exception:
+        return False
+
+
+def verify_sumset_cardinality(result: SumsetCardinalityResult) -> bool:
+    """Verify sumset support and cardinality against source sets."""
+    try:
+        expected = sumset_cardinality(result.left, result.right)
+        return (
+            expected.cardinality == result.cardinality
+            and expected.support == result.support
+        )
+    except Exception:
+        return False
+
+
+def verify_direct_sum_predicate(result: DirectSumPredicateResult) -> bool:
+    """Verify direct-sum diagnostics and conclusion against source sets."""
+    try:
+        expected = direct_sum_predicate(result.modulus, result.left, result.right)
+        return expected == result
+    except Exception:
+        return False
 
 
 def ordered_difference_profile(

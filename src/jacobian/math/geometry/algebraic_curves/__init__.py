@@ -16,6 +16,11 @@ from jacobian.math.geometry.algebraic_curves.operations import (
     projective_closure,
     rational_conic_parametrization,
     singularity_profile,
+    verify_affine_chart,
+    verify_affine_curve_check,
+    verify_projective_closure,
+    verify_projective_plane_curve_singularity_profile,
+    verify_rational_conic_parametrization,
 )
 
 __all__ = [
@@ -30,4 +35,9 @@ __all__ = [
     "projective_closure",
     "rational_conic_parametrization",
     "singularity_profile",
+    "verify_affine_chart",
+    "verify_affine_curve_check",
+    "verify_projective_closure",
+    "verify_projective_plane_curve_singularity_profile",
+    "verify_rational_conic_parametrization",
 ]

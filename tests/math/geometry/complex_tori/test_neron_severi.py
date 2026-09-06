@@ -18,6 +18,7 @@ from jacobian.math.geometry.complex_tori import (
     LatticeComplexStructure,
     compute_neron_severi_lattice,
     compute_riemann_form_profile,
+    verify_neron_severi_lattice,
 )
 from jacobian.math.geometry.complex_tori._models import RiemannFormProfileRequest
 from jacobian.math.geometry.complex_tori._tools import (
@@ -55,6 +56,14 @@ def test_quartic_complex_torus_has_exact_rank_zero_neron_severi_lattice() -> Non
     assert result.rank == 0
     assert result.basis_forms == ()
     assert result.action.generators[0].matrix == torus.complex_structure
+    assert verify_neron_severi_lattice(result) is True
+
+    forged = result.model_dump(mode="json")
+    forged["action"]["generators"][0]["matrix"]["entries"][0][0][
+        "coefficients_ascending"
+    ][0] = {"num": "1", "den": "1"}
+    forged_claim = InvariantBilinearFormLattice.model_validate(forged)
+    assert verify_neron_severi_lattice(forged_claim) is False
 
 
 def test_quartic_complex_torus_has_primitive_rank_one_neron_severi_lattice() -> None:

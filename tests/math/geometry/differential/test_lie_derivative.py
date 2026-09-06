@@ -24,6 +24,7 @@ from jacobian.math.geometry.differential import (
     RationalCoordinateTensor,
     RationalLieDerivativeProfile,
     lie_derivative,
+    verify_lie_derivative,
 )
 from jacobian.math.geometry.differential import _bounds as lie_bounds
 from jacobian.math.geometry.differential import _sympy as lie_backend
@@ -1195,6 +1196,13 @@ def test_profile_round_trip_and_catalog_execution_use_the_same_contract() -> Non
     parsed = RationalLieDerivativeProfile.model_validate(result.model_dump(mode="json"))
 
     assert parsed == result
+    assert verify_lie_derivative(parsed) is True
+    forged = parsed.model_dump(mode="json")
+    forged["lie_derivative"]["components"][0]["numerator"]["terms"][0][
+        "coefficient"
+    ] = {"num": "3", "den": "1"}
+    forged_claim = RationalLieDerivativeProfile.model_validate(forged)
+    assert verify_lie_derivative(forged_claim) is False
     assert _expressions(result.lie_derivative) == (2 * sympy.Symbol("x") ** 2,)
 
 

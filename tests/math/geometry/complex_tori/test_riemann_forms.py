@@ -20,6 +20,7 @@ from jacobian.canonical import encode_strict_json
 from jacobian.math.geometry.complex_tori import (
     LatticeComplexStructure,
     compute_riemann_form_profile,
+    verify_riemann_form_profile,
 )
 from jacobian.math.geometry.complex_tori._models import RiemannFormProfile
 from jacobian.math.geometry.complex_tori._tools import RIEMANN_FORM_PROFILE_OPERATION
@@ -76,6 +77,15 @@ def test_elliptic_degree_d_form_uses_standard_positive_sign_and_type() -> None:
         )
         == result
     )
+    assert verify_riemann_form_profile(result) is True
+
+    forged = result.model_dump(mode="json")
+    forged["outcome"]["associated_form_inertia"]["matrix"]["entries"][0][0] = {
+        "num": "7",
+        "den": "1",
+    }
+    forged_claim = RiemannFormProfile.model_validate(forged)
+    assert verify_riemann_form_profile(forged_claim) is False
 
 
 def test_quartic_rank_one_generator_has_hermitian_signature_one_one() -> None:

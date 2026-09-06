@@ -21,7 +21,10 @@ from jacobian.math.number_theory.algebraic_numbers.real import (
     RealAlgebraicValue,
     compare_real_algebraic,
 )
-from jacobian.math.polynomials.real_algebra import common_interlacing_profile
+from jacobian.math.polynomials.real_algebra import (
+    common_interlacing_profile,
+    verify_common_interlacing_profile,
+)
 from jacobian.math.polynomials.real_algebra._common_interlacing import (
     _admit_common_interlacing,
     _common_interlacing_outcome,
@@ -162,6 +165,14 @@ def test_quadratic_family_returns_complete_attained_gap() -> None:
     )
 
     assert result.status == "EXISTS"
+    assert verify_common_interlacing_profile(result) is True
+    forged = result.model_dump(mode="json")
+    forged["family"][0]["polynomial"]["polynomial"]["terms"][1]["coefficient"] = {
+        "num": "-2",
+        "den": "1",
+    }
+    forged_claim = CommonInterlacingProfile.model_validate(forged)
+    assert verify_common_interlacing_profile(forged_claim) is False
     assert isinstance(result.outcome, CommonInterlacingExists)
     assert tuple(profile.source_index for profile in result.root_profiles) == (0, 1)
     assert tuple(len(profile.roots) for profile in result.root_profiles) == (2, 2)

@@ -145,10 +145,13 @@ class AffineCurveResult(StrictModel):
 
 
 class ProjectiveClosureResult(StrictModel):
+    source_polynomial: RationalPolynomial
     polynomial: RationalPolynomial
 
 
 class AffineChartResult(StrictModel):
+    source_polynomial: RationalPolynomial
+    chart_variable: PolynomialVariable
     polynomial: RationalPolynomial
 
 

@@ -21,6 +21,9 @@ from jacobian.math.polynomials.real_algebra._strict_sublevel_models import (
 from jacobian.math.polynomials.real_algebra._tools import (
     compute_strict_sublevel_measure,
 )
+from jacobian.math.polynomials.real_algebra.operations import (
+    verify_strict_sublevel_measure,
+)
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialTerm,
@@ -117,6 +120,14 @@ def test_quadratic_measure_retains_exact_irrational_boundary_sum() -> None:
     assert not component.right_included
     assert result.measure.rational_part == _rational(0)
     assert tuple(term.coefficient for term in result.measure.root_terms) == (-1, 1)
+    assert verify_strict_sublevel_measure(result) is True
+    forged = result.model_dump(mode="json")
+    forged["source_polynomial"]["polynomial"]["terms"][0]["coefficient"] = {
+        "num": "2",
+        "den": "1",
+    }
+    forged_claim = StrictSublevelMeasureResult.model_validate(forged)
+    assert verify_strict_sublevel_measure(forged_claim) is False
 
     reconstructed_length = sum(
         _resolve_endpoint(result, item.right) - _resolve_endpoint(result, item.left)

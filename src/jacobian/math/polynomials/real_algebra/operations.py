@@ -24,6 +24,9 @@ from jacobian.math.polynomials.real_algebra._models import (
 from jacobian.math.polynomials.real_algebra._models import (
     _validation_error as _real_algebra_validation_error,
 )
+from jacobian.math.polynomials.real_algebra._plane_component_models import (
+    PlaneComponentProfileResult,
+)
 from jacobian.math.polynomials.real_algebra._plane_components import (
     compute_plane_component_profile,
 )
@@ -56,6 +59,9 @@ __all__ = [
     "compute_sturm_chain",
     "root_count",
     "sturm_chain",
+    "verify_common_interlacing_profile",
+    "verify_plane_component_profile",
+    "verify_strict_sublevel_measure",
 ]
 
 
@@ -65,6 +71,15 @@ def common_interlacing_profile(
     """Return the complete exact common weak-interlacing profile of ``family``."""
 
     return _common_interlacing_profile(family)
+
+
+def verify_common_interlacing_profile(claim: CommonInterlacingProfile) -> bool:
+    """Verify retained roots and the complete common-interlacing outcome."""
+
+    try:
+        return common_interlacing_profile(claim.family) == claim
+    except (OperationDomainValidationError, ValueError, TypeError, RuntimeError):
+        return False
 
 
 def _to_sympy_poly(terms: list[tuple[Fraction, int]]) -> Any:
@@ -327,3 +342,35 @@ def compute_strict_sublevel_measure(
         components=payload.components,
         measure=payload.measure,
     )
+
+
+def verify_strict_sublevel_measure(claim: StrictSublevelMeasureResult) -> bool:
+    """Verify strict-sublevel components and exact measure against the source."""
+
+    try:
+        return (
+            compute_strict_sublevel_measure(
+                claim.source_polynomial,
+                claim.threshold,
+                claim.lower,
+                claim.upper,
+            )
+            == claim
+        )
+    except (OperationDomainValidationError, ValueError, TypeError, RuntimeError):
+        return False
+
+
+def verify_plane_component_profile(claim: PlaneComponentProfileResult) -> bool:
+    """Verify the complete component and sample profile against its source."""
+
+    try:
+        return (
+            compute_plane_component_profile(
+                claim.semialgebraic_set,
+                claim.samples,
+            )
+            == claim
+        )
+    except (OperationDomainValidationError, ValueError, TypeError, RuntimeError):
+        return False

@@ -45,12 +45,12 @@ def verify_affine_curve_check(claim: AffineCurveResult) -> bool:
         claim.degree,
     )
 
-
 def compute_projective_closure(
     request: ProjectiveClosureRequest,
 ) -> ProjectiveClosureResult:
     """Unpack one request and project the native closure to its wire result."""
     return ProjectiveClosureResult(
+        source_polynomial=request.polynomial,
         polynomial=projective_closure(request.polynomial),
     )
 
@@ -58,6 +58,8 @@ def compute_projective_closure(
 def compute_affine_chart(request: AffineChartRequest) -> AffineChartResult:
     """Unpack one request and project the native chart to its wire result."""
     return AffineChartResult(
+        source_polynomial=request.polynomial,
+        chart_variable=request.chart_variable,
         polynomial=affine_chart(request.polynomial, request.chart_variable),
     )
 

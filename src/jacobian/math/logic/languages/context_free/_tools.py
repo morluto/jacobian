@@ -19,15 +19,21 @@ from jacobian.math.logic.languages.context_free.operations import (
 
 
 def compute_symbol_profiles(request: SymbolProfilesRequest) -> SymbolProfilesResult:
-    return SymbolProfilesResult(nullable=nullable_nonterminals(request.grammar))
+    return SymbolProfilesResult(
+        grammar=request.grammar, nullable=nullable_nonterminals(request.grammar)
+    )
 
 
 def compute_dependency_graph(request: DependencyGraphRequest) -> DependencyGraphResult:
-    return DependencyGraphResult(edges=dependency_edges(request.grammar))
+    return DependencyGraphResult(
+        grammar=request.grammar, edges=dependency_edges(request.grammar)
+    )
 
 
 def compute_first_sets(request: FirstSetsRequest) -> FirstSetsResult:
-    return FirstSetsResult(first_sets=first_sets(request.grammar))
+    return FirstSetsResult(
+        grammar=request.grammar, first_sets=first_sets(request.grammar)
+    )
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (

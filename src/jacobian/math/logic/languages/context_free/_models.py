@@ -78,12 +78,15 @@ class FirstSetsRequest(StrictModel):
 
 
 class SymbolProfilesResult(StrictModel):
+    grammar: FiniteCFGO
     nullable: tuple[bool, ...]
 
 
 class DependencyGraphResult(StrictModel):
+    grammar: FiniteCFGO
     edges: tuple[tuple[str, str], ...]
 
 
 class FirstSetsResult(StrictModel):
+    grammar: FiniteCFGO
     first_sets: tuple[tuple[str, ...], ...]

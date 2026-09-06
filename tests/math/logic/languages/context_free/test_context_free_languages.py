@@ -8,6 +8,9 @@ from jacobian.math.logic.languages.context_free import (
     dependency_edges,
     first_sets,
     nullable_nonterminals,
+    verify_dependency_graph,
+    verify_first_sets,
+    verify_symbol_profiles,
 )
 from jacobian.math.logic.languages.context_free._models import (
     DependencyGraphRequest,
@@ -60,6 +63,10 @@ def test_symbol_profiles_nullable() -> None:
     request = SymbolProfilesRequest(grammar=_grammar(GRAMMAR))
     result = compute_symbol_profiles(request)
     assert result.nullable == (False, True)
+    assert verify_symbol_profiles(
+        type(result).model_validate_json(result.model_dump_json())
+    )
+    assert not verify_symbol_profiles(result.model_copy(update={"nullable": (True, False)}))
     assert nullable_nonterminals(request.grammar) == result.nullable
 
 
@@ -74,6 +81,10 @@ def test_dependency_graph() -> None:
     result = compute_dependency_graph(request)
     assert ("S", "A") in result.edges
     assert dependency_edges(request.grammar) == result.edges
+    assert verify_dependency_graph(
+        type(result).model_validate_json(result.model_dump_json())
+    )
+    assert not verify_dependency_graph(result.model_copy(update={"edges": ()}))
 
 
 def test_first_sets() -> None:
@@ -81,6 +92,8 @@ def test_first_sets() -> None:
     result = compute_first_sets(request)
     assert result.first_sets == (("a",),)
     assert first_sets(request.grammar) == result.first_sets
+    assert verify_first_sets(type(result).model_validate_json(result.model_dump_json()))
+    assert not verify_first_sets(result.model_copy(update={"first_sets": ((),)}))
 
 
 def test_first_sets_nullable_prefix() -> None:

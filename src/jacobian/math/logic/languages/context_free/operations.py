@@ -1,6 +1,11 @@
 """Exact operations on finite context-free grammars."""
 
-from jacobian.math.logic.languages.context_free._models import FiniteCFGO
+from jacobian.math.logic.languages.context_free._models import (
+    DependencyGraphResult,
+    FiniteCFGO,
+    FirstSetsResult,
+    SymbolProfilesResult,
+)
 
 
 def nullable_nonterminals(grammar: FiniteCFGO) -> tuple[bool, ...]:
@@ -72,4 +77,38 @@ def first_sets(grammar: FiniteCFGO) -> tuple[tuple[str, ...], ...]:
     )
 
 
-__all__ = ["dependency_edges", "first_sets", "nullable_nonterminals"]
+def verify_symbol_profiles(claim: SymbolProfilesResult) -> bool:
+    """Verify nullable flags against the retained grammar and symbol axis."""
+    try:
+        return (
+            tuple(nullable_nonterminals(claim.grammar)) == claim.nullable
+            and len(claim.nullable) == len(claim.grammar.nonterminals)
+        )
+    except (TypeError, ValueError, RuntimeError):
+        return False
+
+
+def verify_dependency_graph(claim: DependencyGraphResult) -> bool:
+    """Verify dependency edges against the retained grammar."""
+    try:
+        return dependency_edges(claim.grammar) == claim.edges
+    except (TypeError, ValueError, RuntimeError):
+        return False
+
+
+def verify_first_sets(claim: FirstSetsResult) -> bool:
+    """Verify FIRST sets against the retained grammar and terminal axis."""
+    try:
+        return first_sets(claim.grammar) == claim.first_sets
+    except (TypeError, ValueError, RuntimeError):
+        return False
+
+
+__all__ = [
+    "dependency_edges",
+    "first_sets",
+    "nullable_nonterminals",
+    "verify_dependency_graph",
+    "verify_first_sets",
+    "verify_symbol_profiles",
+]

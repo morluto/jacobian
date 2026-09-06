@@ -34,6 +34,9 @@ from jacobian.math.polynomials.operations import (
     resultant,
     square_free_decomposition,
 )
+from jacobian.math.polynomials.rational_functions.operations import (
+    verify_hermite_reduction,
+)
 
 
 def __getattr__(name: str) -> object:
@@ -84,4 +87,5 @@ __all__ = [
     "rational_polynomial_integral",
     "resultant",
     "square_free_decomposition",
+    "verify_hermite_reduction",
 ]

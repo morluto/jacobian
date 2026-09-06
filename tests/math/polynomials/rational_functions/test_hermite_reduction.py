@@ -13,10 +13,14 @@ from jacobian.math.polynomials._conversions import (
 )
 from jacobian.math.polynomials.rational_functions._models import (
     HermiteReductionRequest,
+    HermiteReductionResult,
 )
 from jacobian.math.polynomials.rational_functions._tools import (
     TOOLS,
     compute_hermite_reduction,
+)
+from jacobian.math.polynomials.rational_functions.operations import (
+    verify_hermite_reduction,
 )
 from jacobian.math.polynomials.values import (
     RationalFunction,
@@ -62,6 +66,15 @@ def test_native_hermite_reduction_uses_canonical_polynomial_owner() -> None:
 
     assert cancel(rational_function_to_sympy(rational_part) + 1 / (x - 1)) == 0
     assert not remainder.numerator.terms
+
+
+def test_serialized_hermite_claim_is_source_bound_and_verifiable() -> None:
+    result = compute_hermite_reduction(_request(1 / (x - 1) ** 2))
+    decoded = HermiteReductionResult.model_validate_json(result.model_dump_json())
+    assert verify_hermite_reduction(decoded)
+
+    forged = decoded.model_copy(update={"remainder": result.rational_part})
+    assert not verify_hermite_reduction(forged)
 
 
 def test_hermite_reduction_uses_zero_integration_constant() -> None:

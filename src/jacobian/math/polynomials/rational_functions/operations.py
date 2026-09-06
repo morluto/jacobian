@@ -10,6 +10,7 @@ from jacobian.math.polynomials._conversions import (
     symbols_for_variables,
 )
 from jacobian.math.polynomials.rational_functions._models import (
+    HermiteReductionResult,
     require_hermite_reduction_budget,
 )
 from jacobian.math.polynomials.values import RationalFunction
@@ -73,4 +74,20 @@ def _hermite_reduction_admitted(
     )
 
 
-__all__ = ["hermite_reduction"]
+def verify_hermite_reduction(claim: HermiteReductionResult) -> bool:
+    """Verify the canonical Hermite decomposition against its source function."""
+    try:
+        rational_part, remainder = hermite_reduction(claim.function)
+        has_primitive = not remainder.numerator.terms
+        return (
+            rational_part == claim.rational_part
+            and remainder == claim.remainder
+            and claim.rational_primitive_status
+            == ("RATIONAL_PRIMITIVE" if has_primitive else "NO_RATIONAL_PRIMITIVE")
+            and claim.rational_primitive == (rational_part if has_primitive else None)
+        )
+    except (AttributeError, TypeError, ValueError):
+        return False
+
+
+__all__ = ["hermite_reduction", "verify_hermite_reduction"]

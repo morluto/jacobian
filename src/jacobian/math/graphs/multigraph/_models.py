@@ -344,39 +344,6 @@ class MultigraphFlowCheckRequest(StrictModel):
         """Keep candidate parsing structural; admission belongs to the operation."""
         return self
 
-    # Complete-assignment checks intentionally live in the native operation.
-    # Invalid candidate records must remain representable for diagnostics.
-    def _legacy_complete_assignment_validator(self) -> Self:
-        graph_ids = self.graph.edge_id_set
-        assigned_ids = {assign.edge_id for assign in self.edge_values}
-        if graph_ids != assigned_ids:
-            missing = sorted(graph_ids - assigned_ids)
-            extra = sorted(assigned_ids - graph_ids)
-            raise PydanticCustomError(
-                "graph.edge_values_assign_every_edge_exactly_once",
-                f"edge_values must assign every edge exactly once; "
-                f"missing={missing}, extra={extra}",
-            )
-        if len(assigned_ids) != len(self.edge_values):
-            raise PydanticCustomError(
-                "graph.edge_values_must_not_repeat_edge_ids",
-                "edge_values must not repeat edge IDs",
-            )
-        for assign in self.edge_values:
-            if len(assign.value) != self.group.rank:
-                raise PydanticCustomError(
-                    "graph.flow_value_rank_must_match_group_rank",
-                    "flow value rank must match group rank",
-                )
-            if any(
-                c >= m for c, m in zip(assign.value, self.group.moduli, strict=True)
-            ):
-                raise PydanticCustomError(
-                    "graph.flow_value_coordinates_must_be_below_their_modul",
-                    "flow value coordinates must be below their moduli",
-                )
-        return self
-
 
 class MultigraphFlowCheckResult(StrictModel):
     """Exact per-vertex conservation ledger for a submitted flow, bound to its source.

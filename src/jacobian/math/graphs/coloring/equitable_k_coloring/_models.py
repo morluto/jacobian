@@ -45,21 +45,6 @@ class EquitableColoringAssignment(StrictModel):
             )
         return self
 
-    def __len__(self) -> int:
-        return len(self.coloring)
-
-    def __getitem__(self, index: int) -> int:
-        return self.coloring[index]
-
-    def count(self, value: int) -> int:
-        return self.coloring.count(value)
-
-    def __eq__(self, other: object) -> bool:
-        if isinstance(other, tuple):
-            return self.coloring == other
-        return super().__eq__(other)
-
-
 class EquitableColoringResult(StrictModel):
     """The equitable k-colouring decision."""
 
@@ -67,19 +52,6 @@ class EquitableColoringResult(StrictModel):
     k: int
     colorable: bool
     coloring: EquitableColoringAssignment | None = None
-
-    @model_validator(mode="before")
-    @classmethod
-    def accept_legacy_sequence_witness(cls, value: object) -> object:
-        if isinstance(value, dict) and isinstance(value.get("coloring"), tuple):
-            payload = dict(value)
-            payload["coloring"] = {
-                "graph": payload.get("graph"),
-                "k": payload.get("k"),
-                "coloring": payload["coloring"],
-            }
-            return payload
-        return value
 
     @model_validator(mode="after")
     def require_structural_binding(self) -> Self:

@@ -201,23 +201,6 @@ class VertexColoringAssignment(StrictModel):
             )
         return self
 
-    # Small sequence compatibility helpers keep native callers readable while
-    # the serialized value remains the source-bound carrier.
-    def __len__(self) -> int:
-        return len(self.coloring)
-
-    def __getitem__(self, index: int) -> int:
-        return self.coloring[index]
-
-    def count(self, value: int) -> int:
-        return self.coloring.count(value)
-
-    def __eq__(self, other: object) -> bool:
-        if isinstance(other, tuple):
-            return self.coloring == other
-        return super().__eq__(other)
-
-
 class KColorabilityResult(StrictModel):
     """Whether a proper ``k``-coloring exists, with one coloring witness."""
 
@@ -273,21 +256,6 @@ class KColorabilityResult(StrictModel):
         else:
             _require_k_colorability_negative_shape(self)
         return self
-
-    @model_validator(mode="before")
-    @classmethod
-    def accept_legacy_sequence_witness(cls, value: object) -> object:
-        """Convert pre-carrier tuple payloads during the migration."""
-        if isinstance(value, dict) and isinstance(value.get("coloring"), tuple):
-            payload = dict(value)
-            payload["coloring"] = {
-                "graph": payload.get("graph"),
-                "colors": payload.get("colors"),
-                "coloring": payload["coloring"],
-            }
-            return payload
-        return value
-
 
 def _require_k_colorability_positive_witness(result: KColorabilityResult) -> None:
     """A colorable claim must carry a proper source-bound witness."""

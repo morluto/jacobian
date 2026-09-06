@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from jacobian.math.graphs.coloring import (
     verify_k_colorability,
     verify_maximal_independent_set,
@@ -22,7 +24,6 @@ from jacobian.math.graphs.multigraph import (
 )
 from jacobian.math.graphs.multigraph._models import (
     FiniteAbelianGroup,
-    FlowEdgeAssignment,
     LooplessMultigraph,
     MultigraphEdge,
     MultigraphFlowCheckRequest,
@@ -122,12 +123,20 @@ def test_multigraph_flow_checker_diagnoses_invalid_candidate_and_verifies_roundt
         ),
     )
     group = FiniteAbelianGroup(moduli=(3,))
-    request = MultigraphFlowCheckRequest(
-        graph=graph,
-        group=group,
-        edge_values=(
-            FlowEdgeAssignment(edge_id="e0", orientation="left_to_right", value=(3,)),
-        ),
+    request = MultigraphFlowCheckRequest.model_validate_json(
+        json.dumps(
+            {
+                "graph": graph.model_dump(),
+                "group": group.model_dump(),
+                "edge_values": [
+                    {
+                        "edge_id": "e0",
+                        "orientation": "left_to_right",
+                        "value": [3],
+                    }
+                ],
+            }
+        )
     )
     result = multigraph_flow_check(graph, group, request.edge_values)
     assert not result.assignment_valid

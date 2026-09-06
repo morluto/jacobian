@@ -140,7 +140,7 @@ def _descriptor(operation: MathTool[Any, Any]) -> OperationDescriptor:
         title=operation.title,
         description=operation.description,
         input_schema=operation.request_type.model_json_schema(),
-        output_schema=operation.result_type.model_json_schema(),
+        output_schema=operation.result_type.model_json_schema(mode="serialization"),
         read_only=True,
         tags=operation.tags,
         runtime_requirements=operation.runtime_requirements,

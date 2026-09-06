@@ -246,7 +246,7 @@ class RationalFunctionMatrix(StrictModel):
                     if entries and isinstance(entries[0], (list, tuple))
                     else 0
                 )
-        return data
+        return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_rectangular_rows(self) -> Self:

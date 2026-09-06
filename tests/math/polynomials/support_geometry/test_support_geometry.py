@@ -522,6 +522,55 @@ class TestSupportCrossFieldValidation:
         )
         assert all(not verify_polynomial_support(case) for case in cases)
 
+    def test_verifier_rejects_hostile_tuple_subclasses(self) -> None:
+        """Verifier carrier checks do not iterate untrusted tuple subclasses."""
+
+        class EvilTuple(tuple[object, ...]):
+            def __iter__(self) -> Iterator[object]:
+                raise RuntimeError("hostile tuple iterator")
+
+        source = _polynomial(_XY_TERMS, VARS)
+        claim = compute_support(SupportRequest(polynomial=source))
+        for field in ("exponents", "coordinate_min", "coordinate_max"):
+            forged = claim.model_copy(update={field: EvilTuple(getattr(claim, field))})
+            assert not verify_polynomial_support(forged)
+
+        hostile_variables = source.model_copy(
+            update={"variables": EvilTuple(source.variables)}
+        )
+        assert not verify_polynomial_support(
+            claim.model_copy(update={"polynomial": hostile_variables})
+        )
+
+        hostile_terms = source.polynomial.model_copy(
+            update={"terms": EvilTuple(source.polynomial.terms)}
+        )
+        assert not verify_polynomial_support(
+            claim.model_copy(
+                update={
+                    "polynomial": source.model_copy(
+                        update={"polynomial": hostile_terms}
+                    )
+                }
+            )
+        )
+
+        hostile_term = source.polynomial.terms[0].model_copy(
+            update={"exponents": EvilTuple(source.polynomial.terms[0].exponents)}
+        )
+        hostile_sparse = source.polynomial.model_copy(
+            update={"terms": (hostile_term, *source.polynomial.terms[1:])}
+        )
+        assert not verify_polynomial_support(
+            claim.model_copy(
+                update={
+                    "polynomial": source.model_copy(
+                        update={"polynomial": hostile_sparse}
+                    )
+                }
+            )
+        )
+
 
 class TestNewtonReplay:
     def test_ragged_exponent_widths_rejected(self) -> None:

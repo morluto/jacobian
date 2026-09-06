@@ -568,14 +568,14 @@ def verify_polynomial_support(claim: PolynomialSupport) -> bool:
     try:
         if type(claim.is_zero) is not bool or type(claim.term_count) is not int:
             return False
-        if not isinstance(claim.exponents, tuple) or not all(
-            isinstance(exponents, tuple)
+        if type(claim.exponents) is not tuple or not all(
+            type(exponents) is tuple
             and all(type(exponent) is int for exponent in exponents)
             for exponents in claim.exponents
         ):
             return False
         if not all(
-            isinstance(extrema, tuple) and all(type(value) is int for value in extrema)
+            type(extrema) is tuple and all(type(value) is int for value in extrema)
             for extrema in (claim.coordinate_min, claim.coordinate_max)
         ):
             return False

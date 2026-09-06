@@ -185,6 +185,13 @@ Catalog construction discovers packaged `_tools.py` modules under
 `jacobian.math`, sorts their module paths, validates every manifest and
 operation ID, and freezes the resulting inventory. There is no parallel
 decision ledger, central domain list, or external plugin discovery.
+
+Private wire request and response models may contain operation parameters and
+domain-owned mathematical values. They do not justify parallel native and wire
+classes for the same mathematical value. A shared value can retain exact
+integers in Python and encode those fields as decimal strings only for JSON;
+see [native integer codec requirements](../reference/value-interoperability.md#requirements-for-a-native-integer-codec).
+
 `jacobian.catalog` owns declaration models, search, and immutable lookup;
 `jacobian.dispatch` owns strict invocation;
 `jacobian.mcp` and the CLI are delivery boundaries. The private root model and

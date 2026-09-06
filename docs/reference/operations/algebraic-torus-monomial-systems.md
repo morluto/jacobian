@@ -45,7 +45,10 @@ later Laurent-polynomial substitutions.
 The operation admits at most 16 equations and 16 coordinates, with at most 32
 decimal digits per exponent. Those are the inherited transformation-certified
 Smith limits. The component count is bounded before execution by Hadamard's
-maximal-minor estimate and is returned as an exact canonical integer string.
+maximal-minor estimate. Its JSON representation is a canonical decimal integer
+string. This specifies the transport encoding, not a requirement to compute
+with strings or retain strings in migrated native models; see the
+[native integer codec requirements](../value-interoperability.md#requirements-for-a-native-integer-codec).
 The kernel uses SymPy 1.14's exact `smith_normal_decomp` and
 `DomainMatrix.lll_transform`; it verifies the Smith relation, unimodularity,
 torsion congruences, free-kernel equations, and basis transport once before

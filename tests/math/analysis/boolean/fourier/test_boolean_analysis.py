@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import random
+
 import pytest
 from pydantic import ValidationError
 
@@ -186,8 +188,6 @@ def test_fourier_spectrum_and_function() -> None:
 
 def test_fourier_spectrum_matches_definition() -> None:
     # Verify W[k] = sum_x f(x) (-1)^popcount(x & k) against a random table.
-    import random
-
     rng = random.Random(42)
     values = [rng.randint(0, 1) for _ in range(8)]
     result = compute_fourier_spectrum(

@@ -186,27 +186,27 @@ def test_max_affine_claims_retain_sources_and_reject_forgery() -> None:
         type(subdifferential).model_validate(payload)
     )
 
-    def test_rejects_mismatched_point_dimension(self) -> None:
-        request = MaxAffineSubdifferentialRequest.model_validate(
-            {
-                "function": {
-                    "pieces": [
-                        {
-                            "piece_id": "p1",
-                            "coefficients": [
-                                {"num": "1", "den": "1"},
-                                {"num": "0", "den": "1"},
-                            ],
-                            "intercept": {"num": "0", "den": "1"},
-                        },
-                    ],
-                },
-                "point": {"coordinates": [{"num": "1", "den": "1"}]},
-            }
-        )
-        with pytest.raises(OperationDomainValidationError) as exc_info:
-            compute_subdifferential(request)
-        assert (
-            exc_info.value.errors()[0]["type"]
-            == "convex_analysis.point_dimension_mismatch"
-        )
+
+def test_rejects_mismatched_point_dimension() -> None:
+    request = MaxAffineSubdifferentialRequest.model_validate(
+        {
+            "function": {
+                "pieces": [
+                    {
+                        "piece_id": "p1",
+                        "coefficients": [
+                            {"num": "1", "den": "1"},
+                            {"num": "0", "den": "1"},
+                        ],
+                        "intercept": {"num": "0", "den": "1"},
+                    },
+                ],
+            },
+            "point": {"coordinates": [{"num": "1", "den": "1"}]},
+        }
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        compute_subdifferential(request)
+    assert (
+        exc_info.value.errors()[0]["type"] == "convex_analysis.point_dimension_mismatch"
+    )

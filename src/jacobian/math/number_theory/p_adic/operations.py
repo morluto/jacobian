@@ -388,6 +388,9 @@ def hensel_lift_factors(
         )
 
     return HenselFactorLiftResult(
+        polynomial=polynomial,
+        factor_g=factor_g,
+        factor_h=factor_h,
         lifted_g=_wire_polynomial(lifted_g),
         lifted_h=_wire_polynomial(lifted_h),
         prime=p,

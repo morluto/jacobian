@@ -11,6 +11,7 @@ from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.p_adic._models import (
     HenselFactorLiftRequest,
+    HenselFactorLiftResult,
     HenselRootRequest,
     HenselRootResult,
     IntegerPolynomial,
@@ -213,6 +214,13 @@ class TestHenselFactorLifting:
             HenselFactorLiftRequest(
                 polynomial=f, factor_g=g, factor_h=h, prime=3, precision=2
             )
+        )
+        assert result.polynomial == f
+        assert result.factor_g == g
+        assert result.factor_h == h
+        assert (
+            HenselFactorLiftResult.model_validate_json(result.model_dump_json())
+            == result
         )
         modulus = 9
         for x in range(modulus):

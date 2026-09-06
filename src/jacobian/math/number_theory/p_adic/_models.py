@@ -116,8 +116,11 @@ class HenselFactorLiftRequest(StrictModel):
 
 
 class HenselFactorLiftResult(StrictModel):
-    """Lifted coprime factors mod p^k."""
+    """A lifted factorization bound to its polynomial and mod-p factors."""
 
+    polynomial: IntegerPolynomial
+    factor_g: IntegerPolynomial
+    factor_h: IntegerPolynomial
     lifted_g: IntegerPolynomial
     lifted_h: IntegerPolynomial
     prime: int = Field(ge=2, le=MAX_PRIME)

@@ -7,7 +7,7 @@ from typing import Annotated, Any, Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import NativeInteger
 from jacobian._models import StrictModel, canonicalize_json_containers
 
 MAX_GROUP_DEGREE = 64
@@ -62,7 +62,8 @@ class PermutationGroup(StrictModel):
 class GroupOrderResult(StrictModel):
     """The exact order of a finite permutation group."""
 
-    order: CanonicalInteger
+    source: PermutationGroup
+    order: NativeInteger
 
 
 class GroupElementOrderRequest(StrictModel):
@@ -75,7 +76,9 @@ class GroupElementOrderRequest(StrictModel):
 class GroupElementOrderResult(StrictModel):
     """The exact order of one permutation."""
 
-    order: CanonicalInteger
+    source: PermutationGroup
+    element: tuple[int, ...] = Field(min_length=1, max_length=MAX_GROUP_DEGREE)
+    order: NativeInteger
 
 
 class GroupOrbitRequest(StrictModel):
@@ -99,6 +102,7 @@ class GroupOrbitRequest(StrictModel):
 class GroupOrbitResult(StrictModel):
     """The orbit of a point under a permutation group."""
 
+    source: PermutationGroup
     orbit: tuple[int, ...] = Field(min_length=1, max_length=MAX_GROUP_DEGREE)
     point: int = Field(ge=0, le=MAX_GROUP_DEGREE - 1)
 
@@ -147,6 +151,7 @@ class GroupConjugacyClassesResult(StrictModel):
     conjugacy-orbit postcondition; parsing retains only canonical structure.
     """
 
+    source: PermutationGroup
     classes: tuple[ConjugacyClass, ...] = Field(
         min_length=1,
         max_length=MAX_CONJUGACY_CLASSES_GROUP_ORDER,
@@ -158,8 +163,10 @@ class GroupConjugacyClassesResult(StrictModel):
         return self
 
     @classmethod
-    def _from_kernel(cls, classes: tuple[ConjugacyClass, ...]) -> Self:
-        return cls.model_construct(classes=classes)
+    def _from_kernel(
+        cls, source: PermutationGroup, classes: tuple[ConjugacyClass, ...]
+    ) -> Self:
+        return cls.model_construct(source=source, classes=classes)
 
 
 def _require_canonical_partition(
@@ -322,10 +329,7 @@ class SubgroupEntry(StrictModel):
 class GroupSubgroupLatticeResult(StrictModel):
     """All subgroups of a bounded permutation group, bound to its source."""
 
-    degree: int = Field(ge=1, le=MAX_GROUP_DEGREE)
-    generators: tuple[tuple[int, ...], ...] = Field(
-        min_length=1, max_length=MAX_GROUP_DEGREE
-    )
+    source: PermutationGroup
     subgroups: tuple[SubgroupEntry, ...]
     subgroup_count: int = Field(ge=1)
 
@@ -350,14 +354,20 @@ class GroupSubgroupLatticeResult(StrictModel):
 
     @model_validator(mode="after")
     def require_complete_lattice(self) -> Self:
-        for generator in self.generators:
-            _require_permutation(generator, self.degree, "source generator")
         if self.subgroup_count != len(self.subgroups):
             raise _validation_error(
                 "group.outcome_shape",
                 "subgroup_count must match the number of subgroups",
             )
         return self
+
+    @property
+    def degree(self) -> int:
+        return self.source.degree
+
+    @property
+    def generators(self) -> tuple[tuple[int, ...], ...]:
+        return self.source.generators
 
     @classmethod
     def _computed_from_kernel(
@@ -368,8 +378,7 @@ class GroupSubgroupLatticeResult(StrictModel):
         """Construct a complete lattice result emitted by the owner kernel."""
 
         return cls(
-            degree=request.degree,
-            generators=request.generators,
+            source=PermutationGroup(degree=request.degree, generators=request.generators),
             subgroups=subgroups,
             subgroup_count=len(subgroups),
         )

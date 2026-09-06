@@ -149,9 +149,12 @@ def test_group_conjugacy_classes_result_accepts_trivial_and_abelian_partitions()
 ):
     from jacobian.math.groups._models import GroupConjugacyClassesResult
 
-    trivial = GroupConjugacyClassesResult(classes=(((0,),),))
+    trivial = GroupConjugacyClassesResult(
+        source=PermutationGroup(degree=1, generators=((0,),)), classes=(((0,),),)
+    )
     assert trivial.classes == (((0,),),)
     cyclic_c4 = GroupConjugacyClassesResult(
+        source=PermutationGroup(degree=4, generators=((1, 2, 3, 0),)),
         classes=(
             ((0, 1, 2, 3),),
             ((1, 2, 3, 0),),
@@ -166,7 +169,10 @@ def test_group_conjugacy_classes_result_rejects_non_permutations() -> None:
     from jacobian.math.groups._models import GroupConjugacyClassesResult
 
     with _group_error("group.generator_permutation"):
-        GroupConjugacyClassesResult(classes=(((0, 0),),))
+        GroupConjugacyClassesResult(
+            source=PermutationGroup(degree=2, generators=((1, 0),)),
+            classes=(((0, 0),),),
+        )
 
 
 def test_group_conjugacy_classes_result_rejects_mixed_degrees() -> None:
@@ -174,6 +180,7 @@ def test_group_conjugacy_classes_result_rejects_mixed_degrees() -> None:
 
     with _group_error("group.common_degree"):
         GroupConjugacyClassesResult(
+            source=PermutationGroup(degree=2, generators=((1, 0),)),
             classes=(((0, 1),), ((0, 1, 2), (1, 2, 0))),
         )
 
@@ -182,7 +189,10 @@ def test_group_conjugacy_classes_result_rejects_duplicate_elements() -> None:
     from jacobian.math.groups._models import GroupConjugacyClassesResult
 
     with _group_error("group.duplicate_element"):
-        GroupConjugacyClassesResult(classes=(((1, 0),), ((1, 0),)))
+        GroupConjugacyClassesResult(
+            source=PermutationGroup(degree=2, generators=((1, 0),)),
+            classes=(((1, 0),), ((1, 0),)),
+        )
 
 
 def test_group_conjugacy_classes_result_requires_canonical_member_order() -> None:
@@ -193,7 +203,10 @@ def test_group_conjugacy_classes_result_requires_canonical_member_order() -> Non
         ((2, 0, 1), (1, 2, 0)),
     )
     with _group_error("group.class_order"):
-        GroupConjugacyClassesResult(classes=unsorted_members)
+        GroupConjugacyClassesResult(
+            source=PermutationGroup(degree=3, generators=((1, 2, 0),)),
+            classes=unsorted_members,
+        )
 
 
 def test_group_conjugacy_classes_result_requires_representative_class_order() -> None:
@@ -204,7 +217,10 @@ def test_group_conjugacy_classes_result_requires_representative_class_order() ->
         ((0, 1, 2),),
     )
     with _group_error("group.class_order"):
-        GroupConjugacyClassesResult(classes=reordered_classes)
+        GroupConjugacyClassesResult(
+            source=PermutationGroup(degree=3, generators=((1, 2, 0),)),
+            classes=reordered_classes,
+        )
 
 
 def test_group_conjugacy_classes_result_round_trips_through_model_dump() -> None:
@@ -219,6 +235,41 @@ def test_group_conjugacy_classes_result_round_trips_through_model_dump() -> None
     )
     revived = GroupConjugacyClassesResult.model_validate(result.model_dump())
     assert revived == result
+
+
+def test_group_claim_verifiers_reject_forged_serialized_values() -> None:
+    from jacobian.math.groups import (
+        verify_group_conjugacy_classes,
+        verify_group_orbit,
+        verify_group_order,
+    )
+    from jacobian.math.groups._models import GroupConjugacyClassesRequest
+    from jacobian.math.groups._tools import compute_group_conjugacy_classes
+
+    group = PermutationGroup(degree=3, generators=S3_GENERATORS)
+    order = compute_group_order(group)
+    assert verify_group_order(
+        type(order).model_validate_json(order.model_dump_json())
+    )
+    order_payload = order.model_dump(mode="json")
+    order_payload["order"] = "7"
+    assert not verify_group_order(type(order).model_validate(order_payload))
+
+    orbit = compute_group_orbit(GroupOrbitRequest(group=group, point=0))
+    assert verify_group_orbit(type(orbit).model_validate_json(orbit.model_dump_json()))
+    orbit_payload = orbit.model_dump(mode="json")
+    orbit_payload["orbit"] = [0]
+    assert not verify_group_orbit(type(orbit).model_validate(orbit_payload))
+
+    classes = compute_group_conjugacy_classes(
+        GroupConjugacyClassesRequest(degree=3, generators=S3_GENERATORS)
+    )
+    assert verify_group_conjugacy_classes(
+        type(classes).model_validate_json(classes.model_dump_json())
+    )
+    classes_payload = classes.model_dump(mode="json")
+    classes_payload["classes"] = classes_payload["classes"][:-1]
+    assert not verify_group_conjugacy_classes(type(classes).model_validate(classes_payload))
 
 
 def test_group_stabilizer_request_takes_the_canonical_group_value() -> None:

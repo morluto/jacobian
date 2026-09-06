@@ -8,6 +8,11 @@ from jacobian.math.groups.operations import (
     group_order,
     group_stabilizer,
     subgroup_lattice,
+    verify_element_order,
+    verify_group_conjugacy_classes,
+    verify_group_orbit,
+    verify_group_order,
+    verify_subgroup_lattice,
 )
 
 __all__ = [
@@ -18,4 +23,9 @@ __all__ = [
     "group_order",
     "group_stabilizer",
     "subgroup_lattice",
+    "verify_element_order",
+    "verify_group_conjugacy_classes",
+    "verify_group_orbit",
+    "verify_group_order",
+    "verify_subgroup_lattice",
 ]

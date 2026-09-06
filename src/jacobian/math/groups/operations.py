@@ -7,6 +7,11 @@ from typing import Any
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.groups._models import (
     MAX_GROUP_DEGREE,
+    GroupConjugacyClassesResult,
+    GroupElementOrderResult,
+    GroupOrbitResult,
+    GroupOrderResult,
+    GroupSubgroupLatticeResult,
     PermutationGroup,
     SubgroupEntry,
 )
@@ -18,6 +23,11 @@ __all__ = [
     "group_order",
     "group_stabilizer",
     "subgroup_lattice",
+    "verify_element_order",
+    "verify_group_conjugacy_classes",
+    "verify_group_orbit",
+    "verify_group_order",
+    "verify_subgroup_lattice",
 ]
 
 
@@ -40,6 +50,13 @@ def group_order(group: PermutationGroup) -> int:
     return int(_backend_group(group).order())
 
 
+def verify_group_order(claim: GroupOrderResult) -> bool:
+    try:
+        return group_order(claim.source) == claim.order
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+
+
 def element_order(degree: int, generator: list[int]) -> int:
     """Return the exact order of one permutation."""
     from sympy.combinatorics import Permutation
@@ -59,6 +76,20 @@ def element_order(degree: int, generator: list[int]) -> int:
     return int(Permutation(list(generator)).order())
 
 
+def verify_element_order(claim: GroupElementOrderResult) -> bool:
+    try:
+        if len(claim.element) != claim.source.degree:
+            return False
+        if tuple(claim.element) not in {
+            _full_permutation_form(element, claim.source.degree)
+            for element in _backend_group(claim.source).elements
+        }:
+            return False
+        return element_order(claim.source.degree, list(claim.element)) == claim.order
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+
+
 def group_orbit(group: PermutationGroup, point: int) -> list[int]:
     """Return the sorted orbit of a point under a permutation group."""
     if not 0 <= point < group.degree:
@@ -68,6 +99,13 @@ def group_orbit(group: PermutationGroup, point: int) -> list[int]:
             message="point must be in 0..n-1",
         )
     return sorted(_backend_group(group).orbit(point))
+
+
+def verify_group_orbit(claim: GroupOrbitResult) -> bool:
+    try:
+        return tuple(group_orbit(claim.source, claim.point)) == claim.orbit
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
 
 
 def group_conjugacy_classes(
@@ -128,6 +166,17 @@ def group_conjugacy_classes(
     ]
     canonical.sort(key=lambda cls: tuple(cls[0]))
     return canonical
+
+
+def verify_group_conjugacy_classes(claim: GroupConjugacyClassesResult) -> bool:
+    try:
+        expected = group_conjugacy_classes(
+            claim.source.degree, [list(g) for g in claim.source.generators]
+        )
+        actual = [[list(member) for member in cls] for cls in claim.classes]
+        return expected == actual
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
 
 
 def group_stabilizer(group: PermutationGroup, point: int) -> PermutationGroup:
@@ -307,3 +356,10 @@ def subgroup_lattice(group: PermutationGroup) -> list[SubgroupEntry]:
         )
         for generators, order in lattice
     ]
+
+
+def verify_subgroup_lattice(claim: GroupSubgroupLatticeResult) -> bool:
+    try:
+        return tuple(subgroup_lattice(claim.source)) == claim.subgroups
+    except (OperationDomainValidationError, RuntimeError, TypeError, ValueError):
+        return False

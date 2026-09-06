@@ -4,7 +4,6 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     MathTool,
     OperationDomainValidationError,
@@ -79,17 +78,18 @@ def compute_finite_abelian_character_sum_interval_profile(
 
 def compute_group_order(request: PermutationGroup) -> GroupOrderResult:
     order = native.group_order(request)
-    return GroupOrderResult(order=format_canonical_integer(order))
+    return GroupOrderResult(source=request, order=order)
 
 
 def compute_element_order(request: GroupElementOrderRequest) -> GroupElementOrderResult:
     order = native.element_order(request.degree, list(request.generator))
-    return GroupElementOrderResult(order=format_canonical_integer(order))
+    source = PermutationGroup(degree=request.degree, generators=(request.generator,))
+    return GroupElementOrderResult(source=source, element=request.generator, order=order)
 
 
 def compute_group_orbit(request: GroupOrbitRequest) -> GroupOrbitResult:
     orbit = native.group_orbit(request.group, request.point)
-    return GroupOrbitResult(orbit=tuple(orbit), point=request.point)
+    return GroupOrbitResult(source=request.group, orbit=tuple(orbit), point=request.point)
 
 
 def compute_group_conjugacy_classes(
@@ -100,6 +100,7 @@ def compute_group_conjugacy_classes(
         [list(g) for g in request.generators],
     )
     return GroupConjugacyClassesResult._from_kernel(
+        PermutationGroup(degree=request.degree, generators=request.generators),
         tuple(tuple(tuple(p) for p in cls) for cls in classes),
     )
 

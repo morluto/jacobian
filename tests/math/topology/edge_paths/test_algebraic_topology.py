@@ -11,6 +11,8 @@ from jacobian.math.topology.edge_paths._tools import TOOLS
 from jacobian.math.topology.edge_paths.operations import (
     concatenate_edge_paths,
     edge_path_word,
+    verify_edge_path_concatenation,
+    verify_edge_path_word,
 )
 
 
@@ -44,6 +46,9 @@ def test_edge_path_word_forward() -> None:
     result = _word(request)
     assert result.word == ("e1", "e2")
     assert result.length == 2
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_edge_path_word(decoded)
+    assert not verify_edge_path_word(decoded.model_copy(update={"word": ("e2", "e1")}))
 
 
 def test_edge_path_word_backward() -> None:
@@ -66,6 +71,11 @@ def test_edge_path_concatenate() -> None:
     result = _concatenate(request)
     assert result.path == (0, 1, 2)
     assert result.length == 3
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_edge_path_concatenation(decoded)
+    assert not verify_edge_path_concatenation(
+        decoded.model_copy(update={"path": (0, 1)})
+    )
 
 
 def test_edge_path_word_rejects_non_edge_path() -> None:

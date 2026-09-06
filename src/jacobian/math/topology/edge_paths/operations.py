@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.topology.edge_paths._models import (
+    EdgeGraph,
     EdgePathConcatenateResult,
     EdgePathWordResult,
     OrientedEdge,
@@ -98,6 +99,9 @@ def edge_path_word(
         for step in path
     ]
     return EdgePathWordResult(
+        graph=EdgeGraph.from_request(vertex_count, edges),
+        start_vertex=start_vertex,
+        path=path,
         word=tuple(word),
         length=len(word),
     )
@@ -121,9 +125,40 @@ def concatenate_edge_paths(
     else:
         result = first + second
     return EdgePathConcatenateResult(
+        vertex_count=vertex_count,
+        path_a=path_a,
+        path_b=path_b,
         path=tuple(result),
         length=len(result),
     )
 
 
-__all__ = ["concatenate_edge_paths", "edge_path_word"]
+def verify_edge_path_word(claim: EdgePathWordResult) -> bool:
+    """Verify generator encoding against the retained graph and source path."""
+    try:
+        return edge_path_word(
+            claim.graph.vertex_count,
+            claim.graph.edges,
+            claim.start_vertex,
+            claim.path,
+        ) == claim
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+
+
+def verify_edge_path_concatenation(claim: EdgePathConcatenateResult) -> bool:
+    """Verify concatenation against the retained vertex axis and input paths."""
+    try:
+        return concatenate_edge_paths(
+            claim.vertex_count, claim.path_a, claim.path_b
+        ) == claim
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+
+
+__all__ = [
+    "concatenate_edge_paths",
+    "edge_path_word",
+    "verify_edge_path_concatenation",
+    "verify_edge_path_word",
+]

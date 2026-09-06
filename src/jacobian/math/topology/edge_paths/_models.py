@@ -42,11 +42,30 @@ class EdgePathConcatenateRequest(StrictModel):
 # Results
 
 
+class EdgeGraph(StrictModel):
+    """A bounded graph with an explicit vertex axis for edge paths."""
+
+    vertex_count: int = Field(ge=2)
+    edges: tuple[tuple[int, int], ...] = Field(min_length=1, max_length=MAX_EDGES)
+
+    @classmethod
+    def from_request(
+        cls, vertex_count: int, edges: tuple[tuple[int, int], ...]
+    ) -> EdgeGraph:
+        return cls.model_construct(vertex_count=vertex_count, edges=edges)
+
+
 class EdgePathWordResult(StrictModel):
+    graph: EdgeGraph
+    start_vertex: int
+    path: tuple[OrientedEdge, ...] = Field(min_length=1, max_length=MAX_WORD)
     word: tuple[str, ...]
     length: int = Field(ge=0)
 
 
 class EdgePathConcatenateResult(StrictModel):
+    vertex_count: int = Field(ge=2)
+    path_a: tuple[int, ...] = Field(min_length=2, max_length=MAX_WORD)
+    path_b: tuple[int, ...] = Field(min_length=2, max_length=MAX_WORD)
     path: tuple[int, ...]
     length: int = Field(ge=0)

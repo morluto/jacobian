@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from typing import Annotated, Literal, Self
 
 from pydantic import (
@@ -80,26 +79,36 @@ class PrincipalDirichletCharacterValueResult(StrictModel):
     value: Literal[0, 1]
 
     @model_validator(mode="after")
-    def require_exact_source_bound_value(self) -> Self:
+    def require_source_bound_residue(self) -> Self:
+        """Validate only the inexpensive source-to-residue structural binding."""
+
         residue = int(self.integer) % self.character.modulus
         if self.canonical_residue != residue:
             raise _validation_error(
                 "canonical_residue_mismatch",
                 "canonical residue does not match the source integer",
             )
-        expected_is_unit = math.gcd(residue, self.character.modulus) == 1
-        if self.is_unit != expected_is_unit:
-            raise _validation_error(
-                "unit_status_mismatch",
-                "unit status does not match the source character modulus",
-            )
-        expected_value = self.character.values[residue]
-        if self.value != expected_value:
-            raise _validation_error(
-                "value_mismatch",
-                "value does not match the source principal-character table",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        character: PrincipalDirichletCharacter,
+        integer: BoundedCanonicalInteger,
+        canonical_residue: StrictInt,
+        is_unit: StrictBool,
+        value: Literal[0, 1],
+    ) -> Self:
+        """Build a result after its producer has established the evaluation."""
+
+        return cls.model_construct(
+            character=character,
+            integer=integer,
+            canonical_residue=canonical_residue,
+            is_unit=is_unit,
+            value=value,
+        )
 
 
 __all__ = [

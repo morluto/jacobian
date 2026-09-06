@@ -31,7 +31,7 @@ def compute_principal_dirichlet_character_value(
         request.character, request.integer_value()
     )
     residue = request.integer_value() % request.character.modulus
-    return PrincipalDirichletCharacterValueResult(
+    return PrincipalDirichletCharacterValueResult._from_kernel(
         character=request.character,
         integer=request.integer,
         canonical_residue=residue,

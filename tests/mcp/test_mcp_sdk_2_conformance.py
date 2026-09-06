@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
+from mcp.shared.exceptions import MCPError
 from mcp.types import ContentBlock, TextContent, TextResourceContents
 from mcp.types.methods import serialize_server_result
 
@@ -187,6 +188,44 @@ def test_math_run_projects_unexpected_operation_failures() -> None:
         text = _content_text(result.content[0]) if result.content else ""
         assert text == "Error executing tool math.run: operation execution failed"
         assert "private backend failure" not in text
+
+    asyncio.run(scenario())
+
+
+def test_math_run_projects_forged_character_as_invalid_request() -> None:
+    async def scenario() -> None:
+        from mcp import Client
+
+        async with Client(create_server(), raise_exceptions=True) as client:
+            with pytest.raises(MCPError) as error:
+                await client.call_tool(
+                    "math.run",
+                    {
+                        "operation_id": "dirichlet_character.principal.value.compute",
+                        "payload": {
+                            "character": {
+                                "modulus": 4,
+                                "unit_residues": [1],
+                                "values": [0, 1, 0, 0],
+                            },
+                            "integer": "1",
+                        },
+                    },
+                )
+
+        assert error.value.code == -32602
+        assert error.value.message == "operation payload failed validation"
+        assert error.value.data["code"] == "INVALID_REQUEST"
+        assert error.value.data["stage"] == "operation_validation"
+        assert error.value.data["errors"] == [
+            {
+                "location": ["character", "unit_residues"],
+                "code": "dirichlet_character.unit_residues_mismatch",
+                "message": (
+                    "unit residues must be the complete canonical unit group modulo modulus"
+                ),
+            }
+        ]
 
     asyncio.run(scenario())
 

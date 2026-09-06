@@ -182,9 +182,9 @@ class TestGroebnerBasisValidation:
         assert verify_groebner_basis(decoded)
 
         payload = decoded.model_dump(mode="json")
-        payload["basis"]["generators"][0]["polynomial"]["terms"][0][
-            "coefficient"
-        ]["num"] = "2"
+        payload["basis"]["generators"][0]["polynomial"]["terms"][0]["coefficient"][
+            "num"
+        ] = "2"
         forged = type(result).model_validate(payload)
 
         assert not verify_groebner_basis(forged)

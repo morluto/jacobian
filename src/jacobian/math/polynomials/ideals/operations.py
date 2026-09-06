@@ -1304,9 +1304,13 @@ def verify_ideal_membership_certificate(
                 label="certificate cofactor",
             )
             cofactor_terms += len(cofactor.polynomial.terms)
-        if cofactor_terms * sum(
-            len(generator.polynomial.terms) for generator in claim.ideal.generators
-        ) > _MAX_CERTIFICATE_NONZEROS:
+        if (
+            cofactor_terms
+            * sum(
+                len(generator.polynomial.terms) for generator in claim.ideal.generators
+            )
+            > _MAX_CERTIFICATE_NONZEROS
+        ):
             return False
         if any(
             sum(term.exponents) > claim.cofactor_degree_bound

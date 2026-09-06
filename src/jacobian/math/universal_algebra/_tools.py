@@ -29,7 +29,7 @@ def compute_evaluate(request: EvaluateRequest) -> EvaluateResult:
             request.algebra,
             request.term,
             dict(enumerate(request.assignment)),
-        )
+        ),
     )
 
 

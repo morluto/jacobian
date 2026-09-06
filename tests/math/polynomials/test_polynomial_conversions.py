@@ -211,9 +211,9 @@ def test_invariant_operations_accept_canonical_polynomial_values() -> None:
         (
             lambda source: polynomial_gcd(source, source),
             verify_polynomial_gcd,
-            lambda payload: payload["gcd"]["polynomial"]["terms"][0]["coefficient"].update(
-                num="2"
-            ),
+            lambda payload: payload["gcd"]["polynomial"]["terms"][0][
+                "coefficient"
+            ].update(num="2"),
         ),
         (
             lambda source: polynomial_resultant(source, source, "x"),

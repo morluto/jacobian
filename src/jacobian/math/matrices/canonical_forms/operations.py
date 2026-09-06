@@ -559,9 +559,7 @@ def verify_rational_canonical_form(claim: RationalCanonicalFormResult) -> bool:
     """Verify invariant factors and derived polynomials against the matrix."""
 
     try:
-        factors, characteristic, minimal = _rational_canonical_components(
-            claim.matrix
-        )
+        factors, characteristic, minimal = _rational_canonical_components(claim.matrix)
         expected = RationalCanonicalFormResult._from_kernel(
             matrix=claim.matrix,
             invariant_factors=factors,

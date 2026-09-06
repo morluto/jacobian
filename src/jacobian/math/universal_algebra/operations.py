@@ -203,9 +203,7 @@ def verify_evaluate(claim: EvaluateResult) -> bool:
 
     try:
         return (
-            evaluate_term(
-                claim.algebra, claim.term, dict(enumerate(claim.assignment))
-            )
+            evaluate_term(claim.algebra, claim.term, dict(enumerate(claim.assignment)))
             == claim.value
         )
     except (OperationDomainValidationError, ValueError, TypeError):
@@ -228,9 +226,12 @@ def verify_equation_profile(claim: EquationProfileResult) -> bool:
     """Verify an equation profile against its algebra and both terms."""
 
     try:
-        return equation_profile(
-            claim.algebra, claim.left, claim.right, claim.variable_count
-        ) == claim
+        return (
+            equation_profile(
+                claim.algebra, claim.left, claim.right, claim.variable_count
+            )
+            == claim
+        )
     except (OperationDomainValidationError, ValueError, TypeError):
         return False
 

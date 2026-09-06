@@ -116,9 +116,10 @@ def test_jacobian_entries_are_directly_composable_polynomials() -> None:
     decoded = type(result).model_validate_json(result.model_dump_json())
     assert verify_jacobian(decoded)
     payload = result.model_dump(mode="json")
-    payload["matrix"]["entries"][0][0]["polynomial"]["terms"][0][
-        "coefficient"
-    ] = {"num": "99", "den": "1"}
+    payload["matrix"]["entries"][0][0]["polynomial"]["terms"][0]["coefficient"] = {
+        "num": "99",
+        "den": "1",
+    }
     assert not verify_jacobian(type(result).model_validate(payload))
 
 

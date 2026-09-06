@@ -506,7 +506,9 @@ def test_serialized_canonical_claims_verify_against_retained_matrix() -> None:
         "num": "99",
         "den": "1",
     }
-    assert not verify_primary_decomposition(type(primary).model_validate(primary_payload))
+    assert not verify_primary_decomposition(
+        type(primary).model_validate(primary_payload)
+    )
 
 
 def test_rational_canonical_form_rejects_structural_mutations() -> None:

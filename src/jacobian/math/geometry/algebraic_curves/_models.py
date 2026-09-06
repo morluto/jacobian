@@ -148,35 +148,11 @@ class ProjectiveClosureResult(StrictModel):
     source_polynomial: RationalPolynomial
     polynomial: RationalPolynomial
 
-    @model_validator(mode="after")
-    def bind_source_axis(self) -> Self:
-        if len(self.source_polynomial.variables) != 2:
-            raise _validation_error("closure_axis_invalid", "closure source must be affine")
-        expected_axis = (*self.source_polynomial.variables, HOMOGENIZING_COORDINATE)
-        if self.polynomial.variables != expected_axis:
-            raise _validation_error("closure_axis", "closure must retain the source axis")
-        return self
-
 
 class AffineChartResult(StrictModel):
     source_polynomial: RationalPolynomial
     chart_variable: PolynomialVariable
     polynomial: RationalPolynomial
-
-    @model_validator(mode="after")
-    def bind_source_axis(self) -> Self:
-        if len(self.source_polynomial.variables) != 3:
-            raise _validation_error("chart_axis_invalid", "chart source must be projective")
-        if self.chart_variable not in self.source_polynomial.variables:
-            raise _validation_error("chart_variable_axis_mismatch", "chart variable must be on source axis")
-        expected_axis = tuple(
-            variable
-            for variable in self.source_polynomial.variables
-            if variable != self.chart_variable
-        )
-        if self.polynomial.variables != expected_axis:
-            raise _validation_error("chart_axis", "chart must retain the source axis order")
-        return self
 
 
 class RationalConicParametrizationResult(StrictModel):

@@ -629,6 +629,10 @@ def test_projective_closure_circle_is_canonical_polynomial() -> None:
     forged = result.model_dump(mode="json")
     forged["polynomial"]["polynomial"]["terms"][0]["exponents"] = [1, 1, 0]
     assert verify_projective_closure(ProjectiveClosureResult.model_validate(forged)) is False
+    forged_axis = result.model_dump(mode="json")
+    forged_axis["polynomial"]["variables"] = ["y", "x", "z"]
+    axis_claim = ProjectiveClosureResult.model_validate(forged_axis)
+    assert verify_projective_closure(axis_claim) is False
 
 
 def test_affine_chart_circle_is_directly_composable() -> None:
@@ -648,6 +652,10 @@ def test_affine_chart_circle_is_directly_composable() -> None:
     forged = result.model_dump(mode="json")
     forged["polynomial"]["polynomial"]["terms"][0]["exponents"] = [1, 1]
     assert verify_affine_chart(AffineChartResult.model_validate(forged)) is False
+    forged_axis = result.model_dump(mode="json")
+    forged_axis["polynomial"]["variables"] = ["y", "x"]
+    axis_claim = AffineChartResult.model_validate(forged_axis)
+    assert verify_affine_chart(axis_claim) is False
     AffineCurveRequest(polynomial=result.polynomial)
 
 

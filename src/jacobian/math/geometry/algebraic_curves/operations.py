@@ -168,7 +168,7 @@ def verify_affine_curve_check(claim: AffineCurveResult) -> bool:
     """Check the affine-curve decision asserted by a serialized claim."""
 
     try:
-        return affine_curve_check(claim.request.polynomial) == (
+        return affine_curve_check(claim.polynomial) == (
             claim.is_valid,
             claim.degree,
         )

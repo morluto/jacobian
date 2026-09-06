@@ -8,6 +8,7 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.exact._models import (
     COORDINATE_DIGITS,
     DistanceGraphRequest,
+    DistanceGraphResult,
     DistanceProfileRequest,
     DistanceProfileResult,
     LabelledRationalPoint,
@@ -36,7 +37,7 @@ def compute_distance_profile(request: DistanceProfileRequest) -> DistanceProfile
 
 def compute_distance_graph(
     request: DistanceGraphRequest,
-) -> IndexedSimpleUndirectedGraph:
+) -> DistanceGraphResult:
     return distance_graph(request.configuration, request.target_squared_distance)
 
 

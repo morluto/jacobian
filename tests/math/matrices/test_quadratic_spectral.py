@@ -13,6 +13,7 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.quadratic_spectral import (
     RealAlgebraicMultiplicity,
     RealQuadraticInertia,
+    RealQuadraticSpectrum,
     inertia,
     singular_spectrum,
     symmetric_spectrum,
@@ -64,19 +65,41 @@ def test_serialized_spectral_and_inertia_verifiers_reject_forged_sources() -> No
             (_q(0, Fraction(1, 20)), _q(Fraction(1, 2))),
         )
     )
-    for result, verifier in (
-        (symmetric_spectrum(symmetric_source), verify_symmetric_spectrum),
-        (singular_spectrum(symmetric_source), verify_singular_spectrum),
-        (inertia(symmetric_source), verify_inertia),
-    ):
-        decoded = type(result).model_validate_json(
-            result.model_dump_json(), strict=True
-        )
-        assert verifier(decoded)
-        payload = json.loads(result.model_dump_json())
-        payload["matrix"]["entries"][0][0]["rational_part"]["num"] = "-9"
-        forged = type(result).model_validate_json(json.dumps(payload), strict=True)
-        assert not verifier(forged)
+    symmetric = symmetric_spectrum(symmetric_source)
+    decoded_symmetric = RealQuadraticSpectrum.model_validate_json(
+        symmetric.model_dump_json(), strict=True
+    )
+    assert verify_symmetric_spectrum(decoded_symmetric)
+    symmetric_payload = json.loads(symmetric.model_dump_json())
+    symmetric_payload["matrix"]["entries"][0][0]["rational_part"]["num"] = "-9"
+    forged_symmetric = RealQuadraticSpectrum.model_validate_json(
+        json.dumps(symmetric_payload), strict=True
+    )
+    assert not verify_symmetric_spectrum(forged_symmetric)
+
+    singular = singular_spectrum(symmetric_source)
+    decoded_singular = RealQuadraticSpectrum.model_validate_json(
+        singular.model_dump_json(), strict=True
+    )
+    assert verify_singular_spectrum(decoded_singular)
+    singular_payload = json.loads(singular.model_dump_json())
+    singular_payload["matrix"]["entries"][0][0]["rational_part"]["num"] = "-9"
+    forged_singular = RealQuadraticSpectrum.model_validate_json(
+        json.dumps(singular_payload), strict=True
+    )
+    assert not verify_singular_spectrum(forged_singular)
+
+    inertia_result = inertia(symmetric_source)
+    decoded_inertia = RealQuadraticInertia.model_validate_json(
+        inertia_result.model_dump_json(), strict=True
+    )
+    assert verify_inertia(decoded_inertia)
+    inertia_payload = json.loads(inertia_result.model_dump_json())
+    inertia_payload["matrix"]["entries"][0][0]["rational_part"]["num"] = "-9"
+    forged_inertia = RealQuadraticInertia.model_validate_json(
+        json.dumps(inertia_payload), strict=True
+    )
+    assert not verify_inertia(forged_inertia)
 
 
 def test_pang_spectra_and_proof_critical_order_are_exact() -> None:

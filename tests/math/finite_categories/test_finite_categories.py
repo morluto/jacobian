@@ -1,5 +1,6 @@
 """Tests for finite category operations."""
 
+from copy import deepcopy
 from typing import TypedDict
 
 import pytest
@@ -11,6 +12,7 @@ from jacobian.math.finite_categories import (
     FiniteCategory,
     MorphismSpec,
     product,
+    verify_category_profile,
 )
 from jacobian.math.finite_categories._models import (
     CategoryProductRequest,
@@ -156,6 +158,29 @@ class TestProfile:
         ids = dict(result.identity_morphisms)
         assert ids.get("A") == "id_A"
         assert ids.get("B") == "id_B"
+
+    def test_serialized_profile_verifier_rejects_forged_count(self) -> None:
+        result = compute_category_profile(FiniteCategory.model_validate(CATEGORY))
+        restored = type(result).model_validate_json(result.model_dump_json())
+
+        assert restored == result
+        assert verify_category_profile(restored)
+
+        forged = deepcopy(restored.model_dump(mode="json"))
+        forged["hom_sets"][0][2] = 2
+        decoded = type(result).model_validate(forged)
+
+        assert not verify_category_profile(decoded)
+
+    def test_empty_category_profile_round_trips(self) -> None:
+        category = FiniteCategory(
+            objects=(), morphisms=(), identities=(), composition=()
+        )
+        result = compute_category_profile(category)
+        restored = type(result).model_validate_json(result.model_dump_json())
+
+        assert restored == result
+        assert verify_category_profile(restored)
 
 
 class TestOpposite:

@@ -66,6 +66,15 @@ def category_profile(category: FiniteCategory) -> CategoryProfileResult:
     return CategoryProfileResult._from_kernel(category, hom_sets, endomorphisms)
 
 
+def verify_category_profile(claim: CategoryProfileResult) -> bool:
+    """Verify a hom-set profile against its retained finite category."""
+
+    try:
+        return category_profile(claim.category) == claim
+    except Exception:
+        return False
+
+
 def opposite_category(category: FiniteCategory) -> FiniteCategory:
     """Return the finite category with all arrows and compositions reversed."""
 
@@ -89,4 +98,9 @@ def opposite_category(category: FiniteCategory) -> FiniteCategory:
     )
 
 
-__all__ = ["category_profile", "opposite_category", "product"]
+__all__ = [
+    "category_profile",
+    "opposite_category",
+    "product",
+    "verify_category_profile",
+]

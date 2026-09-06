@@ -23,6 +23,7 @@ class CategoryProfileResult(StrictModel):
     to the producing kernel's tests rather than result deserialization.
     """
 
+    category: FiniteCategory
     objects: tuple[CategoryIdentifier, ...] = Field(max_length=MAX_CATEGORY_OBJECTS)
     num_objects: int = Field(ge=0, le=MAX_CATEGORY_OBJECTS)
     num_morphisms: int = Field(ge=0, le=MAX_CATEGORY_MORPHISMS)
@@ -46,6 +47,7 @@ class CategoryProfileResult(StrictModel):
         """Build a profile result from the trusted owner-local kernel."""
 
         return cls.model_construct(
+            category=category,
             objects=category.objects,
             num_objects=len(category.objects),
             num_morphisms=len(category.morphisms),

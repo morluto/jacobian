@@ -4,6 +4,7 @@ from jacobian.math.finite_categories.operations import (
     category_profile,
     opposite_category,
     product,
+    verify_category_profile,
 )
 from jacobian.math.finite_categories.values import (
     CategoryIdentifier,
@@ -24,4 +25,5 @@ __all__ = [
     "category_profile",
     "opposite_category",
     "product",
+    "verify_category_profile",
 ]

@@ -5,6 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.probability._distribution import (
     FiniteDistributionAtom,
     FiniteRationalDistribution,
@@ -253,8 +254,19 @@ def doob_martingale(
 def verify_filtration(claim: FiltrationResult) -> bool:
     """Verify filtration steps against the retained observations and space."""
     try:
+        if not isinstance(claim, FiltrationResult):
+            return False
         expected = filtration_natural(claim.space, claim.observations)
-    except (TypeError, ValueError, RuntimeError):
+    except (
+        AttributeError,
+        ArithmeticError,
+        IndexError,
+        KeyError,
+        OperationDomainValidationError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+    ):
         return False
     return expected == claim.sigmas
 
@@ -262,8 +274,19 @@ def verify_filtration(claim: FiltrationResult) -> bool:
 def verify_doob_martingale(claim: DoobMartingaleResult) -> bool:
     """Verify conditional-expectation rows against retained process sources."""
     try:
+        if not isinstance(claim, DoobMartingaleResult):
+            return False
         expected = doob_martingale(claim.space, claim.observations, claim.payoff)
-    except (TypeError, ValueError, RuntimeError):
+    except (
+        AttributeError,
+        ArithmeticError,
+        IndexError,
+        KeyError,
+        OperationDomainValidationError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+    ):
         return False
     return (
         len(claim.martingale) == len(expected)

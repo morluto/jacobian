@@ -168,6 +168,8 @@ class TestFiltration:
         decoded = type(result).model_validate_json(result.model_dump_json())
         assert verify_filtration(decoded)
         assert not verify_filtration(decoded.model_copy(update={"sigmas": ()}))
+        assert not verify_filtration(object())
+        assert not verify_filtration(decoded.model_copy(update={"space": object()}))
 
     def test_time_axis_is_bounded_for_requests_and_native_calls(self) -> None:
         observations = (("heads", "tails"),) * (MAX_PROCESS_TIME_STEPS + 1)
@@ -207,6 +209,16 @@ class TestDoobMartingale:
                 }
             )
         )
+        forged_payoff = decoded.model_copy(
+            update={
+                "payoff": (
+                    decoded.payoff[0].model_copy(update={"den": "0"}),
+                    decoded.payoff[1],
+                )
+            }
+        )
+        assert not verify_doob_martingale(forged_payoff)
+        assert not verify_doob_martingale(object())
         other_space = FiniteProbabilitySpace(samples=("H",), masses=(_q(1),))
         assert not verify_doob_martingale(
             decoded.model_copy(

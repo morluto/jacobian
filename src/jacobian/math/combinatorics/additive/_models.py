@@ -9,7 +9,7 @@ from pydantic import Field, StringConstraints, model_validator
 from pydantic.json_schema import WithJsonSchema
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import CanonicalInteger, NativeInteger
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.combinatorics.additive._multiset_sum import (
@@ -162,62 +162,6 @@ class IntegerVectorSet(StrictModel):
         return self
 
 
-def _check_totals(
-    entries: tuple[OrderedDifferenceEntry, ...],
-    total_ordered_pairs: int,
-    set_size: int,
-    support_size: int,
-) -> None:
-    total = sum(entry.multiplicity for entry in entries)
-    if total != total_ordered_pairs:
-        raise _validation_error(
-            "_check_totals", "total ordered pairs must match sum of multiplicities"
-        )
-    if total_ordered_pairs != set_size * (set_size - 1):
-        raise _validation_error(
-            "_check_totals", "total_ordered_pairs must equal set_size*(set_size-1)"
-        )
-    if support_size != len(entries):
-        raise _validation_error(
-            "_check_totals", "support_size must equal the number of entries"
-        )
-
-
-def _check_max_and_repeated(
-    entries: tuple[OrderedDifferenceEntry, ...],
-    max_multiplicity: int,
-    has_repeated_difference: bool,
-    first_collision: OrderedDifferencePair | None,
-) -> None:
-    if not entries:
-        if max_multiplicity != 0:
-            raise _validation_error(
-                "_check_max_and_repeated",
-                "max_multiplicity must be 0 when entries is empty",
-            )
-    elif max_multiplicity != max(e.multiplicity for e in entries):
-        raise _validation_error(
-            "_check_max_and_repeated",
-            "max_multiplicity must be the maximum entry multiplicity",
-        )
-    expected_repeated = (max_multiplicity > 1) if entries else False
-    if has_repeated_difference != expected_repeated:
-        raise _validation_error(
-            "_check_max_and_repeated",
-            "has_repeated_difference must match max_multiplicity > 1",
-        )
-    if has_repeated_difference and first_collision is None:
-        raise _validation_error(
-            "_check_max_and_repeated",
-            "first_collision must be present when has_repeated_difference",
-        )
-    if not has_repeated_difference and first_collision is not None:
-        raise _validation_error(
-            "_check_max_and_repeated",
-            "first_collision must be null when has_repeated_difference is false",
-        )
-
-
 def _check_entries_sorted(entries: tuple[OrderedDifferenceEntry, ...]) -> None:
     diffs = [entry.difference.as_int_tuple() for entry in entries]
     if diffs != sorted(diffs):
@@ -227,35 +171,6 @@ def _check_entries_sorted(entries: tuple[OrderedDifferenceEntry, ...]) -> None:
     if len(set(diffs)) != len(diffs):
         raise _validation_error(
             "_check_entries_sorted", "entries differences must be unique"
-        )
-
-
-def _check_first_collision(
-    entries: tuple[OrderedDifferenceEntry, ...],
-    has_repeated_difference: bool,
-    first_collision: OrderedDifferencePair | None,
-) -> None:
-    if entries and has_repeated_difference:
-        # Pair order is canonically lexicographic (checked in
-        # by the entry model, so pairs[0] is independently determined as its
-        # minimum pair; the witness must be exactly that
-        # designated pair of the first sorted repeated-difference entry.
-        expected_entry = next((e for e in entries if e.multiplicity > 1), None)
-        if expected_entry is None:
-            raise _validation_error(
-                "_check_first_collision",
-                "has_repeated_difference requires a repeated difference entry",
-            )
-        if first_collision != expected_entry.pairs[0]:
-            raise _validation_error(
-                "_check_first_collision",
-                "first_collision must be the designated pair of the first "
-                "repeated-difference entry",
-            )
-    elif not entries and first_collision is not None:
-        raise _validation_error(
-            "_check_first_collision",
-            "first_collision must be null when entries is empty",
         )
 
 
@@ -769,8 +684,8 @@ class OrderedDifferenceProfileRequest(StrictModel):
 class OrderedDifferencePair(StrictModel):
     """One ordered source pair (i, j) with i != j."""
 
-    left_index: int = Field(ge=0)
-    right_index: int = Field(ge=0)
+    left_index: int = Field(ge=0, le=_MAX_VECTOR_SET_SIZE - 1)
+    right_index: int = Field(ge=0, le=_MAX_VECTOR_SET_SIZE - 1)
 
 
 class OrderedDifferenceEntry(StrictModel):
@@ -783,20 +698,30 @@ class OrderedDifferenceEntry(StrictModel):
     """
 
     difference: IntegerVector
-    multiplicity: int = Field(gt=0)
-    pairs: tuple[OrderedDifferencePair, ...] = Field(default=())
+    multiplicity: NativeInteger = Field(
+        gt=0,
+        le=_MAX_TOTAL_ORDERED_PAIRS,
+        description="Claimed positive multiplicity of this difference.",
+    )
+    pairs: tuple[OrderedDifferencePair, ...] = Field(
+        default=(), max_length=_MAX_TOTAL_ORDERED_PAIRS
+    )
 
     @model_validator(mode="after")
     def require_canonical(self) -> Self:
-        if self.multiplicity != len(self.pairs):
-            raise _validation_error(
-                "require_canonical", "multiplicity must equal the number of pairs"
-            )
         for pair in self.pairs:
             if pair.left_index == pair.right_index:
                 raise _validation_error(
                     "require_canonical", "pair indices must be distinct"
                 )
+        if self.pairs != tuple(
+            sorted(self.pairs, key=lambda pair: (pair.left_index, pair.right_index))
+        ):
+            raise _validation_error(
+                "require_canonical", "pair indices must be lexicographically ordered"
+            )
+        if len(set(self.pairs)) != len(self.pairs):
+            raise _validation_error("require_canonical", "pair indices must be unique")
         return self
 
 
@@ -806,10 +731,12 @@ class OrderedDifferenceProfileResult(StrictModel):
     vectors: IntegerVectorSet
     dimension: int = Field(ge=1, le=_MAX_DIMENSION)
     set_size: int = Field(ge=1, le=_MAX_VECTOR_SET_SIZE)
-    total_ordered_pairs: int = Field(ge=0, le=_MAX_TOTAL_ORDERED_PAIRS)
-    support_size: int = Field(ge=0, le=_MAX_TOTAL_ORDERED_PAIRS)
-    max_multiplicity: int = Field(ge=0, le=_MAX_TOTAL_ORDERED_PAIRS)
-    entries: tuple[OrderedDifferenceEntry, ...] = Field(default=())
+    total_ordered_pairs: NativeInteger = Field(ge=0, le=_MAX_TOTAL_ORDERED_PAIRS)
+    support_size: NativeInteger = Field(ge=0, le=_MAX_TOTAL_ORDERED_PAIRS)
+    max_multiplicity: NativeInteger = Field(ge=0, le=_MAX_TOTAL_ORDERED_PAIRS)
+    entries: tuple[OrderedDifferenceEntry, ...] = Field(
+        default=(), max_length=_MAX_TOTAL_ORDERED_PAIRS
+    )
     has_repeated_difference: bool = False
     first_collision: OrderedDifferencePair | None = None
 
@@ -826,33 +753,25 @@ class OrderedDifferenceProfileResult(StrictModel):
         return self
 
     @model_validator(mode="after")
-    def require_totals(self) -> Self:
-        _check_totals(
-            self.entries, self.total_ordered_pairs, self.set_size, self.support_size
-        )
-        return self
-
-    @model_validator(mode="after")
-    def require_max_and_repeated(self) -> Self:
-        _check_max_and_repeated(
-            self.entries,
-            self.max_multiplicity,
-            self.has_repeated_difference,
-            self.first_collision,
-        )
-        return self
-
-    @model_validator(mode="after")
     def require_entries(self) -> Self:
         if self.entries:
             _check_entries_sorted(self.entries)
-            _check_first_collision(
-                self.entries, self.has_repeated_difference, self.first_collision
-            )
-        elif self.first_collision is not None:
-            raise _validation_error(
-                "require_entries", "first_collision must be null when entries is empty"
-            )
+            if any(
+                len(entry.difference.coordinates) != self.dimension
+                for entry in self.entries
+            ):
+                raise _validation_error(
+                    "require_entries",
+                    "difference vectors must match the source dimension",
+                )
+            if any(
+                pair.left_index >= self.set_size or pair.right_index >= self.set_size
+                for entry in self.entries
+                for pair in entry.pairs
+            ):
+                raise _validation_error(
+                    "require_entries", "pair indices must belong to the source set"
+                )
         return self
 
     @classmethod

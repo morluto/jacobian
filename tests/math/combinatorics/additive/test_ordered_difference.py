@@ -13,6 +13,7 @@ from jacobian.math.combinatorics.additive._models import (
 from jacobian.math.combinatorics.additive._tools import TOOLS
 from jacobian.math.combinatorics.additive.operations import (
     ordered_difference_profile,
+    verify_ordered_difference_profile,
 )
 
 
@@ -189,11 +190,12 @@ class TestOrderedDifferenceProfile:
         req = _request((0, 0), (1, 0), (0, 1), (1, 1))
         result = _run_ordered(req)
         payload = result.model_dump(mode="json")
-        repeated = [e for e in payload["entries"] if e["multiplicity"] > 1]
+        repeated = [e for e in payload["entries"] if int(e["multiplicity"]) > 1]
         assert len(repeated) >= 2
         payload["first_collision"] = repeated[-1]["pairs"][0]
-        with pytest.raises(ValidationError):
+        assert not verify_ordered_difference_profile(
             OrderedDifferenceProfileResult.model_validate(payload)
+        )
 
     def test_result_rejects_nondesignated_pair_from_first_entry(self) -> None:
         """Swapping in a different valid pair of the same first repeated
@@ -202,7 +204,9 @@ class TestOrderedDifferenceProfile:
         req = _request((0, 0), (1, 0), (0, 1), (1, 1))
         result = _run_ordered(req)
         payload = result.model_dump(mode="json")
-        first_repeated = next(e for e in payload["entries"] if e["multiplicity"] > 1)
+        first_repeated = next(
+            e for e in payload["entries"] if int(e["multiplicity"]) > 1
+        )
         assert len(first_repeated["pairs"]) >= 2
         first_repeated["pairs"][0], first_repeated["pairs"][1] = (
             first_repeated["pairs"][1],
@@ -308,3 +312,43 @@ class TestOrderedDifferenceProfile:
         assert (
             OrderedDifferenceProfileResult.model_validate(result.model_dump()) == result
         )
+        decoded = OrderedDifferenceProfileResult.model_validate_json(
+            result.model_dump_json()
+        )
+        assert verify_ordered_difference_profile(decoded)
+
+    def test_derived_summaries_are_claims_until_consumed(self) -> None:
+        """Schema decoding keeps producer summaries without replaying entries."""
+        result = _run_ordered(_request((0, 0), (1, 0), (0, 1), (1, 1)))
+        payload = result.model_dump(mode="json")
+        payload["total_ordered_pairs"] = "0"
+        payload["support_size"] = "0"
+        payload["max_multiplicity"] = "0"
+        payload["has_repeated_difference"] = False
+        payload["first_collision"] = None
+
+        decoded = OrderedDifferenceProfileResult.model_validate(payload)
+
+        assert decoded.total_ordered_pairs == 0
+        assert decoded.support_size == 0
+        assert decoded.max_multiplicity == 0
+        assert not verify_ordered_difference_profile(decoded)
+
+    def test_forged_difference_is_structural_until_consumer_verification(self) -> None:
+        result = _run_ordered(_request((0, 0), (1, 0)))
+        payload = result.model_dump(mode="json")
+        payload["entries"][0]["difference"]["coordinates"] = ["-2", "0"]
+
+        decoded = OrderedDifferenceProfileResult.model_validate(payload)
+
+        assert decoded.entries[0].difference.as_int_tuple() == (-2, 0)
+        assert not verify_ordered_difference_profile(decoded)
+
+    def test_summary_counts_use_decimal_strings_in_json(self) -> None:
+        result = _run_ordered(_request((0, 0), (1, 0)))
+        payload = result.model_dump(mode="json")
+
+        assert isinstance(payload["total_ordered_pairs"], str)
+        assert isinstance(payload["support_size"], str)
+        assert isinstance(payload["max_multiplicity"], str)
+        assert isinstance(payload["entries"][0]["multiplicity"], str)

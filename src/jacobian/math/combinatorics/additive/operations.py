@@ -16,7 +16,11 @@ from jacobian.canonical import (
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.additive import _multiset_sum
 from jacobian.math.combinatorics.additive._models import (
+    _MAX_COORDINATE_DIGITS,
+    _MAX_DIMENSION,
     _MAX_RESULT_SIZE,
+    _MAX_VECTOR_COORDINATE_LENGTH,
+    _MAX_VECTOR_SET_SIZE,
     AdditiveEnergyResult,
     DirectSumPredicateResult,
     FiniteIntegerSet,
@@ -48,6 +52,12 @@ from jacobian.math.combinatorics.additive.values import (
 )
 
 MAX_DIRECT_SUM_DIAGNOSTIC_ENTRIES = 1_048_576
+
+# The profile kernel performs one exact subtraction per source-pair coordinate.
+# Charge the complete result carrier as well: source coordinates, difference
+# coordinates, and the two indices retained for every possible witness pair.
+MAX_ORDERED_DIFFERENCE_COORDINATE_WORK = 1_000_000
+MAX_ORDERED_DIFFERENCE_OUTPUT_CELLS = 2_000_000
 
 
 def subset_sum_profile(source: IndexedIntegerSequence) -> SubsetSumProfile:
@@ -319,11 +329,24 @@ def ordered_difference_profile(
     dimension = len(vectors.vectors[0].coordinates)
     ordered_pairs = set_size * (set_size - 1)
     coordinate_work = ordered_pairs * dimension
-    if coordinate_work > 1_000_000:
+    if coordinate_work > MAX_ORDERED_DIFFERENCE_COORDINATE_WORK:
         raise OperationDomainValidationError(
             location=("vectors",),
             code="additive_combinatorics.ordered_difference_work_exceeded",
-            message="ordered-difference subtraction exceeds the 1,000,000-coordinate work budget",
+            message=(
+                "ordered-difference subtraction exceeds the "
+                f"{MAX_ORDERED_DIFFERENCE_COORDINATE_WORK:,}-coordinate work budget"
+            ),
+        )
+    output_cells = set_size * dimension + ordered_pairs * (dimension + 2)
+    if output_cells > MAX_ORDERED_DIFFERENCE_OUTPUT_CELLS:
+        raise OperationDomainValidationError(
+            location=("vectors",),
+            code="additive_combinatorics.ordered_difference_output_exceeded",
+            message=(
+                "ordered-difference profile exceeds the "
+                f"{MAX_ORDERED_DIFFERENCE_OUTPUT_CELLS:,}-cell result bound"
+            ),
         )
     vector_values = [vector.as_int_tuple() for vector in vectors.vectors]
     difference_map: dict[tuple[int, ...], list[tuple[int, int]]] = {}
@@ -370,6 +393,178 @@ def ordered_difference_profile(
     )
 
 
+def _admit_ordered_difference_claim(
+    claim: OrderedDifferenceProfileResult,
+) -> tuple[int, int]:
+    """Admit a decoded claim before traversing its source or profile rows."""
+    if not isinstance(claim, OrderedDifferenceProfileResult):
+        raise OperationDomainValidationError(
+            location=("claim",),
+            code="additive_combinatorics.ordered_difference_claim_type",
+            message="ordered-difference verifier requires its typed result value",
+        )
+    vectors = claim.vectors
+    set_size = len(vectors.vectors)
+    if not 1 <= set_size <= _MAX_VECTOR_SET_SIZE:
+        raise OperationDomainValidationError(
+            location=("claim", "vectors"),
+            code="additive_combinatorics.ordered_difference_source_bound",
+            message="ordered-difference claim source exceeds its admitted size",
+        )
+    dimension = len(vectors.vectors[0].coordinates)
+    if not 1 <= dimension <= _MAX_DIMENSION:
+        raise OperationDomainValidationError(
+            location=("claim", "vectors"),
+            code="additive_combinatorics.ordered_difference_dimension_bound",
+            message="ordered-difference claim dimension exceeds its admitted bound",
+        )
+    for vector in vectors.vectors:
+        if len(vector.coordinates) != dimension:
+            raise OperationDomainValidationError(
+                location=("claim", "vectors"),
+                code="additive_combinatorics.ordered_difference_axes",
+                message="ordered-difference source vectors have inconsistent dimensions",
+            )
+        if any(
+            not isinstance(coordinate, str)
+            or len(coordinate) > _MAX_VECTOR_COORDINATE_LENGTH
+            or len(coordinate.lstrip("-")) > _MAX_COORDINATE_DIGITS
+            for coordinate in vector.coordinates
+        ):
+            raise OperationDomainValidationError(
+                location=("claim", "vectors"),
+                code="additive_combinatorics.ordered_difference_coordinate_bound",
+                message="ordered-difference source coordinates exceed their admitted bound",
+            )
+    if claim.set_size != set_size or claim.dimension != dimension:
+        raise OperationDomainValidationError(
+            location=("claim",),
+            code="additive_combinatorics.ordered_difference_axes",
+            message="ordered-difference claim axes do not match its retained source",
+        )
+    ordered_pairs = set_size * (set_size - 1)
+    coordinate_work = ordered_pairs * dimension
+    if coordinate_work > MAX_ORDERED_DIFFERENCE_COORDINATE_WORK:
+        raise OperationDomainValidationError(
+            location=("claim", "vectors"),
+            code="additive_combinatorics.ordered_difference_work_exceeded",
+            message=(
+                "ordered-difference verification exceeds the "
+                f"{MAX_ORDERED_DIFFERENCE_COORDINATE_WORK:,}-coordinate work budget"
+            ),
+        )
+    output_cells = set_size * dimension + ordered_pairs * (dimension + 2)
+    if output_cells > MAX_ORDERED_DIFFERENCE_OUTPUT_CELLS:
+        raise OperationDomainValidationError(
+            location=("claim",),
+            code="additive_combinatorics.ordered_difference_output_exceeded",
+            message=(
+                "ordered-difference verification exceeds the "
+                f"{MAX_ORDERED_DIFFERENCE_OUTPUT_CELLS:,}-cell result bound"
+            ),
+        )
+    if len(claim.entries) > ordered_pairs:
+        raise OperationDomainValidationError(
+            location=("claim", "entries"),
+            code="additive_combinatorics.ordered_difference_entry_bound",
+            message="ordered-difference claim has too many profile rows",
+        )
+    if any(
+        len(entry.difference.coordinates) != dimension
+        or any(
+            not isinstance(coordinate, str)
+            or len(coordinate) > _MAX_VECTOR_COORDINATE_LENGTH
+            for coordinate in entry.difference.coordinates
+        )
+        for entry in claim.entries
+    ):
+        raise OperationDomainValidationError(
+            location=("claim", "entries"),
+            code="additive_combinatorics.ordered_difference_coordinate_bound",
+            message="ordered-difference rows exceed their admitted coordinate bound",
+        )
+    claimed_cells = set_size * dimension + sum(
+        len(entry.difference.coordinates) + 2 * len(entry.pairs)
+        for entry in claim.entries
+    )
+    if claimed_cells > MAX_ORDERED_DIFFERENCE_OUTPUT_CELLS:
+        raise OperationDomainValidationError(
+            location=("claim", "entries"),
+            code="additive_combinatorics.ordered_difference_output_exceeded",
+            message=(
+                "ordered-difference claim payload exceeds the "
+                f"{MAX_ORDERED_DIFFERENCE_OUTPUT_CELLS:,}-cell result bound"
+            ),
+        )
+    return set_size, dimension
+
+
+def verify_ordered_difference_profile(
+    claim: OrderedDifferenceProfileResult,
+) -> bool:
+    """Verify a complete profile claim against its retained vector source.
+
+    Result decoding only checks canonical axes and bounded row shape. This
+    consumer spends its own admitted pair-coordinate budget to check every
+    source pair, every claimed difference row, all multiplicities, and every
+    aggregate summary including completeness and the collision witness.
+    """
+    try:
+        set_size, dimension = _admit_ordered_difference_claim(claim)
+        source = tuple(vector.as_int_tuple() for vector in claim.vectors.vectors)
+        if len(set(source)) != set_size:
+            return False
+        expected: dict[tuple[int, ...], list[tuple[int, int]]] = {}
+        for left_index, left in enumerate(source):
+            for right_index, right in enumerate(source):
+                if left_index == right_index:
+                    continue
+                difference = tuple(
+                    left[index] - right[index] for index in range(dimension)
+                )
+                expected.setdefault(difference, []).append((left_index, right_index))
+
+        actual = {entry.difference.as_int_tuple(): entry for entry in claim.entries}
+        if set(actual) != set(expected):
+            return False
+        for difference, pairs in expected.items():
+            entry = actual[difference]
+            if entry.multiplicity != len(pairs):
+                return False
+            if tuple(
+                (pair.left_index, pair.right_index) for pair in entry.pairs
+            ) != tuple(pairs):
+                return False
+
+        total = sum(len(pairs) for pairs in expected.values())
+        maximum = max((len(pairs) for pairs in expected.values()), default=0)
+        first_collision = next(
+            (
+                pairs[0]
+                for difference, pairs in sorted(expected.items())
+                if len(pairs) > 1
+            ),
+            None,
+        )
+        expected_collision = (
+            None
+            if first_collision is None
+            else OrderedDifferencePair(
+                left_index=first_collision[0], right_index=first_collision[1]
+            )
+        )
+        return (
+            claim.total_ordered_pairs == total
+            and claim.support_size == len(expected)
+            and claim.max_multiplicity == maximum
+            and claim.has_repeated_difference == (maximum > 1)
+            and claim.first_collision == expected_collision
+            and total == set_size * (set_size - 1)
+        )
+    except Exception:
+        return False
+
+
 __all__ = [
     "additive_energy",
     "direct_sum_predicate",
@@ -378,4 +573,5 @@ __all__ = [
     "representation_profile",
     "subset_sum_profile",
     "sumset_cardinality",
+    "verify_ordered_difference_profile",
 ]

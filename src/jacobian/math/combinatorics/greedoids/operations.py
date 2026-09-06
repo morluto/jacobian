@@ -395,7 +395,9 @@ def bases_profile(
         return BasesResult(
             system=system,
             subset=canonical_subset,
-            status="NOT_A_GREEDOID", bases=(), obstruction=recognized.obstruction
+            status="NOT_A_GREEDOID",
+            bases=(),
+            obstruction=recognized.obstruction,
         )
     subset_set = None if canonical_subset is None else frozenset(canonical_subset)
     rank_value, basis_list = _bases_unchecked(system, subset_set)
@@ -417,7 +419,8 @@ def basic_word_outcome(
         return BasicWordProfileResult(
             system=system,
             word=word,
-            status="NOT_A_BASIC_WORD", obstruction="not_a_greedoid"
+            status="NOT_A_BASIC_WORD",
+            obstruction="not_a_greedoid",
         )
     return _basic_word_profile_unchecked(system, word)
 
@@ -429,7 +432,8 @@ def convex_geometry_profile(system: FiniteFeasibleSetSystem) -> ConvexGeometryRe
     if recognized.status != "GREEDOID":
         return ConvexGeometryResult(
             system=system,
-            status="NOT_AN_ANTIMATROID", obstruction=recognized.obstruction
+            status="NOT_AN_ANTIMATROID",
+            obstruction=recognized.obstruction,
         )
     full_ground = tuple(range(len(system.ground)))
     if full_ground not in system.feasible_index() or not _union_closed_unchecked(
@@ -437,7 +441,8 @@ def convex_geometry_profile(system: FiniteFeasibleSetSystem) -> ConvexGeometryRe
     ):
         return ConvexGeometryResult(
             system=system,
-            status="NOT_AN_ANTIMATROID", obstruction="not_full_support_or_union_closed"
+            status="NOT_AN_ANTIMATROID",
+            obstruction="not_full_support_or_union_closed",
         )
     return _antimatroid_to_convex_geometry_unchecked(system)
 

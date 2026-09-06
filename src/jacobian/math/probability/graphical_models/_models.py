@@ -95,9 +95,11 @@ class DSeparationQuery(StrictModel):
             node not in self.dag.variables for values in node_sets for node in values
         ):
             raise ValueError("d-separation node is outside the graph")
-        if set(self.set_a) & set(self.set_b) or set(self.set_a) & set(self.set_c) or set(
-            self.set_b
-        ) & set(self.set_c):
+        if (
+            set(self.set_a) & set(self.set_b)
+            or set(self.set_a) & set(self.set_c)
+            or set(self.set_b) & set(self.set_c)
+        ):
             raise ValueError("d-separation node sets must be pairwise disjoint")
         return self
 

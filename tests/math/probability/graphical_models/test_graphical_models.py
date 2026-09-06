@@ -266,7 +266,9 @@ class TestDSeparation:
         assert result.query.dag.edges == request.query.dag.edges
         decoded = type(result).model_validate_json(result.model_dump_json())
         assert verify_d_separation(decoded)
-        assert not verify_d_separation(decoded.model_copy(update={"d_separated": False}))
+        assert not verify_d_separation(
+            decoded.model_copy(update={"d_separated": False})
+        )
 
     @pytest.mark.parametrize(
         "edges",

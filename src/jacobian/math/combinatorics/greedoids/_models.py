@@ -193,9 +193,7 @@ class RankResult(StrictModel):
     @model_validator(mode="after")
     def bind_status(self) -> Self:
         if self.subset is not None:
-            _require_index_subset(
-                self.subset, len(self.system.ground), "subset"
-            )
+            _require_index_subset(self.subset, len(self.system.ground), "subset")
         if self.status == "GREEDOID":
             if self.rank is None or self.obstruction is not None:
                 raise _validation_error(
@@ -230,9 +228,7 @@ class BasesResult(StrictModel):
     @model_validator(mode="after")
     def bind_status(self) -> Self:
         if self.subset is not None:
-            _require_index_subset(
-                self.subset, len(self.system.ground), "subset"
-            )
+            _require_index_subset(self.subset, len(self.system.ground), "subset")
         _require_index_rows(self.bases, len(self.system.ground), "bases")
         if self.status == "GREEDOID":
             if self.rank is None or self.obstruction is not None:

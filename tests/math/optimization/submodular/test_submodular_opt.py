@@ -239,7 +239,9 @@ class TestKernelEquivalence:
         assert verify_monotonicity(result)
         assert not verify_monotonicity(result.model_copy(update={"is_monotone": True}))
         forged = result.model_copy(
-            update={"violation": result.violation.model_copy(update={"added_element": 1})}
+            update={
+                "violation": result.violation.model_copy(update={"added_element": 1})
+            }
         )
         assert not verify_monotonicity(forged)
 

@@ -4,6 +4,8 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.combinatorics.posets.core._closure_models import LowerClosureRequest
+from jacobian.math.combinatorics.posets.core._closure_tools import lower_closure
 from jacobian.math.combinatorics.posets.core._models import (
     FinitePoset,
     FinitePosetRequest,
@@ -105,6 +107,8 @@ def test_serialized_poset_keeps_order_profile_as_a_claim() -> None:
     assert verify_finite_poset(poset) is False
     with pytest.raises(OperationDomainValidationError, match="antisymmetric"):
         width(poset)
+    with pytest.raises(OperationDomainValidationError, match="antisymmetric"):
+        lower_closure(LowerClosureRequest.model_construct(poset=poset, subset=("a",)))
 
 
 def test_comparable_pairs_require_complete_transitive_relation() -> None:

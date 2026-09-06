@@ -9,10 +9,22 @@ from pydantic_core import PydanticCustomError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.posets.core._closure_kernel import (
-    dual_poset,
-    induced_subposet,
-    lower_closure,
-    upper_closure,
+    dual_poset as _dual_poset_kernel,
+)
+from jacobian.math.combinatorics.posets.core._closure_kernel import (
+    induced_subposet as _induced_subposet_kernel,
+)
+from jacobian.math.combinatorics.posets.core._closure_kernel import (
+    lower_closure as _lower_closure_kernel,
+)
+from jacobian.math.combinatorics.posets.core._closure_kernel import (
+    upper_closure as _upper_closure_kernel,
+)
+from jacobian.math.combinatorics.posets.core._closure_models import (
+    DualPosetResult,
+    InducedSubposetResult,
+    LowerClosureResult,
+    UpperClosureResult,
 )
 from jacobian.math.combinatorics.posets.core._models import (
     MAX_ANTICHAIN_PROFILE_CANDIDATES,
@@ -91,6 +103,28 @@ def _admit_canonical_poset(poset: FinitePoset) -> None:
     )
 
 
+def lower_closure(poset: FinitePoset, subset: tuple[str, ...]) -> LowerClosureResult:
+    _admit_canonical_poset(poset)
+    return _lower_closure_kernel(poset, subset)
+
+
+def upper_closure(poset: FinitePoset, subset: tuple[str, ...]) -> UpperClosureResult:
+    _admit_canonical_poset(poset)
+    return _upper_closure_kernel(poset, subset)
+
+
+def dual_poset(poset: FinitePoset) -> DualPosetResult:
+    _admit_canonical_poset(poset)
+    return _dual_poset_kernel(poset)
+
+
+def induced_subposet(
+    poset: FinitePoset, subset: tuple[str, ...]
+) -> InducedSubposetResult:
+    _admit_canonical_poset(poset)
+    return _induced_subposet_kernel(poset, subset)
+
+
 def verify_finite_poset(poset: FinitePoset) -> bool:
     """Verify all retained canonical order/profile claims of a poset value."""
     try:
@@ -103,33 +137,51 @@ def verify_finite_poset(poset: FinitePoset) -> bool:
             RelationInterpretation.COMPARABLE_PAIRS,
             ReflexivePairPolicy.FORBIDDEN,
         )
-        if tuple(OrderedPair(lower=a, upper=b) for a, b in sorted(strict)) != poset.strict_order_pairs:
+        if (
+            tuple(OrderedPair(lower=a, upper=b) for a, b in sorted(strict))
+            != poset.strict_order_pairs
+        ):
             return False
-        if tuple(OrderedPair(lower=a, upper=b) for a, b in sorted(reduction)) != poset.cover_relations:
+        if (
+            tuple(OrderedPair(lower=a, upper=b) for a, b in sorted(reduction))
+            != poset.cover_relations
+        ):
             return False
-        _validate_poset_incomparable_pairs(poset.elements, poset.incomparable_pairs, strict)
+        _validate_poset_incomparable_pairs(
+            poset.elements, poset.incomparable_pairs, strict
+        )
         expected_minimal, expected_maximal = _compute_poset_extremal_elements(
             poset.elements, strict
         )
         _validate_poset_extremal_elements(
-            poset.minimal_elements, poset.maximal_elements,
-            expected_minimal, expected_maximal,
+            poset.minimal_elements,
+            poset.maximal_elements,
+            expected_minimal,
+            expected_maximal,
         )
         expected_ranks = canonical_poset_ranks(poset.elements, reduction)
         _validate_poset_rank_structure(
-            poset.elements, poset.graded, poset.ranks, expected_ranks,
-            expected_minimal, expected_maximal, reduction,
+            poset.elements,
+            poset.graded,
+            poset.ranks,
+            expected_ranks,
+            expected_minimal,
+            expected_maximal,
+            reduction,
         )
-        return finite_poset_digest(
-            elements=poset.elements,
-            strict_order_pairs=poset.strict_order_pairs,
-            cover_relations=poset.cover_relations,
-            incomparable_pairs=poset.incomparable_pairs,
-            minimal_elements=poset.minimal_elements,
-            maximal_elements=poset.maximal_elements,
-            graded=poset.graded,
-            ranks=poset.ranks,
-        ) == poset.poset_digest
+        return (
+            finite_poset_digest(
+                elements=poset.elements,
+                strict_order_pairs=poset.strict_order_pairs,
+                cover_relations=poset.cover_relations,
+                incomparable_pairs=poset.incomparable_pairs,
+                minimal_elements=poset.minimal_elements,
+                maximal_elements=poset.maximal_elements,
+                graded=poset.graded,
+                ranks=poset.ranks,
+            )
+            == poset.poset_digest
+        )
     except (OperationDomainValidationError, PydanticCustomError, TypeError, ValueError):
         return False
 

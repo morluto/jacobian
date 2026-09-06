@@ -305,6 +305,28 @@ class TestSerializedSubsetClaims:
             )
         )
 
+    def test_boundary_verifier_admits_space_once(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        space = _sierpinski()
+        result = _boundary(SubsetRequest(space=space, subset=(1,)))
+        calls = 0
+        original = __import__(
+            "jacobian.math.topology.finite.spaces.operations",
+            fromlist=["_admit_space"],
+        )._admit_space
+
+        def counted(candidate: FiniteTopologicalSpace) -> None:
+            nonlocal calls
+            calls += 1
+            original(candidate)
+
+        monkeypatch.setattr(
+            "jacobian.math.topology.finite.spaces.operations._admit_space", counted
+        )
+        assert verify_boundary(result)
+        assert calls == 1
+
     def test_subset_indices_are_canonical(self) -> None:
         space = _sierpinski()
         with pytest.raises(ValidationError) as error:

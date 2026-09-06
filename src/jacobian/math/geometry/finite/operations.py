@@ -37,6 +37,7 @@ from jacobian.math.geometry.finite.values import (
     PrimeFieldVectorSpace,
     ProjectivePoint,
     ProjectivePointSequence,
+    _require_projective_representative,
     _validate_vector,
 )
 
@@ -45,9 +46,7 @@ def verify_linear_subspace(subspace: LinearSubspace) -> bool:
     """Check that a source-bound basis is the canonical RREF basis."""
     try:
         _admit_prime_field_space(subspace.space)
-        rows = [list(row) for row in subspace.basis]
-        reduced, rank = rref_rank(rows, subspace.space.field_order)
-        return tuple(tuple(row) for row in reduced[:rank]) == subspace.basis
+        return _linear_subspace_rref(subspace) == subspace.basis
     except (OperationDomainValidationError, ValueError, TypeError):
         return False
 
@@ -55,27 +54,42 @@ def verify_linear_subspace(subspace: LinearSubspace) -> bool:
 def verify_projective_point_sequence(sequence: ProjectivePointSequence) -> bool:
     """Check completeness, uniqueness, and normalization for a point sequence."""
     try:
+        _admit_prime_field_space(sequence.space)
         expected = (sequence.space.field_order ** len(sequence.space.axis) - 1) // (
             sequence.space.field_order - 1
         )
         if len(sequence.coordinates) != expected:
             return False
         for coordinates in sequence.coordinates:
-            _validate_vector(coordinates, sequence.space)
-            if projective_point(sequence.space, coordinates).coordinates != coordinates:
-                return False
+            _require_projective_representative(coordinates, sequence.space)
         return len(set(sequence.coordinates)) == len(sequence.coordinates)
     except (OperationDomainValidationError, ValueError, TypeError):
         return False
 
 
-def _admit_linear_subspace(subspace: LinearSubspace) -> None:
-    if not verify_linear_subspace(subspace):
+def _linear_subspace_rref(
+    subspace: LinearSubspace,
+) -> tuple[tuple[int, ...], ...]:
+    rows = [list(row) for row in subspace.basis]
+    reduced, rank = rref_rank(rows, subspace.space.field_order)
+    return tuple(tuple(row) for row in reduced[:rank])
+
+
+def _admit_linear_subspace(
+    subspace: LinearSubspace,
+    *,
+    check_space: bool = True,
+) -> tuple[tuple[int, ...], ...]:
+    if check_space:
+        _admit_prime_field_space(subspace.space)
+    reduced = _linear_subspace_rref(subspace)
+    if reduced != subspace.basis:
         _domain_error(
             ("subspace",),
             "basis_not_rref",
             "basis must be in reduced row echelon form",
         )
+    return reduced
 
 
 def _domain_error(location: tuple[str | int, ...], code: str, message: str) -> NoReturn:
@@ -243,17 +257,18 @@ def subspace_membership(
     subspace: LinearSubspace,
     vector: tuple[int, ...],
 ) -> SubspaceMembershipResult:
-    _admit_linear_subspace(subspace)
-    _admit_prime_field_space(subspace.space)
+    basis = _admit_linear_subspace(subspace)
     _validate_vector(vector, subspace.space)
-    matrix = [list(row) for row in subspace.basis]
+    matrix = [list(row) for row in basis]
     word = list(vector)
     q = subspace.space.field_order
-
-    _, rank_g = rref_rank([list(r) for r in matrix], q)
-    augmented = [list(row) for row in matrix] + [word]
-    _, rank_aug = rref_rank(augmented, q)
-    is_member = rank_aug == rank_g
+    for row in matrix:
+        pivot = next(index for index, value in enumerate(row) if value)
+        factor = word[pivot]
+        if factor:
+            for index in range(len(word)):
+                word[index] = (word[index] - factor * row[index]) % q
+    is_member = not any(word)
 
     return SubspaceMembershipResult._from_kernel(
         subspace=subspace, vector=vector, is_member=is_member
@@ -275,7 +290,7 @@ def subspace_span(
             "all subspaces must have the declared field and axis",
         )
     for subspace in subspaces:
-        _admit_linear_subspace(subspace)
+        _admit_linear_subspace(subspace, check_space=False)
     _admit_span(vectors, subspaces)
     matrix = [list(row) for row in vectors]
     matrix.extend(list(row) for subspace in subspaces for row in subspace.basis)
@@ -298,11 +313,11 @@ def subspace_intersection(
         location=("subspace_b", "space"),
         message="subspaces must have the same field and axis",
     )
-    _admit_linear_subspace(subspace_a)
-    _admit_linear_subspace(subspace_b)
+    basis_a = _admit_linear_subspace(subspace_a, check_space=False)
+    basis_b = _admit_linear_subspace(subspace_b, check_space=False)
     canonical = intersection_basis(
-        subspace_a.basis,
-        subspace_b.basis,
+        basis_a,
+        basis_b,
         subspace_a.space.field_order,
         len(subspace_a.space.axis),
     )
@@ -368,8 +383,6 @@ def projective_space_enumerate(
     sequence = ProjectivePointSequence.model_construct(
         space=space, coordinates=tuple(points)
     )
-    if not verify_projective_point_sequence(sequence):
-        raise RuntimeError("projective enumeration kernel returned an invalid sequence")
     return ProjectiveSpaceEnumerateResult.model_construct(sequence=sequence)
 
 

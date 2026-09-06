@@ -260,6 +260,23 @@ def test_subspace_membership_nonmember() -> None:
     assert result.is_member is False
 
 
+def test_subspace_membership_admits_field_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    subspace = subspace_compute(
+        _space(3, ("x", "y", "z")), ((1, 0, 0), (0, 1, 0))
+    ).subspace
+    calls = 0
+    original = isprime
+
+    def counted(value: int) -> bool:
+        nonlocal calls
+        calls += 1
+        return bool(original(value))
+
+    monkeypatch.setattr("jacobian.math.geometry.finite.operations.isprime", counted)
+    assert subspace_membership(subspace, (1, 1, 0)).is_member
+    assert calls == 1
+
+
 def test_subspace_span_dependent() -> None:
     request = SubspaceSpanRequest(
         space=_space(2, ("x", "y")),

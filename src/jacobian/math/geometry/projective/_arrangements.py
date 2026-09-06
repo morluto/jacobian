@@ -65,7 +65,7 @@ def compute_projective_line_flats(
     """Compute the complete exact flat lattice for one labelled arrangement."""
 
     try:
-        _admit_projective_line_arrangement(request)
+        normalized = _admit_projective_line_arrangement(request)
     except (PydanticCustomError, ValueError) as exc:
         if isinstance(exc, PydanticCustomError):
             code = exc.type
@@ -78,23 +78,6 @@ def compute_projective_line_flats(
             code=code,
             message=message,
         ) from exc
-    normalized = tuple(
-        sorted(
-            (
-                line.label,
-                _primitive(
-                    cast(
-                        tuple[Fraction, Fraction, Fraction],
-                        tuple(
-                            coefficient.as_fraction()
-                            for coefficient in line.coefficients
-                        ),
-                    )
-                ),
-            )
-            for line in request.lines
-        )
-    )
     points = {
         _cross(normalized[left][1], normalized[right][1])
         for left in range(len(normalized))
@@ -155,17 +138,21 @@ def compute_projective_line_flats(
 
 def _admit_projective_line_arrangement(
     request: ProjectiveLineArrangementRequest,
-) -> None:
+) -> tuple[tuple[str, tuple[int, int, int]], ...]:
     labels = tuple(line.label for line in request.lines)
     if len(labels) != len(set(labels)):
         raise ValueError("projective line labels must be unique")
     normalized = tuple(
-        _primitive_integer_triple(line.coefficients) for line in request.lines
+        sorted(
+            (line.label, _primitive_integer_triple(line.coefficients))
+            for line in request.lines
+        )
     )
-    if len(normalized) != len(set(normalized)):
+    if len({coefficients for _, coefficients in normalized}) != len(normalized):
         raise ValueError(
             "projectively duplicate lines must be merged before invocation"
         )
+    return normalized
 
 
 PROJECTIVE_LINE_ARRANGEMENT_OPERATION: MathTool[

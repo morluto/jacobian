@@ -22,11 +22,11 @@ from jacobian.math.topology.finite.open_sets._models import (
     SpecializationPreorderResult,
 )
 from jacobian.math.topology.finite.open_sets.operations import (
+    _beat_points,
+    _connected_components,
+    _continuity,
     _require_topology_axioms,
-    beat_points,
-    connected_components,
-    continuity,
-    specialization_preorder,
+    _specialization_preorder,
 )
 from jacobian.math.topology.finite.open_sets.values import FiniteTopology
 
@@ -74,7 +74,7 @@ def compute_specialization_preorder(
 ) -> SpecializationPreorderResult:
     _admit_topology(request.topology, location=("topology",))
     return SpecializationPreorderResult._from_kernel(
-        request, specialization_preorder(request.topology)
+        request, _specialization_preorder(request.topology)
     )
 
 
@@ -82,7 +82,7 @@ def compute_connected_components(
     request: ConnectedComponentsRequest,
 ) -> ConnectedComponentsResult:
     _admit_topology(request.topology, location=("topology",))
-    components = connected_components(request.topology)
+    components = _connected_components(request.topology)
     return ConnectedComponentsResult._from_kernel(request, components)
 
 
@@ -90,7 +90,7 @@ def compute_continuity(request: ContinuityRequest) -> ContinuityResult:
     _admit_topology(request.domain, location=("domain",))
     _admit_topology(request.codomain, location=("codomain",))
     try:
-        analysis = continuity(request.domain, request.codomain, request.point_map)
+        analysis = _continuity(request.domain, request.codomain, request.point_map)
     except ValueError as exc:
         raise OperationDomainValidationError(
             location=("point_map",),
@@ -108,7 +108,7 @@ def compute_continuity(request: ContinuityRequest) -> ContinuityResult:
 def compute_beat_points(request: BeatPointsRequest) -> BeatPointsResult:
     _admit_topology(request.topology, location=("topology",))
     try:
-        analysis = beat_points(request.topology)
+        analysis = _beat_points(request.topology)
     except ValueError as exc:
         raise OperationDomainValidationError(
             location=("topology",),

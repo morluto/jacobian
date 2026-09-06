@@ -141,6 +141,25 @@ def test_specialization_orientation_is_explicit_and_bound() -> None:
     assert result.topology == _sierpinski()
 
 
+def test_tool_admission_is_not_replayed_by_specialization_kernel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+
+    def counted(topology: FiniteTopology) -> None:
+        nonlocal calls
+        calls += 1
+
+    monkeypatch.setattr(
+        "jacobian.math.topology.finite.open_sets._tools._require_topology_axioms",
+        counted,
+    )
+    compute_specialization_preorder(
+        SpecializationPreorderRequest(topology=_sierpinski())
+    )
+    assert calls == 1
+
+
 def test_minimal_neighborhoods_and_components() -> None:
     assert minimal_open_neighborhoods(_sierpinski()) == (
         frozenset({0, 1}),

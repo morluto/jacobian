@@ -238,7 +238,8 @@ def verify_boundary(claim: BoundaryResult) -> bool:
     """Verify a boundary claim against its retained finite space and subset."""
     try:
         _admit_space(claim.space)
-        expected = boundary(claim.space, frozenset(claim.subset.indices))
+        subset = frozenset(claim.subset.indices)
+        expected = _closure(claim.space, subset) - _interior(claim.space, subset)
     except (OperationDomainValidationError, ValueError, TypeError):
         return False
     return (

@@ -131,6 +131,10 @@ def interior(topology: FiniteTopology, subset: Iterable[int]) -> frozenset[int]:
 
 def connected_components(topology: FiniteTopology) -> tuple[tuple[int, ...], ...]:
     _require_topology_axioms(topology)
+    return _connected_components(topology)
+
+
+def _connected_components(topology: FiniteTopology) -> tuple[tuple[int, ...], ...]:
     relation = _specialization_preorder(topology)
     visited: set[int] = set()
     components: list[tuple[int, ...]] = []
@@ -158,6 +162,12 @@ def continuity(
 ) -> ContinuityAnalysis:
     _require_topology_axioms(domain)
     _require_topology_axioms(codomain)
+    return _continuity(domain, codomain, point_map)
+
+
+def _continuity(
+    domain: FiniteTopology, codomain: FiniteTopology, point_map: PointMap
+) -> ContinuityAnalysis:
     if point_map.domain_point_count != domain.point_count:
         raise ValueError("map domain size does not match the domain topology")
     if point_map.codomain_point_count != codomain.point_count:
@@ -210,6 +220,10 @@ def _unique_extremum(
 
 def beat_points(topology: FiniteTopology) -> BeatPointAnalysis:
     _require_topology_axioms(topology)
+    return _beat_points(topology)
+
+
+def _beat_points(topology: FiniteTopology) -> BeatPointAnalysis:
     relation = _specialization_preorder(topology)
     if any(
         relation[left][right] and relation[right][left]

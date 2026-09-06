@@ -131,8 +131,6 @@ def local_factors(
 
 def local_admissibility(source: PrimeAffineTuple) -> PrimeTupleAdmissibilityResult:
     """Decide local admissibility by checking exactly every prime at most k."""
-
-    _run_admission(lambda: _admit_primitive_tuple(source))
     return compute_local_admissibility(source)
 
 

@@ -18,6 +18,7 @@ from jacobian.math.number_theory.sequences.recurrence_solving._tools import (
 )
 from jacobian.math.number_theory.sequences.recurrence_solving.operations import (
     berlekamp_massey,
+    verify_prime_field_recurrence,
 )
 
 FIBONACCI_MOD_7 = (0, 1, 1, 2, 3, 5, 1, 6, 0)
@@ -43,6 +44,17 @@ class TestPrimeFieldRecurrenceFind:
         assert result.recurrence.order == 2
         assert tuple(result.recurrence.coefficients) == (1, 1)
         _verify_recurrence(FIBONACCI_MOD_7, result.recurrence.coefficients, 7)
+        assert verify_prime_field_recurrence(result)
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert verify_prime_field_recurrence(decoded)
+        forged = result.model_copy(
+            update={
+                "recurrence": result.recurrence.model_copy(
+                    update={"coefficients": (2, 1)}
+                )
+            }
+        )
+        assert not verify_prime_field_recurrence(forged)
 
     def test_geometric_sequence(self) -> None:
         # 1,2,4,1,2,4 mod 7 -> s_n = 2 s_{n-1}.

@@ -10,6 +10,10 @@ from jacobian.math.number_theory.sequences.recurrence_solving._tools import (
     compute_closed_form,
     compute_find_recurrence,
 )
+from jacobian.math.number_theory.sequences.recurrence_solving.operations import (
+    verify_closed_form,
+    verify_recurrence,
+)
 
 
 def _q(numerator: int, denominator: int = 1) -> CanonicalRational:
@@ -23,6 +27,17 @@ def test_find_recurrence_accepts_exact_rational_sequence() -> None:
     assert result.status == "FOUND"
     assert result.order == 1
     assert result.coefficients[0].as_integer_ratio() == (1, 2)
+    assert result.sequence == (_q(1), _q(1, 2), _q(1, 4), _q(1, 8))
+    assert verify_recurrence(result)
+
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert decoded.sequence == result.sequence
+    assert verify_recurrence(decoded)
+
+    forged = result.model_copy(
+        update={"coefficients": (_q(3),), "order": 1}
+    )
+    assert not verify_recurrence(forged)
 
 
 def test_find_recurrence_accepts_no_fitting_when_no_nonvacuous_order_exists() -> None:
@@ -41,3 +56,12 @@ def test_closed_form_accepts_exact_rational_data() -> None:
         )
     )
     assert result.expression == "3*2**(-n - 1)"
+    assert result.characteristic_coefficients == (_q(1), _q(-1, 2))
+    assert result.initial_values == (_q(3, 2),)
+    assert verify_closed_form(result)
+
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_closed_form(decoded)
+
+    forged = result.model_copy(update={"expression": "0"})
+    assert not verify_closed_form(forged)

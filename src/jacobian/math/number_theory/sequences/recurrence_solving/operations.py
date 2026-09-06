@@ -12,7 +12,10 @@ from jacobian.math.number_theory.sequences.recurrence_solving._models import (
     MAX_CLOSED_FORM_ORDER,
     MAX_RATIONAL_DIGITS,
     MAX_RATIONAL_SEQUENCE_LENGTH,
+    ClosedFormResult,
     PrimeFieldRecurrence,
+    PrimeFieldRecurrenceFindResult,
+    RecurrenceFindResult,
 )
 
 __all__ = [
@@ -22,6 +25,9 @@ __all__ = [
     "berlekamp_massey",
     "closed_form",
     "find_recurrence",
+    "verify_closed_form",
+    "verify_prime_field_recurrence",
+    "verify_recurrence",
 ]
 
 
@@ -158,6 +164,41 @@ def closed_form(
     consts = a.solve(b)
     expr = sum(c * term for c, term in zip(consts, basis, strict=True))
     return ClosedForm(expression=str(sympy.simplify(expr)))
+
+
+def verify_recurrence(claim: RecurrenceFindResult) -> bool:
+    """Verify a fitted rational recurrence against its retained sequence."""
+    try:
+        expected = find_recurrence(claim.sequence)
+    except (TypeError, ValueError):
+        return False
+    return (
+        claim.coefficients == expected.coefficients
+        and claim.order == expected.order
+        and claim.status == expected.status
+    )
+
+
+def verify_closed_form(claim: ClosedFormResult) -> bool:
+    """Verify the displayed closed form against its retained recurrence source."""
+    try:
+        expected = closed_form(
+            claim.characteristic_coefficients, claim.initial_values
+        )
+    except (TypeError, ValueError, RuntimeError):
+        return False
+    return claim.expression == expected.expression
+
+
+def verify_prime_field_recurrence(claim: PrimeFieldRecurrenceFindResult) -> bool:
+    """Verify a prime-field recurrence against its retained source sequence."""
+    try:
+        expected = berlekamp_massey(
+            list(claim.sequence), claim.recurrence.prime
+        )
+    except (TypeError, ValueError, RuntimeError):
+        return False
+    return claim.recurrence == expected
 
 
 def berlekamp_massey(sequence: list[int], prime: int) -> PrimeFieldRecurrence:

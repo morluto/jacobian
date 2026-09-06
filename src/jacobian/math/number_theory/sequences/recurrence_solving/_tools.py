@@ -39,6 +39,7 @@ def compute_find_recurrence(request: RecurrenceFindRequest) -> RecurrenceFindRes
         lambda: native.find_recurrence(request.sequence), location=("sequence",)
     )
     return RecurrenceFindResult._from_kernel(
+        sequence=request.sequence,
         coefficients=result.coefficients,
         order=result.order,
         status=result.status,
@@ -53,7 +54,11 @@ def compute_closed_form(request: ClosedFormRequest) -> ClosedFormResult:
         ),
         location=("characteristic_coefficients", "initial_values"),
     )
-    return ClosedFormResult._from_kernel(expression=result.expression)
+    return ClosedFormResult._from_kernel(
+        characteristic_coefficients=request.characteristic_coefficients,
+        initial_values=request.initial_values,
+        expression=result.expression,
+    )
 
 
 def compute_prime_field_find_recurrence(

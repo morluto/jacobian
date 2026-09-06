@@ -30,6 +30,9 @@ class RecurrenceFindRequest(StrictModel):
 class RecurrenceFindResult(StrictModel):
     """A fitted recurrence or an explicit finite-prefix missing outcome."""
 
+    sequence: tuple[CanonicalRational, ...] = Field(
+        min_length=2, max_length=MAX_RATIONAL_SEQUENCE_LENGTH
+    )
     coefficients: tuple[CanonicalRational, ...] = Field(
         max_length=MAX_RATIONAL_SEQUENCE_LENGTH - 1
     )
@@ -55,6 +58,7 @@ class RecurrenceFindResult(StrictModel):
     def _from_kernel(
         cls,
         *,
+        sequence: tuple[CanonicalRational, ...],
         coefficients: tuple[CanonicalRational, ...],
         order: int,
         status: Literal["FOUND", "NO_FITTING_RECURRENCE"],
@@ -62,6 +66,7 @@ class RecurrenceFindResult(StrictModel):
         """Construct a rational recurrence result from the trusted kernel."""
 
         return cls.model_construct(
+            sequence=sequence,
             coefficients=coefficients,
             order=order,
             status=status,
@@ -85,15 +90,35 @@ class ClosedFormRequest(StrictModel):
 
 
 class ClosedFormResult(StrictModel):
-    """The closed-form solution as a SymPy expression string."""
+    """A closed form bound to its recurrence source.
 
+    ``expression`` is a display projection; consumers verify it against the
+    retained characteristic coefficients and initial values.
+    """
+
+    characteristic_coefficients: tuple[CanonicalRational, ...] = Field(
+        min_length=2, max_length=MAX_CLOSED_FORM_ORDER + 1
+    )
+    initial_values: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_CLOSED_FORM_ORDER
+    )
     expression: str
 
     @classmethod
-    def _from_kernel(cls, *, expression: str) -> Self:
+    def _from_kernel(
+        cls,
+        *,
+        characteristic_coefficients: tuple[CanonicalRational, ...],
+        initial_values: tuple[CanonicalRational, ...],
+        expression: str,
+    ) -> Self:
         """Construct a closed-form result from the trusted SymPy adapter."""
 
-        return cls.model_construct(expression=expression)
+        return cls.model_construct(
+            characteristic_coefficients=characteristic_coefficients,
+            initial_values=initial_values,
+            expression=expression,
+        )
 
 
 # ---------------------------------------------------------------------------

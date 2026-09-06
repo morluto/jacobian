@@ -6,15 +6,11 @@ from math import gcd, lcm
 
 from jacobian.math.groups.abelian._models import (
     AbelianPresentation,
-    ElementEqualRequest,
     ElementEqualResult,
-    ElementOrderRequest,
     ElementOrderResult,
     ElementReduceResult,
     PresentationNormalizeResult,
-    QuotientRequest,
     QuotientResult,
-    SubgroupGeneratedRequest,
     SubgroupGeneratedResult,
 )
 
@@ -58,11 +54,9 @@ def elements_equal(
         for coordinate, factor in zip(coordinates_b, invariant_factors, strict=True)
     )
     return ElementEqualResult(
-        request=ElementEqualRequest(
-            invariant_factors=invariant_factors,
-            coordinates_a=coordinates_a,
-            coordinates_b=coordinates_b,
-        ),
+        invariant_factors=invariant_factors,
+        coordinates_a=coordinates_a,
+        coordinates_b=coordinates_b,
         equal=reduced_a == reduced_b,
     )
 
@@ -72,9 +66,9 @@ def verify_elements_equal(claim: ElementEqualResult) -> bool:
 
     return (
         elements_equal(
-            claim.request.invariant_factors,
-            claim.request.coordinates_a,
-            claim.request.coordinates_b,
+            claim.invariant_factors,
+            claim.coordinates_a,
+            claim.coordinates_b,
         ).equal
         is claim.equal
     )
@@ -92,10 +86,8 @@ def element_order(
         if coordinate != 0:
             order = lcm(order, factor // gcd(coordinate, factor))
     return ElementOrderResult(
-        request=ElementOrderRequest(
-            invariant_factors=invariant_factors,
-            coordinates=coordinates,
-        ),
+        invariant_factors=invariant_factors,
+        coordinates=coordinates,
         order=order,
     )
 
@@ -105,8 +97,8 @@ def verify_element_order(claim: ElementOrderResult) -> bool:
 
     return (
         element_order(
-            claim.request.invariant_factors,
-            claim.request.coordinates,
+            claim.invariant_factors,
+            claim.coordinates,
         ).order
         == claim.order
     )
@@ -138,9 +130,8 @@ def generated_subgroup(
         if factor > 1:
             index *= factor
     return SubgroupGeneratedResult(
-        request=SubgroupGeneratedRequest(
-            invariant_factors=invariant_factors, generators=generators
-        ),
+        invariant_factors=invariant_factors,
+        generators=generators,
         index=index,
     )
 
@@ -163,10 +154,8 @@ def quotient_group(
     for factor in quotient_factors:
         order *= factor
     return QuotientResult(
-        request=QuotientRequest(
-            invariant_factors=invariant_factors,
-            subgroup_generators=subgroup_generators,
-        ),
+        invariant_factors=invariant_factors,
+        subgroup_generators=subgroup_generators,
         quotient_invariant_factors=quotient_factors,
         quotient_order=order,
     )
@@ -176,9 +165,7 @@ def verify_generated_subgroup(claim: SubgroupGeneratedResult) -> bool:
     """Check the index relation asserted by a serialized subgroup claim."""
 
     return (
-        generated_subgroup(
-            claim.request.invariant_factors, claim.request.generators
-        ).index
+        generated_subgroup(claim.invariant_factors, claim.generators).index
         == claim.index
     )
 
@@ -186,9 +173,7 @@ def verify_generated_subgroup(claim: SubgroupGeneratedResult) -> bool:
 def verify_quotient_group(claim: QuotientResult) -> bool:
     """Check the quotient presentation asserted by a serialized claim."""
 
-    expected = quotient_group(
-        claim.request.invariant_factors, claim.request.subgroup_generators
-    )
+    expected = quotient_group(claim.invariant_factors, claim.subgroup_generators)
     return (
         expected.quotient_invariant_factors == claim.quotient_invariant_factors
         and expected.quotient_order == claim.quotient_order

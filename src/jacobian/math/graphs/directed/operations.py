@@ -10,7 +10,6 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.directed._models import (
     MAX_DIRECTED_OPERATION_EDGES,
     MAX_DIRECTED_OPERATION_VERTICES,
-    AcyclicOrderRequest,
     AcyclicOrderResult,
     CondensationEdge,
     CondensationResult,
@@ -127,11 +126,9 @@ def acyclic_order(graph: DirectedGraph) -> AcyclicOrderResult:
     _admit_directed_graph(graph)
     g = _build_digraph(graph)
     if not nx.is_directed_acyclic_graph(g):
-        return AcyclicOrderResult(
-            request=AcyclicOrderRequest(graph=graph), acyclic=False, order=()
-        )
+        return AcyclicOrderResult(graph=graph, acyclic=False, order=())
     return AcyclicOrderResult(
-        request=AcyclicOrderRequest(graph=graph),
+        graph=graph,
         acyclic=True,
         order=tuple(nx.topological_sort(g)),
     )

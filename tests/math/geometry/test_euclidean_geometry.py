@@ -128,22 +128,23 @@ def test_polygon_point_claim_round_trips_and_rejects_a_forged_source() -> None:
     )
 
     payload = result.model_dump(mode="json")
-    payload["request"]["point"] = _pt(3, 3).model_dump(mode="json")
+    payload["point"] = _pt(3, 3).model_dump(mode="json")
     assert not verify_polygon_point_classification(type(result).model_validate(payload))
 
 
 def test_simple_polygon_claim_round_trips_and_rejects_a_forged_decision() -> None:
-    result = simple_polygon(
-        PolygonRequest(points=(_pt(0, 0), _pt(1, 0), _pt(1, 1), _pt(0, 1)))
-    )
+    result = simple_polygon((_pt(0, 0), _pt(1, 0), _pt(1, 1), _pt(0, 1)))
     assert verify_simple_polygon(
         type(result).model_validate_json(result.model_dump_json())
     )
 
     payload = result.model_dump(mode="json")
-    payload["polygon"] = PolygonRequest(
-        points=(_pt(0, 0), _pt(1, 1), _pt(0, 1), _pt(1, 0))
-    ).model_dump(mode="json")
+    payload["polygon"] = [
+        _pt(0, 0).model_dump(mode="json"),
+        _pt(1, 1).model_dump(mode="json"),
+        _pt(0, 1).model_dump(mode="json"),
+        _pt(1, 0).model_dump(mode="json"),
+    ]
     assert not verify_simple_polygon(type(result).model_validate(payload))
 
 

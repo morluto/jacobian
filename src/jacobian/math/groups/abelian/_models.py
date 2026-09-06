@@ -227,24 +227,29 @@ class ElementReduceResult(StrictModel):
 class ElementEqualResult(StrictModel):
     """A source-bound equality claim for two finite abelian group elements."""
 
-    request: ElementEqualRequest
+    invariant_factors: tuple[int, ...]
+    coordinates_a: tuple[int, ...]
+    coordinates_b: tuple[int, ...]
     equal: bool
 
 
 class ElementOrderResult(StrictModel):
     """A source-bound order claim for a finite abelian group element."""
 
-    request: ElementOrderRequest
+    invariant_factors: tuple[int, ...]
+    coordinates: tuple[int, ...]
     order: int = Field(ge=1)
 
 
 class SubgroupGeneratedResult(StrictModel):
-    request: SubgroupGeneratedRequest
+    invariant_factors: tuple[int, ...]
+    generators: tuple[tuple[int, ...], ...]
     index: int = Field(ge=1)
     coset_representatives: tuple[tuple[int, ...], ...] = ()
 
 
 class QuotientResult(StrictModel):
-    request: QuotientRequest
+    invariant_factors: tuple[int, ...]
+    subgroup_generators: tuple[tuple[int, ...], ...]
     quotient_invariant_factors: tuple[int, ...] = ()
     quotient_order: int = Field(ge=1)

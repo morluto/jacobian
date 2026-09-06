@@ -50,7 +50,6 @@ from jacobian.math.lattices._models import (
     OrthogonalSumResult,
     RankGramResult,
     SaturationResult,
-    SublatticeIndexRequest,
     SublatticeIndexResult,
 )
 from jacobian.math.matrices.values import (
@@ -286,9 +285,9 @@ def compute_sublattice_index(
         parent_rank=len(parent.basis.entries),
     )
     return SublatticeIndexResult(
-        inclusion=SublatticeIndexRequest(
-            sublattice=sublattice, parent=parent, embedding=embedding
-        ),
+        sublattice=sublattice,
+        parent=parent,
+        embedding=embedding,
         index=index,
         invariant_factors=tuple(format_canonical_integer(f) for f in factors),
         free_rank=free_rank,
@@ -359,7 +358,7 @@ def verify_rank_gram(claim: RankGramResult) -> bool:
 
 def verify_sublattice_index(claim: SublatticeIndexResult) -> bool:
     """Check the retained inclusion and its bounded Smith quotient invariants."""
-    source = claim.inclusion
+    source = claim
     return (
         compute_sublattice_index(source.sublattice, source.parent, source.embedding)
         == claim

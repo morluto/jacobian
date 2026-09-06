@@ -61,7 +61,6 @@ from jacobian.math.polynomials.ideals._models import (
     IdealMinimalPrimesResult,
     IdealNormalFormResult,
     IdealQuotientResult,
-    IdealRadicalMembershipRequest,
     IdealRadicalMembershipResult,
     IdealRadicalResult,
     IdealSaturationResult,
@@ -1063,7 +1062,8 @@ def ideal_radical_membership(
         domain=sympy.QQ,
     )
     return IdealRadicalMembershipResult(
-        request=IdealRadicalMembershipRequest(ideal=ideal, polynomial=polynomial),
+        ideal=ideal,
+        polynomial=polynomial,
         in_radical=len(basis) == 1 and basis[0] == 1,
     )
 
@@ -1072,9 +1072,7 @@ def verify_ideal_radical_membership(claim: IdealRadicalMembershipResult) -> bool
     """Check the bounded Rabinowitsch decision asserted by a claim."""
 
     return (
-        ideal_radical_membership(
-            claim.request.ideal, claim.request.polynomial
-        ).in_radical
+        ideal_radical_membership(claim.ideal, claim.polynomial).in_radical
         is claim.in_radical
     )
 

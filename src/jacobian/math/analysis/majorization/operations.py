@@ -16,7 +16,6 @@ from jacobian.math.analysis.majorization._models import (
     DoublyStochasticCheckResult,
     MajorizationCheckResult,
     RationalVector,
-    SchurHornCheckRequest,
     SchurHornCheckResult,
     TTransformSequenceResult,
     TTransformStep,
@@ -585,7 +584,8 @@ def schur_horn_check(
     feasible = all_ok and total_sum_match
 
     return SchurHornCheckResult(
-        source=SchurHornCheckRequest(eigenvalues=eigenvalues, diagonal=diagonal),
+        eigenvalues=eigenvalues,
+        diagonal=diagonal,
         feasible=feasible,
         eigenvalues_sorted=tuple(CanonicalRational.from_fraction(v) for v in e_sorted),
         diagonal_sorted=tuple(CanonicalRational.from_fraction(v) for v in d_sorted),
@@ -612,7 +612,7 @@ def verify_doubly_stochastic(claim: DoublyStochasticCheckResult) -> bool:
 
 def verify_schur_horn(claim: SchurHornCheckResult) -> bool:
     """Check the retained eigenvalue and diagonal sequences."""
-    return schur_horn_check(claim.source.eigenvalues, claim.source.diagonal) == claim
+    return schur_horn_check(claim.eigenvalues, claim.diagonal) == claim
 
 
 def verify_birkhoff(claim: BirkhoffDecompositionResult) -> bool:

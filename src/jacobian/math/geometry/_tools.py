@@ -54,11 +54,13 @@ def segment_intersection(
 
 
 def collinear(request: PointTripleRequest) -> CollinearityResult:
-    return _native.collinear(request)
+    return _native.collinear(request.first, request.second, request.third)
 
 
 def concyclic(request: PointQuadrupleRequest) -> ConcyclicityResult:
-    return _native.concyclic(request)
+    return _native.concyclic(
+        request.first, request.second, request.third, request.fourth
+    )
 
 
 def line_intersection(request: LinePairRequest) -> GeometryLineIntersectionResult:
@@ -88,13 +90,13 @@ def signed_area(request: PolygonRequest) -> GeometryRationalResult:
 
 
 def simple_polygon(request: PolygonRequest) -> SimplePolygonDecisionResult:
-    return _native.simple_polygon(request)
+    return _native.simple_polygon(request.points)
 
 
 def classify_polygon_point(
     request: SimplePolygonPointRequest,
 ) -> PolygonPointClassificationResult:
-    return _native.classify_polygon_point(request)
+    return _native.classify_polygon_point(request.polygon.points, request.point)
 
 
 def convex_hull_points(request: PointSetRequest) -> GeometryConvexHullResult:

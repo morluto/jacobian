@@ -278,7 +278,8 @@ class SchurHornCheckRequest(StrictModel):
 class SchurHornCheckResult(StrictModel):
     """Result of Schur-Horn feasibility check."""
 
-    source: SchurHornCheckRequest
+    eigenvalues: tuple[CanonicalRational, ...]
+    diagonal: tuple[CanonicalRational, ...]
 
     feasible: bool
     eigenvalues_sorted: tuple[CanonicalRational, ...]

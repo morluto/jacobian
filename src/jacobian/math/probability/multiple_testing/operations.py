@@ -8,9 +8,7 @@ from jacobian._exact import CanonicalRational
 from jacobian.math._labels import OpaqueLabel
 from jacobian.math.probability.multiple_testing._models import (
     MAX_HYPOTHESES,
-    BHStepUpRequest,
     BHStepUpResult,
-    FDPRequest,
     FDPResult,
     HypothesisSpec,
 )
@@ -51,7 +49,8 @@ def bh_step_up(
     rejected_ids = tuple(h.hypothesis_id for h in hyps[:critical_k])
 
     return BHStepUpResult(
-        source=BHStepUpRequest(hypotheses=hypotheses, level=level),
+        hypotheses=hypotheses,
+        level=level,
         critical_index=critical_k,
         cutoff_threshold=CanonicalRational.from_fraction(cutoff),
         rejected=tuple(sorted(rejected_ids)),
@@ -70,9 +69,8 @@ def false_discovery_proportion(
     total = len(rejected)
     fdp = Fraction(false_d, total) if total > 0 else Fraction(0)
     return FDPResult(
-        source=FDPRequest(
-            rejected_ids=tuple(sorted(rejected)), true_null_ids=tuple(sorted(nulls))
-        ),
+        rejected_ids=tuple(sorted(rejected)),
+        true_null_ids=tuple(sorted(nulls)),
         false_discoveries=false_d,
         total_rejections=total,
         fdp=CanonicalRational.from_fraction(fdp),
@@ -81,14 +79,12 @@ def false_discovery_proportion(
 
 def verify_bh_step_up(claim: BHStepUpResult) -> bool:
     """Check a retained BH claim with the bounded step-up procedure."""
-    return bh_step_up(claim.source.hypotheses, claim.source.level) == claim
+    return bh_step_up(claim.hypotheses, claim.level) == claim
 
 
 def verify_fdp(claim: FDPResult) -> bool:
     """Check the intersection count and exact ratio of retained hypothesis sets."""
-    expected = false_discovery_proportion(
-        claim.source.rejected_ids, claim.source.true_null_ids
-    )
+    expected = false_discovery_proportion(claim.rejected_ids, claim.true_null_ids)
     return (expected.false_discoveries, expected.total_rejections, expected.fdp) == (
         claim.false_discoveries,
         claim.total_rejections,

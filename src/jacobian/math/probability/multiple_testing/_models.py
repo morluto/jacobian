@@ -58,18 +58,19 @@ class BHStepUpRequest(StrictModel):
 class BHStepUpResult(StrictModel):
     """BH step-up rejection set."""
 
-    source: BHStepUpRequest
+    hypotheses: tuple[HypothesisSpec, ...]
+    level: CanonicalRational
     critical_index: int = Field(ge=0, le=MAX_HYPOTHESES)
     cutoff_threshold: CanonicalRational
     rejected: tuple[OpaqueLabel, ...] = Field(max_length=MAX_HYPOTHESES)
 
     @property
     def total_hypotheses(self) -> int:
-        return len(self.source.hypotheses)
+        return len(self.hypotheses)
 
     @model_validator(mode="after")
     def require_rejection_axis(self) -> Self:
-        ids = {hyp.hypothesis_id for hyp in self.source.hypotheses}
+        ids = {hyp.hypothesis_id for hyp in self.hypotheses}
         if (
             len(set(self.rejected)) != len(self.rejected)
             or not set(self.rejected) <= ids
@@ -92,7 +93,8 @@ class FDPRequest(StrictModel):
 class FDPResult(StrictModel):
     """Exact false discovery proportion."""
 
-    source: FDPRequest
+    rejected_ids: tuple[OpaqueLabel, ...]
+    true_null_ids: tuple[OpaqueLabel, ...]
     false_discoveries: int = Field(ge=0)
     total_rejections: int = Field(ge=0)
     fdp: CanonicalRational

@@ -341,7 +341,9 @@ class SublatticeIndexRequest(StrictModel):
 class SublatticeIndexResult(StrictModel):
     """Finite quotient invariant factors and the sublattice index."""
 
-    inclusion: SublatticeIndexRequest
+    sublattice: IntegerLattice
+    parent: IntegerLattice
+    embedding: IntegerMatrix
     index: int = Field(ge=1)
     invariant_factors: tuple[CanonicalInteger, ...] = Field(
         max_length=MAX_MATRIX_DIMENSION

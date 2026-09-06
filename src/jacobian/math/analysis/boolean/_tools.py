@@ -1,8 +1,10 @@
 """Exact Boolean operation declarations."""
 
-from jacobian.canonical import format_canonical_integer
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.analysis.boolean._models import (
+    BooleanIntegerVector,
+    BooleanTruthTable,
     BooleanTruthTableRequest,
     BooleanWalshTransformResult,
 )
@@ -14,8 +16,13 @@ def _walsh_hadamard_transform(
 ) -> BooleanWalshTransformResult:
     spectrum = walsh_hadamard_transform(request.truth_table)
     return BooleanWalshTransformResult(
-        spectrum=tuple(format_canonical_integer(value) for value in spectrum),
-        variable_count=len(request.truth_table).bit_length() - 1,
+        source=BooleanTruthTable(
+            values=tuple(
+                CanonicalRational(num=str(value), den="1")
+                for value in request.truth_table
+            )
+        ),
+        spectrum=BooleanIntegerVector(values=tuple(spectrum)),
     )
 
 

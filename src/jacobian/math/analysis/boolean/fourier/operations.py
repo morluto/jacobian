@@ -6,7 +6,11 @@ from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.analysis.boolean._models import MAX_WALSH_VARIABLES
+from jacobian.math.analysis.boolean._models import (
+    MAX_WALSH_VARIABLES,
+    BooleanRationalVector,
+    BooleanTruthTable,
+)
 from jacobian.math.analysis.boolean.fourier._models import (
     MAX_VARIABLES,
     MIN_VARIABLES,
@@ -56,21 +60,20 @@ def _admit_truth_table(
 
 
 def truth_table(values: tuple[CanonicalRational, ...]) -> TruthTableResult:
-    """Return the truth table with variable count metadata."""
-    variable_count = _admit_truth_table(values)
-    return TruthTableResult(
-        truth_table=values,
-        variable_count=variable_count,
-    )
+    """Return a source-owned Boolean truth table and its fixed cube axis."""
+    _admit_truth_table(values)
+    return TruthTableResult(truth_table=BooleanTruthTable(values=values))
 
 
 def fourier_spectrum(values: tuple[CanonicalRational, ...]) -> FourierSpectrumResult:
     """Compute the exact Walsh-Hadamard (Fourier) spectrum via FWHT."""
-    variable_count = _admit_truth_table(values, minimum=0, maximum=MAX_WALSH_VARIABLES)
+    _admit_truth_table(values, minimum=0, maximum=MAX_WALSH_VARIABLES)
     spectrum = _fast_walsh_hadamard_transform(_truth_values(values))
     return FourierSpectrumResult(
-        spectrum=tuple(_rational(value) for value in spectrum),
-        variable_count=variable_count,
+        source=BooleanTruthTable(values=values),
+        spectrum=BooleanRationalVector(
+            values=tuple(_rational(value) for value in spectrum)
+        ),
     )
 
 
@@ -87,12 +90,14 @@ def multilinear_extension(
     where ``W_f(S)`` is the Walsh-Hadamard coefficient at subset ``S`` and
     the character ``prod_{i in S} (1 - 2 x_i)`` equals ``(-1)^{<S, x>}``.
     """
-    n = _admit_truth_table(values)
+    _admit_truth_table(values)
     coefficients = _subset_mobius_transform(_truth_values(values))
 
     return MultilinearExtensionResult(
-        coefficients=tuple(_rational(value) for value in coefficients),
-        variable_count=n,
+        source=BooleanTruthTable(values=values),
+        coefficients=BooleanRationalVector(
+            values=tuple(_rational(value) for value in coefficients)
+        ),
     )
 
 
@@ -146,10 +151,41 @@ def erasure_noise(
         result += sign * fourier_coeff * (p**subset_size)
 
     return ErasureNoiseResult(
+        source=BooleanTruthTable(values=values),
         expected_value=_rational(result),
-        variable_count=n,
         probability=probability_value,
+        base_input=base_input,
     )
+
+
+def verify_fourier_spectrum(claim: FourierSpectrumResult) -> bool:
+    """Verify a Fourier spectrum against its retained Boolean function."""
+
+    try:
+        return fourier_spectrum(claim.source.values) == claim
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+
+
+def verify_multilinear_extension(claim: MultilinearExtensionResult) -> bool:
+    """Verify multilinear coefficients against their retained truth table."""
+
+    try:
+        return multilinear_extension(claim.source.values) == claim
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+
+
+def verify_erasure_noise(claim: ErasureNoiseResult) -> bool:
+    """Verify the exact noise expectation against source and base assignment."""
+
+    try:
+        return (
+            erasure_noise(claim.source.values, claim.probability, claim.base_input)
+            == claim
+        )
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
 
 
 def _truth_values(values: tuple[CanonicalRational, ...]) -> list[int]:
@@ -191,4 +227,12 @@ def _subset_mobius_transform(values: list[int]) -> list[int]:
     return coefficients
 
 
-__all__ = ["erasure_noise", "fourier_spectrum", "multilinear_extension", "truth_table"]
+__all__ = [
+    "erasure_noise",
+    "fourier_spectrum",
+    "multilinear_extension",
+    "truth_table",
+    "verify_erasure_noise",
+    "verify_fourier_spectrum",
+    "verify_multilinear_extension",
+]

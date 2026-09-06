@@ -22,6 +22,9 @@ from jacobian.math.analysis.boolean.fourier.operations import (
     fourier_spectrum,
     multilinear_extension,
     truth_table,
+    verify_erasure_noise,
+    verify_fourier_spectrum,
+    verify_multilinear_extension,
 )
 
 
@@ -55,6 +58,35 @@ def _truth_table(values: list[int]) -> tuple[CanonicalRational, ...]:
     return tuple(_one() if v == 1 else _zero() for v in values)
 
 
+def test_serialized_boolean_claims_retain_sources_and_reject_forgeries() -> None:
+    values = _truth_table([0, 1, 1, 0])
+
+    spectrum = fourier_spectrum(values)
+    decoded_spectrum = type(spectrum).model_validate_json(spectrum.model_dump_json())
+    assert decoded_spectrum.source.values == values
+    assert verify_fourier_spectrum(decoded_spectrum)
+    spectrum_payload = spectrum.model_dump(mode="json")
+    spectrum_payload["spectrum"]["values"][0] = {"num": "99", "den": "1"}
+    assert not verify_fourier_spectrum(type(spectrum).model_validate(spectrum_payload))
+
+    extension = multilinear_extension(values)
+    decoded_extension = type(extension).model_validate_json(extension.model_dump_json())
+    assert verify_multilinear_extension(decoded_extension)
+    extension_payload = extension.model_dump(mode="json")
+    extension_payload["coefficients"]["values"][0] = {"num": "99", "den": "1"}
+    assert not verify_multilinear_extension(
+        type(extension).model_validate(extension_payload)
+    )
+
+    noise = erasure_noise(values, _rational(1, 2), (0, 1))
+    decoded_noise = type(noise).model_validate_json(noise.model_dump_json())
+    assert decoded_noise.source.values == values
+    assert verify_erasure_noise(decoded_noise)
+    noise_payload = noise.model_dump(mode="json")
+    noise_payload["base_input"] = [1, 1]
+    assert not verify_erasure_noise(type(noise).model_validate(noise_payload))
+
+
 def _rational(num: int, den: int = 1) -> CanonicalRational:
     return CanonicalRational(num=str(num), den=str(den))
 
@@ -68,7 +100,7 @@ def test_truth_table_single_variable() -> None:
     result = compute_truth_table(TruthTableRequest(truth_table=_truth_table([0, 1])))
     assert isinstance(result, TruthTableResult)
     assert result.variable_count == 1
-    assert [entry.as_fraction() for entry in result.truth_table] == [0, 1]
+    assert [entry.as_fraction() for entry in result.truth_table.values] == [0, 1]
 
 
 def test_truth_table_two_variables() -> None:
@@ -76,7 +108,7 @@ def test_truth_table_two_variables() -> None:
         TruthTableRequest(truth_table=_truth_table([1, 0, 1, 1]))
     )
     assert result.variable_count == 2
-    assert len(result.truth_table) == 4
+    assert len(result.truth_table.values) == 4
     assert result.convention == "NATURAL_ORDER"
 
 
@@ -113,7 +145,16 @@ def test_fourier_spectrum_constant_zero_is_all_zeros() -> None:
     )
     assert isinstance(result, FourierSpectrumResult)
     assert result.variable_count == 2
-    assert [c.as_integer_ratio()[0] for c in result.spectrum] == [0, 0, 0, 0]
+    assert [c.as_integer_ratio()[0] for c in result.spectrum.values] == [0, 0, 0, 0]
+
+
+def test_fourier_spectrum_supports_zero_variable_cube() -> None:
+    result = compute_fourier_spectrum(
+        FourierSpectrumRequest(truth_table=_truth_table([1]))
+    )
+    assert result.source.variable_count == 0
+    assert result.source.values[0].as_fraction() == 1
+    assert result.spectrum.values[0].as_fraction() == 1
 
 
 def test_fourier_spectrum_constant_one() -> None:
@@ -121,7 +162,7 @@ def test_fourier_spectrum_constant_one() -> None:
         FourierSpectrumRequest(truth_table=_truth_table([1, 1, 1, 1]))
     )
     # W[0] = sum of all entries = 4; all other coefficients are zero.
-    assert [c.as_integer_ratio()[0] for c in result.spectrum] == [4, 0, 0, 0]
+    assert [c.as_integer_ratio()[0] for c in result.spectrum.values] == [4, 0, 0, 0]
     assert result.variable_count == 2
 
 
@@ -130,7 +171,7 @@ def test_fourier_spectrum_single_variable_identity() -> None:
     result = compute_fourier_spectrum(
         FourierSpectrumRequest(truth_table=_truth_table([0, 1]))
     )
-    assert [c.as_integer_ratio()[0] for c in result.spectrum] == [1, -1]
+    assert [c.as_integer_ratio()[0] for c in result.spectrum.values] == [1, -1]
 
 
 def test_fourier_spectrum_and_function() -> None:
@@ -140,7 +181,7 @@ def test_fourier_spectrum_and_function() -> None:
     )
     # W[0] = sum = 1, W[1] = f00-f01... using popcount parity
     # Standard result: W = [1, -1, -1, 1]
-    assert [c.as_integer_ratio()[0] for c in result.spectrum] == [1, -1, -1, 1]
+    assert [c.as_integer_ratio()[0] for c in result.spectrum.values] == [1, -1, -1, 1]
 
 
 def test_fourier_spectrum_matches_definition() -> None:
@@ -152,7 +193,7 @@ def test_fourier_spectrum_matches_definition() -> None:
     result = compute_fourier_spectrum(
         FourierSpectrumRequest(truth_table=_truth_table(values))
     )
-    spectrum = [c.as_integer_ratio()[0] for c in result.spectrum]
+    spectrum = [c.as_integer_ratio()[0] for c in result.spectrum.values]
     for k in range(8):
         expected = 0
         for x in range(8):
@@ -179,7 +220,7 @@ def test_multilinear_extension_identity() -> None:
     )
     assert isinstance(result, MultilinearExtensionResult)
     assert result.variable_count == 1
-    assert [c.as_fraction() for c in result.coefficients] == [0, 1]
+    assert [c.as_fraction() for c in result.coefficients.values] == [0, 1]
 
 
 def test_multilinear_extension_constant_one() -> None:
@@ -187,14 +228,14 @@ def test_multilinear_extension_constant_one() -> None:
     result = compute_multilinear_extension(
         MultilinearExtensionRequest(truth_table=_truth_table([1, 1]))
     )
-    assert [c.as_fraction() for c in result.coefficients] == [1, 0]
+    assert [c.as_fraction() for c in result.coefficients.values] == [1, 0]
 
 
 def test_multilinear_extension_constant_zero() -> None:
     result = compute_multilinear_extension(
         MultilinearExtensionRequest(truth_table=_truth_table([0, 0, 0, 0]))
     )
-    assert [c.as_fraction() for c in result.coefficients] == [0, 0, 0, 0]
+    assert [c.as_fraction() for c in result.coefficients.values] == [0, 0, 0, 0]
 
 
 def test_multilinear_extension_and_function() -> None:
@@ -202,7 +243,7 @@ def test_multilinear_extension_and_function() -> None:
     result = compute_multilinear_extension(
         MultilinearExtensionRequest(truth_table=_truth_table([0, 0, 0, 1]))
     )
-    assert [c.as_fraction() for c in result.coefficients] == [0, 0, 0, 1]
+    assert [c.as_fraction() for c in result.coefficients.values] == [0, 0, 0, 1]
 
 
 def test_multilinear_extension_agrees_on_hypercube() -> None:
@@ -215,7 +256,7 @@ def test_multilinear_extension_agrees_on_hypercube() -> None:
         assert (
             sum(
                 c.as_fraction()
-                for mask, c in enumerate(parsed.coefficients)
+                for mask, c in enumerate(parsed.coefficients.values)
                 if mask & x == mask
             )
             == truth[x]
@@ -226,7 +267,7 @@ def test_multilinear_extension_agrees_on_hypercube() -> None:
 def test_ten_variable_parity_has_all_closed_form_multilinear_coefficients() -> None:
     truth = [index.bit_count() % 2 for index in range(1024)]
     result = multilinear_extension(_truth_table(truth))
-    assert [c.as_fraction() for c in result.coefficients] == [0] + [
+    assert [c.as_fraction() for c in result.coefficients.values] == [0] + [
         (-2) ** (mask.bit_count() - 1) for mask in range(1, 1024)
     ]
 

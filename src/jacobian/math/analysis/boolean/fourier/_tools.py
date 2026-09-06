@@ -49,7 +49,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="boolean.truth_table.compute",
         title="Evaluate a Boolean function over all 2^n inputs",
-        description="Return a complete Boolean truth table with its variable count and ordering convention.",
+        description="Return a complete Boolean truth table with its source-owned Boolean-cube axis and ordering convention.",
         request_type=TruthTableRequest,
         result_type=TruthTableResult,
         run=_run_truth_table,
@@ -65,7 +65,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="boolean.fourier_spectrum.compute",
         title="Compute a Boolean Fourier spectrum",
-        description="Compute sum_x f(x) (-1)^(s dot x) from the 0/1 values of a complete truth table with 0 through 12 variables. This BOOLEAN_VALUES convention differs from the BOOLEAN_SIGN transform of (-1)^f.",
+        description="Compute sum_x f(x) (-1)^(s dot x) from the 0/1 values of a complete truth table with 0 through 12 variables, retaining the source truth table and subset-mask axis. This BOOLEAN_VALUES convention differs from the BOOLEAN_SIGN transform of (-1)^f.",
         request_type=FourierSpectrumRequest,
         result_type=FourierSpectrumResult,
         run=_run_fourier_spectrum,
@@ -81,7 +81,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="boolean.multilinear_extension.compute",
         title="Compute the multilinear extension polynomial of a Boolean function",
-        description="Compute the unique multilinear polynomial over the rationals that agrees with the Boolean function on {0,1}^n. Returns exact rational coefficients indexed by the subset mask of each monomial, with the ambient variable count.",
+        description="Compute the unique multilinear polynomial over the rationals that agrees with the Boolean function on {0,1}^n. Returns exact rational coefficients indexed by the source-owned subset-mask axis.",
         request_type=MultilinearExtensionRequest,
         result_type=MultilinearExtensionResult,
         run=_run_multilinear_extension,
@@ -97,7 +97,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="boolean.erasure_noise.compute",
         title="Compute the expected value of a Boolean function under erasure noise",
-        description="With probability p each coordinate of the supplied base assignment is kept; with probability (1-p) it is replaced by an independent uniform random bit. Returns the exact rational expected value T_p f(x), computed via the Fourier expansion weighted by p^|S| chi_S(x).",
+        description="With probability p each coordinate of the supplied base assignment is kept; with probability (1-p) it is replaced by an independent uniform random bit. Returns the source-bound exact rational expected value T_p f(x), retaining the probability and base assignment used by the claim.",
         request_type=ErasureNoiseRequest,
         result_type=ErasureNoiseResult,
         run=_run_erasure_noise,

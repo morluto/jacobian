@@ -11,7 +11,8 @@ from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.math.analysis.boolean._models import (
     MAX_TRUTH_TABLE_LENGTH,
-    MAX_WALSH_VARIABLES,
+    BooleanRationalVector,
+    BooleanTruthTable,
 )
 
 MAX_VARIABLES = 10
@@ -42,13 +43,14 @@ class TruthTableRequest(StrictModel):
 
 
 class TruthTableResult(StrictModel):
-    """Result of evaluating a Boolean function over all 2^n inputs."""
+    """A complete source-bound Boolean truth table."""
 
-    truth_table: tuple[CanonicalRational, ...] = Field(
-        min_length=2,
-        max_length=1 << MAX_VARIABLES,
-    )
-    variable_count: int = Field(ge=1, le=MAX_VARIABLES)
+    truth_table: BooleanTruthTable
+
+    @property
+    def variable_count(self) -> int:
+        return self.truth_table.variable_count
+
     convention: Literal["NATURAL_ORDER"] = "NATURAL_ORDER"
 
 
@@ -61,18 +63,20 @@ class FourierSpectrumRequest(TruthTableRequest):
 
 
 class FourierSpectrumResult(StrictModel):
-    """The exact integer Fourier/Walsh-Hadamard spectrum of a truth table."""
+    """The exact rational Fourier spectrum of a source truth table."""
 
-    spectrum: tuple[CanonicalRational, ...] = Field(
-        min_length=1,
-        max_length=MAX_TRUTH_TABLE_LENGTH,
-    )
-    variable_count: int = Field(ge=0, le=MAX_WALSH_VARIABLES)
+    source: BooleanTruthTable
+    spectrum: BooleanRationalVector
+
+    @property
+    def variable_count(self) -> int:
+        return self.source.variable_count
+
     convention: Literal["BOOLEAN_VALUES"] = "BOOLEAN_VALUES"
 
     @model_validator(mode="after")
     def require_spectrum_shape(self) -> Self:
-        if len(self.spectrum) != 1 << self.variable_count:
+        if len(self.spectrum.values) != len(self.source.values):
             raise _validation_error(
                 "spectrum_length", "spectrum length must equal 2 ** variable_count"
             )
@@ -90,15 +94,17 @@ class MultilinearExtensionResult(StrictModel):
     every ambient coordinate, even for the zero or constant polynomial.
     """
 
-    coefficients: tuple[CanonicalRational, ...] = Field(
-        min_length=2, max_length=1 << MAX_VARIABLES
-    )
+    source: BooleanTruthTable
+    coefficients: BooleanRationalVector
     convention: Literal["SUBSET_MONOMIALS"] = "SUBSET_MONOMIALS"
-    variable_count: int = Field(ge=1, le=MAX_VARIABLES)
+
+    @property
+    def variable_count(self) -> int:
+        return self.source.variable_count
 
     @model_validator(mode="after")
     def require_coefficient_shape(self) -> Self:
-        if len(self.coefficients) != 1 << self.variable_count:
+        if len(self.coefficients.values) != len(self.source.values):
             raise _validation_error(
                 "coefficient_shape", "coefficient count must equal 2 ** variable_count"
             )
@@ -130,9 +136,15 @@ class ErasureNoiseRequest(StrictModel):
 
 
 class ErasureNoiseResult(StrictModel):
-    """The expected value of a Boolean function under erasure noise."""
+    """A source-bound expected value under erasure noise."""
 
+    source: BooleanTruthTable
     expected_value: CanonicalRational
-    variable_count: int = Field(ge=1, le=MAX_VARIABLES)
     probability: CanonicalRational
+    base_input: tuple[int, ...]
+
+    @property
+    def variable_count(self) -> int:
+        return self.source.variable_count
+
     convention: Literal["FOURIER_WEIGHTED"] = "FOURIER_WEIGHTED"

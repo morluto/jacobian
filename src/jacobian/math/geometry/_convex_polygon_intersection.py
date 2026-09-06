@@ -193,54 +193,6 @@ class ConvexRationalPolygon(StrictModel):
 
     @model_validator(mode="after")
     def require_strict_convex_ccw(self) -> Self:
-        n = len(self.vertices)
-        if n < 3:
-            raise _validation_error(
-                "convex_polygon_min_vertices",
-                "convex polygon must have at least 3 vertices",
-            )
-        # Check distinct
-        keys = tuple((v.x.num, v.x.den, v.y.num, v.y.den) for v in self.vertices)
-        if len(set(keys)) != n:
-            raise _validation_error(
-                "convex_polygon_vertices_not_unique",
-                "convex polygon vertices must be distinct",
-            )
-        # Check bounded digits
-        for v in self.vertices:
-            require_bounded_rational(
-                v.x,
-                max_digits=MAX_CONVEX_INTERSECTION_COORDINATE_DIGITS,
-                label="vertex x",
-            )
-            require_bounded_rational(
-                v.y,
-                max_digits=MAX_CONVEX_INTERSECTION_COORDINATE_DIGITS,
-                label="vertex y",
-            )
-        # Check strict CCW and convex (all left turns)
-        pts = [_point_to_fraction(v) for v in self.vertices]
-        for i in range(n):
-            a = pts[i]
-            b = pts[(i + 1) % n]
-            c = pts[(i + 2) % n]
-            cross = _cross_points(a, b, c)
-            if cross <= 0:
-                raise _validation_error(
-                    "convex_polygon_not_strict_ccw",
-                    "convex polygon must be strictly CCW with no three consecutive collinear "
-                    f"(cross at index {i + 1} is {cross})",
-                )
-        # Local left turns alone admit some star-shaped rings.  A convex CCW
-        # ring has every vertex in every directed edge's closed left half-plane.
-        for edge_index in range(n):
-            a = pts[edge_index]
-            b = pts[(edge_index + 1) % n]
-            if any(_cross_edge(a, b, point) < 0 for point in pts):
-                raise _validation_error(
-                    "convex_polygon_not_simple",
-                    "convex polygon vertices must lie in every directed edge's left half-plane",
-                )
         return self
 
     @classmethod
@@ -403,6 +355,54 @@ class ConvexPolygonIntersectionResult(StrictModel):
 def _admit_convex_polygon_intersection(
     polygon_a: ConvexRationalPolygon, polygon_b: ConvexRationalPolygon
 ) -> None:
+    for label, polygon in (("polygon_a", polygon_a), ("polygon_b", polygon_b)):
+        n = len(polygon.vertices)
+        keys = tuple((v.x.num, v.x.den, v.y.num, v.y.den) for v in polygon.vertices)
+        if len(set(keys)) != n:
+            raise OperationDomainValidationError(
+                location=(label, "vertices"),
+                code="geometry.convex_polygon.vertices_not_unique",
+                message="convex polygon vertices must be distinct",
+            )
+        try:
+            for vertex in polygon.vertices:
+                require_bounded_rational(
+                    vertex.x,
+                    max_digits=MAX_CONVEX_INTERSECTION_COORDINATE_DIGITS,
+                    label="vertex x",
+                )
+                require_bounded_rational(
+                    vertex.y,
+                    max_digits=MAX_CONVEX_INTERSECTION_COORDINATE_DIGITS,
+                    label="vertex y",
+                )
+        except ValueError as exc:
+            raise OperationDomainValidationError(
+                location=(label, "vertices"),
+                code="geometry.convex_polygon.coordinate_bound",
+                message=str(exc),
+            ) from exc
+        points = [_point_to_fraction(vertex) for vertex in polygon.vertices]
+        for index in range(n):
+            cross = _cross_points(
+                points[index], points[(index + 1) % n], points[(index + 2) % n]
+            )
+            if cross <= 0:
+                raise OperationDomainValidationError(
+                    location=(label, "vertices"),
+                    code="geometry.convex_polygon.not_strict_ccw",
+                    message="convex polygon must be strictly CCW and convex",
+                )
+        for index in range(n):
+            if any(
+                _cross_edge(points[index], points[(index + 1) % n], point) < 0
+                for point in points
+            ):
+                raise OperationDomainValidationError(
+                    location=(label, "vertices"),
+                    code="geometry.convex_polygon.not_convex",
+                    message="convex polygon vertices must lie in every edge's left half-plane",
+                )
     n = len(polygon_a.vertices)
     m = len(polygon_b.vertices)
     if n > MAX_CONVEX_POLYGON_VERTICES or m > MAX_CONVEX_POLYGON_VERTICES:

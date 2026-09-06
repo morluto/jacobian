@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry import (
     convex_polygon_intersection as public_convex_polygon_intersection,
 )
@@ -121,25 +121,28 @@ def test_defining_invariant_half_plane_containment():
 
 def test_rejects_non_convex_or_collinear():
     # Collinear consecutive triple
-    with pytest.raises(ValidationError, match=r"strict.*CCW|collinear"):
-        ConvexRationalPolygon(
-            vertices=(_pt("0", "0"), _pt("1", "0"), _pt("2", "0"), _pt("1", "1"))
-        )
+    polygon = ConvexRationalPolygon(
+        vertices=(_pt("0", "0"), _pt("1", "0"), _pt("2", "0"), _pt("1", "1"))
+    )
+    with pytest.raises(OperationDomainValidationError, match="strictly CCW"):
+        convex_polygon_intersection(polygon, polygon)
 
 
 def test_rejects_self_intersecting_left_turn_ring():
-    with pytest.raises(ValidationError, match="left half-plane"):
-        _poly([("0", "3"), ("-2", "-3"), ("3", "1"), ("-3", "1"), ("2", "-3")])
+    polygon = _poly([("0", "3"), ("-2", "-3"), ("3", "1"), ("-3", "1"), ("2", "-3")])
+    with pytest.raises(OperationDomainValidationError, match="left half-plane"):
+        convex_polygon_intersection(polygon, polygon)
 
 
 def test_native_geometry_api_exposes_intersection():
     square = _poly([("0", "0"), ("1", "0"), ("1", "1"), ("0", "1")])
     assert public_convex_polygon_intersection(square, square).kind == "POLYGON"
     # Not CCW (clockwise)
-    with pytest.raises(ValidationError, match=r"strict.*CCW"):
-        ConvexRationalPolygon(
-            vertices=(_pt("0", "0"), _pt("0", "2"), _pt("2", "2"), _pt("2", "0"))
-        )
+    polygon = ConvexRationalPolygon(
+        vertices=(_pt("0", "0"), _pt("0", "2"), _pt("2", "2"), _pt("2", "0"))
+    )
+    with pytest.raises(OperationDomainValidationError, match="strictly CCW"):
+        public_convex_polygon_intersection(polygon, polygon)
 
 
 def test_json_round_trip():

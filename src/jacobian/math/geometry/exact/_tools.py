@@ -5,6 +5,7 @@ from typing import Any
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.geometry.exact._models import (
     DistanceGraphRequest,
+    DistanceGraphResult,
     DistanceProfileRequest,
     DistanceProfileResult,
     EuclideanOrbitProfileRequest,
@@ -18,7 +19,6 @@ from jacobian.math.geometry.exact.operations import (
     euclidean_orbit_profile,
     pinned_line_distance_profile,
 )
-from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 
 
 def _run_distance_profile(request: DistanceProfileRequest) -> DistanceProfileResult:
@@ -31,7 +31,7 @@ def _run_euclidean_orbit_profile(
     return euclidean_orbit_profile(request.configuration)
 
 
-def _run_distance_graph(request: DistanceGraphRequest) -> IndexedSimpleUndirectedGraph:
+def _run_distance_graph(request: DistanceGraphRequest) -> DistanceGraphResult:
     return distance_graph(request.configuration, request.target_squared_distance)
 
 
@@ -163,7 +163,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         "the canonical integer-indexed simple graph whose edges connect pairs "
         "at exactly that distance.",
         request_type=DistanceGraphRequest,
-        result_type=IndexedSimpleUndirectedGraph,
+        result_type=DistanceGraphResult,
         run=_run_distance_graph,
         tags=("geometry", "distance-graph", "exact"),
         examples=(

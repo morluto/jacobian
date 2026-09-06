@@ -4,12 +4,15 @@ from collections.abc import Sequence
 from fractions import Fraction
 
 import pytest
-from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.exact._models import (
     LabelledRationalPoint,
     PointConfiguration,
+)
+from jacobian.math.geometry.exact.spanned_line_profile._models import (
+    SpannedLineProfileRequest,
 )
 from jacobian.math.geometry.exact.spanned_line_profile.operations import (
     compute_spanned_line_profile,
@@ -69,7 +72,8 @@ def test_result_preserves_source() -> None:
 def test_coincident_points_are_rejected() -> None:
     config = _config([("a", [0, 0]), ("b", [0, 0])])
 
-    with pytest.raises(PydanticCustomError):
+    assert SpannedLineProfileRequest(configuration=config).configuration == config
+    with pytest.raises(OperationDomainValidationError):
         compute_spanned_line_profile(config)
 
 

@@ -1,6 +1,5 @@
 """Typed contracts for the spanned-line profile operation."""
 
-from pydantic import model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -23,11 +22,6 @@ class SpannedLineProfileRequest(StrictModel):
     """Request the pair-spanned affine line profile."""
 
     configuration: PointConfiguration
-
-    @model_validator(mode="after")
-    def require_distinct_points(self) -> "SpannedLineProfileRequest":
-        _require_coordinate_distinctness(self.configuration)
-        return self
 
 
 class SpannedLineEntry(StrictModel):

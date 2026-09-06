@@ -9,6 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 from jacobian.math.matrices.values import RationalMatrix
 
 
@@ -109,8 +110,7 @@ class DistanceMultiplicityEntry(StrictModel):
 class DistanceProfileResult(StrictModel):
     """Complete distance multiplicity profile of a point configuration."""
 
-    dimension: int = Field(ge=1)
-    point_count: int = Field(ge=2)
+    configuration: PointConfiguration
     entries: tuple[DistanceMultiplicityEntry, ...]
 
 
@@ -171,18 +171,32 @@ class DistanceGraphRequest(StrictModel):
         description="Nonnegative squared Euclidean distance to select.",
     )
 
+
+class DistanceGraphResult(StrictModel):
+    """Distance-selected graph retained with its source and target."""
+
+    configuration: PointConfiguration
+    target_squared_distance: CanonicalRational
+    graph: IndexedSimpleUndirectedGraph
+
     @model_validator(mode="after")
-    def require_nonnegative_target(self) -> Self:
+    def require_graph_source_shape(self) -> Self:
         if self.target_squared_distance.as_fraction() < 0:
             raise _validation_error(
                 "squared_distance_target_nonnegative",
                 "squared distance target must be nonnegative",
+            )
+        if self.graph.vertex_count != len(self.configuration.points):
+            raise _validation_error(
+                "distance_graph_vertex_axis",
+                "distance graph vertex count must match the source point axis",
             )
         return self
 
 
 __all__ = [
     "DistanceGraphRequest",
+    "DistanceGraphResult",
     "DistanceMultiplicityEntry",
     "DistanceProfileRequest",
     "DistanceProfileResult",

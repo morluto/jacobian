@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Literal
 
 from jacobian._flint import flint_workprec
 from jacobian.canonical import format_canonical_integer
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math._root_isolation import strict_root_count
 from jacobian.math.matrices.quadratic_spectral._bounds import (
     annihilating_coefficients,
@@ -608,8 +609,39 @@ def inertia(matrix: RealQuadraticMatrix) -> RealQuadraticInertia:
     )
 
 
+def verify_symmetric_spectrum(claim: RealQuadraticSpectrum) -> bool:
+    """Verify a serialized exact symmetric spectrum against its source."""
+    if claim.spectrum_kind != "SYMMETRIC_EIGENVALUES":
+        return False
+    try:
+        return symmetric_spectrum(claim.matrix) == claim
+    except (OperationDomainValidationError, ValueError, RuntimeError):
+        return False
+
+
+def verify_singular_spectrum(claim: RealQuadraticSpectrum) -> bool:
+    """Verify a serialized exact singular spectrum against its source."""
+    if claim.spectrum_kind != "SINGULAR_VALUES":
+        return False
+    try:
+        return singular_spectrum(claim.matrix) == claim
+    except (OperationDomainValidationError, ValueError, RuntimeError):
+        return False
+
+
+def verify_inertia(claim: RealQuadraticInertia) -> bool:
+    """Verify serialized inertia counts and definiteness against the source."""
+    try:
+        return inertia(claim.matrix) == claim
+    except (OperationDomainValidationError, ValueError, RuntimeError):
+        return False
+
+
 __all__ = [
     "inertia",
     "singular_spectrum",
     "symmetric_spectrum",
+    "verify_inertia",
+    "verify_singular_spectrum",
+    "verify_symmetric_spectrum",
 ]

@@ -11,6 +11,9 @@ from jacobian.math.geometry.exact._models import (
     LabelledRationalPoint,
     PointConfiguration,
 )
+from jacobian.math.geometry.exact.triangle_area_profile._models import (
+    TriangleAreaProfileRequest,
+)
 from jacobian.math.geometry.exact.triangle_area_profile.operations import (
     compute_triangle_area_profile,
 )
@@ -78,6 +81,13 @@ def test_result_preserves_source() -> None:
     config = _config([("a", [0, 0]), ("b", [1, 0]), ("c", [0, 1])])
     result = compute_triangle_area_profile(config)
     assert result.configuration == config
+
+
+def test_request_decoding_does_not_admit_coordinate_distinctness() -> None:
+    config = _config([("a", [0, 0]), ("b", [0, 0]), ("c", [1, 0])])
+    assert TriangleAreaProfileRequest(configuration=config).configuration == config
+    with pytest.raises(OperationDomainValidationError):
+        compute_triangle_area_profile(config)
 
 
 def test_derived_area_must_fit_the_canonical_rational_carrier() -> None:

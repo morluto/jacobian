@@ -4,6 +4,9 @@ from jacobian.math.matrices.quadratic_spectral.operations import (
     inertia,
     singular_spectrum,
     symmetric_spectrum,
+    verify_inertia,
+    verify_singular_spectrum,
+    verify_symmetric_spectrum,
 )
 from jacobian.math.matrices.quadratic_spectral.values import (
     RealAlgebraicMultiplicity,
@@ -18,4 +21,7 @@ __all__ = [
     "inertia",
     "singular_spectrum",
     "symmetric_spectrum",
+    "verify_inertia",
+    "verify_singular_spectrum",
+    "verify_symmetric_spectrum",
 ]

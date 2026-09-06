@@ -930,6 +930,16 @@ def cyclic_rational_rank_kernel_profile(
     return _cyclic_rational_rank_kernel_profile_in_request(symbol)
 
 
+def verify_cyclic_rational_rank_kernel_profile(
+    claim: CyclicRationalRankKernelProfile,
+) -> bool:
+    """Verify a serialized profile by recomputing its retained source claim."""
+    try:
+        return cyclic_rational_rank_kernel_profile(claim.symbol) == claim
+    except (CyclicRankKernelAdmissionError, ValueError, RuntimeError, TimeoutError):
+        return False
+
+
 def _cyclic_rational_rank_kernel_profile_in_request(
     symbol: CyclicRationalBlockSymbol,
 ) -> CyclicRationalRankKernelProfile:
@@ -981,4 +991,5 @@ def _cyclic_rational_rank_kernel_profile_in_request(
 __all__ = [
     "CyclicRankKernelAdmissionError",
     "cyclic_rational_rank_kernel_profile",
+    "verify_cyclic_rational_rank_kernel_profile",
 ]

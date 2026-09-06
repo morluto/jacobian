@@ -15,6 +15,7 @@ from jacobian.math.geometry.exact._line_arithmetic import (
     squared_point_line_distance,
 )
 from jacobian.math.geometry.exact._models import (
+    DistanceGraphResult,
     DistanceMultiplicityEntry,
     DistanceProfileResult,
     EuclideanOrbitProfileResult,
@@ -59,8 +60,7 @@ def distance_profile(configuration: PointConfiguration) -> DistanceProfileResult
         for distance, count in sorted(distances.items())
     )
     return DistanceProfileResult(
-        dimension=len(configuration.points[0].coordinates),
-        point_count=len(configuration.points),
+        configuration=configuration,
         entries=entries,
     )
 
@@ -68,8 +68,14 @@ def distance_profile(configuration: PointConfiguration) -> DistanceProfileResult
 def distance_graph(
     configuration: PointConfiguration,
     target_squared_distance: CanonicalRational,
-) -> IndexedSimpleUndirectedGraph:
+) -> DistanceGraphResult:
     """Build the graph whose edges connect pairs at the target distance."""
+    if target_squared_distance.as_fraction() < 0:
+        raise OperationDomainValidationError(
+            location=("target_squared_distance",),
+            code="geometry.squared_distance_target_nonnegative",
+            message="squared distance target must be nonnegative",
+        )
     points = [_to_fraction_point(point) for point in configuration.points]
     target = target_squared_distance.as_fraction()
     edges = tuple(
@@ -78,10 +84,32 @@ def distance_graph(
         for right in range(left + 1, len(points))
         if _squared_distance(points[left], points[right]) == target
     )
-    return IndexedSimpleUndirectedGraph(
-        vertex_count=len(points),
-        edges=edges,
+    return DistanceGraphResult(
+        configuration=configuration,
+        target_squared_distance=target_squared_distance,
+        graph=IndexedSimpleUndirectedGraph(
+            vertex_count=len(points),
+            edges=edges,
+        ),
     )
+
+
+def verify_distance_profile(claim: DistanceProfileResult) -> bool:
+    """Verify a serialized distance profile against its retained source."""
+    try:
+        return distance_profile(claim.configuration) == claim
+    except (OperationDomainValidationError, ValueError, RuntimeError):
+        return False
+
+
+def verify_distance_graph(claim: DistanceGraphResult) -> bool:
+    """Verify a serialized distance graph against its source and target."""
+    try:
+        return (
+            distance_graph(claim.configuration, claim.target_squared_distance) == claim
+        )
+    except (OperationDomainValidationError, ValueError, RuntimeError):
+        return False
 
 
 def euclidean_orbit_profile(
@@ -159,6 +187,14 @@ def euclidean_orbit_profile(
     )
 
 
+def verify_euclidean_orbit_profile(claim: EuclideanOrbitProfileResult) -> bool:
+    """Verify canonical orbit forms and relabelings against their source."""
+    try:
+        return euclidean_orbit_profile(claim.configuration) == claim
+    except (OperationDomainValidationError, ValueError, RuntimeError):
+        return False
+
+
 def pinned_line_distance_profile(
     configuration: PinnedLineConfiguration,
     anchor_value: tuple[CanonicalRational, ...],
@@ -227,9 +263,21 @@ def pinned_line_distance_profile(
     )
 
 
+def verify_pinned_line_distance_profile(claim: PinnedLineDistanceResult) -> bool:
+    """Verify the pinned line profile against its retained source and anchor."""
+    try:
+        return pinned_line_distance_profile(claim.configuration, claim.anchor) == claim
+    except (OperationDomainValidationError, ValueError, RuntimeError):
+        return False
+
+
 __all__ = [
     "distance_graph",
     "distance_profile",
     "euclidean_orbit_profile",
     "pinned_line_distance_profile",
+    "verify_distance_graph",
+    "verify_distance_profile",
+    "verify_euclidean_orbit_profile",
+    "verify_pinned_line_distance_profile",
 ]

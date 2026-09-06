@@ -5,6 +5,8 @@ from __future__ import annotations
 from fractions import Fraction
 from itertools import combinations
 
+from pydantic_core import PydanticCustomError
+
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.exact._models import PointConfiguration
@@ -14,7 +16,7 @@ from jacobian.math.geometry.exact.spanned_line_profile._models import (
     _require_coordinate_distinctness,
 )
 
-__all__ = ["compute_spanned_line_profile"]
+__all__ = ["compute_spanned_line_profile", "verify_spanned_line_profile"]
 
 
 def _admit_line_key_growth(configuration: PointConfiguration) -> None:
@@ -41,7 +43,12 @@ def compute_spanned_line_profile(
     configuration: PointConfiguration,
 ) -> SpannedLineProfileResult:
     """Return every distinct affine line spanned by unordered source pairs."""
-    _require_coordinate_distinctness(configuration)
+    try:
+        _require_coordinate_distinctness(configuration)
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=("configuration",), code=exc.type, message=exc.message()
+        ) from exc
     _admit_line_key_growth(configuration)
     points = configuration.points
     n = len(points)
@@ -84,6 +91,14 @@ def compute_spanned_line_profile(
         lines=tuple(entries),
         line_count=len(entries),
     )
+
+
+def verify_spanned_line_profile(claim: SpannedLineProfileResult) -> bool:
+    """Verify a serialized line profile against its retained configuration."""
+    try:
+        return compute_spanned_line_profile(claim.configuration) == claim
+    except (OperationDomainValidationError, ValueError, RuntimeError):
+        return False
 
 
 def _canonical_line(

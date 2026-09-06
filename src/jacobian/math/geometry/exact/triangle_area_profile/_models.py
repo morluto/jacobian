@@ -1,8 +1,5 @@
 """Typed contracts for the triangle area profile operation."""
 
-from typing import Self
-
-from pydantic import model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
@@ -26,16 +23,6 @@ class TriangleAreaProfileRequest(StrictModel):
     """Request the triangle area profile of a planar configuration."""
 
     configuration: PointConfiguration
-
-    @model_validator(mode="after")
-    def require_planar_configuration(self) -> Self:
-        _require_distinct_coordinates(self.configuration)
-        if len(self.configuration.points[0].coordinates) != 2:
-            raise PydanticCustomError(
-                "geometry.triangle_area_planar_configuration",
-                "triangle area profiles require exactly two coordinates per point",
-            )
-        return self
 
 
 class TriangleAreaEntry(StrictModel):

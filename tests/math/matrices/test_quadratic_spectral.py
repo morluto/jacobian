@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 
 import pytest
@@ -15,6 +16,9 @@ from jacobian.math.matrices.quadratic_spectral import (
     inertia,
     singular_spectrum,
     symmetric_spectrum,
+    verify_inertia,
+    verify_singular_spectrum,
+    verify_symmetric_spectrum,
 )
 from jacobian.math.matrices.quadratic_spectral._models import (
     RealQuadraticInertiaRequest,
@@ -51,6 +55,28 @@ def _matrix(
     entries: tuple[tuple[RealQuadraticValue, ...], ...],
 ) -> RealQuadraticMatrix:
     return RealQuadraticMatrix(entries=entries)
+
+
+def test_serialized_spectral_and_inertia_verifiers_reject_forged_sources() -> None:
+    symmetric_source = _matrix(
+        (
+            (_q(Fraction(1, 2)), _q(0, Fraction(1, 20))),
+            (_q(0, Fraction(1, 20)), _q(Fraction(1, 2))),
+        )
+    )
+    for result, verifier in (
+        (symmetric_spectrum(symmetric_source), verify_symmetric_spectrum),
+        (singular_spectrum(symmetric_source), verify_singular_spectrum),
+        (inertia(symmetric_source), verify_inertia),
+    ):
+        decoded = type(result).model_validate_json(
+            result.model_dump_json(), strict=True
+        )
+        assert verifier(decoded)
+        payload = json.loads(result.model_dump_json())
+        payload["matrix"]["entries"][0][0]["rational_part"]["num"] = "-9"
+        forged = type(result).model_validate_json(json.dumps(payload), strict=True)
+        assert not verifier(forged)
 
 
 def test_pang_spectra_and_proof_critical_order_are_exact() -> None:
@@ -334,6 +360,9 @@ def test_quadratic_spectral_public_api_and_catalog_are_exact() -> None:
         "inertia",
         "singular_spectrum",
         "symmetric_spectrum",
+        "verify_inertia",
+        "verify_singular_spectrum",
+        "verify_symmetric_spectrum",
     )
     assert {tool.operation_id for tool in TOOLS} == {
         "matrix.real_quadratic.inertia.compute",

@@ -139,8 +139,8 @@ class TestDistanceGraph:
             target_squared_distance=CanonicalRational(num="1", den="1"),
         )
         result = compute_distance_graph(req)
-        assert isinstance(result, IndexedSimpleUndirectedGraph)
-        assert len(result.edges) == 4
+        assert isinstance(result.graph, IndexedSimpleUndirectedGraph)
+        assert len(result.graph.edges) == 4
 
     def test_serialized_result_feeds_graph_consumer_unchanged(self) -> None:
         """A distance graph is the graphs owner's value, including no-edge cases."""
@@ -157,12 +157,12 @@ class TestDistanceGraph:
             )
         )
 
-        assert produced == IndexedSimpleUndirectedGraph(vertex_count=2, edges=())
+        assert produced.graph == IndexedSimpleUndirectedGraph(vertex_count=2, edges=())
         assert (
             GraphSpectrumRequest.model_validate(
-                {"graph": produced.model_dump(mode="json")}
+                {"graph": produced.graph.model_dump(mode="json")}
             ).graph
-            == produced
+            == produced.graph
         )
 
 
@@ -281,7 +281,6 @@ class TestEuclideanOrbitProfile:
 
     def test_rejects_negative_squared_distance(self) -> None:
         import pytest
-        from pydantic import ValidationError
 
         configuration = PointConfiguration(
             points=(
@@ -289,11 +288,12 @@ class TestEuclideanOrbitProfile:
                 _make_point("b", [("1", "1")]),
             )
         )
-        with pytest.raises(ValidationError):
-            DistanceGraphRequest(
-                configuration=configuration,
-                target_squared_distance=CanonicalRational(num="-1", den="1"),
-            )
+        request = DistanceGraphRequest(
+            configuration=configuration,
+            target_squared_distance=CanonicalRational(num="-1", den="1"),
+        )
+        with pytest.raises(OperationDomainValidationError):
+            compute_distance_graph(request)
 
 
 class TestPinnedLineDistance:
@@ -674,8 +674,8 @@ class TestCanonicalPointValueComposition:
                 }
             )
         )
-        assert profile.point_count == 3
-        assert graph.vertex_count == 3
+        assert len(profile.configuration.points) == 3
+        assert graph.graph.vertex_count == 3
         assert pinned.point_count == 3
 
     def test_retained_configuration_feeds_sibling_operations_unchanged(self) -> None:
@@ -705,8 +705,11 @@ class TestCanonicalPointValueComposition:
         profile = compute_distance_profile(
             DistanceProfileRequest(configuration=result.configuration)
         )
-        assert profile == compute_distance_profile(
+        expected_profile = compute_distance_profile(
             DistanceProfileRequest(configuration=configuration)
+        )
+        assert profile.model_dump(mode="json") == expected_profile.model_dump(
+            mode="json"
         )
         graph = compute_distance_graph(
             DistanceGraphRequest(
@@ -714,12 +717,13 @@ class TestCanonicalPointValueComposition:
                 target_squared_distance=CanonicalRational(num="1", den="1"),
             )
         )
-        assert graph == compute_distance_graph(
+        expected_graph = compute_distance_graph(
             DistanceGraphRequest(
                 configuration=configuration,
                 target_squared_distance=CanonicalRational(num="1", den="1"),
             )
         )
+        assert graph.model_dump(mode="json") == expected_graph.model_dump(mode="json")
 
 
 class TestAggregatePairLedgerBound:

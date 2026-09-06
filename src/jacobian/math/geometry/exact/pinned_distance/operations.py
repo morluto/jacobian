@@ -17,7 +17,10 @@ from jacobian.math.geometry.exact.pinned_distance._models import (
     PinnedDistanceSupportProfileResult,
 )
 
-__all__ = ["compute_pinned_distance_support_profile"]
+__all__ = [
+    "compute_pinned_distance_support_profile",
+    "verify_pinned_distance_support_profile",
+]
 
 MAX_DISTANCE_INTERMEDIATE_DIGITS = 4 * MAX_CANONICAL_RATIONAL_DIGITS
 
@@ -115,6 +118,16 @@ def compute_pinned_distance_support_profile(
         configuration=configuration,
         entries=tuple(entries),
     )
+
+
+def verify_pinned_distance_support_profile(
+    claim: PinnedDistanceSupportProfileResult,
+) -> bool:
+    """Verify a serialized support profile against its retained configuration."""
+    try:
+        return compute_pinned_distance_support_profile(claim.configuration) == claim
+    except (OperationDomainValidationError, ValueError, RuntimeError):
+        return False
 
 
 def _squared_distance(

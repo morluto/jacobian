@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from fractions import Fraction
 from threading import Event
@@ -26,6 +27,7 @@ from jacobian.math.matrices.cyclic_linear import (
     RationalCyclotomicMatrix,
     RationalCyclotomicVectorSpaceBasis,
     cyclic_rational_rank_kernel_profile,
+    verify_cyclic_rational_rank_kernel_profile,
 )
 from jacobian.math.matrices.cyclic_linear._models import (
     CyclicRationalRankKernelProfileRequest,
@@ -135,6 +137,21 @@ def test_scalar_x_minus_one_drops_only_the_trivial_component() -> None:
     )
     assert len(set(vector)) == 1
     assert vector[0] != 0
+
+
+def test_serialized_profile_verifier_rejects_forged_crt_claim() -> None:
+    result = cyclic_rational_rank_kernel_profile(
+        _symbol(period=3, entries=((0, 0, 0, 1),))
+    )
+    decoded = type(result).model_validate_json(result.model_dump_json(), strict=True)
+    assert verify_cyclic_rational_rank_kernel_profile(decoded)
+
+    payload = json.loads(result.model_dump_json())
+    payload["components"][0]["crt_idempotent"]["polynomial"]["terms"][0]["coefficient"][
+        "num"
+    ] = "2"
+    forged = type(result).model_validate_json(json.dumps(payload), strict=True)
+    assert not verify_cyclic_rational_rank_kernel_profile(forged)
 
 
 def _rational_rowspace(

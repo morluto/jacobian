@@ -197,4 +197,22 @@ def planar_rigidity_profile(
     )
 
 
-__all__ = ["planar_rigidity_profile"]
+def verify_planar_rigidity_profile(claim: PlanarRigidityProfile) -> bool:
+    """Verify the canonical rigidity matrix and rank claim for a framework."""
+    try:
+        admission = _admit_framework(claim.configuration, claim.graph)
+        matrix = _rigidity_matrix(admission)
+        expected_rank = rank_result(matrix)
+        maximal_rank = 2 * len(admission.vertex_axis) - 3
+        return (
+            claim.vertex_axis == admission.vertex_axis
+            and claim.edge_axis == admission.edge_axis
+            and claim.matrix_rank == expected_rank
+            and claim.maximal_infinitesimal_rigidity_rank == maximal_rank
+            and claim.is_infinitesimally_rigid == (expected_rank.rank == maximal_rank)
+        )
+    except (OperationDomainValidationError, ValueError, RuntimeError):
+        return False
+
+
+__all__ = ["planar_rigidity_profile", "verify_planar_rigidity_profile"]

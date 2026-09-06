@@ -7,11 +7,15 @@ from jacobian.math.geometry.exact._models import (
 from jacobian.math.geometry.framework._models import (
     PlanarRigidityProfile,
 )
-from jacobian.math.geometry.framework.operations import planar_rigidity_profile
+from jacobian.math.geometry.framework.operations import (
+    planar_rigidity_profile,
+    verify_planar_rigidity_profile,
+)
 
 __all__ = [
     "LabelledRationalPoint",
     "PlanarRigidityProfile",
     "PointConfiguration",
     "planar_rigidity_profile",
+    "verify_planar_rigidity_profile",
 ]

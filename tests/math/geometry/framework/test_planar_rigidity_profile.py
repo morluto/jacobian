@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 
 import pytest
@@ -29,6 +30,7 @@ from jacobian.math.geometry.framework.operations import (
     _admit_framework,
     _rigidity_matrix,
     planar_rigidity_profile,
+    verify_planar_rigidity_profile,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.matrices._operation_models import MatrixRankRequest
@@ -100,6 +102,7 @@ def test_native_api_exports_the_reused_framework_values() -> None:
         "PlanarRigidityProfile",
         "PointConfiguration",
         "planar_rigidity_profile",
+        "verify_planar_rigidity_profile",
     ]
     assert framework.LabelledRationalPoint is LabelledRationalPoint
     assert framework.PointConfiguration is PointConfiguration
@@ -297,6 +300,21 @@ def test_profile_round_trip_is_structural_and_source_bound() -> None:
     forged["edge_axis"] = [["a", "c"], ["a", "b"], ["b", "c"]]
     with pytest.raises(ValidationError, match="lexicographically sorted"):
         PlanarRigidityProfile.model_validate(forged)
+
+
+def test_serialized_profile_verifier_rejects_forged_matrix_claim() -> None:
+    source = configuration((("a", 0, 0), ("b", 1, 0), ("c", 0, 1)))
+    source_graph = graph(("a", "b", "c"), (("a", "b"), ("a", "c"), ("b", "c")))
+    result = planar_rigidity_profile(source, source_graph)
+    decoded = PlanarRigidityProfile.model_validate_json(
+        result.model_dump_json(), strict=True
+    )
+    assert verify_planar_rigidity_profile(decoded)
+
+    payload = json.loads(result.model_dump_json())
+    payload["matrix_rank"]["matrix"]["entries"][0]["value"]["num"] = "7"
+    forged = PlanarRigidityProfile.model_validate_json(json.dumps(payload), strict=True)
+    assert not verify_planar_rigidity_profile(forged)
 
 
 def test_profile_contains_sources_axes_and_one_nested_matrix() -> None:

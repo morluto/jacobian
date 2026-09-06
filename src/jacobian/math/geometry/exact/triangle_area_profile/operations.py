@@ -5,6 +5,8 @@ from __future__ import annotations
 from fractions import Fraction
 from itertools import combinations
 
+from pydantic_core import PydanticCustomError
+
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
@@ -15,7 +17,7 @@ from jacobian.math.geometry.exact.triangle_area_profile._models import (
     _require_distinct_coordinates,
 )
 
-__all__ = ["compute_triangle_area_profile"]
+__all__ = ["compute_triangle_area_profile", "verify_triangle_area_profile"]
 
 
 def _admit_triangle_area_result(configuration: PointConfiguration) -> None:
@@ -61,7 +63,12 @@ def compute_triangle_area_profile(
             code="geometry.triangle_area_planar_configuration",
             message="triangle area profiles require exactly two coordinates per point",
         )
-    _require_distinct_coordinates(configuration)
+    try:
+        _require_distinct_coordinates(configuration)
+    except PydanticCustomError as exc:
+        raise OperationDomainValidationError(
+            location=("configuration",), code=exc.type, message=exc.message()
+        ) from exc
     _admit_triangle_area_result(configuration)
     points = configuration.points
     n = len(points)
@@ -125,3 +132,11 @@ def compute_triangle_area_profile(
         entries=tuple(entries),
         area_classes=area_classes,
     )
+
+
+def verify_triangle_area_profile(claim: TriangleAreaProfileResult) -> bool:
+    """Verify a serialized triangle-area profile against its source."""
+    try:
+        return compute_triangle_area_profile(claim.configuration) == claim
+    except (OperationDomainValidationError, ValueError, RuntimeError):
+        return False

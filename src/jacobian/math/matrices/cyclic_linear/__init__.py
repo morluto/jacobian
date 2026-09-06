@@ -13,6 +13,7 @@ from jacobian.math.matrices.cyclic_linear._models import (
 )
 from jacobian.math.matrices.cyclic_linear.operations import (
     cyclic_rational_rank_kernel_profile,
+    verify_cyclic_rational_rank_kernel_profile,
 )
 
 __all__ = [
@@ -26,4 +27,5 @@ __all__ = [
     "RationalCyclotomicMatrix",
     "RationalCyclotomicVectorSpaceBasis",
     "cyclic_rational_rank_kernel_profile",
+    "verify_cyclic_rational_rank_kernel_profile",
 ]

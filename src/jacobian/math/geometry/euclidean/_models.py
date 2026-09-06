@@ -33,8 +33,9 @@ class AngleEqualityRequest(StrictModel):
 
 
 class AngleEqualityResult(StrictModel):
-    """Whether the two angles are equal."""
+    """A source-bound claim about equality of two angles."""
 
+    request: AngleEqualityRequest
     equal: bool
 
 
@@ -46,8 +47,9 @@ class TriangleSimilarityRequest(StrictModel):
 
 
 class TriangleSimilarityResult(StrictModel):
-    """Whether the two triangles are similar."""
+    """A source-bound claim about similarity of two triangles."""
 
+    request: TriangleSimilarityRequest
     similar: bool
 
 

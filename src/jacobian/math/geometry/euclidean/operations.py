@@ -7,7 +7,11 @@ from fractions import Fraction
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry._models import RationalPoint2D
-from jacobian.math.geometry.euclidean._models import Triangle
+from jacobian.math.geometry.euclidean._models import (
+    AngleEqualityResult,
+    Triangle,
+    TriangleSimilarityResult,
+)
 
 
 def _vector(
@@ -86,6 +90,23 @@ def angles_equal(
     )
 
 
+def verify_angle_equality(claim: AngleEqualityResult) -> bool:
+    """Check the angle-equality relation asserted by a serialized claim."""
+
+    request = claim.request
+    return (
+        angles_equal(
+            request.vertex1,
+            request.ray1_a,
+            request.ray1_b,
+            request.vertex2,
+            request.ray2_a,
+            request.ray2_b,
+        )
+        is claim.equal
+    )
+
+
 def triangles_similar(first: Triangle, second: Triangle) -> bool:
     """Decide whether two nondegenerate triangles are similar."""
 
@@ -111,6 +132,18 @@ def triangles_similar(first: Triangle, second: Triangle) -> bool:
     )
 
 
+def verify_triangle_similarity(claim: TriangleSimilarityResult) -> bool:
+    """Check the triangle-similarity relation asserted by a serialized claim."""
+
+    return (
+        triangles_similar(
+            claim.request.triangle1,
+            claim.request.triangle2,
+        )
+        is claim.similar
+    )
+
+
 def _admit_triangle(triangle: Triangle, *, location: tuple[str, ...]) -> None:
     """Admit nondegeneracy with a fixed number of bounded rational operations."""
     bx, by = _vector(triangle.a, triangle.b)
@@ -123,4 +156,10 @@ def _admit_triangle(triangle: Triangle, *, location: tuple[str, ...]) -> None:
         )
 
 
-__all__ = ["angles_equal", "squared_segment_ratio", "triangles_similar"]
+__all__ = [
+    "angles_equal",
+    "squared_segment_ratio",
+    "triangles_similar",
+    "verify_angle_equality",
+    "verify_triangle_similarity",
+]

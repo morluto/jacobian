@@ -35,6 +35,8 @@ from jacobian.math.geometry.euclidean.operations import (
     angles_equal,
     squared_segment_ratio,
     triangles_similar,
+    verify_angle_equality,
+    verify_triangle_similarity,
 )
 
 
@@ -545,6 +547,12 @@ class TestAngleEquality:
         )
         result = compute_angle_equality(req)
         assert result.equal is True
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert verify_angle_equality(decoded)
+
+        payload = result.model_dump(mode="json")
+        payload["equal"] = False
+        assert not verify_angle_equality(type(result).model_validate(payload))
 
     def test_different_angles(self) -> None:
         req = AngleEqualityRequest(
@@ -611,6 +619,12 @@ class TestTriangleSimilarity:
         )
         result = compute_triangle_similarity(req)
         assert result.similar is True
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert verify_triangle_similarity(decoded)
+
+        payload = result.model_dump(mode="json")
+        payload["similar"] = False
+        assert not verify_triangle_similarity(type(result).model_validate(payload))
 
     def test_not_similar(self) -> None:
         req = TriangleSimilarityRequest(

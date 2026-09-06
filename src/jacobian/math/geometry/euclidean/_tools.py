@@ -27,6 +27,7 @@ def compute_segment_ratio(request: SegmentRatioRequest) -> CanonicalRational:
 
 def compute_angle_equality(request: AngleEqualityRequest) -> AngleEqualityResult:
     return AngleEqualityResult(
+        request=request,
         equal=angles_equal(
             request.vertex1,
             request.ray1_a,
@@ -34,7 +35,7 @@ def compute_angle_equality(request: AngleEqualityRequest) -> AngleEqualityResult
             request.vertex2,
             request.ray2_a,
             request.ray2_b,
-        )
+        ),
     )
 
 
@@ -42,7 +43,7 @@ def compute_triangle_similarity(
     request: TriangleSimilarityRequest,
 ) -> TriangleSimilarityResult:
     return TriangleSimilarityResult(
-        similar=triangles_similar(request.triangle1, request.triangle2)
+        request=request, similar=triangles_similar(request.triangle1, request.triangle2)
     )
 
 

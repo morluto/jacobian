@@ -16,12 +16,17 @@ def _integer(value: str) -> CanonicalRational:
     return CanonicalRational(num=value, den="1")
 
 
+def _p(*values: CanonicalRational):
+    from jacobian.math.dynamics.arithmetic import polynomial_from_coefficients
+    return polynomial_from_coefficients(tuple(value.as_fraction() for value in values))
+
+
 def test_monomial_counterexample_is_rejected_by_native_admission() -> None:
     coefficient = "1" + "0" * 127
     with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_map_iterate(
             MapIterateRequest(
-                coefficients=(_integer("0"), _integer("0"), _integer(coefficient)), n=10
+                polynomial=_p(_integer("0"), _integer("0"), _integer(coefficient)), n=10
             )
         )
     assert (
@@ -33,7 +38,7 @@ def test_monomial_counterexample_is_rejected_by_native_admission() -> None:
 def test_near_boundary_monomial_remains_admitted() -> None:
     coefficient = "1" + "0" * 30
     request = MapIterateRequest(
-        coefficients=(_integer("0"), _integer("0"), _integer(coefficient)), n=10
+        polynomial=_p(_integer("0"), _integer("0"), _integer(coefficient)), n=10
     )
 
     assert request.n == 10
@@ -43,7 +48,10 @@ def test_dense_polynomial_additive_growth_is_propagated() -> None:
     coefficient = "1" + "0" * 127
     with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_map_iterate(
-            MapIterateRequest(coefficients=(_integer(coefficient),) * 3, n=9)
+            MapIterateRequest(
+                polynomial=_p(_integer(coefficient), _integer(coefficient), _integer(coefficient)),
+                n=9,
+            )
         )
     assert (
         exc_info.value.errors()[0]["type"]
@@ -56,7 +64,7 @@ def test_dynatomic_request_checks_each_required_iterate() -> None:
     with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_dynatomic_polynomial(
             DynatomicPolynomialRequest(
-                coefficients=(_integer("0"), _integer("0"), _integer(coefficient)), n=9
+                polynomial=_p(_integer("0"), _integer("0"), _integer(coefficient)), n=9
             )
         )
     assert (

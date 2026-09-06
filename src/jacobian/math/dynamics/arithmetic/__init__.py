@@ -1,5 +1,12 @@
 """Exact bounded arithmetic dynamics."""
 
+from jacobian.math.dynamics.arithmetic._tools import (
+    verify_cycle_multiplier,
+    verify_dynatomic_polynomial,
+    verify_finite_field_map,
+    verify_map_iterate,
+    verify_orbit_prefix,
+)
 from jacobian.math.dynamics.arithmetic.operations import (
     FunctionalGraph,
     OrbitComputation,
@@ -28,4 +35,9 @@ __all__ = [
     "polynomial_coefficients",
     "polynomial_from_coefficients",
     "validate_cycle",
+    "verify_cycle_multiplier",
+    "verify_dynatomic_polynomial",
+    "verify_finite_field_map",
+    "verify_map_iterate",
+    "verify_orbit_prefix",
 ]

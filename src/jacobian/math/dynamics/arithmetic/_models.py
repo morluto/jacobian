@@ -2,18 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from fractions import Fraction
-from functools import wraps
-from typing import Any, Literal, Self
+from typing import Literal, Self
 
 from pydantic import Field
-from pydantic import model_validator as _pydantic_model_validator
-from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.math._rational_height import RationalHeight, sum_heights
+from jacobian.math.finite_fields.values import FinitePolynomialMap
+from jacobian.math.polynomials.values import RationalPolynomial
 
 MAX_COEFFICIENT_DIGITS = 128
 MAX_DEGREE = 30
@@ -97,30 +95,6 @@ def _validation_code(message: str) -> str:
     if code is None:
         code = "contract_invariant"
     return code
-
-
-def _validation_error(message: str) -> PydanticCustomError:
-    return PydanticCustomError(
-        f"arithmetic_dynamics.{_validation_code(message)}", message
-    )
-
-
-def model_validator(
-    *, mode: Literal["before", "after", "wrap"]
-) -> Callable[[Callable[..., Any]], Any]:
-    """Convert owner-local model invariant failures to stable error codes."""
-
-    def decorate(function: Callable[..., Any]) -> Any:
-        @wraps(function)
-        def wrapped(self: Any, *inner_args: Any, **inner_kwargs: Any) -> Any:
-            try:
-                return function(self, *inner_args, **inner_kwargs)
-            except ValueError as exc:
-                raise _validation_error(str(exc)) from exc
-
-        return _pydantic_model_validator(mode=mode)(wrapped)
-
-    return decorate
 
 
 def _fraction_height(value: Fraction) -> CoefficientHeight:
@@ -265,16 +239,9 @@ def parse_polynomial_coefficients(
 
 
 class PolynomialCoefficientRequest(StrictModel):
-    coefficients: tuple[CanonicalRational, ...] = Field(
-        min_length=1, max_length=MAX_DEGREE + 1
-    )
+    """A source polynomial in the shared canonical QQ representation."""
 
-    def coefficient_values(self) -> tuple[Fraction, ...]:
-        return parse_polynomial_coefficients(self.coefficients)
-
-    def polynomial_degree(self) -> int:
-        values = self.coefficient_values()
-        return 0 if values == (Fraction(0),) else len(values) - 1
+    polynomial: RationalPolynomial
 
 
 class MapIterateRequest(PolynomialCoefficientRequest):
@@ -307,52 +274,30 @@ class CycleMultiplierRequest(PolynomialCoefficientRequest):
 class FiniteFieldMapRequest(StrictModel):
     """A canonical polynomial map over the prime field GF(p)."""
 
-    prime: int = Field(ge=2, le=MAX_FIELD_PRIME)
-    coefficients: tuple[str, ...] = Field(min_length=1, max_length=MAX_DEGREE + 1)
+    polynomial_map: FinitePolynomialMap
 
 
 class MapIterateResult(StrictModel):
-    source_coefficients: tuple[CanonicalRational, ...] = Field(
-        min_length=1, max_length=MAX_DEGREE + 1
-    )
+    source_polynomial: RationalPolynomial
     n: int = Field(ge=0, le=MAX_ITERATE)
-    coefficients: tuple[CanonicalRational, ...] = Field(
-        min_length=1, max_length=MAX_ITERATE_DEGREE + 1
-    )
+    polynomial: RationalPolynomial
     degree: int = Field(ge=0, le=MAX_ITERATE_DEGREE)
 
     @classmethod
     def _from_kernel(
         cls,
         *,
-        source_coefficients: tuple[CanonicalRational, ...],
+        source_polynomial: RationalPolynomial,
         n: int,
-        coefficients: tuple[CanonicalRational, ...],
+        polynomial: RationalPolynomial,
         degree: int,
     ) -> Self:
         return cls.model_construct(
-            source_coefficients=source_coefficients,
+            source_polynomial=source_polynomial,
             n=n,
-            coefficients=coefficients,
+            polynomial=polynomial,
             degree=degree,
         )
-
-    @model_validator(mode="after")
-    def bind_degree_and_coefficients(self) -> Self:
-        parse_polynomial_coefficients(self.source_coefficients)
-        values = tuple(
-            _bounded_fraction(
-                value,
-                max_digits=MAX_POLYNOMIAL_OUTPUT_DIGITS,
-                label="iterate coefficient",
-            )
-            for value in self.coefficients
-        )
-        expected_degree = 0 if values == (Fraction(0),) else len(values) - 1
-        if self.degree != expected_degree:
-            raise _validation_error("degree must match the canonical coefficient tuple")
-        return self
-
 
 class OrbitRepeatEvidence(StrictModel):
     first_seen_index: int = Field(ge=0)
@@ -360,19 +305,8 @@ class OrbitRepeatEvidence(StrictModel):
     preperiod: int = Field(ge=0)
     period: int = Field(ge=1)
 
-    @model_validator(mode="after")
-    def bind_indices(self) -> Self:
-        if self.preperiod != self.first_seen_index:
-            raise _validation_error("preperiod must equal first-seen index")
-        if self.period != self.repeated_at_index - self.first_seen_index:
-            raise _validation_error("period must equal the repeat-index difference")
-        return self
-
-
 class OrbitPrefixResult(StrictModel):
-    source_coefficients: tuple[CanonicalRational, ...] = Field(
-        min_length=1, max_length=MAX_DEGREE + 1
-    )
+    source_polynomial: RationalPolynomial
     start: CanonicalRational
     orbit: tuple[CanonicalRational, ...] = Field(
         min_length=1, max_length=MAX_ORBIT_STEPS + 1
@@ -388,7 +322,7 @@ class OrbitPrefixResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        source_coefficients: tuple[CanonicalRational, ...],
+        source_polynomial: RationalPolynomial,
         start: CanonicalRational,
         requested_steps: int,
         orbit: tuple[CanonicalRational, ...],
@@ -399,7 +333,7 @@ class OrbitPrefixResult(StrictModel):
     ) -> Self:
         found_repeat = termination == "REPEAT_FOUND"
         return cls.model_construct(
-            source_coefficients=source_coefficients,
+            source_polynomial=source_polynomial,
             start=start,
             orbit=orbit,
             requested_steps=requested_steps,
@@ -410,51 +344,9 @@ class OrbitPrefixResult(StrictModel):
             truncated=not found_repeat,
         )
 
-    @model_validator(mode="after")
-    def bind_termination_evidence(self) -> Self:
-        if len(self.orbit) != self.computed_steps + 1:
-            raise _validation_error("orbit length must equal computed steps plus one")
-        if self.computed_steps > self.requested_steps:
-            raise _validation_error("computed steps cannot exceed the request bound")
-        if self.termination == "REPEAT_FOUND":
-            if (
-                self.repeat is None
-                or not self.eventual_behavior_complete
-                or self.truncated
-            ):
-                raise _validation_error(
-                    "repeat termination requires complete repeat evidence"
-                )
-            if self.repeat.repeated_at_index != self.computed_steps:
-                raise _validation_error(
-                    "repeat evidence must bind the final orbit value"
-                )
-            if self.orbit[self.repeat.first_seen_index] != self.orbit[-1]:
-                raise _validation_error("repeat evidence must bind equal orbit values")
-        elif (
-            self.repeat is not None
-            or self.eventual_behavior_complete
-            or not self.truncated
-        ):
-            raise _validation_error(
-                "bounded termination cannot imply eventual behavior"
-            )
-        if self.termination == "STEP_BOUND_REACHED" and (
-            self.computed_steps != self.requested_steps
-        ):
-            raise _validation_error(
-                "step-bound termination must exhaust the requested prefix"
-            )
-        return self
-
-
 class DynatomicPolynomialResult(StrictModel):
-    source_coefficients: tuple[CanonicalRational, ...] = Field(
-        min_length=1, max_length=MAX_DEGREE + 1
-    )
-    coefficients: tuple[CanonicalRational, ...] = Field(
-        min_length=1, max_length=MAX_DYNATOMIC_DEGREE + 1
-    )
+    source_polynomial: RationalPolynomial
+    polynomial: RationalPolynomial
     degree: int = Field(ge=0, le=MAX_DYNATOMIC_DEGREE)
     n: int = Field(ge=1, le=MAX_ITERATE)
 
@@ -462,66 +354,31 @@ class DynatomicPolynomialResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        source_coefficients: tuple[CanonicalRational, ...],
+        source_polynomial: RationalPolynomial,
         n: int,
-        coefficients: tuple[CanonicalRational, ...],
+        polynomial: RationalPolynomial,
         degree: int,
     ) -> Self:
         return cls.model_construct(
-            source_coefficients=source_coefficients,
-            coefficients=coefficients,
+            source_polynomial=source_polynomial,
+            polynomial=polynomial,
             degree=degree,
             n=n,
         )
 
-    @model_validator(mode="after")
-    def bind_degree_and_coefficients(self) -> Self:
-        parse_polynomial_coefficients(self.source_coefficients)
-        values = tuple(
-            _bounded_fraction(
-                value,
-                max_digits=MAX_POLYNOMIAL_OUTPUT_DIGITS,
-                label="dynatomic coefficient",
-            )
-            for value in self.coefficients
-        )
-        expected_degree = 0 if values == (Fraction(0),) else len(values) - 1
-        if self.degree != expected_degree:
-            raise _validation_error("degree must match the canonical coefficient tuple")
-        return self
-
-
 class CycleMultiplierResult(StrictModel):
-    source_coefficients: tuple[CanonicalRational, ...] = Field(
-        min_length=1, max_length=MAX_DEGREE + 1
-    )
+    source_polynomial: RationalPolynomial
     multiplier: CanonicalRational
     cycle: tuple[CanonicalRational, ...] = Field(
         min_length=1, max_length=MAX_ORBIT_STEPS
     )
     period: int = Field(ge=1, le=MAX_ORBIT_STEPS)
 
-    @model_validator(mode="after")
-    def require_structural_consistency(self) -> Self:
-        parse_polynomial_coefficients(self.source_coefficients)
-        for value in self.cycle:
-            _bounded_fraction(
-                value, max_digits=MAX_COEFFICIENT_DIGITS, label="cycle point"
-            )
-        if self.period != len(self.cycle):
-            raise _validation_error("period must match cycle length")
-        require_bounded_rational(
-            self.multiplier,
-            max_digits=MAX_POLYNOMIAL_OUTPUT_DIGITS,
-            label="multiplier",
-        )
-        return self
-
     @classmethod
     def _from_kernel(
         cls,
         *,
-        source_coefficients: tuple[CanonicalRational, ...],
+        source_polynomial: RationalPolynomial,
         cycle: tuple[CanonicalRational, ...],
         multiplier: CanonicalRational,
     ) -> Self:
@@ -533,7 +390,7 @@ class CycleMultiplierResult(StrictModel):
             label="multiplier",
         )
         return cls.model_construct(
-            source_coefficients=source_coefficients,
+            source_polynomial=source_polynomial,
             multiplier=multiplier,
             cycle=cycle,
             period=len(cycle),
@@ -541,26 +398,16 @@ class CycleMultiplierResult(StrictModel):
 
 
 class FiniteFieldMapResult(StrictModel):
-    prime: int = Field(ge=2, le=MAX_FIELD_PRIME)
-    coefficients: tuple[str, ...] = Field(min_length=1, max_length=MAX_DEGREE + 1)
+    polynomial_map: FinitePolynomialMap
     edges: tuple[tuple[int, int], ...]
     cycles: tuple[tuple[int, ...], ...]
     tail_lengths: tuple[int, ...]
-
-    @model_validator(mode="after")
-    def require_structural_consistency(self) -> Self:
-        for coefficient in self.coefficients:
-            _parse_canonical_integer(coefficient)
-        self._require_complete_edges()
-        self._require_canonical_cycles()
-        return self
 
     @classmethod
     def _from_kernel(
         cls,
         *,
-        prime: int,
-        coefficients: tuple[str, ...],
+        polynomial_map: FinitePolynomialMap,
         edges: tuple[tuple[int, int], ...],
         cycles: tuple[tuple[int, ...], ...],
         tail_lengths: tuple[int, ...],
@@ -568,44 +415,11 @@ class FiniteFieldMapResult(StrictModel):
         """Build a result after complete graph enumeration established it."""
 
         return cls.model_construct(
-            prime=prime,
-            coefficients=coefficients,
+            polynomial_map=polynomial_map,
             edges=edges,
             cycles=cycles,
             tail_lengths=tail_lengths,
         )
-
-    def _require_complete_edges(self) -> None:
-        if len(self.edges) != self.prime or len(self.tail_lengths) != self.prime:
-            raise ValueError("functional graph must cover every field element")
-        if tuple(source for source, _ in self.edges) != tuple(range(self.prime)):
-            raise ValueError("functional graph edges must be source ordered")
-        if any(not 0 <= target < self.prime for _, target in self.edges):
-            raise ValueError("functional graph edge target out of range")
-        if any(length < 0 for length in self.tail_lengths):
-            raise ValueError("tail lengths must be nonnegative")
-
-    def _require_canonical_cycles(self) -> None:
-        if self.cycles != tuple(sorted(self.cycles)):
-            raise ValueError("cycles must be canonical and sorted")
-        if any(not cycle or cycle[0] != min(cycle) for cycle in self.cycles):
-            raise ValueError("each cycle must start at its least element")
-        cycle_nodes = [node for cycle in self.cycles for node in cycle]
-        if len(cycle_nodes) != len(set(cycle_nodes)):
-            raise ValueError("functional graph cycles must be disjoint")
-
-
-def _parse_canonical_integer(value: str) -> int:
-    if len(value) > MAX_COEFFICIENT_DIGITS + 1:
-        raise ValueError("coefficient exceeds the integer digit bound")
-    try:
-        parsed = int(value)
-    except ValueError:
-        raise ValueError("coefficient must be a canonical integer") from None
-    if str(parsed) != value:
-        raise ValueError("coefficient must be a canonical integer")
-    return parsed
-
 
 __all__ = [
     "CycleMultiplierRequest",

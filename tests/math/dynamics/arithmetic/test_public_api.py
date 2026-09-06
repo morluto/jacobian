@@ -20,6 +20,11 @@ def test_exact_public_api_symbols() -> None:
         "polynomial_coefficients",
         "polynomial_from_coefficients",
         "validate_cycle",
+        "verify_cycle_multiplier",
+        "verify_dynatomic_polynomial",
+        "verify_finite_field_map",
+        "verify_map_iterate",
+        "verify_orbit_prefix",
     )
     assert tuple(arithmetic_dynamics.__all__) == expected
     assert len(arithmetic_dynamics.__all__) == len(set(arithmetic_dynamics.__all__))

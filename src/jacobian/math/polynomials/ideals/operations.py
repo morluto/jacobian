@@ -461,7 +461,7 @@ def ideal_membership_certificate(
             polynomial=polynomial,
             cofactor_degree_bound=cofactor_degree_bound,
             status="CERTIFICATE",
-            multiplier="1",
+            multiplier=1,
             cofactors=tuple(zero for _ in ideal.generators),
         )
 
@@ -502,7 +502,7 @@ def ideal_membership_certificate(
         polynomial=polynomial,
         cofactor_degree_bound=cofactor_degree_bound,
         status="CERTIFICATE",
-        multiplier=format_canonical_integer(multiplier),
+        multiplier=multiplier,
         cofactors=cofactors,
     )
 
@@ -1272,6 +1272,118 @@ def ideal_equality(
         ) from error
 
 
+def verify_ideal_membership_certificate(
+    claim: IdealMembershipCertificateResult,
+) -> bool:
+    """Verify a serialized ideal-membership identity against its sources."""
+
+    try:
+        _admit_membership_certificate(
+            claim.ideal,
+            claim.polynomial,
+            claim.cofactor_degree_bound,
+        )
+        if claim.status == "NO_CERTIFICATE_WITHIN_BOUND":
+            return (
+                ideal_membership_certificate(
+                    claim.ideal,
+                    claim.polynomial,
+                    claim.cofactor_degree_bound,
+                )
+                == claim
+            )
+        if claim.multiplier is None or claim.cofactors is None:
+            return False
+        if any(
+            sum(term.exponents) > claim.cofactor_degree_bound
+            for cofactor in claim.cofactors
+            for term in cofactor.polynomial.terms
+        ):
+            return False
+        target = rational_polynomial_to_sympy(claim.polynomial).as_expr()
+        identity = sympy.Integer(0)
+        for cofactor, generator in zip(
+            claim.cofactors, claim.ideal.generators, strict=True
+        ):
+            identity += rational_polynomial_to_sympy(cofactor).as_expr() * (
+                rational_polynomial_to_sympy(generator).as_expr()
+            )
+        return bool(sympy.expand(identity - claim.multiplier * target) == 0)
+    except Exception:
+        return False
+
+
+def verify_groebner_basis(claim: GroebnerBasisResult) -> bool:
+    """Verify a reduced Gröbner basis against its retained ideal source."""
+
+    try:
+        _admit_groebner(claim.ideal)
+        payload = {
+            "mode": "verify_groebner_basis",
+            "variables": list(claim.ideal.variables),
+            "order": claim.monomial_order,
+            "generators": [
+                generator.model_dump(mode="json")
+                for generator in claim.ideal.generators
+            ],
+            "basis": [
+                generator.model_dump(mode="json")
+                for generator in claim.basis.generators
+            ],
+        }
+        return bool(_run_sympy_kernel(payload, 10).get("equal", False))
+    except Exception:
+        return False
+
+
+def verify_ideal_normal_form(claim: IdealNormalFormResult) -> bool:
+    """Verify a normal-form claim against its ideal, polynomial, and order."""
+
+    try:
+        return (
+            ideal_normal_form(
+                claim.ideal,
+                claim.polynomial,
+                claim.monomial_order,
+            )
+            == claim
+        )
+    except Exception:
+        return False
+
+
+def verify_ideal_containment(claim: IdealContainmentResult) -> bool:
+    """Verify a directed containment ledger against both retained ideals."""
+
+    try:
+        return (
+            ideal_containment(
+                claim.source,
+                claim.target,
+                claim.monomial_order,
+            )
+            == claim
+        )
+    except Exception:
+        return False
+
+
+def verify_ideal_equality(claim: IdealEqualityResult) -> bool:
+    """Verify both equality ledgers against the retained ideal presentations."""
+
+    try:
+        return (
+            ideal_equality(
+                claim.left,
+                claim.right,
+                claim.monomial_order,
+            )
+            == claim
+        )
+    except Exception:
+        return False
+
+
 __all__ = [
     "elimination_ideal",
     "groebner_basis",
@@ -1285,6 +1397,11 @@ __all__ = [
     "ideal_radical_membership",
     "ideal_saturation",
     "monomial_ideal_graded_betti_table",
+    "verify_groebner_basis",
+    "verify_ideal_containment",
+    "verify_ideal_equality",
+    "verify_ideal_membership_certificate",
+    "verify_ideal_normal_form",
 ]
 
 

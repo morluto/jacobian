@@ -27,6 +27,8 @@ from jacobian.math.polynomials.ideals.operations import (
     elimination_ideal,
     groebner_basis,
     ideal_normal_form,
+    verify_groebner_basis,
+    verify_ideal_normal_form,
 )
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
@@ -169,6 +171,23 @@ class TestGroebnerBasisValidation:
         assert result.generator_count == 1
         assert result.basis is not None
         assert len(result.basis.generators[0].polynomial.terms) == 0
+        assert verify_groebner_basis(result)
+
+    def test_serialized_basis_verifier_rejects_forged_basis(self) -> None:
+        g = _poly(("x",), (1, 1, (1,)))
+        result = _run_groebner(
+            GroebnerBasisRequest(ideal=_ideal(("x",), (g,)), monomial_order="lex")
+        )
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert verify_groebner_basis(decoded)
+
+        payload = decoded.model_dump(mode="json")
+        payload["basis"]["generators"][0]["polynomial"]["terms"][0][
+            "coefficient"
+        ]["num"] = "2"
+        forged = type(result).model_validate(payload)
+
+        assert not verify_groebner_basis(forged)
 
     def test_basis_with_trailing_zero_for_mixed_source_rejected(self) -> None:
         """<x, 0> has reduced basis (x); appending a zero entry is invalid."""
@@ -219,6 +238,24 @@ class TestIdealNormalForm:
         poly = _poly(("x", "y"), (3, 1, (0, 0)))
         result = _run_normal_form(IdealNormalFormRequest(ideal=ideal, polynomial=poly))
         assert result.in_ideal is True
+
+    def test_serialized_normal_form_verifier_rejects_forged_remainder(self) -> None:
+        g = _poly(("x",), (1, 1, (1,)))
+        result = _run_normal_form(
+            IdealNormalFormRequest(
+                ideal=_ideal(("x",), (g,)),
+                polynomial=g,
+            )
+        )
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert verify_ideal_normal_form(decoded)
+
+        payload = decoded.model_dump(mode="json")
+        payload["remainder"] = _poly(("x",), (1, 1, (0,))).model_dump(mode="json")
+        payload["in_ideal"] = False
+        forged = type(result).model_validate(payload)
+
+        assert not verify_ideal_normal_form(forged)
 
 
 class TestEliminationIdeal:

@@ -21,6 +21,8 @@ from jacobian.math.polynomials.ideals._models import (
 from jacobian.math.polynomials.ideals.operations import (
     ideal_containment,
     ideal_equality,
+    verify_ideal_containment,
+    verify_ideal_equality,
 )
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
@@ -148,6 +150,38 @@ def test_relation_results_round_trip_without_replaying_math() -> None:
     result = ideal_equality(left, _ideal(("x",), {(1,): 2}))
 
     assert type(result).model_validate_json(result.model_dump_json()) == result
+
+
+def test_serialized_relation_verifiers_reject_forged_ledgers() -> None:
+    ideal = _ideal(("x",), {(1,): 1})
+    containment = ideal_containment(ideal, ideal)
+    decoded_containment = type(containment).model_validate_json(
+        containment.model_dump_json()
+    )
+    assert verify_ideal_containment(decoded_containment)
+
+    containment_payload = decoded_containment.model_dump(mode="json")
+    containment_payload["ledger"]["contained"] = False
+    containment_payload["ledger"]["first_obstruction_index"] = 0
+    containment_payload["ledger"]["normal_forms"][0] = _polynomial(
+        ("x",), {(1,): 1}
+    ).model_dump(mode="json")
+    forged_containment = type(containment).model_validate(containment_payload)
+    assert not verify_ideal_containment(forged_containment)
+
+    equality = ideal_equality(ideal, ideal)
+    decoded_equality = type(equality).model_validate_json(equality.model_dump_json())
+    assert verify_ideal_equality(decoded_equality)
+
+    equality_payload = decoded_equality.model_dump(mode="json")
+    equality_payload["equal"] = False
+    equality_payload["right_in_left"]["contained"] = False
+    equality_payload["right_in_left"]["first_obstruction_index"] = 0
+    equality_payload["right_in_left"]["normal_forms"][0] = _polynomial(
+        ("x",), {(1,): 1}
+    ).model_dump(mode="json")
+    forged_equality = type(equality).model_validate(equality_payload)
+    assert not verify_ideal_equality(forged_equality)
 
 
 def test_zero_and_unit_ideals_obey_containment_extremes() -> None:

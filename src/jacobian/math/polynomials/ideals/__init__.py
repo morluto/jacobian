@@ -13,11 +13,21 @@ from jacobian.math.polynomials.ideals._models import (
 )
 from jacobian.math.polynomials.ideals.operations import (
     monomial_ideal_graded_betti_table,
+    verify_groebner_basis,
+    verify_ideal_containment,
+    verify_ideal_equality,
+    verify_ideal_membership_certificate,
+    verify_ideal_normal_form,
 )
 
 
 def __getattr__(name: str) -> object:
-    if name not in {"ideal_containment", "ideal_equality"}:
+    if name not in {
+        "ideal_containment",
+        "ideal_equality",
+        "ideal_membership_certificate",
+        "ideal_normal_form",
+    }:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     from jacobian.math.polynomials.ideals import operations
 
@@ -37,4 +47,9 @@ __all__ = [
     "MonomialIdealBettiResult",
     "MultigradedBettiNumber",
     "monomial_ideal_graded_betti_table",
+    "verify_groebner_basis",
+    "verify_ideal_containment",
+    "verify_ideal_equality",
+    "verify_ideal_membership_certificate",
+    "verify_ideal_normal_form",
 ]

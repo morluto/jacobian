@@ -113,21 +113,34 @@ def _validate_identity_value_shape(
 ) -> None:
     """Validate the bounded canonical representation of an identity claim."""
 
-    if not 2 <= value.modulus <= _MAX_MODULUS:
+    if type(value.modulus) is not int or not 2 <= value.modulus <= _MAX_MODULUS:
         raise ValueError("identity modulus is outside result scope")
-    if not 1 <= len(value.variable_order) <= _MAX_VARIABLES:
+    if (
+        type(value.variable_order) is not tuple
+        or not 1 <= len(value.variable_order) <= _MAX_VARIABLES
+    ):
         raise ValueError("identity variable axes are outside result scope")
     if len(set(value.variable_order)) != len(value.variable_order) or any(
         type(name) is not str or _VARIABLE.fullmatch(name) is None
         for name in value.variable_order
     ):
         raise ValueError("identity variable axes must be unique canonical names")
-    if len(value.normalized_left) > _MAX_TERMS:
+    if (
+        type(value.normalized_left) is not tuple
+        or len(value.normalized_left) > _MAX_TERMS
+    ):
         raise ValueError("normalized_left exceeds the bounded term count")
-    if len(value.normalized_right) > _MAX_TERMS:
+    if (
+        type(value.normalized_right) is not tuple
+        or len(value.normalized_right) > _MAX_TERMS
+    ):
         raise ValueError("normalized_right exceeds the bounded term count")
-    if len(value.residual) > _MAX_TERMS * 2:
+    if type(value.residual) is not tuple or len(value.residual) > _MAX_TERMS * 2:
         raise ValueError("residual exceeds the bounded term count")
+    if type(value.identical) is not bool:
+        raise ValueError("identity decision must be a boolean claim")
+    if value.comparison_scope != "FORMAL_COEFFICIENTWISE_IDENTITY":
+        raise ValueError("identity comparison scope is not canonical")
 
     for terms in (value.normalized_left, value.normalized_right, value.residual):
         if any(type(term) is not NormalizedModularPolynomialTerm for term in terms):
@@ -138,9 +151,7 @@ def _validate_identity_value_shape(
         if any(
             len(term.exponents) != len(value.variable_order)
             or any(
-                type(exponent) is not int
-                or exponent < 0
-                or exponent > _MAX_EXPONENT
+                type(exponent) is not int or exponent < 0 or exponent > _MAX_EXPONENT
                 for exponent in term.exponents
             )
             or type(term.coefficient) is not int

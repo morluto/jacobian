@@ -140,9 +140,7 @@ def test_identity_result_decoding_does_not_replay_subtraction(
 
 def test_identity_verifier_accepts_the_bounded_maximum_sparse_claim() -> None:
     terms_left = tuple(
-        ModularPolynomialTerm(
-            coefficient="1", exponents=(index // 257, index % 257)
-        )
+        ModularPolynomialTerm(coefficient="1", exponents=(index // 257, index % 257))
         for index in range(512)
     )
     terms_right = tuple(

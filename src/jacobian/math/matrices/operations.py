@@ -1355,14 +1355,12 @@ def verify_nullspace(claim: NullspaceResult) -> bool:
                     (entry.value.as_fraction(), entry.column)
                 )
             source_rows = tuple(
-                tuple(sparse_rows.get(row, ()))
-                for row in range(claim.matrix.row_count)
+                tuple(sparse_rows.get(row, ())) for row in range(claim.matrix.row_count)
             )
         for index, vector in enumerate(claim.basis_matrix.entries):
             components = tuple(value.as_fraction() for value in vector)
             if any(
-                sum(value * components[column] for value, column in row)
-                != 0
+                sum(value * components[column] for value, column in row) != 0
                 for row in source_rows
             ):
                 return False

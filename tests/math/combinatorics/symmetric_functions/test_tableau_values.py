@@ -53,11 +53,14 @@ def test_semistandard_tableau_rejects_malformed_rows(
     rows: tuple[tuple[int, ...], ...], error_type: str
 ) -> None:
     tableau = SemistandardYoungTableau(rows=rows)
-    with pytest.raises(Exception, match={
-        "symmetric_function.partition_not_weakly_decreasing": "weakly decreasing",
-        "symmetric_function.semistandard_rows_not_weakly_increasing": "weakly increasing",
-        "symmetric_function.tableau_columns_not_strict": "strictly increasing",
-    }[error_type]):
+    with pytest.raises(
+        Exception,
+        match={
+            "symmetric_function.partition_not_weakly_decreasing": "weakly decreasing",
+            "symmetric_function.semistandard_rows_not_weakly_increasing": "weakly increasing",
+            "symmetric_function.tableau_columns_not_strict": "strictly increasing",
+        }[error_type],
+    ):
         require_semistandard(tableau)
 
 

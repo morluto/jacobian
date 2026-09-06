@@ -264,20 +264,20 @@ def test_structurally_incompatible_pairs_fail_before_reverse_insertion() -> None
     )
 
     pair = RSKTableauPair(
-            alphabet=("a",),
-            insertion_tableau=SemistandardYoungTableau(rows=((2,),)),
-            recording_tableau=StandardYoungTableau(rows=((1,),)),
-            shape=IntegerPartition(parts=(1,)),
-        )
+        alphabet=("a",),
+        insertion_tableau=SemistandardYoungTableau(rows=((2,),)),
+        recording_tableau=StandardYoungTableau(rows=((1,),)),
+        shape=IntegerPartition(parts=(1,)),
+    )
     with pytest.raises(ValueError, match="outside the ordered alphabet"):
         inverse_row_insertion_rsk(pair)
 
     pair = RSKTableauPair.model_validate(
         {
-                "alphabet": ["a"],
-                "insertion_tableau": {"rows": [[1, 1]]},
-                "recording_tableau": {"rows": [[1, 3]]},
-                "shape": {"parts": [2]},
+            "alphabet": ["a"],
+            "insertion_tableau": {"rows": [[1, 1]]},
+            "recording_tableau": {"rows": [[1, 3]]},
+            "shape": {"parts": [2]},
         }
     )
     with pytest.raises(Exception, match="exactly 1 through n"):

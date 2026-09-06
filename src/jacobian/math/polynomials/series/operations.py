@@ -303,7 +303,8 @@ def verify_divide(claim: SeriesDivideResult) -> bool:
     try:
         admit_native_divide(claim.numerator, claim.denominator)
         if not (
-            claim.numerator.variable == claim.denominator.variable
+            claim.numerator.variable
+            == claim.denominator.variable
             == claim.quotient.variable
             and claim.numerator.truncation_order
             == claim.denominator.truncation_order
@@ -316,9 +317,13 @@ def verify_divide(claim: SeriesDivideResult) -> bool:
             claim.numerator.truncation_order,
         )
         numerator = _series_fractions(claim.numerator)
-        return tuple(
-            _wire(left - right) for left, right in zip(residual, numerator, strict=True)
-        ) == claim.residual_coefficients
+        return (
+            tuple(
+                _wire(left - right)
+                for left, right in zip(residual, numerator, strict=True)
+            )
+            == claim.residual_coefficients
+        )
     except (TypeError, ValueError):
         return False
 
@@ -440,10 +445,14 @@ def verify_reversion(claim: SeriesReversionResult) -> bool:
         right = _compose_coefficients(claim.result, claim.source)
         target = [Fraction(1) if index == 1 else Fraction(0) for index in range(order)]
         return (
-            tuple(_wire(value - expected) for value, expected in zip(left, target, strict=True))
+            tuple(
+                _wire(value - expected)
+                for value, expected in zip(left, target, strict=True)
+            )
             == claim.left_residual
             and tuple(
-                _wire(value - expected) for value, expected in zip(right, target, strict=True)
+                _wire(value - expected)
+                for value, expected in zip(right, target, strict=True)
             )
             == claim.right_residual
         )

@@ -489,6 +489,7 @@ def test_solver_call_limit_returns_only_sound_partial_bounds() -> None:
     assert result.termination_reason == "SOLVER_CALL_LIMIT"
     assert result.solver_calls == 1
     assert not result.wall_budget_exhausted
+    assert not verify_independence_number(result)
 
 
 def test_wall_expiry_returns_unknown_without_a_false_optimum(

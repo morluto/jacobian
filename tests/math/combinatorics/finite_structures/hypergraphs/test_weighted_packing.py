@@ -212,6 +212,18 @@ class TestWeightedPacking:
         forged_decoded = type(result).model_validate_json(json.dumps(forged))
         assert not verify_weighted_packing(forged_decoded)
 
+    def test_verifier_enforces_canonical_optimum_tie_break(self) -> None:
+        result = _pack(
+            ["a"],
+            [("e1", ("a",)), ("e2", ("a",))],
+            {"e1": 1, "e2": 1},
+        )
+        assert result.packing == ("e1",)
+        forged = result.model_dump(mode="json")
+        forged["packing"] = ["e2"]
+        claim = WeightedPackingResult.model_validate(forged)
+        assert not verify_weighted_packing(claim)
+
     def test_request_rejects_partial_and_duplicate_weights(self) -> None:
         import pytest
         from pydantic import ValidationError

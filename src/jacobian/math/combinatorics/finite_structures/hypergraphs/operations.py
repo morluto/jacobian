@@ -329,10 +329,7 @@ def verify_independence_number(claim: HypergraphIndependenceResult) -> bool:
         ):
             return False
         if claim.status == "UNKNOWN":
-            return (
-                claim.independence_number is None
-                and claim.lower_bound < claim.upper_bound
-            )
+            return False
 
         expected = independence_number(claim.hypergraph, claim.resource_budget)
         return (
@@ -1055,6 +1052,6 @@ def verify_weighted_packing(claim: WeightedPackingResult) -> bool:
         if claim.total_weight.as_fraction() != selected_weight:
             return False
         expected = maximum_weight_packing(claim.hypergraph, claim.weights)
-        return claim.total_weight == expected.total_weight
+        return claim == expected
     except Exception:
         return False

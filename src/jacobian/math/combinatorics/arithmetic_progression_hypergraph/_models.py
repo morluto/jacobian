@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -46,6 +46,13 @@ assert MAX_INTERVAL_SIZE > 0, "no admitted interval size found"
 
 def _admission_error(lower: int, upper: int, k: int) -> tuple[str, str, str] | None:
     """Return the first AP construction admission failure, if any."""
+    for field, value in (("lower", lower), ("upper", upper), ("k", k)):
+        if type(value) is not int:
+            return (
+                field,
+                "invalid_integer",
+                f"{field} must be a strict integer",
+            )
     if upper < lower:
         return ("upper", "empty_interval", "upper must be >= lower")
     if k < 3:
@@ -104,13 +111,15 @@ class ArithmeticProgressionHypergraphRequest(StrictModel):
     ``n = upper - lower + 1``, not merely on endpoint digit length.
     """
 
-    lower: int = Field(
+    lower: StrictInt = Field(
         description="Inclusive lower endpoint L of the integer interval."
     )
-    upper: int = Field(
+    upper: StrictInt = Field(
         description="Inclusive upper endpoint U of the integer interval."
     )
-    k: int = Field(ge=3, description="Arity k >= 3 of each arithmetic progression.")
+    k: StrictInt = Field(
+        ge=3, description="Arity k >= 3 of each arithmetic progression."
+    )
 
     @model_validator(mode="after")
     def require_valid_interval(self) -> Self:
@@ -132,9 +141,9 @@ class ArithmeticProgressionHypergraphResult(StrictModel):
     ``(a, a+d, ..., a+(k-1)*d)`` for ``d >= 1`` with ``a + (k-1)*d <= U``.
     """
 
-    lower: int
-    upper: int
-    k: int
+    lower: StrictInt
+    upper: StrictInt
+    k: StrictInt
     hypergraph: FiniteHypergraph
 
     @model_validator(mode="after")

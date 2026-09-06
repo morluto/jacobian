@@ -495,3 +495,11 @@ def test_native_constructor_rejects_oversized_vertex_carrier() -> None:
         construct_arithmetic_progression_hypergraph(
             0, MAX_INTERVAL_SIZE, MAX_INTERVAL_SIZE + 2
         )
+
+
+@pytest.mark.parametrize("value", [True, 1.5])
+def test_native_constructor_rejects_non_strict_integer_parameters(
+    value: object,
+) -> None:
+    with pytest.raises(OperationDomainValidationError, match="strict integer"):
+        construct_arithmetic_progression_hypergraph(value, 10, 3)  # type: ignore[arg-type]

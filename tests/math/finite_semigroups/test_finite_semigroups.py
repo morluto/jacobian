@@ -281,6 +281,19 @@ class TestPowerProfile:
 
 
 class TestGeneratedSubsemigroup:
+    def test_empty_generators_are_rejected_natively_and_after_serialization(
+        self,
+    ) -> None:
+        semigroup = _finite_semigroup(Z3)
+        with pytest.raises(OperationDomainValidationError):
+            generated_subsemigroup(semigroup, ())
+
+        result = generated_subsemigroup(semigroup, ("1",))
+        payload = result.model_dump(mode="json")
+        payload["generators"] = []
+        with pytest.raises(ValidationError):
+            type(result).model_validate(payload)
+
     def test_z3_generated_by_1(self) -> None:
         result = compute_generated_subsemigroup(
             GeneratedSubsemigroupRequest(

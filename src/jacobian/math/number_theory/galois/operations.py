@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from pydantic_core import PydanticCustomError
 
+from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 
 if TYPE_CHECKING:
@@ -270,7 +271,7 @@ def _coefficients_from_polynomial(polynomial: RationalPolynomial) -> tuple[int, 
     for term in terms:
         if term.coefficient.den != "1":
             raise ValueError("Galois source coefficients must be integral")
-        coefficients[term.exponents[0]] = int(term.coefficient.num)
+        coefficients[term.exponents[0]] = parse_canonical_integer(term.coefficient.num)
     return tuple(coefficients)
 
 

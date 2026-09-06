@@ -66,6 +66,7 @@ class RationalProjectiveLine(StrictModel):
         CanonicalRational,
     ]
 
+
 class PrimitiveProjectiveTriple(StrictModel):
     """Integer homogeneous coordinates with canonical decimal spelling."""
 

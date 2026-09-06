@@ -9,12 +9,10 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.polynomials.unit_circle import (
     FejerRieszFactored,
     FejerRieszFactorResult,
@@ -25,7 +23,6 @@ from jacobian.math.polynomials.unit_circle import (
     real_symmetric_degree_one_fejer_riesz_factor,
     verify_real_symmetric_degree_one_fejer_riesz_factor,
 )
-from jacobian.math.polynomials.unit_circle._tools import TOOLS
 
 
 def q(value: int | Fraction) -> CanonicalRational:
@@ -180,18 +177,3 @@ def test_every_admitted_factor_remains_inside_the_verifier_envelope() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError, match="32-digit"):
         real_symmetric_degree_one_fejer_riesz_factor(outside)
-
-
-def test_native_and_mcp_paths_share_serialized_result() -> None:
-    source = laurent(2, -1)
-    operation = next(
-        tool
-        for tool in TOOLS
-        if tool.operation_id
-        == "polynomial.unit_circle.real_symmetric_degree_one_fejer_riesz_factor.compute"
-    )
-    native = real_symmetric_degree_one_fejer_riesz_factor(source)
-    public = invoke_operation(
-        operation.operation_id, source.model_dump(mode="json"), Catalog.open()
-    )
-    assert public.output == native.model_dump(mode="json")

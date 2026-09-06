@@ -426,17 +426,24 @@ class FinitePoset(StrictModel):
         )
         carrier = set(self.elements)
         all_pairs = strict + covers
-        if any(lower not in carrier or upper not in carrier for lower, upper in all_pairs):
+        if any(
+            lower not in carrier or upper not in carrier for lower, upper in all_pairs
+        ):
             raise _validation_error(
                 "relation_endpoints_declared",
                 "relation endpoints must be declared elements",
             )
-        if any(element not in carrier for element in self.minimal_elements + self.maximal_elements):
+        if any(
+            element not in carrier
+            for element in self.minimal_elements + self.maximal_elements
+        ):
             raise _validation_error(
                 "extremal_elements_declared",
                 "extremal elements must belong to the carrier",
             )
-        if self.ranks is not None and any(rank.element not in carrier for rank in self.ranks):
+        if self.ranks is not None and any(
+            rank.element not in carrier for rank in self.ranks
+        ):
             raise _validation_error(
                 "ranks_declared",
                 "rank entries must belong to the carrier",

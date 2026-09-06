@@ -36,7 +36,9 @@ from jacobian.math.matrices.values import IntegerMatrix
 def verify_integral_torus_character(character: IntegralTorusCharacter) -> bool:
     """Verify the primitive-domain claim of a source-bound character."""
     try:
-        values = tuple(parse_canonical_integer(value) for value in character.coefficients)
+        values = tuple(
+            parse_canonical_integer(value) for value in character.coefficients
+        )
         if len(values) != character.torus.dimension:
             return False
         divisor = 0

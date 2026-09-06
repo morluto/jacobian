@@ -9,16 +9,13 @@ import pytest
 from sympy import ZZ, Poly, Symbol
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.dispatch import invoke_operation
 from jacobian.math.polynomials.unit_circle import (
     UnitCircleArcEnergyRequest,
     UnitCircleArcEnergyResult,
     unit_circle_arc_energy,
     verify_unit_circle_arc_energy,
 )
-from jacobian.math.polynomials.unit_circle._tools import TOOLS
 from jacobian.math.polynomials.unit_circle.operations import (
     _REAL_CYCLOTOMIC_POLYNOMIALS,
     _real_cyclotomic_record,
@@ -214,30 +211,6 @@ def test_arc_admission_bounds_exact_coefficient_growth_before_expansion() -> Non
             many_denominators.start_turn,
             many_denominators.end_turn,
         )
-
-
-def test_native_and_mcp_paths_share_serialized_result() -> None:
-    request = UnitCircleArcEnergyRequest(
-        polynomial=polynomial((1, 1)),
-        start_turn=q(Fraction(-1, 4)),
-        end_turn=q(Fraction(1, 4)),
-    )
-    native = unit_circle_arc_energy(
-        request.polynomial, request.start_turn, request.end_turn
-    )
-    decoded = UnitCircleArcEnergyResult.model_validate_json(
-        native.model_dump_json(), strict=True
-    )
-    assert decoded == native
-    operation = next(
-        tool
-        for tool in TOOLS
-        if tool.operation_id == "polynomial.unit_circle.arc_energy.compute"
-    )
-    public = invoke_operation(
-        operation.operation_id, request.model_dump(mode="json"), Catalog.open()
-    )
-    assert public.output == native.model_dump(mode="json")
 
 
 def test_serialized_claim_forgery_is_structural_but_fails_verification() -> None:

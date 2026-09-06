@@ -325,10 +325,10 @@ def test_exact_public_api_symbols() -> None:
         "AlgebraicTorusSolutionSubgroup",
         "HomogeneousMonomialSystem",
         "TorsionCharacterGroup",
-            "homogeneous_monomial_solution_subgroup",
-            "verify_solution_subgroup",
-            "verify_torsion_character_group",
-        )
+        "homogeneous_monomial_solution_subgroup",
+        "verify_solution_subgroup",
+        "verify_torsion_character_group",
+    )
 
 
 @pytest.mark.parametrize("entries", [[[2, 0], [0, 6]], [[2, 6, 0]], [[0, 0]]])

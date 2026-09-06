@@ -41,7 +41,9 @@ def _matrix_value(
 def verify_torsion_character_group(group: TorsionCharacterGroup) -> bool:
     """Check the invariant-factor claim of a serialized torsion carrier."""
     try:
-        factors = tuple(parse_canonical_integer(value) for value in group.invariant_factors)
+        factors = tuple(
+            parse_canonical_integer(value) for value in group.invariant_factors
+        )
     except (TypeError, ValueError):
         return False
     return all(value > 1 for value in factors) and all(

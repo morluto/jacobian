@@ -39,9 +39,7 @@ def _admit_primitive_tuple(source: PrimeAffineTuple) -> None:
         coefficient = parse_canonical_integer(form.coefficient)
         constant = parse_canonical_integer(form.constant)
         if coefficient == 0:
-            raise _validation_error(
-                "primitive affine form coefficient must be nonzero"
-            )
+            raise _validation_error("primitive affine form coefficient must be nonzero")
         if gcd(abs(coefficient), abs(constant)) != 1:
             raise _validation_error("affine coefficient and constant must be coprime")
 

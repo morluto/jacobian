@@ -405,7 +405,9 @@ def test_sequence_normalization_is_an_explicit_claim() -> None:
     assert verify_projective_point_sequence(forged.sequence) is False
 
 
-def test_enumeration_sequence_claim_verifier_rejects_duplicates_and_wrong_counts() -> None:
+def test_enumeration_sequence_claim_verifier_rejects_duplicates_and_wrong_counts() -> (
+    None
+):
     """The sequence verifier checks uniqueness and completeness."""
     result = projective_space_enumerate(_space(2, ("x", "y")))
 
@@ -468,9 +470,7 @@ def test_result_models_remain_structural_only() -> None:
 
 
 def test_subspace_rref_is_an_explicit_claim() -> None:
-    malformed = LinearSubspace(
-        space=_space(3, ("x", "y")), basis=((1, 1), (1, 1))
-    )
+    malformed = LinearSubspace(space=_space(3, ("x", "y")), basis=((1, 1), (1, 1)))
     assert verify_linear_subspace(malformed) is False
     with pytest.raises(OperationDomainValidationError, match="reduced row"):
         subspace_membership(malformed, (0, 0))

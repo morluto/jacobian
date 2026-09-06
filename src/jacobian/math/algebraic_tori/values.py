@@ -181,6 +181,7 @@ class TorsionCharacterGroup(StrictModel):
         "ZETA_D_EQUALS_EXP_2_PI_I_OVER_D"
     )
 
+
 class AlgebraicTorusSolutionSubgroup(StrictModel):
     """The complete solution subgroup of one homogeneous monomial system.
 

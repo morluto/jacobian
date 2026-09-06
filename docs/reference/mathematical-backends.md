@@ -192,10 +192,10 @@ reconstruction or defining-invariant validation.
 
 ## Singular
 
-The commutative-algebra and polynomial-map domains use Singular as a private
-child-process backend for exact ideal and generic-fiber operations. The
-adapters supply an explicit rational polynomial ring, collision-proof internal
-identifiers, a fixed ordering, and a strict result encoding. Generic-fiber
+The commutative-algebra, polynomial-map, and projective plane-curve domains use
+Singular as a private child-process backend for exact ideal, generic-fiber, and
+singularity-profile operations. The adapters supply an explicit rational
+polynomial ring, collision-proof internal identifiers, a fixed ordering, and a strict result encoding. Generic-fiber
 degree evidence also carries a lift matrix back to the source ideal and has an
 explicit independent verification pass. Singular does not define the public
 request or result types.
@@ -302,5 +302,17 @@ System-runtime requirements belong to operation declarations as
 `jacobian.backends.check_backend` and MCP inspection, outside mathematical
 values. Adapters translate unavailable runtimes to `BackendUnavailableError`;
 transport presents the recovery hint without changing result schemas.
+
+Declare every system runtime an operation can require, including calls through
+another domain's adapter. Native shortcuts do not remove that declaration: a
+projective line can be handled without Singular, while degree-two and degree-three
+singularity profiles need it. Declarations describe possible execution
+requirements; they neither probe the environment nor guarantee availability.
+
+When adding a backend consumer, cover both installed-backend mathematical
+behavior and absent-backend recovery through the native and MCP entry points.
+Preserve `BackendUnavailableError` through intermediate domain error handling.
+Update the requirement list in the installation guide and the source/test
+selection described in the [testing strategy](testing-strategy.md#ci-lifecycle).
 See [backend requirements](../how-to/backend-requirements.md) for the default
 Python dependencies, optional system installations, and supported versions.

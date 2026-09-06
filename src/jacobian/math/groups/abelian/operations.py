@@ -5,7 +5,10 @@ from __future__ import annotations
 from math import gcd, lcm
 
 from jacobian.math.groups.abelian._models import (
+    AbelianElement,
     AbelianPresentation,
+    AbelianQuotient,
+    AbelianSubgroup,
     ElementEqualResult,
     ElementOrderResult,
     ElementReduceResult,
@@ -39,10 +42,11 @@ def reduce_element(
         coordinate % factor
         for coordinate, factor in zip(coordinates, invariant_factors, strict=True)
     )
+    group = AbelianPresentation(invariant_factors=invariant_factors)
     return ElementReduceResult(
-        group=AbelianPresentation(invariant_factors=invariant_factors),
+        group=group,
         coordinates=coordinates,
-        reduced=reduced,
+        reduced=AbelianElement(group=group, coordinates=reduced),
     )
 
 
@@ -59,11 +63,23 @@ def elements_equal(
         coordinate % factor
         for coordinate, factor in zip(coordinates_b, invariant_factors, strict=True)
     )
+    group = AbelianPresentation(invariant_factors=invariant_factors)
     return ElementEqualResult(
-        group=AbelianPresentation(invariant_factors=invariant_factors),
-        invariant_factors=invariant_factors,
-        coordinates_a=coordinates_a,
-        coordinates_b=coordinates_b,
+        group=group,
+        elements_a=AbelianElement(
+            group=group,
+            coordinates=tuple(
+                coordinate % factor
+                for coordinate, factor in zip(coordinates_a, invariant_factors, strict=True)
+            ),
+        ),
+        elements_b=AbelianElement(
+            group=group,
+            coordinates=tuple(
+                coordinate % factor
+                for coordinate, factor in zip(coordinates_b, invariant_factors, strict=True)
+            ),
+        ),
         equal=reduced_a == reduced_b,
     )
 
@@ -73,12 +89,9 @@ def verify_elements_equal(claim: ElementEqualResult) -> bool:
 
     try:
         return (
-            tuple(claim.group.invariant_factors) == claim.invariant_factors
-            and elements_equal(
-                claim.invariant_factors,
-                claim.coordinates_a,
-                claim.coordinates_b,
-            ).equal
+            claim.elements_a.group == claim.group
+            and claim.elements_b.group == claim.group
+            and (claim.elements_a.coordinates == claim.elements_b.coordinates)
             is claim.equal
         )
     except (TypeError, ValueError):
@@ -89,10 +102,7 @@ def verify_element_reduction(claim: ElementReduceResult) -> bool:
     """Check a reduced coordinate claim against its retained group source."""
 
     try:
-        return (
-            reduce_element(claim.group.invariant_factors, claim.coordinates).reduced
-            == claim.reduced
-        )
+        return reduce_element(claim.group.invariant_factors, claim.coordinates).reduced == claim.reduced
     except (TypeError, ValueError):
         return False
 
@@ -108,10 +118,16 @@ def element_order(
     for coordinate, factor in zip(reduced, invariant_factors, strict=True):
         if coordinate != 0:
             order = lcm(order, factor // gcd(coordinate, factor))
+    group = AbelianPresentation(invariant_factors=invariant_factors)
     return ElementOrderResult(
-        group=AbelianPresentation(invariant_factors=invariant_factors),
-        invariant_factors=invariant_factors,
-        coordinates=coordinates,
+        group=group,
+        element=AbelianElement(
+            group=group,
+            coordinates=tuple(
+                coordinate % factor
+                for coordinate, factor in zip(coordinates, invariant_factors, strict=True)
+            ),
+        ),
         order=order,
     )
 
@@ -121,12 +137,11 @@ def verify_element_order(claim: ElementOrderResult) -> bool:
 
     try:
         return (
-            tuple(claim.group.invariant_factors) == claim.invariant_factors
+            claim.element.group == claim.group
             and element_order(
-                claim.invariant_factors,
-                claim.coordinates,
-            ).order
-            == claim.order
+                claim.group.invariant_factors,
+                claim.element.coordinates,
+            ).order == claim.order
         )
     except (TypeError, ValueError):
         return False
@@ -157,10 +172,22 @@ def generated_subgroup(
     for factor in diagonal:
         if factor > 1:
             index *= factor
+    group = AbelianPresentation(invariant_factors=invariant_factors)
+    subgroup = AbelianSubgroup(
+        group=group,
+        generators=tuple(
+            AbelianElement(
+                group=group,
+                coordinates=tuple(
+                    coordinate % factor
+                    for coordinate, factor in zip(generator, invariant_factors, strict=True)
+                ),
+            )
+            for generator in generators
+        ),
+    )
     return SubgroupGeneratedResult(
-        group=AbelianPresentation(invariant_factors=invariant_factors),
-        invariant_factors=invariant_factors,
-        generators=generators,
+        subgroup=subgroup,
         index=index,
     )
 
@@ -182,11 +209,26 @@ def quotient_group(
     order = 1
     for factor in quotient_factors:
         order *= factor
+    group = AbelianPresentation(invariant_factors=invariant_factors)
+    subgroup = AbelianSubgroup(
+        group=group,
+        generators=tuple(
+            AbelianElement(
+                group=group,
+                coordinates=tuple(
+                    coordinate % factor
+                    for coordinate, factor in zip(generator, invariant_factors, strict=True)
+                ),
+            )
+            for generator in subgroup_generators
+        ),
+    )
     return QuotientResult(
-        group=AbelianPresentation(invariant_factors=invariant_factors),
-        invariant_factors=invariant_factors,
-        subgroup_generators=subgroup_generators,
-        quotient_invariant_factors=quotient_factors,
+        quotient=AbelianQuotient(
+            group=group,
+            subgroup=subgroup,
+            invariant_factors=quotient_factors,
+        ),
         quotient_order=order,
     )
 
@@ -196,8 +238,10 @@ def verify_generated_subgroup(claim: SubgroupGeneratedResult) -> bool:
 
     try:
         return (
-            tuple(claim.group.invariant_factors) == claim.invariant_factors
-            and generated_subgroup(claim.invariant_factors, claim.generators).index
+            generated_subgroup(
+                claim.subgroup.group.invariant_factors,
+                tuple(element.coordinates for element in claim.subgroup.generators),
+            ).index
             == claim.index
         )
     except (TypeError, ValueError):
@@ -208,11 +252,12 @@ def verify_quotient_group(claim: QuotientResult) -> bool:
     """Check the quotient presentation asserted by a serialized claim."""
 
     try:
-        expected = quotient_group(claim.invariant_factors, claim.subgroup_generators)
+        expected = quotient_group(
+            claim.quotient.group.invariant_factors,
+            tuple(element.coordinates for element in claim.quotient.subgroup.generators),
+        )
         return (
-            tuple(claim.group.invariant_factors) == claim.invariant_factors
-            and expected.quotient_invariant_factors
-            == claim.quotient_invariant_factors
+            expected.quotient.invariant_factors == claim.quotient.invariant_factors
             and expected.quotient_order == claim.quotient_order
         )
     except (TypeError, ValueError):

@@ -1,5 +1,11 @@
 """Finitely generated abelian group operations."""
 
+from jacobian.math.groups.abelian._models import (
+    AbelianElement,
+    AbelianPresentation,
+    AbelianQuotient,
+    AbelianSubgroup,
+)
 from jacobian.math.groups.abelian.operations import (
     element_order,
     elements_equal,
@@ -16,6 +22,10 @@ from jacobian.math.groups.abelian.operations import (
 )
 
 __all__ = [
+    "AbelianElement",
+    "AbelianPresentation",
+    "AbelianQuotient",
+    "AbelianSubgroup",
     "element_order",
     "elements_equal",
     "generated_subgroup",

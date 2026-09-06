@@ -41,6 +41,14 @@ class AbelianPresentation(StrictModel):
                 "invariant factors must satisfy d_i | d_{i+1} "
                 "(each factor divides the next)",
             )
+        order = 1
+        for factor in self.invariant_factors:
+            order *= factor
+            if order > MAX_GROUP_ORDER:
+                raise _validation_error(
+                    "group_order_bound",
+                    f"group order exceeds the {MAX_GROUP_ORDER}-element bound",
+                )
         return self
 
 
@@ -81,80 +89,64 @@ class PresentationNormalizeRequest(StrictModel):
 
 
 class ElementReduceRequest(StrictModel):
-    invariant_factors: tuple[NativeInteger, ...] = Field(min_length=1, max_length=MAX_ORDERS)
+    group: AbelianPresentation
     coordinates: tuple[NativeInteger, ...] = Field(min_length=1, max_length=MAX_ORDERS)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
-        if len(self.coordinates) != len(self.invariant_factors):
+        if len(self.coordinates) != len(self.group.invariant_factors):
             raise _validation_error(
                 "coordinate_length",
                 "coordinates length must match invariant_factors length",
-            )
-        if any(d < 2 for d in self.invariant_factors):
-            raise _validation_error(
-                "factor_not_finite", "invariant factors must be integers >= 2"
             )
         return self
 
 
 class ElementEqualRequest(StrictModel):
-    invariant_factors: tuple[NativeInteger, ...] = Field(min_length=1, max_length=MAX_ORDERS)
+    group: AbelianPresentation
     coordinates_a: tuple[NativeInteger, ...] = Field(min_length=1, max_length=MAX_ORDERS)
     coordinates_b: tuple[NativeInteger, ...] = Field(min_length=1, max_length=MAX_ORDERS)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
-        if len(self.coordinates_a) != len(self.invariant_factors):
+        if len(self.coordinates_a) != len(self.group.invariant_factors):
             raise _validation_error(
                 "coordinate_a_length",
                 "coordinates_a length must match invariant_factors",
             )
-        if len(self.coordinates_b) != len(self.invariant_factors):
+        if len(self.coordinates_b) != len(self.group.invariant_factors):
             raise _validation_error(
                 "coordinate_b_length",
                 "coordinates_b length must match invariant_factors",
-            )
-        if any(d < 2 for d in self.invariant_factors):
-            raise _validation_error(
-                "factor_not_finite", "invariant factors must be integers >= 2"
             )
         return self
 
 
 class ElementOrderRequest(StrictModel):
-    invariant_factors: tuple[NativeInteger, ...] = Field(min_length=1, max_length=MAX_ORDERS)
+    group: AbelianPresentation
     coordinates: tuple[NativeInteger, ...] = Field(min_length=1, max_length=MAX_ORDERS)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
-        if len(self.coordinates) != len(self.invariant_factors):
+        if len(self.coordinates) != len(self.group.invariant_factors):
             raise _validation_error(
                 "coordinate_length", "coordinates length must match invariant_factors"
-            )
-        if any(d < 2 for d in self.invariant_factors):
-            raise _validation_error(
-                "factor_not_finite", "invariant factors must be integers >= 2"
             )
         return self
 
 
 class SubgroupGeneratedRequest(StrictModel):
-    invariant_factors: tuple[NativeInteger, ...] = Field(min_length=1, max_length=MAX_ORDERS)
+    group: AbelianPresentation
     generators: tuple[tuple[NativeInteger, ...], ...] = Field(min_length=1, max_length=MAX_ORDERS)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
-        if any(len(g) != len(self.invariant_factors) for g in self.generators):
+        if any(len(g) != len(self.group.invariant_factors) for g in self.generators):
             raise _validation_error(
                 "generator_length", "each generator must match invariant_factors length"
             )
-        if any(d < 2 for d in self.invariant_factors):
-            raise _validation_error(
-                "factor_not_finite", "invariant factors must be integers >= 2"
-            )
         order = 1
-        for d in self.invariant_factors:
+        for d in self.group.invariant_factors:
             order *= d
         if order > MAX_GROUP_ORDER:
             raise _validation_error(
@@ -165,23 +157,19 @@ class SubgroupGeneratedRequest(StrictModel):
 
 
 class QuotientRequest(StrictModel):
-    invariant_factors: tuple[NativeInteger, ...] = Field(min_length=1, max_length=MAX_ORDERS)
+    group: AbelianPresentation
     subgroup_generators: tuple[tuple[NativeInteger, ...], ...] = Field(
         min_length=1, max_length=MAX_ORDERS
     )
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
-        if any(len(g) != len(self.invariant_factors) for g in self.subgroup_generators):
+        if any(len(g) != len(self.group.invariant_factors) for g in self.subgroup_generators):
             raise _validation_error(
                 "generator_length", "each generator must match invariant_factors length"
             )
-        if any(d < 2 for d in self.invariant_factors):
-            raise _validation_error(
-                "factor_not_finite", "invariant factors must be integers >= 2"
-            )
         order = 1
-        for d in self.invariant_factors:
+        for d in self.group.invariant_factors:
             order *= d
         if order > MAX_GROUP_ORDER:
             raise _validation_error(
@@ -192,6 +180,65 @@ class QuotientRequest(StrictModel):
 
 
 # Results
+
+
+class AbelianElement(StrictModel):
+    """A canonical coordinate value in one finite abelian group."""
+
+    group: AbelianPresentation
+    coordinates: tuple[NativeInteger, ...] = Field(
+        min_length=0, max_length=MAX_ORDERS
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_coordinates(self) -> Self:
+        if len(self.coordinates) != len(self.group.invariant_factors):
+            raise _validation_error(
+                "element_coordinate_length",
+                "element coordinates must match the group invariant-factor axis",
+            )
+        if any(
+            not 0 <= coordinate < factor
+            for coordinate, factor in zip(
+                self.coordinates, self.group.invariant_factors, strict=True
+            )
+        ):
+            raise _validation_error(
+                "element_not_reduced",
+                "canonical element coordinates must be reduced modulo the group factors",
+            )
+        return self
+
+
+class AbelianSubgroup(StrictModel):
+    """A subgroup presentation with every generator bound to its parent."""
+
+    group: AbelianPresentation
+    generators: tuple[AbelianElement, ...] = Field(min_length=1, max_length=MAX_ORDERS)
+
+    @model_validator(mode="after")
+    def require_parent_bound_generators(self) -> Self:
+        if any(generator.group != self.group for generator in self.generators):
+            raise _validation_error(
+                "subgroup_parent_mismatch", "subgroup generators must share the parent group"
+            )
+        return self
+
+
+class AbelianQuotient(StrictModel):
+    """A quotient presentation retaining its parent group and subgroup map."""
+
+    group: AbelianPresentation
+    subgroup: AbelianSubgroup
+    invariant_factors: tuple[NativeInteger, ...] = ()
+
+    @model_validator(mode="after")
+    def require_parent_bound_subgroup(self) -> Self:
+        if self.subgroup.group != self.group:
+            raise _validation_error(
+                "quotient_parent_mismatch", "quotient subgroup must use the parent group"
+            )
+        return self
 
 
 class PresentationNormalizeResult(StrictModel):
@@ -225,16 +272,15 @@ class PresentationNormalizeResult(StrictModel):
 class ElementReduceResult(StrictModel):
     group: AbelianPresentation
     coordinates: tuple[NativeInteger, ...]
-    reduced: tuple[NativeInteger, ...]
+    reduced: AbelianElement
 
 
 class ElementEqualResult(StrictModel):
     """A source-bound equality claim for two finite abelian group elements."""
 
     group: AbelianPresentation
-    invariant_factors: tuple[NativeInteger, ...]
-    coordinates_a: tuple[NativeInteger, ...]
-    coordinates_b: tuple[NativeInteger, ...]
+    elements_a: AbelianElement
+    elements_b: AbelianElement
     equal: bool
 
 
@@ -242,22 +288,16 @@ class ElementOrderResult(StrictModel):
     """A source-bound order claim for a finite abelian group element."""
 
     group: AbelianPresentation
-    invariant_factors: tuple[NativeInteger, ...]
-    coordinates: tuple[NativeInteger, ...]
+    element: AbelianElement
     order: NativeInteger = Field(ge=1)
 
 
 class SubgroupGeneratedResult(StrictModel):
-    group: AbelianPresentation
-    invariant_factors: tuple[NativeInteger, ...]
-    generators: tuple[tuple[NativeInteger, ...], ...]
+    subgroup: AbelianSubgroup
     index: NativeInteger = Field(ge=1)
-    coset_representatives: tuple[tuple[NativeInteger, ...], ...] = ()
+    coset_representatives: tuple[AbelianElement, ...] = ()
 
 
 class QuotientResult(StrictModel):
-    group: AbelianPresentation
-    invariant_factors: tuple[NativeInteger, ...]
-    subgroup_generators: tuple[tuple[NativeInteger, ...], ...]
-    quotient_invariant_factors: tuple[NativeInteger, ...] = ()
+    quotient: AbelianQuotient
     quotient_order: NativeInteger = Field(ge=1)

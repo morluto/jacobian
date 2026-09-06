@@ -34,27 +34,27 @@ def _run_presentation_normalize(
 
 
 def _run_element_reduce(request: ElementReduceRequest) -> ElementReduceResult:
-    return reduce_element(request.invariant_factors, request.coordinates)
+    return reduce_element(request.group.invariant_factors, request.coordinates)
 
 
 def _run_element_equal(request: ElementEqualRequest) -> ElementEqualResult:
     return elements_equal(
-        request.invariant_factors, request.coordinates_a, request.coordinates_b
+        request.group.invariant_factors, request.coordinates_a, request.coordinates_b
     )
 
 
 def _run_element_order(request: ElementOrderRequest) -> ElementOrderResult:
-    return element_order(request.invariant_factors, request.coordinates)
+    return element_order(request.group.invariant_factors, request.coordinates)
 
 
 def _run_subgroup_generated(
     request: SubgroupGeneratedRequest,
 ) -> SubgroupGeneratedResult:
-    return generated_subgroup(request.invariant_factors, request.generators)
+    return generated_subgroup(request.group.invariant_factors, request.generators)
 
 
 def _run_quotient(request: QuotientRequest) -> QuotientResult:
-    return quotient_group(request.invariant_factors, request.subgroup_generators)
+    return quotient_group(request.group.invariant_factors, request.subgroup_generators)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
@@ -88,7 +88,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="reduce_z6",
                 description="Reduce 7 mod 6 in Z/6.",
-                input={"invariant_factors": [6], "coordinates": [7]},
+                input={"group": {"invariant_factors": [6]}, "coordinates": [7]},
             ),
         ),
     ),
@@ -106,7 +106,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="equal_elements",
                 description="Check 1 and 7 are equal in Z/6.",
                 input={
-                    "invariant_factors": [6],
+                    "group": {"invariant_factors": [6]},
                     "coordinates_a": [1],
                     "coordinates_b": [7],
                 },
@@ -125,7 +125,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="order_in_z6",
                 description="Order of 2 in Z/6.",
-                input={"invariant_factors": [6], "coordinates": [2]},
+                input={"group": {"invariant_factors": [6]}, "coordinates": [2]},
             ),
         ),
     ),
@@ -143,7 +143,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="subgroup_z6",
                 description="Index of <2> in Z/6.",
                 input={
-                    "invariant_factors": [6],
+                    "group": {"invariant_factors": [6]},
                     "generators": [[2]],
                 },
             ),
@@ -163,7 +163,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="quotient_z6_by_2z",
                 description="Quotient Z/6 / <2>.",
                 input={
-                    "invariant_factors": [6],
+                    "group": {"invariant_factors": [6]},
                     "subgroup_generators": [[2]],
                 },
             ),

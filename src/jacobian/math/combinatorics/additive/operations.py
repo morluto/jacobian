@@ -402,7 +402,7 @@ def _admit_ordered_difference_entry(
 ) -> tuple[int, ...]:
     ordered_pairs = set_size * (set_size - 1)
     if (
-        not isinstance(entry, OrderedDifferenceEntry)
+        type(entry) is not OrderedDifferenceEntry
         or type(entry.difference) is not IntegerVector
         or type(entry.difference.coordinates) is not tuple
         or type(entry.pairs) is not tuple

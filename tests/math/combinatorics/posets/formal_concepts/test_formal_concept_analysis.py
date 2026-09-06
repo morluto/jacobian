@@ -5,7 +5,14 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.combinatorics.posets.formal_concepts import FormalContext
+from jacobian.math.combinatorics.posets.formal_concepts import (
+    FormalContext,
+    verify_closure,
+    verify_concept,
+    verify_concept_lattice,
+    verify_derivation,
+    verify_enumerate_concepts,
+)
 from jacobian.math.combinatorics.posets.formal_concepts._models import (
     AttributeSubsetRequest,
     EnumerateConceptsRequest,
@@ -76,19 +83,19 @@ class TestDerivation:
         result = compute_object_derivation(
             ObjectSubsetRequest(context=_cross_context(), subset=())
         )
-        assert result.derived == (0, 1)
+        assert result.derived.indices == (0, 1)
 
     def test_o0_derives_a0_only(self) -> None:
         result = compute_object_derivation(
             ObjectSubsetRequest(context=_cross_context(), subset=(0,))
         )
-        assert result.derived == (0,)
+        assert result.derived.indices == (0,)
 
     def test_empty_attribute_set_derives_all_objects(self) -> None:
         result = compute_attribute_derivation(
             AttributeSubsetRequest(context=_cross_context(), subset=())
         )
-        assert result.derived == (0, 1)
+        assert result.derived.indices == (0, 1)
 
 
 # ---------------------------------------------------------------------------
@@ -97,6 +104,17 @@ class TestDerivation:
 
 
 class TestClosure:
+    def test_serialized_closure_claim_is_source_bound_and_verifiable(self) -> None:
+        result = compute_object_closure(
+            ObjectSubsetRequest(context=_cross_context(), subset=(0,))
+        )
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert verify_closure(decoded)
+
+        forged = result.model_dump(mode="json")
+        forged["is_closed"] = False
+        assert not verify_closure(type(result).model_validate(forged))
+
     def test_empty_object_set_closure(self) -> None:
         result = compute_object_closure(
             ObjectSubsetRequest(context=_cross_context(), subset=())
@@ -104,8 +122,8 @@ class TestClosure:
         # A = {}, A' = {a0, a1}, A'' = {} (no object has both attributes).
         # Empty set is closed: A == A'' = {}.
         assert result.is_closed is True
-        assert result.derived == (0, 1)
-        assert result.closure == ()
+        assert result.derived.indices == (0, 1)
+        assert result.closure.indices == ()
 
     def test_o0_closure(self) -> None:
         result = compute_object_closure(
@@ -113,7 +131,7 @@ class TestClosure:
         )
         # A = {o0}, A' = {a0}, A'' = {g : has a0} = {o0}. So A'' = {o0}, closed.
         assert result.is_closed is True
-        assert result.closure == (0,)
+        assert result.closure.indices == (0,)
 
     def test_empty_attribute_set_closure(self) -> None:
         result = compute_attribute_closure(
@@ -121,8 +139,8 @@ class TestClosure:
         )
         # B = {}, B' = {o0, o1}, B'' = {} because the objects share no attribute.
         assert result.is_closed is True
-        assert result.derived == (0, 1)
-        assert result.closure == ()
+        assert result.derived.indices == (0, 1)
+        assert result.closure.indices == ()
 
     def test_attribute_closure_round_trips(self) -> None:
         tool = next(
@@ -146,15 +164,15 @@ class TestConcept:
         result = compute_concept_from_objects(
             ObjectSubsetRequest(context=_cross_context(), subset=(0,))
         )
-        assert result.extent == (0,)
-        assert result.intent == (0,)
+        assert result.extent.indices == (0,)
+        assert result.intent.indices == (0,)
 
     def test_concept_from_a0(self) -> None:
         result = compute_concept_from_attributes(
             AttributeSubsetRequest(context=_cross_context(), subset=(0,))
         )
-        assert result.extent == (0,)
-        assert result.intent == (0,)
+        assert result.extent.indices == (0,)
+        assert result.intent.indices == (0,)
 
     def test_concepts_agree(self) -> None:
         context = _cross_context()
@@ -164,7 +182,19 @@ class TestConcept:
         from_attrs = compute_concept_from_attributes(
             AttributeSubsetRequest(context=context, subset=(0,))
         )
-        assert from_objects == from_attrs
+        assert from_objects.extent == from_attrs.extent
+        assert from_objects.intent == from_attrs.intent
+
+    def test_serialized_concept_claim_is_source_bound_and_verifiable(self) -> None:
+        result = compute_concept_from_objects(
+            ObjectSubsetRequest(context=_cross_context(), subset=(0,))
+        )
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert verify_concept(decoded)
+
+        forged = result.model_dump(mode="json")
+        forged["extent"]["indices"] = [1]
+        assert not verify_concept(type(result).model_validate(forged))
 
 
 # ---------------------------------------------------------------------------
@@ -173,6 +203,17 @@ class TestConcept:
 
 
 class TestEnumeration:
+    def test_serialized_derivation_claim_is_source_bound_and_verifiable(self) -> None:
+        result = compute_object_derivation(
+            ObjectSubsetRequest(context=_cross_context(), subset=(0,))
+        )
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert verify_derivation(decoded)
+
+        forged = result.model_dump(mode="json")
+        forged["derived"]["indices"] = [1]
+        assert not verify_derivation(type(result).model_validate(forged))
+
     def test_cross_context_has_four_concepts(self) -> None:
         result = compute_enumerate_concepts(
             EnumerateConceptsRequest(context=_cross_context())
@@ -180,6 +221,17 @@ class TestEnumeration:
         # Cross context: ({}, {a0,a1}), ({o0}, {a0}), ({o1}, {a1}),
         # and ({o0,o1}, {}).
         assert result.count == 4
+
+    def test_serialized_enumeration_claim_is_source_bound_and_verifiable(self) -> None:
+        result = compute_enumerate_concepts(
+            EnumerateConceptsRequest(context=_cross_context())
+        )
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert verify_enumerate_concepts(decoded)
+
+        forged = result.model_dump(mode="json")
+        forged["count"] = 3
+        assert not verify_enumerate_concepts(type(result).model_validate(forged))
 
     def test_diagonal_context_has_two_concepts(self) -> None:
         """cl(empty) = {a1} here, so the empty intent is not a concept."""
@@ -301,11 +353,11 @@ def _assert_defining_equations(context: FormalContext) -> None:
         object_derivation,
     )
 
-    for extent_tuple, intent_tuple in compute_enumerate_concepts(
+    for concept in compute_enumerate_concepts(
         EnumerateConceptsRequest(context=context)
     ).concepts:
-        extent = frozenset(extent_tuple)
-        intent = frozenset(intent_tuple)
+        extent = frozenset(concept.extent.indices)
+        intent = frozenset(concept.intent.indices)
         assert object_derivation(context, extent) == intent
         assert attribute_derivation(context, intent) == extent
 
@@ -343,13 +395,13 @@ def test_lattice_embedded_concepts_replay_defining_equations() -> None:
     context = _diagonal_context()
     result = compute_concept_lattice(EnumerateConceptsRequest(context=context))
     assert len(result.concepts) == 2
-    for extent_tuple, intent_tuple in result.concepts:
-        extent = frozenset(extent_tuple)
-        intent = frozenset(intent_tuple)
+    for concept in result.concepts:
+        extent = frozenset(concept.extent.indices)
+        intent = frozenset(concept.intent.indices)
         assert object_derivation(context, extent) == intent
         assert attribute_derivation(context, intent) == extent
     # Extents are pairwise distinct, so no two concepts compare equal.
-    extents = [frozenset(extent_tuple) for extent_tuple, _intent in result.concepts]
+    extents = [frozenset(concept.extent.indices) for concept in result.concepts]
     assert len(set(extents)) == len(extents)
 
 
@@ -359,6 +411,17 @@ def test_lattice_embedded_concepts_replay_defining_equations() -> None:
 
 
 class TestConceptLattice:
+    def test_serialized_lattice_claim_is_source_bound_and_verifiable(self) -> None:
+        result = compute_concept_lattice(
+            EnumerateConceptsRequest(context=_cross_context())
+        )
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert verify_concept_lattice(decoded)
+
+        forged = result.model_dump(mode="json")
+        forged["covers"] = []
+        assert not verify_concept_lattice(type(result).model_validate(forged))
+
     def test_cross_lattice(self) -> None:
         result = compute_concept_lattice(
             EnumerateConceptsRequest(context=_cross_context())

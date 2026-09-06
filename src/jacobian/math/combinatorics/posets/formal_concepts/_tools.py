@@ -31,25 +31,46 @@ from jacobian.math.combinatorics.posets.formal_concepts.operations import (
     object_derivation,
 )
 from jacobian.math.combinatorics.posets.formal_concepts.values import (
+    FormalAttributeSubset,
+    FormalConcept,
+    FormalObjectSubset,
     ImplicationClosureResult,
 )
 
 
 def compute_object_derivation(request: ObjectSubsetRequest) -> DerivationResult:
+    context = request.context
+    subset = FormalObjectSubset(context=context, indices=tuple(sorted(request.subset)))
+    derived = FormalAttributeSubset(
+        context=context,
+        indices=tuple(sorted(object_derivation(context, frozenset(request.subset)))),
+    )
     return DerivationResult(
-        derived=tuple(
-            sorted(object_derivation(request.context, frozenset(request.subset)))
-        )
+        context=context,
+        subset=subset,
+        side="OBJECT",
+        derived=derived,
     )
 
 
 def compute_attribute_derivation(
     request: AttributeSubsetRequest,
 ) -> DerivationResult:
+    context = request.context
+    subset = FormalAttributeSubset(
+        context=context, indices=tuple(sorted(request.subset))
+    )
+    derived = FormalObjectSubset(
+        context=context,
+        indices=tuple(
+            sorted(attribute_derivation(context, frozenset(request.subset)))
+        ),
+    )
     return DerivationResult(
-        derived=tuple(
-            sorted(attribute_derivation(request.context, frozenset(request.subset)))
-        )
+        context=context,
+        subset=subset,
+        side="ATTRIBUTE",
+        derived=derived,
     )
 
 
@@ -85,11 +106,23 @@ def compute_enumerate_concepts(
     request: EnumerateConceptsRequest,
 ) -> EnumerateConceptsResult:
     concepts = enumerate_concepts(request.context)
-    pairs = tuple(
-        (tuple(sorted(concept["extent"])), tuple(sorted(concept["intent"])))
+    concepts_result = tuple(
+        FormalConcept(
+            context=request.context,
+            extent=FormalObjectSubset(
+                context=request.context, indices=tuple(sorted(concept["extent"]))
+            ),
+            intent=FormalAttributeSubset(
+                context=request.context, indices=tuple(sorted(concept["intent"]))
+            ),
+        )
         for concept in concepts
     )
-    return EnumerateConceptsResult(concepts=pairs, count=len(pairs))
+    return EnumerateConceptsResult(
+        context=request.context,
+        concepts=concepts_result,
+        count=len(concepts_result),
+    )
 
 
 def compute_concept_lattice(

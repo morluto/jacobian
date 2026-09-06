@@ -14,7 +14,10 @@ def test_exact_public_api_symbols() -> None:
         "DGBasisClosureRow",
         "DGBasisWork",
         "FiniteAttributeImplicationSystem",
+        "FormalAttributeSubset",
+        "FormalConcept",
         "FormalContext",
+        "FormalObjectSubset",
         "ImplicationClosureResult",
         "ImplicationClosureWork",
         "ImplicationDerivation",
@@ -29,6 +32,11 @@ def test_exact_public_api_symbols() -> None:
         "implication_closure",
         "object_closure",
         "object_derivation",
+        "verify_closure",
+        "verify_concept",
+        "verify_concept_lattice",
+        "verify_derivation",
+        "verify_enumerate_concepts",
     )
     assert tuple(formal_concept_analysis.__all__) == expected
     assert len(formal_concept_analysis.__all__) == len(

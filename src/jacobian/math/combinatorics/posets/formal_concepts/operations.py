@@ -12,6 +12,8 @@ from ._models import (
     ClosureResult,
     ConceptLatticeResult,
     ConceptResult,
+    DerivationResult,
+    EnumerateConceptsResult,
 )
 from .basis import (
     CanonicalImplicationBasisResult,
@@ -25,7 +27,10 @@ from .basis import (
 from .values import (
     AttributeImplication,
     FiniteAttributeImplicationSystem,
+    FormalAttributeSubset,
+    FormalConcept,
     FormalContext,
+    FormalObjectSubset,
     ImplicationClosureResult,
     ImplicationClosureWork,
     ImplicationDerivation,
@@ -44,6 +49,11 @@ __all__ = [
     "implication_closure",
     "object_closure",
     "object_derivation",
+    "verify_closure",
+    "verify_concept",
+    "verify_concept_lattice",
+    "verify_derivation",
+    "verify_enumerate_concepts",
 ]
 
 
@@ -283,6 +293,33 @@ def object_derivation(ctx: FormalContext, objects: frozenset[int]) -> frozenset[
     return _concepts.object_derivation(ctx, objects)
 
 
+def verify_derivation(claim: DerivationResult) -> bool:
+    """Verify a serialized object or attribute derivation against its context."""
+
+    try:
+        if claim.side == "OBJECT":
+            if not isinstance(claim.subset, FormalObjectSubset) or not isinstance(
+                claim.derived, FormalAttributeSubset
+            ):
+                return False
+            derived = object_derivation(claim.context, frozenset(claim.subset.indices))
+        else:
+            if not isinstance(claim.subset, FormalAttributeSubset) or not isinstance(
+                claim.derived, FormalObjectSubset
+            ):
+                return False
+            derived = attribute_derivation(
+                claim.context, frozenset(claim.subset.indices)
+            )
+        return (
+            claim.subset.context == claim.context
+            and claim.derived.context == claim.context
+            and tuple(sorted(derived)) == claim.derived.indices
+        )
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+
+
 def attribute_derivation(
     ctx: FormalContext, attributes: frozenset[int]
 ) -> frozenset[int]:
@@ -309,9 +346,14 @@ def object_closure_result(ctx: FormalContext, objects: frozenset[int]) -> Closur
     derived = _concepts.object_derivation(ctx, objects)
     closure = _concepts.attribute_derivation(ctx, derived)
     return ClosureResult(
-        closure=tuple(sorted(closure)),
-        derived=tuple(sorted(derived)),
-        added=tuple(sorted(closure - objects)),
+        context=ctx,
+        subset=FormalObjectSubset(context=ctx, indices=tuple(sorted(objects))),
+        side="OBJECT",
+        closure=FormalObjectSubset(context=ctx, indices=tuple(sorted(closure))),
+        derived=FormalAttributeSubset(context=ctx, indices=tuple(sorted(derived))),
+        added=FormalObjectSubset(
+            context=ctx, indices=tuple(sorted(closure - objects))
+        ),
         is_closed=closure == objects,
     )
 
@@ -332,11 +374,33 @@ def attribute_closure_result(
     derived = _concepts.attribute_derivation(ctx, attributes)
     closure = _concepts.object_derivation(ctx, derived)
     return ClosureResult(
-        closure=tuple(sorted(closure)),
-        derived=tuple(sorted(derived)),
-        added=tuple(sorted(closure - attributes)),
+        context=ctx,
+        subset=FormalAttributeSubset(context=ctx, indices=tuple(sorted(attributes))),
+        side="ATTRIBUTE",
+        closure=FormalAttributeSubset(context=ctx, indices=tuple(sorted(closure))),
+        derived=FormalObjectSubset(context=ctx, indices=tuple(sorted(derived))),
+        added=FormalAttributeSubset(
+            context=ctx, indices=tuple(sorted(closure - attributes))
+        ),
         is_closed=closure == attributes,
     )
+
+
+def verify_closure(claim: ClosureResult) -> bool:
+    """Verify a serialized object or attribute closure against its context."""
+
+    try:
+        if claim.side == "OBJECT":
+            expected = object_closure_result(
+                claim.context, frozenset(claim.subset.indices)
+            )
+        else:
+            expected = attribute_closure_result(
+                claim.context, frozenset(claim.subset.indices)
+            )
+        return expected == claim
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
 
 
 def concept_from_objects(ctx: FormalContext, objects: frozenset[int]) -> ConceptResult:
@@ -345,8 +409,11 @@ def concept_from_objects(ctx: FormalContext, objects: frozenset[int]) -> Concept
     intent = _concepts.object_derivation(ctx, objects)
     extent = _concepts.attribute_derivation(ctx, intent)
     return ConceptResult(
-        extent=tuple(sorted(extent)),
-        intent=tuple(sorted(intent)),
+        context=ctx,
+        subset=FormalObjectSubset(context=ctx, indices=tuple(sorted(objects))),
+        side="OBJECT",
+        extent=FormalObjectSubset(context=ctx, indices=tuple(sorted(extent))),
+        intent=FormalAttributeSubset(context=ctx, indices=tuple(sorted(intent))),
     )
 
 
@@ -358,9 +425,29 @@ def concept_from_attributes(
     extent = _concepts.attribute_derivation(ctx, attributes)
     intent = _concepts.object_derivation(ctx, extent)
     return ConceptResult(
-        extent=tuple(sorted(extent)),
-        intent=tuple(sorted(intent)),
+        context=ctx,
+        subset=FormalAttributeSubset(context=ctx, indices=tuple(sorted(attributes))),
+        side="ATTRIBUTE",
+        extent=FormalObjectSubset(context=ctx, indices=tuple(sorted(extent))),
+        intent=FormalAttributeSubset(context=ctx, indices=tuple(sorted(intent))),
     )
+
+
+def verify_concept(claim: ConceptResult) -> bool:
+    """Verify a serialized concept against its context and source subset."""
+
+    try:
+        if claim.side == "OBJECT":
+            expected = concept_from_objects(
+                claim.context, frozenset(claim.subset.indices)
+            )
+        else:
+            expected = concept_from_attributes(
+                claim.context, frozenset(claim.subset.indices)
+            )
+        return expected == claim
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
 
 
 def enumerate_concepts(ctx: FormalContext) -> list[_Concept]:
@@ -382,6 +469,35 @@ def enumerate_concepts(ctx: FormalContext) -> list[_Concept]:
         {"extent": frozenset(extent), "intent": frozenset(intent)}
         for extent, intent in pairs
     ]
+
+
+def _concept_values(
+    context: FormalContext, concepts: list[_Concept]
+) -> tuple[FormalConcept, ...]:
+    return tuple(
+        FormalConcept(
+            context=context,
+            extent=FormalObjectSubset(
+                context=context, indices=tuple(sorted(concept["extent"]))
+            ),
+            intent=FormalAttributeSubset(
+                context=context, indices=tuple(sorted(concept["intent"]))
+            ),
+        )
+        for concept in concepts
+    )
+
+
+def verify_enumerate_concepts(claim: EnumerateConceptsResult) -> bool:
+    """Verify a serialized complete concept family against its context."""
+
+    try:
+        concepts = _concept_values(claim.context, enumerate_concepts(claim.context))
+        return EnumerateConceptsResult(
+            context=claim.context, concepts=concepts, count=len(concepts)
+        ) == claim
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
 
 
 def concept_family_size_capped(ctx: FormalContext, limit: int) -> int:
@@ -428,15 +544,17 @@ def concept_lattice(
 ) -> ConceptLatticeResult:
     """Return the concept lattice: concepts, partial order by extent inclusion,
     cover relation, top and bottom concepts."""
-    return _concept_lattice_from_concepts(enumerate_concepts(ctx))
+    return _concept_lattice_from_concepts(ctx, enumerate_concepts(ctx))
 
 
 def _concept_lattice_from_canonical_concepts(
+    context: FormalContext,
     concepts: tuple[tuple[tuple[int, ...], tuple[int, ...]], ...],
 ) -> ConceptLatticeResult:
     """Derive one lattice from an already admitted canonical concept family."""
 
     return _concept_lattice_from_concepts(
+        context,
         [
             {"extent": frozenset(extent), "intent": frozenset(intent)}
             for extent, intent in concepts
@@ -445,6 +563,7 @@ def _concept_lattice_from_canonical_concepts(
 
 
 def _concept_lattice_from_concepts(
+    context: FormalContext,
     concepts: list[_Concept],
 ) -> ConceptLatticeResult:
     """Derive one lattice from a complete exact concept family."""
@@ -454,6 +573,7 @@ def _concept_lattice_from_concepts(
     covers = _cover_relation(order, n)
     if n == 0:
         return ConceptLatticeResult(
+            context=context,
             concepts=(), order=(), covers=(), top=None, bottom=None
         )
     bottom = 0
@@ -464,12 +584,19 @@ def _concept_lattice_from_concepts(
         if concepts[i]["extent"] > concepts[top]["extent"]:
             top = i
     return ConceptLatticeResult(
-        concepts=tuple(
-            (tuple(sorted(concept["extent"])), tuple(sorted(concept["intent"])))
-            for concept in concepts
-        ),
+        context=context,
+        concepts=_concept_values(context, concepts),
         order=tuple(order),
         covers=tuple(covers),
         top=top,
         bottom=bottom,
     )
+
+
+def verify_concept_lattice(claim: ConceptLatticeResult) -> bool:
+    """Verify a serialized concept lattice against its retained context."""
+
+    try:
+        return concept_lattice(claim.context) == claim
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
@@ -288,6 +288,55 @@ class FormalContext(StrictModel):
         return self
 
 
+class _ContextSubset(StrictModel):
+    """Structural base for a canonical subset on one context axis."""
+
+    context: FormalContext
+    indices: tuple[int, ...] = Field(default=())
+
+
+class FormalObjectSubset(_ContextSubset):
+    """A canonical subset of a context's ordered object axis."""
+
+    axis: Literal["OBJECT"] = "OBJECT"
+
+    @model_validator(mode="after")
+    def require_canonical_axis(self) -> Self:
+        if tuple(sorted(set(self.indices))) != self.indices or any(
+            not 0 <= index < len(self.context.objects) for index in self.indices
+        ):
+            raise PydanticCustomError(
+                "formal_concept_analysis.object_subset_not_canonical",
+                "object subset indices must be sorted, unique, and in range",
+            )
+        return self
+
+
+class FormalAttributeSubset(_ContextSubset):
+    """A canonical subset of a context's ordered attribute axis."""
+
+    axis: Literal["ATTRIBUTE"] = "ATTRIBUTE"
+
+    @model_validator(mode="after")
+    def require_canonical_axis(self) -> Self:
+        if tuple(sorted(set(self.indices))) != self.indices or any(
+            not 0 <= index < len(self.context.attributes) for index in self.indices
+        ):
+            raise PydanticCustomError(
+                "formal_concept_analysis.attribute_subset_not_canonical",
+                "attribute subset indices must be sorted, unique, and in range",
+            )
+        return self
+
+
+class FormalConcept(StrictModel):
+    """A formal concept with typed extent and intent context axes."""
+
+    context: FormalContext
+    extent: FormalObjectSubset
+    intent: FormalAttributeSubset
+
+
 __all__ = [
     "MAX_ATTRIBUTES",
     "MAX_CANONICAL_CLOSURE_WORK",
@@ -298,7 +347,10 @@ __all__ = [
     "MAX_OBJECTS",
     "AttributeImplication",
     "FiniteAttributeImplicationSystem",
+    "FormalAttributeSubset",
+    "FormalConcept",
     "FormalContext",
+    "FormalObjectSubset",
     "ImplicationClosureResult",
     "ImplicationClosureWork",
     "ImplicationDerivation",

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
@@ -18,7 +18,10 @@ from jacobian.math.combinatorics.posets.formal_concepts.values import (
     MAX_IMPLICATION_MEMBERSHIPS,
     MAX_IMPLICATIONS,
     FiniteAttributeImplicationSystem,
+    FormalAttributeSubset,
+    FormalConcept,
     FormalContext,
+    FormalObjectSubset,
 )
 
 
@@ -110,23 +113,32 @@ class DuquenneGuiguesBasisRequest(StrictModel):
 class DerivationResult(StrictModel):
     """The derived set."""
 
-    derived: tuple[int, ...]
+    context: FormalContext
+    subset: FormalObjectSubset | FormalAttributeSubset
+    side: Literal["OBJECT", "ATTRIBUTE"]
+    derived: FormalObjectSubset | FormalAttributeSubset
 
 
 class ClosureResult(StrictModel):
     """The closure A'' or B'' with added elements and closed status."""
 
-    closure: tuple[int, ...]
-    derived: tuple[int, ...]
-    added: tuple[int, ...]
+    context: FormalContext
+    subset: FormalObjectSubset | FormalAttributeSubset
+    side: Literal["OBJECT", "ATTRIBUTE"]
+    closure: FormalObjectSubset | FormalAttributeSubset
+    derived: FormalObjectSubset | FormalAttributeSubset
+    added: FormalObjectSubset | FormalAttributeSubset
     is_closed: bool
 
 
 class ConceptResult(StrictModel):
     """A formal concept (extent, intent)."""
 
-    extent: tuple[int, ...]
-    intent: tuple[int, ...]
+    context: FormalContext
+    subset: FormalObjectSubset | FormalAttributeSubset
+    side: Literal["OBJECT", "ATTRIBUTE"]
+    extent: FormalObjectSubset
+    intent: FormalAttributeSubset
 
 
 class EnumerateConceptsRequest(StrictModel):
@@ -138,14 +150,16 @@ class EnumerateConceptsRequest(StrictModel):
 class EnumerateConceptsResult(StrictModel):
     """The complete concept family."""
 
-    concepts: tuple[tuple[tuple[int, ...], tuple[int, ...]], ...]
+    context: FormalContext
+    concepts: tuple[FormalConcept, ...]
     count: int = Field(ge=0)
 
 
 class ConceptLatticeResult(StrictModel):
     """The concept lattice with order, covers, top, and bottom."""
 
-    concepts: tuple[tuple[tuple[int, ...], tuple[int, ...]], ...]
+    context: FormalContext
+    concepts: tuple[FormalConcept, ...]
     order: tuple[tuple[int, int], ...]
     covers: tuple[tuple[int, int], ...]
     top: int | None = None

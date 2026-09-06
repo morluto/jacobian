@@ -50,7 +50,7 @@ def compute_root_isolation(request: UnivariatePolynomialRequest) -> RootIsolatio
         left_roots = int(owning_factor.count_roots(-sympy.oo, lower))
         if owning_factor.eval(lower) == 0:
             left_roots -= 1
-        algebraic_value = RealAlgebraicValue(
+        algebraic_value = RealAlgebraicValue._from_admitted_polynomial(
             polynomial=tuple(
                 format_canonical_integer(coefficient)
                 for coefficient in factor_coefficients

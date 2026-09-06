@@ -392,7 +392,9 @@ class TestReachableStates:
 
         assert result.reachable_states == (0, 1, 2, 3, 4)
         assert result.unreachable_states == ()
-        assert tuple(ranked_tree_node_count(witness.tree) for witness in result.witnesses) == (
+        assert tuple(
+            ranked_tree_node_count(witness.tree) for witness in result.witnesses
+        ) == (
             1,
             1,
             3,
@@ -462,7 +464,9 @@ class TestReachableStates:
             TreeAutomatonReachabilityRequest(automaton=automaton)
         )
 
-        assert tuple(ranked_tree_node_count(witness.tree) for witness in result.witnesses) == (
+        assert tuple(
+            ranked_tree_node_count(witness.tree) for witness in result.witnesses
+        ) == (
             1,
             1,
             1,
@@ -686,9 +690,9 @@ class TestValidation:
 
         assert result.reachable_states == (0,)
         assert result.unreachable_states == tuple(range(1, 64))
-        assert tuple(ranked_tree_node_count(witness.tree) for witness in result.witnesses) == (
-            1,
-        )
+        assert tuple(
+            ranked_tree_node_count(witness.tree) for witness in result.witnesses
+        ) == (1,)
         assert isinstance(profile, ReachableStateProfile)
         assert profile.automaton == automaton
         assert profile.reachable_states == (0,)

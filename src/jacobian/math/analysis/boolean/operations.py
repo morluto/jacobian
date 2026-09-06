@@ -59,7 +59,9 @@ def verify_walsh_transform(
         expected = walsh_hadamard_transform(truth)
     except (OperationDomainValidationError, ValueError, TypeError):
         return False
-    return tuple(expected) == tuple(int(value.as_fraction()) for value in claim.spectrum.values)
+    return tuple(expected) == tuple(
+        int(value.as_fraction()) for value in claim.spectrum.values
+    )
 
 
 __all__ = ["verify_walsh_transform", "walsh_hadamard_transform"]

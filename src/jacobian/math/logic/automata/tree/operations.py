@@ -214,8 +214,6 @@ def verify_accepted_tree_count(claim: AcceptedTreeCountResult) -> bool:
     """Verify an accepted-tree count against its bounded source automaton."""
 
     try:
-        return (
-            accepted_tree_count(claim.automaton, claim.tree_size) == claim.count
-        )
+        return accepted_tree_count(claim.automaton, claim.tree_size) == claim.count
     except (TypeError, ValueError):
         return False

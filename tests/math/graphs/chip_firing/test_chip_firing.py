@@ -62,7 +62,7 @@ class TestLaplacian:
             LaplacianResult(
                 graph=GRAPH,
                 vertices=GRAPH.vertices,
-            laplacian=IntegerMatrix(entries=((0,), (0,))),
+                laplacian=IntegerMatrix(entries=((0,), (0,))),
                 degrees=(0,),
             )
 

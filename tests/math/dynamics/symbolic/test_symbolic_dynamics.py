@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.dynamics.symbolic import (
     AdjacencyShift,
+    BlockPresentation,
     ForbiddenBlockShift,
     adjacency_shift,
     adjacency_shift_from_presentation,
@@ -20,6 +21,7 @@ from jacobian.math.dynamics.symbolic import (
     finite_type_presentation,
     normalize_forbidden_blocks,
     periodic_point_profile,
+    verify_block_presentation,
 )
 from jacobian.math.dynamics.symbolic._models import (
     ArtinMazurZetaRequest,
@@ -203,15 +205,49 @@ def test_golden_mean_finite_type_presentation_is_exact() -> None:
         (edge.source, edge.target, edge.appended_symbol)
         for edge in result.presentation.transitions
     ) == ((0, 0, "0"), (0, 1, "1"), (1, 0, "0"))
+    assert verify_block_presentation(result.presentation)
 
     payload = result.model_dump()
     payload["presentation"]["adjacency_matrix"] = ((1, 0), (1, 1))
-    with pytest.raises(ValidationError) as exc_info:
-        FiniteTypeShiftResult.model_validate(payload)
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "symbolic_dynamics.presentation_adjacency_transition_count"
+    forged = FiniteTypeShiftResult.model_validate(payload)
+    assert not verify_block_presentation(forged.presentation)
+    with pytest.raises(OperationDomainValidationError, match="complete count"):
+        adjacency_shift_from_presentation(forged.presentation)
+
+    round_tripped = BlockPresentation.model_validate_json(
+        result.presentation.model_dump_json()
     )
+    assert round_tripped == result.presentation
+    assert isinstance(
+        result.presentation.model_dump(mode="json")["adjacency_matrix"][0][0], int
+    )
+
+
+def test_block_presentation_verifier_accepts_empty_and_rejects_duplicate_edges() -> (
+    None
+):
+    empty = finite_type_presentation(
+        ForbiddenBlockShift(alphabet=("a",), forbidden_blocks=(("a",),))
+    )
+    assert verify_block_presentation(empty)
+
+    presentation = finite_type_presentation(_golden_mean())
+    forged = presentation.model_copy(
+        update={"transitions": (*presentation.transitions, presentation.transitions[0])}
+    )
+    assert not verify_block_presentation(forged)
+
+
+def test_block_presentation_verifier_rejects_oversized_claim_before_scanning() -> None:
+    oversized = BlockPresentation.model_construct(
+        alphabet=("0",),
+        memory=1,
+        state_blocks=tuple((str(index),) for index in range(51)),
+        transitions=(),
+        adjacency_matrix=(),
+        two_sided=True,
+    )
+    assert not verify_block_presentation(oversized)
 
 
 def test_shorter_forbidden_factors_are_enforced_in_long_memory_presentation() -> None:
@@ -349,12 +385,8 @@ def test_higher_block_presentation_uses_allowed_overlap_edges() -> None:
 
     payload = result.model_dump()
     payload["presentation"]["transitions"] = ()
-    with pytest.raises(ValidationError) as exc_info:
-        HigherBlockResult.model_validate(payload)
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "symbolic_dynamics.presentation_adjacency_transition_count"
-    )
+    forged = HigherBlockResult.model_validate(payload)
+    assert not verify_block_presentation(forged.presentation)
 
 
 def test_higher_block_requires_enough_memory_for_exact_sft_presentation() -> None:

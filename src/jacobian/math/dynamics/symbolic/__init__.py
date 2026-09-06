@@ -9,6 +9,7 @@ from jacobian.math.dynamics.symbolic.operations import (
     higher_block_presentation,
     normalize_forbidden_blocks,
     periodic_point_profile,
+    verify_block_presentation,
 )
 from jacobian.math.dynamics.symbolic.values import (
     AdjacencyShift,
@@ -30,4 +31,5 @@ __all__ = [
     "higher_block_presentation",
     "normalize_forbidden_blocks",
     "periodic_point_profile",
+    "verify_block_presentation",
 ]

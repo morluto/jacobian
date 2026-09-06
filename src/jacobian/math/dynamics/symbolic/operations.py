@@ -18,12 +18,15 @@ from jacobian.math.dynamics.symbolic._bounds import (
     normalize_forbidden_blocks,
     presentation_memory,
     require_bounded_presentation,
+    require_bounded_presentation_verification,
     require_bounded_support,
     require_zeta_budget,
 )
 from jacobian.math.dynamics.symbolic.values import (
+    MAX_ADJACENCY_ENTRY,
     MAX_ADJACENCY_STATES,
     MAX_PERIOD,
+    MAX_SYMBOL_LENGTH,
     AdjacencyShift,
     BlockPresentation,
     ForbiddenBlockShift,
@@ -250,11 +253,142 @@ def adjacency_shift(
 def adjacency_shift_from_presentation(
     presentation: BlockPresentation,
 ) -> AdjacencyShift:
-    """Project a labeled presentation onto its ordered state adjacency carrier."""
+    """Map a verified presentation source to its ordered adjacency target."""
+    if not verify_block_presentation(presentation):
+        raise OperationDomainValidationError(
+            location=("presentation",),
+            code="symbolic_dynamics.presentation_adjacency_invalid",
+            message=(
+                "presentation adjacency must be a complete count of its labeled "
+                "overlap transitions"
+            ),
+        )
     return adjacency_shift(
         presentation.adjacency_matrix,
         two_sided=presentation.two_sided,
     )
+
+
+def _verify_presentation_carrier(claim: BlockPresentation) -> set[str] | None:
+    """Check the bounded axes and return the canonical alphabet set."""
+
+    alphabet = claim.alphabet
+    state_blocks = claim.state_blocks
+    matrix = claim.adjacency_matrix
+    if (
+        not isinstance(alphabet, tuple)
+        or not alphabet
+        or not isinstance(state_blocks, tuple)
+        or not isinstance(matrix, tuple)
+        or not isinstance(claim.transitions, tuple)
+        or not isinstance(claim.memory, int)
+        or isinstance(claim.memory, bool)
+        or claim.memory < 0
+        or not isinstance(claim.two_sided, bool)
+    ):
+        return None
+    try:
+        alphabet_set = set(alphabet)
+        state_set = set(state_blocks)
+    except TypeError:
+        return None
+    if len(alphabet_set) != len(alphabet) or len(state_set) != len(state_blocks):
+        return None
+    if any(
+        not isinstance(symbol, str) or not symbol or len(symbol) > MAX_SYMBOL_LENGTH
+        for symbol in alphabet
+    ):
+        return None
+    if any(
+        not isinstance(block, tuple)
+        or len(block) != claim.memory
+        or any(symbol not in alphabet_set for symbol in block)
+        for block in state_blocks
+    ):
+        return None
+    size = len(state_blocks)
+    if any(
+        not isinstance(row, tuple)
+        or len(row) != size
+        or any(
+            not isinstance(entry, int)
+            or isinstance(entry, bool)
+            or entry < 0
+            or entry > MAX_ADJACENCY_ENTRY
+            for entry in row
+        )
+        for row in matrix
+    ):
+        return None
+    return alphabet_set
+
+
+def _actual_presentation_edges(
+    claim: BlockPresentation, alphabet_set: set[str]
+) -> tuple[dict[tuple[int, int, str], int], list[list[int]]] | None:
+    """Collect supplied transitions while checking their local overlap labels."""
+
+    size = len(claim.state_blocks)
+    actual_edges: dict[tuple[int, int, str], int] = {}
+    counts = [[0] * size for _ in range(size)]
+    for transition in claim.transitions:
+        if not isinstance(transition, LabeledTransition):
+            return None
+        source = transition.source
+        target = transition.target
+        symbol = transition.appended_symbol
+        if (
+            not isinstance(source, int)
+            or isinstance(source, bool)
+            or not isinstance(target, int)
+            or isinstance(target, bool)
+            or not 0 <= source < size
+            or not 0 <= target < size
+            or not isinstance(symbol, str)
+            or symbol not in alphabet_set
+        ):
+            return None
+        source_block = claim.state_blocks[source]
+        target_block = claim.state_blocks[target]
+        if claim.memory:
+            if target_block[:-1] != source_block[1:] or target_block[-1] != symbol:
+                return None
+        elif source_block != () or target_block != ():
+            return None
+        key = (source, target, symbol)
+        actual_edges[key] = actual_edges.get(key, 0) + 1
+        counts[source][target] += 1
+    return actual_edges, counts
+
+
+def _verify_block_presentation(claim: BlockPresentation) -> bool:
+    """Check the complete serialized transition relation and its counts."""
+
+    if not isinstance(claim, BlockPresentation):
+        return False
+    try:
+        require_bounded_presentation_verification(claim)
+        alphabet_set = _verify_presentation_carrier(claim)
+        if alphabet_set is None:
+            return False
+        actual = _actual_presentation_edges(claim, alphabet_set)
+        if actual is None:
+            return False
+        actual_edges, counts = actual
+        return all(count == 1 for count in actual_edges.values()) and (
+            claim.adjacency_matrix == tuple(tuple(row) for row in counts)
+        )
+    except Exception:
+        return False
+
+
+def verify_block_presentation(claim: BlockPresentation) -> bool:
+    """Verify all overlap transitions and their serialized adjacency counts."""
+
+    try:
+        return _verify_block_presentation(claim)
+    except Exception:
+        return False
 
 
 def _mobius_sieve(limit: int) -> tuple[int, ...]:
@@ -377,4 +511,5 @@ __all__ = [
     "higher_block_presentation",
     "normalize_forbidden_blocks",
     "periodic_point_profile",
+    "verify_block_presentation",
 ]

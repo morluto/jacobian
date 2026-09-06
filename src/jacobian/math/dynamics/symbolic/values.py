@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -17,6 +17,7 @@ MAX_ADJACENCY_STATES = 50
 MAX_ADJACENCY_ENTRY = 1_000_000
 MAX_ENUMERATED_BLOCKS = 100_000
 MAX_PRESENTATION_CELLS = MAX_ENUMERATED_BLOCKS
+MAX_PRESENTATION_TRANSITIONS = MAX_PRESENTATION_CELLS
 # Three complete integer vectors are returned. Even one-digit counts consume
 # three digits per period under the aggregate profile budget.
 MAX_PERIOD = 100_000 // 3
@@ -60,7 +61,9 @@ class ForbiddenBlockShift(StrictModel):
 class AdjacencyShift(StrictModel):
     """An edge-shift carrier with nonnegative edge multiplicities."""
 
-    matrix: tuple[tuple[int, ...], ...] = Field(max_length=MAX_ADJACENCY_STATES)
+    matrix: tuple[
+        Annotated[tuple[StrictInt, ...], Field(max_length=MAX_ADJACENCY_STATES)], ...
+    ] = Field(max_length=MAX_ADJACENCY_STATES)
     two_sided: bool = True
 
     @model_validator(mode="after")
@@ -83,19 +86,25 @@ class AdjacencyShift(StrictModel):
 
 
 class LabeledTransition(StrictModel):
-    source: int = Field(ge=0)
-    target: int = Field(ge=0)
-    appended_symbol: str
+    source: StrictInt = Field(ge=0, le=MAX_ADJACENCY_STATES - 1)
+    target: StrictInt = Field(ge=0, le=MAX_ADJACENCY_STATES - 1)
+    appended_symbol: Symbol
+
+
+_Block = Annotated[tuple[Symbol, ...], Field(max_length=MAX_FORBIDDEN_BLOCK_LENGTH)]
+_AdjacencyRow = Annotated[tuple[StrictInt, ...], Field(max_length=MAX_ADJACENCY_STATES)]
 
 
 class BlockPresentation(StrictModel):
     """A finite labeled overlap presentation."""
 
-    alphabet: tuple[str, ...]
-    memory: int = Field(ge=0)
-    state_blocks: tuple[tuple[str, ...], ...]
-    transitions: tuple[LabeledTransition, ...]
-    adjacency_matrix: tuple[tuple[int, ...], ...]
+    alphabet: tuple[Symbol, ...] = Field(min_length=1, max_length=MAX_ALPHABET_SIZE)
+    memory: StrictInt = Field(ge=0, le=MAX_FORBIDDEN_BLOCK_LENGTH)
+    state_blocks: tuple[_Block, ...] = Field(max_length=MAX_ADJACENCY_STATES)
+    transitions: tuple[LabeledTransition, ...] = Field(
+        max_length=MAX_PRESENTATION_CELLS
+    )
+    adjacency_matrix: tuple[_AdjacencyRow, ...] = Field(max_length=MAX_ADJACENCY_STATES)
     two_sided: bool
 
     @model_validator(mode="after")
@@ -108,10 +117,28 @@ class BlockPresentation(StrictModel):
                 "presentation_adjacency_shape",
                 "presentation adjacency must match its state blocks",
             )
+        if any(
+            entry < 0 or entry > MAX_ADJACENCY_ENTRY
+            for row in self.adjacency_matrix
+            for entry in row
+        ):
+            raise _validation_error(
+                "presentation_adjacency_entry_bound",
+                "presentation adjacency entries must be within the supported bounds",
+            )
         if any(len(block) != self.memory for block in self.state_blocks):
             raise _validation_error(
                 "presentation_state_block_memory",
                 "presentation state blocks must match its memory",
+            )
+        if any(
+            symbol not in self.alphabet
+            for block in self.state_blocks
+            for symbol in block
+        ):
+            raise _validation_error(
+                "presentation_state_block_symbol_outside_alphabet",
+                "presentation state blocks must use the presentation alphabet",
             )
         if any(
             transition.source >= size
@@ -122,14 +149,6 @@ class BlockPresentation(StrictModel):
             raise _validation_error(
                 "presentation_transition_outside_carrier",
                 "presentation transition is outside its carrier",
-            )
-        counts = [[0] * size for _ in range(size)]
-        for transition in self.transitions:
-            counts[transition.source][transition.target] += 1
-        if self.adjacency_matrix != tuple(tuple(row) for row in counts):
-            raise _validation_error(
-                "presentation_adjacency_transition_count",
-                "presentation adjacency does not count its transitions",
             )
         return self
 
@@ -143,6 +162,7 @@ __all__ = [
     "MAX_FORBIDDEN_BLOCK_LENGTH",
     "MAX_PERIOD",
     "MAX_PRESENTATION_CELLS",
+    "MAX_PRESENTATION_TRANSITIONS",
     "MAX_SYMBOL_LENGTH",
     "AdjacencyShift",
     "BlockPresentation",

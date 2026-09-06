@@ -20,6 +20,7 @@ def test_exact_public_api_symbols() -> None:
         "higher_block_presentation",
         "normalize_forbidden_blocks",
         "periodic_point_profile",
+        "verify_block_presentation",
     )
     assert tuple(symbolic_dynamics.__all__) == expected
     assert len(symbolic_dynamics.__all__) == len(set(symbolic_dynamics.__all__))

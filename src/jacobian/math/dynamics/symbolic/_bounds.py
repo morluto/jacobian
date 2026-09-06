@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 from jacobian.math.dynamics.symbolic.values import (
+    MAX_ADJACENCY_STATES,
+    MAX_ALPHABET_SIZE,
     MAX_ENUMERATED_BLOCKS,
+    MAX_FORBIDDEN_BLOCK_LENGTH,
     MAX_PRESENTATION_CELLS,
+    MAX_PRESENTATION_TRANSITIONS,
     AdjacencyShift,
+    BlockPresentation,
     ForbiddenBlockShift,
 )
 
@@ -14,6 +19,7 @@ MAX_ZETA_RESULT_DIGITS = 100_000
 MAX_ZETA_WORK = 13_000_000
 MAX_PERIODIC_PROFILE_DIGITS = 100_000
 MAX_PERIODIC_PROFILE_WORK = 10_000_000
+MAX_PRESENTATION_VERIFICATION_WORK = 2_500_000
 
 
 def enumeration_size(alphabet_size: int, block_length: int) -> int:
@@ -76,6 +82,35 @@ def require_bounded_presentation(shift: ForbiddenBlockShift, memory: int) -> Non
         raise ValueError("presentation adjacency exceeds the result bound")
 
 
+def require_bounded_presentation_verification(
+    presentation: BlockPresentation,
+) -> None:
+    """Admit one complete serialized presentation check before scanning it."""
+
+    state_count = len(presentation.state_blocks)
+    if state_count > MAX_ADJACENCY_STATES:
+        raise ValueError("presentation state axis exceeds the supported bound")
+    if len(presentation.transitions) > MAX_PRESENTATION_TRANSITIONS:
+        raise ValueError("presentation transition axis exceeds the supported bound")
+    if presentation.memory > MAX_FORBIDDEN_BLOCK_LENGTH:
+        raise ValueError("presentation memory exceeds the supported bound")
+    if len(presentation.alphabet) > MAX_ALPHABET_SIZE:
+        raise ValueError("presentation alphabet exceeds the supported bound")
+    if len(presentation.adjacency_matrix) != state_count:
+        raise ValueError("presentation adjacency axis exceeds the supported bound")
+    if any(len(row) != state_count for row in presentation.adjacency_matrix):
+        raise ValueError("presentation adjacency axis exceeds the supported bound")
+
+    state_cells = state_count * state_count
+    overlap_work = state_cells * max(1, presentation.memory)
+    expected_work = state_cells * (
+        len(presentation.alphabet) if not presentation.memory else 1
+    )
+    work = state_cells + len(presentation.transitions) + overlap_work + expected_work
+    if work > MAX_PRESENTATION_VERIFICATION_WORK:
+        raise ValueError("presentation verification exceeds the work bound")
+
+
 def require_zeta_budget(shift: AdjacencyShift) -> None:
     """Admit the determinant and its derivable exact result size."""
 
@@ -100,10 +135,12 @@ def require_zeta_budget(shift: AdjacencyShift) -> None:
 __all__ = [
     "MAX_PERIODIC_PROFILE_DIGITS",
     "MAX_PERIODIC_PROFILE_WORK",
+    "MAX_PRESENTATION_VERIFICATION_WORK",
     "enumeration_size",
     "normalize_forbidden_blocks",
     "presentation_memory",
     "require_bounded_presentation",
+    "require_bounded_presentation_verification",
     "require_bounded_support",
     "require_zeta_budget",
 ]

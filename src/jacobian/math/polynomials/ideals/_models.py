@@ -621,6 +621,7 @@ class IdealRadicalResult(StrictModel):
 
 
 class IdealRadicalMembershipResult(StrictModel):
+    request: IdealRadicalMembershipRequest
     in_radical: bool
 
 

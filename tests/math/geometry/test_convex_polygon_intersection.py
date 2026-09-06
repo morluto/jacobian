@@ -26,7 +26,7 @@ def _poly(pts: list[tuple[str, str]]) -> ConvexRationalPolygon:
     return ConvexRationalPolygon(vertices=tuple(_pt(x, y) for x, y in pts))
 
 
-def test_overlapping_squares_polygon():
+def test_overlapping_squares_polygon() -> None:
     a = _poly([("0", "0"), ("2", "0"), ("2", "2"), ("0", "2")])
     b = _poly([("1", "1"), ("3", "1"), ("3", "3"), ("1", "3")])
     result = convex_polygon_intersection(a, b)
@@ -40,7 +40,7 @@ def test_overlapping_squares_polygon():
     assert len(result.vertex_active_edges) == 4
 
 
-def test_vertex_touch_point():
+def test_vertex_touch_point() -> None:
     a = _poly([("0", "0"), ("1", "0"), ("0", "1")])
     b = _poly([("1", "0"), ("2", "0"), ("1", "1")])
     result = convex_polygon_intersection(a, b)
@@ -50,7 +50,7 @@ def test_vertex_touch_point():
     assert len(result.vertex_active_edges) == 1
 
 
-def test_edge_touch_segment():
+def test_edge_touch_segment() -> None:
     # Two unit squares sharing edge y=1 from x=1 to2
     a = _poly([("0", "0"), ("2", "0"), ("2", "1"), ("0", "1")])
     b = _poly([("1", "1"), ("3", "1"), ("3", "2"), ("1", "2")])
@@ -63,7 +63,7 @@ def test_edge_touch_segment():
     assert len(result.vertex_active_edges) == 2
 
 
-def test_disjoint_empty():
+def test_disjoint_empty() -> None:
     a = _poly([("0", "0"), ("1", "0"), ("1", "1"), ("0", "1")])
     b = _poly([("2", "2"), ("3", "2"), ("3", "3"), ("2", "3")])
     result = convex_polygon_intersection(a, b)
@@ -71,7 +71,7 @@ def test_disjoint_empty():
     assert result.polygon is None and result.point is None and result.segment is None
 
 
-def test_containment_reproduces_inner():
+def test_containment_reproduces_inner() -> None:
     large = _poly([("-10", "-10"), ("10", "-10"), ("0", "10")])
     small = _poly([("0", "0"), ("1", "0"), ("0", "1")])
     result = convex_polygon_intersection(large, small)
@@ -82,7 +82,7 @@ def test_containment_reproduces_inner():
     assert set(pts) == {("0", "0"), ("1", "0"), ("0", "1")}
 
 
-def test_rational_nonintegral_intersection():
+def test_rational_nonintegral_intersection() -> None:
     # Triangles with rational intersection not integral
     a = _poly([("0", "0"), ("2", "0"), ("0", "2")])
     b = _poly([("1", "0"), ("3", "0"), ("1", "2")])
@@ -90,15 +90,17 @@ def test_rational_nonintegral_intersection():
     # Overlap should be polygon with rational vertices including (1,0),(2,0),(1,1)
     assert result.kind in ("POLYGON", "SEGMENT", "POINT")
     if result.kind == "POLYGON":
+        assert result.polygon is not None
         assert len(result.polygon.points) >= 3
 
 
-def test_defining_invariant_half_plane_containment():
+def test_defining_invariant_half_plane_containment() -> None:
     a = _poly([("0", "0"), ("2", "0"), ("2", "2"), ("0", "2")])
     b = _poly([("1", "1"), ("3", "1"), ("3", "3"), ("1", "3")])
     result = convex_polygon_intersection(a, b)
     assert result.kind == "POLYGON"
     # Every output vertex must be inside both polygons (including boundary)
+    assert result.polygon is not None
 
     def point_in_convex(pt: RationalPoint2D, poly: ConvexRationalPolygon) -> bool:
         p = (pt.x.as_fraction(), pt.y.as_fraction())
@@ -119,7 +121,7 @@ def test_defining_invariant_half_plane_containment():
         assert point_in_convex(pt, b)
 
 
-def test_rejects_non_convex_or_collinear():
+def test_rejects_non_convex_or_collinear() -> None:
     # Collinear consecutive triple
     polygon = ConvexRationalPolygon(
         vertices=(_pt("0", "0"), _pt("1", "0"), _pt("2", "0"), _pt("1", "1"))
@@ -128,13 +130,13 @@ def test_rejects_non_convex_or_collinear():
         convex_polygon_intersection(polygon, polygon)
 
 
-def test_rejects_self_intersecting_left_turn_ring():
+def test_rejects_self_intersecting_left_turn_ring() -> None:
     polygon = _poly([("0", "3"), ("-2", "-3"), ("3", "1"), ("-3", "1"), ("2", "-3")])
     with pytest.raises(OperationDomainValidationError, match="left half-plane"):
         convex_polygon_intersection(polygon, polygon)
 
 
-def test_native_geometry_api_exposes_intersection():
+def test_native_geometry_api_exposes_intersection() -> None:
     square = _poly([("0", "0"), ("1", "0"), ("1", "1"), ("0", "1")])
     assert public_convex_polygon_intersection(square, square).kind == "POLYGON"
     # Not CCW (clockwise)
@@ -145,7 +147,7 @@ def test_native_geometry_api_exposes_intersection():
         public_convex_polygon_intersection(polygon, polygon)
 
 
-def test_json_round_trip():
+def test_json_round_trip() -> None:
     a = _poly([("0", "0"), ("2", "0"), ("2", "2"), ("0", "2")])
     b = _poly([("1", "1"), ("3", "1"), ("3", "3"), ("1", "3")])
     result = convex_polygon_intersection(a, b)

@@ -59,7 +59,7 @@ class RationalPolynomialMap(StrictModel):
         description="Ordered source-coordinate axis of the polynomial map.",
     )
     output_polynomials: tuple[RationalPolynomial, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_MAP_OUTPUTS,
         description=(
             "Ordered target-coordinate tuple; every polynomial must use the "
@@ -87,7 +87,7 @@ class PolynomialJacobianMatrix(StrictModel):
         min_length=1, max_length=MAX_MAP_INPUTS
     )
     entries: tuple[tuple[RationalPolynomial, ...], ...] = Field(
-        min_length=1, max_length=MAX_MAP_OUTPUTS
+        min_length=0, max_length=MAX_MAP_OUTPUTS
     )
 
     @model_validator(mode="after")

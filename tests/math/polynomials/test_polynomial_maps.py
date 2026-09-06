@@ -123,6 +123,16 @@ def test_jacobian_entries_are_directly_composable_polynomials() -> None:
     assert not verify_jacobian(type(result).model_validate(payload))
 
 
+def test_jacobian_preserves_axes_for_an_empty_output_map() -> None:
+    source = RationalPolynomialMap(input_variables=("x",), output_polynomials=())
+    result = jacobian_matrix(source)
+
+    assert result.source == source
+    assert result.matrix.input_variables == ("x",)
+    assert result.matrix.entries == ()
+    assert verify_jacobian(type(result).model_validate_json(result.model_dump_json()))
+
+
 def test_jacobian_rejects_a_mismatched_output_ring() -> None:
     with polynomial_validation_error():
         RationalPolynomialMap(

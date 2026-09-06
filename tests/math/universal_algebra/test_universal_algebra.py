@@ -437,6 +437,14 @@ class TestCongruence:
         forged_congruence = type(congruence).model_validate(congruence_payload)
         assert not verify_congruence(forged_congruence)
 
+        incomplete = congruence.model_dump(mode="json")
+        incomplete["partition"] = [[0]]
+        with pytest.raises(ValidationError):
+            type(congruence).model_validate(incomplete)
+        assert not verify_congruence(
+            congruence.model_copy(update={"partition": ((0,),)})
+        )
+
 
 # ---------------------------------------------------------------------------
 # Quotient

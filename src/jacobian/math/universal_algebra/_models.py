@@ -276,6 +276,7 @@ class CongruenceResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_obstruction(self) -> Self:
+        _require_partition(self.algebra, self.partition)
         if self.is_congruence:
             if self.obstruction is not None:
                 raise _validation_error(

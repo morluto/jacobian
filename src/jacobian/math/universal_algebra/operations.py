@@ -206,7 +206,7 @@ def verify_evaluate(claim: EvaluateResult) -> bool:
             evaluate_term(claim.algebra, claim.term, dict(enumerate(claim.assignment)))
             == claim.value
         )
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except (OperationDomainValidationError, ValueError, TypeError, AssertionError):
         return False
 
 
@@ -455,7 +455,7 @@ def verify_congruence(claim: CongruenceResult) -> bool:
 
     try:
         return congruence_check(claim.algebra, claim.partition) == claim
-    except (OperationDomainValidationError, ValueError, TypeError):
+    except (OperationDomainValidationError, ValueError, TypeError, AssertionError):
         return False
 
 

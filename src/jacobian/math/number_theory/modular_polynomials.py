@@ -12,11 +12,11 @@ from pydantic import (
     StrictStr,
     StringConstraints,
     WithJsonSchema,
-    field_validator,
     model_validator,
 )
 from pydantic.json_schema import JsonSchemaValue
 
+from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationDomainValidationError
 
@@ -26,19 +26,14 @@ _MAX_VARIABLES = 20
 _MAX_TERMS = 512
 _MAX_EXPONENT = 256
 _VARIABLE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
-_INTEGER = re.compile(r"^(?:0|-?[1-9][0-9]*)$")
+ModularPolynomialCoefficient = Annotated[
+    int, DecimalIntegerEncoding(max_digits=_MAX_INTEGER_DIGITS)
+]
 
 
 class ModularPolynomialTerm(StrictModel):
-    coefficient: StrictStr = Field(min_length=1, max_length=_MAX_INTEGER_DIGITS + 1)
+    coefficient: ModularPolynomialCoefficient
     exponents: tuple[StrictInt, ...] = Field(min_length=1, max_length=_MAX_VARIABLES)
-
-    @field_validator("coefficient")
-    @classmethod
-    def require_canonical_integer(cls, value: str) -> str:
-        if _INTEGER.fullmatch(value) is None:
-            raise ValueError("term coefficient must be a canonical integer")
-        return value
 
     @model_validator(mode="after")
     def require_bounded_exponents(self) -> Self:

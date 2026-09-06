@@ -54,15 +54,15 @@ def _prefix(moments: tuple[CanonicalRational, ...]) -> MomentFunctionalPrefix:
 def _moments_uniform(n: int) -> tuple[CanonicalRational, ...]:
     """Uniform measure on [-1,1]: mu_k = 2/(k+1) for even k, 0 for odd k."""
     return tuple(
-        CanonicalRational(num="2", den=str(k + 1))
+        CanonicalRational(num=2, den=k + 1)
         if k % 2 == 0
-        else CanonicalRational(num="0", den="1")
+        else CanonicalRational(num=0, den=1)
         for k in range(n)
     )
 
 
 def _moments_unit_interval(n: int) -> tuple[CanonicalRational, ...]:
-    return tuple(CanonicalRational(num="1", den=str(degree + 1)) for degree in range(n))
+    return tuple(CanonicalRational(num=1, den=degree + 1) for degree in range(n))
 
 
 class TestHankel:
@@ -116,10 +116,10 @@ class TestHankel:
     def test_maximum_order_rejects_moment_above_derived_height_bound(self) -> None:
         order = MAX_HANKEL_ORDER
         bound = _hankel_determinant_height_bound(order)
-        ones = tuple(CanonicalRational(num="1", den="1") for _ in range(2 * order))
-        prefix_at_bound = _prefix((CanonicalRational(num="1", den="9" * bound), *ones))
+        ones = tuple(CanonicalRational(num=1, den=1) for _ in range(2 * order))
+        prefix_at_bound = _prefix((CanonicalRational(num=1, den=10**bound - 1), *ones))
         prefix_over_bound = _prefix(
-            (CanonicalRational(num="1", den="9" * (bound + 1)), *ones)
+            (CanonicalRational(num=1, den=10 ** (bound + 1) - 1), *ones)
         )
 
         require_hankel_matrix_admission(prefix_at_bound, order, shifted=False)
@@ -136,7 +136,7 @@ class TestShiftedHankel:
         assert result.shift == 1
         assert result.row_axis == (0,)
         assert result.column_axis == (0,)
-        assert result.matrix.entries == ((CanonicalRational(num="0", den="1"),),)
+        assert result.matrix.entries == ((CanonicalRational(num=0, den=1),),)
 
     def test_shifted_hankel(self) -> None:
         result = compute_shifted_hankel(
@@ -145,7 +145,7 @@ class TestShiftedHankel:
         assert result.order == 2
 
     def test_rank_deficient_invariants_at_maximum_shifted_order(self) -> None:
-        moments = tuple(CanonicalRational(num="1", den="1") for _ in range(129))
+        moments = tuple(CanonicalRational(num=1, den=1) for _ in range(129))
         result = compute_shifted_hankel(
             ShiftedHankelRequest(prefix=_prefix(moments), order=63)
         )
@@ -162,9 +162,9 @@ class TestShiftedHankel:
         moment inside that slice must be rejected at admission instead of
         failing when the canonical determinant is constructed."""
         moments = (
-            CanonicalRational(num="1", den="1"),
+            CanonicalRational(num=1, den=1),
             CanonicalRational.from_fraction(Fraction(10) ** 8000),
-            CanonicalRational(num="0", den="1"),
+            CanonicalRational(num=0, den=1),
             CanonicalRational.from_fraction(Fraction(10) ** 32767),
         )
         request = ShiftedHankelRequest(prefix=_prefix(moments), order=1)
@@ -265,11 +265,11 @@ class TestOrthogonalPolynomials:
         """moments [1,0,0,...]: p_1 has zero norm; no orthogonal family
         through higher degrees exists and the boundary must reject."""
         moments = (
-            CanonicalRational(num="1", den="1"),
-            CanonicalRational(num="0", den="1"),
-            CanonicalRational(num="0", den="1"),
-            CanonicalRational(num="0", den="1"),
-            CanonicalRational(num="0", den="1"),
+            CanonicalRational(num=1, den=1),
+            CanonicalRational(num=0, den=1),
+            CanonicalRational(num=0, den=1),
+            CanonicalRational(num=0, den=1),
+            CanonicalRational(num=0, den=1),
         )
         with pytest.raises(ValueError):
             compute_orthogonal_polynomials(
@@ -283,9 +283,9 @@ class TestOrthogonalPolynomials:
         """Moments (1, 0, -1): norms are 1 and -1 - quasi-definite but not
         positive-definite."""
         moments = (
-            CanonicalRational(num="1", den="1"),
-            CanonicalRational(num="0", den="1"),
-            CanonicalRational(num="-1", den="1"),
+            CanonicalRational(num=1, den=1),
+            CanonicalRational(num=0, den=1),
+            CanonicalRational(num=-1, den=1),
         )
         result = compute_orthogonal_polynomials(
             OrthogonalPolynomialRequest(prefix=_prefix(moments), max_degree=1)
@@ -322,9 +322,9 @@ class TestRecurrence:
             OrthogonalPolynomialRequest(
                 prefix=_prefix(
                     (
-                        CanonicalRational(num="2", den="1"),
-                        CanonicalRational(num="5", den="1"),
-                        CanonicalRational(num="9", den="1"),
+                        CanonicalRational(num=2, den=1),
+                        CanonicalRational(num=5, den=1),
+                        CanonicalRational(num=9, den=1),
                     )
                 ),
                 max_degree=0,
@@ -345,7 +345,7 @@ class TestChristoffelDarboux:
             ChristoffelDarbouxRequest(family=family, degree=0)
         )
         # K_0(x,y) = p_0(x) p_0(y) / h_0 = 1/2
-        assert result.coefficients == ((CanonicalRational(num="1", den="2"),),)
+        assert result.coefficients == ((CanonicalRational(num=1, den=2),),)
 
     def test_cd_kernel_is_bivariate(self) -> None:
         """Degree-1 Legendre-like kernel is 1/2 + (3/2) x y, not the
@@ -358,9 +358,9 @@ class TestChristoffelDarboux:
         result = compute_christoffel_darboux(
             ChristoffelDarbouxRequest(family=family, degree=1)
         )
-        half = CanonicalRational(num="1", den="2")
-        zero = CanonicalRational(num="0", den="1")
-        three_halves = CanonicalRational(num="3", den="2")
+        half = CanonicalRational(num=1, den=2)
+        zero = CanonicalRational(num=0, den=1)
+        three_halves = CanonicalRational(num=3, den=2)
         assert result.coefficients == (
             (half, zero),
             (zero, three_halves),
@@ -397,8 +397,8 @@ class TestChristoffelDarboux:
             polynomials=(
                 OrthogonalPolynomialTerm(
                     degree=0,
-                    coefficients=(CanonicalRational(num="1", den="1"),),
-                    squared_norm=CanonicalRational(num="0", den="1"),
+                    coefficients=(CanonicalRational(num=1, den=1),),
+                    squared_norm=CanonicalRational(num=0, den=1),
                 ),
             ),
             variable="x",
@@ -421,16 +421,16 @@ class TestChristoffelDarboux:
             polynomials=(
                 OrthogonalPolynomialTerm(
                     degree=0,
-                    coefficients=(CanonicalRational(num="1", den="1"),),
-                    squared_norm=CanonicalRational(num="2", den="1"),
+                    coefficients=(CanonicalRational(num=1, den=1),),
+                    squared_norm=CanonicalRational(num=2, den=1),
                 ),
                 OrthogonalPolynomialTerm(
                     degree=1,
                     coefficients=(
-                        CanonicalRational(num="0", den="1"),
-                        CanonicalRational(num="1", den="1"),
+                        CanonicalRational(num=0, den=1),
+                        CanonicalRational(num=1, den=1),
                     ),
-                    squared_norm=CanonicalRational(num="0", den="1"),
+                    squared_norm=CanonicalRational(num=0, den=1),
                 ),
             ),
             variable="x",
@@ -440,7 +440,7 @@ class TestChristoffelDarboux:
         result = compute_christoffel_darboux(
             ChristoffelDarbouxRequest(family=family, degree=0)
         )
-        assert result.coefficients == ((CanonicalRational(num="1", den="2"),),)
+        assert result.coefficients == ((CanonicalRational(num=1, den=2),),)
 
 
 class TestJacobiMatrix:
@@ -462,14 +462,14 @@ class TestJacobiMatrix:
         # Monic basis: subdiagonal carries 1, superdiagonal carries beta.
         # beta_1 = 1/3 and beta_2 = 4/15 for Legendre moments; betas keeps
         # the recurrence convention with an unused placeholder first.
-        one = CanonicalRational(num="1", den="1")
-        third = CanonicalRational(num="1", den="3")
-        four_fifteenths = CanonicalRational(num="4", den="15")
+        one = CanonicalRational(num=1, den=1)
+        third = CanonicalRational(num=1, den=3)
+        four_fifteenths = CanonicalRational(num=4, den=15)
         assert result.betas == (
-            CanonicalRational(num="0", den="1"),
+            CanonicalRational(num=0, den=1),
             third,
             four_fifteenths,
-            CanonicalRational(num="9", den="35"),
+            CanonicalRational(num=9, den=35),
         )
         assert result.matrix.entries[1][0] == one
         assert result.matrix.entries[2][1] == one
@@ -492,8 +492,8 @@ class TestJacobiMatrix:
             polynomials=(
                 OrthogonalPolynomialTerm(
                     degree=0,
-                    coefficients=(CanonicalRational(num="1", den="1"),),
-                    squared_norm=CanonicalRational(num="2", den="1"),
+                    coefficients=(CanonicalRational(num=1, den=1),),
+                    squared_norm=CanonicalRational(num=2, den=1),
                 ),
             ),
             variable="x",
@@ -502,7 +502,7 @@ class TestJacobiMatrix:
         )
         result = compute_jacobi_matrix(JacobiMatrixRequest(family=family))
         assert result.alphas == ()
-        assert result.betas == (CanonicalRational(num="0", den="1"),)
+        assert result.betas == (CanonicalRational(num=0, den=1),)
         assert result.matrix.row_count == 0
         assert result.matrix.column_count == 0
         assert result.matrix.entries == ()
@@ -517,13 +517,8 @@ class TestGaussianQuadrature:
         """Measure with weight 7 at +-1 and 5 at +-2: mu_(2j) = 14 + 10*4^j,
         odd moments 0. mu_2/mu_0 = 54/24 = 9/4, so p_2 = x^2 - 9/4 with
         rational nodes +-3/2."""
-        values = ("24", "0", "54", "0", "174")
-        return tuple(
-            CanonicalRational(num=v, den="1")
-            if v != "0"
-            else CanonicalRational(num="0", den="1")
-            for v in values
-        )
+        values = (24, 0, 54, 0, 174)
+        return tuple(CanonicalRational(num=int(v), den=1) for v in values)
 
     def test_exact_rule_for_rational_nodes(self) -> None:
         from jacobian.math.analysis.orthogonal_polynomials._tools import (
@@ -574,8 +569,8 @@ class TestGaussianQuadrature:
             GaussianQuadratureRequest(
                 prefix=_prefix(
                     (
-                        CanonicalRational(num="1", den="1"),
-                        CanonicalRational(num="2", den="1"),
+                        CanonicalRational(num=1, den=1),
+                        CanonicalRational(num=2, den=1),
                     )
                 ),
                 order=1,
@@ -595,7 +590,7 @@ class TestGaussianQuadrature:
         roots; the canonical rational node contract cannot carry them, so
         admission rejects instead of crashing on .p/.q access."""
 
-        uniform = tuple(CanonicalRational(num="1", den=str(k + 1)) for k in range(5))
+        uniform = tuple(CanonicalRational(num=1, den=k + 1) for k in range(5))
         request = GaussianQuadratureRequest(prefix=_prefix(uniform), order=2)
         with pytest.raises(ValueError):
             compute_gaussian_quadrature(request)
@@ -603,9 +598,7 @@ class TestGaussianQuadrature:
 
 class TestQuadratureSourceBinding:
     def _prefix(self) -> MomentFunctionalPrefix:
-        moments = tuple(
-            CanonicalRational(num=v, den="1") for v in ("24", "0", "54", "0", "174")
-        )
+        moments = tuple(CanonicalRational(num=v, den=1) for v in (24, 0, 54, 0, 174))
         return MomentFunctionalPrefix(moments=moments, variable="x")
 
     def test_rule_retains_prefix_and_replays(self) -> None:
@@ -613,7 +606,9 @@ class TestQuadratureSourceBinding:
             GaussianQuadratureRequest(prefix=self._prefix(), order=2)
         )
         assert result.prefix == self._prefix()
-        revalidated = GaussianQuadratureRule.model_validate(result.model_dump())
+        revalidated = GaussianQuadratureRule.model_validate_json(
+            result.model_dump_json()
+        )
         assert revalidated.exactness_degree == 3
 
         payload = result.model_dump()
@@ -622,8 +617,10 @@ class TestQuadratureSourceBinding:
             GaussianQuadratureRule.model_validate(payload)
 
     def test_node_count_matches_order(self) -> None:
-        one_node = QuadratureNode.model_validate(
-            {"node": {"num": "0", "den": "1"}, "weight": {"num": "1", "den": "1"}}
+        one_node = QuadratureNode.model_validate_json(
+            json.dumps(
+                {"node": {"num": "0", "den": "1"}, "weight": {"num": "1", "den": "1"}}
+            )
         )
         with pytest.raises(ValueError):
             GaussianQuadratureRule(
@@ -644,15 +641,15 @@ class TestQuadratureSourceBinding:
         )
 
         minimal = MomentFunctionalPrefix(
-            moments=(CanonicalRational(num="1", den="1"),), variable="x"
+            moments=(CanonicalRational(num=1, den=1),), variable="x"
         )
         with pytest.raises(ValidationError):
             GaussianQuadratureRule(
                 order=1,
                 nodes=(
                     QuadratureNode(
-                        node=CanonicalRational(num="0", den="1"),
-                        weight=CanonicalRational(num="1", den="1"),
+                        node=CanonicalRational(num=0, den=1),
+                        weight=CanonicalRational(num=1, den=1),
                     ),
                 ),
                 variable="x",
@@ -696,7 +693,7 @@ class TestJacobiCrossField:
                     update={
                         "entries": (
                             (
-                                CanonicalRational(num="9", den="1"),
+                                CanonicalRational(num=9, den=1),
                                 *result.matrix.entries[0][1:],
                             ),
                             *result.matrix.entries[1:],
@@ -721,10 +718,10 @@ class TestJacobiCrossField:
         result = compute_jacobi_matrix(JacobiMatrixRequest(family=family))
         rows = [list(row) for row in result.matrix.entries]
         assert len(rows) == 3
-        rows[0][2] = CanonicalRational(num="7", den="5")
-        payload = result.model_dump()
+        rows[0][2] = CanonicalRational(num=7, den=5)
+        payload = json.loads(result.model_dump_json())
         payload["matrix"]["entries"] = [
-            [{"num": c.num, "den": c.den} for c in row] for row in rows
+            [{"num": str(c.num), "den": str(c.den)} for c in row] for row in rows
         ]
         forged = JacobiMatrix.model_validate_json(json.dumps(payload), strict=True)
         assert not verify_jacobi_matrix(forged)
@@ -737,7 +734,7 @@ class TestJacobiCrossField:
         )
         result = compute_jacobi_matrix(JacobiMatrixRequest(family=family))
         changed_norm = family.polynomials[1].model_copy(
-            update={"squared_norm": CanonicalRational(num="1", den="1")}
+            update={"squared_norm": CanonicalRational(num=1, den=1)}
         )
         changed_family = family.model_copy(
             update={
@@ -756,7 +753,7 @@ class TestJacobiCrossField:
             update={
                 "beta": (
                     result.recurrence.beta[0],
-                    CanonicalRational(num="2", den="1"),
+                    CanonicalRational(num=2, den=1),
                     *result.recurrence.beta[2:],
                 )
             }
@@ -769,7 +766,7 @@ class TestJacobiCrossField:
             update={
                 "coefficients": (
                     family.polynomials[1].coefficients[0],
-                    CanonicalRational(num="2", den="1"),
+                    CanonicalRational(num=2, den=1),
                 )
             }
         )
@@ -896,7 +893,7 @@ class TestGramSchmidtHeightAdmission:
         moments = (
             CanonicalRational.from_fraction(Fraction(1) / Fraction(10) ** 20000),
             CanonicalRational.from_fraction(Fraction(10) ** 20000),
-            CanonicalRational(num="0", den="1"),
+            CanonicalRational(num=0, den=1),
         )
         request = OrthogonalPolynomialRequest(prefix=_prefix(moments), max_degree=1)
         with pytest.raises(ValueError):
@@ -906,9 +903,9 @@ class TestGramSchmidtHeightAdmission:
         """A prefix inside the conservative bound keeps admitting, including
         a quasi-definite but not positive-definite family."""
         moments = (
-            CanonicalRational(num="1", den="1"),
-            CanonicalRational(num="0", den="1"),
-            CanonicalRational(num="-1", den="1"),
+            CanonicalRational(num=1, den=1),
+            CanonicalRational(num=0, den=1),
+            CanonicalRational(num=-1, den=1),
         )
         request = OrthogonalPolynomialRequest(prefix=_prefix(moments), max_degree=1)
         result = compute_orthogonal_polynomials(request)
@@ -932,7 +929,7 @@ class TestGramSchmidtHeightAdmission:
         moments = (
             CanonicalRational.from_fraction(Fraction(1) / Fraction(10) ** 20000),
             CanonicalRational.from_fraction(Fraction(10) ** 20000),
-            CanonicalRational(num="0", den="1"),
+            CanonicalRational(num=0, den=1),
         )
         request = OrthogonalPolynomialRequest.model_construct(
             prefix=_prefix(moments), max_degree=1
@@ -951,12 +948,15 @@ class TestQuadratureMinimalPrefixRoundTrip:
         )
 
         moments = (
-            CanonicalRational(num="1", den="1"),
-            CanonicalRational(num="2", den="1"),
+            CanonicalRational(num=1, den=1),
+            CanonicalRational(num=2, den=1),
         )
         request = GaussianQuadratureRequest(prefix=_prefix(moments), order=1)
         result = compute_gaussian_quadrature(request)
-        assert GaussianQuadratureRule.model_validate(result.model_dump()) == result
+        assert (
+            GaussianQuadratureRule.model_validate_json(result.model_dump_json())
+            == result
+        )
 
 
 class TestRecurrenceTupleDimensions:
@@ -967,7 +967,7 @@ class TestRecurrenceTupleDimensions:
 
         with pytest.raises(ValidationError):
             ThreeTermRecurrence(
-                alpha=(CanonicalRational(num="0", den="1"),),
+                alpha=(CanonicalRational(num=0, den=1),),
                 beta=(),
                 variable="x",
             )
@@ -980,7 +980,7 @@ class TestRecurrenceTupleDimensions:
         with pytest.raises(ValidationError):
             ThreeTermRecurrence(
                 alpha=(),
-                beta=(CanonicalRational(num="5", den="1"),),
+                beta=(CanonicalRational(num=5, den=1),),
                 variable="x",
             )
 
@@ -1029,8 +1029,8 @@ class TestJacobiNormRatioAdmission:
             OrthogonalPolynomialTerm,
         )
 
-        zero = CanonicalRational(num="0", den="1")
-        one = CanonicalRational(num="1", den="1")
+        zero = CanonicalRational(num=0, den=1)
+        one = CanonicalRational(num=1, den=1)
         family = OrthogonalPolynomialFamily(
             polynomials=(
                 OrthogonalPolynomialTerm(
@@ -1063,16 +1063,16 @@ class TestJacobiNormRatioAdmission:
             polynomials=(
                 OrthogonalPolynomialTerm(
                     degree=0,
-                    coefficients=(CanonicalRational(num="1", den="1"),),
-                    squared_norm=CanonicalRational(num="1", den="1"),
+                    coefficients=(CanonicalRational(num=1, den=1),),
+                    squared_norm=CanonicalRational(num=1, den=1),
                 ),
                 OrthogonalPolynomialTerm(
                     degree=1,
                     coefficients=(
-                        CanonicalRational(num="0", den="1"),
-                        CanonicalRational(num="1", den="1"),
+                        CanonicalRational(num=0, den=1),
+                        CanonicalRational(num=1, den=1),
                     ),
-                    squared_norm=CanonicalRational(num="0", den="1"),
+                    squared_norm=CanonicalRational(num=0, den=1),
                 ),
             ),
             variable="x",
@@ -1094,8 +1094,8 @@ class TestFamilyDefinitenessFlags:
 
         term = OrthogonalPolynomialTerm(
             degree=0,
-            coefficients=(CanonicalRational(num="1", den="1"),),
-            squared_norm=CanonicalRational(num="-1", den="1"),
+            coefficients=(CanonicalRational(num=1, den=1),),
+            squared_norm=CanonicalRational(num=-1, den=1),
         )
         from jacobian.math.analysis.orthogonal_polynomials import verify_definiteness
 
@@ -1123,8 +1123,8 @@ class TestQuadratureVariableBinding:
                 order=1,
                 nodes=(
                     QuadratureNode(
-                        node=CanonicalRational(num="0", den="1"),
-                        weight=CanonicalRational(num="2", den="1"),
+                        node=CanonicalRational(num=0, den=1),
+                        weight=CanonicalRational(num=2, den=1),
                     ),
                 ),
                 variable="y",
@@ -1196,9 +1196,7 @@ class TestFiniteSupportQuadratureAdmission:
         """A measure supported on exactly n points has a vanishing terminal
         norm h_n; Gaussian construction divides only through p_{n-1}, so the
         exact rule on the retained prefix must stay admitted."""
-        moments = tuple(
-            CanonicalRational(num=v, den="1") for v in ("2", "0", "2", "0", "2")
-        )
+        moments = tuple(CanonicalRational(num=v, den=1) for v in (2, 0, 2, 0, 2))
         request = GaussianQuadratureRequest(prefix=_prefix(moments), order=2)
         result = compute_gaussian_quadrature(request)
         nodes = {(int(n.node.num), int(n.node.den)) for n in result.nodes}
@@ -1210,13 +1208,13 @@ class TestFiniteSupportQuadratureAdmission:
     def test_result_round_trips_through_model_validate(self) -> None:
         """The deserialized finite-support rule replays against its prefix
         without requiring a quasi-definite terminal norm."""
-        moments = tuple(
-            CanonicalRational(num=v, den="1") for v in ("2", "0", "2", "0", "2")
-        )
+        moments = tuple(CanonicalRational(num=v, den=1) for v in (2, 0, 2, 0, 2))
         result = compute_gaussian_quadrature(
             GaussianQuadratureRequest(prefix=_prefix(moments), order=2)
         )
-        revalidated = GaussianQuadratureRule.model_validate(result.model_dump())
+        revalidated = GaussianQuadratureRule.model_validate_json(
+            result.model_dump_json()
+        )
         assert revalidated == result
 
 
@@ -1228,7 +1226,7 @@ class TestDerivedQuadratureHeightAdmission:
         moments = (
             CanonicalRational.from_fraction(Fraction(1, 10**16400)),
             CanonicalRational.from_fraction(Fraction(10) ** 16400),
-            CanonicalRational(num="0", den="1"),
+            CanonicalRational(num=0, den=1),
         )
         request = GaussianQuadratureRequest(prefix=_prefix(moments), order=1)
         with pytest.raises(ValueError):
@@ -1239,37 +1237,40 @@ class TestDerivedQuadratureHeightAdmission:
         exact numeric ordering must not stringify roots, which would trip
         CPython's integer-string conversion limit during admission."""
         moments = (
-            CanonicalRational(num="1", den="1"),
+            CanonicalRational(num=1, den=1),
             CanonicalRational.from_fraction(Fraction(10) ** 2000),
-            CanonicalRational(num="0", den="1"),
+            CanonicalRational(num=0, den=1),
         )
         request = GaussianQuadratureRequest(prefix=_prefix(moments), order=1)
         result = compute_gaussian_quadrature(request)
         assert result.nodes[0].node.as_fraction() == Fraction(10) ** 2000
-        assert result.nodes[0].weight == CanonicalRational(num="1", den="1")
-        assert GaussianQuadratureRule.model_validate(result.model_dump()) == result
+        assert result.nodes[0].weight == CanonicalRational(num=1, den=1)
+        assert (
+            GaussianQuadratureRule.model_validate_json(result.model_dump_json())
+            == result
+        )
 
 
 class TestRuleRoundTrip:
     def test_quasi_definite_positive_weight_rule_revalidates(self) -> None:
         """A genuine positive-weight order-1 rule keeps validating against
         its quasi-definite source prefix."""
-        prefix = _prefix(
-            tuple(CanonicalRational(num=v, den="1") for v in ("1", "0", "-1"))
-        )
+        prefix = _prefix(tuple(CanonicalRational(num=v, den=1) for v in (1, 0, -1)))
         rule = GaussianQuadratureRule(
             order=1,
             nodes=(
                 QuadratureNode(
-                    node=CanonicalRational(num="0", den="1"),
-                    weight=CanonicalRational(num="1", den="1"),
+                    node=CanonicalRational(num=0, den=1),
+                    weight=CanonicalRational(num=1, den=1),
                 ),
             ),
             variable="x",
             exactness_degree=1,
             prefix=prefix,
         )
-        assert GaussianQuadratureRule.model_validate(rule.model_dump()) == rule
+        assert (
+            GaussianQuadratureRule.model_validate_json(rule.model_dump_json()) == rule
+        )
 
 
 class TestShiftedHankelOrderCap:
@@ -1278,7 +1279,7 @@ class TestShiftedHankelOrderCap:
         canonical prefix holds at most 129 moments, so order 64 must not be
         advertised as supported."""
         full_prefix = _prefix(
-            tuple(CanonicalRational(num="1", den="1") for _ in range(129))
+            tuple(CanonicalRational(num=1, den=1) for _ in range(129))
         )
         with pytest.raises(ValidationError):
             ShiftedHankelRequest(prefix=full_prefix, order=64)
@@ -1294,7 +1295,7 @@ class TestCoefficientTupleSchemaBound:
             OrthogonalPolynomialTerm,
         )
 
-        one = CanonicalRational(num="1", den="1")
+        one = CanonicalRational(num=1, den=1)
         accepted = OrthogonalPolynomialTerm(
             degree=0,
             coefficients=tuple(one for _ in range(1)),
@@ -1322,16 +1323,16 @@ class TestAdmissionReplaysExecution:
                 "polynomials": [
                     {
                         "degree": 0,
-                        "coefficients": [{"num": "1", "den": "1"}],
-                        "squared_norm": {"num": "1", "den": "1" + "0" * 30000},
+                        "coefficients": [{"num": 1, "den": 1}],
+                        "squared_norm": {"num": 1, "den": 10**30000},
                     },
                     {
                         "degree": 1,
                         "coefficients": [
-                            {"num": "0", "den": "1"},
-                            {"num": "1", "den": "1"},
+                            {"num": 0, "den": 1},
+                            {"num": 1, "den": 1},
                         ],
-                        "squared_norm": {"num": "1" + "0" * 30000, "den": "1"},
+                        "squared_norm": {"num": 10**30000, "den": 1},
                     },
                 ],
                 "variable": "x",
@@ -1347,22 +1348,22 @@ class TestAdmissionReplaysExecution:
     def test_kernel_coefficient_overflow_rejected_at_admission(self) -> None:
         """p_1 = x + 10^17000 with unit norms: the degree-1 CD kernel's
         constant coefficient reaches ~10^34000 and must fail parsing."""
-        big = "1" + "0" * 17000
+        big = 10**17000
         family = OrthogonalPolynomialFamily.model_validate(
             {
                 "polynomials": [
                     {
                         "degree": 0,
-                        "coefficients": [{"num": "1", "den": "1"}],
-                        "squared_norm": {"num": "1", "den": "1"},
+                        "coefficients": [{"num": 1, "den": 1}],
+                        "squared_norm": {"num": 1, "den": 1},
                     },
                     {
                         "degree": 1,
                         "coefficients": [
-                            {"num": big, "den": "1"},
-                            {"num": "1", "den": "1"},
+                            {"num": big, "den": 1},
+                            {"num": 1, "den": 1},
                         ],
-                        "squared_norm": {"num": "1", "den": "1"},
+                        "squared_norm": {"num": 1, "den": 1},
                     },
                 ],
                 "variable": "x",
@@ -1444,8 +1445,8 @@ class TestNativeAdmission:
 
         prefix = _prefix(
             (
-                CanonicalRational(num="1", den="1"),
-                CanonicalRational(num="2", den="1"),
+                CanonicalRational(num=1, den=1),
+                CanonicalRational(num=2, den=1),
             )
         )
         with pytest.raises(ValueError, match="need at least 3 moments"):
@@ -1510,16 +1511,16 @@ class TestNativeAdmission:
             polynomials=(
                 OrthogonalPolynomialTerm(
                     degree=0,
-                    coefficients=(CanonicalRational(num="1", den="1"),),
-                    squared_norm=CanonicalRational(num="2", den="1"),
+                    coefficients=(CanonicalRational(num=1, den=1),),
+                    squared_norm=CanonicalRational(num=2, den=1),
                 ),
                 OrthogonalPolynomialTerm(
                     degree=1,
                     coefficients=(
-                        CanonicalRational(num="0", den="1"),
-                        CanonicalRational(num="1", den="1"),
+                        CanonicalRational(num=0, den=1),
+                        CanonicalRational(num=1, den=1),
                     ),
-                    squared_norm=CanonicalRational(num="0", den="1"),
+                    squared_norm=CanonicalRational(num=0, den=1),
                 ),
             ),
             variable="x",

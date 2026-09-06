@@ -472,18 +472,12 @@ def from_generator(
         )
     matrix = [list(row) for row in generator_matrix]
     canonical = _canonical_generator(matrix, field_order)
-    dim = len(canonical)
-    length = len(generator_matrix[0])
-    cardinality = field_order**dim
     return FromGeneratorResult(
         encoder=_canonical_encoder(
             field_order=field_order,
             coordinate_axis=coordinate_axis,
             generator_matrix=canonical,
         ),
-        dimension=dim,
-        length=length,
-        cardinality=cardinality,
     )
 
 

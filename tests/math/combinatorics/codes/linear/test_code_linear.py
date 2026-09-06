@@ -91,9 +91,9 @@ def test_from_generator_canonicalizes_dependent_rows() -> None:
         coordinate_axis=("left", "right"),
     )
     result = compute_from_generator(request)
-    assert result.dimension == 1
-    assert result.length == 2
-    assert result.cardinality == 2
+    assert len(result.encoder.message_axis) == 1
+    assert len(result.encoder.coordinate_axis) == 2
+    assert result.encoder.codeword_count == 2
     assert result.encoder.generator_matrix == ((1, 1),)
     assert result.encoder.message_axis == ("m0",)
     assert result.encoder.coordinate_axis == ("left", "right")

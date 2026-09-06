@@ -9,6 +9,8 @@ def test_exact_public_api_symbols() -> None:
         "angles_equal",
         "squared_segment_ratio",
         "triangles_similar",
+        "verify_angle_equality",
+        "verify_triangle_similarity",
     )
 
     assert tuple(euclidean.__all__) == expected

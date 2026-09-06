@@ -246,5 +246,8 @@ def test_number_theory_native_api_is_explicit() -> None:
         "primorial",
         "quadratic_residues",
         "ramanujan_sum",
+        "verify_certified_factorization",
+        "verify_pratt_certificate",
+        "verify_primality_certificate",
     )
     assert all(hasattr(number_theory, name) for name in number_theory.__all__)

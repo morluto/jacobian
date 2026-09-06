@@ -99,6 +99,9 @@ def test_constructor_native_surface_excludes_wire_handlers() -> None:
         "compute_triangle_profile",
         "construct_hypercube_graph",
         "construct_keller_graph",
+        "verify_hypercube_graph",
+        "verify_keller_graph",
+        "verify_triangle_profile",
     )
 
     assert tuple(constructors.__all__) == expected

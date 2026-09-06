@@ -99,7 +99,7 @@ def test_point_predicate_claims_round_trip_and_reject_forged_sources() -> None:
     )
 
     payload = collinear_claim.model_dump(mode="json")
-    payload["request"]["third"] = _point("0", "1").model_dump(mode="json")
+    payload["third"] = _point("0", "1").model_dump(mode="json")
     assert not verify_collinearity(type(collinear_claim).model_validate(payload))
 
     concyclic_claim = concyclic(

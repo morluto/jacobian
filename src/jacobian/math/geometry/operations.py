@@ -523,7 +523,10 @@ def signed_area(points: tuple[RationalPoint2D, ...]) -> GeometryRationalResult:
     return GeometryRationalResult(value=_wire_rational(total / 2))
 
 
-def simple_polygon(points: tuple[RationalPoint2D, ...]) -> SimplePolygonDecisionResult:
+def simple_polygon(polygon: PolygonRequest) -> SimplePolygonDecisionResult:
+    """Decide simplicity for one structural polygon value."""
+
+    points = polygon.points
     checked = 0
     for first in range(len(points)):
         for second in range(first + 1, len(points)):
@@ -551,7 +554,7 @@ def simple_polygon(points: tuple[RationalPoint2D, ...]) -> SimplePolygonDecision
             )
             if not valid:
                 return SimplePolygonDecisionResult(
-                    polygon=PolygonRequest(points=points),
+                    polygon=polygon,
                     vertex_count=len(points),
                     is_simple=False,
                     checked_edge_pairs=checked,
@@ -562,7 +565,7 @@ def simple_polygon(points: tuple[RationalPoint2D, ...]) -> SimplePolygonDecision
                     ),
                 )
     return SimplePolygonDecisionResult(
-        polygon=PolygonRequest(points=points),
+        polygon=polygon,
         vertex_count=len(points),
         is_simple=True,
         checked_edge_pairs=checked,

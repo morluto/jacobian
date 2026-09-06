@@ -89,7 +89,7 @@ def signed_area(request: PolygonRequest) -> GeometryRationalResult:
 
 
 def simple_polygon(request: PolygonRequest) -> SimplePolygonDecisionResult:
-    return _native.simple_polygon(request.points)
+    return _native.simple_polygon(request)
 
 
 def classify_polygon_point(

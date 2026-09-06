@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic_core import PydanticCustomError
+
 from jacobian.math.polynomials._conversions import (
     rational_function_from_sympy,
     rational_function_to_sympy,
@@ -86,7 +88,7 @@ def verify_hermite_reduction(claim: HermiteReductionResult) -> bool:
             == ("RATIONAL_PRIMITIVE" if has_primitive else "NO_RATIONAL_PRIMITIVE")
             and claim.rational_primitive == (rational_part if has_primitive else None)
         )
-    except (AttributeError, TypeError, ValueError):
+    except (AttributeError, TypeError, ValueError, PydanticCustomError):
         return False
 
 

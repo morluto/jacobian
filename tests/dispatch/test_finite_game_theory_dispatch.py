@@ -49,7 +49,12 @@ def test_zero_sum_schema_publishes_coupled_admission_and_dispatches() -> None:
     payload = _small_game()
     assert not list(Draft202012Validator(schema).iter_errors(payload))
     output = invoke_operation(operation.operation_id, payload, Catalog.open()).output
-    assert set(output) == {"row_strategy", "col_strategy", "value"}
+    assert set(output) == {
+        "payoff_matrix",
+        "row_strategy",
+        "col_strategy",
+        "value",
+    }
     assert len(output["row_strategy"]) == 2
     assert len(output["col_strategy"]) == 2
 

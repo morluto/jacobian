@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal, Self
+from typing import Literal
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictInt
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -99,20 +99,6 @@ class NonmonochromaticColoringResult(StrictModel):
     palette_size: int
     outcome: ColoringResult
     witness: ColoringWitness | None = None
-
-    @model_validator(mode="after")
-    def require_outcome_shape(self) -> Self:
-        if self.outcome == "COLORABLE" and self.witness is None:
-            raise PydanticCustomError(
-                "hypergraph_coloring.colorable_requires_witness",
-                "COLORABLE results must carry a witness",
-            )
-        if self.outcome == "NOT_COLORABLE" and self.witness is not None:
-            raise PydanticCustomError(
-                "hypergraph_coloring.not_colorable_has_no_witness",
-                "NOT_COLORABLE results must not carry a witness",
-            )
-        return self
 
 
 __all__ = [

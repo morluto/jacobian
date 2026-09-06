@@ -5,6 +5,8 @@ import pytest
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.hypergraph_coloring.operations import (
     decide_nonmonochromatic_coloring,
+    verify_coloring_witness,
+    verify_non_colorable,
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
@@ -28,6 +30,20 @@ def test_colorable_3edge() -> None:
     assert color_map["0"] != color_map["2"] or color_map["1"] != color_map["2"]
 
 
+def test_serialized_colorable_witness_is_verifiable_and_forgery_resistant() -> None:
+    h = _hg(["0", "1", "2"], [("e0", ("0", "1", "2"))])
+    result = decide_nonmonochromatic_coloring(h, 2)
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_coloring_witness(decoded)
+
+    forged = result.model_dump(mode="json")
+    forged["witness"]["assignments"] = [["0", 0], ["1", 0], ["2", 0]]
+    assert not verify_coloring_witness(type(result).model_validate(forged))
+
+    forged["witness"]["assignments"] = [["0", 0], ["1", 0]]
+    assert not verify_coloring_witness(type(result).model_validate(forged))
+
+
 def test_not_colorable_k3() -> None:
     """K3 as 2-uniform hypergraph with q=2: not colourable."""
     h = _hg(
@@ -37,6 +53,20 @@ def test_not_colorable_k3() -> None:
     result = decide_nonmonochromatic_coloring(h, 2)
     assert result.outcome == "NOT_COLORABLE"
     assert result.witness is None
+
+
+def test_serialized_not_colorable_claim_is_explicitly_verifiable() -> None:
+    h = _hg(
+        ["0", "1", "2"],
+        [("e0", ("0", "1")), ("e1", ("1", "2")), ("e2", ("0", "2"))],
+    )
+    result = decide_nonmonochromatic_coloring(h, 2)
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_non_colorable(decoded)
+
+    forged = result.model_dump(mode="json")
+    forged["outcome"] = "COLORABLE"
+    assert not verify_non_colorable(type(result).model_validate(forged))
 
 
 def test_empty_edges_are_vacuously_colorable() -> None:

@@ -22,7 +22,12 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
 
-__all__ = ["decide_nonmonochromatic_coloring"]
+__all__ = [
+    "decide_nonmonochromatic_coloring",
+    "verify_coloring_witness",
+    "verify_non_colorable",
+    "verify_nonmonochromatic_coloring",
+]
 
 
 def decide_nonmonochromatic_coloring(
@@ -129,3 +134,54 @@ def _is_valid_coloring(
         if len(colors) < 2:
             return False
     return True
+
+
+def verify_coloring_witness(claim: NonmonochromaticColoringResult) -> bool:
+    """Check a serialized COLORABLE witness against its retained hypergraph."""
+
+    if claim.outcome != "COLORABLE" or claim.witness is None:
+        return False
+    vertices = tuple(claim.hypergraph.vertices)
+    assignments = claim.witness.assignments
+    if len(assignments) != len(vertices):
+        return False
+    if {vertex for vertex, _color in assignments} != set(vertices):
+        return False
+    if len({vertex for vertex, _color in assignments}) != len(assignments):
+        return False
+    colors = dict(assignments)
+    if any(
+        type(color) is not int or not 0 <= color < claim.palette_size
+        for color in colors.values()
+    ):
+        return False
+    return all(
+        len({colors[vertex] for vertex in members}) >= 2
+        for _edge_id, members in claim.hypergraph.edges
+    )
+
+
+def verify_non_colorable(claim: NonmonochromaticColoringResult) -> bool:
+    """Re-establish an admitted bounded NOT_COLORABLE decision."""
+
+    if claim.outcome != "NOT_COLORABLE" or claim.witness is not None:
+        return False
+    try:
+        return (
+            decide_nonmonochromatic_coloring(
+                claim.hypergraph, claim.palette_size
+            ).outcome
+            == "NOT_COLORABLE"
+        )
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+
+
+def verify_nonmonochromatic_coloring(
+    claim: NonmonochromaticColoringResult,
+) -> bool:
+    """Verify whichever explicit coloring relation a result claims."""
+
+    if claim.outcome == "COLORABLE":
+        return verify_coloring_witness(claim)
+    return verify_non_colorable(claim)

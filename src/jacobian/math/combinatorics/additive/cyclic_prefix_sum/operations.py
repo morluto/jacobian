@@ -33,6 +33,7 @@ from jacobian.math.combinatorics.additive.values import IndexedIntegerSequence
 __all__ = [
     "compute_cyclic_prefix_sum_residue_profile",
     "search_forbidden_prefix_cyclic_ordering",
+    "verify_forbidden_prefix_cyclic_ordering",
 ]
 
 MAX_WORK_UNITS = 50_000_000
@@ -383,3 +384,43 @@ def search_forbidden_prefix_cyclic_ordering(
         plan.search_node_limit,
         search,
     )
+
+
+def verify_forbidden_prefix_cyclic_ordering(
+    claim: ForbiddenPrefixSequencingResult,
+) -> bool:
+    """Verify a FOUND ordering's prefix-sum witness against its source."""
+
+    if claim.status != "FOUND" or claim.ordering is None:
+        return False
+    try:
+        if len(claim.ordering) != len(claim.source.elements):
+            return False
+        forbidden = set(claim.forbidden_values)
+        running = tuple(0 for _ in claim.source.group.moduli)
+        seen: set[tuple[int, ...]] = set()
+        seen_indices: set[int] = set()
+        for position, row in enumerate(claim.ordering):
+            if row.source_index in seen_indices or not 0 <= row.source_index < len(
+                claim.source.elements
+            ):
+                return False
+            seen_indices.add(row.source_index)
+            element = claim.source.elements[row.source_index]
+            if row.element != element:
+                return False
+            running = tuple(
+                (left + right) % modulus
+                for left, right, modulus in zip(
+                    running, element, claim.source.group.moduli, strict=True
+                )
+            )
+            if row.prefix_sum != running:
+                return False
+            if position + 1 < len(claim.ordering):
+                if not any(running) or running in forbidden or running in seen:
+                    return False
+                seen.add(running)
+        return True
+    except (TypeError, ValueError, IndexError):
+        return False

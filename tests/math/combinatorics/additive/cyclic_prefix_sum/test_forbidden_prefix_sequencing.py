@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from jacobian.catalog.models import MathTool
 from jacobian.math.combinatorics.additive.cyclic_prefix_sum import (
     search_forbidden_prefix_cyclic_ordering,
+    verify_forbidden_prefix_cyclic_ordering,
 )
 from jacobian.math.combinatorics.additive.cyclic_prefix_sum._models import (
     MAX_SEQUENCING_PERMUTATION_NODES,
@@ -113,6 +114,17 @@ def test_positive_fixed_start_avoids_one_target() -> None:
     assert result.first_element == (2,)
     assert result.forbidden_values == ((1,),)
     _replay(result, request)
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_forbidden_prefix_cyclic_ordering(decoded)
+    forged = decoded.model_copy(
+        update={
+            "ordering": tuple(
+                row.model_copy(update={"prefix_sum": (0,)})
+                for row in decoded.ordering or ()
+            )
+        }
+    )
+    assert not verify_forbidden_prefix_cyclic_ordering(forged)
 
 
 def test_exceptional_four_element_family_is_exactly_negative() -> None:

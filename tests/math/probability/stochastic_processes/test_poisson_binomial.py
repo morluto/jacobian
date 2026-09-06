@@ -147,3 +147,28 @@ def test_result_distribution_round_trips_into_finite_raw_moment() -> None:
 
     moment = raw_moment(restored.count_distribution.atoms, 1)
     assert moment.moment.as_fraction() == Fraction(5, 6)
+
+
+def test_serialized_count_masses_require_source_bound_verification() -> None:
+    from jacobian.math.probability.stochastic_processes import verify_poisson_binomial
+    from jacobian.math.probability.stochastic_processes._poisson_binomial_models import (
+        PoissonBinomialResult,
+    )
+
+    result = compute_poisson_binomial(
+        PoissonBinomialRequest(
+            probabilities=(CanonicalRational.from_integer_ratio(1, 2),)
+        )
+    )
+    assert verify_poisson_binomial(result)
+    payload = result.model_dump(mode="json")
+    payload["count_distribution"]["atoms"][0]["probability"] = {
+        "num": "1",
+        "den": "4",
+    }
+    payload["count_distribution"]["atoms"][1]["probability"] = {
+        "num": "1",
+        "den": "4",
+    }
+    forged = PoissonBinomialResult.model_validate(payload)
+    assert not verify_poisson_binomial(forged)

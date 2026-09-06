@@ -16,6 +16,7 @@ from jacobian.backends import BackendUnavailableError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials._conversions import (
     rational_from_sympy,
+    rational_function_to_sympy,
     rational_polynomial_from_sympy,
     rational_polynomial_to_sympy,
     symbols_for_variables,
@@ -34,6 +35,7 @@ from jacobian.math.polynomials.maps._models import (
     GenericDegreeComputationBudget,
     GenericDegreeOutcome,
     GenericDegreeResult,
+    GenericFiberPolynomial,
     JacobianResult,
     VariablePoint,
     _is_unit_generic_fiber_basis,
@@ -211,10 +213,85 @@ def generic_degree(
     )
 
 
+def _generic_fiber_polynomial_expression(
+    polynomial: GenericFiberPolynomial,
+    source_symbols: tuple[sympy.Symbol, ...],
+    parameter_symbols: tuple[sympy.Symbol, ...],
+) -> sympy.Expr:
+    """Convert bounded generic-fiber evidence without parsing caller text."""
+
+    expression = sympy.Integer(0)
+    for term in polynomial.terms:
+        coefficient = rational_function_to_sympy(term.coefficient)
+        substitutions = dict(
+            zip(
+                symbols_for_variables(term.coefficient.variables),
+                parameter_symbols,
+                strict=True,
+            )
+        )
+        coefficient = coefficient.xreplace(substitutions)
+        monomial = sympy.prod(
+            symbol**exponent
+            for symbol, exponent in zip(
+                source_symbols, term.source_exponents, strict=True
+            )
+        )
+        expression += coefficient * monomial
+    return sympy.cancel(expression)
+
+
+def _generic_fiber_source_relations_hold(claim: GenericDegreeResult) -> bool:
+    evidence = claim.evidence
+    if evidence is None:
+        return False
+    if (
+        evidence.source_variable_order != claim.source.input_variables
+        or len(evidence.target_parameters) != len(claim.source.output_polynomials)
+        or len(evidence.basis_from_source) != len(claim.source.output_polynomials)
+    ):
+        return False
+    source_symbols = tuple(
+        sympy.Dummy(f"source_{index}")
+        for index in range(len(claim.source.input_variables))
+    )
+    parameter_symbols = tuple(
+        sympy.Dummy(f"target_{index}")
+        for index in range(len(evidence.target_parameters))
+    )
+    source_name_symbols = symbols_for_variables(claim.source.input_variables)
+    source_generators = []
+    for polynomial, parameter in zip(
+        claim.source.output_polynomials, parameter_symbols, strict=True
+    ):
+        expression = (
+            rational_polynomial_to_sympy(polynomial)
+            .as_expr()
+            .xreplace(dict(zip(source_name_symbols, source_symbols, strict=True)))
+        )
+        source_generators.append(expression - parameter)
+    for basis_index, basis_polynomial in enumerate(evidence.basis):
+        expected = sum(
+            source_generator
+            * _generic_fiber_polynomial_expression(
+                evidence.basis_from_source[source_index][basis_index],
+                source_symbols,
+                parameter_symbols,
+            )
+            for source_index, source_generator in enumerate(source_generators)
+        )
+        actual = _generic_fiber_polynomial_expression(
+            basis_polynomial, source_symbols, parameter_symbols
+        )
+        if sympy.cancel(actual - expected) != 0:
+            return False
+    return True
+
+
 def verify_generic_degree(claim: GenericDegreeResult) -> bool:
     """Verify the retained generic-fiber evidence and declared outcome."""
     evidence = claim.evidence
-    if evidence is None:
+    if evidence is None or not _generic_fiber_source_relations_hold(claim):
         return False
     unit_basis = _is_unit_generic_fiber_basis(evidence)
     if claim.outcome == "GENERICALLY_FINITE":

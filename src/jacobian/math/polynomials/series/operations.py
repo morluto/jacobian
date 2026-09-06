@@ -267,7 +267,9 @@ def verify_inverse(claim: SeriesInverseResult) -> bool:
             claim.source.truncation_order,
         )
         product[0] -= Fraction(1)
-        return tuple(_wire(value) for value in product) == claim.residual_coefficients
+        return all(value == 0 for value in product) and tuple(
+            _wire(value) for value in product
+        ) == claim.residual_coefficients
     except (TypeError, ValueError):
         return False
 
@@ -317,13 +319,12 @@ def verify_divide(claim: SeriesDivideResult) -> bool:
             claim.numerator.truncation_order,
         )
         numerator = _series_fractions(claim.numerator)
-        return (
-            tuple(
-                _wire(left - right)
-                for left, right in zip(residual, numerator, strict=True)
-            )
-            == claim.residual_coefficients
+        differences = tuple(
+            left - right for left, right in zip(residual, numerator, strict=True)
         )
+        return all(value == 0 for value in differences) and tuple(
+            _wire(value) for value in differences
+        ) == claim.residual_coefficients
     except (TypeError, ValueError):
         return False
 
@@ -444,16 +445,18 @@ def verify_reversion(claim: SeriesReversionResult) -> bool:
         left = _compose_coefficients(claim.source, claim.result)
         right = _compose_coefficients(claim.result, claim.source)
         target = [Fraction(1) if index == 1 else Fraction(0) for index in range(order)]
+        left_differences = tuple(
+            value - expected for value, expected in zip(left, target, strict=True)
+        )
+        right_differences = tuple(
+            value - expected for value, expected in zip(right, target, strict=True)
+        )
         return (
-            tuple(
-                _wire(value - expected)
-                for value, expected in zip(left, target, strict=True)
-            )
+            all(value == 0 for value in left_differences)
+            and all(value == 0 for value in right_differences)
+            and tuple(_wire(value) for value in left_differences)
             == claim.left_residual
-            and tuple(
-                _wire(value - expected)
-                for value, expected in zip(right, target, strict=True)
-            )
+            and tuple(_wire(value) for value in right_differences)
             == claim.right_residual
         )
     except (TypeError, ValueError):

@@ -17,6 +17,7 @@ from jacobian.math.probability.stochastic_processes._models import (
     MAX_STOCHASTIC_VALUE_DIGITS,
 )
 from jacobian.math.probability.stochastic_processes._poisson_binomial_models import (
+    PoissonBinomialResult,
     _admit_probabilities,
 )
 
@@ -29,6 +30,7 @@ __all__ = [
     "poisson_binomial",
     "sigma_algebra_from_observation",
     "sigma_algebra_join",
+    "verify_poisson_binomial",
 ]
 
 
@@ -39,6 +41,16 @@ def poisson_binomial(
     values = tuple(probability.as_fraction() for probability in probabilities)
     _admit_probabilities(values)
     return _poisson_binomial_kernel(values)
+
+
+def verify_poisson_binomial(claim: PoissonBinomialResult) -> bool:
+    """Verify a serialized count law against its retained Bernoulli parameters."""
+
+    try:
+        expected = poisson_binomial(claim.probabilities)
+    except (TypeError, ValueError):
+        return False
+    return expected == claim.count_distribution
 
 
 def _poisson_binomial_kernel(

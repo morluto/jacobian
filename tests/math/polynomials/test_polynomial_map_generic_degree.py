@@ -606,3 +606,14 @@ def test_serialized_coefficient_support_is_counted_before_nested_construction() 
 
     with polynomial_validation_error():
         GenericFiberCertificate.model_validate(payload)
+
+
+def test_generic_degree_verifier_binds_evidence_to_source_map() -> None:
+    result = _power_map_result(2)
+    assert verify_generic_degree(result)
+    payload = result.model_dump(mode="json")
+    payload["source"] = _map(("x", "y"), {(1, 0): 1}, {(0, 1): 1}).model_dump(
+        mode="json"
+    )
+    forged = GenericDegreeResult.model_validate(payload)
+    assert not verify_generic_degree(forged)

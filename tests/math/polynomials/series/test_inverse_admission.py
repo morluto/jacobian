@@ -156,3 +156,51 @@ def test_growth_rejection_then_small_inverse_recovers() -> None:
     )
     small = _series([Fraction(1), Fraction(1), *[Fraction()] * 4])
     assert _product(small, inverse(small).result) == [1, 0, 0, 0, 0, 0]
+
+
+def test_matching_nonzero_residual_ledgers_do_not_prove_claims() -> None:
+    source = _series([Fraction(1), Fraction(1), Fraction(0)])
+    inverse_claim = inverse(source)
+    payload = inverse_claim.model_dump(mode="json")
+    payload["result"]["coefficients"] = [
+        {"num": "0", "den": "1"},
+        {"num": "0", "den": "1"},
+        {"num": "0", "den": "1"},
+    ]
+    payload["residual_coefficients"] = [
+        {"num": "-1", "den": "1"},
+        {"num": "0", "den": "1"},
+        {"num": "0", "den": "1"},
+    ]
+    assert not verify_inverse(type(inverse_claim).model_validate(payload))
+
+    numerator = _series([Fraction(1), Fraction(2), Fraction(0)])
+    division_claim = divide(numerator, source)
+    payload = division_claim.model_dump(mode="json")
+    payload["quotient"]["coefficients"] = [
+        {"num": "0", "den": "1"},
+        {"num": "0", "den": "1"},
+        {"num": "0", "den": "1"},
+    ]
+    payload["residual_coefficients"] = [
+        {"num": "-1", "den": "1"},
+        {"num": "-2", "den": "1"},
+        {"num": "0", "den": "1"},
+    ]
+    assert not verify_divide(type(division_claim).model_validate(payload))
+
+    reversion_claim = reversion(_series([Fraction(0), Fraction(1), Fraction(0)]))
+    payload = reversion_claim.model_dump(mode="json")
+    payload["result"]["coefficients"] = [
+        {"num": "0", "den": "1"},
+        {"num": "0", "den": "1"},
+        {"num": "0", "den": "1"},
+    ]
+    nonidentity = [
+        {"num": "0", "den": "1"},
+        {"num": "-1", "den": "1"},
+        {"num": "0", "den": "1"},
+    ]
+    payload["left_residual"] = nonidentity
+    payload["right_residual"] = nonidentity
+    assert not verify_reversion(type(reversion_claim).model_validate(payload))

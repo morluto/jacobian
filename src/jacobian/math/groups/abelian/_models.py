@@ -204,6 +204,9 @@ class ElementReduceResult(StrictModel):
 
 
 class ElementEqualResult(StrictModel):
+    """A source-bound equality claim for two finite abelian group elements."""
+
+    request: ElementEqualRequest
     equal: bool
 
 

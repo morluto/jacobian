@@ -5,6 +5,7 @@ from __future__ import annotations
 from math import gcd, lcm
 
 from jacobian.math.groups.abelian._models import (
+    ElementEqualRequest,
     ElementEqualResult,
     ElementOrderResult,
     ElementReduceResult,
@@ -57,7 +58,27 @@ def elements_equal(
         coordinate % factor
         for coordinate, factor in zip(coordinates_b, invariant_factors, strict=True)
     )
-    return ElementEqualResult(equal=reduced_a == reduced_b)
+    return ElementEqualResult(
+        request=ElementEqualRequest(
+            invariant_factors=invariant_factors,
+            coordinates_a=coordinates_a,
+            coordinates_b=coordinates_b,
+        ),
+        equal=reduced_a == reduced_b,
+    )
+
+
+def verify_elements_equal(claim: ElementEqualResult) -> bool:
+    """Check the equality relation asserted by a serialized element claim."""
+
+    return (
+        elements_equal(
+            claim.request.invariant_factors,
+            claim.request.coordinates_a,
+            claim.request.coordinates_b,
+        ).equal
+        is claim.equal
+    )
 
 
 def element_order(
@@ -132,4 +153,5 @@ __all__ = [
     "normalize_presentation",
     "quotient_group",
     "reduce_element",
+    "verify_elements_equal",
 ]

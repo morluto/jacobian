@@ -7,6 +7,7 @@ from jacobian.math.groups.abelian.operations import (
     normalize_presentation,
     quotient_group,
     reduce_element,
+    verify_elements_equal,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "normalize_presentation",
     "quotient_group",
     "reduce_element",
+    "verify_elements_equal",
 ]

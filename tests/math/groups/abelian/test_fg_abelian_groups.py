@@ -20,6 +20,7 @@ from jacobian.math.groups.abelian.operations import (
     normalize_presentation,
     quotient_group,
     reduce_element,
+    verify_elements_equal,
 )
 
 
@@ -72,6 +73,12 @@ def test_element_equal_same() -> None:
     )
     result = compute_element_equal(request)
     assert result.equal is True
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_elements_equal(decoded)
+
+    payload = result.model_dump(mode="json")
+    payload["equal"] = False
+    assert not verify_elements_equal(type(result).model_validate(payload))
 
 
 def test_element_equal_different() -> None:

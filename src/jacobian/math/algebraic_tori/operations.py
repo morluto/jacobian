@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from itertools import pairwise
 from math import prod
 
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
@@ -34,6 +35,17 @@ def _matrix_value(
         entries=tuple(
             tuple(format_canonical_integer(value) for value in row) for row in entries
         ),
+    )
+
+
+def verify_torsion_character_group(group: TorsionCharacterGroup) -> bool:
+    """Check the invariant-factor claim of a serialized torsion carrier."""
+    try:
+        factors = tuple(parse_canonical_integer(value) for value in group.invariant_factors)
+    except (TypeError, ValueError):
+        return False
+    return all(value > 1 for value in factors) and all(
+        right % left == 0 for left, right in pairwise(factors)
     )
 
 
@@ -267,4 +279,8 @@ def verify_solution_subgroup(claim: AlgebraicTorusSolutionSubgroup) -> bool:
     ) == entries(claim.reduced_free_exponent_map)
 
 
-__all__ = ["homogeneous_monomial_solution_subgroup", "verify_solution_subgroup"]
+__all__ = [
+    "homogeneous_monomial_solution_subgroup",
+    "verify_solution_subgroup",
+    "verify_torsion_character_group",
+]

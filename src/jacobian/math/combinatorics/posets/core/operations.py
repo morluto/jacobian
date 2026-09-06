@@ -38,6 +38,10 @@ from jacobian.math.combinatorics.posets.core._models import (
     ReflexivePairPolicy,
     RelationInterpretation,
     ZetaTransformResult,
+    _compute_poset_extremal_elements,
+    _validate_poset_extremal_elements,
+    _validate_poset_incomparable_pairs,
+    _validate_poset_rank_structure,
     _validated_presentation,
     canonical_poset_ranks,
     finite_poset_digest,
@@ -70,6 +74,64 @@ def _admit_finite_poset(
             elements, relation, interpretation, reflexive_pairs
         )
     )
+
+
+def _admit_canonical_poset(poset: FinitePoset) -> None:
+    """Admit the partial-order relation before running a consumer kernel."""
+    _run_admission(
+        lambda: _validated_presentation(
+            poset.elements,
+            tuple(
+                PresentationPair(lower=pair.lower, upper=pair.upper)
+                for pair in poset.strict_order_pairs
+            ),
+            RelationInterpretation.COMPARABLE_PAIRS,
+            ReflexivePairPolicy.FORBIDDEN,
+        )
+    )
+
+
+def verify_finite_poset(poset: FinitePoset) -> bool:
+    """Verify all retained canonical order/profile claims of a poset value."""
+    try:
+        strict, reduction = _validated_presentation(
+            poset.elements,
+            tuple(
+                PresentationPair(lower=pair.lower, upper=pair.upper)
+                for pair in poset.strict_order_pairs
+            ),
+            RelationInterpretation.COMPARABLE_PAIRS,
+            ReflexivePairPolicy.FORBIDDEN,
+        )
+        if tuple(OrderedPair(lower=a, upper=b) for a, b in sorted(strict)) != poset.strict_order_pairs:
+            return False
+        if tuple(OrderedPair(lower=a, upper=b) for a, b in sorted(reduction)) != poset.cover_relations:
+            return False
+        _validate_poset_incomparable_pairs(poset.elements, poset.incomparable_pairs, strict)
+        expected_minimal, expected_maximal = _compute_poset_extremal_elements(
+            poset.elements, strict
+        )
+        _validate_poset_extremal_elements(
+            poset.minimal_elements, poset.maximal_elements,
+            expected_minimal, expected_maximal,
+        )
+        expected_ranks = canonical_poset_ranks(poset.elements, reduction)
+        _validate_poset_rank_structure(
+            poset.elements, poset.graded, poset.ranks, expected_ranks,
+            expected_minimal, expected_maximal, reduction,
+        )
+        return finite_poset_digest(
+            elements=poset.elements,
+            strict_order_pairs=poset.strict_order_pairs,
+            cover_relations=poset.cover_relations,
+            incomparable_pairs=poset.incomparable_pairs,
+            minimal_elements=poset.minimal_elements,
+            maximal_elements=poset.maximal_elements,
+            graded=poset.graded,
+            ranks=poset.ranks,
+        ) == poset.poset_digest
+    except (OperationDomainValidationError, PydanticCustomError, TypeError, ValueError):
+        return False
 
 
 def _admit_antichain_profile(poset: FinitePoset) -> None:
@@ -168,6 +230,7 @@ def materialize_finite_poset(
 
 
 def width(poset: FinitePoset) -> PosetWidthResult:
+    _admit_canonical_poset(poset)
     nx = _networkx()
     elements = poset.elements
     left_nodes = tuple(("L", element) for element in elements)
@@ -228,6 +291,7 @@ def width(poset: FinitePoset) -> PosetWidthResult:
 
 
 def linear_extension_count(poset: FinitePoset) -> LinearExtensionCountResult:
+    _admit_canonical_poset(poset)
     elements = poset.elements
     if len(elements) > MAX_LINEAR_EXTENSION_ELEMENTS:
         raise OperationDomainValidationError(
@@ -271,6 +335,7 @@ def mobius_function(
     scope: MobiusScope,
     intervals: tuple[PosetInterval, ...],
 ) -> MobiusFunctionResult:
+    _admit_canonical_poset(poset)
     return _compute_mobius(poset, scope, intervals, include_recurrence=False)
 
 
@@ -358,6 +423,7 @@ def closure(
     subset: PosetSubset,
     closure_type: Literal["LOWER", "UPPER"],
 ) -> PosetClosureResult:
+    _admit_canonical_poset(poset)
     elements = set(poset.elements)
     order_pairs = {(p.lower, p.upper) for p in poset.strict_order_pairs}
     order_set = order_pairs | {(e, e) for e in elements}
@@ -387,6 +453,7 @@ def zeta_transform(
     poset: FinitePoset,
     function_values: tuple[MobiusValue, ...],
 ) -> ZetaTransformResult:
+    _admit_canonical_poset(poset)
     comparable = {(p.lower, p.upper) for p in poset.strict_order_pairs}
     func_lookup = {(v.lower, v.upper): v.value for v in function_values}
     all_intervals = []
@@ -412,6 +479,7 @@ def incidence_convolution(
     first: tuple[MobiusValue, ...],
     second: tuple[MobiusValue, ...],
 ) -> IncidenceConvolutionResult:
+    _admit_canonical_poset(poset)
     comparable = {(p.lower, p.upper) for p in poset.strict_order_pairs}
     first_lookup = {(v.lower, v.upper): v.value for v in first}
     second_lookup = {(v.lower, v.upper): v.value for v in second}
@@ -434,6 +502,7 @@ def incidence_convolution(
 
 
 def antichain_profile(poset: FinitePoset) -> AntichainProfileResult:
+    _admit_canonical_poset(poset)
     _admit_antichain_profile(poset)
     elements = poset.elements
     comparable = {(p.lower, p.upper) for p in poset.strict_order_pairs}
@@ -477,6 +546,7 @@ __all__ = [
     "materialize_finite_poset",
     "mobius_function",
     "upper_closure",
+    "verify_finite_poset",
     "width",
     "zeta_transform",
 ]

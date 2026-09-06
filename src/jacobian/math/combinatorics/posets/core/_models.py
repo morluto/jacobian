@@ -419,58 +419,27 @@ class FinitePoset(StrictModel):
     poset_digest: Sha256Digest
 
     @model_validator(mode="after")
-    def require_complete_canonical_poset(self) -> Self:
+    def require_structural_poset(self) -> Self:
+        """Validate carrier shape while retaining derived order facts as claims."""
         strict, covers = _validate_canonical_poset_elements_and_pairs(
             self.elements, self.strict_order_pairs, self.cover_relations
         )
-        closure, reduction = _validated_presentation(
-            self.elements,
-            tuple(
-                PresentationPair(lower=lower, upper=upper) for lower, upper in strict
-            ),
-            RelationInterpretation.COMPARABLE_PAIRS,
-            ReflexivePairPolicy.FORBIDDEN,
-        )
-        if set(covers) != reduction:
+        carrier = set(self.elements)
+        all_pairs = strict + covers
+        if any(lower not in carrier or upper not in carrier for lower, upper in all_pairs):
             raise _validation_error(
-                "cover_relations_reduction",
-                "cover_relations is not the transitive reduction",
+                "relation_endpoints_declared",
+                "relation endpoints must be declared elements",
             )
-        _validate_poset_incomparable_pairs(
-            self.elements, self.incomparable_pairs, closure
-        )
-        expected_minimal, expected_maximal = _compute_poset_extremal_elements(
-            self.elements, closure
-        )
-        _validate_poset_extremal_elements(
-            self.minimal_elements,
-            self.maximal_elements,
-            expected_minimal,
-            expected_maximal,
-        )
-        expected_ranks = canonical_poset_ranks(self.elements, reduction)
-        _validate_poset_rank_structure(
-            self.elements,
-            self.graded,
-            self.ranks,
-            expected_ranks,
-            expected_minimal,
-            expected_maximal,
-            reduction,
-        )
-        expected_digest = finite_poset_digest(
-            elements=self.elements,
-            strict_order_pairs=self.strict_order_pairs,
-            cover_relations=self.cover_relations,
-            incomparable_pairs=self.incomparable_pairs,
-            minimal_elements=self.minimal_elements,
-            maximal_elements=self.maximal_elements,
-            graded=self.graded,
-            ranks=self.ranks,
-        )
-        if self.poset_digest != expected_digest:
+        if any(element not in carrier for element in self.minimal_elements + self.maximal_elements):
             raise _validation_error(
-                "digest_binds_poset", "poset_digest does not bind the canonical poset"
+                "extremal_elements_declared",
+                "extremal elements must belong to the carrier",
+            )
+        if self.ranks is not None and any(rank.element not in carrier for rank in self.ranks):
+            raise _validation_error(
+                "ranks_declared",
+                "rank entries must belong to the carrier",
             )
         return self
 

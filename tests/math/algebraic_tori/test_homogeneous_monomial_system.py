@@ -231,11 +231,13 @@ def test_result_round_trips_and_source_composes_unchanged() -> None:
 
 
 @pytest.mark.parametrize("factors", [("1",)])
-def test_torsion_character_group_rejects_noncanonical_factors(
+def test_torsion_character_group_keeps_factor_claim_out_of_decoding(
     factors: tuple[str, ...],
 ) -> None:
-    with pytest.raises(ValidationError, match="divisibility chain"):
-        TorsionCharacterGroup(invariant_factors=factors)
+    from jacobian.math.algebraic_tori import verify_torsion_character_group
+
+    group = TorsionCharacterGroup(invariant_factors=factors)
+    assert not verify_torsion_character_group(group)
 
 
 def test_result_rejects_component_count_that_contradicts_torsion_group() -> None:
@@ -323,9 +325,10 @@ def test_exact_public_api_symbols() -> None:
         "AlgebraicTorusSolutionSubgroup",
         "HomogeneousMonomialSystem",
         "TorsionCharacterGroup",
-        "homogeneous_monomial_solution_subgroup",
-        "verify_solution_subgroup",
-    )
+            "homogeneous_monomial_solution_subgroup",
+            "verify_solution_subgroup",
+            "verify_torsion_character_group",
+        )
 
 
 @pytest.mark.parametrize("entries", [[[2, 0], [0, 6]], [[2, 6, 0]], [[0, 0]]])

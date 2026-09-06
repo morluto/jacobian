@@ -13,6 +13,8 @@ from jacobian.math.combinatorics.posets.core._models import (
 from jacobian.math.combinatorics.posets.core.operations import (
     linear_extension_count,
     materialize_finite_poset,
+    verify_finite_poset,
+    width,
 )
 
 
@@ -81,6 +83,28 @@ def test_cover_relation_rejects_cycles_and_redundant_edges() -> None:
             )
         )
     _assert_operation_code(exc, "poset.cover_edges_transitive_redundancy")
+
+
+def test_serialized_poset_keeps_order_profile_as_a_claim() -> None:
+    poset = FinitePoset.model_validate(
+        {
+            "elements": ["a", "b"],
+            "strict_order_pairs": [
+                {"lower": "a", "upper": "b"},
+                {"lower": "b", "upper": "a"},
+            ],
+            "cover_relations": [],
+            "incomparable_pairs": [],
+            "minimal_elements": [],
+            "maximal_elements": [],
+            "graded": False,
+            "ranks": None,
+            "poset_digest": "sha256:" + "0" * 64,
+        }
+    )
+    assert verify_finite_poset(poset) is False
+    with pytest.raises(OperationDomainValidationError, match="antisymmetric"):
+        width(poset)
 
 
 def test_comparable_pairs_require_complete_transitive_relation() -> None:

@@ -10,7 +10,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import CanonicalizationError, parse_canonical_integer
+from jacobian.canonical import CanonicalizationError
 from jacobian.math.matrices.certified_snf.values import (
     MAX_CERTIFIED_SNF_INPUT_DIGITS,
     MAX_CERTIFIED_SNF_INPUT_DIMENSION,
@@ -169,7 +169,7 @@ class HomogeneousMonomialSystem(StrictModel):
 
 
 class TorsionCharacterGroup(StrictModel):
-    """Compact component indices ``product_i Z/d_i`` in Smith order."""
+    """Compact component indices retaining the Smith-factor claim."""
 
     invariant_factors: tuple[PositiveTorusInteger, ...] = Field(
         max_length=MAX_CERTIFIED_SNF_INPUT_DIMENSION
@@ -180,19 +180,6 @@ class TorsionCharacterGroup(StrictModel):
     root_convention: Literal["ZETA_D_EQUALS_EXP_2_PI_I_OVER_D"] = (
         "ZETA_D_EQUALS_EXP_2_PI_I_OVER_D"
     )
-
-    @model_validator(mode="after")
-    def require_canonical_invariant_factors(self) -> Self:
-        factors = tuple(
-            parse_canonical_integer(value) for value in self.invariant_factors
-        )
-        if any(value <= 1 for value in factors):
-            raise _validation_error(
-                "algebraic_torus.torsion_invariant_factors",
-                "torsion invariant factors must exceed one and form a divisibility chain",
-            )
-        return self
-
 
 class AlgebraicTorusSolutionSubgroup(StrictModel):
     """The complete solution subgroup of one homogeneous monomial system.

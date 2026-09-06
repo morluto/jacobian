@@ -11,6 +11,7 @@ from jacobian.math.combinatorics.posets.core.operations import (
     materialize_finite_poset,
     mobius_function,
     upper_closure,
+    verify_finite_poset,
     width,
     zeta_transform,
 )
@@ -26,6 +27,7 @@ __all__ = [
     "materialize_finite_poset",
     "mobius_function",
     "upper_closure",
+    "verify_finite_poset",
     "width",
     "zeta_transform",
 ]

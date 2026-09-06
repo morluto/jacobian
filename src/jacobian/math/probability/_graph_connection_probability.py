@@ -45,6 +45,17 @@ class GraphReliabilityEdgeProbability(StrictModel):
         return self
 
 
+class GraphConnectionProbabilityRequest(StrictModel):
+    """Transport request for terminal reliability."""
+
+    graph: SimpleUndirectedGraph
+    edge_probabilities: tuple[GraphReliabilityEdgeProbability, ...] = Field(
+        max_length=MAX_GRAPH_RELIABILITY_EDGES
+    )
+    terminals: tuple[str, str]
+    event: Literal["TERMINALS_CONNECTED"] = "TERMINALS_CONNECTED"
+
+
 class GraphReliabilitySource(StrictModel):
     """Canonical graph, edge-axis probabilities, and terminal event source."""
 
@@ -72,10 +83,6 @@ class GraphReliabilitySource(StrictModel):
         if len(self.graph.edges) > MAX_GRAPH_RELIABILITY_EDGES:
             raise _validation_error("reliability source exceeds the edge bound")
         return self
-
-
-class GraphConnectionProbabilityRequest(GraphReliabilitySource):
-    """Transport projection for a terminal-reliability source value."""
 
 
 class GraphReliabilityState(StrictModel):
@@ -166,7 +173,7 @@ def _wire(value: Any) -> CanonicalRational:
 
 
 def _admit_graph_connection_request(
-    request: GraphConnectionProbabilityRequest,
+    request: GraphConnectionProbabilityRequest | GraphReliabilitySource,
 ) -> tuple[tuple[Any, ...], int]:
     """Normalize edge probabilities and admit the complete ledger envelope."""
     if len(request.graph.vertices) > MAX_GRAPH_RELIABILITY_VERTICES:
@@ -249,10 +256,22 @@ def compute_graph_connection_probability(
 ) -> GraphConnectionProbabilityResult:
     """Compute exact terminal connectivity over every undirected edge subset."""
 
+    probabilities, state_count = _admit_graph_connection_request(request)
+    source = GraphReliabilitySource.model_validate(request.model_dump())
+    return _compute_graph_connection_probability_admitted(
+        source, probabilities, state_count
+    )
+
+
+def _compute_graph_connection_probability_admitted(
+    source: GraphReliabilitySource,
+    probabilities: tuple[Any, ...],
+    state_count: int,
+) -> GraphConnectionProbabilityResult:
+    """Compute an already admitted reliability ledger."""
+
     from flint import fmpq
 
-    source = GraphReliabilitySource.model_validate(request.model_dump())
-    probabilities, state_count = _admit_graph_connection_request(source)
     edge_count = len(source.graph.edges)
     states: list[GraphReliabilityState] = []
     connection_probability = fmpq(0)
@@ -303,6 +322,18 @@ def verify_graph_connection_probability(
         return False
 
 
+def _compute_graph_connection_probability_request(
+    request: GraphConnectionProbabilityRequest,
+) -> GraphConnectionProbabilityResult:
+    """Project a transport request into the domain-owned computation."""
+
+    probabilities, state_count = _admit_graph_connection_request(request)
+    source = GraphReliabilitySource.model_validate(request.model_dump())
+    return _compute_graph_connection_probability_admitted(
+        source, probabilities, state_count
+    )
+
+
 _SQUARE_GRAPH = {
     "graph": {
         "vertices": ["a", "b", "c", "d"],
@@ -328,7 +359,7 @@ GRAPH_CONNECTION_PROBABILITY_OPERATION = MathTool(
     ),
     request_type=GraphConnectionProbabilityRequest,
     result_type=GraphConnectionProbabilityResult,
-    run=compute_graph_connection_probability,
+    run=_compute_graph_connection_probability_request,
     tags=(
         "probability",
         "graph",

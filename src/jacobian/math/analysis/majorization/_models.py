@@ -58,7 +58,7 @@ def _require_majorization_matrix(matrix: RationalMatrix) -> None:
     """Apply majorization's square-matrix and scalar admission envelope."""
 
     row_count = len(matrix.entries)
-    column_count = len(matrix.entries[0]) if matrix.entries else 0
+    column_count = matrix.column_count
     if row_count > MAX_DIMENSION or column_count > MAX_DIMENSION:
         raise _validation_error(
             "matrix_dimension", f"matrix order must not exceed {MAX_DIMENSION}"

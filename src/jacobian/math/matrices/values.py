@@ -35,6 +35,9 @@ MAX_EXACT_LINEAR_MATRIX_AXIS = 64
 # canonical QQ matrix value while narrower operations enforce their own
 # request envelopes.
 MAX_RATIONAL_MATRIX_ORDER = 128
+# Representation envelope includes the existing 4096-state Markov domain.
+# Computational order limits above remain operation-owned.
+MAX_RATIONAL_MATRIX_AXIS = 4096
 # Exact inverse admits square integer sources through order 128. Keep that
 # complete public domain representable by the one canonical ZZ matrix value
 # while lattice reduction and the other integer operations enforce their own
@@ -193,54 +196,79 @@ def _require_raw_matrix_envelope(  # noqa: C901
     return data
 
 
+def _infer_matrix_shape(data: Any) -> Any:
+    """Retain declared axes; infer omitted dimensions only from actual rows."""
+    if isinstance(data, dict):
+        data = dict(data)
+        entries = data.get("entries", ())
+        if isinstance(entries, (list, tuple)):
+            data.setdefault("row_count", len(entries))
+            if not entries or isinstance(entries[0], (list, tuple)):
+                data.setdefault("column_count", len(entries[0]) if entries else 0)
+    return canonicalize_json_containers(data)
+
+
 class RationalMatrix(StrictModel):
-    """One nonempty rectangular matrix over canonical rationals."""
+    """An exact QQ matrix retaining both dimensions, including empty axes."""
 
     domain: Literal["QQ"] = "QQ"
+    row_count: int = Field(
+        default_factory=int,
+        ge=0,
+        le=MAX_RATIONAL_MATRIX_AXIS,
+        description="Row count, inferred from entries when omitted.",
+    )
+    column_count: int = Field(
+        default_factory=int,
+        ge=0,
+        le=MAX_RATIONAL_MATRIX_AXIS,
+        description="Column count, inferred from the first row or zero when omitted.",
+    )
     entries: tuple[tuple[CanonicalRational, ...], ...] = Field(
-        min_length=1,
-        max_length=MAX_RATIONAL_MATRIX_ORDER,
+        default=(),
+        max_length=MAX_RATIONAL_MATRIX_AXIS,
     )
 
     @model_validator(mode="before")
     @classmethod
     def require_raw_matrix_envelope(cls, data: Any) -> Any:
         data = _require_raw_matrix_envelope(
-            data, maximum_axis=MAX_RATIONAL_MATRIX_ORDER, label="matrix"
+            data,
+            maximum_axis=MAX_RATIONAL_MATRIX_AXIS,
+            label="matrix",
+            allow_shape=True,
         )
-        return canonicalize_json_containers(data)
+        return _infer_matrix_shape(data)
 
     @model_validator(mode="after")
-    def require_rectangular_nonempty_rows(self) -> Self:
-        column_count = len(self.entries[0])
-        if column_count == 0 or column_count > MAX_RATIONAL_MATRIX_ORDER:
+    def require_shape_and_scalars(self) -> Self:
+        if len(self.entries) != self.row_count or any(
+            len(row) != self.column_count for row in self.entries
+        ):
             raise _validation_error(
-                "budget_exceeded",
-                "matrix rows must contain between 1 and "
-                f"{MAX_RATIONAL_MATRIX_ORDER} entries",
-            )
-        if any(len(row) != column_count for row in self.entries):
-            raise _validation_error(
-                "budget_exceeded", "matrix rows must all have the same length"
+                "shape_mismatch", "matrix entries must match the declared shape"
             )
         require_matrix_scalar_digits(
-            self.entries,
-            maximum=MAX_MATRIX_SCALAR_DIGITS,
-            label="matrix",
+            self.entries, maximum=MAX_MATRIX_SCALAR_DIGITS, label="matrix"
         )
         return self
 
 
 def rational_matrix_from_fractions(
     entries: tuple[tuple[Fraction, ...], ...] | list[list[Fraction]],
+    *,
+    column_count: int | None = None,
 ) -> RationalMatrix:
-    """Construct the canonical dense rational matrix from exact fractions."""
-
+    """Construct a QQ matrix; supply column_count to retain a zero-row domain."""
     return RationalMatrix(
+        row_count=len(entries),
+        column_count=column_count
+        if column_count is not None
+        else (len(entries[0]) if entries else 0),
         entries=tuple(
             tuple(CanonicalRational.from_fraction(value) for value in row)
             for row in entries
-        )
+        ),
     )
 
 
@@ -314,8 +342,8 @@ def sparse_rational_matrix_from_dense(matrix: RationalMatrix) -> SparseRationalM
     """Convert the canonical dense QQ matrix to dimension-retaining coordinates."""
 
     return SparseRationalMatrix(
-        row_count=len(matrix.entries),
-        column_count=len(matrix.entries[0]),
+        row_count=matrix.row_count,
+        column_count=matrix.column_count,
         entries=tuple(
             SparseRationalMatrixEntry(row=row, column=column, value=value)
             for row, values in enumerate(matrix.entries)
@@ -329,32 +357,29 @@ def dense_rational_matrix_from_sparse(matrix: SparseRationalMatrix) -> RationalM
     """Convert bounded sparse coordinates to the canonical dense QQ matrix."""
 
     if (
-        matrix.row_count == 0
-        or matrix.column_count == 0
-        or matrix.row_count > MAX_RATIONAL_MATRIX_ORDER
-        or matrix.column_count > MAX_RATIONAL_MATRIX_ORDER
+        matrix.row_count > MAX_RATIONAL_MATRIX_AXIS
+        or matrix.column_count > MAX_RATIONAL_MATRIX_AXIS
     ):
-        raise ValueError(
-            "sparse matrix axes cannot be represented by the nonempty canonical "
-            "dense matrix"
-        )
+        raise ValueError("sparse matrix axes exceed the canonical dense matrix")
     zero = CanonicalRational(num="0", den="1")
     coordinates = {(entry.row, entry.column): entry.value for entry in matrix.entries}
     return RationalMatrix(
+        row_count=matrix.row_count,
+        column_count=matrix.column_count,
         entries=tuple(
             tuple(
                 coordinates.get((row, column), zero)
                 for column in range(matrix.column_count)
             )
             for row in range(matrix.row_count)
-        )
+        ),
     )
 
 
 class RationalVectorSpaceBasis(StrictModel):
     """A rational vector-space basis with its ambient dimension retained.
 
-    Unlike a dense matrix, a basis may be empty.  The explicit ambient
+    A basis may be empty. The explicit ambient
     dimension distinguishes the zero subspace of ``QQ^n`` for different ``n``.
     """
 
@@ -396,31 +421,68 @@ def rational_vector_space_basis_from_fractions(
 
 
 class RealQuadraticMatrix(StrictModel):
-    """One nonempty rectangular matrix over a shared real quadratic field."""
+    """An exact matrix over one declared real quadratic field, including empty axes."""
 
     domain: Literal["QQ_SQRT_D"] = "QQ_SQRT_D"
-    entries: tuple[tuple[RealQuadraticValue, ...], ...] = Field(
-        min_length=1,
-        max_length=MAX_MATRIX_DIMENSION,
-        description=(
-            "Nonempty rectangular rows of a+b*sqrt(d) values. Every entry "
-            "must carry the same square-free positive radicand d."
-        ),
+    radicand: int = Field(
+        default_factory=int,
+        ge=2,
+        le=1_000_000,
+        description="Shared radicand; inferred from nonempty entries, required for empty matrices.",
     )
+    row_count: int = Field(
+        default_factory=int,
+        ge=0,
+        le=MAX_MATRIX_DIMENSION,
+        description="Row count, inferred from entries when omitted.",
+    )
+    column_count: int = Field(
+        default_factory=int,
+        ge=0,
+        le=MAX_MATRIX_DIMENSION,
+        description="Column count, inferred from the first row or zero when omitted.",
+    )
+    entries: tuple[tuple[RealQuadraticValue, ...], ...] = Field(
+        default=(),
+        max_length=MAX_MATRIX_DIMENSION,
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def infer_context(cls, data: Any) -> Any:
+        data = _infer_matrix_shape(data)
+        if isinstance(data, dict) and "radicand" not in data:
+            entries = data.get("entries", ())
+            if (
+                isinstance(entries, (list, tuple))
+                and entries
+                and isinstance(entries[0], (list, tuple))
+                and entries[0]
+            ):
+                first = entries[0][0]
+                data["radicand"] = (
+                    first.get("radicand")
+                    if isinstance(first, dict)
+                    else getattr(first, "radicand", None)
+                )
+        return data
 
     @model_validator(mode="after")
     def require_rectangular_shared_field(self) -> Self:
-        column_count = len(self.entries[0])
-        if column_count == 0 or column_count > MAX_MATRIX_DIMENSION:
+        if not 2 <= self.radicand <= 1_000_000:
             raise _validation_error(
-                "shape_mismatch", "matrix rows must contain between 1 and 32 entries"
+                "shape_mismatch",
+                "empty quadratic matrices require an explicit radicand",
             )
-        if any(len(row) != column_count for row in self.entries):
+        if len(self.entries) != self.row_count or any(
+            len(row) != self.column_count for row in self.entries
+        ):
             raise _validation_error(
-                "shape_mismatch", "matrix rows must all have the same length"
+                "shape_mismatch", "matrix entries must match the declared shape"
             )
-        radicand = self.entries[0][0].radicand
-        if any(entry.radicand != radicand for row in self.entries for entry in row):
+        if any(
+            entry.radicand != self.radicand for row in self.entries for entry in row
+        ):
             raise _validation_error(
                 "shape_mismatch",
                 "every matrix entry must belong to one shared real quadratic field",
@@ -570,14 +632,26 @@ class SmithNormalForm(StrictModel):
 
 
 class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
-    """One nonempty rectangular matrix over a shared embedded simple number field."""
+    """An exact matrix retaining its embedding and both axes, including empty shapes."""
 
     domain: Literal["EMBEDDED_REAL_SIMPLE_NUMBER_FIELD"] = (
         "EMBEDDED_REAL_SIMPLE_NUMBER_FIELD"
     )
     embedding: RealNumberFieldEmbedding
+    row_count: int = Field(
+        default_factory=int,
+        ge=0,
+        le=MAX_MATRIX_DIMENSION,
+        description="Row count, inferred from entries when omitted.",
+    )
+    column_count: int = Field(
+        default_factory=int,
+        ge=0,
+        le=MAX_MATRIX_DIMENSION,
+        description="Column count, inferred from the first row or zero when omitted.",
+    )
     entries: tuple[tuple[SimpleNumberFieldElement, ...], ...] = Field(
-        min_length=1,
+        default=(),
         max_length=MAX_MATRIX_DIMENSION,
     )
 
@@ -586,7 +660,9 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
     def require_raw_matrix_envelope(cls, data: Any) -> Any:  # noqa: C901
         if not isinstance(data, dict):
             return data
-        if set(data).difference({"domain", "embedding", "entries"}):
+        if set(data).difference(
+            {"domain", "embedding", "entries", "row_count", "column_count"}
+        ):
             raise _validation_error(
                 "shape_mismatch",
                 "embedded number-field matrix contains unknown fields",
@@ -782,18 +858,15 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
                 root.get("polynomial"), (list, tuple)
             ):
                 raise PydanticCustomError("tuple_type", "Input should be a valid tuple")
-        return normalized
+        return _infer_matrix_shape(normalized)
 
     @model_validator(mode="after")
     def require_rectangular_shared_field(self) -> Self:
-        column_count = len(self.entries[0])
-        if column_count == 0 or column_count > MAX_MATRIX_DIMENSION:
+        if len(self.entries) != self.row_count or any(
+            len(row) != self.column_count for row in self.entries
+        ):
             raise _validation_error(
-                "shape_mismatch", "matrix rows must contain between 1 and 32 entries"
-            )
-        if any(len(row) != column_count for row in self.entries):
-            raise _validation_error(
-                "shape_mismatch", "matrix rows must all have the same length"
+                "shape_mismatch", "matrix entries must match the declared shape"
             )
         presentation = self.embedding.presentation
         for row in self.entries:

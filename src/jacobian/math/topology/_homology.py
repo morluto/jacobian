@@ -15,7 +15,6 @@ from jacobian.math.topology._models import (
     FiniteSimplicialComplex,
     HomologyConvention,
     _validation_error,
-    is_bounded_prime,
 )
 from jacobian.math.topology.chain_complexes.values import (
     CoefficientRing,
@@ -110,11 +109,6 @@ class SimplicialHomologyResult(StrictModel):
 
     @model_validator(mode="after")
     def require_complete_dimension_range(self) -> Self:
-        if not is_bounded_prime(self.prime):
-            raise _validation_error(
-                "topology.require_complete_dimension_range_1",
-                "homology result requires a bounded prime",
-            )
         dimensions = tuple(group.dimension for group in self.groups)
         if dimensions != tuple(range(len(self.groups))):
             raise _validation_error(

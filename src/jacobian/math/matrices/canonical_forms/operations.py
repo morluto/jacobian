@@ -331,8 +331,8 @@ def _admit_matrix_polynomial_evaluation(
     matrix: RationalMatrix,
     polynomial: RationalPolynomial,
 ) -> None:
-    dimension = len(matrix.entries)
-    if len(matrix.entries[0]) != dimension:
+    dimension = matrix.row_count
+    if matrix.column_count != dimension or dimension == 0:
         raise _validation_error(
             "budget_exceeded",
             "matrix polynomial evaluation requires a square matrix",
@@ -376,8 +376,12 @@ def _admit_matrix_polynomial_evaluation(
 
 
 def _admit_square_matrix(matrix: RationalMatrix) -> None:
-    rows = len(matrix.entries)
-    columns = len(matrix.entries[0])
+    rows = matrix.row_count
+    columns = matrix.column_count
+    if rows == 0:
+        raise _validation_error(
+            "budget_exceeded", "canonical-form operations require a nonempty matrix"
+        )
     if rows != columns:
         raise _validation_error(
             "budget_exceeded", "canonical-form operations require a square matrix"

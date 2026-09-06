@@ -144,7 +144,7 @@ def test_sparse_rational_matrix_rejects_entries_on_a_zero_axis(
     ("row_count", "column_count"),
     ((0, 5), (4, 0), (0, 0)),
 )
-def test_zero_axis_sparse_matrix_has_no_dense_canonical_conversion(
+def test_zero_axis_sparse_matrix_preserves_dense_canonical_axes(
     row_count: int, column_count: int
 ) -> None:
     matrix = SparseRationalMatrix(
@@ -152,8 +152,9 @@ def test_zero_axis_sparse_matrix_has_no_dense_canonical_conversion(
         column_count=column_count,
     )
 
-    with pytest.raises(ValueError, match="nonempty canonical dense matrix"):
-        dense_rational_matrix_from_sparse(matrix)
+    dense = dense_rational_matrix_from_sparse(matrix)
+    assert (dense.row_count, dense.column_count) == (row_count, column_count)
+    assert sparse_rational_matrix_from_dense(dense) == matrix
 
 
 @pytest.mark.parametrize(

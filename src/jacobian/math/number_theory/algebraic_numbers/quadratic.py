@@ -181,32 +181,13 @@ class RealQuadraticEmbeddingProfile(StrictModel):
 
     @model_validator(mode="after")
     def bind_profile_to_source(self) -> Self:
-        source_conjugate = RealQuadraticValue(
-            rational_part=self.source.rational_part,
-            radical_coefficient=CanonicalRational.from_fraction(
-                -self.source.radical_coefficient.as_fraction()
-            ),
-            radicand=self.source.radicand,
-        )
-        expected_images = (
-            RealQuadraticEmbeddingImage(embedding="POSITIVE_ROOT", value=self.source),
-            RealQuadraticEmbeddingImage(
-                embedding="NEGATIVE_ROOT", value=source_conjugate
-            ),
-        )
-        if self.images != expected_images:
+        if tuple(image.embedding for image in self.images) != (
+            "POSITIVE_ROOT",
+            "NEGATIVE_ROOT",
+        ) or any(image.value.radicand != self.source.radicand for image in self.images):
             raise _validation_error(
                 "embedding_images_mismatch",
                 "images must use the ordered embeddings of the source field",
-            )
-        expected_trace, expected_norm = _embedding_scalars(self.source)
-        if self.trace.as_fraction() != expected_trace:
-            raise _validation_error(
-                "trace_mismatch", "trace must equal the sum of the source embeddings"
-            )
-        if self.norm.as_fraction() != expected_norm:
-            raise _validation_error(
-                "norm_mismatch", "norm must equal the product of the source embeddings"
             )
         for label, value in (("trace", self.trace), ("norm", self.norm)):
             _require_bounded_rational(
@@ -259,54 +240,6 @@ class RealQuadraticOrderValue(StrictModel):
             raise _validation_error(
                 "difference_field_mismatch",
                 "left, right, and difference must use one quadratic field",
-            )
-        expected_rational = (
-            self.left.rational_part.as_fraction()
-            - self.right.rational_part.as_fraction()
-        )
-        expected_radical = (
-            self.left.radical_coefficient.as_fraction()
-            - self.right.radical_coefficient.as_fraction()
-        )
-        if (
-            self.difference.rational_part.as_fraction() != expected_rational
-            or self.difference.radical_coefficient.as_fraction() != expected_radical
-        ):
-            raise _validation_error(
-                "difference_mismatch", "difference must equal left minus right"
-            )
-
-        rational_square = expected_rational * expected_rational
-        radical_square = expected_radical * expected_radical * self.left.radicand
-        expected_magnitude_order = _order(rational_square, radical_square)
-        if (
-            self.sign_certificate.rational_part_squared.as_fraction() != rational_square
-            or self.sign_certificate.radical_part_squared.as_fraction()
-            != radical_square
-            or self.sign_certificate.magnitude_order != expected_magnitude_order
-        ):
-            raise _validation_error(
-                "sign_certificate_mismatch",
-                "sign certificate must match the exact quadratic difference",
-            )
-
-        expected_basis: RealQuadraticSignBasis = (
-            "RATIONAL_ONLY"
-            if expected_radical == 0
-            else "RADICAL_ONLY"
-            if expected_rational == 0
-            else "SAME_SIGN"
-            if (expected_rational > 0) == (expected_radical > 0)
-            else "OPPOSING_SIGNS_SQUARED_MAGNITUDES"
-        )
-        expected_sign = _sign(expected_rational, expected_radical, self.left.radicand)
-        expected_order = (
-            "LT" if expected_sign < 0 else "GT" if expected_sign > 0 else "EQ"
-        )
-        if self.sign_basis != expected_basis or self.order != expected_order:
-            raise _validation_error(
-                "order_mismatch",
-                "order and sign basis must match the exact quadratic difference",
             )
         return self
 

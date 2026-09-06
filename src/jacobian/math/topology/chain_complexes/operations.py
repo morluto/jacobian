@@ -28,6 +28,7 @@ from jacobian.math.topology.chain_complexes.values import (
     MappingConeResult,
     TensorProductResult,
     VerificationResult,
+    require_prime_field_admission,
 )
 
 MapMatrices = tuple[tuple[tuple[str, ...], ...], ...]
@@ -48,6 +49,23 @@ class ChainComplexAdmissionError(ValueError):
     def __init__(self, reason: str, message: str) -> None:
         super().__init__(message)
         self.reason = reason
+
+
+def _admit_prime_fields(
+    *complexes: ChainComplexValue,
+) -> None:
+    """Admit each distinct GF(p) context once for a compound operation."""
+    admitted: set[int] = set()
+    for complex_value in complexes:
+        prime = complex_value.prime
+        if (
+            complex_value.coefficient_ring is CoefficientRing.PRIME_FIELD
+            and prime in admitted
+        ):
+            continue
+        require_prime_field_admission(complex_value.coefficient_ring, prime)
+        if prime is not None:
+            admitted.add(prime)
 
 
 def _require_tensor_admission(
@@ -975,6 +993,7 @@ def construct_chain_complex(
     Differential entries use the canonical exact string grammar carried by
     :class:`ChainComplexValue`; adjacent differentials must compose to zero.
     """
+    require_prime_field_admission(coefficient_ring, prime)
     value = ChainComplexValue(
         coefficient_ring=coefficient_ring,
         prime=prime,
@@ -1000,6 +1019,7 @@ def construct_chain_complex(
 
 def homology_groups(complex_value: ChainComplexValue) -> HomologyResult:
     """Return exact homology groups for a canonical chain complex value."""
+    require_prime_field_admission(complex_value.coefficient_ring, complex_value.prime)
     _require_complex_cell_budget(
         complex_value,
         maximum=MAX_MATRIX_CELLS,
@@ -1020,6 +1040,7 @@ def differential_squares_to_zero(
     complex_value: ChainComplexValue,
 ) -> VerificationResult:
     """Verify d^2 = 0 for one canonical chain-complex value."""
+    require_prime_field_admission(complex_value.coefficient_ring, complex_value.prime)
     _require_complex_cell_budget(
         complex_value,
         maximum=MAX_OPERATION_MATRIX_CELLS,
@@ -1035,6 +1056,7 @@ def chain_map_commutes(
     map_matrices: MapMatrices,
 ) -> VerificationResult:
     """Verify that a component-wise chain map commutes with differentials."""
+    _admit_prime_fields(source, target)
     for label, complex_value in (("source", source), ("target", target)):
         _require_complex_cell_budget(
             complex_value,
@@ -1060,6 +1082,7 @@ def mapping_cone(
     map_matrices: MapMatrices,
 ) -> MappingConeResult:
     """Compute the mapping cone of a chain-map value."""
+    _admit_prime_fields(source, target)
     for label, complex_value in (("source", source), ("target", target)):
         _require_complex_cell_budget(
             complex_value,
@@ -1092,6 +1115,7 @@ def tensor_product_complex(
     right: ChainComplexValue,
 ) -> TensorProductResult:
     """Compute the tensor product of two canonical chain-complex values."""
+    _admit_prime_fields(left, right)
     for label, complex_value in (("left", left), ("right", right)):
         _require_complex_cell_budget(
             complex_value,

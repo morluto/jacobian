@@ -125,7 +125,7 @@ def _trace_and_determinant(
     spectrum_kind: SpectrumKind,
 ) -> tuple[Quadratic, Quadratic]:
     entries = _matrix_entries(matrix)
-    radicand = matrix.entries[0][0].radicand
+    radicand = matrix.radicand
     if spectrum_kind == "SYMMETRIC_EIGENVALUES":
         a, b = entries[0]
         _ignored, c = entries[1]
@@ -364,15 +364,13 @@ def spectrum_rows(
 ) -> tuple[RealAlgebraicMultiplicity, ...]:
     """Return the complete descending exact spectrum with multiplicities."""
 
-    require_square_free_radicand(
-        matrix.entries[0][0].radicand, location=("matrix", "entries", "radicand")
-    )
     if spectrum_kind == "SYMMETRIC_EIGENVALUES":
         require_symmetric_spectrum_matrix(matrix)
     else:
         require_singular_spectrum_matrix(matrix)
+    require_square_free_radicand(matrix.radicand, location=("matrix", "radicand"))
     rational, radical, trace, determinant = _polynomial_parts(matrix, spectrum_kind)
-    radicand = matrix.entries[0][0].radicand
+    radicand = matrix.radicand
     discriminant = _subtract(
         _multiply(trace, trace, radicand),
         _scale(determinant, Fraction(4)),
@@ -551,7 +549,7 @@ def _eliminate_two(
 
 
 def _inertia_counts(matrix: RealQuadraticMatrix) -> tuple[int, int, int]:
-    radicand = matrix.entries[0][0].radicand
+    radicand = matrix.radicand
     reduced = _matrix_entries(matrix)
     positive = negative = zero = 0
     index = 0
@@ -586,10 +584,8 @@ def inertia_data(
 ) -> tuple[int, int, int, Definiteness]:
     """Return exact Sylvester inertia data for an admitted matrix."""
 
-    require_square_free_radicand(
-        matrix.entries[0][0].radicand, location=("matrix", "entries", "radicand")
-    )
     require_inertia_matrix(matrix)
+    require_square_free_radicand(matrix.radicand, location=("matrix", "radicand"))
     positive, negative, zero = _inertia_counts(matrix)
     return (
         positive,

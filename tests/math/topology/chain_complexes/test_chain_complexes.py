@@ -59,6 +59,39 @@ from jacobian.math.topology.chain_complexes.values import (
     IntegralHomologyGroupValue,
 )
 
+
+def test_chain_value_parsing_is_structural_and_consumers_admit_prime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.topology.chain_complexes.operations as chain_operations
+
+    payload = {
+        "coefficient_ring": "GF_p",
+        "prime": 15,
+        "degree_min": 0,
+        "degree_max": 0,
+        "basis_sizes": [0],
+        "differential_matrices": [],
+    }
+    calls: list[int] = []
+    from jacobian.math.topology.chain_complexes.values import (
+        require_prime_field_admission as original,
+    )
+
+    def tracked(ring: CoefficientRing, prime: int | None) -> None:
+        assert prime is not None
+        calls.append(prime)
+        original(ring, prime)
+
+    monkeypatch.setattr(chain_operations, "require_prime_field_admission", tracked)
+    value = ChainComplexValue.model_validate(payload)
+    ChainComplexValue.model_validate(value.model_dump(mode="json"))
+    assert calls == []
+    with pytest.raises(ValueError, match="not prime"):
+        differential_squares_to_zero(value)
+    assert calls == [15]
+
+
 MapMatrices = tuple[tuple[tuple[str, ...], ...], ...]
 
 

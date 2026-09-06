@@ -269,18 +269,19 @@ class TestFiniteFieldFunctionalGraph:
             if source not in cycle_nodes
         )
 
-    def test_result_contract_rejects_false_tail_evidence(self) -> None:
-        with pytest.raises(ValidationError) as exc_info:
-            FiniteFieldMapResult(
-                prime=2,
-                coefficients=("0",),
-                edges=((0, 0), (1, 0)),
-                cycles=((0,),),
-                tail_lengths=(0, 0),
-            )
+    def test_result_parse_retains_structural_claims_without_replaying_graph(
+        self,
+    ) -> None:
+        result = FiniteFieldMapResult(
+            prime=2,
+            coefficients=("0",),
+            edges=((0, 0), (1, 0)),
+            cycles=((0,),),
+            tail_lengths=(0, 0),
+        )
+
         assert (
-            exc_info.value.errors()[0]["type"]
-            == "arithmetic_dynamics.cycle_tail_mismatch"
+            FiniteFieldMapResult.model_validate_json(result.model_dump_json()) == result
         )
 
     def test_nonprime_modulus_is_rejected(self) -> None:

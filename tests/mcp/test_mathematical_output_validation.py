@@ -31,6 +31,20 @@ from jacobian.mcp.direct_tools import direct_operation_tools
         ("lie_algebra.chevalley_eilenberg.complex.compute", None),
         ("crossed_product.multiply.compute", None),
         ("polynomial.roots.isolate", None),
+        ("arithmetic.real_quadratic.order.compute", None),
+        ("arithmetic.real_quadratic.embeddings.compute", None),
+        ("arithmetic_dynamics.finite_field.functional_graph.compute", None),
+        ("lattice.dual.compute", None),
+        ("topology.simplicial_homology.compute", None),
+        (
+            "chain_complex.construct.compute",
+            {
+                "coefficient_ring": "GF_p",
+                "prime": 1000003,
+                "basis_sizes": [0],
+                "differential_matrices": [],
+            },
+        ),
         (
             "finite_field.projective_line.enumerate",
             {
@@ -75,6 +89,11 @@ def test_direct_sdk_result_validation_does_not_replay_proofs(
                     "_check_category_laws",
                     "_require_jacobi",
                     "require_skew_symmetrizable",
+                    "is_bounded_prime",
+                    "require_prime_field_admission",
+                    "_require_full_rank_qq",
+                    "_sign",
+                    "_order",
                 }
             )
         )

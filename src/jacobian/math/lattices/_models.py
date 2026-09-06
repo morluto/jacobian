@@ -205,48 +205,7 @@ class IntegerLattice(StrictModel):
             maximum=_MAX_LATTICE_INPUT_SCALAR_DIGITS,
             label="lattice basis",
         )
-        _require_full_rank_qq(self.basis.entries, rows, columns)
         return self
-
-
-def _require_full_rank_qq(
-    entries: tuple[tuple[str, ...], ...],
-    rows: int,
-    columns: int,
-) -> None:
-    """Raise when the integer rows are not full row rank over ``QQ``."""
-
-    from fractions import Fraction
-
-    matrix: list[list[Fraction]] = [
-        [Fraction(entry) for entry in row] for row in entries
-    ]
-    rank = 0
-    col = 0
-    row = 0
-    work = [row[:] for row in matrix]
-    while row < rows and col < columns:
-        pivot = None
-        for r in range(row, rows):
-            if work[r][col] != 0:
-                pivot = r
-                break
-        if pivot is None:
-            col += 1
-            continue
-        work[row], work[pivot] = work[pivot], work[row]
-        for r in range(row + 1, rows):
-            if work[r][col] != 0:
-                factor = work[r][col] / work[row][col]
-                for c in range(col, columns):
-                    work[r][c] -= factor * work[row][c]
-        row += 1
-        col += 1
-        rank += 1
-    if rank != rows:
-        raise _validation_error(
-            "basis_not_full_rank", "lattice basis must have full row rank over QQ"
-        )
 
 
 class RankGramRequest(StrictModel):

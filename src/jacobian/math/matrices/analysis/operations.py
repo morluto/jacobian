@@ -97,8 +97,8 @@ def _admit_rational_spectrum_claim(
     matrix: RationalMatrix,
     claimed_profile: tuple[RationalSpectrumMultiplicityClaim, ...],
 ) -> None:
-    order = len(matrix.entries)
-    if order != len(matrix.entries[0]):
+    order = matrix.row_count
+    if order == 0 or order != matrix.column_count:
         raise _validation_error(
             "shape_mismatch", "rational spectrum claims require a square matrix"
         )
@@ -378,8 +378,8 @@ def _admit_inertia_from_bounds(
 
 
 def _admit_inertia(matrix: ExactRealMatrix) -> _InertiaExecutionPlan:
-    order = len(matrix.entries)
-    if order != len(matrix.entries[0]):
+    order = matrix.row_count
+    if order == 0 or order != matrix.column_count:
         raise _validation_error("shape_mismatch", "inertia requires a square matrix")
     if any(
         matrix.entries[row][column] != matrix.entries[column][row]

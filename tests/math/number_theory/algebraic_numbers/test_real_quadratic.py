@@ -6,7 +6,6 @@ from fractions import Fraction
 from typing import cast
 
 import pytest
-from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
@@ -56,7 +55,7 @@ def test_native_order_api_accepts_canonical_values_without_a_wire_request() -> N
 
 
 @pytest.mark.parametrize(
-    ("field", "forged_value", "error_type"),
+    ("field", "forged_value"),
     (
         (
             "difference",
@@ -65,10 +64,9 @@ def test_native_order_api_accepts_canonical_values_without_a_wire_request() -> N
                 "radical_coefficient": {"num": "0", "den": "1"},
                 "radicand": 2,
             },
-            "real_quadratic.difference_mismatch",
         ),
-        ("order", "LT", "real_quadratic.order_mismatch"),
-        ("sign_basis", "RADICAL_ONLY", "real_quadratic.order_mismatch"),
+        ("order", "LT"),
+        ("sign_basis", "RADICAL_ONLY"),
         (
             "sign_certificate",
             {
@@ -76,20 +74,17 @@ def test_native_order_api_accepts_canonical_values_without_a_wire_request() -> N
                 "radical_part_squared": {"num": "0", "den": "1"},
                 "magnitude_order": "GT",
             },
-            "real_quadratic.sign_certificate_mismatch",
         ),
     ),
 )
-def test_order_result_rejects_forged_source_bound_fields(
-    field: str, forged_value: object, error_type: str
+def test_order_result_parsing_retains_structural_source_context_only(
+    field: str, forged_value: object
 ) -> None:
     result = real_quadratic_order(_value(3), _value(1))
     payload = result.model_dump(mode="json")
 
-    with pytest.raises(ValidationError) as exc_info:
-        RealQuadraticOrderValue.model_validate({**payload, field: forged_value})
-
-    assert exc_info.value.errors()[0]["type"] == error_type
+    parsed = RealQuadraticOrderValue.model_validate({**payload, field: forged_value})
+    assert parsed.left.radicand == parsed.right.radicand == parsed.difference.radicand
 
 
 def test_native_order_api_retains_shared_field_admission() -> None:

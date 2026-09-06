@@ -64,6 +64,12 @@ def specialization_preorder(
 ) -> tuple[tuple[bool, ...], ...]:
     """Return ``relation[x][y]`` iff ``x`` lies in the closure of ``{y}``."""
     _require_topology_axioms(topology)
+    return _specialization_preorder(topology)
+
+
+def _specialization_preorder(
+    topology: FiniteTopology,
+) -> tuple[tuple[bool, ...], ...]:
     containing = [
         tuple(
             frozenset(open_set) for open_set in topology.open_sets if point in open_set
@@ -83,6 +89,12 @@ def minimal_open_neighborhoods(
     topology: FiniteTopology,
 ) -> tuple[frozenset[int], ...]:
     _require_topology_axioms(topology)
+    return _minimal_open_neighborhoods(topology)
+
+
+def _minimal_open_neighborhoods(
+    topology: FiniteTopology,
+) -> tuple[frozenset[int], ...]:
     return tuple(
         frozenset.intersection(
             *(
@@ -98,7 +110,7 @@ def minimal_open_neighborhoods(
 def closure(topology: FiniteTopology, subset: Iterable[int]) -> frozenset[int]:
     _require_topology_axioms(topology)
     selected = _subset(topology, subset)
-    relation = specialization_preorder(topology)
+    relation = _specialization_preorder(topology)
     return frozenset(
         point
         for point in range(topology.point_count)
@@ -109,7 +121,7 @@ def closure(topology: FiniteTopology, subset: Iterable[int]) -> frozenset[int]:
 def interior(topology: FiniteTopology, subset: Iterable[int]) -> frozenset[int]:
     _require_topology_axioms(topology)
     selected = _subset(topology, subset)
-    neighborhoods = minimal_open_neighborhoods(topology)
+    neighborhoods = _minimal_open_neighborhoods(topology)
     return frozenset(
         point
         for point, neighborhood in enumerate(neighborhoods)
@@ -119,7 +131,7 @@ def interior(topology: FiniteTopology, subset: Iterable[int]) -> frozenset[int]:
 
 def connected_components(topology: FiniteTopology) -> tuple[tuple[int, ...], ...]:
     _require_topology_axioms(topology)
-    relation = specialization_preorder(topology)
+    relation = _specialization_preorder(topology)
     visited: set[int] = set()
     components: list[tuple[int, ...]] = []
     for start in range(topology.point_count):
@@ -171,7 +183,7 @@ def is_continuous(
 
 def is_t0(topology: FiniteTopology) -> bool:
     _require_topology_axioms(topology)
-    relation = specialization_preorder(topology)
+    relation = _specialization_preorder(topology)
     return all(
         not (relation[left][right] and relation[right][left])
         for left in range(topology.point_count)
@@ -198,7 +210,7 @@ def _unique_extremum(
 
 def beat_points(topology: FiniteTopology) -> BeatPointAnalysis:
     _require_topology_axioms(topology)
-    relation = specialization_preorder(topology)
+    relation = _specialization_preorder(topology)
     if any(
         relation[left][right] and relation[right][left]
         for left in range(topology.point_count)

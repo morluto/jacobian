@@ -104,20 +104,11 @@ def galois_factor(
         )
         for factor_poly, multiplicity in factor_polys
     )
-    factor_count = sum(factor.multiplicity for factor in result_factors)
-    is_irred = (
-        len(result_factors) == 1
-        and result_factors[0].multiplicity == 1
-        and len(result_factors[0].coefficients) == len(coefficients)
-    )
     return GaloisFactorResult._from_kernel(
         field_order=field_order,
         source_coefficients=coefficients,
         unit=int(unit) % field_order,
         factors=result_factors,
-        distinct_factor_count=len(result_factors),
-        factor_count=factor_count,
-        is_irreducible=is_irred,
     )
 
 

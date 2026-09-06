@@ -50,7 +50,7 @@ def _validate_matrix_carrier(value: object) -> RationalFunctionMatrix:
     if not isinstance(value, RationalFunctionMatrix):
         raise ValueError("symbolic matrix must be a RationalFunctionMatrix carrier")
     try:
-        return RationalFunctionMatrix.model_validate(value.model_dump())
+        return RationalFunctionMatrix.model_validate(value.model_dump(warnings="none"))
     except Exception as exc:
         raise ValueError("symbolic matrix carrier failed structural validation") from exc
 

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -23,7 +24,18 @@ from jacobian.math.matrices.symbolic._models import (
     SymbolicMatrixRequest,
     SymbolicRankResult,
 )
-from jacobian.math.matrices.symbolic._tools import TOOLS
+from jacobian.math.matrices.symbolic._tools import (
+    TOOLS,
+)
+from jacobian.math.matrices.symbolic._tools import (
+    _run_characteristic as _run_characteristic_tool,
+)
+from jacobian.math.matrices.symbolic._tools import (
+    _run_determinant as _run_determinant_tool,
+)
+from jacobian.math.matrices.symbolic._tools import (
+    _run_eigenvalues as _run_eigenvalues_tool,
+)
 from jacobian.math.matrices.symbolic.operations import (
     symbolic_characteristic_polynomial,
     symbolic_determinant,
@@ -1238,6 +1250,27 @@ def test_eigenvalue_verifier_is_total_for_forged_source_axes() -> None:
     forged = result.model_copy(update={"matrix": forged_matrix})
     assert not verify_symbolic_eigenvalues(forged)
     assert not verify_symbolic_eigenvalues(None)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("runner", "request_type"),
+    (
+        (_run_determinant_tool, SymbolicDeterminantRequest),
+        (_run_characteristic_tool, SymbolicCharacteristicPolynomialRequest),
+        (_run_eigenvalues_tool, SymbolicCharacteristicPolynomialRequest),
+    ),
+)
+def test_symbolic_polynomial_runners_revalidate_forged_matrix_envelopes(
+    runner: Callable[[Any], Any],
+    request_type: Any,
+) -> None:
+    source = SymbolicMatrix(
+        variables=(), entries=((_constant(1),),),
+    )
+    forged = source.model_copy(update={"row_count": 0, "entries": ("oops",)})
+    request = request_type(matrix=source).model_copy(update={"matrix": forged})
+    with pytest.raises(OperationDomainValidationError):
+        runner(request)
 
 
 def test_matrix_rejects_nonrectangular_mismatched_and_invalid_axes() -> None:

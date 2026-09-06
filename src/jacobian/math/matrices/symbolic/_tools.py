@@ -28,10 +28,11 @@ from jacobian.math.matrices.symbolic.operations import (
 
 
 def _run_determinant(request: SymbolicDeterminantRequest) -> SymbolicDeterminantResult:
+    matrix = _domain_call(_validate_matrix_carrier, request.matrix)
     return SymbolicDeterminantResult(
         determinant=symbolic_determinant(
-            request.matrix.entries,
-            request.matrix.variables,
+            matrix.entries,
+            matrix.variables,
         )
     )
 
@@ -54,9 +55,10 @@ def _run_product(request: RationalFunctionMatrixProductRequest) -> RationalFunct
 def _run_characteristic(
     request: SymbolicCharacteristicPolynomialRequest,
 ) -> SymbolicCharacteristicPolynomialResult:
+    matrix = _domain_call(_validate_matrix_carrier, request.matrix)
     degree, coefficients = symbolic_characteristic_polynomial(
-        request.matrix.entries,
-        request.matrix.variables,
+        matrix.entries,
+        matrix.variables,
     )
     return SymbolicCharacteristicPolynomialResult(
         degree=degree,
@@ -67,12 +69,13 @@ def _run_characteristic(
 def _run_eigenvalues(
     request: SymbolicCharacteristicPolynomialRequest,
 ) -> SymbolicEigenvaluesResult:
+    matrix = _domain_call(_validate_matrix_carrier, request.matrix)
     degree, coefficients = symbolic_characteristic_polynomial(
-        request.matrix.entries,
-        request.matrix.variables,
+        matrix.entries,
+        matrix.variables,
     )
     return SymbolicEigenvaluesResult(
-        matrix=request.matrix,
+        matrix=matrix,
         characteristic_polynomial=coefficients,
         degree=degree,
     )

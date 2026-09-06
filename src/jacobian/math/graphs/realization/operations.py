@@ -9,6 +9,7 @@ import networkx as nx
 from jacobian.math.graphs.realization._models import (
     DegreeSequence,
     DegreeSequenceResult,
+    GraphicalityCertificate,
     GraphicalityCheckResult,
     GraphRealizationResult,
     RealizationCheckResult,
@@ -82,11 +83,10 @@ def graphicality_check(sequence: DegreeSequence) -> GraphicalityCheckResult:
     vertex_count = len(degrees)
     degree_sum = sum(degrees)
     if degree_sum % 2:
-        certificate = "odd-sum: the degree sum is not even"
         return GraphicalityCheckResult(
             sequence=sequence,
             is_graphical=False,
-            certificate=certificate,
+            certificate=GraphicalityCertificate(kind="ODD_SUM"),
         )
     sorted_degrees = sorted(degrees, reverse=True)
     if any(degree >= vertex_count for degree in sorted_degrees):
@@ -94,7 +94,9 @@ def graphicality_check(sequence: DegreeSequence) -> GraphicalityCheckResult:
         return GraphicalityCheckResult(
             sequence=sequence,
             is_graphical=False,
-            certificate=f"degree {bad} exceeds vertex count {vertex_count - 1}",
+            certificate=GraphicalityCertificate(
+                kind="DEGREE_BOUND", degree=bad, vertex_count=vertex_count
+            ),
         )
     cumulative = 0
     for k in range(1, vertex_count + 1):
@@ -106,14 +108,17 @@ def graphicality_check(sequence: DegreeSequence) -> GraphicalityCheckResult:
             return GraphicalityCheckResult(
                 sequence=sequence,
                 is_graphical=False,
-                certificate=(
-                    f"erdos-gallai violation at k={k}: left={cumulative} > right={rhs}"
+                certificate=GraphicalityCertificate(
+                    kind="ERDOS_GALLAI_VIOLATION",
+                    k=k,
+                    left=cumulative,
+                    right=rhs,
                 ),
             )
     return GraphicalityCheckResult(
         sequence=sequence,
         is_graphical=True,
-        certificate="ERDOS-GALLAI",
+        certificate=GraphicalityCertificate(kind="ERDOS_GALLAI"),
     )
 
 
@@ -139,8 +144,43 @@ def verify_degree_sequence_profile(claim: DegreeSequenceResult) -> bool:
 
 
 def verify_graphicality_check(claim: GraphicalityCheckResult) -> bool:
-    """Return whether a graphicality certificate is the canonical claim result."""
-    return graphicality_check(claim.sequence) == claim
+    """Return whether a typed Erdos-Gallai certificate proves the claim."""
+    certificate = claim.certificate
+    degrees = claim.sequence.degrees
+    vertex_count = len(degrees)
+    if certificate.kind == "ODD_SUM":
+        return not claim.is_graphical and sum(degrees) % 2 == 1
+    if certificate.kind == "DEGREE_BOUND":
+        return (
+            not claim.is_graphical
+            and certificate.degree is not None
+            and certificate.vertex_count == vertex_count
+            and certificate.degree in degrees
+            and certificate.degree >= vertex_count
+        )
+    sorted_degrees = sorted(degrees, reverse=True)
+    if certificate.kind == "ERDOS_GALLAI_VIOLATION":
+        if (
+            claim.is_graphical
+            or certificate.k is None
+            or certificate.left is None
+            or certificate.right is None
+            or not 1 <= certificate.k <= vertex_count
+        ):
+            return False
+        k = certificate.k
+        left = sum(sorted_degrees[:k])
+        right = k * (k - 1) + sum(min(value, k) for value in sorted_degrees[k:])
+        return certificate.left == left and certificate.right == right and left > right
+    if certificate.kind == "ERDOS_GALLAI":
+        if not claim.is_graphical or sum(degrees) % 2:
+            return False
+        return all(
+            sum(sorted_degrees[:k])
+            <= k * (k - 1) + sum(min(value, k) for value in sorted_degrees[k:])
+            for k in range(1, vertex_count + 1)
+        ) and all(value < vertex_count for value in sorted_degrees)
+    return False
 
 
 def verify_realization_check(claim: RealizationCheckResult) -> bool:

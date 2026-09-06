@@ -50,6 +50,10 @@ class FloorSumRequest(StrictModel):
 class FloorSumResult(StrictModel):
     """The exact floor sum value."""
 
+    n: int = Field(ge=0, le=_MAX_FLOOR_SUM_N)
+    m: int = Field(ge=1, le=_MAX_FLOOR_SUM_PARAM)
+    a: int = Field(ge=0, le=_MAX_FLOOR_SUM_PARAM)
+    b: int = Field(ge=0, le=_MAX_FLOOR_SUM_PARAM)
     value: CanonicalInteger
 
 
@@ -86,8 +90,15 @@ class CongruenceBoxCountRequest(StrictModel):
 class CongruenceBoxCountResult(StrictModel):
     """Count and residue-class ledger."""
 
+    x_lo: int = Field(ge=-_MAX_BOX_COORD, le=_MAX_BOX_COORD)
+    x_hi: int = Field(ge=-_MAX_BOX_COORD, le=_MAX_BOX_COORD)
+    y_lo: int = Field(ge=-_MAX_BOX_COORD, le=_MAX_BOX_COORD)
+    y_hi: int = Field(ge=-_MAX_BOX_COORD, le=_MAX_BOX_COORD)
+    u: int = Field(ge=-_MAX_BOX_LINEAR_COEFFICIENT, le=_MAX_BOX_LINEAR_COEFFICIENT)
+    v: int = Field(ge=-_MAX_BOX_LINEAR_COEFFICIENT, le=_MAX_BOX_LINEAR_COEFFICIENT)
+    c: int = Field(ge=-_MAX_BOX_LINEAR_COEFFICIENT, le=_MAX_BOX_LINEAR_COEFFICIENT)
     count: int = Field(ge=0)
-    modulus: int = Field(gt=0)
+    modulus: int = Field(ge=1, le=_MAX_BOX_MODULUS)
 
 
 __all__ = [

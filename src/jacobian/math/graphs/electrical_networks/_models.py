@@ -6,6 +6,7 @@ from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.math.matrices.values import RationalMatrix
 
 MAX_NETWORK_VERTICES = 256
 MAX_LAPLACIAN_VERTICES = 128
@@ -72,6 +73,7 @@ class EffectiveResistanceRequest(StrictModel):
 class EffectiveResistanceResult(StrictModel):
     """Exact effective resistance between two terminals."""
 
+    network: ConductanceNetwork
     effective_resistance: CanonicalRational
     terminal_a: int = Field(ge=0, le=MAX_NETWORK_VERTICES - 1)
     terminal_b: int = Field(ge=0, le=MAX_NETWORK_VERTICES - 1)
@@ -95,6 +97,7 @@ class NodePotentialValue(StrictModel):
 class NodePotentialResult(StrictModel):
     """Exact node potentials for unit current injection."""
 
+    network: ConductanceNetwork
     source: int = Field(ge=0, le=MAX_NETWORK_VERTICES - 1)
     sink: int = Field(ge=0, le=MAX_NETWORK_VERTICES - 1)
     potentials: tuple[NodePotentialValue, ...] = Field(
@@ -117,10 +120,10 @@ class LaplacianRequest(StrictModel):
 
 
 class LaplacianResult(StrictModel):
-    """Exact Laplacian matrix as a flat list of (row, col, value) entries."""
+    """Exact Laplacian matrix coupled to its source network."""
 
-    vertex_count: int = Field(ge=2, le=MAX_LAPLACIAN_VERTICES)
-    entries: tuple[LaplacianEntry, ...] = Field(min_length=1)
+    network: LaplacianNetwork
+    matrix: RationalMatrix
 
 
 __all__ = [

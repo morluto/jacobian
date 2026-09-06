@@ -2,6 +2,7 @@
 
 from math import gcd
 
+from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.counting._models import (
     _MAX_BOX_COORD,
@@ -9,6 +10,8 @@ from jacobian.math.number_theory.counting._models import (
     _MAX_BOX_MODULUS,
     _MAX_FLOOR_SUM_N,
     _MAX_FLOOR_SUM_PARAM,
+    CongruenceBoxCountResult,
+    FloorSumResult,
 )
 
 
@@ -115,4 +118,37 @@ def congruence_box_count(
     return count
 
 
-__all__ = ["congruence_box_count", "floor_sum"]
+__all__ = [
+    "congruence_box_count",
+    "floor_sum",
+    "verify_congruence_box_count",
+    "verify_floor_sum",
+]
+
+
+def verify_floor_sum(claim: FloorSumResult) -> bool:
+    """Check a serialized floor-sum claim against its retained parameters."""
+    try:
+        expected = floor_sum(claim.n, claim.m, claim.a, claim.b)
+        actual = parse_canonical_integer(claim.value)
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+    return actual == expected
+
+
+def verify_congruence_box_count(claim: CongruenceBoxCountResult) -> bool:
+    """Check a serialized lattice-point count against its retained box and equation."""
+    try:
+        expected = congruence_box_count(
+            x_lo=claim.x_lo,
+            x_hi=claim.x_hi,
+            y_lo=claim.y_lo,
+            y_hi=claim.y_hi,
+            u=claim.u,
+            v=claim.v,
+            c=claim.c,
+            modulus=claim.modulus,
+        )
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+    return claim.count == expected

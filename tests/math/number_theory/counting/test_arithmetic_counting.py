@@ -7,11 +7,17 @@ from jacobian.math.number_theory.counting import congruence_box_count, floor_sum
 from jacobian.math.number_theory.counting._models import (
     _MAX_BOX_LINEAR_COEFFICIENT,
     CongruenceBoxCountRequest,
+    CongruenceBoxCountResult,
     FloorSumRequest,
+    FloorSumResult,
 )
 from jacobian.math.number_theory.counting._tools import (
     compute_congruence_box_count,
     compute_floor_sum,
+)
+from jacobian.math.number_theory.counting.operations import (
+    verify_congruence_box_count,
+    verify_floor_sum,
 )
 
 
@@ -51,6 +57,14 @@ class TestFloorSum:
         req = FloorSumRequest(n=0, m=3, a=2, b=1)
         result = compute_floor_sum(req)
         assert result.value == "0"
+
+    def test_serialized_claim_retains_parameters_and_rejects_forgery(self) -> None:
+        result = compute_floor_sum(FloorSumRequest(n=5, m=3, a=2, b=1))
+        restored = FloorSumResult.model_validate_json(result.model_dump_json())
+        assert verify_floor_sum(restored)
+        forged = restored.model_dump(mode="json")
+        forged["n"] = 6
+        assert not verify_floor_sum(FloorSumResult.model_validate(forged))
 
     def test_simple(self) -> None:
         # sum_{i=0}^{3} floor(i / 2) = 0+0+1+1 = 2
@@ -127,6 +141,28 @@ class TestCongruenceBoxCount:
                 modulus=3,
             )
             == 12
+        )
+
+    def test_serialized_claim_retains_axes_and_rejects_forgery(self) -> None:
+        request = CongruenceBoxCountRequest(
+            x_lo=0,
+            x_hi=5,
+            y_lo=0,
+            y_hi=5,
+            u=1,
+            v=1,
+            c=0,
+            modulus=3,
+        )
+        result = compute_congruence_box_count(request)
+        restored = CongruenceBoxCountResult.model_validate_json(
+            result.model_dump_json()
+        )
+        assert verify_congruence_box_count(restored)
+        forged = restored.model_dump(mode="json")
+        forged["modulus"] = 5
+        assert not verify_congruence_box_count(
+            CongruenceBoxCountResult.model_validate(forged)
         )
 
     def test_admits_full_coordinate_box(self) -> None:

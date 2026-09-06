@@ -1,6 +1,5 @@
 """Non-coprimality graph operation declarations."""
 
-from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.number_theory.non_coprimality_graph._models import (
     NonCoprimalityGraphRequest,
@@ -14,9 +13,7 @@ from jacobian.math.number_theory.non_coprimality_graph.operations import (
 def compute_non_coprimality_graph(
     request: NonCoprimalityGraphRequest,
 ) -> NonCoprimalityGraphResult:
-    return construct_non_coprimality_graph(
-        tuple(parse_canonical_integer(value) for value in request.integers)
-    )
+    return construct_non_coprimality_graph(request.integers)
 
 
 TOOLS: MathTools = (
@@ -37,7 +34,7 @@ TOOLS: MathTools = (
             OperationExample(
                 name="basic_fixture",
                 description="Non-coprimality graph of {2, 3, 4, 6}; integers are canonical decimal strings.",
-                input={"integers": ["2", "3", "4", "6"]},
+                input={"integers": {"elements": ["2", "3", "4", "6"]}},
             ),
         ),
     ),

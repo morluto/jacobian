@@ -198,6 +198,18 @@ def test_hankel_claim_round_trips_and_forgery_is_verified_by_source() -> None:
     assert not verify_hankel_matrix(restored.model_copy(update={"rank": 99}))
 
 
+def test_hankel_verifier_rejects_malformed_sources_and_oversized_copies() -> None:
+    result = compute_hankel_matrix(
+        HankelRequest(prefix=_prefix(_moments_uniform(3)), order=1)
+    )
+    empty_prefix = result.prefix.model_copy(update={"moments": ()})
+    assert not verify_hankel_matrix(result.model_copy(update={"prefix": empty_prefix}))
+    long_variable = result.prefix.model_copy(update={"variable": "x" * 65})
+    assert not verify_hankel_matrix(result.model_copy(update={"prefix": long_variable}))
+    oversized = result.matrix.model_copy(update={"entries": ((),) * 1_000_000})
+    assert not verify_hankel_matrix(result.model_copy(update={"matrix": oversized}))
+
+
 class TestOrthogonalPolynomials:
     def test_uniform_gives_legendre(self) -> None:
         result = compute_orthogonal_polynomials(
@@ -704,6 +716,73 @@ class TestJacobiCrossField:
         ]
         forged = JacobiMatrix.model_validate_json(json.dumps(payload), strict=True)
         assert not verify_jacobi_matrix(forged)
+
+    def test_jacobi_verifier_rechecks_norm_ratios_and_nested_invariants(self) -> None:
+        family = compute_orthogonal_polynomials(
+            OrthogonalPolynomialRequest(
+                prefix=_prefix(_moments_uniform(7)), max_degree=3
+            )
+        )
+        result = compute_jacobi_matrix(JacobiMatrixRequest(family=family))
+        changed_norm = family.polynomials[1].model_copy(
+            update={"squared_norm": CanonicalRational(num="1", den="1")}
+        )
+        changed_family = family.model_copy(
+            update={
+                "polynomials": (
+                    family.polynomials[0],
+                    changed_norm,
+                    *family.polynomials[2:],
+                )
+            }
+        )
+        assert not verify_jacobi_matrix(
+            result.model_copy(update={"family": changed_family})
+        )
+
+        changed_beta = result.recurrence.model_copy(
+            update={
+                "beta": (
+                    result.recurrence.beta[0],
+                    CanonicalRational(num="2", den="1"),
+                    *result.recurrence.beta[2:],
+                )
+            }
+        )
+        assert not verify_jacobi_matrix(
+            result.model_copy(update={"recurrence": changed_beta})
+        )
+
+        nonmonic = family.polynomials[1].model_copy(
+            update={
+                "coefficients": (
+                    family.polynomials[1].coefficients[0],
+                    CanonicalRational(num="2", den="1"),
+                )
+            }
+        )
+        assert not verify_jacobi_matrix(
+            result.model_copy(
+                update={
+                    "family": family.model_copy(
+                        update={
+                            "polynomials": (
+                                family.polynomials[0],
+                                nonmonic,
+                                *family.polynomials[2:],
+                            )
+                        }
+                    )
+                }
+            )
+        )
+        assert not verify_jacobi_matrix(
+            result.model_copy(
+                update={"matrix": result.matrix.model_copy(update={"domain": "ZZ"})}
+            )
+        )
+        oversized = result.matrix.model_copy(update={"entries": ((),) * 1_000_000})
+        assert not verify_jacobi_matrix(result.model_copy(update={"matrix": oversized}))
 
 
 class TestFamilyResidualBasisCheck:

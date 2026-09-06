@@ -16,6 +16,7 @@ from jacobian.math.analysis.orthogonal_polynomials.values import (
     MAX_HANKEL_ORDER,
     MAX_MOMENT_DEGREE,
     MAX_POLYNOMIAL_DEGREE,
+    MAX_VARIABLE_LENGTH,
     ChristoffelDarbouxKernel,
     GaussianQuadratureRule,
     HankelMomentMatrix,
@@ -687,6 +688,119 @@ def shifted_hankel_matrix(
     return hankel_matrix_from_prefix(prefix, order, shifted=True)
 
 
+def _is_canonical_rational(value: object) -> bool:
+    """Re-establish a rational's invariant after an unvalidated model copy."""
+    if not isinstance(value, CanonicalRational):
+        return False
+    try:
+        return CanonicalRational.from_fraction(value.as_fraction()) == value
+    except Exception:
+        return False
+
+
+def _is_ordered_axis(axis: object, size: int) -> bool:
+    """Check an axis's container, exact length, and canonical ordering."""
+    return isinstance(axis, tuple) and len(axis) == size and axis == tuple(range(size))
+
+
+def _is_bounded_rational_matrix(
+    matrix: object, *, row_count: int, column_count: int
+) -> bool:
+    """Validate a dense QQ carrier before any consumer iterates its rows."""
+    if not isinstance(matrix, RationalMatrix) or matrix.domain != "QQ":
+        return False
+    if (
+        not isinstance(matrix.row_count, int)
+        or isinstance(matrix.row_count, bool)
+        or not isinstance(matrix.column_count, int)
+        or isinstance(matrix.column_count, bool)
+        or matrix.row_count != row_count
+        or matrix.column_count != column_count
+    ):
+        return False
+    entries = matrix.entries
+    if not isinstance(entries, tuple) or len(entries) != row_count:
+        return False
+    for row in entries:
+        if not isinstance(row, tuple) or len(row) != column_count:
+            return False
+        if not all(_is_canonical_rational(value) for value in row):
+            return False
+    return True
+
+
+def _is_bounded_prefix(prefix: object) -> bool:
+    """Validate the retained moment source after unvalidated mutation."""
+    if not isinstance(prefix, MomentFunctionalPrefix):
+        return False
+    if not isinstance(prefix.variable, str) or not (
+        1 <= len(prefix.variable) <= MAX_VARIABLE_LENGTH
+    ):
+        return False
+    moments = prefix.moments
+    if not isinstance(moments, tuple) or not (
+        1 <= len(moments) <= MAX_MOMENT_DEGREE + 1
+    ):
+        return False
+    return all(_is_canonical_rational(value) for value in moments)
+
+
+def _is_bounded_recurrence(recurrence: object, *, alpha_count: int) -> bool:
+    """Validate recurrence shape, variable, and exact scalar invariants."""
+    if not isinstance(recurrence, ThreeTermRecurrence):
+        return False
+    if not isinstance(recurrence.variable, str) or not (
+        1 <= len(recurrence.variable) <= MAX_VARIABLE_LENGTH
+    ):
+        return False
+    if not isinstance(recurrence.alpha, tuple) or len(recurrence.alpha) != alpha_count:
+        return False
+    if (
+        not isinstance(recurrence.beta, tuple)
+        or len(recurrence.beta) != alpha_count + 1
+    ):
+        return False
+    if not all(_is_canonical_rational(value) for value in recurrence.alpha):
+        return False
+    if not all(_is_canonical_rational(value) for value in recurrence.beta):
+        return False
+    return recurrence.beta[0].as_fraction() == 0
+
+
+def _is_bounded_family(family: object, *, polynomial_count: int) -> bool:
+    """Validate family axes, monicity, and canonical scalar values."""
+    if not isinstance(family, OrthogonalPolynomialFamily):
+        return False
+    if not isinstance(family.variable, str) or not (
+        1 <= len(family.variable) <= MAX_VARIABLE_LENGTH
+    ):
+        return False
+    if (
+        not isinstance(family.polynomials, tuple)
+        or len(family.polynomials) != polynomial_count
+    ):
+        return False
+    if not isinstance(family.is_quasi_definite, bool) or not isinstance(
+        family.is_positive_definite, bool
+    ):
+        return False
+    for index, term in enumerate(family.polynomials):
+        if not isinstance(term, OrthogonalPolynomialTerm):
+            return False
+        if (
+            not isinstance(term.degree, int)
+            or isinstance(term.degree, bool)
+            or term.degree != index
+            or not isinstance(term.coefficients, tuple)
+            or len(term.coefficients) != index + 1
+            or not all(_is_canonical_rational(value) for value in term.coefficients)
+            or not _is_canonical_rational(term.squared_norm)
+            or term.coefficients[-1].as_fraction() != 1
+        ):
+            return False
+    return True
+
+
 def verify_hankel_matrix(claim: HankelMomentMatrix) -> bool:
     """Verify a serialized Hankel claim against its retained source.
 
@@ -698,7 +812,7 @@ def verify_hankel_matrix(claim: HankelMomentMatrix) -> bool:
     try:
         if not isinstance(claim, HankelMomentMatrix):
             return False
-        if not isinstance(claim.prefix, MomentFunctionalPrefix):
+        if not _is_bounded_prefix(claim.prefix):
             return False
         if (
             not isinstance(claim.shift, int)
@@ -706,31 +820,26 @@ def verify_hankel_matrix(claim: HankelMomentMatrix) -> bool:
             or claim.shift not in (0, 1)
         ):
             return False
-        if len(claim.prefix.moments) > MAX_MOMENT_DEGREE + 1:
-            return False
         matrix = claim.matrix
         if not isinstance(matrix, RationalMatrix):
             return False
+        if (
+            not isinstance(matrix.row_count, int)
+            or isinstance(matrix.row_count, bool)
+            or matrix.row_count < 1
+            or matrix.row_count > MAX_HANKEL_ORDER + 1
+        ):
+            return False
         side = matrix.row_count
-        if side < 1 or side > MAX_HANKEL_ORDER + 1:
+        if not _is_bounded_rational_matrix(matrix, row_count=side, column_count=side):
             return False
-        if matrix.column_count != side or claim.order != side - 1:
+        if claim.order != side - 1:
             return False
-        if not isinstance(claim.prefix.variable, str) or not all(
-            isinstance(value, CanonicalRational) for value in claim.prefix.moments
+        if not _is_ordered_axis(claim.row_axis, side) or not _is_ordered_axis(
+            claim.column_axis, side
         ):
             return False
-        if any(
-            len(row) != side
-            or not all(isinstance(value, CanonicalRational) for value in row)
-            for row in matrix.entries
-        ):
-            return False
-        if claim.row_axis != tuple(range(side)) or claim.column_axis != tuple(
-            range(side)
-        ):
-            return False
-        if not isinstance(claim.determinant, CanonicalRational):
+        if not _is_canonical_rational(claim.determinant):
             return False
         if not isinstance(claim.rank, int) or isinstance(claim.rank, bool):
             return False
@@ -764,49 +873,34 @@ def verify_jacobi_matrix(claim: JacobiMatrix) -> bool:  # noqa: C901
             return False
         if not isinstance(recurrence, ThreeTermRecurrence):
             return False
+        if not isinstance(recurrence.alpha, tuple):
+            return False
         size = len(recurrence.alpha)
         if size > MAX_POLYNOMIAL_DEGREE or len(family.polynomials) != size + 1:
             return False
-        if len(recurrence.beta) != size + 1:
+        if not _is_bounded_family(family, polynomial_count=size + 1):
             return False
-        if not isinstance(family.variable, str) or not isinstance(
-            recurrence.variable, str
-        ):
-            return False
-        for index, term in enumerate(family.polynomials):
-            if not isinstance(term, OrthogonalPolynomialTerm):
-                return False
-            if term.degree != index or len(term.coefficients) != index + 1:
-                return False
-            if not all(
-                isinstance(value, CanonicalRational) for value in term.coefficients
-            ) or not isinstance(term.squared_norm, CanonicalRational):
-                return False
-        if not all(
-            isinstance(value, CanonicalRational)
-            for value in (*recurrence.alpha, *recurrence.beta)
-        ):
+        if not _is_bounded_recurrence(recurrence, alpha_count=size):
             return False
         matrix = claim.matrix
-        if not isinstance(matrix, RationalMatrix):
+        if not _is_bounded_rational_matrix(matrix, row_count=size, column_count=size):
             return False
-        if (
-            matrix.row_count != size
-            or matrix.column_count != size
-            or claim.row_axis != tuple(range(size))
-            or claim.column_axis != tuple(range(size))
-        ):
-            return False
-        if any(
-            len(row) != size
-            or not all(isinstance(value, CanonicalRational) for value in row)
-            for row in matrix.entries
+        if not _is_ordered_axis(claim.row_axis, size) or not _is_ordered_axis(
+            claim.column_axis, size
         ):
             return False
         if recurrence.variable != family.variable:
             return False
         alphas = [value.as_fraction() for value in recurrence.alpha]
         betas = [value.as_fraction() for value in recurrence.beta]
+        for index in range(1, size + 1):
+            previous_norm = family.polynomials[index - 1].squared_norm.as_fraction()
+            if previous_norm == 0:
+                return False
+            if betas[index] != (
+                family.polynomials[index].squared_norm.as_fraction() / previous_norm
+            ):
+                return False
         require_three_term_identities(family, alphas, betas)
         zero = Fraction(0)
         one = Fraction(1)

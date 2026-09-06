@@ -226,6 +226,13 @@ def verify_kolmogorov_quotient(claim: KolmogorovQuotientResult) -> bool:
     ]
     if tuple(source.points[rep] for rep in representatives) != target.points:
         return False
+    if any(
+        (class_map[left] == class_map[right])
+        != (source.preorder[left] == source.preorder[right])
+        for left in range(count)
+        for right in range(left + 1, count)
+    ):
+        return False
     for target_index in range(classes):
         expected = sorted(
             {class_map[j] for j in source.preorder[representatives[target_index]]}

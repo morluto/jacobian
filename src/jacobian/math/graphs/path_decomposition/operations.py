@@ -46,10 +46,30 @@ def _admit_graph(graph: SimpleUndirectedGraph) -> _PathSearchPlan:
     for left, right in graph.edges:
         adjacency[left].add(right)
         adjacency[right].add(left)
-    # Estimate only: each edge can seed a DFS bounded by the state envelope.
-    # The kernel enumerates candidates once; admission never materializes them.
-    estimate = len(graph.edges) * max(1, vertex_count)
-    if estimate > MAX_SEARCH_STATES:
+    # Every simple path stays in one connected component and is an ordered
+    # sequence of at least two distinct vertices. Sum permutations per
+    # component to bound the DFS before it materializes a candidate.
+    unseen = set(graph.vertices)
+    path_bound = 0
+    while unseen:
+        component = {unseen.pop()}
+        frontier = list(component)
+        while frontier:
+            vertex = frontier.pop()
+            for neighbor in adjacency[vertex] & unseen:
+                unseen.remove(neighbor)
+                component.add(neighbor)
+                frontier.append(neighbor)
+        maximum_degree = max(len(adjacency[vertex]) for vertex in component)
+        walks_at_length = len(component) * maximum_degree
+        for _length in range(2, len(component) + 1):
+            path_bound += walks_at_length
+            if path_bound > MAX_SEARCH_STATES:
+                break
+            walks_at_length *= max(maximum_degree - 1, 0)
+        if path_bound > MAX_SEARCH_STATES:
+            break
+    if path_bound > MAX_SEARCH_STATES:
         _reject(
             "search_work_bound",
             "the exact path search exceeds its bounded work envelope",

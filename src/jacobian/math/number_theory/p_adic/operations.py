@@ -202,7 +202,15 @@ def hensel_lift_root(
 def verify_hensel_root(claim: HenselRootResult) -> bool:
     """Check the local congruence relation carried by a Hensel-root witness."""
 
-    coeffs = _kernel_coefficients(claim.polynomial)
+    try:
+        coeffs = _admit_root(
+            claim.polynomial,
+            claim.prime,
+            claim.root_mod_p,
+            claim.precision,
+        )
+    except OperationDomainValidationError:
+        return False
     lifted = parse_canonical_integer(claim.lifted_root)
     modulus = claim.prime**claim.precision
     return (
@@ -416,6 +424,16 @@ def verify_hensel_factor_lift(claim: HenselFactorLiftResult) -> bool:
     """Check the product and coprimality relations of a factor-lift witness."""
 
     prime = claim.prime
+    try:
+        _admit_factors(
+            claim.polynomial,
+            claim.factor_g,
+            claim.factor_h,
+            prime,
+            claim.precision,
+        )
+    except OperationDomainValidationError:
+        return False
     modulus = prime**claim.precision
     polynomial = _kernel_coefficients(claim.polynomial)
     factor_g = _kernel_coefficients(claim.factor_g)

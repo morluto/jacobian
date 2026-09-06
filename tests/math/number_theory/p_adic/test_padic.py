@@ -63,6 +63,7 @@ class TestHenselRootLifting:
             HenselRootResult.model_validate_json(result.model_dump_json())
         )
         assert not verify_hensel_root(result.model_copy(update={"root_mod_p": 1}))
+        assert not verify_hensel_root(result.model_copy(update={"prime": 4}))
 
     def test_lift_mod_p_squared(self) -> None:
         """Lift root to mod p^2."""

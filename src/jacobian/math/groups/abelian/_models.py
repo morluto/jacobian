@@ -124,12 +124,8 @@ class ElementReduceRequest(StrictModel):
 
 class ElementEqualRequest(StrictModel):
     group: AbelianPresentation
-    coordinates_a: tuple[ExactInteger, ...] = Field(
-        min_length=0, max_length=MAX_ORDERS
-    )
-    coordinates_b: tuple[ExactInteger, ...] = Field(
-        min_length=0, max_length=MAX_ORDERS
-    )
+    coordinates_a: tuple[ExactInteger, ...] = Field(min_length=0, max_length=MAX_ORDERS)
+    coordinates_b: tuple[ExactInteger, ...] = Field(min_length=0, max_length=MAX_ORDERS)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:

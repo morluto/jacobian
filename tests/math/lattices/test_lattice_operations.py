@@ -44,10 +44,7 @@ def _lattice(ambient: int, basis: list[list[int]]) -> IntegerLattice:
 
 
 def _identity_entries(order: int) -> list[list[int]]:
-    return [
-        [int(row == column) for column in range(order)]
-        for row in range(order)
-    ]
+    return [[int(row == column) for column in range(order)] for row in range(order)]
 
 
 # ---------------------------------------------------------------------------

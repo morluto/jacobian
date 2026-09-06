@@ -124,7 +124,9 @@ def test_element_equal_same() -> None:
 
     payload = result.model_dump(mode="json")
     payload["equal"] = False
-    assert not verify_elements_equal(type(result).model_validate_json(json.dumps(payload)))
+    assert not verify_elements_equal(
+        type(result).model_validate_json(json.dumps(payload))
+    )
 
 
 def test_element_equal_different() -> None:
@@ -148,7 +150,9 @@ def test_element_order_in_z6() -> None:
 
     payload = result.model_dump(mode="json")
     payload["order"] = "6"
-    assert not verify_element_order(type(result).model_validate_json(json.dumps(payload)))
+    assert not verify_element_order(
+        type(result).model_validate_json(json.dumps(payload))
+    )
 
 
 def test_element_order_identity() -> None:

@@ -20,12 +20,8 @@ from jacobian.math.matrices.values import IntegerMatrix
 
 
 def test_source_bound_lattice_claims() -> None:
-    parent = IntegerLattice(
-        ambient_dimension=2, basis=IntegerMatrix(entries=((1, 0),))
-    )
-    child = IntegerLattice(
-        ambient_dimension=2, basis=IntegerMatrix(entries=((2, 0),))
-    )
+    parent = IntegerLattice(ambient_dimension=2, basis=IntegerMatrix(entries=((1, 0),)))
+    child = IntegerLattice(ambient_dimension=2, basis=IntegerMatrix(entries=((2, 0),)))
     result: Any
     verifier: Callable[[Any], bool]
     for result, verifier, field, forged in (
@@ -56,9 +52,7 @@ def test_source_bound_lattice_claims() -> None:
 
 
 def test_covolume_is_canonical_and_bound_to_source() -> None:
-    lattice = IntegerLattice(
-        ambient_dimension=1, basis=IntegerMatrix(entries=((2,),))
-    )
+    lattice = IntegerLattice(ambient_dimension=1, basis=IntegerMatrix(entries=((2,),)))
     result = compute_rank_gram(lattice)
     assert result.squared_covolume == 4
     assert result.model_dump(mode="json")["squared_covolume"] == "4"

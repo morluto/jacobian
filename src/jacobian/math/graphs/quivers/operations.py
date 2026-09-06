@@ -17,7 +17,7 @@ def _integer_matrix(entries: list[list[int]]) -> IntegerMatrix:
     return IntegerMatrix(
         row_count=len(entries),
         column_count=len(entries[0]) if entries else 0,
-        entries=tuple(tuple(value for value in row) for row in entries)
+        entries=tuple(tuple(value for value in row) for row in entries),
     )
 
 

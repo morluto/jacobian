@@ -513,14 +513,18 @@ def test_result_validation_rejects_duplicate_sources_and_wrong_gap_difference(
     )
     duplicate = result.model_dump(mode="json")
     duplicate["value_buckets"][1]["representations"] = [[0, 0, 0]]
-    duplicate_claim = BinaryPowerSumGapProfile.model_validate_json(json.dumps(duplicate))
+    duplicate_claim = BinaryPowerSumGapProfile.model_validate_json(
+        json.dumps(duplicate)
+    )
     assert not verify_binary_power_sum_gap_profile(duplicate_claim)
 
     wrong_gap = result.model_dump(mode="json")
     wrong_gap["gaps"][0]["difference"] = result.value_buckets[0].value.model_dump(
         mode="json"
     )
-    wrong_gap_claim = BinaryPowerSumGapProfile.model_validate_json(json.dumps(wrong_gap))
+    wrong_gap_claim = BinaryPowerSumGapProfile.model_validate_json(
+        json.dumps(wrong_gap)
+    )
     assert not verify_binary_power_sum_gap_profile(wrong_gap_claim)
 
 

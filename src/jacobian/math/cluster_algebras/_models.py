@@ -198,10 +198,7 @@ def _identity_matrix(n: int) -> IntegerMatrix:
     return IntegerMatrix(
         row_count=n,
         column_count=n,
-        entries=tuple(
-            tuple(int(i == j) for j in range(n))
-            for i in range(n)
-        ),
+        entries=tuple(tuple(int(i == j) for j in range(n)) for i in range(n)),
     )
 
 

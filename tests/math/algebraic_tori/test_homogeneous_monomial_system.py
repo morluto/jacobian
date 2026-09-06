@@ -199,10 +199,7 @@ def test_large_component_family_is_compact_not_materialized() -> None:
 def test_full_dimension_and_digit_boundary_returns_a_compact_exact_result() -> None:
     factor = 10**32 - 1
     system = _system(
-        [
-            [factor if row == column else 0 for column in range(16)]
-            for row in range(16)
-        ]
+        [[factor if row == column else 0 for column in range(16)] for row in range(16)]
     )
 
     result = homogeneous_monomial_solution_subgroup(system)

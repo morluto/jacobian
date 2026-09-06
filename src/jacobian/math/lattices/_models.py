@@ -348,9 +348,7 @@ class SublatticeIndexResult(StrictModel):
     parent: IntegerLattice
     embedding: IntegerMatrix
     index: ExactInteger = Field(ge=1)
-    invariant_factors: tuple[ExactInteger, ...] = Field(
-        max_length=MAX_MATRIX_DIMENSION
-    )
+    invariant_factors: tuple[ExactInteger, ...] = Field(max_length=MAX_MATRIX_DIMENSION)
     free_rank: int = Field(ge=0, le=MAX_MATRIX_DIMENSION)
     relation: Literal["QUOTIENT_IS_DIRECT_SUM_OF_CYCLIC_GROUPS"] = (
         "QUOTIENT_IS_DIRECT_SUM_OF_CYCLIC_GROUPS"
@@ -368,9 +366,7 @@ class DiscriminantGroupResult(StrictModel):
 
     lattice: IntegerLattice
     discriminant_order: ExactInteger = Field(ge=1)
-    invariant_factors: tuple[ExactInteger, ...] = Field(
-        max_length=MAX_MATRIX_DIMENSION
-    )
+    invariant_factors: tuple[ExactInteger, ...] = Field(max_length=MAX_MATRIX_DIMENSION)
     relation: Literal["DISCRIMINANT_GROUP_EQUALS_DUAL_MOD_LATTICE"] = (
         "DISCRIMINANT_GROUP_EQUALS_DUAL_MOD_LATTICE"
     )

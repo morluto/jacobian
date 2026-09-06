@@ -178,7 +178,9 @@ def verify_orbit_prefix(claim: OrbitPrefixResult) -> bool:
 def verify_dynatomic_polynomial(claim: DynatomicPolynomialResult) -> bool:
     try:
         expected = compute_dynatomic_polynomial(
-            DynatomicPolynomialRequest(coefficients=claim.source_coefficients, n=claim.n)
+            DynatomicPolynomialRequest(
+                coefficients=claim.source_coefficients, n=claim.n
+            )
         )
         return claim == expected
     except (TypeError, ValueError, OperationDomainValidationError):

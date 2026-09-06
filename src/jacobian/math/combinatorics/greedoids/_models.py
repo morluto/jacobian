@@ -255,7 +255,7 @@ class BasicWordProfileResult(StrictModel):
     """Whether the word is a basic word, with first obstruction if not."""
 
     system: FiniteFeasibleSetSystem
-    word: tuple[int, ...] = Field(default=())
+    word: tuple[int, ...] = Field(default=(), max_length=MAX_GROUND_SIZE)
     status: str
     obstruction: str | None = None
     prefix_index: int | None = None

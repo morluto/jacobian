@@ -263,6 +263,15 @@ class TestBasicWordProfile:
         assert result.status == "NOT_A_BASIC_WORD"
         assert result.obstruction == "repeated_element"
 
+    def test_serialized_result_preserves_word_length_envelope(self) -> None:
+        result = _basic_word_profile(
+            BasicWordProfileRequest(system=_two_element_antimatroid(), word=(0,))
+        )
+        payload = result.model_dump(mode="json")
+        payload["word"] = [0] * 65
+        with pytest.raises(ValidationError):
+            type(result).model_validate(payload)
+
     def test_infeasible_prefix(self) -> None:
         # Path greedoid ab-bc: word (0, 1) is fine; word (1, 0) is also fine
         # because {bc} and {bc, ab} are both feasible. Try a foreign element.

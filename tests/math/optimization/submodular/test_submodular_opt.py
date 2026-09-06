@@ -1,6 +1,7 @@
 """Tests for submodular optimization operations."""
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
@@ -67,6 +68,23 @@ class TestSetFunctionEval:
         forged = result.model_dump(mode="json")
         forged["value"] = {"num": "3", "den": "1"}
         assert not verify_set_function_evaluation(type(result).model_validate(forged))
+
+    @pytest.mark.parametrize("subset", ((2,), (0, 0)))
+    def test_serialized_result_rejects_subset_outside_source(
+        self, subset: tuple[int, ...]
+    ) -> None:
+        result = _evaluate_request(
+            SetFunctionEvalRequest(function=_make_uniform_function(1), subset=(0,))
+        )
+        payload = result.model_dump(mode="json")
+        payload["subset"] = subset
+        with pytest.raises(ValidationError):
+            type(result).model_validate(payload)
+
+        # Verifiers remain total for callers that forge unchecked model copies.
+        assert not verify_set_function_evaluation(
+            result.model_copy(update={"subset": subset})
+        )
 
     def test_fractional_value_uses_the_shared_canonical_rational(self) -> None:
         function = SetFunction(

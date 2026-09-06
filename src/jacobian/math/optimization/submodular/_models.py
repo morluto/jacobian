@@ -32,6 +32,22 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"submodular_opt.{reason}", message)
 
 
+def _require_source_subset(
+    subset: tuple[int, ...], ground_set_size: int, field: str = "subset"
+) -> None:
+    """Require a canonical subset of a retained finite ground set."""
+
+    if len(subset) != len(set(subset)):
+        raise _validation_error(
+            f"{field}_elements_not_unique", f"{field} elements must be unique"
+        )
+    if any(not 0 <= elem < ground_set_size for elem in subset):
+        raise _validation_error(
+            f"{field}_element_out_of_range",
+            f"{field} elements must be in 0..ground_set_size-1",
+        )
+
+
 class SetFunctionEntry(StrictModel):
     """One set-function value: f(S) for a subset S of the ground set."""
 
@@ -107,6 +123,11 @@ class SetFunctionEvalResult(StrictModel):
     subset: tuple[int, ...] = Field(default=())
     value: CanonicalRational
 
+    @model_validator(mode="after")
+    def bind_subset_to_source(self) -> Self:
+        _require_source_subset(self.subset, self.function.ground_set_size)
+        return self
+
 
 class MonotonicityViolation(StrictModel):
     """One source-bound covering inequality that fails monotonicity."""
@@ -140,6 +161,20 @@ class MonotonicityCheckResult(StrictModel):
     is_monotone: bool
     violation: MonotonicityViolation | None = None
 
+    @model_validator(mode="after")
+    def bind_violation_to_source(self) -> Self:
+        if self.violation is not None:
+            _require_source_subset(self.violation.subset, self.function.ground_set_size)
+            if (
+                self.violation.added_element >= self.function.ground_set_size
+                or self.violation.added_element in self.violation.subset
+            ):
+                raise _validation_error(
+                    "monotonicity_witness_out_of_range",
+                    "the added element must be a new element of the source ground set",
+                )
+        return self
+
 
 class SubmodularityCheckRequest(StrictModel):
     """Check if a set function is submodular."""
@@ -153,6 +188,25 @@ class SubmodularityCheckResult(StrictModel):
     function: SetFunction
     is_submodular: bool
     violation: SubmodularityViolation | None = None
+
+    @model_validator(mode="after")
+    def bind_violation_to_source(self) -> Self:
+        if self.violation is not None:
+            _require_source_subset(self.violation.subset, self.function.ground_set_size)
+            first = self.violation.first_element
+            second = self.violation.second_element
+            if (
+                first >= self.function.ground_set_size
+                or second >= self.function.ground_set_size
+                or first == second
+                or first in self.violation.subset
+                or second in self.violation.subset
+            ):
+                raise _validation_error(
+                    "submodularity_witness_out_of_range",
+                    "witness elements must be distinct new elements of the source ground set",
+                )
+        return self
 
 
 __all__ = [

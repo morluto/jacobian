@@ -164,7 +164,10 @@ def verify_monotonicity(claim: MonotonicityCheckResult) -> bool:
 def verify_set_function_evaluation(claim: SetFunctionEvalResult) -> bool:
     """Verify a source-bound table lookup claim."""
 
-    return _lookup(claim.function, claim.subset) == claim.value
+    try:
+        return _lookup(claim.function, claim.subset) == claim.value
+    except (StopIteration, ValueError):
+        return False
 
 
 def verify_submodularity(claim: SubmodularityCheckResult) -> bool:

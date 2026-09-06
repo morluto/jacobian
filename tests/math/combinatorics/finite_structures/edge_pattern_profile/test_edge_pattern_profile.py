@@ -9,6 +9,7 @@ from jacobian.math.combinatorics.finite_structures.edge_pattern_profile._models 
 )
 from jacobian.math.combinatorics.finite_structures.edge_pattern_profile.operations import (
     compute_edge_pattern_profile,
+    verify_edge_pattern_profile,
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
@@ -89,7 +90,7 @@ def test_numeric_color_keys_use_strict_delivery_sizing() -> None:
     hg = _hg(["num", "den"], [("e0", ("num", "den"))])
     result = compute_edge_pattern_profile(hg, {"num": "red", "den": "blue"})
 
-    assert {(p.vertex, p.color) for p in result.vertex_colors} == {
+    assert {(p.vertex, p.color) for p in result.vertex_coloring.assignments} == {
         ("den", "blue"),
         ("num", "red"),
     }
@@ -100,10 +101,23 @@ def test_result_preserves_source() -> None:
     colors = {"a": "red", "b": "blue"}
     result = compute_edge_pattern_profile(hg, colors)
     assert result.hypergraph == hg
-    assert {(p.vertex, p.color) for p in result.vertex_colors} == {
+    assert {(p.vertex, p.color) for p in result.vertex_coloring.assignments} == {
         ("a", "red"),
         ("b", "blue"),
     }
+
+
+def test_serialized_profile_is_verifiable_and_rejects_forgery() -> None:
+    hg = _hg(["a", "b", "c"], [("e0", ("a", "b", "c"))])
+    result = compute_edge_pattern_profile(
+        hg, {"a": "red", "b": "red", "c": "blue"}
+    )
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_edge_pattern_profile(decoded)
+
+    forged = result.model_dump(mode="json")
+    forged["entries"][0]["num_color_blocks"] = 1
+    assert not verify_edge_pattern_profile(type(result).model_validate(forged))
 
 
 def test_rejects_incomplete_colors() -> None:
@@ -119,9 +133,9 @@ def test_native_rejects_oversized_color_before_normalization() -> None:
     # A 65-character label on a one-vertex hypergraph is now admitted.
     hg = _hg(["a"], [])
     result = compute_edge_pattern_profile(hg, {"a": "x" * 65})
-    assert len(result.vertex_colors) == 1
-    assert result.vertex_colors[0].vertex == "a"
-    assert result.vertex_colors[0].color == "x" * 65
+    assert len(result.vertex_coloring.assignments) == 1
+    assert result.vertex_coloring.assignments[0].vertex == "a"
+    assert result.vertex_coloring.assignments[0].color == "x" * 65
 
 
 def test_native_rejects_unencodable_color() -> None:

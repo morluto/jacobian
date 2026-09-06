@@ -8,6 +8,7 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.edge_pattern_profile._models import (
     EdgePatternEntry,
     EdgePatternProfileResult,
+    VertexColoring,
     VertexColorPair,
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
@@ -18,7 +19,9 @@ __all__ = [
     "EdgePatternEntry",
     "EdgePatternProfileResult",
     "VertexColorPair",
+    "VertexColoring",
     "compute_edge_pattern_profile",
+    "verify_edge_pattern_profile",
 ]
 
 
@@ -181,13 +184,30 @@ def compute_edge_pattern_profile(
 
     # Thread 2: Use a list of vertex-color pairs to avoid rational ambiguity
     color_pairs = tuple(
-        VertexColorPair(vertex=v, color=c) for v, c in sorted(normalized_colors.items())
+        VertexColorPair(vertex=vertex, color=normalized_colors[vertex])
+        for vertex in hypergraph.vertices
     )
+    coloring = VertexColoring(hypergraph=hypergraph, assignments=color_pairs)
 
     return EdgePatternProfileResult(
         hypergraph=hypergraph,
-        vertex_colors=color_pairs,
+        vertex_coloring=coloring,
         entries=tuple(entries),
         monochromatic_edge_ids=tuple(monochromatic),
         rainbow_edge_ids=tuple(rainbow),
     )
+
+
+def verify_edge_pattern_profile(claim: EdgePatternProfileResult) -> bool:
+    """Verify a serialized edge-pattern profile from its retained coloring."""
+
+    if claim.vertex_coloring.hypergraph != claim.hypergraph:
+        return False
+    try:
+        colors = {
+            assignment.vertex: assignment.color
+            for assignment in claim.vertex_coloring.assignments
+        }
+        return compute_edge_pattern_profile(claim.hypergraph, colors) == claim
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False

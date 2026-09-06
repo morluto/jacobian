@@ -54,11 +54,29 @@ class VertexColorPair(StrictModel):
     color: str
 
 
+class VertexColoring(StrictModel):
+    """A total coloring bound to the source hypergraph vertex axis."""
+
+    hypergraph: FiniteHypergraph
+    assignments: tuple[VertexColorPair, ...]
+
+    @model_validator(mode="after")
+    def require_source_axis_shape(self) -> Self:
+        vertices = tuple(self.hypergraph.vertices)
+        assigned = tuple(pair.vertex for pair in self.assignments)
+        if assigned != vertices:
+            raise PydanticCustomError(
+                "edge_pattern.coloring_axis",
+                "coloring assignments must follow the complete source vertex axis",
+            )
+        return self
+
+
 class EdgePatternProfileResult(StrictModel):
     """The complete vertex-colour edge-pattern profile of a hypergraph."""
 
     hypergraph: FiniteHypergraph
-    vertex_colors: tuple[VertexColorPair, ...]
+    vertex_coloring: VertexColoring
     entries: tuple[EdgePatternEntry, ...]
     monochromatic_edge_ids: tuple[str, ...]
     rainbow_edge_ids: tuple[str, ...]
@@ -69,4 +87,5 @@ __all__ = [
     "EdgePatternProfileRequest",
     "EdgePatternProfileResult",
     "VertexColorPair",
+    "VertexColoring",
 ]

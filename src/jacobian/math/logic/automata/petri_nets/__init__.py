@@ -7,6 +7,11 @@ from jacobian.math.logic.automata.petri_nets.operations import (
     find_minimal_traps,
     fire_transition,
     reachability_graph,
+    verify_enabled_transitions,
+    verify_fire_transition,
+    verify_incidence_matrix,
+    verify_reachability_graph,
+    verify_siphon_trap,
 )
 from jacobian.math.logic.automata.petri_nets.values import Marking, PetriNet
 
@@ -19,4 +24,9 @@ __all__ = [
     "find_minimal_traps",
     "fire_transition",
     "reachability_graph",
+    "verify_enabled_transitions",
+    "verify_fire_transition",
+    "verify_incidence_matrix",
+    "verify_reachability_graph",
+    "verify_siphon_trap",
 ]

@@ -22,6 +22,7 @@ from jacobian.math.logic.automata.petri_nets._tools import (
     compute_fire_transition,
     compute_incidence,
     compute_reachability,
+    compute_siphon_trap,
 )
 from jacobian.math.logic.automata.petri_nets.values import Marking, PetriNet
 
@@ -70,6 +71,59 @@ def test_native_operations_reject_mismatched_markings() -> None:
         petri_nets.fire_transition(net, marking, 0)
     with pytest.raises(ValueError, match="marking length"):
         petri_nets.reachability_graph(net, marking)
+
+
+def test_serialized_claims_retain_sources_and_reject_forgery() -> None:
+    net = _token_passing_net()
+    marking = Marking(tokens=(1, 0))
+    enabled = compute_enabled_transitions(
+        EnabledTransitionsRequest(net=net, marking=marking)
+    )
+    enabled_decoded = type(enabled).model_validate_json(enabled.model_dump_json())
+    assert enabled_decoded.net == net
+    assert enabled_decoded.marking == marking
+    assert petri_nets.verify_enabled_transitions(enabled_decoded)
+    assert not petri_nets.verify_enabled_transitions(
+        enabled_decoded.model_copy(update={"transitions": (1,)})
+    )
+
+    fired = compute_fire_transition(
+        FireTransitionRequest(net=net, marking=marking, transition=0)
+    )
+    fired_decoded = type(fired).model_validate_json(fired.model_dump_json())
+    assert petri_nets.verify_fire_transition(fired_decoded)
+    assert not petri_nets.verify_fire_transition(
+        fired_decoded.model_copy(update={"status": "NOT_ENABLED"})
+    )
+
+    incidence = compute_incidence(IncidenceMatrixRequest(net=net))
+    incidence_decoded = type(incidence).model_validate_json(
+        incidence.model_dump_json()
+    )
+    assert petri_nets.verify_incidence_matrix(incidence_decoded)
+    assert not petri_nets.verify_incidence_matrix(
+        incidence_decoded.model_copy(update={"incidence": ((0, 0), (0, 0))})
+    )
+
+    reachability = compute_reachability(
+        ReachabilityRequest(net=net, initial_marking=marking, max_states=10)
+    )
+    reachability_decoded = type(reachability).model_validate_json(
+        reachability.model_dump_json()
+    )
+    assert reachability_decoded.initial_marking == marking
+    assert petri_nets.verify_reachability_graph(reachability_decoded)
+    assert not petri_nets.verify_reachability_graph(
+        reachability_decoded.model_copy(update={"truncated": True})
+    )
+
+    siphon = compute_siphon_trap(SiphonTrapRequest(net=net))
+    siphon_decoded = type(siphon).model_validate_json(siphon.model_dump_json())
+    assert siphon_decoded.net == net
+    assert petri_nets.verify_siphon_trap(siphon_decoded)
+    assert not petri_nets.verify_siphon_trap(
+        siphon_decoded.model_copy(update={"siphons": ()})
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -235,9 +289,6 @@ class TestValidation:
 # Siphon and trap detection
 # ---------------------------------------------------------------------------
 
-from jacobian.math.logic.automata.petri_nets._tools import (  # noqa: E402
-    compute_siphon_trap,
-)
 from jacobian.math.logic.automata.petri_nets.operations import (  # noqa: E402
     find_minimal_siphons,
     find_minimal_traps,

@@ -28,6 +28,11 @@ __all__ = [
     "fire_transition",
     "reachability_graph",
     "siphon_trap",
+    "verify_enabled_transitions",
+    "verify_fire_transition",
+    "verify_incidence_matrix",
+    "verify_reachability_graph",
+    "verify_siphon_trap",
 ]
 
 
@@ -57,6 +62,8 @@ def enabled_transitions(net: PetriNet, marking: Marking) -> EnabledTransitionsRe
     """Return all transitions enabled at the given marking."""
 
     return EnabledTransitionsResult(
+        net=net,
+        marking=marking,
         transitions=tuple(_enabled_transition_indices(net, marking))
     )
 
@@ -91,10 +98,16 @@ def fire_transition(
     success, new_tokens = _fire_transition_tokens(net, marking, transition)
     if any(token > MAX_PETRI_MARKING for token in new_tokens):
         return FireTransitionResult(
+            net=net,
+            marking=marking,
+            transition=transition,
             status="ESCAPES_DECLARED_ENVELOPE",
             envelope_escape=new_tokens,
         )
     return FireTransitionResult(
+        net=net,
+        marking=marking,
+        transition=transition,
         status="FIRED" if success else "NOT_ENABLED",
         new_marking=Marking(tokens=new_tokens),
     )
@@ -103,6 +116,7 @@ def fire_transition(
 def compute_incidence_matrix(net: PetriNet) -> IncidenceMatrixResult:
     """Compute C = Post - Pre."""
     return IncidenceMatrixResult(
+        net=net,
         incidence=tuple(
             tuple(net.post[p][t] - net.pre[p][t] for t in range(net.transition_count))
             for p in range(net.place_count)
@@ -148,6 +162,9 @@ def reachability_graph(
                 queue.append(len(state_list) - 1)
             edges.append((idx, t, state_index[new_tokens]))
     return ReachabilityResult(
+        net=net,
+        initial_marking=initial_marking,
+        max_states=max_states,
         states=tuple(state_list),
         edges=tuple(edges),
         truncated=truncated,
@@ -263,6 +280,54 @@ def siphon_trap(net: PetriNet) -> SiphonTrapResult:
             "siphon/trap candidate and transition-scan work exceeds the admitted bound"
         )
     return SiphonTrapResult(
+        net=net,
         siphons=tuple(tuple(sorted(s)) for s in find_minimal_siphons(net)),
         traps=tuple(tuple(sorted(t)) for t in find_minimal_traps(net)),
     )
+
+
+def verify_enabled_transitions(claim: EnabledTransitionsResult) -> bool:
+    """Verify enabledness against the retained net and marking."""
+
+    try:
+        return enabled_transitions(claim.net, claim.marking) == claim
+    except (TypeError, ValueError):
+        return False
+
+
+def verify_fire_transition(claim: FireTransitionResult) -> bool:
+    """Verify a firing outcome against its retained source context."""
+
+    try:
+        return fire_transition(claim.net, claim.marking, claim.transition) == claim
+    except (TypeError, ValueError):
+        return False
+
+
+def verify_incidence_matrix(claim: IncidenceMatrixResult) -> bool:
+    """Verify an incidence matrix against its retained net."""
+
+    try:
+        return compute_incidence_matrix(claim.net) == claim
+    except (TypeError, ValueError):
+        return False
+
+
+def verify_reachability_graph(claim: ReachabilityResult) -> bool:
+    """Verify a bounded reachability graph against its retained experiment."""
+
+    try:
+        return reachability_graph(
+            claim.net, claim.initial_marking, claim.max_states
+        ) == claim
+    except (TypeError, ValueError):
+        return False
+
+
+def verify_siphon_trap(claim: SiphonTrapResult) -> bool:
+    """Verify siphon and trap families against the retained net."""
+
+    try:
+        return siphon_trap(claim.net) == claim
+    except (TypeError, ValueError):
+        return False

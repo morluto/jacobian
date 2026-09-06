@@ -39,8 +39,10 @@ class EnabledTransitionsRequest(StrictModel):
 
 
 class EnabledTransitionsResult(StrictModel):
-    """The set of enabled transition indices."""
+    """The set of enabled transition indices bound to the source marking."""
 
+    net: PetriNet
+    marking: Marking
     transitions: tuple[int, ...]
 
 
@@ -63,8 +65,11 @@ class FireTransitionRequest(StrictModel):
 
 
 class FireTransitionResult(StrictModel):
-    """Result of firing a transition."""
+    """Result of firing a transition, retaining its source context."""
 
+    net: PetriNet
+    marking: Marking
+    transition: int = Field(ge=0)
     status: Literal["FIRED", "NOT_ENABLED", "ESCAPES_DECLARED_ENVELOPE"]
     new_marking: Marking | None = None
     envelope_escape: tuple[int, ...] | None = None
@@ -94,8 +99,9 @@ class IncidenceMatrixRequest(StrictModel):
 
 
 class IncidenceMatrixResult(StrictModel):
-    """The incidence matrix."""
+    """The incidence matrix bound to its net's place/transition axes."""
 
+    net: PetriNet
     incidence: tuple[tuple[int, ...], ...]
 
 
@@ -125,6 +131,9 @@ class ReachabilityResult(StrictModel):
     to a list of (transition, resulting_marking) pairs.
     """
 
+    net: PetriNet
+    initial_marking: Marking
+    max_states: int = Field(ge=1, le=MAX_REACHABILITY_STATES)
     states: tuple[tuple[int, ...], ...]
     edges: tuple[tuple[int, int, int], ...]
     truncated: bool
@@ -142,6 +151,7 @@ class SiphonTrapResult(StrictModel):
     Each siphon/trap is represented as a tuple of place indices.
     """
 
+    net: PetriNet
     siphons: tuple[tuple[int, ...], ...]
     traps: tuple[tuple[int, ...], ...]
 

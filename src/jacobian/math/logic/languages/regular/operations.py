@@ -315,9 +315,8 @@ def verify_dfa_run(claim: RunResult) -> bool:
                 return False
     except (KeyError, ValueError, TypeError):
         return False
-    return (
-        state == claim.final_state
-        and claim.accepted == (state in claim.dfa.accepting_states)
+    return state == claim.final_state and claim.accepted == (
+        state in claim.dfa.accepting_states
     )
 
 
@@ -325,9 +324,10 @@ def verify_accepted_word_count(claim: CountResult) -> bool:
     """Verify an exact accepted-word count for the retained DFA and length."""
 
     try:
-        return format_canonical_integer(
-            count_accepted_words(claim.dfa, claim.word_length)
-        ) == claim.count
+        return (
+            format_canonical_integer(count_accepted_words(claim.dfa, claim.word_length))
+            == claim.count
+        )
     except (OperationDomainValidationError, ValueError, TypeError):
         return False
 
@@ -336,11 +336,14 @@ def verify_transition_parikh_profile(claim: TransitionParikhProfile) -> bool:
     """Verify the complete transition-use histogram for a retained automaton."""
 
     try:
-        return transition_parikh_profile(
-            claim.automaton,
-            claim.source_state,
-            claim.target_state,
-            claim.path_length,
-        ) == claim
+        return (
+            transition_parikh_profile(
+                claim.automaton,
+                claim.source_state,
+                claim.target_state,
+                claim.path_length,
+            )
+            == claim
+        )
     except (OperationDomainValidationError, ValueError, TypeError, RuntimeError):
         return False

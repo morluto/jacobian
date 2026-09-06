@@ -222,9 +222,10 @@ def test_run_accepts_word_ending_in_1() -> None:
     assert result.accepted is True
     assert result.final_state == 1
     assert result.state_trace == (0, 1, 0, 1)
-    assert verify_dfa_run(
-        type(result).model_validate_json(result.model_dump_json())
-    ) is True
+    assert (
+        verify_dfa_run(type(result).model_validate_json(result.model_dump_json()))
+        is True
+    )
 
     forged = result.model_dump(mode="json")
     forged["word"][0] = 0
@@ -267,9 +268,12 @@ def test_count_binary_strings_ending_in_1() -> None:
     dfa = _dfa_ends_in_1()
     result = compute_count(CountRequest(dfa=dfa, word_length=3))
     assert result.count == "4"
-    assert verify_accepted_word_count(
-        type(result).model_validate_json(result.model_dump_json())
-    ) is True
+    assert (
+        verify_accepted_word_count(
+            type(result).model_validate_json(result.model_dump_json())
+        )
+        is True
+    )
     forged = result.model_dump(mode="json")
     forged["count"] = "5"
     assert verify_accepted_word_count(type(result).model_validate(forged)) is False

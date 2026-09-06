@@ -50,7 +50,10 @@ def test_divided_differences_are_canonical_rationals() -> None:
     assert verify_divided_differences(decoded) is True
     forged = decoded.model_dump(mode="json")
     forged["coefficients"][0] = {"num": "2", "den": "1"}
-    assert verify_divided_differences(DividedDifferencesResult.model_validate(forged)) is False
+    assert (
+        verify_divided_differences(DividedDifferencesResult.model_validate(forged))
+        is False
+    )
 
 
 def test_newton_form_is_directly_evaluable() -> None:

@@ -112,7 +112,7 @@ def evaluate_newton(
                 form.coefficients,
                 evaluation_point,
             )
-        )
+        ),
     )
 
 

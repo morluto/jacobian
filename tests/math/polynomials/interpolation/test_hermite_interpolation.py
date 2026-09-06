@@ -234,9 +234,12 @@ def test_zero_polynomial_retains_ring_and_zero_conventions() -> None:
     assert result.degree is None
     assert result.leading_coefficient.as_fraction() == 0
     assert all(item.computed.as_fraction() == 0 for item in result.replay)
-    assert verify_hermite_interpolation(
-        HermiteInterpolationResult.model_validate_json(result.model_dump_json())
-    ) is True
+    assert (
+        verify_hermite_interpolation(
+            HermiteInterpolationResult.model_validate_json(result.model_dump_json())
+        )
+        is True
+    )
 
 
 def test_node_row_permutation_preserves_polynomial_and_replay_order() -> None:
@@ -391,11 +394,15 @@ def test_result_round_trips() -> None:
     serialized = result.model_dump(mode="json")
 
     assert HermiteInterpolationResult.model_validate(serialized) == result
-    assert verify_hermite_interpolation(
-        HermiteInterpolationResult.model_validate(serialized)
-    ) is True
+    assert (
+        verify_hermite_interpolation(
+            HermiteInterpolationResult.model_validate(serialized)
+        )
+        is True
+    )
     forged = result.model_dump(mode="json")
     forged["leading_coefficient"] = {"num": "9", "den": "1"}
-    assert verify_hermite_interpolation(
-        HermiteInterpolationResult.model_validate(forged)
-    ) is False
+    assert (
+        verify_hermite_interpolation(HermiteInterpolationResult.model_validate(forged))
+        is False
+    )

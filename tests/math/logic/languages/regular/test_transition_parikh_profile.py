@@ -369,9 +369,12 @@ def test_profile_verifier_rejects_source_and_conclusion_forgeries() -> None:
         )
     )
     payload = result.model_dump(mode="json")
-    assert verify_transition_parikh_profile(
-        TransitionParikhProfile.model_validate_json(result.model_dump_json())
-    ) is True
+    assert (
+        verify_transition_parikh_profile(
+            TransitionParikhProfile.model_validate_json(result.model_dump_json())
+        )
+        is True
+    )
     forgeries: list[dict[str, object]] = []
 
     wrong_vector = deepcopy(payload)

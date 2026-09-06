@@ -62,9 +62,7 @@ def compute_attribute_derivation(
     )
     derived = FormalObjectSubset(
         context=context,
-        indices=tuple(
-            sorted(attribute_derivation(context, frozenset(request.subset)))
-        ),
+        indices=tuple(sorted(attribute_derivation(context, frozenset(request.subset)))),
     )
     return DerivationResult(
         context=context,

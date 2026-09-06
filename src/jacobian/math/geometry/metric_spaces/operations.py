@@ -15,7 +15,14 @@ from ._models import (
     MetricProfileResult,
 )
 
-__all__ = ["ball", "gromov_hyperbolicity", "metric_profile", "verify_ball", "verify_gromov_hyperbolicity", "verify_metric_profile"]
+__all__ = [
+    "ball",
+    "gromov_hyperbolicity",
+    "metric_profile",
+    "verify_ball",
+    "verify_gromov_hyperbolicity",
+    "verify_metric_profile",
+]
 
 
 def _admit_metric_space(space: FiniteMetricSpace) -> None:
@@ -120,7 +127,7 @@ def gromov_hyperbolicity(
                         max_delta = delta
     return GromovHyperbolicityResult(
         metric_space=metric_space,
-        hyperbolicity=CanonicalRational.from_fraction(max_delta)
+        hyperbolicity=CanonicalRational.from_fraction(max_delta),
     )
 
 

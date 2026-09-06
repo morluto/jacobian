@@ -74,8 +74,10 @@ def schur_evaluation(
             message="point must contain 1..20 bounded integer coordinates",
         )
 
-    variables = variables if variables is not None else tuple(
-        f"x{i}" for i in range(len(point))
+    variables = (
+        variables
+        if variables is not None
+        else tuple(f"x{i}" for i in range(len(point)))
     )
     if len(variables) != len(point):
         raise OperationDomainValidationError(
@@ -87,8 +89,10 @@ def schur_evaluation(
     n = len(parts)
     if not parts:
         return SchurExpansionResult(
-            partition=partition, variables=variables,
-            point=point, value=format_canonical_integer(1)
+            partition=partition,
+            variables=variables,
+            point=point,
+            value=format_canonical_integer(1),
         )
 
     def h(k: int) -> int:

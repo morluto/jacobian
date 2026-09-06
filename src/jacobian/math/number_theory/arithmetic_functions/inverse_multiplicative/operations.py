@@ -104,7 +104,9 @@ __all__ = [
 
 def verify_euler_phi_preimages(claim: EulerPhiPreimageResult) -> bool:
     try:
-        return euler_phi_preimages(claim.target) == claim.preimage and claim.count == len(claim.preimage)
+        return euler_phi_preimages(
+            claim.target
+        ) == claim.preimage and claim.count == len(claim.preimage)
     except (OperationDomainValidationError, TypeError, ValueError):
         return False
 
@@ -118,6 +120,9 @@ def verify_euler_phi_preimage_count(claim: EulerPhiPreimageCountResult) -> bool:
 
 def verify_euler_phi_power_sum(claim: EulerPhiPowerSumResult) -> bool:
     try:
-        return euler_phi_preimage_power_profile(claim.target, claim.exponent) == (claim.power_sum, claim.count)
+        return euler_phi_preimage_power_profile(claim.target, claim.exponent) == (
+            claim.power_sum,
+            claim.count,
+        )
     except (OperationDomainValidationError, TypeError, ValueError):
         return False

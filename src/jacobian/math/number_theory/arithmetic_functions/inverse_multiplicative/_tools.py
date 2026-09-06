@@ -22,13 +22,17 @@ def compute_euler_phi_preimage(
     request: EulerPhiPreimageRequest,
 ) -> EulerPhiPreimageResult:
     preimage = euler_phi_preimages(request.target)
-    return EulerPhiPreimageResult(target=request.target, preimage=preimage, count=len(preimage))
+    return EulerPhiPreimageResult(
+        target=request.target, preimage=preimage, count=len(preimage)
+    )
 
 
 def compute_euler_phi_preimage_count(
     request: EulerPhiPreimageCountRequest,
 ) -> EulerPhiPreimageCountResult:
-    return EulerPhiPreimageCountResult(target=request.target, count=euler_phi_preimage_count(request.target))
+    return EulerPhiPreimageCountResult(
+        target=request.target, count=euler_phi_preimage_count(request.target)
+    )
 
 
 def compute_euler_phi_power_sum(

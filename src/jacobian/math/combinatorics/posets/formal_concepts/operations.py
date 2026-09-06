@@ -351,9 +351,7 @@ def object_closure_result(ctx: FormalContext, objects: frozenset[int]) -> Closur
         side="OBJECT",
         closure=FormalObjectSubset(context=ctx, indices=tuple(sorted(closure))),
         derived=FormalAttributeSubset(context=ctx, indices=tuple(sorted(derived))),
-        added=FormalObjectSubset(
-            context=ctx, indices=tuple(sorted(closure - objects))
-        ),
+        added=FormalObjectSubset(context=ctx, indices=tuple(sorted(closure - objects))),
         is_closed=closure == objects,
     )
 
@@ -493,9 +491,12 @@ def verify_enumerate_concepts(claim: EnumerateConceptsResult) -> bool:
 
     try:
         concepts = _concept_values(claim.context, enumerate_concepts(claim.context))
-        return EnumerateConceptsResult(
-            context=claim.context, concepts=concepts, count=len(concepts)
-        ) == claim
+        return (
+            EnumerateConceptsResult(
+                context=claim.context, concepts=concepts, count=len(concepts)
+            )
+            == claim
+        )
     except (OperationDomainValidationError, TypeError, ValueError):
         return False
 
@@ -558,7 +559,7 @@ def _concept_lattice_from_canonical_concepts(
         [
             {"extent": frozenset(extent), "intent": frozenset(intent)}
             for extent, intent in concepts
-        ]
+        ],
     )
 
 
@@ -573,8 +574,7 @@ def _concept_lattice_from_concepts(
     covers = _cover_relation(order, n)
     if n == 0:
         return ConceptLatticeResult(
-            context=context,
-            concepts=(), order=(), covers=(), top=None, bottom=None
+            context=context, concepts=(), order=(), covers=(), top=None, bottom=None
         )
     bottom = 0
     top = 0

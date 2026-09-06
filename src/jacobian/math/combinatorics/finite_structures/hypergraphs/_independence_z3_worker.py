@@ -33,7 +33,6 @@ def main() -> int:
                         mode="json",
                         exclude={
                             "hypergraph",
-                            "hypergraph_digest",
                             "resource_budget",
                         },
                     ),

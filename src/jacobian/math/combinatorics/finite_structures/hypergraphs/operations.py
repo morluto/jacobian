@@ -54,6 +54,7 @@ __all__ = [
     "maximum_weight_packing",
     "minimum_transversal",
     "parameters",
+    "verify_independence_number",
     "vertex_degrees",
 ]
 
@@ -303,6 +304,39 @@ def independence_number(
     )
 
     return _independence_z3.solve_independence_number(hypergraph, resource_budget)
+
+
+def verify_independence_number(claim: HypergraphIndependenceResult) -> bool:
+    """Verify an independence witness and, for exact claims, its optimum."""
+
+    try:
+        source_vertices = set(claim.hypergraph.vertices)
+        witness = claim.incumbent_vertices
+        witness_set = set(witness)
+        if (
+            len(witness_set) != len(witness)
+            or not witness_set <= source_vertices
+            or witness
+            != tuple(vertex for vertex in claim.hypergraph.vertices if vertex in witness_set)
+            or any(
+                set(members) <= witness_set for _, members in claim.hypergraph.edges
+            )
+            or claim.lower_bound != len(witness)
+            or not claim.lower_bound <= claim.upper_bound <= len(source_vertices)
+        ):
+            return False
+        if claim.status == "UNKNOWN":
+            return claim.independence_number is None and claim.lower_bound < claim.upper_bound
+
+        expected = independence_number(claim.hypergraph, claim.resource_budget)
+        return (
+            expected.status == "EXACT"
+            and claim.independence_number == expected.independence_number
+            and claim.lower_bound == expected.lower_bound
+            and claim.upper_bound == expected.upper_bound
+        )
+    except Exception:
+        return False
 
 
 def _canonical_edges(

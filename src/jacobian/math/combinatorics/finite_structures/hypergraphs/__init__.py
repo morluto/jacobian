@@ -17,6 +17,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs.operations import
     maximum_weight_packing,
     minimum_transversal,
     parameters,
+    verify_independence_number,
     vertex_degrees,
 )
 
@@ -35,5 +36,6 @@ __all__ = [
     "maximum_weight_packing",
     "minimum_transversal",
     "parameters",
+    "verify_independence_number",
     "vertex_degrees",
 ]

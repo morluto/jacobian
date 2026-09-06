@@ -13,13 +13,12 @@ from pydantic import (
 )
 from pydantic_core import PydanticCustomError
 
-from jacobian._digest import Sha256Digest
 from jacobian._exact import (
     CanonicalRational,
     require_bounded_rational,
 )
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import encode_strict_json, sha256_digest
+from jacobian.canonical import encode_strict_json
 from jacobian.math.graphs.values import (
     MAX_GRAPH_LABEL_BYTES,
     MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
@@ -233,15 +232,6 @@ class FiniteHypergraph(StrictModel):
         return self
 
 
-def _hypergraph_digest(hypergraph: FiniteHypergraph) -> str:
-    payload = {
-        "format": "jacobian.finite-hypergraph/v1",
-        "vertices": list(hypergraph.vertices),
-        "edges": [[edge_id, list(members)] for edge_id, members in hypergraph.edges],
-    }
-    return sha256_digest(encode_strict_json(payload))
-
-
 def _greedy_independent_vertices(
     hypergraph: FiniteHypergraph,
 ) -> tuple[str, ...]:
@@ -305,7 +295,6 @@ class HypergraphIndependenceResult(StrictModel):
     """Exact optimum or sound incumbent and bounds for one source hypergraph."""
 
     hypergraph: FiniteHypergraph
-    hypergraph_digest: Sha256Digest
     resource_budget: HypergraphIndependenceBudget
     status: HypergraphIndependenceStatus
     independence_number: StrictInt | None = Field(default=None, ge=0, le=MAX_VERTICES)
@@ -339,7 +328,6 @@ class HypergraphIndependenceResult(StrictModel):
 
         return cls.model_construct(
             hypergraph=hypergraph,
-            hypergraph_digest=_hypergraph_digest(hypergraph),
             resource_budget=resource_budget,
             status=status,
             independence_number=independence_number,
@@ -354,11 +342,6 @@ class HypergraphIndependenceResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_source_and_witness(self) -> Self:
-        if self.hypergraph_digest != _hypergraph_digest(self.hypergraph):
-            raise _validation_error(
-                "hypergraph_digest must bind the exact source hypergraph"
-            )
-
         witness_set = set(self.incumbent_vertices)
         expected_order = tuple(
             vertex for vertex in self.hypergraph.vertices if vertex in witness_set

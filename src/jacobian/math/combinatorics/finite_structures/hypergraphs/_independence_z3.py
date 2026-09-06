@@ -17,7 +17,6 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     HypergraphIndependenceStatus,
     HypergraphIndependenceTermination,
     _greedy_independent_vertices,
-    _hypergraph_digest,
     _independence_upper_bound,
 )
 from jacobian.process import (
@@ -424,7 +423,6 @@ def solve_independence_number(
             {
                 **response,
                 "hypergraph": source.model_dump(mode="json"),
-                "hypergraph_digest": _hypergraph_digest(source),
                 "resource_budget": resource_budget.model_dump(mode="json"),
             }
         )

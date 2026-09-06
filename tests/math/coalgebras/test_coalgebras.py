@@ -57,7 +57,6 @@ class ComultiplicationResultPayload(TypedDict):
     coalgebra: dict[str, Any]
     element_index: int
     matrix: MatrixPayload
-    dimension: int
 
 
 @contextmanager
@@ -303,7 +302,6 @@ class TestSourceBoundResults:
                 entries=((4, 0), (0, 0)),
                 columns=2,
             ),
-            dimension=2,
         )
         assert claimed.matrix.entries[0][0] == 4
 

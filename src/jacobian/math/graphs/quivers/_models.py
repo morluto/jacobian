@@ -60,15 +60,17 @@ class FixedLengthPathsRequest(StrictModel):
 
 
 class AdjacencyMatricesResult(StrictModel):
+    """Two square matrix values on the shared implicit vertex axis."""
+
     adjacency_matrix: tuple[tuple[int, ...], ...]
     transpose_matrix: tuple[tuple[int, ...], ...]
-    vertex_count: int = Field(ge=1)
 
 
 class VertexProfilesResult(StrictModel):
+    """In- and out-degree vectors on their shared implicit vertex axis."""
+
     in_degrees: tuple[int, ...]
     out_degrees: tuple[int, ...]
-    vertex_count: int = Field(ge=1)
 
 
 class FixedLengthPathsResult(StrictModel):

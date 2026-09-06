@@ -20,6 +20,7 @@ from jacobian.math.groups.finite_abelian import (
     FiniteAbelianSpectralPairSource,
     decide_finite_abelian_spectral_pair,
     finite_abelian_group_factorization,
+    verify_finite_abelian_group_factorization,
 )
 
 FINITE_ABELIAN_SPECTRAL_PAIR_OPERATION = next(
@@ -388,6 +389,22 @@ def test_native_factorization_accepts_canonical_group_values() -> None:
     assert result.is_exact_factorization
     assert result.group_order == 4
     assert result.pair_count == 4
+
+
+def test_serialized_factorization_witness_is_checked_by_consumer() -> None:
+    result = finite_abelian_group_factorization(
+        FiniteAbelianProductGroup(moduli=(2, 2)),
+        ((0, 0), (1, 0)),
+        ((0, 0), (1, 0)),
+    )
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_finite_abelian_group_factorization(decoded)
+
+    forged = decoded.model_copy(deep=True)
+    payload = forged.model_dump(mode="json")
+    payload["first_duplicate"]["element"] = [1, 1]
+    claim = type(result).model_validate(payload)
+    assert not verify_finite_abelian_group_factorization(claim)
 
 
 def test_singleton_pair_beyond_the_group_order_cap_is_admitted() -> None:

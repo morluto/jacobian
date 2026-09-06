@@ -1138,7 +1138,6 @@ class FiniteAbelianGroupFactorizationResult(StrictModel):
         self._validate_factor_sets()
         self._validate_histogram()
         self._validate_decision_witness_presence()
-        self._validate_witnesses()
         return self
 
     def _validate_group_structure(self) -> None:
@@ -1215,42 +1214,6 @@ class FiniteAbelianGroupFactorizationResult(StrictModel):
             self.first_missing is not None or self.first_duplicate is not None
         ):
             raise ValueError("exact factorizations cannot carry failure witnesses")
-
-    def _validate_witnesses(self) -> None:
-        def canonical(element: tuple[int, ...]) -> bool:
-            return len(element) == len(self.moduli) and all(
-                0 <= coordinate < modulus
-                for coordinate, modulus in zip(element, self.moduli, strict=True)
-            )
-
-        if self.first_missing is not None and not canonical(self.first_missing):
-            raise ValueError("missing witness must be a canonical group element")
-        duplicate = self.first_duplicate
-        if duplicate is None:
-            return
-        elements = (
-            duplicate.element,
-            duplicate.left,
-            duplicate.right,
-            duplicate.other_left,
-            duplicate.other_right,
-        )
-        if not all(canonical(element) for element in elements):
-            raise ValueError("duplicate witness elements must be canonical")
-        first_pair = (duplicate.left, duplicate.right)
-        second_pair = (duplicate.other_left, duplicate.other_right)
-        if first_pair == second_pair:
-            raise ValueError("duplicate witness representations must be distinct")
-        for left, right in (first_pair, second_pair):
-            total = tuple(
-                (left_coordinate + right_coordinate) % modulus
-                for left_coordinate, right_coordinate, modulus in zip(
-                    left, right, self.moduli, strict=True
-                )
-            )
-            if total != duplicate.element:
-                raise ValueError("duplicate witness representations must sum correctly")
-
 
 def finite_abelian_group_factorization(
     group: FiniteAbelianProductGroup,
@@ -1333,6 +1296,21 @@ def finite_abelian_group_factorization(
     )
 
 
+def verify_finite_abelian_group_factorization(
+    claim: FiniteAbelianGroupFactorizationResult,
+) -> bool:
+    """Check a serialized factorization summary against its retained factors."""
+    try:
+        expected = finite_abelian_group_factorization(
+            FiniteAbelianProductGroup(moduli=claim.moduli),
+            claim.normalized_left,
+            claim.normalized_right,
+        )
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+    return expected == claim
+
+
 __all__ = [
     "FiniteAbelianCharacterSumCell",
     "FiniteAbelianCharacterSumIntervalProfileRequest",
@@ -1348,4 +1326,5 @@ __all__ = [
     "compute_finite_abelian_character_sum_interval_profile",
     "decide_finite_abelian_spectral_pair",
     "finite_abelian_group_factorization",
+    "verify_finite_abelian_group_factorization",
 ]

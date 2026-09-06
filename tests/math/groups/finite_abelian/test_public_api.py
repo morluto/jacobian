@@ -22,6 +22,7 @@ def test_exact_public_api_symbols() -> None:
         "compute_finite_abelian_character_sum_interval_profile",
         "decide_finite_abelian_spectral_pair",
         "finite_abelian_group_factorization",
+        "verify_finite_abelian_group_factorization",
     )
     assert tuple(finite_abelian_groups.__all__) == expected
     assert len(finite_abelian_groups.__all__) == len(set(finite_abelian_groups.__all__))

@@ -22,6 +22,7 @@ from jacobian.math.topology.finite.open_sets._models import (
     SpecializationPreorderResult,
 )
 from jacobian.math.topology.finite.open_sets.operations import (
+    _require_topology_axioms,
     beat_points,
     connected_components,
     continuity,
@@ -51,6 +52,21 @@ def _admit_topology(
                 f"{MAX_TOPOLOGY_OPERATION_OPENS} open sets"
             ),
         )
+    try:
+        _require_topology_axioms(topology)
+    except ValueError as exc:
+        message = str(exc)
+        if "unions" in message:
+            code = "finite_topology.not_closed_under_unions"
+        elif "intersections" in message:
+            code = "finite_topology.not_closed_under_intersections"
+        else:
+            code = "finite_topology.missing_extreme_open_sets"
+        raise OperationDomainValidationError(
+            location=location,
+            code=code,
+            message=message,
+        ) from exc
 
 
 def compute_specialization_preorder(

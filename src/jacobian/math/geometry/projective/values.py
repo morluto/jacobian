@@ -57,7 +57,7 @@ def _primitive_integer_triple(
 
 
 class RationalProjectiveLine(StrictModel):
-    """One labelled line ``a*x + b*y + c*z = 0`` over QQ."""
+    """One labelled rational homogeneous line carrier."""
 
     label: ProjectiveLabel
     coefficients: tuple[
@@ -66,19 +66,13 @@ class RationalProjectiveLine(StrictModel):
         CanonicalRational,
     ]
 
-    @model_validator(mode="after")
-    def require_nonzero_line(self) -> Self:
-        _primitive_integer_triple(self.coefficients)
-        return self
-
-
 class PrimitiveProjectiveTriple(StrictModel):
-    """Canonical primitive integer homogeneous coordinates."""
+    """Integer homogeneous coordinates with canonical decimal spelling."""
 
     coordinates: tuple[str, str, str]
 
     @model_validator(mode="after")
-    def require_canonical_primitive_coordinates(self) -> Self:
+    def require_canonical_integer_coordinates(self) -> Self:
         try:
             values = tuple(parse_canonical_integer(value) for value in self.coordinates)
         except ValueError as exc:
@@ -93,19 +87,6 @@ class PrimitiveProjectiveTriple(StrictModel):
             raise _validation_error(
                 "projective_coordinates_canonical_integer_strings",
                 "projective coordinates must be canonical integer strings",
-            )
-        divisor = 0
-        for value in values:
-            divisor = gcd(divisor, abs(value))
-        if divisor != 1:
-            raise _validation_error(
-                "projective_coordinates_nonzero_primitive",
-                "projective coordinates must be nonzero and primitive",
-            )
-        if next(value for value in values if value) < 0:
-            raise _validation_error(
-                "first_nonzero_projective_coordinate_positive",
-                "the first nonzero projective coordinate must be positive",
             )
         return self
 
@@ -133,7 +114,7 @@ class AlgebraicProjectivePlanePoint(StrictModel):
     chart_index: StrictInt = Field(ge=0, le=2)
 
     @model_validator(mode="after")
-    def bind_parent_and_normalization(self) -> Self:
+    def bind_parent_and_field(self) -> Self:
         if len(set(self.axis)) != 3:
             raise _validation_error(
                 "projective_plane_axis",
@@ -147,38 +128,34 @@ class AlgebraicProjectivePlanePoint(StrictModel):
                 "projective_point_field",
                 "all projective coordinates and the selected embedding must share one field presentation",
             )
-        zero = tuple(
-            coefficient.as_fraction() == 0
-            for coordinate in self.coordinates
-            for coefficient in coordinate.coefficients_ascending
-        )
-        degree = presentation.degree
-        coordinate_is_zero = tuple(
-            all(zero[index * degree : (index + 1) * degree]) for index in range(3)
-        )
-        coordinate_is_one = tuple(
-            coordinate.coefficients_ascending[0].as_fraction() == 1
-            and all(
-                coefficient.as_fraction() == 0
-                for coefficient in coordinate.coefficients_ascending[1:]
-            )
-            for coordinate in self.coordinates
-        )
-        if any(not coordinate_is_zero[index] for index in range(self.chart_index)):
-            raise _validation_error(
-                "projective_point_chart",
-                "coordinates before the declared projective chart must be zero",
-            )
-        if not coordinate_is_one[self.chart_index]:
-            raise _validation_error(
-                "projective_point_normalization",
-                "the declared projective chart coordinate must be exactly one",
-            )
         return self
+
+
+def verify_rational_projective_line(line: RationalProjectiveLine) -> bool:
+    """Check that a rational line is a nonzero projective representative."""
+    try:
+        _primitive_integer_triple(line.coefficients)
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def verify_primitive_projective_triple(triple: PrimitiveProjectiveTriple) -> bool:
+    """Check nonzero primitive sign-normalized integer coordinates."""
+    try:
+        values = tuple(parse_canonical_integer(value) for value in triple.coordinates)
+        divisor = 0
+        for value in values:
+            divisor = gcd(divisor, abs(value))
+        return divisor == 1 and next(value for value in values if value) > 0
+    except (TypeError, ValueError, StopIteration):
+        return False
 
 
 __all__ = [
     "AlgebraicProjectivePlanePoint",
     "PrimitiveProjectiveTriple",
     "RationalProjectiveLine",
+    "verify_primitive_projective_triple",
+    "verify_rational_projective_line",
 ]

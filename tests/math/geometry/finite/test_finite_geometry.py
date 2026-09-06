@@ -36,6 +36,8 @@ from jacobian.math.geometry.finite.operations import (
     subspace_intersection,
     subspace_membership,
     subspace_span,
+    verify_linear_subspace,
+    verify_projective_point_sequence,
 )
 from jacobian.math.geometry.finite.values import ProjectivePoint
 
@@ -185,6 +187,8 @@ def test_public_api_constructs_and_embeds_without_private_imports() -> None:
         "subspace_intersection",
         "subspace_membership",
         "subspace_span",
+        "verify_linear_subspace",
+        "verify_projective_point_sequence",
     ]
 
     space = _space(2, ("x", "y"))
@@ -370,9 +374,8 @@ def test_enumerate_admission_bounds_axis_label_characters() -> None:
         projective_space_enumerate(_space(2, ("x", label)))
 
 
-def test_enumeration_replay_rejects_unnormalized_representatives() -> None:
-    """Sequence coordinates stay bound to the canonical representative
-    invariant of the declared parent space."""
+def test_sequence_normalization_is_an_explicit_claim() -> None:
+    """Sequence coordinate normalization is checked by its verifier."""
     result = projective_space_enumerate(_space(3, ("x", "y")))
     assert result.sequence.coordinates == ((0, 1), (1, 0), (1, 1), (1, 2))
 
@@ -381,35 +384,23 @@ def test_enumeration_replay_rejects_unnormalized_representatives() -> None:
         (2, 1),
         *payload["sequence"]["coordinates"][1:],
     )
-    with pytest.raises(ValidationError) as error:
-        ProjectiveSpaceEnumerateResult.model_validate(payload)
-    assert (
-        error.value.errors()[0]["type"]
-        == "finite_geometry.projective_coordinates_not_normalized"
-    )
+    forged = ProjectiveSpaceEnumerateResult.model_validate(payload)
+    assert verify_projective_point_sequence(forged.sequence) is False
 
 
-def test_enumeration_sequence_replay_rejects_duplicates_and_wrong_counts() -> None:
-    """The sequence value itself certifies uniqueness and completeness."""
+def test_enumeration_sequence_claim_verifier_rejects_duplicates_and_wrong_counts() -> None:
+    """The sequence verifier checks uniqueness and completeness."""
     result = projective_space_enumerate(_space(2, ("x", "y")))
 
     payload = result.model_dump()
     payload["sequence"]["coordinates"] = ((0, 1), (0, 1), (1, 0))
-    with pytest.raises(ValidationError) as error:
-        ProjectiveSpaceEnumerateResult.model_validate(payload)
-    assert (
-        error.value.errors()[0]["type"]
-        == "finite_geometry.point_sequence_points_not_unique"
-    )
+    forged = ProjectiveSpaceEnumerateResult.model_validate(payload)
+    assert verify_projective_point_sequence(forged.sequence) is False
 
     payload = result.model_dump()
     payload["sequence"]["coordinates"] = ((0, 1), (1, 0))
-    with pytest.raises(ValidationError) as error:
-        ProjectiveSpaceEnumerateResult.model_validate(payload)
-    assert (
-        error.value.errors()[0]["type"]
-        == "finite_geometry.point_sequence_count_mismatch"
-    )
+    forged = ProjectiveSpaceEnumerateResult.model_validate(payload)
+    assert verify_projective_point_sequence(forged.sequence) is False
 
 
 def test_request_rejects_nonprime_field() -> None:
@@ -457,3 +448,12 @@ def test_result_models_remain_structural_only() -> None:
     payload["count"] = "8"
     forged_count = type(count).model_validate(payload)
     assert forged_count.count == "8"
+
+
+def test_subspace_rref_is_an_explicit_claim() -> None:
+    malformed = LinearSubspace(
+        space=_space(3, ("x", "y")), basis=((1, 1), (1, 1))
+    )
+    assert verify_linear_subspace(malformed) is False
+    with pytest.raises(OperationDomainValidationError, match="reduced row"):
+        subspace_membership(malformed, (0, 0))

@@ -18,6 +18,7 @@ from jacobian.math.topology.finite.open_sets import (
     is_t0,
     minimal_open_neighborhoods,
     specialization_preorder,
+    verify_topology,
 )
 from jacobian.math.topology.finite.open_sets._models import (
     BeatPointsRequest,
@@ -66,24 +67,26 @@ def test_public_surface_keeps_closure_and_interior_native_only() -> None:
     assert interior(space, (1,)) == frozenset({1})
 
 
-def test_topology_axioms_are_validated_at_the_value_boundary() -> None:
-    with pytest.raises(ValidationError) as exc_info:
-        FiniteTopology(
-            point_count=3,
-            open_sets=((), (0,), (1,), (0, 1, 2)),
-        )
-    assert (
-        exc_info.value.errors()[0]["type"] == "finite_topology.not_closed_under_unions"
+def test_topology_axioms_are_admitted_by_operations() -> None:
+    union_invalid = FiniteTopology(
+        point_count=3,
+        open_sets=((), (0,), (1,), (0, 1, 2)),
     )
-    with pytest.raises(ValidationError) as exc_info:
-        FiniteTopology(
-            point_count=3,
-            open_sets=((), (0, 1), (1, 2), (0, 1, 2)),
+    assert verify_topology(union_invalid) is False
+    with pytest.raises(OperationDomainValidationError, match="unions"):
+        compute_specialization_preorder(
+            SpecializationPreorderRequest(topology=union_invalid)
         )
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "finite_topology.not_closed_under_intersections"
+
+    intersection_invalid = FiniteTopology(
+        point_count=3,
+        open_sets=((), (0, 1), (1, 2), (0, 1, 2)),
     )
+    assert verify_topology(intersection_invalid) is False
+    with pytest.raises(OperationDomainValidationError, match="intersections"):
+        compute_specialization_preorder(
+            SpecializationPreorderRequest(topology=intersection_invalid)
+        )
     with pytest.raises(ValidationError) as exc_info:
         FiniteTopology(point_count=2, open_sets=((), (1, 0)))
     assert (

@@ -46,6 +46,16 @@ def _admit_coordinates(coordinates: tuple[CanonicalRational, ...]) -> None:
         ) from exc
 
 
+def _admit_nonzero_point(coordinates: tuple[CanonicalRational, ...]) -> None:
+    _admit_coordinates(coordinates)
+    if all(coordinate.as_fraction() == 0 for coordinate in coordinates):
+        _reject(
+            "projective_point_least_nonzero_coordinate",
+            "projective point must have at least one nonzero coordinate",
+            ("coordinates",),
+        )
+
+
 def _reject(reason: str, message: str, location: tuple[str, ...]) -> None:
     raise OperationDomainValidationError(
         location=location, code=f"geometry.{reason}", message=message
@@ -63,13 +73,7 @@ def rational_projective_point(
     coordinates: tuple[CanonicalRational, ...],
 ) -> RationalPointConstructResult:
     """Canonicalize by scaling so first nonzero coordinate is 1."""
-    _admit_coordinates(coordinates)
-    if all(c.as_fraction() == 0 for c in coordinates):
-        _reject(
-            "projective_point_least_nonzero_coordinate",
-            "projective point must have at least one nonzero coordinate",
-            ("coordinates",),
-        )
+    _admit_nonzero_point(coordinates)
     coords = coordinates
     for _i, c in enumerate(coords):
         if c.as_fraction() != 0:
@@ -88,7 +92,7 @@ def standard_chart(
 ) -> StandardChartResult:
     """Dehomogenize at the given chart index (divide by that coordinate)."""
     coords = point.coordinates
-    _admit_coordinates(coords)
+    _admit_nonzero_point(coords)
     if chart_index >= len(coords):
         _reject("chart_index_out_range", "chart_index out of range", ("chart_index",))
     if coords[chart_index].as_fraction() == 0:
@@ -115,7 +119,7 @@ def chart_transition(
 ) -> ChartTransitionResult:
     """Return the complete target-chart coordinates for the projective point."""
     coords = point.coordinates
-    _admit_coordinates(coords)
+    _admit_nonzero_point(coords)
     if chart_i >= len(coords) or chart_j >= len(coords):
         _reject(
             "chart_index_out_range", "chart index out of range", ("chart_i", "chart_j")

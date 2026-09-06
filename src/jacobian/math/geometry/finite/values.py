@@ -109,23 +109,9 @@ class ProjectivePointSequence(StrictModel):
     coordinates: tuple[tuple[int, ...], ...] = Field(min_length=1)
 
     @model_validator(mode="after")
-    def require_complete_and_canonical(self) -> Self:
-        q = self.space.field_order
-        n = len(self.space.axis)
-        expected = (q**n - 1) // (q - 1)
-        if len(self.coordinates) != expected:
-            raise _validation_error(
-                "point_sequence_count_mismatch",
-                "a projective point sequence must list every point of its "
-                "declared parent space exactly once",
-            )
+    def require_structural_coordinates(self) -> Self:
         for coordinates in self.coordinates:
-            _require_projective_representative(coordinates, self.space)
-        if len(set(self.coordinates)) != len(self.coordinates):
-            raise _validation_error(
-                "point_sequence_points_not_unique",
-                "projective points must be unique",
-            )
+            _validate_vector(coordinates, self.space)
         return self
 
     def __len__(self) -> int:

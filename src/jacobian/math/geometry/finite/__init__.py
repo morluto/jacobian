@@ -14,6 +14,8 @@ from jacobian.math.geometry.finite.operations import (
     subspace_intersection,
     subspace_membership,
     subspace_span,
+    verify_linear_subspace,
+    verify_projective_point_sequence,
 )
 from jacobian.math.geometry.finite.values import (
     PrimeFieldVectorSpace,
@@ -36,4 +38,6 @@ __all__ = [
     "subspace_intersection",
     "subspace_membership",
     "subspace_span",
+    "verify_linear_subspace",
+    "verify_projective_point_sequence",
 ]

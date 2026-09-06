@@ -29,12 +29,7 @@ class RationalProjectivePoint(StrictModel):
     )
 
     @model_validator(mode="after")
-    def require_not_all_zero(self) -> Self:
-        if all(c.as_fraction() == 0 for c in self.coordinates):
-            raise _validation_error(
-                "projective_point_least_nonzero_coordinate",
-                "projective point must have at least one nonzero coordinate",
-            )
+    def require_structural_coordinates(self) -> Self:
         return self
 
 

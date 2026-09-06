@@ -31,30 +31,9 @@ class LinearSubspace(StrictModel):
     basis: tuple[tuple[int, ...], ...] = Field(max_length=MAX_DIM)
 
     @model_validator(mode="after")
-    def require_canonical(self) -> Self:
+    def require_structural(self) -> Self:
         for row in self.basis:
             _validate_vector(row, self.space)
-        pivots: list[int] = []
-        for row_index, row in enumerate(self.basis):
-            try:
-                pivot = next(index for index, value in enumerate(row) if value != 0)
-            except StopIteration as exc:
-                raise _validation_error(
-                    "rref_zero_row", "RREF basis cannot contain a zero row"
-                ) from exc
-            if row[pivot] != 1 or (pivots and pivot <= pivots[-1]):
-                raise _validation_error(
-                    "basis_not_rref", "basis must be in reduced row echelon form"
-                )
-            if any(
-                other[pivot] != 0
-                for other_index, other in enumerate(self.basis)
-                if other_index != row_index
-            ):
-                raise _validation_error(
-                    "basis_not_rref", "basis must be in reduced row echelon form"
-                )
-            pivots.append(pivot)
         return self
 
     @property

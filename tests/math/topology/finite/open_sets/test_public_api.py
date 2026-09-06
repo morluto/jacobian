@@ -22,6 +22,7 @@ def test_exact_public_api_symbols() -> None:
         "is_t0",
         "minimal_open_neighborhoods",
         "specialization_preorder",
+        "verify_topology",
     )
     assert tuple(finite_topology.__all__) == expected
     assert len(finite_topology.__all__) == len(set(finite_topology.__all__))

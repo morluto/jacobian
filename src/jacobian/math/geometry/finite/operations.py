@@ -41,6 +41,43 @@ from jacobian.math.geometry.finite.values import (
 )
 
 
+def verify_linear_subspace(subspace: LinearSubspace) -> bool:
+    """Check that a source-bound basis is the canonical RREF basis."""
+    try:
+        _admit_prime_field_space(subspace.space)
+        rows = [list(row) for row in subspace.basis]
+        reduced, rank = rref_rank(rows, subspace.space.field_order)
+        return tuple(tuple(row) for row in reduced[:rank]) == subspace.basis
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+
+
+def verify_projective_point_sequence(sequence: ProjectivePointSequence) -> bool:
+    """Check completeness, uniqueness, and normalization for a point sequence."""
+    try:
+        expected = (sequence.space.field_order ** len(sequence.space.axis) - 1) // (
+            sequence.space.field_order - 1
+        )
+        if len(sequence.coordinates) != expected:
+            return False
+        for coordinates in sequence.coordinates:
+            _validate_vector(coordinates, sequence.space)
+            if projective_point(sequence.space, coordinates).coordinates != coordinates:
+                return False
+        return len(set(sequence.coordinates)) == len(sequence.coordinates)
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+
+
+def _admit_linear_subspace(subspace: LinearSubspace) -> None:
+    if not verify_linear_subspace(subspace):
+        _domain_error(
+            ("subspace",),
+            "basis_not_rref",
+            "basis must be in reduced row echelon form",
+        )
+
+
 def _domain_error(location: tuple[str | int, ...], code: str, message: str) -> NoReturn:
     raise OperationDomainValidationError(
         location=location,
@@ -82,6 +119,8 @@ __all__ = [
     "subspace_intersection",
     "subspace_membership",
     "subspace_span",
+    "verify_linear_subspace",
+    "verify_projective_point_sequence",
 ]
 
 
@@ -204,6 +243,7 @@ def subspace_membership(
     subspace: LinearSubspace,
     vector: tuple[int, ...],
 ) -> SubspaceMembershipResult:
+    _admit_linear_subspace(subspace)
     _admit_prime_field_space(subspace.space)
     _validate_vector(vector, subspace.space)
     matrix = [list(row) for row in subspace.basis]
@@ -234,6 +274,8 @@ def subspace_span(
             "span_parent_mismatch",
             "all subspaces must have the declared field and axis",
         )
+    for subspace in subspaces:
+        _admit_linear_subspace(subspace)
     _admit_span(vectors, subspaces)
     matrix = [list(row) for row in vectors]
     matrix.extend(list(row) for subspace in subspaces for row in subspace.basis)
@@ -256,6 +298,8 @@ def subspace_intersection(
         location=("subspace_b", "space"),
         message="subspaces must have the same field and axis",
     )
+    _admit_linear_subspace(subspace_a)
+    _admit_linear_subspace(subspace_b)
     canonical = intersection_basis(
         subspace_a.basis,
         subspace_b.basis,
@@ -321,9 +365,12 @@ def projective_space_enumerate(
                     points.append(canonical)
                 break
 
-    return ProjectiveSpaceEnumerateResult(
-        sequence=ProjectivePointSequence(space=space, coordinates=tuple(points)),
+    sequence = ProjectivePointSequence.model_construct(
+        space=space, coordinates=tuple(points)
     )
+    if not verify_projective_point_sequence(sequence):
+        raise RuntimeError("projective enumeration kernel returned an invalid sequence")
+    return ProjectiveSpaceEnumerateResult.model_construct(sequence=sequence)
 
 
 def prime_field_affine_plane(

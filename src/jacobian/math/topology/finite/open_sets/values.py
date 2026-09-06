@@ -21,8 +21,15 @@ class FiniteTopology(StrictModel):
     open_sets: tuple[tuple[int, ...], ...] = Field(min_length=2)
 
     @model_validator(mode="after")
-    def require_topology_axioms(self) -> Self:
-        canonical: list[frozenset[int]] = []
+    def require_structural_open_sets(self) -> Self:
+        """Validate only the finite carrier and wire representation.
+
+        Closure and the two extreme open sets are mathematical properties of
+        a topology.  They are admitted by an operation that needs a topology
+        and remain independently checkable by consumers; decoding a value
+        must not make the serialized value self-certifying.
+        """
+        canonical: list[tuple[int, ...]] = []
         for open_set in self.open_sets:
             if tuple(sorted(set(open_set))) != open_set:
                 raise _validation_error(
@@ -34,29 +41,11 @@ class FiniteTopology(StrictModel):
                     "open_set_point_out_of_range",
                     "open set point is outside the carrier",
                 )
-            canonical.append(frozenset(open_set))
-        opens = set(canonical)
-        if len(opens) != len(canonical):
+            canonical.append(open_set)
+        if len(set(canonical)) != len(canonical):
             raise _validation_error(
                 "open_sets_not_distinct", "open sets must be distinct"
             )
-        full = frozenset(range(self.point_count))
-        if frozenset() not in opens or full not in opens:
-            raise _validation_error(
-                "missing_extreme_open_sets", "empty and full sets must be open"
-            )
-        for left_index, left in enumerate(canonical):
-            for right in canonical[left_index:]:
-                if left | right not in opens:
-                    raise _validation_error(
-                        "not_closed_under_unions",
-                        "open sets must be closed under unions",
-                    )
-                if left & right not in opens:
-                    raise _validation_error(
-                        "not_closed_under_intersections",
-                        "open sets must be closed under intersections",
-                    )
         return self
 
 

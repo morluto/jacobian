@@ -12,6 +12,7 @@ from jacobian.math.topology.finite.open_sets.operations import (
     is_t0,
     minimal_open_neighborhoods,
     specialization_preorder,
+    verify_topology,
 )
 from jacobian.math.topology.finite.open_sets.values import (
     BeatPointWitness,
@@ -34,4 +35,5 @@ __all__ = [
     "is_t0",
     "minimal_open_neighborhoods",
     "specialization_preorder",
+    "verify_topology",
 ]

@@ -26,6 +26,28 @@ class BeatPointAnalysis:
     up_beat_points: tuple[BeatPointWitness, ...]
 
 
+def _require_topology_axioms(topology: FiniteTopology) -> None:
+    """Admit the topology laws once at the operation boundary."""
+    opens = _open_sets(topology)
+    if frozenset() not in opens or frozenset(range(topology.point_count)) not in opens:
+        raise ValueError("empty and full sets must be open")
+    for left in opens:
+        for right in opens:
+            if left | right not in opens:
+                raise ValueError("open sets must be closed under unions")
+            if left & right not in opens:
+                raise ValueError("open sets must be closed under intersections")
+
+
+def verify_topology(topology: FiniteTopology) -> bool:
+    """Check the topology axioms of a caller-supplied finite carrier."""
+    try:
+        _require_topology_axioms(topology)
+    except (ValueError, TypeError):
+        return False
+    return True
+
+
 def _open_sets(topology: FiniteTopology) -> set[frozenset[int]]:
     return {frozenset(open_set) for open_set in topology.open_sets}
 
@@ -41,6 +63,7 @@ def specialization_preorder(
     topology: FiniteTopology,
 ) -> tuple[tuple[bool, ...], ...]:
     """Return ``relation[x][y]`` iff ``x`` lies in the closure of ``{y}``."""
+    _require_topology_axioms(topology)
     containing = [
         tuple(
             frozenset(open_set) for open_set in topology.open_sets if point in open_set
@@ -59,6 +82,7 @@ def specialization_preorder(
 def minimal_open_neighborhoods(
     topology: FiniteTopology,
 ) -> tuple[frozenset[int], ...]:
+    _require_topology_axioms(topology)
     return tuple(
         frozenset.intersection(
             *(
@@ -72,6 +96,7 @@ def minimal_open_neighborhoods(
 
 
 def closure(topology: FiniteTopology, subset: Iterable[int]) -> frozenset[int]:
+    _require_topology_axioms(topology)
     selected = _subset(topology, subset)
     relation = specialization_preorder(topology)
     return frozenset(
@@ -82,6 +107,7 @@ def closure(topology: FiniteTopology, subset: Iterable[int]) -> frozenset[int]:
 
 
 def interior(topology: FiniteTopology, subset: Iterable[int]) -> frozenset[int]:
+    _require_topology_axioms(topology)
     selected = _subset(topology, subset)
     neighborhoods = minimal_open_neighborhoods(topology)
     return frozenset(
@@ -92,6 +118,7 @@ def interior(topology: FiniteTopology, subset: Iterable[int]) -> frozenset[int]:
 
 
 def connected_components(topology: FiniteTopology) -> tuple[tuple[int, ...], ...]:
+    _require_topology_axioms(topology)
     relation = specialization_preorder(topology)
     visited: set[int] = set()
     components: list[tuple[int, ...]] = []
@@ -117,6 +144,8 @@ def connected_components(topology: FiniteTopology) -> tuple[tuple[int, ...], ...
 def continuity(
     domain: FiniteTopology, codomain: FiniteTopology, point_map: PointMap
 ) -> ContinuityAnalysis:
+    _require_topology_axioms(domain)
+    _require_topology_axioms(codomain)
     if point_map.domain_point_count != domain.point_count:
         raise ValueError("map domain size does not match the domain topology")
     if point_map.codomain_point_count != codomain.point_count:
@@ -141,6 +170,7 @@ def is_continuous(
 
 
 def is_t0(topology: FiniteTopology) -> bool:
+    _require_topology_axioms(topology)
     relation = specialization_preorder(topology)
     return all(
         not (relation[left][right] and relation[right][left])
@@ -167,6 +197,7 @@ def _unique_extremum(
 
 
 def beat_points(topology: FiniteTopology) -> BeatPointAnalysis:
+    _require_topology_axioms(topology)
     relation = specialization_preorder(topology)
     if any(
         relation[left][right] and relation[right][left]
@@ -208,4 +239,5 @@ __all__ = [
     "is_t0",
     "minimal_open_neighborhoods",
     "specialization_preorder",
+    "verify_topology",
 ]

@@ -143,9 +143,7 @@ class TestPAdicRoots:
         not_simple["is_simple_root"] = False
         with pytest.raises(ValidationError) as exc_info:
             HenselRootResult.model_validate(not_simple)
-        assert (
-            exc_info.value.errors()[0]["type"] == "padic_arithmetic.simple_flag_invalid"
-        )
+        assert exc_info.value.errors()[0]["type"] == "extra_forbidden"
 
     def test_roots_profile_rejects_out_of_range_structural_entries(self) -> None:
         result = _find_padic_roots(

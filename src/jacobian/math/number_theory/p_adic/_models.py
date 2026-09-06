@@ -66,7 +66,10 @@ class HenselRootResult(StrictModel):
     prime: int = Field(ge=2, le=MAX_PRIME)
     root_mod_p: int = Field(ge=0)
     precision: int = Field(ge=1, le=MAX_PRECISION)
-    is_simple_root: bool
+
+    @property
+    def is_simple_root(self) -> bool:
+        return True
 
     @model_validator(mode="after")
     def require_structural_shape(self) -> Self:
@@ -78,11 +81,6 @@ class HenselRootResult(StrictModel):
             raise _validation_error(
                 "padic_arithmetic.lifted_root_out_of_range",
                 "lifted_root must be in 0..p^k - 1",
-            )
-        if not self.is_simple_root:
-            raise _validation_error(
-                "padic_arithmetic.simple_flag_invalid",
-                "only simple roots are lifted, so the flag must hold",
             )
         return self
 
@@ -101,7 +99,6 @@ class HenselRootResult(StrictModel):
             prime=prime,
             root_mod_p=root_mod_p,
             precision=precision,
-            is_simple_root=True,
         )
 
 
@@ -167,16 +164,14 @@ class PAdicRootsResult(StrictModel):
     roots: tuple[PAdicRootEntry, ...]
     prime: int = Field(ge=2, le=MAX_PRIME)
     precision: int = Field(ge=1, le=MAX_PRECISION)
-    root_count: int = Field(ge=0)
     multiple_residues: tuple[int, ...] = ()
+
+    @property
+    def root_count(self) -> int:
+        return len(self.roots)
 
     @model_validator(mode="after")
     def require_structural_shape(self) -> Self:
-        if self.root_count != len(self.roots):
-            raise _validation_error(
-                "padic_arithmetic.root_count_mismatch",
-                "root_count must match the number of roots",
-            )
         if len(set(self.multiple_residues)) != len(self.multiple_residues):
             raise _validation_error(
                 "padic_arithmetic.multiple_residues_not_distinct",
@@ -214,7 +209,6 @@ class PAdicRootsResult(StrictModel):
             roots=roots,
             prime=prime,
             precision=precision,
-            root_count=len(roots),
             multiple_residues=multiple_residues,
         )
 

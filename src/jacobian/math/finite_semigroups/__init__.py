@@ -7,6 +7,7 @@ from jacobian.math.finite_semigroups.operations import (
     idempotents,
     power_profile,
     principal_ideals,
+    verify_generated_subsemigroup,
 )
 
 __all__: list[str] = [
@@ -16,4 +17,5 @@ __all__: list[str] = [
     "idempotents",
     "power_profile",
     "principal_ideals",
+    "verify_generated_subsemigroup",
 ]

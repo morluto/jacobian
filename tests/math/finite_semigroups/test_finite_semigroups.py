@@ -30,6 +30,7 @@ from jacobian.math.finite_semigroups.operations import (
     idempotents,
     power_profile,
     principal_ideals,
+    verify_generated_subsemigroup,
 )
 
 
@@ -319,6 +320,23 @@ class TestGeneratedSubsemigroup:
             )
         )
         assert set(result.generators) == {"1", "2"}
+
+    def test_serialized_result_verifier_rejects_forged_subset(self) -> None:
+        result = compute_generated_subsemigroup(
+            GeneratedSubsemigroupRequest(
+                semigroup=_finite_semigroup(Z3), generators=("1",)
+            )
+        )
+        restored = type(result).model_validate_json(result.model_dump_json())
+
+        assert restored == result
+        assert verify_generated_subsemigroup(restored)
+
+        forged = restored.model_dump(mode="json")
+        forged["elements"] = ["1"]
+        decoded = type(result).model_validate(forged)
+
+        assert not verify_generated_subsemigroup(decoded)
 
 
 class TestElementPower:

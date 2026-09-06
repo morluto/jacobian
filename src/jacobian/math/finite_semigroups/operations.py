@@ -187,10 +187,20 @@ def generated_subsemigroup(
 
     # Sort by original element ordering
     result_elements = tuple(e for e in elements if e in generated)
-    return GeneratedSubsemigroupResult(
+    return GeneratedSubsemigroupResult._from_kernel(
+        semigroup=semigroup,
         generators=generators,
         elements=result_elements,
     )
+
+
+def verify_generated_subsemigroup(claim: GeneratedSubsemigroupResult) -> bool:
+    """Verify closure and generation against the retained semigroup source."""
+
+    try:
+        return generated_subsemigroup(claim.semigroup, claim.generators) == claim
+    except Exception:
+        return False
 
 
 def element_power(
@@ -471,4 +481,5 @@ __all__ = [
     "idempotents",
     "power_profile",
     "principal_ideals",
+    "verify_generated_subsemigroup",
 ]

@@ -602,10 +602,6 @@ class PolygonPointClassificationResult(StrictModel):
         return self
 
 
-class GeometryBooleanResult(StrictModel):
-    holds: bool
-
-
 class CollinearityResult(StrictModel):
     """A source-bound collinearity claim."""
 

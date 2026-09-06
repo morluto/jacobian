@@ -48,7 +48,9 @@ def _run_rank(request: RationalFunctionMatrixRequest) -> SymbolicRankResult:
     return SymbolicRankResult(rank=rank, pivot_columns=pivot_columns)
 
 
-def _run_product(request: RationalFunctionMatrixProductRequest) -> RationalFunctionMatrix:
+def _run_product(
+    request: RationalFunctionMatrixProductRequest,
+) -> RationalFunctionMatrix:
     return symbolic_matrix_multiply(request.left, request.right)
 
 

@@ -182,9 +182,13 @@ def _require_raw_rational_function_matrix(data: Any) -> Any:
     data = dict(data)
     allowed = {"variables", "row_count", "column_count", "entries"}
     if set(data).difference(allowed):
-        raise _validation_error("shape_mismatch", "symbolic matrix contains unknown fields")
+        raise _validation_error(
+            "shape_mismatch", "symbolic matrix contains unknown fields"
+        )
     data["variables"] = _bounded_raw_sequence(
-        data.get("variables", ()), maximum=MAX_SYMBOLIC_VARIABLES, label="symbolic variables"
+        data.get("variables", ()),
+        maximum=MAX_SYMBOLIC_VARIABLES,
+        label="symbolic variables",
     )
     entries = _bounded_raw_sequence(
         data.get("entries", ()),
@@ -324,9 +328,13 @@ class RationalFunctionVector(StrictModel):
     @model_validator(mode="after")
     def require_axis_and_field(self) -> Self:
         if len(self.entries) != self.dimension:
-            raise _validation_error("shape_mismatch", "vector entries must match its axis")
+            raise _validation_error(
+                "shape_mismatch", "vector entries must match its axis"
+            )
         if any(value.variables != self.variables for value in self.entries):
-            raise _validation_error("shape_mismatch", "vector entries must use its field")
+            raise _validation_error(
+                "shape_mismatch", "vector entries must use its field"
+            )
         return self
 
     def __len__(self) -> int:
@@ -394,9 +402,7 @@ class RationalFunctionVectorBasis(StrictModel):
             label="vector basis vectors",
         )
         if isinstance(vectors, tuple):
-            vectors = tuple(
-                _bounded_raw_vector(vector) for vector in vectors
-            )
+            vectors = tuple(_bounded_raw_vector(vector) for vector in vectors)
         data["vectors"] = vectors
         return canonicalize_json_containers(data)
 
@@ -949,7 +955,9 @@ def _expanded_product_cell_bounds(
     )
 
 
-def _projected_expansion_terms(left: RationalFunctionMatrix, right: RationalFunctionMatrix) -> int:
+def _projected_expansion_terms(
+    left: RationalFunctionMatrix, right: RationalFunctionMatrix
+) -> int:
     """Charge every cell the raw expansion its admitted shape must spend.
 
     A cell admitted through the exact shared-denominator fallback carries
@@ -1557,7 +1565,9 @@ class SymbolicLinearSystemResult(StrictModel):
                 )
             if isinstance(vectors, (list, tuple)):
                 for vector in vectors:
-                    entries = vector.get("entries") if isinstance(vector, dict) else vector
+                    entries = (
+                        vector.get("entries") if isinstance(vector, dict) else vector
+                    )
                     if isinstance(entries, (list, tuple)) and len(entries) > limit:
                         raise _validation_error(
                             "shape_mismatch",
@@ -1678,8 +1688,12 @@ class SymbolicLinearSystemResult(StrictModel):
         rhs: tuple[RationalFunction, ...],
         classification: Literal["UNIQUE", "NON_UNIQUE", "INCONSISTENT"],
         solution: tuple[RationalFunction, ...] | RationalFunctionVector | None,
-        particular_solution: tuple[RationalFunction, ...] | RationalFunctionVector | None,
-        nullspace_basis: tuple[tuple[RationalFunction, ...], ...] | RationalFunctionVectorBasis | None,
+        particular_solution: tuple[RationalFunction, ...]
+        | RationalFunctionVector
+        | None,
+        nullspace_basis: tuple[tuple[RationalFunction, ...], ...]
+        | RationalFunctionVectorBasis
+        | None,
     ) -> Self:
         """Construct a result from the owner-local bounded kernel output."""
 
@@ -1695,6 +1709,7 @@ class SymbolicLinearSystemResult(StrictModel):
                 dimension=matrix.column_count,
                 entries=values,
             )
+
         if isinstance(nullspace_basis, RationalFunctionVectorBasis):
             basis_value = nullspace_basis
         elif nullspace_basis is None:

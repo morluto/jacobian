@@ -52,7 +52,9 @@ def _validate_matrix_carrier(value: object) -> RationalFunctionMatrix:
     try:
         return RationalFunctionMatrix.model_validate(value.model_dump(warnings="none"))
     except Exception as exc:
-        raise ValueError("symbolic matrix carrier failed structural validation") from exc
+        raise ValueError(
+            "symbolic matrix carrier failed structural validation"
+        ) from exc
 
 
 def _matrix_from_values(

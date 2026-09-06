@@ -1200,16 +1200,16 @@ def test_empty_rational_function_product_retains_result_axes() -> None:
 
 
 def test_native_consumers_revalidate_forged_carrier_models() -> None:
-    matrix = SymbolicMatrix(
-        variables=("t",), entries=((_rf(("t",), (1, 1, (0,))),),)
-    )
+    matrix = SymbolicMatrix(variables=("t",), entries=((_rf(("t",), (1, 1, (0,))),),))
     forged = matrix.model_copy(update={"column_count": 0})
     with pytest.raises(OperationDomainValidationError):
         symbolic_matrix_multiply(forged, matrix)
     from jacobian.math.matrices.symbolic._tools import _run_rank
 
     with pytest.raises(OperationDomainValidationError):
-        _run_rank(SymbolicMatrixRequest(matrix=matrix).model_copy(update={"matrix": forged}))
+        _run_rank(
+            SymbolicMatrixRequest(matrix=matrix).model_copy(update={"matrix": forged})
+        )
     system = SymbolicLinearSystemRequest(matrix=matrix, rhs=(matrix.entries[0][0],))
     from jacobian.math.matrices.symbolic._tools import _run_linear_system
 
@@ -1265,7 +1265,8 @@ def test_symbolic_polynomial_runners_revalidate_forged_matrix_envelopes(
     request_type: Any,
 ) -> None:
     source = SymbolicMatrix(
-        variables=(), entries=((_constant(1),),),
+        variables=(),
+        entries=((_constant(1),),),
     )
     forged = source.model_copy(update={"row_count": 0, "entries": ("oops",)})
     request = request_type(matrix=source).model_copy(update={"matrix": forged})

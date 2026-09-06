@@ -602,7 +602,9 @@ class TestNonUniqueWitnessEquivalence:
                 RationalFunctionVector(
                     variables=("t",),
                     dimension=2,
-                    entries=tuple(RationalFunction.model_validate(value) for value in basis_vector),
+                    entries=tuple(
+                        RationalFunction.model_validate(value) for value in basis_vector
+                    ),
                 ),
             ),
         ).model_dump()

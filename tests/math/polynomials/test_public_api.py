@@ -104,6 +104,7 @@ def test_exact_public_api_symbols() -> None:
         "rational_polynomial_integral",
         "resultant",
         "square_free_decomposition",
+        "verify_hermite_reduction",
     )
     assert tuple(polynomials.__all__) == expected
     assert len(polynomials.__all__) == len(set(polynomials.__all__))

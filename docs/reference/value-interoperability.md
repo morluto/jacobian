@@ -91,6 +91,13 @@ those values without redefining them as parallel fields or backend strings.
 Operation-specific work and degree limits belong in admission, not in a
 second, narrower value class.
 
+A consumer that also accepts an input presentation must keep the canonical
+value branch in its schema. For example, simplicial structural operations
+accept both vertices with facets and an unchanged canonical complex returned by
+canonicalization, deletion, or subdivision. They may normalize the presentation
+internally; MCP callers need no Python-only projection step. Native consumers
+that rely on an authored canonical face ledger admit its closure before use.
+
 | Representation question | Decision |
 | --- | --- |
 | Characteristic and minimal polynomials use different coefficient layouts | Share the rational-polynomial encoding. Keep coefficient-list views as native helpers. |

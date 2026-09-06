@@ -80,16 +80,13 @@ def test_profile_parsing_keeps_structural_embedding_checks() -> None:
     assert (
         exc_info.value.errors()[0]["type"] == "real_quadratic.embedding_images_mismatch"
     )
-    with pytest.raises(ValidationError) as exc_info:
-        RealQuadraticEmbeddingProfile.model_validate(
-            {**payload, "norm": {"num": "2", "den": "1"}}
-        )
-    assert exc_info.value.errors()[0]["type"] == "real_quadratic.norm_mismatch"
-    with pytest.raises(ValidationError) as exc_info:
-        RealQuadraticEmbeddingProfile.model_validate(
-            {**payload, "trace": {"num": "7", "den": "1"}}
-        )
-    assert exc_info.value.errors()[0]["type"] == "real_quadratic.trace_mismatch"
+    # Arithmetic outputs remain authored claims after serialization. Parsing
+    # preserves them while checking embedding labels and parent context.
+    claimed = RealQuadraticEmbeddingProfile.model_validate(
+        {**payload, "norm": {"num": "2", "den": "1"}, "trace": {"num": "7", "den": "1"}}
+    )
+    assert claimed.norm.as_fraction() == 2
+    assert claimed.trace.as_fraction() == 7
     with pytest.raises(ValidationError) as exc_info:
         RealQuadraticEmbeddingProfile.model_validate(
             {

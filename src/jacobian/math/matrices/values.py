@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from fractions import Fraction
 from itertools import pairwise
-from typing import Annotated, Any, Literal, Self, cast
+from typing import Any, Literal, Self, cast
 
 from pydantic import Field, field_validator, model_validator
 from pydantic.json_schema import JsonSchemaValue
@@ -205,7 +205,7 @@ def _infer_matrix_shape(data: Any) -> Any:
             data.setdefault("row_count", len(entries))
             if not entries or isinstance(entries[0], (list, tuple)):
                 data.setdefault("column_count", len(entries[0]) if entries else 0)
-    return canonicalize_json_containers(data)
+    return data
 
 
 class RationalMatrix(StrictModel):
@@ -238,7 +238,7 @@ class RationalMatrix(StrictModel):
             label="matrix",
             allow_shape=True,
         )
-        return _infer_matrix_shape(data)
+        return canonicalize_json_containers(_infer_matrix_shape(data))
 
     @model_validator(mode="after")
     def require_shape_and_scalars(self) -> Self:
@@ -465,7 +465,7 @@ class RealQuadraticMatrix(StrictModel):
                     if isinstance(first, dict)
                     else getattr(first, "radicand", None)
                 )
-        return data
+        return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_rectangular_shared_field(self) -> Self:
@@ -879,10 +879,7 @@ class EmbeddedRealSimpleNumberFieldMatrix(StrictModel):
         return self
 
 
-ExactRealMatrix = Annotated[
-    RationalMatrix | EmbeddedRealSimpleNumberFieldMatrix,
-    Field(discriminator="domain", json_schema_extra={"required": ["domain"]}),
-]
+ExactRealMatrix = RationalMatrix | EmbeddedRealSimpleNumberFieldMatrix
 
 
 __all__ = [

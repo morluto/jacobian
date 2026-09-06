@@ -447,6 +447,10 @@ def barycentric_subdivision(
 ) -> BarycentricSubdivisionResult:
     """Compute the barycentric subdivision of a simplicial complex."""
 
+    run_topology_admission(
+        lambda: require_canonical_complex_admission(complex_), location=("complex",)
+    )
+
     sorted_faces = sorted(
         _all_faces(complex_.maximal_simplices), key=lambda face: (len(face), face)
     )
@@ -481,6 +485,10 @@ def barycentric_subdivision(
 def pseudomanifold(complex_: FiniteSimplicialComplex) -> PseudomanifoldResult:
     """Decide whether a complex is a pseudomanifold."""
 
+    run_topology_admission(
+        lambda: require_canonical_complex_admission(complex_), location=("complex",)
+    )
+
     decision = pseudomanifold_decision(complex_.maximal_simplices)
     return PseudomanifoldResult._from_kernel(complex_=complex_, decision=decision)
 
@@ -490,6 +498,10 @@ def shelling_check(
     facet_order: tuple[int, ...],
 ) -> ShellingCheckResult:
     """Check whether a submitted facet order is a valid shelling order."""
+
+    run_topology_admission(
+        lambda: require_canonical_complex_admission(complex_), location=("complex",)
+    )
     if sorted(facet_order) != list(range(len(complex_.maximal_simplices))):
         raise OperationDomainValidationError(
             location=("facet_order",),

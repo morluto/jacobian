@@ -405,7 +405,7 @@ def test_outcome_schema_requires_only_positive_polarization_data() -> None:
     ("form_scale", "expected_status"),
     ((1, "RIEMANN_FORM"), (-1, "HODGE_NON_POSITIVE")),
 )
-def test_hodge_outcome_schema_requires_every_exact_real_discriminator(
+def test_hodge_outcome_schema_preserves_the_canonical_rational_domain_default(
     form_scale: int,
     expected_status: str,
 ) -> None:
@@ -429,7 +429,16 @@ def test_hodge_outcome_schema_requires_every_exact_real_discriminator(
     del missing_torus_domain["torus"]["complex_structure"]["domain"]
     missing_inertia_domain = copy.deepcopy(payload)
     del missing_inertia_domain["outcome"]["associated_form_inertia"]["matrix"]["domain"]
-    for invalid in (missing_torus_domain, missing_inertia_domain):
+    for defaulted in (missing_torus_domain, missing_inertia_domain):
+        assert not list(validator.iter_errors(defaulted))
+        assert RiemannFormProfile.model_validate(
+            defaulted
+        ) == RiemannFormProfile.model_validate(payload)
+        invalid = copy.deepcopy(defaulted)
+        matrix = invalid["torus"]["complex_structure"]
+        if "domain" in matrix:
+            matrix = invalid["outcome"]["associated_form_inertia"]["matrix"]
+        matrix["domain"] = "ZZ"
         assert list(validator.iter_errors(invalid))
         with pytest.raises(ValidationError):
             RiemannFormProfile.model_validate(invalid)

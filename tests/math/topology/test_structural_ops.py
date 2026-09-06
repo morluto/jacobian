@@ -3,6 +3,7 @@
 from typing import TypedDict
 
 import pytest
+from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
@@ -713,8 +714,9 @@ class TestJoinBounds:
         """The published input schema shows both accepted shapes so
         schema-guided callers can pass a canonical complex unchanged."""
         schema = SimplicialComplexRequest.model_json_schema()
-        assert "anyOf" not in schema
-        assert set(schema["properties"]) == {"vertices", "facets"}
+        validator = Draft202012Validator(schema)
+        validator.validate(TRIANGLE)
+        validator.validate(_CANONICAL_CIRCLE)
 
 
 class TestSkeletonBounds:

@@ -15,6 +15,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
 from jacobian._digest import Sha256Digest
@@ -87,6 +88,10 @@ def canonical_simplex(simplex: Simplex) -> Simplex:
 def face_closure(facets: tuple[Simplex, ...]) -> tuple[tuple[Simplex, ...], ...]:
     """Materialize the non-empty face closure in canonical dimension order."""
 
+    if any(not 1 <= len(facet) <= MAX_TOPOLOGY_DIMENSION + 1 for facet in facets):
+        raise ValueError(
+            f"each facet must contain between 1 and {MAX_TOPOLOGY_DIMENSION + 1} vertices"
+        )
     faces: list[set[Simplex]] = [set() for _ in range(MAX_TOPOLOGY_DIMENSION + 1)]
     for facet in facets:
         for size in range(1, len(facet) + 1):
@@ -199,11 +204,10 @@ def _require_request_complex(
 
 
 class SimplicialComplexRequest(StrictModel):
-    """A bounded facet presentation for canonicalization.
+    """A bounded facet presentation or an unchanged canonical complex.
 
-    Canonical complexes are converted explicitly with
-    :func:`simplicial_complex_request_from_value`; parsing this request never
-    projects a canonical value down to facets implicitly.
+    Canonical input is structurally decoded and projected to its maximal facets.
+    Operations establish the face closure from those facets during admission.
     """
 
     vertices: tuple[VertexLabel, ...] = Field(
@@ -217,21 +221,26 @@ class SimplicialComplexRequest(StrictModel):
 
     @model_validator(mode="before")
     @classmethod
-    def require_facet_presentation(cls, data: object) -> object:
+    def accept_canonical_complex_value(cls, data: object) -> object:
         data = canonicalize_json_containers(data)
+        if isinstance(data, dict) and "maximal_simplices" in data:
+            data = FiniteSimplicialComplex.model_validate(data)
         if isinstance(data, FiniteSimplicialComplex):
-            raise _validation_error(
-                "topology.require_facet_presentation_1",
-                "convert FiniteSimplicialComplex explicitly before constructing a request",
-            )
-        if not isinstance(data, dict):
-            return data
-        if "maximal_simplices" in data:
-            raise _validation_error(
-                "topology.require_facet_presentation_2",
-                "convert a canonical complex explicitly; use vertices and facets here",
-            )
+            return {"vertices": data.vertices, "facets": data.maximal_simplices}
         return data
+
+    @classmethod
+    def __get_pydantic_json_schema__(
+        cls, core_schema: Any, handler: Any
+    ) -> JsonSchemaValue:
+        facet_presentation = handler(core_schema)
+        canonical_value = handler(FiniteSimplicialComplex.__pydantic_core_schema__)
+        facet_presentation.pop("title", None)
+        return {
+            "type": "object",
+            "anyOf": [facet_presentation, canonical_value],
+            "description": "Either vertices and facets or an unchanged canonical FiniteSimplicialComplex value.",
+        }
 
 
 def simplicial_complex_request_from_value(

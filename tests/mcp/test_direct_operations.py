@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
-from typing import Any, Self
+from typing import Any, Self, cast
 
 import pytest
 from mcp.shared.exceptions import MCPError
@@ -517,3 +517,47 @@ def test_budget_named_mathematical_precondition_remains_invalid_payload() -> Non
     projected = _invalid_request_error("matrix.determinant.compute", error)
 
     assert projected.data["code"] == "INVALID_REQUEST"
+
+
+@pytest.mark.parametrize("direct", [False, True])
+def test_canonical_topology_results_compose_through_mcp(direct: bool) -> None:
+    ids = tuple(
+        f"topology.simplicial_complex.{suffix}"
+        for suffix in ("canonicalize", "deletion.compute", "skeleton.compute")
+    )
+
+    async def scenario() -> None:
+        from mcp import Client
+
+        async with Client(_server(*ids), raise_exceptions=True) as client:
+
+            async def call(
+                operation_id: str, payload: dict[str, Any]
+            ) -> dict[str, Any]:
+                result = await client.call_tool(
+                    operation_id if direct else "math.run",
+                    payload
+                    if direct
+                    else {"operation_id": operation_id, "payload": payload},
+                )
+                assert result.structured_content is not None
+                return cast(
+                    dict[str, Any],
+                    result.structured_content
+                    if direct
+                    else result.structured_content["output"],
+                )
+
+            canonical = await call(
+                ids[0], {"vertices": ["a", "b", "c"], "facets": [["a", "b", "c"]]}
+            )
+            deleted = await call(
+                ids[1], {"complex": canonical["complex"], "vertices_to_delete": ["c"]}
+            )
+            skeleton = await call(
+                ids[2], {"complex": deleted["remaining_complex"], "k": 0}
+            )
+            assert skeleton["skeleton_facets"] == [["a"], ["b"]]
+            assert skeleton["skeleton_complex"]["f_vector"] == [2]
+
+    asyncio.run(scenario())

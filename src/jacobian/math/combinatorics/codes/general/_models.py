@@ -8,6 +8,7 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.combinatorics.codes.linear.values import PrimeFieldLinearEncoder
 
 # Each operation selects one exact kernel path. Result construction itself
 # never re-enters that path.
@@ -66,10 +67,9 @@ def _matrix_rank_mod_prime(
 
 
 class LinearCodeRequest(StrictModel):
-    """A linear code given by its generator matrix over one bounded prime field."""
+    """A linear code carried by the canonical prime-field encoder."""
 
-    field_order: int = Field(ge=2, le=251)
-    generator_matrix: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=8)
+    encoder: PrimeFieldLinearEncoder
 
 
 class MinimumDistanceResult(StrictModel):
@@ -80,11 +80,11 @@ class MinimumDistanceResult(StrictModel):
     """
 
     request: LinearCodeRequest
-    minimum_distance: int = Field(ge=0, le=256)
+    minimum_distance: StrictInt = Field(ge=0, le=256)
 
     @model_validator(mode="after")
     def require_bounded_distance(self) -> Self:
-        width = len(self.request.generator_matrix[0])
+        width = len(self.request.encoder.coordinate_axis)
         if self.minimum_distance > width:
             raise _error(
                 "code_theory.minimum_distance_out_of_bounds",
@@ -113,7 +113,7 @@ class WeightDistributionResult(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_weight_rows(self) -> Self:
-        width = len(self.request.generator_matrix[0])
+        width = len(self.request.encoder.coordinate_axis)
         seen_weights: list[int] = []
         for weight, _count in self.weights:
             if not 0 <= weight <= width:
@@ -141,8 +141,7 @@ class WeightDistributionResult(StrictModel):
 class CoveringRadiusRequest(StrictModel):
     """A linear code whose syndrome graph fits declared exact-work bounds."""
 
-    field_order: int = Field(ge=2, le=251)
-    generator_matrix: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=8)
+    encoder: PrimeFieldLinearEncoder
 
 
 class CoveringRadiusResult(StrictModel):
@@ -152,11 +151,11 @@ class CoveringRadiusResult(StrictModel):
     """
 
     request: CoveringRadiusRequest
-    covering_radius: int = Field(ge=0, le=256)
+    covering_radius: StrictInt = Field(ge=0, le=256)
 
     @model_validator(mode="after")
     def require_bounded_radius(self) -> Self:
-        width = len(self.request.generator_matrix[0])
+        width = len(self.request.encoder.coordinate_axis)
         if self.covering_radius > width:
             raise _error(
                 "code_theory.covering_radius_out_of_bounds",

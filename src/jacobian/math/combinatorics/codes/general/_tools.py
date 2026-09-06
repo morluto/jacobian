@@ -18,7 +18,7 @@ from jacobian.math.combinatorics.codes.general.operations import (
 
 
 def _minimum_distance(request: LinearCodeRequest) -> MinimumDistanceResult:
-    dist = minimum_distance(request.generator_matrix, request.field_order)
+    dist = minimum_distance(request.encoder)
     return MinimumDistanceResult._from_kernel(
         request=request,
         minimum_distance=dist,
@@ -26,7 +26,7 @@ def _minimum_distance(request: LinearCodeRequest) -> MinimumDistanceResult:
 
 
 def _weight_distribution(request: LinearCodeRequest) -> WeightDistributionResult:
-    weights = weight_distribution(request.generator_matrix, request.field_order)
+    weights = weight_distribution(request.encoder)
     return WeightDistributionResult._from_kernel(
         request=request,
         weights=tuple((w, c) for w, c in weights),
@@ -34,7 +34,7 @@ def _weight_distribution(request: LinearCodeRequest) -> WeightDistributionResult
 
 
 def _covering_radius(request: CoveringRadiusRequest) -> CoveringRadiusResult:
-    radius = covering_radius(request.generator_matrix, request.field_order)
+    radius = covering_radius(request.encoder)
     return CoveringRadiusResult._from_kernel(
         request=request,
         covering_radius=radius,
@@ -54,7 +54,14 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="binary_repetition_code",
                 description="Minimum distance of the binary repetition code of length two.",
-                input={"field_order": 2, "generator_matrix": [[1, 1]]},
+                input={
+                    "encoder": {
+                        "field_order": 2,
+                        "message_axis": ["m0"],
+                        "coordinate_axis": ["x0", "x1"],
+                        "generator_matrix": [[1, 1]],
+                    }
+                },
             ),
         ),
     ),
@@ -70,7 +77,14 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="binary_repetition_code",
                 description="Weight distribution of the binary repetition code of length two.",
-                input={"field_order": 2, "generator_matrix": [[1, 1]]},
+                input={
+                    "encoder": {
+                        "field_order": 2,
+                        "message_axis": ["m0"],
+                        "coordinate_axis": ["x0", "x1"],
+                        "generator_matrix": [[1, 1]],
+                    }
+                },
             ),
         ),
     ),
@@ -86,7 +100,14 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="binary_repetition_code",
                 description="Covering radius of the binary repetition code of length four.",
-                input={"field_order": 2, "generator_matrix": [[1, 1, 1, 1]]},
+                input={
+                    "encoder": {
+                        "field_order": 2,
+                        "message_axis": ["m0"],
+                        "coordinate_axis": ["x0", "x1", "x2", "x3"],
+                        "generator_matrix": [[1, 1, 1, 1]],
+                    }
+                },
             ),
         ),
     ),

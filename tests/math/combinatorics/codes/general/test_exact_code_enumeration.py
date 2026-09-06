@@ -16,6 +16,12 @@ from jacobian.math.combinatorics.codes.general._tools import (
     _minimum_distance,
     _weight_distribution,
 )
+from jacobian.math.combinatorics.codes.general.operations import (
+    verify_covering_radius,
+    verify_minimum_distance,
+    verify_weight_distribution,
+)
+from jacobian.math.combinatorics.codes.linear.values import PrimeFieldLinearEncoder
 
 
 def _assert_validation_error_code(factory: Callable[[], object], code: str) -> None:
@@ -30,64 +36,95 @@ def _assert_operation_error(factory: Callable[[], object], code: str) -> None:
     assert exc_info.value.errors()[0]["type"] == code
 
 
+def _encoder(
+    generator_matrix: tuple[tuple[int, ...], ...],
+    field_order: int,
+    *,
+    width: int | None = None,
+) -> PrimeFieldLinearEncoder:
+    width = width if width is not None else (len(generator_matrix[0]) if generator_matrix else 1)
+    return PrimeFieldLinearEncoder(
+        field_order=field_order,
+        message_axis=tuple(f"m{index}" for index in range(len(generator_matrix))),
+        coordinate_axis=tuple(f"x{index}" for index in range(width)),
+        generator_matrix=generator_matrix,
+    )
+
+
 def test_prime_field_code_enumeration_uses_the_declared_matrix() -> None:
-    request = LinearCodeRequest(field_order=2, generator_matrix=((1, 1),))
+    request = LinearCodeRequest(encoder=_encoder(((1, 1),), 2))
 
     assert _minimum_distance(request).minimum_distance == 2
     assert _weight_distribution(request).weights == ((0, 1), (2, 1))
 
 
-def test_code_weight_distribution_counts_distinct_words_for_dependent_rows() -> None:
-    request = LinearCodeRequest(field_order=2, generator_matrix=((1,), (1,)))
+def test_catalog_examples_use_the_canonical_encoder_carrier() -> None:
+    from jacobian.catalog.catalog import Catalog
+    from jacobian.dispatch import invoke_operation
 
-    assert _weight_distribution(request).weights == ((0, 1), (1, 1))
+    catalog = Catalog.open()
+    operation = catalog.operation("code.minimum_distance.compute")
+    assert operation is not None
+    result = invoke_operation(operation.operation_id, operation.examples[0].input, catalog)
+    assert result.output["minimum_distance"] == 2
+    assert result.output["request"]["encoder"]["coordinate_axis"] == ["x0", "x1"]
+
+
+def test_code_weight_distribution_counts_distinct_words_for_dependent_rows() -> None:
+    request = LinearCodeRequest(encoder=_encoder(((1,), (1,)), 2))
+
+    _assert_operation_error(
+        lambda: _weight_distribution(request),
+        "code_theory.generator_matrix_must_have_full_row_rank",
+    )
 
 
 def test_code_contract_rejects_nonprime_fields_and_unbounded_enumeration() -> None:
     _assert_operation_error(
         lambda: _minimum_distance(
-            LinearCodeRequest(field_order=4, generator_matrix=((1,),))
+            LinearCodeRequest(encoder=_encoder(((1,),), 4))
         ),
         "code_theory.field_order_not_prime",
     )
     _assert_operation_error(
         lambda: _minimum_distance(
-            LinearCodeRequest(field_order=251, generator_matrix=((1,),) * 3)
+            LinearCodeRequest(
+                encoder=_encoder(
+                    ((1, 0, 0), (0, 1, 0), (0, 0, 1)),
+                    251,
+                )
+            )
         ),
         "code_theory.enumeration_work_exceeded",
     )
 
 
 def test_native_code_api_enforces_the_prime_field_contract() -> None:
-    assert minimum_distance(((1, 1),), 2) == 2
+    assert minimum_distance(_encoder(((1, 1),), 2)) == 2
 
     _assert_operation_error(
-        lambda: minimum_distance(((1,),), 4), "code_theory.field_order_not_prime"
+        lambda: minimum_distance(_encoder(((1,),), 4)),
+        "code_theory.field_order_not_prime",
     )
 
 
 def test_zero_code_uses_length_convention_for_minimum_distance() -> None:
-    assert minimum_distance(((0, 0, 0, 0),), 2) == 4
+    assert minimum_distance(_encoder((), 2, width=4)) == 4
 
 
 def test_native_code_api_rejects_empty_generator_matrix_structurally() -> None:
     with pytest.raises(OperationDomainValidationError) as error:
-        minimum_distance((), 2)
-    assert error.value.errors()[0]["type"] == "code_theory.generator_matrix_empty"
+        minimum_distance(_encoder((), 2, width=0))
+    assert error.value.errors()[0]["type"] == "code_theory.generator_width_out_of_bounds"
 
 
 def test_native_code_api_rejects_unequal_rows_semantically() -> None:
-    _assert_operation_error(
-        lambda: minimum_distance(((1, 0), (1,)), 2),
-        "code_theory.generator_rows_unequal",
-    )
+    with pytest.raises(ValidationError):
+        _encoder(((1, 0), (1,)), 2)
 
 
 def test_binary_repetition_code_length_three_has_covering_radius_one() -> None:
-    request = CoveringRadiusRequest(
-        field_order=2,
-        generator_matrix=((1, 1, 1),),
-    )
+    request = CoveringRadiusRequest(encoder=_encoder(((1, 1, 1),), 2))
 
     result = _covering_radius(request)
 
@@ -95,60 +132,45 @@ def test_binary_repetition_code_length_three_has_covering_radius_one() -> None:
 
 
 def test_binary_repetition_code_length_four_has_covering_radius_two() -> None:
-    request = CoveringRadiusRequest(
-        field_order=2,
-        generator_matrix=((1, 1, 1, 1),),
-    )
+    request = CoveringRadiusRequest(encoder=_encoder(((1, 1, 1, 1),), 2))
 
     assert _covering_radius(request).covering_radius == 2
 
 
 def test_binary_hamming_code_has_covering_radius_one() -> None:
-    request = CoveringRadiusRequest(
-        field_order=2,
-        generator_matrix=(
+    request = CoveringRadiusRequest(encoder=_encoder((
             (1, 0, 0, 0, 0, 1, 1),
             (0, 1, 0, 0, 1, 0, 1),
             (0, 0, 1, 0, 1, 1, 0),
             (0, 0, 0, 1, 1, 1, 1),
-        ),
-    )
+        ), 2))
 
     assert _covering_radius(request).covering_radius == 1
 
 
 def test_ternary_repetition_code_has_covering_radius_two() -> None:
-    request = CoveringRadiusRequest(
-        field_order=3,
-        generator_matrix=((1, 1, 1),),
-    )
+    request = CoveringRadiusRequest(encoder=_encoder(((1, 1, 1),), 3))
 
     assert _covering_radius(request).covering_radius == 2
 
 
 def test_dependent_generator_rows_use_rank_not_row_count() -> None:
-    request = CoveringRadiusRequest(
-        field_order=2,
-        generator_matrix=((1, 1, 1), (1, 1, 1)),
-    )
+    request = CoveringRadiusRequest(encoder=_encoder(((1, 1, 1), (1, 1, 1)), 2))
 
-    assert _covering_radius(request).covering_radius == 1
+    _assert_operation_error(
+        lambda: _covering_radius(request),
+        "code_theory.generator_matrix_must_have_full_row_rank",
+    )
 
 
 def test_full_space_code_has_covering_radius_zero() -> None:
-    request = CoveringRadiusRequest(
-        field_order=2,
-        generator_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)),
-    )
+    request = CoveringRadiusRequest(encoder=_encoder(((1, 0, 0), (0, 1, 0), (0, 0, 1)), 2))
 
     assert _covering_radius(request).covering_radius == 0
 
 
 def test_zero_code_has_covering_radius_equal_to_length() -> None:
-    request = CoveringRadiusRequest(
-        field_order=2,
-        generator_matrix=((0, 0, 0),),
-    )
+    request = CoveringRadiusRequest(encoder=_encoder((), 2, width=3))
 
     assert _covering_radius(request).covering_radius == 3
 
@@ -158,12 +180,9 @@ def test_covering_radius_contract_rejects_dependent_row_state_space_hole() -> No
 
     _assert_operation_error(
         lambda: _covering_radius(
-            CoveringRadiusRequest(
-                field_order=251,
-                generator_matrix=(repeated_row,) * 8,
-            )
+            CoveringRadiusRequest(encoder=_encoder((repeated_row,) * 8, 251))
         ),
-        "code_theory.syndrome_state_bound_exceeded",
+        "code_theory.generator_matrix_must_have_full_row_rank",
     )
 
 
@@ -174,10 +193,7 @@ def test_covering_radius_contract_rejects_excessive_transition_work() -> None:
 
     _assert_operation_error(
         lambda: _covering_radius(
-            CoveringRadiusRequest(
-                field_order=3,
-                generator_matrix=generator_matrix,
-            )
+            CoveringRadiusRequest(encoder=_encoder(generator_matrix, 3))
         ),
         "code_theory.syndrome_transition_bound_exceeded",
     )
@@ -186,10 +202,7 @@ def test_covering_radius_contract_rejects_excessive_transition_work() -> None:
 def test_covering_radius_contract_rejects_nonprime_field() -> None:
     _assert_operation_error(
         lambda: _covering_radius(
-            CoveringRadiusRequest(
-                field_order=4,
-                generator_matrix=((1, 1),),
-            )
+            CoveringRadiusRequest(encoder=_encoder(((1, 1),), 4))
         ),
         "code_theory.field_order_not_prime",
     )
@@ -201,7 +214,7 @@ def test_covering_radius_contract_rejects_nonprime_field() -> None:
 
 
 def _linear_request() -> LinearCodeRequest:
-    return LinearCodeRequest(field_order=3, generator_matrix=((1, 0, 1), (0, 1, 1)))
+    return LinearCodeRequest(encoder=_encoder(((1, 0, 1), (0, 1, 1)), 3))
 
 
 def test_results_retain_source_and_round_trip() -> None:
@@ -216,19 +229,26 @@ def test_results_retain_source_and_round_trip() -> None:
     assert dist.request == request
     assert dist.minimum_distance == 2
     assert MinimumDistanceResult.model_validate(dist.model_dump()) == dist
+    assert verify_minimum_distance(
+        MinimumDistanceResult.model_validate_json(dist.model_dump_json())
+    )
 
     profile = _weight_distribution(request)
     assert profile.request == request
     # q^rank = 9 distinct codewords over GF(3) with rank-2 generator rows.
     assert sum(count for _weight, count in profile.weights) == 9
     assert WeightDistributionResult.model_validate(profile.model_dump()) == profile
-
-    covering = CoveringRadiusRequest(
-        field_order=2, generator_matrix=((1, 0, 1), (0, 1, 1))
+    assert verify_weight_distribution(
+        WeightDistributionResult.model_validate_json(profile.model_dump_json())
     )
+
+    covering = CoveringRadiusRequest(encoder=_encoder(((1, 0, 1), (0, 1, 1)), 2))
     radius = _covering_radius(covering)
     assert radius.request == covering
     assert CoveringRadiusResult.model_validate(radius.model_dump()) == radius
+    assert verify_covering_radius(
+        CoveringRadiusResult.model_validate_json(radius.model_dump_json())
+    )
 
     with pytest.raises(ValidationError):
         MinimumDistanceResult(
@@ -258,9 +278,7 @@ def test_structural_models_accept_bounded_claims() -> None:
     )
     assert wrong_distance.minimum_distance == 1
 
-    foreign_code = LinearCodeRequest(
-        field_order=2, generator_matrix=((1, 0), (0, 1), (1, 1))
-    )
+    foreign_code = LinearCodeRequest(encoder=_encoder(((1, 0), (0, 1), (1, 1)), 2))
     forged_source = MinimumDistanceResult.model_validate(
         dict(base, request=foreign_code.model_dump(), minimum_distance=2)
     )
@@ -281,12 +299,16 @@ def test_structural_models_accept_bounded_claims() -> None:
         dict(base, weights=((0, 1), (1, 5), (2, 3)))
     )
     assert forged_profile.weights == ((0, 1), (1, 5), (2, 3))
+    assert not verify_minimum_distance(wrong_distance)
+    assert not verify_minimum_distance(forged_source)
+    assert not verify_weight_distribution(bad_total)
+    assert not verify_weight_distribution(forged_profile)
 
 
 def test_zero_code_result_preserves_the_documented_length_convention() -> None:
     from jacobian.math.combinatorics.codes.general._models import MinimumDistanceResult
 
-    request = LinearCodeRequest(field_order=2, generator_matrix=((0, 0, 0),))
+    request = LinearCodeRequest(encoder=_encoder((), 2, width=3))
     result = _minimum_distance(request)
 
     assert result.minimum_distance == 3
@@ -298,9 +320,11 @@ def test_zero_code_result_preserves_the_documented_length_convention() -> None:
 def test_dependent_generator_rows_rank_cardinality() -> None:
     """Dependent rows deduplicate: cardinality is q^rank, not q^rows."""
 
-    request = LinearCodeRequest(field_order=2, generator_matrix=((1, 1), (1, 1)))
-    profile = _weight_distribution(request)
-    assert sum(count for _weight, count in profile.weights) == 2
+    request = LinearCodeRequest(encoder=_encoder(((1, 1), (1, 1)), 2))
+    _assert_operation_error(
+        lambda: _weight_distribution(request),
+        "code_theory.generator_matrix_must_have_full_row_rank",
+    )
 
 
 def test_enumeration_budget_charges_the_selected_kernel_path() -> None:
@@ -314,15 +338,20 @@ def test_enumeration_budget_charges_the_selected_kernel_path() -> None:
     assert EXACT_ENUMERATION_PASSES == 1
 
     per_pass = MAX_EXACT_CODEWORD_EVALUATIONS // EXACT_ENUMERATION_PASSES
-    boundary = LinearCodeRequest(field_order=251, generator_matrix=((1,), (0,)))
-    tuples_per_pass = boundary.field_order ** len(boundary.generator_matrix)
+    boundary = LinearCodeRequest(encoder=_encoder(((1, 0), (0, 1)), 251))
+    tuples_per_pass = boundary.encoder.field_order ** len(boundary.encoder.message_axis)
     assert tuples_per_pass <= per_pass
     assert _minimum_distance(boundary).minimum_distance == 1
-    assert _weight_distribution(boundary).weights == ((0, 1), (1, 250))
+    assert _weight_distribution(boundary).weights[-1] == (2, 62500)
 
     _assert_operation_error(
         lambda: _minimum_distance(
-            LinearCodeRequest(field_order=251, generator_matrix=((1,),) * 3)
+            LinearCodeRequest(
+                encoder=_encoder(
+                    ((1, 0, 0), (0, 1, 0), (0, 0, 1)),
+                    251,
+                )
+            )
         ),
         "code_theory.enumeration_work_exceeded",
     )
@@ -343,18 +372,15 @@ def test_covering_radius_budget_charges_the_selected_bfs_path() -> None:
         tuple(1 if column == row else 0 for column in range(8)) for row in range(8)
     )
     boundary_matrix = tuple(row + (1,) * 16 for row in identity)
-    boundary = CoveringRadiusRequest(field_order=2, generator_matrix=boundary_matrix)
-    width = len(boundary.generator_matrix[0])
+    boundary = CoveringRadiusRequest(encoder=_encoder(boundary_matrix, 2))
+    width = len(boundary.encoder.coordinate_axis)
     states = 2 ** (width - 8)
     assert states == MAX_COVERING_RADIUS_STATES_PER_PASS
     assert states * 24 * SYNDROME_BFS_PASSES <= MAX_COVERING_RADIUS_TRANSITIONS
 
     _assert_operation_error(
         lambda: _covering_radius(
-            CoveringRadiusRequest(
-                field_order=2,
-                generator_matrix=tuple(row + (1,) * 17 for row in identity),
-            )
+            CoveringRadiusRequest(encoder=_encoder(tuple(row + (1,) * 17 for row in identity), 2))
         ),
         "code_theory.syndrome_state_bound_exceeded",
     )

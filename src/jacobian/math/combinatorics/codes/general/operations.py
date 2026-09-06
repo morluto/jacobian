@@ -15,13 +15,19 @@ from jacobian.math.combinatorics.codes.general._models import (
     MAX_COVERING_RADIUS_TRANSITIONS,
     MAX_EXACT_CODEWORD_EVALUATIONS,
     SYNDROME_BFS_PASSES,
+    CoveringRadiusResult,
+    MinimumDistanceResult,
+    WeightDistributionResult,
     _matrix_rank_mod_prime,
 )
+from jacobian.math.combinatorics.codes.linear.values import PrimeFieldLinearEncoder
 
 __all__ = [
-    "GeneratorMatrix",
     "covering_radius",
     "minimum_distance",
+    "verify_covering_radius",
+    "verify_minimum_distance",
+    "verify_weight_distribution",
     "weight_distribution",
 ]
 
@@ -98,12 +104,46 @@ def _codewords(
             yield codeword
 
 
-def minimum_distance(generator_matrix: GeneratorMatrix, field_order: int) -> int:
+def _admit_encoder(encoder: PrimeFieldLinearEncoder) -> GeneratorMatrix:
+    """Admit the canonical encoder before selecting the exact kernel."""
+
+    generator_matrix = tuple(tuple(row) for row in encoder.generator_matrix)
+    if not generator_matrix:
+        if not isprime(encoder.field_order):
+            raise OperationDomainValidationError(
+                location=("encoder", "field_order"),
+                code="code_theory.field_order_not_prime",
+                message="field_order must be prime for this prime-field operation",
+            )
+        if not encoder.coordinate_axis:
+            raise OperationDomainValidationError(
+                location=("encoder", "coordinate_axis"),
+                code="code_theory.generator_width_out_of_bounds",
+                message="generator rows must have between one and 256 entries",
+            )
+        return generator_matrix
+    _admit_prime_field_matrix(encoder.field_order, generator_matrix)
+    if _matrix_rank_mod_prime(generator_matrix, encoder.field_order) != len(
+        generator_matrix
+    ):
+        raise OperationDomainValidationError(
+            location=("encoder", "generator_matrix"),
+            code="code_theory.generator_matrix_must_have_full_row_rank",
+            message="generator matrix must have full row rank",
+        )
+    return generator_matrix
+
+
+def minimum_distance(encoder: PrimeFieldLinearEncoder) -> int:
     """Return the exact minimum nonzero codeword weight.
 
     For the zero code (rank 0) no nonzero codeword exists; the code
     length is returned by the empty-code convention.
     """
+    generator_matrix = _admit_encoder(encoder)
+    field_order = encoder.field_order
+    if not generator_matrix:
+        return len(encoder.coordinate_axis)
     _admit_enumeration(generator_matrix, field_order)
     min_dist = float("inf")
     for codeword in _codewords(generator_matrix, field_order):
@@ -113,11 +153,13 @@ def minimum_distance(generator_matrix: GeneratorMatrix, field_order: int) -> int
     return int(min_dist) if min_dist != float("inf") else len(generator_matrix[0])
 
 
-def weight_distribution(
-    generator_matrix: GeneratorMatrix, field_order: int
-) -> list[tuple[int, int]]:
+def weight_distribution(encoder: PrimeFieldLinearEncoder) -> list[tuple[int, int]]:
     from collections import Counter
 
+    generator_matrix = _admit_encoder(encoder)
+    field_order = encoder.field_order
+    if not generator_matrix:
+        return [(0, 1)]
     _admit_enumeration(generator_matrix, field_order)
 
     weights: Counter[int] = Counter()
@@ -177,7 +219,7 @@ def _parity_check_matrix(
     return check_rows
 
 
-def covering_radius(generator_matrix: GeneratorMatrix, field_order: int) -> int:
+def covering_radius(encoder: PrimeFieldLinearEncoder) -> int:
     """Compute a linear code's covering radius by syndrome-space BFS.
 
     One graph step adds a nonzero scalar multiple of one parity-check column,
@@ -185,7 +227,11 @@ def covering_radius(generator_matrix: GeneratorMatrix, field_order: int) -> int:
     Therefore graph distance from the zero syndrome is minimum coset-leader
     weight, and the maximum distance is the covering radius.
     """
-    width = _admit_prime_field_matrix(field_order, generator_matrix)
+    generator_matrix = _admit_encoder(encoder)
+    field_order = encoder.field_order
+    width = len(encoder.coordinate_axis)
+    if not generator_matrix:
+        return width
     rank = _matrix_rank_mod_prime(generator_matrix, field_order)
     state_count = field_order ** (width - rank)
     if state_count > MAX_COVERING_RADIUS_STATES_PER_PASS:
@@ -246,3 +292,30 @@ def covering_radius(generator_matrix: GeneratorMatrix, field_order: int) -> int:
     if len(distances) != expected_states:
         raise ArithmeticError("parity-check columns did not span the syndrome space")
     return radius
+
+
+def verify_minimum_distance(claim: MinimumDistanceResult) -> bool:
+    """Verify a serialized minimum-distance claim against its encoder."""
+
+    try:
+        return claim.minimum_distance == minimum_distance(claim.request.encoder)
+    except (ArithmeticError, TypeError, ValueError, OperationDomainValidationError):
+        return False
+
+
+def verify_weight_distribution(claim: WeightDistributionResult) -> bool:
+    """Verify a serialized weight profile against its encoder."""
+
+    try:
+        return claim.weights == tuple(weight_distribution(claim.request.encoder))
+    except (ArithmeticError, TypeError, ValueError, OperationDomainValidationError):
+        return False
+
+
+def verify_covering_radius(claim: CoveringRadiusResult) -> bool:
+    """Verify a serialized covering-radius claim against its encoder."""
+
+    try:
+        return claim.covering_radius == covering_radius(claim.request.encoder)
+    except (ArithmeticError, TypeError, ValueError, OperationDomainValidationError):
+        return False

@@ -348,6 +348,43 @@ def test_orbit_verifier_rechecks_forged_count_structure(counts: object) -> None:
     assert not verify_orbit_distribution(forged)
 
 
+def test_orbit_verifier_rejects_duplicate_valid_directions_with_matching_histogram() -> (
+    None
+):
+    subspace, directions = _slice_a_values()
+    ledger = direction_rank_ledger(subspace, directions)
+    duplicate_ledger = ledger.model_copy(
+        update={"entries": (*ledger.entries[:-1], ledger.entries[0])}
+    )
+    claim = orbit_distribution(ledger).model_copy(
+        update={
+            "ledger": duplicate_ledger,
+            "counts": ((1, 9), (8, 56), (16, 8)),
+        }
+    )
+
+    assert not verify_orbit_distribution(claim)
+
+
+def test_orbit_verifier_rejects_list_ledger_entries() -> None:
+    subspace, directions = _slice_a_values()
+    ledger = direction_rank_ledger(subspace, directions)
+    forged_ledger = ledger.model_copy(update={"entries": list(ledger.entries)})
+    claim = orbit_distribution(ledger).model_copy(update={"ledger": forged_ledger})
+
+    assert not verify_orbit_distribution(claim)
+
+
+def test_orbit_verifier_rejects_oversized_count_before_decimal_materialization() -> (
+    None
+):
+    subspace, directions = _slice_a_values()
+    distribution = orbit_distribution(direction_rank_ledger(subspace, directions))
+    forged = distribution.model_copy(update={"counts": ((1, 10**33_000),)})
+
+    assert not verify_orbit_distribution(forged)
+
+
 def test_serialized_orbit_distribution_decoding_does_not_replay_histogram(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -372,11 +409,17 @@ def test_orbit_distribution_rejects_overlarge_exact_count_output_before_power() 
         name="oversized target",
         labels=tuple(f"y{index}" for index in range(120_000)),
     )
-    oversized_map = ledger.entries[0].linear_map.model_copy(
-        update={"target_axis": oversized_target}
+    oversized_entries = tuple(
+        entry.model_copy(
+            update={
+                "linear_map": entry.linear_map.model_copy(
+                    update={"target_axis": oversized_target}
+                )
+            }
+        )
+        for entry in ledger.entries
     )
-    oversized_entry = ledger.entries[0].model_copy(update={"linear_map": oversized_map})
-    oversized_ledger = ledger.model_copy(update={"entries": (oversized_entry,)})
+    oversized_ledger = ledger.model_copy(update={"entries": oversized_entries})
 
     with pytest.raises(OperationDomainValidationError) as error:
         orbit_distribution(oversized_ledger)

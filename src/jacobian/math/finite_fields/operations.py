@@ -762,6 +762,7 @@ def _orbit_count_digit_bound(base: int, exponent: int) -> int:
 def _admit_orbit_distribution(ledger: DirectionRankLedger) -> None:
     """Admit ledger authentication, histogram growth, and exact output size."""
 
+    _require_orbit_ledger_structure(ledger)
     if (
         _direction_rank_work(ledger.subspace, len(ledger.entries))
         > _MAX_DIRECTION_RANK_WORK
@@ -789,6 +790,52 @@ def _admit_orbit_distribution(ledger: DirectionRankLedger) -> None:
             location=("ledger",),
             code="finite_field.orbit_distribution_output_bound",
             message="orbit distribution count rows exceed their exact output bound",
+        )
+
+
+def _require_orbit_ledger_structure(ledger: DirectionRankLedger) -> None:
+    """Require the complete immutable projective-direction ledger shape."""
+
+    entries = getattr(ledger, "entries", None)
+    if type(entries) is not tuple:
+        raise OperationDomainValidationError(
+            location=("ledger", "entries"),
+            code="finite_field.direction_rank_ledger_entries_tuple",
+            message="direction-rank ledger entries must be an exact tuple",
+        )
+    try:
+        expected_directions = (
+            ledger.subspace.presentation.order ** len(ledger.subspace.row_axis.labels)
+            - 1
+        ) // (ledger.subspace.presentation.order - 1)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("ledger", "entries"),
+            code="finite_field.direction_rank_ledger_direction_shape",
+            message="direction-rank ledger direction shape is invalid",
+        ) from exc
+    if len(entries) != expected_directions:
+        raise OperationDomainValidationError(
+            location=("ledger", "entries"),
+            code="finite_field.direction_rank_ledger_contains_every_projective_direction",
+            message="direction-rank ledger must contain every projective direction",
+        )
+    if any(
+        type(entry) is not RankResult
+        or type(entry.direction) is not ProjectivePoint
+        or len(entry.direction.coordinates) != len(ledger.subspace.row_axis.labels)
+        for entry in entries
+    ):
+        raise OperationDomainValidationError(
+            location=("ledger", "entries"),
+            code="finite_field.direction_rank_ledger_direction_shape",
+            message="ledger entries must contain projective points on the source row axis",
+        )
+    if len({entry.direction.digest for entry in entries}) != len(entries):
+        raise OperationDomainValidationError(
+            location=("ledger", "entries"),
+            code="finite_field.direction_rank_ledger_repeat_direction",
+            message="direction-rank ledger cannot repeat a direction",
         )
 
 

@@ -49,6 +49,15 @@ MAX_ORBIT_DISTRIBUTION_ROWS = _MAX_FIELD_ORDER + 1
 MAX_ORBIT_DISTRIBUTION_TOTAL_DIGITS = 5_000_000
 
 
+def _decimal_digit_upper_bound(value: int) -> int:
+    """Return an integer-only upper bound for a nonnegative integer's digits."""
+
+    if value == 0:
+        return 1
+    # log10(2) < 30103 / 100000; bit_length avoids formatting an oversized int.
+    return (value.bit_length() * 30103 + 99_999) // 100_000
+
+
 def _parse_orbit_count_integer(value: Any, info: ValidationInfo) -> int:
     """Decode one bounded nonnegative native integer from Python or JSON."""
 
@@ -87,7 +96,7 @@ def _parse_orbit_count_integer(value: Any, info: ValidationInfo) -> int:
             "finite_field.orbit_count_integer_nonnegative",
             "orbit counts must be nonnegative",
         )
-    if len(format_canonical_integer(parsed)) > MAX_ORBIT_DISTRIBUTION_COUNT_DIGITS:
+    if _decimal_digit_upper_bound(parsed) > MAX_ORBIT_DISTRIBUTION_COUNT_DIGITS:
         raise PydanticCustomError(
             "finite_field.orbit_count_integer_digits",
             "orbit count exceeds its canonical decimal digit bound",
@@ -121,6 +130,15 @@ def _orbit_counts_structurally_valid(counts: object) -> bool:
     if len({row[0] for row in counts}) != len(counts):
         return False
     if counts != tuple(sorted(counts)):
+        return False
+    digit_upper_bounds = []
+    for row in counts:
+        for value in row:
+            digit_bound = _decimal_digit_upper_bound(value)
+            if digit_bound > MAX_ORBIT_DISTRIBUTION_COUNT_DIGITS:
+                return False
+            digit_upper_bounds.append(digit_bound)
+    if sum(digit_upper_bounds) > MAX_ORBIT_DISTRIBUTION_TOTAL_DIGITS:
         return False
     try:
         total_digits = sum(

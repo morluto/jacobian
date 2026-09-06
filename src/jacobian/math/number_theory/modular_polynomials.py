@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 import re
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import (
     Field,
     StrictBool,
     StrictInt,
     StrictStr,
+    StringConstraints,
+    WithJsonSchema,
     field_validator,
     model_validator,
 )
+from pydantic.json_schema import JsonSchemaValue
 
 from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationDomainValidationError
@@ -56,6 +59,35 @@ class NormalizedModularPolynomialTerm(StrictModel):
     exponents: tuple[StrictInt, ...] = Field(min_length=1, max_length=_MAX_VARIABLES)
 
 
+IdentityVariableName = Annotated[
+    StrictStr,
+    StringConstraints(
+        pattern=r"^[a-z][a-z0-9_]{0,31}$",
+        max_length=32,
+        strict=True,
+    ),
+]
+
+
+def _identity_normalized_term_schema() -> JsonSchemaValue:
+    """Project the shared term carrier onto the identity result envelope."""
+
+    schema = NormalizedModularPolynomialTerm.model_json_schema()
+    exponents = schema["properties"]["exponents"]
+    assert isinstance(exponents, dict)
+    items = exponents["items"]
+    assert isinstance(items, dict)
+    items["minimum"] = 0
+    items["maximum"] = _MAX_EXPONENT
+    return schema
+
+
+IdentityNormalizedModularPolynomialTerm = Annotated[
+    NormalizedModularPolynomialTerm,
+    WithJsonSchema(_identity_normalized_term_schema()),
+]
+
+
 class ModularPolynomialIdentityValue(StrictModel):
     """Source-bound formal-polynomial identity claims.
 
@@ -65,16 +97,18 @@ class ModularPolynomialIdentityValue(StrictModel):
     """
 
     modulus: StrictInt = Field(ge=2, le=_MAX_MODULUS)
-    variable_order: tuple[StrictStr, ...] = Field(
-        min_length=1, max_length=_MAX_VARIABLES
+    variable_order: tuple[IdentityVariableName, ...] = Field(
+        min_length=1,
+        max_length=_MAX_VARIABLES,
+        json_schema_extra={"uniqueItems": True},
     )
-    normalized_left: tuple[NormalizedModularPolynomialTerm, ...] = Field(
+    normalized_left: tuple[IdentityNormalizedModularPolynomialTerm, ...] = Field(
         max_length=_MAX_TERMS
     )
-    normalized_right: tuple[NormalizedModularPolynomialTerm, ...] = Field(
+    normalized_right: tuple[IdentityNormalizedModularPolynomialTerm, ...] = Field(
         max_length=_MAX_TERMS
     )
-    residual: tuple[NormalizedModularPolynomialTerm, ...] = Field(
+    residual: tuple[IdentityNormalizedModularPolynomialTerm, ...] = Field(
         max_length=_MAX_TERMS * 2
     )
     identical: StrictBool
@@ -108,6 +142,55 @@ class ModularPolynomialIdentityValue(StrictModel):
         )
 
 
+def _validate_identity_axes(value: ModularPolynomialIdentityValue) -> None:
+    """Validate exact axes before hashing their names."""
+
+    if type(value.variable_order) is not tuple:
+        raise ValueError("identity variable axes must use a plain tuple")
+    if not 1 <= len(value.variable_order) <= _MAX_VARIABLES:
+        raise ValueError("identity variable axes are outside result scope")
+    if any(type(name) is not str for name in value.variable_order):
+        raise ValueError("identity variable axes must use plain strings")
+    if any(_VARIABLE.fullmatch(name) is None for name in value.variable_order):
+        raise ValueError("identity variable axes must be canonical names")
+    if len(set(value.variable_order)) != len(value.variable_order):
+        raise ValueError("identity variable axes must be unique canonical names")
+
+
+def _validate_identity_terms(
+    terms: object,
+    *,
+    axis_count: int,
+    modulus: int,
+    maximum: int,
+    label: str,
+) -> None:
+    """Validate one term sequence before sorting exponent tuples."""
+
+    if type(terms) is not tuple or len(terms) > maximum:
+        raise ValueError(f"{label} exceeds the bounded term count")
+    if any(type(term) is not NormalizedModularPolynomialTerm for term in terms):
+        raise ValueError("identity terms must use the canonical normalized type")
+    if any(type(term.exponents) is not tuple for term in terms):
+        raise ValueError("normalized exponents must use plain tuples")
+    if any(len(term.exponents) != axis_count for term in terms):
+        raise ValueError("normalized exponent dimensions must match the axes")
+    if any(
+        type(exponent) is not int or exponent < 0 or exponent > _MAX_EXPONENT
+        for term in terms
+        for exponent in term.exponents
+    ):
+        raise ValueError("normalized exponents are outside result scope")
+    if any(
+        type(term.coefficient) is not int or not 1 <= term.coefficient < modulus
+        for term in terms
+    ):
+        raise ValueError("normalized coefficients are outside result scope")
+    exponents = [term.exponents for term in terms]
+    if exponents != sorted(set(exponents)):
+        raise ValueError("normalized terms must be unique and sorted")
+
+
 def _validate_identity_value_shape(
     value: ModularPolynomialIdentityValue,
 ) -> None:
@@ -115,50 +198,41 @@ def _validate_identity_value_shape(
 
     if type(value.modulus) is not int or not 2 <= value.modulus <= _MAX_MODULUS:
         raise ValueError("identity modulus is outside result scope")
-    if (
-        type(value.variable_order) is not tuple
-        or not 1 <= len(value.variable_order) <= _MAX_VARIABLES
-    ):
-        raise ValueError("identity variable axes are outside result scope")
-    if len(set(value.variable_order)) != len(value.variable_order) or any(
-        type(name) is not str or _VARIABLE.fullmatch(name) is None
-        for name in value.variable_order
-    ):
-        raise ValueError("identity variable axes must be unique canonical names")
+    _validate_identity_axes(value)
     if (
         type(value.normalized_left) is not tuple
-        or len(value.normalized_left) > _MAX_TERMS
+        or type(value.normalized_right) is not tuple
+        or type(value.residual) is not tuple
     ):
-        raise ValueError("normalized_left exceeds the bounded term count")
-    if (
-        type(value.normalized_right) is not tuple
-        or len(value.normalized_right) > _MAX_TERMS
-    ):
-        raise ValueError("normalized_right exceeds the bounded term count")
-    if type(value.residual) is not tuple or len(value.residual) > _MAX_TERMS * 2:
-        raise ValueError("residual exceeds the bounded term count")
+        raise ValueError("identity term sequences must use plain tuples")
     if type(value.identical) is not bool:
         raise ValueError("identity decision must be a boolean claim")
-    if value.comparison_scope != "FORMAL_COEFFICIENTWISE_IDENTITY":
+    if type(value.comparison_scope) is not str or value.comparison_scope != (
+        "FORMAL_COEFFICIENTWISE_IDENTITY"
+    ):
         raise ValueError("identity comparison scope is not canonical")
-
-    for terms in (value.normalized_left, value.normalized_right, value.residual):
-        if any(type(term) is not NormalizedModularPolynomialTerm for term in terms):
-            raise ValueError("identity terms must use the canonical normalized type")
-        exponents = [term.exponents for term in terms]
-        if exponents != sorted(set(exponents)):
-            raise ValueError("normalized terms must be unique and sorted")
-        if any(
-            len(term.exponents) != len(value.variable_order)
-            or any(
-                type(exponent) is not int or exponent < 0 or exponent > _MAX_EXPONENT
-                for exponent in term.exponents
-            )
-            or type(term.coefficient) is not int
-            or not 1 <= term.coefficient < value.modulus
-            for term in terms
-        ):
-            raise ValueError("normalized term is outside result scope")
+    axis_count = len(value.variable_order)
+    _validate_identity_terms(
+        value.normalized_left,
+        axis_count=axis_count,
+        modulus=value.modulus,
+        maximum=_MAX_TERMS,
+        label="normalized_left",
+    )
+    _validate_identity_terms(
+        value.normalized_right,
+        axis_count=axis_count,
+        modulus=value.modulus,
+        maximum=_MAX_TERMS,
+        label="normalized_right",
+    )
+    _validate_identity_terms(
+        value.residual,
+        axis_count=axis_count,
+        modulus=value.modulus,
+        maximum=_MAX_TERMS * 2,
+        label="residual",
+    )
 
 
 def _normalize(

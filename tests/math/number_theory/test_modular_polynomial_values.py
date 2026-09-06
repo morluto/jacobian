@@ -99,7 +99,99 @@ def test_identity_result_verifier_rejects_a_forged_residual() -> None:
     payload["identical"] = True
 
     decoded = type(identity).model_validate(payload)
+    assert not list(
+        Draft202012Validator(type(identity).model_json_schema()).iter_errors(payload)
+    )
     assert not verify_modular_polynomial_identity(decoded)
+
+
+def test_identity_result_schema_matches_structural_parser_bounds() -> None:
+    schema = modular_polynomials.ModularPolynomialIdentityValue.model_json_schema()
+    variable_order = schema["properties"]["variable_order"]
+    assert variable_order["items"]["pattern"] == r"^[a-z][a-z0-9_]{0,31}$"
+    assert variable_order["uniqueItems"] is True
+
+    for name in ("normalized_left", "normalized_right", "residual"):
+        terms = schema["properties"][name]
+        expected_max_items = (
+            modular_polynomials._MAX_TERMS
+            if name != "residual"
+            else modular_polynomials._MAX_TERMS * 2
+        )
+        assert terms["maxItems"] == expected_max_items
+        assert terms["items"]["properties"]["exponents"]["items"]["minimum"] == 0
+        assert (
+            terms["items"]["properties"]["exponents"]["items"]["maximum"]
+            == modular_polynomials._MAX_EXPONENT
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("variable_order", ["X"]),
+        ("variable_order", ["x", "x"]),
+        ("normalized_left", [{"coefficient": 1, "exponents": [257]}]),
+    ),
+)
+def test_identity_schema_and_parser_reject_the_same_structural_forgery(
+    field: str, value: object
+) -> None:
+    identity = modular_polynomial_identity(5, ("x",), (), ())
+    payload = identity.model_dump(mode="json")
+    payload[field] = value
+
+    schema_errors = list(
+        Draft202012Validator(type(identity).model_json_schema()).iter_errors(payload)
+    )
+    assert schema_errors
+    with pytest.raises(ValidationError):
+        type(identity).model_validate(payload)
+
+
+def test_identity_verifier_preflights_malicious_tuple_subclass_without_hashing() -> (
+    None
+):
+    class ExplodingTuple(tuple[object, ...]):
+        def __hash__(self) -> int:
+            raise RuntimeError("must not hash untrusted tuple subclass")
+
+    term = NormalizedModularPolynomialTerm.model_construct(
+        coefficient=1,
+        exponents=ExplodingTuple((1,)),
+    )
+    claim = modular_polynomials.ModularPolynomialIdentityValue.model_construct(
+        modulus=5,
+        variable_order=("x",),
+        normalized_left=(term,),
+        normalized_right=(),
+        residual=(term,),
+        identical=False,
+        comparison_scope="FORMAL_COEFFICIENTWISE_IDENTITY",
+    )
+
+    assert verify_modular_polynomial_identity(claim) is False
+
+
+def test_identity_verifier_rejects_oversized_claim_before_subtraction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    term = NormalizedModularPolynomialTerm(coefficient=1, exponents=(1,))
+    claim = modular_polynomials.ModularPolynomialIdentityValue.model_construct(
+        modulus=5,
+        variable_order=("x",),
+        normalized_left=(term,) * (modular_polynomials._MAX_TERMS + 1),
+        normalized_right=(),
+        residual=(term,),
+        identical=False,
+        comparison_scope="FORMAL_COEFFICIENTWISE_IDENTITY",
+    )
+
+    def fail(*args: object, **kwargs: object) -> object:
+        raise AssertionError("oversized claims must be rejected before subtraction")
+
+    monkeypatch.setattr(modular_polynomials, "_subtract_normalized", fail)
+    assert verify_modular_polynomial_identity(claim) is False
 
 
 def test_identity_result_round_trips_through_canonical_json() -> None:

@@ -355,9 +355,8 @@ def verify_factors_length(claim: FactorsLengthResult) -> bool:
             claim.factors == analysis.factors
             and claim.occurrences == analysis.occurrences
             and claim.multiplicities == tuple(map(len, analysis.occurrences))
-            and claim.first_occurrence == tuple(
-                positions[0] for positions in analysis.occurrences
-            )
+            and claim.first_occurrence
+            == tuple(positions[0] for positions in analysis.occurrences)
             and claim.distinct_count == len(analysis.factors)
         )
     except (TypeError, ValueError, IndexError):

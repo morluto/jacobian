@@ -369,9 +369,7 @@ class TestReachableStates:
 
         decoded = type(profile).model_validate_json(profile.model_dump_json())
         assert verify_reachable_state_profile(decoded)
-        forged = decoded.model_copy(
-            update={"witnesses": ((0, _leaf()), (1, _leaf()))}
-        )
+        forged = decoded.model_copy(update={"witnesses": ((0, _leaf()), (1, _leaf()))})
         assert not verify_reachable_state_profile(forged)
 
     def test_no_nullary_seed_has_an_empty_reachable_profile(self) -> None:

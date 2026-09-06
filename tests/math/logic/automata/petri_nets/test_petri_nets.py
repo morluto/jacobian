@@ -97,9 +97,7 @@ def test_serialized_claims_retain_sources_and_reject_forgery() -> None:
     )
 
     incidence = compute_incidence(IncidenceMatrixRequest(net=net))
-    incidence_decoded = type(incidence).model_validate_json(
-        incidence.model_dump_json()
-    )
+    incidence_decoded = type(incidence).model_validate_json(incidence.model_dump_json())
     assert petri_nets.verify_incidence_matrix(incidence_decoded)
     assert not petri_nets.verify_incidence_matrix(
         incidence_decoded.model_copy(update={"incidence": ((0, 0), (0, 0))})

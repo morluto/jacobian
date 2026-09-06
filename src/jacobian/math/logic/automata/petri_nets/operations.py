@@ -64,7 +64,7 @@ def enabled_transitions(net: PetriNet, marking: Marking) -> EnabledTransitionsRe
     return EnabledTransitionsResult(
         net=net,
         marking=marking,
-        transitions=tuple(_enabled_transition_indices(net, marking))
+        transitions=tuple(_enabled_transition_indices(net, marking)),
     )
 
 
@@ -120,7 +120,7 @@ def compute_incidence_matrix(net: PetriNet) -> IncidenceMatrixResult:
         incidence=tuple(
             tuple(net.post[p][t] - net.pre[p][t] for t in range(net.transition_count))
             for p in range(net.place_count)
-        )
+        ),
     )
 
 
@@ -317,9 +317,10 @@ def verify_reachability_graph(claim: ReachabilityResult) -> bool:
     """Verify a bounded reachability graph against its retained experiment."""
 
     try:
-        return reachability_graph(
-            claim.net, claim.initial_marking, claim.max_states
-        ) == claim
+        return (
+            reachability_graph(claim.net, claim.initial_marking, claim.max_states)
+            == claim
+        )
     except (TypeError, ValueError):
         return False
 

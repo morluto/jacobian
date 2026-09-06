@@ -122,7 +122,9 @@ def test_factor_result_is_complete_and_bound_to_the_request() -> None:
     assert supplied.factors[0] == ("b", "b")
     decoded = type(result).model_validate_json(result.model_dump_json())
     assert verify_factors_length(decoded)
-    assert not verify_factors_length(decoded.model_copy(update={"occurrences": ((1,), (1,), (2,))}))
+    assert not verify_factors_length(
+        decoded.model_copy(update={"occurrences": ((1,), (1,), (2,))})
+    )
 
 
 def test_empty_factor_occurs_at_every_boundary() -> None:

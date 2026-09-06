@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from pydantic import Field, StrictInt
+from typing import Self
+
+from pydantic import Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.values import (
@@ -31,6 +34,34 @@ class CycleLengthRow(StrictModel):
     cycle_length: StrictInt = Field(ge=3, le=MAX_VERTICES)
     witness: tuple[str, ...] = Field(min_length=3, max_length=MAX_VERTICES)
 
+    @model_validator(mode="after")
+    def require_canonical_witness(self) -> Self:
+        if self.cycle_length != len(self.witness):
+            raise PydanticCustomError(
+                "cycle_profile.witness_length_mismatch",
+                "cycle witness length must match cycle_length",
+            )
+        if len(set(self.witness)) != len(self.witness):
+            raise PydanticCustomError(
+                "cycle_profile.witness_vertices_must_be_distinct",
+                "cycle witnesses must have distinct vertices",
+            )
+        rotations = [
+            self.witness[index:] + self.witness[:index]
+            for index in range(len(self.witness))
+        ]
+        reversed_witness = (self.witness[0], *reversed(self.witness[1:]))
+        rotations.extend(
+            reversed_witness[index:] + reversed_witness[:index]
+            for index in range(len(self.witness))
+        )
+        if self.witness != min(rotations):
+            raise PydanticCustomError(
+                "cycle_profile.witness_must_be_canonical",
+                "cycle witnesses must use canonical rotation and orientation",
+            )
+        return self
+
     @classmethod
     def _from_kernel(
         cls, cycle_length: int, witness: tuple[str, ...]
@@ -45,6 +76,22 @@ class CycleLengthProfileResult(StrictModel):
 
     graph: SimpleUndirectedGraph
     rows: tuple[CycleLengthRow, ...] = Field(max_length=MAX_VERTICES - 2)
+
+    @model_validator(mode="after")
+    def require_structural_profile(self) -> Self:
+        lengths = tuple(row.cycle_length for row in self.rows)
+        if lengths != tuple(sorted(lengths)) or len(set(lengths)) != len(lengths):
+            raise PydanticCustomError(
+                "cycle_profile.rows_must_be_sorted_unique",
+                "cycle profile rows must be sorted and unique",
+            )
+        vertices = set(self.graph.vertices)
+        if any(not set(row.witness) <= vertices for row in self.rows):
+            raise PydanticCustomError(
+                "cycle_profile.witness_vertices_must_belong_to_graph",
+                "cycle witnesses must use graph vertices",
+            )
+        return self
 
     @classmethod
     def _from_kernel(

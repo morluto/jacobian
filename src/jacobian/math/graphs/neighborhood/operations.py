@@ -38,7 +38,7 @@ def _open_neighborhood_from_admission(
             neighbors.add(right)
         elif right in selected and left not in selected:
             neighbors.add(left)
-    return NeighborhoodResult(
+    return NeighborhoodResult._from_kernel(
         graph=graph,
         selected_vertices=admission.selected_vertices,
         neighborhood=tuple(vertex for vertex in graph.vertices if vertex in neighbors),

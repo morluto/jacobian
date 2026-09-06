@@ -12,7 +12,11 @@ from jacobian.math.graphs.common_neighbor_profile._models import (
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
-__all__ = ["compute_common_neighbor_profile", "verify_common_neighbor_profile"]
+__all__ = [
+    "compute_common_neighbor_profile",
+    "verify_common_neighbor_profile",
+    "verify_common_neighbor_row",
+]
 
 MAX_COMMON_NEIGHBOR_CELLS = 5_000_000
 MAX_COMMON_NEIGHBOR_LABEL_CHARACTERS = 20_000_000
@@ -74,12 +78,54 @@ def compute_common_neighbor_profile(
     """
     _admit_graph(graph)
     rows = _common_neighbor_rows(graph)
-    return CommonNeighborProfileResult(graph=graph, rows=tuple(rows))
+    return CommonNeighborProfileResult._from_kernel(graph, tuple(rows))
+
+
+def verify_common_neighbor_row(
+    graph: SimpleUndirectedGraph, row: CommonNeighborRow
+) -> bool:
+    """Return whether one row is the exact common-neighbor relation in ``graph``."""
+    try:
+        vertex_index = {vertex: index for index, vertex in enumerate(graph.vertices)}
+        left_index = vertex_index[row.vertex_u]
+        right_index = vertex_index[row.vertex_v]
+        if left_index >= right_index:
+            return False
+        adjacency: dict[str, set[str]] = {vertex: set() for vertex in graph.vertices}
+        for left, right in graph.edges:
+            adjacency[left].add(right)
+            adjacency[right].add(left)
+        expected = tuple(sorted(adjacency[row.vertex_u] & adjacency[row.vertex_v]))
+        return row.common_neighbors == expected and row.codegree == len(expected)
+    except (AttributeError, KeyError, TypeError):
+        return False
 
 
 def verify_common_neighbor_profile(claim: CommonNeighborProfileResult) -> bool:
     """Return whether every claimed row is the complete profile of its graph."""
-    return claim.rows == tuple(_common_neighbor_rows(claim.graph))
+    try:
+        expected_pairs = tuple(
+            (left, right)
+            for index, left in enumerate(claim.graph.vertices)
+            for right in claim.graph.vertices[index + 1 :]
+        )
+        actual_pairs = tuple((row.vertex_u, row.vertex_v) for row in claim.rows)
+        if actual_pairs != expected_pairs:
+            return False
+        adjacency: dict[str, set[str]] = {
+            vertex: set() for vertex in claim.graph.vertices
+        }
+        for left, right in claim.graph.edges:
+            adjacency[left].add(right)
+            adjacency[right].add(left)
+        return all(
+            row.common_neighbors
+            == tuple(sorted(adjacency[row.vertex_u] & adjacency[row.vertex_v]))
+            and row.codegree == len(row.common_neighbors)
+            for row in claim.rows
+        )
+    except (AttributeError, KeyError, TypeError):
+        return False
 
 
 def _common_neighbor_rows(graph: SimpleUndirectedGraph) -> list[CommonNeighborRow]:

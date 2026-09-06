@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import pairwise
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.cycle_length_profile._models import (
@@ -12,7 +13,11 @@ from jacobian.math.graphs.cycle_length_profile._models import (
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
-__all__ = ["compute_cycle_length_profile", "verify_cycle_length_profile"]
+__all__ = [
+    "compute_cycle_length_profile",
+    "verify_cycle_length_profile",
+    "verify_cycle_length_row",
+]
 
 MAX_SEARCH_WORK = 10_000_000
 MAX_CYCLE_PROFILE_RETAINED_LABEL_CHARACTERS = 100_000_000
@@ -247,8 +252,26 @@ def compute_cycle_length_profile(
 def verify_cycle_length_profile(claim: CycleLengthProfileResult) -> bool:
     """Return whether a claim has every and only the graph's cycle lengths."""
     try:
-        return compute_cycle_length_profile(claim.graph) == claim
-    except OperationDomainValidationError:
+        if not all(verify_cycle_length_row(claim.graph, row) for row in claim.rows):
+            return False
+        return compute_cycle_length_profile(claim.graph).rows == claim.rows
+    except (AttributeError, OperationDomainValidationError, TypeError):
+        return False
+
+
+def verify_cycle_length_row(graph: SimpleUndirectedGraph, row: CycleLengthRow) -> bool:
+    """Return whether ``row.witness`` is a closed simple cycle in ``graph``."""
+    try:
+        if row.cycle_length != len(row.witness):
+            return False
+        if len(set(row.witness)) != len(row.witness):
+            return False
+        if not set(row.witness) <= set(graph.vertices):
+            return False
+        edges = {frozenset(edge) for edge in graph.edges}
+        cycle = (*row.witness, row.witness[0])
+        return all(frozenset((left, right)) in edges for left, right in pairwise(cycle))
+    except (AttributeError, TypeError):
         return False
 
 

@@ -140,7 +140,9 @@ class GeneratedSubsemigroupResult(StrictModel):
             raise _validation_error(
                 "element_not_in_semigroup", "elements must use the source axis"
             )
-        ordered = tuple(element for element in self.semigroup.elements if element in self.elements)
+        ordered = tuple(
+            element for element in self.semigroup.elements if element in self.elements
+        )
         if self.elements != ordered:
             raise _validation_error(
                 "elements_not_canonical", "elements must retain source ordering"

@@ -139,9 +139,7 @@ def group_like_elements(coalgebra: Coalgebra) -> tuple[GroupLikeElement, ...]:
     return tuple(GroupLikeElement(coefficients=coeffs) for coeffs in found)
 
 
-def verify_group_like_element(
-    coalgebra: Coalgebra, element: GroupLikeElement
-) -> bool:
+def verify_group_like_element(coalgebra: Coalgebra, element: GroupLikeElement) -> bool:
     """Verify one group-like coefficient vector against a coalgebra."""
 
     try:
@@ -164,8 +162,7 @@ def verify_group_like_element(
             return False
         return all(
             sum(
-                coefficients[index]
-                * coalgebra.comultiplication[index][row][column]
+                coefficients[index] * coalgebra.comultiplication[index][row][column]
                 for index in range(dimension)
             )
             % prime

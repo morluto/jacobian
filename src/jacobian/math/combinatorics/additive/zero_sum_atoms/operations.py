@@ -25,7 +25,11 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
 
-__all__ = ["construct_zero_sum_atom_hypergraph"]
+__all__ = [
+    "construct_zero_sum_atom_hypergraph",
+    "verify_zero_sum_atom",
+    "verify_zero_sum_atom_hypergraph",
+]
 
 _OWNER_DEADLINE_SECONDS = 3600.0
 
@@ -182,3 +186,54 @@ def construct_zero_sum_atom_hypergraph(
         atom_count=atom_count,
         total_incidences=total_incidences,
     )
+
+
+def verify_zero_sum_atom_hypergraph(
+    result: ZeroSumAtomHypergraphResult,
+) -> bool:
+    """Verify atom zero-sum, minimality, and completeness for the source."""
+    try:
+        expected = construct_zero_sum_atom_hypergraph(result.source)
+        return (
+            expected.hypergraph == result.hypergraph
+            and expected.vertex_source_indices == result.vertex_source_indices
+            and expected.atom_count == result.atom_count
+            and expected.total_incidences == result.total_incidences
+        )
+    except Exception:
+        return False
+
+
+def verify_zero_sum_atom(
+    source: ZeroSumAtomSource,
+    atom_indices: tuple[int, ...],
+) -> bool:
+    """Verify that source indices form one inclusion-minimal zero-sum atom."""
+    try:
+        _admit_zero_sum_atom_source(source)
+        if type(atom_indices) is not tuple or not atom_indices:
+            return False
+        if any(type(index) is not int for index in atom_indices):
+            return False
+        if len(set(atom_indices)) != len(atom_indices) or any(
+            index < 0 or index >= len(source.elements) for index in atom_indices
+        ):
+            return False
+        moduli = source.group.moduli
+        zero = tuple(0 for _ in moduli)
+        values = tuple(source.elements[index] for index in atom_indices)
+        running = zero
+        for value in values:
+            running = _add(running, value, moduli)
+        if running != zero:
+            return False
+        for proper_size in range(1, len(values)):
+            for positions in combinations(range(len(values)), proper_size):
+                subset_sum = zero
+                for position in positions:
+                    subset_sum = _add(subset_sum, values[position], moduli)
+                if subset_sum == zero:
+                    return False
+        return True
+    except Exception:
+        return False

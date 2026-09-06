@@ -11,6 +11,8 @@ from pydantic import ValidationError
 from jacobian.catalog.models import MathTool
 from jacobian.math.combinatorics.additive.zero_sum_atoms import (
     construct_zero_sum_atom_hypergraph,
+    verify_zero_sum_atom,
+    verify_zero_sum_atom_hypergraph,
 )
 from jacobian.math.combinatorics.additive.zero_sum_atoms._models import (
     MAX_ATOM_EDGES,
@@ -90,6 +92,23 @@ def test_empty_source_has_empty_atom_hypergraph() -> None:
     assert result.hypergraph.edges == ()
     assert result.atom_count == 0
     assert result.total_incidences == 0
+
+
+def test_serialized_forged_atom_family_is_rejected_by_verifier() -> None:
+    result = _run(((1,), (6,)), (7,))
+    payload = result.model_dump(mode="json")
+    payload["hypergraph"]["edges"] = []
+    payload["atom_count"] = 0
+    payload["total_incidences"] = 0
+    decoded = ZeroSumAtomHypergraphResult.model_validate(payload)
+    assert not verify_zero_sum_atom_hypergraph(decoded)
+
+
+def test_atom_verifier_checks_zero_sum_and_inclusion_minimality() -> None:
+    source = _source(((1,), (3,), (5,)), (6,))
+    assert verify_zero_sum_atom(source, (0, 2))
+    assert not verify_zero_sum_atom(source, (0, 1, 2))
+    assert not verify_zero_sum_atom(source, (0, 1))
 
 
 def test_zero_only_source_has_identity_singleton_atom() -> None:

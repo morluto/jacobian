@@ -121,14 +121,15 @@ class GaussianRealificationResult(StrictModel):
     target_variables: tuple[PolynomialVariable, PolynomialVariable]
     real_part: RationalPolynomial
     imag_part: RationalPolynomial
-    substitution: str = Field(
-        description=(
-            "Display-only, non-evaluated substitution with the exact grammar "
-            "'<source> = <first-target> + i*<second-target>', derived from "
-            "the retained variables."
-        ),
-        max_length=128,
-    )
+
+    @property
+    def substitution(self) -> str:
+        """Render the retained substitution as a native display projection."""
+
+        return (
+            f"{self.source_polynomial.variable} = {self.target_variables[0]} "
+            f"+ i*{self.target_variables[1]}"
+        )
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
@@ -152,12 +153,6 @@ class GaussianRealificationResult(StrictModel):
                 "gaussian_imag_part_variables",
                 "imag part must use the ordered target variables",
             )
-        expected = f"{self.source_polynomial.variable} = {self.target_variables[0]} + i*{self.target_variables[1]}"
-        if self.substitution != expected:
-            raise _validation_error(
-                "gaussian_substitution_mismatch",
-                f"substitution must be '{expected}'",
-            )
         return self
 
     @classmethod
@@ -168,13 +163,11 @@ class GaussianRealificationResult(StrictModel):
         real_part: RationalPolynomial,
         imag_part: RationalPolynomial,
     ) -> Self:
-        substitution = f"{source_polynomial.variable} = {target_variables[0]} + i*{target_variables[1]}"
         return cls.model_construct(
             source_polynomial=source_polynomial,
             target_variables=target_variables,
             real_part=real_part,
             imag_part=imag_part,
-            substitution=substitution,
         )
 
 
@@ -384,6 +377,18 @@ def gaussian_realification(
     )
 
 
+def verify_gaussian_realification(claim: GaussianRealificationResult) -> bool:
+    """Check both retained components against the source substitution."""
+
+    try:
+        expected = gaussian_realification(
+            claim.source_polynomial, claim.target_variables
+        )
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+    return expected.real_part == claim.real_part and expected.imag_part == claim.imag_part
+
+
 __all__ = [
     "GaussianComplexCoefficient",
     "GaussianRealificationRequest",
@@ -391,4 +396,5 @@ __all__ = [
     "UnivariateGaussianPolynomial",
     "UnivariateGaussianPolynomialTerm",
     "gaussian_realification",
+    "verify_gaussian_realification",
 ]

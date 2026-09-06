@@ -13,6 +13,7 @@ from jacobian.math.geometry.algebraic_curves._conic import (
 from jacobian.math.geometry.algebraic_curves._gaussian_realification import (
     GaussianRealificationResult,
     UnivariateGaussianPolynomial,
+    verify_gaussian_realification as _verify_gaussian_realification,
 )
 from jacobian.math.geometry.algebraic_curves._gaussian_realification import (
     gaussian_realification as _gaussian_realification,
@@ -66,6 +67,12 @@ def gaussian_realification(
 ) -> GaussianRealificationResult:
     """Return the real and imaginary parts after substituting ``x + i*y``."""
     return _gaussian_realification(polynomial, target_variables)
+
+
+def verify_gaussian_realification(claim: GaussianRealificationResult) -> bool:
+    """Verify real and imaginary components against the retained source."""
+
+    return _verify_gaussian_realification(claim)
 
 
 def affine_curve_check(polynomial: RationalPolynomial) -> tuple[bool, int]:
@@ -254,6 +261,7 @@ __all__ = [
     "singularity_profile",
     "verify_affine_chart",
     "verify_affine_curve_check",
+    "verify_gaussian_realification",
     "verify_projective_closure",
     "verify_projective_plane_curve_singularity_profile",
     "verify_rational_conic_parametrization",

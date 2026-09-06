@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.math.geometry.algebraic_curves import (
     gaussian_realification as public_gaussian_realification,
+    verify_gaussian_realification,
 )
 from jacobian.math.geometry.algebraic_curves._gaussian_realification import (
     GaussianComplexCoefficient,
@@ -205,6 +206,16 @@ def test_json_round_trip():
     json_val = result.model_dump_json()
     replay = type(result).model_validate_json(json_val, strict=True)
     assert replay == result
+    assert "substitution" not in result.model_dump(mode="json")
+    assert verify_gaussian_realification(replay)
+
+    forged = replay.model_dump(mode="json")
+    forged["real_part"]["polynomial"]["terms"][0]["coefficient"] = {
+        "num": "2",
+        "den": "1",
+    }
+    forged_result = type(result).model_validate(forged)
+    assert not verify_gaussian_realification(forged_result)
 
 
 def test_admission_rejects_excessive_degree():

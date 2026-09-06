@@ -39,6 +39,7 @@ class PrattCertificateFactor(StrictModel):
     exponent: StrictInt = Field(ge=1, le=4096)
     certificate: PrattCertificateNode
 
+
 class CertifiedFactorizationRequest(StrictModel):
     """One positive integer for bounded certified factorization."""
 

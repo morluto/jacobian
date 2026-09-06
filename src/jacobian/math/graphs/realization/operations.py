@@ -48,9 +48,7 @@ def graph_realization(sequence: DegreeSequence) -> GraphRealizationResult:
     """Construct a simple graph realizing the degree sequence."""
     degrees = sequence.degrees
     if not _is_graphical_erdos_gallai(degrees):
-        return GraphRealizationResult(
-            sequence=sequence, is_graphical=False
-        )
+        return GraphRealizationResult(sequence=sequence, is_graphical=False)
     graph = nx.havel_hakimi_graph(list(degrees))
     return GraphRealizationResult(
         sequence=sequence,

@@ -26,6 +26,7 @@ from jacobian.math.number_theory.p_adic.operations import (
     find_padic_roots,
     hensel_lift_factors,
     hensel_lift_root,
+    verify_hensel_factor_lift,
     verify_hensel_root,
 )
 
@@ -224,6 +225,10 @@ class TestHenselFactorLifting:
         assert (
             HenselFactorLiftResult.model_validate_json(result.model_dump_json())
             == result
+        )
+        assert verify_hensel_factor_lift(result)
+        assert not verify_hensel_factor_lift(
+            result.model_copy(update={"lifted_g": _wire_poly(0, 1)})
         )
         modulus = 9
         for x in range(modulus):

@@ -412,6 +412,49 @@ def hensel_lift_factors(
     )
 
 
+def verify_hensel_factor_lift(claim: HenselFactorLiftResult) -> bool:
+    """Check the product and coprimality relations of a factor-lift witness."""
+
+    prime = claim.prime
+    modulus = prime**claim.precision
+    polynomial = _kernel_coefficients(claim.polynomial)
+    factor_g = _kernel_coefficients(claim.factor_g)
+    factor_h = _kernel_coefficients(claim.factor_h)
+    lifted_g = _kernel_coefficients(claim.lifted_g)
+    lifted_h = _kernel_coefficients(claim.lifted_h)
+    try:
+        _bezout_unit_mod_p(
+            _trim_asc([coefficient % prime for coefficient in factor_g]),
+            _trim_asc([coefficient % prime for coefficient in factor_h]),
+            prime,
+        )
+    except ValueError:
+        return False
+    return (
+        _is_zero_polynomial(
+            _poly_sub_mod(
+                polynomial,
+                _poly_mul_exact_mod(lifted_g, lifted_h, modulus),
+                modulus,
+            )
+        )
+        and _is_zero_polynomial(
+            _poly_sub_mod(
+                factor_g,
+                lifted_g,
+                prime,
+            )
+        )
+        and _is_zero_polynomial(
+            _poly_sub_mod(
+                factor_h,
+                lifted_h,
+                prime,
+            )
+        )
+    )
+
+
 def find_padic_roots(
     polynomial: IntegerPolynomial,
     prime: int,

@@ -11,11 +11,11 @@ from sympy import ZZ, Poly, Symbol
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.unit_circle import (
-    UnitCircleArcEnergyRequest,
     UnitCircleArcEnergyResult,
     unit_circle_arc_energy,
     verify_unit_circle_arc_energy,
 )
+from jacobian.math.polynomials.unit_circle._models import UnitCircleArcEnergyRequest
 from jacobian.math.polynomials.unit_circle.operations import (
     _REAL_CYCLOTOMIC_POLYNOMIALS,
     _real_cyclotomic_record,

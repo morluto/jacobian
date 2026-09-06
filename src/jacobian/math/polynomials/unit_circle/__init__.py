@@ -8,7 +8,6 @@ from jacobian.math.polynomials.unit_circle._models import (
     HermitianLaurentPolynomial,
     HermitianLaurentTerm,
     RealDegreeOnePolynomialFactor,
-    UnitCircleArcEnergyRequest,
     UnitCircleArcEnergyResult,
 )
 from jacobian.math.polynomials.unit_circle.operations import (
@@ -26,7 +25,6 @@ __all__ = [
     "HermitianLaurentPolynomial",
     "HermitianLaurentTerm",
     "RealDegreeOnePolynomialFactor",
-    "UnitCircleArcEnergyRequest",
     "UnitCircleArcEnergyResult",
     "real_symmetric_degree_one_fejer_riesz_factor",
     "unit_circle_arc_energy",

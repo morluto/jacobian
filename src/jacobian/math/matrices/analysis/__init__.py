@@ -10,11 +10,9 @@ from jacobian.math.matrices.analysis.operations import (
     compute_inertia,
     verify_inertia,
 )
-from jacobian.math.matrices.values import RationalMatrix
 
 __all__ = [
     "InertiaResult",
-    "RationalMatrix",
     "RationalSpectrumMultiplicityClaim",
     "check_farkas_certificate",
     "check_rational_spectrum_claim",

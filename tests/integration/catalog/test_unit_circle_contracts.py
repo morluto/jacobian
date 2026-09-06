@@ -8,10 +8,10 @@ from jacobian.dispatch import invoke_operation
 from jacobian.math.polynomials.unit_circle import (
     HermitianLaurentPolynomial,
     HermitianLaurentTerm,
-    UnitCircleArcEnergyRequest,
     real_symmetric_degree_one_fejer_riesz_factor,
     unit_circle_arc_energy,
 )
+from jacobian.math.polynomials.unit_circle._models import UnitCircleArcEnergyRequest
 from jacobian.math.polynomials.unit_circle._tools import TOOLS
 from jacobian.math.polynomials.values import (
     RationalPolynomial,

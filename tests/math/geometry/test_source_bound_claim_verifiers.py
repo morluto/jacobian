@@ -78,9 +78,7 @@ def test_distance_graph_retain_target_and_source() -> None:
     assert verify_distance_graph(decoded)
 
     forged_target = DistanceGraphResult.model_validate_json(
-        json.dumps(
-            _forged_json(result, ("target_squared_distance", "num"), "-1")
-        ),
+        json.dumps(_forged_json(result, ("target_squared_distance", "num"), "-1")),
         strict=True,
     )
     assert not verify_distance_graph(forged_target)

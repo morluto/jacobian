@@ -45,6 +45,7 @@ def verify_affine_curve_check(claim: AffineCurveResult) -> bool:
         claim.degree,
     )
 
+
 def compute_projective_closure(
     request: ProjectiveClosureRequest,
 ) -> ProjectiveClosureResult:

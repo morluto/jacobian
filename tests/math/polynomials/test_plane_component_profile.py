@@ -345,9 +345,10 @@ def test_quartic_intersection_retains_degree_sixteen_representatives() -> None:
 def test_empty_and_whole_plane_degeneracies() -> None:
     empty_source = _set((), ())
     empty = _computed(empty_source)
-    assert verify_plane_component_profile(
-        compute_plane_component_profile(empty_source)
-    ) is True
+    assert (
+        verify_plane_component_profile(compute_plane_component_profile(empty_source))
+        is True
+    )
     whole = _computed(_set((), ((),)))
 
     assert empty.components == ()

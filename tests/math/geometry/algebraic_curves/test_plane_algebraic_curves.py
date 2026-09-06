@@ -628,7 +628,10 @@ def test_projective_closure_circle_is_canonical_polynomial() -> None:
     assert verify_projective_closure(result) is True
     forged = result.model_dump(mode="json")
     forged["polynomial"]["polynomial"]["terms"][0]["exponents"] = [1, 1, 0]
-    assert verify_projective_closure(ProjectiveClosureResult.model_validate(forged)) is False
+    assert (
+        verify_projective_closure(ProjectiveClosureResult.model_validate(forged))
+        is False
+    )
     forged_axis = result.model_dump(mode="json")
     forged_axis["polynomial"]["variables"] = ["y", "x", "z"]
     axis_claim = ProjectiveClosureResult.model_validate(forged_axis)

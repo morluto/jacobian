@@ -18,7 +18,6 @@ from jacobian.math.graphs.electrical_networks._models import (
     ConductanceNetwork,
     EffectiveResistanceRequest,
     EffectiveResistanceResult,
-    LaplacianEntry,
     LaplacianNetwork,
     LaplacianRequest,
     LaplacianResult,
@@ -26,6 +25,7 @@ from jacobian.math.graphs.electrical_networks._models import (
     NodePotentialResult,
     NodePotentialValue,
 )
+from jacobian.math.matrices.values import rational_matrix_from_fractions
 
 
 def _domain_error(location: tuple[str | int, ...], code: str, message: str) -> None:
@@ -201,6 +201,7 @@ def compute_effective_resistance(
         request.terminal_b,
     )
     return EffectiveResistanceResult(
+        network=network,
         effective_resistance=CanonicalRational.from_fraction(value),
         terminal_a=request.terminal_a,
         terminal_b=request.terminal_b,
@@ -227,6 +228,7 @@ def compute_node_potentials(request: NodePotentialRequest) -> NodePotentialResul
         for i in range(network.vertex_count)
     )
     return NodePotentialResult(
+        network=network,
         source=request.source,
         sink=request.sink,
         potentials=values,
@@ -237,19 +239,9 @@ def compute_laplacian(request: LaplacianRequest) -> LaplacianResult:
     network = request.network
     _admit_network(network)
     matrix = native.laplacian_matrix(network.vertex_count, _edge_triples(network))
-    entries: list[LaplacianEntry] = []
-    for row in range(network.vertex_count):
-        for col in range(network.vertex_count):
-            entries.append(
-                LaplacianEntry(
-                    row=row,
-                    col=col,
-                    value=CanonicalRational.from_fraction(matrix[row][col]),
-                )
-            )
     return LaplacianResult(
-        vertex_count=network.vertex_count,
-        entries=tuple(entries),
+        network=network,
+        matrix=rational_matrix_from_fractions(matrix),
     )
 
 

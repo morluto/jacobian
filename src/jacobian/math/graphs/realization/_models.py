@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -79,12 +79,28 @@ class GraphicalityCheckRequest(StrictModel):
     sequence: DegreeSequence
 
 
+class GraphicalityCertificate(StrictModel):
+    """Typed evidence for one branch of the Erdos-Gallai criterion."""
+
+    kind: Literal[
+        "ERDOS_GALLAI",
+        "ODD_SUM",
+        "DEGREE_BOUND",
+        "ERDOS_GALLAI_VIOLATION",
+    ]
+    degree: int | None = Field(default=None, ge=0)
+    vertex_count: int | None = Field(default=None, ge=1)
+    k: int | None = Field(default=None, ge=1)
+    left: int | None = Field(default=None, ge=0)
+    right: int | None = Field(default=None, ge=0)
+
+
 class GraphicalityCheckResult(StrictModel):
     """A degree sequence with a claimed graphicality certificate."""
 
     sequence: DegreeSequence
     is_graphical: bool
-    certificate: str = ""
+    certificate: GraphicalityCertificate
 
 
 # ---------------------------------------------------------------------------
@@ -122,6 +138,7 @@ __all__ = [
     "DegreeSequenceResult",
     "GraphRealizationRequest",
     "GraphRealizationResult",
+    "GraphicalityCertificate",
     "GraphicalityCheckRequest",
     "GraphicalityCheckResult",
     "RealizationCheckRequest",

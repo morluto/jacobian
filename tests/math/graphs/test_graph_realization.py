@@ -216,23 +216,23 @@ class TestGraphicalityCheck:
     def test_graphical_returns_erdos_gallai_certificate(self) -> None:
         result = _graphicality_check([1, 2, 2, 1])
         assert result.is_graphical is True
-        assert result.certificate == "ERDOS-GALLAI"
+        assert result.certificate.kind == "ERDOS_GALLAI"
 
     def test_odd_sum_returns_certificate(self) -> None:
         result = _graphicality_check([3, 3, 3])
         assert result.is_graphical is False
-        assert "odd-sum" in result.certificate
+        assert result.certificate.kind == "ODD_SUM"
 
     def test_degree_too_large_returns_certificate(self) -> None:
         result = _graphicality_check([6, 1, 1, 1, 1])
         assert result.is_graphical is False
-        assert "exceeds" in result.certificate
+        assert result.certificate.kind == "DEGREE_BOUND"
 
     def test_erdos_gallai_violation_returns_certificate(self) -> None:
         """[3, 3, 3, 1] has even sum but violates an inequality."""
         result = _graphicality_check([3, 3, 3, 1])
         assert result.is_graphical is False
-        assert "erdos-gallai violation" in result.certificate
+        assert result.certificate.kind == "ERDOS_GALLAI_VIOLATION"
 
     def test_certificate_agrees_with_is_graphical(self) -> None:
         """The check must agree with the standalone is_graphical operation."""

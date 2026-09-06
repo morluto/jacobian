@@ -12,14 +12,22 @@ from jacobian.math.graphs.electrical_networks._models import (
     ConductanceEdge,
     ConductanceNetwork,
     EffectiveResistanceRequest,
+    EffectiveResistanceResult,
     LaplacianNetwork,
     LaplacianRequest,
+    LaplacianResult,
     NodePotentialRequest,
+    NodePotentialResult,
 )
 from jacobian.math.graphs.electrical_networks._tools import (
     compute_effective_resistance,
     compute_laplacian,
     compute_node_potentials,
+)
+from jacobian.math.graphs.electrical_networks.operations import (
+    verify_effective_resistance,
+    verify_laplacian,
+    verify_node_potentials,
 )
 
 C = CanonicalRational
@@ -230,10 +238,12 @@ def test_laplacian_single_edge() -> None:
     net = _laplacian_net(2, _edge(0, 1, "1", "1"))
     req = LaplacianRequest(network=net)
     result = compute_laplacian(req)
-    assert result.vertex_count == 2
-    matrix: dict[tuple[int, int], Fraction] = {}
-    for entry in result.entries:
-        matrix[(entry.row, entry.col)] = entry.value.as_fraction()
+    assert result.matrix.row_count == 2
+    matrix = {
+        (row, col): value.as_fraction()
+        for row, values in enumerate(result.matrix.entries)
+        for col, value in enumerate(values)
+    }
     assert matrix[(0, 0)] == Fraction(1)
     assert matrix[(1, 1)] == Fraction(1)
     assert matrix[(0, 1)] == Fraction(-1)
@@ -249,7 +259,11 @@ def test_laplacian_triangle_diagonal_sums_conductances() -> None:
     )
     req = LaplacianRequest(network=net)
     result = compute_laplacian(req)
-    matrix = {(e.row, e.col): e.value.as_fraction() for e in result.entries}
+    matrix = {
+        (row, col): value.as_fraction()
+        for row, values in enumerate(result.matrix.entries)
+        for col, value in enumerate(values)
+    }
     assert matrix[(0, 0)] == Fraction(3)  # 1 + 2
     assert matrix[(1, 1)] == Fraction(2)  # 1 + 1
     assert matrix[(2, 2)] == Fraction(3)  # 1 + 2
@@ -271,7 +285,11 @@ def test_laplacian_rows_sum_to_zero() -> None:
     )
     req = LaplacianRequest(network=net)
     result = compute_laplacian(req)
-    matrix = {(e.row, e.col): e.value.as_fraction() for e in result.entries}
+    matrix = {
+        (row, col): value.as_fraction()
+        for row, values in enumerate(result.matrix.entries)
+        for col, value in enumerate(values)
+    }
     for row in range(4):
         assert sum(matrix[(row, col)] for col in range(4)) == Fraction(0)
 
@@ -280,8 +298,9 @@ def test_laplacian_accepts_disconnected_network() -> None:
     """The Laplacian is well-defined without connectivity."""
     net = _laplacian_net(4, _edge(0, 1, "1", "1"), _edge(2, 3, "1", "1"))
     result = compute_laplacian(LaplacianRequest(network=net))
-    assert result.vertex_count == 4
-    assert len(result.entries) == 16
+    assert result.matrix.row_count == 4
+    assert len(result.matrix.entries) == 4
+    assert len(result.matrix.entries[0]) == 4
 
 
 # ------------------------------------------------------------------ contract validation
@@ -387,3 +406,39 @@ def test_contract_accepts_boundary_conductance() -> None:
     req = EffectiveResistanceRequest(network=net, terminal_a=0, terminal_b=1)
     result = compute_effective_resistance(req)
     assert result.effective_resistance.as_fraction() == Fraction(1, int(numerator))
+
+
+def test_serialized_effective_resistance_claim_is_source_bound() -> None:
+    net = _net(2, _edge(0, 1, "1", "1"))
+    result = compute_effective_resistance(
+        EffectiveResistanceRequest(network=net, terminal_a=0, terminal_b=1)
+    )
+    restored = EffectiveResistanceResult.model_validate_json(result.model_dump_json())
+    assert verify_effective_resistance(restored)
+    forged = restored.model_dump(mode="json")
+    forged["network"]["edges"][0]["conductance"] = {"num": "2", "den": "1"}
+    assert not verify_effective_resistance(
+        EffectiveResistanceResult.model_validate(forged)
+    )
+
+
+def test_serialized_node_potential_claim_is_equation_checked() -> None:
+    net = _net(2, _edge(0, 1, "1", "1"))
+    result = compute_node_potentials(
+        NodePotentialRequest(network=net, source=0, sink=1)
+    )
+    restored = NodePotentialResult.model_validate_json(result.model_dump_json())
+    assert verify_node_potentials(restored)
+    forged = restored.model_dump(mode="json")
+    forged["potentials"][0]["potential"] = {"num": "0", "den": "1"}
+    assert not verify_node_potentials(NodePotentialResult.model_validate(forged))
+
+
+def test_serialized_laplacian_claim_requires_complete_matrix() -> None:
+    net = _laplacian_net(2, _edge(0, 1, "1", "1"))
+    result = compute_laplacian(LaplacianRequest(network=net))
+    restored = LaplacianResult.model_validate_json(result.model_dump_json())
+    assert verify_laplacian(restored)
+    forged = restored.model_dump(mode="json")
+    forged["matrix"]["entries"][0][0] = {"num": "0", "den": "1"}
+    assert not verify_laplacian(LaplacianResult.model_validate(forged))

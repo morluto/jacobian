@@ -18,9 +18,13 @@ from jacobian.math.number_theory.counting.operations import (
 
 def compute_floor_sum(request: FloorSumRequest) -> FloorSumResult:
     return FloorSumResult(
+        n=request.n,
+        m=request.m,
+        a=request.a,
+        b=request.b,
         value=format_canonical_integer(
             floor_sum(request.n, request.m, request.a, request.b)
-        )
+        ),
     )
 
 
@@ -37,7 +41,17 @@ def compute_congruence_box_count(
         c=request.c,
         modulus=request.modulus,
     )
-    return CongruenceBoxCountResult(count=count, modulus=request.modulus)
+    return CongruenceBoxCountResult(
+        x_lo=request.x_lo,
+        x_hi=request.x_hi,
+        y_lo=request.y_lo,
+        y_hi=request.y_hi,
+        u=request.u,
+        v=request.v,
+        c=request.c,
+        count=count,
+        modulus=request.modulus,
+    )
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (

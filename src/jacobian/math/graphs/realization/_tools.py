@@ -6,6 +6,8 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.realization._models import (
     DegreeSequenceRequest,
     DegreeSequenceResult,
+    GraphicalityCheckRequest,
+    GraphicalityCheckResult,
     GraphRealizationRequest,
     GraphRealizationResult,
     RealizationCheckRequest,
@@ -14,6 +16,7 @@ from jacobian.math.graphs.realization._models import (
 from jacobian.math.graphs.realization.operations import (
     degree_sequence_profile,
     graph_realization,
+    graphicality_check,
     realization_check,
 )
 
@@ -24,6 +27,12 @@ def _run_degree_sequence(request: DegreeSequenceRequest) -> DegreeSequenceResult
 
 def _run_graph_realization(request: GraphRealizationRequest) -> GraphRealizationResult:
     return graph_realization(request.sequence)
+
+
+def _run_graphicality_check(
+    request: GraphicalityCheckRequest,
+) -> GraphicalityCheckResult:
+    return graphicality_check(request.sequence)
 
 
 def _run_realization_check(request: RealizationCheckRequest) -> RealizationCheckResult:
@@ -44,6 +53,23 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="graphical_path",
                 description="Check the degree sequence of a four-vertex path.",
                 input={"sequence": {"degrees": [1, 2, 2, 1]}},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="graph.realization.graphicality_check.compute",
+        title="Explain graphicality with a typed Erdos-Gallai certificate",
+        description="Determine whether a degree sequence is graphical and return a typed "
+        "certificate identifying either the criterion or a failing condition.",
+        request_type=GraphicalityCheckRequest,
+        result_type=GraphicalityCheckResult,
+        run=_run_graphicality_check,
+        tags=("graph", "realization", "graphicality", "certificate", "exact"),
+        examples=(
+            OperationExample(
+                name="non_graphical_odd_sum",
+                description="Explain why [3, 3, 3] is not graphical.",
+                input={"sequence": {"degrees": [3, 3, 3]}},
             ),
         ),
     ),

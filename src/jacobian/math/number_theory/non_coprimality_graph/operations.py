@@ -5,8 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from math import gcd
 
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.combinatorics.finite_structures.sets._models import FiniteIntegerSet
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.number_theory.non_coprimality_graph._models import (
     MAX_INTEGER_DIGITS,
@@ -14,7 +15,7 @@ from jacobian.math.number_theory.non_coprimality_graph._models import (
     NonCoprimalityGraphResult,
 )
 
-__all__ = ["construct_non_coprimality_graph"]
+__all__ = ["construct_non_coprimality_graph", "verify_non_coprimality_graph"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,15 +28,21 @@ class NonCoprimalityGraphAdmission:
 
 
 def _admit_non_coprimality_graph(
-    integers: tuple[int, ...],
+    integers: FiniteIntegerSet | tuple[int, ...],
 ) -> NonCoprimalityGraphAdmission:
-    if not isinstance(integers, tuple):
+    if isinstance(integers, FiniteIntegerSet):
+        integer_values = tuple(
+            parse_canonical_integer(value) for value in integers.elements
+        )
+    else:
+        integer_values = integers
+    if not isinstance(integer_values, tuple):
         raise OperationDomainValidationError(
             location=("integers",),
             code="non_coprimality.integer_type",
             message="integers must be a tuple of integers",
         )
-    if not 1 <= len(integers) <= MAX_INTEGERS:
+    if not 1 <= len(integer_values) <= MAX_INTEGERS:
         raise OperationDomainValidationError(
             location=("integers",),
             code="non_coprimality.size",
@@ -44,7 +51,7 @@ def _admit_non_coprimality_graph(
 
     source: list[str] = []
     values: list[int] = []
-    for index, value in enumerate(integers):
+    for index, value in enumerate(integer_values):
         if type(value) is not int:
             raise OperationDomainValidationError(
                 location=("integers", index),
@@ -87,7 +94,8 @@ def _admit_non_coprimality_graph(
         )
 
     sorted_pairs = sorted(zip(source, values, strict=True), key=lambda pair: pair[1])
-    vertices = tuple(label for label, _ in sorted_pairs)
+    # The retained source owns the graph's vertex axis; preserve its order.
+    vertices = tuple(source)
     edges: list[tuple[str, str]] = []
     for left_index, (left_label, left_value) in enumerate(sorted_pairs):
         for right_label, right_value in sorted_pairs[left_index + 1 :]:
@@ -100,7 +108,7 @@ def _admit_non_coprimality_graph(
 
 
 def construct_non_coprimality_graph(
-    integers: tuple[int, ...],
+    integers: FiniteIntegerSet | tuple[int, ...],
 ) -> NonCoprimalityGraphResult:
     """Construct the non-coprimality graph of a set of positive integers.
 
@@ -113,6 +121,28 @@ def construct_non_coprimality_graph(
         edges=admission.edges,
     )
     return NonCoprimalityGraphResult.model_construct(
-        integers=admission.source,
+        integers=FiniteIntegerSet(elements=admission.source),
         graph=graph,
     )
+
+
+def verify_non_coprimality_graph(claim: NonCoprimalityGraphResult) -> bool:
+    """Check the retained integer source and exact gcd edge relation."""
+    source = claim.integers
+    if not 1 <= len(source.elements) <= MAX_INTEGERS:
+        return False
+    try:
+        values = tuple(parse_canonical_integer(value) for value in source.elements)
+    except (TypeError, ValueError):
+        return False
+    if any(value <= 0 for value in values) or len(set(values)) != len(values):
+        return False
+    if claim.graph.vertices != source.elements:
+        return False
+    expected = {
+        (min(str(left), str(right)), max(str(left), str(right)))
+        for index, left in enumerate(values)
+        for right in values[index + 1 :]
+        if gcd(left, right) > 1
+    }
+    return set(claim.graph.edges) == expected

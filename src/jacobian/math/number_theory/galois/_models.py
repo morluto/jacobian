@@ -207,25 +207,21 @@ def _require_factor_residues(result: GaloisFactorResult) -> None:
 
 class FrobeniusCycleResult(StrictModel):
     cycle_type: tuple[PositiveFactorDegree, ...]
-    degree: int = Field(ge=1, le=MAX_FACTOR_DEGREE, strict=True)
-    is_irreducible: bool
+
+    @property
+    def degree(self) -> int:
+        return sum(self.cycle_type)
+
+    @property
+    def is_irreducible(self) -> bool:
+        return self.cycle_type == (self.degree,)
 
     @model_validator(mode="after")
     def require_canonical_partition(self) -> Self:
-        if sum(self.cycle_type) != self.degree:
-            raise _validation_error(
-                "cycle_type_degree_mismatch",
-                "cycle type must partition the polynomial degree",
-            )
         if self.cycle_type != tuple(sorted(self.cycle_type, reverse=True)):
             raise _validation_error(
                 "cycle_type_not_canonical",
                 "cycle type must be sorted in descending order",
-            )
-        if self.is_irreducible != (self.cycle_type == (self.degree,)):
-            raise _validation_error(
-                "cycle_type_irreducibility_mismatch",
-                "irreducibility must agree with the cycle type",
             )
         return self
 

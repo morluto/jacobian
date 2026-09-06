@@ -122,12 +122,7 @@ def frobenius_cycle(
         location=("field_order", "factorization_degrees"),
     )
     cycle_type = tuple(sorted(factorization_degrees, reverse=True))
-    is_irred = cycle_type == (polynomial_degree,)
-    return FrobeniusCycleResult(
-        cycle_type=cycle_type,
-        degree=polynomial_degree,
-        is_irreducible=is_irred,
-    )
+    return FrobeniusCycleResult(cycle_type=cycle_type)
 
 
 def _galois_group_from_coeffs(coeffs: tuple[int, ...]) -> PermutationGroup:

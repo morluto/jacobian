@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Self
+from typing import Self
 
-from pydantic import BeforeValidator, Field, PlainSerializer, model_validator
+from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, NativeInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 
 MAX_HYPERPLANES = 16
 MAX_DIM = 8
@@ -18,23 +17,6 @@ MAX_GENERIC_FORMULA_INDEX = 10**15
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"hyperplane_arrangement.{reason}", message)
-
-
-def _parse_native_integer(value: Any) -> int:
-    if isinstance(value, bool):
-        raise TypeError("integer values must not be booleans")
-    if isinstance(value, int):
-        return value
-    if isinstance(value, str):
-        return parse_canonical_integer(value)
-    raise TypeError("integer values must be Python integers or canonical strings")
-
-
-NativeInteger = Annotated[
-    int,
-    BeforeValidator(_parse_native_integer),
-    PlainSerializer(format_canonical_integer, return_type=str, when_used="json"),
-]
 
 
 class RationalHyperplane(StrictModel):

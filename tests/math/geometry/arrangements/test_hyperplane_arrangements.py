@@ -462,3 +462,12 @@ def test_rational_hyperplane_accepts_negative_rationals() -> None:
     hp = RationalHyperplane(coefficients=(_r(-1, 2), _r(3, 4)), constant=_r(5, 6))
     assert hp.coefficients == (_r(-1, 2), _r(3, 4))
     assert hp.constant == _r(5, 6)
+
+
+def test_result_integer_type_errors_are_structured() -> None:
+    with pytest.raises(ValidationError, match="integer values must not be booleans"):
+        ChamberCountResult(
+            ambient_dimension=2,
+            hyperplane_count=3,
+            chamber_count=True,
+        )

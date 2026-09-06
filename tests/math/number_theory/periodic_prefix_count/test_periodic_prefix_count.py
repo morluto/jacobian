@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory._periodic_models import (
@@ -106,6 +107,30 @@ def test_scalar_cutoff_can_exceed_period_digit_bound() -> None:
     source = PeriodicCongruenceUnionSource(subsets=(), complement=False)
     result = compute_periodic_union_prefix_count(source, 10**256)
     assert result.count == 0
+
+
+def test_scalar_cutoff_beyond_python_decimal_conversion_limit() -> None:
+    source = PeriodicCongruenceUnionSource(subsets=(), complement=False)
+    cutoff = 10**4999
+    result = compute_periodic_union_prefix_count(source, cutoff)
+    restored = PeriodicUnionPrefixCountResult.model_validate_json(
+        result.model_dump_json()
+    )
+    assert restored.cutoff == cutoff
+    assert restored.count == 0
+
+
+def test_result_integer_type_errors_are_structured() -> None:
+    with pytest.raises(ValidationError, match="integer must not be boolean"):
+        PeriodicUnionPrefixCountResult.model_validate(
+            {
+                "source": {"subsets": [], "complement": False},
+                "cutoff": True,
+                "common_period": 1,
+                "occupied_count": 0,
+                "count": 0,
+            }
+        )
 
 
 def test_serialized_result_retains_source_and_rejects_forged_count() -> None:

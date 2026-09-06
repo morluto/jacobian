@@ -3,6 +3,7 @@
 from typing import Annotated, Any
 
 from pydantic import BeforeValidator, Field, PlainSerializer
+from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.canonical import (
@@ -29,15 +30,23 @@ PeriodicPrefixCutoff = Annotated[
 
 def _parse_native_integer(value: Any, *, max_digits: int) -> int:
     if isinstance(value, bool):
-        raise TypeError("integer must not be boolean")
+        raise PydanticCustomError(
+            "canonical_integer.type", "integer must not be boolean"
+        )
     if isinstance(value, int):
         parsed = value
     elif isinstance(value, str):
         parsed = parse_canonical_integer(value)
     else:
-        raise TypeError("integer must be a Python int or canonical decimal string")
-    if parsed < 0 or len(str(parsed)) > max_digits:
-        raise ValueError(f"integer must be nonnegative and at most {max_digits} digits")
+        raise PydanticCustomError(
+            "canonical_integer.type",
+            "integer must be a Python int or canonical decimal string",
+        )
+    if parsed < 0 or len(format_canonical_integer(parsed).lstrip("-")) > max_digits:
+        raise PydanticCustomError(
+            "canonical_integer.bounds",
+            f"integer must be nonnegative and at most {max_digits} digits",
+        )
     return parsed
 
 

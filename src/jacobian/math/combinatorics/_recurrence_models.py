@@ -6,7 +6,7 @@ import builtins
 from itertools import pairwise
 from typing import Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
@@ -15,6 +15,7 @@ from jacobian._exact import (
     require_bounded_rational,
 )
 from jacobian._models import StrictModel
+from jacobian.math.polynomials.series._models import TruncatedSeries
 
 MAX_LINEAR_RECURRENCE_ORDER = 16
 MAX_LINEAR_RECURRENCE_INDEX = 512
@@ -325,68 +326,101 @@ class RationalGeneratingFunctionCoefficientsRequest(StrictModel):
 
 
 class RationalGeneratingFunctionCoefficientsResult(StrictModel):
+    """A rational-function presentation bound to its canonical series value.
+
+    The source presentation is retained so a consumer can check the defining
+    congruence.  Parsing this value only checks its shape and scalar bounds;
+    the mathematical relation belongs to
+    :func:`verify_rational_generating_function_coefficients`.
+    """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "numerator": [{"num": "1", "den": "1"}],
+                    "denominator": [
+                        {"num": "1", "den": "1"},
+                        {"num": "-1", "den": "1"},
+                    ],
+                    "coefficient_convention": "ASCENDING_POWERS_OF_X",
+                    "expansion_point": "0",
+                    "truncation_order": 3,
+                    "series": {
+                        "variable": "x",
+                        "truncation_order": 3,
+                        "coefficients": [
+                            {"num": "1", "den": "1"},
+                            {"num": "1", "den": "1"},
+                            {"num": "1", "den": "1"},
+                        ],
+                    },
+                }
+            ]
+        }
+    )
+
+    numerator: tuple[CanonicalRational, ...] = Field(
+        min_length=1,
+        max_length=MAX_RATIONAL_GENERATING_FUNCTION_DEGREE + 1,
+    )
+    denominator: tuple[CanonicalRational, ...] = Field(
+        min_length=1,
+        max_length=MAX_RATIONAL_GENERATING_FUNCTION_DEGREE + 1,
+    )
     coefficient_convention: Literal["ASCENDING_POWERS_OF_X"]
     expansion_point: Literal["0"]
     truncation_order: StrictInt = Field(
         ge=1,
         le=MAX_RATIONAL_SERIES_TRUNCATION_ORDER,
     )
-    coefficients: tuple[CanonicalRational, ...] = Field(
-        min_length=1,
-        max_length=MAX_RATIONAL_SERIES_TRUNCATION_ORDER,
-    )
-    residual_congruence: Literal[
-        "DENOMINATOR_TIMES_SERIES_MINUS_NUMERATOR_IS_ZERO_MOD_X_TO_ORDER"
-    ]
-    residual_coefficients: tuple[CanonicalRational, ...] = Field(
-        min_length=1,
-        max_length=MAX_RATIONAL_SERIES_TRUNCATION_ORDER,
-    )
+    series: TruncatedSeries
 
     @classmethod
     def _from_kernel(
         cls,
         *,
+        numerator: tuple[CanonicalRational, ...],
+        denominator: tuple[CanonicalRational, ...],
         coefficient_convention: Literal["ASCENDING_POWERS_OF_X"],
         expansion_point: Literal["0"],
         truncation_order: int,
         coefficients: tuple[CanonicalRational, ...],
-        residual_congruence: Literal[
-            "DENOMINATOR_TIMES_SERIES_MINUS_NUMERATOR_IS_ZERO_MOD_X_TO_ORDER"
-        ],
-        residual_coefficients: tuple[CanonicalRational, ...],
     ) -> Self:
         return cls.model_construct(
+            numerator=numerator,
+            denominator=denominator,
             coefficient_convention=coefficient_convention,
             expansion_point=expansion_point,
             truncation_order=truncation_order,
-            coefficients=coefficients,
-            residual_congruence=residual_congruence,
-            residual_coefficients=residual_coefficients,
+            series=TruncatedSeries(
+                variable="x",
+                truncation_order=truncation_order,
+                coefficients=coefficients,
+            ),
         )
 
     @model_validator(mode="after")
     def require_exact_finite_truncation(self) -> Self:
-        if (
-            len(self.coefficients) != self.truncation_order
-            or len(self.residual_coefficients) != self.truncation_order
-        ):
+        _require_canonical_polynomial(self.numerator, label="numerator coefficient")
+        _require_canonical_polynomial(self.denominator, label="denominator coefficient")
+        if self.series.variable != "x":
             raise _recurrence_validation_error(
-                "coefficient and residual vectors must equal truncation_order"
+                "generating-function series variable must be x"
             )
-        for label, values in (
-            ("series coefficient", self.coefficients),
-            ("series residual", self.residual_coefficients),
-        ):
-            for value in values:
-                _require_bounded_rational(
-                    value,
-                    max_digits=MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
-                    label=label,
-                )
-        if any(value.as_fraction() != 0 for value in self.residual_coefficients):
+        if self.series.truncation_order != self.truncation_order:
             raise _recurrence_validation_error(
-                "residual coefficients must vanish through the truncation"
+                "series truncation order must equal truncation_order"
+            )
+        if len(self.series.coefficients) != self.truncation_order:
+            raise _recurrence_validation_error(
+                "series coefficients must equal truncation_order"
+            )
+        for value in self.series.coefficients:
+            _require_bounded_rational(
+                value,
+                max_digits=MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
+                label="series coefficient",
             )
         return self
 

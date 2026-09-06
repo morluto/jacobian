@@ -32,6 +32,7 @@ from jacobian.math.combinatorics.operations import (
     rational_generating_function_coefficients,
     stirling_first,
     stirling_second,
+    verify_rational_generating_function_coefficients,
 )
 from jacobian.math.combinatorics.recurrence_tables import (
     IndexedRecurrenceResidual,
@@ -72,4 +73,5 @@ __all__ = [
     "stirling_first",
     "stirling_second",
     "verify_generalized_exact_cover",
+    "verify_rational_generating_function_coefficients",
 ]

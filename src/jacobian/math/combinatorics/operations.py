@@ -27,15 +27,19 @@ from jacobian.math.combinatorics._recurrence_admission import (
     _admit_series,
 )
 from jacobian.math.combinatorics._recurrence_models import (
+    MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
     MAX_RATIONAL_SERIES_TRUNCATION_ORDER,
     IndexedRationalValue,
     LinearRecurrenceEvaluationResult,
     PolynomialCoefficientRecurrenceEvaluationResult,
     RationalGeneratingFunctionCoefficientsResult,
+    _require_bounded_rational,
+    _require_canonical_polynomial,
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
 )
+from jacobian.math.polynomials.series._models import TruncatedSeries
 
 
 def _nonnegative(value: int, *, name: str) -> int:
@@ -714,17 +718,80 @@ def rational_generating_function_coefficients(
             wire_cache[value] = cached
         return cached
 
-    zero = wire_coefficient(Fraction())
     return RationalGeneratingFunctionCoefficientsResult._from_kernel(
+        numerator=numerator,
+        denominator=denominator,
         coefficient_convention=coefficient_convention,
         expansion_point=expansion_point,
         truncation_order=truncation_order,
         coefficients=tuple(wire_coefficient(item) for item in coefficients),
-        residual_congruence=(
-            "DENOMINATOR_TIMES_SERIES_MINUS_NUMERATOR_IS_ZERO_MOD_X_TO_ORDER"
-        ),
-        residual_coefficients=(zero,) * len(coefficients),
     )
+
+
+def verify_rational_generating_function_coefficients(
+    claim: RationalGeneratingFunctionCoefficientsResult,
+) -> bool:
+    """Check the retained rational presentation against its series.
+
+    The verifier has the same finite source, order, and coefficient envelopes
+    as the operation.  It performs only the defining coefficient congruence;
+    result decoding remains structural and does not replay this check.
+    """
+
+    try:
+        if not isinstance(claim, RationalGeneratingFunctionCoefficientsResult):
+            return False
+        order = claim.truncation_order
+        series = claim.series
+        if (
+            type(order) is not int
+            or not 1 <= order <= MAX_RATIONAL_SERIES_TRUNCATION_ORDER
+            or claim.coefficient_convention != "ASCENDING_POWERS_OF_X"
+            or claim.expansion_point != "0"
+            or not isinstance(series, TruncatedSeries)
+            or series.variable != "x"
+            or type(series.truncation_order) is not int
+            or series.truncation_order != order
+            or not isinstance(series.coefficients, tuple)
+            or len(series.coefficients) != order
+        ):
+            return False
+        if not isinstance(claim.numerator, tuple) or not isinstance(
+            claim.denominator, tuple
+        ):
+            return False
+        if not 1 <= len(claim.numerator) <= 33 or not 1 <= len(claim.denominator) <= 33:
+            return False
+        if not all(
+            isinstance(value, CanonicalRational)
+            for value in (*claim.numerator, *claim.denominator, *series.coefficients)
+        ):
+            return False
+        _require_canonical_polynomial(claim.numerator, label="numerator coefficient")
+        _require_canonical_polynomial(
+            claim.denominator, label="denominator coefficient"
+        )
+        for value in series.coefficients:
+            _require_bounded_rational(
+                value,
+                max_digits=MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
+                label="series coefficient",
+            )
+        denominator = tuple(value.as_fraction() for value in claim.denominator)
+        if denominator[0] == 0:
+            return False
+        numerator = tuple(value.as_fraction() for value in claim.numerator)
+        coefficients = tuple(value.as_fraction() for value in series.coefficients)
+        return all(
+            sum(
+                denominator[offset] * coefficients[degree - offset]
+                for offset in range(min(degree, len(denominator) - 1) + 1)
+            )
+            == (numerator[degree] if degree < len(numerator) else Fraction())
+            for degree in range(order)
+        )
+    except (AttributeError, IndexError, TypeError, ValueError):
+        return False
 
 
 __all__ = [
@@ -750,4 +817,5 @@ __all__ = [
     "rational_generating_function_coefficients",
     "stirling_first",
     "stirling_second",
+    "verify_rational_generating_function_coefficients",
 ]

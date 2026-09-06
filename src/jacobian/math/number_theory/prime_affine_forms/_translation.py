@@ -5,6 +5,9 @@ from __future__ import annotations
 from jacobian._models import StrictModel
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory.affine_forms.values import MAX_AFFINE_COMPONENT_DIGITS
+from jacobian.math.number_theory.prime_affine_forms._admissibility import (
+    _admit_primitive_tuple,
+)
 from jacobian.math.number_theory.prime_affine_forms._interval import (
     IntervalEndpointInteger,
     require_bounded_affine_endpoints,
@@ -38,6 +41,7 @@ def parse_translation_shift(source: PrimeAffineTuple, shift: str) -> int:
 
 
 def _admit_translation(source: PrimeAffineTuple, shift: int) -> None:
+    _admit_primitive_tuple(source)
     shift_text = str(shift)
     require_bounded_affine_endpoints(source, shift_text, label="translation")
     aggregate_digits = 0

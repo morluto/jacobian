@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from math import gcd
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.geometry.affine_tori._bounds import (
     begin_affine_torus_deadline,
     build_affine_torus_plan,
@@ -30,6 +31,20 @@ from jacobian.math.geometry.affine_tori.values import (
     RationalTorusPoint,
 )
 from jacobian.math.matrices.values import IntegerMatrix
+
+
+def verify_integral_torus_character(character: IntegralTorusCharacter) -> bool:
+    """Verify the primitive-domain claim of a source-bound character."""
+    try:
+        values = tuple(parse_canonical_integer(value) for value in character.coefficients)
+        if len(values) != character.torus.dimension:
+            return False
+        divisor = 0
+        for value in values:
+            divisor = gcd(divisor, abs(value))
+        return divisor == 1
+    except (TypeError, ValueError):
+        return False
 
 
 def _integer_matrix(
@@ -103,15 +118,17 @@ def _nonempty_result(
 def _empty_result(
     source: RationalAffineTorusMap, kernel: EmptyFixedLocusKernel
 ) -> AffineTorusFixedLocusResult:
+    character = tuple(format_canonical_integer(value) for value in kernel.character)
+    candidate = IntegralTorusCharacter.model_construct(
+        torus=source.torus,
+        coefficients=character,
+    )
+    if not verify_integral_torus_character(candidate):
+        raise RuntimeError("fixed-locus kernel returned a nonprimitive character")
     return AffineTorusFixedLocusResult(
         source=source,
         outcome=EmptyAffineTorusFixedLocus(
-            obstruction=IntegralTorusCharacter(
-                torus=source.torus,
-                coefficients=tuple(
-                    format_canonical_integer(value) for value in kernel.character
-                ),
-            ),
+            obstruction=candidate,
             obstruction_pairing=CanonicalRational.from_fraction(kernel.pairing),
         ),
     )
@@ -143,4 +160,4 @@ def affine_torus_fixed_locus(
     return result
 
 
-__all__ = ["affine_torus_fixed_locus"]
+__all__ = ["affine_torus_fixed_locus", "verify_integral_torus_character"]

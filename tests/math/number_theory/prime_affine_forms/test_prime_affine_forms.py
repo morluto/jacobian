@@ -15,6 +15,7 @@ from jacobian.math.number_theory.affine_forms import IntegerAffineForm
 from jacobian.math.number_theory.prime_affine_forms import (
     PrimeAffineTuple,
     PrimitiveIntegerAffineForm,
+    verify_primitive_affine_form,
 )
 from jacobian.math.number_theory.prime_affine_forms._admissibility import (
     PrimeTupleAdmissibilityRequest,
@@ -92,23 +93,25 @@ def test_affine_tuple_is_canonical_and_closed() -> None:
     assert tuple(form.form_id for form in TWIN_PRIMES.forms) == ("n", "n_plus_2")
     assert TWIN_PRIMES.forms[1].evaluate(7) == 9
 
-    with pytest.raises(ValidationError):
-        _form("constant", 0, 1)
-    with pytest.raises(ValidationError):
-        _form("nonprimitive", 2, 2)
+    constant_source = _tuple(_form("constant", 0, 1))
+    nonprimitive_source = _tuple(_form("nonprimitive", 2, 2))
+    assert verify_primitive_affine_form(constant_source.forms[0]) is False
+    assert verify_primitive_affine_form(nonprimitive_source.forms[0]) is False
+    with pytest.raises(OperationDomainValidationError):
+        compute_local_factor(
+            PrimeTupleLocalFactorRequest(source=constant_source, prime=2)
+        )
+    with pytest.raises(OperationDomainValidationError):
+        compute_local_factor(
+            PrimeTupleLocalFactorRequest(source=nonprimitive_source, prime=2)
+        )
     with pytest.raises(ValidationError):
         _tuple(_form("same", 1, 0), _form("same", 1, 2))
     with pytest.raises(ValidationError):
         _tuple(_form("first", 1, 0), _form("second", 1, 0))
 
-    with pytest.raises(ValidationError) as exc_info:
-        _form("coded_zero", 0, 1)
-    assert (
-        exc_info.value.errors()[0]["type"] == "prime_affine_form.coefficient_required"
-    )
-    with pytest.raises(ValidationError) as exc_info:
-        _form("coded_nonprimitive", 2, 2)
-    assert exc_info.value.errors()[0]["type"] == "prime_affine_form.primitive_required"
+    assert verify_primitive_affine_form(_form("coded_zero", 0, 1)) is False
+    assert verify_primitive_affine_form(_form("coded_nonprimitive", 2, 2)) is False
 
     _form("f" * 32, 1, int("9" * 256))
     with pytest.raises(ValidationError):

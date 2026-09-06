@@ -10,6 +10,9 @@ from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.number_theory.affine_forms.values import MAX_AFFINE_COMPONENT_DIGITS
+from jacobian.math.number_theory.prime_affine_forms._admissibility import (
+    _admit_primitive_tuple,
+)
 from jacobian.math.number_theory.prime_affine_forms._kernel import (
     MAX_DETERMINISTIC_PRIME_INPUT,
 )
@@ -103,6 +106,7 @@ def _admit_interval_count(
     lower_text: str,
     upper_text: str,
 ) -> tuple[int, int, int, int]:
+    _admit_primitive_tuple(source)
     require_bounded_affine_endpoints(source, lower_text, upper_text, label="interval")
     lower, upper, interval_size = _parse_interval(lower_text, upper_text)
     value_digits = _interval_value_digit_bound(source, lower, upper)

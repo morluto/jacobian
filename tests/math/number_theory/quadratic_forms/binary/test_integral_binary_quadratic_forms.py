@@ -30,7 +30,10 @@ from jacobian.math.number_theory.quadratic_forms.binary._tools import (
     compute_reduced_classes,
     compute_representations,
 )
-from jacobian.math.number_theory.quadratic_forms.binary.operations import reduced_form
+from jacobian.math.number_theory.quadratic_forms.binary.operations import (
+    compose_classes,
+    reduced_form,
+)
 
 
 def _positive_form(
@@ -544,8 +547,10 @@ class TestProperClassComposition:
         assert result.product == _proper_class(2, 1, 3)
 
     def test_nonreduced_representative_is_not_a_proper_class_value(self) -> None:
-        with pytest.raises(ValidationError, match="canonical Gauss-reduced"):
-            ProperBinaryQuadraticFormClass(representative=_positive_form(5, 3, 1))
+        carrier = ProperBinaryQuadraticFormClass(representative=_positive_form(5, 3, 1))
+        assert carrier.representative == _positive_form(5, 3, 1)
+        with pytest.raises((OperationDomainValidationError, ValueError), match="reduced"):
+            compose_classes(carrier, carrier)
 
     def test_different_discriminants_are_rejected_before_composition(self) -> None:
         with pytest.raises(OperationDomainValidationError) as exc_info:

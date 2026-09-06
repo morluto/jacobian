@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from math import prod
+from math import gcd, prod
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
@@ -12,6 +12,7 @@ from jacobian.math.number_theory.affine_forms.values import (
 )
 from jacobian.math.number_theory.prime_affine_forms._admissibility import (
     PrimeTupleAdmissibilityResult,
+    _admit_primitive_tuple,
     compute_local_admissibility,
 )
 from jacobian.math.number_theory.prime_affine_forms._interval import (
@@ -67,10 +68,26 @@ from jacobian.math.number_theory.prime_affine_forms._translation import (
 from jacobian.math.number_theory.prime_affine_forms.values import PrimeAffineTuple
 
 
+def verify_primitive_affine_form(form: object) -> bool:
+    """Check a caller-supplied affine form's primitive-domain claim."""
+    try:
+        coefficient = parse_canonical_integer(form.coefficient)  # type: ignore[attr-defined]
+        constant = parse_canonical_integer(form.constant)  # type: ignore[attr-defined]
+        if coefficient == 0 or gcd(abs(coefficient), abs(constant)) != 1:
+            return False
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
 def local_factor(source: PrimeAffineTuple, prime: int) -> PrimeTupleLocalFactorResult:
     """Return the complete modulo-``prime`` residue partition and local factor."""
 
-    _run_admission(lambda: _admit_local_factor(source, prime))
+    def admit() -> None:
+        _admit_primitive_tuple(source)
+        _admit_local_factor(source, prime)
+
+    _run_admission(admit)
     return PrimeTupleLocalFactorResult._from_kernel(
         source=source, prime=prime, bad=local_bad_residues(source, prime)
     )
@@ -81,7 +98,11 @@ def local_factors(
 ) -> FinitePrimeTupleFactorProduct:
     """Return exact compact local factors over one finite prime set."""
 
-    _run_admission(lambda: _admit_local_factors(source, primes))
+    def admit() -> None:
+        _admit_primitive_tuple(source)
+        _admit_local_factors(source, primes)
+
+    _run_admission(admit)
     product = Fraction(1, 1)
     rows: list[PrimeTupleLocalFactorRow] = []
     first_obstruction: int | None = None
@@ -111,6 +132,7 @@ def local_factors(
 def local_admissibility(source: PrimeAffineTuple) -> PrimeTupleAdmissibilityResult:
     """Decide local admissibility by checking exactly every prime at most k."""
 
+    _run_admission(lambda: _admit_primitive_tuple(source))
     return compute_local_admissibility(source)
 
 
@@ -154,6 +176,7 @@ def interval_enumerate(
 
 
 def _admit_residue_wheel(source: PrimeAffineTuple, primes: tuple[int, ...]) -> None:
+    _admit_primitive_tuple(source)
     _require_prime_set(primes, maximum=MAX_BATCH_PRIME)
     root_cells = source.form_count * len(primes)
     root_work = 6 * root_cells
@@ -171,6 +194,7 @@ def _admit_residue_wheel(source: PrimeAffineTuple, primes: tuple[int, ...]) -> N
 
 
 def _admit_verified_wheel(wheel: PrimeTupleResidueWheel) -> None:
+    _admit_primitive_tuple(wheel.source)
     _require_prime_set(wheel.primes, maximum=MAX_BATCH_PRIME)
     expected_rows = tuple(local_summary(wheel.source, prime) for prime in wheel.primes)
     expected_modulus = wheel_modulus(wheel.primes)
@@ -356,5 +380,6 @@ __all__ = [
     "local_factors",
     "residue_wheel",
     "translate_tuple",
+    "verify_primitive_affine_form",
     "wheel_membership",
 ]

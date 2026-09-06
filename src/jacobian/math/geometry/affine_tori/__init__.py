@@ -6,7 +6,10 @@ from jacobian.math.geometry.affine_tori._models import (
     EmptyAffineTorusFixedLocus,
     NonemptyAffineTorusFixedLocus,
 )
-from jacobian.math.geometry.affine_tori.operations import affine_torus_fixed_locus
+from jacobian.math.geometry.affine_tori.operations import (
+    affine_torus_fixed_locus,
+    verify_integral_torus_character,
+)
 from jacobian.math.geometry.affine_tori.values import (
     ConnectedSubtorusParameterization,
     FiniteTorusComponentPresentation,
@@ -30,4 +33,5 @@ __all__ = [
     "RationalTorusPoint",
     "StandardRealTorus",
     "affine_torus_fixed_locus",
+    "verify_integral_torus_character",
 ]

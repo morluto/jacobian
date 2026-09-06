@@ -31,6 +31,7 @@ from jacobian.math.geometry.affine_tori import (
     RationalAffineTorusMap,
     RationalTorusPoint,
     affine_torus_fixed_locus,
+    verify_integral_torus_character,
 )
 from jacobian.math.geometry.affine_tori import _flint as affine_flint
 from jacobian.math.geometry.affine_tori._bounds import (
@@ -465,6 +466,16 @@ def test_empty_result_deserialization_does_not_replay_obstruction_theorem() -> N
     payload["outcome"]["obstruction_pairing"] = {"num": "1", "den": "2"}
 
     assert AffineTorusFixedLocusResult.model_validate(payload)
+
+
+def test_character_primitivity_is_an_explicit_claim() -> None:
+    source = _source(((1, 0), (0, 1)), (Fraction(1, 2), Fraction(0)))
+    result = affine_torus_fixed_locus(source)
+    assert isinstance(result.outcome, EmptyAffineTorusFixedLocus)
+    character = result.outcome.obstruction
+    assert verify_integral_torus_character(character)
+    forged = character.model_copy(update={"coefficients": ("2", "0")})
+    assert verify_integral_torus_character(forged) is False
 
 
 def test_nonempty_result_deserialization_does_not_replay_kernel_dimension() -> None:

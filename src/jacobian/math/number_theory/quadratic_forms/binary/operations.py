@@ -30,13 +30,26 @@ from jacobian.math.number_theory.quadratic_forms.binary._models import (
     ReducedBinaryQuadraticFormResult,
     _require_composition_budget,
     _require_evaluated_value_bound,
+    _require_positive_primitive_form,
     _require_reduced_class_search_budget,
     _require_representation_coordinate,
 )
 
 
+def _admit_form(form: PrimitivePositiveDefiniteBinaryQuadraticForm) -> None:
+    _require_positive_primitive_form((form.a, form.b, form.c))
+
+
+def _admit_reduced_class(form_class: ProperBinaryQuadraticFormClass) -> None:
+    form = form_class.representative
+    _admit_form(form)
+    if not _check_reduced(form.a, form.b, form.c):
+        raise ValueError("proper form classes require a Gauss-reduced representative")
+
+
 def evaluate(form: PrimitivePositiveDefiniteBinaryQuadraticForm, x: int, y: int) -> int:
     """Return the exact value ``Q(x,y)`` within the public coordinate envelope."""
+    _admit_form(form)
     _require_representation_coordinate(x)
     _require_representation_coordinate(y)
     return _require_evaluated_value_bound(form, x, y)
@@ -46,6 +59,7 @@ def reduced_form(
     form: PrimitivePositiveDefiniteBinaryQuadraticForm,
 ) -> PrimitivePositiveDefiniteBinaryQuadraticForm:
     """Return the canonical Gauss-reduced representative of ``form``."""
+    _admit_form(form)
     a, b, c, _p, _q, _r, _s = _reduce(form.a, form.b, form.c)
     return PrimitivePositiveDefiniteBinaryQuadraticForm(a=a, b=b, c=c)
 
@@ -57,6 +71,7 @@ def reduction(
     tuple[tuple[int, int], tuple[int, int]],
 ]:
     """Return the reduced form and its certifying unimodular matrix."""
+    _admit_form(form)
     a, b, c, p, q, r, s = _reduce(form.a, form.b, form.c)
     return PrimitivePositiveDefiniteBinaryQuadraticForm(a=a, b=b, c=c), (
         (p, q),
@@ -113,6 +128,8 @@ def proper_equivalence(
     second: PrimitivePositiveDefiniteBinaryQuadraticForm,
 ) -> ProperEquivalenceResult:
     """Decide proper equivalence and return the SL₂(Z) witness when equivalent."""
+    _admit_form(first)
+    _admit_form(second)
     if first.discriminant != second.discriminant:
         return ProperEquivalenceResult._from_kernel(
             first=first, second=second, status="NOT_PROPERLY_EQUIVALENT"
@@ -176,6 +193,8 @@ def compose_classes(
     second: ProperBinaryQuadraticFormClass,
 ) -> BinaryQuadraticFormClassCompositionResult:
     """Return the exact proper-class product with direct-composition evidence."""
+    _admit_reduced_class(first)
+    _admit_reduced_class(second)
     _require_composition_budget(first.representative, second.representative)
     direct = _compose(first.representative, second.representative)
     composed_form = PrimitivePositiveDefiniteBinaryQuadraticForm(
@@ -201,6 +220,7 @@ def representations(
     form: PrimitivePositiveDefiniteBinaryQuadraticForm, target: int
 ) -> tuple[BinaryQuadraticFormRepresentation, ...]:
     """Return every ordered signed representation of ``target`` by ``form``."""
+    _admit_form(form)
     return _representations(form, target)
 
 
@@ -223,17 +243,27 @@ def verify_change_of_variables(claim: ProperFormChangeOfVariables) -> bool:
 
 def verify_reduction(claim: ReducedBinaryQuadraticFormResult) -> bool:
     """Check proper equivalence and the target's Gauss-reduced predicate."""
-    target = claim.reduced_form
-    return verify_change_of_variables(claim.change) and _check_reduced(
-        target.a, target.b, target.c
-    )
+    try:
+        _admit_form(claim.form)
+        _admit_form(claim.reduced_form)
+        target = claim.reduced_form
+        return verify_change_of_variables(claim.change) and _check_reduced(
+            target.a, target.b, target.c
+        )
+    except (TypeError, ValueError):
+        return False
 
 
 def verify_proper_equivalence(claim: ProperEquivalenceResult) -> bool:
     """Check the positive witness or the bounded negative equivalence decision."""
-    if claim.change is not None:
-        return verify_change_of_variables(claim.change)
-    return proper_equivalence(claim.first, claim.second).status == claim.status
+    try:
+        _admit_form(claim.first)
+        _admit_form(claim.second)
+        if claim.change is not None:
+            return verify_change_of_variables(claim.change)
+        return proper_equivalence(claim.first, claim.second).status == claim.status
+    except (TypeError, ValueError):
+        return False
 
 
 __all__ = [

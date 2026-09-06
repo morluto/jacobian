@@ -66,19 +66,16 @@ def _is_reduced_coefficients(a: int, b: int, c: int) -> bool:
 
 
 class PrimitivePositiveDefiniteBinaryQuadraticForm(StrictModel):
-    """A canonical primitive positive-definite integral binary quadratic form.
+    """An exact bounded integral binary quadratic form carrier.
 
     The fixed coefficient convention is ``Q(x, y) = a*x^2 + b*x*y + c*y^2``.
+    Positive-definiteness and primitivity are admitted by operations that need
+    that domain and remain claims for serialized values.
     """
 
-    a: int = Field(gt=0, le=MAX_COEFFICIENT)
+    a: int = Field(ge=-MAX_COEFFICIENT, le=MAX_COEFFICIENT)
     b: int = Field(ge=-MAX_COEFFICIENT, le=MAX_COEFFICIENT)
-    c: int = Field(gt=0, le=MAX_COEFFICIENT)
-
-    @model_validator(mode="after")
-    def require_primitive_positive_definite(self) -> Self:
-        _require_positive_primitive_form((self.a, self.b, self.c))
-        return self
+    c: int = Field(ge=-MAX_COEFFICIENT, le=MAX_COEFFICIENT)
 
     @property
     def discriminant(self) -> int:
@@ -87,19 +84,9 @@ class PrimitivePositiveDefiniteBinaryQuadraticForm(StrictModel):
 
 
 class ProperBinaryQuadraticFormClass(StrictModel):
-    """One proper class identified by its canonical Gauss-reduced representative."""
+    """A class carrier retaining a representative and its reducedness claim."""
 
     representative: PrimitivePositiveDefiniteBinaryQuadraticForm
-
-    @model_validator(mode="after")
-    def require_reduced_representative(self) -> Self:
-        form = self.representative
-        if not _is_reduced_coefficients(form.a, form.b, form.c):
-            raise _validation_error(
-                "integral_binary_quadratic_form.class_representative_not_reduced",
-                "proper form classes require a canonical Gauss-reduced representative",
-            )
-        return self
 
     @property
     def discriminant(self) -> int:

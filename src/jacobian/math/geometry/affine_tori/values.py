@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from math import gcd
 from typing import Annotated, Self
 
 from pydantic import Field, StrictInt, WithJsonSchema, model_validator
@@ -15,7 +14,6 @@ from jacobian._exact import (
     require_bounded_rational,
 )
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import parse_canonical_integer
 from jacobian.math.matrices.values import IntegerMatrix
 
 # Conservative preflight fallback: the derived admission in
@@ -442,7 +440,11 @@ class RationalAffineTorusMap(StrictModel):
 
 
 class IntegralTorusCharacter(StrictModel):
-    """A nonzero primitive character ``x |-> phi*x (mod 1)`` of ``T^n``."""
+    """An integral character of ``T^n`` with a source-bound coefficient axis.
+
+    Nonzero primitivity is a witness claim of the fixed-locus operation and
+    is checked there (or by :func:`verify_integral_torus_character`).
+    """
 
     torus: StandardRealTorus
     coefficients: tuple[CanonicalInteger, ...] = Field(
@@ -450,18 +452,10 @@ class IntegralTorusCharacter(StrictModel):
     )
 
     @model_validator(mode="after")
-    def require_primitive_character(self) -> Self:
+    def require_character_shape(self) -> Self:
         if len(self.coefficients) != self.torus.dimension:
             raise _validation_error(
                 "character_shape", "character coefficients must match torus dimension"
-            )
-        values = tuple(parse_canonical_integer(value) for value in self.coefficients)
-        divisor = 0
-        for value in values:
-            divisor = gcd(divisor, abs(value))
-        if divisor != 1:
-            raise _validation_error(
-                "character_primitive", "torus character must be nonzero and primitive"
             )
         return self
 

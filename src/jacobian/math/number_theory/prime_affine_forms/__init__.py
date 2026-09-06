@@ -13,6 +13,7 @@ from jacobian.math.number_theory.prime_affine_forms.operations import (
     local_factors,
     residue_wheel,
     translate_tuple,
+    verify_primitive_affine_form,
     wheel_membership,
 )
 from jacobian.math.number_theory.prime_affine_forms.values import (
@@ -33,5 +34,6 @@ __all__ = [
     "local_factors",
     "residue_wheel",
     "translate_tuple",
+    "verify_primitive_affine_form",
     "wheel_membership",
 ]

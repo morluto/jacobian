@@ -460,7 +460,7 @@ def test_repeated_root_closed_form_preserves_polynomial_factor() -> None:
         )
     )
 
-    assert result.expression == "3*n + 2"
+    assert result.expression.value == "3*n + 2"
 
 
 def test_closed_form_handles_repeated_zero_characteristic_roots() -> None:
@@ -471,7 +471,7 @@ def test_closed_form_handles_repeated_zero_characteristic_roots() -> None:
         )
     )
 
-    assert result.expression == "2*KroneckerDelta(0, n) + 5*KroneckerDelta(1, n)"
+    assert result.expression.value == "2*KroneckerDelta(0, n) + 5*KroneckerDelta(1, n)"
 
 
 def test_closed_form_contract_rejects_characteristic_polynomials_above_degree_four() -> (

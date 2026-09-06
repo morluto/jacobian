@@ -141,6 +141,10 @@ def verify_coloring_witness(claim: NonmonochromaticColoringResult) -> bool:
 
     if claim.outcome != "COLORABLE" or claim.witness is None:
         return False
+    try:
+        _validate_coloring_envelope(claim.hypergraph, claim.palette_size)
+    except (PydanticCustomError, TypeError, ValueError):
+        return False
     vertices = tuple(claim.hypergraph.vertices)
     assignments = claim.witness.assignments
     if len(assignments) != len(vertices):

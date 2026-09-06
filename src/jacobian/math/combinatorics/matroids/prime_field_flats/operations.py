@@ -51,7 +51,7 @@ def verify_prime_field_flat_classification(
     """Verify a complete serialized prime-field flat classification claim."""
 
     if claim.outcome.status != "COMPLETE_EXACT":
-        return True
+        return False
     try:
         return classify_clause_constrained_prime_field_flats(claim.problem) == claim
     except (OperationDomainValidationError, TypeError, ValueError):

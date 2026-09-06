@@ -129,6 +129,15 @@ def test_large_injective_palette_does_not_overflow_deadline_budget() -> None:
     assert result.outcome == "COLORABLE"
 
 
+def test_colorable_verifier_rejects_palette_outside_operation_domain() -> None:
+    h = _hg(["a", "b"], [("e0", ("a", "b"))])
+    result = decide_nonmonochromatic_coloring(h, 2)
+    forged = result.model_dump(mode="json")
+    forged["palette_size"] = 1 << 53
+    claim = type(result).model_validate(forged)
+    assert not verify_coloring_witness(claim)
+
+
 def test_empty_hyperedge_is_not_colorable() -> None:
     h = _hg(["0"], [("e0", ())])
     result = decide_nonmonochromatic_coloring(h, 2)

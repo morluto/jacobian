@@ -451,3 +451,4 @@ def test_work_limit_returns_incomplete_not_empty_complete() -> None:
     assert result.outcome.reason == "SEARCH_WORK_LIMIT"
     assert result.outcome.explored_state_orbit_count == 0
     assert result.outcome.consumed_search_work < exact_cutoff
+    assert not verify_prime_field_flat_classification(result)

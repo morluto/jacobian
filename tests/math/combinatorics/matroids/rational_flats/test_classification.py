@@ -756,6 +756,7 @@ def test_search_work_limit_is_a_typed_stop_at_the_next_exact_charge() -> None:
     assert result.outcome.explored_state_orbit_count == 0
     assert result.outcome.consumed_search_work == exact_cutoff
     assert result.outcome.search_work_limit == exact_cutoff
+    assert not verify_rational_flat_classification(result)
 
 
 def test_state_orbit_limit_stops_before_retaining_the_next_frontier() -> None:
@@ -768,6 +769,7 @@ def test_state_orbit_limit_stops_before_retaining_the_next_frontier() -> None:
     assert result.outcome.reason == "STATE_ORBIT_LIMIT"
     assert result.outcome.explored_state_orbit_count == 1
     assert result.outcome.state_orbit_limit == 1
+    assert not verify_rational_flat_classification(result)
 
 
 def test_one_request_ledger_charges_every_observed_work_primitive() -> None:

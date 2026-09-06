@@ -36,7 +36,7 @@ def verify_rational_flat_classification(
     """Verify a complete serialized rational-flat classification claim."""
 
     if claim.outcome.status != "COMPLETE_EXACT":
-        return True
+        return False
     try:
         return classify_clause_constrained_rational_flats(claim.problem) == claim
     except (OperationDomainValidationError, TypeError, ValueError):

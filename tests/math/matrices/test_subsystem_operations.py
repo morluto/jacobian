@@ -20,6 +20,7 @@ from jacobian.math.matrices.subsystems._models import (
     PsdOrderRequest,
     PsdOrderResult,
     SubsystemKroneckerProductRequest,
+    SubsystemKroneckerProductResult,
     SubsystemPartialTraceRequest,
     SubsystemPartialTraceResult,
 )
@@ -32,6 +33,9 @@ from jacobian.math.matrices.subsystems.operations import (
     kronecker_product,
     partial_trace,
     psd_order,
+    verify_partial_trace,
+    verify_psd_order,
+    verify_subsystem_kronecker_product,
 )
 from jacobian.math.matrices.subsystems.values import (
     FactorizedHermitianMatrix,
@@ -73,6 +77,48 @@ def test_subsystem_native_public_api_is_explicit() -> None:
         "kronecker_product",
         "partial_trace",
         "psd_order",
+        "verify_partial_trace",
+        "verify_psd_order",
+        "verify_subsystem_kronecker_product",
+    )
+
+
+def test_serialized_subsystem_claims_verify_their_retained_relations() -> None:
+    q = MatrixSubsystem(label="q", dimension=2)
+    r = MatrixSubsystem(label="r", dimension=2)
+    left = _matrix([[1, 0], [0, 2]], (q,))
+    right = _matrix([[3, 0], [0, 4]], (r,))
+
+    product_result = compute_kronecker_product(
+        SubsystemKroneckerProductRequest(left=left, right=right)
+    )
+    trace_result = compute_partial_trace(
+        SubsystemPartialTraceRequest(
+            matrix=product_result.product, traced_factor_labels=("q",)
+        )
+    )
+    order_result = decide_psd_order(PsdOrderRequest(left=left, right=left))
+
+    assert verify_subsystem_kronecker_product(
+        SubsystemKroneckerProductResult.model_validate_json(
+            product_result.model_dump_json()
+        )
+    )
+    assert verify_partial_trace(
+        SubsystemPartialTraceResult.model_validate_json(trace_result.model_dump_json())
+    )
+    assert verify_psd_order(
+        PsdOrderResult.model_validate_json(order_result.model_dump_json())
+    )
+
+    assert not verify_subsystem_kronecker_product(
+        product_result.model_copy(update={"right": left})
+    )
+    assert not verify_partial_trace(
+        trace_result.model_copy(update={"reduced_matrix": left})
+    )
+    assert not verify_psd_order(
+        order_result.model_copy(update={"is_less_or_equal": False})
     )
 
 

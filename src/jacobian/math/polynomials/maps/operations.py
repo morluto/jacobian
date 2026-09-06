@@ -116,6 +116,8 @@ def _admit_composition(
 def _admit_generic_degree(polynomial_map: RationalPolynomialMap) -> None:
     source_count = len(polynomial_map.input_variables)
     target_count = len(polynomial_map.output_polynomials)
+    if target_count == 0:
+        raise _validation_error("generic degree requires at least one target component")
     if source_count > MAX_GENERIC_DEGREE_SOURCE_VARIABLES:
         raise _validation_error(
             "generic-degree source exceeds the "

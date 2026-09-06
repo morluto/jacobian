@@ -83,6 +83,14 @@ def _compute(polynomial_map: RationalPolynomialMap) -> GenericDegreeResult:
     return _run_generic_degree(GenericDegreeRequest(polynomial_map=polynomial_map))
 
 
+def test_empty_output_map_is_rejected_by_generic_degree_admission() -> None:
+    polynomial_map = RationalPolynomialMap(
+        input_variables=("x",), output_polynomials=()
+    )
+    with pytest.raises(OperationDomainValidationError, match="target component"):
+        _compute(polynomial_map)
+
+
 def _generic_fiber_coefficient(
     exponents: tuple[int, int],
     numerator: int = 1,

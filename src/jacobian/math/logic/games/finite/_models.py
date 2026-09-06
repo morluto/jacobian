@@ -79,19 +79,25 @@ class NashEquilibriumRequest(ZeroSumGameRequest):
 class BestResponseResult(StrictModel):
     """Best response values for the row player."""
 
+    payoff_matrix: PayoffMatrix
     value: CanonicalRational
     best_row: int = Field(ge=0)
 
     @classmethod
-    def _from_kernel(cls, value: CanonicalRational, best_row: int) -> Self:
+    def _from_kernel(
+        cls, payoff_matrix: PayoffMatrix, value: CanonicalRational, best_row: int
+    ) -> Self:
         """Construct trusted output from the owner-local exact kernel."""
 
-        return cls.model_construct(value=value, best_row=best_row)
+        return cls.model_construct(
+            payoff_matrix=payoff_matrix, value=value, best_row=best_row
+        )
 
 
 class NashEquilibriumResult(StrictModel):
     """Nash equilibrium of a 2-player zero-sum game."""
 
+    payoff_matrix: PayoffMatrix
     row_strategy: tuple[CanonicalRational, ...]
     col_strategy: tuple[CanonicalRational, ...]
     value: CanonicalRational
@@ -99,6 +105,7 @@ class NashEquilibriumResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
+        payoff_matrix: PayoffMatrix,
         row_strategy: tuple[CanonicalRational, ...],
         col_strategy: tuple[CanonicalRational, ...],
         value: CanonicalRational,
@@ -106,6 +113,7 @@ class NashEquilibriumResult(StrictModel):
         """Construct trusted output from the owner-local exact kernel."""
 
         return cls.model_construct(
+            payoff_matrix=payoff_matrix,
             row_strategy=row_strategy,
             col_strategy=col_strategy,
             value=value,

@@ -13,6 +13,8 @@ from jacobian.math.logic.games.finite._models import (
 from jacobian.math.logic.games.finite.operations import (
     best_response,
     nash_equilibrium,
+    verify_best_response,
+    verify_nash_equilibrium,
 )
 
 
@@ -36,6 +38,9 @@ class TestBestResponse:
         )
         result = best_response(req.payoff_matrix)
         assert result.best_row == 0  # Row 0 has minimum 0, Row 1 has minimum 0
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert verify_best_response(decoded)
+        assert not verify_best_response(decoded.model_copy(update={"best_row": 1}))
 
     def test_payoffs_beyond_the_equilibrium_bound_still_admit_best_response(
         self,
@@ -91,6 +96,11 @@ class TestNashEquilibrium:
         )
         result = nash_equilibrium(req.payoff_matrix)
         assert result.value.as_fraction() == 1  # (0,0) is the pure equilibrium
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert verify_nash_equilibrium(decoded)
+        assert not verify_nash_equilibrium(
+            decoded.model_copy(update={"value": _r(2)})
+        )
 
     def test_mixed_equilibrium(self) -> None:
         req = NashEquilibriumRequest(

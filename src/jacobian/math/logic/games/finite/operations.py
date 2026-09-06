@@ -290,7 +290,7 @@ def best_response(payoff_matrix: PayoffMatrix) -> BestResponseResult:
             best_value = row_min
             best_row = row_index
     return BestResponseResult._from_kernel(
-        value=_wire_rational(best_value), best_row=best_row
+        payoff_matrix=payoff_matrix, value=_wire_rational(best_value), best_row=best_row
     )
 
 
@@ -375,10 +375,33 @@ def nash_equilibrium(payoff_matrix: PayoffMatrix) -> NashEquilibriumResult:
     ):
         raise RuntimeError("column strategy does not attain the reported game value")
     return NashEquilibriumResult._from_kernel(
+        payoff_matrix=payoff_matrix,
         row_strategy=tuple(_wire_rational(weight) for weight in row_strategy),
         col_strategy=tuple(_wire_rational(weight) for weight in column_strategy),
         value=_wire_rational(value),
     )
 
 
-__all__ = ["best_response", "nash_equilibrium", "solve_terminal_game"]
+def verify_best_response(claim: BestResponseResult) -> bool:
+    """Verify a best-response claim against its retained payoff matrix."""
+    try:
+        return best_response(claim.payoff_matrix) == claim
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+
+
+def verify_nash_equilibrium(claim: NashEquilibriumResult) -> bool:
+    """Verify an equilibrium claim against its retained payoff matrix."""
+    try:
+        return nash_equilibrium(claim.payoff_matrix) == claim
+    except (OperationDomainValidationError, TypeError, ValueError, RuntimeError):
+        return False
+
+
+__all__ = [
+    "best_response",
+    "nash_equilibrium",
+    "solve_terminal_game",
+    "verify_best_response",
+    "verify_nash_equilibrium",
+]

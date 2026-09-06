@@ -5,6 +5,7 @@ from jacobian.math.graphs.spectra.operations import (
     adjacency_spectrum,
     laplacian_characteristic_polynomial,
     laplacian_spectrum,
+    verify_spectrum,
 )
 
 __all__ = [
@@ -12,4 +13,5 @@ __all__ = [
     "adjacency_spectrum",
     "laplacian_characteristic_polynomial",
     "laplacian_spectrum",
+    "verify_spectrum",
 ]

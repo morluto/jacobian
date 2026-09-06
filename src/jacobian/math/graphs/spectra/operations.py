@@ -11,15 +11,22 @@ __all__ = [
     "adjacency_spectrum",
     "laplacian_characteristic_polynomial",
     "laplacian_spectrum",
+    "verify_spectrum",
 ]
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.spectra._models import (
+    GraphSpectrumEntry,
+    GraphSpectrumResult,
     _require_characteristic_polynomial_graph,
     _require_spectral_graph,
 )
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
+from jacobian.math.number_theory.algebraic_numbers.real import (
+    RealAlgebraicValue,
+    isolate_real_algebraic,
+)
 from jacobian.math.polynomials.values import RationalPolynomial
 
 
@@ -112,15 +119,60 @@ def _laplacian_matrix_entries(graph: IndexedSimpleUndirectedGraph) -> list[int]:
     return entries
 
 
-def adjacency_spectrum(graph: IndexedSimpleUndirectedGraph) -> list[tuple[str, int]]:
+def _algebraic_value(value: Any) -> RealAlgebraicValue:
+    import sympy
+
+    x = sympy.Symbol("x")
+    polynomial = sympy.Poly(sympy.minimal_polynomial(value, x), x)
+    roots = polynomial.all_roots()
+    try:
+        root_index = roots.index(value)
+    except ValueError as exc:
+        raise ValueError("spectrum root is not on its minimal-polynomial axis") from exc
+    coefficients = tuple(str(int(coefficient)) for coefficient in polynomial.all_coeffs())
+    return RealAlgebraicValue._from_admitted_polynomial(
+        polynomial=coefficients,
+        real_root_index=root_index,
+    )
+
+
+def _spectrum(matrix: Any) -> tuple[GraphSpectrumEntry, ...]:
+    return tuple(
+        GraphSpectrumEntry(value=_algebraic_value(value), multiplicity=int(multiplicity))
+        for value, multiplicity in matrix.eigenvals().items()
+    )
+
+
+def adjacency_spectrum(
+    graph: IndexedSimpleUndirectedGraph,
+) -> tuple[GraphSpectrumEntry, ...]:
     mat = _adjacency_matrix(graph)
-    eigenvals = mat.eigenvals()
-    return [(str(val), int(mult)) for val, mult in eigenvals.items()]
+    return _spectrum(mat)
 
 
-def laplacian_spectrum(graph: IndexedSimpleUndirectedGraph) -> list[tuple[str, int]]:
-    eigenvals = _laplacian_matrix(graph).eigenvals()
-    return [(str(val), int(mult)) for val, mult in eigenvals.items()]
+def laplacian_spectrum(
+    graph: IndexedSimpleUndirectedGraph,
+) -> tuple[GraphSpectrumEntry, ...]:
+    return _spectrum(_laplacian_matrix(graph))
+
+
+def verify_spectrum(claim: GraphSpectrumResult) -> bool:
+    """Check typed algebraic eigenvalue claims against the retained graph."""
+    try:
+        for entry in claim.spectrum:
+            isolate_real_algebraic(entry.value)
+        actual = (
+            adjacency_spectrum(claim.graph)
+            if claim.matrix_convention == "ADJACENCY"
+            else laplacian_spectrum(claim.graph)
+        )
+        def key(entry: GraphSpectrumEntry) -> tuple[tuple[str, ...], int]:
+            return entry.value.polynomial, entry.value.real_root_index
+        return sorted(
+            (key(entry), entry.multiplicity) for entry in actual
+        ) == sorted((key(entry), entry.multiplicity) for entry in claim.spectrum)
+    except (AttributeError, IndexError, TypeError, ValueError, OperationDomainValidationError):
+        return False
 
 
 def adjacency_characteristic_polynomial(

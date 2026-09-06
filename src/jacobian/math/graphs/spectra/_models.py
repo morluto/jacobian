@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, Self
 
-from pydantic import WithJsonSchema, model_validator
+from pydantic import StrictInt, WithJsonSchema, model_validator
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
@@ -13,6 +13,7 @@ from jacobian._models import StrictModel
 from jacobian.math.graphs.values import (
     IndexedSimpleUndirectedGraph,
 )
+from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialTerm,
@@ -102,6 +103,22 @@ class GraphSpectrumRequest(StrictModel):
     graph: SpectralGraph
 
 
+class GraphSpectrumEntry(StrictModel):
+    """One exact real eigenvalue and its algebraic multiplicity."""
+
+    value: RealAlgebraicValue
+    multiplicity: StrictInt
+
+    @model_validator(mode="after")
+    def require_positive_multiplicity(self) -> Self:
+        if self.multiplicity < 1:
+            raise PydanticCustomError(
+                "graph.algebraic_multiplicity_must_be_positive",
+                "algebraic multiplicity must be positive",
+            )
+        return self
+
+
 class GraphCharacteristicPolynomialRequest(StrictModel):
     """A graph whose dense integer matrix and exact polynomial are bounded."""
 
@@ -111,10 +128,9 @@ class GraphCharacteristicPolynomialRequest(StrictModel):
 class GraphSpectrumResult(StrictModel):
     """The exact eigenvalues with algebraic multiplicities of a graph matrix.
 
-    Retains the source graph and matrix convention.  Each ``eigenvalues`` entry is
-    the canonical exact SymPy rendering (over the algebraic closure of QQ,
-    never a float) of one distinct eigenvalue; multiplicities are positive
-    and sum to the graph order, so the claimed spectrum reconstructs
+    Retains the source graph and matrix convention. Each ``spectrum`` entry is
+    one typed real algebraic root of one distinct eigenvalue; multiplicities
+    are positive and sum to the graph order, so the claimed spectrum reconstructs
     ``det(xI - M)`` exactly, where ``M`` is the adjacency matrix A for
     ``matrix_convention="ADJACENCY"`` and the Laplacian matrix L for
     ``matrix_convention="LAPLACIAN"``. Pair order carries no mathematical
@@ -123,33 +139,36 @@ class GraphSpectrumResult(StrictModel):
 
     graph: SpectralGraph
     matrix_convention: Literal["ADJACENCY", "LAPLACIAN"]
-    eigenvalues: tuple[str, ...]
-    multiplicities: tuple[int, ...]
+    spectrum: tuple[GraphSpectrumEntry, ...]
 
     @model_validator(mode="after")
     def require_structural_shape(self) -> Self:
         _require_spectral_graph(self.graph)
         order = self.graph.vertex_count
-        if len(self.eigenvalues) != len(self.multiplicities):
-            raise PydanticCustomError(
-                "graph.eigenvalue_multiplicity_tuples_have_equal_length",
-                "eigenvalue and multiplicity tuples must have equal length",
-            )
-        if len(set(self.eigenvalues)) != len(self.eigenvalues):
+        values = tuple(
+            (entry.value.polynomial, entry.value.real_root_index)
+            for entry in self.spectrum
+        )
+        if len(set(values)) != len(values):
             raise PydanticCustomError(
                 "graph.eigenvalues_must_be_distinct", "eigenvalues must be distinct"
             )
-        if any(multiplicity < 1 for multiplicity in self.multiplicities):
-            raise PydanticCustomError(
-                "graph.algebraic_multiplicities_must_be_positive",
-                "algebraic multiplicities must be positive",
-            )
-        if sum(self.multiplicities) != order:
+        if sum(entry.multiplicity for entry in self.spectrum) != order:
             raise PydanticCustomError(
                 "graph.multiplicities_must_sum_to_the_graph_order",
                 "multiplicities must sum to the graph order",
             )
         return self
+
+    @property
+    def eigenvalues(self) -> tuple[RealAlgebraicValue, ...]:
+        """Native projection of exact eigenvalue carriers."""
+        return tuple(entry.value for entry in self.spectrum)
+
+    @property
+    def multiplicities(self) -> tuple[int, ...]:
+        """Native projection of algebraic multiplicities."""
+        return tuple(entry.multiplicity for entry in self.spectrum)
 
     @classmethod
     def _from_kernel(
@@ -157,17 +176,14 @@ class GraphSpectrumResult(StrictModel):
         *,
         graph: IndexedSimpleUndirectedGraph,
         matrix_convention: Literal["ADJACENCY", "LAPLACIAN"],
-        eigenvalues: tuple[str, ...],
-        multiplicities: tuple[int, ...],
+        spectrum: tuple[GraphSpectrumEntry, ...],
     ) -> Self:
         """Construct a spectrum emitted by the trusted exact kernel."""
 
         return cls.model_construct(
             graph=graph,
             matrix_convention=matrix_convention,
-            eigenvalues=eigenvalues,
-            multiplicities=multiplicities,
-            convention="SYMPY_EIGENVALS",
+            spectrum=spectrum,
         )
 
 
@@ -235,6 +251,7 @@ class GraphCharacteristicPolynomialResult(StrictModel):
 __all__ = [
     "GraphCharacteristicPolynomialRequest",
     "GraphCharacteristicPolynomialResult",
+    "GraphSpectrumEntry",
     "GraphSpectrumRequest",
     "GraphSpectrumResult",
 ]

@@ -22,8 +22,7 @@ def compute_adjacency_spectrum(request: GraphSpectrumRequest) -> GraphSpectrumRe
     return GraphSpectrumResult._from_kernel(
         graph=request.graph,
         matrix_convention="ADJACENCY",
-        eigenvalues=tuple(v for v, _ in result),
-        multiplicities=tuple(m for _, m in result),
+        spectrum=result,
     )
 
 
@@ -32,8 +31,7 @@ def compute_laplacian_spectrum(request: GraphSpectrumRequest) -> GraphSpectrumRe
     return GraphSpectrumResult._from_kernel(
         graph=request.graph,
         matrix_convention="LAPLACIAN",
-        eigenvalues=tuple(v for v, _ in result),
-        multiplicities=tuple(m for _, m in result),
+        spectrum=result,
     )
 
 

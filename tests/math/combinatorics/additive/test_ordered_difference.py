@@ -1,5 +1,7 @@
 """Tests for ordered-difference profile operations."""
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -215,6 +217,16 @@ class TestOrderedDifferenceProfile:
         with pytest.raises(ValidationError):
             OrderedDifferenceProfileResult.model_validate(payload)
 
+    def test_verifier_rejects_boolean_first_collision_index_from_model_copy(
+        self,
+    ) -> None:
+        result = _run_ordered(_request((0, 0), (1, 0), (0, 1), (1, 1)))
+        assert result.first_collision is not None
+        forged_pair = result.first_collision.model_copy(update={"right_index": True})
+        forged = result.model_copy(update={"first_collision": forged_pair})
+
+        assert not verify_ordered_difference_profile(forged)
+
     def test_first_collision_is_canonical_minimum_pair(self) -> None:
         """The witness must equal the lexicographic minimum pair of the
         first sorted repeated-difference entry."""
@@ -372,3 +384,33 @@ class TestOrderedDifferenceProfile:
         assert isinstance(payload["support_size"], str)
         assert isinstance(payload["max_multiplicity"], str)
         assert isinstance(payload["entries"][0]["multiplicity"], str)
+
+    def test_native_integer_payload_roundtrip(self) -> None:
+        result = _run_ordered(_request((0, 0), (1, 0), (0, 1)))
+        payload = result.model_dump(mode="python")
+
+        assert type(payload["total_ordered_pairs"]) is int
+        assert type(payload["support_size"]) is int
+        assert type(payload["max_multiplicity"]) is int
+        assert type(payload["entries"][0]["multiplicity"]) is int
+        assert OrderedDifferenceProfileResult.model_validate(payload) == result
+
+    @pytest.mark.parametrize(
+        "field",
+        ("total_ordered_pairs", "support_size", "max_multiplicity"),
+    )
+    def test_json_summary_counts_reject_numeric_values(self, field: str) -> None:
+        result = _run_ordered(_request((0, 0), (1, 0)))
+        payload = result.model_dump(mode="json")
+        payload[field] = 2
+
+        with pytest.raises(ValidationError):
+            OrderedDifferenceProfileResult.model_validate_json(json.dumps(payload))
+
+    def test_json_multiplicity_rejects_numeric_value(self) -> None:
+        result = _run_ordered(_request((0, 0), (1, 0)))
+        payload = result.model_dump(mode="json")
+        payload["entries"][0]["multiplicity"] = 1
+
+        with pytest.raises(ValidationError):
+            OrderedDifferenceProfileResult.model_validate_json(json.dumps(payload))

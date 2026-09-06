@@ -3,13 +3,21 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from typing import Annotated, Self
+from typing import Annotated, Any, Self
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import (
+    BeforeValidator,
+    Field,
+    PlainSerializer,
+    StrictInt,
+    StringConstraints,
+    ValidationInfo,
+    model_validator,
+)
 from pydantic.json_schema import WithJsonSchema
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger, NativeInteger
+from jacobian._exact import CanonicalInteger
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.math.combinatorics.additive._multiset_sum import (
@@ -67,6 +75,35 @@ CanonicalVectorCoordinate = Annotated[
         max_length=_MAX_VECTOR_COORDINATE_LENGTH,
         strict=True,
     ),
+]
+
+
+def _parse_ordered_difference_integer(value: Any, info: ValidationInfo) -> int:
+    """Accept native Python ints while requiring decimal strings in JSON."""
+    if info.mode == "json" and not isinstance(value, str):
+        raise PydanticCustomError(
+            "canonical_integer.json_type",
+            "ordered-difference integers must be canonical decimal strings in JSON",
+        )
+    if isinstance(value, bool):
+        raise PydanticCustomError(
+            "canonical_integer.type",
+            "integer values must not be booleans",
+        )
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        return parse_canonical_integer(value)
+    raise PydanticCustomError(
+        "canonical_integer.type",
+        "integer values must be Python integers or canonical strings",
+    )
+
+
+OrderedDifferenceInteger = Annotated[
+    int,
+    BeforeValidator(_parse_ordered_difference_integer),
+    PlainSerializer(format_canonical_integer, return_type=str, when_used="json"),
 ]
 
 CanonicalMultisetSumBound = Annotated[
@@ -684,8 +721,8 @@ class OrderedDifferenceProfileRequest(StrictModel):
 class OrderedDifferencePair(StrictModel):
     """One ordered source pair (i, j) with i != j."""
 
-    left_index: int = Field(ge=0, le=_MAX_VECTOR_SET_SIZE - 1)
-    right_index: int = Field(ge=0, le=_MAX_VECTOR_SET_SIZE - 1)
+    left_index: StrictInt = Field(ge=0, le=_MAX_VECTOR_SET_SIZE - 1)
+    right_index: StrictInt = Field(ge=0, le=_MAX_VECTOR_SET_SIZE - 1)
 
 
 class OrderedDifferenceEntry(StrictModel):
@@ -698,7 +735,7 @@ class OrderedDifferenceEntry(StrictModel):
     """
 
     difference: IntegerVector
-    multiplicity: NativeInteger = Field(
+    multiplicity: OrderedDifferenceInteger = Field(
         gt=0,
         le=_MAX_TOTAL_ORDERED_PAIRS,
         description="Claimed positive multiplicity of this difference.",
@@ -731,9 +768,13 @@ class OrderedDifferenceProfileResult(StrictModel):
     vectors: IntegerVectorSet
     dimension: int = Field(ge=1, le=_MAX_DIMENSION)
     set_size: int = Field(ge=1, le=_MAX_VECTOR_SET_SIZE)
-    total_ordered_pairs: NativeInteger = Field(ge=0, le=_MAX_TOTAL_ORDERED_PAIRS)
-    support_size: NativeInteger = Field(ge=0, le=_MAX_TOTAL_ORDERED_PAIRS)
-    max_multiplicity: NativeInteger = Field(ge=0, le=_MAX_TOTAL_ORDERED_PAIRS)
+    total_ordered_pairs: OrderedDifferenceInteger = Field(
+        ge=0, le=_MAX_TOTAL_ORDERED_PAIRS
+    )
+    support_size: OrderedDifferenceInteger = Field(ge=0, le=_MAX_TOTAL_ORDERED_PAIRS)
+    max_multiplicity: OrderedDifferenceInteger = Field(
+        ge=0, le=_MAX_TOTAL_ORDERED_PAIRS
+    )
     entries: tuple[OrderedDifferenceEntry, ...] = Field(
         default=(), max_length=_MAX_TOTAL_ORDERED_PAIRS
     )

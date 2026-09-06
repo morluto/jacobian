@@ -438,21 +438,12 @@ def _admit_ordered_difference_entry(
             code="additive_combinatorics.ordered_difference_multiplicity_bound",
             message="ordered-difference multiplicities exceed their admitted bound",
         )
-    for pair in entry.pairs:
-        if (
-            type(pair) is not OrderedDifferencePair
-            or type(pair.left_index) is not int
-            or type(pair.right_index) is not int
-            or not 0 <= pair.left_index < set_size
-            or not 0 <= pair.right_index < set_size
-            or pair.left_index == pair.right_index
-        ):
-            raise OperationDomainValidationError(
-                location=("claim", "entries", "pairs"),
-                code="additive_combinatorics.ordered_difference_pair_bounds",
-                message="ordered-difference pairs must be distinct source indices",
-            )
-    pairs = tuple((pair.left_index, pair.right_index) for pair in entry.pairs)
+    pairs = tuple(
+        _admit_ordered_difference_pair(
+            pair, set_size=set_size, location=("claim", "entries", "pairs")
+        )
+        for pair in entry.pairs
+    )
     if pairs != tuple(sorted(set(pairs))):
         raise OperationDomainValidationError(
             location=("claim", "entries", "pairs"),
@@ -460,6 +451,37 @@ def _admit_ordered_difference_entry(
             message="ordered-difference pairs must be unique and ordered",
         )
     return entry.difference.as_int_tuple()
+
+
+def _admit_ordered_difference_pair(
+    pair: object,
+    *,
+    set_size: int,
+    location: tuple[str, ...],
+) -> tuple[int, int]:
+    if type(pair) is not OrderedDifferencePair:
+        raise OperationDomainValidationError(
+            location=location,
+            code="additive_combinatorics.ordered_difference_pair_bounds",
+            message="ordered-difference pairs must be distinct source indices",
+        )
+    if type(pair.left_index) is not int or type(pair.right_index) is not int:
+        raise OperationDomainValidationError(
+            location=location,
+            code="additive_combinatorics.ordered_difference_pair_bounds",
+            message="ordered-difference pair indices must be native integers",
+        )
+    if (
+        not 0 <= pair.left_index < set_size
+        or not 0 <= pair.right_index < set_size
+        or pair.left_index == pair.right_index
+    ):
+        raise OperationDomainValidationError(
+            location=location,
+            code="additive_combinatorics.ordered_difference_pair_bounds",
+            message="ordered-difference pairs must be distinct source indices",
+        )
+    return pair.left_index, pair.right_index
 
 
 def _admit_ordered_difference_source(
@@ -596,6 +618,12 @@ def _admit_ordered_difference_claim(
             location=("claim",),
             code="additive_combinatorics.ordered_difference_summary_shape",
             message="ordered-difference summaries have an invalid typed shape",
+        )
+    if claim.first_collision is not None:
+        _admit_ordered_difference_pair(
+            claim.first_collision,
+            set_size=set_size,
+            location=("claim", "first_collision"),
         )
     claimed_cells = set_size * dimension + sum(
         len(entry.difference.coordinates) + 2 * len(entry.pairs)

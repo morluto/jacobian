@@ -21,8 +21,10 @@ from jacobian.math.groups.abelian.operations import (
     quotient_group,
     reduce_element,
     verify_element_order,
+    verify_element_reduction,
     verify_elements_equal,
     verify_generated_subgroup,
+    verify_presentation_normalization,
     verify_quotient_group,
 )
 
@@ -68,6 +70,11 @@ def test_element_reduce_modular() -> None:
     request = ElementReduceRequest(invariant_factors=(6,), coordinates=(7,))
     result = compute_element_reduce(request)
     assert result.reduced == (1,)
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_element_reduction(decoded)
+    payload = result.model_dump(mode="json")
+    payload["reduced"] = [2]
+    assert not verify_element_reduction(type(result).model_validate(payload))
 
 
 def test_element_equal_same() -> None:
@@ -128,6 +135,11 @@ def test_presentation_normalize_z6_z4() -> None:
     )
     assert result.order == 24
     assert len(result.invariant_factors) == 2
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_presentation_normalization(decoded)
+    payload = result.model_dump(mode="json")
+    payload["presentation"]["invariant_factors"] = [2, 6]
+    assert not verify_presentation_normalization(type(result).model_validate(payload))
 
 
 def test_invariant_factor_divisibility_canonical_order_accepted() -> None:

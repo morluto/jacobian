@@ -9,6 +9,7 @@ from jacobian.math.groups.abelian._models import (
     ElementEqualResult,
     ElementOrderResult,
     ElementReduceResult,
+    PresentationNormalizeRequest,
     PresentationNormalizeResult,
     QuotientResult,
     SubgroupGeneratedResult,
@@ -26,6 +27,7 @@ def normalize_presentation(
     factors = tuple(int(smith[i, i]) for i in range(min(smith.rows, smith.cols)))
     cleaned = tuple(factor for factor in factors if factor > 1)
     return PresentationNormalizeResult(
+        source=PresentationNormalizeRequest(invariant_factors=invariant_factors),
         presentation=AbelianPresentation(invariant_factors=cleaned),
     )
 
@@ -37,7 +39,11 @@ def reduce_element(
         coordinate % factor
         for coordinate, factor in zip(coordinates, invariant_factors, strict=True)
     )
-    return ElementReduceResult(reduced=reduced)
+    return ElementReduceResult(
+        group=AbelianPresentation(invariant_factors=invariant_factors),
+        coordinates=coordinates,
+        reduced=reduced,
+    )
 
 
 def elements_equal(
@@ -54,6 +60,7 @@ def elements_equal(
         for coordinate, factor in zip(coordinates_b, invariant_factors, strict=True)
     )
     return ElementEqualResult(
+        group=AbelianPresentation(invariant_factors=invariant_factors),
         invariant_factors=invariant_factors,
         coordinates_a=coordinates_a,
         coordinates_b=coordinates_b,
@@ -64,14 +71,30 @@ def elements_equal(
 def verify_elements_equal(claim: ElementEqualResult) -> bool:
     """Check the equality relation asserted by a serialized element claim."""
 
-    return (
-        elements_equal(
-            claim.invariant_factors,
-            claim.coordinates_a,
-            claim.coordinates_b,
-        ).equal
-        is claim.equal
-    )
+    try:
+        return (
+            tuple(claim.group.invariant_factors) == claim.invariant_factors
+            and elements_equal(
+                claim.invariant_factors,
+                claim.coordinates_a,
+                claim.coordinates_b,
+            ).equal
+            is claim.equal
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def verify_element_reduction(claim: ElementReduceResult) -> bool:
+    """Check a reduced coordinate claim against its retained group source."""
+
+    try:
+        return (
+            reduce_element(claim.group.invariant_factors, claim.coordinates).reduced
+            == claim.reduced
+        )
+    except (TypeError, ValueError):
+        return False
 
 
 def element_order(
@@ -86,6 +109,7 @@ def element_order(
         if coordinate != 0:
             order = lcm(order, factor // gcd(coordinate, factor))
     return ElementOrderResult(
+        group=AbelianPresentation(invariant_factors=invariant_factors),
         invariant_factors=invariant_factors,
         coordinates=coordinates,
         order=order,
@@ -95,13 +119,17 @@ def element_order(
 def verify_element_order(claim: ElementOrderResult) -> bool:
     """Check the order relation asserted by a serialized element claim."""
 
-    return (
-        element_order(
-            claim.invariant_factors,
-            claim.coordinates,
-        ).order
-        == claim.order
-    )
+    try:
+        return (
+            tuple(claim.group.invariant_factors) == claim.invariant_factors
+            and element_order(
+                claim.invariant_factors,
+                claim.coordinates,
+            ).order
+            == claim.order
+        )
+    except (TypeError, ValueError):
+        return False
 
 
 def _smith_diagonal(augmented_rows: list[list[int]]) -> list[int]:
@@ -130,6 +158,7 @@ def generated_subgroup(
         if factor > 1:
             index *= factor
     return SubgroupGeneratedResult(
+        group=AbelianPresentation(invariant_factors=invariant_factors),
         invariant_factors=invariant_factors,
         generators=generators,
         index=index,
@@ -154,6 +183,7 @@ def quotient_group(
     for factor in quotient_factors:
         order *= factor
     return QuotientResult(
+        group=AbelianPresentation(invariant_factors=invariant_factors),
         invariant_factors=invariant_factors,
         subgroup_generators=subgroup_generators,
         quotient_invariant_factors=quotient_factors,
@@ -164,20 +194,38 @@ def quotient_group(
 def verify_generated_subgroup(claim: SubgroupGeneratedResult) -> bool:
     """Check the index relation asserted by a serialized subgroup claim."""
 
-    return (
-        generated_subgroup(claim.invariant_factors, claim.generators).index
-        == claim.index
-    )
+    try:
+        return (
+            tuple(claim.group.invariant_factors) == claim.invariant_factors
+            and generated_subgroup(claim.invariant_factors, claim.generators).index
+            == claim.index
+        )
+    except (TypeError, ValueError):
+        return False
 
 
 def verify_quotient_group(claim: QuotientResult) -> bool:
     """Check the quotient presentation asserted by a serialized claim."""
 
-    expected = quotient_group(claim.invariant_factors, claim.subgroup_generators)
-    return (
-        expected.quotient_invariant_factors == claim.quotient_invariant_factors
-        and expected.quotient_order == claim.quotient_order
-    )
+    try:
+        expected = quotient_group(claim.invariant_factors, claim.subgroup_generators)
+        return (
+            tuple(claim.group.invariant_factors) == claim.invariant_factors
+            and expected.quotient_invariant_factors
+            == claim.quotient_invariant_factors
+            and expected.quotient_order == claim.quotient_order
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def verify_presentation_normalization(claim: PresentationNormalizeResult) -> bool:
+    """Check the canonical presentation against its retained raw factors."""
+
+    try:
+        return normalize_presentation(claim.source.invariant_factors) == claim
+    except (TypeError, ValueError):
+        return False
 
 
 __all__ = [
@@ -188,7 +236,9 @@ __all__ = [
     "quotient_group",
     "reduce_element",
     "verify_element_order",
+    "verify_element_reduction",
     "verify_elements_equal",
     "verify_generated_subgroup",
+    "verify_presentation_normalization",
     "verify_quotient_group",
 ]

@@ -7,6 +7,7 @@ from typing import Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import NativeInteger
 from jacobian._models import StrictModel
 
 MAX_ORDERS = 32
@@ -20,7 +21,7 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 class AbelianPresentation(StrictModel):
     """An invariant-factor decomposition of a finitely generated abelian group."""
 
-    invariant_factors: tuple[int, ...] = Field(min_length=0, max_length=MAX_ORDERS)
+    invariant_factors: tuple[NativeInteger, ...] = Field(min_length=0, max_length=MAX_ORDERS)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
@@ -51,7 +52,7 @@ class PresentationNormalizeRequest(StrictModel):
     operation returns that canonical decomposition.
     """
 
-    invariant_factors: tuple[int, ...] = Field(
+    invariant_factors: tuple[NativeInteger, ...] = Field(
         min_length=0,
         max_length=MAX_ORDERS,
         description=(
@@ -80,8 +81,8 @@ class PresentationNormalizeRequest(StrictModel):
 
 
 class ElementReduceRequest(StrictModel):
-    invariant_factors: tuple[int, ...] = Field(min_length=1, max_length=MAX_ORDERS)
-    coordinates: tuple[int, ...] = Field(min_length=1, max_length=MAX_ORDERS)
+    invariant_factors: tuple[NativeInteger, ...] = Field(min_length=1, max_length=MAX_ORDERS)
+    coordinates: tuple[NativeInteger, ...] = Field(min_length=1, max_length=MAX_ORDERS)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
@@ -98,9 +99,9 @@ class ElementReduceRequest(StrictModel):
 
 
 class ElementEqualRequest(StrictModel):
-    invariant_factors: tuple[int, ...] = Field(min_length=1, max_length=MAX_ORDERS)
-    coordinates_a: tuple[int, ...] = Field(min_length=1, max_length=MAX_ORDERS)
-    coordinates_b: tuple[int, ...] = Field(min_length=1, max_length=MAX_ORDERS)
+    invariant_factors: tuple[NativeInteger, ...] = Field(min_length=1, max_length=MAX_ORDERS)
+    coordinates_a: tuple[NativeInteger, ...] = Field(min_length=1, max_length=MAX_ORDERS)
+    coordinates_b: tuple[NativeInteger, ...] = Field(min_length=1, max_length=MAX_ORDERS)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
@@ -122,8 +123,8 @@ class ElementEqualRequest(StrictModel):
 
 
 class ElementOrderRequest(StrictModel):
-    invariant_factors: tuple[int, ...] = Field(min_length=1, max_length=MAX_ORDERS)
-    coordinates: tuple[int, ...] = Field(min_length=1, max_length=MAX_ORDERS)
+    invariant_factors: tuple[NativeInteger, ...] = Field(min_length=1, max_length=MAX_ORDERS)
+    coordinates: tuple[NativeInteger, ...] = Field(min_length=1, max_length=MAX_ORDERS)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
@@ -139,8 +140,8 @@ class ElementOrderRequest(StrictModel):
 
 
 class SubgroupGeneratedRequest(StrictModel):
-    invariant_factors: tuple[int, ...] = Field(min_length=1, max_length=MAX_ORDERS)
-    generators: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=MAX_ORDERS)
+    invariant_factors: tuple[NativeInteger, ...] = Field(min_length=1, max_length=MAX_ORDERS)
+    generators: tuple[tuple[NativeInteger, ...], ...] = Field(min_length=1, max_length=MAX_ORDERS)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
@@ -164,8 +165,8 @@ class SubgroupGeneratedRequest(StrictModel):
 
 
 class QuotientRequest(StrictModel):
-    invariant_factors: tuple[int, ...] = Field(min_length=1, max_length=MAX_ORDERS)
-    subgroup_generators: tuple[tuple[int, ...], ...] = Field(
+    invariant_factors: tuple[NativeInteger, ...] = Field(min_length=1, max_length=MAX_ORDERS)
+    subgroup_generators: tuple[tuple[NativeInteger, ...], ...] = Field(
         min_length=1, max_length=MAX_ORDERS
     )
 
@@ -196,10 +197,11 @@ class QuotientRequest(StrictModel):
 class PresentationNormalizeResult(StrictModel):
     """The canonical finite abelian-group presentation."""
 
+    source: PresentationNormalizeRequest
     presentation: AbelianPresentation
 
     @property
-    def invariant_factors(self) -> tuple[int, ...]:
+    def invariant_factors(self) -> tuple[NativeInteger, ...]:
         """Project the canonical invariant factors."""
 
         return self.presentation.invariant_factors
@@ -221,35 +223,41 @@ class PresentationNormalizeResult(StrictModel):
 
 
 class ElementReduceResult(StrictModel):
-    reduced: tuple[int, ...]
+    group: AbelianPresentation
+    coordinates: tuple[NativeInteger, ...]
+    reduced: tuple[NativeInteger, ...]
 
 
 class ElementEqualResult(StrictModel):
     """A source-bound equality claim for two finite abelian group elements."""
 
-    invariant_factors: tuple[int, ...]
-    coordinates_a: tuple[int, ...]
-    coordinates_b: tuple[int, ...]
+    group: AbelianPresentation
+    invariant_factors: tuple[NativeInteger, ...]
+    coordinates_a: tuple[NativeInteger, ...]
+    coordinates_b: tuple[NativeInteger, ...]
     equal: bool
 
 
 class ElementOrderResult(StrictModel):
     """A source-bound order claim for a finite abelian group element."""
 
-    invariant_factors: tuple[int, ...]
-    coordinates: tuple[int, ...]
-    order: int = Field(ge=1)
+    group: AbelianPresentation
+    invariant_factors: tuple[NativeInteger, ...]
+    coordinates: tuple[NativeInteger, ...]
+    order: NativeInteger = Field(ge=1)
 
 
 class SubgroupGeneratedResult(StrictModel):
-    invariant_factors: tuple[int, ...]
-    generators: tuple[tuple[int, ...], ...]
-    index: int = Field(ge=1)
-    coset_representatives: tuple[tuple[int, ...], ...] = ()
+    group: AbelianPresentation
+    invariant_factors: tuple[NativeInteger, ...]
+    generators: tuple[tuple[NativeInteger, ...], ...]
+    index: NativeInteger = Field(ge=1)
+    coset_representatives: tuple[tuple[NativeInteger, ...], ...] = ()
 
 
 class QuotientResult(StrictModel):
-    invariant_factors: tuple[int, ...]
-    subgroup_generators: tuple[tuple[int, ...], ...]
-    quotient_invariant_factors: tuple[int, ...] = ()
-    quotient_order: int = Field(ge=1)
+    group: AbelianPresentation
+    invariant_factors: tuple[NativeInteger, ...]
+    subgroup_generators: tuple[tuple[NativeInteger, ...], ...]
+    quotient_invariant_factors: tuple[NativeInteger, ...] = ()
+    quotient_order: NativeInteger = Field(ge=1)

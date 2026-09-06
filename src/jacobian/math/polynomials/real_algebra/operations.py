@@ -62,6 +62,8 @@ __all__ = [
     "verify_common_interlacing_profile",
     "verify_plane_component_profile",
     "verify_strict_sublevel_measure",
+    "verify_root_count",
+    "verify_sturm_chain",
 ]
 
 
@@ -295,7 +297,8 @@ def compute_sturm_chain(poly: RationalPolynomial) -> SturmChainResult:
     terms = _poly_to_terms(poly)
     chain = sturm_chain(terms)
     degree = max(t.exponents[0] for t in poly.polynomial.terms)
-    return SturmChainResult(
+    return SturmChainResult._from_kernel(
+        source_polynomial=poly,
         chain=tuple(_terms_to_poly(c, poly.variables) for c in chain),
         degree=degree,
     )
@@ -324,6 +327,24 @@ def compute_root_count(
         lower=lower_bound,
         upper=upper_bound,
     )
+
+
+def verify_sturm_chain(claim: SturmChainResult) -> bool:
+    """Verify a serialized Sturm chain against its retained source polynomial."""
+    try:
+        expected = compute_sturm_chain(claim.source_polynomial)
+        return expected.chain == claim.chain and expected.degree == claim.degree
+    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+        return False
+
+
+def verify_root_count(claim: RootCountResult) -> bool:
+    """Verify a serialized distinct-root count against its source interval."""
+    try:
+        expected = compute_root_count(claim.source_polynomial, claim.lower, claim.upper)
+        return expected.root_count == claim.root_count
+    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+        return False
 
 
 def compute_strict_sublevel_measure(

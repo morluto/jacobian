@@ -9,12 +9,18 @@ from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.real_algebra._models import (
     RootCountRequest,
+    RootCountResult,
     SturmChainRequest,
+    SturmChainResult,
 )
 from jacobian.math.polynomials.real_algebra._tools import (
     TOOLS,
     compute_root_count,
     compute_sturm_chain,
+)
+from jacobian.math.polynomials.real_algebra.operations import (
+    verify_root_count,
+    verify_sturm_chain,
 )
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
@@ -72,6 +78,24 @@ def test_sturm_chain_cubic_known_answer() -> None:
         {1: Fraction(2, 9), 0: Fraction(25, 9)},
         {0: Fraction(-2079, 4)},
     ]
+
+
+def test_serialized_sturm_and_root_count_claims_are_source_bound() -> None:
+    poly = _poly(("1", "1", 2), ("-2", "1", 0))
+    chain = compute_sturm_chain(SturmChainRequest(polynomial=poly))
+    count = compute_root_count(
+        RootCountRequest(
+            polynomial=poly,
+            lower=R(num="-2", den="1"),
+            upper=R(num="2", den="1"),
+        )
+    )
+    decoded_chain = SturmChainResult.model_validate_json(chain.model_dump_json())
+    decoded_count = RootCountResult.model_validate_json(count.model_dump_json())
+    assert verify_sturm_chain(decoded_chain)
+    assert verify_root_count(decoded_count)
+    assert not verify_sturm_chain(decoded_chain.model_copy(update={"chain": (poly,)}))
+    assert not verify_root_count(decoded_count.model_copy(update={"root_count": 9}))
 
 
 def test_sturm_chain_quadratic() -> None:

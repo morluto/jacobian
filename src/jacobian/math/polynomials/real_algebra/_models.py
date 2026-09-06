@@ -89,8 +89,21 @@ class RootCountRequest(StrictModel):
 class SturmChainResult(StrictModel):
     """The ordinary exact Euclidean Sturm sequence as polynomials."""
 
+    source_polynomial: RationalPolynomial
     chain: tuple[RationalPolynomial, ...] = Field(min_length=1)
     degree: int = Field(ge=1, le=MAX_POLYNOMIAL_DEGREE)
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source_polynomial: RationalPolynomial,
+        chain: tuple[RationalPolynomial, ...],
+        degree: int,
+    ) -> SturmChainResult:
+        return cls.model_construct(
+            source_polynomial=source_polynomial, chain=chain, degree=degree
+        )
 
 
 class RootCountResult(StrictModel):

@@ -42,6 +42,12 @@ from jacobian.math.polynomials.operations import (
 from jacobian.math.polynomials.rational_functions.operations import (
     verify_hermite_reduction,
 )
+from jacobian.math.polynomials.unit_circle import (
+    UnitCircleArcEnergyRequest,
+    UnitCircleArcEnergyResult,
+    unit_circle_arc_energy,
+    verify_unit_circle_arc_energy,
+)
 
 
 def __getattr__(name: str) -> object:
@@ -60,6 +66,8 @@ def __getattr__(name: str) -> object:
 
 
 __all__ = [
+    "UnitCircleArcEnergyRequest",
+    "UnitCircleArcEnergyResult",
     "derivative",
     "discriminant",
     "divide",
@@ -94,7 +102,9 @@ __all__ = [
     "rational_polynomial_integral",
     "resultant",
     "square_free_decomposition",
+    "unit_circle_arc_energy",
     "verify_hermite_reduction",
+    "verify_unit_circle_arc_energy",
     "verify_polynomial_discriminant",
     "verify_polynomial_factorization",
     "verify_polynomial_gcd",

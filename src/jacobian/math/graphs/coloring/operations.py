@@ -240,9 +240,6 @@ def verify_vertex_coloring(assignment: VertexColoringAssignment) -> bool:
     )
 
 
-vertex_coloring_check = verify_vertex_coloring
-
-
 def verify_k_colorability(claim: KColorabilityResult) -> bool:
     """Verify the checkable positive part of a serialized colorability claim."""
     if not claim.colorable or claim.coloring is None:
@@ -288,9 +285,6 @@ def verify_maximal_independent_set(claim: MaximalIndependentSetResult) -> bool:
         )
         for vertex in range(claim.graph.vertex_count)
     )
-
-
-maximal_independent_set_check = verify_maximal_independent_set
 
 
 def edge_k_colorability(
@@ -380,11 +374,9 @@ __all__ = [
     "k_colorability",
     "list_capacity_edge_coloring",
     "maximal_independent_set",
-    "maximal_independent_set_check",
     "verify_k_colorability",
     "verify_maximal_independent_set",
     "verify_vertex_coloring",
-    "vertex_coloring_check",
 ]
 
 

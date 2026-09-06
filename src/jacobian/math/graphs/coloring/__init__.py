@@ -7,11 +7,9 @@ from jacobian.math.graphs.coloring.operations import (
     k_colorability,
     list_capacity_edge_coloring,
     maximal_independent_set,
-    maximal_independent_set_check,
     verify_k_colorability,
     verify_maximal_independent_set,
     verify_vertex_coloring,
-    vertex_coloring_check,
 )
 
 __all__ = [
@@ -21,9 +19,7 @@ __all__ = [
     "k_colorability",
     "list_capacity_edge_coloring",
     "maximal_independent_set",
-    "maximal_independent_set_check",
     "verify_k_colorability",
     "verify_maximal_independent_set",
     "verify_vertex_coloring",
-    "vertex_coloring_check",
 ]

@@ -150,6 +150,3 @@ def verify_equitable_coloring(claim: EquitableColoringResult) -> bool:
         return False
     class_sizes = [assignment.coloring.count(color) for color in range(claim.k)]
     return max(class_sizes, default=0) - min(class_sizes, default=0) <= 1
-
-
-equitable_coloring_check = verify_equitable_coloring

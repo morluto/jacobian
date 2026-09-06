@@ -13,8 +13,11 @@ from jacobian.math.probability.graphical_models import (
     factor_marginalize,
     factor_multiply,
     variable_elimination,
+    verify_d_separation,
 )
 from jacobian.math.probability.graphical_models._models import (
+    BayesianDAG,
+    DSeparationQuery,
     DSeparationRequest,
     FactorMarginalizeRequest,
     FactorMultiplyRequest,
@@ -249,17 +252,21 @@ class TestDSeparation:
 
     def test_adapter_binds_graph_and_decision(self) -> None:
         request = DSeparationRequest(
-            variable_count=3,
-            edges=((0, 1), (1, 2)),
-            set_a=(0,),
-            set_b=(2,),
-            set_c=(1,),
+            query=DSeparationQuery(
+                dag=BayesianDAG(variables=(0, 1, 2), edges=((0, 1), (1, 2))),
+                set_a=(0,),
+                set_b=(2,),
+                set_c=(1,),
+            )
         )
 
         result = _d_separation(request)
 
         assert result.d_separated is True
-        assert result.edges == request.edges
+        assert result.query.dag.edges == request.query.dag.edges
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert verify_d_separation(decoded)
+        assert not verify_d_separation(decoded.model_copy(update={"d_separated": False}))
 
     @pytest.mark.parametrize(
         "edges",
@@ -270,24 +277,36 @@ class TestDSeparation:
         ],
     )
     def test_invalid_dag_is_rejected(self, edges: tuple[tuple[int, int], ...]) -> None:
+        if any(parent == child or max(parent, child) >= 3 for parent, child in edges):
+            with pytest.raises(ValidationError):
+                DSeparationRequest(
+                    query=DSeparationQuery(
+                        dag=BayesianDAG(variables=(0, 1, 2), edges=edges),
+                        set_a=(0,),
+                        set_b=(1,),
+                        set_c=(),
+                    )
+                )
+            return
         request = DSeparationRequest(
-            variable_count=3,
-            edges=edges,
-            set_a=(0,),
-            set_b=(1,),
-            set_c=(),
+            query=DSeparationQuery(
+                dag=BayesianDAG(variables=(0, 1, 2), edges=edges),
+                set_a=(0,),
+                set_b=(1,),
+                set_c=(),
+            )
         )
         with pytest.raises(OperationDomainValidationError) as error:
             _d_separation(request)
         assert error.value.errors()[0]["type"] == "graphical_model.d_separation_invalid"
 
     def test_node_sets_must_be_pairwise_disjoint(self) -> None:
-        request = DSeparationRequest(
-            variable_count=2,
-            set_a=(0,),
-            set_b=(1,),
-            set_c=(1,),
-        )
-        with pytest.raises(OperationDomainValidationError) as error:
-            _d_separation(request)
-        assert error.value.errors()[0]["type"] == "graphical_model.d_separation_invalid"
+        with pytest.raises(ValidationError):
+            DSeparationRequest(
+                query=DSeparationQuery(
+                    dag=BayesianDAG(variables=(0, 1), edges=()),
+                    set_a=(0,),
+                    set_b=(1,),
+                    set_c=(1,),
+                )
+            )

@@ -9,6 +9,7 @@ from itertools import combinations
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.probability.graphical_models._models import DSeparationResult
 from jacobian.math.probability.graphical_models._validation import (
     validate_d_separation_input,
 )
@@ -175,6 +176,23 @@ def d_separation(
     return True
 
 
+def verify_d_separation(claim: DSeparationResult) -> bool:
+    """Verify a serialized d-separation conclusion against its source query."""
+
+    query = claim.query
+    try:
+        expected = d_separation(
+            query.dag.variable_count,
+            query.dag.edges,
+            query.set_a,
+            query.set_b,
+            query.set_c,
+        )
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+    return claim.d_separated == expected
+
+
 def _multiply_all(factors: Sequence[Factor]) -> Factor:
     if not factors:
         raise ValueError("at least one factor is required")
@@ -306,4 +324,5 @@ __all__ = [
     "factor_marginalize",
     "factor_multiply",
     "variable_elimination",
+    "verify_d_separation",
 ]

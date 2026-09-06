@@ -35,14 +35,15 @@ def _factor_marginalize(
 
 
 def _d_separation(request: DSeparationRequest) -> DSeparationResult:
+    query = request.query
     return DSeparationResult._from_kernel(
         request,
         d_separation(
-            request.variable_count,
-            request.edges,
-            request.set_a,
-            request.set_b,
-            request.set_c,
+            query.dag.variable_count,
+            query.dag.edges,
+            query.set_a,
+            query.set_b,
+            query.set_c,
         ),
     )
 
@@ -127,11 +128,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="conditioned_chain",
                 description="Decide whether endpoints of a three-node chain are separated by its middle node.",
                 input={
-                    "variable_count": 3,
-                    "edges": [[0, 1], [1, 2]],
-                    "set_a": [0],
-                    "set_b": [2],
-                    "set_c": [1],
+                    "query": {
+                        "dag": {"variables": [0, 1, 2], "edges": [[0, 1], [1, 2]]},
+                        "set_a": [0],
+                        "set_b": [2],
+                        "set_c": [1],
+                    },
                 },
             ),
         ),

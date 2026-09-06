@@ -5,6 +5,7 @@ from jacobian.math.probability.graphical_models.operations import (
     factor_marginalize,
     factor_multiply,
     variable_elimination,
+    verify_d_separation,
 )
 from jacobian.math.probability.graphical_models.values import Factor
 
@@ -14,4 +15,5 @@ __all__ = [
     "factor_marginalize",
     "factor_multiply",
     "variable_elimination",
+    "verify_d_separation",
 ]

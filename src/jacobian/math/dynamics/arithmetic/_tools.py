@@ -31,6 +31,15 @@ from jacobian.math.dynamics.arithmetic.operations import (
     iterate_polynomial,
     orbit_prefix,
     polynomial_coefficients,
+    polynomial_from_coefficients,
+)
+from jacobian.math.finite_fields.operations import (
+    finite_polynomial,
+    finite_polynomial_map,
+)
+from jacobian.math.finite_fields.values import (
+    FiniteFieldElement,
+    FiniteFieldPresentation,
 )
 from jacobian.math.polynomials.values import RationalPolynomial
 
@@ -53,6 +62,29 @@ def _request_polynomial(request: PolynomialCoefficientRequest) -> RationalPolyno
         return request.polynomial
     except ValueError as exc:
         _translate_value_error(exc, ("polynomial",))
+
+
+def _polynomial_example(coefficients: tuple[int, ...]) -> dict[str, Any]:
+    return polynomial_from_coefficients(coefficients).model_dump(mode="json")
+
+
+def _finite_map_example(
+    prime: int, coefficients: tuple[int, ...]
+) -> dict[str, Any]:
+    presentation = FiniteFieldPresentation(
+        characteristic=prime, modulus_coefficients=(0, 1), generator="x"
+    )
+    polynomial = finite_polynomial(
+        presentation,
+        tuple(
+            FiniteFieldElement(
+                presentation=presentation, coordinates=(coefficient % prime,)
+            )
+            for coefficient in coefficients
+        ),
+        variable="x",
+    )
+    return finite_polynomial_map(polynomial).model_dump(mode="json")
 
 
 def compute_map_iterate(request: MapIterateRequest) -> MapIterateResult:
@@ -242,11 +274,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="f_x_squared_plus_1_iterate_2",
                 description="Compute f^2 for f(x)=x^2+1; n must be non-negative.",
                 input={
-                    "coefficients": [
-                        {"num": "1", "den": "1"},
-                        {"num": "0", "den": "1"},
-                        {"num": "1", "den": "1"},
-                    ],
+                    "polynomial": _polynomial_example((1, 0, 1)),
                     "n": 2,
                 },
             ),
@@ -269,11 +297,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 description="Orbit of 0 under f(x)=x^2 for 5 steps; "
                 "start must be a rational number.",
                 input={
-                    "coefficients": [
-                        {"num": "0", "den": "1"},
-                        {"num": "0", "den": "1"},
-                        {"num": "1", "den": "1"},
-                    ],
+                    "polynomial": _polynomial_example((0, 0, 1)),
                     "start": {"num": "0", "den": "1"},
                     "max_steps": 5,
                 },
@@ -295,11 +319,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="dynatomic_n1_x2",
                 description="Dynatomic polynomial for n=1 of f(x)=x^2; n must be at least 1.",
                 input={
-                    "coefficients": [
-                        {"num": "0", "den": "1"},
-                        {"num": "0", "den": "1"},
-                        {"num": "1", "den": "1"},
-                    ],
+                    "polynomial": _polynomial_example((0, 0, 1)),
                     "n": 1,
                 },
             ),
@@ -321,11 +341,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 description="Multiplier of the fixed point 0 under f(x)=x^2; "
                 "cycle points must be rational.",
                 input={
-                    "coefficients": [
-                        {"num": "0", "den": "1"},
-                        {"num": "0", "den": "1"},
-                        {"num": "1", "den": "1"},
-                    ],
+                    "polynomial": _polynomial_example((0, 0, 1)),
                     "cycle": [{"num": "0", "den": "1"}],
                 },
             ),
@@ -345,7 +361,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="x2_mod_5",
                 description="Functional graph of x^2 over GF(5); prime must be a prime number.",
-                input={"prime": 5, "coefficients": ["0", "0", "1"]},
+                input={"polynomial_map": _finite_map_example(5, (0, 0, 1))},
             ),
         ),
     ),
@@ -361,6 +377,7 @@ __all__ = [
     "compute_orbit_prefix",
     "verify_cycle_multiplier",
     "verify_dynatomic_polynomial",
+    "verify_finite_field_map",
     "verify_map_iterate",
     "verify_orbit_prefix",
 ]

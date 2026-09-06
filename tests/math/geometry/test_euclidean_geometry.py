@@ -584,11 +584,17 @@ class TestAngleEquality:
         )
         result = compute_angle_equality(req)
         assert result.equal is True
+        assert result.vertex1 == req.vertex1
+        assert not hasattr(result, "request")
         decoded = type(result).model_validate_json(result.model_dump_json())
         assert verify_angle_equality(decoded)
 
         payload = result.model_dump(mode="json")
         payload["equal"] = False
+        assert not verify_angle_equality(type(result).model_validate(payload))
+
+        payload = result.model_dump(mode="json")
+        payload["ray2_b"] = _pt(1, 1).model_dump(mode="json")
         assert not verify_angle_equality(type(result).model_validate(payload))
 
     def test_different_angles(self) -> None:
@@ -656,11 +662,17 @@ class TestTriangleSimilarity:
         )
         result = compute_triangle_similarity(req)
         assert result.similar is True
+        assert result.triangle1 == req.triangle1
+        assert not hasattr(result, "request")
         decoded = type(result).model_validate_json(result.model_dump_json())
         assert verify_triangle_similarity(decoded)
 
         payload = result.model_dump(mode="json")
         payload["similar"] = False
+        assert not verify_triangle_similarity(type(result).model_validate(payload))
+
+        payload = result.model_dump(mode="json")
+        payload["triangle2"]["c"] = _pt(0, 3).model_dump(mode="json")
         assert not verify_triangle_similarity(type(result).model_validate(payload))
 
     def test_not_similar(self) -> None:

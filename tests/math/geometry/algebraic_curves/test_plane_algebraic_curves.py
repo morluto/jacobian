@@ -26,6 +26,7 @@ from jacobian.math.geometry.algebraic_curves._tools import (
     compute_projective_closure,
     compute_projective_plane_curve_singularity_profile,
     compute_rational_conic_parametrization,
+    verify_affine_curve_check,
 )
 from jacobian.math.polynomials._conversions import (
     rational_function_to_sympy,
@@ -560,6 +561,15 @@ def test_affine_curve_check_circle() -> None:
     result = compute_affine_curve_check(request)
     assert result.is_valid is True
     assert result.degree == 2
+    assert result.polynomial == request.polynomial
+    assert not hasattr(result, "request")
+    assert verify_affine_curve_check(
+        type(result).model_validate_json(result.model_dump_json())
+    )
+
+    forged = result.model_dump(mode="json")
+    forged["degree"] = 1
+    assert not verify_affine_curve_check(type(result).model_validate(forged))
 
 
 def test_native_operations_compose_canonical_values() -> None:

@@ -35,7 +35,12 @@ class AngleEqualityRequest(StrictModel):
 class AngleEqualityResult(StrictModel):
     """A source-bound claim about equality of two angles."""
 
-    request: AngleEqualityRequest
+    vertex1: RationalPoint2D
+    ray1_a: RationalPoint2D
+    ray1_b: RationalPoint2D
+    vertex2: RationalPoint2D
+    ray2_a: RationalPoint2D
+    ray2_b: RationalPoint2D
     equal: bool
 
 
@@ -49,7 +54,8 @@ class TriangleSimilarityRequest(StrictModel):
 class TriangleSimilarityResult(StrictModel):
     """A source-bound claim about similarity of two triangles."""
 
-    request: TriangleSimilarityRequest
+    triangle1: Triangle
+    triangle2: Triangle
     similar: bool
 
 

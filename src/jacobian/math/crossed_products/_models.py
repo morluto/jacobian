@@ -2,17 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Self
-
-from pydantic import model_validator
-from pydantic_core import PydanticCustomError
-
 from jacobian._models import StrictModel
 from jacobian.math.crossed_products.values import FiniteCosetCrossedProductElement
-
-
-def _validation_error(reason: str, message: str) -> PydanticCustomError:
-    return PydanticCustomError(f"crossed_product.{reason}", message)
 
 
 class CrossedProductMultiplyRequest(StrictModel):
@@ -32,18 +23,6 @@ class CrossedProductMultiplyResult(StrictModel):
     left: FiniteCosetCrossedProductElement
     right: FiniteCosetCrossedProductElement
     product: FiniteCosetCrossedProductElement
-
-    @model_validator(mode="after")
-    def require_bounded_source_shape(self) -> Self:
-        if self.product.presentation != self.left.presentation:
-            raise _validation_error(
-                "presentation_mismatch", "product must retain the operand presentation"
-            )
-        if self.right.presentation != self.left.presentation:
-            raise _validation_error(
-                "presentation_mismatch", "operands must use one presentation"
-            )
-        return self
 
 
 def _computed_result(

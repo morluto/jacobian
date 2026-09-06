@@ -127,6 +127,11 @@ def multiply(
 def verify_multiply(claim: CrossedProductMultiplyResult) -> bool:
     """Verify a serialized sparse product against both retained operands."""
     try:
+        if (
+            claim.left.presentation != claim.right.presentation
+            or claim.product.presentation != claim.left.presentation
+        ):
+            return False
         return multiply(claim.left, claim.right) == claim.product
     except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
         return False

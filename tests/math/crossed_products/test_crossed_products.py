@@ -327,6 +327,22 @@ def test_deserialized_result_can_be_verified_explicitly() -> None:
     assert verify_multiply(replayed)
 
 
+def test_deserialized_parent_mismatches_are_verified_after_structural_decode() -> None:
+    alpha, inverse, _ = _gardam_elements()
+    result = compute_product(CrossedProductMultiplyRequest(left=alpha, right=inverse))
+    foreign = _gardam_presentation().model_dump(mode="json")
+    foreign["characteristic"] = 3
+    payload = result.model_dump(mode="json")
+    payload["right"]["presentation"] = foreign
+    claim = CrossedProductMultiplyResult.model_validate(payload)
+    assert not verify_multiply(claim)
+
+    payload = result.model_dump(mode="json")
+    payload["product"]["presentation"] = foreign
+    claim = CrossedProductMultiplyResult.model_validate(payload)
+    assert not verify_multiply(claim)
+
+
 def test_element_requires_unique_canonical_coset_and_exponent_order() -> None:
     presentation = _c2_presentation()
     term = FiniteCosetCrossedProductTerm(coefficient=1, coset="e", exponents=("0",))

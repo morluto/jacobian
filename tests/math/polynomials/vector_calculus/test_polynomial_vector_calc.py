@@ -38,23 +38,23 @@ from jacobian.math.polynomials.vector_calculus.operations import (
 )
 
 
-def _run_gradient(request: ScalarFieldRequest):
+def _run_gradient(request: ScalarFieldRequest) -> VectorResult:
     return gradient(request.polynomial)
 
 
-def _run_laplacian(request: ScalarFieldRequest):
+def _run_laplacian(request: ScalarFieldRequest) -> ScalarResult:
     return laplacian(request.polynomial)
 
 
-def _run_directional_derivative(request: DirectionalDerivativeRequest):
+def _run_directional_derivative(request: DirectionalDerivativeRequest) -> ScalarResult:
     return directional_derivative(request.polynomial, request.direction)
 
 
-def _run_divergence(request: VectorFieldRequest):
+def _run_divergence(request: VectorFieldRequest) -> ScalarResult:
     return divergence(request.components)
 
 
-def _run_curl(request: CurlRequest):
+def _run_curl(request: CurlRequest) -> VectorResult:
     return curl(request.components)
 
 
@@ -139,6 +139,19 @@ def test_serialized_vector_calculus_claims_verify_retained_sources() -> None:
             }
         )
     )
+
+    missing_source = gradient_claim.model_dump(mode="json")
+    missing_source.pop("source_polynomial")
+    assert not verify_gradient(VectorResult.model_validate(missing_source))
+
+    wrong_source_kind = gradient_claim.model_dump(mode="json")
+    wrong_source_kind.pop("source_polynomial")
+    wrong_source_kind["source_components"] = [scalar.model_dump(mode="json")]
+    assert not verify_gradient(VectorResult.model_validate(wrong_source_kind))
+
+    wrong_axis = gradient_claim.model_dump(mode="json")
+    wrong_axis["source_polynomial"]["variables"] = ["u", "v"]
+    assert not verify_gradient(VectorResult.model_validate(wrong_axis))
 
 
 def test_renaming_the_declared_axis_transports_the_gradient() -> None:

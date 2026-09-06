@@ -114,36 +114,6 @@ class ScalarResult(StrictModel):
     direction: tuple[CanonicalRational, ...] | None = None
     result: RationalPolynomial
 
-    @model_validator(mode="after")
-    def require_source_axes(self) -> Self:
-        sources = [
-            source
-            for source in (self.source_polynomial, self.source_components)
-            if source is not None
-        ]
-        if len(sources) != 1:
-            raise _validation_error("source", "scalar result requires one source")
-        source = sources[0]
-        if isinstance(source, tuple) and not source:
-            raise _validation_error("source", "source components cannot be empty")
-        variables = (
-            source.variables
-            if isinstance(source, RationalPolynomial)
-            else source[0].variables
-        )
-        if isinstance(source, tuple) and (
-            len(source) != len(variables)
-            or any(component.variables != variables for component in source)
-        ):
-            raise _validation_error(
-                "ordered_ring", "source components must share one ring"
-            )
-        if self.result.variables != variables:
-            raise _validation_error("ordered_ring", "result must retain source axes")
-        if self.direction is not None and len(self.direction) != len(variables):
-            raise _validation_error("direction", "direction must retain source axes")
-        return self
-
     @classmethod
     def _from_kernel(
         cls,
@@ -172,35 +142,11 @@ class VectorResult(StrictModel):
 
     @model_validator(mode="after")
     def require_one_result_ring(self) -> Self:
-        sources = [
-            source
-            for source in (self.source_polynomial, self.source_components)
-            if source is not None
-        ]
-        if len(sources) != 1:
-            raise _validation_error("source", "vector result requires one source")
         variables = self.components[0].variables
         if any(component.variables != variables for component in self.components):
             raise _validation_error(
                 "ordered_ring", "vector result components must use one ordered ring"
             )
-        source = sources[0]
-        if isinstance(source, tuple) and not source:
-            raise _validation_error("source", "source components cannot be empty")
-        source_variables = (
-            source.variables
-            if isinstance(source, RationalPolynomial)
-            else source[0].variables
-        )
-        if isinstance(source, tuple) and (
-            len(source) != len(source_variables)
-            or any(component.variables != source_variables for component in source)
-        ):
-            raise _validation_error(
-                "ordered_ring", "source components must share one ring"
-            )
-        if source_variables != variables:
-            raise _validation_error("ordered_ring", "result must retain source axes")
         return self
 
     @classmethod

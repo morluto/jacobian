@@ -50,6 +50,7 @@ from jacobian.math.finite_fields.values import (
     ProjectivePoint,
     RankResult,
     _direction_rank_work,
+    _fibers_for_table,
     _homogeneous_monomial_count,
 )
 from jacobian.math.graphs.directed._models import (
@@ -882,6 +883,16 @@ def fiber_partition(table: FiniteMapTable) -> FiberPartition:
     return FiberPartition.from_table(table)
 
 
+def verify_fiber_partition(claim: FiberPartition) -> bool:
+    """Verify every fiber in a serialized finite-map partition."""
+
+    try:
+        _authenticate_map_table(claim.table)
+        return claim.fibers == _fibers_for_table(claim.table)
+    except Exception:
+        return False
+
+
 def analyze_collisions(table: FiniteMapTable) -> CollisionResult:
     """Return either the first canonical collision or an injectivity result."""
 
@@ -899,6 +910,21 @@ def analyze_collisions(table: FiniteMapTable) -> CollisionResult:
             )
         seen[target.digest] = (source, target)
     return CollisionResult._from_kernel(table=table, status="INJECTIVE")
+
+
+def verify_collisions(claim: CollisionResult) -> bool:
+    """Verify a serialized collision or injectivity conclusion."""
+
+    try:
+        expected = analyze_collisions(claim.table)
+        return (
+            claim.status == expected.status
+            and claim.left == expected.left
+            and claim.right == expected.right
+            and claim.image == expected.image
+        )
+    except Exception:
+        return False
 
 
 def analyze_permutation(table: FiniteMapTable) -> PermutationResult:
@@ -919,3 +945,16 @@ def analyze_permutation(table: FiniteMapTable) -> PermutationResult:
     return PermutationResult._from_kernel(
         table=table, status="PERMUTATION", inverse_entries=inverse_entries
     )
+
+
+def verify_permutation(claim: PermutationResult) -> bool:
+    """Verify a serialized permutation or non-permutation conclusion."""
+
+    try:
+        expected = analyze_permutation(claim.table)
+        return (
+            claim.status == expected.status
+            and claim.inverse_entries == expected.inverse_entries
+        )
+    except Exception:
+        return False

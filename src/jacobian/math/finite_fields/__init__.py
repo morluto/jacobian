@@ -21,6 +21,9 @@ from jacobian.math.finite_fields.operations import (
     projective_line,
     projective_point,
     restrict_scalars,
+    verify_collisions,
+    verify_fiber_partition,
+    verify_permutation,
 )
 from jacobian.math.finite_fields.values import (
     Axis,
@@ -87,5 +90,8 @@ __all__ = [
     "projective_line",
     "projective_point",
     "restrict_scalars",
+    "verify_collisions",
+    "verify_fiber_partition",
     "verify_matrix_rank",
+    "verify_permutation",
 ]

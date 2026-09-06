@@ -17,6 +17,9 @@ from jacobian.math.finite_fields import (
     finite_map_table,
     finite_polynomial,
     finite_polynomial_map,
+    verify_collisions,
+    verify_fiber_partition,
+    verify_permutation,
 )
 
 pytestmark = pytest.mark.requires_backend("flint")
@@ -181,3 +184,36 @@ def test_serialized_producer_tables_enter_every_consumer(
         result = consumer(candidate)
         assert result == consumer(table)
         assert result.table is candidate
+
+
+def test_serialized_fiber_partition_is_explicitly_verifiable() -> None:
+    partition = fiber_partition(finite_map_table(_map(3)))
+    decoded = type(partition).model_validate_json(partition.model_dump_json())
+    assert verify_fiber_partition(decoded)
+
+    forged = partition.model_dump(mode="json")
+    forged["fibers"][1][1] = [forged["fibers"][1][1][0]]
+    forged_decoded = type(partition).model_validate(forged)
+    assert not verify_fiber_partition(forged_decoded)
+
+
+def test_serialized_collision_is_explicitly_verifiable() -> None:
+    collision = analyze_collisions(finite_map_table(_map(3)))
+    decoded = type(collision).model_validate_json(collision.model_dump_json())
+    assert verify_collisions(decoded)
+
+    forged = collision.model_dump(mode="json")
+    forged["image"] = forged["table"]["entries"][0][1]
+    forged_decoded = type(collision).model_validate(forged)
+    assert not verify_collisions(forged_decoded)
+
+
+def test_serialized_permutation_is_explicitly_verifiable() -> None:
+    permutation = analyze_permutation(finite_map_table(_map(2)))
+    decoded = type(permutation).model_validate_json(permutation.model_dump_json())
+    assert verify_permutation(decoded)
+
+    forged = permutation.model_dump(mode="json")
+    forged["inverse_entries"][0][1] = forged["inverse_entries"][1][1]
+    forged_decoded = type(permutation).model_validate(forged)
+    assert not verify_permutation(forged_decoded)

@@ -26,6 +26,7 @@ from jacobian.math.number_theory.p_adic.operations import (
     find_padic_roots,
     hensel_lift_factors,
     hensel_lift_root,
+    verify_hensel_root,
 )
 
 
@@ -57,6 +58,10 @@ class TestHenselRootLifting:
         )
         assert result.is_simple_root
         assert (parse_canonical_integer(result.lifted_root) ** 2 + 1) % 125 == 0
+        assert verify_hensel_root(
+            HenselRootResult.model_validate_json(result.model_dump_json())
+        )
+        assert not verify_hensel_root(result.model_copy(update={"root_mod_p": 1}))
 
     def test_lift_mod_p_squared(self) -> None:
         """Lift root to mod p^2."""

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from math import isqrt
 
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.p_adic._models import (
     MAX_PRECISION,
@@ -196,6 +196,20 @@ def hensel_lift_root(
     lifted = _hensel_lift_root(coeffs, prime, root_mod_p, precision)
     return HenselRootResult._from_kernel(
         polynomial, prime, root_mod_p, precision, lifted
+    )
+
+
+def verify_hensel_root(claim: HenselRootResult) -> bool:
+    """Check the local congruence relation carried by a Hensel-root witness."""
+
+    coeffs = _kernel_coefficients(claim.polynomial)
+    lifted = parse_canonical_integer(claim.lifted_root)
+    modulus = claim.prime**claim.precision
+    return (
+        lifted % claim.prime == claim.root_mod_p
+        and _eval_poly(coeffs, claim.root_mod_p, claim.prime) == 0
+        and _eval_deriv(coeffs, claim.root_mod_p, claim.prime) != 0
+        and _eval_poly(coeffs, lifted, modulus) == 0
     )
 
 

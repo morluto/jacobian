@@ -10,8 +10,8 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.directed._models import (
     MAX_DIRECTED_OPERATION_EDGES,
     MAX_DIRECTED_OPERATION_VERTICES,
-    AcyclicOrderResult,
     AcyclicOrderRequest,
+    AcyclicOrderResult,
     CondensationEdge,
     CondensationResult,
     DagLongestPathResult,

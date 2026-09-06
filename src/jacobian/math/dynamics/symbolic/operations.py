@@ -288,6 +288,8 @@ def _verify_presentation_symbols(
     ):
         return None
     alphabet_set = set(alphabet)
+    if len(alphabet_set) != len(alphabet):
+        return None
     rank = {symbol: index for index, symbol in enumerate(alphabet)}
     for block in (*state_blocks, *forbidden_blocks):
         if type(block) is not tuple or len(block) > MAX_FORBIDDEN_BLOCK_LENGTH:
@@ -386,6 +388,10 @@ def _verify_presentation_carrier(claim: BlockPresentation) -> set[str] | None:
         or len(transitions) > MAX_PRESENTATION_TRANSITIONS
     ):
         return None
+    try:
+        require_bounded_presentation_verification(claim)
+    except (TypeError, ValueError):
+        return None
     alphabet_set = _verify_presentation_symbols(
         alphabet, state_blocks, forbidden_blocks, claim.memory
     )
@@ -432,6 +438,52 @@ def _actual_presentation_edges(
     return actual_edges, counts
 
 
+def _expected_occurring_state_blocks(
+    claim: BlockPresentation,
+) -> tuple[tuple[str, ...], ...]:
+    """Derive the canonical state axis from the complete source shift."""
+
+    import networkx as nx
+
+    alphabet = claim.alphabet
+    forbidden = claim.forbidden_blocks
+
+    def allowed(word: tuple[str, ...]) -> bool:
+        return not any(_contains(word, factor) for factor in forbidden)
+
+    candidates = tuple(
+        word
+        for word in itertools.product(alphabet, repeat=claim.memory)
+        if allowed(word)
+    )
+    candidate_set = set(candidates)
+    extensions = (
+        word
+        for word in itertools.product(alphabet, repeat=claim.memory + 1)
+        if allowed(word)
+    )
+    graph: nx.DiGraph[tuple[str, ...]] = nx.DiGraph()
+    graph.add_nodes_from(candidates)
+    for word in extensions:
+        source = word[: claim.memory] if claim.memory else ()
+        target = word[-claim.memory :] if claim.memory else ()
+        if source in candidate_set and target in candidate_set:
+            graph.add_edge(source, target)
+    cyclic = {
+        node
+        for component in nx.strongly_connected_components(graph)
+        for node in component
+        if len(component) > 1 or graph.has_edge(node, node)
+    }
+    right_infinite = _reachable_from(graph, cyclic, reverse=True)
+    left_infinite = _reachable_from(graph, cyclic, reverse=False)
+    return tuple(
+        state
+        for state in candidates
+        if state in right_infinite and (not claim.two_sided or state in left_infinite)
+    )
+
+
 def _expected_presentation_edges(
     claim: BlockPresentation,
 ) -> dict[tuple[int, int, str], int]:
@@ -464,7 +516,8 @@ def _verify_block_presentation(claim: BlockPresentation) -> bool:
         alphabet_set = _verify_presentation_carrier(claim)
         if alphabet_set is None:
             return False
-        require_bounded_presentation_verification(claim)
+        if claim.state_blocks != _expected_occurring_state_blocks(claim):
+            return False
         actual = _actual_presentation_edges(claim, alphabet_set)
         if actual is None:
             return False

@@ -112,6 +112,15 @@ class BlockPresentation(StrictModel):
 
     @model_validator(mode="after")
     def require_bound_presentation(self) -> Self:
+        required_memory = max(
+            (len(block) - 1 for block in self.forbidden_blocks),
+            default=0,
+        )
+        if self.memory < required_memory:
+            raise _validation_error(
+                "presentation_memory_below_forbidden_rule",
+                "presentation memory must encode every forbidden block",
+            )
         size = len(self.state_blocks)
         if len(self.adjacency_matrix) != size or any(
             len(row) != size for row in self.adjacency_matrix

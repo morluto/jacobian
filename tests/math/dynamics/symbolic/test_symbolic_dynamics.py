@@ -21,6 +21,7 @@ from jacobian.math.dynamics.symbolic import (
     adjacency_shift_from_presentation,
     block_language,
     finite_type_presentation,
+    higher_block_presentation,
     normalize_forbidden_blocks,
     periodic_point_profile,
     verify_block_presentation,
@@ -293,6 +294,75 @@ def test_block_presentation_verifier_requires_complete_allowed_overlap_relation(
     )
 
 
+def test_block_presentation_verifier_authenticates_source_occurring_axis() -> None:
+    full_alphabet = higher_block_presentation(
+        ForbiddenBlockShift(alphabet=("a", "b"), forbidden_blocks=()), 1
+    )
+    assert full_alphabet.state_blocks == (("a",), ("b",))
+    only_a = full_alphabet.model_copy(
+        update={
+            "state_blocks": (("a",),),
+            "transitions": (
+                LabeledTransition(source=0, target=0, appended_symbol="a"),
+            ),
+            "adjacency_matrix": ((1,),),
+        }
+    )
+    assert not verify_block_presentation(only_a)
+
+    two_sided = finite_type_presentation(
+        ForbiddenBlockShift(
+            alphabet=("0", "1"),
+            forbidden_blocks=(("0", "0"), ("1", "0")),
+            two_sided=True,
+        )
+    )
+    one_sided = finite_type_presentation(
+        ForbiddenBlockShift(
+            alphabet=("0", "1"),
+            forbidden_blocks=(("0", "0"), ("1", "0")),
+            two_sided=False,
+        )
+    )
+    assert two_sided.state_blocks == (("1",),)
+    assert one_sided.state_blocks == (("0",), ("1",))
+    transient = two_sided.model_copy(
+        update={
+            "state_blocks": (("0",), ("1",)),
+            "transitions": (
+                LabeledTransition(source=1, target=1, appended_symbol="1"),
+            ),
+            "adjacency_matrix": ((0, 0), (0, 1)),
+        }
+    )
+    assert not verify_block_presentation(transient)
+
+
+def test_block_presentation_verifier_rejects_unencoded_rules_and_duplicate_alphabet() -> (
+    None
+):
+    with pytest.raises(ValidationError, match="encode every forbidden block"):
+        BlockPresentation(
+            alphabet=("0", "1"),
+            memory=1,
+            state_blocks=(("0",),),
+            forbidden_blocks=(("0", "1", "0"),),
+            transitions=(),
+            adjacency_matrix=((0,),),
+            two_sided=True,
+        )
+    forged = BlockPresentation.model_construct(
+        alphabet=("0", "0"),
+        memory=0,
+        state_blocks=((),),
+        forbidden_blocks=(),
+        transitions=(),
+        adjacency_matrix=((0,),),
+        two_sided=True,
+    )
+    assert not verify_block_presentation(forged)
+
+
 def test_block_presentation_verifier_rejects_hostile_subclasses_before_operations() -> (
     None
 ):
@@ -322,8 +392,18 @@ def test_block_presentation_verifier_rejects_hostile_subclasses_before_operation
         )
         assert not verify_block_presentation(forged)
 
+    forged_block = presentation.model_copy(
+        update={"state_blocks": (HostileTuple(presentation.state_blocks[0]),)}
+    )
+    assert not verify_block_presentation(forged_block)
+
     forged_row = presentation.model_copy(
-        update={"adjacency_matrix": (HostileTuple(presentation.adjacency_matrix[0]),)}
+        update={
+            "adjacency_matrix": (
+                HostileTuple(presentation.adjacency_matrix[0]),
+                HostileTuple(presentation.adjacency_matrix[1]),
+            )
+        }
     )
     assert not verify_block_presentation(forged_row)
 

@@ -13,6 +13,7 @@ from jacobian.math.dynamics.symbolic.values import (
     AdjacencyShift,
     BlockPresentation,
     ForbiddenBlockShift,
+    LabeledTransition,
 )
 
 MAX_ZETA_COEFFICIENT_DIGITS = 128
@@ -83,6 +84,38 @@ def require_bounded_presentation(shift: ForbiddenBlockShift, memory: int) -> Non
         raise ValueError("presentation adjacency exceeds the result bound")
 
 
+def _presentation_carrier_work(
+    presentation: BlockPresentation,
+) -> tuple[int, list[int]]:
+    """Check nested carrier axes and count their bounded scan cost."""
+
+    carrier_work = len(presentation.alphabet)
+    for block in presentation.state_blocks:
+        if type(block) is not tuple or len(block) > MAX_FORBIDDEN_BLOCK_LENGTH:
+            raise ValueError("presentation state-block axis is malformed")
+        carrier_work += 1 + len(block)
+    forbidden_lengths: list[int] = []
+    for block in presentation.forbidden_blocks:
+        if type(block) is not tuple or len(block) > MAX_FORBIDDEN_BLOCK_LENGTH:
+            raise ValueError("presentation forbidden-block axis is malformed")
+        length = len(block)
+        forbidden_lengths.append(length)
+        carrier_work += 1 + length
+    for row in presentation.adjacency_matrix:
+        if type(row) is not tuple or len(row) != len(presentation.state_blocks):
+            raise ValueError("presentation adjacency axis is malformed")
+        carrier_work += 1 + len(row)
+    for transition in presentation.transitions:
+        if type(transition) is not LabeledTransition:
+            raise ValueError("presentation transition axis is malformed")
+        carrier_work += 3
+    return carrier_work, forbidden_lengths
+
+
+def _contains_work(word_length: int, factor_length: int) -> int:
+    return max(0, word_length - factor_length + 1) * factor_length
+
+
 def require_bounded_presentation_verification(
     presentation: BlockPresentation,
 ) -> None:
@@ -103,15 +136,63 @@ def require_bounded_presentation_verification(
         raise ValueError("presentation alphabet exceeds the supported bound")
     if len(presentation.adjacency_matrix) != state_count:
         raise ValueError("presentation adjacency axis exceeds the supported bound")
-    if any(len(row) != state_count for row in presentation.adjacency_matrix):
-        raise ValueError("presentation adjacency axis exceeds the supported bound")
 
+    # The verifier reconstructs the complete occurring state axis and scans
+    # every source rule.  Check the nested carrier axes before those scans so
+    # hostile tuple subclasses cannot turn a bounded claim into unbounded
+    # iteration, and charge these scans to the same admission budget.
+    carrier_work, forbidden_lengths = _presentation_carrier_work(presentation)
+
+    required_memory = max((length - 1 for length in forbidden_lengths), default=0)
+    if presentation.memory < required_memory:
+        raise ValueError("presentation memory cannot encode its forbidden rules")
+
+    candidate_states = enumeration_size(len(presentation.alphabet), presentation.memory)
+    candidate_extensions = enumeration_size(
+        len(presentation.alphabet), presentation.memory + 1
+    )
+
+    # Account for canonicalization and every forbidden-factor scan performed
+    # while deriving support and labeled overlap edges.
+    normalization_work = sum(1 + length for length in forbidden_lengths)
+    normalization_work += sum(
+        _contains_work(word_length, factor_length)
+        for word_length in forbidden_lengths
+        for factor_length in forbidden_lengths
+    )
+    rule_scan_work = (candidate_states + candidate_extensions) * sum(
+        _contains_work(word_length, factor_length)
+        for word_length in (presentation.memory, presentation.memory + 1)
+        for factor_length in forbidden_lengths
+    )
+    # Candidate construction, graph construction, SCC discovery, and the two
+    # reachability traversals each visit the bounded support axes.
+    support_work = 4 * (candidate_states + candidate_extensions)
     state_cells = state_count * state_count
     overlap_work = state_cells * max(1, presentation.memory)
     expected_work = state_cells * (
         len(presentation.alphabet) if not presentation.memory else 1
     )
-    work = state_cells + len(presentation.transitions) + overlap_work + expected_work
+    expected_rule_work = state_cells * sum(
+        _contains_work(presentation.memory + 1, factor_length)
+        for factor_length in forbidden_lengths
+    )
+    state_rule_work = state_count * sum(
+        _contains_work(presentation.memory, factor_length)
+        for factor_length in forbidden_lengths
+    )
+    work = (
+        carrier_work
+        + normalization_work
+        + rule_scan_work
+        + support_work
+        + len(presentation.transitions) * max(1, presentation.memory)
+        + state_cells
+        + overlap_work
+        + expected_work
+        + expected_rule_work
+        + state_rule_work
+    )
     if work > MAX_PRESENTATION_VERIFICATION_WORK:
         raise ValueError("presentation verification exceeds the work bound")
 

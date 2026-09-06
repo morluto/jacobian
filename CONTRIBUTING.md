@@ -57,7 +57,7 @@ cases:
 | Situation | Command |
 | --- | --- |
 | One-owner edit loop with unrelated static drift | `make handoff-scoped LANE=... TESTS=... PATHS="..."` |
-| A changed process, MCP, or Singular boundary | Add its named `make test-*` lane |
+| A changed process, MCP, Singular, or QEPCAD boundary | Add its named `make test-*` lane; shared process-runner changes need both runtime suites |
 | Documentation | `make docs-linkcheck` |
 | Broad ordinary validation requested or needed for cross-cutting evidence | `make check` once on the frozen tree |
 | Add ordinary integration or reproduce all local semantic test lanes | `make check-all` or `make test-full` |

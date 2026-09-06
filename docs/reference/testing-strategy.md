@@ -29,7 +29,9 @@ crosses its real boundary:
 | Focused mathematical edit loop | `make handoff LANE=math TESTS=tests/math/logic/test_tools.py` |
 | Cross-owner behavior | `make test-integration` |
 | Child-process behavior | `make test-process` |
-| Singular ideal backend | `make test-singular` |
+| Singular-backed ideals, polynomial maps, or projective singularity profiles | `make test-singular` |
+| QEPCAD plane-component backend | `make test-qepcad` |
+| Shared process runner (`src/jacobian/process.py`) | `make test-process`, `make test-singular`, and `make test-qepcad` |
 | Documentation | `make docs-linkcheck` |
 
 `make quick LANE=... TESTS=...` omits mypy but retains the repository-wide Ruff
@@ -37,7 +39,7 @@ check. In a shared checkout, use `make quick-scoped LANE=... TESTS=...
 PATHS="src/... tests/..."` to scope both Ruff and the test path. The explicit
 lane preserves its configured timeout and worker count. Supported
 focused lanes are `math`, `catalog`, `dispatch`, `cli`, `tooling`,
-`integration`, `process`, and `mcp`; Singular retains its dedicated command.
+`integration`, `process`, and `mcp`; Singular and QEPCAD retain dedicated commands.
 
 In a shared checkout with unrelated static drift, declare the source and test
 paths you own instead of waiting on unrelated files:
@@ -92,10 +94,21 @@ make test-timings JUNIT=pytest.xml TIMING=timing.json
 
 Pull requests normally run static validation. The checked-in CI planner selects
 changed mathematical owners and changed dispatch, CLI, tooling, integration,
-process, MCP, Singular, and installed-wheel boundaries. A public operation,
+process, MCP, Singular, QEPCAD, and installed-wheel boundaries. A public operation,
 model, admission, or canonical contract change also selects catalog conformance
 and the advertised-example integration test. Shared runtime, CI, dependency,
-and unmapped paths fail closed to the complete ordinary suite.
+and unmapped paths without a narrower ownership rule fail closed to the complete
+ordinary suite.
+
+The planner selects Singular and QEPCAD independently. Changes to
+`src/jacobian/process.py` select both runtime suites and the process boundary
+lane because both backends use the shared supervisor. Backend-specific changes
+select their corresponding runtime suite. When adding or moving a backend
+consumer, update its source/test ownership in `tools/ci_test_plan.py` and include
+its installed-backend tests in the corresponding Make target. Add a planner
+regression using the actual repository-relative source path with no other
+changed files; a test-file change or broad fallback can otherwise hide missing
+source ownership.
 
 When automatic linting adds a formatting commit, the default GitHub token does
 not emit the ordinary pull-request synchronization event. The lint workflow
@@ -427,10 +440,10 @@ contract makes that choice canonical.
 Singular testing follows the same ownership split as other child-process
 backends. The shared bounded-process supervisor owns process-group termination,
 including descendants that ignore termination or retain inherited pipes. The
-Singular lane tests only adapter-specific behavior: timeout and execution-outcome
-projection, supported-version enforcement, strict codec behavior, output limits,
-and request-scoped cleanup. Do not duplicate the supervisor's termination suite
-for each mathematical backend.
+Singular lane includes mathematical consumer tests and adapter-specific behavior:
+timeout and execution-outcome projection, supported-version enforcement, strict
+codec behavior, output limits, and request-scoped cleanup. Do not duplicate the
+supervisor's termination suite for each mathematical backend.
 
 The commutative-algebra domain checks Singular's mathematical results against an
 independent combinatorial oracle on bounded monomial ideals, in addition to

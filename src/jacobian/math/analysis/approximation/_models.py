@@ -9,6 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
     CanonicalRational,
+    NativeInteger,
     canonical_rational_component_digits,
     require_bounded_rational,
 )
@@ -89,7 +90,7 @@ class LagrangeBasisResult(StrictModel):
     """Lagrange basis polynomials with their retained node set."""
 
     nodes: RationalNodeSet
-    node_count: int = Field(ge=1, le=MAX_INTERPOLATION_NODES)
+    node_count: NativeInteger = Field(ge=1, le=MAX_INTERPOLATION_NODES)
     basis: tuple[LagrangeBasisPolynomial, ...] = Field(min_length=1)
 
     @model_validator(mode="after")

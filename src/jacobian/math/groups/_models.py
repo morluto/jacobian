@@ -323,7 +323,7 @@ class SubgroupEntry(StrictModel):
     """
 
     group: PermutationGroup
-    order: int = Field(ge=1, le=MAX_SUBGROUP_LATTICE_GROUP_ORDER)
+    order: NativeInteger = Field(ge=1, le=MAX_SUBGROUP_LATTICE_GROUP_ORDER)
 
 
 class GroupSubgroupLatticeResult(StrictModel):
@@ -331,7 +331,7 @@ class GroupSubgroupLatticeResult(StrictModel):
 
     source: PermutationGroup
     subgroups: tuple[SubgroupEntry, ...]
-    subgroup_count: int = Field(ge=1)
+    subgroup_count: NativeInteger = Field(ge=1)
 
     @model_validator(mode="before")
     @classmethod

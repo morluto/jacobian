@@ -4,6 +4,9 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.matrices.symbolic._models import (
+    RationalFunctionMatrix,
+    RationalFunctionMatrixProductRequest,
+    RationalFunctionMatrixRequest,
     SymbolicCharacteristicPolynomialRequest,
     SymbolicCharacteristicPolynomialResult,
     SymbolicDeterminantRequest,
@@ -11,9 +14,6 @@ from jacobian.math.matrices.symbolic._models import (
     SymbolicEigenvaluesResult,
     SymbolicLinearSystemRequest,
     SymbolicLinearSystemResult,
-    SymbolicMatrix,
-    SymbolicMatrixProductRequest,
-    SymbolicMatrixRequest,
     SymbolicRankResult,
 )
 from jacobian.math.matrices.symbolic.operations import (
@@ -34,7 +34,9 @@ def _run_determinant(request: SymbolicDeterminantRequest) -> SymbolicDeterminant
     )
 
 
-def _run_rank(request: SymbolicMatrixRequest) -> SymbolicRankResult:
+def _run_rank(request: RationalFunctionMatrixRequest) -> SymbolicRankResult:
+    if request.matrix.row_count == 0 or request.matrix.column_count == 0:
+        return SymbolicRankResult(rank=0, pivot_columns=())
     rank, pivot_columns = symbolic_rank(
         request.matrix.entries,
         request.matrix.variables,
@@ -42,7 +44,7 @@ def _run_rank(request: SymbolicMatrixRequest) -> SymbolicRankResult:
     return SymbolicRankResult(rank=rank, pivot_columns=pivot_columns)
 
 
-def _run_product(request: SymbolicMatrixProductRequest) -> SymbolicMatrix:
+def _run_product(request: RationalFunctionMatrixProductRequest) -> RationalFunctionMatrix:
     return symbolic_matrix_multiply(request.left, request.right)
 
 
@@ -208,14 +210,14 @@ TOOLS = (
         operation_id="matrix.symbolic.rank.compute",
         title="Compute exact symbolic matrix rank over QQ(t_1, ..., t_n)",
         description="Compute the rank and RREF pivot columns of a rectangular matrix whose entries are rational functions in declared algebraically independent variables, using SymPy's exact row reduction.",
-        request_type=SymbolicMatrixRequest,
+        request_type=RationalFunctionMatrixRequest,
         result_type=SymbolicRankResult,
         run=_run_rank,
         tags=("matrix", "symbolic", "rank", "rational-function-field", "exact"),
         examples=(
             OperationExample(
                 name="symbolic_rank_full",
-                description="Compute the rank of a 2x2 symbolic matrix; rows must be nonempty and equal length over declared variables.",
+                description="Compute the rank of a 2x2 symbolic matrix with equal-length rows over declared variables.",
                 input={
                     "matrix": _generic_two_by_two(),
                 },
@@ -233,8 +235,8 @@ TOOLS = (
             "aggregate support, exponents, coefficients, and result before SymPy "
             "multiplication."
         ),
-        request_type=SymbolicMatrixProductRequest,
-        result_type=SymbolicMatrix,
+        request_type=RationalFunctionMatrixProductRequest,
+        result_type=RationalFunctionMatrix,
         run=_run_product,
         tags=(
             "matrix",

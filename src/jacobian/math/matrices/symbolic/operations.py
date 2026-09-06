@@ -14,8 +14,10 @@ from pydantic_core import PydanticCustomError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.symbolic._models import (
+    RationalFunctionMatrix,
+    RationalFunctionVector,
+    RationalFunctionVectorBasis,
     SymbolicEigenvaluesResult,
-    SymbolicMatrix,
     _require_canonical_symbolic_values,
     _require_determinant_family_result_budget,
     _require_symbolic_product_admission,
@@ -125,19 +127,42 @@ def symbolic_rank(
 
 
 def symbolic_matrix_multiply(
-    left: SymbolicMatrix,
-    right: SymbolicMatrix,
-) -> SymbolicMatrix:
+    left: RationalFunctionMatrix,
+    right: RationalFunctionMatrix,
+) -> RationalFunctionMatrix:
     """Return the exact product of compatible symbolic matrices.
 
-    Native callers supply domain-owned ``SymbolicMatrix`` values. The owner
+    Native callers supply domain-owned ``RationalFunctionMatrix`` values. The owner
     admits complete work and result size before private SymPy multiplication.
     """
 
     _domain_call(_require_symbolic_product_admission, left, right)
+    # SymPy does not preserve a zero-row or zero-column dense matrix's second
+    # axis.  The carrier owns those axes, so construct the zero product
+    # directly whenever the backend has no nonempty dense representation.
+    if (
+        left.row_count == 0
+        or left.column_count == 0
+        or right.row_count == 0
+        or right.column_count == 0
+    ):
+        import sympy
+
+        zero = rational_function_from_sympy(sympy.Integer(0), left.variables)
+        return RationalFunctionMatrix(
+            variables=left.variables,
+            row_count=left.row_count,
+            column_count=right.column_count,
+            entries=tuple(
+                tuple(zero for _ in range(right.column_count))
+                for _ in range(left.row_count)
+            ),
+        )
     product = _matrix_from_values(left.entries) * _matrix_from_values(right.entries)
-    return SymbolicMatrix(
+    return RationalFunctionMatrix(
         variables=left.variables,
+        row_count=left.row_count,
+        column_count=right.column_count,
         entries=tuple(
             tuple(
                 rational_function_from_sympy(product[row, column], left.variables)
@@ -230,9 +255,9 @@ def symbolic_linear_system_solve(
     variables: tuple[str, ...],
 ) -> tuple[
     SystemClassification,
-    tuple[RationalFunction, ...] | None,
-    tuple[RationalFunction, ...] | None,
-    tuple[tuple[RationalFunction, ...], ...] | None,
+    RationalFunctionVector | None,
+    RationalFunctionVector | None,
+    RationalFunctionVectorBasis | None,
 ]:
     """Solve ``A x = b`` over ``QQ(t_1, ..., t_n)``.
 
@@ -274,13 +299,33 @@ def symbolic_linear_system_solve(
             raise ValueError(
                 "exact row reduction did not determine the unique solution"
             )
-        return "UNIQUE", tuple(solution[j] for j in range(n_cols)), None, None
+        return (
+            "UNIQUE",
+            RationalFunctionVector(
+                variables=variables,
+                dimension=n_cols,
+                entries=tuple(solution[j] for j in range(n_cols)),
+            ),
+            None,
+            None,
+        )
 
     # Non-unique consistent system
     null = matrix.nullspace()
-    nullspace_basis: tuple[tuple[RationalFunction, ...], ...] = tuple(
-        tuple(rational_function_from_sympy(vec[i], variables) for i in range(n_cols))
-        for vec in null
+    nullspace_basis = RationalFunctionVectorBasis(
+        variables=variables,
+        vector_dimension=n_cols,
+        vectors=tuple(
+            RationalFunctionVector(
+                variables=variables,
+                dimension=n_cols,
+                entries=tuple(
+                    rational_function_from_sympy(vec[i], variables)
+                    for i in range(n_cols)
+                ),
+            )
+            for vec in null
+        ),
     )
 
     # Find a particular solution using the pseudo-inverse approach
@@ -302,8 +347,12 @@ def symbolic_linear_system_solve(
     return (
         "NON_UNIQUE",
         None,
-        tuple(particular),
-        nullspace_basis if nullspace_basis else None,
+        RationalFunctionVector(
+            variables=variables,
+            dimension=n_cols,
+            entries=tuple(particular),
+        ),
+        nullspace_basis if len(nullspace_basis) else None,
     )
 
 

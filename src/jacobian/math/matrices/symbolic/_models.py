@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from itertools import combinations, permutations, product
 from math import prod
 from typing import Any, Literal, Self
@@ -152,8 +152,31 @@ def _require_determinant_family_result_budget(
         )
 
 
-class SymbolicMatrix(StrictModel):
-    """One nonempty rectangular matrix over a multivariate rational-function field.
+def _require_raw_rational_function_matrix(data: Any) -> Any:
+    """Bound raw matrix axes before nested rational functions are parsed."""
+    if not isinstance(data, dict):
+        return data
+    allowed = {"variables", "row_count", "column_count", "entries"}
+    if set(data).difference(allowed):
+        raise _validation_error("shape_mismatch", "symbolic matrix contains unknown fields")
+    entries = data.get("entries")
+    if isinstance(entries, (list, tuple)):
+        if len(entries) > MAX_SYMBOLIC_MATRIX_DIMENSION:
+            raise _validation_error(
+                "budget_exceeded",
+                "symbolic matrix has at most 8 rows",
+            )
+        for row in entries:
+            if isinstance(row, (list, tuple)) and len(row) > MAX_SYMBOLIC_MATRIX_DIMENSION:
+                raise _validation_error(
+                    "budget_exceeded",
+                    "symbolic matrix has at most 8 columns",
+                )
+    return canonicalize_json_containers(data)
+
+
+class RationalFunctionMatrix(StrictModel):
+    """One rectangular matrix over a multivariate rational-function field.
 
     Every entry is a canonical reduced numerator/denominator value over the
     declared ordered variables. For example, the former expression ``a*c`` is
@@ -167,23 +190,47 @@ class SymbolicMatrix(StrictModel):
         min_length=0,
         max_length=MAX_SYMBOLIC_VARIABLES,
     )
+    row_count: int = Field(ge=0, le=MAX_SYMBOLIC_MATRIX_DIMENSION)
+    column_count: int = Field(ge=0, le=MAX_SYMBOLIC_MATRIX_DIMENSION)
     entries: tuple[tuple[RationalFunction, ...], ...] = Field(
-        min_length=1,
         max_length=MAX_SYMBOLIC_MATRIX_DIMENSION,
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def infer_axes_for_native_construction(cls, data: Any) -> Any:
+        """Fill dimensions for existing in-process constructors."""
+        data = _require_raw_rational_function_matrix(data)
+        if isinstance(data, dict):
+            entries = data.get("entries")
+            if "row_count" not in data and isinstance(entries, (list, tuple)):
+                data = dict(data)
+                data["row_count"] = len(entries)
+            if "column_count" not in data and isinstance(entries, (list, tuple)):
+                data = dict(data)
+                data["column_count"] = (
+                    len(entries[0])
+                    if entries and isinstance(entries[0], (list, tuple))
+                    else 0
+                )
+        return data
+
     @model_validator(mode="after")
-    def require_rectangular_nonempty_rows(self) -> Self:
-        column_count = len(self.entries[0])
-        if column_count == 0 or column_count > MAX_SYMBOLIC_MATRIX_DIMENSION:
+    def require_rectangular_rows(self) -> Self:
+        if len(self.entries) != self.row_count:
+            raise _validation_error(
+                "shape_mismatch", "matrix entries must match the declared row axis"
+            )
+        if any(len(row) != self.column_count for row in self.entries):
             raise _validation_error(
                 "shape_mismatch",
-                "matrix rows must contain between 1 and "
-                f"{MAX_SYMBOLIC_MATRIX_DIMENSION} entries",
+                "matrix entries must match the declared column axis",
             )
-        if any(len(row) != column_count for row in self.entries):
+        if self.column_count > MAX_SYMBOLIC_MATRIX_DIMENSION:
             raise _validation_error(
-                "budget_exceeded", "matrix rows must all have the same length"
+                "shape_mismatch",
+                "matrix columns must contain at most "
+                f"{MAX_SYMBOLIC_MATRIX_DIMENSION} entries",
             )
         if len(set(self.variables)) != len(self.variables):
             raise _validation_error(
@@ -205,6 +252,116 @@ class SymbolicMatrix(StrictModel):
                 "symbolic matrix exceeds the 512-term operation budget",
             )
         return self
+
+
+class RationalFunctionVector(StrictModel):
+    """A vector with an explicit rational-function field and ordered axis."""
+
+    variables: tuple[PolynomialVariable, ...] = Field(
+        min_length=0, max_length=MAX_SYMBOLIC_VARIABLES
+    )
+    dimension: int = Field(ge=0, le=MAX_SYMBOLIC_MATRIX_DIMENSION)
+    entries: tuple[RationalFunction, ...] = Field(
+        max_length=MAX_SYMBOLIC_MATRIX_DIMENSION
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def infer_dimension_for_native_construction(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if set(data).difference({"variables", "dimension", "entries"}):
+                raise _validation_error(
+                    "shape_mismatch", "rational-function vector contains unknown fields"
+                )
+            entries = data.get("entries")
+            if isinstance(entries, (list, tuple)):
+                if len(entries) > MAX_SYMBOLIC_MATRIX_DIMENSION:
+                    raise _validation_error(
+                        "budget_exceeded", "rational-function vector has at most 8 entries"
+                    )
+                data = canonicalize_json_containers(data)
+        if isinstance(data, dict) and "dimension" not in data:
+            entries = data.get("entries")
+            if isinstance(entries, (list, tuple)):
+                data = dict(data)
+                data["dimension"] = len(entries)
+        return data
+
+    @model_validator(mode="after")
+    def require_axis_and_field(self) -> Self:
+        if len(self.entries) != self.dimension:
+            raise _validation_error("shape_mismatch", "vector entries must match its axis")
+        if any(value.variables != self.variables for value in self.entries):
+            raise _validation_error("shape_mismatch", "vector entries must use its field")
+        return self
+
+    def __len__(self) -> int:
+        return self.dimension
+
+    def __getitem__(self, index: int) -> RationalFunction:
+        return self.entries[index]
+
+    def __iter__(self) -> Iterator[RationalFunction]:  # type: ignore[override]
+        return iter(self.entries)
+
+
+class RationalFunctionVectorBasis(StrictModel):
+    """A finite family of vectors sharing one ordered coordinate axis.
+
+    ``vectors`` is the explicit basis-vector axis; ``vector_dimension`` is the
+    coordinate axis carried by every member.  Keeping both axes makes an empty
+    kernel basis unambiguous as well.
+    """
+
+    variables: tuple[PolynomialVariable, ...] = Field(
+        min_length=0, max_length=MAX_SYMBOLIC_VARIABLES
+    )
+    vector_dimension: int = Field(ge=0, le=MAX_SYMBOLIC_MATRIX_DIMENSION)
+    vectors: tuple[RationalFunctionVector, ...] = Field(
+        max_length=MAX_SYMBOLIC_MATRIX_DIMENSION
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_bounded_raw_basis(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        vectors = data.get("vectors")
+        if isinstance(vectors, (list, tuple)):
+            if len(vectors) > MAX_SYMBOLIC_MATRIX_DIMENSION:
+                raise _validation_error(
+                    "budget_exceeded", "vector basis has at most 8 basis vectors"
+                )
+            for vector in vectors:
+                entries = vector.get("entries") if isinstance(vector, dict) else vector
+                if isinstance(entries, (list, tuple)) and len(entries) > MAX_SYMBOLIC_MATRIX_DIMENSION:
+                    raise _validation_error(
+                        "budget_exceeded",
+                        "basis vectors have at most 8 coordinates",
+                    )
+        return canonicalize_json_containers(data)
+
+    @model_validator(mode="after")
+    def require_shared_axis(self) -> Self:
+        if any(
+            vector.variables != self.variables
+            or vector.dimension != self.vector_dimension
+            for vector in self.vectors
+        ):
+            raise _validation_error(
+                "shape_mismatch",
+                "basis vectors must use the declared field and coordinate axis",
+            )
+        return self
+
+    def __len__(self) -> int:
+        return len(self.vectors)
+
+    def __getitem__(self, index: int) -> RationalFunctionVector:
+        return self.vectors[index]
+
+    def __iter__(self) -> Iterator[RationalFunctionVector]:  # type: ignore[override]
+        return iter(self.vectors)
 
 
 def _require_canonical_symbolic_values(
@@ -733,7 +890,7 @@ def _expanded_product_cell_bounds(
     )
 
 
-def _projected_expansion_terms(left: SymbolicMatrix, right: SymbolicMatrix) -> int:
+def _projected_expansion_terms(left: RationalFunctionMatrix, right: RationalFunctionMatrix) -> int:
     """Charge every cell the raw expansion its admitted shape must spend.
 
     A cell admitted through the exact shared-denominator fallback carries
@@ -762,8 +919,8 @@ def _projected_expansion_terms(left: SymbolicMatrix, right: SymbolicMatrix) -> i
 
 
 def _require_symbolic_product_admission(
-    left: SymbolicMatrix,
-    right: SymbolicMatrix,
+    left: RationalFunctionMatrix,
+    right: RationalFunctionMatrix,
 ) -> None:
     """Prove that every exact product entry fits the canonical result value.
 
@@ -783,7 +940,7 @@ def _require_symbolic_product_admission(
             "budget_exceeded",
             "symbolic matrix multiplication requires identical ordered field variables",
         )
-    if len(left.entries[0]) != len(right.entries):
+    if left.column_count != right.row_count:
         raise _validation_error(
             "budget_exceeded",
             "symbolic matrix multiplication requires the left column count to equal "
@@ -871,7 +1028,7 @@ def _require_symbolic_product_admission(
             # denominator term (unit or monomial), and cancellation in the
             # admitted domain can only shrink collected numerator support,
             # so result_term_count bounds the terms the returned
-            # SymbolicMatrix will validate.
+            # RationalFunctionMatrix will validate.
             aggregate_result_terms += result_term_count
     if aggregate_expansion_terms > MAX_SYMBOLIC_MATRIX_TERMS:
         raise _validation_error(
@@ -885,30 +1042,30 @@ def _require_symbolic_product_admission(
         )
 
 
-class SymbolicMatrixProductRequest(StrictModel):
+class RationalFunctionMatrixProductRequest(StrictModel):
     """Two compatible symbolic matrices whose exact product is representable."""
 
-    left: SymbolicMatrix = Field(
+    left: RationalFunctionMatrix = Field(
         description=(
-            "A nonempty symbolic matrix over QQ(t_1, ..., t_n). Its ordered "
+            "A symbolic matrix over QQ(t_1, ..., t_n), including empty axes. Its ordered "
             "field variables must exactly match right.variables."
         )
     )
-    right: SymbolicMatrix = Field(
+    right: RationalFunctionMatrix = Field(
         description=(
-            "A nonempty symbolic matrix over the same ordered field as left. "
+            "A symbolic matrix over the same ordered field as left. "
             "Its row count must equal left's column count."
         )
     )
 
 
-class SymbolicMatrixRequest(StrictModel):
+class RationalFunctionMatrixRequest(StrictModel):
     """A symbolic matrix over a declared variable list."""
 
-    matrix: SymbolicMatrix
+    matrix: RationalFunctionMatrix
 
 
-class SquareSymbolicMatrixRequest(SymbolicMatrixRequest):
+class SquareRationalFunctionMatrixRequest(RationalFunctionMatrixRequest):
     """A square symbolic matrix for operations requiring square input.
 
     Operations like determinant, characteristic polynomial, and eigenvalues
@@ -919,8 +1076,8 @@ class SquareSymbolicMatrixRequest(SymbolicMatrixRequest):
 
     @model_validator(mode="after")
     def require_square(self) -> Self:
-        rows = len(self.matrix.entries)
-        cols = len(self.matrix.entries[0])
+        rows = self.matrix.row_count
+        cols = self.matrix.column_count
         if rows != cols:
             raise _validation_error(
                 "budget_exceeded", "operation requires a square symbolic matrix"
@@ -928,10 +1085,10 @@ class SquareSymbolicMatrixRequest(SymbolicMatrixRequest):
         return self
 
 
-class SymbolicDeterminantRequest(SquareSymbolicMatrixRequest):
+class SymbolicDeterminantRequest(SquareRationalFunctionMatrixRequest):
     """A square matrix whose exact determinant fits the public result type."""
 
-    matrix: SymbolicMatrix = Field(
+    matrix: RationalFunctionMatrix = Field(
         description=(
             "A square symbolic matrix. One-dimensional matrices may contain any "
             "accepted rational function; larger matrices require polynomial "
@@ -941,10 +1098,10 @@ class SymbolicDeterminantRequest(SquareSymbolicMatrixRequest):
     )
 
 
-class SymbolicCharacteristicPolynomialRequest(SquareSymbolicMatrixRequest):
+class SymbolicCharacteristicPolynomialRequest(SquareRationalFunctionMatrixRequest):
     """A square matrix whose characteristic polynomial fits the result type."""
 
-    matrix: SymbolicMatrix = Field(
+    matrix: RationalFunctionMatrix = Field(
         description=(
             "A square symbolic matrix. One-dimensional matrices may contain any "
             "accepted rational function; larger matrices require polynomial "
@@ -987,7 +1144,7 @@ class SymbolicEigenvaluesResult(StrictModel):
     the retained symbolic matrix.
     """
 
-    matrix: SymbolicMatrix
+    matrix: RationalFunctionMatrix
     characteristic_polynomial: tuple[RationalFunction, ...] = Field(
         min_length=2,
         max_length=MAX_SYMBOLIC_MATRIX_DIMENSION + 1,
@@ -997,9 +1154,8 @@ class SymbolicEigenvaluesResult(StrictModel):
 
     @model_validator(mode="after")
     def require_square_source_and_polynomial_shape(self) -> Self:
-        entries = self.matrix.entries
         if (
-            len(entries) != len(entries[0])
+            self.matrix.row_count != self.matrix.column_count
             or len(self.characteristic_polynomial) != self.degree + 1
         ):
             raise _validation_error(
@@ -1256,7 +1412,7 @@ class SymbolicLinearSystemRequest(StrictModel):
     side ``b`` must use the same declared ordered variable list.
     """
 
-    matrix: SymbolicMatrix
+    matrix: RationalFunctionMatrix
     rhs: tuple[RationalFunction, ...] = Field(
         min_length=1,
         max_length=MAX_SYMBOLIC_MATRIX_DIMENSION,
@@ -1301,15 +1457,15 @@ class SymbolicLinearSystemResult(StrictModel):
     re-enters a symbolic operation.
     """
 
-    matrix: SymbolicMatrix
+    matrix: RationalFunctionMatrix
     rhs: tuple[RationalFunction, ...] = Field(
         min_length=1,
         max_length=MAX_SYMBOLIC_MATRIX_DIMENSION,
     )
     classification: Literal["UNIQUE", "NON_UNIQUE", "INCONSISTENT"]
-    solution: tuple[RationalFunction, ...] | None = None
-    particular_solution: tuple[RationalFunction, ...] | None = None
-    nullspace_basis: tuple[tuple[RationalFunction, ...], ...] | None = None
+    solution: RationalFunctionVector | None = None
+    particular_solution: RationalFunctionVector | None = None
+    nullspace_basis: RationalFunctionVectorBasis | None = None
     consistency: Literal["EXACT_RATIONAL_FUNCTION"] = "EXACT_RATIONAL_FUNCTION"
     field_semantics: Literal["GENERIC_OVER_QQ_FIELD"] = "GENERIC_OVER_QQ_FIELD"
 
@@ -1332,7 +1488,26 @@ class SymbolicLinearSystemResult(StrictModel):
                     f"column count {limit}",
                 )
         basis = data.get("nullspace_basis")
-        if isinstance(basis, (list, tuple)):
+        if isinstance(basis, dict):
+            vectors = basis.get("vectors")
+            if isinstance(vectors, (list, tuple)) and len(vectors) > limit:
+                raise _validation_error(
+                    "shape_mismatch",
+                    f"nullspace_basis length {len(vectors)} exceeds the "
+                    f"retained system's column count {limit}",
+                )
+            if isinstance(vectors, (list, tuple)):
+                for vector in vectors:
+                    entries = vector.get("entries") if isinstance(vector, dict) else vector
+                    if isinstance(entries, (list, tuple)) and len(entries) > limit:
+                        raise _validation_error(
+                            "shape_mismatch",
+                            "a nullspace basis vector exceeds the retained "
+                            f"system's column count {limit}",
+                        )
+        elif isinstance(basis, (list, tuple)):
+            # A legacy nested tuple is rejected by the typed field after this
+            # cheap cap; never parse an unbounded relayed basis first.
             if len(basis) > limit:
                 raise _validation_error(
                     "shape_mismatch",
@@ -1350,11 +1525,11 @@ class SymbolicLinearSystemResult(StrictModel):
 
     def _require_witness_vector_shape(
         self,
-        vector: tuple[RationalFunction, ...],
+        vector: RationalFunctionVector,
         *,
         label: str,
     ) -> None:
-        columns = len(self.matrix.entries[0])
+        columns = self.matrix.column_count
         if len(vector) != columns:
             raise _validation_error(
                 "shape_mismatch",
@@ -1392,10 +1567,21 @@ class SymbolicLinearSystemResult(StrictModel):
                 self.particular_solution,
                 label="particular_solution",
             )
-            for vector in self.nullspace_basis or ():
-                self._require_witness_vector_shape(
-                    vector, label="nullspace basis vector"
-                )
+            if self.nullspace_basis is not None:
+                if self.nullspace_basis.variables != self.matrix.variables:
+                    raise _validation_error(
+                        "shape_mismatch",
+                        "nullspace basis must use the retained system's ordered field",
+                    )
+                if self.nullspace_basis.vector_dimension != self.matrix.column_count:
+                    raise _validation_error(
+                        "shape_mismatch",
+                        "nullspace basis must use the retained system's column axis",
+                    )
+                for vector in self.nullspace_basis:
+                    self._require_witness_vector_shape(
+                        vector, label="nullspace basis vector"
+                    )
         elif (
             self.solution is not None
             or self.particular_solution is not None
@@ -1429,24 +1615,54 @@ class SymbolicLinearSystemResult(StrictModel):
     def _from_kernel(
         cls,
         *,
-        matrix: SymbolicMatrix,
+        matrix: RationalFunctionMatrix,
         rhs: tuple[RationalFunction, ...],
         classification: Literal["UNIQUE", "NON_UNIQUE", "INCONSISTENT"],
-        solution: tuple[RationalFunction, ...] | None,
-        particular_solution: tuple[RationalFunction, ...] | None,
-        nullspace_basis: tuple[tuple[RationalFunction, ...], ...] | None,
+        solution: tuple[RationalFunction, ...] | RationalFunctionVector | None,
+        particular_solution: tuple[RationalFunction, ...] | RationalFunctionVector | None,
+        nullspace_basis: tuple[tuple[RationalFunction, ...], ...] | RationalFunctionVectorBasis | None,
     ) -> Self:
         """Construct a result from the owner-local bounded kernel output."""
 
+        def vector(
+            values: tuple[RationalFunction, ...] | RationalFunctionVector | None,
+        ) -> RationalFunctionVector | None:
+            if values is None:
+                return None
+            if isinstance(values, RationalFunctionVector):
+                return values
+            return RationalFunctionVector.model_construct(
+                variables=matrix.variables,
+                dimension=matrix.column_count,
+                entries=values,
+            )
+        if isinstance(nullspace_basis, RationalFunctionVectorBasis):
+            basis_value = nullspace_basis
+        elif nullspace_basis is None:
+            basis_value = None
+        else:
+            basis_value = RationalFunctionVectorBasis.model_construct(
+                variables=matrix.variables,
+                vector_dimension=matrix.column_count,
+                vectors=tuple(vector(item) for item in nullspace_basis),
+            )
         return cls.model_construct(
             matrix=matrix,
             rhs=rhs,
             classification=classification,
-            solution=solution,
-            particular_solution=particular_solution,
-            nullspace_basis=nullspace_basis,
+            solution=vector(solution),
+            particular_solution=vector(particular_solution),
+            nullspace_basis=basis_value,
         )
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"matrix.{reason}", message)
+
+
+# The symbolic matrix names remain import aliases while the domain-owned
+# carriers are published under their field-independent canonical names.
+SymbolicMatrix = RationalFunctionMatrix
+SymbolicMatrixProductRequest = RationalFunctionMatrixProductRequest
+SymbolicMatrixRequest = RationalFunctionMatrixRequest
+SquareSymbolicMatrixRequest = SquareRationalFunctionMatrixRequest

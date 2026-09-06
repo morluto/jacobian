@@ -1131,6 +1131,9 @@ def test_symbolic_native_api_exports_matrix_value_and_product() -> None:
     import jacobian.math.matrices.symbolic as symbolic
 
     assert tuple(symbolic.__all__) == (
+        "RationalFunctionMatrix",
+        "RationalFunctionVector",
+        "RationalFunctionVectorBasis",
         "SymbolicMatrix",
         "symbolic_characteristic_polynomial",
         "symbolic_determinant",
@@ -1139,6 +1142,49 @@ def test_symbolic_native_api_exports_matrix_value_and_product() -> None:
         "symbolic_rank",
         "verify_symbolic_eigenvalues",
     )
+
+
+def test_rational_function_matrix_preserves_empty_shapes_and_axes() -> None:
+    from jacobian.math.matrices.symbolic import RationalFunctionMatrix
+
+    for rows, columns, entries in ((0, 3, ()), (3, 0, ((), (), ())), (0, 0, ())):
+        matrix = RationalFunctionMatrix(
+            variables=("t",),
+            row_count=rows,
+            column_count=columns,
+            entries=entries,
+        )
+        payload = matrix.model_dump(mode="json")
+        assert (payload["row_count"], payload["column_count"]) == (rows, columns)
+        restored = RationalFunctionMatrix.model_validate(payload)
+        assert restored == matrix
+
+
+def test_rational_function_matrix_rejects_forged_axes() -> None:
+    from jacobian.math.matrices.symbolic import RationalFunctionMatrix
+
+    with pytest.raises(ValidationError):
+        RationalFunctionMatrix.model_validate(
+            {"variables": ["t"], "row_count": 0, "column_count": 3, "entries": [[]]}
+        )
+
+
+def test_empty_rational_function_product_retains_result_axes() -> None:
+    from jacobian.math.matrices.symbolic import RationalFunctionMatrix
+
+    zero = _rf(("t",))
+    left = RationalFunctionMatrix(
+        variables=("t",), row_count=2, column_count=0, entries=((), ())
+    )
+    right = RationalFunctionMatrix(
+        variables=("t",),
+        row_count=0,
+        column_count=3,
+        entries=(),
+    )
+    product = symbolic_matrix_multiply(left, right)
+    assert (product.row_count, product.column_count) == (2, 3)
+    assert product.entries == ((zero, zero, zero), (zero, zero, zero))
 
 
 def test_matrix_rejects_nonrectangular_mismatched_and_invalid_axes() -> None:

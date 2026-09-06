@@ -9,6 +9,8 @@ from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.symbolic._models import (
+    RationalFunctionVector,
+    RationalFunctionVectorBasis,
     SymbolicLinearSystemRequest,
     SymbolicLinearSystemResult,
     SymbolicMatrix,
@@ -347,8 +349,10 @@ class TestSolutionGrowthAdmission:
         result = _run_linear_system(request)
         assert result.classification == "NON_UNIQUE"
         assert result.particular_solution is not None
+        assert result.particular_solution.dimension == matrix.column_count
         assert result.particular_solution[0] == rf(n**2, 1)
         assert result.nullspace_basis is not None
+        assert result.nullspace_basis.vector_dimension == matrix.column_count
 
 
 class TestAdmissionWorkBounding:
@@ -463,12 +467,25 @@ class TestSourceBoundResult:
         result = _run_linear_system(request)
         assert result.matrix == request.matrix
         assert result.rhs == request.rhs
+        assert result.solution is not None
+        assert result.solution.variables == request.matrix.variables
+        assert result.solution.dimension == request.matrix.column_count
 
     def test_serialized_result_revalidates(self) -> None:
         result = _run_linear_system(self._request())
-        revalidated = SymbolicLinearSystemResult.model_validate(result.model_dump())
+        revalidated = SymbolicLinearSystemResult.model_validate(
+            result.model_dump(mode="json")
+        )
         assert revalidated.classification == "UNIQUE"
         assert revalidated.solution == result.solution
+
+    def test_serialized_solution_forgery_cannot_change_its_axis(self) -> None:
+        result = _run_linear_system(self._request())
+        payload = _payload(result.model_dump(mode="json"))
+        solution = cast(Payload, payload["solution"])
+        solution["dimension"] = 1
+        with pytest.raises(ValidationError):
+            SymbolicLinearSystemResult.model_validate(payload)
 
 
 class TestNativeSystemAdmission:
@@ -574,9 +591,21 @@ class TestNonUniqueWitnessEquivalence:
         payload = _payload(self._non_unique_result().model_dump())
         # (9, 4) solves the system exactly and (0, 5) spans the same kernel
         # line as the replayed witness; neither matches backend identity.
-        payload["particular_solution"] = [rf(9).model_dump(), rf(4).model_dump()]
+        payload["particular_solution"] = RationalFunctionVector(
+            variables=("t",), dimension=2, entries=(rf(9), rf(4))
+        ).model_dump()
         basis_vector = [_rf(("t",)).model_dump(), rf(5).model_dump()]
-        payload["nullspace_basis"] = [basis_vector]
+        payload["nullspace_basis"] = RationalFunctionVectorBasis(
+            variables=("t",),
+            vector_dimension=2,
+            vectors=(
+                RationalFunctionVector(
+                    variables=("t",),
+                    dimension=2,
+                    entries=tuple(RationalFunction.model_validate(value) for value in basis_vector),
+                ),
+            ),
+        ).model_dump()
         revalidated = SymbolicLinearSystemResult.model_validate(payload)
         assert revalidated.classification == "NON_UNIQUE"
 

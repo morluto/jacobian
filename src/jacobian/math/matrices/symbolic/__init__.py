@@ -9,8 +9,16 @@ from jacobian.math.matrices.symbolic.operations import (
     symbolic_rank,
     verify_symbolic_eigenvalues,
 )
+from jacobian.math.matrices.symbolic.values import (
+    RationalFunctionMatrix,
+    RationalFunctionVector,
+    RationalFunctionVectorBasis,
+)
 
 __all__ = [
+    "RationalFunctionMatrix",
+    "RationalFunctionVector",
+    "RationalFunctionVectorBasis",
     "SymbolicMatrix",
     "symbolic_characteristic_polynomial",
     "symbolic_determinant",

@@ -18,6 +18,7 @@ def test_exact_public_api_symbols() -> None:
         "poisson_binomial",
         "sigma_algebra_from_observation",
         "sigma_algebra_join",
+        "verify_poisson_binomial",
     )
     assert tuple(finite_stochastic_processes.__all__) == expected
     assert len(finite_stochastic_processes.__all__) == len(

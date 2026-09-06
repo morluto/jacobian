@@ -21,16 +21,6 @@ from jacobian.math.number_theory.arithmetic_functions.inverse_multiplicative._to
 )
 
 
-def test_discovery_schema_describes_serialized_exact_integers() -> None:
-    from jacobian.catalog.catalog import Catalog
-
-    descriptor = Catalog.open().inspect(
-        "number_theory.euler_phi.preimage_power_sums.compute"
-    )
-    assert descriptor is not None
-    assert descriptor.output_schema["properties"]["power_sum"]["type"] == "string"
-
-
 def test_catalog_contains_only_audited_operations() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
         "number_theory.euler_phi.preimages.compute",

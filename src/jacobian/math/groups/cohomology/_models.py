@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import Field, model_validator
-from pydantic_core import PydanticCustomError
+from pydantic import Field
 
 from jacobian._models import StrictModel
 from jacobian.math.groups._models import PermutationGroup
@@ -47,12 +46,6 @@ MAX_PRIME = 2_147_483_647
 """Conservative 31-bit prime bound before primality testing; bounds digit
 length and predicted modular-arithmetic work, not a mathematical restriction
 to small primes."""
-
-
-def _validation_error(reason: str, message: str) -> PydanticCustomError:
-    """Build a stable validation error owned by group-cohomology contracts."""
-
-    return PydanticCustomError(f"group_cohomology.{reason}", message)
 
 
 class GroupCohomologyRequest(StrictModel):
@@ -98,29 +91,10 @@ class GroupCohomologyResult(StrictModel):
     group: PermutationGroup
     prime: int = Field(ge=2, le=MAX_PRIME)
     max_degree: int = Field(ge=0, le=MAX_COCHAIN_DEGREE)
-    groups: tuple[CohomologyGroup, ...] = Field(min_length=1)
-    group_order: int = Field(ge=1)
-
-    @model_validator(mode="after")
-    def require_consistent(self) -> Self:
-        if len(self.groups) != self.max_degree + 1 or tuple(
-            group.degree for group in self.groups
-        ) != tuple(range(self.max_degree + 1)):
-            raise _validation_error(
-                "degrees_not_contiguous",
-                "groups must cover degrees 0..max_degree exactly once in order",
-            )
-        if self.group_order > MAX_GROUP_ORDER:
-            raise _validation_error(
-                "group_order_exceeds_bound",
-                f"group_order must not exceed {MAX_GROUP_ORDER}",
-            )
-        for group in self.groups:
-            if group.betti > group.cochain_dimension:
-                raise _validation_error(
-                    "betti_bound", "betti cannot exceed cochain_dimension"
-                )
-        return self
+    groups: tuple[CohomologyGroup, ...] = Field(
+        min_length=1, max_length=MAX_COCHAIN_DEGREE + 1
+    )
+    group_order: int = Field(ge=1, le=MAX_GROUP_ORDER)
 
     @classmethod
     def _from_kernel(

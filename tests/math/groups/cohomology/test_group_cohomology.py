@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -15,10 +17,11 @@ from jacobian.math.groups.cohomology._models import (
 )
 from jacobian.math.groups.cohomology.operations import (
     group_cohomology,
+    verify_cohomology,
 )
 
 
-def compute_group_cohomology(request: GroupCohomologyRequest):
+def compute_group_cohomology(request: GroupCohomologyRequest) -> GroupCohomologyResult:
     return group_cohomology(request.group, request.prime, request.max_degree)
 
 
@@ -370,3 +373,15 @@ class TestResultBinding:
             group_order=2,
         )
         assert result.prime == 4
+
+    def test_serialized_claim_forgery_is_structural_but_fails_verification(
+        self,
+    ) -> None:
+        result = compute_group_cohomology(self._request())
+        payload = json.loads(result.model_dump_json())
+        payload["group_order"] = 7
+        forged = GroupCohomologyResult.model_validate_json(
+            json.dumps(payload), strict=True
+        )
+        assert forged.group_order == 7
+        assert not verify_cohomology(forged)

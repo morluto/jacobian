@@ -98,9 +98,7 @@ class StationaryDistributionResult(StrictModel):
                 "closed classes must be unique and sorted",
             )
         for item in self.extreme_distributions:
-            if any(
-                index < 0 or index >= dimension for index in item.closed_class
-            ):
+            if any(index < 0 or index >= dimension for index in item.closed_class):
                 raise _validation_error(
                     "closed_class_index",
                     "closed-class indices must lie on the transition-state axis",

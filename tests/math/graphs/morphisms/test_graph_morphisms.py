@@ -639,9 +639,7 @@ class TestSubgraphPatternFind:
         assert not verify_subgraph_pattern_find(forged_existing)
 
         huge = "v" * (6 * 1024 * 1024)
-        oversized_host = self._g(
-            [huge, "w0", "w1"], [[huge, "w0"], ["w0", "w1"]]
-        )
+        oversized_host = self._g([huge, "w0", "w1"], [[huge, "w0"], ["w0", "w1"]])
         oversized_pattern = self._g(
             ["p", "q", "r"], [["p", "q"], ["p", "r"], ["q", "r"]]
         )

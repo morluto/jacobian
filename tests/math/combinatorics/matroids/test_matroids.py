@@ -16,6 +16,7 @@ from jacobian.math.combinatorics.matroids import (
     matroid_closure,
     matroid_rank,
     operations,
+    verify_closure,
 )
 from jacobian.math.combinatorics.matroids._models import (
     MatroidClosureRequest,
@@ -146,6 +147,19 @@ class TestClosure:
         assert result.rank == 1
         payload = result.model_dump(mode="json")
         assert type(result).model_validate(payload) == result
+        assert verify_closure(type(result).model_validate(payload))
+
+        forged = dict(payload)
+        forged["closure"] = [0, 1]
+        assert not verify_closure(type(result).model_validate(forged))
+
+    def test_empty_closure_claim_round_trips_and_verifies(self) -> None:
+        m = _matroid(5, [[], []], 0)
+        result = compute_closure(MatroidClosureRequest(matroid=m, subset=()))
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert decoded.closure == ()
+        assert decoded.rank == 0
+        assert verify_closure(decoded)
 
     def test_subset_indices_validated(self) -> None:
         m = _matroid(5, [(1, 0), (0, 1)], 2)

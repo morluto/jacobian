@@ -165,11 +165,6 @@ class MatroidClosureResult(MatroidClosureRequest):
                 "closure.indices",
                 "closure indices must be in 0..matroid.matrix.columns-1",
             )
-        if self.rank > len(self.subset):
-            raise _validation_error(
-                "rank.bound",
-                "rank cannot exceed the number of selected ground-set elements",
-            )
         return self
 
     @classmethod

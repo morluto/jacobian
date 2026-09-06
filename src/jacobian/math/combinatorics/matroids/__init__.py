@@ -4,10 +4,12 @@ from jacobian.math.combinatorics.matroids._models import LinearMatroid
 from jacobian.math.combinatorics.matroids.operations import (
     matroid_closure,
     matroid_rank,
+    verify_closure,
 )
 
 __all__ = [
     "LinearMatroid",
     "matroid_closure",
     "matroid_rank",
+    "verify_closure",
 ]

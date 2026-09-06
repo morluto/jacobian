@@ -111,4 +111,13 @@ def closure_result(
     )
 
 
-__all__ = ["closure_result", "matroid_closure", "matroid_rank"]
+def verify_closure(claim: MatroidClosureResult) -> bool:
+    """Verify a serialized closure and rank against its retained matroid."""
+
+    try:
+        return closure_result(claim.matroid, claim.subset) == claim
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+
+
+__all__ = ["closure_result", "matroid_closure", "matroid_rank", "verify_closure"]

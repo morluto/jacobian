@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from collections.abc import Callable
 from fractions import Fraction
 
@@ -18,8 +17,6 @@ from jacobian.math.combinatorics._recurrence_models import (
     _require_bounded_rational,
     _require_canonical_polynomial,
 )
-
-_LOG10_2 = math.log10(2)
 
 
 def _run_admission(
@@ -66,9 +63,25 @@ def _admit_bounded_input(
 
 
 def _lower_decimal_digits(value: int) -> int:
+    """Return the exact decimal width without converting through ``str``.
+
+    The bit-length estimate only selects a nearby power of ten.  Integer
+    comparisons correct that estimate, so powers of ten at the result bound
+    are not underestimated and values just below them remain admitted.
+    """
+
     if value == 0:
         return 1
-    return math.floor((abs(value).bit_length() - 1) * _LOG10_2) + 1
+    magnitude = abs(value)
+    digits = ((magnitude.bit_length() - 1) * 30103) // 100000 + 1
+    lower_power = 10 ** (digits - 1)
+    while magnitude < lower_power:
+        digits -= 1
+        lower_power //= 10
+    while magnitude >= lower_power * 10:
+        lower_power *= 10
+        digits += 1
+    return digits
 
 
 def _require_bounded_fraction(
@@ -86,6 +99,17 @@ def _require_bounded_fraction(
                 f"{MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS}-digit bound"
             ),
         )
+
+
+def _rational_series_work_units(denominator_degree: int, truncation_order: int) -> int:
+    """Return the exact recurrence work charged by a rational-series prefix."""
+
+    ramp = min(max(0, truncation_order - 1), denominator_degree)
+    recurrence_products = ramp * (ramp + 1) // 2
+    recurrence_products += (
+        max(0, truncation_order - denominator_degree - 1) * denominator_degree
+    )
+    return truncation_order + recurrence_products
 
 
 def _admit_linear_recurrence(
@@ -246,12 +270,7 @@ def _admit_series(
     numerator_values = tuple(value.as_fraction() for value in numerator)
     denominator_values = tuple(value.as_fraction() for value in denominator)
     denominator_degree = len(denominator_values) - 1
-    ramp = min(max(0, truncation_order - 1), denominator_degree)
-    recurrence_products = ramp * (ramp + 1) // 2
-    recurrence_products += (
-        max(0, truncation_order - denominator_degree - 1) * denominator_degree
-    )
-    work_units = truncation_order + recurrence_products
+    work_units = _rational_series_work_units(denominator_degree, truncation_order)
     if work_units > MAX_RATIONAL_SERIES_WORK_UNITS:
         raise OperationDomainValidationError(
             location=("truncation_order",),
@@ -284,4 +303,6 @@ __all__ = [
     "_admit_linear_recurrence",
     "_admit_p_recursive_recurrence",
     "_admit_series",
+    "_lower_decimal_digits",
+    "_rational_series_work_units",
 ]

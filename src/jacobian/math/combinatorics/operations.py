@@ -25,16 +25,18 @@ from jacobian.math.combinatorics._recurrence_admission import (
     _admit_linear_recurrence,
     _admit_p_recursive_recurrence,
     _admit_series,
+    _rational_series_work_units,
 )
 from jacobian.math.combinatorics._recurrence_models import (
+    MAX_COMBINATORICS_INPUT_RATIONAL_DIGITS,
     MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
     MAX_RATIONAL_SERIES_TRUNCATION_ORDER,
+    MAX_RATIONAL_SERIES_WORK_UNITS,
     IndexedRationalValue,
     LinearRecurrenceEvaluationResult,
     PolynomialCoefficientRecurrenceEvaluationResult,
     RationalGeneratingFunctionCoefficientsResult,
     _require_bounded_rational,
-    _require_canonical_polynomial,
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
@@ -467,6 +469,33 @@ def _wire(value: Fraction) -> CanonicalRational:
     )
 
 
+def _canonical_fractions(
+    values: tuple[CanonicalRational, ...], max_digits: int, label: str
+) -> tuple[Fraction, ...] | None:
+    """Validate canonical rational scalars and return their exact fractions."""
+
+    if not isinstance(values, tuple):
+        return None
+    fractions: list[Fraction] = []
+    for value in values:
+        if not isinstance(value, CanonicalRational):
+            return None
+        _require_bounded_rational(value, max_digits=max_digits, label=label)
+        if type(value.num) is not str or type(value.den) is not str:
+            return None
+        numerator = parse_canonical_integer(value.num)
+        denominator = parse_canonical_integer(value.den)
+        if denominator <= 0:
+            return None
+        fraction = Fraction(numerator, denominator)
+        if value.num != format_canonical_integer(
+            fraction.numerator
+        ) or value.den != format_canonical_integer(fraction.denominator):
+            return None
+        fractions.append(fraction)
+    return tuple(fractions)
+
+
 def _require_rational_tuple(values: object, *, name: str) -> None:
     if not isinstance(values, tuple) or not all(
         isinstance(value, CanonicalRational) for value in values
@@ -762,26 +791,37 @@ def verify_rational_generating_function_coefficients(
             return False
         if not 1 <= len(claim.numerator) <= 33 or not 1 <= len(claim.denominator) <= 33:
             return False
-        if not all(
-            isinstance(value, CanonicalRational)
-            for value in (*claim.numerator, *claim.denominator, *series.coefficients)
-        ):
-            return False
-        _require_canonical_polynomial(claim.numerator, label="numerator coefficient")
-        _require_canonical_polynomial(
-            claim.denominator, label="denominator coefficient"
+
+        numerator = _canonical_fractions(
+            claim.numerator,
+            MAX_COMBINATORICS_INPUT_RATIONAL_DIGITS,
+            "numerator coefficient",
         )
-        for value in series.coefficients:
-            _require_bounded_rational(
-                value,
-                max_digits=MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
-                label="series coefficient",
-            )
-        denominator = tuple(value.as_fraction() for value in claim.denominator)
+        denominator = _canonical_fractions(
+            claim.denominator,
+            MAX_COMBINATORICS_INPUT_RATIONAL_DIGITS,
+            "denominator coefficient",
+        )
+        if numerator is None or denominator is None:
+            return False
+        if len(numerator) > 1 and numerator[-1] == 0:
+            return False
+        if len(denominator) > 1 and denominator[-1] == 0:
+            return False
         if denominator[0] == 0:
             return False
-        numerator = tuple(value.as_fraction() for value in claim.numerator)
-        coefficients = tuple(value.as_fraction() for value in series.coefficients)
+        if (
+            _rational_series_work_units(len(denominator) - 1, order)
+            > MAX_RATIONAL_SERIES_WORK_UNITS
+        ):
+            return False
+        coefficients = _canonical_fractions(
+            series.coefficients,
+            MAX_COMBINATORICS_RESULT_RATIONAL_DIGITS,
+            "series coefficient",
+        )
+        if coefficients is None:
+            return False
         return all(
             sum(
                 denominator[offset] * coefficients[degree - offset]
@@ -790,7 +830,7 @@ def verify_rational_generating_function_coefficients(
             == (numerator[degree] if degree < len(numerator) else Fraction())
             for degree in range(order)
         )
-    except (AttributeError, IndexError, TypeError, ValueError):
+    except (ArithmeticError, AttributeError, IndexError, TypeError, ValueError):
         return False
 
 

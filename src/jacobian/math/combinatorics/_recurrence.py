@@ -185,7 +185,10 @@ RECURRENCE_OPERATIONS = (
         title="Compute a rational generating-function coefficient prefix",
         description=(
             "Expand one exact rational function N(x)/D(x) at zero through a "
-            "bounded finite truncation and expose the residual congruence."
+            "bounded finite truncation and return a canonical TruncatedSeries "
+            "bound to the retained numerator and denominator. The denominator "
+            "constant coefficient must be nonzero; consumers can verify the "
+            "source relation when they rely on it."
         ),
         request_type=RationalGeneratingFunctionCoefficientsRequest,
         result_type=RationalGeneratingFunctionCoefficientsResult,

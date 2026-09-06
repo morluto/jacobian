@@ -9,6 +9,10 @@ from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.combinatorics._recurrence_admission import (
+    _lower_decimal_digits,
+    _require_bounded_fraction,
+)
 from jacobian.math.combinatorics._recurrence_models import (
     RationalGeneratingFunctionCoefficientsRequest,
     RationalGeneratingFunctionCoefficientsResult,
@@ -17,7 +21,10 @@ from jacobian.math.combinatorics.operations import (
     rational_generating_function_coefficients,
     verify_rational_generating_function_coefficients,
 )
-from jacobian.math.polynomials.series._models import SeriesTruncateRequest
+from jacobian.math.polynomials.series._models import (
+    SeriesTruncateRequest,
+    TruncatedSeries,
+)
 from jacobian.math.polynomials.series.operations import truncate
 
 ONE = CanonicalRational(num="1", den="1")
@@ -102,6 +109,65 @@ def test_source_relation_survives_canonical_json_roundtrip() -> None:
     assert decoded.numerator == (ONE,)
     assert decoded.denominator == (ONE, MINUS_ONE)
     assert verify_rational_generating_function_coefficients(decoded)
+
+
+def test_verifier_rejects_model_copy_scalar_corruption() -> None:
+    result = _expand((ONE, MINUS_ONE), 5)
+    malformed_denominator = result.denominator[0].model_copy(update={"den": "0"})
+    malformed = result.model_copy(
+        update={"denominator": (malformed_denominator, MINUS_ONE)}
+    )
+    assert not verify_rational_generating_function_coefficients(malformed)
+
+    malformed_coefficient = result.series.coefficients[0].model_copy(
+        update={"num": None}
+    )
+    malformed_series = result.series.model_copy(
+        update={
+            "coefficients": (
+                malformed_coefficient,
+                *result.series.coefficients[1:],
+            )
+        }
+    )
+    malformed = result.model_copy(update={"series": malformed_series})
+    assert not verify_rational_generating_function_coefficients(malformed)
+
+
+def test_verifier_rejects_overwork_before_scanning_a_forged_series() -> None:
+    order = 250_000
+    forged = RationalGeneratingFunctionCoefficientsResult.model_construct(
+        numerator=(ONE,),
+        denominator=(ONE, *((MINUS_ONE,) * 32)),
+        coefficient_convention="ASCENDING_POWERS_OF_X",
+        expansion_point="0",
+        truncation_order=order,
+        series=TruncatedSeries.model_construct(
+            variable="x",
+            truncation_order=order,
+            coefficients=(ONE,) * order,
+        ),
+    )
+
+    assert not verify_rational_generating_function_coefficients(forged)
+
+
+def test_decimal_digit_bound_counts_power_of_ten_exactly() -> None:
+    below = 10**32_768 - 1
+    at = 10**32_768
+    assert _lower_decimal_digits(below) == 32_768
+    assert _lower_decimal_digits(at) == 32_769
+    _require_bounded_fraction(
+        Fraction(below),
+        label="series coefficient",
+        location=("coefficients", 0),
+    )
+    with pytest.raises(OperationDomainValidationError, match="32768-digit bound"):
+        _require_bounded_fraction(
+            Fraction(at),
+            label="series coefficient",
+            location=("coefficients", 0),
+        )
 
 
 def test_catalog_schema_publishes_the_canonical_series_example() -> None:

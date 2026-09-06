@@ -126,8 +126,10 @@ def _admit(
         work = size * (sum(m + 1 for m in multidegree) + 1)
     else:
         work = size * (len(terms) * (dimension + 1) + 1)
+    # Each power-row entry performs bounded rational powers and cross-products;
+    # each output-row entry performs one weighted term and an accumulation.
     work += sum(
-        (m + 1) * sum(2 * (e + 1) + 1 for e in es)
+        (m + 1) * sum(4 * (e + 1) + 4 for e in es)
         for es, m in zip(exponents, multidegree, strict=True)
     )
     if work * (1 + height // 64) ** 2 > MAX_WEIGHTED_WORK:

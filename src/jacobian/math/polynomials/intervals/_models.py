@@ -6,17 +6,12 @@ from dataclasses import dataclass
 from math import gcd
 from typing import Self
 
-from pydantic import ConfigDict, model_validator
+from pydantic import ConfigDict
 from pydantic_core import PydanticCustomError
 
-from jacobian._digest import Sha256Digest
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, require_bounded_rational
 from jacobian._models import StrictModel
-from jacobian.canonical import (
-    encode_strict_json,
-    format_canonical_integer,
-    sha256_digest,
-)
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.analysis.intervals import ClosedRationalInterval, RationalBox
 from jacobian.math.polynomials.intervals._kernel import term_is_zero_on_box
 from jacobian.math.polynomials.values import (
@@ -125,25 +120,6 @@ def _endpoint_lcm_contribution(interval: ClosedRationalInterval) -> int:
         )
     common = factor * upper_denominator
     return 0 if common == 1 else _integer_digits(common)
-
-
-def _source_payload(
-    polynomial: RationalPolynomial,
-    box: RationalBox,
-) -> dict[str, object]:
-    return {
-        "polynomial": polynomial.model_dump(mode="json"),
-        "box": box.model_dump(mode="json"),
-    }
-
-
-def polynomial_box_source_digest(
-    polynomial: RationalPolynomial,
-    box: RationalBox,
-) -> Sha256Digest:
-    """Return the strict-wire digest binding one polynomial and ordered box."""
-
-    return sha256_digest(encode_strict_json(_source_payload(polynomial, box)))
 
 
 def _term_component_bounds(
@@ -307,19 +283,7 @@ class PolynomialBoxEnclosureResult(StrictModel):
 
     polynomial: RationalPolynomial
     box: RationalBox
-    source_digest: Sha256Digest
     enclosure: ClosedRationalInterval
-
-    @model_validator(mode="after")
-    def require_source_binding(self) -> Self:
-        if self.source_digest != polynomial_box_source_digest(
-            self.polynomial,
-            self.box,
-        ):
-            raise _validation_error(
-                "source digest does not bind the polynomial and box"
-            )
-        return self
 
     @classmethod
     def _from_kernel(
@@ -333,10 +297,6 @@ class PolynomialBoxEnclosureResult(StrictModel):
         return cls.model_construct(
             polynomial=request.polynomial,
             box=request.box,
-            source_digest=polynomial_box_source_digest(
-                request.polynomial,
-                request.box,
-            ),
             enclosure=enclosure,
         )
 
@@ -353,5 +313,4 @@ __all__ = [
     "MAX_BOX_ENCLOSURE_TOTAL_DEGREE",
     "PolynomialBoxEnclosureRequest",
     "PolynomialBoxEnclosureResult",
-    "polynomial_box_source_digest",
 ]

@@ -29,6 +29,7 @@ from jacobian.math.polynomials.intervals._models import (
 from jacobian.math.polynomials.intervals._tools import (
     TOOLS,
     compute_polynomial_box_enclosure,
+    verify_polynomial_box_enclosure,
 )
 from jacobian.math.polynomials.maps.operations import jacobian_matrix
 from jacobian.math.polynomials.maps.values import RationalPolynomialMap
@@ -267,7 +268,7 @@ def test_reversed_coordinate_interval_is_rejected_before_execution() -> None:
 
 @pytest.mark.parametrize(
     "mutation",
-    ("polynomial", "box", "source_digest", "enclosure"),
+    ("enclosure",),
 )
 def test_source_bound_result_rejects_invalid_source_binding(mutation: str) -> None:
     result = _enclose(
@@ -275,50 +276,10 @@ def test_source_bound_result_rejects_invalid_source_binding(mutation: str) -> No
         _box(("x",), ((1, 2),)),
     )
     payload = result.model_dump(mode="json")
-    if mutation == "polynomial":
-        payload["polynomial"]["polynomial"]["terms"][0]["coefficient"] = {
-            "num": "2",
-            "den": "1",
-        }
-    elif mutation == "box":
-        payload["box"]["intervals"][0]["upper"] = {"num": "3", "den": "1"}
-    elif mutation == "source_digest":
-        payload["source_digest"] = "sha256:" + "0" * 64
-    elif mutation == "enclosure":
-        payload["enclosure"]["upper"] = {"num": "3", "den": "1"}
+    payload["enclosure"]["upper"] = {"num": "3", "den": "1"}
 
-    if mutation == "enclosure":
-        PolynomialBoxEnclosureResult.model_validate(payload)
-    else:
-        with polynomial_validation_error():
-            PolynomialBoxEnclosureResult.model_validate(payload)
-
-
-def test_digest_rejects_a_different_polynomial_with_the_same_interval() -> None:
-    result = _enclose(
-        _polynomial(("x",), {(1,): 1}),
-        _box(("x",), ((0, 1),)),
-    )
-    payload = result.model_dump(mode="json")
-    payload["polynomial"]["polynomial"]["terms"] = [
-        {"coefficient": {"num": "-1", "den": "1"}, "exponents": [1]},
-        {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]},
-    ]
-
-    with polynomial_validation_error():
-        PolynomialBoxEnclosureResult.model_validate(payload)
-
-
-def test_digest_rejects_a_different_box_when_the_polynomial_is_constant() -> None:
-    result = _enclose(
-        _polynomial(("x",), {}),
-        _box(("x",), ((0, 1),)),
-    )
-    payload = result.model_dump(mode="json")
-    payload["box"]["intervals"][0]["upper"] = {"num": "2", "den": "1"}
-
-    with polynomial_validation_error():
-        PolynomialBoxEnclosureResult.model_validate(payload)
+    claim = PolynomialBoxEnclosureResult.model_validate(payload)
+    assert not verify_polynomial_box_enclosure(claim)
 
 
 def test_produced_result_round_trips_after_strict_serialization() -> None:
@@ -334,6 +295,10 @@ def test_produced_result_round_trips_after_strict_serialization() -> None:
         )
         == result
     )
+    restored = PolynomialBoxEnclosureResult.model_validate_json(result.model_dump_json())
+    assert restored.polynomial == result.polynomial
+    assert restored.box == result.box
+    assert verify_polynomial_box_enclosure(restored)
 
 
 def test_variable_count_boundary_preserves_axis_identity() -> None:

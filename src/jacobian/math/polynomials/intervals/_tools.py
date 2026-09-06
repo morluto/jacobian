@@ -20,6 +20,21 @@ def compute_polynomial_box_enclosure(
     )
 
 
+def verify_polynomial_box_enclosure(
+    claim: PolynomialBoxEnclosureResult,
+) -> bool:
+    try:
+        expected = compute_polynomial_box_enclosure(
+            PolynomialBoxEnclosureRequest(
+                polynomial=claim.polynomial,
+                box=claim.box,
+            )
+        )
+    except Exception:
+        return False
+    return claim.enclosure == expected.enclosure
+
+
 def _rational(numerator: int, denominator: int = 1) -> dict[str, str]:
     return {"num": str(numerator), "den": str(denominator)}
 
@@ -94,4 +109,4 @@ TOOLS: MathTools = (
     ),
 )
 
-__all__ = ["TOOLS"]
+__all__ = ["TOOLS", "verify_polynomial_box_enclosure"]

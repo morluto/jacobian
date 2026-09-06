@@ -253,7 +253,10 @@ def verify_fixed_length_cycle(claim: FixedLengthCycleResult) -> bool:
         if claim.cycle:
             return False
         _require_negative_cycle_domain(claim.graph, claim.length)
-        return True
+        return (
+            _find_cycle_of_length(claim.graph.vertices, claim.graph.edges, claim.length)
+            is None
+        )
     except (TypeError, ValueError):
         return False
 
@@ -443,6 +446,15 @@ def verify_subgraph_pattern_find(claim: SubgraphPatternFindResult) -> bool:
         if claim.vertex_map:
             return False
         _require_negative_embedding_domain(claim.pattern, claim.host)
-        return True
+        return (
+            _find_subgraph_embedding(
+                claim.pattern.vertices,
+                claim.pattern.edges,
+                claim.host.vertices,
+                claim.host.edges,
+                max_candidate_checks=None,
+            )
+            is None
+        )
     except (TypeError, ValueError):
         return False

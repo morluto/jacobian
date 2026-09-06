@@ -383,6 +383,12 @@ class TestFixedLengthCycle:
         assert revalidated.decision == "DOES_NOT_EXIST"
         assert revalidated.cycle == ()
 
+        triangle = self._g(["a", "b", "c"], [["a", "b"], ["b", "c"], ["a", "c"]])
+        forged_existing = FixedLengthCycleResult(
+            graph=triangle, decision="DOES_NOT_EXIST", length=3, cycle=()
+        )
+        assert not verify_fixed_length_cycle(forged_existing)
+
         # Outside the bounded request domain a negative decision is not
         # exact: reject an oversized retained graph with no witness check
         # to lean on.
@@ -566,6 +572,14 @@ class TestSubgraphPatternFind:
         )
         assert revalidated.decision == "DOES_NOT_EXIST"
         assert revalidated.vertex_map == ()
+
+        forged_existing = SubgraphPatternFindResult(
+            pattern=self._g(["x", "y"], [["x", "y"]]),
+            host=self._g(["a", "b", "c"], [["a", "b"], ["b", "c"]]),
+            decision="DOES_NOT_EXIST",
+            vertex_map=(),
+        )
+        assert not verify_subgraph_pattern_find(forged_existing)
 
         # Outside the bounded request domain (pattern over the vertex cap)
         # a negative conclusion is not exact and must be rejected.

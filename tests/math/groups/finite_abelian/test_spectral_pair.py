@@ -406,6 +406,11 @@ def test_serialized_factorization_witness_is_checked_by_consumer() -> None:
     claim = type(result).model_validate(payload)
     assert not verify_finite_abelian_group_factorization(claim)
 
+    payload = decoded.model_dump(mode="json")
+    payload["representation_histogram"][0]["element_count"] = 1
+    malformed_summary = type(result).model_validate(payload)
+    assert not verify_finite_abelian_group_factorization(malformed_summary)
+
 
 def test_singleton_pair_beyond_the_group_order_cap_is_admitted() -> None:
     result = decide_finite_abelian_spectral_pair(

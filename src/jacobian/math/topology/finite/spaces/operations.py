@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from jacobian.catalog.models import OperationDomainValidationError
 
-from ._models import KolmogorovQuotientResult
+from ._models import ContinuousCheckResult, KolmogorovQuotientResult
 from .values import FiniteTopologicalMap, FiniteTopologicalSpace
 
 __all__ = [
@@ -16,6 +16,7 @@ __all__ = [
     "kolmogorov_quotient",
     "minimal_neighbourhoods",
     "specialization_preorder",
+    "verify_continuity",
     "verify_kolmogorov_quotient",
 ]
 
@@ -170,6 +171,65 @@ def kolmogorov_quotient(space: FiniteTopologicalSpace) -> KolmogorovQuotientResu
     )
 
 
+def verify_continuity(claim: ContinuousCheckResult) -> bool:
+    """Check the monotonicity relation of a retained point map.
+
+    A map f is continuous iff x' <= x implies f(x') <= f(x) in the
+    specialization preorders. Both endpoint spaces are admitted here because
+    a serialized claim is caller-authored.
+    """
+    source = claim.point_map.source
+    target = claim.point_map.target
+    try:
+        _admit_space(source)
+        _admit_space(target)
+    except OperationDomainValidationError:
+        return False
+    monotone = True
+    for i in range(len(source.points)):
+        image = claim.point_map.point_map[i]
+        for j in source.preorder[i]:
+            if claim.point_map.point_map[j] not in target.preorder[image]:
+                monotone = False
+                break
+        if not monotone:
+            break
+    return monotone == claim.is_continuous
+
+
 def verify_kolmogorov_quotient(claim: KolmogorovQuotientResult) -> bool:
-    """Check the bounded quotient relation and its canonical representative labels."""
-    return kolmogorov_quotient(claim.quotient_map.source) == claim
+    """Check the quotient relation directly without rebuilding the quotient.
+
+    Verifies the class map is a consecutive surjection, target points are
+    first source representatives, and the target preorder is induced through
+    the class map. Producer construction is not replayed.
+    """
+    quotient_map = claim.quotient_map
+    source = quotient_map.source
+    target = quotient_map.target
+    class_map = quotient_map.point_map
+    try:
+        _admit_space(source)
+        _admit_space(target)
+    except OperationDomainValidationError:
+        return False
+    count = len(source.points)
+    if len(class_map) != count:
+        return False
+    classes = len(target.points)
+    if set(class_map) != set(range(classes)) or any(
+        not 0 <= image < classes for image in class_map
+    ):
+        return False
+    representatives = [
+        next(i for i in range(count) if class_map[i] == a) for a in range(classes)
+    ]
+    if tuple(source.points[rep] for rep in representatives) != target.points:
+        return False
+    for target_index in range(classes):
+        expected = sorted(
+            {class_map[j] for j in source.preorder[representatives[target_index]]}
+        )
+        if tuple(expected) != tuple(sorted(target.preorder[target_index])):
+            return False
+    return True

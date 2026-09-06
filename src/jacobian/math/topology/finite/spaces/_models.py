@@ -9,6 +9,7 @@ from jacobian.math._labels import OpaqueLabel
 from jacobian.math.topology.finite.spaces.values import (
     FiniteTopologicalMap,
     FiniteTopologicalSpace,
+    FiniteTopologicalSubset,
 )
 
 
@@ -20,15 +21,27 @@ class SubsetRequest(StrictModel):
 
 
 class InteriorResult(StrictModel):
-    interior: tuple[int, ...]
+    """The interior of a retained subset as a source-bound value."""
+
+    space: FiniteTopologicalSpace
+    subset: FiniteTopologicalSubset
+    interior: FiniteTopologicalSubset
 
 
 class ClosureResult(StrictModel):
-    closure: tuple[int, ...]
+    """The closure of a retained subset as a source-bound value."""
+
+    space: FiniteTopologicalSpace
+    subset: FiniteTopologicalSubset
+    closure: FiniteTopologicalSubset
 
 
 class BoundaryResult(StrictModel):
-    boundary: tuple[int, ...]
+    """The boundary of a retained subset as a source-bound value."""
+
+    space: FiniteTopologicalSpace
+    subset: FiniteTopologicalSubset
+    boundary: FiniteTopologicalSubset
 
 
 class ContinuousCheckRequest(StrictModel):
@@ -38,6 +51,9 @@ class ContinuousCheckRequest(StrictModel):
 
 
 class ContinuousCheckResult(StrictModel):
+    """Whether a retained point map is continuous."""
+
+    point_map: FiniteTopologicalMap
     is_continuous: bool
 
 

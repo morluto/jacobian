@@ -61,6 +61,30 @@ class FiniteTopologicalSpace(StrictModel):
         return self
 
 
+class FiniteTopologicalSubset(StrictModel):
+    """A canonical subset of a finite topological space's point axis.
+
+    Carries the parent space so the indices stay interpretable after
+    serialization. Parsing is structural only: sorted unique in-range
+    indices. Whether the subset satisfies a further property (openness,
+    closedness) is established by the owning operation, not by decoding.
+    """
+
+    space: FiniteTopologicalSpace
+    indices: tuple[int, ...] = Field(default=())
+
+    @model_validator(mode="after")
+    def require_canonical_axis(self) -> Self:
+        if tuple(sorted(set(self.indices))) != tuple(self.indices) or any(
+            not 0 <= index < len(self.space.points) for index in self.indices
+        ):
+            raise _validation_error(
+                "subset_indices_not_canonical",
+                "subset indices must be sorted unique point-axis indices",
+            )
+        return self
+
+
 class FiniteTopologicalMap(StrictModel):
     """An immutable continuous map between finite topological spaces."""
 
@@ -87,4 +111,5 @@ __all__ = [
     "MAX_POINTS",
     "FiniteTopologicalMap",
     "FiniteTopologicalSpace",
+    "FiniteTopologicalSubset",
 ]

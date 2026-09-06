@@ -1,5 +1,7 @@
 """Defining-invariant and boundary tests for maximum edge matchings."""
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -10,6 +12,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs.operations import (
     maximum_edge_matching,
+    verify_maximum_edge_matching,
 )
 
 HYPERGRAPH = {
@@ -70,6 +73,17 @@ class TestMaximumEdgeMatching:
         result = _matching(HYPERGRAPH)
         assert result.count == 1
         assert result.matching == ("e1",)
+
+    def test_serialized_matching_claim_is_structural_and_verifiable(self) -> None:
+        result = _matching(HYPERGRAPH)
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert verify_maximum_edge_matching(decoded)
+
+        forged = result.model_dump(mode="json")
+        forged["matching"] = ["e1", "e3"]
+        forged["count"] = 2
+        forged_decoded = type(result).model_validate_json(json.dumps(forged))
+        assert not verify_maximum_edge_matching(forged_decoded)
 
     def test_empty_edge_family_empty_matching(self) -> None:
         result = _matching({"vertices": ["a", "b"], "edges": []})

@@ -1,5 +1,7 @@
 """Defining-invariant and boundary tests for minimum transversals."""
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -10,6 +12,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs.operations import (
     minimum_transversal,
+    verify_minimum_transversal,
 )
 
 HYPERGRAPH = {
@@ -238,3 +241,14 @@ class TestMinimumTransversal:
         # compute function must return the minimum.
         result = _transversal(HYPERGRAPH)
         assert result.cardinality == 2
+
+    def test_serialized_transversal_claim_is_structural_and_verifiable(self) -> None:
+        result = _transversal(HYPERGRAPH)
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert verify_minimum_transversal(decoded)
+
+        forged = result.model_dump(mode="json")
+        forged["transversal"] = ["a"]
+        forged["cardinality"] = 1
+        forged_decoded = type(result).model_validate_json(json.dumps(forged))
+        assert not verify_minimum_transversal(forged_decoded)

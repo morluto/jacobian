@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 from itertools import combinations
 
@@ -15,6 +16,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 from jacobian.math.combinatorics.finite_structures.hypergraphs.operations import (
     maximum_edge_matching,
     maximum_weight_packing,
+    verify_weighted_packing,
 )
 
 
@@ -29,7 +31,7 @@ def _pack(
     vertices: list[str],
     edges: list[tuple[str, tuple[str, ...]]],
     weights: dict[str, int],
-):
+) -> WeightedPackingResult:
     hypergraph = FiniteHypergraph(
         vertices=tuple(vertices),
         edges=tuple((edge_id, members) for edge_id, members in edges),
@@ -195,6 +197,20 @@ class TestWeightedPacking:
             WeightedPackingResult.model_validate(result.model_dump(mode="json"))
             == result
         )
+
+    def test_serialized_packing_claim_is_structural_and_verifiable(self) -> None:
+        result = _pack(
+            ["a", "b", "c"],
+            [("e1", ("a", "b")), ("e2", ("b", "c"))],
+            {"e1": 2, "e2": 3},
+        )
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert verify_weighted_packing(decoded)
+
+        forged = result.model_dump(mode="json")
+        forged["total_weight"] = {"num": "0", "den": "1"}
+        forged_decoded = type(result).model_validate_json(json.dumps(forged))
+        assert not verify_weighted_packing(forged_decoded)
 
     def test_request_rejects_partial_and_duplicate_weights(self) -> None:
         import pytest

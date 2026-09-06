@@ -55,6 +55,9 @@ __all__ = [
     "minimum_transversal",
     "parameters",
     "verify_independence_number",
+    "verify_maximum_edge_matching",
+    "verify_minimum_transversal",
+    "verify_weighted_packing",
     "vertex_degrees",
 ]
 
@@ -761,6 +764,32 @@ def minimum_transversal(hypergraph: FiniteHypergraph) -> MinimumTransversalResul
     )
 
 
+def verify_minimum_transversal(claim: MinimumTransversalResult) -> bool:
+    """Verify transversal feasibility and the claimed minimum cardinality."""
+
+    try:
+        vertices = set(claim.hypergraph.vertices)
+        witness = claim.transversal
+        witness_set = set(witness)
+        if (
+            len(witness_set) != len(witness)
+            or not witness_set <= vertices
+            or witness
+            != tuple(
+                vertex for vertex in claim.hypergraph.vertices if vertex in witness_set
+            )
+            or claim.cardinality != len(witness)
+            or not all(
+                witness_set & set(members) for _, members in claim.hypergraph.edges
+            )
+        ):
+            return False
+        expected = minimum_transversal(claim.hypergraph)
+        return claim.cardinality == expected.cardinality
+    except Exception:
+        return False
+
+
 def _maximum_component_matching(
     edge_sets: tuple[frozenset[str], ...],
     component: tuple[int, ...],
@@ -830,6 +859,36 @@ def maximum_edge_matching(hypergraph: FiniteHypergraph) -> MaximumEdgeMatchingRe
         matching=matching,
         count=count,
     )
+
+
+def verify_maximum_edge_matching(claim: MaximumEdgeMatchingResult) -> bool:
+    """Verify matching disjointness and the claimed maximum cardinality."""
+
+    try:
+        edge_map = dict(claim.hypergraph.edges)
+        witness = claim.matching
+        witness_set = set(witness)
+        if (
+            len(witness_set) != len(witness)
+            or any(edge_id not in edge_map for edge_id in witness)
+            or witness
+            != tuple(
+                edge_id for edge_id, _ in claim.hypergraph.edges if edge_id in witness_set
+            )
+            or claim.count != len(witness)
+        ):
+            return False
+        member_sets = [set(edge_map[edge_id]) for edge_id in witness]
+        if any(
+            member_sets[left] & member_sets[right]
+            for left in range(len(member_sets))
+            for right in range(left + 1, len(member_sets))
+        ):
+            return False
+        expected = maximum_edge_matching(claim.hypergraph)
+        return claim.count == expected.count
+    except Exception:
+        return False
 
 
 def _weighted_packing_plan(
@@ -954,3 +1013,41 @@ def maximum_weight_packing(
         packing=packing,
         total_weight=CanonicalRational.from_fraction(total),
     )
+
+
+def verify_weighted_packing(claim: WeightedPackingResult) -> bool:
+    """Verify packing feasibility, weight arithmetic, and optimum weight."""
+
+    try:
+        edge_map = dict(claim.hypergraph.edges)
+        weight_map = {
+            entry.edge_id: entry.weight.as_fraction() for entry in claim.weights
+        }
+        witness = claim.packing
+        witness_set = set(witness)
+        if (
+            len(witness_set) != len(witness)
+            or any(edge_id not in edge_map for edge_id in witness)
+            or witness
+            != tuple(
+                edge_id for edge_id, _ in claim.hypergraph.edges if edge_id in witness_set
+            )
+            or set(weight_map) != set(edge_map)
+        ):
+            return False
+        member_sets = [set(edge_map[edge_id]) for edge_id in witness]
+        if any(
+            member_sets[left] & member_sets[right]
+            for left in range(len(member_sets))
+            for right in range(left + 1, len(member_sets))
+        ):
+            return False
+        selected_weight = sum(
+            (weight_map[edge_id] for edge_id in witness), start=Fraction(0)
+        )
+        if claim.total_weight.as_fraction() != selected_weight:
+            return False
+        expected = maximum_weight_packing(claim.hypergraph, claim.weights)
+        return claim.total_weight == expected.total_weight
+    except Exception:
+        return False

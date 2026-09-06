@@ -18,6 +18,9 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs.operations import
     minimum_transversal,
     parameters,
     verify_independence_number,
+    verify_maximum_edge_matching,
+    verify_minimum_transversal,
+    verify_weighted_packing,
     vertex_degrees,
 )
 
@@ -37,5 +40,8 @@ __all__ = [
     "minimum_transversal",
     "parameters",
     "verify_independence_number",
+    "verify_maximum_edge_matching",
+    "verify_minimum_transversal",
+    "verify_weighted_packing",
     "vertex_degrees",
 ]

@@ -12,6 +12,9 @@ from jacobian.math.probability.stochastic_processes import (
     FiniteRandomVariable,
     FiniteSigmaAlgebra,
 )
+from jacobian.math.probability.stochastic_processes._admission import (
+    admit_probability_space,
+)
 from jacobian.math.probability.stochastic_processes._models import (
     MAX_PROCESS_TIME_STEPS,
     ConditionalExpectationRequest,
@@ -233,6 +236,34 @@ class TestDoobMartingale:
 
 
 class TestValidation:
+    def test_probability_axioms_are_not_decoding_claims(self) -> None:
+        # Structural transport accepts the source axis and rational vector;
+        # positivity and normalization belong to operation admission.
+        payload = {
+            "samples": ["a", "b"],
+            "masses": [{"num": "-1", "den": "3"}, {"num": "1", "den": "3"}],
+        }
+        decoded = FiniteProbabilitySpace.model_validate(payload)
+        assert decoded.samples == ("a", "b")
+        with pytest.raises(OperationDomainValidationError) as error:
+            admit_probability_space(decoded)
+        assert error.value.errors()[0]["type"] == (
+            "finite_stochastic_process.mass_nonpositive"
+        )
+
+    def test_mass_component_bound_is_operation_admission(self) -> None:
+        oversized = FiniteProbabilitySpace.model_validate(
+            {
+                "samples": ["a"],
+                "masses": [{"num": "1" + "0" * 256, "den": "1"}],
+            }
+        )
+        with pytest.raises(OperationDomainValidationError) as error:
+            admit_probability_space(oversized)
+        assert error.value.errors()[0]["type"] == (
+            "finite_stochastic_process.mass_component_digits"
+        )
+
     def test_nonpositive_mass_rejected(self) -> None:
         space = FiniteProbabilitySpace(samples=("a",), masses=(_q(0),))
         with pytest.raises(OperationDomainValidationError) as error:

@@ -7,7 +7,7 @@ from typing import Annotated, Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 
 MAX_SAMPLES = 64
@@ -20,10 +20,12 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 
 class FiniteProbabilitySpace(StrictModel):
-    """An immutable finite probability space with positive-mass atoms.
+    """An immutable finite sample axis with canonical rational masses.
 
-    ``samples`` are unique labels. ``masses`` are positive canonical rationals
-    that sum to exactly one.
+    ``samples`` are unique labels and ``masses`` has one entry for each sample
+    in the same order. Positivity and normalization are operation-domain
+    claims established by :func:`admit_probability_space`, rather than by
+    transport decoding.
     """
 
     samples: tuple[str, ...] = Field(min_length=1, max_length=MAX_SAMPLES)
@@ -33,7 +35,7 @@ class FiniteProbabilitySpace(StrictModel):
     )
 
     @model_validator(mode="after")
-    def require_well_formed(self) -> Self:
+    def require_structural_axes(self) -> Self:
         if len(self.samples) != len(self.masses):
             raise _validation_error(
                 "sample_mass_length_mismatch",
@@ -41,12 +43,6 @@ class FiniteProbabilitySpace(StrictModel):
             )
         if len(set(self.samples)) != len(self.samples):
             raise _validation_error("sample_duplicate", "sample labels must be unique")
-        for mass in self.masses:
-            require_bounded_rational(
-                mass,
-                max_digits=256,
-                label="probability mass",
-            )
         return self
 
 

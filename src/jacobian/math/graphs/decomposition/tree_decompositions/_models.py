@@ -68,7 +68,10 @@ class VertexOccurrencesResult(StrictModel):
 
     @model_validator(mode="after")
     def require_source_axes(self) -> Self:
-        if tuple(row.vertex for row in self.occurrences) != self.decomposition.graph.vertices:
+        if (
+            tuple(row.vertex for row in self.occurrences)
+            != self.decomposition.graph.vertices
+        ):
             raise ValueError("occurrences must cover the source graph vertex axis")
         nodes = set(self.decomposition.tree_nodes)
         for row in self.occurrences:
@@ -145,9 +148,14 @@ class RerootResult(StrictModel):
     @model_validator(mode="after")
     def require_source_axes(self) -> Self:
         nodes = set(self.decomposition.tree_nodes)
-        if self.root not in nodes or tuple(row.node for row in self.nodes) != self.decomposition.tree_nodes:
+        if (
+            self.root not in nodes
+            or tuple(row.node for row in self.nodes) != self.decomposition.tree_nodes
+        ):
             raise ValueError("rooted profiles must cover the source bag-node axis")
-        if any(row.parent is not None and row.parent not in nodes for row in self.nodes):
+        if any(
+            row.parent is not None and row.parent not in nodes for row in self.nodes
+        ):
             raise ValueError("rooted profile values must use source bag nodes")
         if any(
             not set(row.children) <= nodes or not set(row.path) <= nodes

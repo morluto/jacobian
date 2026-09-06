@@ -138,12 +138,13 @@ def vertex_occurrences(
     for vertex in td.graph.vertices:
         containing = [i for i, bag in enumerate(td.bags) if vertex in bag]
         if not containing:
-            occurrences.append(OccurrenceSubtree(
-                vertex=vertex,
-                nodes=(), edges=(), count=0, leaves=()
-            ))
+            occurrences.append(
+                OccurrenceSubtree(vertex=vertex, nodes=(), edges=(), count=0, leaves=())
+            )
             continue
-        occurrences.append(_occurrence_subtree(td, adjacency, int_edges, vertex, containing))
+        occurrences.append(
+            _occurrence_subtree(td, adjacency, int_edges, vertex, containing)
+        )
     return VertexOccurrencesResult(decomposition=td, occurrences=tuple(occurrences))
 
 

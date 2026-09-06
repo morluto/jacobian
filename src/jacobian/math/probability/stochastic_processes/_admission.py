@@ -2,6 +2,7 @@
 
 from fractions import Fraction
 
+from jacobian._exact import require_bounded_rational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.probability.stochastic_processes._models import (
     MAX_PROCESS_TIME_STEPS,
@@ -21,7 +22,7 @@ def _reject(reason: str, message: str) -> None:
 
 
 def admit_probability_space(space: FiniteProbabilitySpace) -> None:
-    """Check at most 64 masses with 256-digit components.
+    """Establish positive normalization within the exact arithmetic envelope.
 
     A common denominator has at most 16384 digits; positive partial sums
     require at most 16386 numerator digits. No backend or unbounded expansion
@@ -29,6 +30,14 @@ def admit_probability_space(space: FiniteProbabilitySpace) -> None:
     """
     total = Fraction(0)
     for mass in space.masses:
+        try:
+            require_bounded_rational(
+                mass,
+                max_digits=256,
+                label="probability mass",
+            )
+        except ValueError as error:
+            _reject("mass_component_digits", str(error))
         value = mass.as_fraction()
         if value <= 0:
             _reject("mass_nonpositive", "masses must be positive")

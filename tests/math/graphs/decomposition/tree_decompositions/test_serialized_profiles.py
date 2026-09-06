@@ -74,3 +74,51 @@ def test_single_bag_empty_edge_profiles() -> None:
     payload["occurrences"][0]["vertex"] = "foreign"
     with pytest.raises(ValidationError):
         type(occurrence).model_validate(payload)
+
+
+def test_derived_profiles_round_trip_with_typed_axes() -> None:
+    source = TreeDecomposition(
+        graph=SimpleUndirectedGraph(vertices=("a", "b"), edges=(("a", "b"),)),
+        tree_nodes=("left", "right"),
+        tree_edges=(("left", "right"),),
+        bags=(("a", "b"), ("b",)),
+    )
+    profiles = (
+        width(source),
+        vertex_occurrences(source),
+        adhesions(source),
+        reroot(source, "right"),
+        bag_intersection_graph(source),
+    )
+    for profile in profiles:
+        restored = type(profile).model_validate_json(profile.model_dump_json())
+        assert restored.decomposition == source
+
+    occurrences = profiles[1]
+    assert tuple(row.vertex for row in occurrences.occurrences) == ("a", "b")
+    rooted = profiles[3]
+    assert tuple(row.node for row in rooted.nodes) == ("left", "right")
+
+
+@pytest.mark.parametrize("kind", ("adhesion", "rooted", "bag"))
+def test_forged_profile_axes_are_rejected(kind: str) -> None:
+    source = TreeDecomposition(
+        graph=SimpleUndirectedGraph(vertices=("a", "b"), edges=(("a", "b"),)),
+        tree_nodes=("left", "right"),
+        tree_edges=(("left", "right"),),
+        bags=(("a", "b"), ("b",)),
+    )
+    if kind == "adhesion":
+        result = adhesions(source)
+        payload = result.model_dump(mode="json")
+        payload["edges"][0]["edge"] = ["left", "foreign"]
+    elif kind == "rooted":
+        result = reroot(source, "right")
+        payload = result.model_dump(mode="json")
+        payload["nodes"][0]["node"] = "foreign"
+    else:
+        result = bag_intersection_graph(source)
+        payload = result.model_dump(mode="json")
+        payload["nodes"][0]["node"] = "foreign"
+    with pytest.raises(ValidationError):
+        type(result).model_validate(payload)

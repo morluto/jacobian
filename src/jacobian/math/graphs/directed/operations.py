@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from itertools import pairwise
 from typing import Any
 
 import networkx as nx
@@ -66,7 +67,8 @@ def reachability(graph: DirectedGraph, source: int) -> ReachabilityResult:
     descendants = nx.descendants(g, source)
     reachable = frozenset(descendants) | {source}
     unreachable = frozenset(range(graph.vertex_count)) - reachable
-    return ReachabilityResult(
+    return ReachabilityResult._from_kernel(
+        graph=graph,
         source=source,
         reachable=tuple(sorted(reachable)),
         unreachable=tuple(sorted(unreachable)),
@@ -85,7 +87,8 @@ def strongly_connected_components(
     g = _build_digraph(graph)
     sccs = list(nx.strongly_connected_components(g))
     components = tuple(tuple(sorted(component)) for component in sccs)
-    return StronglyConnectedComponentsResult(
+    return StronglyConnectedComponentsResult._from_kernel(
+        graph=graph,
         component_count=len(components),
         components=components,
     )
@@ -111,7 +114,8 @@ def condensation(graph: DirectedGraph) -> CondensationResult:
     ]
     edges.sort(key=lambda e: (e.source, e.target))
 
-    return CondensationResult(
+    return CondensationResult._from_kernel(
+        graph=graph,
         vertex_count=len(sccs),
         components=components,
         edges=tuple(edges),
@@ -126,8 +130,8 @@ def acyclic_order(graph: DirectedGraph) -> AcyclicOrderResult:
     _admit_directed_graph(graph)
     g = _build_digraph(graph)
     if not nx.is_directed_acyclic_graph(g):
-        return AcyclicOrderResult(graph=graph, acyclic=False, order=())
-    return AcyclicOrderResult(
+        return AcyclicOrderResult._from_kernel(graph=graph, acyclic=False, order=())
+    return AcyclicOrderResult._from_kernel(
         graph=graph,
         acyclic=True,
         order=tuple(nx.topological_sort(g)),
@@ -145,8 +149,10 @@ def dag_longest_path(graph: DirectedGraph) -> DagLongestPathResult:
     _admit_directed_graph(graph)
     g = _build_digraph(graph)
     if not nx.is_directed_acyclic_graph(g):
-        return DagLongestPathResult(
+        return DagLongestPathResult._from_kernel(
             status="NOT_APPLICABLE",
+            maximum_edge_count=0,
+            path=(),
             source=graph,
         )
     topo_order = list(nx.topological_sort(g))
@@ -179,12 +185,108 @@ def dag_longest_path(graph: DirectedGraph) -> DagLongestPathResult:
             best_edge_count = cand_edges
             best_vertex_sequence = cand_path
 
-    return DagLongestPathResult(
+    return DagLongestPathResult._from_kernel(
         status="ACYCLIC",
         maximum_edge_count=best_edge_count,
         path=tuple(best_vertex_sequence),
         source=graph,
     )
+
+
+def verify_reachability(claim: ReachabilityResult) -> bool:
+    """Check the source-bound reachability partition without trusting summaries."""
+    try:
+        _admit_directed_graph(claim.graph)
+        g = _build_digraph(claim.graph)
+        reachable = frozenset(nx.descendants(g, claim.source)) | {claim.source}
+        unreachable = frozenset(g.nodes) - reachable
+        return claim.reachable == tuple(
+            sorted(reachable)
+        ) and claim.unreachable == tuple(sorted(unreachable))
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return False
+
+
+def verify_strongly_connected_components(
+    claim: StronglyConnectedComponentsResult,
+) -> bool:
+    """Check that the retained components are exactly the graph's SCCs."""
+    try:
+        _admit_directed_graph(claim.graph)
+        expected = {
+            frozenset(component)
+            for component in nx.strongly_connected_components(
+                _build_digraph(claim.graph)
+            )
+        }
+        actual = {frozenset(component) for component in claim.components}
+        return actual == expected and claim.component_count == len(expected)
+    except (AttributeError, TypeError, ValueError):
+        return False
+
+
+def verify_condensation(claim: CondensationResult) -> bool:
+    """Check SCC components and the exact edge relation of a condensation."""
+    try:
+        _admit_directed_graph(claim.graph)
+        graph = _build_digraph(claim.graph)
+        expected_components = tuple(nx.strongly_connected_components(graph))
+        actual_by_vertex = {
+            vertex: index
+            for index, component in enumerate(claim.components)
+            for vertex in component
+        }
+        expected_sets = {frozenset(component) for component in expected_components}
+        actual_sets = {frozenset(component) for component in claim.components}
+        if actual_sets != expected_sets or claim.vertex_count != len(expected_sets):
+            return False
+        expected_edges = {
+            (actual_by_vertex[source], actual_by_vertex[target])
+            for source, target in claim.graph.edges
+            if actual_by_vertex[source] != actual_by_vertex[target]
+        }
+        actual_edges = {(edge.source, edge.target) for edge in claim.edges}
+        return actual_edges == expected_edges
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return False
+
+
+def verify_acyclic_order(claim: AcyclicOrderResult) -> bool:
+    """Check the DAG status and topological-order relation of a claim."""
+    try:
+        _admit_directed_graph(claim.graph)
+        graph = _build_digraph(claim.graph)
+        is_acyclic = nx.is_directed_acyclic_graph(graph)
+        if claim.acyclic != is_acyclic:
+            return False
+        if not is_acyclic:
+            return claim.order == ()
+        position = {vertex: index for index, vertex in enumerate(claim.order)}
+        return all(
+            position[source] < position[target] for source, target in claim.graph.edges
+        )
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return False
+
+
+def verify_dag_longest_path(claim: DagLongestPathResult) -> bool:
+    """Check DAG-path validity and the claimed maximum edge count."""
+    try:
+        _admit_directed_graph(claim.source)
+        graph = _build_digraph(claim.source)
+        is_acyclic = nx.is_directed_acyclic_graph(graph)
+        if claim.status == "NOT_APPLICABLE":
+            return not is_acyclic and claim.maximum_edge_count == 0 and claim.path == ()
+        if not is_acyclic or not claim.path:
+            return False
+        if any(
+            (source, target) not in graph.edges
+            for source, target in pairwise(claim.path)
+        ):
+            return False
+        return claim.maximum_edge_count == nx.dag_longest_path_length(graph)
+    except (AttributeError, KeyError, TypeError, ValueError, nx.NetworkXError):
+        return False
 
 
 __all__ = [
@@ -193,4 +295,9 @@ __all__ = [
     "dag_longest_path",
     "reachability",
     "strongly_connected_components",
+    "verify_acyclic_order",
+    "verify_condensation",
+    "verify_dag_longest_path",
+    "verify_reachability",
+    "verify_strongly_connected_components",
 ]

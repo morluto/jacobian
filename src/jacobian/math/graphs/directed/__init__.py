@@ -15,6 +15,11 @@ if TYPE_CHECKING:
         dag_longest_path,
         reachability,
         strongly_connected_components,
+        verify_acyclic_order,
+        verify_condensation,
+        verify_dag_longest_path,
+        verify_reachability,
+        verify_strongly_connected_components,
     )
 
 __all__ = [
@@ -23,6 +28,11 @@ __all__ = [
     "dag_longest_path",
     "reachability",
     "strongly_connected_components",
+    "verify_acyclic_order",
+    "verify_condensation",
+    "verify_dag_longest_path",
+    "verify_reachability",
+    "verify_strongly_connected_components",
 ]
 
 

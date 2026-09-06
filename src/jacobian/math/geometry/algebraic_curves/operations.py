@@ -20,11 +20,18 @@ from jacobian.math.geometry.algebraic_curves._gaussian_realification import (
 from jacobian.math.geometry.algebraic_curves._models import (
     _MAX_CURVE_TERMS,
     HOMOGENIZING_COORDINATE,
+    AffineChartResult,
+    AffineCurveResult,
+    ProjectiveClosureResult,
+    RationalConicParametrizationResult,
     _require_curve_polynomial,
     _validation_error,
     _validation_error_from,
 )
 from jacobian.math.geometry.algebraic_curves._singularity import singularity_profile
+from jacobian.math.geometry.algebraic_curves._singularity_models import (
+    ProjectivePlaneCurveSingularityProfile,
+)
 from jacobian.math.polynomials._conversions import (
     rational_polynomial_from_sympy,
     rational_polynomial_to_sympy,
@@ -157,6 +164,39 @@ def affine_chart(
     )
 
 
+def verify_affine_curve_check(claim: AffineCurveResult) -> bool:
+    """Check the affine-curve decision asserted by a serialized claim."""
+
+    try:
+        return affine_curve_check(claim.request.polynomial) == (
+            claim.is_valid,
+            claim.degree,
+        )
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+
+
+def verify_projective_closure(claim: ProjectiveClosureResult) -> bool:
+    """Verify a retained affine source and its exact homogenization."""
+
+    try:
+        return projective_closure(claim.source_polynomial) == claim.polynomial
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+
+
+def verify_affine_chart(claim: AffineChartResult) -> bool:
+    """Verify a retained projective source, chart, and dehomogenization."""
+
+    try:
+        return (
+            affine_chart(claim.source_polynomial, claim.chart_variable)
+            == claim.polynomial
+        )
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+
+
 def rational_conic_parametrization(
     polynomial: RationalPolynomial,
     point: VariablePoint,
@@ -175,10 +215,46 @@ def rational_conic_parametrization(
     return derive_rational_conic_parametrization(polynomial, point, parameter)
 
 
+def verify_rational_conic_parametrization(
+    claim: RationalConicParametrizationResult,
+) -> bool:
+    """Verify the source-bound line-pencil identities of a conic claim."""
+
+    try:
+        data = rational_conic_parametrization(
+            claim.source_polynomial,
+            claim.exceptional_point,
+            claim.parameter,
+        )
+        return (
+            data.coordinates == claim.coordinates
+            and data.inverse_parameter == claim.inverse_parameter
+            and data.finite_parameter_denominator == claim.finite_parameter_denominator
+        )
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+
+
+def verify_projective_plane_curve_singularity_profile(
+    claim: ProjectivePlaneCurveSingularityProfile,
+) -> bool:
+    """Verify a complete singularity profile against its retained source."""
+
+    try:
+        return singularity_profile(claim.source_polynomial) == claim
+    except (OperationDomainValidationError, ValueError, TypeError, RuntimeError):
+        return False
+
+
 __all__ = [
     "affine_chart",
     "affine_curve_check",
     "projective_closure",
     "rational_conic_parametrization",
     "singularity_profile",
+    "verify_affine_chart",
+    "verify_affine_curve_check",
+    "verify_projective_closure",
+    "verify_projective_plane_curve_singularity_profile",
+    "verify_rational_conic_parametrization",
 ]

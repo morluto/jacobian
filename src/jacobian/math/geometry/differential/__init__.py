@@ -3,7 +3,10 @@
 from jacobian.math.geometry.differential._models import (
     RationalLieDerivativeProfile,
 )
-from jacobian.math.geometry.differential.operations import lie_derivative
+from jacobian.math.geometry.differential.operations import (
+    lie_derivative,
+    verify_lie_derivative,
+)
 from jacobian.math.geometry.differential.values import (
     RationalCoordinateTensor,
     TensorVariance,
@@ -14,4 +17,5 @@ __all__ = [
     "RationalLieDerivativeProfile",
     "TensorVariance",
     "lie_derivative",
+    "verify_lie_derivative",
 ]

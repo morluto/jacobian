@@ -29,6 +29,9 @@ from jacobian.math.polynomials.real_algebra.operations import (
     compute_plane_component_profile,
     root_count,
     sturm_chain,
+    verify_common_interlacing_profile,
+    verify_plane_component_profile,
+    verify_strict_sublevel_measure,
 )
 
 __all__ = [
@@ -56,4 +59,7 @@ __all__ = [
     "compute_plane_component_profile",
     "root_count",
     "sturm_chain",
+    "verify_common_interlacing_profile",
+    "verify_plane_component_profile",
+    "verify_strict_sublevel_measure",
 ]

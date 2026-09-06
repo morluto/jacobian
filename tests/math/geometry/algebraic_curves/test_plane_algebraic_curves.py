@@ -9,12 +9,23 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.geometry.algebraic_curves import _conic, _singularity, operations
+from jacobian.math.geometry.algebraic_curves import (
+    _conic,
+    _singularity,
+    operations,
+    verify_affine_chart,
+    verify_projective_closure,
+    verify_projective_plane_curve_singularity_profile,
+    verify_rational_conic_parametrization,
+)
 from jacobian.math.geometry.algebraic_curves._conic import MAX_CONIC_INPUT_DIGITS
 from jacobian.math.geometry.algebraic_curves._models import (
     AffineChartRequest,
+    AffineChartResult,
     AffineCurveRequest,
     ProjectiveClosureRequest,
+    ProjectiveClosureResult,
+    ProjectivePlaneCurveSingularityProfile,
     ProjectivePlaneCurveSingularityRequest,
     RationalConicParametrizationRequest,
     RationalConicParametrizationResult,
@@ -141,6 +152,14 @@ def test_linear_projective_curve_is_smooth_without_backend(
     )
 
     assert result.outcome.status == "SMOOTH_OVER_ALGEBRAIC_CLOSURE"
+    assert verify_projective_plane_curve_singularity_profile(result) is True
+    forged = result.model_dump(mode="json")
+    forged["partial_derivatives"][0]["polynomial"]["terms"][0]["coefficient"] = {
+        "num": "2",
+        "den": "1",
+    }
+    forged_claim = ProjectivePlaneCurveSingularityProfile.model_validate(forged)
+    assert verify_projective_plane_curve_singularity_profile(forged_claim) is False
 
 
 def test_rational_conic_parametrization_has_canonical_known_answer() -> None:
@@ -171,6 +190,14 @@ def test_rational_conic_parametrization_has_canonical_known_answer() -> None:
     assert result.exceptional_point == _point(source.variables, point)
     assert result.exceptional_parameter == "PROJECTIVE_INFINITY"
     assert result.normalization == "GRADIENT_ORTHOGONAL_LINE_PENCIL"
+    assert verify_rational_conic_parametrization(result) is True
+    forged = result.model_dump(mode="json")
+    forged["coordinates"][0]["numerator"]["terms"][0]["coefficient"] = {
+        "num": "2",
+        "den": "1",
+    }
+    forged_claim = RationalConicParametrizationResult.model_validate(forged)
+    assert verify_rational_conic_parametrization(forged_claim) is False
 
 
 @pytest.mark.parametrize(
@@ -588,6 +615,10 @@ def test_projective_closure_circle_is_canonical_polynomial() -> None:
         (1, (0, 2, 0)),
         (-1, (0, 0, 2)),
     )
+    assert verify_projective_closure(result) is True
+    forged = result.model_dump(mode="json")
+    forged["polynomial"]["polynomial"]["terms"][0]["exponents"] = [1, 1, 0]
+    assert verify_projective_closure(ProjectiveClosureResult.model_validate(forged)) is False
 
 
 def test_affine_chart_circle_is_directly_composable() -> None:
@@ -603,6 +634,10 @@ def test_affine_chart_circle_is_directly_composable() -> None:
     assert result.polynomial == _polynomial(
         ("x", "y"), (1, (2, 0)), (1, (0, 2)), (-1, (0, 0))
     )
+    assert verify_affine_chart(result) is True
+    forged = result.model_dump(mode="json")
+    forged["polynomial"]["polynomial"]["terms"][0]["exponents"] = [1, 1]
+    assert verify_affine_chart(AffineChartResult.model_validate(forged)) is False
     AffineCurveRequest(polynomial=result.polynomial)
 
 

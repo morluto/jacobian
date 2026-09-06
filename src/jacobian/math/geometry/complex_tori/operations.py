@@ -426,6 +426,24 @@ def compute_neron_severi_lattice(
         ) from exc
 
 
+def verify_neron_severi_lattice(claim: InvariantBilinearFormLattice) -> bool:
+    """Verify the complete alternating Hodge lattice retained by a claim."""
+
+    if claim.kind != "ALTERNATING" or len(claim.action.generators) != 1:
+        return False
+    generator = claim.action.generators[0]
+    if generator.label != "complex_structure":
+        return False
+    try:
+        torus = LatticeComplexStructure(
+            coordinate_axis=claim.action.coordinate_axis,
+            complex_structure=generator.matrix,
+        )
+        return compute_neron_severi_lattice(torus) == claim
+    except (OperationDomainValidationError, PydanticCustomError, ValueError):
+        return False
+
+
 def _integer_form_domain_matrix(
     form: IntegralBilinearForm,
     domain: Any,
@@ -598,7 +616,18 @@ def compute_riemann_form_profile(
         ) from exc
 
 
+def verify_riemann_form_profile(claim: RiemannFormProfile) -> bool:
+    """Verify Hodge compatibility, inertia, Smith data, and polarization."""
+
+    try:
+        return compute_riemann_form_profile(claim.torus, claim.form) == claim
+    except (OperationDomainValidationError, PydanticCustomError, ValueError):
+        return False
+
+
 __all__ = [
     "compute_neron_severi_lattice",
     "compute_riemann_form_profile",
+    "verify_neron_severi_lattice",
+    "verify_riemann_form_profile",
 ]

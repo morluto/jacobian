@@ -35,20 +35,12 @@ def compute_affine_curve_check(request: AffineCurveRequest) -> AffineCurveResult
     return AffineCurveResult(request=request, is_valid=is_valid, degree=degree)
 
 
-def verify_affine_curve_check(claim: AffineCurveResult) -> bool:
-    """Check the affine-curve decision asserted by a serialized claim."""
-
-    return affine_curve_check(claim.request.polynomial) == (
-        claim.is_valid,
-        claim.degree,
-    )
-
-
 def compute_projective_closure(
     request: ProjectiveClosureRequest,
 ) -> ProjectiveClosureResult:
     """Unpack one request and project the native closure to its wire result."""
     return ProjectiveClosureResult(
+        source_polynomial=request.polynomial,
         polynomial=projective_closure(request.polynomial),
     )
 
@@ -56,6 +48,8 @@ def compute_projective_closure(
 def compute_affine_chart(request: AffineChartRequest) -> AffineChartResult:
     """Unpack one request and project the native chart to its wire result."""
     return AffineChartResult(
+        source_polynomial=request.polynomial,
+        chart_variable=request.chart_variable,
         polynomial=affine_chart(request.polynomial, request.chart_variable),
     )
 

@@ -62,4 +62,14 @@ def lie_derivative(
     return result
 
 
-__all__ = ["lie_derivative"]
+def verify_lie_derivative(claim: RationalLieDerivativeProfile) -> bool:
+    """Verify the retained source-field Lie derivative relation."""
+
+    try:
+        expected = lie_derivative(claim.vector_field, claim.source)
+        return expected.lie_derivative == claim.lie_derivative
+    except (ValueError, TypeError, ArithmeticError, RuntimeError):
+        return False
+
+
+__all__ = ["lie_derivative", "verify_lie_derivative"]

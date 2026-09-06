@@ -118,6 +118,9 @@ def test_operation_admits_only_real_symmetric_sources() -> None:
 
 def test_verifier_rejects_reciprocal_and_source_forgeries() -> None:
     result = real_symmetric_degree_one_fejer_riesz_factor(laurent(3, -1))
+    assert not verify_real_symmetric_degree_one_fejer_riesz_factor(
+        result.model_copy(update={"source": None})  # type: ignore[arg-type]
+    )
     payload = json.loads(result.model_dump_json())
     coefficients = payload["conclusion"]["factor"]["coefficients_ascending"]
     coefficients.reverse()

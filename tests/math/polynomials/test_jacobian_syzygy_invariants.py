@@ -188,28 +188,20 @@ def test_three_variable_sparse_and_labelled_inputs_agree() -> None:
     assert [item.column_count for item in sparse_result.degree_maps] == [3, 9]
 
 
-def test_zero_labelled_factor_preserves_the_empty_target_axis() -> None:
+def test_zero_labelled_factor_is_rejected_at_projective_admission() -> None:
     zero = _rational(Fraction(0))
-    result = compute_graded_jacobian_syzygy(
-        GradedJacobianSyzygyRequest(
-            linear_factors=(
-                RationalProjectiveLine(
-                    label="zero",
-                    coefficients=(zero, zero, zero),
-                ),
+    request = GradedJacobianSyzygyRequest(
+        linear_factors=(
+            RationalProjectiveLine(
+                label="zero",
+                coefficients=(zero, zero, zero),
             ),
-            linear_factor_variables=("x", "y", "z"),
-            max_degree=0,
-        )
+        ),
+        linear_factor_variables=("x", "y", "z"),
+        max_degree=0,
     )
-    coefficient_map = result.degree_maps[0]
-    assert coefficient_map.target_monomial_basis == ()
-    assert (
-        coefficient_map.row_count,
-        coefficient_map.column_count,
-        coefficient_map.rank,
-        coefficient_map.nullity,
-    ) == (0, 3, 0, 3)
+    with pytest.raises(OperationDomainValidationError, match="nonzero projective"):
+        compute_graded_jacobian_syzygy(request)
 
 
 def test_three_variable_certificate_payload_retains_degree_maps() -> None:

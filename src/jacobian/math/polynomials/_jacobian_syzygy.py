@@ -15,6 +15,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationExample,
 )
+from jacobian.math.geometry.projective.values import verify_rational_projective_line
 from jacobian.math.matrices._flint import rational_determinant
 from jacobian.math.number_theory.arithmetic import primitive_integer_vector
 from jacobian.math.polynomials._conversions import (
@@ -189,6 +190,10 @@ def _admit_graded_jacobian_syzygy(
             raise _validation_error("linear-factor input is incomplete")
         variables = tuple(factor_variables)
         for factor in request.linear_factors:
+            if not verify_rational_projective_line(factor):
+                raise _validation_error(
+                    "linear factors must be nonzero projective representatives"
+                )
             for coefficient in factor.coefficients:
                 require_bounded_rational(
                     coefficient,

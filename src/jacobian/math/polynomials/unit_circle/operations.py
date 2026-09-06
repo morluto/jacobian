@@ -437,7 +437,13 @@ def verify_unit_circle_arc_energy(claim: UnitCircleArcEnergyResult) -> bool:
             value.as_fraction() for value in binding.element.coefficients_ascending
         )
         return actual == expected
-    except (OperationDomainValidationError, ValueError, RuntimeError):
+    except (
+        AttributeError,
+        TypeError,
+        OperationDomainValidationError,
+        ValueError,
+        RuntimeError,
+    ):
         return False
 
 
@@ -588,9 +594,11 @@ def verify_real_symmetric_degree_one_fejer_riesz_factor(
             and field_element_sign(outer_difference, recognized) >= 0
         )
     except (
+        AttributeError,
         EmbeddedNumberFieldRecognitionError,
         NumberFieldRealEmbeddingOrderError,
         OperationDomainValidationError,
+        TypeError,
         ValueError,
         RuntimeError,
     ):

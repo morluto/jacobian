@@ -360,7 +360,7 @@ class GradedJacobianCoefficientMap(StrictModel):
     target_monomial_basis: tuple[ExponentVector, ...] = Field(
         max_length=MAX_MAP_DIMENSION
     )
-    row_count: StrictInt = Field(ge=0, le=MAX_MAP_DIMENSION)
+    row_count: StrictInt = Field(ge=1, le=MAX_MAP_DIMENSION)
     column_count: StrictInt = Field(ge=1, le=MAX_MAP_DIMENSION)
     matrix_digest: Sha256Digest
     sparse_entries: tuple[GradedJacobianMapEntry, ...] = Field(

@@ -20,7 +20,11 @@ from jacobian.math.graphs.decomposition.tree_decompositions import (
     vertex_occurrences,
     width,
 )
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.decomposition.tree_decompositions.values import MAX_TREE_NODES
+from jacobian.math.graphs.values import (
+    MAX_INDEXED_SIMPLE_GRAPH_VERTICES,
+    SimpleUndirectedGraph,
+)
 
 
 def test_empty_graph_and_bag_profiles_compose() -> None:
@@ -120,5 +124,75 @@ def test_forged_profile_axes_are_rejected(kind: str) -> None:
         result = bag_intersection_graph(source)
         payload = result.model_dump(mode="json")
         payload["nodes"][0]["node"] = "foreign"
+    with pytest.raises(ValidationError):
+        type(result).model_validate(payload)
+
+
+def test_occurrence_edges_must_reference_source_tree_edges() -> None:
+    source = TreeDecomposition(
+        graph=SimpleUndirectedGraph(vertices=("a", "b"), edges=(("a", "b"),)),
+        tree_nodes=("left", "right"),
+        tree_edges=(("left", "right"),),
+        bags=(("a", "b"), ("b",)),
+    )
+    result = vertex_occurrences(source)
+    payload = result.model_dump(mode="json")
+    payload["occurrences"][1]["edges"] = [["left", "foreign"]]
+    with pytest.raises(ValidationError):
+        type(result).model_validate(payload)
+
+
+def test_profile_verifiers_are_total_for_model_copy_forgery() -> None:
+    source = TreeDecomposition(
+        graph=SimpleUndirectedGraph(vertices=("a", "b"), edges=(("a", "b"),)),
+        tree_nodes=("left", "right"),
+        tree_edges=(("left", "right"),),
+        bags=(("a", "b"), ("b",)),
+    )
+    profiles = (
+        (width(source), verify_width),
+        (vertex_occurrences(source), verify_vertex_occurrences),
+        (adhesions(source), verify_adhesions),
+        (reroot(source, "right"), verify_reroot),
+        (bag_intersection_graph(source), verify_bag_intersection_graph),
+    )
+    for profile, verifier in profiles:
+        assert verifier(profile)
+        assert not verifier(profile.model_copy(update={"decomposition": object()}))
+        assert not verifier(object())
+
+
+@pytest.mark.parametrize(
+    "profile_kind", ("width", "occurrences", "adhesions", "reroot", "bag")
+)
+def test_profile_sequences_have_explicit_wire_bounds(profile_kind: str) -> None:
+    source = TreeDecomposition(
+        graph=SimpleUndirectedGraph(vertices=("a", "b"), edges=(("a", "b"),)),
+        tree_nodes=("left", "right"),
+        tree_edges=(("left", "right"),),
+        bags=(("a", "b"), ("b",)),
+    )
+    if profile_kind == "width":
+        result = width(source)
+        payload = result.model_dump(mode="json")
+        payload["bag_sizes"] = [2] * (MAX_TREE_NODES + 1)
+    elif profile_kind == "occurrences":
+        result = vertex_occurrences(source)
+        payload = result.model_dump(mode="json")
+        payload["occurrences"] = payload["occurrences"] * (
+            MAX_INDEXED_SIMPLE_GRAPH_VERTICES + 1
+        )
+    elif profile_kind == "adhesions":
+        result = adhesions(source)
+        payload = result.model_dump(mode="json")
+        payload["size_profile"] = [1] * (MAX_TREE_NODES + 1)
+    elif profile_kind == "reroot":
+        result = reroot(source, "right")
+        payload = result.model_dump(mode="json")
+        payload["nodes"] = payload["nodes"] * (MAX_TREE_NODES + 1)
+    else:
+        result = bag_intersection_graph(source)
+        payload = result.model_dump(mode="json")
+        payload["nodes"] = payload["nodes"] * (MAX_TREE_NODES + 1)
     with pytest.raises(ValidationError):
         type(result).model_validate(payload)

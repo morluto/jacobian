@@ -118,9 +118,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="graph.tree_decomposition.vertex_occurrences.compute",
         title="Compute per-source-vertex occurrence subtrees",
-        description="Return the exact finite map source vertex -> connected subtree node "
-        "set / induced tree edges, with occurrence counts and leaf/extremal "
-        "nodes. Useful for decomposition-based constructions.",
+        description="Return a typed occurrence record for every source vertex. The "
+        "serialized `occurrences` sequence carries each vertex, its connected "
+        "subtree nodes, induced tree edges, count, and leaf nodes. Useful for "
+        "decomposition-based constructions.",
         request_type=VertexOccurrencesRequest,
         result_type=VertexOccurrencesResult,
         run=compute_vertex_occurrences,
@@ -156,9 +157,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="graph.tree_decomposition.reroot.compute",
         title="Reroot a tree decomposition at a selected tree node",
-        description="Return the same underlying decomposition with a parent map, children "
-        "map, depth per bag, and root-to-node paths. Changing the root does "
-        "not change the width, bags, or unrooted tree.",
+        description="Return the same underlying decomposition with a typed `nodes` "
+        "sequence carrying each bag node's parent, children, depth, and "
+        "root-to-node path. Changing the root does not change the width, bags, "
+        "or unrooted tree.",
         request_type=RerootRequest,
         result_type=RerootResult,
         run=compute_reroot,

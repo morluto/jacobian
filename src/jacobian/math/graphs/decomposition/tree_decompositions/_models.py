@@ -9,8 +9,11 @@ from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.decomposition.tree_decompositions.values import (
+    MAX_BAG_SIZE,
+    MAX_TREE_NODES,
     TreeDecomposition,
 )
+from jacobian.math.graphs.values import MAX_INDEXED_SIMPLE_GRAPH_VERTICES
 
 
 def _normalized_tree_nodes(decomposition: TreeDecomposition) -> list[str]:
@@ -28,10 +31,10 @@ class WidthResult(StrictModel):
 
     decomposition: TreeDecomposition
 
-    bag_sizes: tuple[int, ...]
+    bag_sizes: tuple[int, ...] = Field(max_length=MAX_TREE_NODES)
     max_bag_cardinality: int = Field(ge=0)
     width: int = Field(ge=-1)
-    maximum_bag_nodes: tuple[str, ...]
+    maximum_bag_nodes: tuple[str, ...] = Field(max_length=MAX_TREE_NODES)
 
     @model_validator(mode="after")
     def bind_width(self) -> Self:
@@ -52,10 +55,10 @@ class OccurrenceSubtree(StrictModel):
     """Occurrence profile for one source-graph vertex."""
 
     vertex: str
-    nodes: tuple[str, ...]
-    edges: tuple[tuple[str, str], ...]
+    nodes: tuple[str, ...] = Field(max_length=MAX_TREE_NODES)
+    edges: tuple[tuple[str, str], ...] = Field(max_length=MAX_TREE_NODES)
     count: int = Field(ge=0)
-    leaves: tuple[str, ...]
+    leaves: tuple[str, ...] = Field(max_length=MAX_TREE_NODES)
 
 
 class VertexOccurrencesResult(StrictModel):
@@ -64,7 +67,9 @@ class VertexOccurrencesResult(StrictModel):
 
     decomposition: TreeDecomposition
 
-    occurrences: tuple[OccurrenceSubtree, ...]
+    occurrences: tuple[OccurrenceSubtree, ...] = Field(
+        max_length=MAX_INDEXED_SIMPLE_GRAPH_VERTICES
+    )
 
     @model_validator(mode="after")
     def require_source_axes(self) -> Self:
@@ -74,14 +79,18 @@ class VertexOccurrencesResult(StrictModel):
         ):
             raise ValueError("occurrences must cover the source graph vertex axis")
         nodes = set(self.decomposition.tree_nodes)
+        tree_edges = {tuple(sorted(edge)) for edge in self.decomposition.tree_edges}
         for row in self.occurrences:
             if (
                 not set(row.nodes) <= nodes
                 or not set(row.leaves) <= set(row.nodes)
-                or any(a not in row.nodes or b not in row.nodes for a, b in row.edges)
+                or any(
+                    (a, b) not in tree_edges or a not in row.nodes or b not in row.nodes
+                    for a, b in row.edges
+                )
             ):
                 raise ValueError(
-                    "occurrence subtrees must use the source bag-node axis"
+                    "occurrence subtrees must use source tree edges and bag nodes"
                 )
         return self
 
@@ -99,7 +108,7 @@ class AdhesionsRequest(StrictModel):
 
 class Adhesion(StrictModel):
     edge: tuple[str, str]
-    adhesion: tuple[str, ...]
+    adhesion: tuple[str, ...] = Field(max_length=MAX_BAG_SIZE)
     size: int = Field(ge=0)
 
 
@@ -108,9 +117,9 @@ class AdhesionsResult(StrictModel):
 
     decomposition: TreeDecomposition
 
-    edges: tuple[Adhesion, ...]
+    edges: tuple[Adhesion, ...] = Field(max_length=MAX_TREE_NODES)
     max_adhesion: int = Field(ge=0)
-    size_profile: tuple[int, ...]
+    size_profile: tuple[int, ...] = Field(max_length=MAX_TREE_NODES)
 
     @model_validator(mode="after")
     def require_source_axes(self) -> Self:
@@ -132,9 +141,9 @@ class RerootNode(StrictModel):
 
     node: str
     parent: str | None
-    children: tuple[str, ...]
+    children: tuple[str, ...] = Field(max_length=MAX_TREE_NODES)
     depth: int = Field(ge=0)
-    path: tuple[str, ...]
+    path: tuple[str, ...] = Field(max_length=MAX_TREE_NODES)
 
 
 class RerootResult(StrictModel):
@@ -143,7 +152,7 @@ class RerootResult(StrictModel):
     decomposition: TreeDecomposition
 
     root: str
-    nodes: tuple[RerootNode, ...]
+    nodes: tuple[RerootNode, ...] = Field(max_length=MAX_TREE_NODES)
 
     @model_validator(mode="after")
     def require_source_axes(self) -> Self:
@@ -204,8 +213,8 @@ class BagIntersectionGraphResult(StrictModel):
 
     decomposition: TreeDecomposition
 
-    nodes: tuple[BagNode, ...]
-    edges: tuple[Adhesion, ...]
+    nodes: tuple[BagNode, ...] = Field(max_length=MAX_TREE_NODES)
+    edges: tuple[Adhesion, ...] = Field(max_length=MAX_TREE_NODES)
     max_adhesion: int = Field(ge=0)
 
     @model_validator(mode="after")

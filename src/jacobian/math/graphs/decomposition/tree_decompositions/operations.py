@@ -375,24 +375,89 @@ def bag_intersection_graph(td: TreeDecomposition) -> BagIntersectionGraphResult:
 
 def verify_width(claim: WidthResult) -> bool:
     """Check width and maxima against the admitted source decomposition."""
-    return width(claim.decomposition) == claim
+    try:
+        if not isinstance(claim, WidthResult):
+            return False
+        return width(claim.decomposition) == claim
+    except (
+        AttributeError,
+        IndexError,
+        KeyError,
+        OperationDomainValidationError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+    ):
+        return False
 
 
 def verify_vertex_occurrences(claim: VertexOccurrencesResult) -> bool:
     """Check source-vertex occurrence profiles in the bounded decomposition."""
-    return vertex_occurrences(claim.decomposition) == claim
+    try:
+        if not isinstance(claim, VertexOccurrencesResult):
+            return False
+        return vertex_occurrences(claim.decomposition) == claim
+    except (
+        AttributeError,
+        IndexError,
+        KeyError,
+        OperationDomainValidationError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+    ):
+        return False
 
 
 def verify_adhesions(claim: AdhesionsResult) -> bool:
     """Check all source tree-edge intersections and their summaries."""
-    return adhesions(claim.decomposition) == claim
+    try:
+        if not isinstance(claim, AdhesionsResult):
+            return False
+        return adhesions(claim.decomposition) == claim
+    except (
+        AttributeError,
+        IndexError,
+        KeyError,
+        OperationDomainValidationError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+    ):
+        return False
 
 
 def verify_reroot(claim: RerootResult) -> bool:
     """Check the parent, child, depth and path relations from the declared root."""
-    return reroot(claim.decomposition, claim.root) == claim
+    try:
+        if not isinstance(claim, RerootResult):
+            return False
+        return reroot(claim.decomposition, claim.root) == claim
+    except (
+        AttributeError,
+        IndexError,
+        KeyError,
+        OperationDomainValidationError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+    ):
+        return False
 
 
 def verify_bag_intersection_graph(claim: BagIntersectionGraphResult) -> bool:
     """Check weighted bag-tree relations against the admitted decomposition."""
-    return bag_intersection_graph(claim.decomposition) == claim
+    try:
+        if not isinstance(claim, BagIntersectionGraphResult):
+            return False
+        return bag_intersection_graph(claim.decomposition) == claim
+    except (
+        AttributeError,
+        IndexError,
+        KeyError,
+        OperationDomainValidationError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+    ):
+        return False

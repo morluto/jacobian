@@ -368,6 +368,9 @@ class TestCongruence:
             CongruenceRequest(algebra=_boolean_algebra(), partition=((0, 1),))
         )
         assert result.is_congruence is True
+        from jacobian.math.universal_algebra import verify_congruence
+
+        assert verify_congruence(result)
 
     def test_equality_partition_is_congruence(self) -> None:
         result = compute_congruence(

@@ -37,6 +37,7 @@ __all__ = [
     "generated_subalgebra",
     "homomorphism_profile",
     "quotient",
+    "verify_congruence",
 ]
 
 
@@ -391,6 +392,12 @@ def congruence_check(
     """
     _admit_partition(algebra, partition, quotient_request=False)
     return _congruence_check_unchecked(algebra, partition)
+
+
+def verify_congruence(claim: CongruenceResult) -> bool:
+    """Check a serialized congruence verdict against its retained relation."""
+
+    return congruence_check(claim.algebra, claim.partition) == claim
 
 
 def _congruence_check_unchecked(

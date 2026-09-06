@@ -7,6 +7,7 @@ from jacobian.math.universal_algebra.operations import (
     generated_subalgebra,
     homomorphism_profile,
     quotient,
+    verify_congruence,
 )
 from jacobian.math.universal_algebra.values import (
     ApplicationTerm,
@@ -34,4 +35,5 @@ __all__ = [
     "generated_subalgebra",
     "homomorphism_profile",
     "quotient",
+    "verify_congruence",
 ]

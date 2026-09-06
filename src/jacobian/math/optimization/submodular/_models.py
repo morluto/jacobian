@@ -115,8 +115,9 @@ class MonotonicityCheckRequest(StrictModel):
 class MonotonicityCheckResult(StrictModel):
     """Whether the function is monotone non-decreasing."""
 
+    function: SetFunction
     is_monotone: bool
-    violation: str
+    violation: tuple[tuple[int, ...], int] | None = None
 
 
 class SubmodularityCheckRequest(StrictModel):
@@ -128,8 +129,9 @@ class SubmodularityCheckRequest(StrictModel):
 class SubmodularityCheckResult(StrictModel):
     """Whether the function is submodular."""
 
+    function: SetFunction
     is_submodular: bool
-    violation: str
+    violation: tuple[tuple[int, ...], int, int] | None = None
 
 
 __all__ = [

@@ -455,22 +455,44 @@ def polya_inventory(
 
 def verify_element_cycles(claim: ElementCyclesResult) -> bool:
     """Check the enumerated element and every cycle-derived field once."""
-    return element_cycles(claim.action, claim.element) == claim
+    try:
+        return element_cycles(claim.action, claim.element) == claim
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
 
 
 def verify_cycle_index(claim: CycleIndexResult) -> bool:
     """Check cycle counts against the bounded generated action."""
-    return cycle_index(claim.action) == claim
+    try:
+        return cycle_index(claim.action) == claim
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
 
 
 def verify_burnside_count(claim: BurnsideCountResult) -> bool:
     """Check fixed-point contributions and their orbit count."""
-    return burnside_count(claim.action) == claim
+    try:
+        return burnside_count(claim.action) == claim
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
 
 
 def verify_polya_inventory(claim: PolyaInventoryResult) -> bool:
     """Check inventory coefficients in the admitted coloring domain."""
-    return polya_inventory(claim.action, claim.colors) == claim
+    try:
+        return polya_inventory(claim.action, claim.colors) == claim
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+
+
+def verify_subset_family_orbit_profile(
+    claim: SubsetFamilyOrbitProfileResult,
+) -> bool:
+    """Check every orbit-profile summary against its retained source family."""
+    try:
+        return subset_family_orbit_profile(claim.action, claim.subsets) == claim
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
 
 
 __all__ = [
@@ -484,4 +506,5 @@ __all__ = [
     "verify_cycle_index",
     "verify_element_cycles",
     "verify_polya_inventory",
+    "verify_subset_family_orbit_profile",
 ]

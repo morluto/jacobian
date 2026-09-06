@@ -12,8 +12,10 @@ from jacobian.math.groups.actions import (
     verify_cycle_index,
     verify_element_cycles,
     verify_polya_inventory,
+    verify_subset_family_orbit_profile,
 )
 from jacobian.math.groups.actions._models import FinitePermutationAction
+from jacobian.math.groups.actions.operations import subset_family_orbit_profile
 
 
 def test_serialized_action_claims() -> None:
@@ -25,6 +27,12 @@ def test_serialized_action_claims() -> None:
         (cycle_index(action), verify_cycle_index, "group_order", 3),
         (burnside_count(action), verify_burnside_count, "fixed_point_sum", 0),
         (polya_inventory(action, 2), verify_polya_inventory, "terms", (((0, 1), 1),)),
+        (
+            subset_family_orbit_profile(action, ((0,),)),
+            verify_subset_family_orbit_profile,
+            "total_full_orbit_size",
+            1,
+        ),
     ):
         assert verifier(type(result).model_validate_json(result.model_dump_json()))
         payload = result.model_dump()

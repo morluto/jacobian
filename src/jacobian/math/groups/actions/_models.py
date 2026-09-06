@@ -325,20 +325,10 @@ class SubsetFamilyOrbitProfileRow(StrictModel):
 
     @model_validator(mode="after")
     def bind_orbit_profile_row(self) -> Self:
-        if self.supplied_count != len(self.source_indices):
-            raise _validation_error(
-                "orbit_profile_row_count_mismatch",
-                "supplied_count must equal the number of retained source indices",
-            )
         if tuple(sorted(set(self.source_indices))) != self.source_indices:
             raise _validation_error(
                 "orbit_profile_source_indices_not_canonical",
                 "source indices must be distinct and increasing",
-            )
-        if self.orbit_size * self.stabilizer_size > MAX_GROUP_ORDER:
-            raise _validation_error(
-                "orbit_stabilizer_product_exceeds_bound",
-                "orbit_size * stabilizer_size must stay within the group-order bound",
             )
         return self
 
@@ -363,7 +353,7 @@ class SubsetFamilyOrbitProfileResult(StrictModel):
     total_full_orbit_size: int = Field(ge=0, le=MAX_ORBIT_PROFILE_IMAGES)
 
     @model_validator(mode="after")
-    def bind_subset_family_orbit_profile(self) -> Self:  # noqa: C901
+    def bind_subset_family_orbit_profile(self) -> Self:
         if self.rows != tuple(
             sorted(
                 self.rows,
@@ -396,69 +386,14 @@ class SubsetFamilyOrbitProfileResult(StrictModel):
                 "orbit_profile_duplicate_subsets",
                 "subsets must be pairwise distinct",
             )
-        seen_indices: set[int] = set()
-        seen_representatives: set[tuple[int, ...]] = set()
-        total_supplied = 0
-        total_orbits = 0
-        complete = True
         for row in self.rows:
-            if row.orbit_size * row.stabilizer_size != self.group_order:
+            if row.representative.positions != tuple(
+                sorted(row.representative.positions)
+            ):
                 raise _validation_error(
-                    "orbit_profile_orbit_stabilizer_mismatch",
-                    "every row must satisfy orbit_size * stabilizer_size == group_order",
+                    "orbit_profile_representative_not_canonical",
+                    "representative positions must be increasing",
                 )
-            if row.representative.action != self.action:
-                raise _validation_error(
-                    "orbit_profile_representative_action_mismatch",
-                    "every orbit representative must be bound to the source action",
-                )
-            representative = row.representative.positions
-            if representative in seen_representatives:
-                raise _validation_error(
-                    "orbit_profile_duplicate_representatives",
-                    "orbit representatives must be pairwise distinct",
-                )
-            seen_representatives.add(representative)
-            for index in row.source_indices:
-                if not 0 <= index < self.family_size:
-                    raise _validation_error(
-                        "orbit_profile_source_index_out_of_range",
-                        "every source index must address the supplied family",
-                    )
-                if index in seen_indices:
-                    raise _validation_error(
-                        "orbit_profile_duplicate_source_indices",
-                        "each supplied subset must occur in exactly one orbit row",
-                    )
-                seen_indices.add(index)
-            total_supplied += row.supplied_count
-            total_orbits += row.orbit_size
-            complete = complete and row.supplied_count == row.orbit_size
-        if self.total_supplied_subsets != total_supplied:
-            raise _validation_error(
-                "orbit_profile_supplied_total_mismatch",
-                "total_supplied_subsets must equal the retained source-index count",
-            )
-        if self.total_full_orbit_size != total_orbits:
-            raise _validation_error(
-                "orbit_profile_orbit_total_mismatch",
-                "total_full_orbit_size must equal the sum of row orbit sizes",
-            )
-        if self.is_union_of_complete_orbits != complete:
-            raise _validation_error(
-                "orbit_profile_completeness_claim_mismatch",
-                "is_union_of_complete_orbits must match per-row supplied/orbit equality",
-            )
-        if len(seen_indices) != self.family_size:
-            raise _validation_error(
-                "orbit_profile_source_coverage_mismatch",
-                "orbit rows must cover every supplied family index exactly once",
-            )
-        if complete and self.family_size != self.total_full_orbit_size:
-            raise _validation_error(
-                "orbit_profile_complete_family_size_mismatch",
-                "a complete-orbit family must have family_size equal to total orbit size",
-            )
         return self
 
     @classmethod

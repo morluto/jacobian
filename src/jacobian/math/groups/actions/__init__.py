@@ -11,6 +11,7 @@ from jacobian.math.groups.actions.operations import (
     verify_cycle_index,
     verify_element_cycles,
     verify_polya_inventory,
+    verify_subset_family_orbit_profile,
 )
 
 __all__ = [
@@ -24,4 +25,5 @@ __all__ = [
     "verify_cycle_index",
     "verify_element_cycles",
     "verify_polya_inventory",
+    "verify_subset_family_orbit_profile",
 ]

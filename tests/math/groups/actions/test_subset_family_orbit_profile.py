@@ -17,6 +17,7 @@ from jacobian.math.groups.actions._tools import TOOLS
 from jacobian.math.groups.actions.operations import (
     _enumerate_group,
     subset_family_orbit_profile,
+    verify_subset_family_orbit_profile,
 )
 
 
@@ -315,8 +316,12 @@ def test_result_rejects_inconsistent_row_claims(
     else:
         forged["rows"][0][forged_field] = value
 
-    with pytest.raises(ValidationError):
-        SubsetFamilyOrbitProfileResult.model_validate(forged)
+    if forged_field == "source_indices":
+        with pytest.raises(ValidationError):
+            SubsetFamilyOrbitProfileResult.model_validate(forged)
+    else:
+        claim = SubsetFamilyOrbitProfileResult.model_validate(forged)
+        assert not verify_subset_family_orbit_profile(claim)
 
 
 def test_result_rejects_lost_source_coverage_and_wrong_completeness() -> None:
@@ -328,11 +333,8 @@ def test_result_rejects_lost_source_coverage_and_wrong_completeness() -> None:
     forged["is_union_of_complete_orbits"] = True
     forged["total_supplied_subsets"] = 1
 
-    with pytest.raises(ValidationError) as exc_info:
-        SubsetFamilyOrbitProfileResult.model_validate(forged)
-    _assert_error_type(
-        exc_info.value, "finite_group_action.orbit_profile_completeness_claim_mismatch"
-    )
+    claim = SubsetFamilyOrbitProfileResult.model_validate(forged)
+    assert not verify_subset_family_orbit_profile(claim)
 
 
 def test_result_rejects_duplicate_orbit_representatives() -> None:
@@ -340,11 +342,8 @@ def test_result_rejects_duplicate_orbit_representatives() -> None:
     forged = result.model_dump()
     forged["rows"][0]["representative"] = forged["rows"][1]["representative"]
 
-    with pytest.raises(ValidationError) as exc_info:
-        SubsetFamilyOrbitProfileResult.model_validate(forged)
-    _assert_error_type(
-        exc_info.value, "finite_group_action.orbit_profile_duplicate_representatives"
-    )
+    claim = SubsetFamilyOrbitProfileResult.model_validate(forged)
+    assert not verify_subset_family_orbit_profile(claim)
 
 
 def test_result_rejects_representative_bound_to_a_different_action() -> None:
@@ -352,21 +351,20 @@ def test_result_rejects_representative_bound_to_a_different_action() -> None:
     forged = result.model_dump()
     forged["rows"][0]["representative"]["action"] = _dihedral_d4().model_dump()
 
-    with pytest.raises(ValidationError) as exc_info:
-        SubsetFamilyOrbitProfileResult.model_validate(forged)
-    _assert_error_type(
-        exc_info.value,
-        "finite_group_action.orbit_profile_representative_action_mismatch",
-    )
+    claim = SubsetFamilyOrbitProfileResult.model_validate(forged)
+    assert not verify_subset_family_orbit_profile(claim)
 
 
 def test_serialized_result_round_trips_unchanged() -> None:
     action = _dihedral_d4()
     result = _result(action, (0, 1), (2, 3))
 
-    restored = SubsetFamilyOrbitProfileResult.model_validate(result.model_dump())
+    restored = SubsetFamilyOrbitProfileResult.model_validate_json(
+        result.model_dump_json()
+    )
 
     assert restored == result
+    assert verify_subset_family_orbit_profile(restored)
 
 
 def test_public_declaration_exposes_and_executes_copyable_example() -> None:

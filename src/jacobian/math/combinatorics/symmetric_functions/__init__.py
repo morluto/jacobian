@@ -3,6 +3,7 @@
 from jacobian.math.combinatorics.symmetric_functions.operations import (
     partition_conjugate,
     schur_evaluation,
+    verify_schur_evaluation,
 )
 from jacobian.math.combinatorics.symmetric_functions.values import (
     IntegerPartition,
@@ -20,4 +21,5 @@ __all__ = [
     "require_semistandard",
     "require_standard",
     "schur_evaluation",
+    "verify_schur_evaluation",
 ]

@@ -47,6 +47,7 @@ def _complete_homogeneous(variables: Sequence[int], k: int) -> int:
 def schur_evaluation(
     partition: IntegerPartition,
     point: tuple[int, ...],
+    variables: tuple[str, ...] | None = None,
 ) -> SchurExpansionResult:
     """Evaluate a Schur function s_lambda at a point using the Jacobi-Trudi formula.
 
@@ -73,10 +74,22 @@ def schur_evaluation(
             message="point must contain 1..20 bounded integer coordinates",
         )
 
+    variables = variables if variables is not None else tuple(
+        f"x{i}" for i in range(len(point))
+    )
+    if len(variables) != len(point):
+        raise OperationDomainValidationError(
+            location=("variables",),
+            code="symmetric_function.schur_dimensions_mismatch",
+            message="variables and point must have the same length",
+        )
     parts = list(partition.parts)
     n = len(parts)
     if not parts:
-        return SchurExpansionResult(value=format_canonical_integer(1))
+        return SchurExpansionResult(
+            partition=partition, variables=variables,
+            point=point, value=format_canonical_integer(1)
+        )
 
     def h(k: int) -> int:
         if k < 0:
@@ -90,7 +103,20 @@ def schur_evaluation(
             matrix[i][j] = h(parts[i] - (i + 1) + (j + 1))
 
     result = _determinant(matrix)
-    return SchurExpansionResult(value=format_canonical_integer(result))
+    return SchurExpansionResult(
+        partition=partition,
+        variables=variables,
+        point=point,
+        value=format_canonical_integer(result),
+    )
+
+
+def verify_schur_evaluation(claim: SchurExpansionResult) -> bool:
+    try:
+        expected = schur_evaluation(claim.partition, claim.point)
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+    return expected.value == claim.value and len(claim.variables) == len(claim.point)
 
 
 def _determinant(matrix: list[list[int]]) -> int:
@@ -111,4 +137,5 @@ def _determinant(matrix: list[list[int]]) -> int:
 __all__ = [
     "partition_conjugate",
     "schur_evaluation",
+    "verify_schur_evaluation",
 ]

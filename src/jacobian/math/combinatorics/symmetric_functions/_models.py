@@ -124,6 +124,9 @@ class SchurExpansionRequest(StrictModel):
 
 
 class SchurExpansionResult(StrictModel):
+    partition: IntegerPartition
+    variables: tuple[str, ...]
+    point: tuple[PointCoordinate, ...]
     value: CanonicalInteger
 
     @model_validator(mode="after")

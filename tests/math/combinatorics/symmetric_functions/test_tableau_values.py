@@ -28,6 +28,7 @@ def test_symmetric_function_public_values_have_one_canonical_identity() -> None:
         "require_semistandard",
         "require_standard",
         "schur_evaluation",
+        "verify_schur_evaluation",
     )
 
 

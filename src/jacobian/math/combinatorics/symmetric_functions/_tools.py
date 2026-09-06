@@ -11,7 +11,7 @@ from jacobian.math.combinatorics.symmetric_functions.operations import schur_eva
 
 
 def _run_schur_evaluation(request: SchurExpansionRequest) -> SchurExpansionResult:
-    return schur_evaluation(request.partition, request.point)
+    return schur_evaluation(request.partition, request.point, request.variables)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (

@@ -339,7 +339,8 @@ def _prepare_root_box(
                 label="Jacobian midpoint value",
                 result_digits=MAX_ROOT_BOX_POINT_VALUE_DIGITS,
             )[0]
-            for polynomial in jacobian.entries
+            for row in jacobian.matrix.entries
+            for polynomial in row
         )
         jacobian_enclosure_flat = tuple(
             _admitted_enclosure(
@@ -348,12 +349,14 @@ def _prepare_root_box(
                 label="Jacobian entry",
                 result_digits=MAX_ROOT_BOX_ENCLOSURE_DIGITS,
             )
-            for polynomial in jacobian.entries
+            for row in jacobian.matrix.entries
+            for polynomial in row
         )
         order = len(polynomial_map.input_variables)
+        output_count = len(polynomial_map.output_polynomials)
         jacobian_at_center = tuple(
             jacobian_at_center_flat[row * order : (row + 1) * order]
-            for row in range(order)
+            for row in range(output_count)
         )
         prepared = MidpointKernelData(
             center=center,
@@ -361,7 +364,7 @@ def _prepare_root_box(
             jacobian_at_center=jacobian_at_center,
             jacobian_enclosure=tuple(
                 jacobian_enclosure_flat[row * order : (row + 1) * order]
-                for row in range(order)
+                for row in range(output_count)
             ),
         )
         _require_krawczyk_height_envelope(prepared, box)

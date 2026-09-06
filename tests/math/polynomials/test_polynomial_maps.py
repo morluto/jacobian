@@ -18,6 +18,7 @@ from jacobian.math.polynomials.maps.operations import (
     compose_polynomials,
     evaluate_polynomial,
     jacobian_matrix,
+    verify_jacobian,
 )
 from jacobian.math.polynomials.maps.values import RationalPolynomialMap
 from jacobian.math.polynomials.values import (
@@ -106,14 +107,19 @@ def test_jacobian_entries_are_directly_composable_polynomials() -> None:
         ),
     )
     result = jacobian_matrix(request)
-    assert result.n_inputs == 2
-    assert result.n_outputs == 2
-    assert result.entries == (
-        _polynomial(("x", "y"), {(1, 0): 2}),
-        _polynomial(("x", "y"), {}),
-        _polynomial(("x", "y"), {}),
-        _polynomial(("x", "y"), {(0, 1): 2}),
+    assert result.source == request
+    assert result.matrix.input_variables == ("x", "y")
+    assert result.matrix.entries == (
+        (_polynomial(("x", "y"), {(1, 0): 2}), _polynomial(("x", "y"), {})),
+        (_polynomial(("x", "y"), {}), _polynomial(("x", "y"), {(0, 1): 2})),
     )
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_jacobian(decoded)
+    payload = result.model_dump(mode="json")
+    payload["matrix"]["entries"][0][0]["polynomial"]["terms"][0][
+        "coefficient"
+    ] = {"num": "99", "den": "1"}
+    assert not verify_jacobian(type(result).model_validate(payload))
 
 
 def test_jacobian_rejects_a_mismatched_output_ring() -> None:

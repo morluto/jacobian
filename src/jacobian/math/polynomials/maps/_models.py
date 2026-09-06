@@ -12,7 +12,7 @@ from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.polynomials.maps.values import (
     MAX_MAP_INPUTS,
-    MAX_MAP_OUTPUTS,
+    PolynomialJacobianMatrix,
     RationalPolynomialMap,
 )
 from jacobian.math.polynomials.values import (
@@ -80,24 +80,17 @@ class EvalResult(StrictModel):
 
 
 class JacobianResult(StrictModel):
-    """The row-major Jacobian matrix over the source polynomial ring."""
+    """A source-bound Jacobian matrix over the map's polynomial ring."""
 
-    n_inputs: int = Field(ge=1, le=MAX_MAP_INPUTS)
-    n_outputs: int = Field(ge=1, le=MAX_MAP_OUTPUTS)
-    entries: tuple[RationalPolynomial, ...] = Field(
-        max_length=MAX_MAP_INPUTS * MAX_MAP_OUTPUTS
-    )
+    source: RationalPolynomialMap
+    matrix: PolynomialJacobianMatrix
 
     @model_validator(mode="after")
     def require_matrix_shape(self) -> Self:
-        if len(self.entries) != self.n_inputs * self.n_outputs:
-            raise _validation_error(
-                "Jacobian entry count must match its matrix dimensions"
-            )
-        if self.entries:
-            variables = self.entries[0].variables
-            if any(entry.variables != variables for entry in self.entries):
-                raise _validation_error("Jacobian entries must use one ordered ring")
+        if self.matrix.input_variables != self.source.input_variables:
+            raise _validation_error("Jacobian matrix must use the source input axis")
+        if len(self.matrix.entries) != len(self.source.output_polynomials):
+            raise _validation_error("Jacobian rows must match source output axis")
         return self
 
 

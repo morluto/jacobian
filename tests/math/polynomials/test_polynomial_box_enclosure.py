@@ -223,11 +223,11 @@ def test_jacobian_entry_is_consumed_without_parent_or_axis_conversion() -> None:
     )
 
     result = _enclose(
-        jacobian.entries[0],
+        jacobian.matrix.entries[0][0],
         _box(("x", "y"), ((1, 2), (3, 4))),
     )
 
-    assert result.polynomial == jacobian.entries[0]
+    assert result.polynomial == jacobian.matrix.entries[0][0]
     assert result.enclosure == _interval(5, 8)
 
 

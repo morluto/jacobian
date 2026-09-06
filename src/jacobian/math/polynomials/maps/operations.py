@@ -45,6 +45,7 @@ from jacobian.math.polynomials.maps._models import (
 from jacobian.math.polynomials.maps._singular import run_singular_generic_fiber
 from jacobian.math.polynomials.maps.values import (
     MAX_MAP_POLYNOMIAL_TERMS,
+    PolynomialJacobianMatrix,
     RationalPolynomialMap,
     require_map_polynomial,
 )
@@ -334,19 +335,32 @@ def jacobian_matrix(polynomial_map: RationalPolynomialMap) -> JacobianResult:
         for polynomial in polynomial_map.output_polynomials
     ]
     entries = tuple(
-        rational_polynomial_from_sympy(
-            sympy.Poly(sympy.diff(output, variable), *variables, domain=sympy.QQ),
-            polynomial_map.input_variables,
-            maximum_terms=MAX_MAP_POLYNOMIAL_TERMS,
+        tuple(
+            rational_polynomial_from_sympy(
+                sympy.Poly(sympy.diff(output, variable), *variables, domain=sympy.QQ),
+                polynomial_map.input_variables,
+                maximum_terms=MAX_MAP_POLYNOMIAL_TERMS,
+            )
+            for variable in variables
         )
         for output in outputs
-        for variable in variables
     )
     return JacobianResult(
-        n_inputs=len(variables),
-        n_outputs=len(outputs),
-        entries=entries,
+        source=polynomial_map,
+        matrix=PolynomialJacobianMatrix(
+            input_variables=polynomial_map.input_variables,
+            entries=entries,
+        ),
     )
+
+
+def verify_jacobian(claim: JacobianResult) -> bool:
+    """Verify Jacobian entries against the retained polynomial map source."""
+
+    try:
+        return jacobian_matrix(claim.source) == claim
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
 
 
 def compose_polynomials(
@@ -385,4 +399,5 @@ __all__ = [
     "generic_degree",
     "jacobian_matrix",
     "verify_generic_degree",
+    "verify_jacobian",
 ]

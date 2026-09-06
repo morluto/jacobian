@@ -80,4 +80,31 @@ class RationalPolynomialMap(StrictModel):
         return self
 
 
-__all__ = ["RationalPolynomialMap"]
+class PolynomialJacobianMatrix(StrictModel):
+    """A polynomial matrix with an explicit ordered input-variable axis."""
+
+    input_variables: tuple[PolynomialVariable, ...] = Field(
+        min_length=1, max_length=MAX_MAP_INPUTS
+    )
+    entries: tuple[tuple[RationalPolynomial, ...], ...] = Field(
+        min_length=1, max_length=MAX_MAP_OUTPUTS
+    )
+
+    @model_validator(mode="after")
+    def require_matrix_shape(self) -> Self:
+        if any(len(row) != len(self.input_variables) for row in self.entries):
+            raise _validation_error(
+                "Jacobian rows must match the input-variable axis length"
+            )
+        if any(
+            polynomial.variables != self.input_variables
+            for row in self.entries
+            for polynomial in row
+        ):
+            raise _validation_error(
+                "Jacobian entries must use the ordered input-variable axis"
+            )
+        return self
+
+
+__all__ = ["PolynomialJacobianMatrix", "RationalPolynomialMap"]

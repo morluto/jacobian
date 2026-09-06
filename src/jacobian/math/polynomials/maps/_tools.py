@@ -135,7 +135,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="polynomial.map.jacobian",
         title="Compute the Jacobian matrix of a polynomial map",
-        description="Compute the row-major Jacobian matrix of a canonical polynomial map.",
+        description="Compute the source-bound Jacobian matrix of a canonical polynomial map, retaining ordered input and output axes.",
         request_type=RationalPolynomialMap,
         result_type=JacobianResult,
         run=jacobian_matrix,

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 from flint import nmod_mat
+from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math import finite_fields
@@ -265,6 +268,84 @@ def test_serialized_orbit_distribution_is_a_claim_checked_by_its_consumer() -> N
     forged["counts"] = [["1", "1"]]
     forged_decoded = type(distribution).model_validate(forged)
     assert not verify_orbit_distribution(forged_decoded)
+
+
+def test_orbit_count_codec_separates_native_and_json_integer_validation() -> None:
+    subspace, directions = _slice_a_values()
+    distribution = orbit_distribution(direction_rank_ledger(subspace, directions))
+    payload = distribution.model_dump(mode="json")
+    payload["counts"] = ((1, 9), (8, 48), (16, 12))
+
+    native = type(distribution).model_validate(payload)
+    assert native.counts == distribution.counts
+    with pytest.raises(ValidationError):
+        type(distribution).model_validate_json(json.dumps(payload))
+
+
+@pytest.mark.parametrize(
+    "mutation", ["subspace", "presentation", "axis", "source_axis"]
+)
+def test_orbit_verifier_rejects_forged_entry_source_binding(mutation: str) -> None:
+    subspace, directions = _slice_a_values()
+    ledger = direction_rank_ledger(subspace, directions)
+    entry = ledger.entries[0]
+    if mutation == "subspace":
+        forged_subspace = subspace.model_copy(
+            update={
+                "basis_axis": Axis(
+                    name="foreign basis", labels=subspace.basis_axis.labels
+                )
+            }
+        )
+        forged_entry = entry.model_copy(update={"subspace": forged_subspace})
+    elif mutation == "presentation":
+        foreign = finite_field(2, (1, 1, 1), generator="z")
+        forged_direction = entry.direction.model_copy(update={"presentation": foreign})
+        forged_entry = entry.model_copy(update={"direction": forged_direction})
+    elif mutation == "axis":
+        forged_direction = entry.direction.model_copy(
+            update={
+                "axis": Axis(
+                    name="foreign direction", labels=entry.direction.axis.labels
+                )
+            }
+        )
+        forged_entry = entry.model_copy(update={"direction": forged_direction})
+    else:
+        forged_map = entry.linear_map.model_copy(
+            update={
+                "source_axis": Axis(
+                    name="foreign source", labels=subspace.basis_axis.labels
+                )
+            }
+        )
+        forged_entry = entry.model_copy(update={"linear_map": forged_map})
+    forged_ledger = ledger.model_copy(
+        update={"entries": (forged_entry, *ledger.entries[1:])}
+    )
+    forged_claim = orbit_distribution(ledger).model_copy(
+        update={"ledger": forged_ledger}
+    )
+
+    assert not verify_orbit_distribution(forged_claim)
+
+
+@pytest.mark.parametrize(
+    "counts",
+    [
+        ((True, 9),),
+        ((1.5, 9),),
+        ((1, -1),),
+        ((2, 9), (1, 9)),
+        ((1, 9, 0),),
+    ],
+)
+def test_orbit_verifier_rechecks_forged_count_structure(counts: object) -> None:
+    subspace, directions = _slice_a_values()
+    distribution = orbit_distribution(direction_rank_ledger(subspace, directions))
+    forged = distribution.model_copy(update={"counts": counts})
+
+    assert not verify_orbit_distribution(forged)
 
 
 def test_serialized_orbit_distribution_decoding_does_not_replay_histogram(

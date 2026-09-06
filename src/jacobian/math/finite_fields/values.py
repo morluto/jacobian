@@ -11,6 +11,7 @@ from pydantic import (
     Field,
     PlainSerializer,
     StrictInt,
+    ValidationInfo,
     model_validator,
 )
 from pydantic_core import PydanticCustomError
@@ -48,17 +49,22 @@ MAX_ORBIT_DISTRIBUTION_ROWS = _MAX_FIELD_ORDER + 1
 MAX_ORBIT_DISTRIBUTION_TOTAL_DIGITS = 5_000_000
 
 
-def _parse_orbit_count_integer(value: Any) -> int:
+def _parse_orbit_count_integer(value: Any, info: ValidationInfo) -> int:
     """Decode one bounded nonnegative native integer from Python or JSON."""
 
+    if info.mode == "json" and type(value) is not str:
+        raise PydanticCustomError(
+            "finite_field.orbit_count_integer_json_type",
+            "JSON orbit counts must be canonical decimal strings",
+        )
     if isinstance(value, bool):
         raise PydanticCustomError(
             "finite_field.orbit_count_integer_type",
             "orbit counts must be exact integers, not booleans",
         )
-    if isinstance(value, int):
+    if type(value) is int:
         parsed = value
-    elif isinstance(value, str):
+    elif type(value) is str:
         if len(value.lstrip("-")) > MAX_ORBIT_DISTRIBUTION_COUNT_DIGITS:
             raise PydanticCustomError(
                 "finite_field.orbit_count_integer_digits",
@@ -94,6 +100,35 @@ OrbitCountInteger = Annotated[
     BeforeValidator(_parse_orbit_count_integer),
     PlainSerializer(format_canonical_integer, return_type=str, when_used="json"),
 ]
+
+
+def _orbit_counts_structurally_valid(counts: object) -> bool:
+    """Check the bounded representation of an authored orbit histogram."""
+
+    if type(counts) is not tuple or not 1 <= len(counts) <= MAX_ORBIT_DISTRIBUTION_ROWS:
+        return False
+    for row in counts:
+        if type(row) is not tuple or len(row) != 2:
+            return False
+        orbit_size, multiplicity = row
+        if (
+            type(orbit_size) is not int
+            or type(multiplicity) is not int
+            or orbit_size < 1
+            or multiplicity < 0
+        ):
+            return False
+    if len({row[0] for row in counts}) != len(counts):
+        return False
+    if counts != tuple(sorted(counts)):
+        return False
+    try:
+        total_digits = sum(
+            len(format_canonical_integer(value)) for row in counts for value in row
+        )
+    except Exception:
+        return False
+    return total_digits <= MAX_ORBIT_DISTRIBUTION_TOTAL_DIGITS
 
 
 def _homogeneous_monomial_count(variable_count: int, degree: int) -> int:
@@ -1080,6 +1115,11 @@ class OrbitDistribution(StrictModel):
 
     @model_validator(mode="after")
     def validate_distribution(self) -> Self:
+        if not _orbit_counts_structurally_valid(self.counts):
+            raise _validation_error(
+                "finite_field.orbit_counts_structural_shape",
+                "orbit counts must be bounded, nonnegative, unique, and canonically ordered",
+            )
         if any(orbit_size < 1 for orbit_size, _ in self.counts):
             raise _validation_error(
                 "finite_field.orbit_size_positive",
@@ -1094,14 +1134,6 @@ class OrbitDistribution(StrictModel):
             raise _validation_error(
                 "finite_field.orbit_counts_canonical_order",
                 "orbit count rows must be sorted by orbit size",
-            )
-        total_digits = sum(
-            len(format_canonical_integer(value)) for row in self.counts for value in row
-        )
-        if total_digits > MAX_ORBIT_DISTRIBUTION_TOTAL_DIGITS:
-            raise _validation_error(
-                "finite_field.orbit_counts_total_digit_bound",
-                "orbit count rows exceed their total decimal digit bound",
             )
         return self
 

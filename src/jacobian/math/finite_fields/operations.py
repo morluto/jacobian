@@ -55,6 +55,7 @@ from jacobian.math.finite_fields.values import (
     _fibers_for_table,
     _homogeneous_monomial_count,
     _orbit_counts,
+    _orbit_counts_structurally_valid,
 )
 from jacobian.math.graphs.directed._models import (
     MAX_DIRECTED_GRAPH_PARSE_EDGES,
@@ -799,8 +800,30 @@ def _authenticate_orbit_ledger(ledger: DirectionRankLedger) -> None:
     _admit_restriction_shape(ledger.subspace)
     active_context = _flint.context(ledger.subspace.presentation)
     require_independent_basis(ledger.subspace)
+    expected_target_axis = Axis(
+        name=f"Res({ledger.subspace.column_axis.name})",
+        labels=tuple(
+            f"{label}:{basis}"
+            for label in ledger.subspace.column_axis.labels
+            for basis in ledger.subspace.presentation.ordered_basis
+        ),
+    )
     for index, entry in enumerate(ledger.entries):
         request_checkpoint("before orbit ledger entry authentication")
+        if (
+            entry.subspace != ledger.subspace
+            or entry.direction.presentation != ledger.subspace.presentation
+            or entry.direction.axis != ledger.subspace.row_axis
+            or entry.linear_map.matrix.prime
+            != ledger.subspace.presentation.characteristic
+            or entry.linear_map.source_axis != ledger.subspace.basis_axis
+            or entry.linear_map.target_axis != expected_target_axis
+        ):
+            raise OperationDomainValidationError(
+                location=("ledger", "entries", index),
+                code="finite_field.ledger_entry_matches_source_restriction",
+                message="ledger entries must retain the source field, direction axis, and map axes",
+            )
         expected = _linear_map_rank_admitted(
             ledger.subspace, entry.direction, active_context
         )
@@ -824,6 +847,8 @@ def verify_orbit_distribution(claim: OrbitDistribution) -> bool:
     """Verify a serialized orbit histogram against its complete source ledger."""
 
     try:
+        if not _orbit_counts_structurally_valid(claim.counts):
+            return False
         _admit_orbit_distribution(claim.ledger)
         _authenticate_orbit_ledger(claim.ledger)
         return claim.counts == _orbit_counts(claim.ledger)

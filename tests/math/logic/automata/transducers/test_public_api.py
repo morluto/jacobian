@@ -21,6 +21,8 @@ def test_exact_public_api_symbols() -> None:
         "replay_rational_path",
         "run_subsequential",
         "trim_subsequential",
+        "verify_composition",
+        "verify_subsequential_run",
     )
     assert tuple(finite_state_transducers.__all__) == expected
     assert len(finite_state_transducers.__all__) == len(

@@ -31,6 +31,12 @@ def test_exact_public_api_symbols() -> None:
         "primitive_root",
         "substitution_dependency_graph",
         "substitution_primitivity_profile",
+        "verify_factors_length",
+        "verify_incidence_matrix",
+        "verify_periods",
+        "verify_substitution_dependency_graph",
+        "verify_substitution_fixed_point_prefix",
+        "verify_substitution_primitivity_profile",
     )
     assert tuple(words.__all__) == expected
     assert len(words.__all__) == len(set(words.__all__))

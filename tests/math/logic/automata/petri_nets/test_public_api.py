@@ -16,6 +16,11 @@ def test_exact_public_api_symbols() -> None:
         "find_minimal_traps",
         "fire_transition",
         "reachability_graph",
+        "verify_enabled_transitions",
+        "verify_fire_transition",
+        "verify_incidence_matrix",
+        "verify_reachability_graph",
+        "verify_siphon_trap",
     )
     assert tuple(petri_nets.__all__) == expected
     assert len(petri_nets.__all__) == len(set(petri_nets.__all__))

@@ -18,7 +18,10 @@ def test_exact_public_api_symbols() -> None:
         "kolmogorov_quotient",
         "minimal_neighbourhoods",
         "specialization_preorder",
+        "verify_boundary",
+        "verify_closure",
         "verify_continuity",
+        "verify_interior",
         "verify_kolmogorov_quotient",
     )
     assert tuple(finite_topology_spaces.__all__) == expected

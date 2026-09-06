@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from jacobian.catalog.models import OperationDomainValidationError
 
-from ._models import ContinuousCheckResult, KolmogorovQuotientResult
+from ._models import (
+    BoundaryResult,
+    ClosureResult,
+    ContinuousCheckResult,
+    InteriorResult,
+    KolmogorovQuotientResult,
+)
 from .values import FiniteTopologicalMap, FiniteTopologicalSpace
 
 __all__ = [
@@ -16,7 +22,10 @@ __all__ = [
     "kolmogorov_quotient",
     "minimal_neighbourhoods",
     "specialization_preorder",
+    "verify_boundary",
+    "verify_closure",
     "verify_continuity",
+    "verify_interior",
     "verify_kolmogorov_quotient",
 ]
 
@@ -195,6 +204,36 @@ def verify_continuity(claim: ContinuousCheckResult) -> bool:
         if not monotone:
             break
     return monotone == claim.is_continuous
+
+
+def verify_interior(claim: InteriorResult) -> bool:
+    """Verify an interior claim against its retained finite space and subset."""
+    try:
+        _admit_space(claim.space)
+        expected = _interior(claim.space, frozenset(claim.subset.indices))
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+    return tuple(sorted(expected)) == claim.interior.indices
+
+
+def verify_closure(claim: ClosureResult) -> bool:
+    """Verify a closure claim against its retained finite space and subset."""
+    try:
+        _admit_space(claim.space)
+        expected = _closure(claim.space, frozenset(claim.subset.indices))
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+    return tuple(sorted(expected)) == claim.closure.indices
+
+
+def verify_boundary(claim: BoundaryResult) -> bool:
+    """Verify a boundary claim against its retained finite space and subset."""
+    try:
+        _admit_space(claim.space)
+        expected = boundary(claim.space, frozenset(claim.subset.indices))
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+    return tuple(sorted(expected)) == claim.boundary.indices
 
 
 def verify_kolmogorov_quotient(claim: KolmogorovQuotientResult) -> bool:

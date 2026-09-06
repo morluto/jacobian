@@ -9,7 +9,10 @@ from jacobian.math.topology.finite.spaces.operations import (
     kolmogorov_quotient,
     minimal_neighbourhoods,
     specialization_preorder,
+    verify_boundary,
+    verify_closure,
     verify_continuity,
+    verify_interior,
     verify_kolmogorov_quotient,
 )
 from jacobian.math.topology.finite.spaces.values import (
@@ -30,6 +33,9 @@ __all__ = [
     "kolmogorov_quotient",
     "minimal_neighbourhoods",
     "specialization_preorder",
+    "verify_boundary",
+    "verify_closure",
     "verify_continuity",
+    "verify_interior",
     "verify_kolmogorov_quotient",
 ]

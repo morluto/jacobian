@@ -11,9 +11,14 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.topology.finite.spaces import (
     FiniteTopologicalMap,
     FiniteTopologicalSpace,
+    verify_boundary,
+    verify_closure,
     verify_continuity,
+    verify_interior,
 )
 from jacobian.math.topology.finite.spaces._models import (
+    BoundaryResult,
+    ClosureResult,
     ContinuousCheckRequest,
     ContinuousCheckResult,
     InteriorResult,
@@ -262,6 +267,31 @@ class TestSerializedSubsetClaims:
         assert decoded.space == space
         assert decoded.subset.indices == (1,)
         assert decoded.interior.indices == (1,)
+        assert verify_interior(decoded)
+        forged = decoded.model_copy(
+            update={"interior": decoded.interior.model_copy(update={"indices": ()})}
+        )
+        assert not verify_interior(forged)
+
+    def test_closure_and_boundary_verifiers_reject_forgery(self) -> None:
+        space = _sierpinski()
+        closure_result = _closure(SubsetRequest(space=space, subset=(1,)))
+        boundary_result = _boundary(SubsetRequest(space=space, subset=(1,)))
+        closure_decoded = ClosureResult.model_validate_json(
+            closure_result.model_dump_json()
+        )
+        boundary_decoded = BoundaryResult.model_validate_json(
+            boundary_result.model_dump_json()
+        )
+        assert verify_closure(closure_decoded)
+        assert verify_boundary(boundary_decoded)
+        assert not verify_closure(
+            closure_decoded.model_copy(
+                update={
+                    "closure": closure_decoded.closure.model_copy(update={"indices": ()})
+                }
+            )
+        )
 
     def test_subset_indices_are_canonical(self) -> None:
         space = _sierpinski()

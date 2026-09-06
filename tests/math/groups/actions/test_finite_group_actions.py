@@ -518,6 +518,12 @@ class TestBounds:
             polya_inventory(_trivial(5), 20)
         assert error.value.errors()[0]["type"] == "finite_group_action.polya_terms_exceeded"
 
+    def test_polya_fixed_points_use_bounded_dynamic_program(self) -> None:
+        # The old Cartesian product would require 2**50 assignments. The
+        # dynamic program retains only the 51 possible content vectors.
+        result = polya_inventory(_trivial(50), 2)
+        assert len(result.terms) == 51
+
     def test_group_order_bound_exceeded(self) -> None:
         # S_8 has order 40320 > 10000 and acts on only 8 points, so it fits
         # the domain-size cap but exceeds the group-order bound.

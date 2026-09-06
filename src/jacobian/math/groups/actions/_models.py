@@ -15,6 +15,13 @@ MAX_GENERATORS = 50
 MAX_LABEL_LENGTH = 64
 MAX_COLORS = 50
 MAX_TERMS = 5000
+# A Pólya coefficient counts orbits of colourings with one fixed content
+# vector, so it is bounded by the total number of colourings in the admitted
+# carrier.  This cap is large, but finite and independent of any claim.
+MAX_POLYA_COEFFICIENT = MAX_COLORS**MAX_DOMAIN_SIZE
+# Dynamic-programming transitions across all admitted group elements.  This
+# bounds the actual consumer/producer work after the group has been admitted.
+MAX_POLYA_WORK = 10_000_000
 MAX_FAMILY_MEMBERS = 5000
 MAX_ORBIT_PROFILE_IMAGES = 200000
 MAX_ORBIT_PROFILE_INCIDENCES = 1000000
@@ -28,6 +35,21 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 
 DomainPosition = Annotated[int, Field(ge=0, le=MAX_DOMAIN_SIZE - 1)]
+CycleTypePart = Annotated[int, Field(ge=1, le=MAX_DOMAIN_SIZE)]
+CycleTypeMultiplicity = Annotated[int, Field(ge=1, le=MAX_GROUP_ORDER)]
+CycleType = Annotated[
+    tuple[CycleTypePart, ...], Field(min_length=1, max_length=MAX_DOMAIN_SIZE)
+]
+CycleTypeCount = tuple[CycleType, CycleTypeMultiplicity]
+PolyaExponent = Annotated[int, Field(ge=0, le=MAX_DOMAIN_SIZE)]
+PolyaCoefficient = Annotated[int, Field(ge=1, le=MAX_POLYA_COEFFICIENT)]
+PolyaMonomial = Annotated[
+    tuple[PolyaExponent, ...], Field(min_length=1, max_length=MAX_COLORS)
+]
+PolyaTerm = tuple[PolyaMonomial, PolyaCoefficient]
+CycleRow = Annotated[
+    tuple[DomainPosition, ...], Field(min_length=1, max_length=MAX_DOMAIN_SIZE)
+]
 FiniteActionSubset = Annotated[
     tuple[DomainPosition, ...],
     Field(max_length=MAX_DOMAIN_SIZE),
@@ -450,11 +472,9 @@ class ElementCyclesResult(StrictModel):
     """
 
     action: FinitePermutationAction
-    element: int
+    element: int = Field(ge=0, le=MAX_GROUP_ORDER - 1)
     permutation: tuple[DomainPosition, ...] = Field(max_length=MAX_DOMAIN_SIZE)
-    cycles: tuple[tuple[DomainPosition, ...], ...] = Field(
-        max_length=MAX_DOMAIN_SIZE
-    )
+    cycles: tuple[CycleRow, ...] = Field(max_length=MAX_DOMAIN_SIZE)
     cycle_lengths: tuple[int, ...] = Field(max_length=MAX_DOMAIN_SIZE)
     cycle_type: tuple[int, ...] = Field(max_length=MAX_DOMAIN_SIZE)
     fixed_points: tuple[DomainPosition, ...] = Field(max_length=MAX_DOMAIN_SIZE)
@@ -543,8 +563,8 @@ class CycleIndexResult(StrictModel):
 
     action: FinitePermutationAction
     group_order: int
-    degree: int
-    cycle_type_counts: tuple[tuple[tuple[int, ...], int], ...] = Field(
+    degree: int = Field(ge=1, le=MAX_DOMAIN_SIZE)
+    cycle_type_counts: tuple[CycleTypeCount, ...] = Field(
         min_length=1, max_length=MAX_GROUP_ORDER
     )
 
@@ -692,8 +712,8 @@ class PolyaInventoryResult(StrictModel):
 
     action: FinitePermutationAction
     colors: int = Field(ge=1, le=MAX_COLORS)
-    degree: int
-    terms: tuple[tuple[tuple[int, ...], int], ...] = Field(max_length=MAX_TERMS)
+    degree: int = Field(ge=1, le=MAX_DOMAIN_SIZE)
+    terms: tuple[PolyaTerm, ...] = Field(max_length=MAX_TERMS)
 
     @model_validator(mode="after")
     def bind_polya(self) -> Self:
@@ -723,7 +743,7 @@ class PolyaInventoryResult(StrictModel):
         action: FinitePermutationAction,
         colors: int,
         degree: int,
-        terms: tuple[tuple[tuple[int, ...], int], ...],
+        terms: tuple[PolyaTerm, ...],
     ) -> Self:
         return cls.model_construct(
             action=action, colors=colors, degree=degree, terms=terms

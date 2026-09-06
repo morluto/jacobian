@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from itertools import product as iproduct
+from math import comb
 
 from pydantic import ValidationError
 
@@ -14,6 +14,7 @@ from jacobian.math.groups.actions._models import (
     MAX_ORBIT_PROFILE_IMAGES,
     MAX_ORBIT_PROFILE_INCIDENCES,
     MAX_ORBIT_PROFILE_TRANSPORTERS,
+    MAX_POLYA_WORK,
     MAX_TERMS,
     ActionBoundSubset,
     BurnsideCountResult,
@@ -251,31 +252,42 @@ def _polya_terms_from_group(
                 f"{MAX_COLORS}"
             ),
         )
+    # The state space after k cycle factors is bounded by the number of
+    # colour-count vectors of length k.  Charge this upper bound once before
+    # expanding so the dynamic program cannot start an admitted request whose
+    # transition budget is already too large.
+    estimated_work = 0
+    for permutation in group:
+        cycle_count = len(_permutation_cycle_type(permutation))
+        for prefix_length in range(cycle_count):
+            estimated_work += colors * min(
+                MAX_TERMS, comb(prefix_length + colors - 1, colors - 1)
+            )
+            if estimated_work > MAX_POLYA_WORK:
+                raise OperationDomainValidationError(
+                    location=("colors",),
+                    code="finite_group_action.polya_work_exceeded",
+                    message=(
+                        "Pólya inventory dynamic-programming work exceeds the "
+                        f"bounded maximum of {MAX_POLYA_WORK} transitions"
+                    ),
+                )
+
     orbit_count: dict[tuple[int, ...], int] = {}
     for perm in group:
         cycle_lengths = _permutation_cycle_type(perm)
-        # Build the monomial exponent-tuple contribution of this element.
-        # cycle of length i contributes sum_c y_c^i, so for each monomial we
-        # choose one term per cycle.  Accumulate the product over cycles.
-        # Each cycle of length L contributes (y_c)^L for some colour c.
-        # We represent each cycle's choice as an exponent vector of length
-        # colors, where entry c is L if that colour is chosen.
-        cycle_choices: list[list[tuple[int, ...]]] = []
+        states: dict[tuple[int, ...], int] = {(0,) * colors: 1}
         for length in cycle_lengths:
-            choices = []
-            for c in range(colors):
-                exponents = [0] * colors
-                exponents[c] = length
-                choices.append(tuple(exponents))
-            cycle_choices.append(choices)
-        # Cartesian product over cycles.
-        for assignment in iproduct(*cycle_choices):
-            monomial = tuple(
-                sum(assignment[j][c] for j in range(len(assignment)))
-                for c in range(colors)
-            )
-            orbit_count[monomial] = orbit_count.get(monomial, 0) + 1
-            if len(orbit_count) > MAX_TERMS:
+            next_states: dict[tuple[int, ...], int] = {}
+            for monomial, coefficient in states.items():
+                for color in range(colors):
+                    updated = list(monomial)
+                    updated[color] += length
+                    updated_monomial = tuple(updated)
+                    next_states[updated_monomial] = (
+                        next_states.get(updated_monomial, 0) + coefficient
+                    )
+            if len(next_states) > MAX_TERMS:
                 raise OperationDomainValidationError(
                     location=("colors",),
                     code="finite_group_action.polya_terms_exceeded",
@@ -284,6 +296,18 @@ def _polya_terms_from_group(
                         f"of {MAX_TERMS} sparse terms"
                     ),
                 )
+            states = next_states
+        for monomial, coefficient in states.items():
+            orbit_count[monomial] = orbit_count.get(monomial, 0) + coefficient
+        if len(orbit_count) > MAX_TERMS:
+            raise OperationDomainValidationError(
+                location=("colors",),
+                code="finite_group_action.polya_terms_exceeded",
+                message=(
+                    "Pólya inventory has more than the bounded maximum "
+                    f"of {MAX_TERMS} sparse terms"
+                ),
+            )
     group_order = len(group)
     terms: list[tuple[tuple[int, ...], int]] = []
     for monomial, count in orbit_count.items():

@@ -3,6 +3,9 @@
 from collections.abc import Callable
 from typing import Any
 
+import pytest
+from pydantic import ValidationError
+
 from jacobian.math.groups.actions import (
     burnside_count,
     cycle_index,
@@ -15,7 +18,14 @@ from jacobian.math.groups.actions import (
     verify_subset_family_orbit_profile,
 )
 from jacobian.math.groups.actions import operations as action_operations
-from jacobian.math.groups.actions._models import MAX_COLORS, FinitePermutationAction
+from jacobian.math.groups.actions._models import (
+    MAX_COLORS,
+    MAX_DOMAIN_SIZE,
+    MAX_POLYA_COEFFICIENT,
+    CycleIndexResult,
+    FinitePermutationAction,
+    PolyaInventoryResult,
+)
 from jacobian.math.groups.actions.operations import subset_family_orbit_profile
 
 
@@ -78,3 +88,26 @@ def test_polya_verifier_rejects_out_of_bound_model_copy() -> None:
         update={"colors": MAX_COLORS + 1}
     )
     assert verify_polya_inventory(claim) is False
+
+
+def test_polya_claim_scalar_bounds_are_structural() -> None:
+    """Malformed scalar claims fail before any identity is recomputed."""
+    action = FinitePermutationAction(domain=("a", "b"), generators=((1, 0),))
+    result = polya_inventory(action, 2)
+    for terms in (
+        (((MAX_DOMAIN_SIZE + 1, 0), 1),),
+        (((0, 0), MAX_POLYA_COEFFICIENT + 1),),
+    ):
+        payload = result.model_dump()
+        payload["terms"] = terms
+        with pytest.raises(ValidationError):
+            PolyaInventoryResult.model_validate(payload)
+
+
+def test_cycle_index_claim_multiplicity_bound_is_structural() -> None:
+    action = FinitePermutationAction(domain=("a", "b"), generators=((1, 0),))
+    result = cycle_index(action)
+    payload = result.model_dump()
+    payload["cycle_type_counts"] = (((1, 1), 10_001),)
+    with pytest.raises(ValidationError):
+        CycleIndexResult.model_validate(payload)

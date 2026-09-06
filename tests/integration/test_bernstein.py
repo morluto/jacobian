@@ -12,10 +12,13 @@ import sympy as sp
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import invoke_operation
+from jacobian.math.analysis.intervals import RationalBox
 from jacobian.math.polynomials.bernstein import (
     RationalBernsteinPolynomial,
     bernstein_coefficients,
+    restrict_bernstein,
     verify_bernstein_coefficients,
+    verify_bernstein_restriction,
 )
 from jacobian.math.polynomials.bernstein._tools import BernsteinRequest
 
@@ -307,3 +310,135 @@ def test_dense_bidegree_16_conversion_is_admitted_and_exact() -> None:
     result = _run(payload)
     assert len(result.coefficients) == 289
     _reconstruct(result)
+
+
+def _box(
+    intervals: list[tuple[tuple[int, int], tuple[int, int]]],
+    variables: list[str] | None = None,
+) -> Any:
+    names = variables or ["x", "y"][: len(intervals)]
+    return {
+        "domain": "QQ",
+        "variables": names,
+        "intervals": [
+            {"lower": _q(lower[0], lower[1]), "upper": _q(upper[0], upper[1])}
+            for lower, upper in intervals
+        ],
+    }
+
+
+def test_restriction_reuses_exact_tensor_and_matches_direct_conversion() -> None:
+    payload = _fixture()
+    payload["polynomial"]["polynomial"]["terms"] = [
+        {"coefficient": _q(4), "exponents": [2, 0]},
+        {"coefficient": _q(-4), "exponents": [1, 0]},
+        {"coefficient": _q(1), "exponents": [0, 0]},
+    ]
+    payload["multidegree"] = [2, 0]
+    payload["box"] = _box([((0, 1), (1, 1)), ((0, 1), (1, 1))])
+    parent = _run(payload)
+    child = RationalBox.model_validate(
+        _box([((1, 4), (3, 4)), ((0, 1), (1, 1))])
+    )
+    restricted = restrict_bernstein(parent, child)
+    direct = bernstein_coefficients(parent.polynomial, child, parent.multidegree)
+    assert [value.as_fraction() for value in restricted.coefficients] == [
+        Fraction(1, 4),
+        Fraction(-1, 4),
+        Fraction(1, 4),
+    ]
+    assert restricted.coefficients == direct.coefficients
+    assert verify_bernstein_restriction(parent, restricted)
+
+
+def test_restriction_identity_nested_and_independent_axes_commute() -> None:
+    parent = _run(_fixture())
+    assert restrict_bernstein(parent, parent.box) == parent
+    first_box = RationalBox.model_validate(_box([((1, 8), (7, 8)), ((1, 8), (7, 8))]))
+    final_box = RationalBox.model_validate(_box([((1, 4), (3, 4)), ((1, 4), (3, 4))]))
+    direct = restrict_bernstein(parent, final_box)
+    nested = restrict_bernstein(restrict_bernstein(parent, first_box), final_box)
+    assert nested.coefficients == direct.coefficients
+
+    x_box = RationalBox.model_validate(_box([((1, 4), (3, 4)), ((0, 1), (1, 1))]))
+    y_box = RationalBox.model_validate(_box([((0, 1), (1, 1)), ((1, 4), (3, 4))]))
+    xy_box = RationalBox.model_validate(_box([((1, 4), (3, 4)), ((1, 4), (3, 4))]))
+    x_then_y = restrict_bernstein(restrict_bernstein(parent, x_box), xy_box)
+    y_then_x = restrict_bernstein(restrict_bernstein(parent, y_box), xy_box)
+    assert x_then_y.coefficients == y_then_x.coefficients
+
+
+def test_restriction_handles_a_realistic_dense_289_entry_tensor() -> None:
+    payload = _fixture()
+    payload["polynomial"]["polynomial"]["terms"] = [
+        {
+            "coefficient": _q((-1) ** (i + j) * (i + 1) * (j + 1), 7),
+            "exponents": [i, j],
+        }
+        for i in range(16, -1, -1)
+        for j in range(16, -1, -1)
+    ]
+    payload["multidegree"] = [16, 16]
+    parent = _run(payload)
+    child = RationalBox.model_validate(
+        _box([((1, 3), (2, 3)), ((1, 5), (4, 5))])
+    )
+    restricted = restrict_bernstein(parent, child)
+    direct = bernstein_coefficients(parent.polynomial, child, parent.multidegree)
+    assert restricted.coefficients == direct.coefficients
+
+
+def test_restriction_preserves_zero_tensor_on_a_degenerate_degree_profile() -> None:
+    payload = _fixture()
+    payload["polynomial"]["polynomial"]["terms"] = []
+    payload["multidegree"] = [3, 2]
+    parent = _run(payload)
+    child = RationalBox.model_validate(
+        _box([((1, 3), (2, 3)), ((1, 5), (4, 5))])
+    )
+    restricted = restrict_bernstein(parent, child)
+    assert len(restricted.coefficients) == 12
+    assert all(value.as_fraction() == 0 for value in restricted.coefficients)
+
+
+@pytest.mark.parametrize("mutation", ["parent", "child", "outside", "axis"])
+def test_restriction_rejects_forged_claims_and_invalid_children(mutation: str) -> None:
+    parent = _run(_fixture())
+    child_box = RationalBox.model_validate(
+        _box([((1, 4), (3, 4)), ((1, 4), (3, 4))])
+    )
+    if mutation == "parent":
+        wire = parent.model_dump(mode="json")
+        wire["coefficients"][0] = _q(999)
+        forged = RationalBernsteinPolynomial.model_validate(wire)
+        with pytest.raises(OperationDomainValidationError):
+            restrict_bernstein(forged, child_box)
+    elif mutation == "child":
+        claim = restrict_bernstein(parent, child_box)
+        wire = claim.model_dump(mode="json")
+        wire["coefficients"][0] = _q(999)
+        forged = RationalBernsteinPolynomial.model_validate(wire)
+        assert not verify_bernstein_restriction(parent, forged)
+    elif mutation == "outside":
+        outside = RationalBox.model_validate(
+            _box([((0, 1), (2, 1)), ((1, 4), (3, 4))])
+        )
+        with pytest.raises(OperationDomainValidationError):
+            restrict_bernstein(parent, outside)
+    else:
+        wrong_axes = RationalBox.model_validate(
+            _box([((1, 4), (3, 4)), ((1, 4), (3, 4))], ["y", "x"])
+        )
+        with pytest.raises(OperationDomainValidationError):
+            restrict_bernstein(parent, wrong_axes)
+
+
+def test_restriction_rejects_degenerate_parent_and_child() -> None:
+    parent = _run(_fixture())
+    point = RationalBox.model_validate(_box([((1, 2), (1, 2)), ((0, 1), (1, 1))]))
+    with pytest.raises(OperationDomainValidationError):
+        restrict_bernstein(parent, point)
+    parent_point = parent.model_copy(
+        update={"box": point}
+    )
+    assert not verify_bernstein_restriction(parent_point, parent)

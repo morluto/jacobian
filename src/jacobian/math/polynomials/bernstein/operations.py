@@ -1,5 +1,6 @@
 """Exact separable monomial-to-Bernstein maps, with one native admission."""
 
+from fractions import Fraction
 from itertools import product
 from math import comb, prod
 from time import monotonic
@@ -271,4 +272,172 @@ def verify_bernstein_coefficients(claim: RationalBernsteinPolynomial) -> bool:
         return False
 
 
-__all__ = ["bernstein_coefficients", "verify_bernstein_coefficients"]
+def _restriction_admit(
+    parent: RationalBernsteinPolynomial,
+    child: RationalBox,
+) -> tuple[Fraction, ...]:
+    if child.variables != parent.box.variables:
+        _reject("restriction child must follow the parent's complete ordered axes")
+    ratios: list[Fraction] = []
+    max_height = 1
+    for parent_interval, child_interval in zip(
+        parent.box.intervals, child.intervals, strict=True
+    ):
+        parent_lower = parent_interval.lower.as_fraction()
+        parent_upper = parent_interval.upper.as_fraction()
+        child_lower = child_interval.lower.as_fraction()
+        child_upper = child_interval.upper.as_fraction()
+        if parent_lower >= parent_upper:
+            _reject("restriction requires a nondegenerate parent on every axis")
+        if child_lower >= child_upper:
+            _reject("restriction requires a nondegenerate child on every axis")
+        if child_lower < parent_lower or child_upper > parent_upper:
+            _reject("restriction child must be contained in the parent box")
+        alpha = (child_lower - parent_lower) / (parent_upper - parent_lower)
+        beta = (child_upper - parent_lower) / (parent_upper - parent_lower)
+        ratios.extend((alpha, beta))
+        max_height = max(
+            max_height,
+            len(str(abs(alpha.numerator))),
+            len(str(alpha.denominator)),
+            len(str(abs(beta.numerator))),
+            len(str(beta.denominator)),
+        )
+    coefficient_height = max(
+        max(
+            len(value.num.lstrip("-")),
+            len(value.den),
+        )
+        for value in parent.coefficients
+    )
+    degree_height = sum(m * max_height for m in parent.multidegree)
+    output_height = coefficient_height + degree_height + len(parent.multidegree) + 2
+    if output_height > MAX_COMPONENT_DIGITS:
+        _reject(
+            "Bernstein restriction rational growth exceeds the 8192-digit envelope"
+        )
+    size = prod(m + 1 for m in parent.multidegree)
+    work = size * (sum(m + 1 for m in parent.multidegree) + 1)
+    if work * (1 + output_height // 64) ** 2 > MAX_WEIGHTED_WORK:
+        _reject("Bernstein restriction exceeds the height-weighted arithmetic budget")
+    return tuple(ratios)
+
+
+def _split_fiber(
+    values: list[Fraction],
+    parameter: Fraction,
+) -> tuple[list[Fraction], list[Fraction]]:
+    left = [values[0]]
+    right = [values[-1]]
+    current = values
+    for _ in range(1, len(values)):
+        current = [
+            (1 - parameter) * current[i] + parameter * current[i + 1]
+            for i in range(len(current) - 1)
+        ]
+        left.append(current[0])
+        right.append(current[-1])
+    right.reverse()
+    return left, right
+
+
+def _restrict_axis(
+    values: list[Fraction],
+    shape: tuple[int, ...],
+    axis: int,
+    alpha: Fraction,
+    beta: Fraction,
+) -> list[Fraction]:
+    width = shape[axis]
+    after = prod(shape[axis + 1 :])
+    before = prod(shape[:axis])
+    output: list[Fraction] = []
+    for prefix in range(before):
+        fibers = [
+            [
+                values[(prefix * width + source) * after + suffix]
+                for source in range(width)
+            ]
+            for suffix in range(after)
+        ]
+        restricted_fibers = []
+        for fiber in fibers:
+            if alpha == 0:
+                segment = fiber
+            else:
+                _, segment = _split_fiber(fiber, alpha)
+            if beta == 1:
+                restricted_fibers.append(segment)
+            else:
+                parameter = (beta - alpha) / (1 - alpha)
+                restricted, _ = _split_fiber(segment, parameter)
+                restricted_fibers.append(restricted)
+        for target in range(width):
+            for suffix in range(after):
+                output.append(restricted_fibers[suffix][target])
+    return output
+
+
+def _restrict_trusted(
+    parent: RationalBernsteinPolynomial,
+    child: RationalBox,
+) -> RationalBernsteinPolynomial:
+    execution = current_request_execution()
+    started = monotonic() if execution is None else execution.started_at
+    deadline = started + BERNSTEIN_WALL_SECONDS
+    if execution is not None and execution.deadline is not None:
+        deadline = min(deadline, execution.deadline)
+    bind_request_deadline(deadline)
+    _checkpoint(deadline)
+    ratios = _restriction_admit(parent, child)
+    shape = tuple(m + 1 for m in parent.multidegree)
+    values = [coefficient.as_fraction() for coefficient in parent.coefficients]
+    for axis, (alpha, beta) in enumerate(zip(ratios[::2], ratios[1::2], strict=True)):
+        _checkpoint(deadline)
+        values = _restrict_axis(values, shape, axis, alpha, beta)
+    coefficients = tuple(CanonicalRational.from_fraction(value) for value in values)
+    result = RationalBernsteinPolynomial.model_construct(
+        polynomial=parent.polynomial,
+        box=child,
+        multidegree=parent.multidegree,
+        coefficients=coefficients,
+    )
+    _checkpoint(deadline)
+    return result
+
+
+def restrict_bernstein(
+    parent: RationalBernsteinPolynomial,
+    child: RationalBox,
+) -> RationalBernsteinPolynomial:
+    """Restrict a source-bound Bernstein tensor to a rational subbox."""
+    if not verify_bernstein_coefficients(parent):
+        _reject("restriction parent coefficients do not match their source and box")
+    return _restrict_trusted(parent, child)
+
+
+def verify_bernstein_restriction(
+    parent: RationalBernsteinPolynomial,
+    claim: RationalBernsteinPolynomial,
+) -> bool:
+    """Verify a serialized child tensor is the exact restriction of its parent."""
+    try:
+        if (
+            parent.polynomial != claim.polynomial
+            or parent.multidegree != claim.multidegree
+        ):
+            return False
+        if not verify_bernstein_coefficients(parent):
+            return False
+        expected = _restrict_trusted(parent, claim.box)
+        return expected.coefficients == claim.coefficients
+    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+        return False
+
+
+__all__ = [
+    "bernstein_coefficients",
+    "restrict_bernstein",
+    "verify_bernstein_coefficients",
+    "verify_bernstein_restriction",
+]

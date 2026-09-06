@@ -72,6 +72,11 @@ __all__ = [
     "multivariate_gcd",
     "multivariate_resultant",
     "multivariate_subresultant_sequence",
+    "verify_multivariate_division",
+    "verify_multivariate_factor",
+    "verify_multivariate_gcd",
+    "verify_multivariate_resultant",
+    "verify_multivariate_subresultant_sequence",
 ]
 
 
@@ -231,8 +236,8 @@ def multivariate_gcd(
     left_value = rational_polynomial_to_sympy(left)
     right_value = rational_polynomial_to_sympy(right)
     gcd = left_value.gcd(right_value)
-    return MultivariateGcdResult(
-        gcd=_result_polynomial(gcd, left.variables),
+    return MultivariateGcdResult._from_kernel(
+        left, right, _result_polynomial(gcd, left.variables)
     )
 
 
@@ -280,7 +285,9 @@ def multivariate_division(
             "multivariate division reconstruction failed"
         )
 
-    return MultivariateDivisionResult(
+    return MultivariateDivisionResult._from_kernel(
+        left=left,
+        right=right,
         quotient=_result_polynomial(quotient_poly, variables),
         remainder=_result_polynomial(remainder_poly, variables),
         monomial_order=monomial_order,
@@ -486,6 +493,75 @@ def multivariate_factor(polynomial: RationalPolynomial) -> MultivariateFactorRes
 
     return MultivariateFactorResult._from_kernel(
         coefficient=coefficient_value,
+        polynomial=polynomial,
         factors=factors,
         reconstructed=reconstructed_poly,
     )
+
+
+def verify_multivariate_gcd(claim: MultivariateGcdResult) -> bool:
+    """Verify a monic GCD against its retained ordered polynomial pair."""
+    try:
+        _admit_pair(claim.left, claim.right)
+        expected = rational_polynomial_from_sympy(
+            rational_polynomial_to_sympy(claim.left).gcd(
+                rational_polynomial_to_sympy(claim.right)
+            ),
+            claim.left.variables,
+        )
+        return expected == claim.gcd
+    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+        return False
+
+
+def verify_multivariate_division(claim: MultivariateDivisionResult) -> bool:
+    """Verify the canonical quotient and remainder under the retained order."""
+    try:
+        _admit_division(claim.left, claim.right)
+        expected = multivariate_division(claim.left, claim.right, claim.monomial_order)
+        return (
+            expected.quotient == claim.quotient
+            and expected.remainder == claim.remainder
+        )
+    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+        return False
+
+
+def verify_multivariate_factor(claim: MultivariateFactorResult) -> bool:
+    """Verify the complete canonical factorization for the retained source."""
+    try:
+        return multivariate_factor(claim.polynomial) == claim
+    except (
+        AttributeError,
+        TypeError,
+        ValueError,
+        OperationDomainValidationError,
+    ):
+        return False
+
+
+def verify_multivariate_resultant(claim: MultivariateResultantResult) -> bool:
+    """Verify the retained Sylvester resultant relation."""
+    try:
+        _admit_resultant(claim.left, claim.right, claim.elimination_variable)
+        return (
+            _sylvester_resultant_value(
+                claim.left, claim.right, claim.elimination_variable
+            )
+            == claim.resultant
+        )
+    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+        return False
+
+
+def verify_multivariate_subresultant_sequence(
+    claim: MultivariateSubresultantSequenceResult,
+) -> bool:
+    """Verify the complete Brown PRS and ledgers against retained sources."""
+    try:
+        expected = multivariate_subresultant_sequence(
+            claim.left, claim.right, claim.main_variable
+        )
+        return expected == claim
+    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+        return False

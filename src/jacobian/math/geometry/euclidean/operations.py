@@ -93,15 +93,14 @@ def angles_equal(
 def verify_angle_equality(claim: AngleEqualityResult) -> bool:
     """Check the angle-equality relation asserted by a serialized claim."""
 
-    request = claim.request
     return (
         angles_equal(
-            request.vertex1,
-            request.ray1_a,
-            request.ray1_b,
-            request.vertex2,
-            request.ray2_a,
-            request.ray2_b,
+            claim.vertex1,
+            claim.ray1_a,
+            claim.ray1_b,
+            claim.vertex2,
+            claim.ray2_a,
+            claim.ray2_b,
         )
         is claim.equal
     )
@@ -137,8 +136,8 @@ def verify_triangle_similarity(claim: TriangleSimilarityResult) -> bool:
 
     return (
         triangles_similar(
-            claim.request.triangle1,
-            claim.request.triangle2,
+            claim.triangle1,
+            claim.triangle2,
         )
         is claim.similar
     )

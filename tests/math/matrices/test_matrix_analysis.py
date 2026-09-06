@@ -25,6 +25,9 @@ from jacobian.math.matrices.analysis.operations import (
 from jacobian.math.matrices.analysis.operations import (
     compute_inertia as compute_inertia_native,
 )
+from jacobian.math.matrices.analysis.operations import (
+    verify_inertia,
+)
 from jacobian.math.matrices.values import (
     MAX_RATIONAL_MATRIX_ORDER,
     RationalMatrix,
@@ -260,6 +263,19 @@ def test_inertia_results_round_trip_known_answers(
     assert (result.n_positive, result.n_negative, result.n_zero) == counts
     assert result.definiteness == label
     assert InertiaResult.model_validate(result.model_dump()) == result
+
+
+def test_serialized_inertia_claims_are_source_bound_and_verifiable() -> None:
+    result = compute_inertia(_inertia_request(2, {(0, 0): "1", (1, 1): "-1"}))
+    decoded = InertiaResult.model_validate_json(result.model_dump_json())
+    assert verify_inertia(decoded)
+
+    forged_counts = result.model_copy(update={"n_positive": 2, "n_negative": 0})
+    assert not verify_inertia(forged_counts)
+
+    foreign_source = _inertia_request(2, {(0, 0): "1", (1, 1): "1"}).matrix
+    forged_source = result.model_copy(update={"matrix": foreign_source})
+    assert not verify_inertia(forged_source)
 
 
 def test_inertia_result_rejects_structural_mutations() -> None:

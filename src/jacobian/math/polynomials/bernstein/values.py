@@ -36,15 +36,6 @@ class RationalBernsteinPolynomial(StrictModel):
             )
         if prod(m + 1 for m in self.multidegree) != len(self.coefficients):
             raise ValueError("Bernstein tensor shape must match the multidegree")
-        if any(interval.lower == interval.upper for interval in self.box.intervals):
-            raise ValueError("Bernstein boxes require strictly positive widths")
-        if any(
-            any(e > m for e, m in zip(term.exponents, self.multidegree, strict=True))
-            for term in self.polynomial.polynomial.terms
-        ):
-            raise ValueError(
-                "Bernstein multidegree must dominate source coordinate degrees"
-            )
         return self
 
 

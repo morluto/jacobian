@@ -378,19 +378,26 @@ def _verify_profile_extrema(
 
 
 def verify_explicit_profile(claim: ExplicitProfileResult) -> bool:
-    """Check a profile's extremum witnesses against its retained source."""
-    return _verify_profile_extrema(
-        claim.source,
-        pair_count=claim.pair_count,
-        minimum_distance=claim.minimum_distance,
-        maximum_distance=claim.maximum_distance,
-        minimum_distance_witness=claim.minimum_distance_witness,
-        maximum_distance_witness=claim.maximum_distance_witness,
+    """Check every profile bin and extremum against its retained source."""
+    expected = _explicit_profile_data(claim.source)
+    return (
+        claim.weight_distribution == expected.weight_distribution
+        and claim.distance_histogram == expected.distance_histogram
+        and claim.minimum_distance == expected.minimum_distance
+        and claim.maximum_distance == expected.maximum_distance
+        and _verify_profile_extrema(
+            claim.source,
+            pair_count=claim.pair_count,
+            minimum_distance=claim.minimum_distance,
+            maximum_distance=claim.maximum_distance,
+            minimum_distance_witness=claim.minimum_distance_witness,
+            maximum_distance_witness=claim.maximum_distance_witness,
+        )
     )
 
 
 def verify_constant_weight_profile(claim: ConstantWeightProfileResult) -> bool:
-    """Check a constant-weight profile's extremum witnesses and weight."""
+    """Check every constant-weight profile bin, extremum, and source weight."""
     if not claim.source.codewords:
         return False
     weight = sum(claim.source.codewords[0])
@@ -398,13 +405,20 @@ def verify_constant_weight_profile(claim: ConstantWeightProfileResult) -> bool:
         sum(word) != weight for word in claim.source.codewords
     ):
         return False
-    return _verify_profile_extrema(
-        claim.source,
-        pair_count=claim.pair_count,
-        minimum_distance=claim.minimum_distance,
-        maximum_distance=claim.maximum_distance,
-        minimum_distance_witness=claim.minimum_distance_witness,
-        maximum_distance_witness=claim.maximum_distance_witness,
+    expected = _constant_weight_profile_data(claim.source)
+    return (
+        claim.distance_histogram == expected.distance_histogram
+        and claim.intersection_histogram == expected.intersection_histogram
+        and claim.minimum_distance == expected.minimum_distance
+        and claim.maximum_distance == expected.maximum_distance
+        and _verify_profile_extrema(
+            claim.source,
+            pair_count=claim.pair_count,
+            minimum_distance=claim.minimum_distance,
+            maximum_distance=claim.maximum_distance,
+            minimum_distance_witness=claim.minimum_distance_witness,
+            maximum_distance_witness=claim.maximum_distance_witness,
+        )
     )
 
 

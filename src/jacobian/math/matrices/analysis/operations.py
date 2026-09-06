@@ -831,6 +831,14 @@ def _compute_inertia(
     return result
 
 
+def verify_inertia(claim: InertiaResult) -> bool:
+    """Verify a serialized exact-real inertia claim against its source matrix."""
+    try:
+        return compute_inertia(claim.matrix) == claim
+    except (AttributeError, TypeError, ValueError, OperationDomainValidationError):
+        return False
+
+
 def compute_inertia(matrix: ExactRealMatrix) -> InertiaResult:
     """Compute Sylvester inertia over QQ or one exact real simple field."""
 

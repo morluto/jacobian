@@ -61,7 +61,27 @@ class NeighborhoodResult(StrictModel):
                 "graph.neighborhood_must_be_canonical",
                 "neighbourhood vertices must be a subset in source-vertex order",
             )
+        if selected & neighborhood:
+            raise PydanticCustomError(
+                "graph.open_neighborhood_must_exclude_selected_vertices",
+                "an open neighbourhood must exclude selected vertices",
+            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        graph: SimpleUndirectedGraph,
+        selected_vertices: tuple[str, ...],
+        neighborhood: tuple[str, ...],
+    ) -> NeighborhoodResult:
+        """Construct a result after the kernel established its relation."""
+
+        return cls.model_construct(
+            graph=graph,
+            selected_vertices=selected_vertices,
+            neighborhood=neighborhood,
+        )
 
 
 __all__ = [

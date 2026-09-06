@@ -17,6 +17,7 @@ from jacobian.math.graphs.directed._models import (
     AcyclicOrderResult,
     CondensationRequest,
     CondensationResult,
+    DagLongestPathResult,
     DirectedGraph,
     ReachabilityRequest,
     ReachabilityResult,
@@ -26,8 +27,14 @@ from jacobian.math.graphs.directed._models import (
 from jacobian.math.graphs.directed.operations import (
     acyclic_order,
     condensation,
+    dag_longest_path,
     reachability,
     strongly_connected_components,
+    verify_acyclic_order,
+    verify_condensation,
+    verify_dag_longest_path,
+    verify_reachability,
+    verify_strongly_connected_components,
 )
 
 # ---------------------------------------------------------------------------
@@ -535,6 +542,62 @@ class TestCarrierParseEnvelope:
 
     def test_envelope_dwarfs_the_direct_operation_admission(self) -> None:
         assert MAX_DIRECTED_GRAPH_PARSE_EDGES > 64 * MAX_DIRECTED_OPERATION_EDGES
+
+
+# ---------------------------------------------------------------------------
+# Consumer-side claim verification
+# ---------------------------------------------------------------------------
+
+
+class TestClaimVerification:
+    def test_serialized_claims_retain_graph_and_reject_forgery(self) -> None:
+        graph = DirectedGraph(
+            vertex_count=4,
+            edges=((0, 1), (1, 2), (2, 3)),
+        )
+
+        reachability_claim = ReachabilityResult.model_validate_json(
+            reachability(graph, 0).model_dump_json()
+        )
+        assert reachability_claim.graph == graph
+        assert verify_reachability(reachability_claim)
+        forged_reachability = reachability_claim.model_copy(
+            update={"reachable": (0, 2), "unreachable": (1, 3)}
+        )
+        assert not verify_reachability(forged_reachability)
+
+        scc_claim = StronglyConnectedComponentsResult.model_validate_json(
+            strongly_connected_components(graph).model_dump_json()
+        )
+        assert scc_claim.graph == graph
+        assert verify_strongly_connected_components(scc_claim)
+        forged_scc = scc_claim.model_copy(update={"components": ((0, 1), (2,), (3,))})
+        assert not verify_strongly_connected_components(forged_scc)
+
+        condensation_claim = CondensationResult.model_validate_json(
+            condensation(graph).model_dump_json()
+        )
+        assert condensation_claim.graph == graph
+        assert verify_condensation(condensation_claim)
+        forged_condensation = condensation_claim.model_copy(update={"edges": ()})
+        assert not verify_condensation(forged_condensation)
+
+        order_claim = AcyclicOrderResult.model_validate_json(
+            acyclic_order(graph).model_dump_json()
+        )
+        assert order_claim.graph == graph
+        assert verify_acyclic_order(order_claim)
+        forged_order = order_claim.model_copy(update={"order": (0, 2, 1, 3)})
+        assert not verify_acyclic_order(forged_order)
+
+        longest_claim = dag_longest_path(graph)
+        assert verify_dag_longest_path(
+            DagLongestPathResult.model_validate_json(longest_claim.model_dump_json())
+        )
+        forged_longest = longest_claim.model_copy(
+            update={"maximum_edge_count": 1, "path": (0, 1)}
+        )
+        assert not verify_dag_longest_path(forged_longest)
 
 
 # ---------------------------------------------------------------------------

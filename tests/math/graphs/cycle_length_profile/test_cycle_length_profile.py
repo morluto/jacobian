@@ -14,6 +14,7 @@ from jacobian.math.graphs.cycle_length_profile.operations import (
     MAX_CYCLE_PROFILE_RETAINED_LABEL_CHARACTERS,
     compute_cycle_length_profile,
     verify_cycle_length_profile,
+    verify_cycle_length_row,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -125,6 +126,21 @@ def test_serialized_profile_claim_is_verified_for_witnesses_and_completeness() -
     assert not verify_cycle_length_profile(
         CycleLengthProfileResult.model_validate(payload)
     )
+
+
+def test_cycle_row_verifier_checks_the_closed_graph_relation() -> None:
+    graph = _graph(
+        ["a", "b", "c", "d"],
+        [("a", "b"), ("b", "c"), ("c", "d"), ("a", "d")],
+    )
+    row = CycleLengthRow(cycle_length=4, witness=("a", "b", "c", "d"))
+    assert verify_cycle_length_row(graph, row)
+    forged = CycleLengthRow(cycle_length=4, witness=("a", "b", "c", "d"))
+    graph_without_closing_edge = _graph(
+        graph.vertices,
+        [("a", "b"), ("b", "c"), ("c", "d")],
+    )
+    assert not verify_cycle_length_row(graph_without_closing_edge, forged)
 
 
 def test_cycle_traversal_allows_descending_indices() -> None:

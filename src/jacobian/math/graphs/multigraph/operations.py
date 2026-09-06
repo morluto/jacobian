@@ -19,6 +19,7 @@ from jacobian.math.graphs.multigraph._models import (
     CycleRecord,
     EulerianCyclesResult,
     FiniteAbelianGroup,
+    FlowAssignmentDiagnostic,
     FlowEdgeAssignment,
     LooplessMultigraph,
     MultigraphEdge,
@@ -35,6 +36,7 @@ __all__ = [
     "eulerian_cycles",
     "multigraph_flow_check",
     "multigraph_flow_find",
+    "verify_multigraph_flow_check",
 ]
 
 
@@ -54,6 +56,19 @@ def multigraph_flow_check(
     minus the sum of incoming flow values (componentwise modular arithmetic).
     Conservation holds when every vertex divergence is the zero element.
     """
+    diagnostics = _flow_assignment_diagnostics(graph, group, edge_values)
+    if diagnostics:
+        return MultigraphFlowCheckResult._from_kernel(
+            graph=graph,
+            group=group,
+            edge_flow_records=edge_values,
+            divergence_ledger=(),
+            zero_edge_ids=(),
+            nowhere_zero=False,
+            conservation_holds=False,
+            assignment_valid=False,
+            assignment_diagnostics=diagnostics,
+        )
     divergence_ledger, conservation_holds = _compute_divergence_ledger(
         graph, group, edge_values
     )
@@ -72,7 +87,66 @@ def multigraph_flow_check(
         zero_edge_ids=tuple(zero_edge_ids),
         nowhere_zero=nowhere_zero,
         conservation_holds=conservation_holds,
+        assignment_valid=True,
+        assignment_diagnostics=(),
     )
+
+
+def _flow_assignment_diagnostics(
+    graph: LooplessMultigraph,
+    group: FiniteAbelianGroup,
+    records: tuple[FlowEdgeAssignment, ...],
+) -> tuple[FlowAssignmentDiagnostic, ...]:
+    """Admit candidate shape and return all invalidity diagnostics."""
+    graph_ids = graph.edge_id_set
+    seen: set[str] = set()
+    diagnostics: list[FlowAssignmentDiagnostic] = []
+    for edge_id in sorted(graph_ids - {record.edge_id for record in records}):
+        diagnostics.append(
+            FlowAssignmentDiagnostic(code="MISSING_EDGE", edge_id=edge_id)
+        )
+    for record in records:
+        if record.edge_id in seen:
+            diagnostics.append(
+                FlowAssignmentDiagnostic(code="DUPLICATE_EDGE", edge_id=record.edge_id)
+            )
+        seen.add(record.edge_id)
+        if record.edge_id not in graph_ids:
+            diagnostics.append(
+                FlowAssignmentDiagnostic(code="UNKNOWN_EDGE", edge_id=record.edge_id)
+            )
+        if len(record.value) != group.rank:
+            diagnostics.append(
+                FlowAssignmentDiagnostic(
+                    code="RANK_MISMATCH",
+                    edge_id=record.edge_id,
+                    expected_rank=group.rank,
+                    actual_rank=len(record.value),
+                )
+            )
+            continue
+        for index, (coordinate, modulus) in enumerate(
+            zip(record.value, group.moduli, strict=True)
+        ):
+            if coordinate < 0 or coordinate >= modulus:
+                diagnostics.append(
+                    FlowAssignmentDiagnostic(
+                        code="RESIDUE_OUT_OF_RANGE",
+                        edge_id=record.edge_id,
+                        coordinate=index,
+                        modulus=modulus,
+                    )
+                )
+    return tuple(diagnostics)
+
+
+def verify_multigraph_flow_check(claim: MultigraphFlowCheckResult) -> bool:
+    """Verify the exact flow ledger or typed invalid-candidate diagnostics."""
+    expected = multigraph_flow_check(claim.graph, claim.group, claim.edge_flow_records)
+    return claim == expected
+
+
+multigraph_flow_check_verify = verify_multigraph_flow_check
 
 
 # ---------------------------------------------------------------------------

@@ -139,7 +139,7 @@ class RationalConicParametrizationRequest(StrictModel):
 
 
 class AffineCurveResult(StrictModel):
-    request: AffineCurveRequest
+    polynomial: RationalPolynomial
     is_valid: bool
     degree: int = Field(ge=0, le=_MAX_CURVE_EXPONENT)
 

@@ -81,6 +81,7 @@ class MultivariateFactorResult(StrictModel):
     status: Literal["FACTORIZED"] = "FACTORIZED"
     coefficient: CanonicalRational
     factors: tuple[MultivariateIrreducibleFactor, ...] = Field(max_length=128)
+    polynomial: RationalPolynomial
     reconstructed: RationalPolynomial
     normalization: Literal["CONTENT_AND_MONIC_IRREDUCIBLES"] | None = (
         "CONTENT_AND_MONIC_IRREDUCIBLES"
@@ -99,6 +100,10 @@ class MultivariateFactorResult(StrictModel):
         )
         if not self.reconstructed.polynomial.terms:
             raise _validation_error("reconstructed polynomial must be nonzero")
+        if self.polynomial.variables != self.reconstructed.variables:
+            raise _validation_error(
+                "source and reconstructed polynomial must use the same variables"
+            )
         if (
             self.normalization != "CONTENT_AND_MONIC_IRREDUCIBLES"
             or self.product_reconstruction != "EXACT"
@@ -117,6 +122,7 @@ class MultivariateFactorResult(StrictModel):
         cls,
         *,
         coefficient: CanonicalRational,
+        polynomial: RationalPolynomial,
         factors: tuple[MultivariateIrreducibleFactor, ...],
         reconstructed: RationalPolynomial,
     ) -> Self:
@@ -130,6 +136,7 @@ class MultivariateFactorResult(StrictModel):
         return cls.model_construct(
             status="FACTORIZED",
             coefficient=coefficient,
+            polynomial=polynomial,
             factors=factors,
             reconstructed=reconstructed,
             normalization="CONTENT_AND_MONIC_IRREDUCIBLES",

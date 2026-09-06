@@ -207,7 +207,8 @@ def test_edgeless_vertex_coloring_bypasses_the_worker(
 
     assert result.status == "DECIDED"
     assert result.colorable is True
-    assert result.coloring == (0, 0)
+    assert result.coloring is not None
+    assert result.coloring.coloring == (0, 0)
 
 
 class TestEdgeKColorability:
@@ -638,7 +639,8 @@ class TestVertexKColorability:
         )
         assert result.status == "DECIDED"
         assert result.colorable is True
-        assert result.coloring == ()
+        assert result.coloring is not None
+        assert result.coloring.coloring == ()
         assert result.vertex_count == 0
         assert KColorabilityResult.model_validate(result.model_dump()) == result
 
@@ -655,7 +657,8 @@ class TestVertexKColorability:
         result = compute_k_colorability(request)
         assert result.status == "DECIDED"
         assert result.colorable is True
-        assert result.coloring == (0,) * 65
+        assert result.coloring is not None
+        assert result.coloring.coloring == (0,) * 65
 
     def test_triangle_decision_carries_a_proper_witness(self) -> None:
         from jacobian.math.graphs.coloring._models import KColorabilityRequest
@@ -674,9 +677,9 @@ class TestVertexKColorability:
         assert result.status == "DECIDED"
         assert result.colorable is True
         assert result.coloring is not None
-        assert len(result.coloring) == 3
+        assert len(result.coloring.coloring) == 3
         assert all(
-            result.coloring[left] != result.coloring[right]
+            result.coloring.coloring[left] != result.coloring.coloring[right]
             for left, right in request.graph.edges
         )
 

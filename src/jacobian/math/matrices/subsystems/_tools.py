@@ -21,8 +21,10 @@ from jacobian.math.matrices.subsystems.operations import (
 def compute_kronecker_product(
     request: SubsystemKroneckerProductRequest,
 ) -> SubsystemKroneckerProductResult:
-    return SubsystemKroneckerProductResult(
-        product=kronecker_product(request.left, request.right)
+    return SubsystemKroneckerProductResult._from_kernel(
+        left=request.left,
+        right=request.right,
+        product=kronecker_product(request.left, request.right),
     )
 
 

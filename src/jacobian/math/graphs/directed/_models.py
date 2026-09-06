@@ -112,9 +112,54 @@ class ReachabilityRequest(StrictModel):
 
 
 class ReachabilityResult(StrictModel):
+    graph: DirectedOperationGraph
     source: int = Field(ge=0, le=255)
     reachable: tuple[int, ...]
     unreachable: tuple[int, ...]
+
+    @model_validator(mode="after")
+    def require_vertex_partition(self) -> Self:
+        universe = set(range(self.graph.vertex_count))
+        if self.source not in universe:
+            raise PydanticCustomError(
+                "graph.reachability_source_must_belong_to_graph",
+                "source must be a vertex of graph",
+            )
+        if self.reachable != tuple(
+            sorted(set(self.reachable))
+        ) or self.unreachable != tuple(sorted(set(self.unreachable))):
+            raise PydanticCustomError(
+                "graph.reachability_axes_must_be_sorted_unique",
+                "reachable and unreachable axes must be sorted and unique",
+            )
+        if set(self.reachable) | set(self.unreachable) != universe or set(
+            self.reachable
+        ) & set(self.unreachable):
+            raise PydanticCustomError(
+                "graph.reachability_axes_must_partition_graph",
+                "reachable and unreachable axes must partition graph vertices",
+            )
+        if self.source not in self.reachable:
+            raise PydanticCustomError(
+                "graph.reachability_source_must_be_reachable",
+                "source must be included in reachable vertices",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        graph: DirectedOperationGraph,
+        source: int,
+        reachable: tuple[int, ...],
+        unreachable: tuple[int, ...],
+    ) -> Self:
+        return cls.model_construct(
+            graph=graph,
+            source=source,
+            reachable=reachable,
+            unreachable=unreachable,
+        )
 
 
 class StronglyConnectedComponentsRequest(StrictModel):
@@ -122,8 +167,47 @@ class StronglyConnectedComponentsRequest(StrictModel):
 
 
 class StronglyConnectedComponentsResult(StrictModel):
+    graph: DirectedOperationGraph
     component_count: int = Field(ge=0, strict=True)
     components: tuple[tuple[int, ...], ...]
+
+    @model_validator(mode="after")
+    def require_vertex_partition(self) -> Self:
+        universe = set(range(self.graph.vertex_count))
+        normalized = tuple(
+            tuple(sorted(set(component))) for component in self.components
+        )
+        if normalized != self.components or any(
+            not component for component in self.components
+        ):
+            raise PydanticCustomError(
+                "graph.scc_components_must_be_sorted_nonempty",
+                "SCC components must be sorted and nonempty",
+            )
+        if (
+            self.component_count != len(self.components)
+            or set().union(*(set(component) for component in self.components))
+            != universe
+            or sum(map(len, self.components)) != len(universe)
+        ):
+            raise PydanticCustomError(
+                "graph.scc_components_must_partition_graph",
+                "SCC components must partition graph vertices",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        graph: DirectedOperationGraph,
+        component_count: int,
+        components: tuple[tuple[int, ...], ...],
+    ) -> Self:
+        return cls.model_construct(
+            graph=graph,
+            component_count=component_count,
+            components=components,
+        )
 
 
 class CondensationRequest(StrictModel):
@@ -136,9 +220,60 @@ class CondensationEdge(StrictModel):
 
 
 class CondensationResult(StrictModel):
+    graph: DirectedOperationGraph
     vertex_count: int = Field(ge=0, strict=True)
     components: tuple[tuple[int, ...], ...]
     edges: tuple[CondensationEdge, ...] = Field(default=())
+
+    @model_validator(mode="after")
+    def require_canonical_condensation(self) -> Self:
+        universe = set(range(self.graph.vertex_count))
+        normalized = tuple(
+            tuple(sorted(set(component))) for component in self.components
+        )
+        if normalized != self.components or any(
+            not component for component in self.components
+        ):
+            raise PydanticCustomError(
+                "graph.condensation_components_must_be_sorted_nonempty",
+                "condensation components must be sorted and nonempty",
+            )
+        if (
+            self.vertex_count != len(self.components)
+            or set().union(*(set(component) for component in self.components))
+            != universe
+            or sum(map(len, self.components)) != len(universe)
+        ):
+            raise PydanticCustomError(
+                "graph.condensation_components_must_partition_graph",
+                "condensation components must partition graph vertices",
+            )
+        edge_keys = tuple((edge.source, edge.target) for edge in self.edges)
+        if edge_keys != tuple(sorted(set(edge_keys))) or any(
+            source == target
+            or not (0 <= source < self.vertex_count and 0 <= target < self.vertex_count)
+            for source, target in edge_keys
+        ):
+            raise PydanticCustomError(
+                "graph.condensation_edges_must_be_canonical",
+                "condensation edges must be sorted, unique, and loop-free",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        graph: DirectedOperationGraph,
+        vertex_count: int,
+        components: tuple[tuple[int, ...], ...],
+        edges: tuple[CondensationEdge, ...],
+    ) -> Self:
+        return cls.model_construct(
+            graph=graph,
+            vertex_count=vertex_count,
+            components=components,
+            edges=edges,
+        )
 
 
 class AcyclicOrderRequest(StrictModel):
@@ -152,6 +287,15 @@ class AcyclicOrderResult(StrictModel):
 
     @model_validator(mode="after")
     def require_order_matches_acyclicity(self) -> Self:
+        universe = set(range(self.graph.vertex_count))
+        if (
+            self.order != tuple(dict.fromkeys(self.order))
+            or set(self.order) != universe
+        ) and (self.acyclic or self.order):
+            raise PydanticCustomError(
+                "graph.acyclic_order_must_be_a_vertex_permutation",
+                "a topological order must contain each graph vertex exactly once",
+            )
         if self.acyclic:
             if not self.order:
                 raise PydanticCustomError(
@@ -165,6 +309,12 @@ class AcyclicOrderResult(StrictModel):
             )
         return self
 
+    @classmethod
+    def _from_kernel(
+        cls, graph: DirectedOperationGraph, acyclic: bool, order: tuple[int, ...]
+    ) -> Self:
+        return cls.model_construct(graph=graph, acyclic=acyclic, order=order)
+
 
 class DagLongestPathRequest(StrictModel):
     graph: DirectedOperationGraph
@@ -174,7 +324,7 @@ class DagLongestPathResult(StrictModel):
     status: Literal["ACYCLIC", "NOT_APPLICABLE"]
     maximum_edge_count: int = Field(default=0, ge=0, strict=True)
     path: tuple[int, ...] = Field(default=())
-    source: DirectedGraph
+    source: DirectedOperationGraph
     convention: Literal["JACOBIAN_DAG_LONGEST_PATH"] = "JACOBIAN_DAG_LONGEST_PATH"
 
     @model_validator(mode="after")
@@ -201,4 +351,31 @@ class DagLongestPathResult(StrictModel):
                     "graph.dag_longest_path_edge_count_must_match_path",
                     "maximum_edge_count must equal len(path) - 1",
                 )
+            vertices = set(range(self.source.vertex_count))
+            if (
+                self.path != tuple(dict.fromkeys(self.path))
+                or not set(self.path) <= vertices
+            ):
+                raise PydanticCustomError(
+                    "graph.dag_longest_path_must_use_distinct_graph_vertices",
+                    "DAG path must use distinct graph vertices",
+                )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        status: Literal["ACYCLIC", "NOT_APPLICABLE"],
+        maximum_edge_count: int,
+        path: tuple[int, ...],
+        source: DirectedOperationGraph,
+        convention: Literal["JACOBIAN_DAG_LONGEST_PATH"] = "JACOBIAN_DAG_LONGEST_PATH",
+    ) -> Self:
+        return cls.model_construct(
+            status=status,
+            maximum_edge_count=maximum_edge_count,
+            path=path,
+            source=source,
+            convention=convention,
+        )

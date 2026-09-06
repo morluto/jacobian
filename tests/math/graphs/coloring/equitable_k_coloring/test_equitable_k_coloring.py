@@ -58,7 +58,8 @@ def test_large_palette_uses_the_direct_singleton_class_construction() -> None:
     result = decide_equitable_k_coloring(graph, 64)
 
     assert result.colorable
-    assert result.coloring == tuple(range(64))
+    assert result.coloring is not None
+    assert result.coloring.coloring == tuple(range(64))
 
 
 def test_edgeless_graph_uses_direct_balanced_class_construction() -> None:
@@ -67,8 +68,8 @@ def test_edgeless_graph_uses_direct_balanced_class_construction() -> None:
 
     assert result.colorable
     assert result.coloring is not None
-    assert result.coloring.count(0) == 10
-    assert result.coloring.count(1) == 10
+    assert result.coloring.coloring.count(0) == 10
+    assert result.coloring.coloring.count(1) == 10
 
 
 def test_exponential_search_is_rejected_before_backtracking() -> None:

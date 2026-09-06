@@ -688,3 +688,30 @@ class TestSerializedClaimVerifiers:
         assert not verify_constant_weight_profile(
             ConstantWeightProfileResult.model_validate(forged)
         )
+
+    def test_profile_verifiers_reject_redistributed_histogram_bins(self) -> None:
+        explicit = explicit_profile(_code((0, 0, 0), (0, 0, 1), (1, 1, 1)))
+        forged = explicit.model_dump(mode="json")
+        forged["weight_distribution"][0] -= 1
+        forged["weight_distribution"][1] += 1
+        assert not verify_explicit_profile(ExplicitProfileResult.model_validate(forged))
+
+        forged = explicit.model_dump(mode="json")
+        forged["distance_histogram"][1] -= 1
+        forged["distance_histogram"][2] += 1
+        assert not verify_explicit_profile(ExplicitProfileResult.model_validate(forged))
+
+        constant = constant_weight_profile(constant_weight_code(4, 2).code)
+        forged = constant.model_dump(mode="json")
+        forged["distance_histogram"][2] -= 1
+        forged["distance_histogram"][4] += 1
+        assert not verify_constant_weight_profile(
+            ConstantWeightProfileResult.model_validate(forged)
+        )
+
+        forged = constant.model_dump(mode="json")
+        forged["intersection_histogram"][0] -= 1
+        forged["intersection_histogram"][1] += 1
+        assert not verify_constant_weight_profile(
+            ConstantWeightProfileResult.model_validate(forged)
+        )

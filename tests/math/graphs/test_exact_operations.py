@@ -46,7 +46,7 @@ def test_k_colorability_uses_an_exact_decision_procedure() -> None:
     assert result.colorable is True
     assert result.coloring is not None
     assert all(
-        result.coloring[left] != result.coloring[right]
+        result.coloring.coloring[left] != result.coloring.coloring[right]
         for left, right in request.graph.edges
     )
 

@@ -126,4 +126,41 @@ def graph_symmetry_orbits(
     )
 
 
-__all__ = ["graph_symmetry_orbits"]
+def verify_graph_symmetry_orbits(claim: GraphSymmetryOrbitResult) -> bool:
+    """Verify generators and complete generated vertex/edge orbit partitions."""
+    source = claim.source
+    graph = source.graph
+    vertices = graph.graph.vertices
+    edges = graph.graph.edges
+    try:
+        _admit_graph_symmetry_orbit(graph, source.generators)
+        expected_vertex_members, expected_edge_members = _declared_orbit_partitions(
+            graph, source.generators
+        )
+    except (OperationDomainValidationError, PydanticCustomError, KeyError):
+        return False
+
+    expected_vertex_orbits = tuple(
+        (members[0], members) for members in expected_vertex_members
+    )
+    expected_edge_orbits = tuple(
+        (members[0], members) for members in expected_edge_members
+    )
+    return (
+        claim.vertices == tuple(sorted(vertices))
+        and claim.edges == tuple(sorted(edges))
+        and claim.generator_ids
+        == tuple(sorted(generator.generator_id for generator in source.generators))
+        and claim.vertex_color_mode
+        == ("DECLARED" if graph.vertex_colors else "UNCOLORED")
+        and claim.edge_color_mode == ("DECLARED" if graph.edge_colors else "UNCOLORED")
+        and tuple(
+            (orbit.representative, orbit.members) for orbit in claim.vertex_orbits
+        )
+        == expected_vertex_orbits
+        and tuple((orbit.representative, orbit.members) for orbit in claim.edge_orbits)
+        == expected_edge_orbits
+    )
+
+
+__all__ = ["graph_symmetry_orbits", "verify_graph_symmetry_orbits"]

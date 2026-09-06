@@ -12,6 +12,7 @@ from jacobian.math.graphs.common_neighbor_profile.operations import (
     MAX_COMMON_NEIGHBOR_LABEL_CHARACTERS,
     compute_common_neighbor_profile,
     verify_common_neighbor_profile,
+    verify_common_neighbor_row,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -118,6 +119,17 @@ def test_serialized_profile_claim_is_verified_for_content_and_coverage() -> None
     assert not verify_common_neighbor_profile(
         CommonNeighborProfileResult.model_validate(payload)
     )
+
+
+def test_common_neighbor_row_verifier_checks_pair_relation() -> None:
+    graph = _graph(
+        ["a", "b", "c"],
+        [("a", "b"), ("a", "c"), ("b", "c")],
+    )
+    row = compute_common_neighbor_profile(graph).rows[0]
+    assert verify_common_neighbor_row(graph, row)
+    forged = row.model_copy(update={"common_neighbors": ("a",), "codegree": 1})
+    assert not verify_common_neighbor_row(graph, forged)
 
 
 def test_native_admission_rejects_unbounded_retained_labels() -> None:

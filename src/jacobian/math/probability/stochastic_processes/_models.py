@@ -16,6 +16,7 @@ from jacobian.math.probability.stochastic_processes.values import (
 )
 
 MAX_STOCHASTIC_VALUE_DIGITS = 256
+MAX_PROCESS_TIME_STEPS = 256
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -76,7 +77,9 @@ class FiltrationRequest(StrictModel):
     """Compute the natural filtration of observations."""
 
     space: FiniteProbabilitySpace
-    observations: tuple[tuple[str, ...], ...] = Field(default=())
+    observations: tuple[tuple[str, ...], ...] = Field(
+        default=(), max_length=MAX_PROCESS_TIME_STEPS
+    )
 
     @model_validator(mode="after")
     def require_observations_match_space(self) -> Self:
@@ -93,7 +96,9 @@ class DoobMartingaleRequest(StrictModel):
     """Compute the Doob martingale of a payoff process."""
 
     space: FiniteProbabilitySpace
-    observations: tuple[tuple[str, ...], ...] = Field(default=())
+    observations: tuple[tuple[str, ...], ...] = Field(
+        default=(), max_length=MAX_PROCESS_TIME_STEPS
+    )
     payoff: tuple[CanonicalRational, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
@@ -115,17 +120,25 @@ class FiltrationResult(StrictModel):
     """The natural filtration as a tuple of sigma algebras."""
 
     space: FiniteProbabilitySpace
-    observations: tuple[tuple[str, ...], ...] = Field(default=())
-    sigmas: tuple[FiniteSigmaAlgebra, ...] = Field(default=())
+    observations: tuple[tuple[str, ...], ...] = Field(
+        default=(), max_length=MAX_PROCESS_TIME_STEPS
+    )
+    sigmas: tuple[FiniteSigmaAlgebra, ...] = Field(
+        default=(), max_length=MAX_PROCESS_TIME_STEPS
+    )
 
 
 class DoobMartingaleResult(StrictModel):
     """The Doob martingale as canonical rational value vectors."""
 
     space: FiniteProbabilitySpace
-    observations: tuple[tuple[str, ...], ...] = Field(default=())
+    observations: tuple[tuple[str, ...], ...] = Field(
+        default=(), max_length=MAX_PROCESS_TIME_STEPS
+    )
     payoff: tuple[CanonicalRational, ...] = Field(min_length=1)
-    martingale: tuple[FiniteRandomVariable, ...] = Field(default=())
+    martingale: tuple[FiniteRandomVariable, ...] = Field(
+        default=(), max_length=MAX_PROCESS_TIME_STEPS
+    )
 
 
 __all__ = [

@@ -12,6 +12,7 @@ from jacobian.math.probability._distribution import (
 from jacobian.math.probability.stochastic_processes._admission import (
     admit_partition,
     admit_probability_space,
+    admit_time_axis,
 )
 from jacobian.math.probability.stochastic_processes._models import (
     MAX_STOCHASTIC_VALUE_DIGITS,
@@ -201,6 +202,7 @@ def filtration_natural(
 ) -> tuple[FiniteSigmaAlgebra, ...]:
     """Return the natural filtration F_t = sigma(Y_0, ..., Y_t) for each time t."""
     admit_probability_space(space)
+    admit_time_axis(space, observations)
     return _filtration_natural(space, observations)
 
 
@@ -238,6 +240,7 @@ def doob_martingale(
     if len(payoff) != len(space.samples):
         raise ValueError("payoff must have one entry per sample")
     admit_probability_space(space)
+    admit_time_axis(space, observations)
     sigmas = _filtration_natural(space, observations)
     rv = FiniteRandomVariable(space=space, values=payoff)
     result: list[tuple[CanonicalRational, ...]] = []

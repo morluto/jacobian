@@ -3,6 +3,9 @@
 from fractions import Fraction
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.probability.stochastic_processes._models import (
+    MAX_PROCESS_TIME_STEPS,
+)
 from jacobian.math.probability.stochastic_processes.values import (
     FiniteProbabilitySpace,
     FiniteSigmaAlgebra,
@@ -47,3 +50,22 @@ def admit_partition(sigma: FiniteSigmaAlgebra) -> None:
             seen.add(sample)
     if seen != set(sigma.space.samples):
         _reject("partition_incomplete", "blocks must partition the entire sample space")
+
+
+def admit_time_axis(
+    space: FiniteProbabilitySpace, observations: tuple[tuple[str, ...], ...]
+) -> None:
+    """Bound filtration output and partition-refinement work by time and samples."""
+
+    if len(observations) > MAX_PROCESS_TIME_STEPS:
+        raise OperationDomainValidationError(
+            location=("observations",),
+            code="finite_stochastic_process.time_axis_bound",
+            message=f"observations may contain at most {MAX_PROCESS_TIME_STEPS} rows",
+        )
+    if any(len(observation) != len(space.samples) for observation in observations):
+        raise OperationDomainValidationError(
+            location=("observations",),
+            code="finite_stochastic_process.observation_length_mismatch",
+            message="each observation must have one entry per sample",
+        )

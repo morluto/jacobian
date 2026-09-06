@@ -13,6 +13,7 @@ from jacobian.math.probability.stochastic_processes import (
     FiniteSigmaAlgebra,
 )
 from jacobian.math.probability.stochastic_processes._models import (
+    MAX_PROCESS_TIME_STEPS,
     ConditionalExpectationRequest,
     DoobMartingaleRequest,
     FiltrationRequest,
@@ -27,6 +28,7 @@ from jacobian.math.probability.stochastic_processes._tools import (
 )
 from jacobian.math.probability.stochastic_processes.operations import (
     conditional_expectation,
+    filtration_natural,
     sigma_algebra_from_observation,
     sigma_algebra_join,
     verify_doob_martingale,
@@ -163,6 +165,14 @@ class TestFiltration:
         decoded = type(result).model_validate_json(result.model_dump_json())
         assert verify_filtration(decoded)
         assert not verify_filtration(decoded.model_copy(update={"sigmas": ()}))
+
+    def test_time_axis_is_bounded_for_requests_and_native_calls(self) -> None:
+        observations = (("heads", "tails"),) * (MAX_PROCESS_TIME_STEPS + 1)
+        with pytest.raises(ValidationError):
+            FiltrationRequest(space=_coin_space(), observations=observations)
+        with pytest.raises(OperationDomainValidationError) as error:
+            filtration_natural(_coin_space(), observations)
+        assert error.value.errors()[0]["type"].endswith("time_axis_bound")
 
 
 # ---------------------------------------------------------------------------

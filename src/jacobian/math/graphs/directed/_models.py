@@ -146,6 +146,7 @@ class AcyclicOrderRequest(StrictModel):
 
 
 class AcyclicOrderResult(StrictModel):
+    request: AcyclicOrderRequest
     acyclic: bool
     order: tuple[int, ...]
 

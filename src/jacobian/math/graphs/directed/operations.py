@@ -11,6 +11,7 @@ from jacobian.math.graphs.directed._models import (
     MAX_DIRECTED_OPERATION_EDGES,
     MAX_DIRECTED_OPERATION_VERTICES,
     AcyclicOrderResult,
+    AcyclicOrderRequest,
     CondensationEdge,
     CondensationResult,
     DagLongestPathResult,
@@ -126,8 +127,14 @@ def acyclic_order(graph: DirectedGraph) -> AcyclicOrderResult:
     _admit_directed_graph(graph)
     g = _build_digraph(graph)
     if not nx.is_directed_acyclic_graph(g):
-        return AcyclicOrderResult(acyclic=False, order=())
-    return AcyclicOrderResult(acyclic=True, order=tuple(nx.topological_sort(g)))
+        return AcyclicOrderResult(
+            request=AcyclicOrderRequest(graph=graph), acyclic=False, order=()
+        )
+    return AcyclicOrderResult(
+        request=AcyclicOrderRequest(graph=graph),
+        acyclic=True,
+        order=tuple(nx.topological_sort(g)),
+    )
 
 
 def dag_longest_path(graph: DirectedGraph) -> DagLongestPathResult:

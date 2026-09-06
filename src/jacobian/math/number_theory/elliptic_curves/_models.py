@@ -39,7 +39,10 @@ class CurveDiscriminantResult(StrictModel):
 
     curve: ShortWeierstrassCurve
     discriminant: CanonicalRational
-    is_nonsingular: bool
+
+    @property
+    def is_nonsingular(self) -> bool:
+        return self.discriminant.as_fraction() != 0
 
     @classmethod
     def _from_kernel(
@@ -47,12 +50,10 @@ class CurveDiscriminantResult(StrictModel):
         *,
         curve: ShortWeierstrassCurve,
         discriminant: CanonicalRational,
-        is_nonsingular: bool,
     ) -> Self:
         return cls.model_construct(
             curve=curve,
             discriminant=discriminant,
-            is_nonsingular=is_nonsingular,
         )
 
 

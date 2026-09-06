@@ -191,7 +191,6 @@ def discriminant(curve: ShortWeierstrassCurve) -> CurveDiscriminantResult:
     return CurveDiscriminantResult._from_kernel(
         curve=curve,
         discriminant=CanonicalRational.from_fraction(disc),
-        is_nonsingular=disc != 0,
     )
 
 

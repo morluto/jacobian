@@ -201,6 +201,11 @@ class TestEvaluate:
 
 
 class TestReduce:
+    def test_semantically_invalid_form_is_a_typed_domain_rejection(self) -> None:
+        request = BinaryQuadraticFormReduceRequest(form=_positive_form(-1, 3, 1))
+        with pytest.raises(OperationDomainValidationError, match="positive definite"):
+            compute_reduce(request)
+
     def test_reduce_already_reduced(self) -> None:
         result = compute_reduce(
             BinaryQuadraticFormReduceRequest(form=_positive_form(1, 0, 1))
@@ -242,6 +247,14 @@ class TestReduce:
 
 
 class TestProperEquivalence:
+    def test_semantically_invalid_form_is_a_typed_domain_rejection(self) -> None:
+        request = BinaryQuadraticFormProperEquivRequest(
+            first=_positive_form(-1, 1, 1),
+            second=_positive_form(1, 1, 1),
+        )
+        with pytest.raises(OperationDomainValidationError, match="positive definite"):
+            compute_proper_equivalence(request)
+
     def test_self_equivalent(self) -> None:
         result = compute_proper_equivalence(
             BinaryQuadraticFormProperEquivRequest(
@@ -549,7 +562,9 @@ class TestProperClassComposition:
     def test_nonreduced_representative_is_not_a_proper_class_value(self) -> None:
         carrier = ProperBinaryQuadraticFormClass(representative=_positive_form(5, 3, 1))
         assert carrier.representative == _positive_form(5, 3, 1)
-        with pytest.raises((OperationDomainValidationError, ValueError), match="reduced"):
+        with pytest.raises(
+            (OperationDomainValidationError, ValueError), match="reduced"
+        ):
             compose_classes(carrier, carrier)
 
     def test_different_discriminants_are_rejected_before_composition(self) -> None:

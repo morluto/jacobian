@@ -65,7 +65,7 @@ def compute_evaluate(
 def compute_reduce(
     request: BinaryQuadraticFormReduceRequest,
 ) -> ReducedBinaryQuadraticFormResult:
-    reduced, matrix = native.reduction(request.form)
+    reduced, matrix = _admit(lambda: native.reduction(request.form), ("form",))
     return ReducedBinaryQuadraticFormResult._from_kernel(
         form=request.form, reduced_form=reduced, matrix=matrix
     )
@@ -74,7 +74,10 @@ def compute_reduce(
 def compute_proper_equivalence(
     request: BinaryQuadraticFormProperEquivRequest,
 ) -> ProperEquivalenceResult:
-    return native.proper_equivalence(request.first, request.second)
+    return _admit(
+        lambda: native.proper_equivalence(request.first, request.second),
+        ("first", "second"),
+    )
 
 
 def compute_reduced_classes(

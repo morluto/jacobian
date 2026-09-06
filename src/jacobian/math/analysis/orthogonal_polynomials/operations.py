@@ -692,6 +692,33 @@ def _is_canonical_rational(value: object) -> bool:
     """Re-establish a rational's invariant after an unvalidated model copy."""
     if not isinstance(value, CanonicalRational):
         return False
+    numerator, denominator = value.num, value.den
+
+    # ``model_copy(update=...)`` bypasses Pydantic validation.  Check the wire
+    # types and bounded spellings before any exact parser or Fraction sees a
+    # caller-controlled string.
+    def _is_canonical_integer_spelling(component: object) -> bool:
+        if not isinstance(component, str):
+            return False
+        digits = component[1:] if component.startswith("-") else component
+        if (
+            not digits
+            or len(digits) > MAX_CANONICAL_RATIONAL_DIGITS
+            or not digits.isascii()
+            or not digits.isdecimal()
+        ):
+            return False
+        if component == "0":
+            return True
+        return digits[0] in "123456789"
+
+    if (
+        not _is_canonical_integer_spelling(numerator)
+        or not _is_canonical_integer_spelling(denominator)
+        or denominator.startswith("-")
+        or denominator == "0"
+    ):
+        return False
     try:
         return CanonicalRational.from_fraction(value.as_fraction()) == value
     except Exception:

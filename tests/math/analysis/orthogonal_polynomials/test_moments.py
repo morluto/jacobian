@@ -210,6 +210,18 @@ def test_hankel_verifier_rejects_malformed_sources_and_oversized_copies() -> Non
     assert not verify_hankel_matrix(result.model_copy(update={"matrix": oversized}))
 
 
+def test_hankel_verifier_rejects_oversized_forged_rational_before_parsing() -> None:
+    result = compute_hankel_matrix(
+        HankelRequest(prefix=_prefix(_moments_uniform(3)), order=0)
+    )
+    forged_scalar = result.matrix.entries[0][0].model_copy(
+        update={"num": "1" + "0" * 1_000_000}
+    )
+    forged_matrix = result.matrix.model_copy(update={"entries": ((forged_scalar,),)})
+
+    assert not verify_hankel_matrix(result.model_copy(update={"matrix": forged_matrix}))
+
+
 class TestOrthogonalPolynomials:
     def test_uniform_gives_legendre(self) -> None:
         result = compute_orthogonal_polynomials(

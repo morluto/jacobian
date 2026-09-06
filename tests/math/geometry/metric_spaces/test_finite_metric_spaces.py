@@ -18,7 +18,13 @@ from jacobian.math.geometry.metric_spaces._tools import (
     _gromov_hyperbolicity,
     _metric_profile,
 )
-from jacobian.math.geometry.metric_spaces.operations import ball, metric_profile
+from jacobian.math.geometry.metric_spaces.operations import (
+    ball,
+    metric_profile,
+    verify_ball,
+    verify_gromov_hyperbolicity,
+    verify_metric_profile,
+)
 
 
 def _ms(distances: list[list[int]]) -> FiniteMetricSpace:
@@ -35,6 +41,9 @@ def test_profile_path_graph() -> None:
     assert result.radius == 1
     assert result.centers == (1,)
     assert result.periphery == (0, 2)
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_metric_profile(decoded)
+    assert not verify_metric_profile(decoded.model_copy(update={"diameter": 0}))
 
 
 def test_native_profile_returns_the_canonical_result() -> None:
@@ -80,6 +89,9 @@ def test_ball_radius_1_at_endpoint() -> None:
     ms = _ms([[0, 1, 2], [1, 0, 1], [2, 1, 0]])
     result = _ball(BallRequest(metric_space=ms, center=0, radius=1))
     assert set(result.points) == {0, 1}
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_ball(decoded)
+    assert not verify_ball(decoded.model_copy(update={"points": (0,)}))
 
 
 def test_native_ball_rejects_invalid_bounds() -> None:
@@ -95,6 +107,8 @@ def test_gromov_hyperbolicity_path_graph() -> None:
     ms = _ms([[0, 1, 2, 3], [1, 0, 1, 2], [2, 1, 0, 1], [3, 2, 1, 0]])
     result = _gromov_hyperbolicity(GromovHyperbolicityRequest(metric_space=ms))
     assert result.hyperbolicity.as_fraction() == Fraction(0, 1)
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_gromov_hyperbolicity(decoded)
 
 
 def test_gromov_hyperbolicity_cycle_c4() -> None:

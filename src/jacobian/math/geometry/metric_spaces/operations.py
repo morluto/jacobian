@@ -15,7 +15,7 @@ from ._models import (
     MetricProfileResult,
 )
 
-__all__ = ["ball", "gromov_hyperbolicity", "metric_profile"]
+__all__ = ["ball", "gromov_hyperbolicity", "metric_profile", "verify_ball", "verify_gromov_hyperbolicity", "verify_metric_profile"]
 
 
 def _admit_metric_space(space: FiniteMetricSpace) -> None:
@@ -63,6 +63,7 @@ def metric_profile(
     centers = tuple(i for i, e in enumerate(eccentricities) if e == radius)
     periphery = tuple(i for i, e in enumerate(eccentricities) if e == diameter)
     return MetricProfileResult(
+        metric_space=metric_space,
         diameter=diameter,
         radius=radius,
         eccentricities=tuple(
@@ -84,6 +85,7 @@ def ball(metric_space: FiniteMetricSpace, center: int, radius: int) -> BallResul
     distances = metric_space.distances
     n = len(distances)
     return BallResult(
+        metric_space=metric_space,
         center=center,
         radius=radius,
         points=tuple(i for i in range(n) if distances[center][i] <= radius),
@@ -117,5 +119,27 @@ def gromov_hyperbolicity(
                     if delta > max_delta:
                         max_delta = delta
     return GromovHyperbolicityResult(
+        metric_space=metric_space,
         hyperbolicity=CanonicalRational.from_fraction(max_delta)
     )
+
+
+def verify_metric_profile(claim: MetricProfileResult) -> bool:
+    try:
+        return metric_profile(claim.metric_space) == claim
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+
+
+def verify_ball(claim: BallResult) -> bool:
+    try:
+        return ball(claim.metric_space, claim.center, claim.radius) == claim
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+
+
+def verify_gromov_hyperbolicity(claim: GromovHyperbolicityResult) -> bool:
+    try:
+        return gromov_hyperbolicity(claim.metric_space) == claim
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False

@@ -33,14 +33,18 @@ class EulerPhiPowerSumRequest(StrictModel):
 
 
 class EulerPhiPreimageResult(StrictModel):
+    target: int = Field(ge=1, le=MAX_N)
     preimage: tuple[int, ...]
     count: int = Field(ge=0)
 
 
 class EulerPhiPreimageCountResult(StrictModel):
+    target: int = Field(ge=1, le=MAX_N)
     count: int = Field(ge=0)
 
 
 class EulerPhiPowerSumResult(StrictModel):
+    target: int = Field(ge=1, le=MAX_N)
+    exponent: int = Field(ge=1, le=MAX_POWER_SUM_EXPONENT)
     power_sum: int = Field(ge=0)
     count: int = Field(ge=0)

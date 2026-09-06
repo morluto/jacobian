@@ -62,6 +62,7 @@ class EccentricityResult(StrictModel):
 class MetricProfileResult(StrictModel):
     """Profile of a finite metric space."""
 
+    metric_space: FiniteMetricSpace
     diameter: int = Field(ge=0, le=MAX_DISTANCE)
     radius: int = Field(ge=0, le=MAX_DISTANCE)
     eccentricities: tuple[EccentricityResult, ...] = Field(min_length=2)
@@ -89,6 +90,7 @@ class BallRequest(StrictModel):
 class BallResult(StrictModel):
     """The ball (set of points within radius of center)."""
 
+    metric_space: FiniteMetricSpace
     center: int = Field(ge=0, le=MAX_POINTS - 1)
     radius: int = Field(ge=0, le=MAX_DISTANCE)
     points: tuple[int, ...] = Field(min_length=1)
@@ -103,4 +105,5 @@ class GromovHyperbolicityRequest(StrictModel):
 class GromovHyperbolicityResult(StrictModel):
     """The four-point Gromov hyperbolicity (max delta over all quadruples)."""
 
+    metric_space: FiniteMetricSpace
     hyperbolicity: CanonicalRational

@@ -12,6 +12,9 @@ def test_exact_public_api_symbols() -> None:
         "ball",
         "gromov_hyperbolicity",
         "metric_profile",
+        "verify_ball",
+        "verify_gromov_hyperbolicity",
+        "verify_metric_profile",
     )
     assert tuple(finite_metric_spaces.__all__) == expected
     assert len(finite_metric_spaces.__all__) == len(set(finite_metric_spaces.__all__))

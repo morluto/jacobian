@@ -6,6 +6,9 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.arithmetic_functions.inverse_multiplicative._models import (
     MAX_N,
     MAX_POWER_SUM_EXPONENT,
+    EulerPhiPowerSumResult,
+    EulerPhiPreimageCountResult,
+    EulerPhiPreimageResult,
 )
 
 
@@ -93,4 +96,28 @@ __all__ = [
     "euler_phi_preimage_power_profile",
     "euler_phi_preimage_power_sum",
     "euler_phi_preimages",
+    "verify_euler_phi_power_sum",
+    "verify_euler_phi_preimage_count",
+    "verify_euler_phi_preimages",
 ]
+
+
+def verify_euler_phi_preimages(claim: EulerPhiPreimageResult) -> bool:
+    try:
+        return euler_phi_preimages(claim.target) == claim.preimage and claim.count == len(claim.preimage)
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+
+
+def verify_euler_phi_preimage_count(claim: EulerPhiPreimageCountResult) -> bool:
+    try:
+        return euler_phi_preimage_count(claim.target) == claim.count
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+
+
+def verify_euler_phi_power_sum(claim: EulerPhiPowerSumResult) -> bool:
+    try:
+        return euler_phi_preimage_power_profile(claim.target, claim.exponent) == (claim.power_sum, claim.count)
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False

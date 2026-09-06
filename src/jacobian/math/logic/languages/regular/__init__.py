@@ -6,6 +6,9 @@ from jacobian.math.logic.languages.regular.operations import (
     dfa_run,
     dfa_transition_carrier,
     transition_parikh_profile,
+    verify_accepted_word_count,
+    verify_dfa_run,
+    verify_transition_parikh_profile,
 )
 from jacobian.math.logic.languages.regular.values import (
     DFA,
@@ -28,4 +31,7 @@ __all__ = [
     "dfa_run",
     "dfa_transition_carrier",
     "transition_parikh_profile",
+    "verify_accepted_word_count",
+    "verify_dfa_run",
+    "verify_transition_parikh_profile",
 ]

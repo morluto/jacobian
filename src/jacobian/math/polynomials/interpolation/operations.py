@@ -85,7 +85,10 @@ def _admit_newton_evaluate(evaluation_point: CanonicalRational) -> None:
 
 
 def divided_differences(samples: InterpolationSamples) -> DividedDifferencesResult:
-    return DividedDifferencesResult(coefficients=_admit_samples(samples))
+    return DividedDifferencesResult(
+        samples=samples,
+        coefficients=_admit_samples(samples),
+    )
 
 
 def newton_form(samples: InterpolationSamples) -> NewtonForm:
@@ -101,6 +104,8 @@ def evaluate_newton(
 ) -> NewtonEvaluateResult:
     _run_admission(lambda: _admit_newton_evaluate(evaluation_point))
     return NewtonEvaluateResult(
+        newton_form=form,
+        evaluation_point=evaluation_point,
         result=CanonicalRational.from_fraction(
             evaluate_newton_form(
                 form.nodes,
@@ -109,6 +114,33 @@ def evaluate_newton(
             )
         )
     )
+
+
+def verify_divided_differences(claim: DividedDifferencesResult) -> bool:
+    """Verify divided-difference coefficients against retained samples."""
+
+    try:
+        return divided_differences(claim.samples) == claim
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+
+
+def verify_newton_evaluation(claim: NewtonEvaluateResult) -> bool:
+    """Verify a Newton evaluation against its retained form and point."""
+
+    try:
+        return evaluate_newton(claim.newton_form, claim.evaluation_point) == claim
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+
+
+def verify_hermite_interpolation(claim: HermiteInterpolationResult) -> bool:
+    """Verify all Hermite polynomial, degree, leading, and replay claims."""
+
+    try:
+        return hermite_interpolation(claim.source) == claim
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
 
 
 def hermite_interpolation(
@@ -172,4 +204,7 @@ __all__ = [
     "evaluate_newton",
     "hermite_interpolation",
     "newton_form",
+    "verify_divided_differences",
+    "verify_hermite_interpolation",
+    "verify_newton_evaluation",
 ]

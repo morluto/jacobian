@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.logic.languages.regular._models import CountResult, RunResult
 from jacobian.math.logic.languages.regular._profile_admission import (
     TransitionParikhAdmissionPlan,
     admit_transition_profile,
@@ -25,6 +26,9 @@ __all__ = [
     "dfa_run",
     "dfa_transition_carrier",
     "transition_parikh_profile",
+    "verify_accepted_word_count",
+    "verify_dfa_run",
+    "verify_transition_parikh_profile",
 ]
 
 
@@ -293,3 +297,50 @@ def transition_parikh_profile(
         ),
         total_path_count=format_canonical_integer(total_path_count),
     )
+
+
+def verify_dfa_run(claim: RunResult) -> bool:
+    """Verify DFA transitions, final state, and acceptance for a run claim."""
+
+    transitions = _transition_map(claim.dfa)
+    if len(claim.state_trace) != len(claim.word) + 1:
+        return False
+    state = claim.dfa.initial_state
+    if claim.state_trace[0] != state:
+        return False
+    try:
+        for symbol, observed in zip(claim.word, claim.state_trace[1:], strict=True):
+            state = transitions[(state, symbol)]
+            if observed != state:
+                return False
+    except (KeyError, ValueError, TypeError):
+        return False
+    return (
+        state == claim.final_state
+        and claim.accepted == (state in claim.dfa.accepting_states)
+    )
+
+
+def verify_accepted_word_count(claim: CountResult) -> bool:
+    """Verify an exact accepted-word count for the retained DFA and length."""
+
+    try:
+        return format_canonical_integer(
+            count_accepted_words(claim.dfa, claim.word_length)
+        ) == claim.count
+    except (OperationDomainValidationError, ValueError, TypeError):
+        return False
+
+
+def verify_transition_parikh_profile(claim: TransitionParikhProfile) -> bool:
+    """Verify the complete transition-use histogram for a retained automaton."""
+
+    try:
+        return transition_parikh_profile(
+            claim.automaton,
+            claim.source_state,
+            claim.target_state,
+            claim.path_length,
+        ) == claim
+    except (OperationDomainValidationError, ValueError, TypeError, RuntimeError):
+        return False

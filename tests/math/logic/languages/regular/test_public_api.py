@@ -19,6 +19,9 @@ def test_exact_public_api_symbols() -> None:
         "dfa_run",
         "dfa_transition_carrier",
         "transition_parikh_profile",
+        "verify_accepted_word_count",
+        "verify_dfa_run",
+        "verify_transition_parikh_profile",
     )
     assert tuple(regular_languages.__all__) == expected
     assert len(regular_languages.__all__) == len(set(regular_languages.__all__))

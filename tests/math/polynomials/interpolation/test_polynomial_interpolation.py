@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.math.polynomials.interpolation._models import (
     DividedDifferencesRequest,
+    DividedDifferencesResult,
     InterpolationSamples,
     NewtonEvaluateRequest,
     NewtonFormRequest,
@@ -15,6 +16,8 @@ from jacobian.math.polynomials.interpolation.operations import (
     divided_differences,
     evaluate_newton,
     newton_form,
+    verify_divided_differences,
+    verify_newton_evaluation,
 )
 
 
@@ -39,8 +42,15 @@ def test_catalog_contains_only_audited_operations() -> None:
 
 
 def test_divided_differences_are_canonical_rationals() -> None:
-    result = divided_differences(DividedDifferencesRequest(samples=_samples()).samples)
+    samples = _samples()
+    result = divided_differences(DividedDifferencesRequest(samples=samples).samples)
     assert result.coefficients == (_q(1), _q(1), _q(1))
+    assert result.samples == samples
+    decoded = DividedDifferencesResult.model_validate_json(result.model_dump_json())
+    assert verify_divided_differences(decoded) is True
+    forged = decoded.model_dump(mode="json")
+    forged["coefficients"][0] = {"num": "2", "den": "1"}
+    assert verify_divided_differences(DividedDifferencesResult.model_validate(forged)) is False
 
 
 def test_newton_form_is_directly_evaluable() -> None:
@@ -49,6 +59,13 @@ def test_newton_form_is_directly_evaluable() -> None:
     request = NewtonEvaluateRequest(newton_form=form, evaluation_point=_q(3))
     result = evaluate_newton(request.newton_form, request.evaluation_point)
     assert result.result == _q(10)
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert decoded.newton_form == form
+    assert decoded.evaluation_point == _q(3)
+    assert verify_newton_evaluation(decoded) is True
+    forged = decoded.model_dump(mode="json")
+    forged["result"] = {"num": "11", "den": "1"}
+    assert verify_newton_evaluation(type(result).model_validate(forged)) is False
 
 
 def test_interpolation_reconstructs_every_sample() -> None:

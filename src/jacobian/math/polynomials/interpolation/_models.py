@@ -484,15 +484,18 @@ class NewtonEvaluateRequest(StrictModel):
     evaluation_point: CanonicalRational
 
 
+class NewtonEvaluateResult(StrictModel):
+    newton_form: NewtonForm
+    evaluation_point: CanonicalRational
+    result: CanonicalRational
+
+
 class DividedDifferencesResult(StrictModel):
+    samples: InterpolationSamples
     coefficients: tuple[CanonicalRational, ...] = Field(
         min_length=1,
         max_length=MAX_NEWTON_POINTS,
     )
-
-
-class NewtonEvaluateResult(StrictModel):
-    result: CanonicalRational
 
 
 __all__ = [

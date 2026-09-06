@@ -20,6 +20,8 @@ from jacobian.math.logic.languages.regular.operations import (
     count_accepted_words,
     dfa_complement,
     dfa_run,
+    verify_accepted_word_count,
+    verify_dfa_run,
 )
 from jacobian.math.logic.languages.regular.values import (
     DFA,
@@ -220,6 +222,22 @@ def test_run_accepts_word_ending_in_1() -> None:
     assert result.accepted is True
     assert result.final_state == 1
     assert result.state_trace == (0, 1, 0, 1)
+    assert verify_dfa_run(
+        type(result).model_validate_json(result.model_dump_json())
+    ) is True
+
+    forged = result.model_dump(mode="json")
+    forged["word"][0] = 0
+    assert verify_dfa_run(type(result).model_validate(forged)) is False
+    forged = result.model_dump(mode="json")
+    forged["state_trace"][1] = 0
+    assert verify_dfa_run(type(result).model_validate(forged)) is False
+    forged = result.model_dump(mode="json")
+    forged["accepted"] = False
+    assert verify_dfa_run(type(result).model_validate(forged)) is False
+    forged = result.model_dump(mode="json")
+    forged["dfa"]["transitions"][1]["target"] = 0
+    assert verify_dfa_run(type(result).model_validate(forged)) is False
 
 
 def test_run_rejects_word_ending_in_0() -> None:
@@ -249,6 +267,15 @@ def test_count_binary_strings_ending_in_1() -> None:
     dfa = _dfa_ends_in_1()
     result = compute_count(CountRequest(dfa=dfa, word_length=3))
     assert result.count == "4"
+    assert verify_accepted_word_count(
+        type(result).model_validate_json(result.model_dump_json())
+    ) is True
+    forged = result.model_dump(mode="json")
+    forged["count"] = "5"
+    assert verify_accepted_word_count(type(result).model_validate(forged)) is False
+    forged = result.model_dump(mode="json")
+    forged["dfa"]["transitions"][1]["target"] = 0
+    assert verify_accepted_word_count(type(result).model_validate(forged)) is False
 
 
 def test_count_length_zero() -> None:

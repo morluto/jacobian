@@ -19,6 +19,7 @@ from jacobian.math.logic.languages.regular._tools import (
 from jacobian.math.logic.languages.regular.operations import (
     dfa_transition_carrier,
     transition_parikh_profile,
+    verify_transition_parikh_profile,
 )
 from jacobian.math.logic.languages.regular.values import (
     DFA,
@@ -368,6 +369,9 @@ def test_profile_verifier_rejects_source_and_conclusion_forgeries() -> None:
         )
     )
     payload = result.model_dump(mode="json")
+    assert verify_transition_parikh_profile(
+        TransitionParikhProfile.model_validate_json(result.model_dump_json())
+    ) is True
     forgeries: list[dict[str, object]] = []
 
     wrong_vector = deepcopy(payload)
@@ -401,6 +405,7 @@ def test_profile_verifier_rejects_source_and_conclusion_forgeries() -> None:
         except ValidationError:
             continue
         assert candidate.total_path_count == forged["total_path_count"]
+        assert verify_transition_parikh_profile(candidate) is False
 
 
 def test_transition_axis_requires_contiguous_stable_identifiers() -> None:

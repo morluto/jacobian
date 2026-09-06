@@ -23,6 +23,8 @@ from jacobian.math.matrices.subsystems._models import (
     SubsystemKroneckerProductResult,
     SubsystemPartialTraceRequest,
     SubsystemPartialTraceResult,
+    _entry_fractions,
+    _fraction_component_digits,
 )
 from jacobian.math.matrices.subsystems._tools import (
     compute_kronecker_product,
@@ -283,8 +285,6 @@ def test_partial_trace_boundary_result_components_round_trip() -> None:
 def test_kronecker_product_rejects_structural_bounds_before_operand_conversion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from jacobian.math.matrices.subsystems import operations
-
     heavy = Fraction(1, 10**300 + 9)
 
     def dense(order: int, factor: MatrixSubsystem) -> FactorizedHermitianMatrix:
@@ -297,11 +297,13 @@ def test_kronecker_product_rejects_structural_bounds_before_operand_conversion(
         )
 
     converted: list[object] = []
-    real_entry_fractions = operations._entry_fractions
+    real_entry_fractions = _entry_fractions
 
     def counted(matrix: object) -> object:
         converted.append(matrix)
         return real_entry_fractions(matrix)  # type: ignore[arg-type]
+
+    from jacobian.math.matrices.subsystems import operations
 
     monkeypatch.setattr(operations, "_entry_fractions", counted)
 
@@ -337,18 +339,18 @@ def test_kronecker_product_rejects_structural_bounds_before_operand_conversion(
 def test_kronecker_product_stops_the_digit_scan_after_the_first_excess_product(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from jacobian.math.matrices.subsystems import operations
-
     q = MatrixSubsystem(label="q", dimension=2)
     r = MatrixSubsystem(label="r", dimension=2)
     heavy = Fraction(1, 10**300 + 9)
     scanned: list[int] = []
-    real_digits = operations._fraction_component_digits
+    real_digits = _fraction_component_digits
 
     def counted(value: Fraction) -> tuple[int, int]:
         digits = real_digits(value)
         scanned.append(max(digits))
         return digits
+
+    from jacobian.math.matrices.subsystems import operations
 
     monkeypatch.setattr(operations, "_fraction_component_digits", counted)
     with pytest.raises(OperationDomainValidationError):

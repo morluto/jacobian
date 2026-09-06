@@ -137,7 +137,7 @@ def test_raw_embedded_matrix_bounds_iterable_axes_before_nested_validation() -> 
     ):
         EmbeddedRealSimpleNumberFieldMatrix.model_validate(payload)
 
-    payload["entries"] = repeat([])
+    payload["entries"] = [[[]] for _ in range(33)]
     with pytest.raises(ValidationError, match="at most 32 rows"):
         EmbeddedRealSimpleNumberFieldMatrix.model_validate(payload)
 

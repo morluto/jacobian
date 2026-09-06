@@ -11,17 +11,22 @@ import pytest
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.multivariate._division import (
     MultivariateDivisionRequest,
+    MultivariateDivisionResult,
 )
 from jacobian.math.polynomials.multivariate._factor_models import (
     MultivariateFactorRequest,
     MultivariateFactorResult,
 )
-from jacobian.math.polynomials.multivariate._gcd import MultivariateGcdRequest
+from jacobian.math.polynomials.multivariate._gcd import (
+    MultivariateGcdRequest,
+    MultivariateGcdResult,
+)
 from jacobian.math.polynomials.multivariate._models import (
     _MAX_MULTIVARIATE_COEFFICIENT_DIGITS,
 )
 from jacobian.math.polynomials.multivariate._resultant import (
     MultivariateResultantRequest,
+    MultivariateResultantResult,
 )
 from jacobian.math.polynomials.multivariate._subresultants import (
     MultivariateSubresultantSequenceRequest,
@@ -110,17 +115,23 @@ def test_serialized_multivariate_claims_are_source_bound_and_verifiable() -> Non
         )
     )
 
-    claims = (gcd, division, factor, resultant, subresultants)
-    verifiers = (
-        verify_multivariate_gcd,
-        verify_multivariate_division,
-        verify_multivariate_factor,
-        verify_multivariate_resultant,
-        verify_multivariate_subresultant_sequence,
+    assert verify_multivariate_gcd(
+        MultivariateGcdResult.model_validate_json(gcd.model_dump_json())
     )
-    for claim, verifier in zip(claims, verifiers, strict=True):
-        decoded = type(claim).model_validate_json(claim.model_dump_json())
-        assert verifier(decoded)
+    assert verify_multivariate_division(
+        MultivariateDivisionResult.model_validate_json(division.model_dump_json())
+    )
+    assert verify_multivariate_factor(
+        MultivariateFactorResult.model_validate_json(factor.model_dump_json())
+    )
+    assert verify_multivariate_resultant(
+        MultivariateResultantResult.model_validate_json(resultant.model_dump_json())
+    )
+    assert verify_multivariate_subresultant_sequence(
+        MultivariateSubresultantSequenceResult.model_validate_json(
+            subresultants.model_dump_json()
+        )
+    )
 
     assert not verify_multivariate_gcd(gcd.model_copy(update={"right": left}))
     assert not verify_multivariate_division(

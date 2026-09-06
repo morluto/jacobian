@@ -49,7 +49,7 @@ def _admit(
     polynomial: RationalPolynomial,
     box: RationalBox,
     multidegree: Multidegree,
-) -> tuple[tuple[int, ...], ...]:
+) -> tuple[tuple[tuple[int, ...], ...], bool]:
     dimension = len(polynomial.variables)
     if box.variables != polynomial.variables or len(multidegree) != dimension:
         _reject(
@@ -71,6 +71,10 @@ def _admit(
     degrees = tuple(max(es, default=0) for es in exponents)
     if any(e > m for e, m in zip(degrees, multidegree, strict=True)):
         _reject("multidegree must dominate every source coordinate degree")
+    # A rectangular support can use separable tensor contractions.  This is
+    # the actual kernel cost for dense inputs; the sparse path below retains
+    # the source-term cost for genuinely sparse polynomials.
+    dense = bool(terms) and len(terms) == prod(e + 1 for e in degrees)
 
     # A common denominator divides the product of source denominators,
     # endpoint denominator products to each coordinate degree, and all
@@ -114,15 +118,43 @@ def _admit(
             "Bernstein tensor, axis maps, and source exceed the representation budget"
         )
     # comb(k,j) uses at most j integer steps; powers and per-axis binomial
-    # rows are also covered. No dense global basis-change matrix is built.
-    work = size * (len(terms) * (dimension + 1) + 1)
+    # rows are also covered. Dense inputs are contracted one axis at a time,
+    # so their work is proportional to the tensor size and axis widths rather
+    # than to the product of tensor size and source support.
+    if dense:
+        work = size * (sum(m + 1 for m in multidegree) + 1)
+    else:
+        work = size * (len(terms) * (dimension + 1) + 1)
     work += sum(
-        (m + 1) * sum((e + 1) ** 2 * 8 for e in es)
+        (m + 1) * sum(2 * (e + 1) + 1 for e in es)
         for es, m in zip(exponents, multidegree, strict=True)
     )
     if work * (1 + height // 64) ** 2 > MAX_WEIGHTED_WORK:
         _reject("Bernstein conversion exceeds the height-weighted arithmetic budget")
-    return exponents
+    return exponents, dense
+
+
+def _contract_axis(
+    values: list[fmpq],
+    shape: tuple[int, ...],
+    axis: int,
+    rows: dict[int, tuple[fmpq, ...]],
+    target_degree: int,
+) -> tuple[list[fmpq], tuple[int, ...]]:
+    """Contract one tensor axis with the monomial-to-Bernstein rows."""
+    source_degree = shape[axis] - 1
+    after = prod(shape[axis + 1 :])
+    before = prod(shape[:axis])
+    target_shape = (*shape[:axis], target_degree + 1, *shape[axis + 1 :])
+    output: list[fmpq] = []
+    for prefix in range(before):
+        for target in range(target_degree + 1):
+            for suffix in range(after):
+                value = fmpq(0)
+                for source in range(source_degree + 1):
+                    value += values[(prefix * (source_degree + 1) + source) * after + suffix] * rows[source][target]
+                output.append(value)
+    return output, target_shape
 
 
 def _checkpoint(deadline: float) -> None:
@@ -144,7 +176,7 @@ def bernstein_coefficients(
         deadline = min(deadline, execution.deadline)
     bind_request_deadline(deadline)
     _checkpoint(deadline)
-    exponents = _admit(polynomial, box, multidegree)
+    exponents, dense = _admit(polynomial, box, multidegree)
     _checkpoint(deadline)
     axis_maps: list[dict[int, tuple[fmpq, ...]]] = []
     for es, m, interval in zip(exponents, multidegree, box.intervals, strict=True):
@@ -175,6 +207,32 @@ def bernstein_coefficients(
         (fmpq(*t.coefficient.as_integer_ratio()), t.exponents)
         for t in polynomial.polynomial.terms
     )
+    if dense:
+        source_shape = tuple(e + 1 for e in tuple(max(es, default=0) for es in exponents))
+        source_strides = tuple(prod(source_shape[i + 1 :]) for i in range(len(source_shape)))
+        values = [fmpq(0)] * prod(source_shape)
+        for coefficient, powers in terms:
+            offset = sum(power * stride for power, stride in zip(powers, source_strides, strict=True))
+            values[offset] = coefficient
+        shape = source_shape
+        for axis, rows in enumerate(axis_maps):
+            _checkpoint(deadline)
+            values, shape = _contract_axis(values, shape, axis, rows, multidegree[axis])
+        coefficients = [
+            CanonicalRational.model_construct(
+                num=format_canonical_integer(int(value.numerator)),
+                den=format_canonical_integer(int(value.denominator)),
+            )
+            for value in values
+        ]
+        result = RationalBernsteinPolynomial.model_construct(
+            polynomial=polynomial,
+            box=box,
+            multidegree=multidegree,
+            coefficients=tuple(coefficients),
+        )
+        _checkpoint(deadline)
+        return result
     coefficients = []
     for index in product(*(range(m + 1) for m in multidegree)):
         _checkpoint(deadline)

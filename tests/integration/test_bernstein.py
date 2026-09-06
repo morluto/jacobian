@@ -291,3 +291,19 @@ def test_dense_cubic_on_a_rational_rectangle_admits_a_large_elevated_tensor() ->
     assert [c.as_fraction() for c in elevated.coefficients] == [
         value for row in tensor for value in row
     ]
+
+
+def test_dense_bidegree_16_conversion_is_admitted_and_exact() -> None:
+    payload = _fixture()
+    payload["polynomial"]["polynomial"]["terms"] = [
+        {
+            "coefficient": _q((-1) ** (i + j) * (i + 1) * (j + 1), 7),
+            "exponents": [i, j],
+        }
+        for i in range(16, -1, -1)
+        for j in range(16, -1, -1)
+    ]
+    payload["multidegree"] = [16, 16]
+    result = _run(payload)
+    assert len(result.coefficients) == 289
+    _reconstruct(result)

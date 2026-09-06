@@ -50,11 +50,63 @@ class CubicalComplexRequest(StrictModel):
     cells: tuple[CubicalCell, ...] = Field(min_length=1, max_length=MAX_CELLS)
 
 
-class FVectorResult(StrictModel):
-    """The f-vector and Euler characteristic of a cubical complex."""
+class CubicalComplex(StrictModel):
+    """Canonical cubical complex with an explicit ambient coordinate axis.
 
-    dimension: int
-    f_vector: tuple[int, ...]
+    ``cells`` is a sorted family of distinct cells.  Operations establish that
+    it is face closed before constructing this value; decoding checks only the
+    bounded cell and axis representation.
+    """
+
+    ambient_dimension: int = Field(ge=1, le=MAX_DIM)
+    cells: tuple[CubicalCell, ...] = Field(
+        min_length=1, max_length=MAX_CELLS
+    )
+
+    @model_validator(mode="after")
+    def require_structural_cells(self) -> Self:
+        if any(len(cell.intervals) != self.ambient_dimension for cell in self.cells):
+            raise _validation_error(
+                "ambient_dimension_mismatch",
+                "every cell must use the declared ambient coordinate axis",
+            )
+        if tuple(sorted(self.cells, key=lambda cell: cell.intervals)) != self.cells:
+            raise _validation_error(
+                "cells_not_canonical", "cells must be sorted canonically"
+            )
+        if len(set(self.cells)) != len(self.cells):
+            raise _validation_error("duplicate_cells", "cells must be distinct")
+        return self
+
+
+class FVector(StrictModel):
+    """An f-vector whose entries are indexed by explicit cell dimension."""
+
+    dimension_axis: tuple[int, ...] = Field(min_length=1, max_length=MAX_DIM + 1)
+    counts: tuple[int, ...] = Field(min_length=1, max_length=MAX_DIM + 1)
+
+    @model_validator(mode="after")
+    def require_structural_axis(self) -> Self:
+        if self.dimension_axis != tuple(range(len(self.dimension_axis))):
+            raise _validation_error(
+                "dimension_axis_not_canonical",
+                "dimension axis must enumerate dimensions from zero",
+            )
+        if len(self.counts) != len(self.dimension_axis) or any(
+            count < 0 for count in self.counts
+        ):
+            raise _validation_error(
+                "f_vector_shape", "f-vector counts must match its dimension axis"
+            )
+        return self
+
+
+class FVectorResult(StrictModel):
+    """The f-vector and Euler characteristic bound to a cubical complex."""
+
+    complex: CubicalComplex
+    source_cells: tuple[CubicalCell, ...] = Field(min_length=1, max_length=MAX_CELLS)
+    f_vector: FVector
     euler_characteristic: int
 
 
@@ -65,8 +117,23 @@ class FaceClosureRequest(StrictModel):
 
 
 class FaceClosureResult(StrictModel):
-    """Result of face closure computation."""
+    """A face-closed complex and its dimensional cell-count summary."""
 
+    complex: CubicalComplex
+    source_cells: tuple[CubicalCell, ...] = Field(min_length=1, max_length=MAX_CELLS)
     original_cells: int
     total_cells: int
-    cells_by_dimension: tuple[int, ...]
+    cells_by_dimension: FVector
+
+
+__all__ = [
+    "MAX_CELLS",
+    "MAX_DIM",
+    "CubicalCell",
+    "CubicalComplex",
+    "CubicalComplexRequest",
+    "FVector",
+    "FVectorResult",
+    "FaceClosureRequest",
+    "FaceClosureResult",
+]

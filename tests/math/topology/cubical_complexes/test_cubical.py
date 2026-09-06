@@ -7,10 +7,14 @@ from jacobian.math.topology.cubical_complexes._models import (
     CubicalCell,
     CubicalComplexRequest,
     FaceClosureRequest,
+    FaceClosureResult,
+    FVectorResult,
 )
 from jacobian.math.topology.cubical_complexes.operations import (
     f_vector,
     face_closure,
+    verify_f_vector,
+    verify_face_closure,
 )
 
 
@@ -22,7 +26,13 @@ class TestFaceClosure:
         assert result.original_cells == 1
         # 4 vertices + 4 edges + 1 square = 9 cells
         assert result.total_cells == 9
-        assert result.cells_by_dimension == (4, 4, 1)
+        assert result.cells_by_dimension.counts == (4, 4, 1)
+        assert result.complex.ambient_dimension == 2
+        restored = FaceClosureResult.model_validate_json(result.model_dump_json())
+        assert verify_face_closure(restored)
+
+        forged = restored.model_copy(update={"total_cells": 1})
+        assert not verify_face_closure(forged)
 
     def test_single_1d_cell(self) -> None:
         result = face_closure(
@@ -31,7 +41,7 @@ class TestFaceClosure:
         assert result.original_cells == 1
         # 2 vertices + 1 edge = 3 cells
         assert result.total_cells == 3
-        assert result.cells_by_dimension == (2, 1)
+        assert result.cells_by_dimension.counts == (2, 1)
 
 
 class TestFVector:
@@ -41,10 +51,23 @@ class TestFVector:
                 cells=(CubicalCell(intervals=((0, 1), (0, 1))),)
             ).cells
         )
-        assert result.dimension == 2
+        assert result.f_vector.dimension_axis == (0, 1, 2)
         # 4 vertices + 4 edges + 1 square
-        assert result.f_vector == (4, 4, 1)
+        assert result.f_vector.counts == (4, 4, 1)
         assert result.euler_characteristic == 1
+        restored = FVectorResult.model_validate_json(result.model_dump_json())
+        assert verify_f_vector(restored)
+
+        forged = restored.model_copy(update={"euler_characteristic": 99})
+        assert not verify_f_vector(forged)
+
+    def test_degenerate_cell_retains_ambient_axis(self) -> None:
+        cell = CubicalCell(intervals=((4, 4), (7, 7)))
+        result = f_vector((cell,))
+        assert result.complex.ambient_dimension == 2
+        assert result.f_vector.dimension_axis == (0, 1, 2)
+        assert result.f_vector.counts == (1, 0, 0)
+        assert verify_f_vector(result)
 
 
 class TestValidation:

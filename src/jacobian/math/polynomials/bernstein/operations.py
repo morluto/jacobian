@@ -338,27 +338,32 @@ def verify_bernstein_coefficients(claim: RationalBernsteinPolynomial) -> bool:
 def _restriction_admit(
     parent: RationalBernsteinPolynomial,
     child: RationalBox,
-) -> tuple[Fraction, ...]:
+) -> tuple[tuple[Fraction, Fraction] | None, ...]:
     if child.variables != parent.box.variables:
         _reject("restriction child must follow the parent's complete ordered axes")
-    ratios: list[Fraction] = []
+    ratios: list[tuple[Fraction, Fraction] | None] = []
     split_parameter_height = 1
-    for parent_interval, child_interval in zip(
-        parent.box.intervals, child.intervals, strict=True
+    for degree, parent_interval, child_interval in zip(
+        parent.multidegree, parent.box.intervals, child.intervals, strict=True
     ):
-        parent_lower = parent_interval.lower.as_fraction()
-        parent_upper = parent_interval.upper.as_fraction()
-        child_lower = child_interval.lower.as_fraction()
-        child_upper = child_interval.upper.as_fraction()
+        parent_lower = fmpq(*parent_interval.lower.as_integer_ratio())
+        parent_upper = fmpq(*parent_interval.upper.as_integer_ratio())
+        child_lower = fmpq(*child_interval.lower.as_integer_ratio())
+        child_upper = fmpq(*child_interval.upper.as_integer_ratio())
         if parent_lower >= parent_upper:
             _reject("restriction requires a nondegenerate parent on every axis")
         if child_lower >= child_upper:
             _reject("restriction requires a nondegenerate child on every axis")
         if child_lower < parent_lower or child_upper > parent_upper:
             _reject("restriction child must be contained in the parent box")
-        alpha = (child_lower - parent_lower) / (parent_upper - parent_lower)
-        beta = (child_upper - parent_lower) / (parent_upper - parent_lower)
-        ratios.extend((alpha, beta))
+        if degree == 0:
+            ratios.append(None)
+            continue
+        alpha_value = (child_lower - parent_lower) / (parent_upper - parent_lower)
+        beta_value = (child_upper - parent_lower) / (parent_upper - parent_lower)
+        alpha = Fraction(int(alpha_value.numerator), int(alpha_value.denominator))
+        beta = Fraction(int(beta_value.numerator), int(beta_value.denominator))
+        ratios.append((alpha, beta))
         split_parameter_height = max(
             split_parameter_height,
             _fraction_height(alpha),
@@ -479,7 +484,10 @@ def _restrict_trusted(
     ratios = _restriction_admit(parent, child)
     shape = tuple(m + 1 for m in parent.multidegree)
     values = [coefficient.as_fraction() for coefficient in parent.coefficients]
-    for axis, (alpha, beta) in enumerate(zip(ratios[::2], ratios[1::2], strict=True)):
+    for axis, ratio in enumerate(ratios):
+        if ratio is None:
+            continue
+        alpha, beta = ratio
         _checkpoint(deadline)
         values = _restrict_axis(values, shape, axis, alpha, beta)
     coefficients = tuple(CanonicalRational.from_fraction(value) for value in values)

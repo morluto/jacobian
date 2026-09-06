@@ -426,6 +426,39 @@ def test_restriction_preserves_zero_tensor_on_a_degenerate_degree_profile() -> N
     assert all(value.as_fraction() == 0 for value in restricted.coefficients)
 
 
+def test_inactive_restriction_axis_does_not_construct_large_split_ratios() -> None:
+    payload = _fixture()
+    payload["polynomial"]["variables"] = ["x"]
+    payload["polynomial"]["polynomial"]["terms"] = [
+        {"coefficient": _q(1), "exponents": [0]}
+    ]
+    payload["multidegree"] = [0]
+    scale = "1" + "0" * 9000
+    payload["box"] = {
+        "domain": "QQ",
+        "variables": ["x"],
+        "intervals": [{"lower": _q(0), "upper": {"num": "1", "den": scale}}],
+    }
+    request = BernsteinRequest.model_validate(payload)
+    parent = bernstein_coefficients(
+        request.polynomial, request.box, request.multidegree
+    )
+    child = RationalBox.model_validate(
+        {
+            "domain": "QQ",
+            "variables": ["x"],
+            "intervals": [
+                {
+                    "lower": {"num": "1", "den": "4" + "0" * 9000},
+                    "upper": {"num": "1", "den": "2" + "0" * 9000},
+                }
+            ],
+        }
+    )
+    restricted = restrict_bernstein(parent, child)
+    assert restricted.coefficients == parent.coefficients
+
+
 def test_native_restriction_reuses_the_trusted_tensor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

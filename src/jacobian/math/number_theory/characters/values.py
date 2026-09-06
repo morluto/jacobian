@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -36,27 +35,48 @@ class PrincipalDirichletCharacter(StrictModel):
     )
 
     @model_validator(mode="after")
-    def require_complete_canonical_principal_table(self) -> Self:
-        expected_units = tuple(
-            residue
-            for residue in range(self.modulus)
-            if math.gcd(residue, self.modulus) == 1
-        )
-        if self.unit_residues != expected_units:
+    def require_structural_shape(self) -> Self:
+        """Validate the bounded wire shape without proving the character."""
+
+        if len(self.unit_residues) > self.modulus:
             raise _validation_error(
-                "unit_residues_mismatch",
-                "unit residues must be the complete canonical unit group modulo modulus",
+                "unit_residues_length",
+                "unit residues cannot contain more entries than the modulus",
             )
-        units = frozenset(expected_units)
-        expected_values = tuple(
-            1 if residue in units else 0 for residue in range(self.modulus)
-        )
-        if self.values != expected_values:
+        if any(
+            residue < 0 or residue >= self.modulus for residue in self.unit_residues
+        ):
             raise _validation_error(
-                "values_table_mismatch",
-                "values must be the complete extension-by-zero principal character table",
+                "unit_residue_range",
+                "unit residues must be distinct canonical residues modulo modulus",
+            )
+        if self.unit_residues != tuple(sorted(set(self.unit_residues))):
+            raise _validation_error(
+                "unit_residue_order",
+                "unit residues must be strictly increasing canonical residues",
+            )
+        if len(self.values) != self.modulus:
+            raise _validation_error(
+                "values_table_length",
+                "values must contain exactly one entry for every canonical residue",
             )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        modulus: int,
+        unit_residues: tuple[StrictInt, ...],
+        values: tuple[Literal[0, 1], ...],
+    ) -> Self:
+        """Build a character after its producer has established its table."""
+
+        return cls.model_construct(
+            modulus=modulus,
+            unit_residues=unit_residues,
+            values=values,
+        )
 
 
 __all__ = ["MAX_PRINCIPAL_CHARACTER_MODULUS", "PrincipalDirichletCharacter"]

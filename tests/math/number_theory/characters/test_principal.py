@@ -20,6 +20,10 @@ from jacobian.math.number_theory.characters._tools import (
     compute_principal_dirichlet_character,
     compute_principal_dirichlet_character_value,
 )
+from jacobian.math.number_theory.characters.operations import (
+    require_complete_principal_dirichlet_character,
+    require_principal_dirichlet_character_value_result,
+)
 from jacobian.math.number_theory.characters.values import (
     MAX_PRINCIPAL_CHARACTER_MODULUS,
     PrincipalDirichletCharacter,
@@ -67,28 +71,56 @@ def test_value_operation_is_bound_to_the_supplied_table(
     assert result.value == value
 
 
-def test_character_model_rejects_forged_unit_group_or_value_table() -> None:
-    with pytest.raises(ValidationError) as error:
-        PrincipalDirichletCharacter(
-            modulus=12,
-            unit_residues=(1, 5, 7),
-            values=(0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1),
-        )
-    assert (
-        error.value.errors()[0]["type"] == "dirichlet_character.unit_residues_mismatch"
-    )
-    with pytest.raises(ValidationError) as error:
-        PrincipalDirichletCharacter(
-            modulus=12,
-            unit_residues=(1, 5, 7, 11),
-            values=(0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1),
-        )
-    assert (
-        error.value.errors()[0]["type"] == "dirichlet_character.values_table_mismatch"
+def test_character_model_accepts_structural_claim_without_replaying_unit_group() -> (
+    None
+):
+    character = PrincipalDirichletCharacter.model_validate(
+        {
+            "modulus": 4,
+            "unit_residues": [1],
+            "values": [0, 1, 0, 0],
+        }
     )
 
+    assert character.modulus == 4
+    assert character.unit_residues == (1,)
+    assert character.values == (0, 1, 0, 0)
 
-def test_value_result_rejects_a_forged_residue_or_value() -> None:
+
+def test_character_model_rejects_structurally_invalid_tables() -> None:
+    with pytest.raises(ValidationError) as error:
+        PrincipalDirichletCharacter(
+            modulus=4,
+            unit_residues=(1,),
+            values=(0, 1, 0),
+        )
+    assert error.value.errors()[0]["type"] == "dirichlet_character.values_table_length"
+    with pytest.raises(ValidationError) as error:
+        PrincipalDirichletCharacter(
+            modulus=4,
+            unit_residues=(1, 4),
+            values=(0, 1, 0, 0),
+        )
+    assert error.value.errors()[0]["type"] == "dirichlet_character.unit_residue_range"
+
+
+def test_character_checker_rejects_a_structurally_valid_forged_claim() -> None:
+    character = PrincipalDirichletCharacter.model_validate(
+        {
+            "modulus": 4,
+            "unit_residues": [1],
+            "values": [0, 1, 0, 0],
+        }
+    )
+
+    with pytest.raises(ValueError, match="complete canonical unit group"):
+        require_complete_principal_dirichlet_character(character)
+
+    with pytest.raises(ValueError, match="complete canonical unit group"):
+        principal_dirichlet_character_value(character, 1)
+
+
+def test_value_result_checks_only_structural_source_binding() -> None:
     character = principal_dirichlet_character(12)
     with pytest.raises(ValidationError) as error:
         PrincipalDirichletCharacterValueResult(
@@ -102,15 +134,30 @@ def test_value_result_rejects_a_forged_residue_or_value() -> None:
         error.value.errors()[0]["type"]
         == "dirichlet_character.canonical_residue_mismatch"
     )
-    with pytest.raises(ValidationError) as error:
-        PrincipalDirichletCharacterValueResult(
-            character=character,
-            integer="18",
-            canonical_residue=6,
-            is_unit=False,
-            value=1,
-        )
-    assert error.value.errors()[0]["type"] == "dirichlet_character.value_mismatch"
+
+    result = PrincipalDirichletCharacterValueResult(
+        character=character,
+        integer="18",
+        canonical_residue=6,
+        is_unit=True,
+        value=1,
+    )
+    with pytest.raises(ValueError, match="unit status"):
+        require_principal_dirichlet_character_value_result(result)
+
+
+def test_value_result_checker_rejects_a_forged_evaluation_claim() -> None:
+    character = principal_dirichlet_character(12)
+    result = PrincipalDirichletCharacterValueResult.model_construct(
+        character=character,
+        integer="18",
+        canonical_residue=6,
+        is_unit=False,
+        value=1,
+    )
+
+    with pytest.raises(ValueError, match="value does not match"):
+        require_principal_dirichlet_character_value_result(result)
 
 
 def test_value_request_rejects_noncanonical_negative_zero() -> None:

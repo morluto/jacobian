@@ -16,6 +16,7 @@ from jacobian._exact import (
 )
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.posets.core._models import FinitePoset
+from jacobian.math.combinatorics.posets.core.operations import _admit_canonical_poset
 from jacobian.math.combinatorics.posets.weighted_antichain._models import (
     MAX_ENUMERATION_WORK,
     MaximumWeightAntichainResult,
@@ -38,6 +39,14 @@ def _admit_maximum_weight_antichain(
             code="weighted_antichain.invalid_poset",
             message="poset must be a FinitePoset value",
         )
+    try:
+        _admit_canonical_poset(poset)
+    except OperationDomainValidationError as exc:
+        raise OperationDomainValidationError(
+            location=("poset",),
+            code="weighted_antichain.invalid_poset_relation",
+            message=str(exc),
+        ) from exc
     if not isinstance(weights, tuple) or len(weights) != len(poset.elements):
         raise OperationDomainValidationError(
             location=("weights",),

@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math.matrices.values import RationalMatrix
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -36,41 +37,57 @@ class MomentFunctionalPrefix(StrictModel):
 
 
 class HankelMomentMatrix(StrictModel):
-    """The exact Hankel matrix H_r[i,j] = mu_(i+j)."""
+    """A source-bound ordinary or shifted exact Hankel matrix."""
 
-    order: int = Field(ge=0, le=MAX_HANKEL_ORDER)
-    entries: tuple[tuple[CanonicalRational, ...], ...]
+    prefix: MomentFunctionalPrefix
+    shift: Literal[0, 1]
+    row_axis: tuple[int, ...] = Field(min_length=1, max_length=MAX_HANKEL_ORDER + 1)
+    column_axis: tuple[int, ...] = Field(min_length=1, max_length=MAX_HANKEL_ORDER + 1)
+    matrix: RationalMatrix
     determinant: CanonicalRational
     rank: int = Field(ge=0)
-    variable: str = Field(min_length=1, max_length=MAX_VARIABLE_LENGTH)
 
     @model_validator(mode="after")
-    def bind_determinant_and_rank_to_entries(self) -> Self:
-        side = self.order + 1
-        if len(self.entries) != side or any(len(row) != side for row in self.entries):
+    def require_axes_match_matrix(self) -> Self:
+        """Validate carrier shape and axes without replaying claims."""
+        if self.row_axis != tuple(range(self.matrix.row_count)):
             raise _validation_error(
                 "value_invariant",
-                f"entries must form a {side}x{side} matrix for order {self.order}",
+                "row axis must be the ordered axis of the canonical matrix",
             )
+        if self.column_axis != tuple(range(self.matrix.column_count)):
+            raise _validation_error(
+                "value_invariant",
+                "column axis must be the ordered axis of the canonical matrix",
+            )
+        if self.matrix.row_count != self.matrix.column_count:
+            raise _validation_error("value_invariant", "Hankel matrix must be square")
         return self
+
+    @property
+    def order(self) -> int:
+        return self.matrix.row_count - 1
 
     @classmethod
     def _from_kernel(
         cls,
         *,
+        prefix: MomentFunctionalPrefix,
         order: int,
-        entries: tuple[tuple[CanonicalRational, ...], ...],
+        shift: Literal[0, 1],
+        matrix: RationalMatrix,
         determinant: CanonicalRational,
         rank: int,
-        variable: str,
     ) -> Self:
-        """Build a trusted matrix result without replaying exact elimination."""
+        """Build a trusted result without replaying exact elimination."""
         return cls.model_construct(
-            order=order,
-            entries=entries,
+            prefix=prefix,
+            shift=shift,
+            row_axis=tuple(range(order + 1)),
+            column_axis=tuple(range(order + 1)),
+            matrix=matrix,
             determinant=determinant,
             rank=rank,
-            variable=variable,
         )
 
 
@@ -298,79 +315,63 @@ __all__ = [
 
 
 class JacobiMatrix(StrictModel):
-    """Finite tridiagonal multiplication-by-x matrix in the monic basis.
+    """A source-bound finite Jacobi matrix in the monic polynomial basis."""
 
-    With x p_k = p_{k+1} + alpha_k p_k + beta_k p_{k-1}, the subdiagonal
-    carries the monic normalization 1 and the superdiagonal carries
-    beta_{i+1}; ``betas`` keeps the recurrence convention with an unused
-    placeholder first.
-    """
-
-    alphas: tuple[CanonicalRational, ...]
-    betas: tuple[CanonicalRational, ...]
-    matrix: tuple[tuple[CanonicalRational, ...], ...]
-    variable: str = Field(min_length=1, max_length=MAX_VARIABLE_LENGTH)
-
-    @model_validator(mode="after")
-    def bind_matrix_to_coefficients(self) -> Self:
-        size = len(self.alphas)
-        if len(self.betas) != size:
-            raise _validation_error(
-                "value_invariant",
-                "betas must carry one entry per alpha: an unused zero "
-                "placeholder followed by one norm ratio per recurrence step",
-            )
-        if self.betas and self.betas[0].as_fraction() != 0:
-            raise _validation_error(
-                "value_invariant", "betas[0] is the unused placeholder and must be zero"
-            )
-        if len(self.matrix) != size or any(len(row) != size for row in self.matrix):
-            raise _validation_error(
-                "value_invariant", "matrix must be a square size x size array"
-            )
-        for i in range(size):
-            if self.matrix[i][i] != self.alphas[i]:
-                raise _validation_error(
-                    "value_invariant", f"matrix diagonal must carry alpha_{i}"
-                )
-            if i + 1 < size:
-                if self.matrix[i + 1][i] != CanonicalRational.from_integer_ratio(1, 1):
-                    raise _validation_error(
-                        "value_invariant", "the monic subdiagonal must be exactly 1"
-                    )
-                if self.betas[i + 1] != self.matrix[i][i + 1]:
-                    raise _validation_error(
-                        "value_invariant", "matrix superdiagonal must carry beta_{i+1}"
-                    )
-        return self
+    family: OrthogonalPolynomialFamily
+    recurrence: ThreeTermRecurrence
+    row_axis: tuple[int, ...] = Field(
+        min_length=0, max_length=MAX_POLYNOMIAL_DEGREE + 1
+    )
+    column_axis: tuple[int, ...] = Field(
+        min_length=0, max_length=MAX_POLYNOMIAL_DEGREE + 1
+    )
+    matrix: RationalMatrix
 
     @model_validator(mode="after")
-    def require_tridiagonal_band(self) -> Self:
-        """Every entry outside the tridiagonal band must vanish; otherwise
-        the value would claim a tridiagonal operator it does not carry."""
-        if any(
-            entry.as_fraction() != 0
-            for i, row in enumerate(self.matrix)
-            for j, entry in enumerate(row)
-            if abs(i - j) > 1
-        ):
+    def require_axes_match_matrix(self) -> Self:
+        """Validate only source dimensions and ordered matrix axes."""
+        size = len(self.recurrence.alpha)
+        if self.row_axis != tuple(range(size)):
             raise _validation_error(
-                "value_invariant", "entries outside the tridiagonal band must be zero"
+                "value_invariant", "row axis must be the ordered axis of the matrix"
+            )
+        if self.column_axis != tuple(range(size)):
+            raise _validation_error(
+                "value_invariant", "column axis must be the ordered axis of the matrix"
+            )
+        if self.matrix.row_count != size or self.matrix.column_count != size:
+            raise _validation_error(
+                "value_invariant", "matrix dimensions must match the recurrence"
             )
         return self
+
+    @property
+    def alphas(self) -> tuple[CanonicalRational, ...]:
+        """Compatibility view of the retained recurrence coefficients."""
+        return self.recurrence.alpha
+
+    @property
+    def betas(self) -> tuple[CanonicalRational, ...]:
+        """Compatibility view of the retained recurrence coefficients."""
+        return self.recurrence.beta
+
+    @property
+    def variable(self) -> str:
+        """Compatibility view of the recurrence variable."""
+        return self.recurrence.variable
 
     @classmethod
     def _from_kernel(
         cls,
         *,
-        alphas: tuple[CanonicalRational, ...],
-        betas: tuple[CanonicalRational, ...],
-        matrix: tuple[tuple[CanonicalRational, ...], ...],
-        variable: str,
+        family: OrthogonalPolynomialFamily,
+        recurrence: ThreeTermRecurrence,
+        matrix: RationalMatrix,
     ) -> Self:
         return cls.model_construct(
-            alphas=alphas,
-            betas=betas,
+            family=family,
+            recurrence=recurrence,
+            row_axis=tuple(range(matrix.row_count)),
+            column_axis=tuple(range(matrix.column_count)),
             matrix=matrix,
-            variable=variable,
         )

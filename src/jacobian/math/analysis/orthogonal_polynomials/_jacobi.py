@@ -8,7 +8,9 @@ from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.math.analysis.orthogonal_polynomials.values import (
     JacobiMatrix,
     OrthogonalPolynomialFamily,
+    ThreeTermRecurrence,
 )
+from jacobian.math.matrices.values import rational_matrix_from_fractions
 
 
 class JacobiMatrixAdmissionError(ValueError):
@@ -86,28 +88,30 @@ def _derive_jacobi_coefficients(
     polys = family.polynomials
     n = len(polys)
     alphas: list[Fraction] = []
-    betas: list[Fraction] = []
-    for k in range(n - 1):
+    betas: list[Fraction] = [Fraction(0)]
+    for k in range(n):
         p_k = [coefficient.as_fraction() for coefficient in polys[k].coefficients]
+        if k > 0:
+            betas.append(
+                polys[k].squared_norm.as_fraction()
+                / polys[k - 1].squared_norm.as_fraction()
+            )
+        if k + 1 >= n:
+            continue
         p_next = [
             coefficient.as_fraction() for coefficient in polys[k + 1].coefficients
         ]
         if k == 0:
             alphas.append(-p_next[0])
-            betas.append(Fraction(0))
-        else:
-            x_pk = [Fraction(0)] * (len(p_k) + 1)
-            for i, coefficient in enumerate(p_k):
-                x_pk[i + 1] = coefficient
-            residual = [
-                x_pk[i] - p_next[i] if i < len(p_next) else x_pk[i]
-                for i in range(len(x_pk))
-            ]
-            alphas.append(residual[k] if k < len(residual) else Fraction(0))
-            betas.append(
-                polys[k].squared_norm.as_fraction()
-                / polys[k - 1].squared_norm.as_fraction()
-            )
+            continue
+        x_pk = [Fraction(0)] * (len(p_k) + 1)
+        for i, coefficient in enumerate(p_k):
+            x_pk[i + 1] = coefficient
+        residual = [
+            x_pk[i] - p_next[i] if i < len(p_next) else x_pk[i]
+            for i in range(len(x_pk))
+        ]
+        alphas.append(residual[k] if k < len(residual) else Fraction(0))
     return alphas, betas
 
 
@@ -163,10 +167,10 @@ def require_jacobi_matrix_admission(family: OrthogonalPolynomialFamily) -> None:
                 "rational digit limit; supply a family whose coefficient "
                 "differences stay representable",
             )
-    for k in range(1, len(polys) - 1):
+    for k in range(1, len(polys)):
         h_k = polys[k].squared_norm.as_fraction()
         h_prev = polys[k - 1].squared_norm.as_fraction()
-        if h_prev == 0 or h_k == 0:
+        if h_prev == 0:
             raise JacobiMatrixAdmissionError(
                 "norm_ratio",
                 f"adjacent-norm ratio beta_{k} is undefined because squared "
@@ -190,50 +194,18 @@ def jacobi_matrix_from_family(family: OrthogonalPolynomialFamily) -> JacobiMatri
     n = len(polys)
 
     if n < 2:
-        return JacobiMatrix._from_kernel(
-            alphas=(),
-            betas=(),
-            matrix=(),
+        recurrence = ThreeTermRecurrence._from_kernel(
+            alpha=(),
+            beta=(CanonicalRational.from_integer_ratio(0, 1),),
             variable=family.variable,
         )
+        return JacobiMatrix._from_kernel(
+            family=family,
+            recurrence=recurrence,
+            matrix=rational_matrix_from_fractions((), column_count=0),
+        )
 
-    alphas: list[Fraction] = []
-    betas: list[Fraction] = []
-    for k in range(n - 1):
-        p_k = [coefficient.as_fraction() for coefficient in polys[k].coefficients]
-        p_next = [
-            coefficient.as_fraction() for coefficient in polys[k + 1].coefficients
-        ]
-        squared_norm_k = polys[k].squared_norm.as_fraction()
-
-        if k == 0:
-            alphas.append(-p_next[0])
-            betas.append(Fraction(0))
-        else:
-            squared_norm_prev = polys[k - 1].squared_norm.as_fraction()
-            x_pk = [Fraction(0)] * (len(p_k) + 1)
-            for i, coefficient in enumerate(p_k):
-                x_pk[i + 1] = coefficient
-            residual = [
-                x_pk[i] - p_next[i] if i < len(p_next) else x_pk[i]
-                for i in range(len(x_pk))
-            ]
-            alphas.append(residual[k] if k < len(residual) else Fraction(0))
-            try:
-                betas.append(squared_norm_k / squared_norm_prev)
-            except ZeroDivisionError:
-                raise JacobiMatrixAdmissionError(
-                    "norm_ratio",
-                    f"adjacent-norm ratio beta_{k} is undefined because squared "
-                    "norm h_{k-1} vanishes",
-                ) from None
-    try:
-        require_three_term_identities(family, alphas, betas)
-    except ValueError as exc:
-        raise JacobiMatrixAdmissionError(
-            "incompatible_family",
-            str(exc),
-        ) from None
+    alphas, betas = _derive_jacobi_coefficients(family)
 
     matrix_size = n - 1
     matrix = [[Fraction(0)] * matrix_size for _ in range(matrix_size)]
@@ -243,12 +215,19 @@ def jacobi_matrix_from_family(family: OrthogonalPolynomialFamily) -> JacobiMatri
             matrix[i + 1][i] = Fraction(1)
             matrix[i][i + 1] = betas[i + 1]
 
-    return JacobiMatrix._from_kernel(
-        alphas=tuple(_from_fraction(alpha) for alpha in alphas),
-        betas=tuple(_from_fraction(beta) for beta in betas),
-        matrix=tuple(
-            tuple(_from_fraction(matrix[i][j]) for j in range(matrix_size))
-            for i in range(matrix_size)
-        ),
+    recurrence = ThreeTermRecurrence._from_kernel(
+        alpha=tuple(_from_fraction(alpha) for alpha in alphas),
+        beta=tuple(_from_fraction(beta) for beta in betas),
         variable=family.variable,
+    )
+    return JacobiMatrix._from_kernel(
+        family=family,
+        recurrence=recurrence,
+        matrix=rational_matrix_from_fractions(
+            tuple(
+                tuple(matrix[i][j] for j in range(matrix_size))
+                for i in range(matrix_size)
+            ),
+            column_count=matrix_size,
+        ),
     )

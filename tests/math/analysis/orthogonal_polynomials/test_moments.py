@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 from math import comb, prod
 
@@ -30,6 +31,8 @@ from jacobian.math.analysis.orthogonal_polynomials._tools import (
 from jacobian.math.analysis.orthogonal_polynomials.operations import (
     _hankel_determinant_height_bound,
     require_hankel_matrix_admission,
+    verify_hankel_matrix,
+    verify_jacobi_matrix,
 )
 from jacobian.math.analysis.orthogonal_polynomials.values import (
     MAX_HANKEL_ORDER,
@@ -39,6 +42,7 @@ from jacobian.math.analysis.orthogonal_polynomials.values import (
     OrthogonalPolynomialTerm,
     QuadratureNode,
 )
+from jacobian.math.matrices.operations import determinant_result, rank_result
 
 type RationalInput = int | Fraction
 
@@ -67,12 +71,17 @@ class TestHankel:
             HankelRequest(prefix=_prefix(_moments_uniform(3)), order=0)
         )
         assert result.order == 0
-        assert len(result.entries) == 1
-        assert len(result.entries[0]) == 1
-        assert int(result.entries[0][0].num) == 2
-        assert int(result.entries[0][0].den) == 1
+        assert result.matrix.row_count == 1
+        assert result.matrix.column_count == 1
+        assert int(result.matrix.entries[0][0].num) == 2
+        assert int(result.matrix.entries[0][0].den) == 1
         assert int(result.determinant.num) == 2
         assert result.rank == 1
+        assert result.row_axis == (0,)
+        assert result.column_axis == (0,)
+        assert result.shift == 0
+        assert determinant_result(result.matrix).determinant == result.determinant
+        assert rank_result(result.matrix).rank == result.rank
 
     def test_hankel_order_2(self) -> None:
         result = compute_hankel_matrix(
@@ -99,7 +108,7 @@ class TestHankel:
         assert result.rank == 65
         assert result.determinant.as_fraction() == Fraction(1, expected_denominator)
         assert all(
-            result.entries[row][column] == moments[row + column]
+            result.matrix.entries[row][column] == moments[row + column]
             for row in range(65)
             for column in range(65)
         )
@@ -119,6 +128,16 @@ class TestHankel:
 
 
 class TestShiftedHankel:
+    def test_shifted_hankel_order_0_retains_shift_and_axes(self) -> None:
+        result = compute_shifted_hankel(
+            ShiftedHankelRequest(prefix=_prefix(_moments_uniform(2)), order=0)
+        )
+        assert result.order == 0
+        assert result.shift == 1
+        assert result.row_axis == (0,)
+        assert result.column_axis == (0,)
+        assert result.matrix.entries == ((CanonicalRational(num="0", den="1"),),)
+
     def test_shifted_hankel(self) -> None:
         result = compute_shifted_hankel(
             ShiftedHankelRequest(prefix=_prefix(_moments_uniform(6)), order=2)
@@ -133,7 +152,10 @@ class TestShiftedHankel:
 
         assert result.rank == 1
         assert result.determinant.as_fraction() == 0
-        assert all(entry == moments[0] for row in result.entries for entry in row)
+        assert all(
+            entry == moments[0] for row in result.matrix.entries for entry in row
+        )
+        assert result.shift == 1
 
     def test_consumed_moment_heights_bound_admission(self) -> None:
         """The shifted determinant consumes mu_1..mu_(2r+1); an extreme
@@ -158,6 +180,22 @@ class TestShiftedHankel:
         )
         request = ShiftedHankelRequest(prefix=_prefix(moments), order=1)
         assert compute_shifted_hankel(request).order == 1
+
+
+def test_hankel_claim_round_trips_and_forgery_is_verified_by_source() -> None:
+    result = compute_hankel_matrix(
+        HankelRequest(prefix=_prefix(_moments_uniform(3)), order=1)
+    )
+    restored = type(result).model_validate_json(result.model_dump_json(), strict=True)
+    assert restored == result
+    assert verify_hankel_matrix(restored)
+
+    payload = json.loads(result.model_dump_json())
+    payload["matrix"]["entries"][0][0] = {"num": "9", "den": "1"}
+    forged = type(result).model_validate_json(json.dumps(payload), strict=True)
+    assert forged.matrix.entries[0][0].as_fraction() == 9
+    assert not verify_hankel_matrix(forged)
+    assert not verify_hankel_matrix(restored.model_copy(update={"rank": 99}))
 
 
 class TestOrthogonalPolynomials:
@@ -391,11 +429,12 @@ class TestJacobiMatrix:
         result = compute_jacobi_matrix(JacobiMatrixRequest(family=family))
         # 3x3 matrix: n=4 polynomials, so the multiplication operator acts
         # on p_0..p_2.
-        assert len(result.matrix) == 3
+        assert result.matrix.row_count == 3
+        assert result.matrix.column_count == 3
         assert len(result.alphas) == 3
         # Diagonal should all be 0 for symmetric measure
         for i in range(3):
-            assert int(result.matrix[i][i].num) == 0
+            assert int(result.matrix.entries[i][i].num) == 0
         # Monic basis: subdiagonal carries 1, superdiagonal carries beta.
         # beta_1 = 1/3 and beta_2 = 4/15 for Legendre moments; betas keeps
         # the recurrence convention with an unused placeholder first.
@@ -406,11 +445,16 @@ class TestJacobiMatrix:
             CanonicalRational(num="0", den="1"),
             third,
             four_fifteenths,
+            CanonicalRational(num="9", den="35"),
         )
-        assert result.matrix[1][0] == one
-        assert result.matrix[2][1] == one
-        assert result.matrix[0][1] == third
-        assert result.matrix[1][2] == four_fifteenths
+        assert result.matrix.entries[1][0] == one
+        assert result.matrix.entries[2][1] == one
+        assert result.matrix.entries[0][1] == third
+        assert result.matrix.entries[1][2] == four_fifteenths
+        assert result.row_axis == (0, 1, 2)
+        assert result.column_axis == (0, 1, 2)
+        assert result.family == family
+        assert verify_jacobi_matrix(result)
 
     def test_singleton_family_yields_empty_jacobi_matrix(self) -> None:
         """A family holding only p_0 admits the empty multiplication
@@ -434,9 +478,14 @@ class TestJacobiMatrix:
         )
         result = compute_jacobi_matrix(JacobiMatrixRequest(family=family))
         assert result.alphas == ()
-        assert result.betas == ()
-        assert result.matrix == ()
+        assert result.betas == (CanonicalRational(num="0", den="1"),)
+        assert result.matrix.row_count == 0
+        assert result.matrix.column_count == 0
+        assert result.matrix.entries == ()
         assert result.variable == "x"
+        assert result.row_axis == ()
+        assert result.column_axis == ()
+        assert verify_jacobi_matrix(result)
 
 
 class TestGaussianQuadrature:
@@ -589,16 +638,50 @@ class TestQuadratureSourceBinding:
 
 
 class TestJacobiCrossField:
-    def test_contradictory_jacobi_rejected(self) -> None:
-        from jacobian.math.analysis.orthogonal_polynomials.values import JacobiMatrix
-
-        with pytest.raises(ValidationError):
-            JacobiMatrix(
-                alphas=(CanonicalRational(num="0", den="1"),),
-                betas=(CanonicalRational(num="0", den="1"),),
-                matrix=((CanonicalRational(num="1", den="1"),),),
-                variable="x",
+    def test_jacobi_claim_round_trip_and_forged_relation(self) -> None:
+        family = compute_orthogonal_polynomials(
+            OrthogonalPolynomialRequest(
+                prefix=_prefix(_moments_uniform(7)), max_degree=3
             )
+        )
+        result = compute_jacobi_matrix(JacobiMatrixRequest(family=family))
+        restored = type(result).model_validate_json(
+            result.model_dump_json(), strict=True
+        )
+        assert restored == result
+        assert verify_jacobi_matrix(restored)
+
+        payload = json.loads(result.model_dump_json())
+        payload["matrix"]["entries"][0][2] = {"num": "7", "den": "5"}
+        forged = type(result).model_validate_json(json.dumps(payload), strict=True)
+        assert not verify_jacobi_matrix(forged)
+        assert not verify_jacobi_matrix(restored.model_copy(update={"matrix": None}))
+
+    def test_contradictory_jacobi_is_decodable_but_fails_relation_verifier(
+        self,
+    ) -> None:
+        family = compute_orthogonal_polynomials(
+            OrthogonalPolynomialRequest(
+                prefix=_prefix(_moments_uniform(5)), max_degree=2
+            )
+        )
+        result = compute_jacobi_matrix(JacobiMatrixRequest(family=family))
+        forged = result.model_copy(
+            update={
+                "matrix": result.matrix.model_copy(
+                    update={
+                        "entries": (
+                            (
+                                CanonicalRational(num="9", den="1"),
+                                *result.matrix.entries[0][1:],
+                            ),
+                            *result.matrix.entries[1:],
+                        )
+                    }
+                )
+            }
+        )
+        assert not verify_jacobi_matrix(forged)
 
     def test_off_band_entry_rejected(self) -> None:
         """A nonzero entry outside the tridiagonal band cannot revalidate
@@ -612,15 +695,15 @@ class TestJacobiCrossField:
             )
         )
         result = compute_jacobi_matrix(JacobiMatrixRequest(family=family))
-        rows = [list(row) for row in result.matrix]
+        rows = [list(row) for row in result.matrix.entries]
         assert len(rows) == 3
         rows[0][2] = CanonicalRational(num="7", den="5")
         payload = result.model_dump()
-        payload["matrix"] = [
+        payload["matrix"]["entries"] = [
             [{"num": c.num, "den": c.den} for c in row] for row in rows
         ]
-        with pytest.raises(ValidationError):
-            JacobiMatrix.model_validate(payload)
+        forged = JacobiMatrix.model_validate_json(json.dumps(payload), strict=True)
+        assert not verify_jacobi_matrix(forged)
 
 
 class TestFamilyResidualBasisCheck:
@@ -812,10 +895,9 @@ class TestRecurrenceTupleDimensions:
 
 
 class TestJacobiNormRatioAdmission:
-    def test_unused_terminal_ratio_does_not_gate_admission(self) -> None:
-        """For a two-polynomial family the operation returns [[alpha_0]] and
-        never emits h_1/h_0, so an extreme terminal norm ratio must not
-        reject an otherwise fully representable result."""
+    def test_retained_terminal_recurrence_ratio_is_bounded(self) -> None:
+        """The source-bound recurrence retains beta for every family term,
+        including the terminal norm ratio, so its exact height is admitted."""
 
         def term(
             deg: int,
@@ -844,8 +926,8 @@ class TestJacobiNormRatioAdmission:
             is_positive_definite=True,
         )
         request = JacobiMatrixRequest(family=family)
-        result = compute_jacobi_matrix(request)
-        assert [a.as_fraction() for a in result.alphas] == [Fraction(0)]
+        with pytest.raises(ValueError):
+            compute_jacobi_matrix(request)
 
     def test_zero_norm_ratio_rejected_at_request_boundary(self) -> None:
         """p_0=1, p_1=x, p_2=x^2 with all-zero norms is authorable; parsing
@@ -908,7 +990,7 @@ class TestJacobiNormRatioAdmission:
         )
         result = compute_jacobi_matrix(JacobiMatrixRequest(family=family))
         assert [a.as_fraction() for a in result.alphas] == [Fraction(0)]
-        assert [b.as_fraction() for b in result.betas] == [Fraction(0)]
+        assert [b.as_fraction() for b in result.betas] == [Fraction(0), Fraction(0)]
 
 
 class TestFamilyDefinitenessFlags:

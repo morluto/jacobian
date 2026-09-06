@@ -164,8 +164,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="moment_functional.hankel.compute",
         title="Compute Hankel moment matrix",
-        description="Compute the exact Hankel matrix H_r[i,j] = mu_(i+j) from a bounded "
-        "rational moment prefix, with determinant and rank.",
+        description="Compute a source-bound exact Hankel claim with canonical "
+        "RationalMatrix H_r[i,j] = mu_(i+j), retaining its moment prefix, ordered "
+        "axes, determinant, and rank.",
         request_type=HankelRequest,
         result_type=HankelMomentMatrix,
         run=compute_hankel_matrix,
@@ -173,7 +174,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             OperationExample(
                 name="uniform_hankel",
-                description="Hankel matrix for the uniform measure on [-1,1]: "
+                description="Source-bound Hankel matrix for the uniform measure on [-1,1]: "
                 "mu_k = 2/(k+1) for even k and mu_k = 0 for odd k. The "
                 "prefix must hold at least 2*order+1 moments scaled so the "
                 "exact determinant stays canonical.",
@@ -187,7 +188,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="moment_functional.shifted_hankel.compute",
         title="Compute shifted Hankel moment matrix",
-        description="Compute the exact shifted Hankel matrix H_r^(1)[i,j] = mu_(i+j+1).",
+        description="Compute a source-bound shifted Hankel claim with canonical "
+        "RationalMatrix H_r^(1)[i,j] = mu_(i+j+1), retaining its moment prefix "
+        "and explicit shift.",
         request_type=ShiftedHankelRequest,
         result_type=HankelMomentMatrix,
         run=compute_shifted_hankel,
@@ -195,7 +198,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             OperationExample(
                 name="shifted_hankel_uniform",
-                description="Shifted Hankel matrix for the uniform measure on [-1,1]: "
+                description="Source-bound shifted Hankel matrix for the uniform measure on [-1,1]: "
                 "odd moments vanish, so H^(1) reads mu_1..mu_(2*order+1). "
                 "The prefix must hold at least 2*order+2 moments within the "
                 "determinant height bound.",
@@ -313,7 +316,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="orthogonal_polynomial.jacobi_matrix.compute",
         title="Compute the finite Jacobi matrix",
-        description="Compute the exact finite tridiagonal Jacobi matrix from an "
+        description="Compute a source-bound finite Jacobi claim with canonical "
+        "RationalMatrix axes and the retained three-term recurrence from an "
         "orthogonal polynomial family.",
         request_type=JacobiMatrixRequest,
         result_type=JacobiMatrix,

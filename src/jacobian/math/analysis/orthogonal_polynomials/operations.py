@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from typing import Literal
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.math._rational_height import RationalHeight
@@ -13,6 +14,8 @@ from jacobian.math.analysis.orthogonal_polynomials._jacobi import (
 )
 from jacobian.math.analysis.orthogonal_polynomials.values import (
     MAX_HANKEL_ORDER,
+    MAX_MOMENT_DEGREE,
+    MAX_POLYNOMIAL_DEGREE,
     ChristoffelDarbouxKernel,
     GaussianQuadratureRule,
     HankelMomentMatrix,
@@ -23,6 +26,7 @@ from jacobian.math.analysis.orthogonal_polynomials.values import (
     QuadratureNode,
     ThreeTermRecurrence,
 )
+from jacobian.math.matrices.values import RationalMatrix, rational_matrix_from_fractions
 
 
 class HankelMatrixAdmissionError(ValueError):
@@ -154,15 +158,16 @@ def hankel_matrix_from_prefix(
     )
 
     determinant, rank = determinant_and_rank(matrix)
+    shift: Literal[0, 1] = 1 if shifted else 0
     return HankelMomentMatrix._from_kernel(
+        prefix=prefix,
         order=order,
-        entries=tuple(
-            tuple(_from_fraction(matrix[i][j]) for j in range(order + 1))
-            for i in range(order + 1)
+        shift=shift,
+        matrix=rational_matrix_from_fractions(
+            matrix,
         ),
         determinant=_from_fraction(determinant),
         rank=rank,
-        variable=prefix.variable,
     )
 
 
@@ -682,6 +687,147 @@ def shifted_hankel_matrix(
     return hankel_matrix_from_prefix(prefix, order, shifted=True)
 
 
+def verify_hankel_matrix(claim: HankelMomentMatrix) -> bool:
+    """Verify a serialized Hankel claim against its retained source.
+
+    Result decoding deliberately checks only the canonical carrier and its
+    axes.  This bounded consumer owns the source moment identity and the
+    determinant/rank claims, and returns ``False`` for malformed values that
+    can be created with ``model_copy(update=...)``.
+    """
+    try:
+        if not isinstance(claim, HankelMomentMatrix):
+            return False
+        if not isinstance(claim.prefix, MomentFunctionalPrefix):
+            return False
+        if (
+            not isinstance(claim.shift, int)
+            or isinstance(claim.shift, bool)
+            or claim.shift not in (0, 1)
+        ):
+            return False
+        if len(claim.prefix.moments) > MAX_MOMENT_DEGREE + 1:
+            return False
+        matrix = claim.matrix
+        if not isinstance(matrix, RationalMatrix):
+            return False
+        side = matrix.row_count
+        if side < 1 or side > MAX_HANKEL_ORDER + 1:
+            return False
+        if matrix.column_count != side or claim.order != side - 1:
+            return False
+        if not isinstance(claim.prefix.variable, str) or not all(
+            isinstance(value, CanonicalRational) for value in claim.prefix.moments
+        ):
+            return False
+        if any(
+            len(row) != side
+            or not all(isinstance(value, CanonicalRational) for value in row)
+            for row in matrix.entries
+        ):
+            return False
+        if claim.row_axis != tuple(range(side)) or claim.column_axis != tuple(
+            range(side)
+        ):
+            return False
+        if not isinstance(claim.determinant, CanonicalRational):
+            return False
+        if not isinstance(claim.rank, int) or isinstance(claim.rank, bool):
+            return False
+        if not 0 <= claim.rank <= side:
+            return False
+        require_hankel_matrix_admission(
+            claim.prefix, claim.order, shifted=bool(claim.shift)
+        )
+        expected = hankel_matrix_from_prefix(
+            claim.prefix, claim.order, shifted=bool(claim.shift)
+        )
+        return expected == claim
+    except Exception:
+        return False
+
+
+def verify_jacobi_matrix(claim: JacobiMatrix) -> bool:  # noqa: C901
+    """Verify a serialized Jacobi claim at the consumer boundary.
+
+    The check is intentionally separate from ``JacobiMatrix`` decoding: it
+    establishes both the retained family recurrence and the matrix's
+    tridiagonal representation, with all dimensions bounded by the public
+    orthogonal-polynomial value limits.
+    """
+    try:
+        if not isinstance(claim, JacobiMatrix):
+            return False
+        family = claim.family
+        recurrence = claim.recurrence
+        if not isinstance(family, OrthogonalPolynomialFamily):
+            return False
+        if not isinstance(recurrence, ThreeTermRecurrence):
+            return False
+        size = len(recurrence.alpha)
+        if size > MAX_POLYNOMIAL_DEGREE or len(family.polynomials) != size + 1:
+            return False
+        if len(recurrence.beta) != size + 1:
+            return False
+        if not isinstance(family.variable, str) or not isinstance(
+            recurrence.variable, str
+        ):
+            return False
+        for index, term in enumerate(family.polynomials):
+            if not isinstance(term, OrthogonalPolynomialTerm):
+                return False
+            if term.degree != index or len(term.coefficients) != index + 1:
+                return False
+            if not all(
+                isinstance(value, CanonicalRational) for value in term.coefficients
+            ) or not isinstance(term.squared_norm, CanonicalRational):
+                return False
+        if not all(
+            isinstance(value, CanonicalRational)
+            for value in (*recurrence.alpha, *recurrence.beta)
+        ):
+            return False
+        matrix = claim.matrix
+        if not isinstance(matrix, RationalMatrix):
+            return False
+        if (
+            matrix.row_count != size
+            or matrix.column_count != size
+            or claim.row_axis != tuple(range(size))
+            or claim.column_axis != tuple(range(size))
+        ):
+            return False
+        if any(
+            len(row) != size
+            or not all(isinstance(value, CanonicalRational) for value in row)
+            for row in matrix.entries
+        ):
+            return False
+        if recurrence.variable != family.variable:
+            return False
+        alphas = [value.as_fraction() for value in recurrence.alpha]
+        betas = [value.as_fraction() for value in recurrence.beta]
+        require_three_term_identities(family, alphas, betas)
+        zero = Fraction(0)
+        one = Fraction(1)
+        for i, row in enumerate(matrix.entries):
+            for j, value in enumerate(row):
+                expected = (
+                    alphas[i]
+                    if i == j
+                    else one
+                    if i == j + 1
+                    else betas[i + 1]
+                    if j == i + 1
+                    else zero
+                )
+                if value.as_fraction() != expected:
+                    return False
+        return True
+    except Exception:
+        return False
+
+
 def orthogonal_polynomials(
     prefix: MomentFunctionalPrefix, max_degree: int
 ) -> OrthogonalPolynomialFamily:
@@ -732,4 +878,6 @@ __all__ = [
     "recurrence_coefficients",
     "shifted_hankel_matrix",
     "verify_definiteness",
+    "verify_hankel_matrix",
+    "verify_jacobi_matrix",
 ]

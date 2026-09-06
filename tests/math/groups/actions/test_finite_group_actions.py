@@ -526,7 +526,9 @@ class TestBounds:
             OperationDomainValidationError, match="between 1 and"
         ) as error:
             polya_inventory(_cyclic_c3(), MAX_COLORS + 1)
-        assert error.value.errors()[0]["type"] == "finite_group_action.colors_out_of_range"
+        assert (
+            error.value.errors()[0]["type"] == "finite_group_action.colors_out_of_range"
+        )
 
     def test_polya_term_output_bound_is_admitted_before_completion(self) -> None:
         # Five fixed points with twenty colours have more than MAX_TERMS
@@ -536,7 +538,10 @@ class TestBounds:
             OperationDomainValidationError, match="more than the bounded maximum"
         ) as error:
             polya_inventory(_trivial(5), 20)
-        assert error.value.errors()[0]["type"] == "finite_group_action.polya_terms_exceeded"
+        assert (
+            error.value.errors()[0]["type"]
+            == "finite_group_action.polya_terms_exceeded"
+        )
 
     def test_polya_fixed_points_use_bounded_dynamic_program(self) -> None:
         # The old Cartesian product would require 2**50 assignments. The
@@ -544,7 +549,9 @@ class TestBounds:
         result = polya_inventory(_trivial(50), 2)
         assert len(result.terms) == 51
 
-    def test_polya_weighted_preflight_rejects_order_5184_action(self, monkeypatch) -> None:
+    def test_polya_weighted_preflight_rejects_order_5184_action(
+        self, monkeypatch
+    ) -> None:
         action = _order_5184_action()
         group = _enumerate_group(action)
         assert len(group) == 5_184
@@ -566,7 +573,9 @@ class TestBounds:
             OperationDomainValidationError, match="dynamic-programming work"
         ) as error:
             polya_inventory(action, 2)
-        assert error.value.errors()[0]["type"] == "finite_group_action.polya_work_exceeded"
+        assert (
+            error.value.errors()[0]["type"] == "finite_group_action.polya_work_exceeded"
+        )
         # One cycle-type pass is the preflight; a second pass would mean DP
         # started after the bound had already rejected the request.
         assert calls == len(group)

@@ -84,9 +84,7 @@ def test_action_claim_verifiers_are_total() -> None:
 def test_polya_verifier_rejects_out_of_bound_model_copy() -> None:
     """Verifier admission remains bounded when a caller bypasses validation."""
     action = FinitePermutationAction(domain=("a", "b"), generators=((1, 0),))
-    claim = polya_inventory(action, 2).model_copy(
-        update={"colors": MAX_COLORS + 1}
-    )
+    claim = polya_inventory(action, 2).model_copy(update={"colors": MAX_COLORS + 1})
     assert verify_polya_inventory(claim) is False
 
 

@@ -247,10 +247,7 @@ def _polya_terms_from_group(
         raise OperationDomainValidationError(
             location=("colors",),
             code="finite_group_action.colors_out_of_range",
-            message=(
-                "colors must be an integer between 1 and "
-                f"{MAX_COLORS}"
-            ),
+            message=(f"colors must be an integer between 1 and {MAX_COLORS}"),
         )
     estimated_work = _polya_work_upper_bound(group, colors)
     if estimated_work > MAX_POLYA_WORK:
@@ -308,9 +305,7 @@ def _polya_terms_from_group(
     return tuple(terms)
 
 
-def _polya_work_upper_bound(
-    group: tuple[tuple[int, ...], ...], colors: int
-) -> int:
+def _polya_work_upper_bound(group: tuple[tuple[int, ...], ...], colors: int) -> int:
     """Return a conservative transition count for weighted cycle DP states."""
     estimated_work = 0
     for permutation in group:
@@ -586,7 +581,10 @@ def verify_burnside_count(claim: BurnsideCountResult) -> bool:
         if claim.group_order != len(group):
             return False
         contributions = tuple(
-            sum(permutation[position] == position for position in range(len(permutation)))
+            sum(
+                permutation[position] == position
+                for position in range(len(permutation))
+            )
             for permutation in group
         )
         total = sum(contributions)

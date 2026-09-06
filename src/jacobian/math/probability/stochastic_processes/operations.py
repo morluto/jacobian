@@ -95,7 +95,11 @@ def _sigma_from_observation(
     for sample, obs in zip(space.samples, observation, strict=True):
         fibers.setdefault(obs, set()).add(sample)
     blocks = tuple(tuple(sorted(f)) for f in fibers.values())
-    return FiniteSigmaAlgebra(space=space, blocks=blocks)
+    result = FiniteSigmaAlgebra(space=space, blocks=blocks)
+    # Construction is structural; admit the generated partition once at the
+    # operation boundary before publishing it to callers.
+    admit_partition(result)
+    return result
 
 
 def sigma_algebra_join(

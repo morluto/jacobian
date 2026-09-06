@@ -1,6 +1,9 @@
 """Typed contracts for the hypergraph vertex containment operation."""
 
-from pydantic import Field
+from typing import Self
+
+from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalInteger, CanonicalRational
 from jacobian._models import StrictModel
@@ -36,6 +39,21 @@ class HypergraphVertexContainmentResult(StrictModel):
     total_state_count: CanonicalInteger
     success_count: CanonicalInteger
     probability: CanonicalRational
+
+    @model_validator(mode="after")
+    def bind_cardinality_axis(self) -> Self:
+        expected = tuple(range(len(self.hypergraph.vertices) + 1))
+        if self.cardinality_axis != expected:
+            raise PydanticCustomError(
+                "hypergraph_containment.cardinality_axis_mismatch",
+                "cardinality_axis must cover every subset cardinality in order",
+            )
+        if len(self.containing_subset_counts) != len(expected):
+            raise PydanticCustomError(
+                "hypergraph_containment.profile_length_mismatch",
+                "containing subset counts must align with cardinality_axis",
+            )
+        return self
 
 
 __all__ = [

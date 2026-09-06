@@ -44,7 +44,7 @@ def test_native_surface_accepts_canonical_partition_values() -> None:
     partition = IntegerPartition(parts=(2, 1))
 
     assert partition_conjugate(partition).parts == (2, 1)
-    assert schur_evaluation(partition, (1, 1)).value == "2"
+    assert schur_evaluation(partition, (1, 1)).value == 2
 
 
 def test_schur_result_round_trip_and_verifier() -> None:
@@ -58,6 +58,35 @@ def test_schur_result_round_trip_and_verifier() -> None:
     decoded = type(result).model_validate_json(result.model_dump_json())
     assert verify_schur_evaluation(decoded)
     assert not verify_schur_evaluation(decoded.model_copy(update={"value": "99"}))
+    assert result.model_dump(mode="json")["value"] == "5"
+
+    forged_axis = decoded.model_copy(update={"variables": ("u", "u")})
+    assert not verify_schur_evaluation(forged_axis)
+
+
+def test_schur_result_axis_is_structural() -> None:
+    partition = IntegerPartition(parts=(1,))
+    with pytest.raises(ValidationError) as error:
+        SchurExpansionResult(
+            partition=partition,
+            variables=("x", "x"),
+            point=(1, 2),
+            value=3,
+        )
+    assert error.value.errors()[0]["type"] == (
+        "symmetric_function.schur_variables_not_distinct"
+    )
+
+    with pytest.raises(ValidationError) as error:
+        SchurExpansionResult(
+            partition=partition,
+            variables=("x", "y"),
+            point=(1,),
+            value=1,
+        )
+    assert error.value.errors()[0]["type"] == (
+        "symmetric_function.schur_dimensions_mismatch"
+    )
 
 
 def test_conjugate_self_conjugate_partition() -> None:
@@ -108,7 +137,7 @@ def test_schur_single_variable_one() -> None:
             point=(1,),
         )
     )
-    assert result.value == "1"
+    assert result.value == 1
 
 
 def test_schur_complete_homogeneous_at_ones() -> None:
@@ -120,7 +149,7 @@ def test_schur_complete_homogeneous_at_ones() -> None:
             point=(1, 1),
         )
     )
-    assert result.value == "3"
+    assert result.value == 3
 
 
 def test_schur_elementary_at_ones() -> None:
@@ -132,7 +161,7 @@ def test_schur_elementary_at_ones() -> None:
             point=(1, 1),
         )
     )
-    assert result.value == "1"
+    assert result.value == 1
 
 
 def test_schur_at_origin() -> None:
@@ -143,7 +172,7 @@ def test_schur_at_origin() -> None:
             point=(0, 0, 0),
         )
     )
-    assert result.value == "0"
+    assert result.value == 0
 
 
 def test_partition_rejects_non_decreasing() -> None:
@@ -246,4 +275,4 @@ def test_schur_accepts_boundary_partition_length() -> None:
         point=(0,),
     )
     assert isinstance(request.partition, IntegerPartition)
-    assert compute_schur_evaluation(request).value == "0"
+    assert compute_schur_evaluation(request).value == 0

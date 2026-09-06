@@ -53,6 +53,14 @@ def test_native_profile_returns_the_canonical_result() -> None:
     assert result.eccentricities[0].point == 0
 
 
+def test_profile_result_rejects_misaligned_point_axis() -> None:
+    result = metric_profile(_ms([[0, 1], [1, 0]]))
+    forged = result.model_dump(mode="json")
+    forged["eccentricities"][0]["point"] = 1
+    with pytest.raises(ValidationError, match="point axis"):
+        type(result).model_validate(forged)
+
+
 def test_profile_complete_graph() -> None:
     """Complete graph K3: all eccentricities = 1, diameter = radius = 1."""
     ms = _ms([[0, 1, 1], [1, 0, 1], [1, 1, 0]])
@@ -100,6 +108,14 @@ def test_native_ball_rejects_invalid_bounds() -> None:
         ball(ms, center=2, radius=1)
     with pytest.raises(ValueError, match="non-negative"):
         ball(ms, center=0, radius=-1)
+
+
+def test_ball_result_rejects_points_outside_source_axis() -> None:
+    result = ball(_ms([[0, 1], [1, 0]]), center=0, radius=1)
+    forged = result.model_dump(mode="json")
+    forged["points"] = [0, 2]
+    with pytest.raises(ValidationError, match="within the metric space"):
+        type(result).model_validate(forged)
 
 
 def test_gromov_hyperbolicity_path_graph() -> None:

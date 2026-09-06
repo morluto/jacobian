@@ -3,6 +3,9 @@ from __future__ import annotations
 from fractions import Fraction
 from math import comb
 
+import pytest
+from pydantic import ValidationError
+
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import parse_canonical_integer
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
@@ -231,3 +234,14 @@ def test_dominated_edges_are_removed_before_work_admission() -> None:
     )
 
     assert parse_canonical_integer(result.success_count) == 1 << 12
+
+
+def test_result_rejects_incomplete_cardinality_axis() -> None:
+    hg = _hg(["a", "b"], [("e", ("a",))])
+    result = compute_hypergraph_vertex_containment(
+        hg, CanonicalRational.from_fraction(Fraction(1, 2))
+    )
+    forged = result.model_dump(mode="json")
+    forged["cardinality_axis"] = []
+    with pytest.raises(ValidationError, match="every subset cardinality"):
+        type(result).model_validate(forged)

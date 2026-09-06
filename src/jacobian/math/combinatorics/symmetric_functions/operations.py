@@ -85,6 +85,12 @@ def schur_evaluation(
             code="symmetric_function.schur_dimensions_mismatch",
             message="variables and point must have the same length",
         )
+    if len(set(variables)) != len(variables):
+        raise OperationDomainValidationError(
+            location=("variables",),
+            code="symmetric_function.schur_variables_not_distinct",
+            message="variables must be distinct (duplicate axis)",
+        )
     parts = list(partition.parts)
     n = len(parts)
     if not parts:
@@ -92,7 +98,7 @@ def schur_evaluation(
             partition=partition,
             variables=variables,
             point=point,
-            value=format_canonical_integer(1),
+            value=1,
         )
 
     def h(k: int) -> int:
@@ -107,20 +113,26 @@ def schur_evaluation(
             matrix[i][j] = h(parts[i] - (i + 1) + (j + 1))
 
     result = _determinant(matrix)
+    if len(format_canonical_integer(result).lstrip("-")) > 4_000:
+        raise OperationDomainValidationError(
+            location=("point",),
+            code="symmetric_function.schur_value_digits_exceeded",
+            message="Schur value exceeds the 4,000-digit output bound",
+        )
     return SchurExpansionResult(
         partition=partition,
         variables=variables,
         point=point,
-        value=format_canonical_integer(result),
+        value=result,
     )
 
 
 def verify_schur_evaluation(claim: SchurExpansionResult) -> bool:
     try:
-        expected = schur_evaluation(claim.partition, claim.point)
+        expected = schur_evaluation(claim.partition, claim.point, claim.variables)
     except (OperationDomainValidationError, TypeError, ValueError):
         return False
-    return expected.value == claim.value and len(claim.variables) == len(claim.point)
+    return expected == claim
 
 
 def _determinant(matrix: list[list[int]]) -> int:

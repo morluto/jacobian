@@ -91,6 +91,15 @@ class TestDerivation:
         )
         assert result.derived.indices == (0,)
 
+    def test_result_rejects_subset_from_another_context(self) -> None:
+        result = compute_object_derivation(
+            ObjectSubsetRequest(context=_cross_context(), subset=(0,))
+        )
+        forged = result.model_dump(mode="json")
+        forged["subset"]["context"] = _diagonal_context().model_dump(mode="json")
+        with pytest.raises(ValidationError, match="retained context"):
+            type(result).model_validate(forged)
+
     def test_empty_attribute_set_derives_all_objects(self) -> None:
         result = compute_attribute_derivation(
             AttributeSubsetRequest(context=_cross_context(), subset=())

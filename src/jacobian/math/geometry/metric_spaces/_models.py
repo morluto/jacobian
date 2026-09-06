@@ -69,6 +69,24 @@ class MetricProfileResult(StrictModel):
     centers: tuple[int, ...] = Field(min_length=1)
     periphery: tuple[int, ...] = Field(min_length=0)
 
+    @model_validator(mode="after")
+    def bind_point_axes(self) -> Self:
+        expected = tuple(range(self.metric_space.point_count))
+        if tuple(value.point for value in self.eccentricities) != expected:
+            raise _validation_error(
+                "eccentricity_axis_mismatch",
+                "eccentricities must cover the metric-space point axis in order",
+            )
+        for name, values in (("centers", self.centers), ("periphery", self.periphery)):
+            if tuple(sorted(set(values))) != values or any(
+                point not in expected for point in values
+            ):
+                raise _validation_error(
+                    f"{name}_axis_mismatch",
+                    f"{name} must be sorted unique indices on the metric-space point axis",
+                )
+        return self
+
 
 class BallRequest(StrictModel):
     """Compute the ball of given radius centered at a point."""
@@ -94,6 +112,23 @@ class BallResult(StrictModel):
     center: int = Field(ge=0, le=MAX_POINTS - 1)
     radius: int = Field(ge=0, le=MAX_DISTANCE)
     points: tuple[int, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def bind_point_axes(self) -> Self:
+        point_count = self.metric_space.point_count
+        if self.center >= point_count:
+            raise _validation_error(
+                "ball_center_out_of_range",
+                "ball center index must be within the metric space",
+            )
+        if tuple(sorted(set(self.points))) != self.points or any(
+            not 0 <= point < point_count for point in self.points
+        ):
+            raise _validation_error(
+                "ball_points_axis_mismatch",
+                "ball points must be sorted unique indices within the metric space",
+            )
+        return self
 
 
 class GromovHyperbolicityRequest(StrictModel):

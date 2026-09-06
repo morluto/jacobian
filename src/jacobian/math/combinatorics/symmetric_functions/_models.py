@@ -8,8 +8,9 @@ from pydantic import Field, WithJsonSchema, model_validator
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import NativeInteger
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.combinatorics.symmetric_functions.values import (
     MAX_PARTITION_SIZE,
     IntegerPartition,
@@ -125,13 +126,30 @@ class SchurExpansionRequest(StrictModel):
 
 class SchurExpansionResult(StrictModel):
     partition: IntegerPartition
-    variables: tuple[str, ...]
-    point: tuple[PointCoordinate, ...]
-    value: CanonicalInteger
+    variables: tuple[str, ...] = Field(
+        min_length=1,
+        max_length=20,
+        json_schema_extra={"uniqueItems": True},
+    )
+    point: tuple[PointCoordinate, ...] = Field(min_length=1, max_length=20)
+    value: NativeInteger
 
     @model_validator(mode="after")
-    def require_bounded_value(self) -> Self:
-        if len(self.value.lstrip("-")) > _MAX_SCHUR_RESULT_DIGITS:
+    def require_structural_contract(self) -> Self:
+        if len(self.variables) != len(self.point):
+            raise _validation_error(
+                "schur_dimensions_mismatch",
+                "variables and point must have the same length",
+            )
+        if len(set(self.variables)) != len(self.variables):
+            raise _validation_error(
+                "schur_variables_not_distinct",
+                "variables must be distinct (duplicate axis)",
+            )
+        if (
+            len(format_canonical_integer(self.value).lstrip("-"))
+            > _MAX_SCHUR_RESULT_DIGITS
+        ):
             raise _validation_error(
                 "schur_value_digits_exceeded",
                 "Schur value exceeds the output digit bound",

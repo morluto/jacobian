@@ -118,6 +118,27 @@ class DerivationResult(StrictModel):
     side: Literal["OBJECT", "ATTRIBUTE"]
     derived: FormalObjectSubset | FormalAttributeSubset
 
+    @model_validator(mode="after")
+    def bind_axes_to_context(self) -> Self:
+        expected = (
+            (FormalObjectSubset, FormalAttributeSubset)
+            if self.side == "OBJECT"
+            else (FormalAttributeSubset, FormalObjectSubset)
+        )
+        if not isinstance(self.subset, expected[0]) or not isinstance(
+            self.derived, expected[1]
+        ):
+            raise PydanticCustomError(
+                "formal_concept_analysis.derivation_axis_mismatch",
+                "derivation subset and result axes must agree with side",
+            )
+        if self.subset.context != self.context or self.derived.context != self.context:
+            raise PydanticCustomError(
+                "formal_concept_analysis.result_context_mismatch",
+                "derived subsets must use the retained context",
+            )
+        return self
+
 
 class ClosureResult(StrictModel):
     """The closure A'' or B'' with added elements and closed status."""
@@ -130,6 +151,32 @@ class ClosureResult(StrictModel):
     added: FormalObjectSubset | FormalAttributeSubset
     is_closed: bool
 
+    @model_validator(mode="after")
+    def bind_axes_to_context(self) -> Self:
+        same_axis = (
+            FormalObjectSubset if self.side == "OBJECT" else FormalAttributeSubset
+        )
+        derived_axis = (
+            FormalAttributeSubset if self.side == "OBJECT" else FormalObjectSubset
+        )
+        if not all(
+            isinstance(value, same_axis)
+            for value in (self.subset, self.closure, self.added)
+        ) or not isinstance(self.derived, derived_axis):
+            raise PydanticCustomError(
+                "formal_concept_analysis.closure_axis_mismatch",
+                "closure subsets must agree with the declared side",
+            )
+        if any(
+            value.context != self.context
+            for value in (self.subset, self.closure, self.derived, self.added)
+        ):
+            raise PydanticCustomError(
+                "formal_concept_analysis.result_context_mismatch",
+                "closure subsets must use the retained context",
+            )
+        return self
+
 
 class ConceptResult(StrictModel):
     """A formal concept (extent, intent)."""
@@ -139,6 +186,26 @@ class ConceptResult(StrictModel):
     side: Literal["OBJECT", "ATTRIBUTE"]
     extent: FormalObjectSubset
     intent: FormalAttributeSubset
+
+    @model_validator(mode="after")
+    def bind_axes_to_context(self) -> Self:
+        subset_axis = (
+            FormalObjectSubset if self.side == "OBJECT" else FormalAttributeSubset
+        )
+        if not isinstance(self.subset, subset_axis):
+            raise PydanticCustomError(
+                "formal_concept_analysis.concept_axis_mismatch",
+                "concept input subset must agree with the declared side",
+            )
+        if any(
+            value.context != self.context
+            for value in (self.subset, self.extent, self.intent)
+        ):
+            raise PydanticCustomError(
+                "formal_concept_analysis.result_context_mismatch",
+                "concept subsets must use the retained context",
+            )
+        return self
 
 
 class EnumerateConceptsRequest(StrictModel):
@@ -154,6 +221,15 @@ class EnumerateConceptsResult(StrictModel):
     concepts: tuple[FormalConcept, ...]
     count: int = Field(ge=0)
 
+    @model_validator(mode="after")
+    def bind_concepts_to_context(self) -> Self:
+        if any(concept.context != self.context for concept in self.concepts):
+            raise PydanticCustomError(
+                "formal_concept_analysis.result_context_mismatch",
+                "enumerated concepts must use the retained context",
+            )
+        return self
+
 
 class ConceptLatticeResult(StrictModel):
     """The concept lattice with order, covers, top, and bottom."""
@@ -164,6 +240,15 @@ class ConceptLatticeResult(StrictModel):
     covers: tuple[tuple[int, int], ...]
     top: int | None = None
     bottom: int | None = None
+
+    @model_validator(mode="after")
+    def bind_concepts_to_context(self) -> Self:
+        if any(concept.context != self.context for concept in self.concepts):
+            raise PydanticCustomError(
+                "formal_concept_analysis.result_context_mismatch",
+                "lattice concepts must use the retained context",
+            )
+        return self
 
 
 __all__ = [

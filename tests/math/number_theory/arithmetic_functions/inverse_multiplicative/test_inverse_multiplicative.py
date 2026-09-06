@@ -1,5 +1,6 @@
 """Tests for inverse multiplicative function operations."""
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.number_theory.arithmetic_functions.inverse_multiplicative import (
     euler_phi_preimage_count,
     euler_phi_preimage_power_sum,
@@ -7,7 +8,9 @@ from jacobian.math.number_theory.arithmetic_functions.inverse_multiplicative imp
 )
 from jacobian.math.number_theory.arithmetic_functions.inverse_multiplicative._models import (
     EulerPhiPowerSumRequest,
+    EulerPhiPowerSumResult,
     EulerPhiPreimageCountRequest,
+    EulerPhiPreimageCountResult,
     EulerPhiPreimageRequest,
 )
 from jacobian.math.number_theory.arithmetic_functions.inverse_multiplicative._tools import (
@@ -32,6 +35,21 @@ def test_preimage_of_1() -> None:
     assert result.preimage == (1, 2)
     assert result.count == 2
     assert euler_phi_preimages(1) == result.preimage
+    assert result.model_dump(mode="json") == {
+        "target": "1",
+        "preimage": ["1", "2"],
+        "count": "2",
+    }
+
+
+def test_inverse_totient_results_accept_large_canonical_integer_strings() -> None:
+    large = "1" + "0" * 5_000
+    result = EulerPhiPreimageCountResult(target=1, count=large)
+    assert format_canonical_integer(result.count) == large
+    assert result.model_dump(mode="json")["count"] == large
+    power = EulerPhiPowerSumResult(target="1", exponent="1", power_sum=large, count="2")
+    assert format_canonical_integer(power.power_sum) == large
+    assert power.model_dump(mode="json")["power_sum"] == large
 
 
 def test_preimage_count_of_1() -> None:

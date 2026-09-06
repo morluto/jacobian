@@ -2,6 +2,7 @@
 
 from sympy import isprime
 
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.arithmetic_functions.inverse_multiplicative._models import (
     MAX_N,
@@ -10,6 +11,23 @@ from jacobian.math.number_theory.arithmetic_functions.inverse_multiplicative._mo
     EulerPhiPreimageCountResult,
     EulerPhiPreimageResult,
 )
+
+MAX_INVERSE_TOTIENT_RESULT_DIGITS = 32_768
+
+
+def _require_result_digits(value: int, *, label: str) -> None:
+    if (
+        len(format_canonical_integer(value).lstrip("-"))
+        > MAX_INVERSE_TOTIENT_RESULT_DIGITS
+    ):
+        raise OperationDomainValidationError(
+            location=("target",),
+            code="inverse_totient.result_digits_exceeded",
+            message=(
+                f"{label} exceeds the {MAX_INVERSE_TOTIENT_RESULT_DIGITS}-digit "
+                "exact result bound"
+            ),
+        )
 
 
 def _admit_target(target: int) -> None:
@@ -63,7 +81,11 @@ def euler_phi_preimages(target: int) -> tuple[int, ...]:
                 power *= prime
         return results
 
-    return tuple(sorted(solve(target, len(candidate_primes))))
+    preimages = tuple(sorted(solve(target, len(candidate_primes))))
+    for value in preimages:
+        _require_result_digits(value, label="preimage")
+    _require_result_digits(len(preimages), label="preimage count")
+    return preimages
 
 
 def euler_phi_preimage_count(target: int) -> int:
@@ -82,7 +104,24 @@ def euler_phi_preimage_power_profile(target: int, exponent: int) -> tuple[int, i
             message=(f"exponent must lie between 1 and {MAX_POWER_SUM_EXPONENT}"),
         )
     preimage = euler_phi_preimages(target)
-    return sum(value**exponent for value in preimage), len(preimage)
+    maximum_digits = max(
+        (len(format_canonical_integer(value).lstrip("-")) for value in preimage),
+        default=1,
+    )
+    upper_bound_digits = len(str(len(preimage))) + exponent * maximum_digits
+    if upper_bound_digits > MAX_INVERSE_TOTIENT_RESULT_DIGITS:
+        raise OperationDomainValidationError(
+            location=("target", "exponent"),
+            code="inverse_totient.result_digits_exceeded",
+            message=(
+                "the exact power sum may exceed the "
+                f"{MAX_INVERSE_TOTIENT_RESULT_DIGITS}-digit result bound"
+            ),
+        )
+    power_sum = sum(value**exponent for value in preimage)
+    _require_result_digits(power_sum, label="power sum")
+    _require_result_digits(len(preimage), label="preimage count")
+    return power_sum, len(preimage)
 
 
 def euler_phi_preimage_power_sum(target: int, exponent: int) -> int:

@@ -336,6 +336,15 @@ class FormalConcept(StrictModel):
     extent: FormalObjectSubset
     intent: FormalAttributeSubset
 
+    @model_validator(mode="after")
+    def bind_subsets_to_context(self) -> Self:
+        if self.extent.context != self.context or self.intent.context != self.context:
+            raise PydanticCustomError(
+                "formal_concept_analysis.concept_context_mismatch",
+                "concept extent and intent must use the retained context",
+            )
+        return self
+
 
 __all__ = [
     "MAX_ATTRIBUTES",

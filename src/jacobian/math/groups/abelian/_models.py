@@ -54,8 +54,8 @@ class AbelianPresentation(StrictModel):
         return self
 
 
-class PresentationNormalizeRequest(StrictModel):
-    """A bounded finite cyclic-factor presentation to normalize exactly.
+class CyclicFactorPresentation(StrictModel):
+    """A bounded finite cyclic-factor presentation before normalization.
 
     The factors describe a direct product of finite cyclic groups and need not
     already satisfy the invariant-factor divisibility convention.  The
@@ -90,9 +90,27 @@ class PresentationNormalizeRequest(StrictModel):
         return self
 
 
+class PresentationNormalizeRequest(StrictModel):
+    """Transport projection for a cyclic-factor presentation."""
+
+    invariant_factors: tuple[NativeInteger, ...] = Field(
+        min_length=0,
+        max_length=MAX_ORDERS,
+        description=(
+            "Finite cyclic-factor orders to normalize; input order and "
+            "divisibility need not be canonical."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_bounded_finite_presentation(self) -> Self:
+        CyclicFactorPresentation(invariant_factors=self.invariant_factors)
+        return self
+
+
 class ElementReduceRequest(StrictModel):
     group: AbelianPresentation
-    coordinates: tuple[NativeInteger, ...] = Field(min_length=1, max_length=MAX_ORDERS)
+    coordinates: tuple[NativeInteger, ...] = Field(min_length=0, max_length=MAX_ORDERS)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
@@ -107,10 +125,10 @@ class ElementReduceRequest(StrictModel):
 class ElementEqualRequest(StrictModel):
     group: AbelianPresentation
     coordinates_a: tuple[NativeInteger, ...] = Field(
-        min_length=1, max_length=MAX_ORDERS
+        min_length=0, max_length=MAX_ORDERS
     )
     coordinates_b: tuple[NativeInteger, ...] = Field(
-        min_length=1, max_length=MAX_ORDERS
+        min_length=0, max_length=MAX_ORDERS
     )
 
     @model_validator(mode="after")
@@ -130,7 +148,7 @@ class ElementEqualRequest(StrictModel):
 
 class ElementOrderRequest(StrictModel):
     group: AbelianPresentation
-    coordinates: tuple[NativeInteger, ...] = Field(min_length=1, max_length=MAX_ORDERS)
+    coordinates: tuple[NativeInteger, ...] = Field(min_length=0, max_length=MAX_ORDERS)
 
     @model_validator(mode="after")
     def require_valid(self) -> Self:
@@ -255,7 +273,7 @@ class AbelianQuotient(StrictModel):
 class PresentationNormalizeResult(StrictModel):
     """The canonical finite abelian-group presentation."""
 
-    source: PresentationNormalizeRequest
+    source: CyclicFactorPresentation
     presentation: AbelianPresentation
 
     @property

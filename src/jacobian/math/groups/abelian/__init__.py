@@ -5,6 +5,7 @@ from jacobian.math.groups.abelian._models import (
     AbelianPresentation,
     AbelianQuotient,
     AbelianSubgroup,
+    CyclicFactorPresentation,
 )
 from jacobian.math.groups.abelian.operations import (
     element_order,
@@ -26,6 +27,7 @@ __all__ = [
     "AbelianPresentation",
     "AbelianQuotient",
     "AbelianSubgroup",
+    "CyclicFactorPresentation",
     "element_order",
     "elements_equal",
     "generated_subgroup",

@@ -9,10 +9,10 @@ from jacobian.math.groups.abelian._models import (
     AbelianPresentation,
     AbelianQuotient,
     AbelianSubgroup,
+    CyclicFactorPresentation,
     ElementEqualResult,
     ElementOrderResult,
     ElementReduceResult,
-    PresentationNormalizeRequest,
     PresentationNormalizeResult,
     QuotientResult,
     SubgroupGeneratedResult,
@@ -20,17 +20,17 @@ from jacobian.math.groups.abelian._models import (
 
 
 def normalize_presentation(
-    invariant_factors: tuple[int, ...],
+    source: CyclicFactorPresentation,
 ) -> PresentationNormalizeResult:
     from sympy import Matrix, diag
     from sympy.matrices.normalforms import smith_normal_form
 
-    matrix = Matrix(diag(*invariant_factors))
+    matrix = Matrix(diag(*source.invariant_factors))
     smith = smith_normal_form(matrix, domain=None)
     factors = tuple(int(smith[i, i]) for i in range(min(smith.rows, smith.cols)))
     cleaned = tuple(factor for factor in factors if factor > 1)
     return PresentationNormalizeResult(
-        source=PresentationNormalizeRequest(invariant_factors=invariant_factors),
+        source=source,
         presentation=AbelianPresentation(invariant_factors=cleaned),
     )
 
@@ -278,7 +278,7 @@ def verify_presentation_normalization(claim: PresentationNormalizeResult) -> boo
     """Check the canonical presentation against its retained raw factors."""
 
     try:
-        return normalize_presentation(claim.source.invariant_factors) == claim
+        return normalize_presentation(claim.source) == claim
     except (TypeError, ValueError):
         return False
 

@@ -5,6 +5,7 @@ from pydantic import ValidationError
 
 from jacobian.math.groups.abelian._models import (
     AbelianPresentation,
+    CyclicFactorPresentation,
     ElementEqualRequest,
     ElementOrderRequest,
     ElementReduceRequest,
@@ -30,7 +31,9 @@ from jacobian.math.groups.abelian.operations import (
 
 
 def compute_presentation_normalize(request: PresentationNormalizeRequest):
-    return normalize_presentation(request.invariant_factors)
+    return normalize_presentation(
+        CyclicFactorPresentation(invariant_factors=request.invariant_factors)
+    )
 
 
 def compute_element_reduce(request: ElementReduceRequest):
@@ -62,6 +65,23 @@ def test_catalog_contains_only_audited_operations() -> None:
         "abelian_group.quotient.compute",
         "abelian_group.subgroup.generated.compute",
     }
+
+
+def test_trivial_group_element_operations_use_empty_coordinates() -> None:
+    group = AbelianPresentation(invariant_factors=())
+    reduced = reduce_element(group, ())
+    assert reduced.reduced.coordinates == ()
+    assert elements_equal(group, (), ()).equal
+    assert element_order(group, ()).order == 1
+
+    assert ElementReduceRequest(group=group, coordinates=()).coordinates == ()
+    assert (
+        ElementEqualRequest(
+            group=group, coordinates_a=(), coordinates_b=()
+        ).coordinates_a
+        == ()
+    )
+    assert ElementOrderRequest(group=group, coordinates=()).coordinates == ()
 
 
 def test_element_reduce_modular() -> None:

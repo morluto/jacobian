@@ -286,6 +286,21 @@ def test_group_claim_verifiers_reject_forged_serialized_values() -> None:
     assert not verify_element_order(type(element).model_validate(element_payload))
 
 
+def test_element_order_verifier_uses_group_membership_without_enumeration() -> None:
+    from jacobian.math.groups import verify_element_order
+    from jacobian.math.groups._models import GroupElementOrderResult
+
+    cycle = (*range(1, 10), 0)
+    transposition = (1, 0, *range(2, 10))
+    source = PermutationGroup(degree=10, generators=(cycle, transposition))
+    claim = GroupElementOrderResult(
+        source=source,
+        element=tuple(range(10)),
+        order=1,
+    )
+    assert verify_element_order(claim)
+
+
 def test_group_stabilizer_request_takes_the_canonical_group_value() -> None:
     group = PermutationGroup(degree=3, generators=S3_GENERATORS)
     request = GroupStabilizerRequest(group=group, point=0)

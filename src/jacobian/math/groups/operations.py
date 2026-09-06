@@ -80,10 +80,10 @@ def verify_element_order(claim: GroupElementOrderResult) -> bool:
     try:
         if len(claim.element) != claim.source.degree:
             return False
-        if tuple(claim.element) not in {
-            _full_permutation_form(element, claim.source.degree)
-            for element in _backend_group(claim.source).elements
-        }:
+        from sympy.combinatorics import Permutation
+
+        element = Permutation(list(claim.element))
+        if not _backend_group(claim.source).contains(element, strict=True):
             return False
         return element_order(claim.source.degree, list(claim.element)) == claim.order
     except (OperationDomainValidationError, TypeError, ValueError):

@@ -4,6 +4,7 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.groups.abelian._models import (
+    CyclicFactorPresentation,
     ElementEqualRequest,
     ElementEqualResult,
     ElementOrderRequest,
@@ -30,7 +31,9 @@ from jacobian.math.groups.abelian.operations import (
 def _run_presentation_normalize(
     request: PresentationNormalizeRequest,
 ) -> PresentationNormalizeResult:
-    return normalize_presentation(request.invariant_factors)
+    return normalize_presentation(
+        CyclicFactorPresentation(invariant_factors=request.invariant_factors)
+    )
 
 
 def _run_element_reduce(request: ElementReduceRequest) -> ElementReduceResult:

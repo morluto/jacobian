@@ -23,6 +23,9 @@ from jacobian.math.polynomials.series.operations import (
     subtract,
     to_polynomial,
     truncate,
+    verify_divide,
+    verify_inverse,
+    verify_reversion,
 )
 
 __all__ = [
@@ -42,4 +45,7 @@ __all__ = [
     "subtract",
     "to_polynomial",
     "truncate",
+    "verify_divide",
+    "verify_inverse",
+    "verify_reversion",
 ]

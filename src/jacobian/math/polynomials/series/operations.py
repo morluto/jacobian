@@ -68,6 +68,9 @@ __all__ = [
     "subtract",
     "to_polynomial",
     "truncate",
+    "verify_divide",
+    "verify_inverse",
+    "verify_reversion",
 ]
 
 # ---------------------------------------------------------------------------
@@ -249,6 +252,26 @@ def inverse(series: TruncatedSeries) -> SeriesInverseResult:
     )
 
 
+def verify_inverse(claim: SeriesInverseResult) -> bool:
+    """Verify an inverse claim, including its serialized residual ledger."""
+    try:
+        admit_native_inverse(claim.source)
+        if (
+            claim.source.variable != claim.result.variable
+            or claim.source.truncation_order != claim.result.truncation_order
+        ):
+            return False
+        product = _cauchy_convolve(
+            _series_fractions(claim.source),
+            _series_fractions(claim.result),
+            claim.source.truncation_order,
+        )
+        product[0] -= Fraction(1)
+        return tuple(_wire(value) for value in product) == claim.residual_coefficients
+    except (TypeError, ValueError):
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Divide
 # ---------------------------------------------------------------------------
@@ -273,6 +296,31 @@ def divide(
         quotient=_series_result(numerator.variable, n, q),
         residual_coefficients=tuple(_wire(c) for c in residual),
     )
+
+
+def verify_divide(claim: SeriesDivideResult) -> bool:
+    """Verify a quotient claim, including its serialized residual ledger."""
+    try:
+        admit_native_divide(claim.numerator, claim.denominator)
+        if not (
+            claim.numerator.variable == claim.denominator.variable
+            == claim.quotient.variable
+            and claim.numerator.truncation_order
+            == claim.denominator.truncation_order
+            == claim.quotient.truncation_order
+        ):
+            return False
+        residual = _cauchy_convolve(
+            _series_fractions(claim.denominator),
+            _series_fractions(claim.quotient),
+            claim.numerator.truncation_order,
+        )
+        numerator = _series_fractions(claim.numerator)
+        return tuple(
+            _wire(left - right) for left, right in zip(residual, numerator, strict=True)
+        ) == claim.residual_coefficients
+    except (TypeError, ValueError):
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -376,6 +424,31 @@ def reversion(series: TruncatedSeries) -> SeriesReversionResult:
         left_residual=tuple(_wire(c) for c in left_residual),
         right_residual=tuple(_wire(c) for c in right_residual),
     )
+
+
+def verify_reversion(claim: SeriesReversionResult) -> bool:
+    """Verify both composition identities and their serialized ledgers."""
+    try:
+        admit_native_reversion(claim.source)
+        if (
+            claim.source.variable != claim.result.variable
+            or claim.source.truncation_order != claim.result.truncation_order
+        ):
+            return False
+        order = claim.source.truncation_order
+        left = _compose_coefficients(claim.source, claim.result)
+        right = _compose_coefficients(claim.result, claim.source)
+        target = [Fraction(1) if index == 1 else Fraction(0) for index in range(order)]
+        return (
+            tuple(_wire(value - expected) for value, expected in zip(left, target, strict=True))
+            == claim.left_residual
+            and tuple(
+                _wire(value - expected) for value, expected in zip(right, target, strict=True)
+            )
+            == claim.right_residual
+        )
+    except (TypeError, ValueError):
+        return False
 
 
 # ---------------------------------------------------------------------------

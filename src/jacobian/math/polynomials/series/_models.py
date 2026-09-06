@@ -150,18 +150,13 @@ def _require_height(height: RationalHeight, operation: str) -> None:
         )
 
 
-def _require_zero_residual(
+def _require_residual_shape(
     coefficients: tuple[CanonicalRational, ...], order: int, operation: str
 ) -> None:
     if len(coefficients) != order:
         raise _validation_error(
             f"{operation}_residual_length",
             f"{operation} residual must contain exactly {order} coefficients",
-        )
-    if any(value.num != "0" for value in coefficients):
-        raise _validation_error(
-            f"{operation}_residual_nonzero",
-            f"{operation} residual must be identically zero",
         )
 
 
@@ -681,7 +676,7 @@ class SeriesInverseResult(StrictModel):
                 "source_context_mismatch",
                 "inverse source and result must share variable and truncation order",
             )
-        _require_zero_residual(
+        _require_residual_shape(
             self.residual_coefficients,
             self.result.truncation_order,
             "inverse",
@@ -731,7 +726,7 @@ class SeriesDivideResult(StrictModel):
                 "source_context_mismatch",
                 "division series must share variable and truncation order",
             )
-        _require_zero_residual(
+        _require_residual_shape(
             self.residual_coefficients,
             self.quotient.truncation_order,
             "division",
@@ -809,8 +804,8 @@ class SeriesReversionResult(StrictModel):
                 "source_context_mismatch",
                 "reversion source and result must share variable and truncation order",
             )
-        _require_zero_residual(self.left_residual, order, "left reversion")
-        _require_zero_residual(self.right_residual, order, "right reversion")
+        _require_residual_shape(self.left_residual, order, "left reversion")
+        _require_residual_shape(self.right_residual, order, "right reversion")
         return self
 
     @classmethod

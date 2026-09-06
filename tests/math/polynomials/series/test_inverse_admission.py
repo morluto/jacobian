@@ -9,7 +9,14 @@ import pytest
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.catalog.models import MathTool, OperationDomainValidationError
-from jacobian.math.polynomials.series import divide, inverse
+from jacobian.math.polynomials.series import (
+    divide,
+    inverse,
+    reversion,
+    verify_divide,
+    verify_inverse,
+    verify_reversion,
+)
 from jacobian.math.polynomials.series._models import (
     MAX_TRUNCATION_ORDER,
     TruncatedSeries,
@@ -37,6 +44,28 @@ def _product(left: TruncatedSeries, right: TruncatedSeries) -> list[Fraction]:
         )
         for k in range(left.truncation_order)
     ]
+
+
+def test_serialized_residual_ledgers_are_claims_checked_by_consumers() -> None:
+    source = _series([Fraction(1), Fraction(1), Fraction(0)])
+    inverse_claim = inverse(source)
+    inverse_payload = inverse_claim.model_dump(mode="json")
+    inverse_payload["residual_coefficients"][1] = {"num": "1", "den": "1"}
+    forged_inverse = type(inverse_claim).model_validate(inverse_payload)
+    assert not verify_inverse(forged_inverse)
+
+    numerator = _series([Fraction(1), Fraction(2), Fraction(0)])
+    division_claim = divide(numerator, source)
+    division_payload = division_claim.model_dump(mode="json")
+    division_payload["residual_coefficients"][0] = {"num": "1", "den": "1"}
+    forged_division = type(division_claim).model_validate(division_payload)
+    assert not verify_divide(forged_division)
+
+    reversion_claim = reversion(_series([Fraction(0), Fraction(1), Fraction(0)]))
+    reversion_payload = reversion_claim.model_dump(mode="json")
+    reversion_payload["left_residual"][0] = {"num": "1", "den": "1"}
+    forged_reversion = type(reversion_claim).model_validate(reversion_payload)
+    assert not verify_reversion(forged_reversion)
 
 
 @pytest.mark.parametrize("order", [5, 6, 7, 64, MAX_TRUNCATION_ORDER])

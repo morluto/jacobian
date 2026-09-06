@@ -312,7 +312,12 @@ def _restriction_admit(
         )
         for value in parent.coefficients
     )
-    degree_height = sum(m * max_height for m in parent.multidegree)
+    # Each de Casteljau level introduces one ratio cross-product and one
+    # addition.  Account for both the ratio digits and the additions in the
+    # output-component envelope before allocating the restricted tensor.
+    degree_height = sum(
+        m * (max_height + 1) + m for m in parent.multidegree
+    )
     output_height = coefficient_height + degree_height + len(parent.multidegree) + 2
     if output_height > MAX_COMPONENT_DIGITS:
         _reject(

@@ -21,7 +21,10 @@ from jacobian.math.probability.hypergraph_containment._models import (
     HypergraphVertexContainmentResult,
 )
 
-__all__ = ["compute_hypergraph_vertex_containment"]
+__all__ = [
+    "compute_hypergraph_vertex_containment",
+    "verify_hypergraph_vertex_containment",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -193,6 +196,7 @@ def compute_hypergraph_vertex_containment(
         return HypergraphVertexContainmentResult(
             hypergraph=hypergraph,
             retention_probability=retention_probability,
+            cardinality_axis=tuple(range(n + 1)),
             containing_subset_counts=tuple("0" for _ in range(n + 1)),
             total_state_count=format_canonical_integer(1 << n),
             success_count="0",
@@ -203,6 +207,7 @@ def compute_hypergraph_vertex_containment(
         return HypergraphVertexContainmentResult(
             hypergraph=hypergraph,
             retention_probability=retention_probability,
+            cardinality_axis=tuple(range(n + 1)),
             containing_subset_counts=tuple(
                 format_canonical_integer(value) for value in all_counts
             ),
@@ -227,6 +232,7 @@ def compute_hypergraph_vertex_containment(
         return HypergraphVertexContainmentResult(
             hypergraph=hypergraph,
             retention_probability=retention_probability,
+            cardinality_axis=tuple(range(n + 1)),
             containing_subset_counts=tuple(
                 format_canonical_integer(value) for value in singleton_counts
             ),
@@ -256,6 +262,7 @@ def compute_hypergraph_vertex_containment(
         return HypergraphVertexContainmentResult(
             hypergraph=hypergraph,
             retention_probability=retention_probability,
+            cardinality_axis=tuple(range(n + 1)),
             containing_subset_counts=tuple(
                 format_canonical_integer(value) for value in ie_counts
             ),
@@ -285,6 +292,7 @@ def compute_hypergraph_vertex_containment(
     return HypergraphVertexContainmentResult(
         hypergraph=hypergraph,
         retention_probability=retention_probability,
+        cardinality_axis=tuple(range(n + 1)),
         containing_subset_counts=tuple(
             format_canonical_integer(value) for value in counts
         ),
@@ -292,3 +300,16 @@ def compute_hypergraph_vertex_containment(
         success_count=format_canonical_integer(success),
         probability=CanonicalRational.from_fraction(prob),
     )
+
+
+def verify_hypergraph_vertex_containment(
+    claim: HypergraphVertexContainmentResult,
+) -> bool:
+    """Verify the retained cardinality profile and probability claim."""
+    try:
+        expected = compute_hypergraph_vertex_containment(
+            claim.hypergraph, claim.retention_probability
+        )
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+    return expected == claim

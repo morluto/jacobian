@@ -10,6 +10,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
 )
 from jacobian.math.probability.hypergraph_containment.operations import (
     compute_hypergraph_vertex_containment,
+    verify_hypergraph_vertex_containment,
 )
 
 
@@ -29,6 +30,12 @@ def test_single_edge_p1() -> None:
     assert parse_canonical_integer(result.success_count) == 1
     assert parse_canonical_integer(result.total_state_count) == 4
     assert result.probability.as_fraction() == Fraction(1)
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert decoded.cardinality_axis == (0, 1, 2)
+    assert verify_hypergraph_vertex_containment(decoded)
+    assert not verify_hypergraph_vertex_containment(
+        decoded.model_copy(update={"success_count": "0"})
+    )
 
 
 def test_single_edge_p0() -> None:

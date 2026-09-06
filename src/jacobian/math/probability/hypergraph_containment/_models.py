@@ -31,6 +31,7 @@ class HypergraphVertexContainmentResult(StrictModel):
 
     hypergraph: FiniteHypergraph
     retention_probability: CanonicalRational
+    cardinality_axis: tuple[int, ...]
     containing_subset_counts: tuple[CanonicalInteger, ...]
     total_state_count: CanonicalInteger
     success_count: CanonicalInteger

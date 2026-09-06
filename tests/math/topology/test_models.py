@@ -30,6 +30,30 @@ from jacobian.math.topology.chain_complexes.values import (
 )
 
 
+def test_simplicial_homology_result_roundtrip_does_not_retest_prime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    complex_ = _canonical_complex(("a", "b"), (("a", "b"),))
+    result = _operation("topology.simplicial_homology.compute").run(
+        SimplicialHomologyRequest(complex=complex_, prime=2)
+    )
+    calls: list[int] = []
+    import jacobian.math.topology._models as topology_models
+
+    original = topology_models.is_bounded_prime
+
+    def tracked(value: int) -> bool:
+        calls.append(value)
+        return original(value)
+
+    monkeypatch.setattr(topology_models, "is_bounded_prime", tracked)
+    assert (
+        SimplicialHomologyResult.model_validate(result.model_dump(mode="json"))
+        == result
+    )
+    assert calls == []
+
+
 @overload
 def _operation(
     operation_id: Literal["topology.simplicial_complex.canonicalize"],

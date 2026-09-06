@@ -53,6 +53,7 @@ from jacobian.math.lattices._models import (
     SublatticeIndexResult,
 )
 from jacobian.math.matrices.values import (
+    MAX_MATRIX_DIMENSION,
     IntegerMatrix,
     rational_matrix_from_fractions,
     rational_vector_space_basis_from_fractions,
@@ -121,6 +122,49 @@ def _basis_int_list(lattice: IntegerLattice) -> list[list[int]]:
     return [[parse_canonical_integer(v) for v in row] for row in lattice.basis.entries]
 
 
+def _admit_lattice(lattice: IntegerLattice) -> list[list[int]]:
+    """Admit the semantic full-row-rank claim once per operation."""
+
+    basis = _basis_int_list(lattice)
+    rows = len(basis)
+    columns = lattice.ambient_dimension
+    if rows * columns > MAX_MATRIX_DIMENSION**2:
+        raise OperationDomainValidationError(
+            location=("lattice", "basis"),
+            code="lattice.rank_work_exceeds_bound",
+            message="lattice rank admission exceeds the exact work bound",
+        )
+    if integer_rank(basis) != rows:
+        raise OperationDomainValidationError(
+            location=("lattice", "basis"),
+            code="lattice.basis_not_full_rank",
+            message="lattice basis must have full row rank over QQ",
+        )
+    return basis
+
+
+def _admit_lattice_sum(
+    first: IntegerLattice, second: IntegerLattice
+) -> tuple[list[list[int]], list[list[int]]]:
+    """Admit both operands and the combined block-diagonal envelope."""
+    first_basis = _admit_lattice(first)
+    second_basis = _admit_lattice(second)
+    ambient_dimension = first.ambient_dimension + second.ambient_dimension
+    rows = len(first_basis) + len(second_basis)
+    if ambient_dimension > MAX_MATRIX_DIMENSION or rows * ambient_dimension > (
+        MAX_MATRIX_DIMENSION**2
+    ):
+        raise OperationDomainValidationError(
+            location=("lattice",),
+            code="lattice.sum_work_exceeds_bound",
+            message=(
+                "lattice sum exceeds the exact output envelope: combined "
+                f"ambient dimension {ambient_dimension} and {rows} basis rows"
+            ),
+        )
+    return first_basis, second_basis
+
+
 def _integer_matrix(matrix: list[list[int]]) -> IntegerMatrix:
     return IntegerMatrix(
         entries=tuple(
@@ -132,7 +176,7 @@ def _integer_matrix(matrix: list[list[int]]) -> IntegerMatrix:
 def compute_rank_gram(lattice: IntegerLattice) -> RankGramResult:
     """Compute exact rank, Gram matrix, and squared covolume."""
 
-    basis = _basis_int_list(lattice)
+    basis = _admit_lattice(lattice)
     rank = len(basis)
     gram = _gram_matrix(basis)
     det = integer_determinant(gram)
@@ -148,7 +192,7 @@ def compute_rank_gram(lattice: IntegerLattice) -> RankGramResult:
 def compute_canonical_basis(lattice: IntegerLattice) -> CanonicalBasisResult:
     """Compute the row-Hermite canonical basis of a lattice."""
 
-    hnf, transform = _hermite_basis(_basis_int_list(lattice))
+    hnf, transform = _hermite_basis(_admit_lattice(lattice))
     return CanonicalBasisResult(
         canonical_basis=_integer_matrix(hnf),
         transformation=_integer_matrix(transform),
@@ -159,7 +203,7 @@ def compute_canonical_basis(lattice: IntegerLattice) -> CanonicalBasisResult:
 def compute_dual(lattice: IntegerLattice) -> DualResult:
     """Compute the exact rational dual basis and dual Gram matrix."""
 
-    basis = _basis_int_list(lattice)
+    basis = _admit_lattice(lattice)
     dual = _dual_basis(basis)
     from sympy import Matrix
 
@@ -184,7 +228,7 @@ def compute_dual(lattice: IntegerLattice) -> DualResult:
 def compute_saturation(lattice: IntegerLattice) -> SaturationResult:
     """Compute the primitive closure and its exact inclusion index."""
 
-    saturated, inclusion, index = _saturate_lattice(_basis_int_list(lattice))
+    saturated, inclusion, index = _saturate_lattice(_admit_lattice(lattice))
     return SaturationResult(
         saturated_basis=_integer_matrix(saturated),
         inclusion_transform=_integer_matrix(inclusion),
@@ -207,8 +251,8 @@ def compute_sublattice_index(
     embedding_values = [
         [parse_canonical_integer(v) for v in row] for row in embedding.entries
     ]
-    parent_values = _basis_int_list(parent)
-    sublattice_values = _basis_int_list(sublattice)
+    parent_values = _admit_lattice(parent)
+    sublattice_values = _admit_lattice(sublattice)
     # The existing lattice axes and scalar bounds also bound this rectangular
     # product. Establish the caller's inclusion before using E's Smith form.
     if (
@@ -246,7 +290,7 @@ def compute_sublattice_index(
 def compute_discriminant_group(lattice: IntegerLattice) -> DiscriminantGroupResult:
     """Compute the discriminant order and quotient invariant factors."""
 
-    order, factors = _discriminant_group(_basis_int_list(lattice))
+    order, factors = _discriminant_group(_admit_lattice(lattice))
     return DiscriminantGroupResult(
         discriminant_order=order,
         invariant_factors=tuple(format_canonical_integer(f) for f in factors),
@@ -258,7 +302,7 @@ def compute_orthogonal_complement(
 ) -> OrthogonalComplementResult:
     """Compute a canonical rational basis for the orthogonal complement."""
 
-    complement = _orthogonal_complement(_basis_int_list(lattice))
+    complement = _orthogonal_complement(_admit_lattice(lattice))
     return OrthogonalComplementResult(
         complement_basis=rational_vector_space_basis_from_fractions(
             complement,
@@ -273,7 +317,8 @@ def compute_direct_sum(
 ) -> DirectSumResult:
     """Compute the block-coordinate direct sum of two lattices."""
 
-    result = _direct_sum(_basis_int_list(first), _basis_int_list(second))
+    first_basis, second_basis = _admit_lattice_sum(first, second)
+    result = _direct_sum(first_basis, second_basis)
     return DirectSumResult(
         direct_sum_basis=_integer_matrix(result),
         ambient_dimension=first.ambient_dimension + second.ambient_dimension,
@@ -285,7 +330,8 @@ def compute_orthogonal_sum(
 ) -> OrthogonalSumResult:
     """Compute the block-diagonal orthogonal sum of two lattices."""
 
-    result = _orthogonal_sum(_basis_int_list(first), _basis_int_list(second))
+    first_basis, second_basis = _admit_lattice_sum(first, second)
+    result = _orthogonal_sum(first_basis, second_basis)
     return OrthogonalSumResult(
         orthogonal_sum_basis=_integer_matrix(result),
         ambient_dimension=first.ambient_dimension + second.ambient_dimension,

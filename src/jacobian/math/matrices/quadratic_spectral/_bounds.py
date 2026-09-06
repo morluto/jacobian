@@ -71,8 +71,10 @@ def _primitive_integer_coefficients(
 def annihilating_coefficients(
     matrix: RealQuadraticMatrix, spectrum_kind: SpectrumKind
 ) -> tuple[int, ...]:
+    if len(matrix.entries) != 2 or not matrix.entries or len(matrix.entries[0]) != 2:
+        raise ValueError("exact quadratic spectral operations require a 2 by 2 matrix")
     entries = [[_entry(value) for value in row] for row in matrix.entries]
-    radicand = matrix.entries[0][0].radicand
+    radicand = matrix.radicand
     if spectrum_kind == "SYMMETRIC_EIGENVALUES":
         a, b = entries[0]
         _ignored, c = entries[1]
@@ -103,12 +105,14 @@ def annihilating_coefficients(
 
 
 def _require_two_by_two(matrix: RealQuadraticMatrix) -> None:
-    if len(matrix.entries) != 2 or len(matrix.entries[0]) != 2:
+    if len(matrix.entries) != 2 or not matrix.entries or len(matrix.entries[0]) != 2:
         raise ValueError("exact quadratic spectral operations require a 2 by 2 matrix")
 
 
 def _require_symmetric(matrix: RealQuadraticMatrix) -> None:
     rows = len(matrix.entries)
+    if not matrix.entries:
+        raise ValueError("quadratic matrix operations require a nonempty matrix")
     columns = len(matrix.entries[0])
     if rows != columns:
         raise ValueError("quadratic inertia and eigenvalues require a square matrix")

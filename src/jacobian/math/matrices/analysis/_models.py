@@ -301,7 +301,7 @@ class FarkasCertificateResult(StrictModel):
         if (
             len(self.rhs_vector) != rows
             or len(self.multipliers) != rows
-            or len(self.y_t_a) != len(self.constraint_matrix.entries[0])
+            or len(self.y_t_a) != self.constraint_matrix.column_count
         ):
             raise _validation_error(
                 "shape_mismatch",

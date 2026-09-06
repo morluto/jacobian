@@ -30,8 +30,8 @@ class EventualHittingProfileRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_request(self) -> Self:
-        dimension = len(self.matrix.entries)
-        if any(len(row) != dimension for row in self.matrix.entries):
+        dimension = self.matrix.row_count
+        if self.matrix.column_count != dimension:
             raise PydanticCustomError(
                 "markov_chain.eventual_hitting_matrix_not_square",
                 "matrix must be square",

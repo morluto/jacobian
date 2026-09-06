@@ -269,7 +269,7 @@ class Axis(StrictModel):
             raise _validation_error(
                 "finite_field.axis_name_nonempty", "axis name must be nonempty"
             )
-        if not self.labels or any(not label for label in self.labels):
+        if any(not label for label in self.labels):
             raise _validation_error(
                 "finite_field.axis_labels_nonempty", "axis labels must be nonempty"
             )
@@ -312,7 +312,7 @@ class PrimeFieldActionAxis(Axis):
             raise _validation_error(
                 "finite_field.axis_name_nonempty", "axis name must be nonempty"
             )
-        if not self.labels or any(not label for label in self.labels):
+        if any(not label for label in self.labels):
             raise _validation_error(
                 "finite_field.axis_labels_nonempty", "axis labels must be nonempty"
             )

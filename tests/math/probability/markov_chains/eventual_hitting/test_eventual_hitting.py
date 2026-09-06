@@ -7,6 +7,12 @@ import pytest
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.values import rational_matrix_from_fractions
+from jacobian.math.probability.markov_chains.eventual_hitting._models import (
+    EventualHittingProfileRequest,
+)
+from jacobian.math.probability.markov_chains.eventual_hitting._tools import (
+    compute_ehp_op,
+)
 from jacobian.math.probability.markov_chains.eventual_hitting.operations import (
     compute_eventual_hitting_profile,
 )
@@ -147,3 +153,41 @@ def test_denominator_height_is_bounded_before_solving() -> None:
 
     with pytest.raises(OperationDomainValidationError, match="rational result bound"):
         compute_eventual_hitting_profile(rational_matrix_from_fractions(matrix), (2,))
+
+
+@pytest.mark.parametrize("size", [129, 256])
+def test_identity_chain_accepts_matrix_orders_above_generic_markov_limit(
+    size: int,
+) -> None:
+    matrix = rational_matrix_from_fractions(
+        [
+            [Fraction(1) if row == column else Fraction(0) for column in range(size)]
+            for row in range(size)
+        ]
+    )
+    request = EventualHittingProfileRequest(matrix=matrix, target_states=(0,))
+    result = compute_ehp_op(
+        EventualHittingProfileRequest.model_validate_json(request.model_dump_json())
+    )
+    assert result.matrix == matrix
+    assert [value.as_fraction() for value in result.hitting_probabilities] == [
+        Fraction(int(state == 0)) for state in range(size)
+    ]
+
+
+def test_empty_native_matrix_is_rejected_before_backend() -> None:
+    matrix = rational_matrix_from_fractions(())
+    with pytest.raises(OperationDomainValidationError, match="dimension"):
+        compute_eventual_hitting_profile(matrix, (0,))
+
+
+def test_native_matrix_above_eventual_axis_limit_is_rejected_before_backend() -> None:
+    from jacobian.math.probability.markov_chains.eventual_hitting.operations import (
+        _admit_eventual_hitting,
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="dimension"):
+        _admit_eventual_hitting(
+            tuple((Fraction(1),) for _ in range(4097)),
+            (0,),
+        )

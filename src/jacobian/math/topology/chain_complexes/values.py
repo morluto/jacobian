@@ -172,24 +172,28 @@ def _require_prime_coupling(
             raise _validation_error(
                 "prime_out_of_bounds", "prime modulus exceeds the bounded prime limit"
             )
-        if prime % 2 == 0:
-            if prime != 2:
-                raise _validation_error(
-                    "prime_not_prime", f"prime {prime} is not prime"
-                )
-            return
-        divisor = 3
-        while divisor * divisor <= prime:
-            if prime % divisor == 0:
-                raise _validation_error(
-                    "prime_not_prime", f"prime {prime} is not prime"
-                )
-            divisor += 2
     elif prime is not None:
         raise _validation_error(
             "prime_forbidden",
             "QQ and ZZ coefficient rings must not have a prime modulus",
         )
+
+
+def require_prime_field_admission(
+    coefficient_ring: CoefficientRing, prime: int | None
+) -> None:
+    """Establish primality before an operation uses GF(p) arithmetic.
+
+    Value parsing keeps only the structural ring/modulus coupling.  This
+    admission helper is intentionally called by field-dependent operations.
+    """
+    _require_prime_coupling(coefficient_ring, prime)
+    if coefficient_ring is CoefficientRing.PRIME_FIELD:
+        from flint import fmpz
+
+        assert prime is not None
+        if not fmpz(prime).is_prime():
+            raise ValueError(f"prime {prime} is not prime")
 
 
 def _require_canonical_integer_spelling(entry: str, part: str) -> int:

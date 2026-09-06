@@ -269,21 +269,10 @@ class SteenrodSquareResult(SteenrodSquareRequest):
 
     @model_validator(mode="after")
     def require_canonical_result_shape(self) -> Self:
-        expected_degree = self.cochain_degree + self.square_degree
-        if self.result_degree != expected_degree:
-            raise _validation_error(
-                "result_degree",
-                "result_degree must equal cochain_degree plus square_degree",
-            )
         if len(self.result_simplex_values) != len(self.result_simplex_coefficients):
             raise _validation_error(
                 "result_length_mismatch",
                 "result_simplex_values and result_simplex_coefficients must have the same length",
-            )
-        if self.is_zero != (not self.result_simplex_values):
-            raise _validation_error(
-                "result_zero_shape",
-                "is_zero must agree with whether the canonical result support is empty",
             )
         if len(set(self.result_simplex_values)) != len(self.result_simplex_values):
             raise _validation_error(
@@ -300,24 +289,6 @@ class SteenrodSquareResult(SteenrodSquareRequest):
         _require_bounded_coefficients(
             self.result_simplex_coefficients, "result_simplex_coefficient"
         )
-        if any(
-            coefficient % 2 != 1 for coefficient in self.result_simplex_coefficients
-        ):
-            raise _validation_error(
-                "result_coefficient",
-                "canonical GF(2) result coefficients must equal one",
-            )
-        effective_ambient = _effective_ambient(
-            self.ambient_simplices, self.ambient_complex
-        )
-        ambient_faces = set(effective_ambient)
-        if effective_ambient and any(
-            simplex not in ambient_faces for simplex in self.result_simplex_values
-        ):
-            raise _validation_error(
-                "result_outside_ambient",
-                "result support must lie inside the ambient complex",
-            )
         return self
 
     @classmethod
@@ -412,20 +383,6 @@ class BocksteinResult(BocksteinRequest):
     result_simplex_values: tuple[tuple[int, ...], ...] = Field(default=())
     result_simplex_coefficients: tuple[int, ...] = Field(default=())
     is_zero: bool
-
-    @model_validator(mode="after")
-    def require_supported_zero_shape(self) -> Self:
-        if (
-            self.result_degree != self.cochain_degree + 1
-            or self.result_simplex_values
-            or self.result_simplex_coefficients
-            or not self.is_zero
-        ):
-            raise _validation_error(
-                "result_shape",
-                "the supported Bockstein branch returns the empty degree-(cochain_degree + 1) cochain",
-            )
-        return self
 
     @classmethod
     def _from_kernel(

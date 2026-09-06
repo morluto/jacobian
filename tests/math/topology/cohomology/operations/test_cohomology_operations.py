@@ -14,6 +14,8 @@ from jacobian.math.topology.cohomology.operations._models import (
 from jacobian.math.topology.cohomology.operations.operations import (
     bockstein,
     steenrod_square,
+    verify_bockstein,
+    verify_steenrod_square,
 )
 
 
@@ -69,6 +71,11 @@ class TestSteenrodSquare:
         )
         assert not result.is_zero
         assert result.result_degree == 1
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert verify_steenrod_square(decoded)
+        forged = result.model_dump(mode="json")
+        forged["result_simplex_coefficients"] = [0]
+        assert not verify_steenrod_square(type(result).model_validate(forged))
 
     def test_sq_above_degree_is_zero(self) -> None:
         """Sq^k(x) = 0 for k > deg(x) (instability)."""
@@ -303,9 +310,8 @@ class TestBockstein:
         )
         payload = compute_bockstein(request).model_dump()
         payload["result_degree"] = 3
-        with pytest.raises(ValidationError) as excinfo:
-            BocksteinResult.model_validate(payload)
-        _assert_error_code(excinfo, "cohomology_operation.result_shape")
+        decoded = BocksteinResult.model_validate(payload)
+        assert not verify_bockstein(decoded)
 
     def test_nonzero_cocycle(self) -> None:
         """Bockstein of a non-zero cocycle is unsupported without the complex."""

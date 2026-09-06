@@ -510,6 +510,38 @@ def bockstein(
     )
 
 
+def verify_steenrod_square(claim: SteenrodSquareResult) -> bool:
+    """Verify a serialized supported Steenrod-square claim."""
+
+    try:
+        return steenrod_square(
+            claim.cochain_degree,
+            claim.simplex_values,
+            claim.simplex_coefficients,
+            claim.square_degree,
+            claim.ambient_simplices,
+            claim.ambient_complex,
+        ) == claim
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+
+
+def verify_bockstein(claim: BocksteinResult) -> bool:
+    """Verify the supported serialized Bockstein relation."""
+
+    try:
+        return bockstein(
+            claim.prime,
+            claim.cochain_degree,
+            claim.simplex_values,
+            claim.simplex_coefficients,
+            claim.ambient_simplices,
+            claim.ambient_complex,
+        ) == claim
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+
+
 __all__ = [
     "bockstein",
     "bockstein_fields",

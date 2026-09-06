@@ -70,7 +70,7 @@ def test_number_field_worker_has_private_cwd_and_os_resource_limits(
         NumberFieldRequest(field=_number_field("1", "0", "-2"))
     )
 
-    assert result.discriminant == "8"
+    assert result.discriminant == 8
     assert recorded["resource_limits"] == ProcessResourceLimits(
         cpu_seconds=60,
         address_space_bytes=number_field_operations._WORKER_ADDRESS_SPACE_BYTES,

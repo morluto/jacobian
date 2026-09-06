@@ -278,7 +278,7 @@ def test_number_field_discriminant_is_not_power_basis_discriminant() -> None:
     field = SimpleNumberFieldPresentation(coefficients_descending=("1", "0", "-5"))
     result = compute_nf_discriminant(NumberFieldRequest(field=field))
 
-    assert result.discriminant == "5"
+    assert result.discriminant == 5
 
 
 def test_embedding_field_composes_unchanged_with_field_invariant_consumers() -> None:
@@ -290,8 +290,8 @@ def test_embedding_field_composes_unchanged_with_field_invariant_consumers() -> 
     )
 
     assert request.field == produced
-    assert compute_nf_discriminant(request).discriminant == "-4"
-    assert discriminant(request.field) == "-4"
+    assert compute_nf_discriminant(request).discriminant == -4
+    assert discriminant(request.field) == -4
     assert ring_of_integers(request.field) == ["1", "alpha"]
 
 
@@ -376,14 +376,14 @@ def test_integral_basis_is_computed_in_the_defining_power_basis() -> None:
     field = SimpleNumberFieldPresentation(coefficients_descending=("1", "0", "-5"))
 
     assert ring_of_integers(field) == ["1", "alpha/2 + 1/2"]
-    assert discriminant(field) == "5"
+    assert discriminant(field) == 5
 
 
 def test_number_field_consumers_accept_a_nonmonic_canonical_presentation() -> None:
     field = SimpleNumberFieldPresentation(coefficients_descending=("2", "0", "1"))
 
-    assert compute_nf_discriminant(NumberFieldRequest(field=field)).discriminant == "-8"
-    assert discriminant(field) == "-8"
+    assert compute_nf_discriminant(NumberFieldRequest(field=field)).discriminant == -8
+    assert discriminant(field) == -8
     assert ring_of_integers(field) == ["1", "2*alpha"]
 
 

@@ -27,8 +27,10 @@ def test_discriminant_rejects_noncanonical_integer(value: str) -> None:
 def test_field_discriminant_claim_round_trip() -> None:
     field = SimpleNumberFieldPresentation(coefficients_descending=("1", "0", "-5"))
     # Q(sqrt(5)) has field discriminant 5, not polynomial discriminant 20.
-    assert discriminant(field) == "5"
+    assert discriminant(field) == 5
     claim = NumberFieldDiscriminantResult(field=field, discriminant="5")
+    assert claim.discriminant == 5
+    assert claim.model_dump(mode="json")["discriminant"] == "5"
     assert verify_discriminant(
         NumberFieldDiscriminantResult.model_validate_json(claim.model_dump_json())
     )

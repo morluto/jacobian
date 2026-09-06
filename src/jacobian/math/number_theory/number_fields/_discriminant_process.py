@@ -15,7 +15,6 @@ from jacobian._execution import (
 from jacobian.canonical import (
     CanonicalizationError,
     encode_strict_json,
-    format_canonical_integer,
     loads_strict_json,
     parse_canonical_integer,
 )
@@ -103,9 +102,7 @@ def compute_nf_discriminant(
         if response["kind"] == "complete":
             if set(response) != {"kind", "discriminant", "request_digest"}:
                 raise ValueError("complete worker response has invalid fields")
-            discriminant = format_canonical_integer(
-                parse_canonical_integer(response["discriminant"])
-            )
+            discriminant = parse_canonical_integer(response["discriminant"])
             return NumberFieldDiscriminantResult(
                 field=request.field, discriminant=discriminant
             )

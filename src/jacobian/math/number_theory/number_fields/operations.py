@@ -7,14 +7,14 @@ from dataclasses import dataclass
 from math import factorial
 from typing import Any
 
-from jacobian._exact import CanonicalInteger
+from jacobian._exact import NativeInteger
 from jacobian._execution import (
     OperationExecutionCancelledError,
     OperationExecutionTimeoutError,
     bind_request_deadline,
     current_request_execution,
 )
-from jacobian.canonical import format_canonical_integer, parse_canonical_integer
+from jacobian.canonical import parse_canonical_integer
 from jacobian.math.number_theory.algebraic_numbers.complex import (
     ComplexAlgebraicValue,
     algebraic_root_separation_denominator_bound,
@@ -348,9 +348,9 @@ def _integral_basis(
     return integral_basis
 
 
-def discriminant(field: SimpleNumberFieldPresentation) -> CanonicalInteger:
+def discriminant(field: SimpleNumberFieldPresentation) -> NativeInteger:
     _ring_of_integers, field_discriminant, _alpha, _leading = _integral_basis(field)
-    return format_canonical_integer(int(field_discriminant))
+    return int(field_discriminant)
 
 
 def verify_discriminant(claim: NumberFieldDiscriminantResult) -> bool:

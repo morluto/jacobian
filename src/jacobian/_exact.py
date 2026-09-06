@@ -3,9 +3,16 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import Annotated, Self
+from typing import Annotated, Any, Self
 
-from pydantic import ConfigDict, Field, StringConstraints, model_validator
+from pydantic import (
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    PlainSerializer,
+    StringConstraints,
+    model_validator,
+)
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -17,6 +24,25 @@ CanonicalInteger = Annotated[
         pattern=r"^(?:0|-?[1-9][0-9]*)$",
         strict=True,
     ),
+]
+
+
+def _parse_native_integer(value: Any) -> int:
+    """Accept native integers and canonical decimal strings at the wire edge."""
+
+    if isinstance(value, bool):
+        raise TypeError("integer values must not be booleans")
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        return parse_canonical_integer(value)
+    raise TypeError("integer values must be Python integers or canonical strings")
+
+
+NativeInteger = Annotated[
+    int,
+    BeforeValidator(_parse_native_integer),
+    PlainSerializer(format_canonical_integer, return_type=str, when_used="json"),
 ]
 
 MAX_CANONICAL_RATIONAL_DIGITS = 32_768

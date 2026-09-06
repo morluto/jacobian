@@ -2,7 +2,7 @@
 
 from fractions import Fraction
 from itertools import product
-from math import comb, prod
+from math import comb, lcm, prod
 from time import monotonic
 
 from flint import fmpq
@@ -80,7 +80,18 @@ def _admit(
     # A common denominator divides the product of source denominators,
     # endpoint denominator products to each coordinate degree, and all
     # binomial(m,j), j<=degree. Bound binomial(m,j) by m**j without expanding it.
-    denominator = sum(_denominator_digits(t.coefficient.den) for t in terms)
+    source_denominator = 1
+    source_denominator_digits = 0
+    for term in terms:
+        if _denominator_digits(term.coefficient.den) > MAX_COMPONENT_DIGITS:
+            source_denominator_digits = MAX_COMPONENT_DIGITS + 1
+            break
+        source_denominator = lcm(source_denominator, int(term.coefficient.den))
+        if source_denominator.bit_length() > MAX_COMPONENT_DIGITS * 4:
+            source_denominator_digits = MAX_COMPONENT_DIGITS + 1
+            break
+        source_denominator_digits = len(str(source_denominator))
+    denominator = source_denominator_digits
     magnitude = max((_digits(t.coefficient.num) for t in terms), default=1)
     binomial_digits = 0
     for e, m, interval in zip(degrees, multidegree, box.intervals, strict=True):
@@ -89,7 +100,8 @@ def _admit(
             _denominator_digits(interval.lower.den)
             + _denominator_digits(interval.upper.den)
         )
-        denominator += e * (e + 1) // 2 * len(str(max(1, m)))
+        binomial_denominator = lcm(*(comb(m, j) for j in range(e + 1)))
+        denominator += len(str(binomial_denominator))
         # |a|+|b-a| < 3*10**endpoint; the binomial ratio is at most one.
         magnitude += e * (endpoint + 1)
         binomial_digits += e * len(str(max(1, m)))

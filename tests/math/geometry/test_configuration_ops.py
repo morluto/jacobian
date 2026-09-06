@@ -9,12 +9,17 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry._models import (
     CircumradiusProfileRequest,
     GeneralPositionRequest,
+    PointQuadrupleRequest,
+    PointTripleRequest,
     RationalPoint2D,
 )
 from jacobian.math.geometry._tools import (
     circumradius_profile,
+    collinear,
+    concyclic,
     general_position_search,
 )
+from jacobian.math.geometry.operations import verify_collinearity, verify_concyclicity
 
 
 def _point(x: str, y: str) -> RationalPoint2D:
@@ -80,6 +85,34 @@ class TestGeneralPosition:
             GeneralPositionRequest(
                 points=(_point("0", "0"), _point("0", "0"), _point("1", "0"))
             )
+
+
+def test_point_predicate_claims_round_trip_and_reject_forged_sources() -> None:
+    first = _point("0", "0")
+    second = _point("1", "0")
+    third = _point("2", "0")
+    collinear_claim = collinear(
+        PointTripleRequest(first=first, second=second, third=third)
+    )
+    assert verify_collinearity(
+        type(collinear_claim).model_validate_json(collinear_claim.model_dump_json())
+    )
+
+    payload = collinear_claim.model_dump(mode="json")
+    payload["request"]["third"] = _point("0", "1").model_dump(mode="json")
+    assert not verify_collinearity(type(collinear_claim).model_validate(payload))
+
+    concyclic_claim = concyclic(
+        PointQuadrupleRequest(
+            first=_point("1", "0"),
+            second=_point("0", "1"),
+            third=_point("-1", "0"),
+            fourth=_point("0", "-1"),
+        )
+    )
+    assert verify_concyclicity(
+        type(concyclic_claim).model_validate_json(concyclic_claim.model_dump_json())
+    )
 
 
 class TestCircumradiusProfile:

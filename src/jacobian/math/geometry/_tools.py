@@ -7,9 +7,10 @@ from jacobian.math.geometry._models import (
     CircumcircleRequest,
     CircumradiusProfileRequest,
     CircumradiusProfileResult,
+    CollinearityResult,
+    ConcyclicityResult,
     GeneralPositionRequest,
     GeneralPositionResult,
-    GeometryBooleanResult,
     GeometryCircleResult,
     GeometryConvexHullResult,
     GeometryLineIntersectionResult,
@@ -52,14 +53,12 @@ def segment_intersection(
     return _native.segment_intersection(request.first, request.second)
 
 
-def collinear(request: PointTripleRequest) -> GeometryBooleanResult:
-    return _native.collinear(request.first, request.second, request.third)
+def collinear(request: PointTripleRequest) -> CollinearityResult:
+    return _native.collinear(request)
 
 
-def concyclic(request: PointQuadrupleRequest) -> GeometryBooleanResult:
-    return _native.concyclic(
-        request.first, request.second, request.third, request.fourth
-    )
+def concyclic(request: PointQuadrupleRequest) -> ConcyclicityResult:
+    return _native.concyclic(request)
 
 
 def line_intersection(request: LinePairRequest) -> GeometryLineIntersectionResult:

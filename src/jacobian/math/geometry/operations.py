@@ -21,16 +21,19 @@ from jacobian.math.geometry._models import (
     CircumradiusProfileResult,
     CircumradiusTripleEntry,
     ClosedSegment2D,
+    CollinearityResult,
     CollinearTripleWitness,
+    ConcyclicityResult,
     ConcyclicQuadrupleWitness,
     GeneralPositionResult,
-    GeometryBooleanResult,
     GeometryCircleResult,
     GeometryConvexHullResult,
     GeometryLineIntersectionResult,
     GeometryOrientationResult,
     GeometryPointResult,
     GeometryRationalResult,
+    PointQuadrupleRequest,
+    PointTripleRequest,
     PolygonIntersectionWitness,
     PolygonPointClassificationResult,
     PolygonRequest,
@@ -67,6 +70,8 @@ __all__ = [
     "signed_area",
     "simple_polygon",
     "squared_distance",
+    "verify_collinearity",
+    "verify_concyclicity",
     "verify_polygon_point_classification",
     "verify_simple_polygon",
 ]
@@ -365,36 +370,41 @@ def segment_intersection(
     )
 
 
-def collinear(
-    first_point: RationalPoint2D,
-    second_point: RationalPoint2D,
-    third_point: RationalPoint2D,
-) -> GeometryBooleanResult:
+def collinear(request: PointTripleRequest) -> CollinearityResult:
     from sympy.geometry import Point2D
 
-    return GeometryBooleanResult(
-        holds=Point2D.is_collinear(
-            _point(first_point), _point(second_point), _point(third_point)
-        )
+    return CollinearityResult(
+        request=request,
+        collinear=Point2D.is_collinear(
+            _point(request.first), _point(request.second), _point(request.third)
+        ),
     )
 
 
-def concyclic(
-    first_point: RationalPoint2D,
-    second_point: RationalPoint2D,
-    third_point: RationalPoint2D,
-    fourth_point: RationalPoint2D,
-) -> GeometryBooleanResult:
+def concyclic(request: PointQuadrupleRequest) -> ConcyclicityResult:
     from sympy.geometry import Point2D
 
-    return GeometryBooleanResult(
-        holds=Point2D.is_concyclic(
-            _point(first_point),
-            _point(second_point),
-            _point(third_point),
-            _point(fourth_point),
-        )
+    return ConcyclicityResult(
+        request=request,
+        concyclic=Point2D.is_concyclic(
+            _point(request.first),
+            _point(request.second),
+            _point(request.third),
+            _point(request.fourth),
+        ),
     )
+
+
+def verify_collinearity(claim: CollinearityResult) -> bool:
+    """Check the collinearity relation asserted by a serialized claim."""
+
+    return collinear(claim.request).collinear is claim.collinear
+
+
+def verify_concyclicity(claim: ConcyclicityResult) -> bool:
+    """Check the concyclicity relation asserted by a serialized claim."""
+
+    return concyclic(claim.request).concyclic is claim.concyclic
 
 
 def line_intersection(

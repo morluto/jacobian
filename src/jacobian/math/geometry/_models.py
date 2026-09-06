@@ -606,6 +606,20 @@ class GeometryBooleanResult(StrictModel):
     holds: bool
 
 
+class CollinearityResult(StrictModel):
+    """A source-bound collinearity claim."""
+
+    request: PointTripleRequest
+    collinear: bool
+
+
+class ConcyclicityResult(StrictModel):
+    """A source-bound concyclicity claim."""
+
+    request: PointQuadrupleRequest
+    concyclic: bool
+
+
 class GeometryRationalResult(StrictModel):
     value: CanonicalRational
 

@@ -114,6 +114,40 @@ pass the [operation admission gates](public-operation-admission.md#admission-gat
 In this pre-stable repository, update affected producers and consumers together
 instead of adding aliases or a network of adapters around defective schemas.
 
+## Repair the contract, not each call site
+
+Use the observed failure to identify the owning change:
+
+| Failure | Repair |
+| --- | --- |
+| Boolean multilinear extension returns a printed backend expression | Return the domain-owned polynomial with its coefficient ring and ordered variables. A display string is optional presentation, not the composable value. |
+| An algebra center or empty basis loses its ambient algebra | Retain the parent and the inclusion or basis coordinates needed to interpret the result. Do not infer the parent from nonempty entries. |
+| Plain and witness-producing Smith operations encode the same diagonal differently | Return the same canonical value in both; transformations are additional mathematical data. |
+| Factorization output cannot feed a root operation | Share the polynomial carrier; preserve factor multiplicities in the factorization result. The consumer still admits its own degree and work. |
+| Two declarations for the same Walsh computation admit different variable counts | Establish one semantic contract and admission path. A different algorithm or discovery phrase does not justify a second contract. |
+| A sparse input is rejected using the cost of dense expansion | Admit the algorithm actually used, including intermediates and exact output; preserve a useful sparse boundary regression. |
+
+Shared representation guarantees that values cross the typed boundary unchanged;
+it does not guarantee that every consumer can afford every representable input.
+Explain operation limits separately from carrier limits. Do not promise a larger
+accepted domain until its motivating request executes successfully.
+
+## State precisely what a relation establishes
+
+A witness is useful only with a named relation and sufficient source context.
+For example, `H = U A` alone does not establish Hermite normal form: the contract
+also needs the relevant unimodularity and normal-form conditions. Likewise, a
+valid graph matching need not be maximum, and an integer matrix of proposed
+lattice coordinates proves inclusion only when it reconstructs the claimed
+basis. Tests must cover the full advertised postcondition, not merely the
+cheapest identity.
+
+This does not require every producer to run a second solver or attach a proof.
+Its algorithm establishes the postcondition; independent tests check it. A
+consumer accepting an authored witness checks the particular relation and
+properties on which its own answer depends, under its own admission. Context,
+a source digest, and successful structural parsing cannot replace those checks.
+
 ## MCP Python SDK v2
 
 The repository pins `mcp==2.1.0`. The official

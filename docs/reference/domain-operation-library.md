@@ -251,7 +251,8 @@ Likewise, a computed exact-success result must satisfy its defining invariant
 and exclude structurally contradictory status and witness combinations. When
 result branches change the presence or mathematical meaning of a witness,
 certificate, diagnostic, or derived value, use a
-discriminated result such as `CONSTRUCTED`, `NOT_APPLICABLE`, or `UNKNOWN`.
+discriminated result with the branches actually defined by the operation, such
+as `CONSTRUCTED` and `NOT_APPLICABLE`.
 The generated public schema must expose those branches and exclude their
 contradictory field combinations; do not replace that contract with one model
 containing optional fields and corrective booleans. If all branches genuinely
@@ -260,6 +261,20 @@ status implication. A result must not report exact success while also reporting
 that reconstruction, target matching, optimality, or certificate validation
 failed. Diagnostic fields may explain a non-success branch; they cannot weaken
 the operation's advertised postcondition.
+
+Advertise `UNKNOWN` only when it is an explicit, representable result branch
+with defined semantics. A backend's internal uncertainty does not add that
+branch to an exact operation. In particular, timeout, unavailable runtime, or
+exhausted execution resources must not become a factorization, divisor list,
+negative answer, or mathematical non-applicability conclusion.
+
+Distinguish invalid input from an established mathematical rejection. If an
+operation asks whether a quotient construction applies, a well-formed relation
+that fails the required compatibility condition is a typed negative outcome
+when that outcome belongs to the declared codomain. Malformed encodings and
+requests outside the admitted domain remain input/admission errors; unexpected
+backend faults remain execution errors. Keep descriptions, result schemas,
+native behavior, and MCP projection consistent with that distinction.
 
 Ordinary result construction must not replay the computation that produced it.
 The trusted kernel establishes the defining invariant before calling its

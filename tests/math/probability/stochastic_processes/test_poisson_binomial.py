@@ -171,5 +171,5 @@ def test_serialized_count_masses_require_source_bound_verification() -> None:
         "num": "1",
         "den": "4",
     }
-    forged = PoissonBinomialResult.model_validate(payload)
+    forged = PoissonBinomialResult.model_validate_json(json.dumps(payload))
     assert not verify_poisson_binomial(forged)

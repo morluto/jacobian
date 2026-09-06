@@ -63,7 +63,6 @@ def test_dispatch_accepts_hnf_above_the_lll_axis() -> None:
         "column_count": len(entries),
         "entries": entries,
     }
-    assert result.output["source_matrix"] == expected
     assert result.output["normal_form"] == expected
     assert result.output["transformation"] == expected
 

@@ -57,7 +57,7 @@ def test_serialized_stationary_claim_is_checked_by_consumer() -> None:
         "num": "2",
         "den": "1",
     }
-    claim = type(result).model_validate(forged)
+    claim = type(result).model_validate_json(json.dumps(forged))
     assert not verify_stationary_distribution_result(claim)
 
 

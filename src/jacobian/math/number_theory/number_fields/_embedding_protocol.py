@@ -18,7 +18,7 @@ from jacobian.math.number_theory.number_fields._embedding_limits import (
 )
 from jacobian.math.number_theory.number_fields.values import (
     MAX_NUMBER_FIELD_EMBEDDING_DEGREE,
-    NumberFieldInteger,
+    NumberFieldDiscriminantInteger,
     SimpleNumberFieldPresentation,
 )
 
@@ -53,7 +53,7 @@ class NumberFieldEmbeddingWorkerComplete(StrictModel):
     negative_complex_rectangles: tuple[RationalComplexIsolatingRectangle, ...] = Field(
         max_length=MAX_NUMBER_FIELD_EMBEDDING_DEGREE // 2
     )
-    defining_polynomial_discriminant: NumberFieldInteger
+    defining_polynomial_discriminant: NumberFieldDiscriminantInteger
 
     @model_validator(mode="after")
     def bind_degree_and_half_plane(self) -> Self:

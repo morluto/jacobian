@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 from itertools import product
 
@@ -95,5 +96,5 @@ def test_serialized_forged_profile_is_rejected_by_verifier() -> None:
     result = compute_gowers_cube_profile(3, (0, 1), 1)
     payload = result.model_dump(mode="json")
     payload["cube_count"] += 1
-    decoded = result.model_validate(payload)
+    decoded = result.model_validate_json(json.dumps(payload))
     assert not verify_gowers_cube_profile(decoded)

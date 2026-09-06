@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
@@ -63,9 +65,7 @@ def test_f3_is_the_directed_three_cycle() -> None:
     )
     assert result.graph.edges == ((0, 1), (1, 2), (2, 0))
     assert result.orientation == "ARC_X_TO_Y_IFF_Y_MINUS_X_IS_NONZERO_SQUARE"
-    assert (
-        PaleyTournamentResult.model_validate(result.model_dump(mode="json")) == result
-    )
+    assert PaleyTournamentResult.model_validate_json(result.model_dump_json()) == result
     assert verify_paley_tournament(result)
 
 
@@ -139,20 +139,20 @@ def test_serialized_result_is_structural_and_publicly_verifiable() -> None:
     result = paley_tournament(finite_field(3, (0, 1)))
     payload = result.model_dump(mode="json")
     payload["graph"]["vertex_count"] = 4
-    decoded = PaleyTournamentResult.model_validate(payload)
+    decoded = PaleyTournamentResult.model_validate_json(json.dumps(payload))
     assert not verify_paley_tournament(decoded)
 
     payload = result.model_dump(mode="json")
     payload["graph"]["edges"] = [[0, 1], [1, 0], [2, 0]]
-    decoded = PaleyTournamentResult.model_validate(payload)
+    decoded = PaleyTournamentResult.model_validate_json(json.dumps(payload))
     assert not verify_paley_tournament(decoded)
 
     payload = result.model_dump(mode="json")
     payload["graph"]["edges"] = list(reversed(payload["graph"]["edges"]))
-    decoded = PaleyTournamentResult.model_validate(payload)
+    decoded = PaleyTournamentResult.model_validate_json(json.dumps(payload))
     assert not verify_paley_tournament(decoded)
 
     payload = result.model_dump(mode="json")
-    payload["vertex_axis"][0]["coordinates"] = [1]
-    decoded = PaleyTournamentResult.model_validate(payload)
+    payload["vertex_axis"][0]["coordinates"] = ["1"]
+    decoded = PaleyTournamentResult.model_validate_json(json.dumps(payload))
     assert not verify_paley_tournament(decoded)

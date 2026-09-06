@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -216,7 +218,7 @@ def test_json_round_trip():
         "num": "2",
         "den": "1",
     }
-    forged_result = type(result).model_validate(forged)
+    forged_result = type(result).model_validate_json(json.dumps(forged))
     assert not verify_gaussian_realification(forged_result)
 
 

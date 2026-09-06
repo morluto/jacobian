@@ -102,7 +102,9 @@ def test_serialized_forged_atom_family_is_rejected_by_verifier() -> None:
     payload["hypergraph"]["edges"] = []
     payload["atom_count"] = 0
     payload["total_incidences"] = 0
-    decoded = ZeroSumAtomHypergraphResult.model_validate(payload)
+    decoded = ZeroSumAtomHypergraphResult.model_validate_json(
+        encode_strict_json(payload)
+    )
     assert not verify_zero_sum_atom_hypergraph(decoded)
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -45,9 +47,85 @@ def test_presentation_identity_binds_modulus_generator_basis_and_encoding() -> N
     assert presentation.digest == _presentation().digest
     assert presentation.digest != _presentation(generator="z").digest
     assert (
-        FiniteFieldPresentation.model_validate(presentation.model_dump(mode="json"))
+        FiniteFieldPresentation.model_validate_json(presentation.model_dump_json())
         == presentation
     )
+
+
+def test_exact_field_integer_leaves_are_native_in_python_and_decimal_in_json() -> None:
+    presentation = _presentation()
+    element_value = _element(presentation, (1, 0, 1))
+
+    assert presentation.model_dump() == {
+        "characteristic": 2,
+        "modulus_coefficients": (1, 1, 0, 1),
+        "generator": "a",
+    }
+    assert presentation.model_dump(mode="json") == {
+        "characteristic": "2",
+        "modulus_coefficients": ["1", "1", "0", "1"],
+        "generator": "a",
+    }
+    assert element_value.model_dump(mode="json")["coordinates"] == ["1", "0", "1"]
+    assert FiniteFieldElement.model_validate_json(element_value.model_dump_json()) == (
+        element_value
+    )
+
+
+@pytest.mark.parametrize(
+    ("model", "payload"),
+    [
+        (
+            FiniteFieldPresentation,
+            {
+                "characteristic": "02",
+                "modulus_coefficients": ["1", "1", "0", "1"],
+                "generator": "a",
+            },
+        ),
+        (
+            FiniteFieldPresentation,
+            {
+                "characteristic": 2,
+                "modulus_coefficients": ["1", "1", "0", "1"],
+                "generator": "a",
+            },
+        ),
+        (
+            FiniteFieldPresentation,
+            {
+                "characteristic": True,
+                "modulus_coefficients": ["1", "1", "0", "1"],
+                "generator": "a",
+            },
+        ),
+        (
+            FiniteFieldPresentation,
+            {
+                "characteristic": 2.0,
+                "modulus_coefficients": ["1", "1", "0", "1"],
+                "generator": "a",
+            },
+        ),
+        (
+            FiniteFieldElement,
+            {
+                "presentation": {
+                    "characteristic": "2",
+                    "modulus_coefficients": ["1", "1", "0", "1"],
+                    "generator": "a",
+                },
+                "coordinates": ["01", "0", "1"],
+            },
+        ),
+    ],
+)
+def test_json_integer_leaves_reject_noncanonical_strings_and_json_numbers(
+    model: type[FiniteFieldPresentation | FiniteFieldElement],
+    payload: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError):
+        model.model_validate_json(json.dumps(payload))
 
 
 @pytest.mark.parametrize(

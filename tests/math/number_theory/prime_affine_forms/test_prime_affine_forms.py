@@ -92,8 +92,22 @@ def test_affine_tuple_is_canonical_and_closed() -> None:
     assert tuple(form.form_id for form in TWIN_PRIMES.forms) == ("n", "n_plus_2")
     assert TWIN_PRIMES.forms[1].evaluate(7) == 9
 
-    constant_source = _tuple(_form("constant", 0, 1))
-    nonprimitive_source = _tuple(_form("nonprimitive", 2, 2))
+    # Construct malformed source values directly to exercise operation-level
+    # admission and verifiers without weakening the value constructor.
+    constant_source = PrimeAffineTuple.model_construct(
+        forms=(
+            PrimitiveIntegerAffineForm.model_construct(
+                form_id="constant", coefficient=0, constant=1
+            ),
+        )
+    )
+    nonprimitive_source = PrimeAffineTuple.model_construct(
+        forms=(
+            PrimitiveIntegerAffineForm.model_construct(
+                form_id="nonprimitive", coefficient=2, constant=2
+            ),
+        )
+    )
     assert verify_primitive_affine_form(constant_source.forms[0]) is False
     assert verify_primitive_affine_form(nonprimitive_source.forms[0]) is False
     with pytest.raises(OperationDomainValidationError):
@@ -109,8 +123,22 @@ def test_affine_tuple_is_canonical_and_closed() -> None:
     with pytest.raises(ValidationError):
         _tuple(_form("first", 1, 0), _form("second", 1, 0))
 
-    assert verify_primitive_affine_form(_form("coded_zero", 0, 1)) is False
-    assert verify_primitive_affine_form(_form("coded_nonprimitive", 2, 2)) is False
+    assert (
+        verify_primitive_affine_form(
+            PrimitiveIntegerAffineForm.model_construct(
+                form_id="coded_zero", coefficient=0, constant=1
+            )
+        )
+        is False
+    )
+    assert (
+        verify_primitive_affine_form(
+            PrimitiveIntegerAffineForm.model_construct(
+                form_id="coded_nonprimitive", coefficient=2, constant=2
+            )
+        )
+        is False
+    )
 
     _form("f" * 32, 1, int("9" * 256))
     with pytest.raises(ValidationError):

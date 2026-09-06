@@ -281,8 +281,8 @@ def bernstein_coefficients(
             values, shape = _contract_axis(values, shape, axis, rows, multidegree[axis])
         coefficients = [
             CanonicalRational.model_construct(
-                num=format_canonical_integer(int(value.numerator)),
-                den=format_canonical_integer(int(value.denominator)),
+                num=int(value.numerator),
+                den=int(value.denominator),
             )
             for value in values
         ]

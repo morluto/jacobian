@@ -203,7 +203,7 @@ def test_restriction_and_rank_operations_preserve_their_defining_invariant() -> 
 
     assert result.linear_map == restricted
     assert result.rank == rank(restricted.matrix)
-    assert type(result).model_validate(result.model_dump(mode="json")) == result
+    assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
 def test_slice_a_keeps_directions_bound_through_orbit_aggregation() -> None:
@@ -237,7 +237,7 @@ def test_orbit_consumer_rejects_a_forged_source_bound_ledger(mutation: str) -> N
     else:
         for entry in entries:
             entry["linear_map"]["target_axis"]["name"] = "unrelated target"
-    candidate = DirectionRankLedger.model_validate(payload)
+    candidate = DirectionRankLedger.model_validate_json(json.dumps(payload))
     with pytest.raises(OperationDomainValidationError) as error:
         orbit_distribution(candidate)
     assert error.value.errors()[0]["type"] == (

@@ -224,11 +224,11 @@ def test_jacobian_entry_is_consumed_without_parent_or_axis_conversion() -> None:
     )
 
     result = _enclose(
-        jacobian.entries[0],
+        jacobian.matrix.entries[0][0],
         _box(("x", "y"), ((1, 2), (3, 4))),
     )
 
-    assert result.polynomial == jacobian.entries[0]
+    assert result.polynomial == jacobian.matrix.entries[0][0]
     assert result.enclosure == _interval(5, 8)
 
 
@@ -264,62 +264,6 @@ def test_box_must_use_the_polynomial_complete_ordered_axis() -> None:
 def test_reversed_coordinate_interval_is_rejected_before_execution() -> None:
     with polynomial_validation_error():
         ClosedRationalInterval(lower=_q(2), upper=_q(1))
-
-
-@pytest.mark.parametrize(
-    "mutation",
-    ("polynomial", "box", "source_digest", "enclosure"),
-)
-def test_source_bound_result_rejects_invalid_source_binding(mutation: str) -> None:
-    result = _enclose(
-        _polynomial(("x",), {(1,): 1}),
-        _box(("x",), ((1, 2),)),
-    )
-    payload = result.model_dump(mode="json")
-    if mutation == "polynomial":
-        payload["polynomial"]["polynomial"]["terms"][0]["coefficient"] = {
-            "num": "2",
-            "den": "1",
-        }
-    elif mutation == "box":
-        payload["box"]["intervals"][0]["upper"] = {"num": "3", "den": "1"}
-    elif mutation == "source_digest":
-        payload["source_digest"] = "sha256:" + "0" * 64
-    elif mutation == "enclosure":
-        payload["enclosure"]["upper"] = {"num": "3", "den": "1"}
-
-    if mutation == "enclosure":
-        PolynomialBoxEnclosureResult.model_validate_json(json.dumps(payload))
-    else:
-        with polynomial_validation_error():
-            PolynomialBoxEnclosureResult.model_validate_json(json.dumps(payload))
-
-
-def test_digest_rejects_a_different_polynomial_with_the_same_interval() -> None:
-    result = _enclose(
-        _polynomial(("x",), {(1,): 1}),
-        _box(("x",), ((0, 1),)),
-    )
-    payload = result.model_dump(mode="json")
-    payload["polynomial"]["polynomial"]["terms"] = [
-        {"coefficient": {"num": "-1", "den": "1"}, "exponents": [1]},
-        {"coefficient": {"num": "1", "den": "1"}, "exponents": [0]},
-    ]
-
-    with polynomial_validation_error():
-        PolynomialBoxEnclosureResult.model_validate_json(json.dumps(payload))
-
-
-def test_digest_rejects_a_different_box_when_the_polynomial_is_constant() -> None:
-    result = _enclose(
-        _polynomial(("x",), {}),
-        _box(("x",), ((0, 1),)),
-    )
-    payload = result.model_dump(mode="json")
-    payload["box"]["intervals"][0]["upper"] = {"num": "2", "den": "1"}
-
-    with polynomial_validation_error():
-        PolynomialBoxEnclosureResult.model_validate_json(json.dumps(payload))
 
 
 def test_produced_result_round_trips_after_strict_serialization() -> None:

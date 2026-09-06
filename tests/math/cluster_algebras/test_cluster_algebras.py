@@ -300,7 +300,7 @@ class TestGVectorBinding:
             GVectorResult(
                 exchange_matrix=b,
                 g_matrix={
-                    "entries": [["1", "0", "0"], ["0", "1", "0"], ["0", "0", "1"]],
+                    "entries": [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
                 },
                 convention="FOMIN_ZELEVINSKY",
             )

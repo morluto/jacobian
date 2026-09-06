@@ -231,7 +231,7 @@ class TestAcceptedTreeCount:
         )
 
         assert (
-            BottomUpTreeAutomaton.model_validate(automaton.model_dump(mode="json"))
+            BottomUpTreeAutomaton.model_validate_json(automaton.model_dump_json())
             == automaton
         )
 

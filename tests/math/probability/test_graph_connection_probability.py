@@ -78,7 +78,7 @@ def test_reliability_verifier_rejects_state_with_forged_edge_axis() -> None:
         graph=SimpleUndirectedGraph(vertices=("a", "b"), edges=(("a", "b"),)),
         edge_probabilities=(
             GraphReliabilityEdgeProbability(
-                edge=("a", "b"), open_probability={"num": "1", "den": "2"}
+                edge=("a", "b"), open_probability=CanonicalRational(num=1, den=2)
             ),
         ),
         terminals=("a", "b"),

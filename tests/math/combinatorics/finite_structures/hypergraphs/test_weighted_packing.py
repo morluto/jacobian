@@ -221,7 +221,7 @@ class TestWeightedPacking:
         assert result.packing == ("e1",)
         forged = result.model_dump(mode="json")
         forged["packing"] = ["e2"]
-        claim = WeightedPackingResult.model_validate(forged)
+        claim = WeightedPackingResult.model_validate_json(json.dumps(forged))
         assert not verify_weighted_packing(claim)
 
     def test_request_rejects_partial_and_duplicate_weights(self) -> None:

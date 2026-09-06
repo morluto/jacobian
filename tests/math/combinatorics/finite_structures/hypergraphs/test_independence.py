@@ -23,6 +23,7 @@ from jacobian.math.combinatorics.finite_structures.hypergraphs.operations import
     dual,
     independence_number,
     parameters,
+    verify_independence_number,
 )
 from jacobian.process import BoundedProcessResult, ProcessResourceLimits
 
@@ -196,7 +197,7 @@ def test_large_ap_carrier_reaches_linear_consumers_not_independence_search() -> 
     assert len(source.vertices) == 212
     assert len(source.edges) == 11_130
     assert sum(len(members) for _, members in source.edges) == 33_390
-    assert FiniteHypergraph.model_validate(source.model_dump(mode="json")) == source
+    assert FiniteHypergraph.model_validate_json(source.model_dump_json()) == source
     parameter_result = parameters(source)
     assert (
         parameter_result.vertex_count,
@@ -424,7 +425,7 @@ def test_all_three_vertex_hypergraphs_match_exhaustive_search() -> None:
         assert result.independence_number == len(_brute_force_witness(source))
 
 
-def test_result_rejects_stale_source_digest() -> None:
+def test_result_verifier_rejects_a_forged_source() -> None:
     result = _compute(
         {
             "vertices": ["a", "b", "c"],
@@ -432,22 +433,19 @@ def test_result_rejects_stale_source_digest() -> None:
         }
     )
     payload = result.model_dump(mode="json")
-    payload["hypergraph"]["edges"][0][0] = "renamed"
-    with pytest.raises(ValidationError):
-        HypergraphIndependenceResult.model_validate_json(json.dumps(payload))
+    payload["hypergraph"]["edges"] = []
+    forged = HypergraphIndependenceResult.model_validate_json(json.dumps(payload))
+    assert not verify_independence_number(forged)
 
 
-def test_source_digest_preserves_distinct_unicode_wire_values() -> None:
+def test_distinct_unicode_sources_round_trip_without_normalization() -> None:
     decomposed = _compute({"vertices": ["e\u0301"], "edges": []})
     composed = _compute({"vertices": ["\u00e9"], "edges": []})
     assert decomposed.hypergraph != composed.hypergraph
-    assert decomposed.hypergraph_digest != composed.hypergraph_digest
-
-    payload = decomposed.model_dump(mode="json")
-    payload["hypergraph"] = composed.hypergraph.model_dump(mode="json")
-    payload["incumbent_vertices"] = list(composed.incumbent_vertices)
-    with pytest.raises(ValidationError):
-        HypergraphIndependenceResult.model_validate_json(json.dumps(payload))
+    assert (
+        type(decomposed).model_validate_json(decomposed.model_dump_json()) == decomposed
+    )
+    assert type(composed).model_validate_json(composed.model_dump_json()) == composed
 
 
 def test_solver_call_limit_returns_only_sound_partial_bounds() -> None:
@@ -806,7 +804,7 @@ def test_producer_projects_solver_error_when_witness_misses_threshold(
     assert result.solver_calls == 1
     assert not result.wall_budget_exhausted
     assert result.termination_reason == "SOLVER_ERROR"
-    assert HypergraphIndependenceResult.model_validate(result.model_dump(mode="json"))
+    assert HypergraphIndependenceResult.model_validate_json(result.model_dump_json())
 
 
 def test_produced_exact_result_meets_the_queried_threshold() -> None:

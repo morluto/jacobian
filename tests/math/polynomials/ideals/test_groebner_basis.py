@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Literal, NoReturn, TypedDict
 
 import pytest
@@ -185,7 +186,7 @@ class TestGroebnerBasisValidation:
         payload["basis"]["generators"][0]["polynomial"]["terms"][0]["coefficient"][
             "num"
         ] = "2"
-        forged = type(result).model_validate(payload)
+        forged = type(result).model_validate_json(json.dumps(payload))
 
         assert not verify_groebner_basis(forged)
 
@@ -253,7 +254,7 @@ class TestIdealNormalForm:
         payload = decoded.model_dump(mode="json")
         payload["remainder"] = _poly(("x",), (1, 1, (0,))).model_dump(mode="json")
         payload["in_ideal"] = False
-        forged = type(result).model_validate(payload)
+        forged = type(result).model_validate_json(json.dumps(payload))
 
         assert not verify_ideal_normal_form(forged)
 

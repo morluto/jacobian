@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from itertools import combinations, product
 
 import pytest
@@ -404,12 +405,12 @@ def test_serialized_factorization_witness_is_checked_by_consumer() -> None:
     forged = decoded.model_copy(deep=True)
     payload = forged.model_dump(mode="json")
     payload["first_duplicate"]["element"] = [1, 1]
-    claim = type(result).model_validate(payload)
+    claim = type(result).model_validate_json(json.dumps(payload))
     assert not verify_finite_abelian_group_factorization(claim)
 
     payload = decoded.model_dump(mode="json")
     payload["representation_histogram"][0]["element_count"] = 1
-    malformed_summary = type(result).model_validate(payload)
+    malformed_summary = type(result).model_validate_json(json.dumps(payload))
     assert not verify_finite_abelian_group_factorization(malformed_summary)
 
 

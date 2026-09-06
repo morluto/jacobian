@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 
 import pytest
@@ -58,7 +59,7 @@ def test_profile_result_rejects_misaligned_point_axis() -> None:
     forged = result.model_dump(mode="json")
     forged["eccentricities"][0]["point"] = 1
     with pytest.raises(ValidationError, match="point axis"):
-        type(result).model_validate(forged)
+        type(result).model_validate_json(json.dumps(forged))
 
 
 def test_profile_complete_graph() -> None:
@@ -115,7 +116,7 @@ def test_ball_result_rejects_points_outside_source_axis() -> None:
     forged = result.model_dump(mode="json")
     forged["points"] = [0, 2]
     with pytest.raises(ValidationError, match="within the metric space"):
-        type(result).model_validate(forged)
+        type(result).model_validate_json(json.dumps(forged))
 
 
 def test_gromov_hyperbolicity_path_graph() -> None:

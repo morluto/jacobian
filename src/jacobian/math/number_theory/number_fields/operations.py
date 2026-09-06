@@ -53,8 +53,8 @@ from jacobian.math.number_theory.number_fields.values import (
     ComplexNumberFieldEmbedding,
     ComplexNumberFieldEmbeddingRecord,
     NumberFieldConjugatePair,
+    NumberFieldDiscriminantInteger,
     NumberFieldEmbeddingProfile,
-    NumberFieldInteger,
     NumberFieldSignature,
     RealNumberFieldEmbedding,
     RealNumberFieldEmbeddingRecord,
@@ -345,7 +345,9 @@ def _integral_basis(
     return integral_basis
 
 
-def discriminant(field: SimpleNumberFieldPresentation) -> NumberFieldInteger:
+def discriminant(
+    field: SimpleNumberFieldPresentation,
+) -> NumberFieldDiscriminantInteger:
     _ring_of_integers, field_discriminant, _alpha, _leading = _integral_basis(field)
     return int(field_discriminant)
 

@@ -406,7 +406,7 @@ class TestEulerianDecomposition:
         cycle = result.cycles[0]
         assert len(cycle.vertices) == 65
         assert len(cycle.edge_ids) == 64
-        replayed = EulerianCyclesResult.model_validate(result.model_dump(mode="json"))
+        replayed = EulerianCyclesResult.model_validate_json(result.model_dump_json())
         assert replayed == result
 
     def test_serialized_claim_verifier_checks_incidence_and_usage(self) -> None:

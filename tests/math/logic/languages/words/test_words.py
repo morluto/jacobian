@@ -607,7 +607,7 @@ def test_empty_alphabet_carries_exactly_the_empty_word_through_json() -> None:
 
     assert word.alphabet == ()
     assert word.letters == ()
-    assert FiniteWord.model_validate(word.model_dump(mode="json")) == word
+    assert FiniteWord.model_validate_json(word.model_dump_json()) == word
 
 
 @pytest.mark.parametrize("symbol", ["\ud800", "\udfff", "a\ud800b"])

@@ -29,8 +29,14 @@ MAX_NUMBER_FIELD_EMBEDDING_DEGREE = 8
 MAX_SIMPLE_NUMBER_FIELD_COEFFICIENT_DIGITS = 256
 MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS = 256
 MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS = 4_096
+MAX_NUMBER_FIELD_DISCRIMINANT_DIGITS = (
+    2 * MAX_SIMPLE_NUMBER_FIELD_DEGREE - 1
+) * MAX_SIMPLE_NUMBER_FIELD_COEFFICIENT_DIGITS + 4 * MAX_SIMPLE_NUMBER_FIELD_DEGREE
 NumberFieldInteger = Annotated[
     int, DecimalIntegerEncoding(max_digits=MAX_SIMPLE_NUMBER_FIELD_COEFFICIENT_DIGITS)
+]
+NumberFieldDiscriminantInteger = Annotated[
+    int, DecimalIntegerEncoding(max_digits=MAX_NUMBER_FIELD_DISCRIMINANT_DIGITS)
 ]
 
 
@@ -404,7 +410,7 @@ class NumberFieldEmbeddingProfile(StrictModel):
     complex_conjugate_pairs: tuple[NumberFieldConjugatePair, ...] = Field(
         max_length=MAX_NUMBER_FIELD_EMBEDDING_DEGREE // 2
     )
-    defining_polynomial_discriminant: NumberFieldInteger
+    defining_polynomial_discriminant: NumberFieldDiscriminantInteger
     ordering: Literal["REAL_INCREASING_THEN_POSITIVE_REPRESENTATIVE_PAIRS_V1"] = (
         "REAL_INCREASING_THEN_POSITIVE_REPRESENTATIVE_PAIRS_V1"
     )
@@ -495,7 +501,7 @@ class NumberFieldEmbeddingProfile(StrictModel):
         ],
         signature: NumberFieldSignature,
         complex_conjugate_pairs: tuple[NumberFieldConjugatePair, ...],
-        defining_polynomial_discriminant: NumberFieldInteger,
+        defining_polynomial_discriminant: NumberFieldDiscriminantInteger,
     ) -> Self:
         return cls.model_construct(
             field=field,

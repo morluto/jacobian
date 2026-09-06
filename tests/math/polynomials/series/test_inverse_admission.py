@@ -49,22 +49,47 @@ def _product(left: TruncatedSeries, right: TruncatedSeries) -> list[Fraction]:
 def test_serialized_residual_ledgers_are_claims_checked_by_consumers() -> None:
     source = _series([Fraction(1), Fraction(1), Fraction(0)])
     inverse_claim = inverse(source)
-    inverse_payload = inverse_claim.model_dump(mode="json")
-    inverse_payload["residual_coefficients"][1] = {"num": "1", "den": "1"}
-    forged_inverse = type(inverse_claim).model_validate(inverse_payload)
+    decoded_inverse = type(inverse_claim).model_validate_json(
+        inverse_claim.model_dump_json()
+    )
+    forged_inverse = decoded_inverse.model_copy(
+        update={
+            "residual_coefficients": (
+                *decoded_inverse.residual_coefficients[:1],
+                CanonicalRational.from_integer_ratio(1, 1),
+                *decoded_inverse.residual_coefficients[2:],
+            )
+        }
+    )
     assert not verify_inverse(forged_inverse)
 
     numerator = _series([Fraction(1), Fraction(2), Fraction(0)])
     division_claim = divide(numerator, source)
-    division_payload = division_claim.model_dump(mode="json")
-    division_payload["residual_coefficients"][0] = {"num": "1", "den": "1"}
-    forged_division = type(division_claim).model_validate(division_payload)
+    decoded_division = type(division_claim).model_validate_json(
+        division_claim.model_dump_json()
+    )
+    forged_division = decoded_division.model_copy(
+        update={
+            "residual_coefficients": (
+                CanonicalRational.from_integer_ratio(1, 1),
+                *decoded_division.residual_coefficients[1:],
+            )
+        }
+    )
     assert not verify_divide(forged_division)
 
     reversion_claim = reversion(_series([Fraction(0), Fraction(1), Fraction(0)]))
-    reversion_payload = reversion_claim.model_dump(mode="json")
-    reversion_payload["left_residual"][0] = {"num": "1", "den": "1"}
-    forged_reversion = type(reversion_claim).model_validate(reversion_payload)
+    decoded_reversion = type(reversion_claim).model_validate_json(
+        reversion_claim.model_dump_json()
+    )
+    forged_reversion = decoded_reversion.model_copy(
+        update={
+            "left_residual": (
+                CanonicalRational.from_integer_ratio(1, 1),
+                *decoded_reversion.left_residual[1:],
+            )
+        }
+    )
     assert not verify_reversion(forged_reversion)
 
 
@@ -161,46 +186,58 @@ def test_growth_rejection_then_small_inverse_recovers() -> None:
 def test_matching_nonzero_residual_ledgers_do_not_prove_claims() -> None:
     source = _series([Fraction(1), Fraction(1), Fraction(0)])
     inverse_claim = inverse(source)
-    payload = inverse_claim.model_dump(mode="json")
-    payload["result"]["coefficients"] = [
-        {"num": "0", "den": "1"},
-        {"num": "0", "den": "1"},
-        {"num": "0", "den": "1"},
-    ]
-    payload["residual_coefficients"] = [
-        {"num": "-1", "den": "1"},
-        {"num": "0", "den": "1"},
-        {"num": "0", "den": "1"},
-    ]
-    assert not verify_inverse(type(inverse_claim).model_validate(payload))
+    decoded_inverse = type(inverse_claim).model_validate_json(
+        inverse_claim.model_dump_json()
+    )
+    forged_inverse = decoded_inverse.model_copy(
+        update={
+            "result": decoded_inverse.result.model_copy(
+                update={"coefficients": (CanonicalRational(num=0, den=1),) * 3}
+            ),
+            "residual_coefficients": (
+                CanonicalRational(num=-1, den=1),
+                CanonicalRational(num=0, den=1),
+                CanonicalRational(num=0, den=1),
+            ),
+        }
+    )
+    assert not verify_inverse(forged_inverse)
 
     numerator = _series([Fraction(1), Fraction(2), Fraction(0)])
     division_claim = divide(numerator, source)
-    payload = division_claim.model_dump(mode="json")
-    payload["quotient"]["coefficients"] = [
-        {"num": "0", "den": "1"},
-        {"num": "0", "den": "1"},
-        {"num": "0", "den": "1"},
-    ]
-    payload["residual_coefficients"] = [
-        {"num": "-1", "den": "1"},
-        {"num": "-2", "den": "1"},
-        {"num": "0", "den": "1"},
-    ]
-    assert not verify_divide(type(division_claim).model_validate(payload))
+    decoded_division = type(division_claim).model_validate_json(
+        division_claim.model_dump_json()
+    )
+    forged_division = decoded_division.model_copy(
+        update={
+            "quotient": decoded_division.quotient.model_copy(
+                update={"coefficients": (CanonicalRational(num=0, den=1),) * 3}
+            ),
+            "residual_coefficients": (
+                CanonicalRational(num=-1, den=1),
+                CanonicalRational(num=-2, den=1),
+                CanonicalRational(num=0, den=1),
+            ),
+        }
+    )
+    assert not verify_divide(forged_division)
 
     reversion_claim = reversion(_series([Fraction(0), Fraction(1), Fraction(0)]))
-    payload = reversion_claim.model_dump(mode="json")
-    payload["result"]["coefficients"] = [
-        {"num": "0", "den": "1"},
-        {"num": "0", "den": "1"},
-        {"num": "0", "den": "1"},
-    ]
-    nonidentity = [
-        {"num": "0", "den": "1"},
-        {"num": "-1", "den": "1"},
-        {"num": "0", "den": "1"},
-    ]
-    payload["left_residual"] = nonidentity
-    payload["right_residual"] = nonidentity
-    assert not verify_reversion(type(reversion_claim).model_validate(payload))
+    decoded_reversion = type(reversion_claim).model_validate_json(
+        reversion_claim.model_dump_json()
+    )
+    nonidentity = (
+        CanonicalRational(num=0, den=1),
+        CanonicalRational(num=-1, den=1),
+        CanonicalRational(num=0, den=1),
+    )
+    forged_reversion = decoded_reversion.model_copy(
+        update={
+            "result": decoded_reversion.result.model_copy(
+                update={"coefficients": (CanonicalRational(num=0, den=1),) * 3}
+            ),
+            "left_residual": nonidentity,
+            "right_residual": nonidentity,
+        }
+    )
+    assert not verify_reversion(forged_reversion)

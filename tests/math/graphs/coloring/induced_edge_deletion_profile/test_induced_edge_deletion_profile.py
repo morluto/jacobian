@@ -350,7 +350,9 @@ def test_native_mcp_parity() -> None:
     via_tool = tool.run(request)
     assert native == via_tool
     # also test via wire round-trip
-    dumped = InducedEdgeDeletionProfileResult.model_validate(native.model_dump())
+    dumped = InducedEdgeDeletionProfileResult.model_validate_json(
+        native.model_dump_json()
+    )
     assert dumped == native
 
 

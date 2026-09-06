@@ -114,6 +114,14 @@ Producers, consumers, validators, serializers, worker codecs, and schemas share
 this boundary. When changing an exact-integer contract, preserve its canonical
 JSON encoding and test both native and serialized composition.
 
+An encoding migration changes the leaves of a canonical value, not the value's
+mathematical shape. Do not replace an owned polynomial or map with a bare
+coefficient tuple merely to expose its integers. For example, rational dynamics
+accepts `RationalPolynomial`, and finite-field functional-graph operations accept
+`FinitePolynomialMap`; those carriers retain their ring or field, variable, and
+domain/codomain context. Migrate the integer fields inside those values, then
+prove that a serialized producer result decodes directly as the consumer input.
+
 Test arithmetic with native exact values wherever the native API accepts them.
 Test serialization separately for canonical spelling, malformed inputs, and
 lossless round trips, and retain producer-consumer composition tests across the

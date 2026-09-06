@@ -204,8 +204,8 @@ def test_wire_request_preserves_the_empty_embedded_action_carrier() -> None:
         kind="BILINEAR",
     )
 
-    decoded = InvariantBilinearFormLatticeRequest.model_validate(
-        request.model_dump(mode="json")
+    decoded = InvariantBilinearFormLatticeRequest.model_validate_json(
+        json.dumps(request.model_dump(mode="json"))
     )
 
     assert isinstance(decoded.action, EmbeddedRealNumberFieldMatrixAction)
@@ -395,7 +395,7 @@ def test_deep_unknown_form_data_is_rejected_before_recursive_canonicalization() 
         nested = {"next": nested}
     action = _action([("A", [[-1, 0], [0, 1]])])
     form = compute_invariant_bilinear_form_lattice(action, "BILINEAR").basis_forms[0]
-    payload = form.model_dump(mode="json")
+    payload = form.model_dump()
     payload["unknown"] = nested
 
     with pytest.raises(ValidationError) as exc_info:

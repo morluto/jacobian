@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 
 import pytest
@@ -120,7 +121,7 @@ def test_jacobian_entries_are_directly_composable_polynomials() -> None:
         "num": "99",
         "den": "1",
     }
-    assert not verify_jacobian(type(result).model_validate(payload))
+    assert not verify_jacobian(type(result).model_validate_json(json.dumps(payload)))
 
 
 def test_jacobian_preserves_axes_for_an_empty_output_map() -> None:

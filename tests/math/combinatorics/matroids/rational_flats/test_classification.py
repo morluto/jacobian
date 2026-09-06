@@ -1,5 +1,6 @@
 """Complete clause-constrained rational-flat orbit classification."""
 
+import json
 import time
 from dataclasses import replace
 from fractions import Fraction
@@ -479,7 +480,9 @@ def test_serialized_complete_claim_and_representative_are_verifiable() -> None:
 
     forged = result.model_dump(mode="json")
     forged["outcome"]["representatives"][0]["orbit_size"] = 2
-    forged_result = ClauseConstrainedRationalFlatClassification.model_validate(forged)
+    forged_result = ClauseConstrainedRationalFlatClassification.model_validate_json(
+        json.dumps(forged)
+    )
     assert not verify_rational_flat_classification(forged_result)
 
 
@@ -532,7 +535,9 @@ def test_complete_family_requires_distinct_canonical_representative_keys() -> No
     ]
     forged["outcome"]["orbit_count"] = 2
     forged["outcome"]["solution_flat_count"] = 2 * representative.orbit_size
-    forged_result = ClauseConstrainedRationalFlatClassification.model_validate(forged)
+    forged_result = ClauseConstrainedRationalFlatClassification.model_validate_json(
+        json.dumps(forged)
+    )
     assert not verify_rational_flat_classification(forged_result)
 
 

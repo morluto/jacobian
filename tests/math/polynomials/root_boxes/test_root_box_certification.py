@@ -417,7 +417,6 @@ def test_permuting_the_complete_axis_preserves_the_geometric_root() -> None:
         interval.lower.as_fraction()
         for interval in transported.conclusion.evidence.krawczyk_image.intervals
     ) == (Fraction(1), Fraction(2))
-    assert source.source_digest != transported.source_digest
 
 
 def test_non_square_system_and_mismatched_axis_are_domain_rejections() -> None:
@@ -460,31 +459,6 @@ def test_endpoint_digit_budget_is_owned_by_operation_admission() -> None:
             _map(("x",), ({(1,): 1},)),
             _box(("x",), ((endpoint, endpoint + 1),)),
         )
-
-
-@pytest.mark.parametrize("mutation", ("polynomial", "box", "preconditioner"))
-def test_record_digest_rejects_independent_source_or_evidence_mutation(
-    mutation: str,
-) -> None:
-    result = _certify(
-        _map(("x",), ({(2,): 1, (0,): -2},)),
-        _box(("x",), ((1, 2),)),
-    )
-    payload = result.model_dump(mode="json")
-    if mutation == "polynomial":
-        payload["polynomial_map"]["output_polynomials"][0]["polynomial"]["terms"][1][
-            "coefficient"
-        ] = {"num": "-3", "den": "1"}
-    elif mutation == "box":
-        payload["box"]["intervals"][0]["upper"] = {"num": "3", "den": "1"}
-    else:
-        payload["conclusion"]["evidence"]["preconditioner"]["entries"][0][0] = {
-            "num": "1",
-            "den": "2",
-        }
-
-    with pytest.raises(ValidationError, match="digest"):
-        PolynomialSystemRootBoxResult.model_validate_json(json.dumps(payload))
 
 
 def test_produced_result_round_trips_and_schema_discriminates_every_branch() -> None:

@@ -344,7 +344,7 @@ class TestLagrangeBasisSourceBinding:
         assert verify_lagrange_basis(decoded)
         payload = result.model_dump(mode="json")
         payload["basis"][0]["barycentric_weight"]["num"] = "2"
-        forged = LagrangeBasisResult.model_validate(payload)
+        forged = LagrangeBasisResult.model_validate_json(json.dumps(payload))
         assert not verify_lagrange_basis(forged)
 
 
@@ -457,5 +457,5 @@ class TestInterpolationPublication:
         assert verify_lagrange_interpolation(decoded)
         payload = result.model_dump(mode="json")
         payload["source"]["values"][0]["num"] = "9"
-        forged = LagrangeInterpolationResult.model_validate(payload)
+        forged = LagrangeInterpolationResult.model_validate_json(json.dumps(payload))
         assert not verify_lagrange_interpolation(forged)

@@ -122,8 +122,8 @@ def test_native_spectral_api_requires_a_validated_simple_graph() -> None:
         (entry.value.polynomial, entry.value.real_root_index): entry.multiplicity
         for entry in result
     } == {
-        (("1", "0"), 0): 1,
-        (("1", "-2"), 0): 1,
+        ((1, 0), 0): 1,
+        ((1, -2), 0): 1,
     }
 
     with pytest.raises(ValidationError):
@@ -143,8 +143,8 @@ def test_laplacian_spectrum_uses_normalized_simple_graph_degree() -> None:
         (entry.value.polynomial, entry.value.real_root_index): entry.multiplicity
         for entry in result.spectrum
     } == {
-        (("1", "0"), 0): 1,
-        (("1", "-2"), 0): 1,
+        ((1, 0), 0): 1,
+        ((1, -2), 0): 1,
     }
 
 

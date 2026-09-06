@@ -23,6 +23,7 @@ from jacobian.math.combinatorics.additive.operations import (
     direct_sum_predicate,
     representation_profile,
     sumset_cardinality,
+    verify_sumset_cardinality,
 )
 from jacobian.math.combinatorics.finite_structures.sets._models import (
     FiniteIntegerSet as CanonicalFiniteIntegerSet,
@@ -236,15 +237,19 @@ class TestSumsetCardinality:
     def test_result_rejects_cardinality_that_disagrees_with_canonical_support(
         self,
     ) -> None:
-        with pytest.raises(ValidationError, match="cardinality must equal"):
-            SumsetCardinalityResult(
-                cardinality=1,
-                support=FiniteIntegerSet(elements=(0, 1)),
-            )
+        result = SumsetCardinalityResult(
+            left=FiniteIntegerSet(elements=(0,)),
+            right=FiniteIntegerSet(elements=(0, 1)),
+            cardinality=1,
+            support=FiniteIntegerSet(elements=(0, 1)),
+        )
+        assert not verify_sumset_cardinality(result)
 
     def test_result_rejects_noncanonical_support_order(self) -> None:
-        with pytest.raises(ValidationError, match="support must be sorted"):
+        with pytest.raises(ValidationError, match="sumset support must be sorted"):
             SumsetCardinalityResult(
+                left=FiniteIntegerSet(elements=(0,)),
+                right=FiniteIntegerSet(elements=(0, 1)),
                 cardinality=2,
                 support=FiniteIntegerSet(elements=(1, 0)),
             )

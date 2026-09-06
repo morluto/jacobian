@@ -9,6 +9,7 @@ from jacobian.catalog.models import (
     OperationExample,
 )
 from jacobian.math.dynamics.arithmetic._models import (
+    MAX_DEGREE,
     CycleMultiplierRequest,
     CycleMultiplierResult,
     DynatomicPolynomialRequest,
@@ -20,7 +21,6 @@ from jacobian.math.dynamics.arithmetic._models import (
     OrbitPrefixRequest,
     OrbitPrefixResult,
     OrbitRepeatEvidence,
-    PolynomialCoefficientRequest,
     _validation_code,
 )
 from jacobian.math.dynamics.arithmetic.operations import (
@@ -29,10 +29,16 @@ from jacobian.math.dynamics.arithmetic.operations import (
     finite_field_functional_graph,
     iterate_polynomial,
     orbit_prefix,
-    polynomial_coefficients,
     polynomial_from_coefficients,
 )
-from jacobian.math.polynomials.values import RationalPolynomial
+from jacobian.math.finite_fields.operations import (
+    finite_polynomial,
+    finite_polynomial_map,
+)
+from jacobian.math.finite_fields.values import (
+    FiniteFieldElement,
+    FiniteFieldPresentation,
+)
 
 
 def _translate_value_error(
@@ -45,27 +51,37 @@ def _translate_value_error(
     ) from exc
 
 
-def _request_polynomial(request: PolynomialCoefficientRequest) -> RationalPolynomial:
-    try:
-        return polynomial_from_coefficients(request.coefficient_values())
-    except ValueError as exc:
-        _translate_value_error(exc, ("coefficients",))
+def _polynomial_example(coefficients: tuple[int, ...]) -> dict[str, Any]:
+    return polynomial_from_coefficients(coefficients).model_dump(mode="json")
+
+
+def _finite_map_example(prime: int, coefficients: tuple[int, ...]) -> dict[str, Any]:
+    presentation = FiniteFieldPresentation(
+        characteristic=prime, modulus_coefficients=(0, 1), generator="x"
+    )
+    polynomial = finite_polynomial(
+        presentation,
+        tuple(
+            FiniteFieldElement(
+                presentation=presentation, coordinates=(coefficient % prime,)
+            )
+            for coefficient in coefficients
+        ),
+        variable="x",
+    )
+    return finite_polynomial_map(polynomial).model_dump(mode="json")
 
 
 def compute_map_iterate(request: MapIterateRequest) -> MapIterateResult:
-    polynomial = _request_polynomial(request)
     try:
-        result = iterate_polynomial(polynomial, request.n)
-        coefficients = tuple(value for value in polynomial_coefficients(result))
+        result = iterate_polynomial(request.polynomial, request.n)
     except ValueError as exc:
-        location = ("coefficients",) if "coefficient" in str(exc) else ("n",)
+        location = ("polynomial",) if "polynomial" in str(exc) else ("n",)
         _translate_value_error(exc, location)
     return MapIterateResult._from_kernel(
-        source_coefficients=request.coefficients,
+        source_polynomial=request.polynomial,
         n=request.n,
-        coefficients=tuple(
-            CanonicalRational.from_fraction(value) for value in coefficients
-        ),
+        polynomial=result,
         degree=0
         if not result.polynomial.terms
         else max(term.exponents[0] for term in result.polynomial.terms),
@@ -73,11 +89,10 @@ def compute_map_iterate(request: MapIterateRequest) -> MapIterateResult:
 
 
 def compute_orbit_prefix(request: OrbitPrefixRequest) -> OrbitPrefixResult:
-    polynomial = _request_polynomial(request)
     try:
-        result = orbit_prefix(polynomial, request.start, request.max_steps)
+        result = orbit_prefix(request.polynomial, request.start, request.max_steps)
     except ValueError as exc:
-        location = ("start",) if "orbit start" in str(exc) else ("coefficients",)
+        location = ("start",) if "orbit start" in str(exc) else ("polynomial",)
         _translate_value_error(exc, location)
     repeat = (
         None
@@ -90,7 +105,7 @@ def compute_orbit_prefix(request: OrbitPrefixRequest) -> OrbitPrefixResult:
         )
     )
     return OrbitPrefixResult._from_kernel(
-        source_coefficients=request.coefficients,
+        source_polynomial=request.polynomial,
         start=request.start,
         requested_steps=request.max_steps,
         orbit=tuple(CanonicalRational.from_fraction(value) for value in result.orbit),
@@ -102,19 +117,15 @@ def compute_orbit_prefix(request: OrbitPrefixRequest) -> OrbitPrefixResult:
 def compute_dynatomic_polynomial(
     request: DynatomicPolynomialRequest,
 ) -> DynatomicPolynomialResult:
-    polynomial = _request_polynomial(request)
     try:
-        result = dynatomic_polynomial(polynomial, request.n)
-        coefficients = polynomial_coefficients(result)
+        result = dynatomic_polynomial(request.polynomial, request.n)
     except ValueError as exc:
-        location = ("coefficients",) if "coefficient" in str(exc) else ("n",)
+        location = ("polynomial",) if "polynomial" in str(exc) else ("n",)
         _translate_value_error(exc, location)
     return DynatomicPolynomialResult._from_kernel(
-        source_coefficients=request.coefficients,
+        source_polynomial=request.polynomial,
         n=request.n,
-        coefficients=tuple(
-            CanonicalRational.from_fraction(value) for value in coefficients
-        ),
+        polynomial=result,
         degree=0
         if not result.polynomial.terms
         else max(term.exponents[0] for term in result.polynomial.terms),
@@ -124,89 +135,105 @@ def compute_dynatomic_polynomial(
 def compute_cycle_multiplier(
     request: CycleMultiplierRequest,
 ) -> CycleMultiplierResult:
-    polynomial = _request_polynomial(request)
     try:
-        multiplier = cycle_multiplier(polynomial, request.cycle)
+        multiplier = cycle_multiplier(request.polynomial, request.cycle)
     except ValueError as exc:
-        _translate_value_error(exc, ("cycle",))
+        location = ("cycle",) if "cycle" in str(exc) else ("polynomial",)
+        _translate_value_error(exc, location)
     return CycleMultiplierResult._from_kernel(
-        source_coefficients=request.coefficients,
+        source_polynomial=request.polynomial,
         cycle=request.cycle,
         multiplier=multiplier,
     )
 
 
 def compute_finite_field_map(request: FiniteFieldMapRequest) -> FiniteFieldMapResult:
+    polynomial_map = request.polynomial_map
+    if (
+        polynomial_map.domain != polynomial_map.codomain
+        or polynomial_map.polynomial.variable != "x"
+        or polynomial_map.domain.degree != 1
+    ):
+        _translate_value_error(
+            ValueError("finite-field map must be a prime-field univariate map"),
+            ("polynomial_map",),
+        )
+    if len(polynomial_map.polynomial.coefficients) > MAX_DEGREE + 1:
+        _translate_value_error(
+            ValueError("polynomial must have between 1 and 31 coefficients"),
+            ("polynomial_map",),
+        )
+    values: list[int] = []
+    for coefficient in polynomial_map.polynomial.coefficients:
+        values.append(coefficient.coordinates[0])
     try:
-        graph = finite_field_functional_graph(request.coefficients, request.prime)
+        graph = finite_field_functional_graph(
+            tuple(values), polynomial_map.domain.characteristic
+        )
     except ValueError as exc:
-        location = ("coefficients",) if "coefficient" in str(exc) else ("prime",)
-        _translate_value_error(exc, location)
+        _translate_value_error(exc, ("polynomial_map",))
     return FiniteFieldMapResult._from_kernel(
-        prime=request.prime,
-        coefficients=request.coefficients,
+        polynomial_map=polynomial_map,
         edges=graph.edges,
         cycles=graph.cycles,
         tail_lengths=graph.tail_lengths,
     )
 
 
+def verify_finite_field_map(claim: FiniteFieldMapResult) -> bool:
+    try:
+        expected = compute_finite_field_map(
+            FiniteFieldMapRequest(polynomial_map=claim.polynomial_map)
+        )
+    except (TypeError, ValueError, OperationDomainValidationError):
+        return False
+    return claim == expected
+
+
 def verify_map_iterate(claim: MapIterateResult) -> bool:
     try:
         expected = compute_map_iterate(
-            MapIterateRequest(coefficients=claim.source_coefficients, n=claim.n)
+            MapIterateRequest(polynomial=claim.source_polynomial, n=claim.n)
         )
-        return claim == expected
     except (TypeError, ValueError, OperationDomainValidationError):
         return False
+    return claim == expected
 
 
 def verify_orbit_prefix(claim: OrbitPrefixResult) -> bool:
     try:
         expected = compute_orbit_prefix(
             OrbitPrefixRequest(
-                coefficients=claim.source_coefficients,
+                polynomial=claim.source_polynomial,
                 start=claim.start,
                 max_steps=claim.requested_steps,
             )
         )
-        return claim == expected
     except (TypeError, ValueError, OperationDomainValidationError):
         return False
+    return claim == expected
 
 
 def verify_dynatomic_polynomial(claim: DynatomicPolynomialResult) -> bool:
     try:
         expected = compute_dynatomic_polynomial(
-            DynatomicPolynomialRequest(
-                coefficients=claim.source_coefficients, n=claim.n
-            )
+            DynatomicPolynomialRequest(polynomial=claim.source_polynomial, n=claim.n)
         )
-        return claim == expected
     except (TypeError, ValueError, OperationDomainValidationError):
         return False
+    return claim == expected
 
 
 def verify_cycle_multiplier(claim: CycleMultiplierResult) -> bool:
     try:
         expected = compute_cycle_multiplier(
             CycleMultiplierRequest(
-                coefficients=claim.source_coefficients, cycle=claim.cycle
+                polynomial=claim.source_polynomial, cycle=claim.cycle
             )
         )
-        return claim == expected
     except (TypeError, ValueError, OperationDomainValidationError):
         return False
-
-
-def verify_finite_field_map(claim: FiniteFieldMapResult) -> bool:
-    try:
-        expected = compute_finite_field_map(
-            FiniteFieldMapRequest(prime=claim.prime, coefficients=claim.coefficients)
-        )
-        return claim == expected
-    except (TypeError, ValueError, OperationDomainValidationError):
-        return False
+    return claim == expected
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
@@ -224,11 +251,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="f_x_squared_plus_1_iterate_2",
                 description="Compute f^2 for f(x)=x^2+1; n must be non-negative.",
                 input={
-                    "coefficients": [
-                        {"num": "1", "den": "1"},
-                        {"num": "0", "den": "1"},
-                        {"num": "1", "den": "1"},
-                    ],
+                    "polynomial": _polynomial_example((1, 0, 1)),
                     "n": 2,
                 },
             ),
@@ -251,11 +274,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 description="Orbit of 0 under f(x)=x^2 for 5 steps; "
                 "start must be a rational number.",
                 input={
-                    "coefficients": [
-                        {"num": "0", "den": "1"},
-                        {"num": "0", "den": "1"},
-                        {"num": "1", "den": "1"},
-                    ],
+                    "polynomial": _polynomial_example((0, 0, 1)),
                     "start": {"num": "0", "den": "1"},
                     "max_steps": 5,
                 },
@@ -277,11 +296,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="dynatomic_n1_x2",
                 description="Dynatomic polynomial for n=1 of f(x)=x^2; n must be at least 1.",
                 input={
-                    "coefficients": [
-                        {"num": "0", "den": "1"},
-                        {"num": "0", "den": "1"},
-                        {"num": "1", "den": "1"},
-                    ],
+                    "polynomial": _polynomial_example((0, 0, 1)),
                     "n": 1,
                 },
             ),
@@ -303,11 +318,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 description="Multiplier of the fixed point 0 under f(x)=x^2; "
                 "cycle points must be rational.",
                 input={
-                    "coefficients": [
-                        {"num": "0", "den": "1"},
-                        {"num": "0", "den": "1"},
-                        {"num": "1", "den": "1"},
-                    ],
+                    "polynomial": _polynomial_example((0, 0, 1)),
                     "cycle": [{"num": "0", "den": "1"}],
                 },
             ),
@@ -327,7 +338,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="x2_mod_5",
                 description="Functional graph of x^2 over GF(5); prime must be a prime number.",
-                input={"prime": 5, "coefficients": ["0", "0", "1"]},
+                input={"polynomial_map": _finite_map_example(5, (0, 0, 1))},
             ),
         ),
     ),
@@ -336,6 +347,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
 
 __all__ = [
     "TOOLS",
+    "compute_cycle_multiplier",
+    "compute_dynatomic_polynomial",
+    "compute_finite_field_map",
+    "compute_map_iterate",
+    "compute_orbit_prefix",
     "verify_cycle_multiplier",
     "verify_dynatomic_polynomial",
     "verify_finite_field_map",

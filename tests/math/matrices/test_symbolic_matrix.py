@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
@@ -1167,7 +1168,7 @@ def test_rational_function_matrix_preserves_empty_shapes_and_axes() -> None:
         )
         payload = matrix.model_dump(mode="json")
         assert (payload["row_count"], payload["column_count"]) == (rows, columns)
-        restored = RationalFunctionMatrix.model_validate(payload)
+        restored = RationalFunctionMatrix.model_validate_json(json.dumps(payload))
         assert restored == matrix
 
 

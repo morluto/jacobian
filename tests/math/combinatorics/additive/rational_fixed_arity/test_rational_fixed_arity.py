@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 from itertools import combinations
 from math import comb
@@ -116,7 +117,7 @@ def test_serialized_forged_profile_is_rejected_by_verifier() -> None:
     result = compute_rational_fixed_arity_sum_profile((_cr(1), _cr(2)), 1)
     payload = result.model_dump(mode="json")
     payload["rows"][0]["multiplicity"] += 1
-    decoded = result.model_validate(payload)
+    decoded = result.model_validate_json(json.dumps(payload))
     assert not verify_rational_fixed_arity_sum_profile(decoded)
 
 

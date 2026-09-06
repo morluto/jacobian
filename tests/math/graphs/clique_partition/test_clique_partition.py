@@ -112,7 +112,7 @@ class TestSemantics:
     def test_result_reparses(self) -> None:
         result = _check(DIAMOND, [["a", "b", "c"], ["a", "d"], ["b", "d"]])
         assert (
-            EdgeCliquePartitionResult.model_validate(result.model_dump(mode="json"))
+            EdgeCliquePartitionResult.model_validate_json(result.model_dump_json())
             == result
         )
 

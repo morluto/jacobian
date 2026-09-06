@@ -82,6 +82,12 @@ pass through the consumer's typed boundary without the caller reconstructing
 its field presentation, axes, ambient dimension, normalization, or other
 mathematical context. Empty and degenerate values retain that context too.
 
+Integer encoding does not authorize flattening that value. A dynamics request
+continues to accept `RationalPolynomial` or `FinitePolynomialMap`, rather than
+separate coefficient and field parameters; only their integer leaves serialize
+as decimal strings. This preserves direct producer-to-consumer composition and
+keeps parent, variable, and domain/codomain data available to admission.
+
 For example, a QQ matrix with `row_count=0`, `column_count=3`, and
 `entries=[]` is a map from a three-dimensional space to the zero space.
 Its dimensions survive dense/sparse conversion, backend conversion, and JSON
@@ -120,43 +126,34 @@ for the remaining legacy-field and compound-rational scope.
 
 ### Finite abelian groups
 
-The abelian operations use `FiniteAbelianProductGroup(moduli=(6, 4))`, the same
-ordered cyclic-product parent used by finite-group factorization and character
-operations. Empty `moduli` denotes the trivial group. Legacy flat
-`invariant_factors` request fields and `AbelianPresentation` are removed.
-The `moduli` field contains exact Python integers. `model_dump()` preserves
-them; `model_dump(mode="json")` and `model_dump_json()` encode them as canonical
-decimal strings. `model_validate_json()` validates and decodes that encoding
-back into the same value type. Native construction does not accept numeric
-strings, and JSON decoding does not accept numbers for these fields.
+The abelian operations use `AbelianPresentation(invariant_factors=(2, 12))`.
+Its invariant factors and all element coordinates are exact Python integers.
+`model_dump()` preserves them; `model_dump(mode="json")` and
+`model_dump_json()` encode them as canonical decimal strings.
+`model_validate_json()` validates and decodes that encoding back into the same
+value type. Native construction does not accept numeric strings, and JSON
+decoding does not accept numbers for these fields.
 
-`reduce_element(group, coordinates)` returns a `FiniteAbelianElement` with
-`group` and canonical `coordinates`; that serialized value passes unchanged
-to `element_order(element)` or `elements_equal(left, right)`. Different ordered
-parents are not implicitly identified, even when they are isomorphic.
-`FiniteAbelianSubgroup(group=..., generators=...)` retains canonical generator
-coordinates, including empty generating sets. Both `generated_subgroup` and
-`quotient_group` consume that same value and retain it in their result.
+`reduce_element(group, coordinates)` returns an `ElementReduceResult` retaining
+the source coordinates and an `AbelianElement` with canonical coordinates.
+`element_order` and `elements_equal` retain their source group and canonical
+elements in their result values. `generated_subgroup` and `quotient_group`
+similarly return parent-bound `AbelianSubgroup` values. Different presentations
+are not implicitly identified merely because they present isomorphic groups.
 
-`normalize_presentation(group)` retains `source_group` and returns the
-invariant-factor `group`; quotient computation returns its abstract `quotient`
-group. Neither result supplies a coordinate isomorphism or quotient projection.
-Group order and exponent are native properties of the shared parent, not
-duplicated serialized claims. Work bounds are checked at native operation
-admission. Abelian element coordinates, subgroup generators, and element-order
-results are exact Python integers with canonical decimal-string JSON encoding.
-Reduction accepts signed decimal-string coordinates through MCP and exact
-Python integers natively, with a 32,768-digit guard in both paths.
-Moduli now serialize as canonical integer strings too, but still retain the
-previous magnitude bound while the remaining coordinate consumers are migrated.
-Element orders exceeding that scalar range remain exact in transport.
+`normalize_presentation(source)` retains the source cyclic-factor presentation
+and returns an invariant-factor `AbelianPresentation`; quotient computation
+returns an abstract `AbelianQuotient`. Neither result supplies a coordinate
+isomorphism or quotient projection. Group order and exponent are mathematical
+result fields, not duplicated serialized claims. Work bounds are checked at
+native operation admission. Reduction accepts exact Python integers natively
+and canonical decimal-string coordinates through JSON, with a 32,768-digit
+encoding guard in both paths.
 
-The group modulus magnitude bound and the separate numeric character-operation
-coordinate fields remain limitations, not the intended mathematical domain.
-String encoding of moduli alone does not complete the range expansion.
-The abelian Smith operations also still retain a
-4,096 group-order admission cap; do not interpret the canonical element-order
-encoding as evidence that this separate scale limitation has been repaired.
+The abelian Smith operations still retain a 4,096 group-order admission cap;
+do not interpret canonical integer encoding as evidence that this separate
+scale limitation has been repaired. Other finite-group and character operations
+retain their own bounded coordinate contracts.
 See [exact integer migrations](value-interoperability.md#exact-integers-representation-is-not-a-work-limit)
 and [large-group admission](public-operation-admission.md#large-integers-and-large-finite-groups)
 for the required repairs.

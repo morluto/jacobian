@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -261,7 +263,7 @@ class TestValidation:
             "samples": ["a", "b"],
             "masses": [{"num": "-1", "den": "3"}, {"num": "1", "den": "3"}],
         }
-        decoded = FiniteProbabilitySpace.model_validate(payload)
+        decoded = FiniteProbabilitySpace.model_validate_json(json.dumps(payload))
         assert decoded.samples == ("a", "b")
         with pytest.raises(OperationDomainValidationError) as error:
             admit_probability_space(decoded)
@@ -270,11 +272,13 @@ class TestValidation:
         )
 
     def test_mass_component_bound_is_operation_admission(self) -> None:
-        oversized = FiniteProbabilitySpace.model_validate(
-            {
-                "samples": ["a"],
-                "masses": [{"num": "1" + "0" * 256, "den": "1"}],
-            }
+        oversized = FiniteProbabilitySpace.model_validate_json(
+            json.dumps(
+                {
+                    "samples": ["a"],
+                    "masses": [{"num": "1" + "0" * 256, "den": "1"}],
+                }
+            )
         )
         with pytest.raises(OperationDomainValidationError) as error:
             admit_probability_space(oversized)

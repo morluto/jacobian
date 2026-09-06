@@ -36,9 +36,11 @@ def test_walsh_conventions_have_exact_affine_relationship(n: int) -> None:
         {"truth_table": [c.model_dump(mode="json") for c in _truth_table(values)]},
         catalog,
     ).output
-    assert signs["source"] == raw["source"]
-    assert len(signs["source"]["values"]) == 1 << n
-    assert [int(v) for v in signs["spectrum"]["values"]] == [
+    assert signs["variable_count"] == n
+    assert signs["ordering"] == "HADAMARD"
+    assert signs["convention"] == "BOOLEAN_SIGN"
+    assert len(raw["source"]["values"]) == 1 << n
+    assert [int(v) for v in signs["spectrum"]] == [
         ((1 << n) if i == 0 else 0) - 2 * int(v["num"])
         for i, v in enumerate(raw["spectrum"]["values"])
     ]

@@ -16,6 +16,7 @@ from pydantic import (
 )
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.canonical import (
     format_canonical_integer,
@@ -39,6 +40,15 @@ _MAX_ACTION_GENERATORS = MAX_PRIME_FIELD_MATRIX_AXIS
 # homogeneous basis at one matrix axis.  Work and output admission remain
 # result-sensitive in the operation owner.
 _MAX_HOMOGENEOUS_MONOMIALS = MAX_PRIME_FIELD_MATRIX_AXIS
+# The finite-field presentation and element validators cap every residue by
+# the characteristic, and cap the characteristic by the supported field
+# order.  Five decimal digits therefore cover every exact integer leaf while
+# keeping the JSON boundary explicit.
+MAX_FINITE_FIELD_INTEGER_DIGITS = len(str(_MAX_FIELD_ORDER))
+FiniteFieldInteger = Annotated[
+    int,
+    DecimalIntegerEncoding(max_digits=MAX_FINITE_FIELD_INTEGER_DIGITS),
+]
 
 # Orbit counts are native Python integers, but their JSON representation must
 # remain lossless for consumers that do not have arbitrary-precision JSON
@@ -248,23 +258,28 @@ class FiniteFieldPresentation(StrictModel):
         json_schema_extra={
             "examples": [
                 {
-                    "characteristic": 2,
-                    "modulus_coefficients": [1, 1, 1],
+                    "characteristic": "2",
+                    "modulus_coefficients": ["1", "1", "1"],
                     "generator": "a",
                 }
             ]
         }
     )
 
-    characteristic: int = Field(
-        description="Prime p defining the base field GF(p).", examples=[2]
+    characteristic: FiniteFieldInteger = Field(
+        description=(
+            "Prime p defining the base field GF(p); a native Python int and a "
+            "canonical decimal string in JSON."
+        ),
+        examples=["2"],
     )
-    modulus_coefficients: tuple[int, ...] = Field(
+    modulus_coefficients: tuple[FiniteFieldInteger, ...] = Field(
         description=(
             "Constant-to-leading coefficients of a monic irreducible modulus over "
-            "GF(characteristic); each coefficient is a canonical residue."
+            "GF(characteristic); each coefficient is a canonical residue, represented "
+            "as a native Python int and a canonical decimal string in JSON."
         ),
-        examples=[[1, 1, 1]],
+        examples=[["1", "1", "1"]],
     )
     generator: str = Field(
         default="a",
@@ -321,7 +336,7 @@ class FiniteFieldElement(StrictModel):
     """Power-basis coordinates bound to one exact field presentation."""
 
     presentation: FiniteFieldPresentation
-    coordinates: tuple[int, ...]
+    coordinates: tuple[FiniteFieldInteger, ...]
 
     @model_validator(mode="after")
     def validate_coordinates(self) -> Self:

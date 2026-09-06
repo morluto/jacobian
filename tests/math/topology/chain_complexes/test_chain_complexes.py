@@ -85,7 +85,7 @@ def test_chain_value_parsing_is_structural_and_consumers_admit_prime(
 
     monkeypatch.setattr(chain_operations, "require_prime_field_admission", tracked)
     value = ChainComplexValue.model_validate(payload)
-    ChainComplexValue.model_validate(value.model_dump(mode="json"))
+    ChainComplexValue.model_validate_json(value.model_dump_json())
     assert calls == []
     with pytest.raises(ValueError, match="not prime"):
         differential_squares_to_zero(value)

@@ -310,7 +310,7 @@ def test_canonical_labels_stay_sorted_across_the_three_digit_boundary() -> None:
     assert result.canonical_graph.graph.vertices == expected_labels
     assert result.canonical_graph.vertex_colors == tuple(sorted(colors))
 
-    ColoredGraphCanonicalizationResult.model_validate(result.model_dump(mode="json"))
+    ColoredGraphCanonicalizationResult.model_validate_json(result.model_dump_json())
 
 
 def test_request_rejects_edge_key_work_before_enumeration() -> None:

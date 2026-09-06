@@ -23,6 +23,7 @@ from jacobian.math.finite_fields.operations import (
     restrict_scalars,
     verify_collisions,
     verify_fiber_partition,
+    verify_orbit_distribution,
     verify_paley_tournament,
     verify_permutation,
 )
@@ -94,6 +95,7 @@ __all__ = [
     "verify_collisions",
     "verify_fiber_partition",
     "verify_matrix_rank",
+    "verify_orbit_distribution",
     "verify_paley_tournament",
     "verify_permutation",
 ]

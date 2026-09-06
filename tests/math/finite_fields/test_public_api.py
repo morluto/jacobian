@@ -20,6 +20,7 @@ from jacobian.math.finite_fields import (
     projective_line,
     projective_point,
     restrict_scalars,
+    verify_orbit_distribution,
 )
 from jacobian.math.finite_fields._tools import TOOLS
 from jacobian.math.matrices.finite_fields.linear_algebra import rank
@@ -245,6 +246,64 @@ def test_serialized_rank_ledger_composes_into_orbit_distribution() -> None:
     assert result.ledger is candidate
 
 
+def test_serialized_orbit_distribution_is_a_claim_checked_by_its_consumer() -> None:
+    subspace, directions = _slice_a_values()
+    distribution = orbit_distribution(direction_rank_ledger(subspace, directions))
+
+    decoded = type(distribution).model_validate_json(distribution.model_dump_json())
+    assert decoded.counts == ((1, 9), (8, 48), (16, 12))
+    assert decoded.ledger.subspace.presentation == subspace.presentation
+    assert decoded.ledger.entries[0].linear_map.source_axis == subspace.basis_axis
+    assert decoded.model_dump(mode="json")["counts"] == [
+        ["1", "9"],
+        ["8", "48"],
+        ["16", "12"],
+    ]
+    assert verify_orbit_distribution(decoded)
+
+    forged = distribution.model_dump(mode="json")
+    forged["counts"] = [["1", "1"]]
+    forged_decoded = type(distribution).model_validate(forged)
+    assert not verify_orbit_distribution(forged_decoded)
+
+
+def test_serialized_orbit_distribution_decoding_does_not_replay_histogram(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    subspace, directions = _slice_a_values()
+    distribution = orbit_distribution(direction_rank_ledger(subspace, directions))
+
+    def fail(_ledger: object) -> tuple[tuple[int, int], ...]:
+        raise AssertionError("histogram replayed during result decoding")
+
+    monkeypatch.setattr(
+        "jacobian.math.finite_fields.values._orbit_counts",
+        fail,
+    )
+    decoded = type(distribution).model_validate_json(distribution.model_dump_json())
+    assert decoded.counts == ((1, 9), (8, 48), (16, 12))
+
+
+def test_orbit_distribution_rejects_overlarge_exact_count_output_before_power() -> None:
+    subspace, directions = _slice_a_values()
+    ledger = direction_rank_ledger(subspace, directions)
+    oversized_target = Axis.model_construct(
+        name="oversized target",
+        labels=tuple(f"y{index}" for index in range(120_000)),
+    )
+    oversized_map = ledger.entries[0].linear_map.model_copy(
+        update={"target_axis": oversized_target}
+    )
+    oversized_entry = ledger.entries[0].model_copy(update={"linear_map": oversized_map})
+    oversized_ledger = ledger.model_copy(update={"entries": (oversized_entry,)})
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        orbit_distribution(oversized_ledger)
+    assert error.value.errors()[0]["type"] == (
+        "finite_field.orbit_distribution_count_digit_bound"
+    )
+
+
 def test_slice_a_rank_derives_the_restriction_from_its_source() -> None:
     subspace, directions = _slice_a_values()
     direction = directions.points[0]
@@ -411,6 +470,7 @@ def test_exact_public_api_symbols() -> None:
         "verify_collisions",
         "verify_fiber_partition",
         "verify_matrix_rank",
+        "verify_orbit_distribution",
         "verify_paley_tournament",
         "verify_permutation",
     )

@@ -2,14 +2,25 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 import rfc8785
-from pydantic import ConfigDict, Field, StrictInt, model_validator
+from pydantic import (
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    PlainSerializer,
+    StrictInt,
+    model_validator,
+)
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import sha256_digest
+from jacobian.canonical import (
+    format_canonical_integer,
+    parse_canonical_integer,
+    sha256_digest,
+)
 from jacobian.math.graphs.directed._models import DirectedGraph
 from jacobian.math.matrices.finite_fields._bounds import (
     MAX_PRIME_FIELD_MATRIX_AXIS,
@@ -27,6 +38,62 @@ _MAX_ACTION_GENERATORS = MAX_PRIME_FIELD_MATRIX_AXIS
 # homogeneous basis at one matrix axis.  Work and output admission remain
 # result-sensitive in the operation owner.
 _MAX_HOMOGENEOUS_MONOMIALS = MAX_PRIME_FIELD_MATRIX_AXIS
+
+# Orbit counts are native Python integers, but their JSON representation must
+# remain lossless for consumers that do not have arbitrary-precision JSON
+# numbers.  Keep the scalar and aggregate result bounds explicit at this
+# source-bound result boundary.
+MAX_ORBIT_DISTRIBUTION_COUNT_DIGITS = 32_768
+MAX_ORBIT_DISTRIBUTION_ROWS = _MAX_FIELD_ORDER + 1
+MAX_ORBIT_DISTRIBUTION_TOTAL_DIGITS = 5_000_000
+
+
+def _parse_orbit_count_integer(value: Any) -> int:
+    """Decode one bounded nonnegative native integer from Python or JSON."""
+
+    if isinstance(value, bool):
+        raise PydanticCustomError(
+            "finite_field.orbit_count_integer_type",
+            "orbit counts must be exact integers, not booleans",
+        )
+    if isinstance(value, int):
+        parsed = value
+    elif isinstance(value, str):
+        if len(value.lstrip("-")) > MAX_ORBIT_DISTRIBUTION_COUNT_DIGITS:
+            raise PydanticCustomError(
+                "finite_field.orbit_count_integer_digits",
+                "orbit count exceeds its canonical decimal digit bound",
+            )
+        try:
+            parsed = parse_canonical_integer(value)
+        except ValueError as exc:
+            raise PydanticCustomError(
+                "finite_field.orbit_count_integer_syntax",
+                "orbit counts must use canonical decimal integers",
+            ) from exc
+    else:
+        raise PydanticCustomError(
+            "finite_field.orbit_count_integer_type",
+            "orbit counts must be Python integers or canonical decimal strings",
+        )
+    if parsed < 0:
+        raise PydanticCustomError(
+            "finite_field.orbit_count_integer_nonnegative",
+            "orbit counts must be nonnegative",
+        )
+    if len(format_canonical_integer(parsed)) > MAX_ORBIT_DISTRIBUTION_COUNT_DIGITS:
+        raise PydanticCustomError(
+            "finite_field.orbit_count_integer_digits",
+            "orbit count exceeds its canonical decimal digit bound",
+        )
+    return parsed
+
+
+OrbitCountInteger = Annotated[
+    int,
+    BeforeValidator(_parse_orbit_count_integer),
+    PlainSerializer(format_canonical_integer, return_type=str, when_used="json"),
+]
 
 
 def _homogeneous_monomial_count(variable_count: int, degree: int) -> int:
@@ -997,17 +1064,44 @@ class DirectionRankLedger(StrictModel):
 
 
 class OrbitDistribution(StrictModel):
-    """Orbit-size counts derived from one exact direction-rank ledger."""
+    """A source-bound claim of orbit-size counts for one exact ledger.
+
+    The producer establishes the histogram once.  Decoding preserves the
+    retained ledger and checks only the count rows' bounded structural shape;
+    a consumer that relies on the histogram must call
+    :func:`verify_orbit_distribution`.
+    """
 
     ledger: DirectionRankLedger
-    counts: tuple[tuple[int, int], ...]
+    counts: tuple[tuple[OrbitCountInteger, OrbitCountInteger], ...] = Field(
+        min_length=1,
+        max_length=MAX_ORBIT_DISTRIBUTION_ROWS,
+    )
 
     @model_validator(mode="after")
     def validate_distribution(self) -> Self:
-        if self.counts != _orbit_counts(self.ledger):
+        if any(orbit_size < 1 for orbit_size, _ in self.counts):
             raise _validation_error(
-                "finite_field.orbit_counts_do_not_match_direction_rank_ledger",
-                "orbit counts do not match the direction-rank ledger",
+                "finite_field.orbit_size_positive",
+                "orbit sizes must be positive",
+            )
+        if len({orbit_size for orbit_size, _ in self.counts}) != len(self.counts):
+            raise _validation_error(
+                "finite_field.orbit_counts_unique_sizes",
+                "orbit count rows must have unique orbit sizes",
+            )
+        if self.counts != tuple(sorted(self.counts)):
+            raise _validation_error(
+                "finite_field.orbit_counts_canonical_order",
+                "orbit count rows must be sorted by orbit size",
+            )
+        total_digits = sum(
+            len(format_canonical_integer(value)) for row in self.counts for value in row
+        )
+        if total_digits > MAX_ORBIT_DISTRIBUTION_TOTAL_DIGITS:
+            raise _validation_error(
+                "finite_field.orbit_counts_total_digit_bound",
+                "orbit count rows exceed their total decimal digit bound",
             )
         return self
 

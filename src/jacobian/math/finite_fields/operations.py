@@ -29,6 +29,8 @@ from jacobian.math.finite_fields._models import (
     _MAX_PROJECTIVE_POINTS,
 )
 from jacobian.math.finite_fields.values import (
+    MAX_ORBIT_DISTRIBUTION_COUNT_DIGITS,
+    MAX_ORBIT_DISTRIBUTION_TOTAL_DIGITS,
     Axis,
     AxisBoundMatrix,
     CollisionResult,
@@ -52,6 +54,7 @@ from jacobian.math.finite_fields.values import (
     _direction_rank_work,
     _fibers_for_table,
     _homogeneous_monomial_count,
+    _orbit_counts,
 )
 from jacobian.math.graphs.directed._models import (
     MAX_DIRECTED_GRAPH_PARSE_EDGES,
@@ -741,8 +744,22 @@ def direction_rank_ledger(
     )
 
 
-def orbit_distribution(ledger: DirectionRankLedger) -> OrbitDistribution:
-    """Aggregate projective orbit counts from a complete direction-rank ledger."""
+def _orbit_count_digit_bound(base: int, exponent: int) -> int:
+    """Conservatively bound decimal digits of ``base**exponent``.
+
+    ``log10(2) < 30103 / 100000`` gives an integer-only upper bound from the
+    result's bit length, avoiding construction of an over-budget power during
+    admission.
+    """
+
+    if exponent == 0:
+        return 1
+    bits = base.bit_length() * exponent
+    return (bits * 30103 + 99_999) // 100_000
+
+
+def _admit_orbit_distribution(ledger: DirectionRankLedger) -> None:
+    """Admit ledger authentication, histogram growth, and exact output size."""
 
     if (
         _direction_rank_work(ledger.subspace, len(ledger.entries))
@@ -753,6 +770,30 @@ def orbit_distribution(ledger: DirectionRankLedger) -> OrbitDistribution:
             code="finite_field.orbit_ledger_exceeds_operation_work_budget",
             message="orbit ledger authentication exceeds the operation work budget",
         )
+    first = ledger.entries[0]
+    target_dimension = len(first.linear_map.target_axis.labels)
+    prime = first.direction.presentation.characteristic
+    maximum_power_digits = _orbit_count_digit_bound(prime, target_dimension)
+    maximum_count_digits = maximum_power_digits + len(str(len(ledger.entries))) + 1
+    if maximum_count_digits > MAX_ORBIT_DISTRIBUTION_COUNT_DIGITS:
+        raise OperationDomainValidationError(
+            location=("ledger",),
+            code="finite_field.orbit_distribution_count_digit_bound",
+            message="orbit distribution counts exceed their exact output digit bound",
+        )
+    possible_rows = min(len(ledger.entries) + 1, target_dimension + 1)
+    total_digits = possible_rows * 2 * maximum_count_digits
+    if total_digits > MAX_ORBIT_DISTRIBUTION_TOTAL_DIGITS:
+        raise OperationDomainValidationError(
+            location=("ledger",),
+            code="finite_field.orbit_distribution_output_bound",
+            message="orbit distribution count rows exceed their exact output bound",
+        )
+
+
+def _authenticate_orbit_ledger(ledger: DirectionRankLedger) -> None:
+    """Check every supplied ledger entry against its retained source."""
+
     from jacobian.math.finite_fields import _flint
 
     _admit_restriction_shape(ledger.subspace)
@@ -769,7 +810,25 @@ def orbit_distribution(ledger: DirectionRankLedger) -> OrbitDistribution:
                 code="finite_field.ledger_entry_matches_source_restriction",
                 message="ledger entry must match the restricted map and rank of its bound source",
             )
+
+
+def orbit_distribution(ledger: DirectionRankLedger) -> OrbitDistribution:
+    """Aggregate projective orbit counts from a complete direction-rank ledger."""
+
+    _admit_orbit_distribution(ledger)
+    _authenticate_orbit_ledger(ledger)
     return OrbitDistribution._from_kernel(ledger)
+
+
+def verify_orbit_distribution(claim: OrbitDistribution) -> bool:
+    """Verify a serialized orbit histogram against its complete source ledger."""
+
+    try:
+        _admit_orbit_distribution(claim.ledger)
+        _authenticate_orbit_ledger(claim.ledger)
+        return claim.counts == _orbit_counts(claim.ledger)
+    except Exception:
+        return False
 
 
 def finite_polynomial(

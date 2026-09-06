@@ -451,8 +451,8 @@ def _laurent_coefficients(source: HermitianLaurentPolynomial) -> dict[int, Fract
                 location=("source", "terms"),
                 code="polynomial.unit_circle.fejer_riesz_component_bound",
                 message=(
-                    "Fejer-Riesz rational components exceed the 64-digit "
-                    "exact-growth bound"
+                    "Fejer-Riesz rational components exceed the "
+                    f"{MAX_FEJER_RIESZ_COMPONENT_DIGITS}-digit exact-growth bound"
                 ),
             )
     values = {term.exponent: _fraction(term.coefficient) for term in source.terms}
@@ -524,14 +524,14 @@ def real_symmetric_degree_one_fejer_riesz_factor(
         (sympy.Rational(c0.numerator, c0.denominator) + sympy.sqrt(radical)) / 2
     )
     b = sympy.Rational(c1.numerator, c1.denominator) / a
-    alpha = sympy.simplify(a)
+    alpha = a
     presentation = SimpleNumberFieldPresentation(
         coefficients_descending=_minimal_polynomial(alpha)
     )
     record = _largest_real_embedding_record(presentation)
     factors = (
         _binding_in_field(alpha, alpha, presentation, record),
-        _binding_in_field(sympy.simplify(b), alpha, presentation, record),
+        _binding_in_field(b, alpha, presentation, record),
     )
     return FejerRieszFactorResult(
         source=source,

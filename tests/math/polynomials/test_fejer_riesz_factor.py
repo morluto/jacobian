@@ -32,7 +32,7 @@ def q(value: int | Fraction) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(value))
 
 
-def laurent(c0: int, c1: int) -> HermitianLaurentPolynomial:
+def laurent(c0: int | Fraction, c1: int | Fraction) -> HermitianLaurentPolynomial:
     return HermitianLaurentPolynomial(
         terms=tuple(
             HermitianLaurentTerm(exponent=exponent, coefficient=q(coefficient))
@@ -157,10 +157,26 @@ def test_verifier_recognizes_the_exact_embedding_record() -> None:
 
 
 def test_component_growth_is_rejected_before_algebraic_work() -> None:
-    huge = 10**64
+    huge = 10**32
     source = laurent(2 * huge, -huge)
-    with pytest.raises(OperationResourceAdmissionError, match="64-digit"):
+    with pytest.raises(OperationResourceAdmissionError, match="32-digit"):
         real_symmetric_degree_one_fejer_riesz_factor(source)
+
+
+def test_every_admitted_factor_remains_inside_the_verifier_envelope() -> None:
+    denominator_0 = 10**31 + 7
+    denominator_1 = 10**31 + 9
+    source = laurent(Fraction(3, denominator_0), Fraction(1, denominator_1))
+    result = real_symmetric_degree_one_fejer_riesz_factor(source)
+    assert isinstance(result.conclusion, FejerRieszFactored)
+    assert verify_real_symmetric_degree_one_fejer_riesz_factor(result)
+
+    outside = laurent(
+        Fraction(3, 10**32 + 7),
+        Fraction(1, 10**32 + 9),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="32-digit"):
+        real_symmetric_degree_one_fejer_riesz_factor(outside)
 
 
 def test_native_and_mcp_paths_share_serialized_result() -> None:

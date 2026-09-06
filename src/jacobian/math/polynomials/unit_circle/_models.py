@@ -27,8 +27,12 @@ MAX_ARC_ENERGY_FIELD_COEFFICIENT_DIGITS = 256
 # therefore stay below 214 decimal digits, inside the 256-digit result carrier.
 MAX_ARC_ENERGY_INPUT_COMPONENT_DIGITS = 48
 MAX_ARC_ENERGY_TOTAL_DENOMINATOR_DIGITS = 48
-MAX_FEJER_RIESZ_COMPONENT_DIGITS = 64
-MAX_FEJER_RIESZ_DERIVED_DIGITS = 256
+# Clearing denominators in the quartic for q(0) triples the input height.
+# Keeping inputs below 32 digits leaves the presentation and both factor
+# coordinates below 128 digits, so the shared degree-four exact-order
+# resultant remains inside its 1,000-digit recognition envelope.
+MAX_FEJER_RIESZ_COMPONENT_DIGITS = 32
+MAX_FEJER_RIESZ_DERIVED_DIGITS = 128
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:

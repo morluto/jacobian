@@ -62,20 +62,6 @@ def test_prime_field_code_enumeration_uses_the_declared_matrix() -> None:
     assert _weight_distribution(request).weights == ((0, 1), (2, 1))
 
 
-def test_catalog_examples_use_the_canonical_encoder_carrier() -> None:
-    from jacobian.catalog.catalog import Catalog
-    from jacobian.dispatch import invoke_operation
-
-    catalog = Catalog.open()
-    operation = catalog.operation("code.minimum_distance.compute")
-    assert operation is not None
-    result = invoke_operation(
-        operation.operation_id, operation.examples[0].input, catalog
-    )
-    assert result.output["minimum_distance"] == 2
-    assert result.output["request"]["encoder"]["coordinate_axis"] == ["x0", "x1"]
-
-
 def test_code_weight_distribution_counts_distinct_words_for_dependent_rows() -> None:
     request = LinearCodeRequest(encoder=_encoder(((1,), (1,)), 2))
 

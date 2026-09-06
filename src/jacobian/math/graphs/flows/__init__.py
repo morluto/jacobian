@@ -7,6 +7,7 @@ from jacobian.math.graphs.flows.operations import (
     min_cut,
     verify_edge_disjoint_paths,
     verify_max_flow,
+    verify_min_cost_flow,
     verify_min_cut,
 )
 
@@ -17,5 +18,6 @@ __all__ = [
     "min_cut",
     "verify_edge_disjoint_paths",
     "verify_max_flow",
+    "verify_min_cost_flow",
     "verify_min_cut",
 ]

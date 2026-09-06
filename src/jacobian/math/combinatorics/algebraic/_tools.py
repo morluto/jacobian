@@ -70,7 +70,14 @@ def rsk_word(request: RSKWordRequest) -> RSKTableauPair:
 
 
 def inverse_rsk_word(request: RSKInverseWordRequest) -> FiniteWord:
-    return native.inverse_row_insertion_rsk(request.pair)
+    try:
+        return native.inverse_row_insertion_rsk(request.pair)
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("pair",),
+            code="algebraic_combinatorics.rsk_pair_incompatible",
+            message=str(exc),
+        ) from exc
 
 
 _PARTITION_321 = {"partition": {"parts": [3, 2, 1]}}

@@ -9,6 +9,7 @@ from collections import Counter
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics import algebraic as algebraic_combinatorics
 from jacobian.math.combinatorics.algebraic import (
     inverse_row_insertion_rsk,
@@ -271,6 +272,13 @@ def test_structurally_incompatible_pairs_fail_before_reverse_insertion() -> None
     )
     with pytest.raises(ValueError, match="outside the ordered alphabet"):
         inverse_row_insertion_rsk(pair)
+
+    transported = RSKInverseWordRequest(pair=pair.model_copy(update={"alphabet": ()}))
+    with pytest.raises(OperationDomainValidationError) as error:
+        inverse_rsk_word(transported)
+    assert error.value.errors()[0]["type"] == (
+        "algebraic_combinatorics.rsk_pair_incompatible"
+    )
 
     pair = RSKTableauPair.model_validate(
         {

@@ -14,6 +14,7 @@ from jacobian._exact import (
     require_bounded_rational,
 )
 from jacobian._models import StrictModel, canonicalize_json_containers
+from jacobian.canonical import format_canonical_integer
 from jacobian.math.matrices.values import IntegerMatrix
 
 # Conservative preflight fallback: the derived admission in
@@ -47,7 +48,8 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 
 def _integer_digits(value: int | str) -> int:
-    return len(str(value).lstrip("-"))
+    text = value if isinstance(value, str) else format_canonical_integer(value)
+    return len(text.lstrip("-"))
 
 
 def _preflight_sequence(value: object, *, label: str, maximum: int) -> None:

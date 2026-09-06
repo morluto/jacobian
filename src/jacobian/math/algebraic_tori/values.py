@@ -10,7 +10,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import CanonicalizationError
+from jacobian.canonical import CanonicalizationError, format_canonical_integer
 from jacobian.math.matrices.certified_snf.values import (
     MAX_CERTIFIED_SNF_INPUT_DIGITS,
     MAX_CERTIFIED_SNF_INPUT_DIMENSION,
@@ -58,7 +58,10 @@ def _raw_field(value: object, name: str) -> object:
 
 def _raw_integer_exceeds_bound(value: object) -> bool:
     if isinstance(value, int) and not isinstance(value, bool):
-        return len(str(value).lstrip("-")) > MAX_CERTIFIED_SNF_INPUT_DIGITS
+        return (
+            len(format_canonical_integer(value).lstrip("-"))
+            > MAX_CERTIFIED_SNF_INPUT_DIGITS
+        )
     return (
         isinstance(value, str)
         and len(value.lstrip("-")) > MAX_CERTIFIED_SNF_INPUT_DIGITS

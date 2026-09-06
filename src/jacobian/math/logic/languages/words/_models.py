@@ -54,11 +54,9 @@ class FactorsLengthResult(FactorsLengthRequest):
                 "factor_result_shape",
                 "factor result fields must have one entry per factor",
             )
-        for factor, positions, multiplicity, first in zip(
+        for factor, positions in zip(
             self.factors,
             self.occurrences,
-            self.multiplicities,
-            self.first_occurrence,
             strict=True,
         ):
             if len(factor) != self.factor_length or any(
@@ -80,11 +78,6 @@ class FactorsLengthResult(FactorsLengthRequest):
                 raise _validation_error(
                     "factor_result_positions",
                     "factor occurrence position is outside the word",
-                )
-            if multiplicity != len(positions) or first != positions[0]:
-                raise _validation_error(
-                    "factor_result_summary",
-                    "factor summaries must agree with occurrences",
                 )
         return self
 
@@ -134,13 +127,6 @@ class PeriodsResult(PeriodsRequest):
             raise _validation_error(
                 "period_result_periods",
                 "periods must be increasing positive word offsets",
-            )
-        if (self.periods and self.least_period != self.periods[0]) or (
-            not self.periods and self.least_period != 0
-        ):
-            raise _validation_error(
-                "period_result_least",
-                "least_period must be the first reported period, or zero",
             )
         return self
 
@@ -253,25 +239,6 @@ class SubstitutionPrimitivityProfileResult(SubstitutionPrimitivityProfileRequest
                 "primitivity_components",
                 "components must partition the substitution alphabet",
             )
-        if self.irreducible != (len(self.strongly_connected_components) == 1):
-            raise _validation_error(
-                "primitivity_irreducible", "irreducible must match component count"
-            )
-        if self.primitive:
-            if (
-                self.aperiodic is not True
-                or self.least_positive_power is None
-                or self.obstruction != "NONE"
-            ):
-                raise _validation_error(
-                    "primitivity_positive",
-                    "a primitive profile needs a positive aperiodic witness",
-                )
-        elif self.least_positive_power is not None or self.obstruction == "NONE":
-            raise _validation_error(
-                "primitivity_negative",
-                "a nonprimitive profile cannot claim a positive power",
-            )
         return self
 
     @classmethod
@@ -329,23 +296,6 @@ class SubstitutionFixedPointPrefixResult(SubstitutionFixedPointPrefixRequest):
             raise _validation_error(
                 "fixed_point_prefix_shape",
                 "prefix must have the requested target-alphabet length",
-            )
-        if (
-            self.retained_prefix_lengths[0] != min(1, self.prefix_length)
-            or self.retained_prefix_lengths[-1] != self.prefix_length
-            or any(
-                left > right
-                for left, right in zip(
-                    self.retained_prefix_lengths,
-                    self.retained_prefix_lengths[1:],
-                    strict=False,
-                )
-            )
-            or self.least_iterate_depth != len(self.retained_prefix_lengths) - 1
-        ):
-            raise _validation_error(
-                "fixed_point_prefix_ledger",
-                "retained prefix lengths must describe the iterate ledger",
             )
         return self
 

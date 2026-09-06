@@ -18,6 +18,12 @@ from jacobian.math.logic.languages.words.operations import (
     primitive_root,
     substitution_dependency_graph,
     substitution_primitivity_profile,
+    verify_factors_length,
+    verify_incidence_matrix,
+    verify_periods,
+    verify_substitution_dependency_graph,
+    verify_substitution_fixed_point_prefix,
+    verify_substitution_primitivity_profile,
 )
 from jacobian.math.logic.languages.words.values import (
     FiniteWord,
@@ -52,4 +58,10 @@ __all__ = [
     "primitive_root",
     "substitution_dependency_graph",
     "substitution_primitivity_profile",
+    "verify_factors_length",
+    "verify_incidence_matrix",
+    "verify_periods",
+    "verify_substitution_dependency_graph",
+    "verify_substitution_fixed_point_prefix",
+    "verify_substitution_primitivity_profile",
 ]

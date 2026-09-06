@@ -8,6 +8,14 @@ from typing import Literal
 from jacobian.math.logic.languages.words._fixed_point_admission import (
     require_fixed_point_prefix_budget,
 )
+from jacobian.math.logic.languages.words._models import (
+    FactorsLengthResult,
+    IncidenceMatrixResult,
+    PeriodsResult,
+    SubstitutionDependencyGraphResult,
+    SubstitutionFixedPointPrefixResult,
+    SubstitutionPrimitivityProfileResult,
+)
 from jacobian.math.logic.languages.words.values import (
     MAX_MORPHISM_OUTPUT_LENGTH,
     FiniteWord,
@@ -329,4 +337,99 @@ __all__ = [
     "primitive_root",
     "substitution_dependency_graph",
     "substitution_primitivity_profile",
+    "verify_factors_length",
+    "verify_incidence_matrix",
+    "verify_periods",
+    "verify_substitution_dependency_graph",
+    "verify_substitution_fixed_point_prefix",
+    "verify_substitution_primitivity_profile",
 ]
+
+
+def verify_factors_length(claim: FactorsLengthResult) -> bool:
+    """Verify factor slices and occurrence summaries against the source word."""
+
+    try:
+        analysis = factors_of_length(claim.word, claim.factor_length)
+        return (
+            claim.factors == analysis.factors
+            and claim.occurrences == analysis.occurrences
+            and claim.multiplicities == tuple(map(len, analysis.occurrences))
+            and claim.first_occurrence == tuple(
+                positions[0] for positions in analysis.occurrences
+            )
+            and claim.distinct_count == len(analysis.factors)
+        )
+    except (TypeError, ValueError, IndexError):
+        return False
+
+
+def verify_periods(claim: PeriodsResult) -> bool:
+    """Verify a period and primitivity profile against its source word."""
+
+    try:
+        analysis = periods(claim.word)
+        return (
+            claim.periods == analysis.periods
+            and claim.least_period == analysis.least_period
+            and claim.is_primitive == analysis.primitive
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def verify_incidence_matrix(claim: IncidenceMatrixResult) -> bool:
+    """Verify a morphism incidence matrix against its alphabet axes."""
+
+    try:
+        return claim.matrix == incidence_matrix(claim.morphism)
+    except (TypeError, ValueError):
+        return False
+
+
+def verify_substitution_dependency_graph(
+    claim: SubstitutionDependencyGraphResult,
+) -> bool:
+    """Verify every dependency edge and occurrence against its substitution."""
+
+    try:
+        return claim.graph == substitution_dependency_graph(claim.substitution)
+    except (TypeError, ValueError):
+        return False
+
+
+def verify_substitution_primitivity_profile(
+    claim: SubstitutionPrimitivityProfileResult,
+) -> bool:
+    """Verify a substitution primitivity claim against its dependency graph."""
+
+    try:
+        analysis = substitution_primitivity_profile(claim.dependency_graph)
+        return (
+            claim.strongly_connected_components
+            == analysis.strongly_connected_components
+            and claim.irreducible == analysis.irreducible
+            and claim.aperiodic == analysis.aperiodic
+            and claim.primitive == analysis.primitive
+            and claim.least_positive_power == analysis.least_positive_power
+            and claim.exponent_upper_bound == analysis.exponent_upper_bound
+            and claim.obstruction == analysis.obstruction
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def verify_substitution_fixed_point_prefix(
+    claim: SubstitutionFixedPointPrefixResult,
+) -> bool:
+    """Verify a fixed-point prefix and iterate ledger against its source."""
+
+    try:
+        analysis = fixed_point_prefix(claim.source, claim.prefix_length)
+        return (
+            claim.prefix == analysis.prefix
+            and claim.least_iterate_depth == analysis.least_iterate_depth
+            and claim.retained_prefix_lengths == analysis.retained_prefix_lengths
+        )
+    except (TypeError, ValueError):
+        return False

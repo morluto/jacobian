@@ -31,6 +31,12 @@ from jacobian.math.logic.languages.words import (
     primitive_root,
     substitution_dependency_graph,
     substitution_primitivity_profile,
+    verify_factors_length,
+    verify_incidence_matrix,
+    verify_periods,
+    verify_substitution_dependency_graph,
+    verify_substitution_fixed_point_prefix,
+    verify_substitution_primitivity_profile,
 )
 from jacobian.math.logic.languages.words import _tools as word_operations
 from jacobian.math.logic.languages.words._models import (
@@ -114,6 +120,9 @@ def test_factor_result_is_complete_and_bound_to_the_request() -> None:
     payload["factors"] = (("b", "b"), *payload["factors"][1:])
     supplied = FactorsLengthResult.model_validate(payload)
     assert supplied.factors[0] == ("b", "b")
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_factors_length(decoded)
+    assert not verify_factors_length(decoded.model_copy(update={"occurrences": ((1,), (1,), (2,))}))
 
 
 def test_empty_factor_occurs_at_every_boundary() -> None:
@@ -208,6 +217,23 @@ def test_fibonacci_incidence_matrix_and_binding() -> None:
     assert supplied.matrix == ((1, 0), (1, 1))
 
 
+def test_period_result_verifier_rejects_forged_profile() -> None:
+    result = compute_periods(PeriodsRequest(word=_word("ababab")))
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_periods(decoded)
+    assert not verify_periods(decoded.model_copy(update={"least_period": 1}))
+
+
+def test_incidence_result_verifier_rejects_forged_matrix() -> None:
+    morphism = WordMorphism(
+        source_alphabet=("a",), target_alphabet=("a",), images=(("a", "a"),)
+    )
+    result = compute_incidence_matrix(IncidenceMatrixRequest(morphism=morphism))
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_incidence_matrix(decoded)
+    assert not verify_incidence_matrix(decoded.model_copy(update={"matrix": ((1,),)}))
+
+
 def test_substitution_requires_an_endomorphism() -> None:
     with _raises_code("word.substitution_not_endomorphism"):
         Substitution(
@@ -237,6 +263,11 @@ def test_fibonacci_dependency_graph_retains_positions_and_source() -> None:
     payload["graph"]["edges"] = payload["graph"]["edges"][:-1]
     supplied = SubstitutionDependencyGraphResult.model_validate(payload)
     assert len(supplied.graph.edges) == 2
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_substitution_dependency_graph(decoded)
+    assert not verify_substitution_dependency_graph(
+        decoded.model_copy(update={"graph": supplied.graph})
+    )
 
 
 def test_dependency_graph_output_budget_is_admitted_before_enumeration() -> None:
@@ -287,6 +318,11 @@ def test_primitivity_profile_distinguishes_positive_reducible_and_periodic() -> 
     assert periodic.aperiodic is False
     assert periodic.primitive is False
     assert periodic.obstruction == "PERIODIC_DEPENDENCY_GRAPH"
+    decoded = type(fibonacci).model_validate_json(fibonacci.model_dump_json())
+    assert verify_substitution_primitivity_profile(decoded)
+    assert not verify_substitution_primitivity_profile(
+        decoded.model_copy(update={"primitive": False})
+    )
 
 
 def test_fixed_point_prefix_uses_the_least_sufficient_iterate() -> None:
@@ -307,6 +343,11 @@ def test_fixed_point_prefix_uses_the_least_sufficient_iterate() -> None:
     payload["prefix"]["letters"] = (*payload["prefix"]["letters"][:-1], "1")
     supplied = SubstitutionFixedPointPrefixResult.model_validate(payload)
     assert supplied.prefix.letters[-1] == "1"
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_substitution_fixed_point_prefix(decoded)
+    assert not verify_substitution_fixed_point_prefix(
+        decoded.model_copy(update={"least_iterate_depth": 3})
+    )
 
 
 def test_fixed_point_prefix_empty_and_length_boundaries() -> None:

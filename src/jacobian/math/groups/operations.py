@@ -11,6 +11,7 @@ from jacobian.math.groups._models import (
     GroupElementOrderResult,
     GroupOrbitResult,
     GroupOrderResult,
+    GroupStabilizerResult,
     GroupSubgroupLatticeResult,
     PermutationGroup,
     SubgroupEntry,
@@ -27,6 +28,7 @@ __all__ = [
     "verify_group_conjugacy_classes",
     "verify_group_orbit",
     "verify_group_order",
+    "verify_group_stabilizer",
     "verify_subgroup_lattice",
 ]
 
@@ -205,6 +207,14 @@ def group_stabilizer(group: PermutationGroup, point: int) -> PermutationGroup:
     if not generators:
         generators = (tuple(range(group.degree)),)
     return PermutationGroup(degree=group.degree, generators=generators)
+
+
+def verify_group_stabilizer(claim: GroupStabilizerResult) -> bool:
+    """Check that a serialized subgroup is the retained source's point stabilizer."""
+    try:
+        return group_stabilizer(claim.source, claim.point) == claim.stabilizer
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
 
 
 class SubgroupLatticeBudgetExceededError(RuntimeError):

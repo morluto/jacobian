@@ -195,6 +195,26 @@ def test_group_conjugacy_classes_result_rejects_duplicate_elements() -> None:
         )
 
 
+def test_group_conjugacy_classes_preflights_total_members() -> None:
+    from jacobian.math.groups._models import (
+        MAX_CONJUGACY_CLASSES_GROUP_ORDER,
+        GroupConjugacyClassesResult,
+    )
+
+    first_size = MAX_CONJUGACY_CLASSES_GROUP_ORDER // 2 + 1
+    second_size = MAX_CONJUGACY_CLASSES_GROUP_ORDER - first_size + 1
+    with _group_error("group.partition_bound"):
+        GroupConjugacyClassesResult.model_validate(
+            {
+                "source": {"degree": 1, "generators": [[0]]},
+                "classes": [
+                    [[0]] * first_size,
+                    [[0]] * second_size,
+                ],
+            }
+        )
+
+
 def test_group_conjugacy_classes_result_requires_canonical_member_order() -> None:
     from jacobian.math.groups._models import GroupConjugacyClassesResult
 
@@ -350,6 +370,25 @@ def test_group_stabilizer_result_serializes_into_the_next_request() -> None:
         {"group": result.stabilizer.model_dump(), "point": 0}
     )
     assert chained.group == result.stabilizer
+
+
+def test_group_stabilizer_verifier_rejects_a_forged_subgroup() -> None:
+    from jacobian.math.groups import verify_group_stabilizer
+
+    group = PermutationGroup(degree=3, generators=S3_GENERATORS)
+    result = compute_group_stabilizer(GroupStabilizerRequest(group=group, point=0))
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert verify_group_stabilizer(decoded)
+
+    forged = decoded.model_copy(
+        update={
+            "stabilizer": PermutationGroup(
+                degree=3,
+                generators=((1, 2, 0),),
+            )
+        }
+    )
+    assert not verify_group_stabilizer(forged)
 
 
 def test_native_stabilizer_returns_canonical_group_value_consumers_accept() -> None:

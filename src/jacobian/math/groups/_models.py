@@ -157,6 +157,25 @@ class GroupConjugacyClassesResult(StrictModel):
         max_length=MAX_CONJUGACY_CLASSES_GROUP_ORDER,
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def require_bounded_partition_payload(cls, data: Any) -> Any:
+        data = canonicalize_json_containers(data)
+        if isinstance(data, dict):
+            classes = data.get("classes")
+            if isinstance(classes, (list, tuple)):
+                member_count = 0
+                for conjugacy_class in classes:
+                    if isinstance(conjugacy_class, (list, tuple)):
+                        member_count += len(conjugacy_class)
+                        if member_count > MAX_CONJUGACY_CLASSES_GROUP_ORDER:
+                            raise _validation_error(
+                                "group.partition_bound",
+                                "a conjugacy-class partition may contain at most "
+                                f"{MAX_CONJUGACY_CLASSES_GROUP_ORDER} elements",
+                            )
+        return data
+
     @model_validator(mode="after")
     def require_conjugacy_class_partition(self) -> Self:
         _require_canonical_partition(self.classes)

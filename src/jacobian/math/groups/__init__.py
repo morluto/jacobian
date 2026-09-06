@@ -12,6 +12,7 @@ from jacobian.math.groups.operations import (
     verify_group_conjugacy_classes,
     verify_group_orbit,
     verify_group_order,
+    verify_group_stabilizer,
     verify_subgroup_lattice,
 )
 
@@ -27,5 +28,6 @@ __all__ = [
     "verify_group_conjugacy_classes",
     "verify_group_orbit",
     "verify_group_order",
+    "verify_group_stabilizer",
     "verify_subgroup_lattice",
 ]

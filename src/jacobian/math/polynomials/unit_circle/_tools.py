@@ -16,7 +16,9 @@ from jacobian.math.polynomials.unit_circle.operations import (
 
 
 def _run_arc_energy(request: UnitCircleArcEnergyRequest) -> UnitCircleArcEnergyResult:
-    return unit_circle_arc_energy(request)
+    return unit_circle_arc_energy(
+        request.polynomial, request.start_turn, request.end_turn
+    )
 
 
 def _run_fejer(source: HermitianLaurentPolynomial) -> FejerRieszFactorResult:
@@ -45,7 +47,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         title="Compute exact unit-circle arc energy",
         description=(
             "Compute the exact normalized energy integral of a bounded rational "
-            "polynomial on an oriented arc with unwrapped rational turns."
+            "polynomial on an oriented arc with unwrapped rational turns. The "
+            "result is A+B/pi, with B in the standard real cyclotomic field "
+            "fixed by the rational endpoint conductor."
         ),
         request_type=UnitCircleArcEnergyRequest,
         result_type=UnitCircleArcEnergyResult,

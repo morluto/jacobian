@@ -19,6 +19,12 @@ MAX_ARC_ENERGY_TERMS = 64
 MAX_ARC_ENERGY_CONDUCTOR = 32
 MAX_ARC_ENERGY_FIELD_DEGREE = 8
 MAX_ARC_ENERGY_FIELD_COEFFICIENT_DIGITS = 256
+# With one shared coefficient denominator D, these bounds give D < 10^48
+# and scaled integer coefficients below 10^96.  A degree-32 correlation,
+# division by lcm(1,...,32), and the largest fixed cyclotomic coordinate (14)
+# therefore stay below 214 decimal digits, inside the 256-digit result carrier.
+MAX_ARC_ENERGY_INPUT_COMPONENT_DIGITS = 48
+MAX_ARC_ENERGY_TOTAL_DENOMINATOR_DIGITS = 48
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -34,11 +40,16 @@ class UnitCircleArcEnergyRequest(StrictModel):
 
 
 class UnitCircleArcEnergyResult(StrictModel):
-    """The exact normalized arc energy ``A + B/pi`` with its source."""
+    """The exact energy ``A + B/pi`` in the arc's standard real cyclotomic field.
+
+    The conductor is ``lcm(4, den(start), den(end))``.  The retained embedding
+    sends the field generator to ``2*cos(2*pi/conductor)``.
+    """
 
     polynomial: RationalPolynomial
     start_turn: CanonicalRational
     end_turn: CanonicalRational
+    cyclotomic_conductor: StrictInt = Field(ge=4, le=MAX_ARC_ENERGY_CONDUCTOR)
     rational_part: CanonicalRational
     pi_inverse_coefficient: SimpleNumberFieldRealEmbeddingBinding
     representation: Literal["RATIONAL_PLUS_REAL_CYCLOTOMIC_OVER_PI"] = (

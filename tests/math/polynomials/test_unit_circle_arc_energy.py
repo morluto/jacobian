@@ -6,6 +6,7 @@ import json
 from fractions import Fraction
 
 import pytest
+from sympy import ZZ, Poly, Symbol
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.catalog import Catalog
@@ -18,6 +19,10 @@ from jacobian.math.polynomials.unit_circle import (
     verify_unit_circle_arc_energy,
 )
 from jacobian.math.polynomials.unit_circle._tools import TOOLS
+from jacobian.math.polynomials.unit_circle.operations import (
+    _REAL_CYCLOTOMIC_POLYNOMIALS,
+    _real_cyclotomic_record,
+)
 from jacobian.math.polynomials.values import (
     RationalPolynomial,
     RationalPolynomialTerm,
@@ -42,16 +47,23 @@ def polynomial(coefficients: tuple[int, ...]) -> RationalPolynomial:
     )
 
 
+def rational_polynomial(coefficients: tuple[Fraction, ...]) -> RationalPolynomial:
+    return RationalPolynomial(
+        variables=("z",),
+        polynomial=SparseRationalPolynomial(
+            terms=tuple(
+                RationalPolynomialTerm(coefficient=q(value), exponents=(degree,))
+                for degree, value in reversed(tuple(enumerate(coefficients)))
+                if value
+            )
+        ),
+    )
+
+
 def energy(
     coefficients: tuple[int, ...], start: Fraction, end: Fraction
 ) -> UnitCircleArcEnergyResult:
-    return unit_circle_arc_energy(
-        UnitCircleArcEnergyRequest(
-            polynomial=polynomial(coefficients),
-            start_turn=q(start),
-            end_turn=q(end),
-        )
-    )
+    return unit_circle_arc_energy(polynomial(coefficients), q(start), q(end))
 
 
 def rational_value(result: UnitCircleArcEnergyResult) -> Fraction:
@@ -112,9 +124,83 @@ def test_additivity_complement_and_nonrational_cyclotomic_coefficient() -> None:
     )
 
 
+def test_standard_real_cyclotomic_field_and_embedding_are_fixed_by_conductor() -> None:
+    result = energy((1, 1), Fraction(0), Fraction(1, 8))
+    binding = result.pi_inverse_coefficient
+    assert result.cyclotomic_conductor == 8
+    assert binding.element.presentation.coefficients_descending == ("1", "0", "-2")
+    assert tuple(
+        value.as_fraction() for value in binding.element.coefficients_ascending
+    ) == (Fraction(0), Fraction(1, 2))
+    assert binding.embedding_record.embedding.root.real_root_index == 1
+    assert binding.embedding_record.isolating_interval.lower.as_fraction() == 1
+    assert binding.embedding_record.isolating_interval.upper.as_fraction() == 2
+    assert verify_unit_circle_arc_energy(result)
+
+
+@pytest.mark.parametrize("conductor", (4, 8, 12, 16, 20, 24, 28, 32))
+def test_every_admitted_standard_embedding_interval_is_exact(conductor: int) -> None:
+    presentation, record = _real_cyclotomic_record(conductor)
+    x = Symbol("x")
+    defining = Poly.from_list(
+        [int(value) for value in _REAL_CYCLOTOMIC_POLYNOMIALS[conductor]],
+        gens=x,
+        domain=ZZ,
+    )
+    assert defining.is_irreducible
+    assert presentation.degree == defining.degree()
+    interval = record.isolating_interval
+    assert (
+        defining.count_roots(interval.lower.as_fraction(), interval.upper.as_fraction())
+        == 1
+    )
+    assert record.embedding.root.real_root_index == presentation.degree - 1
+
+
+def test_dense_degree_32_and_large_exact_integer_are_admitted() -> None:
+    dense = energy((1,) * 33, Fraction(0), Fraction(1, 32))
+    assert dense.cyclotomic_conductor == 32
+    assert dense.pi_inverse_coefficient.element.presentation.degree == 8
+    assert verify_unit_circle_arc_energy(dense)
+
+    large = unit_circle_arc_energy(rational_polynomial((Fraction(10**47),)), q(0), q(1))
+    assert large.rational_part.as_fraction() == 10**94
+    assert verify_unit_circle_arc_energy(large)
+
+
 def test_arc_admission_rejects_excessive_conductor() -> None:
     with pytest.raises(OperationDomainValidationError, match="conductor"):
         energy((1, 1), Fraction(0), Fraction(1, 33))
+
+    # Endpoint denominators alone fit, but adjoining i requires conductor 36.
+    with pytest.raises(OperationDomainValidationError, match="conductor"):
+        energy((1, 1), Fraction(0), Fraction(1, 18))
+
+
+def test_arc_admission_bounds_exact_coefficient_growth_before_expansion() -> None:
+    oversized = UnitCircleArcEnergyRequest(
+        polynomial=rational_polynomial((Fraction(10**48),)),
+        start_turn=q(0),
+        end_turn=q(1),
+    )
+    with pytest.raises(OperationDomainValidationError, match="exact-growth"):
+        unit_circle_arc_energy(
+            oversized.polynomial, oversized.start_turn, oversized.end_turn
+        )
+
+    many_denominators = UnitCircleArcEnergyRequest(
+        polynomial=rational_polynomial(
+            tuple(Fraction(1, 10**12 + offset) for offset in range(5))
+        ),
+        start_turn=q(0),
+        end_turn=q(Fraction(1, 4)),
+    )
+    with pytest.raises(OperationDomainValidationError, match="denominators"):
+        unit_circle_arc_energy(
+            many_denominators.polynomial,
+            many_denominators.start_turn,
+            many_denominators.end_turn,
+        )
 
 
 def test_native_and_mcp_paths_share_serialized_result() -> None:
@@ -123,7 +209,9 @@ def test_native_and_mcp_paths_share_serialized_result() -> None:
         start_turn=q(Fraction(-1, 4)),
         end_turn=q(Fraction(1, 4)),
     )
-    native = unit_circle_arc_energy(request)
+    native = unit_circle_arc_energy(
+        request.polynomial, request.start_turn, request.end_turn
+    )
     decoded = UnitCircleArcEnergyResult.model_validate_json(
         native.model_dump_json(), strict=True
     )
@@ -148,3 +236,32 @@ def test_serialized_claim_forgery_is_structural_but_fails_verification() -> None
     )
     assert forged.rational_part.as_fraction() == 2
     assert not verify_unit_circle_arc_energy(forged)
+
+    payload = json.loads(native.model_dump_json())
+    payload["cyclotomic_conductor"] = 8
+    forged_conductor = UnitCircleArcEnergyResult.model_validate_json(
+        json.dumps(payload), strict=True
+    )
+    assert not verify_unit_circle_arc_energy(forged_conductor)
+
+    irrational = energy((1, 1), Fraction(0), Fraction(1, 8))
+    payload = json.loads(irrational.model_dump_json())
+    payload["pi_inverse_coefficient"]["element"]["coefficients_ascending"][1] = {
+        "num": "1",
+        "den": "3",
+    }
+    forged_coordinate = UnitCircleArcEnergyResult.model_validate_json(
+        json.dumps(payload), strict=True
+    )
+    assert not verify_unit_circle_arc_energy(forged_coordinate)
+
+    payload = json.loads(irrational.model_dump_json())
+    payload["pi_inverse_coefficient"]["embedding_record"]["isolating_interval"] = {
+        "lower": {"num": "3", "den": "1"},
+        "upper": {"num": "4", "den": "1"},
+        "interval_type": "OPEN",
+    }
+    forged_embedding = UnitCircleArcEnergyResult.model_validate_json(
+        json.dumps(payload), strict=True
+    )
+    assert not verify_unit_circle_arc_energy(forged_embedding)

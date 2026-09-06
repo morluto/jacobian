@@ -84,7 +84,7 @@ def test_rank_gram_of_identity_is_identity() -> None:
     result = compute_rank_gram(_lattice(2, [[1, 0], [0, 1]]))
     assert result.rank == 2
     assert result.ambient_dimension == 2
-    assert result.squared_covolume == "1"
+    assert result.squared_covolume == 1
     assert result.covolume_rational is True
     gram = result.gram_matrix.entries
     assert gram == (("1", "0"), ("0", "1"))
@@ -96,7 +96,7 @@ def test_rank_gram_of_scaled_lattice() -> None:
     assert result.rank == 2
     gram = result.gram_matrix.entries
     assert gram == (("4", "0"), ("0", "9"))
-    assert result.squared_covolume == "36"
+    assert result.squared_covolume == 36
 
 
 def test_rank_gram_rejects_dependent_basis_rows() -> None:
@@ -222,7 +222,7 @@ def test_sublattice_index_double() -> None:
         IntegerMatrix.model_validate({"entries": [["2"]]}),
     )
     assert result.index == 2
-    assert result.invariant_factors == ("2",)
+    assert result.invariant_factors == (2,)
     assert result.free_rank == 0
 
 
@@ -234,7 +234,7 @@ def test_sublattice_index_quadratic() -> None:
         IntegerMatrix.model_validate({"entries": [["2", "0"], ["0", "2"]]}),
     )
     assert result.index == 4
-    assert result.invariant_factors == ("2", "2")
+    assert result.invariant_factors == (2, 2)
     assert result.free_rank == 0
 
 
@@ -265,7 +265,7 @@ def test_discriminant_group_of_2z_squared() -> None:
     """disc group of 2 ZZ^2 has order |det diag(4,4)| = 16."""
     result = compute_discriminant_group(_lattice(2, [[2, 0], [0, 2]]))
     assert result.discriminant_order == 16
-    assert result.invariant_factors == ("4", "4")
+    assert result.invariant_factors == (4, 4)
 
 
 def test_discriminant_group_order_matches_gram_det() -> None:

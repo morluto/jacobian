@@ -35,32 +35,32 @@ class TestSemigroupSummary:
     def test_semigroup_3_5(self) -> None:
         req = NumericalSemigroupSummaryRequest(generators=("3", "5"))
         result = compute_summary(req)
-        assert result.frobenius_number == "7"
-        assert result.multiplicity == "3"
+        assert result.frobenius_number == 7
+        assert result.multiplicity == 3
         assert result.genus == 4
         gaps = [int(g) for g in result.gaps]
         assert gaps == [1, 2, 4, 7]
-        assert result.conductor == "8"
+        assert result.conductor == 8
 
     def test_semigroup_4_5_6(self) -> None:
         req = NumericalSemigroupSummaryRequest(generators=("4", "5", "6"))
         result = compute_summary(req)
-        assert result.multiplicity == "4"
+        assert result.multiplicity == 4
         # Frobenius number of <4,5,6> is 7
-        assert result.frobenius_number == "7"
+        assert result.frobenius_number == 7
 
     def test_two_generators(self) -> None:
         req = NumericalSemigroupSummaryRequest(generators=("2", "3"))
         result = compute_summary(req)
         # <2,3> has Frobenius=1, gaps={1}, genus=1
-        assert result.frobenius_number == "1"
+        assert result.frobenius_number == 1
         assert result.genus == 1
 
     def test_two_and_one_hundred_one(self) -> None:
         req = NumericalSemigroupSummaryRequest(generators=("2", "101"))
         result = compute_summary(req)
-        assert result.frobenius_number == "99"
-        assert result.conductor == "100"
+        assert result.frobenius_number == 99
+        assert result.conductor == 100
         assert result.genus == 50
 
     def test_rejects_nonpositive_generators(self) -> None:

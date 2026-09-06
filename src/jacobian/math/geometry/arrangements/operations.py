@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.arrangements._models import (
     MAX_GENERIC_FORMULA_INDEX,
     ChamberCountResult,
     CharacteristicPolynomialResult,
+    HyperplaneArrangementRequest,
     HyperplaneArrangementResult,
     RationalHyperplane,
 )
@@ -115,6 +115,9 @@ def arrangement(
     hyperplanes: tuple[RationalHyperplane, ...],
 ) -> HyperplaneArrangementResult:
     """Check if an arrangement is central (all hyperplanes pass through origin)."""
+    HyperplaneArrangementRequest(
+        ambient_dimension=ambient_dimension, hyperplanes=hyperplanes
+    )
     is_central = all(
         hyperplane.constant.as_fraction() == 0 for hyperplane in hyperplanes
     )
@@ -122,6 +125,7 @@ def arrangement(
         hyperplane_count=len(hyperplanes),
         ambient_dimension=ambient_dimension,
         is_central=is_central,
+        hyperplanes=hyperplanes,
     )
 
 
@@ -160,10 +164,9 @@ def characteristic_polynomial(
         -inner[-1],
     )
     return CharacteristicPolynomialResult(
-        coefficients=tuple(
-            format_canonical_integer(coefficient)
-            for coefficient in reversed(descending)
-        ),
+        ambient_dimension=n,
+        hyperplane_count=m,
+        coefficients=tuple(reversed(descending)),
         degree=n,
     )
 
@@ -208,11 +211,52 @@ def chamber_count(ambient_dimension: int, hyperplane_count: int) -> ChamberCount
                 "chamber count exceeds the binomial-summation work budget",
             )
         count = _chamber_recurrence(m - 1, n)
-    return ChamberCountResult(chamber_count=format_canonical_integer(count))
+    return ChamberCountResult(
+        ambient_dimension=n,
+        hyperplane_count=m,
+        chamber_count=count,
+    )
+
+
+def verify_arrangement(claim: HyperplaneArrangementResult) -> bool:
+    """Verify centrality against the retained hyperplane arrangement."""
+
+    try:
+        return (
+            arrangement(claim.ambient_dimension, claim.hyperplanes).is_central
+            == claim.is_central
+        )
+    except Exception:
+        return False
+
+
+def verify_characteristic_polynomial(
+    claim: CharacteristicPolynomialResult,
+) -> bool:
+    """Verify generic characteristic coefficients against their source axes."""
+
+    try:
+        return characteristic_polynomial(
+            claim.ambient_dimension, claim.hyperplane_count
+        ) == claim
+    except Exception:
+        return False
+
+
+def verify_chamber_count(claim: ChamberCountResult) -> bool:
+    """Verify a generic chamber count against its source axes."""
+
+    try:
+        return chamber_count(claim.ambient_dimension, claim.hyperplane_count) == claim
+    except Exception:
+        return False
 
 
 __all__ = [
     "arrangement",
     "chamber_count",
     "characteristic_polynomial",
+    "verify_arrangement",
+    "verify_chamber_count",
+    "verify_characteristic_polynomial",
 ]

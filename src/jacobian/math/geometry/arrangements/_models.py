@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Annotated, Any, Self
 
-from pydantic import Field, model_validator
+from pydantic import BeforeValidator, Field, PlainSerializer, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalInteger, CanonicalRational
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.canonical import parse_canonical_integer
+from jacobian.canonical import format_canonical_integer, parse_canonical_integer
 
 MAX_HYPERPLANES = 16
 MAX_DIM = 8
@@ -18,6 +18,23 @@ MAX_GENERIC_FORMULA_INDEX = 10**15
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"hyperplane_arrangement.{reason}", message)
+
+
+def _parse_native_integer(value: Any) -> int:
+    if isinstance(value, bool):
+        raise TypeError("integer values must not be booleans")
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        return parse_canonical_integer(value)
+    raise TypeError("integer values must be Python integers or canonical strings")
+
+
+NativeInteger = Annotated[
+    int,
+    BeforeValidator(_parse_native_integer),
+    PlainSerializer(format_canonical_integer, return_type=str, when_used="json"),
+]
 
 
 class RationalHyperplane(StrictModel):
@@ -72,11 +89,16 @@ class ChamberCountRequest(StrictModel):
 class HyperplaneArrangementResult(StrictModel):
     hyperplane_count: int = Field(ge=1)
     ambient_dimension: int = Field(ge=1)
+    hyperplanes: tuple[RationalHyperplane, ...] = Field(
+        min_length=1, max_length=MAX_HYPERPLANES
+    )
     is_central: bool
 
 
 class CharacteristicPolynomialResult(StrictModel):
-    coefficients: tuple[CanonicalInteger, ...]
+    ambient_dimension: int = Field(ge=1, le=MAX_GENERIC_FORMULA_INDEX)
+    hyperplane_count: int = Field(ge=1, le=MAX_GENERIC_FORMULA_INDEX)
+    coefficients: tuple[NativeInteger, ...]
     degree: int = Field(ge=0)
 
     @model_validator(mode="after")
@@ -90,11 +112,13 @@ class CharacteristicPolynomialResult(StrictModel):
 
 
 class ChamberCountResult(StrictModel):
-    chamber_count: CanonicalInteger
+    ambient_dimension: int = Field(ge=1, le=MAX_GENERIC_FORMULA_INDEX)
+    hyperplane_count: int = Field(ge=1, le=MAX_GENERIC_FORMULA_INDEX)
+    chamber_count: NativeInteger
 
     @model_validator(mode="after")
     def require_positive_count(self) -> Self:
-        if parse_canonical_integer(self.chamber_count) < 1:
+        if self.chamber_count < 1:
             raise _validation_error(
                 "chamber_count_nonpositive",
                 "chamber count must be a positive canonical integer",

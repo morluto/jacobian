@@ -7,7 +7,14 @@ from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics import greedoids
-from jacobian.math.combinatorics.greedoids import FiniteFeasibleSetSystem
+from jacobian.math.combinatorics.greedoids import (
+    FiniteFeasibleSetSystem,
+    verify_bases_profile,
+    verify_basic_word_profile,
+    verify_convex_geometry_profile,
+    verify_rank_profile,
+    verify_recognize,
+)
 from jacobian.math.combinatorics.greedoids._models import (
     MAX_GROUND_LABEL_UTF8_BYTES,
     BasesRequest,
@@ -143,6 +150,10 @@ class TestRecognize:
         assert result.status == "GREEDOID"
         assert result.rank == 2
         assert result.bases == ((0, 1),)
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert decoded.system == _two_element_antimatroid()
+        assert verify_recognize(decoded)
+        assert not verify_recognize(decoded.model_copy(update={"rank": 1}))
 
     def test_path_greedoid_is_greedoid(self) -> None:
         result = _recognize(RecognizeRequest(system=_path_greedoid()))
@@ -181,6 +192,11 @@ class TestRankAndBases:
         # subset of {a}.
         result = _rank(RankRequest(system=_two_element_antimatroid(), subset=(0,)))
         assert result.rank == 1
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert decoded.system == _two_element_antimatroid()
+        assert decoded.subset == (0,)
+        assert verify_rank_profile(decoded)
+        assert not verify_rank_profile(decoded.model_copy(update={"rank": 2}))
 
     def test_rank_of_empty_subset(self) -> None:
         result = _rank(RankRequest(system=_two_element_antimatroid(), subset=()))
@@ -196,6 +212,10 @@ class TestRankAndBases:
         result = _bases(BasesRequest(system=_two_element_antimatroid(), subset=(0,)))
         assert result.rank == 1
         assert result.bases == ((0,),)
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert decoded.subset == (0,)
+        assert verify_bases_profile(decoded)
+        assert not verify_bases_profile(decoded.model_copy(update={"bases": ((0, 1),)}))
 
     def test_non_greedoid_cannot_claim_bases_or_rank(self) -> None:
         system = _non_greedoid_exchange()
@@ -228,6 +248,13 @@ class TestBasicWordProfile:
         )
         assert result.status == "BASIC_WORD"
         assert result.is_full is False
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert decoded.system == _two_element_antimatroid()
+        assert decoded.word == (0,)
+        assert verify_basic_word_profile(decoded)
+        assert not verify_basic_word_profile(
+            decoded.model_copy(update={"prefix_length": 2})
+        )
 
     def test_repeated_element(self) -> None:
         result = _basic_word_profile(
@@ -260,6 +287,12 @@ class TestConvexGeometry:
         full = (0, 1)
         assert empty in result.closed_family
         assert full in result.closed_family
+        decoded = type(result).model_validate_json(result.model_dump_json())
+        assert decoded.system == _two_element_antimatroid()
+        assert verify_convex_geometry_profile(decoded)
+        assert not verify_convex_geometry_profile(
+            decoded.model_copy(update={"closed_family": ()})
+        )
 
     def test_complement_map_inverse(self) -> None:
         result = _convex_geometry(

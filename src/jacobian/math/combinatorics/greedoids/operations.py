@@ -34,6 +34,11 @@ __all__ = [
     "rank_profile",
     "recognize",
     "union_closed",
+    "verify_bases_profile",
+    "verify_basic_word_profile",
+    "verify_convex_geometry_profile",
+    "verify_rank_profile",
+    "verify_recognize",
 ]
 
 
@@ -59,6 +64,7 @@ def _accessibility_obstruction(
 def _exchange_obstruction(
     feasible_sets: list[frozenset[int]],
     index: dict[tuple[int, ...], int],
+    system: FiniteFeasibleSetSystem,
 ) -> RecognizeResult | None:
     """Return the first exchange violation, or ``None``."""
     by_size: dict[int, list[frozenset[int]]] = {}
@@ -78,6 +84,7 @@ def _exchange_obstruction(
                     ]
                     if not augmenting:
                         return RecognizeResult(
+                            system=system,
                             status="NOT_A_GREEDOID",
                             obstruction="exchange_violation",
                             larger_set=tuple(sorted(x_set)),
@@ -104,20 +111,24 @@ def _recognize_unchecked(system: FiniteFeasibleSetSystem) -> RecognizeResult:
     index = system.feasible_index()
     n = len(system.ground)
     if () not in index:
-        return RecognizeResult(status="NOT_A_GREEDOID", obstruction="missing_empty_set")
+        return RecognizeResult(
+            system=system, status="NOT_A_GREEDOID", obstruction="missing_empty_set"
+        )
     access = _accessibility_obstruction(list(system.feasible), index)
     if access is not None:
         return RecognizeResult(
+            system=system,
             status="NOT_A_GREEDOID",
             obstruction="inaccessible_feasible_set",
             feasible_set=access,
         )
     feasible_sets = _feasible_sets(system)
-    exch = _exchange_obstruction(feasible_sets, index)
+    exch = _exchange_obstruction(feasible_sets, index, system)
     if exch is not None:
         return exch
     r, basis_list = _bases_unchecked(system, None)
     return RecognizeResult(
+        system=system,
         status="GREEDOID",
         rank=r,
         bases=tuple(tuple(sorted(b)) for b in basis_list),
@@ -247,12 +258,16 @@ def _basic_word_profile_unchecked(
     for elem in word:
         if not 0 <= elem < n:
             return BasicWordProfileResult(
+                system=system,
+                word=word,
                 status="NOT_A_BASIC_WORD",
                 obstruction="foreign_element",
                 prefix_index=len(seen),
             )
         if elem in seen:
             return BasicWordProfileResult(
+                system=system,
+                word=word,
                 status="NOT_A_BASIC_WORD",
                 obstruction="repeated_element",
                 prefix_index=len(seen),
@@ -264,6 +279,8 @@ def _basic_word_profile_unchecked(
         prefix = prefix | {elem}
         if tuple(sorted(prefix)) not in index:
             return BasicWordProfileResult(
+                system=system,
+                word=word,
                 status="NOT_A_BASIC_WORD",
                 obstruction="infeasible_prefix",
                 prefix_index=i,
@@ -272,6 +289,8 @@ def _basic_word_profile_unchecked(
     r, _ = _bases_unchecked(system, None)
     is_full = len(word) == r
     return BasicWordProfileResult(
+        system=system,
+        word=word,
         status="BASIC_WORD",
         prefix_length=len(word),
         is_full=is_full,
@@ -308,6 +327,7 @@ def _antimatroid_to_convex_geometry_unchecked(
         complement_map[feasible] = closed_tuple
         closed_family.append(closed_tuple)
     return ConvexGeometryResult(
+        system=system,
         closed_family=tuple(closed_family),
         complement_map=tuple(sorted(complement_map.items())),
     )
@@ -352,12 +372,13 @@ def rank_profile(
     recognized = _recognized(system)
     if recognized.status != "GREEDOID":
         return RankResult(
+            system=system,
             status="NOT_A_GREEDOID",
             obstruction=recognized.obstruction,
             subset=subset,
         )
     subset_set = None if subset is None else frozenset(subset)
-    return RankResult(rank=_rank_unchecked(system, subset_set), subset=subset)
+    return RankResult(system=system, rank=_rank_unchecked(system, subset_set), subset=subset)
 
 
 def bases_profile(
@@ -368,11 +389,15 @@ def bases_profile(
     recognized = _recognized(system)
     if recognized.status != "GREEDOID":
         return BasesResult(
+            system=system,
+            subset=subset,
             status="NOT_A_GREEDOID", bases=(), obstruction=recognized.obstruction
         )
     subset_set = None if subset is None else frozenset(subset)
     rank_value, basis_list = _bases_unchecked(system, subset_set)
     return BasesResult(
+        system=system,
+        subset=subset,
         rank=rank_value,
         bases=tuple(tuple(sorted(basis)) for basis in basis_list),
     )
@@ -386,6 +411,8 @@ def basic_word_outcome(
     recognized = _recognized(system)
     if recognized.status != "GREEDOID":
         return BasicWordProfileResult(
+            system=system,
+            word=word,
             status="NOT_A_BASIC_WORD", obstruction="not_a_greedoid"
         )
     return _basic_word_profile_unchecked(system, word)
@@ -397,6 +424,7 @@ def convex_geometry_profile(system: FiniteFeasibleSetSystem) -> ConvexGeometryRe
     recognized = _recognized(system)
     if recognized.status != "GREEDOID":
         return ConvexGeometryResult(
+            system=system,
             status="NOT_AN_ANTIMATROID", obstruction=recognized.obstruction
         )
     full_ground = tuple(range(len(system.ground)))
@@ -404,6 +432,7 @@ def convex_geometry_profile(system: FiniteFeasibleSetSystem) -> ConvexGeometryRe
         system
     ):
         return ConvexGeometryResult(
+            system=system,
             status="NOT_AN_ANTIMATROID", obstruction="not_full_support_or_union_closed"
         )
     return _antimatroid_to_convex_geometry_unchecked(system)
@@ -419,3 +448,48 @@ def convex_geometry_to_antimatroid(
     """
     ground_set = frozenset(range(n))
     return [tuple(sorted(ground_set - frozenset(c))) for c in closed_family]
+
+
+def verify_recognize(claim: RecognizeResult) -> bool:
+    """Verify a recognition claim against its retained feasible system."""
+
+    try:
+        return recognize(claim.system) == claim
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+
+
+def verify_rank_profile(claim: RankResult) -> bool:
+    """Verify a rank claim against its retained system and subset."""
+
+    try:
+        return rank_profile(claim.system, claim.subset) == claim
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+
+
+def verify_bases_profile(claim: BasesResult) -> bool:
+    """Verify a basis profile against its retained feasible system."""
+
+    try:
+        return bases_profile(claim.system, claim.subset) == claim
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+
+
+def verify_basic_word_profile(claim: BasicWordProfileResult) -> bool:
+    """Verify a basic-word claim against its retained system and word."""
+
+    try:
+        return basic_word_outcome(claim.system, claim.word) == claim
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False
+
+
+def verify_convex_geometry_profile(claim: ConvexGeometryResult) -> bool:
+    """Verify a convex-geometry profile against its retained feasible system."""
+
+    try:
+        return convex_geometry_profile(claim.system) == claim
+    except (OperationDomainValidationError, TypeError, ValueError):
+        return False

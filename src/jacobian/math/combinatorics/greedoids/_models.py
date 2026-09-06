@@ -35,6 +35,24 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"greedoid.{reason}", message)
 
 
+def _require_index_subset(
+    indices: tuple[int, ...], ground_size: int, field: str
+) -> None:
+    if tuple(sorted(set(indices))) != indices or any(
+        not 0 <= index < ground_size for index in indices
+    ):
+        raise _validation_error(
+            "indexed_subset_invalid", f"{field} must be sorted unique ground indices"
+        )
+
+
+def _require_index_rows(
+    rows: tuple[tuple[int, ...], ...], ground_size: int, field: str
+) -> None:
+    for row in rows:
+        _require_index_subset(row, ground_size, field)
+
+
 class GreedoidAdmissionError(ValueError):
     """Native admission failure for greedoid operations."""
 
@@ -116,6 +134,7 @@ class RecognizeRequest(StrictModel):
 class RecognizeResult(StrictModel):
     """``GREEDOID`` with rank/bases, or ``NOT_A_GREEDOID`` with the first obstruction."""
 
+    system: FiniteFeasibleSetSystem
     status: str
     obstruction: str | None = None
     larger_set: tuple[int, ...] | None = None
@@ -127,6 +146,16 @@ class RecognizeResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_status(self) -> Self:
+        _require_index_rows(
+            tuple(
+                row
+                for row in (self.larger_set, self.smaller_set, self.feasible_set)
+                if row is not None
+            ),
+            len(self.system.ground),
+            "recognition obstruction",
+        )
+        _require_index_rows(self.bases, len(self.system.ground), "bases")
         if self.status not in ("GREEDOID", "NOT_A_GREEDOID"):
             raise _validation_error(
                 "recognize_status_invalid", "status must be GREEDOID or NOT_A_GREEDOID"
@@ -155,6 +184,7 @@ class RankRequest(StrictModel):
 class RankResult(StrictModel):
     """The greedoid rank of the supplied subset."""
 
+    system: FiniteFeasibleSetSystem
     status: Literal["GREEDOID", "NOT_A_GREEDOID"] = "GREEDOID"
     rank: int | None = Field(default=None, ge=0)
     subset: tuple[int, ...] | None = Field(default=None)
@@ -162,6 +192,10 @@ class RankResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_status(self) -> Self:
+        if self.subset is not None:
+            _require_index_subset(
+                self.subset, len(self.system.ground), "subset"
+            )
         if self.status == "GREEDOID":
             if self.rank is None or self.obstruction is not None:
                 raise _validation_error(
@@ -186,6 +220,8 @@ class BasesRequest(StrictModel):
 class BasesResult(StrictModel):
     """The basis family and common rank."""
 
+    system: FiniteFeasibleSetSystem
+    subset: tuple[int, ...] | None = Field(default=None)
     status: Literal["GREEDOID", "NOT_A_GREEDOID"] = "GREEDOID"
     rank: int | None = Field(default=None, ge=0)
     bases: tuple[tuple[int, ...], ...]
@@ -193,6 +229,11 @@ class BasesResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_status(self) -> Self:
+        if self.subset is not None:
+            _require_index_subset(
+                self.subset, len(self.system.ground), "subset"
+            )
+        _require_index_rows(self.bases, len(self.system.ground), "bases")
         if self.status == "GREEDOID":
             if self.rank is None or self.obstruction is not None:
                 raise _validation_error(
@@ -217,6 +258,8 @@ class BasicWordProfileRequest(StrictModel):
 class BasicWordProfileResult(StrictModel):
     """Whether the word is a basic word, with first obstruction if not."""
 
+    system: FiniteFeasibleSetSystem
+    word: tuple[int, ...] = Field(default=())
     status: str
     obstruction: str | None = None
     prefix_index: int | None = None
@@ -227,6 +270,10 @@ class BasicWordProfileResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_status(self) -> Self:
+        if self.prefix_set is not None:
+            _require_index_subset(
+                self.prefix_set, len(self.system.ground), "prefix_set"
+            )
         if self.status not in ("BASIC_WORD", "NOT_A_BASIC_WORD"):
             raise _validation_error(
                 "basic_word_status_invalid",
@@ -248,6 +295,7 @@ class ConvexGeometryResult(StrictModel):
     the wire representation stays JSON-safe.
     """
 
+    system: FiniteFeasibleSetSystem
     status: Literal["ANTIMATROID", "NOT_AN_ANTIMATROID"] = "ANTIMATROID"
     closed_family: tuple[tuple[int, ...], ...] = ()
     complement_map: tuple[tuple[tuple[int, ...], tuple[int, ...]], ...] = ()
@@ -255,6 +303,12 @@ class ConvexGeometryResult(StrictModel):
 
     @model_validator(mode="after")
     def bind_status(self) -> Self:
+        _require_index_rows(
+            self.closed_family, len(self.system.ground), "closed_family"
+        )
+        for feasible, closed in self.complement_map:
+            _require_index_subset(feasible, len(self.system.ground), "complement map")
+            _require_index_subset(closed, len(self.system.ground), "complement map")
         if self.status == "ANTIMATROID":
             if self.obstruction is not None:
                 raise _validation_error(

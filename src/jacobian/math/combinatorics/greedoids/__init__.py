@@ -13,6 +13,11 @@ from jacobian.math.combinatorics.greedoids.operations import (
     rank_profile,
     recognize,
     union_closed,
+    verify_bases_profile,
+    verify_basic_word_profile,
+    verify_convex_geometry_profile,
+    verify_rank_profile,
+    verify_recognize,
 )
 from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 
@@ -30,4 +35,9 @@ __all__ = [
     "rank_profile",
     "recognize",
     "union_closed",
+    "verify_bases_profile",
+    "verify_basic_word_profile",
+    "verify_convex_geometry_profile",
+    "verify_rank_profile",
+    "verify_recognize",
 ]

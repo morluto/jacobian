@@ -75,6 +75,8 @@ class GraphIsomorphismResult(StrictModel):
     ``NOT_ISOMORPHIC`` carries no mapping.
     """
 
+    graph_a: SimpleGraph
+    graph_b: SimpleGraph
     status: Literal["ISOMORPHIC", "NOT_ISOMORPHIC"]
     vertex_mapping: tuple[VertexMappingPair, ...] = Field(default=())
 

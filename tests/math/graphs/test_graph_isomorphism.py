@@ -14,6 +14,7 @@ from jacobian.math.graphs.isomorphism._models import (
 )
 from jacobian.math.graphs.isomorphism._vf2_process import (
     decide_graph_isomorphism,
+    verify_graph_isomorphism,
 )
 
 # ---------------------------------------------------------------------------
@@ -90,10 +91,25 @@ def test_nonisomorphic_result_rejects_vertex_mappings() -> None:
     with pytest.raises(ValidationError):
         GraphIsomorphismResult.model_validate(
             {
+                "graph_a": {"vertex_count": 1, "edges": []},
+                "graph_b": {"vertex_count": 1, "edges": []},
                 "status": "NOT_ISOMORPHIC",
                 "vertex_mapping": [{"from_vertex": 0, "to_vertex": 0}],
             }
         )
+
+
+def test_serialized_isomorphism_claim_is_verified_against_its_graphs() -> None:
+    result = _decide(
+        {"vertex_count": 3, "edges": [(0, 1), (1, 2)]},
+        {"vertex_count": 3, "edges": [(0, 2), (1, 2)]},
+    )
+    assert verify_graph_isomorphism(
+        GraphIsomorphismResult.model_validate_json(result.model_dump_json())
+    )
+    payload = result.model_dump(mode="json")
+    payload["vertex_mapping"][1]["to_vertex"] = 0
+    assert not verify_graph_isomorphism(GraphIsomorphismResult.model_validate(payload))
 
 
 # ---------------------------------------------------------------------------
